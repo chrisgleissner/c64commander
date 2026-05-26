@@ -89,7 +89,6 @@ describe("useInteractiveConfigWrite", () => {
     expect(mockMutateAsync).toHaveBeenCalledWith({
       category: "Audio Mixer",
       updates: { "SID1 Volume": "12" },
-      immediate: false,
       skipInvalidation: true,
     });
   });
@@ -108,7 +107,6 @@ describe("useInteractiveConfigWrite", () => {
     expect(mockMutateAsync).toHaveBeenCalledWith({
       category: "U64 Specific Settings",
       updates: { "CPU Speed": " 4", "Turbo Control": "Manual" },
-      immediate: false,
       skipInvalidation: true,
     });
   });
@@ -309,7 +307,6 @@ describe("useInteractiveConfigWrite", () => {
     expect(mockMutateAsync).toHaveBeenCalledWith({
       category: "Audio Mixer",
       updates: { "SID1 Volume": "15" },
-      immediate: false,
       skipInvalidation: true,
     });
   });

@@ -443,6 +443,7 @@ export default function PlayFilesPage() {
     archiveConfigs,
     restoreVolumeOverrides,
     applyAudioMixerUpdates,
+    enabledSidVolumeItems,
     buildEnabledSidMuteUpdates,
     captureSidMuteSnapshot,
     snapshotToUpdates,

@@ -263,19 +263,20 @@ describe("runHealthCheck — all-success path", () => {
     expect(result!.deviceInfo?.firmware).toBe("3.11");
   });
 
-  it("bypasses only REST circuit blocking for the diagnostic REST probe", async () => {
+  it("routes the manual diagnostic REST probe through the gateway without bypassing the circuit", async () => {
     setupAllProbesSuccess();
 
     await runHealthCheck();
 
     expect(mockGetInfo).toHaveBeenCalledWith(
       expect.objectContaining({
+        __c64uIntent: "user",
         __c64uAllowDuringError: true,
-        __c64uBypassCircuit: true,
       }),
     );
     expect(mockGetInfo).toHaveBeenCalledWith(
       expect.not.objectContaining({
+        __c64uBypassCircuit: true,
         __c64uBypassBackoff: true,
         __c64uBypassCooldown: true,
       }),
@@ -1138,7 +1139,7 @@ describe("runHealthCheck — TELNET probe", () => {
     expect(mockWithTelnetInteraction).toHaveBeenCalledWith(
       expect.objectContaining({
         actionId: "health-check",
-        intent: "system",
+        intent: "user",
       }),
       expect.any(Function),
     );

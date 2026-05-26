@@ -32,7 +32,8 @@ const createAbortablePendingRun = () => {
     });
 };
 
-const { mockRunHealthCheckForTarget, mockGetPasswordForDevice } = vi.hoisted(() => ({
+const { mockRunConnectivityProbeForTarget, mockRunHealthCheckForTarget, mockGetPasswordForDevice } = vi.hoisted(() => ({
+  mockRunConnectivityProbeForTarget: vi.fn(),
   mockRunHealthCheckForTarget: vi.fn(),
   mockGetPasswordForDevice: vi.fn(),
 }));
@@ -57,6 +58,11 @@ const diagnosticsSuppressionMock = vi.hoisted(() => {
   };
 });
 
+const { mockGetConnectionSnapshot, mockGetDeviceStateSnapshot } = vi.hoisted(() => ({
+  mockGetConnectionSnapshot: vi.fn(),
+  mockGetDeviceStateSnapshot: vi.fn(),
+}));
+
 vi.mock("@/lib/diagnostics/healthCheckEngine", () => ({
   HEALTH_CHECK_CONTEXTS: {
     backgroundMaintenance: {
@@ -68,6 +74,7 @@ vi.mock("@/lib/diagnostics/healthCheckEngine", () => ({
       configPulsePolicy: "visible-config-pulse-allowed",
     },
   },
+  runConnectivityProbeForTarget: mockRunConnectivityProbeForTarget,
   runHealthCheckForTarget: mockRunHealthCheckForTarget,
 }));
 
@@ -76,6 +83,14 @@ vi.mock("@/lib/secureStorage", () => ({
 }));
 
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
+
+vi.mock("@/lib/connection/connectionManager", () => ({
+  getConnectionSnapshot: () => mockGetConnectionSnapshot(),
+}));
+
+vi.mock("@/lib/deviceInteraction/deviceStateStore", () => ({
+  getDeviceStateSnapshot: () => mockGetDeviceStateSnapshot(),
+}));
 
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   isDiagnosticsOverlaySuppressionArmed: () => diagnosticsSuppressionMock.isActive(),
@@ -197,7 +212,32 @@ describe("useSavedDeviceHealthChecks", () => {
     clearSavedDeviceSwitchMetrics();
     diagnosticsSuppressionMock.reset();
     pollingPauseRegistry.__resetForTest();
+    mockGetConnectionSnapshot.mockReturnValue({
+      state: "REAL_CONNECTED",
+      lastDiscoveryTrigger: null,
+      lastTransitionAtMs: 0,
+      lastProbeAtMs: null,
+      lastProbeSucceededAtMs: null,
+      lastProbeFailedAtMs: null,
+      lastProbeError: null,
+      deviceInfo: null,
+      demoInterstitialVisible: false,
+    });
+    mockGetDeviceStateSnapshot.mockReturnValue({
+      state: "READY",
+      connectionState: "REAL_CONNECTED",
+      busyCount: 0,
+      lastRequestAtMs: null,
+      lastUpdatedAtMs: 0,
+      lastErrorMessage: null,
+      lastSuccessAtMs: null,
+      lastFailureAtMs: null,
+      circuitOpenUntilMs: null,
+    });
     mockGetPasswordForDevice.mockResolvedValue("secret");
+    mockRunConnectivityProbeForTarget.mockImplementation(async (target: { deviceHost: string }) =>
+      target.deviceHost.includes("backup") ? makeResult("backup") : makeResult("office"),
+    );
     mockRunHealthCheckForTarget.mockImplementation(async (target: { deviceHost: string }) =>
       target.deviceHost.includes("backup") ? makeResult("backup") : makeResult("office"),
     );
@@ -209,6 +249,17 @@ describe("useSavedDeviceHealthChecks", () => {
   });
 
   const buildSavedDevices = () => [...devices];
+  const selectedDeviceId = "device-office";
+
+  const renderBackgroundHook = (savedDevices = buildSavedDevices(), enabled = true) =>
+    renderHook(() =>
+      useSavedDeviceHealthChecks(savedDevices, enabled, HEALTH_CHECK_CONTEXTS.backgroundMaintenance, selectedDeviceId),
+    );
+
+  const renderSwitchHook = (savedDevices = buildSavedDevices(), enabled = true) =>
+    renderHook(() =>
+      useSavedDeviceHealthChecks(savedDevices, enabled, HEALTH_CHECK_CONTEXTS.switchDeviceDialog, selectedDeviceId),
+    );
 
   const flushAsyncWork = async () => {
     await act(async () => {
@@ -218,41 +269,56 @@ describe("useSavedDeviceHealthChecks", () => {
     });
   };
 
-  it("runs concurrent background-maintenance checks for all devices and reruns every 10 seconds while enabled", async () => {
+  it("probes only the selected device in background-maintenance mode and backs off between refreshes", async () => {
     const savedDevices = buildSavedDevices();
-    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
+    const { result } = renderBackgroundHook(savedDevices);
 
     await flushAsyncWork();
 
-    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2);
-
-    expect(mockRunHealthCheckForTarget).toHaveBeenNthCalledWith(
+    expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(1);
+    expect(mockRunHealthCheckForTarget).not.toHaveBeenCalled();
+    expect(mockRunConnectivityProbeForTarget).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ deviceHost: "office-u64", ftpPort: 21, telnetPort: 64, password: null }),
       expect.objectContaining({ context: HEALTH_CHECK_CONTEXTS.backgroundMaintenance }),
     );
-    expect(mockRunHealthCheckForTarget).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ deviceHost: "backup-u64:8080", ftpPort: 2021, telnetPort: 2323, password: "secret" }),
-      expect.objectContaining({ context: HEALTH_CHECK_CONTEXTS.backgroundMaintenance }),
-    );
     expect(result.current.byDeviceId["device-office"]?.latestResult?.overallHealth).toBe("Healthy");
-    expect(result.current.byDeviceId["device-backup"]?.latestResult?.overallHealth).toBe("Degraded");
+    expect(result.current.byDeviceId["device-backup"]?.latestResult).toBeNull();
 
-    // F-DIAG-1: background-maintenance cycles run every 60 s now (was 10 s)
-    // to reduce cross-device contamination of the active device's rollup.
     await act(async () => {
       vi.advanceTimersByTime(60_000);
     });
 
     await flushAsyncWork();
 
-    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(4);
+    expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(2);
+  });
+
+  it("surfaces circuit-open state without issuing a background probe", async () => {
+    mockGetDeviceStateSnapshot.mockReturnValue({
+      state: "ERROR",
+      connectionState: "REAL_CONNECTED",
+      busyCount: 0,
+      lastRequestAtMs: null,
+      lastUpdatedAtMs: 0,
+      lastErrorMessage: "Circuit open",
+      lastSuccessAtMs: Date.now() - 1_000,
+      lastFailureAtMs: Date.now(),
+      circuitOpenUntilMs: Date.now() + 30_000,
+    });
+
+    const { result } = renderBackgroundHook();
+
+    await flushAsyncWork();
+
+    expect(mockRunConnectivityProbeForTarget).not.toHaveBeenCalled();
+    expect(result.current.byDeviceId["device-office"]?.deferredReason).toBe("circuit-open");
+    expect(result.current.byDeviceId["device-office"]?.error).toBe("Circuit open");
   });
 
   it("allows switch-device dialog checks to use the explicit visible config pulse context", async () => {
     const savedDevices = buildSavedDevices();
-    renderHook(() => useSavedDeviceHealthChecks(savedDevices, true, HEALTH_CHECK_CONTEXTS.switchDeviceDialog));
+    renderSwitchHook(savedDevices);
 
     await flushAsyncWork();
 
@@ -270,8 +336,7 @@ describe("useSavedDeviceHealthChecks", () => {
   });
 
   it("keeps the previous latest result visible while a rerun is still in progress", async () => {
-    const savedDevices = buildSavedDevices();
-    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
+    const { result } = renderSwitchHook();
 
     await flushAsyncWork();
 
@@ -302,8 +367,7 @@ describe("useSavedDeviceHealthChecks", () => {
   });
 
   it("keeps the last known result when a superseded cycle is aborted", async () => {
-    const savedDevices = buildSavedDevices();
-    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
+    const { result } = renderSwitchHook();
 
     await flushAsyncWork();
 
@@ -343,8 +407,7 @@ describe("useSavedDeviceHealthChecks", () => {
   });
 
   it("manual refresh forces a new all-device cycle before the next interval", async () => {
-    const savedDevices = buildSavedDevices();
-    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
+    const { result } = renderSwitchHook();
 
     await flushAsyncWork();
 
@@ -361,13 +424,17 @@ describe("useSavedDeviceHealthChecks", () => {
 
   it("does not restart background maintenance when verification-only device metadata changes", async () => {
     const initialDevices = buildSavedDevices();
-    const { rerender } = renderHook(({ savedDevices }) => useSavedDeviceHealthChecks(savedDevices, true), {
-      initialProps: { savedDevices: initialDevices },
-    });
+    const { rerender } = renderHook(
+      ({ savedDevices }) =>
+        useSavedDeviceHealthChecks(savedDevices, true, HEALTH_CHECK_CONTEXTS.backgroundMaintenance, selectedDeviceId),
+      {
+        initialProps: { savedDevices: initialDevices },
+      },
+    );
 
     await flushAsyncWork();
 
-    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2);
+    expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(1);
 
     const verifiedDevices = initialDevices.map((device, index) => ({
       ...device,
@@ -380,23 +447,22 @@ describe("useSavedDeviceHealthChecks", () => {
     rerender({ savedDevices: verifiedDevices });
     await flushAsyncWork();
 
-    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2);
+    expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       vi.advanceTimersByTime(60_000);
     });
     await flushAsyncWork();
 
-    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(4);
+    expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(2);
   });
 
   it("defers background refresh work while a foreground saved-device switch is active", async () => {
-    const savedDevices = buildSavedDevices();
-    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
+    const { result } = renderBackgroundHook();
 
     await flushAsyncWork();
 
-    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2);
+    expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(1);
 
     const attemptId = beginSavedDeviceSwitchAttempt({
       fromDeviceId: "device-office",
@@ -410,7 +476,7 @@ describe("useSavedDeviceHealthChecks", () => {
     await flushAsyncWork();
 
     expect(result.current.cycle.running).toBe(false);
-    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2);
+    expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(1);
 
     completeSavedDeviceSwitchAttempt(attemptId, {
       outcome: "success",
@@ -422,20 +488,17 @@ describe("useSavedDeviceHealthChecks", () => {
     });
     await flushAsyncWork();
 
-    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(4);
+    expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(2);
   });
 
   it("cancels an in-flight background cycle when a foreground saved-device switch starts", async () => {
-    const savedDevices = buildSavedDevices();
-    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
+    const { result } = renderBackgroundHook();
 
     await flushAsyncWork();
 
     const previousOfficeResult = result.current.byDeviceId["device-office"]?.latestResult;
 
-    mockRunHealthCheckForTarget
-      .mockImplementationOnce(createAbortablePendingRun())
-      .mockImplementationOnce(createAbortablePendingRun());
+    mockRunConnectivityProbeForTarget.mockImplementationOnce(createAbortablePendingRun());
 
     await act(async () => {
       result.current.refreshAll();
@@ -459,12 +522,11 @@ describe("useSavedDeviceHealthChecks", () => {
   it("pauses background-maintenance polling while diagnostics suppression is armed", async () => {
     diagnosticsSuppressionMock.setActive(true);
 
-    const savedDevices = buildSavedDevices();
-    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
+    const { result } = renderBackgroundHook();
 
     await flushAsyncWork();
 
-    expect(mockRunHealthCheckForTarget).not.toHaveBeenCalled();
+    expect(mockRunConnectivityProbeForTarget).not.toHaveBeenCalled();
     expect(result.current.cycle.running).toBe(false);
 
     diagnosticsSuppressionMock.setActive(false);
@@ -474,17 +536,16 @@ describe("useSavedDeviceHealthChecks", () => {
     });
     await flushAsyncWork();
 
-    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2);
+    expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(1);
   });
 
   it("pauses background-maintenance polling while pollingPauseRegistry is held", async () => {
     const pauseHandle = pollingPauseRegistry.acquirePause();
-    const savedDevices = buildSavedDevices();
-    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
+    const { result } = renderBackgroundHook();
 
     await flushAsyncWork();
 
-    expect(mockRunHealthCheckForTarget).not.toHaveBeenCalled();
+    expect(mockRunConnectivityProbeForTarget).not.toHaveBeenCalled();
     expect(result.current.cycle.running).toBe(false);
 
     pauseHandle.release();
@@ -494,20 +555,17 @@ describe("useSavedDeviceHealthChecks", () => {
     });
     await flushAsyncWork();
 
-    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2);
+    expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(1);
   });
 
   it("cancels an in-flight background cycle when pollingPauseRegistry is acquired", async () => {
-    const savedDevices = buildSavedDevices();
-    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
+    const { result } = renderBackgroundHook();
 
     await flushAsyncWork();
 
     const previousOfficeResult = result.current.byDeviceId["device-office"]?.latestResult;
 
-    mockRunHealthCheckForTarget
-      .mockImplementationOnce(createAbortablePendingRun())
-      .mockImplementationOnce(createAbortablePendingRun());
+    mockRunConnectivityProbeForTarget.mockImplementationOnce(createAbortablePendingRun());
 
     await act(async () => {
       result.current.refreshAll();
@@ -544,8 +602,7 @@ describe("useSavedDeviceHealthChecks", () => {
     });
     mockRunHealthCheckForTarget.mockImplementationOnce(async () => makeResult("backup"));
 
-    const savedDevices = buildSavedDevices();
-    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
+    const { result } = renderSwitchHook();
 
     await flushAsyncWork();
 
@@ -627,13 +684,12 @@ describe("useSavedDeviceHealthChecks", () => {
       }),
     } as typeof window.__c64uDiagnosticsTestBridge;
 
-    const savedDevices = buildSavedDevices();
-    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
+    const { result } = renderBackgroundHook();
 
     expect(result.current.cycle.running).toBe(true);
     expect(result.current.byDeviceId["device-office"]?.running).toBe(true);
     expect(result.current.byDeviceId["device-office"]?.liveProbes?.REST?.outcome).toBe("Success");
-    expect(mockRunHealthCheckForTarget).not.toHaveBeenCalled();
+    expect(mockRunConnectivityProbeForTarget).not.toHaveBeenCalled();
 
     act(() => {
       window.dispatchEvent(
@@ -645,7 +701,7 @@ describe("useSavedDeviceHealthChecks", () => {
 
     await flushAsyncWork();
 
-    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2);
+    expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(1);
   });
 
   it("switches from live polling to seeded saved-device state after mount without breaking updates", async () => {
@@ -653,12 +709,11 @@ describe("useSavedDeviceHealthChecks", () => {
       getSavedDeviceHealthSnapshot: () => null,
     } as typeof window.__c64uDiagnosticsTestBridge;
 
-    const savedDevices = buildSavedDevices();
-    const { result } = renderHook(() => useSavedDeviceHealthChecks(savedDevices, true));
+    const { result } = renderBackgroundHook();
 
     await flushAsyncWork();
 
-    expect(mockRunHealthCheckForTarget).toHaveBeenCalledTimes(2);
+    expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(1);
 
     act(() => {
       window.dispatchEvent(

@@ -1123,6 +1123,56 @@ test.describe("Playback file browser", () => {
     await snap(page, testInfo, "no-autoresume");
   });
 
+  test("stop clears transport UI while post-stop volume restore requests are delayed", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await seedPlaylistStorage(page, [
+      {
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/demo.sid",
+        name: "demo.sid",
+        durationMs: 8000,
+      },
+    ]);
+
+    let delayRestoreRequests = false;
+    const delayRestoreRoute = async (route: Parameters<Parameters<typeof page.route>[1]>[0]) => {
+      if (delayRestoreRequests) {
+        await page.waitForTimeout(5000);
+      }
+      await route.continue();
+    };
+
+    await page.route("**/v1/configs", delayRestoreRoute);
+    await page.route("**/v1/configs/**", delayRestoreRoute);
+
+    await page.goto("/play");
+    const playButton = page.getByTestId("playlist-play");
+    const elapsed = page.getByTestId("playback-elapsed");
+
+    await playButton.click();
+    await expect(playButton).toHaveAttribute("aria-label", "Stop");
+    await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
+    await expect.poll(() => elapsed.textContent()).not.toBe("0:00");
+
+    delayRestoreRequests = true;
+    const resetBefore = server.requests.filter((req) => req.url.startsWith("/v1/machine:reset")).length;
+    await playButton.click();
+    await expect
+      .poll(() => server.requests.filter((req) => req.url.startsWith("/v1/machine:reset")).length > resetBefore)
+      .toBe(true);
+    await expect(playButton).toHaveAttribute("aria-label", "Play", { timeout: 1000 });
+    await expect(elapsed).toHaveText("0:00");
+    await page.waitForTimeout(1200);
+    await expect(playButton).toHaveAttribute("aria-label", "Play");
+    await expect(elapsed).toHaveText("0:00");
+    await snap(page, testInfo, "stop-ui-cleared-before-volume-restore");
+
+    delayRestoreRequests = false;
+    await page.unroute("**/v1/configs", delayRestoreRoute);
+    await page.unroute("**/v1/configs/**", delayRestoreRoute);
+  });
+
   test("played time advances steadily while playing", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await seedPlaylistStorage(page, [
       {

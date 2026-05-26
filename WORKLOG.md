@@ -1,116 +1,172 @@
-# Device Safety Regression Worklog
+# Production Hardening 2 — Research Worklog
 
-## Files Inspected
+> Research-only task. Evidence log for `docs/research/stabilization/prod-hardening-2/research.md`.
+> The prior device-safety *implementation* worklog is preserved in git history
+> (commits `733adf2d`, `f7cd0d4d`, `9963d3e6`, `fa6e711e`). This file logs the
+> *research* investigation that follows it.
 
-- `README.md`: project overview, Home page feature context, Android/web setup.
-- `.github/copilot-instructions.md`: mandatory classification, bug-fix tests, validation, screenshot policy, coverage gate.
-- `docs/ux-guidelines.md`: UI interaction constraints; no visible redesign planned.
-- `package.json`: available lint, test, coverage, build, Android, and evidence commands.
-- `src/pages/HomePage.tsx`: Home config controls, quick actions, FTP/Telnet config and REU workflows.
-- `src/pages/home/components/LightingSummaryCard.tsx`: Home case light color and brightness slider workflow.
-- `src/hooks/useDeviceBoundSlider.ts`: local slider intent, throttled preview, commit, polling pause, stale reconciliation.
-- `src/hooks/useInteractiveConfigWrite.ts`: coalesced interactive config writes used by lighting sliders and SID slider paths.
-- `src/lib/deviceInteraction/latestIntentWriteLane.ts`: latest-value-wins write lane.
-- `src/lib/config/configWriteThrottle.ts`: serialized config write queue.
-- `src/lib/deviceInteraction/deviceInteractionManager.ts`: REST/FTP/Telnet safety scheduler, cooldown, backoff, priority queues.
-- `src/lib/c64api.ts`: REST transport, config writes, machine CTAs, drive writes, playback writes.
-- `src/lib/ftp/ftpClient.ts`: FTP list/read/write wrapper.
-- `src/lib/telnet/telnetClient.ts`, `src/lib/telnet/telnetSession.ts`, `src/hooks/useTelnetActions.ts`: Telnet transports and scheduled action path.
-- `src/lib/config/applyConfigFileReference.ts`: config-file FTP/Telnet workflow.
-- `src/hooks/useC64Connection.ts`: background info/config/drives polling and config mutation hooks.
-- `src/lib/query/c64PollingGovernance.ts`: polling pause registry used by sliders.
-- `src/lib/diagnostics/healthCheckEngine.ts`, `src/lib/connection/connectionManager.ts`: health/discovery probes and explicit bypass callers.
-- Representative tests under `tests/unit/...` for c64api, config write throttle, device interaction scheduling, sliders, and config rows.
+## Entry 1 — Orientation
 
-## Relevant Findings
+- Read root `PLANS.md`/`WORKLOG.md` (prior implementation task). They document the
+  device-safety scheduler, config write throttle, slider intent, and the fixes that
+  landed in recent commits. Used as a starting evidence map, re-verified below.
+- Inspected repo layout: `src/lib/deviceInteraction/`, `src/lib/config/`,
+  `src/lib/ftp/`, `src/lib/telnet/`, `src/lib/diagnostics/`, `src/hooks/`, `src/pages/`.
+- Recent commits confirm active hardening: `733adf2d Prevent bypass of backoff`,
+  `f7cd0d4d Maintain device safety backoff`, `fa6e711e Mute volume on pause`.
 
-- Change classification is `CODE_CHANGE`; no intentional visible UI change, so screenshot refresh is not expected.
-- Home case light sliders are device-bound sliders in `LightingSummaryCard`. They update local UI immediately, throttle preview writes, and commit the final value.
-- `useInteractiveConfigWrite` previously sent `immediate: true` for non-`C64U` product families. `C64API.updateConfigBatch` honored `immediate` by bypassing `scheduleConfigWrite`.
-- Even when `scheduleConfigWrite` was used, it only used app-level `configWriteIntervalMs` default of 200 ms. It did not enforce `loadDeviceSafetyConfig().configsCooldownMs`, which is 1200 ms in conservative `C64U` AUTO mode.
-- REST config mutation scheduling had a separate hardcoded `CONFIG_MUTATION_COOLDOWN_MS = 120` instead of Device Safety `configsCooldownMs`.
-- `useDeviceBoundSlider` already protected the visual state from stale device echoes via pending intent, but it lacked diagnostic logs for local intent, coalescing, stale refresh ignored, and latest intent confirmed.
-- Background reads waited for interactive write bursts only when intent was `background`. System health reads could continue during user write bursts; they now yield while user write activity is active.
-- FTP list/read/write paths go through `withFtpInteraction`. Telnet paths in `useTelnetActions` went through `withTelnetInteraction`; Home config/REU helper sessions and config-reference helper sessions did not and were routed through the Telnet scheduler.
+## Entry 2 — Core safety layer (Objective 1) — VERIFIED
 
-## Root Cause Evidence
+Files read in full:
 
-- Root cause set:
-  - Config writes did not consistently honor Device Safety settings. `scheduleConfigWrite` enforced only app `configWriteIntervalMs` (200 ms default), while conservative Device Safety `configsCooldownMs` is 1200 ms.
-  - REST config mutation cooldown used a hardcoded 120 ms cooldown, bypassing Device Safety `configsCooldownMs`.
-  - `updateConfigBatch({ ... }, { immediate: true })` bypassed `scheduleConfigWrite`; `useInteractiveConfigWrite` and other callers could therefore bypass the serialized config queue.
-  - Home case light brightness/color sliders send throttled preview writes plus final commit writes. With the too-short/bypassable gates, rapid visual changes could produce unsafe config mutation traffic.
-- Test evidence added:
-  - `configWriteThrottle` proves conservative Device Safety config cooldown dominates app write interval.
-  - `deviceInteractionManager.scheduling` proves REST config mutations are separated by Device Safety cooldown and system reads yield to active user write bursts.
-  - `useDeviceBoundSlider` proves 20 rapid local changes stay visually local, produce fewer preview writes than local changes, keep the final value through a stale refresh, and log intent/coalescing/stale/confirmation events.
-  - `useInteractiveConfigWrite` proves interactive writes route through serialized config writes with `immediate: false`.
+- `deviceInteractionManager.ts` — central gateway. Exposes `withRestInteraction`,
+  `withFtpInteraction`, `withTelnetInteraction`. Per-transport `InteractionScheduler`
+  with intent priority queues (`user` > `system` > `background`), concurrency limits
+  (REST=1, Telnet=1, FTP=`config.ftpMaxConcurrency`), cooldown maps, error-streak
+  backoff (`computeBackoff`), circuit breaker, cache+inflight coalescing for reads,
+  `getReadyAtMs` deferred drain for read cooldown/backoff. `resetInteractionState`
+  cancels queued tasks on device switch (`InteractionCancelledError`).
+  - `isTestEnv()` short-circuits ALL gating in tests → scheduling only exercised in
+    prod/forced mode. Evidence-relevant for test strategy.
+  - `shouldBlockForState`: user intent can proceed during DISCOVERING; ERROR blocks
+    background, allows user if `allowUserOverrideCircuit`.
+  - Read-priority yielding: non-user read-only REST waits on
+    `waitForBackgroundReadsToResume()` while write bursts active; system reads log
+    "yielding to user device activity".
+- `deviceSafetySettings.ts` — 4 concrete presets + AUTO. AUTO→CONSERVATIVE for `C64U`,
+  AUTO→BALANCED for U64 family / unverified. CONSERVATIVE: configsCooldown 1200ms,
+  ftpListCooldown 800ms, ftpMaxConcurrency 1, circuit threshold 2, no user override.
+  Overrides via localStorage; broadcast triggers scheduler `updateConfig` (clears all
+  state). `discoveryProbeIntervalMs` present.
+- `configWriteThrottle.ts` — serialized FIFO queue; `waitForInterval` uses
+  `max(appIntervalMs, safety.configsCooldownMs)`. So config writes are double-gated
+  (this queue + REST scheduler config-mutation cooldown).
+- `latestIntentWriteLane.ts` — latest-value-wins lane: only most recent scheduled
+  value runs; superseded values are skipped, waiters resolved up to settled version.
+- `deviceActivityGate.ts` — counts machine-transition + playback/interactive write
+  bursts; `areBackgroundReadsSuspended()` gates background/system reads.
+  `beginInteractiveWriteBurst = beginPlaybackWriteBurst`.
 
-## Device-Bound Call Audit
+Conclusion: a genuine unified-per-protocol gateway exists with priority, coalescing,
+backoff, circuit breaking. Approved boundaries = the three `with*Interaction` wrappers
++ `scheduleConfigWrite` for config writes.
 
-| Area                           | Files                                                                                                                    | Path                                                                                                                                                          | Safety/backoff status                                                                                                                                                                        | Priority/stale-state notes                                                                                                    |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Home case light brightness     | `LightingSummaryCard.tsx`, `useDeviceBoundSlider.ts`, `useInteractiveConfigWrite.ts`, `useC64Connection.ts`, `c64api.ts` | Slider local intent -> throttled preview/commit -> latest-intent lane -> `updateConfigBatch` -> `scheduleConfigWrite` -> REST scheduler -> `/v1/configs` POST | Fixed: no `immediate` bypass; config queue uses max(app interval, Device Safety `configsCooldownMs`); REST mutation cooldown uses Device Safety `configsCooldownMs`                          | Local slider value stays latched while pending; stale device value ignored; background/system reads yield to user write burst |
-| Home case light color          | Same as brightness                                                                                                       | Color slider local intent -> same write lane and `/v1/configs` POST                                                                                           | Fixed via same shared slider/config write path                                                                                                                                               | Same latest-value and stale reconciliation behavior                                                                           |
-| Home lighting selects/toggles  | `LightingSummaryCard.tsx`, `useConfigActions.ts`, `c64api.ts`                                                            | `updateConfigValue` -> `setConfigValue` -> `scheduleConfigWrite` -> REST scheduler                                                                            | Fixed by config queue and REST mutation cooldown changes                                                                                                                                     | Ordered serialization, no over-coalescing                                                                                     |
-| Other Home config CTAs/toggles | `HomePage.tsx`, `AudioMixer.tsx`, `DriveManager.tsx`, `PrinterManager.tsx`, `UserInterfaceSummaryCard.tsx`               | `updateConfigValue` or C64API mutation helpers                                                                                                                | Config writes fixed via `scheduleConfigWrite`; machine/drive/playback writes pass through `C64API.request` and REST scheduler                                                                | User intent priority is scheduler order; background/system reads yield during user write bursts                               |
-| Config page sliders            | `ConfigItemRow.tsx`, `useDeviceBoundSlider.ts`, `useC64SetConfig`                                                        | Slider hook -> `setConfigValue` -> `scheduleConfigWrite` -> REST scheduler                                                                                    | Fixed by shared slider logs and config queue safety                                                                                                                                          | Local pending intent prevents stale rollback                                                                                  |
-| Play volume sliders            | `VolumeControls.tsx`, `useVolumeOverride.ts`                                                                             | Slider hook -> volume override writes -> `updateConfigBatch(... immediate: true)`                                                                             | Fixed at API layer: `immediate` is logged but still routed through Device Safety queue                                                                                                       | Existing polling pause tests plus API safety path                                                                             |
-| Lighting Studio apply          | `useLightingStudio.tsx`                                                                                                  | `updateConfigBatch(... immediate: true)`                                                                                                                      | Fixed at API layer: `immediate` no longer bypasses queue                                                                                                                                     | UI state managed by studio; device writes are safe                                                                            |
-| REST reads/polling             | `useC64Connection.ts`, `c64api.ts`, `deviceInteractionManager.ts`                                                        | Query hooks -> `getInfo/getCategory/getDrives` -> REST scheduler                                                                                              | Reads use cache/cooldown/backoff; background and system reads yield during user write bursts                                                                                                 | Stale slider state handled in slider hook; polling pause still cancels active drive polling                                   |
-| FTP                            | `ftpClient.ts` and callers                                                                                               | `listFtpDirectory/readFtpFile/writeFtpFile` -> `withFtpInteraction`                                                                                           | Uses FTP scheduler, Device Safety FTP concurrency/cooldown/backoff                                                                                                                           | User/system/background intent supported by wrapper                                                                            |
-| Telnet actions                 | `useTelnetActions.ts`, `HomePage.tsx`, `applyConfigFileReference.ts`                                                     | Telnet workflow -> `withTelnetInteraction`                                                                                                                    | Fixed Home/config-reference direct sessions to route through Telnet scheduler                                                                                                                | Serialized and backoff-protected                                                                                              |
-| Diagnostics/discovery probes   | `healthCheckEngine.ts`, `connectionManager.ts`                                                                           | Some probes intentionally pass bypass flags for discovery/recovery                                                                                            | Remaining audited exception: these can bypass cache/cooldown/backoff/circuit for explicit discovery/diagnostic recovery, but system REST reads now yield while user write activity is active | Not used by Home slider writes; keep under follow-up risk if stricter diagnostics semantics are required                      |
+## Entry 3 — Transport layer (Objective 2) — VERIFIED
 
-## Code Changes Made
+- `c64api.ts` (2407 lines). `request<T>()` (l.792) routes every call through
+  `withRestInteraction` (l.858) inside `runWithImplicitAction`; intent defaults
+  to `"user"` (l.803). C64API-layer budget-replay cache + in-flight dedupe sit on
+  top of the scheduler's cache. The raw `fetch` at l.945 is INSIDE the gateway.
+- `fetchWithTimeout()` (l.1198) ALSO routes through `withRestInteraction` BUT
+  hardcodes `intent: "user"` (l.1216) and threads no cooldown intent. Callers:
+  `readMemory` (l.1673), `writeMemoryBlock` (l.1717), uploads (l.1820/1930/2007/
+  2059/2111/2164). => memory reads/writes + uploads are always `user` priority and
+  the readmem/writemem paths resolve to NO cooldown key in `resolveRestPolicy`.
+- Config writes: `setConfigValue` (l.1519), `updateConfigBatch` (l.1563),
+  save/load/reset (l.1551-1561) all wrap `scheduleConfigWrite(...)` => double-gated
+  (config queue + REST config-mutation cooldown). `updateConfigBatch`'s `immediate`
+  option (l.1595) now ONLY logs — it no longer bypasses the queue (prior fix holds).
+- Machine control (`machineReset/reboot/pause/resume/poweroff/menu_button`,
+  l.1611-1657) route through `request` with MACHINE_CONTROL_COOLDOWN_MS=250.
 
-- Created `PLANS.md` and `WORKLOG.md`.
-- `src/lib/config/configWriteThrottle.ts`: config write queue now waits for `max(loadConfigWriteIntervalMs(), loadDeviceSafetyConfig().configsCooldownMs)` and logs applied delay.
-- `src/lib/deviceInteraction/deviceInteractionManager.ts`: REST config mutation cooldown now uses `config.configsCooldownMs`; system reads yield to active user write bursts; REST start/end/cooldown/backoff debug logs added.
-- `src/lib/c64api.ts`: `updateConfigBatch(..., { immediate: true })` no longer bypasses `scheduleConfigWrite`; it logs that the immediate option was routed through the safety queue.
-- `src/hooks/useInteractiveConfigWrite.ts`: interactive config writes always pass `immediate: false` and log queued/sent latest-intent events.
-- `src/hooks/useDeviceBoundSlider.ts`: added stable debug names and logs for local intent, queued writes, coalesced writes, delayed preview, stale device value ignored, and latest intent confirmed.
-- `src/pages/home/components/LightingSummaryCard.tsx`: provided debug names for color and brightness sliders.
-- `src/pages/HomePage.tsx`: routed direct Home config/REU Telnet sessions through `withTelnetInteraction`.
-- `src/lib/config/applyConfigFileReference.ts`: routed config-reference Telnet sessions through `withTelnetInteraction`.
+## Entry 4 — Bypass search (Objective 2)
 
-## Tests Added or Modified
+- `rg fetch(` => non-gateway device calls:
+  - `connectionManager.ts` l.194/322/426: raw `fetch(${baseUrl}/v1/info)` in
+    `probeWithFetch`/`probeInfoOnce`/`probeInfoWithConnectionConfig`. Used in test
+    env AND as a PRODUCTION fallback when `api.getInfo` throws a non-HTTP error
+    (network/timeout) => fires OUTSIDE the scheduler precisely when the device is
+    struggling. CONFIRMED BYPASS.
+  - `GlobalDiagnosticsOverlay.tsx` l.59 `validateTarget`: raw `fetch(/v1/info)`,
+    user-triggered diagnostics. CONFIRMED BYPASS (diagnostics-scoped).
+  - `ftpClient.web.ts` l.61: bridge HTTP call — this is the FTP transport invoked
+    INSIDE `withFtpInteraction`; not a bypass.
+  - hvsc/licenses/mockConfig/webServerLogs/secureStorage.web fetches => NOT device
+    traffic (CDN/asset/local bridge).
+- `rg immediate: true` => `useLightingStudio` l.561, `applyConfigFileReference`
+  l.257, `useVolumeOverride` l.298/338. All go through `updateConfigBatch` =>
+  `scheduleConfigWrite` => safe (immediate is a no-op for bypass).
+- `configDrift.ts`: `getCategories/getConfigItem` with `__c64uIntent:"system"`,
+  `__c64uBypassCache:true` => through gateway. Safe (system reads, cache bypass only).
 
-- `tests/unit/configWriteThrottle.test.ts`: added Device Safety cooldown regression and updated burst spacing expectations.
-- `tests/unit/lib/deviceInteraction/deviceInteractionManager.scheduling.test.ts`: added REST config mutation cooldown and system-read-yields-to-user-write regressions.
-- `tests/unit/hooks/useDeviceBoundSlider.test.ts`: added 20-change rapid slider/log/stale-refresh regression.
-- `tests/unit/hooks/useInteractiveConfigWrite.test.ts`: updated expectations to serialized safe write path.
+## Entry 5 — Health-check load (Objective 4) — VERIFIED
 
-## Commands Run
+- Two health systems:
+  1. Active-device singleton `runHealthCheck()` (healthCheckEngine l.1655). Manual
+     only, triggered by GlobalDiagnosticsOverlay "Run health check" (l.365). 6 probes
+     sequential: REST→FTP→TELNET→CONFIG→RASTER→JIFFY. REST failure short-circuits the
+     rest. Global 12s deadline.
+  2. Saved-device `useSavedDeviceHealthChecks` (mounted in `UnifiedHealthBadge`
+     l.339). Probes ALL saved devices in PARALLEL (`Promise.allSettled(devices.map)`).
+     Cadence: picker open => `switchDeviceDialog` ctx, 10s, CONFIG-pulse ALLOWED;
+     picker closed => `backgroundMaintenance` ctx, 60s, CONFIG read-only/skipped.
+- Per-device cost per cycle (visible-config-pulse-allowed): REST getInfo +
+  FTP list + TELNET connect/auth/banner + CONFIG roundtrip (up to 2 writes + 3 reads
+  per target, iterates up to 4 targets until one succeeds) + RASTER readMemory(+retry)
+  + JIFFY readMemory(+retry). ~9-13 device ops. Background (read-only) drops CONFIG.
+- Probe intents/bypasses:
+  - REST probe: `__c64uIntent:"system"`, `__c64uBypassCache:true`,
+    `__c64uBypassCircuit:true`, `__c64uAllowDuringError:true` => bypasses circuit/cache.
+  - CONFIG-pulse `setConfigValue`: NO `__c64uIntent` => defaults `"user"` => runs at
+    USER priority through `scheduleConfigWrite`, competing with real user writes.
+  - JIFFY/RASTER `readMemory`: intent dropped by `fetchWithTimeout` => forced `"user"`.
+  - FTP probe: intent `"system"` via `withFtpInteraction`. TELNET probe: `"system"`
+    via `withTelnetInteraction`.
+- All per-device `new C64API(...)` instances share the SAME module-singleton
+  schedulers (REST/Telnet concurrency 1, FTP=ftpMaxConcurrency). REST/FTP cooldown
+  keys are host/baseUrl-scoped, so cross-device probes don't share cooldown but DO
+  serialize through one concurrency slot.
+- Pause guards (backgroundMaintenance only): `shouldPauseForForegroundSwitch`,
+  `shouldPauseForDiagnosticsSuppression`, `shouldPauseForPollingPause`. NOT applied to
+  `switchDeviceDialog` (10s, picker open). AbortController cancellation per device.
 
-- `pwd && rg --files ...`: located orientation and source files. Result: pass.
-- `sed -n '1,240p' README.md`: inspected overview. Result: pass.
-- `sed -n '1,260p' .github/copilot-instructions.md`: inspected mandatory workflow. Result: pass.
-- `sed -n '1,220p' docs/ux-guidelines.md`: inspected UX guidance. Result: pass.
-- `cat package.json`: inspected scripts. Result: pass.
-- `rg ... device-bound calls`: audited REST/FTP/Telnet/ping/health/config/slider/CTA paths. Result: pass.
-- `npx prettier --write ...`: formatted changed TS/TSX/MD files. Result: pass.
-- `npx vitest run tests/unit/configWriteThrottle.test.ts tests/unit/hooks/useDeviceBoundSlider.test.ts tests/unit/hooks/useInteractiveConfigWrite.test.ts tests/unit/lib/deviceInteraction/deviceInteractionManager.scheduling.test.ts`: initial result failed one old burst-spacing assumption; after update result passed, 4 files / 40 tests.
-- `npx vitest run tests/unit/c64api.test.ts tests/unit/c64api.branches.test.ts tests/unit/lib/c64api.test.ts tests/unit/config/deviceSafetySettings.test.ts tests/unit/components/ConfigItemRow.test.tsx tests/unit/components/ConfigItemRow.edgeCases.test.tsx`: passed, 6 files / 212 tests.
+## Entry 6 — Polling / lifecycle / sliders (Objective 3)
 
-## Test Results
+- `useC64Connection`: info query intent `"background"`, gated by `screenActive`,
+  `diagnosticsSuppression`, `pollingPaused`; refetchInterval `HEALTH_CHECK_INTERVAL_MS`
+  (60s) and only when `shouldRunScheduledHealthCheck()`. Drives poll 30s/60s idle.
+  getCategory/getConfigItem staleTime 30-60s. Config write mutation =>
+  `api.setConfigValue` => scheduleConfigWrite.
+- `c64PollingGovernance.pollingPauseRegistry`: ref-counted pause acquired by sliders
+  (`useDeviceBoundSlider.acquirePollingPauseIfNeeded`) and observed by info/drives
+  polling AND background health maintenance.
+- `useDeviceBoundSlider`: local-only draft state; throttled preview (latest-wins via
+  timer + pending ref), single commit on release; pending-intent latches visible value
+  and ignores stale device echoes; watchdog releases pause; clears on device switch /
+  visibility hidden. Preview/commit both route to caller's `preview`/`commit` which go
+  through `useInteractiveConfigWrite` lane (lighting) or `setConfigValue` (ConfigItemRow).
+- `useInteractiveConfigWrite`: `createLatestIntentWriteLane` + 400ms quiet window +
+  `waitForMachineTransitionsToSettle` + `beginInteractiveWriteBurst(configsCooldownMs)`;
+  always `immediate:false, skipInvalidation:true`; debounced reconciliation invalidate.
+- `useVolumeOverride`: own latest-intent lane + `beginPlaybackWriteBurst`; uses
+  `immediate:true` (no-op) through `updateConfigBatch`. Safe.
+- Sliders are well-coalesced. Residual risk: ConfigItemRow preview throttle still emits
+  one preview write per throttle window during a long drag (bounded by throttle, not 1),
+  and the commit always fires; acceptable but worth a documented bound.
 
-- Targeted safety/sliders/scheduler tests: passed, 40 tests.
-- Adjacent C64 API/config-row tests: passed, 212 tests.
-- Full lint/build/coverage and APK deployment still pending.
+## Entry 7 — Working-tree note
 
-## Log Evidence
+- At research time the tree also showed pre-existing edits NOT made by this task:
+  `.github/workflows/android.yaml`, `playwright/playback.part2.spec.ts`,
+  `tests/unit/ci/telemetryGateWorkflow.test.ts`. Left untouched per concurrent-change
+  policy. This research task changed only `PLANS.md`, `WORKLOG.md`, and the new
+  `docs/research/stabilization/prod-hardening-2/research.md`.
 
-- Automated log assertions in `useDeviceBoundSlider.test.ts` prove:
-  - 20 rapid local slider changes were recorded as local intent and the visible value followed the latest local value.
-  - Preview writes were fewer than local changes.
-  - Final commit value was queued.
-  - Stale device value `0` was ignored while pending value `20` was latched.
-  - Confirmation of latest intent `20` cleared pending state.
-- Automated log assertion in `configWriteThrottle.test.ts` proves Device Safety config cooldown `1200` ms applied over app interval `100` ms.
-- Scheduler tests prove config mutation outbound starts are spaced by Device Safety cooldown and system health reads wait until user write burst settles.
+## Entry 8 — Product-direction clarification (amendment)
 
-## Remaining Limitations
+User clarified after the initial research draft:
+1. The **picker-open 10 s full health cycle is WANTED and kept** (not a risk). The
+   real problem is **excessive BACKGROUND health checks** (the 60 s parallel fan-out
+   across all saved devices with REST+FTP+Telnet+memory).
+2. The `connectionManager` raw-fetch fallback is **nonsense — delete it.** Remove all
+   strange quirks from REST/Telnet/FTP and keep the calls simple.
+3. **Do not chase the C64U lock-up root cause** (rabbit hole). Assume any fast sequence
+   of REST/Telnet/FTP calls can wedge the listener and harden against that class.
 
-- Hardware reachability and Pixel 4 availability have not yet been checked.
-- Diagnostic/discovery probes still contain explicit bypass flags for recovery/discovery semantics. They now yield to active user write bursts, but a stricter no-bypass diagnostics policy would require a follow-up design decision because those probes are also used to recover from unknown/error states.
+Actions: amended `research.md` (exec summary, health section, risk register, inventory
+rows 15/24, CTA table, roadmap P1/P2, acceptance criteria, target policy, open
+questions). Authored `docs/research/stabilization/prod-hardening-2/plans.md`
+(implementation plan to fix every finding) and `prompt.md` (executable handoff prompt).
+Best-practice background-health design = traffic-derived health + selected-device-only
++ freshness gate + single lightweight `/v1/info` probe + adaptive cadence + circuit
+respect; picker-open path untouched.

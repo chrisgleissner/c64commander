@@ -109,6 +109,7 @@ const renderPlaybackController = (
     restoreVolumeOverrides?: ReturnType<typeof vi.fn>;
     dispatchVolume?: ReturnType<typeof vi.fn>;
     resolveEnabledSidVolumeItems?: ReturnType<typeof vi.fn>;
+    enabledSidVolumeItems?: Array<{ name: string; value: string; options?: string[] }>;
     pauseMuteSnapshotRef?: { current: any };
     trackStartedAtRef?: { current: number | null };
     trackInstanceIdRef?: { current: number };
@@ -167,6 +168,7 @@ const renderPlaybackController = (
       archiveConfigs: options?.archiveConfigs,
       restoreVolumeOverrides: options?.restoreVolumeOverrides ?? vi.fn().mockResolvedValue(undefined),
       applyAudioMixerUpdates: options?.applyAudioMixerUpdates ?? vi.fn().mockResolvedValue(undefined),
+      enabledSidVolumeItems: options?.enabledSidVolumeItems ?? [],
       buildEnabledSidMuteUpdates: options?.buildEnabledSidMuteUpdates ?? vi.fn().mockReturnValue({}),
       captureSidMuteSnapshot:
         options?.captureSidMuteSnapshot ?? vi.fn().mockReturnValue({ volumes: {}, enablement: {} }),
@@ -866,7 +868,6 @@ describe("usePlaybackController", () => {
         enablement: {},
       },
     };
-    const resolveEnabledSidVolumeItems = vi.fn().mockResolvedValue([{ name: "SID 1", value: "-42 dB" }]);
     const snapshotToUpdates = vi.fn().mockReturnValue({ "SID 1": "0 dB" });
     vi.mocked(getC64API).mockReturnValue({
       machineResume: vi.fn(async () => {
@@ -879,7 +880,7 @@ describe("usePlaybackController", () => {
       isPaused: true,
       applyAudioMixerUpdates,
       pauseMuteSnapshotRef,
-      resolveEnabledSidVolumeItems,
+      enabledSidVolumeItems: [{ name: "SID 1", value: "-42 dB" }],
       snapshotToUpdates,
     });
 
@@ -915,10 +916,8 @@ describe("usePlaybackController", () => {
       isPaused: false,
       dispatchVolume,
       applyAudioMixerUpdates,
+      enabledSidVolumeItems: [{ name: "SID 1", value: "0 dB", options: ["-42 dB", "0 dB"] }],
       pauseMuteSnapshotRef,
-      resolveEnabledSidVolumeItems: vi
-        .fn()
-        .mockResolvedValue([{ name: "SID 1", value: "0 dB", options: ["-42 dB", "0 dB"] }]),
       buildEnabledSidMuteUpdates: vi.fn().mockReturnValue({ "SID 1": "-42 dB" }),
       captureSidMuteSnapshot: vi.fn().mockReturnValue({ volumes: { "SID 1": "0 dB" }, enablement: {} }),
     });
@@ -954,6 +953,34 @@ describe("usePlaybackController", () => {
     expect(machinePause).toHaveBeenCalled();
     expect(applyAudioMixerUpdates).not.toHaveBeenCalled();
     expect(dispatchVolume).not.toHaveBeenCalled();
+  });
+
+  it("pauses using cached SID mixer items without forcing fresh config reads", async () => {
+    const playlist = [
+      createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+    ];
+    const dispatchVolume = vi.fn();
+    const applyAudioMixerUpdates = vi.fn().mockResolvedValue(undefined);
+    const machinePause = vi.fn().mockResolvedValue(undefined);
+    const resolveEnabledSidVolumeItems = vi.fn().mockRejectedValue(new Error("fresh config read should not run"));
+    vi.mocked(getC64API).mockReturnValue({ machinePause } as any);
+
+    const { result } = renderPlaybackController(playlist, {
+      isPlaying: true,
+      dispatchVolume,
+      applyAudioMixerUpdates,
+      resolveEnabledSidVolumeItems,
+      enabledSidVolumeItems: [{ name: "SID 1", value: "0 dB", options: ["-42 dB", "0 dB"] }],
+      buildEnabledSidMuteUpdates: vi.fn().mockReturnValue({ "SID 1": "-42 dB" }),
+      captureSidMuteSnapshot: vi.fn().mockReturnValue({ volumes: { "SID 1": "0 dB" }, enablement: {} }),
+    });
+
+    await result.current.handlePauseResume();
+
+    expect(machinePause).toHaveBeenCalled();
+    expect(dispatchVolume).toHaveBeenCalledWith({ type: "mute", reason: "pause" });
+    expect(applyAudioMixerUpdates).toHaveBeenCalledWith({ "SID 1": "-42 dB" }, "Pause mute");
+    expect(resolveEnabledSidVolumeItems).not.toHaveBeenCalled();
   });
 
   it("prevents duplicate play starts while a single-flight request is already active", async () => {
@@ -1619,6 +1646,95 @@ describe("usePlaybackController", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("clears local stop state before delayed volume restoration completes", async () => {
+    vi.useFakeTimers();
+    try {
+      const machineReset = vi.fn().mockResolvedValue(undefined);
+      let resolveRestoreVolume!: () => void;
+      const restoreVolumeDeferred = new Promise<void>((resolve) => {
+        resolveRestoreVolume = resolve;
+      });
+      const restoreVolumeOverrides = vi.fn().mockReturnValue(restoreVolumeDeferred);
+      const setPlayedMs = vi.fn();
+      const setIsPlaying = vi.fn();
+      const setIsPaused = vi.fn();
+      const setElapsedMs = vi.fn();
+      const setDurationMs = vi.fn();
+      const setCurrentSubsongCount = vi.fn();
+      const setAutoAdvanceDueAtMs = vi.fn();
+      const playedClockRef = {
+        current: {
+          start: vi.fn(),
+          stop: vi.fn(),
+          pause: vi.fn(),
+          resume: vi.fn(),
+          reset: vi.fn(),
+          current: vi.fn().mockReturnValue(0),
+        },
+      } as const;
+
+      vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+      const { result } = renderPlaybackController([createPlaylistItem()], {
+        isPlaying: true,
+        restoreVolumeOverrides,
+        setPlayedMs,
+        setIsPlaying,
+        setIsPaused,
+        setElapsedMs,
+        setDurationMs,
+        setCurrentSubsongCount,
+        setAutoAdvanceDueAtMs,
+        playedClockRef,
+      });
+
+      const stopPromise = result.current.handleStop();
+      await vi.advanceTimersByTimeAsync(3500);
+
+      expect(machineReset).toHaveBeenCalledTimes(1);
+      expect(restoreVolumeOverrides).toHaveBeenCalledWith("stop");
+      expect(playedClockRef.current.stop).toHaveBeenCalledTimes(1);
+      expect(setPlayedMs).toHaveBeenCalledWith(0);
+      expect(setIsPlaying).toHaveBeenCalledWith(false);
+      expect(setIsPaused).toHaveBeenCalledWith(false);
+      expect(setElapsedMs).toHaveBeenCalledWith(0);
+      expect(setDurationMs).toHaveBeenCalledWith(undefined);
+      expect(setCurrentSubsongCount).toHaveBeenCalledWith(null);
+      expect(setAutoAdvanceDueAtMs).toHaveBeenCalledWith(null);
+
+      resolveRestoreVolume();
+      await stopPromise;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("logs unexpected restore failures after stop without leaving playback active", async () => {
+    const machineReset = vi.fn().mockResolvedValue(undefined);
+    const restoreVolumeOverrides = vi.fn().mockRejectedValue(new Error("restore failed"));
+    const setIsPlaying = vi.fn();
+    const setIsPaused = vi.fn();
+    const setElapsedMs = vi.fn();
+
+    vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+    const { result } = renderPlaybackController([createPlaylistItem()], {
+      isPlaying: true,
+      restoreVolumeOverrides,
+      setIsPlaying,
+      setIsPaused,
+      setElapsedMs,
+    });
+
+    await result.current.handleStop();
+
+    expect(setIsPlaying).toHaveBeenCalledWith(false);
+    expect(setIsPaused).toHaveBeenCalledWith(false);
+    expect(setElapsedMs).toHaveBeenCalledWith(0);
+    expect(addErrorLog).toHaveBeenCalledWith(
+      "Playback stop volume restore failed",
+      expect.objectContaining({ error: "restore failed" }),
+    );
   });
 
   it("retries resume before unmuting paused playback", async () => {

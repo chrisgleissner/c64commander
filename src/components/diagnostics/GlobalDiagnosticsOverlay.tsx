@@ -38,7 +38,7 @@ import { clearHealthHistory, getHealthHistory } from "@/lib/diagnostics/healthHi
 import { recordRecentTarget } from "@/lib/diagnostics/recentTargets";
 import type { ConnectionActionsCallbacks } from "@/components/diagnostics/ConnectionActionsRegion";
 import type { DeviceDetailInfo } from "@/components/diagnostics/DeviceDetailView";
-import { buildBaseUrlFromDeviceHost, normalizeDeviceHost } from "@/lib/c64api";
+import { buildBaseUrlFromDeviceHost, C64API, normalizeDeviceHost } from "@/lib/c64api";
 import { getActiveAutoResolutionContext, loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import { createActionContext, runWithActionTrace } from "@/lib/tracing/actionTrace";
 import { recordActionEnd, recordActionStart, recordRestResponse } from "@/lib/tracing/traceSession";
@@ -50,46 +50,44 @@ import {
 } from "@/lib/diagnostics/diagnosticsTestBridge";
 import { resolveDiagnosticsPanelFromPath } from "@/lib/diagnostics/diagnosticsOverlayRoutes";
 
-const validateTarget = async (host: string, port: number) => {
+export const validateTarget = async (host: string, port: number) => {
   const normalizedHost = normalizeDeviceHost(host);
   const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 4000);
+  const deviceHost = `${normalizedHost}:${port}`;
+  const api = new C64API(buildBaseUrlFromDeviceHost(deviceHost), undefined, deviceHost);
   try {
-    const response = await fetch(`http://${normalizedHost}:${port}/v1/info`, {
-      signal: controller.signal,
+    const body = await api.getInfo({
+      timeoutMs: 4000,
+      __c64uIntent: "user",
+      __c64uAllowDuringError: true,
+      __c64uBypassCache: true,
+      __c64uBypassCircuit: true,
     });
-    let body: unknown = null;
-    try {
-      body = await response.clone().json();
-    } catch {
-      body = null;
-    }
     return {
-      ok: response.ok,
+      ok: true,
       normalizedHost,
       body,
-      status: response.status,
+      status: 200,
       durationMs: Math.max(
         0,
         Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
       ),
-      errorMessage: response.ok ? null : `HTTP ${response.status}`,
+      errorMessage: null,
     };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error ?? "Target validation failed");
+    const httpStatusMatch = /^HTTP\s+(\d+)/i.exec(message);
     return {
       ok: false,
       normalizedHost,
       body: null,
-      status: null,
+      status: httpStatusMatch ? Number(httpStatusMatch[1]) : null,
       durationMs: Math.max(
         0,
         Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
       ),
-      errorMessage: (error as Error).message,
+      errorMessage: message,
     };
-  } finally {
-    clearTimeout(timer);
   }
 };
 

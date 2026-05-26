@@ -525,6 +525,7 @@ describe("UnifiedHealthBadge", () => {
         context: "background-maintenance",
         configPulsePolicy: "read-only",
       }),
+      "device-office",
     );
     expect(mockState.savedDeviceHealthChecks.refreshAll).not.toHaveBeenCalled();
     expect(screen.queryByTestId("switch-device-sheet")).toBeNull();
@@ -758,6 +759,7 @@ describe("UnifiedHealthBadge", () => {
         context: "switch-device-dialog",
         configPulsePolicy: "visible-config-pulse-allowed",
       }),
+      "device-office",
     );
     expect(screen.queryByTestId("switch-device-refresh-all")).toBeNull();
     expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();

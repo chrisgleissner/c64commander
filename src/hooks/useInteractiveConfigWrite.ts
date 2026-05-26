@@ -105,7 +105,6 @@ export function useInteractiveConfigWrite({
             category: categoryRef.current,
             updates,
             productFamily,
-            immediate: false,
             skipInvalidation: true,
             quietMs: INTERACTIVE_WRITE_QUIET_MS,
             backgroundReadCooldownMs: safety.configsCooldownMs,
@@ -113,7 +112,6 @@ export function useInteractiveConfigWrite({
           await mutateRef.current({
             category: categoryRef.current,
             updates,
-            immediate: false,
             skipInvalidation: true,
           });
         } finally {

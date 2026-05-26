@@ -497,6 +497,53 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "resume-restored-mixer");
   });
 
+  test("pause still flips to resume while background SID config reads are delayed", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await seedPlaylistStorage(page, [
+      {
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/demo.sid",
+        name: "demo.sid",
+        durationMs: 8000,
+      },
+    ]);
+
+    let delayConfigReads = false;
+    const delayConfigReadRoute = async (route: Parameters<Parameters<typeof page.route>[1]>[0]) => {
+      if (delayConfigReads && route.request().method() === "GET") {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+      await route.continue();
+    };
+
+    await page.route("**/v1/configs", delayConfigReadRoute);
+    await page.route("**/v1/configs/**", delayConfigReadRoute);
+    try {
+      await page.goto("/play");
+      await waitForRealConnectionBadge(page);
+
+      const playButton = page.getByTestId("playlist-play");
+      const pauseButton = page.getByTestId("playlist-pause");
+      const muteButton = page.getByTestId("volume-mute");
+
+      await playButton.tap();
+      await expect(playButton).toHaveAttribute("aria-label", "Stop");
+      await expect(pauseButton).toBeEnabled();
+
+      delayConfigReads = true;
+      await pauseButton.tap();
+      await expect(pauseButton).toHaveAttribute("aria-label", "Resume", { timeout: 1000 });
+      await expect(muteButton).toContainText("Unmute");
+      await expect.poll(() => server.requests.some((req) => req.url.includes("/v1/machine:pause"))).toBe(true);
+      await snap(page, testInfo, "pause-not-blocked-by-config-read-delay");
+    } finally {
+      delayConfigReads = false;
+      await page.unroute("**/v1/configs", delayConfigReadRoute);
+      await page.unroute("**/v1/configs/**", delayConfigReadRoute);
+    }
+  });
+
   test("touch taps drive play, pause, mute, resume, and stop controls on mobile", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {

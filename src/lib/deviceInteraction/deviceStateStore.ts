@@ -19,6 +19,7 @@ export type DeviceStateSnapshot = Readonly<{
   lastUpdatedAtMs: number;
   lastErrorMessage: string | null;
   lastSuccessAtMs: number | null;
+  lastFailureAtMs: number | null;
   circuitOpenUntilMs: number | null;
 }>;
 
@@ -27,6 +28,7 @@ let busyCount = 0;
 let lastRequestAtMs: number | null = null;
 let lastErrorMessage: string | null = null;
 let lastSuccessAtMs: number | null = null;
+let lastFailureAtMs: number | null = null;
 let circuitOpenUntilMs: number | null = null;
 let hasSuccessfulRequest = false;
 let snapshot: DeviceStateSnapshot = Object.freeze({
@@ -37,6 +39,7 @@ let snapshot: DeviceStateSnapshot = Object.freeze({
   lastUpdatedAtMs: Date.now(),
   lastErrorMessage: null,
   lastSuccessAtMs: null,
+  lastFailureAtMs: null,
   circuitOpenUntilMs: null,
 });
 
@@ -75,6 +78,7 @@ const updateSnapshot = (note?: string) => {
     lastUpdatedAtMs: Date.now(),
     lastErrorMessage,
     lastSuccessAtMs,
+    lastFailureAtMs,
     circuitOpenUntilMs,
   });
   setTraceDeviceConnectionState(state);
@@ -112,8 +116,13 @@ export const markDeviceRequestEnd = (result: { success: boolean; errorMessage?: 
     hasSuccessfulRequest = true;
     lastSuccessAtMs = Date.now();
     lastErrorMessage = null;
-  } else if (result.errorMessage) {
-    lastErrorMessage = result.errorMessage;
+    lastFailureAtMs = null;
+  } else {
+    lastFailureAtMs = Date.now();
+    if (result.errorMessage) {
+      lastErrorMessage = result.errorMessage;
+    }
+    lastFailureAtMs = Date.now();
   }
   updateSnapshot(result.success ? "request-success" : "request-failure");
 };

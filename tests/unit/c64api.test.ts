@@ -1132,7 +1132,7 @@ describe("c64api", () => {
 
     const api = new C64API("http://c64u");
 
-    await expect(api.updateConfigBatch({ Audio: { Volume: "+6 dB" } }, { immediate: true })).rejects.toMatchObject({
+    await expect(api.updateConfigBatch({ Audio: { Volume: "+6 dB" } })).rejects.toMatchObject({
       name: "FirmwareConfigWriteError",
       code: "FIRMWARE_WRITE_REJECTED",
       firmwareErrors: ["Value rejected"],
@@ -1186,10 +1186,7 @@ describe("c64api", () => {
     const api = new C64API("http://c64u");
 
     try {
-      await api.updateConfigBatch(
-        { "U64 Specific Settings": { "CPU Speed": "4", "Turbo Control": "Manual" } },
-        { immediate: true },
-      );
+      await api.updateConfigBatch({ "U64 Specific Settings": { "CPU Speed": "4", "Turbo Control": "Manual" } });
 
       expect(JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body))).toEqual({
         "U64 Specific Settings": {
@@ -1220,9 +1217,7 @@ describe("c64api", () => {
 
     const api = new C64API("http://c64u");
 
-    await expect(
-      api.updateConfigBatch({ "LED Strip Settings": { "Strip Intensity": 40 } }, { immediate: true }),
-    ).rejects.toMatchObject({
+    await expect(api.updateConfigBatch({ "LED Strip Settings": { "Strip Intensity": 40 } })).rejects.toMatchObject({
       name: "ConfigWriteValidationError",
       code: "OUT_OF_RANGE",
       category: "LED Strip Settings",

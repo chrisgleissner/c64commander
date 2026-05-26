@@ -175,61 +175,6 @@ const probeInfoWithConnectionConfig = async (
 ): Promise<ProbeInfoResult> => {
   const timeoutMs = options.timeoutMs ?? loadDiscoveryProbeTimeoutMs();
   const outerSignal = options.signal;
-  const isTestEnv =
-    typeof process !== "undefined" && (process.env.VITEST === "true" || process.env.NODE_ENV === "test");
-
-  const probeWithFetchForInfo = async (): Promise<ProbeInfoResult> => {
-    const payloadResult = await (async () => {
-      const controller = timeoutMs ? new AbortController() : null;
-      const abortFromOuter = () => controller?.abort();
-      if (outerSignal && controller) {
-        if (outerSignal.aborted) {
-          controller.abort();
-        } else {
-          outerSignal.addEventListener("abort", abortFromOuter, { once: true });
-        }
-      }
-      const timeoutId = timeoutMs ? setTimeout(() => controller?.abort(), timeoutMs) : null;
-      try {
-        const response = await fetch(`${config.baseUrl}/v1/info`, {
-          ...(controller ? { signal: controller.signal } : outerSignal ? { signal: outerSignal } : {}),
-        });
-        const payload = await parseProbePayload(response);
-        if (!response.ok) {
-          return {
-            ok: false,
-            deviceInfo: toDeviceInfo(payload),
-            error: `HTTP ${response.status}`,
-            resolvedAddress: config.resolvedAddress,
-          } satisfies ProbeInfoResult;
-        }
-        return {
-          ok: isProbePayloadHealthy(payload),
-          deviceInfo: toDeviceInfo(payload),
-          error: isProbePayloadHealthy(payload) ? null : "Probe payload missing required identity",
-          resolvedAddress: config.resolvedAddress,
-        } satisfies ProbeInfoResult;
-      } catch (error) {
-        return {
-          ok: false,
-          deviceInfo: null,
-          error: (error as Error).message,
-          resolvedAddress: config.resolvedAddress,
-        } satisfies ProbeInfoResult;
-      } finally {
-        if (timeoutId) clearTimeout(timeoutId);
-        if (outerSignal && controller) {
-          outerSignal.removeEventListener("abort", abortFromOuter);
-        }
-      }
-    })();
-    return payloadResult;
-  };
-
-  if (isTestEnv) {
-    return probeWithFetchForInfo();
-  }
-
   try {
     const api = new C64API(config.baseUrl, config.password, config.probeDeviceHost);
     const response = await api.getInfo({
@@ -239,7 +184,6 @@ const probeInfoWithConnectionConfig = async (
       __c64uAllowDuringDiscovery: true,
       __c64uAllowDuringError: true,
       __c64uBypassCache: true,
-      __c64uBypassCircuit: true,
     });
     return {
       ok: isProbePayloadHealthy(response),
@@ -257,8 +201,12 @@ const probeInfoWithConnectionConfig = async (
         resolvedAddress: config.resolvedAddress,
       };
     }
-    const fallbackResult = await probeWithFetchForInfo();
-    return fallbackResult.ok ? fallbackResult : { ...fallbackResult, error: fallbackResult.error ?? message };
+    return {
+      ok: false,
+      deviceInfo: null,
+      error: message,
+      resolvedAddress: config.resolvedAddress,
+    };
   }
 };
 
@@ -273,101 +221,10 @@ const isProbePayloadHealthy = (payload: unknown) => {
   return true;
 };
 
-const parseProbePayload = async (response: Response): Promise<unknown> => {
-  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
-  if (!contentType.includes("application/json")) return null;
-  try {
-    return await response.clone().json();
-  } catch (error) {
-    addLog("warn", "Discovery probe JSON parse failed", {
-      error: (error as Error).message,
-    });
-    return null;
-  }
-};
-
-const toDeviceInfo = (payload: unknown): DeviceInfo | null => {
-  if (!payload || typeof payload !== "object") return null;
-  const maybePayload = payload as Partial<DeviceInfo>;
-  return {
-    product: typeof maybePayload.product === "string" ? maybePayload.product : undefined,
-    firmware_version: typeof maybePayload.firmware_version === "string" ? maybePayload.firmware_version : undefined,
-    fpga_version: typeof maybePayload.fpga_version === "string" ? maybePayload.fpga_version : undefined,
-    core_version: typeof maybePayload.core_version === "string" ? maybePayload.core_version : undefined,
-    hostname: typeof maybePayload.hostname === "string" ? maybePayload.hostname : undefined,
-    unique_id: typeof maybePayload.unique_id === "string" ? maybePayload.unique_id : undefined,
-    errors: Array.isArray(maybePayload.errors)
-      ? maybePayload.errors.filter((entry): entry is string => typeof entry === "string")
-      : [],
-  };
-};
-
-const probeWithFetch = async (
-  baseUrl: string,
-  options: { signal?: AbortSignal; timeoutMs?: number },
-): Promise<boolean> => {
-  const timeoutMs = options.timeoutMs ?? loadDiscoveryProbeTimeoutMs();
-  const outerSignal = options.signal;
-  const controller = timeoutMs ? new AbortController() : null;
-  const abortFromOuter = () => controller?.abort();
-  if (outerSignal && controller) {
-    if (outerSignal.aborted) {
-      controller.abort();
-    } else {
-      outerSignal.addEventListener("abort", abortFromOuter, { once: true });
-    }
-  }
-  const timeoutId = timeoutMs ? setTimeout(() => controller?.abort(), timeoutMs) : null;
-  try {
-    const response = await fetch(`${baseUrl}/v1/info`, {
-      ...(controller ? { signal: controller.signal } : outerSignal ? { signal: outerSignal } : {}),
-    });
-    const payload = await parseProbePayload(response);
-    if (!response.ok) return false;
-    return isProbePayloadHealthy(payload);
-  } catch (error) {
-    const host = (() => {
-      try {
-        return new URL(baseUrl).hostname;
-      } catch (hostError) {
-        addLog("debug", "Failed to parse discovery probe base URL host", {
-          baseUrl,
-          error: (hostError as Error).message,
-          stack: (hostError as Error).stack ?? null,
-        });
-        return undefined;
-      }
-    })();
-    const failure = normalizeTransportError(error, { host });
-    // Surface DNS failures at info level (was: debug, which produced silent
-    // OFFLINE on Android when a bare hostname couldn't resolve). Other
-    // transport classes stay at debug — they are noisy under flaky WiFi.
-    addLog(failure.class === "dns" ? "info" : "debug", "Discovery probe request failed", {
-      baseUrl,
-      class: failure.class,
-      userMessage: failure.userMessage,
-      error: failure.rawMessage,
-    });
-    setSnapshot({ lastProbeError: failure.userMessage });
-    return false;
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
-    if (outerSignal && controller) {
-      outerSignal.removeEventListener("abort", abortFromOuter);
-    }
-  }
-};
-
 export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<boolean> {
   const config = await loadPersistedConnectionConfig();
   const timeoutMs = options.timeoutMs ?? loadDiscoveryProbeTimeoutMs();
   const outerSignal = options.signal;
-  const isTestEnv =
-    typeof process !== "undefined" && (process.env.VITEST === "true" || process.env.NODE_ENV === "test");
-
-  if (isTestEnv) {
-    return probeWithFetch(config.baseUrl, { signal: outerSignal, timeoutMs });
-  }
 
   try {
     const api = new C64API(config.baseUrl, config.password, config.deviceHost);
@@ -378,26 +235,33 @@ export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: num
       __c64uAllowDuringDiscovery: true,
       __c64uAllowDuringError: true,
       __c64uBypassCache: true,
-      __c64uBypassCircuit: true,
     });
     return isProbePayloadHealthy(response);
   } catch (error) {
     const message = (error as Error | undefined)?.message ?? "";
-    if (/^HTTP\s+\d+/.test(message)) {
-      return false;
-    }
-    try {
-      return await probeWithFetch(config.baseUrl, {
-        signal: outerSignal,
-        timeoutMs,
-      });
-    } catch (fallbackError) {
-      addLog("debug", "Discovery probe fallback failed", {
+    if (!/^HTTP\s+\d+/.test(message)) {
+      const host = (() => {
+        try {
+          return new URL(config.baseUrl).hostname;
+        } catch (hostError) {
+          addLog("debug", "Failed to parse discovery probe base URL host", {
+            baseUrl: config.baseUrl,
+            error: (hostError as Error).message,
+            stack: (hostError as Error).stack ?? null,
+          });
+          return undefined;
+        }
+      })();
+      const failure = normalizeTransportError(error, { host });
+      addLog(failure.class === "dns" ? "info" : "debug", "Discovery probe request failed", {
         baseUrl: config.baseUrl,
-        error: (fallbackError as Error).message,
+        class: failure.class,
+        userMessage: failure.userMessage,
+        error: failure.rawMessage,
       });
-      return false;
+      setSnapshot({ lastProbeError: failure.userMessage });
     }
+    return false;
   }
 }
 
@@ -407,57 +271,6 @@ export async function probeInfoOnce(
   const config = await loadPersistedConnectionConfig();
   const timeoutMs = options.timeoutMs ?? loadDiscoveryProbeTimeoutMs();
   const outerSignal = options.signal;
-  const isTestEnv =
-    typeof process !== "undefined" && (process.env.VITEST === "true" || process.env.NODE_ENV === "test");
-
-  const probeWithFetchForInfo = async (): Promise<ProbeInfoResult> => {
-    const payloadResult = await (async () => {
-      const controller = timeoutMs ? new AbortController() : null;
-      const abortFromOuter = () => controller?.abort();
-      if (outerSignal && controller) {
-        if (outerSignal.aborted) {
-          controller.abort();
-        } else {
-          outerSignal.addEventListener("abort", abortFromOuter, { once: true });
-        }
-      }
-      const timeoutId = timeoutMs ? setTimeout(() => controller?.abort(), timeoutMs) : null;
-      try {
-        const response = await fetch(`${config.baseUrl}/v1/info`, {
-          ...(controller ? { signal: controller.signal } : outerSignal ? { signal: outerSignal } : {}),
-        });
-        const payload = await parseProbePayload(response);
-        if (!response.ok) {
-          return {
-            ok: false,
-            deviceInfo: toDeviceInfo(payload),
-            error: `HTTP ${response.status}`,
-          } satisfies ProbeInfoResult;
-        }
-        return {
-          ok: isProbePayloadHealthy(payload),
-          deviceInfo: toDeviceInfo(payload),
-          error: isProbePayloadHealthy(payload) ? null : "Probe payload missing required identity",
-        } satisfies ProbeInfoResult;
-      } catch (error) {
-        return {
-          ok: false,
-          deviceInfo: null,
-          error: (error as Error).message,
-        } satisfies ProbeInfoResult;
-      } finally {
-        if (timeoutId) clearTimeout(timeoutId);
-        if (outerSignal && controller) {
-          outerSignal.removeEventListener("abort", abortFromOuter);
-        }
-      }
-    })();
-    return payloadResult;
-  };
-
-  if (isTestEnv) {
-    return probeWithFetchForInfo();
-  }
 
   try {
     const api = new C64API(config.baseUrl, config.password, config.deviceHost);
@@ -468,7 +281,6 @@ export async function probeInfoOnce(
       __c64uAllowDuringDiscovery: true,
       __c64uAllowDuringError: true,
       __c64uBypassCache: true,
-      __c64uBypassCircuit: true,
     });
     return {
       ok: isProbePayloadHealthy(response),
@@ -484,8 +296,11 @@ export async function probeInfoOnce(
         error: message,
       };
     }
-    const fallbackResult = await probeWithFetchForInfo();
-    return fallbackResult.ok ? fallbackResult : { ...fallbackResult, error: fallbackResult.error ?? message };
+    return {
+      ok: false,
+      deviceInfo: null,
+      error: message,
+    };
   }
 }
 

@@ -261,4 +261,108 @@ describe("withRestInteraction", () => {
       vi.useRealTimers();
     }
   });
+
+  it("spaces rapid machine read requests behind the machine-io cooldown", async () => {
+    vi.useFakeTimers();
+    const events: Array<{ label: string; at: number }> = [];
+
+    try {
+      const first = withRestInteraction(
+        {
+          action,
+          method: "GET",
+          path: "/v1/machine:readmem?address=00A2&length=3",
+          normalizedUrl: "/v1/machine:readmem",
+          intent: "system",
+          baseUrl: "http://c64u",
+          bypassCache: true,
+        },
+        async () => {
+          events.push({ label: "first", at: Date.now() });
+          return "first";
+        },
+      );
+
+      await vi.runOnlyPendingTimersAsync();
+      await first;
+
+      const second = withRestInteraction(
+        {
+          action,
+          method: "GET",
+          path: "/v1/machine:readmem?address=00A2&length=3",
+          normalizedUrl: "/v1/machine:readmem",
+          intent: "system",
+          baseUrl: "http://c64u",
+          bypassCache: true,
+        },
+        async () => {
+          events.push({ label: "second", at: Date.now() });
+          return "second";
+        },
+      );
+
+      await vi.advanceTimersByTimeAsync(249);
+      expect(events.map((event) => event.label)).toEqual(["first"]);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await second;
+
+      expect(events.map((event) => event.label)).toEqual(["first", "second"]);
+      expect(events[1].at - events[0].at).toBeGreaterThanOrEqual(250);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("spaces rapid machine write requests behind the machine-io cooldown", async () => {
+    vi.useFakeTimers();
+    const events: Array<{ label: string; at: number }> = [];
+
+    try {
+      const first = withRestInteraction(
+        {
+          action,
+          method: "PUT",
+          path: "/v1/machine:writemem?address=1000",
+          normalizedUrl: "/v1/machine:writemem",
+          intent: "user",
+          baseUrl: "http://c64u",
+        },
+        async () => {
+          events.push({ label: "first", at: Date.now() });
+          return "first";
+        },
+      );
+
+      await vi.runOnlyPendingTimersAsync();
+      await first;
+
+      const second = withRestInteraction(
+        {
+          action,
+          method: "PUT",
+          path: "/v1/machine:writemem?address=1000",
+          normalizedUrl: "/v1/machine:writemem",
+          intent: "user",
+          baseUrl: "http://c64u",
+        },
+        async () => {
+          events.push({ label: "second", at: Date.now() });
+          return "second";
+        },
+      );
+
+      await vi.advanceTimersByTimeAsync(249);
+      expect(events.map((event) => event.label)).toEqual(["first"]);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await second;
+
+      expect(events.map((event) => event.label)).toEqual(["first", "second"]);
+      expect(events[1].at - events[0].at).toBeGreaterThanOrEqual(250);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

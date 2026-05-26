@@ -443,6 +443,20 @@ const resolveRestPolicy = (method: string, path: string, baseUrl: string) => {
       cooldownMs: config.drivesCooldownMs,
     };
   }
+  if (normalizedPath === "/v1/machine:readmem") {
+    return {
+      key: `${baseUrl}:rest-machine-readmem`,
+      cacheMs: 0,
+      cooldownMs: MACHINE_CONTROL_COOLDOWN_MS,
+    };
+  }
+  if (normalizedPath === "/v1/machine:writemem") {
+    return {
+      key: `${baseUrl}:rest-machine-writemem`,
+      cacheMs: 0,
+      cooldownMs: MACHINE_CONTROL_COOLDOWN_MS,
+    };
+  }
   if (!isReadOnlyRestMethod(method) && isMachineControlPath(canonicalPath)) {
     return {
       key: `${baseUrl}:rest-machine-control`,

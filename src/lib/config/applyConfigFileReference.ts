@@ -254,7 +254,7 @@ export const applyConfigFileReference = async ({
         categories: Object.keys(payload),
         overrideCount: configOverrides.length,
       });
-      await getC64API().updateConfigBatch(payload, { immediate: true });
+      await getC64API().updateConfigBatch(payload);
     }
   } catch (error) {
     addErrorLog("Playback config application failed", {

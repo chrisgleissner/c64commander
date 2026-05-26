@@ -4,6 +4,21 @@ import { ConfigItemRow } from "@/components/ConfigItemRow";
 
 let mockProfile: "compact" | "medium" | "expanded" = "medium";
 
+vi.mock("@/components/ui/slider", () => ({
+  Slider: ({ value, onValueChange, onValueCommit, ...props }: any) => (
+    <input
+      type="range"
+      aria-label={props["aria-label"]}
+      data-testid={props["data-testid"]}
+      min={props.min}
+      max={props.max}
+      value={value[0] ?? 0}
+      onChange={(event) => onValueChange?.([Number((event.target as HTMLInputElement).value)])}
+      onMouseUp={(event) => onValueCommit?.([Number((event.target as HTMLInputElement).value)])}
+    />
+  ),
+}));
+
 vi.mock("@/hooks/useC64Connection", () => ({
   useC64ConfigItem: () => ({ data: undefined, isLoading: false }),
   VISIBLE_C64_QUERY_OPTIONS: { intent: "user", refetchOnMount: "always" },
@@ -12,6 +27,36 @@ vi.mock("@/hooks/useC64Connection", () => ({
 vi.mock("@/hooks/useDisplayProfile", () => ({
   useDisplayProfile: () => ({ profile: mockProfile }),
 }));
+
+vi.mock("@/hooks/useDeviceBoundSlider", async () => {
+  const React = await import("react");
+
+  return {
+    createIndexedSliderDomain: (options: string[]) => ({ options }),
+    useDeviceBoundSlider: ({ deviceValue, domain, onDraftChange, preview, commit }: any) => {
+      const options: string[] = domain.options ?? [];
+      const resolveValue = (index: number) => options[Math.round(index)] ?? String(index);
+      const [displayValue, setDisplayValue] = React.useState(deviceValue);
+
+      return {
+        displayValue,
+        sliderValue: Math.max(0, options.indexOf(displayValue)),
+        onValueChange: ([index]: number[]) => {
+          const nextValue = resolveValue(index);
+          setDisplayValue(nextValue);
+          onDraftChange?.(nextValue);
+          return preview?.(nextValue);
+        },
+        onValueCommit: ([index]: number[]) => {
+          const nextValue = resolveValue(index);
+          setDisplayValue(nextValue);
+          onDraftChange?.(nextValue);
+          return commit?.(nextValue);
+        },
+      };
+    },
+  };
+});
 
 describe("ConfigItemRow text input buffering", () => {
   it("keeps focus while typing and commits once on blur", () => {
@@ -85,5 +130,51 @@ describe("ConfigItemRow text input buffering", () => {
 
     expect(screen.getByTestId("config-item-layout")).toHaveAttribute("data-layout", "vertical");
     mockProfile = "medium";
+  });
+
+  it("coalesces rapid slider drags to one in-flight write plus one trailing latest value", async () => {
+    vi.useFakeTimers();
+    const pending: Array<() => void> = [];
+    const onValueChange = vi.fn(() => new Promise<void>((resolve) => pending.push(resolve)));
+
+    try {
+      render(
+        <ConfigItemRow
+          category="Audio Mixer"
+          name="Vol UltiSid 1"
+          value="10"
+          options={Array.from({ length: 21 }, (_, index) => String(index))}
+          onValueChange={onValueChange}
+          sliderTestId="volume-slider"
+        />,
+      );
+
+      const slider = screen.getByLabelText("Vol UltiSid 1 slider");
+
+      for (let index = 1; index <= 20; index += 1) {
+        fireEvent.change(slider, { target: { value: String(index) } });
+      }
+      fireEvent.mouseUp(slider, { target: { value: "20" } });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(onValueChange).toHaveBeenCalledTimes(1);
+      expect(screen.getByDisplayValue("20")).toBeInTheDocument();
+
+      pending.shift()?.();
+
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(onValueChange).toHaveBeenCalledTimes(2);
+      expect(onValueChange).toHaveBeenLastCalledWith("20");
+      expect(screen.getByDisplayValue("20")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

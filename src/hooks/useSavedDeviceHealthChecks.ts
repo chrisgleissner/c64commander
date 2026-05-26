@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   HEALTH_CHECK_CONTEXTS,
+  runConnectivityProbeForTarget,
   runHealthCheckForTarget,
   type HealthCheckRunContext,
   type HealthCheckProbeRecord,
@@ -9,10 +10,14 @@ import {
   type HealthCheckRunResult,
 } from "@/lib/diagnostics/healthCheckEngine";
 import { resetHealthCheckProbeStates, type HealthCheckProbeExecutionState } from "@/lib/diagnostics/healthCheckState";
+import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
+import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
+import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
 import {
   DIAGNOSTICS_TEST_SAVED_DEVICE_HEALTH_EVENT,
   type DiagnosticsTestBridge,
   type SavedDeviceHealthSeedState,
+  type SavedDeviceHealthSeedSnapshot,
 } from "@/lib/diagnostics/diagnosticsTestBridge";
 import { addLog } from "@/lib/logging";
 import { getPasswordForDevice } from "@/lib/secureStorage";
@@ -32,12 +37,17 @@ import { buildSavedDevicePreferredRuntimeHost } from "@/lib/savedDevices/resolve
 
 // F-DIAG-1 — saved-device probe cycle frequency.
 // Picker open (switchDeviceDialog): every 10 s so health refreshes are visible
-// during interaction. Background maintenance (picker closed): every 60 s so
-// inactive devices do not generate enough trace traffic to interfere with
-// foreground operations or cross-contaminate the active device rollup.
+// during interaction.
+// Background maintenance (picker closed): selected-device-only, lightweight,
+// and freshness-gated. Healthy devices back off aggressively; failing devices
+// re-check sooner without fan-out.
 const AUTO_REFRESH_MS_FOREGROUND = 10_000;
-const AUTO_REFRESH_MS_BACKGROUND = 60_000;
+const MIN_BACKGROUND_FRESHNESS_MS = 5_000;
+const MIN_BACKGROUND_HEALTHY_CADENCE_MS = 60_000;
+const MIN_BACKGROUND_RECOVERY_CADENCE_MS = 15_000;
 const TOTAL_PROBE_COUNT = 6;
+
+type SavedDeviceHealthDeferredReason = "freshness" | "circuit-open" | null;
 
 export type SavedDeviceHealthSnapshot = {
   running: boolean;
@@ -46,6 +56,8 @@ export type SavedDeviceHealthSnapshot = {
   probeStates: Record<HealthCheckProbeType, HealthCheckProbeExecutionState>;
   lastStartedAt: string | null;
   lastCompletedAt: string | null;
+  lastObservedAt: string | null;
+  deferredReason: SavedDeviceHealthDeferredReason;
   error: string | null;
 };
 
@@ -75,8 +87,53 @@ const buildIdleSnapshot = (): SavedDeviceHealthSnapshot => ({
   probeStates: resetHealthCheckProbeStates(),
   lastStartedAt: null,
   lastCompletedAt: null,
+  lastObservedAt: null,
+  deferredReason: null,
   error: null,
 });
+
+const maxTimestamp = (...values: Array<number | null | undefined>) =>
+  values.reduce<number | null>((latest, value) => {
+    if (typeof value !== "number" || Number.isNaN(value)) {
+      return latest;
+    }
+    return latest === null ? value : Math.max(latest, value);
+  }, null);
+
+const toIsoTimestamp = (value: number | null) => (value === null ? null : new Date(value).toISOString());
+
+const getBackgroundHealthFreshnessMs = () => {
+  const safety = loadDeviceSafetyConfig();
+  return Math.max(MIN_BACKGROUND_FRESHNESS_MS, safety.infoCacheMs * 8);
+};
+
+const getBackgroundHealthCadenceMs = (mode: "healthy" | "recovery") => {
+  const freshnessMs = getBackgroundHealthFreshnessMs();
+  return mode === "healthy"
+    ? Math.max(MIN_BACKGROUND_HEALTHY_CADENCE_MS, freshnessMs * 6)
+    : Math.max(MIN_BACKGROUND_RECOVERY_CADENCE_MS, freshnessMs);
+};
+
+const getBackgroundTrafficEvidence = () => {
+  const connection = getConnectionSnapshot();
+  const deviceState = getDeviceStateSnapshot();
+  const lastSuccessAtMs = maxTimestamp(deviceState.lastSuccessAtMs, connection.lastProbeSucceededAtMs);
+  const lastFailureAtMs = maxTimestamp(deviceState.lastFailureAtMs, connection.lastProbeFailedAtMs);
+  const lastObservedAtMs = maxTimestamp(lastSuccessAtMs, lastFailureAtMs);
+  const circuitOpen = typeof deviceState.circuitOpenUntilMs === "number" && Date.now() < deviceState.circuitOpenUntilMs;
+  const failureIsNewest = lastFailureAtMs !== null && lastFailureAtMs >= (lastSuccessAtMs ?? Number.NEGATIVE_INFINITY);
+
+  return {
+    connection,
+    lastSuccessAtMs,
+    lastFailureAtMs,
+    lastObservedAtMs,
+    lastObservedAt: toIsoTimestamp(lastObservedAtMs),
+    isFailure: circuitOpen || failureIsNewest,
+    circuitOpen,
+    errorMessage: deviceState.lastErrorMessage ?? connection.lastProbeError ?? null,
+  };
+};
 
 const mergeDeviceState = (
   previous: Record<string, SavedDeviceHealthSnapshot>,
@@ -85,6 +142,25 @@ const mergeDeviceState = (
   const next: Record<string, SavedDeviceHealthSnapshot> = {};
   devices.forEach((device) => {
     next[device.id] = previous[device.id] ?? buildIdleSnapshot();
+  });
+  return next;
+};
+
+const normalizeSeedSnapshot = (snapshot: SavedDeviceHealthSeedSnapshot): SavedDeviceHealthSnapshot => ({
+  ...buildIdleSnapshot(),
+  ...snapshot,
+  lastObservedAt: snapshot.lastObservedAt ?? snapshot.lastCompletedAt ?? null,
+  deferredReason: snapshot.deferredReason ?? null,
+});
+
+const mergeSeededDeviceState = (
+  previous: Record<string, SavedDeviceHealthSeedSnapshot>,
+  devices: SavedDevice[],
+): Record<string, SavedDeviceHealthSnapshot> => {
+  const next: Record<string, SavedDeviceHealthSnapshot> = {};
+  devices.forEach((device) => {
+    const seededSnapshot = previous[device.id];
+    next[device.id] = seededSnapshot ? normalizeSeedSnapshot(seededSnapshot) : buildIdleSnapshot();
   });
   return next;
 };
@@ -98,6 +174,7 @@ export function useSavedDeviceHealthChecks(
   devices: SavedDevice[],
   enabled: boolean,
   context: HealthCheckRunContext = HEALTH_CHECK_CONTEXTS.backgroundMaintenance,
+  selectedDeviceId: string | null = null,
 ): UseSavedDeviceHealthChecksResult {
   const devicesRef = useRef(devices);
   const [byDeviceId, setByDeviceId] = useState<Record<string, SavedDeviceHealthSnapshot>>(() =>
@@ -151,7 +228,7 @@ export function useSavedDeviceHealthChecks(
   const seededResult = useMemo<UseSavedDeviceHealthChecksResult | null>(() => {
     if (!seededState) return null;
     return {
-      byDeviceId: mergeDeviceState(seededState.byDeviceId, devices),
+      byDeviceId: mergeSeededDeviceState(seededState.byDeviceId, devices),
       cycle: seededState.cycle,
       refreshAll: noopRefreshAll,
       totalProbeCount: TOTAL_PROBE_COUNT,
@@ -178,8 +255,9 @@ export function useSavedDeviceHealthChecks(
             device.hasPassword ? "password" : "no-password",
           ].join(":"),
         )
-        .join("|"),
-    [devices],
+        .join("|")
+        .concat(`::selected=${selectedDeviceId ?? ""}`),
+    [devices, selectedDeviceId],
   );
 
   useEffect(() => {
@@ -209,7 +287,7 @@ export function useSavedDeviceHealthChecks(
     controllersRef.current.clear();
   }, []);
 
-  const runCycle = useCallback(
+  const runForegroundCycle = useCallback(
     async (force: boolean) => {
       const currentDevices = devicesRef.current;
       if (!enabled || currentDevices.length === 0) {
@@ -251,6 +329,7 @@ export function useSavedDeviceHealthChecks(
             liveProbes: {},
             probeStates: resetHealthCheckProbeStates(),
             lastStartedAt: startedAt,
+            deferredReason: null,
             error: null,
           }));
 
@@ -279,6 +358,7 @@ export function useSavedDeviceHealthChecks(
                     running: true,
                     liveProbes,
                     probeStates,
+                    deferredReason: null,
                     error: null,
                   }));
                 },
@@ -296,6 +376,8 @@ export function useSavedDeviceHealthChecks(
               liveProbes: null,
               probeStates: current.probeStates,
               lastCompletedAt: new Date().toISOString(),
+              lastObservedAt: result.endTimestamp,
+              deferredReason: null,
               error: null,
             }));
           } catch (error) {
@@ -315,6 +397,7 @@ export function useSavedDeviceHealthChecks(
               liveProbes: null,
               probeStates: current.probeStates,
               lastCompletedAt: new Date().toISOString(),
+              deferredReason: null,
               error: message,
             }));
           } finally {
@@ -348,9 +431,173 @@ export function useSavedDeviceHealthChecks(
     ],
   );
 
+  const runBackgroundCycle = useCallback(
+    async (force: boolean) => {
+      const currentDevices = devicesRef.current;
+      if (!enabled || currentDevices.length === 0 || !selectedDeviceId) {
+        return getBackgroundHealthCadenceMs("healthy");
+      }
+      if (shouldPauseForForegroundSwitch()) {
+        return getBackgroundHealthCadenceMs("healthy");
+      }
+      if (shouldPauseForDiagnosticsSuppression()) {
+        return getBackgroundHealthCadenceMs("healthy");
+      }
+      if (shouldPauseForPollingPause()) {
+        return getBackgroundHealthCadenceMs("healthy");
+      }
+      if (cycleRunningRef.current) {
+        if (!force) {
+          return getBackgroundHealthCadenceMs("healthy");
+        }
+        cancelAll("Superseded by a new saved-device health check cycle");
+      }
+
+      const selectedDevice = currentDevices.find((device) => device.id === selectedDeviceId);
+      if (!selectedDevice) {
+        return getBackgroundHealthCadenceMs("healthy");
+      }
+
+      const evidence = getBackgroundTrafficEvidence();
+      const freshnessMs = getBackgroundHealthFreshnessMs();
+      const hasFreshEvidence =
+        evidence.lastObservedAtMs !== null && Date.now() - evidence.lastObservedAtMs < freshnessMs;
+
+      if (evidence.circuitOpen || (!force && hasFreshEvidence)) {
+        updateDevice(selectedDevice.id, (current) => ({
+          ...current,
+          running: false,
+          liveProbes: null,
+          probeStates: current.probeStates,
+          lastObservedAt: evidence.lastObservedAt ?? current.lastObservedAt,
+          deferredReason: evidence.circuitOpen ? "circuit-open" : "freshness",
+          error: evidence.isFailure ? (evidence.errorMessage ?? current.error) : null,
+        }));
+        setCycle((current) => ({
+          ...current,
+          running: false,
+          lastCompletedAt: new Date().toISOString(),
+        }));
+        return getBackgroundHealthCadenceMs(evidence.isFailure ? "recovery" : "healthy");
+      }
+
+      const cycleToken = cycleTokenRef.current + 1;
+      cycleTokenRef.current = cycleToken;
+      cycleRunningRef.current = true;
+      const startedAt = new Date().toISOString();
+      const controller = new AbortController();
+      controllersRef.current.set(selectedDevice.id, controller);
+
+      setCycle((current) => ({
+        running: true,
+        lastStartedAt: startedAt,
+        lastCompletedAt: current.lastCompletedAt,
+      }));
+      updateDevice(selectedDevice.id, (current) => ({
+        ...current,
+        running: true,
+        liveProbes: null,
+        probeStates: resetHealthCheckProbeStates(),
+        lastStartedAt: startedAt,
+        deferredReason: null,
+        error: null,
+      }));
+
+      try {
+        const password = selectedDevice.hasPassword ? await getPasswordForDevice(selectedDevice.id) : null;
+        if (cycleTokenRef.current !== cycleToken || controller.signal.aborted) {
+          return getBackgroundHealthCadenceMs("healthy");
+        }
+
+        const result = await runConnectivityProbeForTarget(
+          {
+            deviceHost: buildSavedDevicePreferredRuntimeHost(
+              selectedDevice,
+              getSavedDeviceSwitchSummary(selectedDevice.id),
+            ),
+            ftpPort: selectedDevice.ftpPort,
+            telnetPort: selectedDevice.telnetPort,
+            password,
+          },
+          {
+            context,
+            signal: controller.signal,
+          },
+        );
+
+        if (cycleTokenRef.current !== cycleToken || controller.signal.aborted) {
+          return getBackgroundHealthCadenceMs("healthy");
+        }
+
+        updateDevice(selectedDevice.id, (current) => ({
+          ...current,
+          running: false,
+          latestResult: result,
+          liveProbes: null,
+          probeStates: current.probeStates,
+          lastCompletedAt: result.endTimestamp,
+          lastObservedAt: result.endTimestamp,
+          deferredReason: null,
+          error: result.connectivity === "Offline" ? (result.probes.REST.reason ?? "Device not reachable") : null,
+        }));
+
+        return getBackgroundHealthCadenceMs(result.connectivity === "Offline" ? "recovery" : "healthy");
+      } catch (error) {
+        if (controller.signal.aborted || cycleTokenRef.current !== cycleToken) {
+          return getBackgroundHealthCadenceMs("healthy");
+        }
+
+        const message = error instanceof Error ? error.message : String(error ?? "Saved-device health check failed");
+        addLog("warn", "Saved-device background health check failed", {
+          deviceId: selectedDevice.id,
+          host: selectedDevice.host,
+          error: message,
+        });
+        updateDevice(selectedDevice.id, (current) => ({
+          ...current,
+          running: false,
+          liveProbes: null,
+          probeStates: current.probeStates,
+          lastCompletedAt: new Date().toISOString(),
+          lastObservedAt: current.lastObservedAt,
+          deferredReason: null,
+          error: message,
+        }));
+        return getBackgroundHealthCadenceMs("recovery");
+      } finally {
+        const active = controllersRef.current.get(selectedDevice.id);
+        if (active === controller) {
+          controllersRef.current.delete(selectedDevice.id);
+        }
+        if (cycleTokenRef.current === cycleToken) {
+          cycleRunningRef.current = false;
+          setCycle((current) => ({
+            running: false,
+            lastStartedAt: current.lastStartedAt ?? startedAt,
+            lastCompletedAt: new Date().toISOString(),
+          }));
+        }
+      }
+    },
+    [
+      cancelAll,
+      context,
+      enabled,
+      selectedDeviceId,
+      shouldPauseForDiagnosticsSuppression,
+      shouldPauseForForegroundSwitch,
+      shouldPauseForPollingPause,
+      updateDevice,
+    ],
+  );
+
   const refreshAll = useCallback(() => {
-    void runCycle(true);
-  }, [runCycle]);
+    if (context === HEALTH_CHECK_CONTEXTS.backgroundMaintenance) {
+      void runBackgroundCycle(true);
+      return;
+    }
+    void runForegroundCycle(true);
+  }, [context, runBackgroundCycle, runForegroundCycle]);
 
   useEffect(() => {
     if (seededState) {
@@ -362,19 +609,46 @@ export function useSavedDeviceHealthChecks(
       return;
     }
 
-    void runCycle(true);
-    const intervalMs =
-      context === HEALTH_CHECK_CONTEXTS.backgroundMaintenance ? AUTO_REFRESH_MS_BACKGROUND : AUTO_REFRESH_MS_FOREGROUND;
+    if (context === HEALTH_CHECK_CONTEXTS.backgroundMaintenance) {
+      let cancelled = false;
+      let timeoutId: number | null = null;
+
+      const scheduleNext = (delayMs: number) => {
+        if (cancelled) {
+          return;
+        }
+        timeoutId = window.setTimeout(() => {
+          void runBackgroundCycle(false).then((nextDelayMs) => {
+            scheduleNext(nextDelayMs);
+          });
+        }, delayMs);
+      };
+
+      void runBackgroundCycle(true).then((nextDelayMs) => {
+        scheduleNext(nextDelayMs);
+      });
+
+      return () => {
+        cancelled = true;
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+        }
+        cancelAll("Saved-device switcher closed");
+        setCycle((current) => ({ ...current, running: false }));
+      };
+    }
+
+    void runForegroundCycle(true);
     const intervalId = window.setInterval(() => {
-      void runCycle(false);
-    }, intervalMs);
+      void runForegroundCycle(false);
+    }, AUTO_REFRESH_MS_FOREGROUND);
 
     return () => {
       window.clearInterval(intervalId);
       cancelAll("Saved-device switcher closed");
       setCycle((current) => ({ ...current, running: false }));
     };
-  }, [cancelAll, context, cycleScheduleKey, enabled, runCycle, seededState]);
+  }, [cancelAll, context, cycleScheduleKey, enabled, runBackgroundCycle, runForegroundCycle, seededState]);
 
   useEffect(() => {
     if (seededState || context !== HEALTH_CHECK_CONTEXTS.backgroundMaintenance) {

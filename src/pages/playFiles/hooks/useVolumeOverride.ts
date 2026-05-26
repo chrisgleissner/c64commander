@@ -295,7 +295,6 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
             updateConfigBatch.mutateAsync({
               category: "Audio Mixer",
               updates: write.updates,
-              immediate: true,
               skipInvalidation: true,
             }),
             4000,
@@ -335,7 +334,6 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
           updateConfigBatch.mutateAsync({
             category: "Audio Mixer",
             updates,
-            immediate: true,
             skipInvalidation: true,
           }),
           4000,

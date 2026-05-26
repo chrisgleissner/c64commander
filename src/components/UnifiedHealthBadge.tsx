@@ -93,11 +93,14 @@ const resolveDeviceHealthSummary = (
   snapshot: ReturnType<typeof useSavedDeviceHealthChecks>["byDeviceId"][string] | undefined,
   totalProbeCount: number,
   switchStatusLabel: string | null,
+  device: { lastSuccessfulConnectionAt?: string | null },
+  isSelected: boolean,
 ) => {
   const switchPrefix = switchStatusLabel && switchStatusLabel !== "Selected" ? `${switchStatusLabel} selection` : null;
+  const lastSeenAt = snapshot?.lastObservedAt ?? snapshot?.lastCompletedAt ?? device.lastSuccessfulConnectionAt ?? null;
 
   if (!snapshot) {
-    return [switchPrefix, "Waiting to start"].filter(Boolean).join(" · ");
+    return [switchPrefix, formatRelativeTime("Last seen", parseIsoTimestamp(lastSeenAt))].filter(Boolean).join(" · ");
   }
 
   if (snapshot.running) {
@@ -110,17 +113,30 @@ const resolveDeviceHealthSummary = (
       .join(" · ");
   }
 
-  if (snapshot.error) {
+  if (snapshot.deferredReason === "freshness") {
     return [
       switchPrefix,
-      "Latest check failed",
-      formatRelativeTime("Last check", parseIsoTimestamp(snapshot.lastCompletedAt)),
+      formatRelativeTime("Last seen", parseIsoTimestamp(lastSeenAt)),
+      isSelected ? "Deferred" : null,
     ]
       .filter(Boolean)
       .join(" · ");
   }
 
-  return [switchPrefix, formatRelativeTime("Last check", parseIsoTimestamp(snapshot.lastCompletedAt))]
+  if (snapshot.error) {
+    return [
+      switchPrefix,
+      snapshot.deferredReason === "circuit-open" ? "Circuit open" : "Latest check failed",
+      formatRelativeTime(
+        snapshot.deferredReason === "circuit-open" ? "Last seen" : "Last check",
+        parseIsoTimestamp(snapshot.deferredReason === "circuit-open" ? lastSeenAt : snapshot.lastCompletedAt),
+      ),
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+
+  return [switchPrefix, formatRelativeTime("Last check", parseIsoTimestamp(snapshot.lastCompletedAt ?? lastSeenAt))]
     .filter(Boolean)
     .join(" · ");
 };
@@ -340,6 +356,7 @@ export function UnifiedHealthBadge({ className }: Props) {
     savedDevices.devices,
     shouldRunSavedDeviceHealthChecks,
     pickerOpen ? HEALTH_CHECK_CONTEXTS.switchDeviceDialog : HEALTH_CHECK_CONTEXTS.backgroundMaintenance,
+    savedDevices.selectedDeviceId,
   );
 
   const shouldPreferSelectedDeviceEvidence = pickerOpen || pendingSwitch !== null;
@@ -635,7 +652,7 @@ export function UnifiedHealthBadge({ className }: Props) {
                           ) : null}
                         </span>
                         <span className="mt-1 block text-xs text-muted-foreground">
-                          {resolveDeviceHealthSummary(healthSnapshot, totalProbeCount, statusLabel)}
+                          {resolveDeviceHealthSummary(healthSnapshot, totalProbeCount, statusLabel, device, isSelected)}
                         </span>
                         {showAndroidHostnameWarning ? (
                           <span className="mt-1 block text-xs text-amber-600">

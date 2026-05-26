@@ -13,6 +13,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createIndexedSliderDomain, useDeviceBoundSlider } from "@/hooks/useDeviceBoundSlider";
+import { createLatestIntentWriteLane } from "@/lib/deviceInteraction/latestIntentWriteLane";
+import type { LatestIntentWriteLane } from "@/lib/deviceInteraction/latestIntentWriteLane";
 import { emitUiTraceMarker } from "@/lib/tracing/userTrace";
 import { useC64ConfigItem, VISIBLE_C64_QUERY_OPTIONS } from "@/hooks/useC64Connection";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
@@ -118,6 +120,20 @@ export function ConfigItemRow({
   const [inputValue, setInputValue] = useState(() => String(value));
   const [isTextEditing, setIsTextEditing] = useState(false);
   const lastCommittedRef = useRef<string>(String(value));
+  const sliderWriteLaneRef = useRef<LatestIntentWriteLane<string> | null>(null);
+  const onValueChangeRef = useRef(onValueChange);
+
+  useEffect(() => {
+    onValueChangeRef.current = onValueChange;
+  }, [onValueChange]);
+
+  if (!sliderWriteLaneRef.current) {
+    sliderWriteLaneRef.current = createLatestIntentWriteLane<string>({
+      run: async (nextValue) => {
+        await Promise.resolve(onValueChangeRef.current(nextValue));
+      },
+    });
+  }
 
   const extractConfigFromResponse = (data: unknown) => {
     if (!data || typeof data !== "object") return undefined;
@@ -346,12 +362,12 @@ export function ConfigItemRow({
     },
     preview: (nextValue) => {
       if (controlKind !== "slider" || String(nextValue) === lastCommittedRef.current) return;
-      return Promise.resolve(onValueChange(nextValue));
+      return sliderWriteLaneRef.current?.schedule(String(nextValue));
     },
     commit: (nextValue) => {
       if (controlKind !== "slider" || String(nextValue) === lastCommittedRef.current) return;
       lastCommittedRef.current = String(nextValue);
-      return Promise.resolve(onValueChange(nextValue));
+      return sliderWriteLaneRef.current?.schedule(String(nextValue));
     },
   });
 
