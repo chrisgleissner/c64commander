@@ -24,6 +24,17 @@ describe("telemetry release gate workflow rules", () => {
     );
   });
 
+  it("classifies Android monitor exit codes before enforcing the minimum metrics row count", () => {
+    const workflow = readWorkflow("android.yaml");
+    const codeFileIndex = workflow.indexOf('code_file="ci-artifacts/telemetry/android/monitor.exitcode"');
+    const infraKillIndex = workflow.indexOf('if [[ "$code" == "137" ]]; then');
+    const minRowsIndex = workflow.indexOf('if [[ "$data_rows" -lt 2 ]]; then');
+
+    expect(codeFileIndex).toBeGreaterThan(-1);
+    expect(infraKillIndex).toBeGreaterThan(codeFileIndex);
+    expect(minRowsIndex).toBeGreaterThan(infraKillIndex);
+  });
+
   it("publishes Android release artifacts for all signed tag builds while keeping Play upload stable-only", () => {
     const workflow = readWorkflow("android.yaml");
     expect(workflow).toContain(
