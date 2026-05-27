@@ -340,21 +340,35 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   const applyAudioMixerUpdates = useCallback(
     async (updates: Record<string, string | number>, context: string) => {
       if (!Object.keys(updates).length) return;
-      const pendingWrite = withTimeout(
-        updateConfigBatch.mutateAsync({
-          category: "Audio Mixer",
-          updates,
-          skipInvalidation: true,
-        }),
-        4000,
-        `${context} audio mixer update`,
-      );
+      const startAudioMixerWrite = () =>
+        withTimeout(
+          updateConfigBatch.mutateAsync({
+            category: "Audio Mixer",
+            updates,
+            skipInvalidation: true,
+          }),
+          4000,
+          `${context} audio mixer update`,
+        );
+      let pendingWrite = startAudioMixerWrite();
       try {
         audioMixerWriteInFlightRef.current = pendingWrite;
         await pendingWrite;
         schedulePlaybackReconciliation();
       } catch (error) {
         if (context.startsWith("Restore")) {
+          if (!isAbortLikeError(error)) {
+            try {
+              await waitForMachineTransitionsToSettle();
+              pendingWrite = startAudioMixerWrite();
+              audioMixerWriteInFlightRef.current = pendingWrite;
+              await pendingWrite;
+              schedulePlaybackReconciliation();
+              return;
+            } catch (retryError) {
+              error = retryError;
+            }
+          }
           addErrorLog("Audio mixer restore failed", {
             error: (error as Error).message,
             context,

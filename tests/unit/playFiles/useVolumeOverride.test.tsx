@@ -1170,6 +1170,30 @@ describe("useVolumeOverride", () => {
     expect(toast).not.toHaveBeenCalled();
   });
 
+  it("retries transient stop restore failures before showing a toast", async () => {
+    buildEnabledSidRestoreUpdatesMock.mockReturnValue({ "SID 1": "5" });
+    mutateAsyncMock
+      .mockRejectedValueOnce(new Error("Restore (stop) audio mixer update timed out"))
+      .mockResolvedValueOnce(undefined);
+    const transitionGateMock = vi.mocked(waitForMachineTransitionsToSettle);
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    result.current.volumeSessionActiveRef.current = true;
+    result.current.volumeSessionSnapshotRef.current = { "SID 1": "0" };
+
+    await expect(result.current.restoreVolumeOverrides("stop")).resolves.toBeUndefined();
+
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(2);
+    expect(transitionGateMock).toHaveBeenCalledTimes(2);
+    expect(addErrorLog).not.toHaveBeenCalledWith("Audio mixer restore failed", {
+      error: "Restore (stop) audio mixer update timed out",
+      context: "Restore (stop)",
+    });
+    expect(toast).not.toHaveBeenCalled();
+  });
+
   it("deduplicates concurrent restore attempts while a restore is still in flight", async () => {
     buildEnabledSidRestoreUpdatesMock.mockReturnValue({ "SID 1": "5" });
 
