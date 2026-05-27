@@ -278,9 +278,9 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     volumeUiTargetRef.current = muted
       ? null
       : {
-          index,
-          setAtMs: nextIntent.setAtMs,
-        };
+        index,
+        setAtMs: nextIntent.setAtMs,
+      };
   }, []);
 
   const withTimeout = useCallback(async <T>(promise: Promise<T>, timeoutMs: number, operation: string) => {
