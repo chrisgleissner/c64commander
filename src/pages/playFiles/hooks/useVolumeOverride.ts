@@ -528,7 +528,15 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
         const items = await resolveEnabledSidVolumeItems(true);
         const updates = buildEnabledSidRestoreUpdates(items, sidEnablement, snapshot);
         if (Object.keys(updates).length) {
-          await applyAudioMixerUpdates(updates, `Restore (${reason})`);
+          await withPollingPause(async () => {
+            await waitForMachineTransitionsToSettle();
+            const endWriteBurst = beginPlaybackWriteBurst();
+            try {
+              await applyAudioMixerUpdates(updates, `Restore (${reason})`);
+            } finally {
+              endWriteBurst();
+            }
+          });
         }
         volumeSessionSnapshotRef.current = null;
         volumeSessionActiveRef.current = false;
@@ -556,6 +564,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       status.isConnected,
       status.isConnecting,
       status.state,
+      withPollingPause,
     ],
   );
 

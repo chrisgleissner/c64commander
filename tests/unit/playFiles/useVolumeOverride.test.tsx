@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "@/hooks/use-toast";
 import { useVolumeOverride } from "@/pages/playFiles/hooks/useVolumeOverride";
+import { waitForMachineTransitionsToSettle } from "@/lib/deviceInteraction/deviceActivityGate";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 
@@ -1112,6 +1113,23 @@ describe("useVolumeOverride", () => {
     );
     expect(result.current.volumeSessionActiveRef.current).toBe(false);
     expect(result.current.volumeSessionSnapshotRef.current).toBeNull();
+  });
+
+  it("waits for machine transitions before applying restore updates", async () => {
+    buildEnabledSidRestoreUpdatesMock.mockReturnValue({ "SID 1": "5" });
+    const transitionGateMock = vi.mocked(waitForMachineTransitionsToSettle);
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    result.current.volumeSessionActiveRef.current = true;
+    result.current.volumeSessionSnapshotRef.current = { "SID 1": "0" };
+
+    await result.current.restoreVolumeOverrides("stop");
+
+    expect(transitionGateMock).toHaveBeenCalledTimes(1);
+    expect(transitionGateMock.mock.invocationCallOrder[0]).toBeLessThan(mutateAsyncMock.mock.invocationCallOrder[0]);
   });
 
   it("suppresses restore failure toasts during navigation cleanup", async () => {
