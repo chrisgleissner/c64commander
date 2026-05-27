@@ -1152,6 +1152,39 @@ describe("useVolumeOverride", () => {
     expect(toast).not.toHaveBeenCalled();
   });
 
+  it("deduplicates concurrent restore attempts while a restore is still in flight", async () => {
+    buildEnabledSidRestoreUpdatesMock.mockReturnValue({ "SID 1": "5" });
+
+    let resolveRestore: (() => void) | null = null;
+    mutateAsyncMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveRestore = resolve;
+        }),
+    );
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    result.current.volumeSessionActiveRef.current = true;
+    result.current.volumeSessionSnapshotRef.current = { "SID 1": "0" };
+
+    const firstRestore = result.current.restoreVolumeOverrides("stop");
+    const secondRestore = result.current.restoreVolumeOverrides("playback-ended");
+
+    await waitFor(() => {
+      expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
+    });
+
+    expect(resolveRestore).not.toBeNull();
+    resolveRestore?.();
+
+    await expect(Promise.all([firstRestore, secondRestore])).resolves.toEqual([undefined, undefined]);
+    expect(result.current.volumeSessionActiveRef.current).toBe(false);
+    expect(result.current.volumeSessionSnapshotRef.current).toBeNull();
+  });
+
   it("logs forced refresh failures for audio mixer and SID enablement lookups", async () => {
     const { result } = renderHook(() =>
       useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),

@@ -510,11 +510,25 @@ test.describe("Playback file browser (part 2)", () => {
     ]);
 
     let delayConfigReads = false;
+    const delayedConfigReadTasks = new Set<Promise<void>>();
     const delayConfigReadRoute = async (route: Parameters<Parameters<typeof page.route>[1]>[0]) => {
-      if (delayConfigReads && route.request().method() === "GET") {
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+      const delayedReadTask = (async () => {
+        if (delayConfigReads && route.request().method() === "GET") {
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+        }
+      })();
+      delayedConfigReadTasks.add(delayedReadTask);
+      try {
+        await delayedReadTask;
+        await route.continue();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error ?? "");
+        if (!message.includes("Route is already handled")) {
+          throw error;
+        }
+      } finally {
+        delayedConfigReadTasks.delete(delayedReadTask);
       }
-      await route.continue();
     };
 
     await page.route("**/v1/configs", delayConfigReadRoute);
@@ -539,6 +553,7 @@ test.describe("Playback file browser (part 2)", () => {
       await snap(page, testInfo, "pause-not-blocked-by-config-read-delay");
     } finally {
       delayConfigReads = false;
+      await Promise.allSettled([...delayedConfigReadTasks]);
       await page.unroute("**/v1/configs", delayConfigReadRoute);
       await page.unroute("**/v1/configs/**", delayConfigReadRoute);
     }

@@ -147,6 +147,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   const volumeUpdateTimerRef = useRef<number | null>(null);
   const volumeUpdateSeqRef = useRef(0);
   const volumeUiTargetRef = useRef<{ index: number; setAtMs: number } | null>(null);
+  const restoreInFlightRef = useRef<Promise<void> | null>(null);
   const pendingVolumeWriteRef = useRef<PlaybackSyncIntent | null>(null);
   const lastKnownDeviceVolumeRef = useRef<PlaybackSyncState | null>(null);
   const lastManualWriteRef = useRef<{ index: number; muted: boolean; setAtMs: number } | null>(null);
@@ -275,9 +276,9 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     volumeUiTargetRef.current = muted
       ? null
       : {
-          index,
-          setAtMs: nextIntent.setAtMs,
-        };
+        index,
+        setAtMs: nextIntent.setAtMs,
+      };
   }, []);
 
   const withTimeout = useCallback(async <T>(promise: Promise<T>, timeoutMs: number, operation: string) => {
@@ -507,29 +508,43 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
 
   const restoreVolumeOverrides = useCallback(
     async (reason: string) => {
+      if (restoreInFlightRef.current) {
+        await restoreInFlightRef.current;
+        return;
+      }
       if (!volumeSessionActiveRef.current) return;
       const snapshot = volumeSessionSnapshotRef.current;
       if (!snapshot) return;
-      if (status.state === "DEMO_ACTIVE" || (!status.isConnected && !status.isConnecting)) {
+      const restorePromise = (async () => {
+        if (status.state === "DEMO_ACTIVE" || (!status.isConnected && !status.isConnecting)) {
+          volumeSessionSnapshotRef.current = null;
+          volumeSessionActiveRef.current = false;
+          manualMuteSnapshotRef.current = null;
+          pauseMuteSnapshotRef.current = null;
+          dispatchTrackedVolume({ type: "reset", index: defaultVolumeIndex });
+          volumeUiTargetRef.current = null;
+          return;
+        }
+        const items = await resolveEnabledSidVolumeItems(true);
+        const updates = buildEnabledSidRestoreUpdates(items, sidEnablement, snapshot);
+        if (Object.keys(updates).length) {
+          await applyAudioMixerUpdates(updates, `Restore (${reason})`);
+        }
         volumeSessionSnapshotRef.current = null;
         volumeSessionActiveRef.current = false;
         manualMuteSnapshotRef.current = null;
         pauseMuteSnapshotRef.current = null;
         dispatchTrackedVolume({ type: "reset", index: defaultVolumeIndex });
         volumeUiTargetRef.current = null;
-        return;
+      })();
+      restoreInFlightRef.current = restorePromise;
+      try {
+        await restorePromise;
+      } finally {
+        if (restoreInFlightRef.current === restorePromise) {
+          restoreInFlightRef.current = null;
+        }
       }
-      const items = await resolveEnabledSidVolumeItems(true);
-      const updates = buildEnabledSidRestoreUpdates(items, sidEnablement, snapshot);
-      if (Object.keys(updates).length) {
-        await applyAudioMixerUpdates(updates, `Restore (${reason})`);
-      }
-      volumeSessionSnapshotRef.current = null;
-      volumeSessionActiveRef.current = false;
-      manualMuteSnapshotRef.current = null;
-      pauseMuteSnapshotRef.current = null;
-      dispatchTrackedVolume({ type: "reset", index: defaultVolumeIndex });
-      volumeUiTargetRef.current = null;
     },
     [
       applyAudioMixerUpdates,
