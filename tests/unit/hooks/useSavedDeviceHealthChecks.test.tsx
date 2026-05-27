@@ -23,6 +23,9 @@ const createDeferred = <T,>() => {
 
 const createAbortError = () => Object.assign(new Error("Aborted"), { name: "AbortError" });
 
+const originalDocumentVisibilityStateDescriptor = Object.getOwnPropertyDescriptor(document, "visibilityState");
+const originalDocumentHiddenDescriptor = Object.getOwnPropertyDescriptor(document, "hidden");
+
 const setDocumentVisibility = (visibilityState: "visible" | "hidden") => {
   Object.defineProperty(document, "visibilityState", {
     configurable: true,
@@ -32,6 +35,20 @@ const setDocumentVisibility = (visibilityState: "visible" | "hidden") => {
     configurable: true,
     value: visibilityState === "hidden",
   });
+};
+
+const restoreDocumentVisibilityDescriptors = () => {
+  if (originalDocumentVisibilityStateDescriptor) {
+    Object.defineProperty(document, "visibilityState", originalDocumentVisibilityStateDescriptor);
+  } else {
+    delete (document as { visibilityState?: Document["visibilityState"] }).visibilityState;
+  }
+
+  if (originalDocumentHiddenDescriptor) {
+    Object.defineProperty(document, "hidden", originalDocumentHiddenDescriptor);
+  } else {
+    delete (document as { hidden?: Document["hidden"] }).hidden;
+  }
 };
 
 const createAbortablePendingRun = () => {
@@ -257,6 +274,7 @@ describe("useSavedDeviceHealthChecks", () => {
 
   afterEach(() => {
     delete window.__c64uDiagnosticsTestBridge;
+    restoreDocumentVisibilityDescriptors();
     vi.useRealTimers();
   });
 
