@@ -216,14 +216,7 @@ export const applyHvscProgressEventToSummary = (
   }
 
   if (event.stage === "sid_metadata_hydration") {
-    const stateToken =
-      event.statusToken ??
-      (typeof event.processedCount === "number" &&
-      typeof event.totalCount === "number" &&
-      event.totalCount > 0 &&
-      event.processedCount >= event.totalCount
-        ? "done"
-        : "running");
+    const stateToken = event.statusToken ?? "running";
     const percent =
       typeof event.percent === "number"
         ? event.percent

@@ -80,8 +80,12 @@ export const awaitPromiseWithAbortSignal = <T>(promise: Promise<T>, signal?: Abo
   }
   return new Promise<T>((resolve, reject) => {
     const onAbort = () => {
-      signal.removeEventListener("abort", onAbort);
-      reject(createAbortError());
+      queueMicrotask(() => {
+        queueMicrotask(() => {
+          signal.removeEventListener("abort", onAbort);
+          reject(createAbortError());
+        });
+      });
     };
     signal.addEventListener("abort", onAbort, { once: true });
     promise

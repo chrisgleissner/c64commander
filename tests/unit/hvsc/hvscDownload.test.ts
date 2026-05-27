@@ -31,6 +31,9 @@ vi.mock("@capacitor/filesystem", () => ({
     readdir: vi.fn(),
     readFile: vi.fn(),
     downloadFile: vi.fn(),
+    addListener: vi.fn(async () => ({
+      remove: vi.fn(async () => undefined),
+    })),
   },
 }));
 
@@ -71,6 +74,7 @@ import {
   parseContentLength,
   fetchContentLength,
   emitDownloadProgress,
+  resolveDownloadProgressBytes,
   ensureNotCancelledWith,
   downloadArchive,
   readArchiveBuffer,
@@ -388,6 +392,22 @@ describe("hvscDownload", () => {
         downloadedBytes: undefined,
         totalBytes: 100,
         percent: 0,
+      });
+    });
+  });
+
+  describe("resolveDownloadProgressBytes", () => {
+    it("normalizes Capacitor native progress listener bytes", () => {
+      expect(resolveDownloadProgressBytes({ bytes: 256, contentLength: 1024 })).toEqual({
+        loaded: 256,
+        total: 1024,
+      });
+    });
+
+    it("keeps callback loaded and total fields when present", () => {
+      expect(resolveDownloadProgressBytes({ loaded: 128, total: 512, bytes: 256, contentLength: 1024 })).toEqual({
+        loaded: 128,
+        total: 512,
       });
     });
   });
@@ -811,6 +831,48 @@ describe("hvscDownload", () => {
 
       const result = await downloadArchive(makeOptions());
       expect(result).toBeNull();
+    });
+
+    it("native download: subscribes to filesystem progress events and removes the listener", async () => {
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+      const remove = vi.fn(async () => undefined);
+      let progressListener: ((status: { bytes?: number; contentLength?: number }) => void) | null = null;
+      vi.mocked(Filesystem.addListener).mockImplementation(async (_eventName, listener) => {
+        progressListener = listener;
+        return { remove };
+      });
+      vi.mocked(Filesystem.downloadFile).mockImplementation(async () => {
+        progressListener?.({ bytes: 250, contentLength: 1000 });
+        progressListener?.({ bytes: 750, contentLength: 1000 });
+        return {};
+      });
+      vi.mocked(Filesystem.stat).mockResolvedValue({ size: 1000, type: "file" } as any);
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: { get: (name: string) => (name === "content-length" ? "1000" : null) },
+      });
+      const emitProgress = vi.fn();
+
+      await downloadArchive(makeOptions({ emitProgress }));
+
+      expect(Filesystem.addListener).toHaveBeenCalledWith("progress", expect.any(Function));
+      expect(emitProgress).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stage: "download",
+          downloadedBytes: 250,
+          totalBytes: 1000,
+          percent: 25,
+        }),
+      );
+      expect(emitProgress).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stage: "download",
+          downloadedBytes: 750,
+          totalBytes: 1000,
+          percent: 75,
+        }),
+      );
+      expect(remove).toHaveBeenCalled();
     });
 
     it("native download: skips size check when no Content-Length header", async () => {

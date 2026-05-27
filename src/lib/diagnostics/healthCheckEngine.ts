@@ -35,6 +35,7 @@ import { getStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 import type { TelnetTransport } from "@/lib/telnet/telnetTypes";
 import { recordTelnetOperation } from "@/lib/tracing/traceSession";
 import { isTransientConnectivityFailure } from "@/lib/uiErrors";
+import type { InteractionIntent } from "@/lib/deviceInteraction/deviceInteractionManager";
 
 const CONFIG_ROUNDTRIP_TARGETS = [
   { category: "LED Strip Settings", item: "Strip Intensity", delta: 16, min: 0, max: 31 },
@@ -131,6 +132,7 @@ type ProbeRuntime = {
   ftpPort: number;
   telnetPort: number;
   password?: string;
+  intent: InteractionIntent;
 };
 
 type TelnetAuthenticationResult = {
@@ -185,7 +187,14 @@ const generateRunId = (): string => {
   return `hcr-${runSequence.toString().padStart(4, "0")}`;
 };
 
-const buildProbeRuntime = (target?: HealthCheckTarget): ProbeRuntime => {
+const resolveProbeIntent = (runContext: HealthCheckRunContext): InteractionIntent => {
+  if (runContext.context === "background-maintenance") return "background";
+  if (runContext.context === "manual-diagnostics") return "user";
+  return "system";
+};
+
+const buildProbeRuntime = (runContext: HealthCheckRunContext, target?: HealthCheckTarget): ProbeRuntime => {
+  const intent = resolveProbeIntent(runContext);
   if (target) {
     const deviceHost = target.deviceHost;
     return {
@@ -194,6 +203,7 @@ const buildProbeRuntime = (target?: HealthCheckTarget): ProbeRuntime => {
       ftpPort: target.ftpPort,
       telnetPort: target.telnetPort,
       password: target.password ?? undefined,
+      intent,
     };
   }
 
@@ -205,6 +215,7 @@ const buildProbeRuntime = (target?: HealthCheckTarget): ProbeRuntime => {
     ftpPort: getStoredFtpPort(),
     telnetPort: getStoredTelnetPort(),
     password: snap.password,
+    intent,
   };
 };
 
@@ -248,6 +259,7 @@ const readMemoryProbeWithTransientRetry = async (
       return await runtime.api.readMemory(address, length, {
         signal: options.signal,
         timeoutMs: options.timeoutMs,
+        __c64uIntent: runtime.intent,
       });
     } catch (error) {
       lastError = error;
@@ -526,12 +538,9 @@ const probeRest = async (
       runtime.api.getInfo({
         signal,
         timeoutMs: PROBE_TIMEOUT_MS.REST,
-        __c64uIntent: "system",
+        __c64uIntent: runtime.intent,
         __c64uAllowDuringError: true,
         __c64uBypassCache: true,
-        __c64uBypassCooldown: true,
-        __c64uBypassBackoff: true,
-        __c64uBypassCircuit: true,
       }),
     );
     const hasErrors = Array.isArray(info.errors) && info.errors.length > 0;
@@ -643,7 +652,7 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
       const readResp = await runtime.api.getConfigItem(target.category, target.item, {
         signal,
         timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
-        __c64uIntent: "system",
+        __c64uIntent: runtime.intent,
         __c64uBypassCache: true,
       });
       const itemData = extractConfigItemData(readResp, target.category, target.item);
@@ -693,6 +702,7 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
         await runtime.api.setConfigValue(target.category, target.item, tempValue, {
           signal,
           timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
+          __c64uIntent: runtime.intent,
         });
         tempValueApplied = true;
         await waitMs(CONFIG_PULSE_DELAY_MS, signal);
@@ -700,7 +710,7 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
         const readBackResp = await runtime.api.getConfigItem(target.category, target.item, {
           signal,
           timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
-          __c64uIntent: "system",
+          __c64uIntent: runtime.intent,
           __c64uBypassCache: true,
         });
         readBackValue = parseConfigNumericValue(extractConfigItemData(readBackResp, target.category, target.item));
@@ -710,6 +720,7 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
             await runtime.api.setConfigValue(target.category, target.item, currentValue, {
               signal,
               timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
+              __c64uIntent: runtime.intent,
             });
           } catch (error) {
             revertErrorMessage = error instanceof Error ? error.message : String(error ?? "Unknown revert failure");
@@ -726,7 +737,7 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
       const verifyResp = await runtime.api.getConfigItem(target.category, target.item, {
         signal,
         timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
-        __c64uIntent: "system",
+        __c64uIntent: runtime.intent,
         __c64uBypassCache: true,
       });
       const verifyValue = parseConfigNumericValue(extractConfigItemData(verifyResp, target.category, target.item));
@@ -796,7 +807,7 @@ const probeFtp = async (runtime: ProbeRuntime): Promise<HealthCheckProbeRecord> 
         password: runtime.password,
         path: "/",
         timeoutMs: PROBE_TIMEOUT_MS.FTP,
-        __c64uIntent: "system",
+        __c64uIntent: runtime.intent,
       }),
     );
     const hasEntries = Array.isArray(result) || (!!result && Array.isArray(result.entries));
@@ -1021,7 +1032,7 @@ const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
     return await withTelnetInteraction(
       {
         actionId: "health-check",
-        intent: "system",
+        intent: runtime.intent,
         action: traceAction,
       },
       async () => {
@@ -1364,6 +1375,87 @@ const buildRunResult = (args: {
   };
 };
 
+export const runConnectivityProbeForTarget = async (
+  target: HealthCheckTarget,
+  options: {
+    signal?: AbortSignal;
+    context?: HealthCheckRunContext;
+  } = {},
+): Promise<HealthCheckRunResult> => {
+  const runId = generateRunId();
+  const startTimestamp = new Date().toISOString();
+  const startedAtMs = Date.now();
+  const runContext = normalizeHealthCheckRunContext({
+    ...options,
+    context: options.context ?? HEALTH_CHECK_CONTEXTS.backgroundMaintenance,
+  });
+  const runtime = buildProbeRuntime(runContext, target);
+  const controller = new AbortController();
+  const outerSignal = options.signal;
+  const abortFromOuter = () => controller.abort(outerSignal?.reason);
+
+  if (outerSignal) {
+    if (outerSignal.aborted) {
+      controller.abort(outerSignal.reason);
+    } else {
+      outerSignal.addEventListener("abort", abortFromOuter, { once: true });
+    }
+  }
+
+  const skippedProbe = (probe: Exclude<HealthCheckProbeType, "REST">, reason: string): ProbeExecution => ({
+    record: makeRecord(probe, "Skipped", null, reason, Date.now()),
+    lifecycle: "CANCELLED",
+  });
+
+  try {
+    const { record, deviceInfo } = await withTimeout(
+      () => probeRest(controller.signal, runtime),
+      PROBE_TIMEOUT_MS.REST,
+      `REST timed out after ${PROBE_TIMEOUT_MS.REST}ms`,
+    );
+    const rest: ProbeExecution = {
+      record,
+      lifecycle: lifecycleFromRecord(record.outcome),
+      deviceInfo,
+    };
+    const endTimestamp = new Date().toISOString();
+    const skipReason = "Skipped: lightweight background connectivity probe";
+    const ftp = skippedProbe("FTP", skipReason);
+    const telnet = skippedProbe("TELNET", skipReason);
+    const config = skippedProbe("CONFIG", skipReason);
+    const raster = skippedProbe("RASTER", skipReason);
+    const jiffy = skippedProbe("JIFFY", skipReason);
+
+    return buildRunResult({
+      runId,
+      startTimestamp,
+      endTimestamp,
+      totalDurationMs: Date.now() - startedAtMs,
+      rest,
+      ftp,
+      telnet,
+      config,
+      raster,
+      jiffy,
+      deviceInfo: rest.deviceInfo,
+      uptimeSeconds: null,
+      connectivity: rest.lifecycle === "SUCCESS" ? "Online" : "Offline",
+      latency: computeProbeLatencyPercentiles({
+        REST: rest.record,
+        FTP: ftp.record,
+        TELNET: telnet.record,
+        CONFIG: config.record,
+        RASTER: raster.record,
+        JIFFY: jiffy.record,
+      }),
+    });
+  } finally {
+    if (outerSignal) {
+      outerSignal.removeEventListener("abort", abortFromOuter);
+    }
+  }
+};
+
 export const runHealthCheckForTarget = async (
   target: HealthCheckTarget,
   options: {
@@ -1378,7 +1470,7 @@ export const runHealthCheckForTarget = async (
   const startedAtMs = Date.now();
   const deadlineMs = startedAtMs + GLOBAL_RUN_TIMEOUT_MS;
   const runContext = normalizeHealthCheckRunContext(options);
-  const runtime = buildProbeRuntime(target);
+  const runtime = buildProbeRuntime(runContext, target);
   const controller = new AbortController();
   const probeStates = buildLocalProbeStates();
   const liveProbes: Partial<Record<HealthCheckProbeType, HealthCheckProbeRecord>> = {};
@@ -1701,7 +1793,7 @@ export const runHealthCheck = async (
 
   try {
     addLog("info", "Health check started", { runId });
-    const runtime = buildProbeRuntime();
+    const runtime = buildProbeRuntime(HEALTH_CHECK_CONTEXTS.manualDiagnostics);
 
     const rest = await runProbe(
       run,

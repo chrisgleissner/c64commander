@@ -11,6 +11,7 @@ import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { APP_SETTINGS_KEYS, loadVolumeSliderPreviewIntervalMs } from "@/lib/config/appSettings";
 import { pollingPauseRegistry, type PollingPauseHandle } from "@/lib/query/c64PollingGovernance";
 import { clampSliderValue } from "@/lib/ui/sliderBehavior";
+import { addLog } from "@/lib/logging";
 
 type SliderDomainValue = string | number;
 
@@ -26,6 +27,7 @@ export type DeviceBoundSliderPreviewMode = "commitOnly" | "throttled";
 type WritePhase = "preview" | "commit";
 
 type UseDeviceBoundSliderOptions<T extends SliderDomainValue> = {
+  debugName?: string;
   deviceValue: T;
   domain: DeviceBoundSliderDomain<T>;
   previewMode: DeviceBoundSliderPreviewMode;
@@ -102,6 +104,7 @@ const DEFAULT_WATCHDOG_MS = 2000;
 const POLLING_PAUSE_TAIL_GRACE_MS = 250;
 
 export function useDeviceBoundSlider<T extends SliderDomainValue>({
+  debugName = "device-bound-slider",
   deviceValue,
   domain,
   previewMode,
@@ -121,6 +124,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingPreviewSliderValueRef = useRef<number | null>(null);
   const lastPreviewSentAtRef = useRef<number | null>(null);
+  const lastIgnoredDeviceValueRef = useRef<string | null>(null);
   const watchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pauseTailGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Drives/info polling pauses while the user is dragging or while we are
@@ -176,6 +180,14 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       const nextValue = domain.fromSliderValue(clampedSliderValue);
       lastPreviewSentAtRef.current = Date.now();
       pendingPreviewSliderValueRef.current = null;
+      addLog("debug", "Device-bound slider queued write", {
+        slider: debugName,
+        phase: "preview",
+        value: nextValue,
+        sliderValue: clampedSliderValue,
+        priority: "user",
+        coalescing: "throttled-latest",
+      });
       void Promise.resolve(preview(nextValue)).catch((error) => {
         setDraftSliderValue(null);
         onError?.(error, {
@@ -184,7 +196,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
         });
       });
     },
-    [domain, onError, preview, previewMode],
+    [debugName, domain, onError, preview, previewMode],
   );
 
   const schedulePreview = useCallback(
@@ -204,10 +216,24 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       }
 
       if (previewTimerRef.current !== null) {
+        addLog("debug", "Device-bound slider coalesced write", {
+          slider: debugName,
+          phase: "preview",
+          supersededBySliderValue: clampedSliderValue,
+          priority: "user",
+          coalescing: "throttled-latest",
+        });
         return;
       }
 
       const delayMs = Math.max(0, resolvedPreviewThrottleMs - (now - lastSentAt));
+      addLog("debug", "Device-bound slider write delayed", {
+        slider: debugName,
+        phase: "preview",
+        delayMs,
+        priority: "user",
+        coalescing: "throttled-latest",
+      });
       previewTimerRef.current = setTimeout(() => {
         previewTimerRef.current = null;
         const nextSliderValue = pendingPreviewSliderValueRef.current;
@@ -217,7 +243,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
         flushPreview(nextSliderValue);
       }, delayMs);
     },
-    [clearPreviewTimer, domain, flushPreview, preview, previewMode, resolvedPreviewThrottleMs],
+    [clearPreviewTimer, debugName, domain, flushPreview, preview, previewMode, resolvedPreviewThrottleMs],
   );
 
   const armWatchdog = useCallback(() => {
@@ -263,10 +289,29 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
 
   useEffect(() => {
     if (pendingIntent && equals(deviceValue, pendingIntent.value)) {
+      addLog("debug", "Device-bound slider latest intent confirmed", {
+        slider: debugName,
+        value: pendingIntent.value,
+        sliderValue: pendingIntent.sliderValue,
+      });
       setPendingIntent(null);
       clearWatchdogTimer();
+      lastIgnoredDeviceValueRef.current = null;
+      return;
     }
-  }, [clearWatchdogTimer, deviceValue, equals, pendingIntent]);
+    if (pendingIntent) {
+      const ignoredSignature = `${String(deviceValue)}->${String(pendingIntent.value)}`;
+      if (lastIgnoredDeviceValueRef.current !== ignoredSignature) {
+        lastIgnoredDeviceValueRef.current = ignoredSignature;
+        addLog("debug", "Device-bound slider stale device value ignored", {
+          slider: debugName,
+          deviceValue,
+          pendingValue: pendingIntent.value,
+          pendingSliderValue: pendingIntent.sliderValue,
+        });
+      }
+    }
+  }, [clearWatchdogTimer, debugName, deviceValue, equals, pendingIntent]);
 
   const didMountResetBoundaryRef = useRef(false);
 
@@ -312,6 +357,12 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       }
       const nextSliderValue = domain.clampSliderValue(values[0] ?? deviceSliderValue);
       const nextValue = domain.fromSliderValue(nextSliderValue);
+      addLog("debug", "Device-bound slider local intent changed", {
+        slider: debugName,
+        value: nextValue,
+        sliderValue: nextSliderValue,
+        priority: "user",
+      });
       // First drag tick: pause drives/info polling so the round-trip noise
       // does not steal frames from the slider preview.
       if (!isDraggingRef.current) {
@@ -324,7 +375,15 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       onDraftChange?.(nextValue);
       schedulePreview(nextSliderValue);
     },
-    [acquirePollingPauseIfNeeded, clearPauseTailGraceTimer, deviceSliderValue, domain, onDraftChange, schedulePreview],
+    [
+      acquirePollingPauseIfNeeded,
+      clearPauseTailGraceTimer,
+      debugName,
+      deviceSliderValue,
+      domain,
+      onDraftChange,
+      schedulePreview,
+    ],
   );
 
   const onValueCommit = useCallback(
@@ -334,6 +393,12 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       }
       const nextSliderValue = domain.clampSliderValue(draftSliderValueRef.current ?? values[0] ?? deviceSliderValue);
       const nextValue = domain.fromSliderValue(nextSliderValue);
+      addLog("debug", "Device-bound slider final intent committed", {
+        slider: debugName,
+        value: nextValue,
+        sliderValue: nextSliderValue,
+        priority: "user",
+      });
       isDraggingRef.current = false;
       clearPreviewTimer();
       pendingPreviewSliderValueRef.current = null;
@@ -347,6 +412,14 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       setPendingIntent({
         sliderValue: nextSliderValue,
         value: nextValue,
+      });
+      addLog("debug", "Device-bound slider queued write", {
+        slider: debugName,
+        phase: "commit",
+        value: nextValue,
+        sliderValue: nextSliderValue,
+        priority: "user",
+        coalescing: "latest-intent",
       });
       armWatchdog();
       void Promise.resolve(commit(nextValue))
@@ -366,6 +439,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       clearLatchedState,
       clearPreviewTimer,
       commit,
+      debugName,
       deviceSliderValue,
       deviceValue,
       domain,

@@ -214,12 +214,19 @@ describe("useVolumeOverride transition race", () => {
       3,
       expect.objectContaining({ category: "Audio Mixer", updates: { "SID 1": "0" } }),
     );
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(3);
+
+    resolveRestore?.();
+
+    await waitFor(() => {
+      expect(mutateAsyncMock).toHaveBeenCalledTimes(4);
+    });
+
     expect(mutateAsyncMock).toHaveBeenNthCalledWith(
       4,
       expect.objectContaining({ category: "Audio Mixer", updates: { "SID 1": "5" } }),
     );
 
-    resolveRestore?.();
     resolveUnmute?.();
     await act(async () => {
       await Promise.all([restorePromise, ensurePromise]);
@@ -231,6 +238,133 @@ describe("useVolumeOverride transition race", () => {
       "SID 1": "0",
     });
     expect(buildEnabledSidMutedToTargetUpdatesMock).toHaveBeenCalledWith(expect.any(Array), expect.anything(), "5");
+  });
+
+  it("waits for an in-flight playback-start unmute before sending stop restore updates", async () => {
+    let resolveUnmute: (() => void) | null = null;
+    let resolveRestore: (() => void) | null = null;
+    mutateAsyncMock
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveUnmute = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveRestore = resolve;
+          }),
+      );
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => expect(result.current.volumeState.index).toBe(0));
+
+    await act(async () => {
+      await result.current.handleVolumeCommit(1);
+    });
+
+    await act(async () => {
+      await result.current.handleToggleMute();
+    });
+
+    const ensurePromise = result.current.ensureUnmuted({ force: true, refreshItems: true });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const restorePromise = result.current.restoreVolumeOverrides("stop");
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mutateAsyncMock).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({ category: "Audio Mixer", updates: { "SID 1": "5" } }),
+    );
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(3);
+
+    resolveUnmute?.();
+
+    await waitFor(() => {
+      expect(mutateAsyncMock).toHaveBeenCalledTimes(4);
+    });
+
+    expect(mutateAsyncMock).toHaveBeenNthCalledWith(
+      4,
+      expect.objectContaining({ category: "Audio Mixer", updates: { "SID 1": "0" } }),
+    );
+
+    resolveRestore?.();
+    await act(async () => {
+      await Promise.all([ensurePromise, restorePromise]);
+    });
+  });
+
+  it("waits for an in-flight direct audio mixer write before sending stop restore updates", async () => {
+    let resolveResumeUnmute: (() => void) | null = null;
+    let resolveRestore: (() => void) | null = null;
+    mutateAsyncMock
+      .mockResolvedValueOnce(undefined)
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveResumeUnmute = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveRestore = resolve;
+          }),
+      );
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => expect(result.current.volumeState.index).toBe(0));
+
+    await act(async () => {
+      await result.current.handleVolumeCommit(1);
+    });
+
+    const resumePromise = result.current.applyAudioMixerUpdates({ "SID 1": "5" }, "Resume unmute");
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const restorePromise = result.current.restoreVolumeOverrides("stop");
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mutateAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ category: "Audio Mixer", updates: { "SID 1": "5" } }),
+    );
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(2);
+
+    resolveResumeUnmute?.();
+
+    await waitFor(() => {
+      expect(mutateAsyncMock).toHaveBeenCalledTimes(3);
+    });
+
+    expect(mutateAsyncMock).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({ category: "Audio Mixer", updates: { "SID 1": "0" } }),
+    );
+
+    resolveRestore?.();
+    await act(async () => {
+      await Promise.all([resumePromise, restorePromise]);
+    });
   });
 
   it("treats a pending mute write as the effective state for the next rapid toggle", async () => {

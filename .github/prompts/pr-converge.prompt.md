@@ -139,6 +139,8 @@ npm run build
 
 Add additional validation if relevant to the touched components.
 
+Confirm the device gateway guard still passes: no direct `fetch(.../v1...)` or native FTP/Telnet socket imports were introduced outside the approved gateway modules.
+
 ---
 
 # Step 5 — Push Fixes

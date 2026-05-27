@@ -1347,19 +1347,6 @@ jobs:
             echo "actual:   $header"
             exit 1
           fi
-          line_count=$(wc -l < "$csv")
-          data_rows=$((line_count - 1))
-          if [[ "$data_rows" -lt 2 ]]; then
-            echo "telemetry gate failed: expected multiple data rows, found ${data_rows}"
-            echo "telemetry gate debug: csv=${csv} line_count=${line_count} data_rows=${data_rows}"
-            tail -n "$debug_tail_lines" ci-artifacts/telemetry/android/monitor-run.log || true
-            tail -n "$debug_tail_lines" ci-artifacts/telemetry/android/events.log || true
-            if [[ -f ci-artifacts/telemetry/android/metadata.json ]]; then
-              echo "telemetry gate debug: metadata.json"
-              cat ci-artifacts/telemetry/android/metadata.json || true
-            fi
-            exit 1
-          fi
           code_file="ci-artifacts/telemetry/android/monitor.exitcode"
           if [[ ! -f "$code_file" ]]; then
             echo "telemetry gate failed: monitor exit code missing"
@@ -1384,6 +1371,19 @@ jobs:
           fi
           if [[ "$code" != "0" ]]; then
             echo "telemetry gate failed: monitor exited with code $code"
+            exit 1
+          fi
+          line_count=$(wc -l < "$csv")
+          data_rows=$((line_count - 1))
+          if [[ "$data_rows" -lt 2 ]]; then
+            echo "telemetry gate failed: expected multiple data rows, found ${data_rows}"
+            echo "telemetry gate debug: csv=${csv} line_count=${line_count} data_rows=${data_rows}"
+            tail -n "$debug_tail_lines" ci-artifacts/telemetry/android/monitor-run.log || true
+            tail -n "$debug_tail_lines" ci-artifacts/telemetry/android/events.log || true
+            if [[ -f ci-artifacts/telemetry/android/metadata.json ]]; then
+              echo "telemetry gate debug: metadata.json"
+              cat ci-artifacts/telemetry/android/metadata.json || true
+            fi
             exit 1
           fi
 

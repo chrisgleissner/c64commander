@@ -404,7 +404,7 @@ test.describe("Playback file browser (part 2)", () => {
     expect(configIndicesAfterPlay).toEqual([]);
   });
 
-  test("pause preserves SID mixer state and resume avoids extra mixer writes", async ({
+  test("pause mutes SID mixer state and resume restores it without extra writes", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await seedPlaylistStorage(page, [
@@ -437,24 +437,31 @@ test.describe("Playback file browser (part 2)", () => {
       { value: string }
     >;
     const configCountBeforePause = server.requests.filter((req) => req.url.includes("/v1/configs")).length;
+    const sidVolumeNames = ["Vol UltiSid 1", "Vol UltiSid 2", "Vol Socket 1", "Vol Socket 2"] as const;
+    const expectedPauseState = Object.fromEntries(
+      sidVolumeNames.map((name) => [name, playingState[name].value === "OFF" ? "OFF" : "-42 dB"]),
+    ) as Record<(typeof sidVolumeNames)[number], string>;
+    const expectedPauseMuteWrites = sidVolumeNames.filter(
+      (name) => playingState[name].value !== "OFF" && playingState[name].value !== "-42 dB",
+    ).length;
 
     await pauseButton.click();
     await snap(page, testInfo, "paused");
-    await expect(muteButton).toContainText("Mute");
-    await expect(muteButton).not.toHaveAttribute(PERSISTENT_ATTR, "true");
+    await expect(muteButton).toContainText("Unmute");
+    await expect(muteButton).toHaveAttribute(PERSISTENT_ATTR, "true");
 
     await expect
       .poll(() => {
         const audio = server.getState()["Audio Mixer"];
         return (
-          audio["Vol UltiSid 1"].value === playingState["Vol UltiSid 1"].value &&
-          audio["Vol UltiSid 2"].value === playingState["Vol UltiSid 2"].value &&
-          audio["Vol Socket 1"].value === playingState["Vol Socket 1"].value &&
-          audio["Vol Socket 2"].value === playingState["Vol Socket 2"].value
+          audio["Vol UltiSid 1"].value === expectedPauseState["Vol UltiSid 1"] &&
+          audio["Vol UltiSid 2"].value === expectedPauseState["Vol UltiSid 2"] &&
+          audio["Vol Socket 1"].value === expectedPauseState["Vol Socket 1"] &&
+          audio["Vol Socket 2"].value === expectedPauseState["Vol Socket 2"]
         );
       })
       .toBe(true);
-    await snap(page, testInfo, "pause-preserved-mixer");
+    await snap(page, testInfo, "pause-muted-mixer");
 
     await pauseButton.click();
     await snap(page, testInfo, "resumed");
@@ -486,9 +493,122 @@ test.describe("Playback file browser (part 2)", () => {
     const configBetweenPauseAndResume = configIndices.filter((index) => index > pauseIndex && index < resumeIndex);
     expect(pauseIndex).toBeGreaterThan(-1);
     expect(resumeIndex).toBeGreaterThan(-1);
-    expect(configBetweenPauseAndResume).toEqual([]);
-    expect(server.requests.filter((req) => req.url.includes("/v1/configs")).length).toBe(configCountBeforePause);
-    await snap(page, testInfo, "resume-preserved-mixer");
+    expect(configBetweenPauseAndResume).toHaveLength(expectedPauseMuteWrites);
+    await snap(page, testInfo, "resume-restored-mixer");
+  });
+
+  test("pause still flips to resume while background SID config reads are delayed", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await seedPlaylistStorage(page, [
+      {
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/demo.sid",
+        name: "demo.sid",
+        durationMs: 8000,
+      },
+    ]);
+
+    let delayConfigReads = false;
+    const delayedConfigReadTasks = new Set<Promise<void>>();
+    const delayConfigReadRoute = async (route: Parameters<Parameters<typeof page.route>[1]>[0]) => {
+      const delayedReadTask = (async () => {
+        if (delayConfigReads && route.request().method() === "GET") {
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+        }
+      })();
+      delayedConfigReadTasks.add(delayedReadTask);
+      try {
+        await delayedReadTask;
+        await route.continue();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error ?? "");
+        if (!message.includes("Route is already handled")) {
+          throw error;
+        }
+      } finally {
+        delayedConfigReadTasks.delete(delayedReadTask);
+      }
+    };
+
+    await page.route("**/v1/configs", delayConfigReadRoute);
+    await page.route("**/v1/configs/**", delayConfigReadRoute);
+    try {
+      await page.goto("/play");
+      await waitForRealConnectionBadge(page);
+
+      const playButton = page.getByTestId("playlist-play");
+      const pauseButton = page.getByTestId("playlist-pause");
+      const muteButton = page.getByTestId("volume-mute");
+
+      await playButton.tap();
+      await expect(playButton).toHaveAttribute("aria-label", "Stop");
+      await expect(pauseButton).toBeEnabled();
+
+      delayConfigReads = true;
+      await pauseButton.tap();
+      await expect(pauseButton).toHaveAttribute("aria-label", "Resume", { timeout: 1000 });
+      await expect(muteButton).toContainText("Unmute");
+      await expect.poll(() => server.requests.some((req) => req.url.includes("/v1/machine:pause"))).toBe(true);
+      await snap(page, testInfo, "pause-not-blocked-by-config-read-delay");
+    } finally {
+      delayConfigReads = false;
+      await Promise.allSettled([...delayedConfigReadTasks]);
+      await page.unroute("**/v1/configs", delayConfigReadRoute);
+      await page.unroute("**/v1/configs/**", delayConfigReadRoute);
+    }
+  });
+
+  test("touch taps drive play, pause, mute, resume, and stop controls on mobile", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await seedPlaylistStorage(page, [
+      {
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/demo.sid",
+        name: "demo.sid",
+        durationMs: 8000,
+      },
+    ]);
+
+    await page.goto("/play");
+    await waitForRealConnectionBadge(page);
+
+    const playButton = page.getByTestId("playlist-play");
+    const pauseButton = page.getByTestId("playlist-pause");
+    const muteButton = page.getByTestId("volume-mute");
+
+    await playButton.tap();
+    await expect(playButton).toHaveAttribute("aria-label", "Stop");
+    await expect.poll(() => server.requests.some((req) => req.url.includes("/v1/runners:sidplay"))).toBe(true);
+    await snap(page, testInfo, "touch-play-started");
+
+    await muteButton.tap();
+    await expect(muteButton).toContainText("Unmute");
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"].value, { timeout: 4000 }).toBe("-42 dB");
+    await snap(page, testInfo, "touch-mute-applied");
+
+    await muteButton.tap();
+    await expect(muteButton).toContainText("Mute");
+    await expect
+      .poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"].value, { timeout: 4000 })
+      .not.toBe("-42 dB");
+    await snap(page, testInfo, "touch-unmute-applied");
+
+    await pauseButton.tap();
+    await expect(muteButton).toContainText("Unmute");
+    await expect.poll(() => server.requests.some((req) => req.url.includes("/v1/machine:pause"))).toBe(true);
+    await snap(page, testInfo, "touch-pause-applied");
+
+    await pauseButton.tap();
+    await expect(muteButton).toContainText("Mute");
+    await expect.poll(() => server.requests.some((req) => req.url.includes("/v1/machine:resume"))).toBe(true);
+    await snap(page, testInfo, "touch-resume-applied");
+
+    await playButton.tap();
+    await expect(playButton).toHaveAttribute("aria-label", "Play");
+    await expect.poll(() => server.requests.some((req) => req.url.includes("/v1/machine:reset"))).toBe(true);
+    await snap(page, testInfo, "touch-stop-applied");
   });
 
   test("native folder picker adds local files to playlist", async ({ page }: { page: Page }, testInfo: TestInfo) => {

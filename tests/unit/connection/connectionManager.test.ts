@@ -297,29 +297,16 @@ describe("connectionManager", () => {
     );
   });
 
-  it("logs when discovery probe JSON parsing fails", async () => {
-    const addLogSpy = vi.spyOn(logging, "addLog");
+  it("does not retry discovery through a raw fetch fallback when the gateway probe fails", async () => {
     const { probeOnce } = await import("../../../src/lib/connection/connectionManager");
 
     localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
-    vi.mocked(fetch).mockResolvedValue(
-      new Response("not-json", {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
-    );
+    vi.mocked(fetch).mockRejectedValueOnce(new TypeError("Failed to fetch"));
 
     const ok = await probeOnce();
 
     expect(ok).toBe(false);
-    expect(addLogSpy).toHaveBeenCalledWith(
-      "warn",
-      "Discovery probe JSON parse failed",
-      expect.objectContaining({
-        error: expect.any(String),
-      }),
-    );
-    addLogSpy.mockRestore();
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
   });
 
   it("does not fall back to demo mode after real connection is sticky", async () => {
@@ -1270,7 +1257,7 @@ describe("connectionManager", () => {
     await expect(probeOnce()).resolves.toBe(false);
   });
 
-  it("probeOnce uses the C64API system probe flags outside the fetch-only Vitest path", async () => {
+  it("probeOnce uses the C64API system probe flags", async () => {
     vi.stubEnv("VITEST", "false");
     vi.stubEnv("NODE_ENV", "production");
     localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
@@ -1291,14 +1278,13 @@ describe("connectionManager", () => {
         __c64uIntent: "system",
         __c64uAllowDuringDiscovery: true,
         __c64uAllowDuringError: true,
-        __c64uBypassCircuit: true,
       }),
     );
 
     getInfoSpy.mockRestore();
   });
 
-  it("probeInfoOnce uses the C64API system probe flags outside the fetch-only Vitest path", async () => {
+  it("probeInfoOnce uses the C64API system probe flags", async () => {
     vi.stubEnv("VITEST", "false");
     vi.stubEnv("NODE_ENV", "production");
     localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
@@ -1324,14 +1310,13 @@ describe("connectionManager", () => {
         __c64uIntent: "system",
         __c64uAllowDuringDiscovery: true,
         __c64uAllowDuringError: true,
-        __c64uBypassCircuit: true,
       }),
     );
 
     getInfoSpy.mockRestore();
   });
 
-  it("verifyCurrentConnectionTarget uses switch probe flags for explicit device targets outside the fetch-only Vitest path", async () => {
+  it("verifyCurrentConnectionTarget uses switch probe flags for explicit device targets", async () => {
     vi.stubEnv("VITEST", "false");
     vi.stubEnv("NODE_ENV", "production");
     localStorage.setItem("c64u_device_host", "c64u");
@@ -1364,7 +1349,6 @@ describe("connectionManager", () => {
         __c64uIntent: "system",
         __c64uAllowDuringDiscovery: true,
         __c64uAllowDuringError: true,
-        __c64uBypassCircuit: true,
       }),
     );
 

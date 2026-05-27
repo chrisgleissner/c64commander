@@ -299,6 +299,25 @@ describe("useHvscLibrary progress coverage", () => {
     expect(result.current.hvscMetadataProgressLabel).toBe("HVSC META 12/60 running");
   });
 
+  it("keeps active indexing preparation progress below 100 until completion", async () => {
+    const { result } = renderHook(() => useHvscLibrary());
+
+    await waitFor(() => expect(progressListener).not.toBeNull());
+
+    act(() => {
+      progressListener?.({
+        stage: "sid_metadata_hydration",
+        processedCount: 60,
+        totalCount: 60,
+        percent: 100,
+        message: "HVSC META 60/60 running",
+      });
+    });
+
+    await waitFor(() => expect(result.current.hvscPreparationState).toBe("INGESTING"));
+    expect(result.current.hvscPreparationProgressPercent).toBe(99);
+  });
+
   it("treats database insertion as indexing progress instead of falling back to extract", async () => {
     let resolveInstall: (() => void) | null = null;
     mocks.installOrUpdateHvscMock.mockImplementation(

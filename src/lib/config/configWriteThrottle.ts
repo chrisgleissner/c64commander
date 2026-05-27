@@ -7,13 +7,16 @@
  */
 
 import { loadConfigWriteIntervalMs } from "./appSettings";
-import { addErrorLog } from "@/lib/logging";
+import { loadDeviceSafetyConfig } from "./deviceSafetySettings";
+import { addErrorLog, addLog } from "@/lib/logging";
 
 let lastWriteAt = 0;
 let queue = Promise.resolve();
 
 const waitForInterval = async () => {
-  const minInterval = loadConfigWriteIntervalMs();
+  const appIntervalMs = loadConfigWriteIntervalMs();
+  const safety = loadDeviceSafetyConfig();
+  const minInterval = Math.max(appIntervalMs, safety.configsCooldownMs);
   if (minInterval <= 0) {
     lastWriteAt = Date.now();
     return;
@@ -26,6 +29,13 @@ const waitForInterval = async () => {
   const elapsed = now - lastWriteAt;
   const waitMs = Math.max(0, minInterval - elapsed);
   if (waitMs > 0) {
+    addLog("debug", "Config write backoff delay applied", {
+      waitMs,
+      appIntervalMs,
+      deviceSafetyConfigsCooldownMs: safety.configsCooldownMs,
+      deviceSafetyMode: safety.mode,
+      effectiveDeviceSafetyMode: safety.resolution?.effectiveMode ?? safety.mode,
+    });
     await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
   lastWriteAt = Date.now();
@@ -34,6 +44,9 @@ const waitForInterval = async () => {
 export const scheduleConfigWrite = async <T>(task: () => Promise<T>): Promise<T> => {
   const run = async () => {
     await waitForInterval();
+    addLog("debug", "Config write queue task starting", {
+      deviceSafetyConfigsCooldownMs: loadDeviceSafetyConfig().configsCooldownMs,
+    });
     return task();
   };
   const next = queue.then(run);

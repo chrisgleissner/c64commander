@@ -464,16 +464,14 @@ export function useC64UpdateConfigBatch() {
     mutationFn: async ({
       category,
       updates,
-      immediate,
       skipInvalidation,
     }: {
       category: string;
       updates: Record<string, string | number>;
-      immediate?: boolean;
       skipInvalidation?: boolean;
     }) => {
       const api = getC64API();
-      return api.updateConfigBatch({ [category]: updates }, { immediate });
+      return api.updateConfigBatch({ [category]: updates });
     },
     onSuccess: (_, variables) => {
       if (variables.skipInvalidation) {

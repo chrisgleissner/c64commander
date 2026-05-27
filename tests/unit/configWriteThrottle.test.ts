@@ -9,10 +9,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { scheduleConfigWrite, resetConfigWriteThrottle } from "@/lib/config/configWriteThrottle";
 import { saveConfigWriteIntervalMs } from "@/lib/config/appSettings";
-import { addErrorLog } from "@/lib/logging";
+import { saveDeviceSafetyMode } from "@/lib/config/deviceSafetySettings";
+import { addErrorLog, addLog } from "@/lib/logging";
 
 vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
+  addLog: vi.fn(),
 }));
 
 describe("configWriteThrottle", () => {
@@ -23,6 +25,7 @@ describe("configWriteThrottle", () => {
     vi.setSystemTime(1000);
     saveConfigWriteIntervalMs(500);
     vi.mocked(addErrorLog).mockClear();
+    vi.mocked(addLog).mockClear();
   });
 
   afterEach(() => {
@@ -48,6 +51,38 @@ describe("configWriteThrottle", () => {
     expect(times).toEqual([1000, 1500]);
   });
 
+  it("uses the Device Safety config cooldown when it is more conservative than the app write interval", async () => {
+    saveConfigWriteIntervalMs(100);
+    saveDeviceSafetyMode("CONSERVATIVE");
+    resetConfigWriteThrottle();
+    const times: number[] = [];
+    const task = async () => {
+      times.push(Date.now());
+      return true;
+    };
+
+    const first = scheduleConfigWrite(task);
+    const second = scheduleConfigWrite(task);
+
+    await first;
+    await vi.advanceTimersByTimeAsync(1199);
+    expect(times).toEqual([1000]);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await second;
+
+    expect(times).toEqual([1000, 2200]);
+    expect(addLog).toHaveBeenCalledWith(
+      "debug",
+      "Config write backoff delay applied",
+      expect.objectContaining({
+        waitMs: 1200,
+        appIntervalMs: 100,
+        deviceSafetyConfigsCooldownMs: 1200,
+      }),
+    );
+  });
+
   it("logs failed tasks and continues the queue", async () => {
     const failingTask = async () => {
       throw new Error("write failed");
@@ -71,6 +106,7 @@ describe("configWriteThrottle", () => {
 
   it("spaces a sustained checkbox-style burst and preserves the final intended state", async () => {
     saveConfigWriteIntervalMs(100);
+    saveDeviceSafetyMode("RELAXED");
     const intendedStates = Array.from({ length: 12 }, (_, index) => (index % 2 === 0 ? "Enabled" : "Disabled"));
     const startedAt: number[] = [];
     let inFlight = 0;
@@ -89,7 +125,7 @@ describe("configWriteThrottle", () => {
       }),
     );
 
-    await vi.advanceTimersByTimeAsync(100 * intendedStates.length);
+    await vi.advanceTimersByTimeAsync(200 * intendedStates.length);
     await expect(Promise.all(writes)).resolves.toEqual(intendedStates);
 
     expect(maxInFlight).toBe(1);
@@ -97,7 +133,7 @@ describe("configWriteThrottle", () => {
     expect(startedAt).toHaveLength(intendedStates.length);
     expect(startedAt[0]).toBe(1000);
     startedAt.slice(1).forEach((timestamp, index) => {
-      expect(timestamp - startedAt[index]).toBeGreaterThanOrEqual(100);
+      expect(timestamp - startedAt[index]).toBeGreaterThanOrEqual(200);
     });
   });
 });

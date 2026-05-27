@@ -38,6 +38,12 @@ import {
 import { useNavigationGuardBlocker } from "@/lib/navigation/navigationGuards";
 import { tabIndexForPath } from "@/lib/navigation/tabRoutes";
 import { t } from "@/lib/i18n";
+
+const isAbortLikeError = (error: unknown) => {
+  const name = (error as { name?: string } | undefined)?.name;
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return name === "AbortError" || /aborted/i.test(message);
+};
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import { SwipeNavigationLayer } from "@/components/SwipeNavigationLayer";
 import { LightingStudioProvider } from "@/hooks/useLightingStudio";
@@ -300,6 +306,13 @@ const GlobalErrorListener = () => {
       });
     };
     const handleRejection = (event: PromiseRejectionEvent) => {
+      if (isAbortLikeError(event.reason)) {
+        event.preventDefault();
+        addLog("debug", "Ignored abort-like unhandled rejection", {
+          reason: event.reason instanceof Error ? event.reason.message : String(event.reason ?? "AbortError"),
+        });
+        return;
+      }
       const activeAction = getActiveAction();
       const error =
         event.reason instanceof Error ? event.reason : new Error(String(event.reason ?? "Unhandled rejection"));

@@ -558,7 +558,7 @@ export function LightingStudioProvider({ children }: { children: React.ReactNode
     }
 
     void getC64API()
-      .updateConfigBatch(payload, { immediate: true })
+      .updateConfigBatch(payload)
       .then(() => {
         lastAppliedSignatureRef.current = resolvedSignature;
         updateHasChanges(getActiveBaseUrl(), true);

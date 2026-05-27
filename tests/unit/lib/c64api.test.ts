@@ -438,8 +438,8 @@ describe("C64API request identity", () => {
     const api = new C64API("http://127.0.0.1");
 
     await Promise.all([
-      api.updateConfigBatch({ "Audio Mixer": { "Vol Socket 1": "0 dB" } }, { immediate: true }),
-      api.updateConfigBatch({ "Audio Mixer": { "Vol Socket 1": "0 dB" } }, { immediate: true }),
+      api.updateConfigBatch({ "Audio Mixer": { "Vol Socket 1": "0 dB" } }),
+      api.updateConfigBatch({ "Audio Mixer": { "Vol Socket 1": "0 dB" } }),
     ]);
 
     const writeCalls = vi

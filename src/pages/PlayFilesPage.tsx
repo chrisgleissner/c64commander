@@ -443,6 +443,7 @@ export default function PlayFilesPage() {
     archiveConfigs,
     restoreVolumeOverrides,
     applyAudioMixerUpdates,
+    enabledSidVolumeItems,
     buildEnabledSidMuteUpdates,
     captureSidMuteSnapshot,
     snapshotToUpdates,
@@ -733,12 +734,12 @@ export default function PlayFilesPage() {
         prev.map((item) =>
           item.id === itemId
             ? {
-                ...item,
-                configRef,
-                configOrigin: options?.origin ?? resolveStoredConfigOrigin(configRef ?? null, null),
-                configOverrides: options?.overrides ?? (configRef ? (item.configOverrides ?? null) : null),
-                configCandidates: options?.candidates ?? item.configCandidates ?? null,
-              }
+              ...item,
+              configRef,
+              configOrigin: options?.origin ?? resolveStoredConfigOrigin(configRef ?? null, null),
+              configOverrides: options?.overrides ?? (configRef ? (item.configOverrides ?? null) : null),
+              configCandidates: options?.candidates ?? item.configCandidates ?? null,
+            }
             : item,
         ),
       );
@@ -751,16 +752,16 @@ export default function PlayFilesPage() {
       prev.map((entry) =>
         entry.id === item.id
           ? {
-              ...entry,
-              configOverrides: overrides,
-              configOrigin: overrides?.length
-                ? "manual"
-                : entry.configRef
-                  ? resolveStoredConfigOrigin(entry.configRef, entry.configOrigin ?? null)
-                  : entry.configOrigin === "manual-none"
-                    ? "manual-none"
-                    : "none",
-            }
+            ...entry,
+            configOverrides: overrides,
+            configOrigin: overrides?.length
+              ? "manual"
+              : entry.configRef
+                ? resolveStoredConfigOrigin(entry.configRef, entry.configOrigin ?? null)
+                : entry.configOrigin === "manual-none"
+                  ? "manual-none"
+                  : "none",
+          }
           : entry,
       ),
     );
@@ -1445,13 +1446,23 @@ export default function PlayFilesPage() {
   }, [isPaused, isPlaying, restoreVolumeOverrides]);
 
   const restoreVolumeOverridesOnNavigateRef = useRef(restoreVolumeOverrides);
+  const navigateCleanupIsPlayingRef = useRef(isPlaying);
+  const navigateCleanupIsPausedRef = useRef(isPaused);
 
   useEffect(() => {
     restoreVolumeOverridesOnNavigateRef.current = restoreVolumeOverrides;
   }, [restoreVolumeOverrides]);
 
+  useEffect(() => {
+    navigateCleanupIsPlayingRef.current = isPlaying;
+    navigateCleanupIsPausedRef.current = isPaused;
+  }, [isPaused, isPlaying]);
+
   useEffect(
     () => () => {
+      if (navigateCleanupIsPlayingRef.current || navigateCleanupIsPausedRef.current) {
+        return;
+      }
       void restoreVolumeOverridesOnNavigateRef.current("navigate").catch((error) => {
         addErrorLog("Volume restore failed during navigation", {
           error: (error as Error).message,

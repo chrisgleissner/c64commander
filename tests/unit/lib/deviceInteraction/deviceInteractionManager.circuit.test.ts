@@ -163,13 +163,20 @@ describe("deviceInteractionManager circuit cooldown", () => {
     };
 
     const failingHandler = vi.fn().mockRejectedValue(new Error("Network error"));
-    await expect(withRestInteraction(meta, failingHandler)).rejects.toThrow("Network error");
-    await expect(withRestInteraction(meta, failingHandler)).rejects.toThrow("Network error");
+    const first = withRestInteraction(meta, failingHandler);
+    void first.catch(() => undefined);
+    await vi.runOnlyPendingTimersAsync();
+    await expect(first).rejects.toThrow("Network error");
+
+    const second = withRestInteraction(meta, failingHandler);
+    void second.catch(() => undefined);
+    await vi.advanceTimersByTimeAsync(300);
+    await expect(second).rejects.toThrow("Network error");
 
     const bypassHandler = vi.fn().mockResolvedValue({ product: "C64 Ultimate" });
-    await expect(withRestInteraction({ ...meta, bypassCircuit: true }, bypassHandler)).resolves.toEqual({
-      product: "C64 Ultimate",
-    });
+    const bypass = withRestInteraction({ ...meta, bypassCircuit: true }, bypassHandler);
+    await vi.advanceTimersByTimeAsync(300);
+    await expect(bypass).resolves.toEqual({ product: "C64 Ultimate" });
 
     expect(bypassHandler).toHaveBeenCalledTimes(1);
     expect(recordDeviceGuard).toHaveBeenCalledWith(

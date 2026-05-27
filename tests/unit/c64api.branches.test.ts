@@ -1094,7 +1094,7 @@ describe("c64api branches", () => {
     });
 
     const api = new C64API("http://c64u");
-    const result = await api.updateConfigBatch({ Audio: { Volume: "0 dB" } }, { immediate: true });
+    const result = await api.updateConfigBatch({ Audio: { Volume: "0 dB" } });
     expect(result.errors).toEqual([]);
     expect(fetchMock).toHaveBeenCalled();
     const [, opts] = fetchMock.mock.calls.at(-1)!;

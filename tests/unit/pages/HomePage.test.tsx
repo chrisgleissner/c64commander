@@ -1530,6 +1530,30 @@ describe("HomePage SID status", () => {
     );
   });
 
+  it("preserves C64U padded CPU speed option tokens when committing from the Home slider", async () => {
+    u64SettingsPayloadRef.current = buildU64SettingsPayload({
+      cpuSpeed: " 1",
+      cpuSpeedOptions: [" 1", " 2", " 4"],
+      turboControl: "Off",
+      turboControlOptions: ["Off", "Manual", "C64U Turbo Registers", "TurboEnable Bit"],
+    });
+
+    renderHomePage();
+
+    const slider = screen.getByTestId("home-cpu-speed-slider");
+    const thumb = slider.querySelector('[role="slider"]');
+    expect(thumb).toBeTruthy();
+
+    fireEvent.keyDown(thumb!, { key: "ArrowRight" });
+
+    await waitFor(() =>
+      expect(interactiveWriteMockRef.current).toHaveBeenCalledWith({
+        "CPU Speed": " 2",
+        "Turbo Control": "Manual",
+      }),
+    );
+  });
+
   it("avoids redundant turbo-control writes when the desired turbo mode is already active", async () => {
     u64SettingsPayloadRef.current = buildU64SettingsPayload({
       cpuSpeed: "2",

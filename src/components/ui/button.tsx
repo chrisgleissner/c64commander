@@ -46,13 +46,36 @@ export interface ButtonProps
 }
 
 const StatelessButton = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, onClick, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, onClick, onPointerUp, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
+    const suppressNextClickRef = React.useRef(false);
+
+    const invokeClick = React.useCallback(
+      (event: React.MouseEvent<HTMLElement> | React.PointerEvent<HTMLElement>) => {
+        onClick?.(event as unknown as React.MouseEvent<HTMLButtonElement>);
+      },
+      [onClick],
+    );
+
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
+        type={asChild ? undefined : "button"}
+        onPointerUp={(event: React.PointerEvent<HTMLElement>) => {
+          onPointerUp?.(event as unknown as React.PointerEvent<HTMLButtonElement>);
+          if (event.defaultPrevented) return;
+          if (event.pointerType === "mouse") return;
+          if ((event.currentTarget as HTMLElement).matches(":disabled")) return;
+          suppressNextClickRef.current = true;
+          invokeClick(event);
+        }}
         onClick={(event: React.MouseEvent<HTMLElement>) => {
+          if (suppressNextClickRef.current) {
+            suppressNextClickRef.current = false;
+            handlePointerButtonClick(event);
+            return;
+          }
           onClick?.(event as React.MouseEvent<HTMLButtonElement>);
           handlePointerButtonClick(event);
         }}

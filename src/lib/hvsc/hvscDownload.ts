@@ -295,6 +295,16 @@ export const emitDownloadProgress = (
   });
 };
 
+export const resolveDownloadProgressBytes = (status: {
+  loaded?: number | null;
+  total?: number | null;
+  bytes?: number | null;
+  contentLength?: number | null;
+}) => ({
+  loaded: status.loaded ?? status.bytes ?? 0,
+  total: status.total ?? status.contentLength ?? null,
+});
+
 // ── Cache resolution ─────────────────────────────────────────────
 
 export const resolveCachedArchive = async (prefix: string, version: number) => {
@@ -574,6 +584,7 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
       const cacheDir = getHvscCacheDir();
       let lastReported = 0;
       let pollingTimer: ReturnType<typeof setInterval> | null = null;
+      let progressListener: { remove: () => Promise<void> } | null = null;
       let totalBytes = totalBytesHint ?? null;
       let pollErrorLogged = false;
       const pollSize = async () => {
@@ -599,19 +610,22 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
       };
       try {
         pollingTimer = setInterval(pollSize, 400);
+        if (Filesystem.addListener) {
+          progressListener = await Filesystem.addListener("progress", (status) => {
+            if (status.url && status.url !== downloadUrl) return;
+            const progress = resolveDownloadProgressBytes(status);
+            totalBytes = progress.total ?? totalBytes;
+            expectedSizeBytes = progress.total ?? expectedSizeBytes;
+            if (progress.loaded >= lastReported) {
+              lastReported = progress.loaded;
+              emitDownloadProgress(emitProgress, archiveName, progress.loaded, totalBytes);
+            }
+          });
+        }
         await Filesystem.downloadFile({
           url: downloadUrl,
           directory: Directory.Data,
           path: `${cacheDir}/${archivePath}`,
-          progress: (status) => {
-            totalBytes = status.total ?? totalBytes;
-            expectedSizeBytes = status.total ?? expectedSizeBytes;
-            const loaded = status.loaded ?? 0;
-            if (loaded >= lastReported) {
-              lastReported = loaded;
-              emitDownloadProgress(emitProgress, archiveName, loaded, totalBytes);
-            }
-          },
         });
         ensureNotCancelled();
       } catch (error) {
@@ -629,6 +643,14 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
         inMemoryBuffer = retainInMemoryBuffer ? buffer : null;
       } finally {
         if (pollingTimer) clearInterval(pollingTimer);
+        if (progressListener) {
+          await progressListener.remove().catch((error) => {
+            addLog("warn", "Failed to remove HVSC native download progress listener", {
+              archiveName,
+              error: (error as Error).message,
+            });
+          });
+        }
       }
       let nativeDownloadedSize: number | null = null;
       try {

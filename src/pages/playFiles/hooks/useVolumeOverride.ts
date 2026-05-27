@@ -64,6 +64,14 @@ const PLAYBACK_RECONCILE_MIN_DELAY_MS = 50;
 const PLAYBACK_RECONCILE_MAX_DELAY_MS = 250;
 const PENDING_VOLUME_WRITE_STALE_MS = 5000;
 
+const isAbortLikeError = (error: unknown) => {
+  const name = (error as { name?: string } | undefined)?.name;
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return name === "AbortError" || /aborted/i.test(message);
+};
+
+const shouldToastRestoreFailure = (context: string) => context !== "Restore (navigate)";
+
 export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProps) {
   const { status } = useC64Connection();
   const updateConfigBatch = useC64UpdateConfigBatch();
@@ -139,6 +147,9 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   const volumeUpdateTimerRef = useRef<number | null>(null);
   const volumeUpdateSeqRef = useRef(0);
   const volumeUiTargetRef = useRef<{ index: number; setAtMs: number } | null>(null);
+  const restoreInFlightRef = useRef<Promise<void> | null>(null);
+  const audioMixerWriteInFlightRef = useRef<Promise<void> | null>(null);
+  const playbackWriteInFlightRef = useRef<Promise<void> | null>(null);
   const pendingVolumeWriteRef = useRef<PlaybackSyncIntent | null>(null);
   const lastKnownDeviceVolumeRef = useRef<PlaybackSyncState | null>(null);
   const lastManualWriteRef = useRef<{ index: number; muted: boolean; setAtMs: number } | null>(null);
@@ -267,9 +278,9 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     volumeUiTargetRef.current = muted
       ? null
       : {
-          index,
-          setAtMs: nextIntent.setAtMs,
-        };
+        index,
+        setAtMs: nextIntent.setAtMs,
+      };
   }, []);
 
   const withTimeout = useCallback(async <T>(promise: Promise<T>, timeoutMs: number, operation: string) => {
@@ -295,7 +306,6 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
             updateConfigBatch.mutateAsync({
               category: "Audio Mixer",
               updates: write.updates,
-              immediate: true,
               skipInvalidation: true,
             }),
             4000,
@@ -330,33 +340,54 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   const applyAudioMixerUpdates = useCallback(
     async (updates: Record<string, string | number>, context: string) => {
       if (!Object.keys(updates).length) return;
-      try {
-        await withTimeout(
+      const startAudioMixerWrite = () =>
+        withTimeout(
           updateConfigBatch.mutateAsync({
             category: "Audio Mixer",
             updates,
-            immediate: true,
             skipInvalidation: true,
           }),
           4000,
           `${context} audio mixer update`,
         );
+      let pendingWrite = startAudioMixerWrite();
+      try {
+        audioMixerWriteInFlightRef.current = pendingWrite;
+        await pendingWrite;
         schedulePlaybackReconciliation();
       } catch (error) {
         if (context.startsWith("Restore")) {
+          if (!isAbortLikeError(error)) {
+            try {
+              await waitForMachineTransitionsToSettle();
+              pendingWrite = startAudioMixerWrite();
+              audioMixerWriteInFlightRef.current = pendingWrite;
+              await pendingWrite;
+              schedulePlaybackReconciliation();
+              return;
+            } catch (retryError) {
+              error = retryError;
+            }
+          }
           addErrorLog("Audio mixer restore failed", {
             error: (error as Error).message,
             context,
           });
-          toast({
-            variant: "destructive",
-            title: "Could not restore volume settings",
-            description: "Your current volume may be different than before playback.",
-          });
+          if (shouldToastRestoreFailure(context) && !isAbortLikeError(error)) {
+            toast({
+              variant: "destructive",
+              title: "Could not restore volume settings",
+              description: "Your current volume may be different than before playback.",
+            });
+          }
           return;
         }
         // Non-Restore contexts: rethrow so callers can gate UI state on confirmed writes.
         throw error;
+      } finally {
+        if (audioMixerWriteInFlightRef.current === pendingWrite) {
+          audioMixerWriteInFlightRef.current = null;
+        }
       }
     },
     [schedulePlaybackReconciliation, updateConfigBatch, withTimeout],
@@ -406,8 +437,10 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       }
 
       markPendingVolumeWrite(write.index, write.muted);
+      const scheduledWrite = playbackWriteLaneRef.current?.schedule(write) ?? Promise.resolve();
       try {
-        await playbackWriteLaneRef.current?.schedule(write);
+        playbackWriteInFlightRef.current = scheduledWrite;
+        await scheduledWrite;
         if (write.reconcile !== false) {
           schedulePlaybackReconciliation();
         }
@@ -418,6 +451,10 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
           clearPendingVolumeWrite();
         }
         throw error;
+      } finally {
+        if (playbackWriteInFlightRef.current === scheduledWrite) {
+          playbackWriteInFlightRef.current = null;
+        }
       }
     },
     [clearPendingVolumeWrite, markPendingVolumeWrite, schedulePlaybackReconciliation],
@@ -499,29 +536,57 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
 
   const restoreVolumeOverrides = useCallback(
     async (reason: string) => {
+      if (restoreInFlightRef.current) {
+        await restoreInFlightRef.current;
+        return;
+      }
       if (!volumeSessionActiveRef.current) return;
       const snapshot = volumeSessionSnapshotRef.current;
       if (!snapshot) return;
-      if (status.state === "DEMO_ACTIVE" || (!status.isConnected && !status.isConnecting)) {
+      const restorePromise = (async () => {
+        if (status.state === "DEMO_ACTIVE" || (!status.isConnected && !status.isConnecting)) {
+          volumeSessionSnapshotRef.current = null;
+          volumeSessionActiveRef.current = false;
+          manualMuteSnapshotRef.current = null;
+          pauseMuteSnapshotRef.current = null;
+          dispatchTrackedVolume({ type: "reset", index: defaultVolumeIndex });
+          volumeUiTargetRef.current = null;
+          return;
+        }
+        if (playbackWriteInFlightRef.current) {
+          await playbackWriteInFlightRef.current.catch(() => undefined);
+        }
+        if (audioMixerWriteInFlightRef.current) {
+          await audioMixerWriteInFlightRef.current.catch(() => undefined);
+        }
+        const items = await resolveEnabledSidVolumeItems(true);
+        const updates = buildEnabledSidRestoreUpdates(items, sidEnablement, snapshot);
+        if (Object.keys(updates).length) {
+          await withPollingPause(async () => {
+            await waitForMachineTransitionsToSettle();
+            const endWriteBurst = beginPlaybackWriteBurst();
+            try {
+              await applyAudioMixerUpdates(updates, `Restore (${reason})`);
+            } finally {
+              endWriteBurst();
+            }
+          });
+        }
         volumeSessionSnapshotRef.current = null;
         volumeSessionActiveRef.current = false;
         manualMuteSnapshotRef.current = null;
         pauseMuteSnapshotRef.current = null;
         dispatchTrackedVolume({ type: "reset", index: defaultVolumeIndex });
         volumeUiTargetRef.current = null;
-        return;
+      })();
+      restoreInFlightRef.current = restorePromise;
+      try {
+        await restorePromise;
+      } finally {
+        if (restoreInFlightRef.current === restorePromise) {
+          restoreInFlightRef.current = null;
+        }
       }
-      const items = await resolveEnabledSidVolumeItems(true);
-      const updates = buildEnabledSidRestoreUpdates(items, sidEnablement, snapshot);
-      if (Object.keys(updates).length) {
-        await applyAudioMixerUpdates(updates, `Restore (${reason})`);
-      }
-      volumeSessionSnapshotRef.current = null;
-      volumeSessionActiveRef.current = false;
-      manualMuteSnapshotRef.current = null;
-      pauseMuteSnapshotRef.current = null;
-      dispatchTrackedVolume({ type: "reset", index: defaultVolumeIndex });
-      volumeUiTargetRef.current = null;
     },
     [
       applyAudioMixerUpdates,
@@ -533,6 +598,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       status.isConnected,
       status.isConnecting,
       status.state,
+      withPollingPause,
     ],
   );
 
@@ -941,6 +1007,9 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     async (options: EnsureUnmutedOptions = {}) => {
       const { force = false, refreshItems = false } = options;
       if (!volumeMuted || (manualMuteIntentRef.current && !force)) return;
+      if (restoreInFlightRef.current) {
+        await restoreInFlightRef.current;
+      }
       const items = refreshItems
         ? await resolveEnabledSidVolumeItems(true)
         : enabledSidVolumeItems.length

@@ -10,6 +10,7 @@ import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 const mockSliderContext = vi.hoisted(() => ({
   selectedDeviceId: "device-a",
 }));
+const addLogMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/hooks/useSavedDevices", () => ({
   useSavedDevices: () => ({
@@ -17,11 +18,16 @@ vi.mock("@/hooks/useSavedDevices", () => ({
   }),
 }));
 
+vi.mock("@/lib/logging", () => ({
+  addLog: addLogMock,
+}));
+
 describe("useDeviceBoundSlider", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     mockSliderContext.selectedDeviceId = "device-a";
     pollingPauseRegistry.__resetForTest();
+    addLogMock.mockClear();
   });
 
   afterEach(() => {
@@ -196,6 +202,80 @@ describe("useDeviceBoundSlider", () => {
     });
 
     expect(preview.mock.calls.length).toBeLessThanOrEqual(6);
+  });
+
+  it("logs rapid local intent, coalesced preview, final commit, and stale refresh protection", () => {
+    const preview = vi.fn();
+    const commit = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ deviceValue }) =>
+        useDeviceBoundSlider({
+          debugName: "home-case-light-brightness",
+          deviceValue,
+          domain: createNumericSliderDomain({ min: 0, max: 31, round: Math.round }),
+          previewMode: "throttled",
+          preview,
+          commit,
+          previewThrottleMs: 200,
+        }),
+      {
+        initialProps: { deviceValue: 0 },
+      },
+    );
+
+    for (let value = 1; value <= 20; value += 1) {
+      act(() => {
+        result.current.onValueChange([value]);
+        vi.advanceTimersByTime(5);
+      });
+      expect(result.current.sliderValue).toBe(value);
+    }
+
+    expect(preview.mock.calls.length).toBeLessThan(20);
+
+    act(() => {
+      result.current.onValueCommit([20]);
+    });
+
+    rerender({ deviceValue: 0 });
+    expect(result.current.sliderValue).toBe(20);
+    expect(result.current.displayValue).toBe(20);
+
+    rerender({ deviceValue: 20 });
+    expect(result.current.isAwaitingReconciliation).toBe(false);
+    expect(result.current.sliderValue).toBe(20);
+    expect(commit).toHaveBeenCalledWith(20);
+
+    expect(addLogMock).toHaveBeenCalledWith(
+      "debug",
+      "Device-bound slider local intent changed",
+      expect.objectContaining({ slider: "home-case-light-brightness", value: 20, priority: "user" }),
+    );
+    expect(addLogMock).toHaveBeenCalledWith(
+      "debug",
+      "Device-bound slider coalesced write",
+      expect.objectContaining({ slider: "home-case-light-brightness", phase: "preview" }),
+    );
+    expect(addLogMock).toHaveBeenCalledWith(
+      "debug",
+      "Device-bound slider final intent committed",
+      expect.objectContaining({ slider: "home-case-light-brightness", value: 20 }),
+    );
+    expect(addLogMock).toHaveBeenCalledWith(
+      "debug",
+      "Device-bound slider queued write",
+      expect.objectContaining({ slider: "home-case-light-brightness", phase: "commit", value: 20 }),
+    );
+    expect(addLogMock).toHaveBeenCalledWith(
+      "debug",
+      "Device-bound slider stale device value ignored",
+      expect.objectContaining({ slider: "home-case-light-brightness", deviceValue: 0, pendingValue: 20 }),
+    );
+    expect(addLogMock).toHaveBeenCalledWith(
+      "debug",
+      "Device-bound slider latest intent confirmed",
+      expect.objectContaining({ slider: "home-case-light-brightness", value: 20 }),
+    );
   });
 
   it("does not send previews in commit-only mode", () => {

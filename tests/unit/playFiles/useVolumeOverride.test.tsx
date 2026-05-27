@@ -1,6 +1,8 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { toast } from "@/hooks/use-toast";
 import { useVolumeOverride } from "@/pages/playFiles/hooks/useVolumeOverride";
+import { waitForMachineTransitionsToSettle } from "@/lib/deviceInteraction/deviceActivityGate";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 
@@ -1109,6 +1111,118 @@ describe("useVolumeOverride", () => {
         updates: { "SID 1": "5" },
       }),
     );
+    expect(result.current.volumeSessionActiveRef.current).toBe(false);
+    expect(result.current.volumeSessionSnapshotRef.current).toBeNull();
+  });
+
+  it("waits for machine transitions before applying restore updates", async () => {
+    buildEnabledSidRestoreUpdatesMock.mockReturnValue({ "SID 1": "5" });
+    const transitionGateMock = vi.mocked(waitForMachineTransitionsToSettle);
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    result.current.volumeSessionActiveRef.current = true;
+    result.current.volumeSessionSnapshotRef.current = { "SID 1": "0" };
+
+    await result.current.restoreVolumeOverrides("stop");
+
+    expect(transitionGateMock).toHaveBeenCalledTimes(1);
+    expect(transitionGateMock.mock.invocationCallOrder[0]).toBeLessThan(mutateAsyncMock.mock.invocationCallOrder[0]);
+  });
+
+  it("suppresses restore failure toasts during navigation cleanup", async () => {
+    buildEnabledSidRestoreUpdatesMock.mockReturnValue({ "SID 1": "5" });
+    mutateAsyncMock.mockRejectedValue(new Error("navigation teardown"));
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    result.current.volumeSessionActiveRef.current = true;
+    result.current.volumeSessionSnapshotRef.current = { "SID 1": "0" };
+
+    await expect(result.current.restoreVolumeOverrides("navigate")).resolves.toBeUndefined();
+
+    expect(addErrorLog).toHaveBeenCalledWith("Audio mixer restore failed", {
+      error: "navigation teardown",
+      context: "Restore (navigate)",
+    });
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it("suppresses restore failure toasts for abort-like teardown writes", async () => {
+    buildEnabledSidRestoreUpdatesMock.mockReturnValue({ "SID 1": "5" });
+    mutateAsyncMock.mockRejectedValue(new Error("net::ERR_ABORTED"));
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    result.current.volumeSessionActiveRef.current = true;
+    result.current.volumeSessionSnapshotRef.current = { "SID 1": "0" };
+
+    await expect(result.current.restoreVolumeOverrides("stop")).resolves.toBeUndefined();
+
+    expect(addErrorLog).toHaveBeenCalledWith("Audio mixer restore failed", {
+      error: "net::ERR_ABORTED",
+      context: "Restore (stop)",
+    });
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it("retries transient stop restore failures before showing a toast", async () => {
+    buildEnabledSidRestoreUpdatesMock.mockReturnValue({ "SID 1": "5" });
+    mutateAsyncMock
+      .mockRejectedValueOnce(new Error("Restore (stop) audio mixer update timed out"))
+      .mockResolvedValueOnce(undefined);
+    const transitionGateMock = vi.mocked(waitForMachineTransitionsToSettle);
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    result.current.volumeSessionActiveRef.current = true;
+    result.current.volumeSessionSnapshotRef.current = { "SID 1": "0" };
+
+    await expect(result.current.restoreVolumeOverrides("stop")).resolves.toBeUndefined();
+
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(2);
+    expect(transitionGateMock).toHaveBeenCalledTimes(2);
+    expect(addErrorLog).not.toHaveBeenCalledWith("Audio mixer restore failed", {
+      error: "Restore (stop) audio mixer update timed out",
+      context: "Restore (stop)",
+    });
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it("deduplicates concurrent restore attempts while a restore is still in flight", async () => {
+    buildEnabledSidRestoreUpdatesMock.mockReturnValue({ "SID 1": "5" });
+
+    let resolveRestore: (() => void) | null = null;
+    mutateAsyncMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveRestore = resolve;
+        }),
+    );
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    result.current.volumeSessionActiveRef.current = true;
+    result.current.volumeSessionSnapshotRef.current = { "SID 1": "0" };
+
+    const firstRestore = result.current.restoreVolumeOverrides("stop");
+    const secondRestore = result.current.restoreVolumeOverrides("playback-ended");
+
+    await waitFor(() => {
+      expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
+    });
+
+    expect(resolveRestore).not.toBeNull();
+    resolveRestore?.();
+
+    await expect(Promise.all([firstRestore, secondRestore])).resolves.toEqual([undefined, undefined]);
     expect(result.current.volumeSessionActiveRef.current).toBe(false);
     expect(result.current.volumeSessionSnapshotRef.current).toBeNull();
   });

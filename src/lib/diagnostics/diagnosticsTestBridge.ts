@@ -55,6 +55,8 @@ export type SavedDeviceHealthSeedSnapshot = {
   probeStates: Record<HealthCheckProbeType, HealthCheckProbeExecutionState>;
   lastStartedAt: string | null;
   lastCompletedAt: string | null;
+  lastObservedAt?: string | null;
+  deferredReason?: "freshness" | "circuit-open" | null;
   error: string | null;
 };
 

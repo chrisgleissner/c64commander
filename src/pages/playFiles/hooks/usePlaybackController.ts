@@ -129,6 +129,7 @@ interface UsePlaybackControllerProps {
   // Volume Control
   restoreVolumeOverrides: (reason: string) => Promise<void>;
   applyAudioMixerUpdates: (updates: Record<string, string | number>, reason: string) => Promise<void>;
+  enabledSidVolumeItems: AudioMixerItem[];
   buildEnabledSidMuteUpdates: (items: AudioMixerItem[], enablement: SidEnablement) => Record<string, string | number>;
   captureSidMuteSnapshot: (items: AudioMixerItem[], enablement: SidEnablement) => SidMuteSnapshot;
   snapshotToUpdates: (
@@ -195,6 +196,7 @@ export function usePlaybackController({
   archiveConfigs,
   restoreVolumeOverrides,
   applyAudioMixerUpdates,
+  enabledSidVolumeItems,
   buildEnabledSidMuteUpdates,
   captureSidMuteSnapshot,
   snapshotToUpdates,
@@ -263,6 +265,70 @@ export function usePlaybackController({
     },
     [withTimeout],
   );
+
+  const muteBeforeMachinePause = useCallback(async () => {
+    if (!enabledSidVolumeItems.length) {
+      pauseMuteSnapshotRef.current = null;
+      pausingFromPauseRef.current = false;
+      resumingFromPauseRef.current = false;
+      addLog("warn", "Playback pause mute skipped because no cached SID mixer items are available");
+      return;
+    }
+    const items = enabledSidVolumeItems;
+    const snapshot = captureSidMuteSnapshot(items, sidEnablement);
+    const updates = buildEnabledSidMuteUpdates(items, sidEnablement);
+    pauseMuteSnapshotRef.current = snapshot;
+    pausingFromPauseRef.current = true;
+    resumingFromPauseRef.current = false;
+    dispatchVolume({ type: "mute", reason: "pause" });
+    if (Object.keys(updates).length) {
+      await applyAudioMixerUpdates(updates, "Pause mute");
+    }
+    addLog("info", "Playback pause mute applied", {
+      sidOutputCount: items.length,
+      updateCount: Object.keys(updates).length,
+    });
+  }, [
+    applyAudioMixerUpdates,
+    buildEnabledSidMuteUpdates,
+    captureSidMuteSnapshot,
+    dispatchVolume,
+    enabledSidVolumeItems,
+    pauseMuteSnapshotRef,
+    pausingFromPauseRef,
+    resumingFromPauseRef,
+    sidEnablement,
+  ]);
+
+  const unmuteAfterMachineResume = useCallback(async () => {
+    const snapshot = pauseMuteSnapshotRef.current;
+    const currentItems = enabledSidVolumeItems.length ? enabledSidVolumeItems : undefined;
+    let updates = snapshotToUpdates(snapshot, currentItems);
+    if (!Object.keys(updates).length && snapshot) {
+      updates = snapshotToUpdates(snapshot);
+    }
+    if (Object.keys(updates).length) {
+      await applyAudioMixerUpdates(updates, "Resume unmute");
+    } else {
+      await ensureUnmuted({ force: true, refreshItems: true });
+    }
+    pauseMuteSnapshotRef.current = null;
+    pausingFromPauseRef.current = false;
+    resumingFromPauseRef.current = true;
+    dispatchVolume({ type: "unmute", reason: "pause" });
+    addLog("info", "Playback resume unmute applied", {
+      updateCount: Object.keys(updates).length,
+    });
+  }, [
+    applyAudioMixerUpdates,
+    dispatchVolume,
+    enabledSidVolumeItems,
+    ensureUnmuted,
+    pauseMuteSnapshotRef,
+    pausingFromPauseRef,
+    resumingFromPauseRef,
+    snapshotToUpdates,
+  ]);
 
   const stopMachineWithGracePeriod = useCallback(
     async (api: ReturnType<typeof getC64API>, shouldReboot: boolean) => {
@@ -848,7 +914,6 @@ export function usePlaybackController({
           },
         });
       }
-      await restoreVolumeOverrides("stop");
       const now = Date.now();
       playedClockRef.current.stop(now, true);
       setPlayedMs(0);
@@ -861,6 +926,15 @@ export function usePlaybackController({
       lastAppliedPlaybackConfigSignatureRef.current = null;
       autoAdvanceGuardRef.current = null;
       setAutoAdvanceDueAtMs(null);
+      try {
+        await restoreVolumeOverrides("stop");
+      } catch (error) {
+        addErrorLog("Playback stop volume restore failed", {
+          error: (error as Error).message,
+          currentIndex,
+          category: currentItem?.category,
+        });
+      }
     }),
     [
       currentIndex,
@@ -899,7 +973,7 @@ export function usePlaybackController({
               pausingFromPauseRef.current = false;
               resumingFromPauseRef.current = false;
               await resumeMachineWithRetry(api);
-              pauseMuteSnapshotRef.current = null;
+              await unmuteAfterMachineResume();
               setIsPaused(false);
               const now = Date.now();
               trackStartedAtRef.current = now - elapsedMs;
@@ -914,9 +988,7 @@ export function usePlaybackController({
               return;
             }
 
-            pauseMuteSnapshotRef.current = null;
-            pausingFromPauseRef.current = false;
-            resumingFromPauseRef.current = false;
+            await muteBeforeMachinePause();
             await withTimeout(api.machinePause(), 3000, "Pause");
             const now = Date.now();
             playedClockRef.current.pause(now);
@@ -955,7 +1027,9 @@ export function usePlaybackController({
       pausingFromPauseRef,
       resumingFromPauseRef,
       playedClockRef,
+      muteBeforeMachinePause,
       resumeMachineWithRetry,
+      unmuteAfterMachineResume,
       setAutoAdvanceDueAtMs,
       setPlayedMs,
       setIsPaused,

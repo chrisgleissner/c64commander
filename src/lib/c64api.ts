@@ -14,7 +14,7 @@ import {
   hasStoredPasswordFlag,
   setPassword as storePassword,
 } from "@/lib/secureStorage";
-import { updateSelectedSavedDeviceConnection } from "@/lib/savedDevices/store";
+import { getSelectedSavedDeviceProductFamilySync, updateSelectedSavedDeviceConnection } from "@/lib/savedDevices/store";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 import { getSmokeConfig, isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
@@ -27,6 +27,7 @@ import {
   validateConfigBatchWrite,
   validateConfigWrite,
 } from "@/lib/config/validateConfigWrite";
+import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { runWithImplicitAction } from "@/lib/tracing/actionTrace";
 import { recordRestRequest, recordRestResponse, recordTraceError } from "@/lib/tracing/traceSession";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
@@ -101,6 +102,44 @@ const buildHttpErrorMessage = (status: number, statusText: string): string => {
   return text ? `HTTP ${status}: ${text}` : `HTTP ${status}`;
 };
 
+const normalizeConfigWriteToken = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
+
+const resolveDeclaredConfigWriteValue = (
+  category: string,
+  item: string,
+  value: string | number,
+  categoryPayload: unknown,
+) => {
+  if (typeof value !== "string") return value;
+  const itemConfig = getConfigCategoryItems(categoryPayload, category)[item];
+  if (itemConfig === undefined) return value;
+  const options = normalizeConfigItem(itemConfig).options;
+  if (!Array.isArray(options) || options.length === 0 || options.includes(value)) return value;
+  const normalizedValue = normalizeConfigWriteToken(value);
+  const matches = options.filter((option) => normalizeConfigWriteToken(option) === normalizedValue);
+  return matches.length === 1 ? matches[0] : value;
+};
+
+const resolveLegacyC64uConfigWriteValue = (category: string, item: string, value: string | number) => {
+  if (
+    getSelectedSavedDeviceProductFamilySync() !== "C64U" ||
+    category !== "U64 Specific Settings" ||
+    item !== "CPU Speed" ||
+    typeof value !== "string"
+  ) {
+    return value;
+  }
+  const trimmedValue = value.trim();
+  return /^[1-9]$/.test(trimmedValue) ? ` ${trimmedValue}` : value;
+};
+
+const resolveConfigWriteValue = (category: string, item: string, value: string | number, categoryPayload: unknown) =>
+  resolveLegacyC64uConfigWriteValue(
+    category,
+    item,
+    resolveDeclaredConfigWriteValue(category, item, value, categoryPayload),
+  );
+
 const isDnsFailure = (message: string) => /unknown host|enotfound|ename_not_found|dns/i.test(message);
 const isNetworkFailureMessage = (message: string) =>
   /failed to fetch|networkerror|network request failed|unknown host|enotfound|ename_not_found|dns/i.test(message);
@@ -172,6 +211,37 @@ let requestSequence = 0;
 const buildRequestId = () => {
   requestSequence = (requestSequence + 1) % 1_000_000;
   return `c64req-${Date.now().toString(36)}-${requestSequence.toString(36)}`;
+};
+
+const createTimedRequestSignal = (outerSignal: AbortSignal | undefined, timeoutMs?: number) => {
+  let timedOut = false;
+  const controller = timeoutMs ? new AbortController() : null;
+  const abortFromOuter = () => controller?.abort();
+  if (outerSignal && controller) {
+    if (outerSignal.aborted) {
+      controller.abort();
+    } else {
+      outerSignal.addEventListener("abort", abortFromOuter, { once: true });
+    }
+  }
+  const timeoutId =
+    timeoutMs && controller
+      ? setTimeout(() => {
+          timedOut = true;
+          controller.abort();
+        }, timeoutMs)
+      : null;
+
+  return {
+    signal: controller ? controller.signal : outerSignal,
+    didTimeout: () => timedOut,
+    cleanup: () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (outerSignal && controller) {
+        outerSignal.removeEventListener("abort", abortFromOuter);
+      }
+    },
+  };
 };
 
 let connectionManagerImport: Promise<typeof import("@/lib/connection/connectionManager")> | null = null;
@@ -854,6 +924,7 @@ export class C64API {
                 payloadPreview: requestTrace.payloadPreview,
               });
 
+              const timedSignal = createTimedRequestSignal(requestSignal, requestTimeoutMs);
               try {
                 if (shouldBlockSmokeMutation(method)) {
                   addErrorLog(
@@ -889,44 +960,15 @@ export class C64API {
                 }
 
                 // Keep C64U REST calls stateless and avoid cookie bridge churn on native startup.
-                const outerSignal = requestSignal;
-                const controller = requestTimeoutMs ? new AbortController() : null;
-                const abortFromOuter = () => controller?.abort();
-                if (outerSignal && controller) {
-                  if (outerSignal.aborted) {
-                    controller.abort();
-                  } else {
-                    outerSignal.addEventListener("abort", abortFromOuter, {
-                      once: true,
-                    });
-                  }
-                }
-                const timeoutId = requestTimeoutMs ? setTimeout(() => controller?.abort(), requestTimeoutMs) : null;
-                const signal = controller ? controller.signal : outerSignal;
-                const responsePromise = fetch(url, {
-                  ...requestOptions,
-                  headers,
-                  credentials: requestOptions.credentials ?? "omit",
-                  ...(signal ? { signal } : {}),
-                });
-                let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
-                const timeoutPromise = requestTimeoutMs
-                  ? new Promise<never>((_, reject) => {
-                      timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), requestTimeoutMs);
-                    })
-                  : null;
-                let response: Response;
-                try {
-                  response = timeoutPromise
-                    ? await Promise.race([responsePromise, timeoutPromise])
-                    : await responsePromise;
-                } finally {
-                  if (timeoutId) clearTimeout(timeoutId);
-                  if (outerSignal && controller) {
-                    outerSignal.removeEventListener("abort", abortFromOuter);
-                  }
-                  if (timeoutPromiseId) clearTimeout(timeoutPromiseId);
-                }
+                const response = await awaitPromiseWithAbortSignal(
+                  fetch(url, {
+                    ...requestOptions,
+                    headers,
+                    credentials: requestOptions.credentials ?? "omit",
+                    ...(timedSignal.signal ? { signal: timedSignal.signal } : {}),
+                  }),
+                  timedSignal.signal,
+                );
 
                 status = response.status;
                 const durationMs = Math.max(
@@ -1003,7 +1045,10 @@ export class C64API {
                 const fuzzBlocked = (error as { __fuzzBlocked?: boolean }).__fuzzBlocked;
                 const rawMessage = (error as Error).message || "Request failed";
                 const callerAborted = requestSignal?.aborted === true;
-                const isAbort = (error as { name?: string }).name === "AbortError" || /timed out/i.test(rawMessage);
+                const isAbort =
+                  (error as { name?: string }).name === "AbortError" ||
+                  timedSignal.didTimeout() ||
+                  /timed out/i.test(rawMessage);
                 const isNetworkFailure = isNetworkFailureMessage(rawMessage);
                 const failure = classifyError(error);
                 const normalizedError =
@@ -1129,6 +1174,7 @@ export class C64API {
                 }
                 throw error;
               } finally {
+                timedSignal.cleanup();
                 this.logRestCall(method, path, status, startedAt);
               }
             }
@@ -1158,10 +1204,12 @@ export class C64API {
 
   private async fetchWithTimeout(
     url: string,
-    options: RequestInit & { __c64uTraceSuppressed?: boolean },
+    options: RequestInit & { __c64uIntent?: InteractionIntent; __c64uTraceSuppressed?: boolean },
     timeoutMs?: number,
   ): Promise<Response> {
+    const intent = options.__c64uIntent ?? "user";
     options.__c64uTraceSuppressed = true;
+    delete (options as { __c64uIntent?: InteractionIntent }).__c64uIntent;
     const body = options.body;
 
     const method = (options.method || "GET").toString().toUpperCase();
@@ -1173,7 +1221,7 @@ export class C64API {
           method,
           path: normalizeUrlPath(url),
           normalizedUrl: normalizeUrlPath(url),
-          intent: "user",
+          intent,
           baseUrl: (() => {
             try {
               return new URL(url).origin;
@@ -1215,24 +1263,17 @@ export class C64API {
           }
 
           // Keep upload/control calls stateless to avoid cookie bridge lookups.
-          const controller = timeoutMs ? new AbortController() : null;
-          const timeoutId = timeoutMs ? setTimeout(() => controller?.abort(), timeoutMs) : null;
-          let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
+          const timedSignal = createTimedRequestSignal(options.signal ?? undefined, timeoutMs);
           try {
-            const responsePromise = fetch(url, {
-              ...options,
-              body: normalizedBody.body,
-              credentials: options.credentials ?? "omit",
-              ...(controller ? { signal: controller.signal } : {}),
-            });
-            const timeoutPromise = timeoutMs
-              ? new Promise<never>((_, reject) => {
-                  timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
-                })
-              : null;
-            const response = timeoutPromise
-              ? await Promise.race([responsePromise, timeoutPromise])
-              : await responsePromise;
+            const response = await awaitPromiseWithAbortSignal(
+              fetch(url, {
+                ...options,
+                body: normalizedBody.body,
+                credentials: options.credentials ?? "omit",
+                ...(timedSignal.signal ? { signal: timedSignal.signal } : {}),
+              }),
+              timedSignal.signal,
+            );
             if (response.ok) {
               noteRestReachable(url, this.deviceHost);
             }
@@ -1255,7 +1296,10 @@ export class C64API {
             return response;
           } catch (error) {
             const rawMessage = (error as Error).message || "Request failed";
-            const isAbort = (error as { name?: string }).name === "AbortError" || /timed out/i.test(rawMessage);
+            const isAbort =
+              (error as { name?: string }).name === "AbortError" ||
+              timedSignal.didTimeout() ||
+              /timed out/i.test(rawMessage);
             const isNetworkFailure = isNetworkFailureMessage(rawMessage);
             const normalizedError = isAbort || isNetworkFailure ? resolveHostErrorMessage(rawMessage) : rawMessage;
             const durationMs = Math.max(
@@ -1318,8 +1362,7 @@ export class C64API {
             }
             throw error;
           } finally {
-            if (timeoutPromiseId) clearTimeout(timeoutPromiseId);
-            if (timeoutId) clearTimeout(timeoutId);
+            timedSignal.cleanup();
           }
         },
       ),
@@ -1485,16 +1528,17 @@ export class C64API {
   ): Promise<ConfigResponse> {
     const catEncoded = encodeURIComponent(category);
     const itemEncoded = encodeURIComponent(item);
-    const valEncoded = encodeURIComponent(String(value));
     const categoryPayload = {
       [category]: {
         items: await this.ensureConfigCategoryItems(category, [item]),
       },
     };
+    const resolvedValue = resolveConfigWriteValue(category, item, value, categoryPayload);
+    const valEncoded = encodeURIComponent(String(resolvedValue));
     validateConfigWrite({
       category,
       item,
-      value,
+      value: resolvedValue,
       categoryPayload,
     });
     const response = await scheduleConfigWrite(() =>
@@ -1503,8 +1547,8 @@ export class C64API {
         ...options,
       }),
     );
-    this.assertConfigWriteAccepted(response as { errors?: string[] }, { category, item, value });
-    this.setCachedConfigValue(category, item, value);
+    this.assertConfigWriteAccepted(response as { errors?: string[] }, { category, item, value: resolvedValue });
+    this.setCachedConfigValue(category, item, resolvedValue);
     return response;
   }
 
@@ -1520,11 +1564,9 @@ export class C64API {
     return scheduleConfigWrite(() => this.request("/v1/configs:reset_to_default", { method: "PUT", ...options }));
   }
 
-  async updateConfigBatch(
-    payload: Record<string, Record<string, string | number>>,
-    options: { immediate?: boolean } = {},
-  ): Promise<{ errors: string[] }> {
+  async updateConfigBatch(payload: Record<string, Record<string, string | number>>): Promise<{ errors: string[] }> {
     const categories = Object.entries(payload);
+    const resolvedPayload: Record<string, Record<string, string | number>> = {};
     await Promise.all(
       categories.map(async ([category, updates]) => {
         const categoryPayload = {
@@ -1532,9 +1574,16 @@ export class C64API {
             items: await this.ensureConfigCategoryItems(category, Object.keys(updates)),
           },
         };
+        const resolvedUpdates = Object.fromEntries(
+          Object.entries(updates).map(([item, value]) => [
+            item,
+            resolveConfigWriteValue(category, item, value, categoryPayload),
+          ]),
+        );
+        resolvedPayload[category] = resolvedUpdates;
         validateConfigBatchWrite({
           category,
-          updates,
+          updates: resolvedUpdates,
           categoryPayload,
         });
       }),
@@ -1542,11 +1591,11 @@ export class C64API {
     const run = (): Promise<{ errors: string[] }> =>
       this.request("/v1/configs", {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify(resolvedPayload),
       });
-    const response = options.immediate ? await run() : await scheduleConfigWrite(run);
-    this.assertConfigWriteAccepted(response, { payload });
-    categories.forEach(([category, updates]) => {
+    const response = await scheduleConfigWrite(run);
+    this.assertConfigWriteAccepted(response, { payload: resolvedPayload });
+    Object.entries(resolvedPayload).forEach(([category, updates]) => {
       Object.entries(updates).forEach(([item, value]) => {
         this.setCachedConfigValue(category, item, value);
       });
@@ -1626,7 +1675,7 @@ export class C64API {
     };
     const response = await this.fetchWithTimeout(
       url,
-      { headers, signal: options.signal },
+      { headers, signal: options.signal, __c64uIntent: options.__c64uIntent },
       options.timeoutMs ?? CONTROL_REQUEST_TIMEOUT_MS,
     );
     if (!response.ok) {
@@ -1652,16 +1701,25 @@ export class C64API {
     return new Uint8Array(data);
   }
 
-  async writeMemory(address: string, data: Uint8Array): Promise<{ errors: string[] }> {
+  async writeMemory(
+    address: string,
+    data: Uint8Array,
+    options: C64ReadRequestOptions = {},
+  ): Promise<{ errors: string[] }> {
     const hex = Array.from(data)
       .map((value) => value.toString(16).padStart(2, "0"))
       .join("");
     return this.request(`/v1/machine:writemem?address=${address}&data=${hex}`, {
       method: "PUT",
+      ...options,
     });
   }
 
-  async writeMemoryBlock(address: string, data: Uint8Array): Promise<{ errors: string[] }> {
+  async writeMemoryBlock(
+    address: string,
+    data: Uint8Array,
+    options: C64ReadRequestOptions = {},
+  ): Promise<{ errors: string[] }> {
     const path = `/v1/machine:writemem?address=${address}`;
     const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     let status: number | "error" = "error";
@@ -1679,8 +1737,10 @@ export class C64API {
             "Content-Type": "application/octet-stream",
           },
           body: payload,
+          signal: options.signal,
+          __c64uIntent: options.__c64uIntent,
         },
-        RAM_BLOCK_WRITE_TIMEOUT_MS,
+        options.timeoutMs ?? RAM_BLOCK_WRITE_TIMEOUT_MS,
       );
       status = response.status;
     } finally {
@@ -1727,6 +1787,7 @@ export class C64API {
     type?: string,
     mode?: "readwrite" | "readonly" | "unlinked",
     metadata: UploadValidationMetadata = {},
+    options: C64ReadRequestOptions = {},
   ): Promise<{ errors: string[] }> {
     let path = `/v1/drives/${drive}:mount`;
     if (type || mode) {
@@ -1770,8 +1831,10 @@ export class C64API {
           method,
           headers: upload.headers,
           body: upload.body,
+          signal: options.signal,
+          __c64uIntent: options.__c64uIntent,
         },
-        UPLOAD_REQUEST_TIMEOUT_MS,
+        options.timeoutMs ?? UPLOAD_REQUEST_TIMEOUT_MS,
       );
       status = response.status;
     } finally {
@@ -1842,6 +1905,7 @@ export class C64API {
     songNr?: number,
     sslFile?: Blob,
     metadata: UploadValidationMetadata = {},
+    options: C64ReadRequestOptions = {},
   ): Promise<{ errors: string[] }> {
     const url = new URL(`${this.getBaseUrl()}/v1/runners:sidplay`);
     if (songNr !== undefined) {
@@ -1880,8 +1944,10 @@ export class C64API {
             method,
             headers,
             body: form,
+            signal: options.signal,
+            __c64uIntent: options.__c64uIntent,
           },
-          UPLOAD_REQUEST_TIMEOUT_MS,
+          options.timeoutMs ?? UPLOAD_REQUEST_TIMEOUT_MS,
         );
         status = response.status;
 
@@ -1937,7 +2003,11 @@ export class C64API {
     });
   }
 
-  async playModUpload(modFile: Blob, metadata: UploadValidationMetadata = {}): Promise<{ errors: string[] }> {
+  async playModUpload(
+    modFile: Blob,
+    metadata: UploadValidationMetadata = {},
+    options: C64ReadRequestOptions = {},
+  ): Promise<{ errors: string[] }> {
     const path = "/v1/runners:modplay";
     const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     let status: number | "error" = "error";
@@ -1957,8 +2027,10 @@ export class C64API {
           method,
           headers: upload.headers,
           body: upload.body,
+          signal: options.signal,
+          __c64uIntent: options.__c64uIntent,
         },
-        UPLOAD_REQUEST_TIMEOUT_MS,
+        options.timeoutMs ?? UPLOAD_REQUEST_TIMEOUT_MS,
       );
       status = response.status;
     } finally {
@@ -1989,7 +2061,11 @@ export class C64API {
     });
   }
 
-  async runPrgUpload(prgFile: Blob, metadata: UploadValidationMetadata = {}): Promise<{ errors: string[] }> {
+  async runPrgUpload(
+    prgFile: Blob,
+    metadata: UploadValidationMetadata = {},
+    options: C64ReadRequestOptions = {},
+  ): Promise<{ errors: string[] }> {
     const path = "/v1/runners:run_prg";
     const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     let status: number | "error" = "error";
@@ -2009,8 +2085,10 @@ export class C64API {
           method,
           headers: upload.headers,
           body: upload.body,
+          signal: options.signal,
+          __c64uIntent: options.__c64uIntent,
         },
-        UPLOAD_REQUEST_TIMEOUT_MS,
+        options.timeoutMs ?? UPLOAD_REQUEST_TIMEOUT_MS,
       );
       status = response.status;
     } finally {
@@ -2041,7 +2119,11 @@ export class C64API {
     });
   }
 
-  async loadPrgUpload(prgFile: Blob, metadata: UploadValidationMetadata = {}): Promise<{ errors: string[] }> {
+  async loadPrgUpload(
+    prgFile: Blob,
+    metadata: UploadValidationMetadata = {},
+    options: C64ReadRequestOptions = {},
+  ): Promise<{ errors: string[] }> {
     const path = "/v1/runners:load_prg";
     const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     let status: number | "error" = "error";
@@ -2061,8 +2143,10 @@ export class C64API {
           method,
           headers: upload.headers,
           body: upload.body,
+          signal: options.signal,
+          __c64uIntent: options.__c64uIntent,
         },
-        UPLOAD_REQUEST_TIMEOUT_MS,
+        options.timeoutMs ?? UPLOAD_REQUEST_TIMEOUT_MS,
       );
       status = response.status;
     } finally {
@@ -2093,7 +2177,11 @@ export class C64API {
     });
   }
 
-  async runCartridgeUpload(crtFile: Blob, metadata: UploadValidationMetadata = {}): Promise<{ errors: string[] }> {
+  async runCartridgeUpload(
+    crtFile: Blob,
+    metadata: UploadValidationMetadata = {},
+    options: C64ReadRequestOptions = {},
+  ): Promise<{ errors: string[] }> {
     const path = "/v1/runners:run_crt";
     const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     let status: number | "error" = "error";
@@ -2114,8 +2202,10 @@ export class C64API {
           method,
           headers: upload.headers,
           body: upload.body,
+          signal: options.signal,
+          __c64uIntent: options.__c64uIntent,
         },
-        UPLOAD_REQUEST_TIMEOUT_MS,
+        options.timeoutMs ?? UPLOAD_REQUEST_TIMEOUT_MS,
       );
       status = response.status;
     } finally {

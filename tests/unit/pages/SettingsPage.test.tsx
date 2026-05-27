@@ -518,8 +518,9 @@ describe("SettingsPage", () => {
       item: () => file,
     } as FileList;
   };
-  it("saves connection settings and relies on saved-device verification", async () => {
+  it("saves connection settings and triggers a manual discovery after saved-device verification", async () => {
     mockSwitchSavedDevice.mockResolvedValue(undefined);
+    vi.mocked(discoverConnection).mockResolvedValue(undefined);
 
     renderSettingsPage();
 
@@ -528,7 +529,7 @@ describe("SettingsPage", () => {
     await waitFor(() => {
       expect(mockUpdateConfig).toHaveBeenCalledWith("c64u", undefined);
       expect(mockSwitchSavedDevice).toHaveBeenCalledWith("saved-device-1");
-      expect(discoverConnection).not.toHaveBeenCalled();
+      expect(discoverConnection).toHaveBeenCalledWith("manual");
       expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Connection settings saved" }));
     });
   }, 15000);
