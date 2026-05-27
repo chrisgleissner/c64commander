@@ -64,6 +64,12 @@ const PLAYBACK_RECONCILE_MIN_DELAY_MS = 50;
 const PLAYBACK_RECONCILE_MAX_DELAY_MS = 250;
 const PENDING_VOLUME_WRITE_STALE_MS = 5000;
 
+const isAbortLikeError = (error: unknown) => {
+  const name = (error as { name?: string } | undefined)?.name;
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return name === "AbortError" || /aborted/i.test(message);
+};
+
 const shouldToastRestoreFailure = (context: string) => context !== "Restore (navigate)";
 
 export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProps) {
@@ -348,7 +354,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
             error: (error as Error).message,
             context,
           });
-          if (shouldToastRestoreFailure(context)) {
+          if (shouldToastRestoreFailure(context) && !isAbortLikeError(error)) {
             toast({
               variant: "destructive",
               title: "Could not restore volume settings",

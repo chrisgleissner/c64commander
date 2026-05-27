@@ -1133,6 +1133,25 @@ describe("useVolumeOverride", () => {
     expect(toast).not.toHaveBeenCalled();
   });
 
+  it("suppresses restore failure toasts for abort-like teardown writes", async () => {
+    buildEnabledSidRestoreUpdatesMock.mockReturnValue({ "SID 1": "5" });
+    mutateAsyncMock.mockRejectedValue(new Error("net::ERR_ABORTED"));
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    result.current.volumeSessionActiveRef.current = true;
+    result.current.volumeSessionSnapshotRef.current = { "SID 1": "0" };
+
+    await expect(result.current.restoreVolumeOverrides("stop")).resolves.toBeUndefined();
+
+    expect(addErrorLog).toHaveBeenCalledWith("Audio mixer restore failed", {
+      error: "net::ERR_ABORTED",
+      context: "Restore (stop)",
+    });
+    expect(toast).not.toHaveBeenCalled();
+  });
+
   it("logs forced refresh failures for audio mixer and SID enablement lookups", async () => {
     const { result } = renderHook(() =>
       useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
