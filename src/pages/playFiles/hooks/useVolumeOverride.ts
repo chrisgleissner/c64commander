@@ -148,6 +148,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   const volumeUpdateSeqRef = useRef(0);
   const volumeUiTargetRef = useRef<{ index: number; setAtMs: number } | null>(null);
   const restoreInFlightRef = useRef<Promise<void> | null>(null);
+  const audioMixerWriteInFlightRef = useRef<Promise<void> | null>(null);
   const playbackWriteInFlightRef = useRef<Promise<void> | null>(null);
   const pendingVolumeWriteRef = useRef<PlaybackSyncIntent | null>(null);
   const lastKnownDeviceVolumeRef = useRef<PlaybackSyncState | null>(null);
@@ -339,16 +340,18 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   const applyAudioMixerUpdates = useCallback(
     async (updates: Record<string, string | number>, context: string) => {
       if (!Object.keys(updates).length) return;
+      const pendingWrite = withTimeout(
+        updateConfigBatch.mutateAsync({
+          category: "Audio Mixer",
+          updates,
+          skipInvalidation: true,
+        }),
+        4000,
+        `${context} audio mixer update`,
+      );
       try {
-        await withTimeout(
-          updateConfigBatch.mutateAsync({
-            category: "Audio Mixer",
-            updates,
-            skipInvalidation: true,
-          }),
-          4000,
-          `${context} audio mixer update`,
-        );
+        audioMixerWriteInFlightRef.current = pendingWrite;
+        await pendingWrite;
         schedulePlaybackReconciliation();
       } catch (error) {
         if (context.startsWith("Restore")) {
@@ -367,6 +370,10 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
         }
         // Non-Restore contexts: rethrow so callers can gate UI state on confirmed writes.
         throw error;
+      } finally {
+        if (audioMixerWriteInFlightRef.current === pendingWrite) {
+          audioMixerWriteInFlightRef.current = null;
+        }
       }
     },
     [schedulePlaybackReconciliation, updateConfigBatch, withTimeout],
@@ -534,6 +541,9 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
         }
         if (playbackWriteInFlightRef.current) {
           await playbackWriteInFlightRef.current.catch(() => undefined);
+        }
+        if (audioMixerWriteInFlightRef.current) {
+          await audioMixerWriteInFlightRef.current.catch(() => undefined);
         }
         const items = await resolveEnabledSidVolumeItems(true);
         const updates = buildEnabledSidRestoreUpdates(items, sidEnablement, snapshot);
