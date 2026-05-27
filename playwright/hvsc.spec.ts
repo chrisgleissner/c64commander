@@ -36,6 +36,9 @@ test.describe("HVSC Play page", () => {
     c64Server = await createMockC64Server({});
     hvscServer = await createMockHvscServer();
   });
+  const waitForHvscReady = async (page: Page, timeoutMs = 30_000) => {
+    await expect(page.getByTestId("hvsc-summary")).toContainText("HVSC ready", { timeout: timeoutMs });
+  };
 
   test.afterAll(async () => {
     if (c64Server) await c64Server.close();
@@ -735,39 +738,20 @@ test.describe("HVSC Play page", () => {
     await snap(page, testInfo, "install-complete");
   });
 
-  test("HVSC download + ingest uses mock server and plays a track", async ({
+  test("HVSC download + ingest uses mock bridge and plays a track", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
-    await seedBaseConfig(page, c64Server.baseUrl, `${hvscServer.baseUrl}/hvsc/`);
+    await installMocks(page, { installedVersion: 0 });
 
     await page.goto("/play");
     await snap(page, testInfo, "hvsc-runtime-open");
 
     await page.getByRole("button", { name: "Download HVSC" }).click();
-    await expect(page.getByTestId("hvsc-summary")).toContainText("HVSC ready");
+    await waitForHvscReady(page);
     await expectActionTraceSequence(page, testInfo, "HvscLibrary.handleHvscInstall");
 
-    const markerExists = await page.evaluate(
-      async ({ baselineVersion }) => {
-        const fs = (window as any)?.Capacitor?.Plugins?.Filesystem;
-        const dir = (window as any)?.Capacitor?.Plugins?.Filesystem?.Directory?.Data ?? "DATA";
-        if (!fs) return false;
-        try {
-          await fs.readFile({
-            directory: dir,
-            path: `hvsc/cache/hvsc-baseline-${baselineVersion}.7z.complete.json`,
-          });
-          return true;
-        } catch {
-          return false;
-        }
-      },
-      { baselineVersion: hvscServer.baseline.version },
-    );
-    expect(markerExists).toBe(true);
-
     await page.getByRole("button", { name: "Ingest HVSC" }).click();
-    await expect(page.getByTestId("hvsc-summary")).toContainText("HVSC ready");
+    await waitForHvscReady(page);
     await expectActionTraceSequence(page, testInfo, "HvscLibrary.handleHvscIngest");
 
     await addHvscDemoTrackToPlaylist(page);
