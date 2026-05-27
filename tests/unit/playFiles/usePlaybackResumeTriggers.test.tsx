@@ -43,11 +43,16 @@ describe("usePlaybackResumeTriggers", () => {
     expect(onResume).toHaveBeenCalledTimes(1);
   });
 
-  it("fires on focus and pageshow", () => {
+  it("dedupes clustered focus and pageshow resume signals", () => {
     const onResume = vi.fn();
     renderHook(() => usePlaybackResumeTriggers(onResume));
 
     window.dispatchEvent(new Event("focus"));
+    window.dispatchEvent(new Event("pageshow"));
+
+    expect(onResume).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(250);
     window.dispatchEvent(new Event("pageshow"));
 
     expect(onResume).toHaveBeenCalledTimes(2);

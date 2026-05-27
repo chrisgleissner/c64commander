@@ -27,6 +27,7 @@ import {
 import { isUpdateApplied, loadHvscState, updateHvscState } from "@/lib/hvsc/hvscStateStore";
 import { fetchLatestHvscVersions } from "@/lib/hvsc/hvscReleaseService";
 import { getHvscDurationByMd5, getHvscSongByVirtualPath, listHvscFolder } from "@/lib/hvsc/hvscFilesystem";
+import { getHvscIngestionRuntimeState } from "@/lib/hvsc/hvscIngestionRuntimeSupport";
 import {
   deleteLibraryFile,
   resetLibraryRoot,
@@ -207,6 +208,10 @@ describe("hvscIngestionRuntime", () => {
     } as any);
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
     vi.mocked(deleteLibraryFile).mockResolvedValue(undefined as any);
+    const runtimeState = getHvscIngestionRuntimeState();
+    runtimeState.activeIngestionRunning = false;
+    runtimeState.cancelTokens.clear();
+    runtimeState.nativeListenersByToken.clear();
     if (!globalThis.crypto) {
       (globalThis as typeof globalThis & { crypto?: Crypto }).crypto = {
         randomUUID: () => "uuid",
@@ -305,8 +310,26 @@ describe("hvscIngestionRuntime", () => {
   });
 
   it("allows cancellation tokens to be reused", async () => {
+    const runtimeState = getHvscIngestionRuntimeState();
+    runtimeState.activeIngestionRunning = true;
+    runtimeState.cancelTokens.set("token-1", { cancelled: false });
+
     await expect(cancelHvscInstall("token-1")).resolves.toBeUndefined();
     await expect(cancelHvscInstall("token-1")).resolves.toBeUndefined();
+    expect(runtimeState.cancelTokens.get("token-1")?.cancelled).toBe(true);
+  });
+
+  it("does not overwrite ready state when cancel is requested while idle", async () => {
+    await cancelHvscInstall("idle-token");
+
+    expect(updateHvscState).not.toHaveBeenCalledWith(
+      expect.objectContaining({ ingestionState: "idle", ingestionError: "Cancelled" }),
+    );
+    expect(addLog).toHaveBeenCalledWith(
+      "info",
+      "HVSC cancel ignored; no active ingestion",
+      expect.objectContaining({ token: "idle-token" }),
+    );
   });
 
   it("installs baseline from cached archive without downloading", async () => {
@@ -900,6 +923,9 @@ describe("hvscIngestionRuntime", () => {
   });
 
   it("logs warning when native cancellation fails", async () => {
+    const runtimeState = getHvscIngestionRuntimeState();
+    runtimeState.activeIngestionRunning = true;
+    runtimeState.cancelTokens.set("token-cancel-fail", { cancelled: false });
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
     nativeHvscPlugin.cancelIngestion.mockRejectedValueOnce(new Error("cancel failed"));

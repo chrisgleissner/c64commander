@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   ingestCachedHvscMock: vi.fn(),
   installOrUpdateHvscMock: vi.fn(),
   isHvscBridgeAvailableMock: vi.fn(),
+  isHvscIngestionBridgeAvailableMock: vi.fn(),
   markHvscUpdateCheckAtMock: vi.fn(),
   resetHvscLibraryDataMock: vi.fn(),
   recoverStaleIngestionStateMock: vi.fn(),
@@ -77,6 +78,7 @@ vi.mock("@/lib/hvsc", async () => {
     ingestCachedHvsc: (...args: unknown[]) => mocks.ingestCachedHvscMock(...args),
     installOrUpdateHvsc: (...args: unknown[]) => mocks.installOrUpdateHvscMock(...args),
     isHvscBridgeAvailable: (...args: unknown[]) => mocks.isHvscBridgeAvailableMock(...args),
+    isHvscIngestionBridgeAvailable: (...args: unknown[]) => mocks.isHvscIngestionBridgeAvailableMock(...args),
     resetHvscLibraryData: (...args: unknown[]) => mocks.resetHvscLibraryDataMock(...args),
     recoverStaleIngestionState: (...args: unknown[]) => mocks.recoverStaleIngestionStateMock(...args),
   };
@@ -189,6 +191,7 @@ describe("useHvscLibrary preparation state coverage", () => {
     mocks.ingestCachedHvscMock.mockResolvedValue(undefined);
     mocks.installOrUpdateHvscMock.mockResolvedValue(undefined);
     mocks.isHvscBridgeAvailableMock.mockReturnValue(true);
+    mocks.isHvscIngestionBridgeAvailableMock.mockReturnValue(true);
     mocks.markHvscUpdateCheckAtMock.mockReset();
     mocks.resetHvscLibraryDataMock.mockResolvedValue(undefined);
     mocks.shouldCheckForHvscUpdatesMock.mockReturnValue(false);
@@ -220,6 +223,7 @@ describe("useHvscLibrary preparation state coverage", () => {
 
   it("returns null preparation progress percent when state is NOT_PRESENT", async () => {
     mocks.isHvscBridgeAvailableMock.mockReturnValue(false);
+    mocks.isHvscIngestionBridgeAvailableMock.mockReturnValue(false);
 
     const { result } = renderHook(() => useHvscLibrary());
 
@@ -495,6 +499,7 @@ describe("useHvscLibrary preparation state coverage", () => {
 
   it("runHvscPreparation is a no-op when hvsc bridge is not available", async () => {
     mocks.isHvscBridgeAvailableMock.mockReturnValue(false);
+    mocks.isHvscIngestionBridgeAvailableMock.mockReturnValue(false);
 
     const { result } = renderHook(() => useHvscLibrary());
 

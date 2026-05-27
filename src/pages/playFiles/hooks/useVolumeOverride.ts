@@ -278,9 +278,9 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     volumeUiTargetRef.current = muted
       ? null
       : {
-        index,
-        setAtMs: nextIntent.setAtMs,
-      };
+          index,
+          setAtMs: nextIntent.setAtMs,
+        };
   }, []);
 
   const withTimeout = useCallback(async <T>(promise: Promise<T>, timeoutMs: number, operation: string) => {
@@ -357,6 +357,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
         schedulePlaybackReconciliation();
       } catch (error) {
         if (context.startsWith("Restore")) {
+          let restoreError = error;
           if (!isAbortLikeError(error)) {
             try {
               await waitForMachineTransitionsToSettle();
@@ -366,14 +367,14 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
               schedulePlaybackReconciliation();
               return;
             } catch (retryError) {
-              error = retryError;
+              restoreError = retryError;
             }
           }
           addErrorLog("Audio mixer restore failed", {
-            error: (error as Error).message,
+            error: (restoreError as Error).message,
             context,
           });
-          if (shouldToastRestoreFailure(context) && !isAbortLikeError(error)) {
+          if (shouldToastRestoreFailure(context) && !isAbortLikeError(restoreError)) {
             toast({
               variant: "destructive",
               title: "Could not restore volume settings",

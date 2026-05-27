@@ -239,4 +239,45 @@ describe("usePlaybackController auto advance", () => {
     expect(result.current.trackInstanceIdRef.current).toBe(4);
     expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(4);
   });
+
+  it("advances only once for duplicate auto callbacks with the same track instance", async () => {
+    const playlist = [createPlaylistItem("one", 1_000), createPlaylistItem("two", 1_000)];
+    const { result } = renderPlaybackHarness(playlist);
+
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+
+    const dueTrackInstanceId = result.current.trackInstanceIdRef.current;
+    await act(async () => {
+      await Promise.all([
+        result.current.handleNext("auto", dueTrackInstanceId),
+        result.current.handleNext("auto", dueTrackInstanceId),
+      ]);
+    });
+
+    expect(result.current.currentIndex).toBe(1);
+    expect(result.current.isPlaying).toBe(true);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(2);
+  });
+
+  it("suppresses a pending auto-advance after manual stop clears the guard", async () => {
+    const playlist = [createPlaylistItem("one", 1_000), createPlaylistItem("two", 1_000)];
+    const { result } = renderPlaybackHarness(playlist);
+
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+
+    const dueTrackInstanceId = result.current.trackInstanceIdRef.current;
+    await act(async () => {
+      await result.current.handleStop();
+      await result.current.handleNext("auto", dueTrackInstanceId);
+    });
+
+    expect(result.current.currentIndex).toBe(0);
+    expect(result.current.isPlaying).toBe(false);
+    expect(result.current.autoAdvanceGuardRef.current).toBeNull();
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+  });
 });

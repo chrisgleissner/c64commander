@@ -23,6 +23,17 @@ const createDeferred = <T,>() => {
 
 const createAbortError = () => Object.assign(new Error("Aborted"), { name: "AbortError" });
 
+const setDocumentVisibility = (visibilityState: "visible" | "hidden") => {
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    value: visibilityState,
+  });
+  Object.defineProperty(document, "hidden", {
+    configurable: true,
+    value: visibilityState === "hidden",
+  });
+};
+
 const createAbortablePendingRun = () => {
   return (_target: unknown, options?: { signal?: AbortSignal }) =>
     new Promise((_, reject) => {
@@ -241,6 +252,7 @@ describe("useSavedDeviceHealthChecks", () => {
     mockRunHealthCheckForTarget.mockImplementation(async (target: { deviceHost: string }) =>
       target.deviceHost.includes("backup") ? makeResult("backup") : makeResult("office"),
     );
+    setDocumentVisibility("visible");
   });
 
   afterEach(() => {
@@ -556,6 +568,29 @@ describe("useSavedDeviceHealthChecks", () => {
     await flushAsyncWork();
 
     expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(1);
+  });
+
+  it("suppresses background-maintenance probes while hidden and runs one selected-device probe on visible resume", async () => {
+    setDocumentVisibility("hidden");
+    const { result } = renderBackgroundHook();
+
+    await flushAsyncWork();
+
+    expect(result.current.cycle.running).toBe(false);
+    expect(mockRunConnectivityProbeForTarget).not.toHaveBeenCalled();
+
+    await act(async () => {
+      setDocumentVisibility("visible");
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await flushAsyncWork();
+
+    expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(1);
+    expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledWith(
+      expect.objectContaining({ deviceHost: "office-u64" }),
+      expect.objectContaining({ context: HEALTH_CHECK_CONTEXTS.backgroundMaintenance }),
+    );
+    expect(mockRunHealthCheckForTarget).not.toHaveBeenCalled();
   });
 
   it("cancels an in-flight background cycle when pollingPauseRegistry is acquired", async () => {

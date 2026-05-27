@@ -34,6 +34,7 @@ export {
   ingestCachedHvsc,
   installOrUpdateHvsc,
   isHvscBridgeAvailable,
+  isHvscIngestionBridgeAvailable,
   resetHvscLibraryData,
   resolveHvscSonglength,
 } from "./hvscService";

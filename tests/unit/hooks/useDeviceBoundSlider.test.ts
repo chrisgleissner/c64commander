@@ -12,6 +12,14 @@ const mockSliderContext = vi.hoisted(() => ({
 }));
 const addLogMock = vi.hoisted(() => vi.fn());
 
+const createDeferred = () => {
+  let resolve!: () => void;
+  const promise = new Promise<void>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+};
+
 vi.mock("@/hooks/useSavedDevices", () => ({
   useSavedDevices: () => ({
     selectedDeviceId: mockSliderContext.selectedDeviceId,
@@ -202,6 +210,58 @@ describe("useDeviceBoundSlider", () => {
     });
 
     expect(preview.mock.calls.length).toBeLessThanOrEqual(6);
+  });
+
+  it("keeps slow preview writes single-flight with one trailing latest intent", async () => {
+    const previewRuns: Array<ReturnType<typeof createDeferred>> = [];
+    let activePreviewCount = 0;
+    let maxActivePreviewCount = 0;
+    const preview = vi.fn(() => {
+      const run = createDeferred();
+      previewRuns.push(run);
+      activePreviewCount += 1;
+      maxActivePreviewCount = Math.max(maxActivePreviewCount, activePreviewCount);
+      return run.promise.finally(() => {
+        activePreviewCount -= 1;
+      });
+    });
+
+    const { result } = renderHook(() =>
+      useDeviceBoundSlider({
+        deviceValue: 0,
+        domain: createNumericSliderDomain({ min: 0, max: 100, round: Math.round }),
+        previewMode: "throttled",
+        preview,
+        commit: vi.fn(),
+        previewThrottleMs: 200,
+      }),
+    );
+
+    act(() => {
+      result.current.onValueChange([10]);
+    });
+    expect(preview).toHaveBeenCalledTimes(1);
+
+    for (let value = 11; value <= 60; value += 1) {
+      act(() => {
+        result.current.onValueChange([value]);
+        vi.advanceTimersByTime(10);
+      });
+      expect(result.current.sliderValue).toBe(value);
+    }
+
+    expect(preview).toHaveBeenCalledTimes(1);
+    expect(activePreviewCount).toBe(1);
+
+    await act(async () => {
+      previewRuns[0].resolve();
+      await previewRuns[0].promise;
+      await Promise.resolve();
+    });
+
+    expect(preview).toHaveBeenCalledTimes(2);
+    expect(preview).toHaveBeenLastCalledWith(60);
+    expect(maxActivePreviewCount).toBe(1);
   });
 
   it("logs rapid local intent, coalesced preview, final commit, and stale refresh protection", () => {

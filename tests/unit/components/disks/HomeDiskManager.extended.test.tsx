@@ -21,6 +21,13 @@ vi.mock("@/components/lists/SelectableActionList", () => ({
           <span data-testid="disk-title">{item.title}</span>
           {/* Primary Action (Mount) */}
           {item.onAction && <button onClick={item.onAction}>Mount</button>}
+          {item.menuItems
+            ?.filter((menuItem: any) => menuItem.type === "action")
+            .map((menuItem: any) => (
+              <button key={menuItem.label} disabled={menuItem.disabled} onClick={menuItem.onSelect}>
+                {menuItem.label}
+              </button>
+            ))}
         </div>
       ))}
     </div>
@@ -420,6 +427,7 @@ describe("HomeDiskManager Extended", () => {
       isConnected: true,
       deviceInfo: { unique_id: "test-device" },
     };
+    useC64DrivesMock.data = mockDrivesData as any;
     useDiskLibraryMock.disks = [
       {
         id: "ultimate/disk2.d64",
@@ -455,6 +463,41 @@ describe("HomeDiskManager Extended", () => {
       expect(screen.getByRole("button", { name: "Drive A Mount disk" })).toBeInTheDocument();
     });
   }, 15000);
+
+  it("keeps a mounted disk in the collection when eject before remove fails", async () => {
+    const { reportUserError } = await import("@/lib/uiErrors");
+    mockUnmountDrive.mockRejectedValueOnce(new Error("Eject failed"));
+    useC64DrivesMock.data = {
+      drives: [
+        {
+          a: {
+            bus_id: 8,
+            enabled: true,
+            image_file: "disk2.d64",
+            image_path: "/",
+          },
+        },
+        { b: { bus_id: 9, enabled: true, image_file: "", image_path: "" } },
+      ],
+    } as any;
+
+    renderComponent();
+
+    const item = screen.getByTestId("disk-item-ultimate/disk2.d64");
+    fireEvent.click(within(item).getByText("Remove from collection"));
+    fireEvent.click(screen.getByText("Remove"));
+
+    await waitFor(() => {
+      expect(mockUnmountDrive).toHaveBeenCalledWith("a");
+    });
+    expect(useDiskLibraryMock.removeDisk).not.toHaveBeenCalled();
+    expect(reportUserError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "DISK_EJECT_BEFORE_DELETE",
+        title: "Disk eject failed",
+      }),
+    );
+  });
 
   it("handles drive power toggle", async () => {
     renderComponent();

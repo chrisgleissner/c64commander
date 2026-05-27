@@ -34,6 +34,7 @@ import {
   ingestCachedHvsc,
   installOrUpdateHvsc,
   isHvscBridgeAvailable,
+  isHvscIngestionBridgeAvailable,
   recoverStaleIngestionState,
   type HvscPreparationPhase,
   type HvscPreparationSnapshot,
@@ -667,6 +668,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
   const handleHvscInstall = useCallback(
     () =>
       runHvscAction("HvscLibrary.handleHvscInstall", async () => {
+        if (!isHvscIngestionBridgeAvailable()) return;
         try {
           const startedAt = new Date().toISOString();
           hvscIgnoreProgressRef.current = false;
@@ -833,7 +835,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
   const handleHvscIngest = useCallback(
     () =>
       runHvscAction("HvscLibrary.handleHvscIngest", async () => {
-        if (!isHvscBridgeAvailable()) return;
+        if (!isHvscIngestionBridgeAvailable()) return;
         if (!hvscHasCache) {
           toast({
             title: "HVSC cache missing",
@@ -1062,6 +1064,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
 
   const hvscRoot = useMemo(() => loadHvscRoot(), []);
   const hvscAvailable = isHvscBridgeAvailable();
+  const hvscIngestionAvailable = isHvscIngestionBridgeAvailable();
   const hvscLibraryAvailable =
     hvscAvailable &&
     (Boolean(hvscStatus?.installedVersion) ||
@@ -1076,7 +1079,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
   const hvscUpdating = hvscLoading || hvscInProgress;
   const hvscInlineError: string | null =
     hvscErrorMessage || (hvscStatus?.ingestionState === "error" ? (hvscStatus.ingestionError ?? null) : null);
-  const hvscCanIngest = hvscAvailable && hvscHasCache && !hvscUpdating;
+  const hvscCanIngest = hvscIngestionAvailable && hvscHasCache && !hvscUpdating;
   const hvscSummaryState = useMemo(() => {
     if (hvscStatusSummary.download.status === "failure" || hvscStatusSummary.extraction.status === "failure")
       return "failure";
