@@ -1446,13 +1446,23 @@ export default function PlayFilesPage() {
   }, [isPaused, isPlaying, restoreVolumeOverrides]);
 
   const restoreVolumeOverridesOnNavigateRef = useRef(restoreVolumeOverrides);
+  const navigateCleanupIsPlayingRef = useRef(isPlaying);
+  const navigateCleanupIsPausedRef = useRef(isPaused);
 
   useEffect(() => {
     restoreVolumeOverridesOnNavigateRef.current = restoreVolumeOverrides;
   }, [restoreVolumeOverrides]);
 
+  useEffect(() => {
+    navigateCleanupIsPlayingRef.current = isPlaying;
+    navigateCleanupIsPausedRef.current = isPaused;
+  }, [isPaused, isPlaying]);
+
   useEffect(
     () => () => {
+      if (navigateCleanupIsPlayingRef.current || navigateCleanupIsPausedRef.current) {
+        return;
+      }
       void restoreVolumeOverridesOnNavigateRef.current("navigate").catch((error) => {
         addErrorLog("Volume restore failed during navigation", {
           error: (error as Error).message,

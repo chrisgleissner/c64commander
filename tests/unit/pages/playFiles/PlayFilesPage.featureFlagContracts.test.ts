@@ -65,7 +65,14 @@ describe("PlayFilesPage feature-flag contracts", () => {
     expect(playFilesPageSource).toContain(
       "const restoreVolumeOverridesOnNavigateRef = useRef(restoreVolumeOverrides);",
     );
+    expect(playFilesPageSource).toContain("const navigateCleanupIsPlayingRef = useRef(isPlaying);");
+    expect(playFilesPageSource).toContain("const navigateCleanupIsPausedRef = useRef(isPaused);");
     expect(playFilesPageSource).toContain("restoreVolumeOverridesOnNavigateRef.current = restoreVolumeOverrides;");
+    expect(playFilesPageSource).toContain("navigateCleanupIsPlayingRef.current = isPlaying;");
+    expect(playFilesPageSource).toContain("navigateCleanupIsPausedRef.current = isPaused;");
+    expect(playFilesPageSource).toContain(
+      "if (navigateCleanupIsPlayingRef.current || navigateCleanupIsPausedRef.current) {",
+    );
     expect(playFilesPageSource).toContain(
       'void restoreVolumeOverridesOnNavigateRef.current("navigate").catch((error) => {',
     );
