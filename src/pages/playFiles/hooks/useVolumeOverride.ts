@@ -64,6 +64,8 @@ const PLAYBACK_RECONCILE_MIN_DELAY_MS = 50;
 const PLAYBACK_RECONCILE_MAX_DELAY_MS = 250;
 const PENDING_VOLUME_WRITE_STALE_MS = 5000;
 
+const shouldToastRestoreFailure = (context: string) => context !== "Restore (navigate)";
+
 export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProps) {
   const { status } = useC64Connection();
   const updateConfigBatch = useC64UpdateConfigBatch();
@@ -346,11 +348,13 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
             error: (error as Error).message,
             context,
           });
-          toast({
-            variant: "destructive",
-            title: "Could not restore volume settings",
-            description: "Your current volume may be different than before playback.",
-          });
+          if (shouldToastRestoreFailure(context)) {
+            toast({
+              variant: "destructive",
+              title: "Could not restore volume settings",
+              description: "Your current volume may be different than before playback.",
+            });
+          }
           return;
         }
         // Non-Restore contexts: rethrow so callers can gate UI state on confirmed writes.

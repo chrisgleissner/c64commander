@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { toast } from "@/hooks/use-toast";
 import { useVolumeOverride } from "@/pages/playFiles/hooks/useVolumeOverride";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
@@ -1111,6 +1112,25 @@ describe("useVolumeOverride", () => {
     );
     expect(result.current.volumeSessionActiveRef.current).toBe(false);
     expect(result.current.volumeSessionSnapshotRef.current).toBeNull();
+  });
+
+  it("suppresses restore failure toasts during navigation cleanup", async () => {
+    buildEnabledSidRestoreUpdatesMock.mockReturnValue({ "SID 1": "5" });
+    mutateAsyncMock.mockRejectedValue(new Error("navigation teardown"));
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    result.current.volumeSessionActiveRef.current = true;
+    result.current.volumeSessionSnapshotRef.current = { "SID 1": "0" };
+
+    await expect(result.current.restoreVolumeOverrides("navigate")).resolves.toBeUndefined();
+
+    expect(addErrorLog).toHaveBeenCalledWith("Audio mixer restore failed", {
+      error: "navigation teardown",
+      context: "Restore (navigate)",
+    });
+    expect(toast).not.toHaveBeenCalled();
   });
 
   it("logs forced refresh failures for audio mixer and SID enablement lookups", async () => {
