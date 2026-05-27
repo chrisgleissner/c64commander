@@ -148,6 +148,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   const volumeUpdateSeqRef = useRef(0);
   const volumeUiTargetRef = useRef<{ index: number; setAtMs: number } | null>(null);
   const restoreInFlightRef = useRef<Promise<void> | null>(null);
+  const playbackWriteInFlightRef = useRef<Promise<void> | null>(null);
   const pendingVolumeWriteRef = useRef<PlaybackSyncIntent | null>(null);
   const lastKnownDeviceVolumeRef = useRef<PlaybackSyncState | null>(null);
   const lastManualWriteRef = useRef<{ index: number; muted: boolean; setAtMs: number } | null>(null);
@@ -276,9 +277,9 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     volumeUiTargetRef.current = muted
       ? null
       : {
-        index,
-        setAtMs: nextIntent.setAtMs,
-      };
+          index,
+          setAtMs: nextIntent.setAtMs,
+        };
   }, []);
 
   const withTimeout = useCallback(async <T>(promise: Promise<T>, timeoutMs: number, operation: string) => {
@@ -415,8 +416,10 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       }
 
       markPendingVolumeWrite(write.index, write.muted);
+      const scheduledWrite = playbackWriteLaneRef.current?.schedule(write) ?? Promise.resolve();
       try {
-        await playbackWriteLaneRef.current?.schedule(write);
+        playbackWriteInFlightRef.current = scheduledWrite;
+        await scheduledWrite;
         if (write.reconcile !== false) {
           schedulePlaybackReconciliation();
         }
@@ -427,6 +430,10 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
           clearPendingVolumeWrite();
         }
         throw error;
+      } finally {
+        if (playbackWriteInFlightRef.current === scheduledWrite) {
+          playbackWriteInFlightRef.current = null;
+        }
       }
     },
     [clearPendingVolumeWrite, markPendingVolumeWrite, schedulePlaybackReconciliation],
@@ -524,6 +531,9 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
           dispatchTrackedVolume({ type: "reset", index: defaultVolumeIndex });
           volumeUiTargetRef.current = null;
           return;
+        }
+        if (playbackWriteInFlightRef.current) {
+          await playbackWriteInFlightRef.current.catch(() => undefined);
         }
         const items = await resolveEnabledSidVolumeItems(true);
         const updates = buildEnabledSidRestoreUpdates(items, sidEnablement, snapshot);
@@ -973,6 +983,9 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     async (options: EnsureUnmutedOptions = {}) => {
       const { force = false, refreshItems = false } = options;
       if (!volumeMuted || (manualMuteIntentRef.current && !force)) return;
+      if (restoreInFlightRef.current) {
+        await restoreInFlightRef.current;
+      }
       const items = refreshItems
         ? await resolveEnabledSidVolumeItems(true)
         : enabledSidVolumeItems.length
