@@ -55,6 +55,10 @@ const getBrowserWindow = () =>
 
 const hasMockBridge = () => Boolean(getBrowserWindow()?.__hvscMock__);
 const getMockBridge = () => getBrowserWindow()?.__hvscMock__;
+const hasMockIngestionBridge = () => {
+  const mock = getMockBridge();
+  return Boolean(mock?.installOrUpdateHvsc || mock?.ingestCachedHvsc);
+};
 const hasRuntimeBridge = () => {
   if (typeof window === "undefined") return false;
   try {
@@ -62,6 +66,23 @@ const hasRuntimeBridge = () => {
   } catch (error) {
     const err = error as Error;
     addErrorLog("HVSC runtime bridge probe failed", {
+      error: {
+        name: err.name,
+        message: err.message,
+        stack: err.stack,
+      },
+    });
+    return false;
+  }
+};
+
+const hasRuntimeIngestionBridge = () => {
+  if (typeof window === "undefined") return false;
+  try {
+    return Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("HvscIngestion");
+  } catch (error) {
+    const err = error as Error;
+    addErrorLog("HVSC ingestion bridge probe failed", {
       error: {
         name: err.name,
         message: err.message,
@@ -116,6 +137,7 @@ const migrateLegacyMediaIndex = async () => {
 };
 
 export const isHvscBridgeAvailable = () => hasMockBridge() || hasRuntimeBridge();
+export const isHvscIngestionBridgeAvailable = () => hasMockIngestionBridge() || hasRuntimeIngestionBridge();
 
 export const getHvscStatus = async (): Promise<HvscStatus> => {
   const mock = getMockBridge();

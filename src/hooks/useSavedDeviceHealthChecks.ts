@@ -114,6 +114,9 @@ const getBackgroundHealthCadenceMs = (mode: "healthy" | "recovery") => {
     : Math.max(MIN_BACKGROUND_RECOVERY_CADENCE_MS, freshnessMs);
 };
 
+const isDocumentHidden = () =>
+  typeof document !== "undefined" && (document.visibilityState === "hidden" || document.hidden);
+
 const getBackgroundTrafficEvidence = () => {
   const connection = getConnectionSnapshot();
   const deviceState = getDeviceStateSnapshot();
@@ -223,6 +226,10 @@ export function useSavedDeviceHealthChecks(
 
   const shouldPauseForPollingPause = useCallback(() => {
     return context === HEALTH_CHECK_CONTEXTS.backgroundMaintenance && pollingPauseRegistry.isPollingPaused();
+  }, [context]);
+
+  const shouldPauseForDocumentHidden = useCallback(() => {
+    return context === HEALTH_CHECK_CONTEXTS.backgroundMaintenance && isDocumentHidden();
   }, [context]);
 
   const seededResult = useMemo<UseSavedDeviceHealthChecksResult | null>(() => {
@@ -446,6 +453,11 @@ export function useSavedDeviceHealthChecks(
       if (shouldPauseForPollingPause()) {
         return getBackgroundHealthCadenceMs("healthy");
       }
+      if (shouldPauseForDocumentHidden()) {
+        cancelAll("Document hidden");
+        setCycle((current) => ({ ...current, running: false }));
+        return getBackgroundHealthCadenceMs("healthy");
+      }
       if (cycleRunningRef.current) {
         if (!force) {
           return getBackgroundHealthCadenceMs("healthy");
@@ -587,6 +599,7 @@ export function useSavedDeviceHealthChecks(
       shouldPauseForDiagnosticsSuppression,
       shouldPauseForForegroundSwitch,
       shouldPauseForPollingPause,
+      shouldPauseForDocumentHidden,
       updateDevice,
     ],
   );
@@ -711,6 +724,24 @@ export function useSavedDeviceHealthChecks(
 
     return pollingPauseRegistry.subscribe(handlePollingPause);
   }, [cancelAll, context, seededState]);
+
+  useEffect(() => {
+    if (seededState || context !== HEALTH_CHECK_CONTEXTS.backgroundMaintenance || typeof document === "undefined") {
+      return;
+    }
+
+    const handleVisibilityChange = () => {
+      if (isDocumentHidden()) {
+        cancelAll("Document hidden");
+        setCycle((current) => ({ ...current, running: false }));
+        return;
+      }
+      void runBackgroundCycle(true);
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [cancelAll, context, runBackgroundCycle, seededState]);
 
   return useMemo(
     () =>

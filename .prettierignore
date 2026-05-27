@@ -19,6 +19,7 @@ test-results/**
 .claude/**
 .kilo/**
 .opencode/**
+.worktrees/**
 .venv/**
 Logs/**
 tmp/**

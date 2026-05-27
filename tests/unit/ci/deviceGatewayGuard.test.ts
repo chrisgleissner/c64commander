@@ -7,6 +7,7 @@ const repoRoot = path.resolve(__dirname, "../../..");
 const srcRoot = path.join(repoRoot, "src");
 
 const ALLOWED_DIRECT_FETCH_FILES = new Set(["src/lib/c64api.ts", "src/lib/native/ftpClient.web.ts"]);
+const ALLOWED_CIRCUIT_BYPASS_FILES = new Set(["src/lib/c64api.ts"]);
 
 const ALLOWED_NATIVE_SOCKET_IMPORT_FILES = new Set([
   "src/lib/ftp/ftpClient.ts",
@@ -49,6 +50,12 @@ const hasDirectDeviceFetch = (content: string): boolean => {
 const hasDisallowedNativeSocketImport = (content: string): boolean =>
   /from\s+['"]@\/lib\/native\/(?:telnetSocket|ftpClient)['"]/.test(content);
 
+const hasDisallowedCircuitBypass = (content: string): boolean => /\b__c64uBypassCircuit\b/.test(content);
+
+const hasDeadImmediateUpdateConfigOption = (content: string): boolean =>
+  /\bupdateConfigBatch\b[\s\S]{0,300}\bimmediate\s*:/.test(content) ||
+  /\bimmediate\s*:\s*(?:true|false)\b[\s\S]{0,300}\bupdateConfigBatch\b/.test(content);
+
 const findViolations = (files: Array<{ file: string; content: string }>): Violation[] =>
   files.flatMap(({ file, content }) => {
     const violations: Violation[] = [];
@@ -64,6 +71,20 @@ const findViolations = (files: Array<{ file: string; content: string }>): Violat
       violations.push({
         file,
         reason: "native FTP/Telnet socket imports must stay behind the gateway client modules",
+      });
+    }
+
+    if (hasDisallowedCircuitBypass(content) && !ALLOWED_CIRCUIT_BYPASS_FILES.has(file)) {
+      violations.push({
+        file,
+        reason: "__c64uBypassCircuit must stay inside the REST gateway policy boundary",
+      });
+    }
+
+    if (hasDeadImmediateUpdateConfigOption(content)) {
+      violations.push({
+        file,
+        reason: "updateConfigBatch must not regain the removed immediate option",
       });
     }
 
@@ -111,6 +132,44 @@ describe("device gateway guard", () => {
       {
         file: "src/components/BadTelnet.ts",
         reason: "native FTP/Telnet socket imports must stay behind the gateway client modules",
+      },
+    ]);
+  });
+
+  it("rejects a planted circuit-breaker bypass outside the REST gateway", () => {
+    const violations = findViolations([
+      {
+        file: "src/components/BadRecovery.tsx",
+        content: `
+          export const validate = (api: { getInfo: (options: unknown) => Promise<unknown> }) =>
+            api.getInfo({ __c64uBypassCircuit: true });
+        `,
+      },
+    ]);
+
+    expect(violations).toEqual([
+      {
+        file: "src/components/BadRecovery.tsx",
+        reason: "__c64uBypassCircuit must stay inside the REST gateway policy boundary",
+      },
+    ]);
+  });
+
+  it("rejects a planted updateConfigBatch immediate option", () => {
+    const violations = findViolations([
+      {
+        file: "src/hooks/useBadConfigWriter.ts",
+        content: `
+          export const saveNow = (updateConfigBatch: (updates: unknown, options?: unknown) => void) =>
+            updateConfigBatch([], { immediate: true });
+        `,
+      },
+    ]);
+
+    expect(violations).toEqual([
+      {
+        file: "src/hooks/useBadConfigWriter.ts",
+        reason: "updateConfigBatch must not regain the removed immediate option",
       },
     ]);
   });

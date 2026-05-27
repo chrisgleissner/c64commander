@@ -1258,7 +1258,12 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
 // ── Cancel ───────────────────────────────────────────────────────
 
 export const cancelHvscInstall = async (cancelToken: string): Promise<void> => {
-  if (!runtimeState.cancelTokens.has(cancelToken)) {
+  const tokenWasActive = runtimeState.cancelTokens.has(cancelToken);
+  if (!tokenWasActive && !runtimeState.activeIngestionRunning) {
+    addLog("info", "HVSC cancel ignored; no active ingestion", { token: cancelToken });
+    return;
+  }
+  if (!tokenWasActive) {
     runtimeState.cancelTokens.set(cancelToken, { cancelled: true });
   } else {
     runtimeState.cancelTokens.get(cancelToken)!.cancelled = true;

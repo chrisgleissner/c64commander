@@ -103,6 +103,9 @@ export const createNumericSliderDomain = (params: {
 const DEFAULT_WATCHDOG_MS = 2000;
 const POLLING_PAUSE_TAIL_GRACE_MS = 250;
 
+const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
+  typeof value === "object" && value !== null && "then" in value && typeof value.then === "function";
+
 export function useDeviceBoundSlider<T extends SliderDomainValue>({
   debugName = "device-bound-slider",
   deviceValue,
@@ -123,6 +126,8 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
   const isDraggingRef = useRef(false);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingPreviewSliderValueRef = useRef<number | null>(null);
+  const previewInFlightRef = useRef(false);
+  const previewGenerationRef = useRef(0);
   const lastPreviewSentAtRef = useRef<number | null>(null);
   const lastIgnoredDeviceValueRef = useRef<string | null>(null);
   const watchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -177,7 +182,20 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
         return;
       }
       const clampedSliderValue = domain.clampSliderValue(sliderValue);
+      if (previewInFlightRef.current) {
+        pendingPreviewSliderValueRef.current = clampedSliderValue;
+        addLog("debug", "Device-bound slider coalesced write", {
+          slider: debugName,
+          phase: "preview",
+          supersededBySliderValue: clampedSliderValue,
+          priority: "user",
+          coalescing: "throttled-latest",
+        });
+        return;
+      }
       const nextValue = domain.fromSliderValue(clampedSliderValue);
+      const generation = previewGenerationRef.current;
+      previewInFlightRef.current = true;
       lastPreviewSentAtRef.current = Date.now();
       pendingPreviewSliderValueRef.current = null;
       addLog("debug", "Device-bound slider queued write", {
@@ -188,15 +206,56 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
         priority: "user",
         coalescing: "throttled-latest",
       });
-      void Promise.resolve(preview(nextValue)).catch((error) => {
+      const handlePreviewError = (error: unknown) => {
+        if (previewGenerationRef.current !== generation) {
+          return;
+        }
         setDraftSliderValue(null);
         onError?.(error, {
           phase: "preview",
           value: nextValue,
         });
-      });
+      };
+      const finishPreview = () => {
+        if (previewGenerationRef.current !== generation) {
+          return;
+        }
+        previewInFlightRef.current = false;
+        const trailingSliderValue = pendingPreviewSliderValueRef.current;
+        if (trailingSliderValue !== null) {
+          const now = Date.now();
+          const lastSentAt = lastPreviewSentAtRef.current;
+          if (lastSentAt === null || now - lastSentAt >= resolvedPreviewThrottleMs) {
+            flushPreview(trailingSliderValue);
+            return;
+          }
+          if (previewTimerRef.current === null) {
+            previewTimerRef.current = setTimeout(
+              () => {
+                previewTimerRef.current = null;
+                const nextSliderValue = pendingPreviewSliderValueRef.current;
+                if (nextSliderValue !== null) {
+                  flushPreview(nextSliderValue);
+                }
+              },
+              Math.max(0, resolvedPreviewThrottleMs - (now - lastSentAt)),
+            );
+          }
+        }
+      };
+      try {
+        const result = preview(nextValue);
+        if (isPromiseLike(result)) {
+          void Promise.resolve(result).catch(handlePreviewError).finally(finishPreview);
+          return;
+        }
+        finishPreview();
+      } catch (error) {
+        handlePreviewError(error);
+        finishPreview();
+      }
     },
-    [debugName, domain, onError, preview, previewMode],
+    [debugName, domain, onError, preview, previewMode, resolvedPreviewThrottleMs],
   );
 
   const schedulePreview = useCallback(
@@ -264,6 +323,8 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
   }, [clearPauseTailGraceTimer, releasePollingPause]);
 
   const clearLatchedState = useCallback(() => {
+    previewGenerationRef.current += 1;
+    previewInFlightRef.current = false;
     isDraggingRef.current = false;
     draftSliderValueRef.current = null;
     setDraftSliderValue(null);
@@ -400,8 +461,10 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
         priority: "user",
       });
       isDraggingRef.current = false;
+      previewGenerationRef.current += 1;
       clearPreviewTimer();
       pendingPreviewSliderValueRef.current = null;
+      previewInFlightRef.current = false;
       lastPreviewSentAtRef.current = null;
       draftSliderValueRef.current = null;
       setDraftSliderValue(null);

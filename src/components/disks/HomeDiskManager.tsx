@@ -834,10 +834,20 @@ export const HomeDiskManager = () => {
           });
         }
       } catch (error) {
-        addErrorLog("Disk eject failed", { error: (error as Error).message });
+        const message = error instanceof Error ? error.message : String(error ?? "Disk eject failed");
+        addErrorLog("Disk eject failed", { diskId: disk.id, drives: mountedDrives, error: message });
+        reportUserError({
+          operation: "DISK_EJECT_BEFORE_DELETE",
+          title: "Disk eject failed",
+          description: "The disk was not removed from the collection because it is still mounted.",
+          error,
+          context: { diskId: disk.id, drives: mountedDrives },
+        });
+        return false;
       }
     }
     diskLibrary.removeDisk(disk.id);
+    return true;
   });
 
   const handleBulkDelete = async () => {
@@ -846,12 +856,13 @@ export const HomeDiskManager = () => {
       setBulkDeleteOpen(false);
       return;
     }
-    await Promise.all(disksToRemove.map((disk) => handleDeleteDisk(disk, { suppressToast: true })));
+    const results = await Promise.all(disksToRemove.map((disk) => handleDeleteDisk(disk, { suppressToast: true })));
+    const removedCount = results.filter(Boolean).length;
     setSelectedDiskIds(new Set());
     setBulkDeleteOpen(false);
     toast({
       title: "Disks removed",
-      description: `${disksToRemove.length} disk(s) removed from the library.`,
+      description: `${removedCount} disk(s) removed from the library.`,
     });
   };
 

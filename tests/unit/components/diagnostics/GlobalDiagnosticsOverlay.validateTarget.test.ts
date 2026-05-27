@@ -35,6 +35,11 @@ describe("validateTarget", () => {
         __c64uBypassCache: true,
       }),
     );
+    expect(getInfoSpy).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        __c64uBypassCircuit: true,
+      }),
+    );
     expect(fetchMock).not.toHaveBeenCalled();
 
     getInfoSpy.mockRestore();

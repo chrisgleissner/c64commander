@@ -41,7 +41,7 @@ vi.mock("@capacitor/core", () => ({
 
 vi.mock("@/lib/hvsc/hvscIngestionRuntime", () => ({
   addHvscProgressListener: vi.fn(async (listener: any) => ({
-    remove: async () => {},
+    remove: async () => { },
   })),
   cancelHvscInstall: vi.fn(async () => undefined),
   checkForHvscUpdates: vi.fn(async () => ({
@@ -176,6 +176,7 @@ import {
   resetHvscLibraryData,
   streamHvscSongsRecursive,
   ensureHvscMetadataHydration,
+  isHvscIngestionBridgeAvailable,
   __test__,
 } from "@/lib/hvsc/hvscService";
 import {
@@ -186,6 +187,7 @@ import {
 import { resolveHvscSonglengthDuration } from "@/lib/hvsc/hvscSongLengthService";
 import { loadHvscBrowseIndexSnapshot, verifyHvscBrowseIndexIntegrity } from "@/lib/hvsc/hvscBrowseIndexStore";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
+import { addErrorLog } from "@/lib/logging";
 
 describe("hvscService", () => {
   beforeEach(() => {
@@ -229,6 +231,42 @@ describe("hvscService", () => {
 
     it("returns false when neither bridge is available", () => {
       expect(isHvscBridgeAvailable()).toBe(false);
+    });
+
+    it("keeps browse availability separate from native ingestion availability", () => {
+      vi.mocked(Capacitor.isPluginAvailable).mockImplementation((plugin) => plugin === "Filesystem");
+
+      expect(isHvscBridgeAvailable()).toBe(true);
+      expect(isHvscIngestionBridgeAvailable()).toBe(false);
+    });
+
+    it("returns true for ingestion only when the native ingestion plugin is available", () => {
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+      vi.mocked(Capacitor.isPluginAvailable).mockImplementation((plugin) => plugin === "HvscIngestion");
+
+      expect(isHvscIngestionBridgeAvailable()).toBe(true);
+    });
+
+    it("returns true for ingestion when the mock bridge exposes ingestion methods", () => {
+      (window as any).__hvscMock__ = { installOrUpdateHvsc: vi.fn() };
+
+      expect(isHvscIngestionBridgeAvailable()).toBe(true);
+    });
+
+    it("returns false and logs when ingestion bridge probing throws", () => {
+      vi.mocked(Capacitor.isNativePlatform).mockImplementation(() => {
+        throw new Error("probe explosion");
+      });
+
+      expect(isHvscIngestionBridgeAvailable()).toBe(false);
+      expect(addErrorLog).toHaveBeenCalledWith(
+        "HVSC ingestion bridge probe failed",
+        expect.objectContaining({
+          error: expect.objectContaining({
+            message: "probe explosion",
+          }),
+        }),
+      );
     });
   });
 

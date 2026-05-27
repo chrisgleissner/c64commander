@@ -61,7 +61,6 @@ export const validateTarget = async (host: string, port: number) => {
       __c64uIntent: "user",
       __c64uAllowDuringError: true,
       __c64uBypassCache: true,
-      __c64uBypassCircuit: true,
     });
     return {
       ok: true,

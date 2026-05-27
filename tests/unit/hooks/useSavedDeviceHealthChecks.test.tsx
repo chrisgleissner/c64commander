@@ -23,6 +23,34 @@ const createDeferred = <T,>() => {
 
 const createAbortError = () => Object.assign(new Error("Aborted"), { name: "AbortError" });
 
+const originalDocumentVisibilityStateDescriptor = Object.getOwnPropertyDescriptor(document, "visibilityState");
+const originalDocumentHiddenDescriptor = Object.getOwnPropertyDescriptor(document, "hidden");
+
+const setDocumentVisibility = (visibilityState: "visible" | "hidden") => {
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    value: visibilityState,
+  });
+  Object.defineProperty(document, "hidden", {
+    configurable: true,
+    value: visibilityState === "hidden",
+  });
+};
+
+const restoreDocumentVisibilityDescriptors = () => {
+  if (originalDocumentVisibilityStateDescriptor) {
+    Object.defineProperty(document, "visibilityState", originalDocumentVisibilityStateDescriptor);
+  } else {
+    delete (document as { visibilityState?: Document["visibilityState"] }).visibilityState;
+  }
+
+  if (originalDocumentHiddenDescriptor) {
+    Object.defineProperty(document, "hidden", originalDocumentHiddenDescriptor);
+  } else {
+    delete (document as { hidden?: Document["hidden"] }).hidden;
+  }
+};
+
 const createAbortablePendingRun = () => {
   return (_target: unknown, options?: { signal?: AbortSignal }) =>
     new Promise((_, reject) => {
@@ -241,10 +269,12 @@ describe("useSavedDeviceHealthChecks", () => {
     mockRunHealthCheckForTarget.mockImplementation(async (target: { deviceHost: string }) =>
       target.deviceHost.includes("backup") ? makeResult("backup") : makeResult("office"),
     );
+    setDocumentVisibility("visible");
   });
 
   afterEach(() => {
     delete window.__c64uDiagnosticsTestBridge;
+    restoreDocumentVisibilityDescriptors();
     vi.useRealTimers();
   });
 
@@ -556,6 +586,52 @@ describe("useSavedDeviceHealthChecks", () => {
     await flushAsyncWork();
 
     expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(1);
+  });
+
+  it("suppresses background-maintenance probes while hidden and runs one selected-device probe on visible resume", async () => {
+    setDocumentVisibility("hidden");
+    const { result } = renderBackgroundHook();
+
+    await flushAsyncWork();
+
+    expect(result.current.cycle.running).toBe(false);
+    expect(mockRunConnectivityProbeForTarget).not.toHaveBeenCalled();
+
+    await act(async () => {
+      setDocumentVisibility("visible");
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await flushAsyncWork();
+
+    expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(1);
+    expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledWith(
+      expect.objectContaining({ deviceHost: "office-u64" }),
+      expect.objectContaining({ context: HEALTH_CHECK_CONTEXTS.backgroundMaintenance }),
+    );
+    expect(mockRunHealthCheckForTarget).not.toHaveBeenCalled();
+  });
+
+  it("cancels an active background cycle when the page becomes hidden", async () => {
+    const { result } = renderBackgroundHook();
+
+    await flushAsyncWork();
+
+    mockRunConnectivityProbeForTarget.mockImplementationOnce(createAbortablePendingRun());
+
+    await act(async () => {
+      result.current.refreshAll();
+    });
+    await flushAsyncWork();
+
+    expect(result.current.cycle.running).toBe(true);
+
+    await act(async () => {
+      setDocumentVisibility("hidden");
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await flushAsyncWork();
+
+    expect(result.current.cycle.running).toBe(false);
   });
 
   it("cancels an in-flight background cycle when pollingPauseRegistry is acquired", async () => {
