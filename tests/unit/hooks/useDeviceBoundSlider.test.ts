@@ -14,10 +14,12 @@ const addLogMock = vi.hoisted(() => vi.fn());
 
 const createDeferred = () => {
   let resolve!: () => void;
-  const promise = new Promise<void>((resolvePromise) => {
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<void>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise;
+    reject = rejectPromise;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 };
 
 vi.mock("@/hooks/useSavedDevices", () => ({
@@ -262,6 +264,111 @@ describe("useDeviceBoundSlider", () => {
     expect(preview).toHaveBeenCalledTimes(2);
     expect(preview).toHaveBeenLastCalledWith(60);
     expect(maxActivePreviewCount).toBe(1);
+  });
+
+  it("surfaces synchronous preview exceptions and unlocks subsequent preview writes", () => {
+    const onError = vi.fn();
+    const preview = vi.fn(() => {
+      throw new Error("sync preview failure");
+    });
+    const { result } = renderHook(() =>
+      useDeviceBoundSlider({
+        deviceValue: 0,
+        domain: createNumericSliderDomain({ min: 0, max: 100, round: Math.round }),
+        previewMode: "throttled",
+        preview,
+        commit: vi.fn(),
+        onError,
+        previewThrottleMs: 200,
+      }),
+    );
+
+    act(() => {
+      result.current.onValueChange([10]);
+    });
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "sync preview failure" }),
+      expect.objectContaining({ phase: "preview", value: 10 }),
+    );
+
+    act(() => {
+      result.current.onValueChange([11]);
+      vi.advanceTimersByTime(200);
+    });
+
+    expect(preview).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores stale async preview failures after commit bumps generation", async () => {
+    const run = createDeferred();
+    const onError = vi.fn();
+    const preview = vi.fn(() => run.promise);
+    const { result } = renderHook(() =>
+      useDeviceBoundSlider({
+        deviceValue: 0,
+        domain: createNumericSliderDomain({ min: 0, max: 100, round: Math.round }),
+        previewMode: "throttled",
+        preview,
+        commit: vi.fn(),
+        onError,
+        previewThrottleMs: 200,
+      }),
+    );
+
+    act(() => {
+      result.current.onValueChange([10]);
+      result.current.onValueCommit([10]);
+    });
+
+    await act(async () => {
+      run.reject(new Error("late preview failure"));
+      await run.promise.catch(() => undefined);
+      await Promise.resolve();
+    });
+
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("schedules a delayed trailing preview when an in-flight preview resolves too quickly", async () => {
+    const firstRun = createDeferred();
+    const preview = vi
+      .fn<() => Promise<void>>()
+      .mockImplementationOnce(() => firstRun.promise)
+      .mockImplementation(async () => undefined);
+
+    const { result } = renderHook(() =>
+      useDeviceBoundSlider({
+        deviceValue: 0,
+        domain: createNumericSliderDomain({ min: 0, max: 100, round: Math.round }),
+        previewMode: "throttled",
+        preview,
+        commit: vi.fn(),
+        previewThrottleMs: 200,
+      }),
+    );
+
+    act(() => {
+      result.current.onValueChange([10]);
+      result.current.onValueChange([20]);
+    });
+
+    expect(preview).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      firstRun.resolve();
+      await firstRun.promise;
+      await Promise.resolve();
+    });
+
+    expect(preview).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+
+    expect(preview).toHaveBeenCalledTimes(2);
+    expect(preview).toHaveBeenLastCalledWith(20);
   });
 
   it("logs rapid local intent, coalesced preview, final commit, and stale refresh protection", () => {

@@ -187,6 +187,7 @@ import {
 import { resolveHvscSonglengthDuration } from "@/lib/hvsc/hvscSongLengthService";
 import { loadHvscBrowseIndexSnapshot, verifyHvscBrowseIndexIntegrity } from "@/lib/hvsc/hvscBrowseIndexStore";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
+import { addErrorLog } from "@/lib/logging";
 
 describe("hvscService", () => {
   beforeEach(() => {
@@ -244,6 +245,28 @@ describe("hvscService", () => {
       vi.mocked(Capacitor.isPluginAvailable).mockImplementation((plugin) => plugin === "HvscIngestion");
 
       expect(isHvscIngestionBridgeAvailable()).toBe(true);
+    });
+
+    it("returns true for ingestion when the mock bridge exposes ingestion methods", () => {
+      (window as any).__hvscMock__ = { installOrUpdateHvsc: vi.fn() };
+
+      expect(isHvscIngestionBridgeAvailable()).toBe(true);
+    });
+
+    it("returns false and logs when ingestion bridge probing throws", () => {
+      vi.mocked(Capacitor.isNativePlatform).mockImplementation(() => {
+        throw new Error("probe explosion");
+      });
+
+      expect(isHvscIngestionBridgeAvailable()).toBe(false);
+      expect(addErrorLog).toHaveBeenCalledWith(
+        "HVSC ingestion bridge probe failed",
+        expect.objectContaining({
+          error: expect.objectContaining({
+            message: "probe explosion",
+          }),
+        }),
+      );
     });
   });
 

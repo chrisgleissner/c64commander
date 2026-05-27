@@ -254,6 +254,10 @@ Violating this rule is a release blocker.
 - The run must satisfy a safety margin of at least **91% branch coverage** globally.
 - If branch coverage is below 91%, continue adding meaningful tests until it is `>= 91%`.
 - For changes under `agents/`, also run `npm run test:agents` and confirm `>= 90%` branch coverage.
+- Global coverage is necessary but not sufficient for PR convergence. You must also verify **changed-line (patch) coverage** for the current branch.
+- Never infer patch coverage from global totals. Use the CI/Codecov patch report or a local changed-line check against merged coverage output.
+- If patch coverage fails, treat it as a blocker even when global branch coverage is above 91%.
+- Minimize formatting-only churn in executable files because it creates extra patch lines that must be covered.
 
 ### Exception: fast local Android deploy loop
 

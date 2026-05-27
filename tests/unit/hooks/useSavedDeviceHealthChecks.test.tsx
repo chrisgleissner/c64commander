@@ -611,6 +611,29 @@ describe("useSavedDeviceHealthChecks", () => {
     expect(mockRunHealthCheckForTarget).not.toHaveBeenCalled();
   });
 
+  it("cancels an active background cycle when the page becomes hidden", async () => {
+    const { result } = renderBackgroundHook();
+
+    await flushAsyncWork();
+
+    mockRunConnectivityProbeForTarget.mockImplementationOnce(createAbortablePendingRun());
+
+    await act(async () => {
+      result.current.refreshAll();
+    });
+    await flushAsyncWork();
+
+    expect(result.current.cycle.running).toBe(true);
+
+    await act(async () => {
+      setDocumentVisibility("hidden");
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await flushAsyncWork();
+
+    expect(result.current.cycle.running).toBe(false);
+  });
+
   it("cancels an in-flight background cycle when pollingPauseRegistry is acquired", async () => {
     const { result } = renderBackgroundHook();
 
