@@ -46,7 +46,7 @@ Fix: added `pingFtp()` as a control-channel-only probe (connect → login → NO
 
 ## Tests
 
-- `tests/unit/lib/config/configWriteThrottle.test.ts` — generation cancellation and ConfigWriteCancelledError assertions.
+- `tests/unit/configWriteThrottle.test.ts` — generation cancellation and ConfigWriteCancelledError assertions.
 - `tests/unit/hooks/useTelnetActions.test.tsx` — no-mount-Telnet assertion.
 - `tests/unit/lib/native/ftpClient.web.test.ts` — max-attempts-1 assertion and pingFtp stub.
 - `tests/unit/lib/diagnostics/healthCheckEngine.test.ts` — 69 tests including 2 new PH6-04 regression tests and PH6-05 pingFtp mocks.
@@ -98,7 +98,7 @@ Two runs executed: first with unfixed APK (identified PH6-04), second with fixed
 - `src/lib/ftp/ftpClient.ts`
 - `src/lib/diagnostics/healthCheckEngine.ts`
 - `android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt`
-- `tests/unit/lib/config/configWriteThrottle.test.ts`
+- `tests/unit/configWriteThrottle.test.ts`
 - `tests/unit/hooks/useTelnetActions.test.tsx`
 - `tests/unit/lib/native/ftpClient.web.test.ts`
 - `tests/unit/lib/diagnostics/healthCheckEngine.test.ts`

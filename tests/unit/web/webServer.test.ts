@@ -543,6 +543,21 @@ describe("web server platform runtime", () => {
     const readPayload = (await readRes.json()) as { data: string };
     expect(Buffer.from(readPayload.data, "base64").toString("utf8")).toBe("PSID_DATA");
 
+    const pingRes = await fetch(`${server.baseUrl}/api/ftp/ping`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: cookie,
+      },
+      body: JSON.stringify({
+        host: ftpServer.host,
+        port: ftpServer.port,
+        username: "anonymous",
+      }),
+    });
+    expect(pingRes.status).toBe(200);
+    await expect(pingRes.json()).resolves.toEqual({ ok: true });
+
     await server.close();
   });
 
@@ -567,6 +582,11 @@ describe("web server platform runtime", () => {
       method: "GET",
     });
     expect(readGet.status).toBe(405);
+
+    const pingGet = await fetch(`${server.baseUrl}/api/ftp/ping`, {
+      method: "GET",
+    });
+    expect(pingGet.status).toBe(405);
 
     await server.close();
   });

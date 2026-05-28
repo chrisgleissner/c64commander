@@ -47,15 +47,15 @@ No live scenario revealed behavior inconsistent with the intended safety model.
 
 ### 8. c64u liveness
 
-c64u survived all 14 scenarios. The single REST outage (S3) was classified external (pre-existing intermittent c64u firmware REST crash) and occurred before any app traffic in that scenario.
+c64u survived all 14 scenarios in the fixed-APK validation run. The single REST outage observed earlier in S3 was reclassified as PH6-04: an app-caused defect in `healthCheckEngine.ts` that unconditionally sent bare CRLF to Telnet port 23 when no password was configured. That defect is fixed in this PR.
 
 ### 9. App-caused crash evidence
 
-None found. The only REST outage (S3) was:
-- Preceded by a Telnet health probe only (no config write, no FTP, no REST from app).
-- FTP and Telnet TCP survived the crash (confirming partial REST process crash, not full device freeze).
-- The app correctly degraded its health badge and did not retry-storm during the outage.
-- c64u self-recovered or was manually restarted; all subsequent scenarios were clean.
+One app-caused crash was identified and fixed in this PR:
+- S3 from the first live run was caused by the app's unconditional post-auth CRLF in the Telnet health probe even when `authenticateTelnetIfNeeded()` returned early with `passwordSent: false`.
+- FTP and Telnet TCP surviving while REST crashed helped isolate the failure to the c64u REST process rather than a full device freeze.
+- The root cause is now fixed by gating CRLF emission on `authResult.passwordSent`.
+- The fixed APK re-ran S3 and the full 14-scenario suite with no recurrence.
 
 ### 10. No bypass found
 
@@ -67,4 +67,4 @@ Static scan and live evidence confirm:
 
 ## Conclusion
 
-The request safety model is sound after PH6-01, PH6-02, and PH6-03. Live validation confirms no bypass, no request storm, and no app-caused c64u instability across 14 scenarios.
+The request safety model is sound after PH6-01 through PH6-04. Live validation confirms no bypass, no request storm, and no remaining app-caused c64u instability across the fixed-APK 14-scenario run. The earlier S3 outage is now understood as PH6-04, a concrete app defect that this PR fixes.
