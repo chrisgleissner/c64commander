@@ -27,6 +27,13 @@ export type FtpListResult = {
   entries: FtpEntry[];
 };
 
+export const FTP_CONNECT_TIMEOUT_MS = 1_500;
+
+const withDefaultConnectTimeout = <T extends { connectTimeoutMs?: number }>(options: T): T => ({
+  ...options,
+  connectTimeoutMs: options.connectTimeoutMs ?? FTP_CONNECT_TIMEOUT_MS,
+});
+
 const executeFtpList = async (
   action: TraceActionContext,
   ftpOptions: FtpListOptions,
@@ -39,71 +46,72 @@ const executeFtpList = async (
     ...ftpOptions,
     path: normalizedPath,
   };
-  return withFtpInteraction(
-    {
-      action,
-      operation: "list",
-      path: normalizedPath,
-      intent,
-      host: ftpOptions.host,
-      port: ftpOptions.port,
-    },
-    async () => {
-      try {
-        const response = await FtpClient.listDirectory({
-          ...ftpOptions,
-          path: normalizedPath,
-        });
-        const responsePayload = { entries: response.entries };
-        recordFtpOperation(action, {
-          operation: "list",
-          command: "LIST",
-          hostname: ftpOptions.host,
-          port: ftpOptions.port,
-          path: normalizedPath,
-          durationMs: Math.max(
-            0,
-            Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
-          ),
-          result: "success",
-          requestPayload,
-          requestPayloadPreview: buildPayloadPreviewFromJson(requestPayload),
-          responsePayload,
-          responsePayloadPreview: buildPayloadPreviewFromJson(responsePayload),
-          error: null,
-        });
-        return { path: normalizedPath, entries: response.entries };
-      } catch (error) {
-        const err = error as Error;
-        addErrorLog(
-          "FTP listing failed",
-          buildErrorLogDetails(err, {
-            host: ftpOptions.host,
+  try {
+    const response = await withFtpInteraction(
+      {
+        action,
+        operation: "list",
+        path: normalizedPath,
+        intent,
+        host: ftpOptions.host,
+        port: ftpOptions.port,
+      },
+      async () =>
+        await FtpClient.listDirectory(
+          withDefaultConnectTimeout({
+            ...ftpOptions,
             path: normalizedPath,
           }),
-        );
-        recordFtpOperation(action, {
-          operation: "list",
-          command: "LIST",
-          hostname: ftpOptions.host,
-          port: ftpOptions.port,
-          path: normalizedPath,
-          durationMs: Math.max(
-            0,
-            Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
-          ),
-          result: "failure",
-          requestPayload,
-          requestPayloadPreview: buildPayloadPreviewFromJson(requestPayload),
-          error: err,
-        });
-        recordTraceError(action, err);
-        throw error;
-      } finally {
-        decrementFtpInFlight();
-      }
-    },
-  );
+        ),
+    );
+    const responsePayload = { entries: response.entries };
+    recordFtpOperation(action, {
+      operation: "list",
+      command: "LIST",
+      hostname: ftpOptions.host,
+      port: ftpOptions.port,
+      path: normalizedPath,
+      durationMs: Math.max(
+        0,
+        Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+      ),
+      result: "success",
+      requestPayload,
+      requestPayloadPreview: buildPayloadPreviewFromJson(requestPayload),
+      responsePayload,
+      responsePayloadPreview: buildPayloadPreviewFromJson(responsePayload),
+      error: null,
+    });
+    return { path: normalizedPath, entries: response.entries };
+  } catch (error) {
+    const err = error as Error;
+    addErrorLog(
+      "FTP listing failed",
+      buildErrorLogDetails(err, {
+        host: ftpOptions.host,
+        path: normalizedPath,
+      }),
+    );
+    recordFtpOperation(action, {
+      operation: "list",
+      command: "LIST",
+      hostname: ftpOptions.host,
+      port: ftpOptions.port,
+      path: normalizedPath,
+      durationMs: Math.max(
+        0,
+        Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+      ),
+      result: "failure",
+      requestPayload,
+      requestPayloadPreview: buildPayloadPreviewFromJson(requestPayload),
+      error: err,
+    });
+    recordTraceError(action, err);
+    throw error;
+  } finally {
+    decrementFtpInFlight();
+  }
 };
 
 export const listFtpDirectory = async (
@@ -141,71 +149,69 @@ const executeFtpRead = async (
   incrementFtpInFlight();
   const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
   const requestPayload = { ...ftpOptions, path };
-  return withFtpInteraction(
-    {
-      action,
+  try {
+    const response = await withFtpInteraction(
+      {
+        action,
+        operation: "read",
+        path,
+        intent,
+        host: ftpOptions.host,
+        port: ftpOptions.port,
+      },
+      async () => await FtpClient.readFile(withDefaultConnectTimeout({ ...ftpOptions, path })),
+    );
+    const responsePayload = {
+      data: response.data,
+      sizeBytes: response.sizeBytes,
+    };
+    recordFtpOperation(action, {
       operation: "read",
-      path,
-      intent,
-      host: ftpOptions.host,
+      command: "RETR",
+      hostname: ftpOptions.host,
       port: ftpOptions.port,
-    },
-    async () => {
-      try {
-        const response = await FtpClient.readFile({ ...ftpOptions, path });
-        const responsePayload = {
-          data: response.data,
-          sizeBytes: response.sizeBytes,
-        };
-        recordFtpOperation(action, {
-          operation: "read",
-          command: "RETR",
-          hostname: ftpOptions.host,
-          port: ftpOptions.port,
-          path,
-          durationMs: Math.max(
-            0,
-            Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
-          ),
-          result: "success",
-          requestPayload,
-          requestPayloadPreview: buildPayloadPreviewFromJson(requestPayload),
-          responsePayload,
-          responsePayloadPreview: buildPayloadPreviewFromBase64(response.data),
-          error: null,
-        });
-        return response;
-      } catch (error) {
-        const err = error as Error;
-        addErrorLog(
-          "FTP file read failed",
-          buildErrorLogDetails(err, {
-            host: ftpOptions.host,
-            path,
-          }),
-        );
-        recordFtpOperation(action, {
-          operation: "read",
-          command: "RETR",
-          hostname: ftpOptions.host,
-          port: ftpOptions.port,
-          path,
-          durationMs: Math.max(
-            0,
-            Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
-          ),
-          result: "failure",
-          requestPayload,
-          requestPayloadPreview: buildPayloadPreviewFromJson(requestPayload),
-          error: err,
-        });
-        recordTraceError(action, err);
-        throw error;
-      } finally {
-        decrementFtpInFlight();
-      }
-    },
-  );
+      path,
+      durationMs: Math.max(
+        0,
+        Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+      ),
+      result: "success",
+      requestPayload,
+      requestPayloadPreview: buildPayloadPreviewFromJson(requestPayload),
+      responsePayload,
+      responsePayloadPreview: buildPayloadPreviewFromBase64(response.data),
+      error: null,
+    });
+    return response;
+  } catch (error) {
+    const err = error as Error;
+    addErrorLog(
+      "FTP file read failed",
+      buildErrorLogDetails(err, {
+        host: ftpOptions.host,
+        path,
+      }),
+    );
+    recordFtpOperation(action, {
+      operation: "read",
+      command: "RETR",
+      hostname: ftpOptions.host,
+      port: ftpOptions.port,
+      path,
+      durationMs: Math.max(
+        0,
+        Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+      ),
+      result: "failure",
+      requestPayload,
+      requestPayloadPreview: buildPayloadPreviewFromJson(requestPayload),
+      error: err,
+    });
+    recordTraceError(action, err);
+    throw error;
+  } finally {
+    decrementFtpInFlight();
+  }
 };
 
 export const readFtpFile = async (
@@ -242,68 +248,66 @@ const executeFtpWrite = async (
   incrementFtpInFlight();
   const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
   const requestPayload = { ...ftpOptions, path };
-  return withFtpInteraction(
-    {
-      action,
+  try {
+    const response = await withFtpInteraction(
+      {
+        action,
+        operation: "write",
+        path,
+        intent,
+        host: ftpOptions.host,
+        port: ftpOptions.port,
+      },
+      async () => await FtpClient.writeFile(withDefaultConnectTimeout({ ...ftpOptions, path })),
+    );
+    const responsePayload = { sizeBytes: response.sizeBytes };
+    recordFtpOperation(action, {
       operation: "write",
-      path,
-      intent,
-      host: ftpOptions.host,
+      command: "STOR",
+      hostname: ftpOptions.host,
       port: ftpOptions.port,
-    },
-    async () => {
-      try {
-        const response = await FtpClient.writeFile({ ...ftpOptions, path });
-        const responsePayload = { sizeBytes: response.sizeBytes };
-        recordFtpOperation(action, {
-          operation: "write",
-          command: "STOR",
-          hostname: ftpOptions.host,
-          port: ftpOptions.port,
-          path,
-          durationMs: Math.max(
-            0,
-            Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
-          ),
-          result: "success",
-          requestPayload,
-          requestPayloadPreview: buildPayloadPreviewFromBase64(ftpOptions.data),
-          responsePayload,
-          responsePayloadPreview: buildPayloadPreviewFromJson(responsePayload),
-          error: null,
-        });
-        return response;
-      } catch (error) {
-        const err = error as Error;
-        addErrorLog(
-          "FTP file write failed",
-          buildErrorLogDetails(err, {
-            host: ftpOptions.host,
-            path,
-          }),
-        );
-        recordFtpOperation(action, {
-          operation: "write",
-          command: "STOR",
-          hostname: ftpOptions.host,
-          port: ftpOptions.port,
-          path,
-          durationMs: Math.max(
-            0,
-            Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
-          ),
-          result: "failure",
-          requestPayload,
-          requestPayloadPreview: buildPayloadPreviewFromBase64(ftpOptions.data),
-          error: err,
-        });
-        recordTraceError(action, err);
-        throw error;
-      } finally {
-        decrementFtpInFlight();
-      }
-    },
-  );
+      path,
+      durationMs: Math.max(
+        0,
+        Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+      ),
+      result: "success",
+      requestPayload,
+      requestPayloadPreview: buildPayloadPreviewFromBase64(ftpOptions.data),
+      responsePayload,
+      responsePayloadPreview: buildPayloadPreviewFromJson(responsePayload),
+      error: null,
+    });
+    return response;
+  } catch (error) {
+    const err = error as Error;
+    addErrorLog(
+      "FTP file write failed",
+      buildErrorLogDetails(err, {
+        host: ftpOptions.host,
+        path,
+      }),
+    );
+    recordFtpOperation(action, {
+      operation: "write",
+      command: "STOR",
+      hostname: ftpOptions.host,
+      port: ftpOptions.port,
+      path,
+      durationMs: Math.max(
+        0,
+        Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+      ),
+      result: "failure",
+      requestPayload,
+      requestPayloadPreview: buildPayloadPreviewFromBase64(ftpOptions.data),
+      error: err,
+    });
+    recordTraceError(action, err);
+    throw error;
+  } finally {
+    decrementFtpInFlight();
+  }
 };
 
 export const writeFtpFile = async (

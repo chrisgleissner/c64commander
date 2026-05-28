@@ -466,6 +466,14 @@ export default function PlayFilesPage() {
     ensureUnmuted,
     resolveUnavailableConfigDecision,
   });
+  const handleNextRef = useRef(handleNext);
+  useEffect(() => {
+    handleNextRef.current = handleNext;
+  }, [handleNext]);
+  const playbackStateRef = useRef({ isPlaying, isPaused });
+  useEffect(() => {
+    playbackStateRef.current = { isPlaying, isPaused };
+  }, [isPlaying, isPaused]);
 
   useEffect(() => {
     if (playlist.length > 0) return;
@@ -1124,6 +1132,10 @@ export default function PlayFilesPage() {
     },
     [currentIndex, handleNext, isPaused, isPlaying, playedClockRef],
   );
+  const syncPlaybackTimelineRef = useRef(syncPlaybackTimeline);
+  useEffect(() => {
+    syncPlaybackTimelineRef.current = syncPlaybackTimeline;
+  }, [syncPlaybackTimeline]);
 
   useEffect(() => {
     if (!isPlaying || isPaused || currentIndex < 0) return;
@@ -1142,19 +1154,20 @@ export default function PlayFilesPage() {
       try {
         const nextHandle = await onBackgroundAutoSkipDue((event) => {
           if (cancelled) return;
-          syncPlaybackTimeline({ allowAutoAdvance: false });
+          syncPlaybackTimelineRef.current({ allowAutoAdvance: false });
           const guard = autoAdvanceGuardRef.current;
-          if (!guard || !isPlaying || isPaused) return;
+          const playbackState = playbackStateRef.current;
+          if (!guard || !playbackState.isPlaying || playbackState.isPaused) return;
           if (event.dueAtMs !== guard.dueAtMs) return;
           const expectedTrackInstanceId = guard.trackInstanceId;
           void (async () => {
             try {
-              await handleNext("auto", expectedTrackInstanceId);
+              await handleNextRef.current("auto", expectedTrackInstanceId);
               if (cancelled) return;
               const nextGuard = autoAdvanceGuardRef.current;
               if (!nextGuard) {
                 setAutoAdvanceDueAtMs(null);
-                await queueBackgroundDueAtUpdate(null);
+                await queueBackgroundDueAtUpdateRef.current(null);
                 addLog("debug", "Cleared background auto-advance watchdog after auto next with no remaining guard", {
                   expectedTrackInstanceId,
                   dueAtMs: event.dueAtMs,
@@ -1163,7 +1176,7 @@ export default function PlayFilesPage() {
               }
               if (nextGuard.trackInstanceId === expectedTrackInstanceId) {
                 setAutoAdvanceDueAtMs(null);
-                await queueBackgroundDueAtUpdate(null);
+                await queueBackgroundDueAtUpdateRef.current(null);
                 addLog("warn", "Background auto-advance did not move to a new track instance; cleared stale watchdog", {
                   expectedTrackInstanceId,
                   dueAtMs: event.dueAtMs,
@@ -1172,7 +1185,7 @@ export default function PlayFilesPage() {
                 return;
               }
               setAutoAdvanceDueAtMs(nextGuard.dueAtMs);
-              await queueBackgroundDueAtUpdate(nextGuard.dueAtMs);
+              await queueBackgroundDueAtUpdateRef.current(nextGuard.dueAtMs);
             } catch (error) {
               addErrorLog("Failed to re-arm background auto-advance", {
                 error: error instanceof Error ? error.message : String(error),
@@ -1202,7 +1215,7 @@ export default function PlayFilesPage() {
         void handle.remove();
       }
     };
-  }, [autoAdvanceGuardRef, handleNext, isPaused, isPlaying, syncPlaybackTimeline]);
+  }, [autoAdvanceGuardRef, handleNextRef, playbackStateRef, queueBackgroundDueAtUpdateRef, syncPlaybackTimelineRef]);
 
   const currentItem = playlist[currentIndex];
   const { setPlaybackContext, resolved: lightingResolved, openStudio, openContextLens } = useLightingStudio();

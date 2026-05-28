@@ -452,7 +452,7 @@ describe("deviceInteractionManager", () => {
     const first = withFtpInteraction(meta, handler);
     const second = withFtpInteraction(meta, handler);
 
-    expect(handler).toHaveBeenCalledTimes(1);
+    await expect.poll(() => handler.mock.calls.length).toBe(1);
     resolveHandler?.();
     await expect(first).resolves.toBeUndefined();
     await expect(second).resolves.toBeUndefined();
@@ -461,6 +461,99 @@ describe("deviceInteractionManager", () => {
     await expect(withFtpInteraction(meta, failingHandler)).rejects.toThrow("FTP failed");
     expect(markDeviceRequestEnd).toHaveBeenCalledWith({ success: false, errorMessage: "FTP failed" });
     expect(addErrorLog).not.toHaveBeenCalledWith("FTP request failed", expect.any(Object));
+  });
+
+  it("retries a transient FTP connect timeout once and resolves with one scheduled operation", async () => {
+    vi.useFakeTimers();
+    const { withFtpInteraction, resetInteractionState, FTP_TRANSIENT_RETRY_DELAY_MS } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const meta = {
+      action: makeAction("ftp-transient-retry"),
+      operation: "list" as const,
+      path: "/USB2",
+      intent: "system" as const,
+      host: "u64",
+    };
+    const handler = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("SocketTimeoutException: failed to connect after 1500ms"))
+      .mockResolvedValueOnce("ok");
+
+    const result = withFtpInteraction(meta, handler);
+    await expect.poll(() => handler.mock.calls.length).toBe(1);
+    await vi.advanceTimersByTimeAsync(FTP_TRANSIENT_RETRY_DELAY_MS);
+
+    await expect(result).resolves.toBe("ok");
+    expect(handler).toHaveBeenCalledTimes(2);
+    expect(recordDeviceGuard).toHaveBeenCalledWith(
+      meta.action,
+      expect.objectContaining({ decision: "defer", reason: "retry" }),
+    );
+  });
+
+  it("does not retry non-retryable FTP login failures", async () => {
+    const { withFtpInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const meta = {
+      action: makeAction("ftp-login-failed"),
+      operation: "list" as const,
+      path: "/",
+      intent: "system" as const,
+      host: "u64",
+    };
+    const handler = vi.fn().mockRejectedValue(new Error("FTP login failed"));
+
+    await expect(withFtpInteraction(meta, handler)).rejects.toThrow("FTP login failed");
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry when a transient FTP failure opens the circuit", async () => {
+    config = { ...createConfig(), circuitBreakerThreshold: 1, allowUserOverrideCircuit: false };
+    const { withFtpInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const meta = {
+      action: makeAction("ftp-circuit-no-retry"),
+      operation: "list" as const,
+      path: "/USB2",
+      intent: "system" as const,
+      host: "u64",
+    };
+    const handler = vi.fn().mockRejectedValue(new Error("FTP listDirectory timed out after connect 1500ms"));
+
+    await expect(withFtpInteraction(meta, handler)).rejects.toThrow("FTP listDirectory timed out");
+    expect(handler).toHaveBeenCalledTimes(1);
+    await expect(withFtpInteraction(meta, handler)).rejects.toThrow("FTP circuit open");
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops after one retry when transient FTP failures persist", async () => {
+    vi.useFakeTimers();
+    const { withFtpInteraction, resetInteractionState, FTP_TRANSIENT_RETRY_DELAY_MS } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const meta = {
+      action: makeAction("ftp-persistent-transient"),
+      operation: "read" as const,
+      path: "/USB2/demo.sid",
+      intent: "system" as const,
+      host: "u64",
+    };
+    const handler = vi.fn().mockRejectedValue(new Error("Connection reset during FTP connect"));
+
+    const result = withFtpInteraction(meta, handler);
+    const assertion = expect(result).rejects.toThrow("Connection reset during FTP connect");
+    await expect.poll(() => handler.mock.calls.length).toBe(1);
+    await vi.advanceTimersByTimeAsync(FTP_TRANSIENT_RETRY_DELAY_MS);
+
+    await assertion;
+    expect(handler).toHaveBeenCalledTimes(2);
   });
 
   it("PH9: does not coalesce concurrent same-path FTP operations across different hosts", async () => {
@@ -534,7 +627,7 @@ describe("deviceInteractionManager", () => {
     const second = withFtpInteraction(meta, handler);
 
     // Inflight coalescing: second call returns the first promise without re-invoking
-    expect(handler).toHaveBeenCalledTimes(1);
+    await expect.poll(() => handler.mock.calls.length).toBe(1);
     release?.();
     await expect(first).resolves.toBe("ok");
     await expect(second).resolves.toBe("ok");
@@ -645,8 +738,7 @@ describe("deviceInteractionManager", () => {
     };
 
     const handler = vi.fn().mockRejectedValue(new Error("FTP timeout"));
-    // Need 2 failures to open circuit (default threshold=2)
-    await expect(withFtpInteraction(meta, handler)).rejects.toThrow("FTP timeout");
+    // The first call retries once; two transient failures open the circuit.
     await expect(withFtpInteraction(meta, handler)).rejects.toThrow("FTP timeout");
 
     // Circuit should now be open for FTP (system intent blocked)
@@ -1177,8 +1269,8 @@ describe("deviceInteractionManager", () => {
 
     // Default config: circuitBreakerThreshold=2, allowUserOverrideCircuit=true
     const action = makeAction("ftp-override");
-    const sysHandler = vi.fn().mockRejectedValue(new Error("FTP fail"));
-    // Need 2 failures to open circuit (default threshold=2)
+    const sysHandler = vi.fn().mockRejectedValue(new Error("FTP timeout"));
+    // The first call retries once; two transient failures open the circuit.
     await expect(
       withFtpInteraction(
         {
@@ -1189,18 +1281,7 @@ describe("deviceInteractionManager", () => {
         },
         sysHandler,
       ),
-    ).rejects.toThrow("FTP fail");
-    await expect(
-      withFtpInteraction(
-        {
-          action: makeAction("ftp-fail-2"),
-          operation: "list",
-          path: "/sys2",
-          intent: "system" as const,
-        },
-        sysHandler,
-      ),
-    ).rejects.toThrow("FTP fail");
+    ).rejects.toThrow("FTP timeout");
 
     // Circuit open now - system intent blocked
     await expect(

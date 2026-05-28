@@ -675,6 +675,9 @@ describe("HomeDiskManager Extended", () => {
       expect(useDiskLibraryMock.addDisks).toHaveBeenCalledWith(
         expect.arrayContaining([expect.objectContaining({ path: "fallback.d64" })]),
         expect.anything(),
+        expect.objectContaining({
+          expectedSelectedDeviceId: expect.any(String),
+        }),
       );
     });
   });
@@ -755,6 +758,9 @@ describe("HomeDiskManager Extended", () => {
       expect(useDiskLibraryMock.addDisks).toHaveBeenCalledWith(
         expect.arrayContaining([expect.objectContaining({ path: "/nested/auto.d64" })]),
         expect.anything(),
+        expect.objectContaining({
+          expectedSelectedDeviceId: expect.any(String),
+        }),
       );
     });
   });
@@ -785,6 +791,9 @@ describe("HomeDiskManager Extended", () => {
       expect(useDiskLibraryMock.addDisks).toHaveBeenCalledWith(
         expect.arrayContaining([expect.objectContaining({ path: "/manual-name.d64", group: "manual-name.d64" })]),
         expect.anything(),
+        expect.objectContaining({
+          expectedSelectedDeviceId: expect.any(String),
+        }),
       );
     });
   });
@@ -812,6 +821,9 @@ describe("HomeDiskManager Extended", () => {
       expect(useDiskLibraryMock.addDisks).toHaveBeenCalledWith(
         expect.arrayContaining([expect.objectContaining({ path: "/nested/closed.d64" })]),
         expect.anything(),
+        expect.objectContaining({
+          expectedSelectedDeviceId: expect.any(String),
+        }),
       );
     });
   });

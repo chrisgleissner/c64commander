@@ -8,8 +8,8 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { useCallback, useRef, useState } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { USER_TRANSPORT_COALESCE_MS, usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { executePlayPlan } from "@/lib/playback/playbackRouter";
 
@@ -176,6 +176,10 @@ describe("usePlaybackController auto advance", () => {
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("plays through a three-song playlist and stops after the final auto-advance when repeat is off", async () => {
     const playlist = [
       createPlaylistItem("one", 1_000),
@@ -279,5 +283,51 @@ describe("usePlaybackController auto advance", () => {
     expect(result.current.isPlaying).toBe(false);
     expect(result.current.autoAdvanceGuardRef.current).toBeNull();
     expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+  });
+
+  it("manual next at the end stops when repeat is off without launching another item", async () => {
+    vi.useFakeTimers();
+    const playlist = [createPlaylistItem("one", 1_000), createPlaylistItem("two", 1_000)];
+    const { result } = renderPlaybackHarness(playlist);
+
+    await act(async () => {
+      await result.current.playItem(playlist[1], { playlistIndex: 1 });
+    });
+
+    const next = result.current.handleNext("user");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(USER_TRANSPORT_COALESCE_MS);
+    });
+    await next;
+
+    expect(result.current.currentIndex).toBe(1);
+    expect(result.current.isPlaying).toBe(false);
+    expect(result.current.isPaused).toBe(false);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+  });
+
+  it("manual next at the end wraps when repeat is on and launches only the first item", async () => {
+    vi.useFakeTimers();
+    const playlist = [createPlaylistItem("one", 1_000), createPlaylistItem("two", 1_000)];
+    const { result } = renderPlaybackHarness(playlist, { repeatEnabled: true });
+
+    await act(async () => {
+      await result.current.playItem(playlist[1], { playlistIndex: 1 });
+    });
+
+    const next = result.current.handleNext("user");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(USER_TRANSPORT_COALESCE_MS);
+    });
+    await next;
+
+    expect(result.current.currentIndex).toBe(0);
+    expect(result.current.isPlaying).toBe(true);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ path: "/PROGRAMS/one.prg" }),
+      expect.anything(),
+    );
   });
 });

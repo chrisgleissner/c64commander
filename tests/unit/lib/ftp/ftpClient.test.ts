@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
+import { FTP_CONNECT_TIMEOUT_MS, listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
 import { FtpClient } from "@/lib/native/ftpClient";
 import { withFtpInteraction } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { getActiveAction, runWithImplicitAction } from "@/lib/tracing/actionTrace";
@@ -80,6 +80,22 @@ describe("ftpClient", () => {
       expect(decrementFtpInFlight).toHaveBeenCalled();
     });
 
+    it("logs one list failure when the FTP gateway retry still fails", async () => {
+      vi.mocked(withFtpInteraction).mockImplementationOnce(async (_ctx, fn) => {
+        await expect(fn()).rejects.toThrow("FTP bridge request timed out");
+        return await fn();
+      });
+      vi.mocked(FtpClient.listDirectory).mockRejectedValue(new Error("FTP bridge request timed out"));
+
+      await expect(listFtpDirectory({ ...mockListOptions, path: "/USB2" })).rejects.toThrow(
+        "FTP bridge request timed out",
+      );
+
+      expect(FtpClient.listDirectory).toHaveBeenCalledTimes(2);
+      expect(addErrorLog).toHaveBeenCalledTimes(1);
+      expect(recordTraceError).toHaveBeenCalledTimes(1);
+    });
+
     it("uses existing active action if available", async () => {
       const mockAction = { id: "active" };
       vi.mocked(getActiveAction).mockReturnValue(mockAction as any);
@@ -97,6 +113,17 @@ describe("ftpClient", () => {
       await listFtpDirectory({ ...mockListOptions, path: "" });
 
       expect(FtpClient.listDirectory).toHaveBeenCalledWith(expect.objectContaining({ path: "/" }));
+    });
+
+    it("passes the lower LAN connect timeout to the native FTP bridge by default", async () => {
+      vi.mocked(FtpClient.listDirectory).mockResolvedValue({ entries: [] });
+
+      await listFtpDirectory({ ...mockListOptions, path: "/" });
+
+      expect(FtpClient.listDirectory).toHaveBeenCalledWith(
+        expect.objectContaining({ connectTimeoutMs: FTP_CONNECT_TIMEOUT_MS }),
+      );
+      expect(FTP_CONNECT_TIMEOUT_MS).toBe(1_500);
     });
   });
 

@@ -73,6 +73,7 @@ import { prepareDirectoryInput } from "@/lib/sourceNavigation/localSourcesStore"
 import type { SelectedItem, SourceEntry, SourceLocation } from "@/lib/sourceNavigation/types";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
+import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
@@ -869,6 +870,8 @@ export const HomeDiskManager = () => {
   const handleAddDiskSelections = useCallback(
     trace(async (source: SourceLocation, selections: SelectedItem[]) => {
       if (isAddingItems) return false;
+      let abortController: AbortController | null = null;
+      let handleConnectionChange: EventListener | null = null;
       try {
         const startedAt = Date.now();
         addItemsStartedAtRef.current = startedAt;
@@ -897,14 +900,42 @@ export const HomeDiskManager = () => {
           total: null,
           message: "Scanning…",
         });
-        const abortController = new AbortController();
-        addItemsAbortRef.current = abortController;
-        const abortSignal = abortController.signal;
+        abortController = new AbortController();
+        const activeAbortController = abortController;
+        addItemsAbortRef.current = activeAbortController;
+        const abortSignal = activeAbortController.signal;
+        const selectedDeviceIdAtStart = getSavedDevicesSnapshot().selectedDeviceId;
+        const createAbortError = () => {
+          if (typeof DOMException !== "undefined") {
+            return new DOMException("Add items scan cancelled", "AbortError");
+          }
+          const error = new Error("Add items scan cancelled");
+          error.name = "AbortError";
+          return error;
+        };
+        const throwIfAborted = () => {
+          if (abortSignal.aborted) {
+            throw createAbortError();
+          }
+          if (getSavedDevicesSnapshot().selectedDeviceId !== selectedDeviceIdAtStart) {
+            activeAbortController.abort();
+            throw createAbortError();
+          }
+        };
+        handleConnectionChange = (event: Event) => {
+          const detail = (event as CustomEvent<{ reason?: string }>).detail;
+          if (detail?.reason !== "saved-device-switch") return;
+          activeAbortController.abort();
+        };
+        if (typeof window !== "undefined") {
+          window.addEventListener("c64u-connection-change", handleConnectionChange);
+        }
         await yieldToRenderer();
         let processed = 0;
         let lastUpdate = 0;
 
         const updateProgress = (delta: number) => {
+          throwIfAborted();
           processed += delta;
           const now = Date.now();
           if (now - lastUpdate < 120) return;
@@ -945,13 +976,12 @@ export const HomeDiskManager = () => {
           );
         };
         for (const selection of selections) {
-          if (abortSignal.aborted) {
-            throw new DOMException("Aborted", "AbortError");
-          }
+          throwIfAborted();
           if (selection.type === "dir") {
             const nested = await source.listFilesRecursive(selection.path, {
               signal: abortSignal,
             });
+            throwIfAborted();
             updateProgress(nested.length);
             nested.forEach((entry) => {
               if (entry.type !== "file") return;
@@ -966,6 +996,7 @@ export const HomeDiskManager = () => {
           } else {
             const entryPath = normalizeSourcePath(selection.path);
             const meta = await resolveSelectionEntry(entryPath);
+            throwIfAborted();
             files.push({
               path: entryPath,
               name: meta?.name ?? selection.name,
@@ -1059,10 +1090,12 @@ export const HomeDiskManager = () => {
                 });
               }
             }
+            throwIfAborted();
             const playbackConfig = await discoverDiskPlaybackConfig(source, {
               path: normalized,
               name: entry.name,
             });
+            throwIfAborted();
             const diskEntry = createDiskEntry({
               path: normalized,
               location: source.type === "ultimate" ? "ultimate" : "local",
@@ -1089,7 +1122,10 @@ export const HomeDiskManager = () => {
         const minDuration = addItemsSurface === "page" ? 800 : 300;
         await waitAtLeast(startedAt, minDuration);
 
-        diskLibrary.addDisks(disks, runtimeFiles);
+        throwIfAborted();
+        diskLibrary.addDisks(disks, runtimeFiles, {
+          expectedSelectedDeviceId: selectedDeviceIdAtStart,
+        });
         if (localTreeUri) {
           addLog("debug", "SAF disk scan complete", {
             sourceId: source.id,
@@ -1112,10 +1148,16 @@ export const HomeDiskManager = () => {
       } catch (error) {
         const err = error as Error;
         if (err.name === "AbortError") {
+          addLog("debug", "Add items scan cancelled", {
+            sourceId: source.id,
+            sourceType: source.type,
+            selectionCount: selections.length,
+            target: "disks",
+          });
           setAddItemsProgress((prev) => ({
             ...prev,
             status: "idle",
-            message: "Scan canceled.",
+            message: "Add cancelled",
           }));
           return false;
         }
@@ -1139,8 +1181,13 @@ export const HomeDiskManager = () => {
         });
         return false;
       } finally {
+        if (typeof window !== "undefined" && handleConnectionChange) {
+          window.removeEventListener("c64u-connection-change", handleConnectionChange);
+        }
         setIsAddingItems(false);
-        addItemsAbortRef.current = null;
+        if (abortController && addItemsAbortRef.current === abortController) {
+          addItemsAbortRef.current = null;
+        }
         if (addItemsStartedAtRef.current) {
           setAddItemsProgress((prev) => ({
             ...prev,

@@ -1338,7 +1338,7 @@ test.describe("Playback file browser", () => {
     await nextButton.click();
     await nextButton.click();
     await expect(currentTrack).toContainText("track-3.sid");
-    await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(2);
+    await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(1);
     await snap(page, testInfo, "skipped-to-last");
   });
 

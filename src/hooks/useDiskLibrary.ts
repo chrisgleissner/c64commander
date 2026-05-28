@@ -11,6 +11,28 @@ import { addErrorLog } from "@/lib/logging";
 import { buildDiskId, createDiskEntry, getDiskName, normalizeDiskPath, type DiskEntry } from "@/lib/disks/diskTypes";
 import { loadDiskLibrary, saveDiskLibrary } from "@/lib/disks/diskStore";
 import { buildDiskTreeState } from "@/lib/disks/diskTree";
+import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
+
+export type AddDisksOptions = {
+  expectedSelectedDeviceId?: string | null;
+};
+
+const createAddDisksAbortError = () => {
+  if (typeof DOMException !== "undefined") {
+    return new DOMException("Add items scan cancelled", "AbortError");
+  }
+  const error = new Error("Add items scan cancelled");
+  error.name = "AbortError";
+  return error;
+};
+
+const throwIfSavedDeviceChanged = (expectedSelectedDeviceId: string | null | undefined) => {
+  if (!expectedSelectedDeviceId) return;
+  const currentSelectedDeviceId = getSavedDevicesSnapshot().selectedDeviceId;
+  if (currentSelectedDeviceId !== expectedSelectedDeviceId) {
+    throw createAddDisksAbortError();
+  }
+};
 
 export type DiskLibrary = {
   disks: DiskEntry[];
@@ -18,7 +40,7 @@ export type DiskLibrary = {
   filter: string;
   setFilter: (value: string) => void;
   tree: ReturnType<typeof buildDiskTreeState>;
-  addDisks: (entries: DiskEntry[], runtime?: Record<string, File>) => void;
+  addDisks: (entries: DiskEntry[], runtime?: Record<string, File>, options?: AddDisksOptions) => void;
   removeDisk: (diskId: string) => void;
   updateDiskGroup: (diskId: string, group: string | null) => void;
   updateDiskName: (diskId: string, name: string) => void;
@@ -51,18 +73,22 @@ export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
     saveDiskLibrary(uniqueId, { disks });
   }, [disks, uniqueId]);
 
-  const addDisks = useCallback((entries: DiskEntry[], runtime: Record<string, File> = {}) => {
-    setRuntimeFiles((prev) => ({ ...prev, ...runtime }));
-    setDisks((prev) => {
-      const next = [...prev];
-      const existing = new Set(prev.map((disk) => disk.id));
-      entries.forEach((entry) => {
-        if (existing.has(entry.id)) return;
-        next.push(entry);
+  const addDisks = useCallback(
+    (entries: DiskEntry[], runtime: Record<string, File> = {}, options?: AddDisksOptions) => {
+      throwIfSavedDeviceChanged(options?.expectedSelectedDeviceId);
+      setRuntimeFiles((prev) => ({ ...prev, ...runtime }));
+      setDisks((prev) => {
+        const next = [...prev];
+        const existing = new Set(prev.map((disk) => disk.id));
+        entries.forEach((entry) => {
+          if (existing.has(entry.id)) return;
+          next.push(entry);
+        });
+        return next;
       });
-      return next;
-    });
-  }, []);
+    },
+    [],
+  );
 
   const removeDisk = useCallback((diskId: string) => {
     setRuntimeFiles((prev) => {

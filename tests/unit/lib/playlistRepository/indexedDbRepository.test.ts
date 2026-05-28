@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getIndexedDbPlaylistDataRepository } from "@/lib/playlistRepository";
 import { resetIndexedDbPlaylistRepositoryForTests } from "@/lib/playlistRepository/indexedDbRepository";
 import type { PlaylistItemRecord, TrackRecord } from "@/lib/playlistRepository";
+import { addLog } from "@/lib/logging";
+
+vi.mock("@/lib/logging", () => ({
+  addLog: vi.fn(),
+}));
 
 const INDEXEDDB_RECOVERY_STORAGE_KEY = "c64u_playlist_repo:indexeddb:recovery";
 
@@ -129,6 +134,7 @@ describe("indexedDB playlist repository", () => {
   beforeEach(() => {
     resetIndexedDbPlaylistRepositoryForTests();
     vi.restoreAllMocks();
+    vi.mocked(addLog).mockReset();
     Object.defineProperty(globalThis, "indexedDB", {
       value: createFakeIndexedDb(),
       configurable: true,
@@ -393,7 +399,9 @@ describe("indexedDB playlist repository", () => {
 
     expect(result.rows).toEqual([]);
     expect(result.totalMatchCount).toBe(0);
-    expect(warn).toHaveBeenCalledWith(
+    expect(warn).not.toHaveBeenCalled();
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
       "Failed to load playlist repository state from IndexedDB",
       expect.objectContaining({ error: expect.any(Error) }),
     );
@@ -443,11 +451,69 @@ describe("indexedDB playlist repository", () => {
     expect(rows.totalMatchCount).toBe(0);
     expect(await repository.getSession("playlist-default")).toBeNull();
     expect(await repository.getPlaylistItems("playlist-default")).toEqual([]);
-    expect(warn).toHaveBeenCalledWith(
+    expect(warn).not.toHaveBeenCalled();
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
       "Incompatible playlist repository schema in IndexedDB. Resetting repository state.",
       expect.objectContaining({ expectedVersion: 3, foundVersion: 999 }),
     );
     expect(localStorage.getItem(INDEXEDDB_RECOVERY_STORAGE_KEY)).toContain("incompatible-schema");
+  });
+
+  it("routes schema-load failures through addLog without raw console warnings", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const factory = createFakeIndexedDb({ failGet: true, preExistingStore: true });
+    factory.__stores.get("state")?.set("meta:schema", { version: 3 });
+    Object.defineProperty(globalThis, "indexedDB", {
+      value: factory,
+      configurable: true,
+      writable: true,
+    });
+
+    const repository = getIndexedDbPlaylistDataRepository({
+      preferDurableStorage: false,
+    });
+    const result = await repository.queryPlaylist({
+      playlistId: "playlist-default",
+      limit: 10,
+      offset: 0,
+    });
+
+    expect(result.totalMatchCount).toBe(0);
+    expect(warn).not.toHaveBeenCalled();
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Failed to load playlist repository state from IndexedDB",
+      expect.objectContaining({ error: expect.any(Error) }),
+    );
+  });
+
+  it("routes incompatible null-version schema resets through addLog without raw console warnings", async () => {
+    Object.defineProperty(globalThis, "indexedDB", {
+      value: createFakeIndexedDb({
+        initialPersistedState: "invalid-legacy-payload",
+      }),
+      configurable: true,
+      writable: true,
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const repository = getIndexedDbPlaylistDataRepository({
+      preferDurableStorage: false,
+    });
+    const rows = await repository.queryPlaylist({
+      playlistId: "playlist-default",
+      limit: 10,
+      offset: 0,
+    });
+
+    expect(rows.totalMatchCount).toBe(0);
+    expect(warn).not.toHaveBeenCalled();
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Incompatible playlist repository schema in IndexedDB. Resetting repository state.",
+      expect.objectContaining({ expectedVersion: 3, foundVersion: null }),
+    );
   });
 
   it("propagates write failures from IndexedDB", async () => {
@@ -669,7 +735,12 @@ describe("indexedDB playlist repository", () => {
       offset: 0,
     });
     expect(result.totalMatchCount).toBe(0);
-    expect(warn).toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Failed to load playlist repository state from IndexedDB",
+      expect.objectContaining({ error: expect.any(Error) }),
+    );
 
     resetIndexedDbPlaylistRepositoryForTests();
     Object.defineProperty(globalThis, "indexedDB", {

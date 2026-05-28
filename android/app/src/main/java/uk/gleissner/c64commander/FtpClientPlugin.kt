@@ -29,7 +29,8 @@ import org.apache.commons.net.ftp.FTPFile
 class FtpClientPlugin : Plugin() {
   private val executor = Executors.newSingleThreadExecutor()
   private val logTag = "FtpClientPlugin"
-  private val defaultTimeoutMs = 8_000
+  private val defaultConnectTimeoutMs = 1_500
+  private val defaultTransferTimeoutMs = 8_000
   private val timeoutMessagePattern = Regex("\\b(timed out|timeout)\\b", RegexOption.IGNORE_CASE)
   internal var ftpClientFactory: () -> FTPClient = { FTPClient() }
   internal var runTask: (Runnable) -> Unit = { runnable -> executor.execute(runnable) }
@@ -54,8 +55,13 @@ class FtpClientPlugin : Plugin() {
     }
   }
 
-  private fun resolveTimeoutMs(call: PluginCall): Int {
-    val configured = call.getInt("timeoutMs") ?: defaultTimeoutMs
+  private fun resolveTransferTimeoutMs(call: PluginCall): Int {
+    val configured = call.getInt("timeoutMs")?.takeIf { it > 0 } ?: defaultTransferTimeoutMs
+    return configured.coerceIn(1_000, 60_000)
+  }
+
+  private fun resolveConnectTimeoutMs(call: PluginCall): Int {
+    val configured = call.getInt("connectTimeoutMs")?.takeIf { it > 0 } ?: defaultConnectTimeoutMs
     return configured.coerceIn(1_000, 60_000)
   }
 
@@ -97,10 +103,15 @@ class FtpClientPlugin : Plugin() {
     }
   }
 
-  private fun buildFailureMessage(operation: String, error: Exception, timeoutMs: Int): String {
+  private fun buildFailureMessage(
+          operation: String,
+          error: Exception,
+          connectTimeoutMs: Int,
+          transferTimeoutMs: Int
+  ): String {
     val message = error.message ?: "FTP $operation failed"
     return if (error is SocketTimeoutException || timeoutMessagePattern.containsMatchIn(message)) {
-      "FTP $operation timed out after ${timeoutMs}ms"
+      "FTP $operation timed out after connect ${connectTimeoutMs}ms / transfer ${transferTimeoutMs}ms"
     } else {
       message
     }
@@ -117,13 +128,14 @@ class FtpClientPlugin : Plugin() {
     val username = call.getString("username") ?: "user"
     val password = call.getString("password") ?: ""
     val path = call.getString("path") ?: "/"
-    val timeoutMs = resolveTimeoutMs(call)
+    val timeoutMs = resolveTransferTimeoutMs(call)
+    val connectTimeoutMs = resolveConnectTimeoutMs(call)
 
     runTask(
             Runnable {
               val client = ftpClientFactory()
               try {
-                applyPreConnectTimeouts(client, timeoutMs)
+                applyPreConnectTimeouts(client, connectTimeoutMs)
                 client.connect(host, port)
                 applyConnectedTimeouts(client, timeoutMs)
                 val loggedIn = client.login(username, password)
@@ -158,7 +170,7 @@ class FtpClientPlugin : Plugin() {
                 result.put("entries", entries)
                 call.resolve(result)
               } catch (error: Exception) {
-                val message = buildFailureMessage("listDirectory", error, timeoutMs)
+                val message = buildFailureMessage("listDirectory", error, connectTimeoutMs, timeoutMs)
                 AppLogger.error(
                         pluginContextOrNull(),
                         logTag,
@@ -200,13 +212,14 @@ class FtpClientPlugin : Plugin() {
     val port = call.getInt("port") ?: 21
     val username = call.getString("username") ?: "user"
     val password = call.getString("password") ?: ""
-    val timeoutMs = resolveTimeoutMs(call)
+    val timeoutMs = resolveTransferTimeoutMs(call)
+    val connectTimeoutMs = resolveConnectTimeoutMs(call)
 
     runTask(
             Runnable {
               val client = ftpClientFactory()
               try {
-                applyPreConnectTimeouts(client, timeoutMs)
+                applyPreConnectTimeouts(client, connectTimeoutMs)
                 client.connect(host, port)
                 applyConnectedTimeouts(client, timeoutMs)
                 val loggedIn = client.login(username, password)
@@ -230,7 +243,7 @@ class FtpClientPlugin : Plugin() {
                 result.put("sizeBytes", bytes.size)
                 call.resolve(result)
               } catch (error: Exception) {
-                val message = buildFailureMessage("readFile", error, timeoutMs)
+                val message = buildFailureMessage("readFile", error, connectTimeoutMs, timeoutMs)
                 AppLogger.error(
                         pluginContextOrNull(),
                         logTag,
@@ -277,13 +290,14 @@ class FtpClientPlugin : Plugin() {
     val port = call.getInt("port") ?: 21
     val username = call.getString("username") ?: "user"
     val password = call.getString("password") ?: ""
-    val timeoutMs = resolveTimeoutMs(call)
+    val timeoutMs = resolveTransferTimeoutMs(call)
+    val connectTimeoutMs = resolveConnectTimeoutMs(call)
 
     runTask(
             Runnable {
               val client = ftpClientFactory()
               try {
-                applyPreConnectTimeouts(client, timeoutMs)
+                applyPreConnectTimeouts(client, connectTimeoutMs)
                 client.connect(host, port)
                 applyConnectedTimeouts(client, timeoutMs)
                 val loggedIn = client.login(username, password)
@@ -304,7 +318,7 @@ class FtpClientPlugin : Plugin() {
                 result.put("sizeBytes", bytes.size)
                 call.resolve(result)
               } catch (error: Exception) {
-                val message = buildFailureMessage("writeFile", error, timeoutMs)
+                val message = buildFailureMessage("writeFile", error, connectTimeoutMs, timeoutMs)
                 AppLogger.error(
                         pluginContextOrNull(),
                         logTag,

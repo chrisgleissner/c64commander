@@ -30,9 +30,10 @@ describe("PlayFilesPage feature-flag contracts", () => {
   it("turns Android background auto-skip callbacks into auto next transitions", () => {
     expect(playFilesPageSource).toContain("const registerBackgroundAutoSkipListener = async () => {");
     expect(playFilesPageSource).toContain("const nextHandle = await onBackgroundAutoSkipDue((event) => {");
-    expect(playFilesPageSource).toContain("syncPlaybackTimeline({ allowAutoAdvance: false });");
+    expect(playFilesPageSource).toContain("syncPlaybackTimelineRef.current({ allowAutoAdvance: false });");
+    expect(playFilesPageSource).toContain("const playbackState = playbackStateRef.current;");
     expect(playFilesPageSource).toContain("if (event.dueAtMs !== guard.dueAtMs) return;");
-    expect(playFilesPageSource).toContain('await handleNext("auto", expectedTrackInstanceId);');
+    expect(playFilesPageSource).toContain('await handleNextRef.current("auto", expectedTrackInstanceId);');
     expect(playFilesPageSource).toContain(
       "const backgroundDueWriteLaneRef = useRef<LatestIntentWriteLane<number | null> | null>(null);",
     );
@@ -45,10 +46,31 @@ describe("PlayFilesPage feature-flag contracts", () => {
     );
     expect(playFilesPageSource).toContain("setAutoAdvanceDueAtMs(null);");
     expect(playFilesPageSource).toContain("setAutoAdvanceDueAtMs(nextGuard.dueAtMs);");
-    expect(playFilesPageSource).toContain("await queueBackgroundDueAtUpdate(null);");
-    expect(playFilesPageSource).toContain("await queueBackgroundDueAtUpdate(nextGuard.dueAtMs);");
+    expect(playFilesPageSource).toContain("await queueBackgroundDueAtUpdateRef.current(null);");
+    expect(playFilesPageSource).toContain("await queueBackgroundDueAtUpdateRef.current(nextGuard.dueAtMs);");
     expect(playFilesPageSource).toContain('addErrorLog("Failed to re-arm background auto-advance"');
     expect(playFilesPageSource).toContain('addErrorLog("Failed to register background auto-advance listener"');
+  });
+
+  it("keeps the Android background auto-skip native listener registered through volatile playback changes", () => {
+    expect(playFilesPageSource).toContain("const handleNextRef = useRef(handleNext);");
+    expect(playFilesPageSource).toContain("handleNextRef.current = handleNext;");
+    expect(playFilesPageSource).toContain("const playbackStateRef = useRef({ isPlaying, isPaused });");
+    expect(playFilesPageSource).toContain("playbackStateRef.current = { isPlaying, isPaused };");
+    expect(playFilesPageSource).toContain("const syncPlaybackTimelineRef = useRef(syncPlaybackTimeline);");
+    expect(playFilesPageSource).toContain("syncPlaybackTimelineRef.current = syncPlaybackTimeline;");
+
+    const listenerEffectStart = playFilesPageSource.indexOf("const registerBackgroundAutoSkipListener = async () => {");
+    const listenerEffectEnd = playFilesPageSource.indexOf(
+      "const currentItem = playlist[currentIndex];",
+      listenerEffectStart,
+    );
+    const listenerEffect = playFilesPageSource.slice(listenerEffectStart, listenerEffectEnd);
+    expect(listenerEffect).not.toContain(
+      "[autoAdvanceGuardRef, handleNext, isPaused, isPlaying, syncPlaybackTimeline]",
+    );
+    expect(listenerEffect).not.toContain("await handleNext(");
+    expect(listenerEffect).not.toContain("!isPlaying || isPaused");
   });
 
   it("stops background execution only on real cleanup, not on track instance churn", () => {
