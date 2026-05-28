@@ -51,10 +51,20 @@ export type FtpWriteOptions = {
   traceContext?: NativeTraceContext;
 };
 
+export type FtpPingOptions = {
+  host: string;
+  port?: number;
+  username?: string;
+  password?: string;
+  connectTimeoutMs?: number;
+  traceContext?: NativeTraceContext;
+};
+
 export type FtpClientPlugin = {
   listDirectory: (options: FtpListOptions) => Promise<{ entries: FtpEntry[] }>;
   readFile: (options: FtpReadOptions) => Promise<{ data: string; sizeBytes?: number }>;
   writeFile: (options: FtpWriteOptions) => Promise<{ sizeBytes: number }>;
+  pingFtp: (options: FtpPingOptions) => Promise<{ ok: boolean }>;
 };
 
 export const FtpClient = registerPlugin<FtpClientPlugin>("FtpClient", {

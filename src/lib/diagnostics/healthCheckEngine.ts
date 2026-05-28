@@ -16,7 +16,7 @@ import {
   type HealthCheckProbeLifecycle,
   type HealthCheckRunLifecycle,
 } from "@/lib/diagnostics/healthCheckState";
-import { listFtpDirectory } from "@/lib/ftp/ftpClient";
+import { pingFtp } from "@/lib/ftp/ftpClient";
 import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { addLog } from "@/lib/logging";
 import { createTelnetClient } from "@/lib/telnet/telnetClient";
@@ -800,20 +800,15 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
 const probeFtp = async (runtime: ProbeRuntime): Promise<HealthCheckProbeRecord> => {
   const startMs = Date.now();
   try {
-    const { result, durationMs } = await timedProbe(() =>
-      listFtpDirectory({
+    const { durationMs } = await timedProbe(() =>
+      pingFtp({
         host: runtime.host,
         port: runtime.ftpPort,
         password: runtime.password,
-        path: "/",
-        timeoutMs: PROBE_TIMEOUT_MS.FTP,
+        connectTimeoutMs: PROBE_TIMEOUT_MS.FTP,
         __c64uIntent: runtime.intent,
       }),
     );
-    const hasEntries = Array.isArray(result) || (!!result && Array.isArray(result.entries));
-    if (!hasEntries) {
-      return makeRecord("FTP", "Fail", durationMs, "Invalid FTP listing payload", startMs);
-    }
     return makeRecord("FTP", "Success", durationMs, null, startMs);
   } catch (error) {
     if (isTimeoutLike(error)) {

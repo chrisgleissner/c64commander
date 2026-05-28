@@ -345,10 +345,64 @@ class FtpClientPlugin : Plugin() {
     )
   }
 
+  @PluginMethod
+  fun pingFtp(call: PluginCall) {
+    val host = call.getString("host")
+    if (host.isNullOrBlank()) {
+      call.reject("host is required")
+      return
+    }
+    val port = call.getInt("port") ?: 21
+    val username = call.getString("username") ?: "user"
+    val password = call.getString("password") ?: ""
+    val connectTimeoutMs = resolveConnectTimeoutMs(call)
+
+    runTask(
+            Runnable {
+              val client = ftpClientFactory()
+              try {
+                applyPreConnectTimeouts(client, connectTimeoutMs)
+                client.connect(host, port)
+                applyConnectedTimeouts(client, connectTimeoutMs)
+                val loggedIn = client.login(username, password)
+                if (!loggedIn) {
+                  call.reject("FTP ping login failed")
+                  return@Runnable
+                }
+                client.sendNoOp()
+                call.resolve(JSObject().apply { put("ok", true) })
+              } catch (error: Exception) {
+                val message = buildFailureMessage("pingFtp", error, connectTimeoutMs, connectTimeoutMs)
+                AppLogger.error(
+                        pluginContextOrNull(),
+                        logTag,
+                        "FTP ping failed",
+                        "FtpClientPlugin",
+                        error,
+                        traceFields(call),
+                )
+                call.reject(message, error)
+              } finally {
+                try {
+                  if (client.isConnected) client.disconnect()
+                } catch (error: Exception) {
+                  AppLogger.warn(
+                          pluginContextOrNull(),
+                          logTag,
+                          "Failed to disconnect FTP ping client",
+                          "FtpClientPlugin",
+                          error,
+                  )
+                }
+              }
+            }
+    )
+  }
+
   private fun resolveListing(client: FTPClient, path: String): Array<FTPFile> {
     return try {
       val listed = client.listFiles(path)
-      if (listed != null && listed.isNotEmpty()) {
+      if (listed != null) {
         listed
       } else {
         val mlisted = client.mlistDir(path)

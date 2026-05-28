@@ -821,7 +821,29 @@ class FtpClientPluginTest {
   }
 
   @Test
-  fun resolveListingFallsBackToMlistWhenListEmpty() {
+  fun resolveListingReturnsEmptyArrayDirectlyWhenListFilesReturnsEmptyArray() {
+    // Regression: empty array from listFiles means directory is empty — must NOT fall through to MLSD
+    val plugin = FtpClientPlugin()
+    val method =
+            FtpClientPlugin::class.java.getDeclaredMethod(
+                    "resolveListing",
+                    FTPClient::class.java,
+                    String::class.java,
+            )
+    method.isAccessible = true
+
+    val ftpClient = mock(FTPClient::class.java)
+    `when`(ftpClient.listFiles("/")).thenReturn(emptyArray())
+
+    @Suppress("UNCHECKED_CAST") val result = method.invoke(plugin, ftpClient, "/") as Array<FTPFile>
+
+    assertEquals(0, result.size)
+    verify(ftpClient, never()).mlistDir("/")
+    verify(ftpClient, never()).listNames("/")
+  }
+
+  @Test
+  fun resolveListingFallsBackToMlistWhenListReturnsNull() {
     val plugin = FtpClientPlugin()
     val method =
             FtpClientPlugin::class.java.getDeclaredMethod(
@@ -833,7 +855,7 @@ class FtpClientPluginTest {
 
     val ftpClient = mock(FTPClient::class.java)
     val listedFile = FTPFile().apply { name = "mlist.txt" }
-    `when`(ftpClient.listFiles("/")).thenReturn(emptyArray())
+    `when`(ftpClient.listFiles("/")).thenReturn(null)
     `when`(ftpClient.mlistDir("/")).thenReturn(arrayOf(listedFile))
 
     @Suppress("UNCHECKED_CAST") val result = method.invoke(plugin, ftpClient, "/") as Array<FTPFile>
@@ -878,7 +900,7 @@ class FtpClientPluginTest {
     method.isAccessible = true
 
     val ftpClient = mock(FTPClient::class.java)
-    `when`(ftpClient.listFiles("/")).thenReturn(emptyArray())
+    `when`(ftpClient.listFiles("/")).thenReturn(null)
     `when`(ftpClient.mlistDir("/")).thenReturn(emptyArray())
     `when`(ftpClient.listNames("/")).thenReturn(arrayOf("USB2", "demo.sid"))
     `when`(ftpClient.mlistFile("/USB2"))
@@ -918,7 +940,7 @@ class FtpClientPluginTest {
     method.isAccessible = true
 
     val ftpClient = mock(FTPClient::class.java)
-    `when`(ftpClient.listFiles("/")).thenReturn(emptyArray())
+    `when`(ftpClient.listFiles("/")).thenReturn(null)
     `when`(ftpClient.mlistDir("/")).thenReturn(emptyArray())
     `when`(ftpClient.listNames("/")).thenReturn(arrayOf("USB2", "demo.sid"))
     `when`(ftpClient.mlistFile("/USB2")).thenReturn(null)
@@ -938,5 +960,105 @@ class FtpClientPluginTest {
     verify(ftpClient).changeWorkingDirectory("/USB2")
     verify(ftpClient).changeWorkingDirectory("/")
     verify(ftpClient).changeWorkingDirectory("/demo.sid")
+  }
+
+  // pingFtp tests — verifies control-channel-only probe (no PASV / no data channel)
+
+  @Test
+  fun pingFtpRejectsMissingHost() {
+    val plugin = FtpClientPlugin()
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn(null)
+    val latch = CountDownLatch(1)
+    doAnswer {
+              latch.countDown()
+              null
+            }
+            .`when`(call)
+            .reject("host is required")
+
+    plugin.pingFtp(call)
+
+    assertTrue(latch.await(2, TimeUnit.SECONDS))
+  }
+
+  @Test
+  fun pingFtpSucceedsWithoutOpeningDataChannel() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "")).thenReturn(true)
+    `when`(ftpClient.isConnected).thenReturn(true)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("")
+
+    var resolved: JSObject? = null
+    doAnswer { invocation ->
+              resolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(any())
+
+    plugin.pingFtp(call)
+
+    verify(ftpClient).connect("127.0.0.1", 21)
+    verify(ftpClient).login("user", "")
+    verify(ftpClient).sendNoOp()
+    // No PASV data channel must be opened
+    verify(ftpClient, never()).enterLocalPassiveMode()
+    verify(ftpClient, never()).listFiles(any(String::class.java))
+    verify(ftpClient, never()).mlistDir(any(String::class.java))
+    assertEquals(true, resolved?.getBool("ok"))
+  }
+
+  @Test
+  fun pingFtpRejectsOnLoginFailure() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "wrong")).thenReturn(false)
+    `when`(ftpClient.isConnected).thenReturn(true)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("wrong")
+
+    plugin.pingFtp(call)
+
+    verify(ftpClient).connect("127.0.0.1", 21)
+    verify(call).reject("FTP ping login failed")
+    verify(ftpClient, never()).enterLocalPassiveMode()
+  }
+
+  @Test
+  fun pingFtpRejectsOnConnectionError() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.connect(eq("127.0.0.1"), eq(21))).thenThrow(RuntimeException("refused"))
+    `when`(ftpClient.isConnected).thenReturn(false)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("")
+
+    plugin.pingFtp(call)
+
+    verify(call).reject(any(String::class.java), any(Exception::class.java))
   }
 }

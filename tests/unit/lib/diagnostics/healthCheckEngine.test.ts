@@ -16,7 +16,7 @@ const {
   mockGetConfigItem,
   mockSetConfigValue,
   mockLoadConfig,
-  mockListFtpDirectory,
+  mockPingFtp,
   mockCreateTelnetClient,
   mockTelnetConnect,
   mockTelnetRead,
@@ -29,7 +29,7 @@ const {
   mockGetConfigItem: vi.fn(),
   mockSetConfigValue: vi.fn(),
   mockLoadConfig: vi.fn(),
-  mockListFtpDirectory: vi.fn(),
+  mockPingFtp: vi.fn(() => Promise.resolve({ ok: true })),
   mockCreateTelnetClient: vi.fn(),
   mockTelnetConnect: vi.fn(),
   mockTelnetRead: vi.fn(),
@@ -79,7 +79,7 @@ vi.mock("@/lib/c64api", () => ({
 }));
 
 vi.mock("@/lib/ftp/ftpClient", () => ({
-  listFtpDirectory: mockListFtpDirectory,
+  pingFtp: mockPingFtp,
 }));
 
 vi.mock("@/lib/telnet/telnetClient", () => ({
@@ -176,7 +176,7 @@ const setupAllProbesSuccess = () => {
     .mockResolvedValueOnce(ledReadbackResp) // readback: value=6
     .mockResolvedValueOnce(ledResp); // verify revert: value=5
   mockSetConfigValue.mockResolvedValue(undefined);
-  mockListFtpDirectory.mockResolvedValue([]);
+  mockPingFtp.mockResolvedValue({ ok: true });
   mockTelnetConnect.mockResolvedValue(undefined);
   mockTelnetSend.mockResolvedValue(undefined);
   queueTelnetReads(telnetBanner, new Uint8Array(0));
@@ -189,7 +189,7 @@ beforeEach(() => {
   mockGetConfigItem.mockReset();
   mockSetConfigValue.mockReset();
   mockLoadConfig.mockReset();
-  mockListFtpDirectory.mockReset();
+  mockPingFtp.mockReset();
   mockCreateTelnetClient.mockReset();
   mockTelnetConnect.mockReset();
   mockTelnetRead.mockReset();
@@ -413,7 +413,7 @@ describe("runHealthCheckForTarget", () => {
       21,
       expect.objectContaining({ timeoutMs: 4000 }),
     );
-    expect(mockListFtpDirectory).toHaveBeenCalledWith(
+    expect(mockPingFtp).toHaveBeenCalledWith(
       expect.objectContaining({ host: "backup-u64", port: 2021, password: "secret" }),
     );
     expect(mockTelnetConnect).toHaveBeenCalledWith("backup-u64", 2323);
@@ -493,7 +493,7 @@ describe("runHealthCheck — REST probe failure", () => {
 
     mockGetInfo.mockReset();
     mockGetInfo.mockRejectedValue(new Error("Host unreachable"));
-    mockListFtpDirectory.mockReset();
+    mockPingFtp.mockReset();
     mockTelnetConnect.mockReset();
     mockTelnetRead.mockReset();
     mockTelnetSend.mockReset();
@@ -516,7 +516,7 @@ describe("runHealthCheck — REST probe failure", () => {
 
   it("skips JIFFY, RASTER, CONFIG when REST fails", async () => {
     mockGetInfo.mockRejectedValue(new Error("Network error"));
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.probes.REST.outcome).toBe("Fail");
@@ -527,7 +527,7 @@ describe("runHealthCheck — REST probe failure", () => {
 
   it("skips FTP when REST fails (FTP now depends on REST)", async () => {
     mockGetInfo.mockRejectedValue(new Error("Network error"));
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.probes.FTP.outcome).toBe("Skipped");
@@ -542,7 +542,7 @@ describe("runHealthCheck — REST probe failure", () => {
 
   it("sets REST Fail reason from error message", async () => {
     mockGetInfo.mockRejectedValue(new Error("Connection refused"));
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.probes.REST.reason).toContain("Connection refused");
@@ -550,7 +550,7 @@ describe("runHealthCheck — REST probe failure", () => {
 
   it("sets Unhealthy overallHealth when REST fails", async () => {
     mockGetInfo.mockRejectedValue(new Error("timeout"));
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.overallHealth).toBe("Unhealthy");
@@ -572,7 +572,7 @@ describe("runHealthCheck — JIFFY probe", () => {
       .mockResolvedValueOnce(ledReadbackResp)
       .mockResolvedValueOnce(ledResp);
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.probes.JIFFY.outcome).toBe("Fail");
@@ -590,7 +590,7 @@ describe("runHealthCheck — JIFFY probe", () => {
       .mockResolvedValueOnce(ledReadbackResp)
       .mockResolvedValueOnce(ledResp);
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.probes.JIFFY.outcome).toBe("Fail");
@@ -615,7 +615,7 @@ describe("runHealthCheck — JIFFY probe", () => {
       .mockResolvedValueOnce(ledReadbackResp)
       .mockResolvedValueOnce(ledResp);
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
 
@@ -639,7 +639,7 @@ describe("runHealthCheck — RASTER probe", () => {
       .mockResolvedValueOnce(ledReadbackResp)
       .mockResolvedValueOnce(ledResp);
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.probes.RASTER.outcome).toBe("Skipped");
@@ -656,7 +656,7 @@ describe("runHealthCheck — RASTER probe", () => {
       .mockResolvedValueOnce(ledReadbackResp)
       .mockResolvedValueOnce(ledResp);
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.probes.RASTER.outcome).toBe("Skipped");
@@ -681,7 +681,7 @@ describe("runHealthCheck — RASTER probe", () => {
       .mockResolvedValueOnce(ledReadbackResp)
       .mockResolvedValueOnce(ledResp);
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
 
@@ -705,7 +705,7 @@ describe("runHealthCheck — CONFIG probe", () => {
       .mockResolvedValueOnce(ledResp) // readback: still 5, expected 6
       .mockResolvedValueOnce(ledResp); // verify
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.probes.CONFIG.outcome).toBe("Fail");
@@ -724,7 +724,7 @@ describe("runHealthCheck — CONFIG probe", () => {
       .mockResolvedValueOnce(ledReadbackResp) // readback: 6 ok
       .mockResolvedValueOnce(ledReadbackResp); // verify: 6 ≠ 5
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.probes.CONFIG.outcome).toBe("Fail");
@@ -739,7 +739,7 @@ describe("runHealthCheck — CONFIG probe", () => {
     });
     mockGetConfigItem.mockResolvedValue({}); // both targets return empty → continue loop → Skipped
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.probes.CONFIG.outcome).toBe("Skipped");
@@ -764,7 +764,7 @@ describe("runHealthCheck — CONFIG probe", () => {
       .mockResolvedValueOnce(keyboardReadback)
       .mockResolvedValueOnce(keyboardResp);
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
 
@@ -809,7 +809,7 @@ describe("runHealthCheck — CONFIG probe", () => {
       .mockResolvedValueOnce(currentReadbackResp)
       .mockResolvedValueOnce(currentResp);
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
 
@@ -832,7 +832,7 @@ describe("runHealthCheck — REST probe device errors", () => {
       ...successfulInfo,
       errors: ["Drive error", "Timeout"],
     });
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.probes.REST.outcome).toBe("Fail");
@@ -841,7 +841,7 @@ describe("runHealthCheck — REST probe device errors", () => {
 
   it("fails REST when product field is missing", async () => {
     mockGetInfo.mockResolvedValue({ ...successfulInfo, product: "" });
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.probes.REST.outcome).toBe("Fail");
@@ -866,7 +866,7 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
       .mockResolvedValueOnce(directNumReadbackResp)
       .mockResolvedValueOnce(directNumResp);
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.probes.CONFIG.outcome).toBe("Success");
@@ -886,7 +886,7 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
       .mockResolvedValueOnce(strReadbackResp)
       .mockResolvedValueOnce(strResp);
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.probes.CONFIG.outcome).toBe("Success");
@@ -919,7 +919,7 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
       .mockResolvedValueOnce(numericReadback)
       .mockResolvedValueOnce(numericWithMismatchedOptions);
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
 
@@ -947,7 +947,7 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
       .mockResolvedValueOnce(maxReadbackResp)
       .mockResolvedValueOnce(maxResp);
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.probes.CONFIG.outcome).toBe("Success");
@@ -964,7 +964,7 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
       .mockResolvedValueOnce(ledReadbackResp)
       .mockResolvedValueOnce(ledResp);
     mockSetConfigValue.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("Revert failed"));
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
 
@@ -976,7 +976,7 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
 // ─── runHealthCheck — FTP probe ───────────────────────────────────────────────
 
 describe("runHealthCheck — FTP probe", () => {
-  it("fails FTP when listFtpDirectory throws", async () => {
+  it("fails FTP when pingFtp throws", async () => {
     mockGetInfo.mockResolvedValue(successfulInfo);
     mockReadMemory.mockImplementation((addr: string) => {
       if (addr === "00A2") return Promise.resolve(jiffyBytes);
@@ -987,7 +987,7 @@ describe("runHealthCheck — FTP probe", () => {
       .mockResolvedValueOnce(ledReadbackResp)
       .mockResolvedValueOnce(ledResp);
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockRejectedValue(new Error("FTP connection refused"));
+    mockPingFtp.mockRejectedValue(new Error("FTP connection refused"));
 
     const result = await runHealthCheck();
     expect(result!.probes.FTP.outcome).toBe("Fail");
@@ -1005,32 +1005,13 @@ describe("runHealthCheck — FTP probe", () => {
       .mockResolvedValueOnce(ledReadbackResp)
       .mockResolvedValueOnce(ledResp);
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockRejectedValue(new Error("FTP timed out after 1000ms"));
+    mockPingFtp.mockRejectedValue(new Error("FTP timed out after 1000ms"));
 
     const result = await runHealthCheck();
 
     expect(result!.probes.FTP.outcome).toBe("Fail");
     expect(result!.probes.FTP.durationMs).toBe(1000);
     expect(getHealthCheckStateSnapshot().runState).toBe("TIMEOUT");
-  });
-
-  it("fails FTP when the directory listing payload is malformed", async () => {
-    mockGetInfo.mockResolvedValue(successfulInfo);
-    mockReadMemory.mockImplementation((addr: string) => {
-      if (addr === "00A2") return Promise.resolve(jiffyBytes);
-      return Promise.resolve(new Uint8Array([0x42]));
-    });
-    mockGetConfigItem
-      .mockResolvedValueOnce(ledResp)
-      .mockResolvedValueOnce(ledReadbackResp)
-      .mockResolvedValueOnce(ledResp);
-    mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue({ path: "/", entries: null } as never);
-
-    const result = await runHealthCheck();
-
-    expect(result!.probes.FTP.outcome).toBe("Fail");
-    expect(result!.probes.FTP.reason).toBe("Invalid FTP listing payload");
   });
 
   it("normalizes an HTTP device host with a port before probing FTP", async () => {
@@ -1047,16 +1028,15 @@ describe("runHealthCheck — FTP probe", () => {
       .mockResolvedValueOnce(ledReadbackResp)
       .mockResolvedValueOnce(ledResp);
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
 
     expect(result!.probes.FTP.outcome).toBe("Success");
-    expect(mockListFtpDirectory).toHaveBeenCalledWith(
+    expect(mockPingFtp).toHaveBeenCalledWith(
       expect.objectContaining({
         host: "127.0.0.1",
         port: 21,
-        path: "/",
       }),
     );
   });
@@ -1242,7 +1222,7 @@ describe("runHealthCheck — REST probe optional fields", () => {
       .mockResolvedValueOnce(ledReadbackResp)
       .mockResolvedValueOnce(ledResp);
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.probes.REST.outcome).toBe("Success");
@@ -1256,7 +1236,7 @@ describe("runHealthCheck — REST probe optional fields", () => {
       product: undefined,
       errors: [],
     });
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.probes.REST.outcome).toBe("Fail");
@@ -1279,7 +1259,7 @@ describe("runHealthCheck — JIFFY probe null bytes", () => {
       .mockResolvedValueOnce(ledReadbackResp)
       .mockResolvedValueOnce(ledResp);
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.probes.JIFFY.outcome).toBe("Fail");
@@ -1306,7 +1286,7 @@ describe("runHealthCheck — CONFIG probe with items-wrapper format", () => {
       .mockResolvedValueOnce(itemsReadback)
       .mockResolvedValueOnce(itemsResp);
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.probes.CONFIG.outcome).toBe("Success");
@@ -1345,7 +1325,7 @@ describe("runHealthCheck — CONFIG probe with items-wrapper format", () => {
       .mockResolvedValueOnce(audioReadback)
       .mockResolvedValueOnce(audioResp);
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.probes.CONFIG.outcome).toBe("Success");
@@ -1394,7 +1374,7 @@ describe("runHealthCheck — CONFIG probe with items-wrapper format", () => {
       return Promise.resolve({});
     });
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
 
@@ -1458,7 +1438,7 @@ describe("runHealthCheck — CONFIG probe with items-wrapper format", () => {
       return Promise.resolve({});
     });
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
 
@@ -1489,7 +1469,7 @@ describe("runHealthCheck — CONFIG probe exception", () => {
     });
     mockGetConfigItem.mockRejectedValue(new Error("Config API unavailable"));
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.probes.CONFIG.outcome).toBe("Fail");
@@ -1547,7 +1527,7 @@ describe("runHealthCheck — onProbeProgress callback", () => {
 
   it("callback receives all probes as Skipped after REST failure", async () => {
     mockGetInfo.mockRejectedValue(new Error("Network error"));
-    mockListFtpDirectory.mockResolvedValue([]);
+    mockPingFtp.mockResolvedValue({ ok: true });
     const lastPartial: Record<string, string> = {};
     await runHealthCheck((partial) => {
       for (const [k, v] of Object.entries(partial)) lastPartial[k] = v!.outcome;
