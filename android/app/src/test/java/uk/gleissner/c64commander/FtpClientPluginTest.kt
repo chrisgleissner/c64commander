@@ -665,8 +665,37 @@ class FtpClientPluginTest {
     plugin.listDirectory(call)
 
     val ordered = inOrder(ftpClient)
-    ordered.verify(ftpClient).setConnectTimeout(4321)
-    ordered.verify(ftpClient).setDefaultTimeout(4321)
+    ordered.verify(ftpClient).setConnectTimeout(1500)
+    ordered.verify(ftpClient).setDefaultTimeout(1500)
+    ordered.verify(ftpClient).connect("127.0.0.1", 21)
+    ordered.verify(ftpClient).setSoTimeout(4321)
+  }
+
+  @Test
+  fun listDirectoryAppliesConfiguredConnectTimeoutSeparatelyFromTransferTimeout() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    `when`(ftpClient.listFiles("/")).thenReturn(emptyArray())
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getInt("connectTimeoutMs")).thenReturn(1200)
+    `when`(call.getInt("timeoutMs")).thenReturn(4321)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("secret")
+    `when`(call.getString("path")).thenReturn("/")
+
+    plugin.listDirectory(call)
+
+    val ordered = inOrder(ftpClient)
+    ordered.verify(ftpClient).setConnectTimeout(1200)
+    ordered.verify(ftpClient).setDefaultTimeout(1200)
     ordered.verify(ftpClient).connect("127.0.0.1", 21)
     ordered.verify(ftpClient).setSoTimeout(4321)
   }
@@ -680,6 +709,7 @@ class FtpClientPluginTest {
                     String::class.java,
                     Exception::class.java,
                     Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType,
             )
     method.isAccessible = true
 
@@ -690,6 +720,7 @@ class FtpClientPluginTest {
                     NullPointerException(
                             "Attempt to invoke virtual method 'void java.net.Socket.setSoTimeout(int)' on a null object reference"
                     ),
+                    1500,
                     8000,
             ) as
                     String

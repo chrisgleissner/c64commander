@@ -351,6 +351,7 @@ vi.mock("@/lib/tracing/traceSession", () => ({
   recordActionEnd: vi.fn(),
   recordActionScopeStart: vi.fn(),
   recordActionScopeEnd: vi.fn(),
+  recordDeviceGuard: vi.fn(),
   recordTraceError: vi.fn(),
 }));
 

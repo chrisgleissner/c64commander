@@ -24,6 +24,7 @@ export type FtpListOptions = {
   password?: string;
   path?: string;
   timeoutMs?: number;
+  connectTimeoutMs?: number;
   traceContext?: NativeTraceContext;
 };
 
@@ -34,6 +35,7 @@ export type FtpReadOptions = {
   password?: string;
   path: string;
   timeoutMs?: number;
+  connectTimeoutMs?: number;
   traceContext?: NativeTraceContext;
 };
 
@@ -45,6 +47,7 @@ export type FtpWriteOptions = {
   path: string;
   data: string;
   timeoutMs?: number;
+  connectTimeoutMs?: number;
   traceContext?: NativeTraceContext;
 };
 

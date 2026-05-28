@@ -25,6 +25,7 @@ import {
   areBackgroundReadsSuspended,
   waitForBackgroundReadsToResume,
 } from "@/lib/deviceInteraction/deviceActivityGate";
+import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 import {
   buildRestRequestIdentity,
   canonicalizeRestPath,
@@ -264,6 +265,7 @@ const updateConfig = () => {
   restCache.clear();
   restCooldownUntil.clear();
   ftpCooldownUntil.clear();
+  ftpConnectCooldownUntil.clear();
   restInflight.clear();
   ftpInflight.clear();
   restErrorStreak = 0;
@@ -285,6 +287,7 @@ export const resetInteractionState = (reason: string) => {
   restCooldownUntil.clear();
   restInflight.clear();
   ftpCooldownUntil.clear();
+  ftpConnectCooldownUntil.clear();
   ftpInflight.clear();
   restErrorStreak = 0;
   restBackoffUntilMs = 0;
@@ -316,6 +319,7 @@ subscribeDeviceSafetyUpdates(updateConfig);
 const REST_MAX_CONCURRENCY = 1;
 const TELNET_MAX_CONCURRENCY = 1;
 const MACHINE_CONTROL_COOLDOWN_MS = 250;
+export const FTP_TRANSIENT_RETRY_DELAY_MS = 250;
 
 const restScheduler = new InteractionScheduler(() => REST_MAX_CONCURRENCY, "rest");
 const ftpScheduler = new InteractionScheduler(() => config.ftpMaxConcurrency, "ftp");
@@ -327,6 +331,7 @@ const restCooldownUntil = new Map<string, number>();
 
 const ftpInflight = new Map<string, Promise<unknown>>();
 const ftpCooldownUntil = new Map<string, number>();
+const ftpConnectCooldownUntil = new Map<string, number>();
 
 let restErrorStreak = 0;
 let restBackoffUntilMs = 0;
@@ -383,7 +388,20 @@ const resetRestFailure = () => {
   setCircuitOpenUntil(null);
 };
 
+const isTransientFtpFailure = (error: Error) => {
+  const message = error.message.toLowerCase();
+  return (
+    isTransientConnectivityFailure(message) ||
+    /timed out|timeout|connection refused|connection reset|econnrefused|econnreset|socket closed|connection aborted/.test(
+      message,
+    )
+  );
+};
+
+const shouldRetryFtpFailure = (error: Error) => isTransientFtpFailure(error);
+
 const updateFtpFailure = (error: Error) => {
+  if (!isTransientFtpFailure(error)) return;
   ftpErrorStreak += 1;
   const backoffMs = computeBackoff(ftpErrorStreak);
   const now = Date.now();
@@ -762,6 +780,32 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
   return scheduledPromise;
 };
 
+const applyFtpConnectPacing = async (hostScope: string, action: TraceActionContext, intent: InteractionIntent) => {
+  const cooldownMs = config.ftpListCooldownMs;
+  if (cooldownMs <= 0) return;
+  const now = Date.now();
+  const cooldownUntil = ftpConnectCooldownUntil.get(hostScope) ?? 0;
+  if (now < cooldownUntil) {
+    const waitMs = cooldownUntil - now;
+    recordDeviceGuard(action, {
+      decision: "defer",
+      reason: "cooldown",
+      waitMs,
+    });
+    addLog("debug", "FTP connect pacing delay applied", {
+      transport: "ftp",
+      hostScope,
+      intent,
+      waitMs,
+      cooldownMs,
+      deviceSafetyMode: config.mode,
+      effectiveDeviceSafetyMode: config.resolution?.effectiveMode ?? config.mode,
+    });
+    await sleep(waitMs);
+  }
+  ftpConnectCooldownUntil.set(hostScope, Date.now() + cooldownMs);
+};
+
 export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () => Promise<T>): Promise<T> => {
   if (isTestEnv()) {
     markDeviceRequestStart();
@@ -816,7 +860,6 @@ export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () =>
     return inflight as Promise<T>;
   }
 
-  const cooldownUntil = ftpCooldownUntil.get(key) ?? 0;
   const scheduleTask = async () => {
     if (ftpBackoffUntilMs > Date.now()) {
       const waitMs = ftpBackoffUntilMs - Date.now();
@@ -828,33 +871,43 @@ export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () =>
       await sleep(waitMs);
     }
 
-    if (config.ftpListCooldownMs > 0 && Date.now() < cooldownUntil) {
-      const waitMs = cooldownUntil - Date.now();
-      recordDeviceGuard(meta.action, {
-        decision: "defer",
-        reason: "cooldown",
-        waitMs,
-      });
-      await sleep(waitMs);
-    }
-
     if (config.ftpListCooldownMs > 0) {
       ftpCooldownUntil.set(key, Date.now() + config.ftpListCooldownMs);
     }
 
-    markDeviceRequestStart();
-    try {
-      const result = await handler();
-      resetFtpFailure();
-      markDeviceRequestEnd({ success: true });
-      return result;
-    } catch (error) {
-      const err = error as Error;
-      updateFtpFailure(err);
-      markDeviceRequestEnd({ success: false, errorMessage: err.message });
-      throw error;
-    } finally {
-      ftpInflight.delete(key);
+    let attempt = 0;
+    while (true) {
+      await applyFtpConnectPacing(hostScope, meta.action, meta.intent);
+      markDeviceRequestStart();
+      try {
+        const result = await handler();
+        resetFtpFailure();
+        markDeviceRequestEnd({ success: true });
+        return result;
+      } catch (error) {
+        const err = error as Error;
+        updateFtpFailure(err);
+        markDeviceRequestEnd({ success: false, errorMessage: err.message });
+        const circuitOpen = ftpCircuitUntilMs > Date.now();
+        if (attempt >= 1 || !shouldRetryFtpFailure(err) || circuitOpen) {
+          throw error;
+        }
+        attempt += 1;
+        recordDeviceGuard(meta.action, {
+          decision: "defer",
+          reason: "retry",
+          waitMs: FTP_TRANSIENT_RETRY_DELAY_MS,
+        });
+        addLog("debug", "Retrying transient FTP failure once", {
+          operation: meta.operation,
+          path: meta.path,
+          host: meta.host ?? null,
+          port: meta.port ?? 21,
+          error: err.message,
+          waitMs: FTP_TRANSIENT_RETRY_DELAY_MS,
+        });
+        await sleep(FTP_TRANSIENT_RETRY_DELAY_MS);
+      }
     }
   };
 
@@ -864,7 +917,11 @@ export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () =>
   });
 
   ftpInflight.set(key, scheduledPromise as Promise<unknown>);
-  return scheduledPromise;
+  try {
+    return await scheduledPromise;
+  } finally {
+    ftpInflight.delete(key);
+  }
 };
 
 export const withTelnetInteraction = async <T>(meta: TelnetRequestMeta, handler: () => Promise<T>): Promise<T> => {

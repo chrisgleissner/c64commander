@@ -74,6 +74,20 @@ type AutoAdvanceGuard = {
   userCancelled: boolean;
 };
 
+type PendingUserSkip = {
+  timer: number | null;
+  originIndex: number;
+  targetIndex: number | null;
+  stopAtEnd: boolean;
+  operation: "PLAYBACK_NEXT" | "PLAYBACK_PREVIOUS";
+  title: "Playback next failed" | "Playback previous failed";
+  resolvers: Array<{
+    resolve: () => void;
+  }>;
+};
+
+export const USER_TRANSPORT_COALESCE_MS = 120;
+
 interface UsePlaybackControllerProps {
   playlist: PlaylistItem[];
   setPlaylist: React.Dispatch<React.SetStateAction<PlaylistItem[]>>;
@@ -226,6 +240,7 @@ export function usePlaybackController({
   const playlistRef = useRef(playlist);
   const currentIndexRef = useRef(currentIndex);
   const userTransportQueueRef = useRef(Promise.resolve());
+  const pendingUserSkipRef = useRef<PendingUserSkip | null>(null);
   const STOP_MACHINE_TIMEOUT_MS = 6000;
 
   playlistRef.current = playlist;
@@ -251,6 +266,14 @@ export function usePlaybackController({
     );
     return await run;
   }, []);
+
+  const setVisibleCurrentIndex = useCallback(
+    (nextIndex: number) => {
+      currentIndexRef.current = nextIndex;
+      setCurrentIndex(nextIndex);
+    },
+    [setCurrentIndex],
+  );
 
   const resumeMachineWithRetry = useCallback(
     async (api: ReturnType<typeof getC64API>) => {
@@ -717,7 +740,7 @@ export function usePlaybackController({
         setElapsedMs(0);
         setDurationMs(resolvedDuration);
         if (typeof options?.playlistIndex === "number" && options.playlistIndex >= 0) {
-          setCurrentIndex(options.playlistIndex);
+          setVisibleCurrentIndex(options.playlistIndex);
         }
         await executePlayPlan(api, plan, executionOptions);
         const now = Date.now();
@@ -771,7 +794,7 @@ export function usePlaybackController({
       resolveSidMetadata,
       resolveSonglengthDurationMsForPath,
       resolveUltimateSidDurationByMd5,
-      setCurrentIndex,
+      setVisibleCurrentIndex,
       setCurrentSubsongCount,
       setDurationMs,
       setElapsedMs,
@@ -1038,19 +1061,132 @@ export function usePlaybackController({
     ],
   );
 
+  const flushPendingUserSkip = useCallback(async () => {
+    const pending = pendingUserSkipRef.current;
+    if (!pending) return;
+    pendingUserSkipRef.current = null;
+    const settle = () => {
+      pending.resolvers.forEach(({ resolve }) => resolve());
+    };
+
+    try {
+      await enqueueUserTransport(async () => {
+        const activePlaylist = playlistRef.current;
+        if (!activePlaylist.length) return;
+        if (pending.stopAtEnd || pending.targetIndex === null) {
+          playedClockRef.current.pause(Date.now());
+          setIsPlaying(false);
+          setIsPaused(false);
+          autoAdvanceGuardRef.current = null;
+          setAutoAdvanceDueAtMs(null);
+          return;
+        }
+        const currentItem = activePlaylist[pending.originIndex];
+        const targetItem = activePlaylist[pending.targetIndex];
+        if (!targetItem) return;
+        const shouldReboot = currentItem?.category === "disk" || targetItem.category === "disk";
+        await playItem(targetItem, {
+          rebootBeforePlay: shouldReboot,
+          playlistIndex: pending.targetIndex,
+        });
+        setIsPaused(false);
+      });
+      settle();
+    } catch (error) {
+      if (!isHandledUiError(error)) {
+        reportUserError({
+          operation: pending.operation,
+          title: pending.title,
+          description: (error as Error).message,
+          error,
+          context: {
+            originIndex: pending.originIndex,
+            targetIndex: pending.targetIndex,
+          },
+        });
+      }
+      setIsPlaying(false);
+      setIsPaused(false);
+      trackStartedAtRef.current = null;
+      autoAdvanceGuardRef.current = null;
+      setAutoAdvanceDueAtMs(null);
+      settle();
+    }
+  }, [
+    enqueueUserTransport,
+    playItem,
+    playedClockRef,
+    setAutoAdvanceDueAtMs,
+    setIsPaused,
+    setIsPlaying,
+    trackStartedAtRef,
+    autoAdvanceGuardRef,
+  ]);
+
+  const scheduleUserSkip = useCallback(
+    (
+      targetIndex: number | null,
+      stopAtEnd: boolean,
+      originIndex: number,
+      operation: PendingUserSkip["operation"],
+      title: PendingUserSkip["title"],
+    ) =>
+      new Promise<void>((resolve) => {
+        const pending = pendingUserSkipRef.current;
+        if (pending?.timer !== null && pending?.timer !== undefined) {
+          window.clearTimeout(pending.timer);
+        }
+        const resolvers = pending?.resolvers ?? [];
+        resolvers.push({ resolve });
+        pendingUserSkipRef.current = {
+          timer: window.setTimeout(() => {
+            const currentPending = pendingUserSkipRef.current;
+            if (currentPending) {
+              currentPending.timer = null;
+            }
+            void flushPendingUserSkip();
+          }, USER_TRANSPORT_COALESCE_MS),
+          originIndex: pending?.originIndex ?? originIndex,
+          targetIndex,
+          stopAtEnd,
+          operation,
+          title,
+          resolvers,
+        };
+      }),
+    [flushPendingUserSkip],
+  );
+
   const handleNext = useCallback(
     async (source: "auto" | "user" = "user", expectedTrackInstanceId?: number) => {
+      if (source === "user") {
+        const activePlaylist = playlistRef.current;
+        if (!activePlaylist.length) return;
+        cancelAutoAdvance();
+        const activeIndex = currentIndexRef.current;
+        let nextIndex = activeIndex + 1;
+        const now = Date.now();
+        playedClockRef.current.pause(now);
+        setPlayedMs(playedClockRef.current.current(now));
+        if (nextIndex >= activePlaylist.length) {
+          if (!repeatEnabled) {
+            await scheduleUserSkip(null, true, activeIndex, "PLAYBACK_NEXT", "Playback next failed");
+            return;
+          }
+          nextIndex = 0;
+        }
+        setVisibleCurrentIndex(nextIndex);
+        await scheduleUserSkip(nextIndex, false, activeIndex, "PLAYBACK_NEXT", "Playback next failed");
+        return;
+      }
+
       const runTransition = async () => {
         const activePlaylist = playlistRef.current;
         if (!activePlaylist.length) return;
-        if (source === "auto") {
-          const guard = autoAdvanceGuardRef.current;
-          if (!guard || guard.autoFired || guard.userCancelled) return;
-          if (typeof expectedTrackInstanceId === "number" && guard.trackInstanceId !== expectedTrackInstanceId) return;
-          guard.autoFired = true;
-        } else {
-          cancelAutoAdvance();
-        }
+        const guard = autoAdvanceGuardRef.current;
+        if (!guard || guard.autoFired || guard.userCancelled) return;
+        if (typeof expectedTrackInstanceId === "number" && guard.trackInstanceId !== expectedTrackInstanceId) return;
+        guard.autoFired = true;
 
         const activeIndex = currentIndexRef.current;
         let nextIndex = activeIndex + 1;
@@ -1100,18 +1236,15 @@ export function usePlaybackController({
         }
       };
 
-      if (source === "user") {
-        await enqueueUserTransport(runTransition);
-        return;
-      }
       await runTransition();
     },
     [
       cancelAutoAdvance,
-      enqueueUserTransport,
       playItem,
       repeatEnabled,
       playedClockRef,
+      scheduleUserSkip,
+      setVisibleCurrentIndex,
       setAutoAdvanceDueAtMs,
       setPlayedMs,
       setIsPlaying,
@@ -1122,58 +1255,18 @@ export function usePlaybackController({
   );
 
   const handlePrevious = useCallback(async () => {
-    await enqueueUserTransport(async () => {
-      const activePlaylist = playlistRef.current;
-      if (!activePlaylist.length) return;
-      const activeIndex = currentIndexRef.current;
-      const prevIndex =
-        activeIndex > 0 ? activeIndex - 1 : repeatEnabled && activePlaylist.length > 1 ? activePlaylist.length - 1 : 0;
-      cancelAutoAdvance();
-      const now = Date.now();
-      playedClockRef.current.pause(now);
-      setPlayedMs(playedClockRef.current.current(now));
-      const currentItem = activePlaylist[activeIndex];
-      const prevItem = activePlaylist[prevIndex];
-      const shouldReboot = currentItem?.category === "disk" || prevItem?.category === "disk";
-      try {
-        await playItem(prevItem, {
-          rebootBeforePlay: shouldReboot,
-          playlistIndex: prevIndex,
-        });
-        setIsPaused(false);
-      } catch (error) {
-        if (!isHandledUiError(error)) {
-          reportUserError({
-            operation: "PLAYBACK_PREVIOUS",
-            title: "Playback previous failed",
-            description: (error as Error).message,
-            error,
-            context: {
-              currentIndex: activeIndex,
-              prevIndex,
-            },
-          });
-        }
-        setIsPlaying(false);
-        setIsPaused(false);
-        trackStartedAtRef.current = null;
-        autoAdvanceGuardRef.current = null;
-        setAutoAdvanceDueAtMs(null);
-      }
-    });
-  }, [
-    cancelAutoAdvance,
-    enqueueUserTransport,
-    playItem,
-    repeatEnabled,
-    playedClockRef,
-    setAutoAdvanceDueAtMs,
-    setPlayedMs,
-    setIsPlaying,
-    setIsPaused,
-    trackStartedAtRef,
-    autoAdvanceGuardRef,
-  ]);
+    const activePlaylist = playlistRef.current;
+    if (!activePlaylist.length) return;
+    const activeIndex = currentIndexRef.current;
+    const prevIndex =
+      activeIndex > 0 ? activeIndex - 1 : repeatEnabled && activePlaylist.length > 1 ? activePlaylist.length - 1 : 0;
+    cancelAutoAdvance();
+    const now = Date.now();
+    playedClockRef.current.pause(now);
+    setPlayedMs(playedClockRef.current.current(now));
+    setVisibleCurrentIndex(prevIndex);
+    await scheduleUserSkip(prevIndex, false, activeIndex, "PLAYBACK_PREVIOUS", "Playback previous failed");
+  }, [cancelAutoAdvance, repeatEnabled, playedClockRef, setPlayedMs, scheduleUserSkip, setVisibleCurrentIndex]);
 
   const playlistItemDuration = useCallback(
     (item: PlaylistItem, index: number) => {
