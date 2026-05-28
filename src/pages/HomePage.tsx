@@ -251,12 +251,11 @@ function HomePageContent() {
   const deviceCode = inferConnectedDeviceCode(status.deviceInfo?.product);
   const powerCycleSupportedByProduct = deviceCode === "c64u" || deviceCode === "u64e2";
   const powerCycleSupport = telnet.isAvailable ? getTelnetSupport("powerCycle") : null;
-  const powerCycleVisible =
-    homeTelnetPowerCycleEnabled &&
-    powerCycleSupportedByProduct &&
-    telnet.isAvailable &&
-    powerCycleSupport?.status === "supported";
-  const powerCycleDisabledReason = null;
+  const powerCycleVisible = homeTelnetPowerCycleEnabled && powerCycleSupportedByProduct && telnet.isAvailable;
+  const powerCycleDisabledReason =
+    powerCycleSupport?.status === "unsupported"
+      ? (powerCycleSupport.reason ?? `${TELNET_ACTIONS.powerCycle.label} is unavailable.`)
+      : null;
   const saveReuDisabledReason = telnet.isAvailable ? getTelnetDisabledReason("saveReuMemory") : null;
   const saveConfigDisabledReason = telnet.isAvailable ? getTelnetDisabledReason("saveConfigToFile") : null;
   const clearFlashDisabledReason = telnet.isAvailable ? getTelnetDisabledReason("clearFlashConfig") : null;
@@ -620,7 +619,7 @@ function HomePageContent() {
 
   const clearRamRebootSupport = telnet.isAvailable ? getTelnetSupport("rebootClearMemory") : null;
   const clearRamRebootVisible =
-    homeTelnetClearRamRebootEnabled && telnet.isAvailable && clearRamRebootSupport?.status === "supported";
+    homeTelnetClearRamRebootEnabled && telnet.isAvailable && clearRamRebootSupport?.status !== "unsupported";
   const machineExtraActions = [
     ...(clearRamRebootVisible
       ? [

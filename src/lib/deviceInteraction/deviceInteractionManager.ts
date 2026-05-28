@@ -33,6 +33,7 @@ import {
   isMachineControlPath,
   isReadOnlyRestMethod,
 } from "@/lib/deviceInteraction/restRequestIdentity";
+import { resetConfigWriteThrottle } from "@/lib/config/configWriteThrottle";
 
 export type InteractionIntent = "user" | "system" | "background";
 
@@ -285,6 +286,7 @@ export const resetInteractionState = (reason: string) => {
   restCache.clear();
   restCooldownUntil.clear();
   restInflight.clear();
+  resetConfigWriteThrottle(reason);
   ftpConnectCooldownUntil.clear();
   ftpInflight.clear();
   restErrorStreak = 0;

@@ -6,11 +6,21 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { FtpClientPlugin, FtpListOptions, FtpEntry, FtpReadOptions, FtpWriteOptions } from "./ftpClient";
+import type {
+  FtpClientPlugin,
+  FtpListOptions,
+  FtpEntry,
+  FtpReadOptions,
+  FtpWriteOptions,
+  FtpPingOptions,
+} from "./ftpClient";
 import { getFtpBridgeUrl } from "@/lib/ftp/ftpConfig";
 
 const FTP_BRIDGE_TIMEOUT_MS = 5000;
-const FTP_BRIDGE_MAX_ATTEMPTS = 3;
+// Retry ownership lives in withFtpInteraction so all FTP pressure is visible
+// to the device-safety gateway. The web bridge layer performs one bounded
+// HTTP attempt per scheduled FTP operation.
+const FTP_BRIDGE_MAX_ATTEMPTS = 1;
 
 const isRetryableFtpBridgeFailure = (error: unknown, status?: number) => {
   const resolvedStatus = typeof status === "number" ? status : (error as { status?: number } | undefined)?.status;
@@ -126,5 +136,16 @@ export class FtpClientWeb implements FtpClientPlugin {
     }
 
     return { sizeBytes: payload.sizeBytes };
+  }
+
+  async pingFtp(options: FtpPingOptions): Promise<{ ok: boolean }> {
+    const payload = await this.postJson<{ ok?: boolean } | null>("ping", {
+      host: options.host,
+      port: options.port,
+      username: options.username,
+      password: options.password,
+      traceContext: options.traceContext,
+    });
+    return { ok: payload?.ok === true };
   }
 }

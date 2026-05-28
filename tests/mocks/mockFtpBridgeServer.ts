@@ -71,7 +71,8 @@ export async function createMockFtpBridgeServer(): Promise<MockFtpBridgeServer> 
 
       const isList = req.method === "POST" && req.url === "/v1/ftp/list";
       const isRead = req.method === "POST" && req.url === "/v1/ftp/read";
-      if (!isList && !isRead) {
+      const isPing = req.method === "POST" && req.url === "/v1/ftp/ping";
+      if (!isList && !isRead && !isPing) {
         res.writeHead(404, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Not found" }));
         return;
@@ -119,6 +120,10 @@ export async function createMockFtpBridgeServer(): Promise<MockFtpBridgeServer> 
 
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ entries }));
+        } else if (isPing) {
+          await client.send("NOOP");
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: true }));
         } else {
           const { stream, getBuffer } = createBufferSink();
           await client.downloadTo(stream, payload.path ?? "/");

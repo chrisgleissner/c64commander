@@ -1385,6 +1385,39 @@ describe("deviceInteractionManager", () => {
     ).resolves.toBe("new-device");
   });
 
+  it("PH10: resetInteractionState rejects queued config writes before stale device mutation", async () => {
+    const { resetInteractionState } = await import("@/lib/deviceInteraction/deviceInteractionManager");
+    const { ConfigWriteCancelledError, scheduleConfigWrite } = await import("@/lib/config/configWriteThrottle");
+    resetInteractionState("test");
+
+    let releaseRunning: (() => void) | null = null;
+    const runningHandler = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          releaseRunning = () => resolve("old-device-running");
+        }),
+    );
+    const staleHandler = vi.fn().mockResolvedValue("old-device-stale");
+
+    const running = scheduleConfigWrite(runningHandler);
+    await expect.poll(() => runningHandler.mock.calls.length).toBe(1);
+
+    const stale = scheduleConfigWrite(staleHandler);
+    const staleExpectation = expect(stale).rejects.toMatchObject({
+      name: "ConfigWriteCancelledError",
+      reason: "saved-device-switch",
+      isCancellation: true,
+    });
+
+    resetInteractionState("saved-device-switch");
+    releaseRunning?.();
+
+    await expect(running).resolves.toBe("old-device-running");
+    await staleExpectation;
+    await expect(stale).rejects.toBeInstanceOf(ConfigWriteCancelledError);
+    expect(staleHandler).not.toHaveBeenCalled();
+  });
+
   it("PH10: resetInteractionState rejects queued FTP and Telnet work as cancellation", async () => {
     const { withFtpInteraction, withTelnetInteraction, resetInteractionState } =
       await import("@/lib/deviceInteraction/deviceInteractionManager");

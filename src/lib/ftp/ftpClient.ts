@@ -12,6 +12,7 @@ import {
   FtpClient,
   type FtpEntry,
   type FtpListOptions,
+  type FtpPingOptions,
   type FtpReadOptions,
   type FtpWriteOptions,
 } from "@/lib/native/ftpClient";
@@ -331,5 +332,40 @@ export const writeFtpFile = async (
       traceContext: resolveNativeTraceContext(action),
     };
     return executeFtpWrite(action, optionsWithTrace, options.path, intent);
+  });
+};
+
+export const pingFtp = async (
+  options: FtpPingOptions & { __c64uIntent?: InteractionIntent },
+): Promise<{ ok: boolean }> => {
+  const { __c64uIntent, ...ftpOptions } = options;
+  const intent = __c64uIntent ?? "health";
+
+  return runWithImplicitAction("ftp.ping", async (action) => {
+    incrementFtpInFlight();
+    try {
+      return await withFtpInteraction(
+        {
+          action,
+          operation: "ping",
+          path: "/",
+          intent,
+          host: ftpOptions.host,
+          port: ftpOptions.port,
+        },
+        async () =>
+          await FtpClient.pingFtp(
+            withDefaultConnectTimeout({
+              ...ftpOptions,
+              traceContext: resolveNativeTraceContext(action),
+            }),
+          ),
+      );
+    } catch (error) {
+      addErrorLog("FTP ping failed", buildErrorLogDetails(error as Error, { host: ftpOptions.host }));
+      throw error;
+    } finally {
+      decrementFtpInFlight();
+    }
   });
 };

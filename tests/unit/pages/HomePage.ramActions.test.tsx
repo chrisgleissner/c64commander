@@ -537,6 +537,22 @@ describe("HomePage RAM actions", () => {
     await waitFor(() => expect(toastSpy).toHaveBeenCalledWith({ title: "Power cycled" }), { timeout: 5000 });
   });
 
+  it("keeps telnet quick actions visible before capability discovery completes", () => {
+    featureFlagsRef.current.home_telnet_power_cycle_enabled = true;
+    featureFlagsRef.current.home_telnet_clear_ram_reboot_enabled = true;
+    telnetState.getActionSupport.mockImplementation((actionId: string) => ({
+      actionId,
+      status: "unknown" as const,
+      reason: "Discovering Telnet actions on the connected device.",
+      target: null,
+    }));
+
+    renderHomePage();
+
+    expect(screen.getByRole("button", { name: /^power cycle$/i })).toBeInTheDocument();
+    expect(screen.getByTestId("home-machine-inline-rebootClearMemory")).toBeInTheDocument();
+  });
+
   it("runs clear-ram reboot through telnet when the flag is enabled", async () => {
     featureFlagsRef.current.home_telnet_clear_ram_reboot_enabled = true;
     renderHomePage();

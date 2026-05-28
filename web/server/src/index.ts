@@ -397,6 +397,46 @@ const handleFtpRead = async (req: IncomingMessage, res: ServerResponse, config: 
   }
 };
 
+const handleFtpPing = async (req: IncomingMessage, res: ServerResponse, config: AppConfig) => {
+  const payload = await readJsonBody<{
+    host?: string;
+    port?: number;
+    username?: string;
+    password?: string;
+  }>(req);
+  const requestedHost = sanitizeHost(payload.host) ?? config.defaultDeviceHost;
+  if (!allowRemoteFtpHosts && requestedHost !== config.defaultDeviceHost) {
+    writeJson(res, 403, { error: "FTP host override is disabled" });
+    return;
+  }
+  const host = requestedHost;
+  const ftp = new FtpClient();
+  ftp.ftp.verbose = false;
+  try {
+    await ftp.access({
+      host,
+      port: Number(payload.port ?? 21),
+      user: payload.username ?? "anonymous",
+      password: config.networkPassword ?? payload.password ?? "",
+      secure: false,
+    });
+    await ftp.send("NOOP");
+    writeJson(res, 200, { ok: true });
+  } catch (error) {
+    log("error", "FTP ping failed", {
+      host,
+      ...errorDetails(error),
+    });
+    writeJson(res, 502, { error: "FTP ping failed" });
+  } finally {
+    try {
+      ftp.close();
+    } catch (error) {
+      log("warn", "FTP close failed after ping", errorDetails(error));
+    }
+  }
+};
+
 const handleFtpWrite = async (req: IncomingMessage, res: ServerResponse, config: AppConfig) => {
   const payload = await readJsonBody<{
     host?: string;
@@ -577,6 +617,15 @@ export const startWebServer = async () => {
           return;
         }
         await handleFtpRead(req, res, config);
+        return;
+      }
+
+      if (pathname === "/api/ftp/ping") {
+        if (method !== "POST") {
+          writeJson(res, 405, { error: "Method not allowed" });
+          return;
+        }
+        await handleFtpPing(req, res, config);
         return;
       }
 

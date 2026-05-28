@@ -307,39 +307,18 @@ export function useTelnetActions(): TelnetActionsState {
       return;
     }
 
-    let cancelled = false;
-    setDiscoveryState("loading");
+    const cachedSnapshot = getCachedTelnetCapabilities(capabilityCacheKey, stableDeviceInfo);
+    if (cachedSnapshot) {
+      setCapabilities(cachedSnapshot);
+      setDiscoveryError(null);
+      setDiscoveryState("ready");
+      return;
+    }
+
+    setCapabilities(null);
     setDiscoveryError(null);
-
-    void loadCapabilities()
-      .then(({ snapshot }) => {
-        if (cancelled) return;
-        setCapabilities(snapshot);
-        setDiscoveryState("ready");
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        const message = (error as Error).message;
-        setCapabilities(null);
-        setDiscoveryError(message);
-        setDiscoveryState("error");
-        addLog("error", `${LOG_TAG}: capability discovery failed`, {
-          cacheKey: capabilityCacheKey,
-          error: message,
-        });
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    capability.isAvailable,
-    capability.menuKey,
-    capabilityCacheKey,
-    loadCapabilities,
-    stableDeviceInfo,
-    status.isConnected,
-  ]);
+    setDiscoveryState("idle");
+  }, [capability.isAvailable, capability.menuKey, capabilityCacheKey, stableDeviceInfo, status.isConnected]);
 
   useEffect(() => {
     if (
@@ -388,7 +367,24 @@ export function useTelnetActions(): TelnetActionsState {
         await runWithActionTrace(traceAction, async () => {
           const startedAt = Date.now();
           try {
-            const capabilityLoad = await loadCapabilities();
+            let capabilityLoad: TelnetCapabilityLoadResult;
+            try {
+              setDiscoveryState("loading");
+              setDiscoveryError(null);
+              capabilityLoad = await loadCapabilities();
+              setCapabilities(capabilityLoad.snapshot);
+              setDiscoveryState("ready");
+            } catch (error) {
+              const message = (error as Error).message;
+              setCapabilities(null);
+              setDiscoveryError(message);
+              setDiscoveryState("error");
+              addLog("error", `${LOG_TAG}: capability discovery failed`, {
+                cacheKey: capabilityCacheKey,
+                error: message,
+              });
+              throw error;
+            }
             discoveryTrace = capabilityLoad.trace;
             const support =
               capabilityLoad.snapshot.actionSupport[actionId as keyof typeof capabilityLoad.snapshot.actionSupport];
@@ -470,7 +466,7 @@ export function useTelnetActions(): TelnetActionsState {
         setActiveActionId(null);
       }
     },
-    [capability.isAvailable, capability.menuKey, loadCapabilities],
+    [capability.isAvailable, capability.menuKey, capabilityCacheKey, loadCapabilities],
   );
 
   return {

@@ -1,0 +1,5 @@
+# Block screenshots and test-artefact images from being committed
+*.png
+*.jpg
+*.jpeg
+*.gif
