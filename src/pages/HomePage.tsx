@@ -528,12 +528,12 @@ function HomePageContent() {
         error,
         context: isDeviceControlError(error)
           ? {
-            deviceControlOperation: error.operation,
-            transport: error.transport,
-            endpoint: error.endpoint,
-            request: error.request,
-            response: error.response,
-          }
+              deviceControlOperation: error.operation,
+              transport: error.transport,
+              endpoint: error.endpoint,
+              request: error.request,
+              response: error.response,
+            }
           : undefined,
       });
     } finally {
@@ -623,30 +623,30 @@ function HomePageContent() {
   const machineExtraActions = [
     ...(clearRamRebootVisible
       ? [
-        {
-          id: "rebootClearMemory",
-          label: "Reboot (Clr Mem)",
-          icon: Power,
-          variant: "danger" as const,
-          className: "border-destructive/40 bg-destructive/[0.04]",
-          onSelect: handleRebootClearMemory,
-          disabled: !isActive || machineTaskBusy || telnet.isBusy,
-          loading: telnet.activeActionId === "rebootClearMemory",
-        },
-      ]
+          {
+            id: "rebootClearMemory",
+            label: "Reboot (Clr Mem)",
+            icon: Power,
+            variant: "danger" as const,
+            className: "border-destructive/40 bg-destructive/[0.04]",
+            onSelect: handleRebootClearMemory,
+            disabled: !isActive || machineTaskBusy || telnet.isBusy,
+            loading: telnet.activeActionId === "rebootClearMemory",
+          },
+        ]
       : []),
     ...(reuSnapshotEnabled
       ? [
-        {
-          id: "saveReuMemory",
-          label: TELNET_ACTIONS.saveReuMemory.label,
-          icon: Save,
-          onSelect: handleSaveReu,
-          disabled: !isActive || machineTaskBusy || telnet.isBusy || saveReuDisabledReason !== null,
-          loading: telnet.activeActionId === "saveReuMemory",
-          reason: saveReuDisabledReason,
-        },
-      ]
+          {
+            id: "saveReuMemory",
+            label: TELNET_ACTIONS.saveReuMemory.label,
+            icon: Save,
+            onSelect: handleSaveReu,
+            disabled: !isActive || machineTaskBusy || telnet.isBusy || saveReuDisabledReason !== null,
+            loading: telnet.activeActionId === "saveReuMemory",
+            reason: saveReuDisabledReason,
+          },
+        ]
       : []),
   ];
 
