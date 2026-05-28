@@ -10,7 +10,10 @@ import type { FtpClientPlugin, FtpListOptions, FtpEntry, FtpReadOptions, FtpWrit
 import { getFtpBridgeUrl } from "@/lib/ftp/ftpConfig";
 
 const FTP_BRIDGE_TIMEOUT_MS = 5000;
-const FTP_BRIDGE_MAX_ATTEMPTS = 3;
+// Retry ownership lives in withFtpInteraction so all FTP pressure is visible
+// to the device-safety gateway. The web bridge layer performs one bounded
+// HTTP attempt per scheduled FTP operation.
+const FTP_BRIDGE_MAX_ATTEMPTS = 1;
 
 const isRetryableFtpBridgeFailure = (error: unknown, status?: number) => {
   const resolvedStatus = typeof status === "number" ? status : (error as { status?: number } | undefined)?.status;

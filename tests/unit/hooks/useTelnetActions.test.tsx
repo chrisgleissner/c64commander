@@ -272,15 +272,18 @@ describe("useTelnetActions", () => {
     discoverTelnetCapabilitiesSpy.mockResolvedValue(buildSnapshot());
   });
 
-  it("returns initial availability and loads discovery state", async () => {
+  it("returns initial availability without probing Telnet capabilities on launch", () => {
     const { result } = renderHook(() => useTelnetActions());
 
     expect(result.current.isBusy).toBe(false);
     expect(result.current.activeActionId).toBeNull();
     expect(result.current.isAvailable).toBe(true);
-
-    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
-    expect(discoverTelnetCapabilitiesSpy).toHaveBeenCalledTimes(1);
+    expect(result.current.discoveryState).toBe("idle");
+    expect(result.current.getActionSupport("powerCycle")).toMatchObject({
+      status: "unknown",
+      reason: "Telnet action discovery has not completed yet.",
+    });
+    expect(discoverTelnetCapabilitiesSpy).not.toHaveBeenCalled();
   });
 
   it("exposes unsupported action state from discovery", async () => {
@@ -295,6 +298,10 @@ describe("useTelnetActions", () => {
 
     const { result } = renderHook(() => useTelnetActions());
 
+    await expect(result.current.executeAction("powerCycle")).rejects.toMatchObject({
+      code: "UNSUPPORTED_ACTION",
+      message: "Power Cycle is not available on Ultimate 64 Elite 3.14e.",
+    });
     await waitFor(() => {
       expect(result.current.getActionSupport("powerCycle")).toMatchObject({
         status: "unsupported",
@@ -311,7 +318,9 @@ describe("useTelnetActions", () => {
 
     const { result } = renderHook(() => useTelnetActions());
 
-    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
+    await act(async () => {
+      await result.current.executeAction("powerCycle");
+    });
     expect(mockConnect).toHaveBeenCalledWith("u64", 23, undefined);
     expect(mockDisconnect).toHaveBeenCalled();
   });
@@ -319,7 +328,9 @@ describe("useTelnetActions", () => {
   it("runs capability discovery through the Telnet interaction scheduler", async () => {
     const { result } = renderHook(() => useTelnetActions());
 
-    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
+    await act(async () => {
+      await result.current.executeAction("powerCycle");
+    });
     expect(withTelnetInteractionSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         actionId: "capability-discovery",
@@ -341,12 +352,19 @@ describe("useTelnetActions", () => {
 
     const { result } = renderHook(() => useTelnetActions());
 
+    let actionPromise: Promise<void> | null = null;
+    await act(async () => {
+      actionPromise = result.current.executeAction("powerCycle");
+    });
+
     await waitFor(() => expect(result.current.discoveryState).toBe("loading"));
     expect(pollingPauseRegistry.isPollingPaused()).toBe(true);
 
     resolveDiscovery?.(buildSnapshot());
 
-    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
+    await act(async () => {
+      await actionPromise;
+    });
     expect(pollingPauseRegistry.isPollingPaused()).toBe(false);
   });
 
@@ -366,7 +384,7 @@ describe("useTelnetActions", () => {
     expect(discoverTelnetCapabilitiesSpy).not.toHaveBeenCalled();
   });
 
-  it("waits for device info before discovering capabilities and runs once after it appears", async () => {
+  it("waits for device info before allowing explicit capability discovery", async () => {
     statusRef.current = {
       ...statusRef.current,
       deviceInfo: null,
@@ -388,18 +406,23 @@ describe("useTelnetActions", () => {
     };
     rerender();
 
-    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
+    expect(result.current.discoveryState).toBe("idle");
+    expect(discoverTelnetCapabilitiesSpy).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.executeAction("powerCycle");
+    });
     expect(discoverTelnetCapabilitiesSpy).toHaveBeenCalledTimes(1);
 
     rerender();
     expect(discoverTelnetCapabilitiesSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("does not rediscover capabilities when identical device info is recreated on rerender", async () => {
+  it("does not discover capabilities when identical device info is recreated on rerender", () => {
     const { result, rerender } = renderHook(() => useTelnetActions());
 
-    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
-    expect(discoverTelnetCapabilitiesSpy).toHaveBeenCalledTimes(1);
+    expect(result.current.discoveryState).toBe("idle");
+    expect(discoverTelnetCapabilitiesSpy).not.toHaveBeenCalled();
 
     statusRef.current = {
       ...statusRef.current,
@@ -407,7 +430,8 @@ describe("useTelnetActions", () => {
     };
     rerender();
 
-    expect(discoverTelnetCapabilitiesSpy).toHaveBeenCalledTimes(1);
+    expect(result.current.discoveryState).toBe("idle");
+    expect(discoverTelnetCapabilitiesSpy).not.toHaveBeenCalled();
   });
 
   it("returns unavailable fallback support when telnet cannot run on the platform", () => {
@@ -428,6 +452,7 @@ describe("useTelnetActions", () => {
 
     const { result } = renderHook(() => useTelnetActions());
 
+    await expect(result.current.executeAction("powerCycle")).rejects.toThrow("capability lookup exploded");
     await waitFor(() => expect(result.current.discoveryState).toBe("error"));
     expect(result.current.discoveryError).toBe("capability lookup exploded");
     expect(result.current.getActionSupport("powerCycle")).toMatchObject({
@@ -440,10 +465,9 @@ describe("useTelnetActions", () => {
     });
   });
 
-  it("returns a default unknown support object for unrecognized action ids", async () => {
+  it("returns a default unknown support object for unrecognized action ids", () => {
     const { result } = renderHook(() => useTelnetActions());
 
-    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
     expect(result.current.getActionSupport("ghostAction")).toEqual({
       actionId: "ghostAction",
       status: "unknown",
@@ -454,8 +478,6 @@ describe("useTelnetActions", () => {
 
   it("executes a known telnet action through the discovered target", async () => {
     const { result } = renderHook(() => useTelnetActions());
-
-    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
 
     await act(async () => {
       await result.current.executeAction("powerCycle");
@@ -511,7 +533,6 @@ describe("useTelnetActions", () => {
     );
 
     const { result } = renderHook(() => useTelnetActions());
-    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
 
     await expect(
       act(async () => {
@@ -538,7 +559,6 @@ describe("useTelnetActions", () => {
   it("throws for unknown telnet action ids", async () => {
     const { result } = renderHook(() => useTelnetActions());
 
-    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
     await expect(result.current.executeAction("ghostAction")).rejects.toThrow("Unknown Telnet action: ghostAction");
   });
 
@@ -566,7 +586,6 @@ describe("useTelnetActions", () => {
     );
 
     const { result } = renderHook(() => useTelnetActions());
-    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
 
     await expect(result.current.executeAction("powerCycle")).rejects.toMatchObject({
       code: "DISCOVERY_FAILED",
@@ -579,7 +598,6 @@ describe("useTelnetActions", () => {
     mockExecute.mockRejectedValueOnce(new Error("boom"));
 
     const { result } = renderHook(() => useTelnetActions());
-    await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
 
     await expect(result.current.executeAction("powerCycle")).rejects.toThrow("boom");
     expect(recordTelnetOperationSpy).toHaveBeenCalledWith(
