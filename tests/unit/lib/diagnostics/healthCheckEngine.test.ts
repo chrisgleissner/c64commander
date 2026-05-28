@@ -1127,7 +1127,7 @@ describe("runHealthCheck — TELNET probe", () => {
     const result = await runHealthCheck();
 
     expect(result!.probes.TELNET.outcome).toBe("Success");
-    expect(mockTelnetSend).toHaveBeenCalledTimes(2);
+    expect(mockTelnetSend).toHaveBeenCalledTimes(1);
     expect(mockTelnetSend).toHaveBeenCalledWith(encodeTelnetText("\r\n"));
   });
 
@@ -1186,7 +1186,6 @@ describe("runHealthCheck — TELNET probe", () => {
             requestPayload: expect.objectContaining({
               steps: expect.arrayContaining([
                 expect.objectContaining({ type: "connect", host: "c64u.local", port: 23 }),
-                expect.objectContaining({ type: "send-raw", data: "\r\n" }),
               ]),
             }),
             responsePayload: expect.objectContaining({
@@ -1200,11 +1199,27 @@ describe("runHealthCheck — TELNET probe", () => {
     );
   });
 
-  it("elicits banner data with a plain CRLF after connecting", async () => {
+  it("does NOT send CRLF to Telnet when no password is configured", async () => {
     setupAllProbesSuccess();
 
     await runHealthCheck();
 
+    // Sending bare CRLF to c64u before banner exchange crashes the c64u REST listener (P0 fix).
+    expect(mockTelnetSend).not.toHaveBeenCalledWith(encodeTelnetText("\r\n"));
+  });
+
+  it("sends CRLF only when password was successfully sent (passwordSent=true)", async () => {
+    setupAllProbesSuccess();
+    vi.mocked(getC64APIConfigSnapshot).mockReturnValue({
+      deviceHost: "c64u.local",
+      password: "secret",
+    });
+    // Banner triggers password prompt, auth succeeds, then CRLF is safe to send
+    queueTelnetReads("Password:", new Uint8Array(0), new Uint8Array(0), "Storage Browser", new Uint8Array(0));
+
+    await runHealthCheck();
+
+    expect(mockTelnetSend).toHaveBeenCalledWith(encodeTelnetText("secret\r\n"));
     expect(mockTelnetSend).toHaveBeenCalledWith(encodeTelnetText("\r\n"));
   });
 });

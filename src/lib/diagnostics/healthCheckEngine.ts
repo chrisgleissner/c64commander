@@ -1043,7 +1043,9 @@ const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
             throw createAbortError();
           }
 
-          await transport.send(textEncoder.encode(TELNET_AUTH_ENTER));
+          if (authResult.passwordSent) {
+            await transport.send(textEncoder.encode(TELNET_AUTH_ENTER));
+          }
           finalVisibleText = mergeVisibleTelnetText(
             authResult.visibleText,
             await readTelnetVisibleText(transport, signal, {
@@ -1080,7 +1082,7 @@ const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
               steps: [
                 { type: "connect", host: runtime.host, port: runtime.telnetPort },
                 ...(authResult.passwordSent ? [{ type: "authenticate", passwordSent: true } as const] : []),
-                { type: "send-raw", data: TELNET_AUTH_ENTER },
+                ...(authResult.passwordSent ? [{ type: "send-raw", data: TELNET_AUTH_ENTER } as const] : []),
               ],
             },
             responsePayload: {
@@ -1108,7 +1110,7 @@ const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
               steps: [
                 { type: "connect", host: runtime.host, port: runtime.telnetPort },
                 ...(authResult.passwordSent ? [{ type: "authenticate", passwordSent: true } as const] : []),
-                { type: "send-raw", data: TELNET_AUTH_ENTER },
+                ...(authResult.passwordSent ? [{ type: "send-raw", data: TELNET_AUTH_ENTER } as const] : []),
               ],
             },
             responsePayload: {

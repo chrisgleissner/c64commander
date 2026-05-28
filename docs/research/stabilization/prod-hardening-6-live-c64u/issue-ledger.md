@@ -6,8 +6,11 @@ Every observed issue from the live Pixel 4 / `c64u` review will be recorded here
 
 | ID | Severity | Subsystem | Status |
 | -- | -- | -- | -- |
-| PH6-01 | P1 | Config writes / saved-device switching | Fixed; targeted tests pass |
-| PH6-02 | P1 | Web FTP bridge retry ownership | Fixed; targeted tests pass |
+| PH6-01 | P1 | Config writes / saved-device switching | Fixed; full HIL run confirms no stale write |
+| PH6-02 | P1 | Web FTP bridge retry ownership | Fixed; full HIL run confirms no excess FTP |
+| PH6-03 | P1 | Eager Telnet capability discovery on mount | Fixed; full HIL run confirms no mount Telnet |
+| PH6-04 | P0 | Unconditional CRLF to Telnet crashes c64u REST | **Fixed; PH6-04 regression tests pass; S3 passes in fixed-APK run** |
+| INC-S3 | P0 | c64u REST crash during S3 health check | **Reclassified: root cause is PH6-04 (app defect), not external. Fixed.** |
 
 ## PH6-01 - Queued Config Write Can Survive Saved-Device Switch
 
@@ -66,16 +69,35 @@ Every observed issue from the live Pixel 4 / `c64u` review will be recorded here
 - Proof: targeted test pass, included in `npm run test` passing run (578 files, 6677 tests).
 - Final status: **fixed; live validation confirmed no Telnet storms on S2–S14**.
 
-## INC-S3 - c64u REST Crash During Health Check (External)
+## PH6-04 - Unconditional CRLF to Telnet Port 23 Crashes c64u REST
 
-- Severity: **Not a defect** (external c64u instability)
-- Page/subsystem: Health check poller / c64u firmware REST listener
-- Observation: During S3 (diagnostics panel / saved-device picker), c64u REST returned `curl: (56) Recv failure: Connection reset by peer` AFTER a Telnet health probe.
-- FTP TCP (port 21) and Telnet TCP (port 23) remained reachable during the crash, confirming partial REST listener crash only.
-- The c64u firmware has a known pre-existing intermittent REST listener crash pattern that is independent of app behavior.
-- App action: None. No app traffic had been sent in S3 that would justify a REST crash. The app correctly showed a degraded badge and did not storm the device during degraded state.
-- User restarted c64u; all subsequent scenarios (S4–S14) passed without recurrence.
-- Disposition: External c64u instability. No app fix required. Documented for completeness.
+- Severity: **P0**
+- Page/subsystem: `src/lib/diagnostics/healthCheckEngine.ts` / Telnet health probe
+- Root cause: Line 1046 unconditionally sent `"\r\n"` (CRLF) to Telnet port 23 after `authenticateTelnetIfNeeded()`, regardless of whether the function actually sent a password. When no password is configured, `authenticateTelnetIfNeeded()` returns `{passwordSent: false}` via early return at line 964 — but line 1046 sent CRLF anyway. The c64u firmware interprets bare CRLF before IAC Telnet negotiation as a fatal protocol violation, crashing the HTTP/REST server process. All three listener surfaces (REST, FTP, Telnet) go offline.
+- Timeline from `logcat-s3-health-check.txt`:
+  - `15:12:20.356` Telnet TCP connect to port 23 succeeded.
+  - `15:12:20.361` CRLF sent unconditionally.
+  - `15:12:20.362` c64u: "Connection reset by peer".
+  - `15:12:20.428+` All REST calls: ECONNRESET.
+- Fix:
+  - `src/lib/diagnostics/healthCheckEngine.ts` line 1046: wrapped in `if (authResult.passwordSent) { ... }`.
+  - Lines 1083, 1111: `send-raw` trace steps also conditioned on `passwordSent`.
+- Regression tests added (`tests/unit/lib/diagnostics/healthCheckEngine.test.ts`):
+  - "does NOT send CRLF when no password configured" — asserts `transport.send` called 0 times (down from 1).
+  - "sends CRLF only when passwordSent=true" — verifies gate works both directions.
+- Proof: 69 health-check engine tests pass. Fixed-APK run S3 PASS with REST_EXIT:0 pre and post.
+- Final status: **P0 FIXED** ✅
+
+## INC-S3 - c64u REST Crash During S3 Health Check
+
+- Original severity: ~~Not a defect (external)~~ → **Reclassified: P0 app defect (FIXED by PH6-04)**
+- Page/subsystem: Health check poller — `src/lib/diagnostics/healthCheckEngine.ts`
+- Observation: During the first (unfixed) run S3, c64u REST crashed with `curl: (56)` immediately after a Telnet health probe.
+- Initial classification was "external c64u instability" — **this was incorrect**.
+- Confirmed root cause: PH6-04 (see above). The unconditional CRLF from `healthCheckEngine.ts` caused the c64u REST process to crash.
+- Evidence of fix effectiveness: In the fixed-APK run, S3 (health check cycle) completed with all sub-checks passing (REST/FTP/Telnet/Config/Raster SUCCESS) and POST_REST_EXIT:0. No crash.
+- Logcat evidence: `logcat-s3-health-check.txt` (crash; 7611 lines) vs `logcat-s3-health-check-fixed.txt` (clean; 801 lines).
+- Final status: **P0 FIXED** ✅
 
 ## INC-TURBO - Accidental Turbo Control Toggle During S5 (P3)
 

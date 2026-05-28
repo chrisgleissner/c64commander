@@ -54,3 +54,58 @@ All scenarios executed Pixel 4 `9B081FFAZ001WX` ↔ `c64u` firmware 1.1.0.
 - 1 exception: S3 (diagnostics panel / health check cycle). REST failed AFTER scenario. The REST crash occurred after a Telnet health probe; the c64u REST listener has a known pre-existing intermittent crash pattern (exit 56, ECONNRESET). FTP and Telnet TCP remained reachable during that crash, confirming it is the REST process, not a full device freeze. Classified external — c64u-side instability, NOT an app defect. No app request storm was found that caused or plausibly contributed to the crash.
 - After S3 the user manually restarted c64u; REST recovered. All subsequent scenarios (S4–S14) passed with REST healthy before and after each scenario.
 - c64u survived app force-stop (S14): REST_EXIT:0 immediately after force-stop confirms no app-caused crash from connection teardown.
+
+---
+
+## Fixed-APK Run (PH6-04 Applied)
+
+### APK
+
+- Path: `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk`
+- Built after PH6-04 fix.
+- Installed on Pixel 4 `9B081FFAZ001WX` (uninstall + fresh install).
+- Package: `uk.gleissner.c64commander` version 0.7.9-rc1.
+
+### Pre-HIL Baseline — Fixed Run
+
+- REST: healthy. firmware_version "1.1.0". REST_EXIT:0.
+- FTP TCP: FTP_TCP_EXIT:0.
+- Telnet TCP: TELNET_TCP_EXIT:0.
+- c64u firmware: 1.1.0, fpga 122, core 1.49.
+- All listeners operational. Fixed-APK run proceeds.
+
+### Live Scenario Matrix — Fixed APK
+
+All scenarios executed Pixel 4 `9B081FFAZ001WX` ↔ `c64u` firmware 1.1.0.
+
+| Scenario | PRE REST_EXIT | POST REST_EXIT | Logcat | Result |
+|----------|---------------|----------------|--------|--------|
+| S1: Cold app launch | 0 ✅ | 0 ✅ | logcat-s1-cold-launch-fixed.txt (557 lines) | PASS |
+| S2: Settings page | 0 ✅ | 0 ✅ | logcat-s2-settings-fixed.txt (185 lines) | PASS |
+| S3: Health check cycle (PH6-04 verified) | 0 ✅ | 0 ✅ | logcat-s3-health-check-fixed.txt (801 lines) | **PASS** ✅ |
+| S4: Home page | 0 ✅ | 0 ✅ | logcat-s4-home-fixed.txt (1025 lines) | PASS |
+| S5: Case light brightness slider | 0 ✅ | 0 ✅ | logcat-s5-brightness-fixed.txt (3025 lines) | PASS |
+| S6: WASD toggle ON→OFF→ON | 0 ✅ | 0 ✅ | logcat-s6-wasd-toggle-fixed.txt (143 lines) | PASS |
+| S7: Config Audio Mixer slider | 0 ✅ | 0 ✅ | logcat-s7-config-fixed.txt (1082 lines) | PASS |
+| S8: Play page opens | 0 ✅ | 0 ✅ | logcat-s8-play-fixed.txt (2276 lines) | PASS |
+| S9: Volume slider + mute/unmute | 0 ✅ | 0 ✅ | logcat-s9-volume-fixed.txt (599 lines) | PASS |
+| S10: Play C64U source browsing | 0 ✅ | 0 ✅ | logcat-s10-play-source-fixed.txt (4232 lines) | PASS |
+| S11: Disks page opens | 0 ✅ | 0 ✅ | logcat-s11-disks-fixed.txt (244 lines) | PASS |
+| S12: Disks C64U source browsing | 0 ✅ | 0 ✅ | logcat-s12-disks-source-fixed.txt (608 lines) | PASS |
+| S13: App background / foreground | 0 ✅ | 0 ✅ | logcat-s13-bgfg-fixed.txt (611 lines) | PASS |
+| S14: Force-stop + REST probe | 0 ✅ | 0 ✅ | logcat-s14-forcestop-fixed.txt (184 lines) | PASS |
+
+### c64u Health Summary — Fixed Run
+
+**14/14 scenarios PASS. c64u firmware 1.1.0 remained fully healthy throughout the entire fixed-APK run.**
+
+- S3 specifically confirms PH6-04 fix: health check cycle completed without crashing the c64u REST server.
+- No CRLF was sent to Telnet port 23 when no password was configured; REST_EXIT:0 both PRE and POST S3.
+- Contrast with first (unfixed) run where S3 caused REST_EXIT:56 (crash) at 15:12:20.
+
+### First-Run S3 Crash vs Fixed-Run S3 Comparison
+
+| Run | Logcat | S3 PRE | S3 POST | c64u status after S3 |
+|-----|--------|--------|---------|----------------------|
+| Unfixed | logcat-s3-health-check.txt (7611 lines) | EXIT:0 | EXIT:56 | Crashed; all listeners offline |
+| Fixed (PH6-04) | logcat-s3-health-check-fixed.txt (801 lines) | EXIT:0 | EXIT:0 | Healthy; all listeners operational |

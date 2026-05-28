@@ -85,3 +85,36 @@ Resuming after prior session completed all 14 live scenarios. Remaining: documen
 - [x] PLANS.md: this entry — DONE
 - [x] Final npm run test:coverage — DONE (91.66% branches ≥91%)
 - [x] Final git commit — PENDING
+
+---
+
+## CONTINUATION 4 — PH6-04 Root Cause, Fix, and Fixed-APK HIL Run (2026-05-28)
+
+Resuming after repeated c64u outages during first live HIL run. Root cause identified and fixed.
+
+### Tasks
+
+- [x] Investigate c64u crash root cause — unconditional CRLF in `healthCheckEngine.ts` line 1046 — DONE
+- [x] Reclassify INC-S3 from "external" to P0 app defect (PH6-04) — DONE
+- [x] Implement PH6-04 fix: conditional CRLF on `authResult.passwordSent` — DONE
+- [x] Add regression tests ("no CRLF without password", "CRLF only when passwordSent") — DONE
+- [x] npm run test — 6678 tests pass — DONE
+- [x] npm run lint — pass — DONE
+- [x] npm run build — pass — DONE
+- [x] npm run test:coverage — 91.65% branch ≥91% — DONE
+- [x] npm run cap:build — pass — DONE
+- [x] cd android && ./gradlew assembleDebug — c64commander-0.7.9-rc1-debug.apk — DONE
+- [x] Install fixed APK on Pixel 4 9B081FFAZ001WX — DONE
+- [x] Establish pre-HIL baseline for fixed APK run — REST_EXIT:0, FTP_TCP_EXIT:0, TELNET_TCP_EXIT:0 — DONE
+- [x] Execute full S1–S14 HIL matrix with fixed APK — all 14 PASS, c64u healthy throughout — DONE
+- [x] Save logcat files with -fixed suffix — all 14 saved — DONE
+- [x] Update WORKLOG.md — P0 root cause + fixed-run S1-S14 matrix appended — DONE
+- [x] Update issue-ledger.md — INC-S3 reclassified, PH6-04 entry added — DONE
+- [x] Update android-live-results.md — fixed-run matrix appended — DONE
+- [x] Update pr-desc.md — PH6-04 fix added, live validation updated — DONE
+- [x] Update PLANS.md — this section — DONE
+- [ ] Final git commit — PENDING
+
+### Current Blockers
+
+- None. All evidence complete. Commit pending.
