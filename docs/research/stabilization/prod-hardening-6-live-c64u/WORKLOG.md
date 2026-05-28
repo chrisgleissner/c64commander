@@ -498,3 +498,62 @@ All logcat files have `-fixed` suffix to distinguish from first (unfixed) run.
 | S14 | Force-stop + REST probe | 0 ✅ | 0 ✅ | PASS |
 
 **14/14 scenarios PASS. c64u firmware 1.1.0 remained fully healthy throughout the fixed-APK run.**
+
+---
+
+## CONTINUATION 5 — PH6-05 FTP PCB Exhaustion Fix, PNG Removal, Docs Finalization (2026-05-28)
+
+Resuming after c64u degraded again post-HIL. Prior session (continuation 4) had already completed the 14/14 fixed-APK HIL matrix but c64u degraded from bare TCP probes being used on developer machine — these exhaust c64u's lwIP PCB pool even without an app present.
+
+### Root cause: PH6-05 (FTP probe PASV channel exhaustion)
+
+- `probeFtp()` in `healthCheckEngine.ts` called `listFtpDirectory()` which opens a PASV data channel.
+- PASV = 2 TCP connections per call (control + data channel).
+- Health checks run every ~10s for all saved devices.
+- TIME_WAIT connections filled c64u's lwIP `MEMP_NUM_TCP_PCB` pool (~16 slots).
+- All TCP listeners became nonresponsive (REST + FTP + Telnet all exit non-zero).
+
+### Fix implemented
+
+- Added `pingFtp()`: control-channel-only probe (connect → login → NOOP → disconnect, no PASV).
+- New `FtpClientPlugin.pingFtp()` Kotlin @PluginMethod added.
+- `probeFtp()` switched to `pingFtp()`.
+- Committed: `90f4bf5a` — fix(ftp): PH6-05 replace listFtpDirectory with pingFtp in health check FTP probe
+
+### PNG removal
+
+- `c1a3a617` — chore: remove screenshots from PH6 evidence directory (15 PNGs removed)
+- `0bb680da` — chore: block PNG/image additions in PH6 evidence directory (.gitignore added)
+
+### Validation runs this session
+
+```
+npx vitest run --project unit-jsdom tests/unit/lib/diagnostics/ → PASS
+npx vitest run --project unit-jsdom tests/unit/lib/ftp/ → PASS
+npx vitest run --project unit-jsdom tests/unit/lib/native/ → PASS
+npx vitest run --project unit-node → 983 tests PASS
+npm run cap:build → PASS
+./build --skip-tests --install-apk → PASS (APK: c64commander-0.7.9-rc1-debug.apk, Pixel 4: 9B081FFAZ001WX)
+```
+
+### c64u state
+
+- c64u was degraded (REST_EXIT:56) at start of this session — pre-existing from prior session, not caused by this session.
+- HIL 14/14 already confirmed complete from continuation 4 (fixed-APK run).
+- No new HIL required: PH6-05 is purely a health-probe frequency/protocol fix (no new app scenarios needed).
+
+### CRITICAL PROBE RULE
+
+NEVER use bare TCP probes (`timeout 5 bash -lc '</dev/tcp/c64u/21>'`) from developer machine against c64u — these exhaust c64u's lwIP PCB pool identically to the app bug. ALL c64u probes from developer machine must use ONLY: `curl --max-time 5 http://c64u/v1/info`
+
+### Documentation updates
+
+- pr-desc.md: PH6-05 section added; summary updated to "Five targeted safety fixes"; Files Changed extended.
+- PLANS.md: CONTINUATION 5 appended.
+- WORKLOG.md: this entry.
+
+### Git state at end of session
+
+Branch: feat/prod-hardening-6
+Unpushed commits (3): 0bb680da, 90f4bf5a, c1a3a617
+Working tree: pending commit of documentation updates (WORKLOG, PLANS, pr-desc)

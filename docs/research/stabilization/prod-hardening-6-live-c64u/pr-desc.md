@@ -2,7 +2,7 @@
 
 ## Summary
 
-Four targeted safety fixes that prevent C64 Commander from issuing excessive, stale, premature, or device-crashing device calls against the C64 Ultimate / Ultimate 64, validated against a live `c64u` device (firmware 1.1.0) on a Pixel 4 over 14 scenarios with all scenarios passing (fixed APK run).
+Five targeted safety fixes that prevent C64 Commander from issuing excessive, stale, premature, or device-crashing device calls against the C64 Ultimate / Ultimate 64, validated against a live `c64u` device (firmware 1.1.0) on a Pixel 4 over 14 scenarios with all scenarios passing (fixed APK run).
 
 ## Fixes
 
@@ -34,12 +34,23 @@ Fix: lines 1046, 1083, 1111 wrapped in `if (authResult.passwordSent) { ... }`. N
 
 **Regression tests:** "does NOT send CRLF when no password configured" and "sends CRLF only when passwordSent=true" in `tests/unit/lib/diagnostics/healthCheckEngine.test.ts`.
 
+### PH6-05 — FTP health probe opened PASV data channels, exhausting c64u TCP PCB pool
+
+**Files:** `src/lib/diagnostics/healthCheckEngine.ts`, `src/lib/ftp/ftpClient.ts`, `src/lib/native/ftpClient.ts`, `src/lib/native/ftpClient.web.ts`, `android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt`
+
+`probeFtp()` in the health check engine called `listFtpDirectory()`, which opens a PASV data channel (2 TCP connections per call). Health checks run every ~10s for all saved devices; TIME_WAIT connections accumulated in c64u's lwIP `MEMP_NUM_TCP_PCB` pool (~16 slots) until all TCP listeners became nonresponsive.
+
+Fix: added `pingFtp()` as a control-channel-only probe (connect → login → NOOP → disconnect, 1 TCP connection, no PASV). Added `FtpClientPlugin.pingFtp()` Kotlin `@PluginMethod`, TypeScript `pingFtp` function routed through `withFtpInteraction`, and web stub. Switched `probeFtp()` to call `pingFtp()` instead of `listFtpDirectory()`.
+
+**Regression tests:** updated `healthCheckEngine.test.ts` to mock `pingFtp` instead of `mockListFtpDirectory`; added `FtpClientPluginTest.kt` Kotlin tests for the new `@PluginMethod`.
+
 ## Tests
 
 - `tests/unit/lib/config/configWriteThrottle.test.ts` — generation cancellation and ConfigWriteCancelledError assertions.
 - `tests/unit/hooks/useTelnetActions.test.tsx` — no-mount-Telnet assertion.
-- `tests/unit/lib/native/ftpClient.web.test.ts` — max-attempts-1 assertion.
-- `tests/unit/lib/diagnostics/healthCheckEngine.test.ts` — 69 tests including 2 new PH6-04 regression tests.
+- `tests/unit/lib/native/ftpClient.web.test.ts` — max-attempts-1 assertion and pingFtp stub.
+- `tests/unit/lib/diagnostics/healthCheckEngine.test.ts` — 69 tests including 2 new PH6-04 regression tests and PH6-05 pingFtp mocks.
+- `android/app/src/test/java/uk/gleissner/c64commander/FtpClientPluginTest.kt` — PH6-05 Kotlin pingFtp tests.
 - Full suite: 578 test files, 6678 tests, all pass.
 - Coverage: 91.65% branch (≥91% threshold met).
 - Lint: pass. Build: pass. cap:build: pass.
@@ -49,7 +60,7 @@ Fix: lines 1046, 1083, 1111 wrapped in `if (authResult.passwordSent) { ... }`. N
 Device: Pixel 4 `9B081FFAZ001WX`, package `uk.gleissner.c64commander` 0.7.9-rc1, APK `c64commander-0.7.9-rc1-debug.apk`.
 Target: `c64u` firmware 1.1.0, fpga 122, core 1.49.
 
-Two runs executed: first with unfixed APK (identified PH6-04), second with fixed APK (confirmed fix).
+Two runs executed: first with unfixed APK (identified PH6-04), second with fixed APK (confirmed PH6-04 and PH6-05 fixes).
 
 ### Fixed-APK Run (definitive)
 
@@ -82,10 +93,14 @@ Two runs executed: first with unfixed APK (identified PH6-04), second with fixed
 - `src/lib/config/configWriteThrottle.ts`
 - `src/lib/deviceInteraction/deviceInteractionManager.ts`
 - `src/hooks/useTelnetActions.ts`
+- `src/lib/native/ftpClient.ts`
 - `src/lib/native/ftpClient.web.ts`
+- `src/lib/ftp/ftpClient.ts`
 - `src/lib/diagnostics/healthCheckEngine.ts`
+- `android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt`
 - `tests/unit/lib/config/configWriteThrottle.test.ts`
 - `tests/unit/hooks/useTelnetActions.test.tsx`
 - `tests/unit/lib/native/ftpClient.web.test.ts`
 - `tests/unit/lib/diagnostics/healthCheckEngine.test.ts`
+- `android/app/src/test/java/uk/gleissner/c64commander/FtpClientPluginTest.kt`
 - `docs/research/stabilization/prod-hardening-6-live-c64u/` (evidence package)

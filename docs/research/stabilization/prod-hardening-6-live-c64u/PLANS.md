@@ -118,3 +118,39 @@ Resuming after repeated c64u outages during first live HIL run. Root cause ident
 ### Current Blockers
 
 - None. All evidence complete. Commit pending.
+
+---
+
+## CONTINUATION 5 — PH6-05 FTP PCB Pool Exhaustion Fix, PNG Removal, Branch Push (2026-05-28)
+
+Resuming after c64u degraded again during post-HIL validation. Root cause: FTP health probe opened PASV data channels (2 TCP connections/call), exhausting c64u's lwIP PCB pool.
+
+### Tasks
+
+- [x] Diagnose c64u TCP PCB pool exhaustion from `listFtpDirectory` PASV channels — DONE
+- [x] Add `pingFtp()` (control-channel only: connect+login+NOOP+disconnect, no PASV) — DONE
+  - TypeScript: `src/lib/ftp/ftpClient.ts`, `src/lib/native/ftpClient.ts`, `src/lib/native/ftpClient.web.ts`
+  - Kotlin: `android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt`
+- [x] Switch `probeFtp()` in `healthCheckEngine.ts` to `pingFtp()` — DONE
+- [x] Update `healthCheckEngine.test.ts` to mock `pingFtp` instead of `listFtpDirectory` — DONE
+- [x] Add Kotlin tests in `FtpClientPluginTest.kt` — DONE
+- [x] Commit PH6-05 fix: `90f4bf5a` — DONE
+- [x] Remove PNGs from evidence directory (`chore: remove screenshots from PH6 evidence directory`): `c1a3a617` — DONE
+- [x] Add `.gitignore` blocking future PNGs in evidence dir: `0bb680da` — DONE
+- [x] Update pr-desc.md: PH6-05 section + Files Changed updated — DONE
+- [x] All unit-jsdom tests pass (run by directory group) — DONE
+- [x] All unit-node tests (983) pass — DONE
+- [x] npm run cap:build — PASS — DONE
+- [x] ./build --skip-tests --install-apk — PASS, APK on Pixel 4 9B081FFAZ001WX — DONE
+- [x] HIL 14/14 PASS confirmed (completed in prior continuation) — DONE
+- [ ] Append WORKLOG.md with continuation 5 activity — PENDING
+- [ ] Final git commit of evidence docs — PENDING
+- [ ] Push branch to origin — PENDING
+
+### CRITICAL PROBE RULE (documented here for future operators)
+
+NEVER use bare TCP probes (`timeout 5 bash -lc '</dev/tcp/c64u/21>'`) from developer machine — these also exhaust c64u's lwIP PCB pool. ALL c64u health probes from developer machine must use ONLY: `curl --max-time 5 http://c64u/v1/info`
+
+### Current Blockers
+
+- None. Ready to commit and push.
