@@ -49,15 +49,15 @@ No live scenario revealed behavior inconsistent with the intended safety model.
 
 ### 8. c64u liveness
 
-c64u survived all 14 scenarios in the fixed-APK validation run. The single REST outage observed earlier in S3 was reclassified as PH6-04: an app-caused defect in `healthCheckEngine.ts` that unconditionally sent bare CRLF to Telnet port 23 when no password was configured. That defect is fixed in this PR.
+c64u survived all 14 scenarios in the fixed-APK validation run. The single REST outage observed earlier in S3 was reclassified as PH6-04: an app-caused defect in `healthCheckEngine.ts` that emitted bare CRLF to Telnet port 23 without first proving that a password prompt had been observed and answered. The follow-up hardening now matches the normal Telnet session behavior: no CRLF is sent unless the probe actually saw `Password:` and sent credentials.
 
 ### 9. App-caused crash evidence
 
 One app-caused crash was identified and fixed in this PR:
 
-- S3 from the first live run was caused by the app's unconditional post-auth CRLF in the Telnet health probe even when `authenticateTelnetIfNeeded()` returned early with `passwordSent: false`.
+- S3 from the first live run was caused by the app sending bare CRLF during the Telnet health probe without a confirmed authenticated prompt path.
 - FTP and Telnet TCP surviving while REST crashed helped isolate the failure to the c64u REST process rather than a full device freeze.
-- The root cause is now fixed by gating CRLF emission on `authResult.passwordSent`.
+- The root cause is now fixed by removing prompt-discovery CRLF entirely and still gating all remaining CRLF emission on `authResult.passwordSent`.
 - The fixed APK re-ran S3 and the full 14-scenario suite with no recurrence.
 
 ### 10. No bypass found
@@ -71,4 +71,4 @@ Static scan and live evidence confirm:
 
 ## Conclusion
 
-The request safety model is sound after PH6-01 through PH6-04. Live validation confirms no bypass, no request storm, and no remaining app-caused c64u instability across the fixed-APK 14-scenario run. The earlier S3 outage is now understood as PH6-04, a concrete app defect that this PR fixes.
+The request safety model is sound after PH6-01 through PH6-04. Live validation confirms no bypass, no request storm, and no remaining app-caused c64u instability across the fixed-APK 14-scenario run. The earlier S3 outage is now understood as PH6-04, a concrete app defect whose Telnet health-check path has been tightened so it no longer sends any bare CRLF before a confirmed password-prompt/authentication exchange.

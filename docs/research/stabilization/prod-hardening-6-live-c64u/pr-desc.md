@@ -24,15 +24,15 @@ A queued config write from the previously-selected device could fire after the u
 
 A `useEffect` eagerly called `loadCapabilities()` on every mount (and reconnect), firing Telnet traffic with no user action. Removed the eager call; capability discovery is now deferred to the first `executeAction()` invocation and cached normally.
 
-### PH6-04 — Unconditional CRLF to Telnet port 23 crashes c64u REST server
+### PH6-04 — Bare Telnet CRLF crashes c64u REST server
 
 **File:** `src/lib/diagnostics/healthCheckEngine.ts`
 
-A bare `"\r\n"` (CRLF) was sent to Telnet port 23 unconditionally on every health check cycle, regardless of whether a password was configured. `authenticateTelnetIfNeeded()` returns `{passwordSent: false}` via early return when no password is set — but line 1046 sent CRLF anyway. The c64u firmware interprets bare CRLF before IAC Telnet negotiation as a fatal protocol violation, crashing its HTTP/REST server process (exit 56, ECONNRESET on all subsequent REST calls). This was the root cause of all three observed c64u outages during the first live HIL run.
+A bare `"\r\n"` (CRLF) was sent to Telnet port 23 from the health-check path before the app had proved there was an authenticated prompt flow. The original defect was the unconditional post-auth CRLF when `authenticateTelnetIfNeeded()` returned `{ passwordSent: false }`. A second unsafe branch was that the probe also tried to discover a prompt by reading and then proceeding without requiring an observed `Password:` banner. The c64u firmware interprets bare CRLF before successful Telnet negotiation as a fatal protocol violation, crashing its HTTP/REST server process (exit 56, ECONNRESET on subsequent REST calls).
 
-Fix: lines 1046, 1083, 1111 wrapped in `if (authResult.passwordSent) { ... }`. No CRLF is sent unless the authentication path actually sent a password.
+Fix: the health-check probe now behaves like the normal Telnet session path. If no `Password:` prompt is observed, it returns immediately without sending CRLF. Any remaining CRLF/send-raw steps are still wrapped in `if (authResult.passwordSent) { ... }`. No CRLF is sent unless the probe actually saw `Password:` and sent a password.
 
-**Regression tests:** "does NOT send CRLF when no password configured" and "sends CRLF only when passwordSent=true" in `tests/unit/lib/diagnostics/healthCheckEngine.test.ts`.
+**Regression tests:** "does NOT send CRLF when no password configured", "does not send prompt-discovery CRLF when no password prompt is observed", and "sends CRLF only when passwordSent=true" in `tests/unit/lib/diagnostics/healthCheckEngine.test.ts`.
 
 ### PH6-05 — FTP health probe opened PASV data channels, exhausting c64u TCP PCB pool
 
