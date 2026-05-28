@@ -388,4 +388,92 @@ describe("usePlaybackController play transition supersession", () => {
     expect(setIsPlaying).toHaveBeenCalledWith(true);
     expect(setIsPaused).toHaveBeenCalledWith(false);
   });
+
+  it("cleans up a pending user skip when the controller unmounts", async () => {
+    vi.useFakeTimers();
+    const firstItem = createPlaylistItem("track-a", "/PROGRAMS/track-a.prg");
+    const secondItem = createPlaylistItem("track-b", "/PROGRAMS/track-b.prg");
+    const playlist = [firstItem, secondItem];
+    const setCurrentIndex = vi.fn();
+    const setIsPlaying = vi.fn();
+    const setIsPaused = vi.fn();
+    const setElapsedMs = vi.fn();
+    const setPlayedMs = vi.fn();
+    const setDurationMs = vi.fn();
+    const setCurrentSubsongCount = vi.fn();
+    const setTrackInstanceId = vi.fn();
+    const setAutoAdvanceDueAtMs = vi.fn();
+    const enqueuePlayTransition = vi.fn(async (task: () => Promise<void>) => task());
+
+    const { result, unmount } = renderHook(() =>
+      usePlaybackController({
+        playlist,
+        setPlaylist: vi.fn(),
+        currentIndex: 0,
+        setCurrentIndex,
+        isPlaying: false,
+        setIsPlaying,
+        isPaused: false,
+        setIsPaused,
+        setIsPlaylistLoading: vi.fn(),
+        elapsedMs: 0,
+        setElapsedMs,
+        playedMs: 0,
+        setPlayedMs,
+        durationMs: undefined,
+        setDurationMs,
+        setCurrentSubsongCount,
+        setTrackInstanceId,
+        repeatEnabled: false,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+        deviceProduct: "C64 Ultimate",
+        ensurePlaybackConnection: vi.fn().mockResolvedValue(undefined),
+        resolveSonglengthDurationMsForPath: vi.fn().mockResolvedValue(null),
+        applySonglengthsToItems: vi.fn().mockImplementation(async (items) => items),
+        restoreVolumeOverrides: vi.fn().mockResolvedValue(undefined),
+        applyAudioMixerUpdates: vi.fn().mockResolvedValue(undefined),
+        buildEnabledSidMuteUpdates: vi.fn().mockReturnValue({}),
+        captureSidMuteSnapshot: vi.fn().mockReturnValue({ volumes: {}, enablement: {} }),
+        snapshotToUpdates: vi.fn().mockReturnValue({}),
+        resolveEnabledSidVolumeItems: vi.fn().mockResolvedValue([]),
+        dispatchVolume: vi.fn(),
+        sidEnablement: {} as never,
+        pauseMuteSnapshotRef: { current: null },
+        pausingFromPauseRef: { current: false },
+        resumingFromPauseRef: { current: false },
+        ensureUnmuted: vi.fn().mockResolvedValue(undefined),
+        playedClockRef: {
+          current: {
+            start: vi.fn(),
+            stop: vi.fn(),
+            pause: vi.fn(),
+            resume: vi.fn(),
+            reset: vi.fn(),
+            current: vi.fn().mockReturnValue(0),
+          },
+        },
+        trackStartedAtRef: { current: null },
+        trackInstanceIdRef: { current: 0 },
+        autoAdvanceGuardRef: { current: null },
+        playStartInFlightRef: { current: false },
+        cancelAutoAdvance: vi.fn(),
+        enqueuePlayTransition,
+        durationSeconds: 45,
+        setAutoAdvanceDueAtMs,
+        trace: (fn: (...args: unknown[]) => unknown) => fn,
+      }),
+    );
+
+    const pendingSkip = result.current.handleNext("user");
+    unmount();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(USER_TRANSPORT_COALESCE_MS);
+    });
+
+    await expect(pendingSkip).resolves.toBeUndefined();
+    expect(enqueuePlayTransition).not.toHaveBeenCalled();
+    expect(executePlayPlan).not.toHaveBeenCalled();
+  });
 });

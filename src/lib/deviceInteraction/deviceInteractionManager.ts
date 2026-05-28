@@ -139,7 +139,7 @@ class InteractionScheduler {
   constructor(
     private readonly maxConcurrency: () => number,
     private readonly label: string = "scheduler",
-  ) {}
+  ) { }
 
   schedule<T>(task: QueueTask<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
@@ -264,7 +264,6 @@ const updateConfig = () => {
   config = loadDeviceSafetyConfig();
   restCache.clear();
   restCooldownUntil.clear();
-  ftpCooldownUntil.clear();
   ftpConnectCooldownUntil.clear();
   restInflight.clear();
   ftpInflight.clear();
@@ -286,7 +285,6 @@ export const resetInteractionState = (reason: string) => {
   restCache.clear();
   restCooldownUntil.clear();
   restInflight.clear();
-  ftpCooldownUntil.clear();
   ftpConnectCooldownUntil.clear();
   ftpInflight.clear();
   restErrorStreak = 0;
@@ -330,7 +328,6 @@ const restInflight = new Map<string, Promise<unknown>>();
 const restCooldownUntil = new Map<string, number>();
 
 const ftpInflight = new Map<string, Promise<unknown>>();
-const ftpCooldownUntil = new Map<string, number>();
 const ftpConnectCooldownUntil = new Map<string, number>();
 
 let restErrorStreak = 0;
@@ -761,15 +758,15 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
     run: scheduleTask,
     getReadyAtMs: defersReadWaitsInScheduler
       ? () => {
-          let readyAtMs = Date.now();
-          if (!meta.bypassBackoff) {
-            readyAtMs = Math.max(readyAtMs, restBackoffUntilMs);
-          }
-          if (!meta.bypassCooldown && policy.key && policy.cooldownMs > 0) {
-            readyAtMs = Math.max(readyAtMs, restCooldownUntil.get(policy.key) ?? 0);
-          }
-          return readyAtMs;
+        let readyAtMs = Date.now();
+        if (!meta.bypassBackoff) {
+          readyAtMs = Math.max(readyAtMs, restBackoffUntilMs);
         }
+        if (!meta.bypassCooldown && policy.key && policy.cooldownMs > 0) {
+          readyAtMs = Math.max(readyAtMs, restCooldownUntil.get(policy.key) ?? 0);
+        }
+        return readyAtMs;
+      }
       : undefined,
   });
 
@@ -869,10 +866,6 @@ export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () =>
         waitMs,
       });
       await sleep(waitMs);
-    }
-
-    if (config.ftpListCooldownMs > 0) {
-      ftpCooldownUntil.set(key, Date.now() + config.ftpListCooldownMs);
     }
 
     let attempt = 0;
