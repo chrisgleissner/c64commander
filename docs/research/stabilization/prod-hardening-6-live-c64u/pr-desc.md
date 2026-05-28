@@ -64,22 +64,22 @@ Two runs executed: first with unfixed APK (identified PH6-04), second with fixed
 
 ### Fixed-APK Run (definitive)
 
-| # | Scenario | PRE REST | POST REST | Result |
-|---|----------|----------|-----------|--------|
-| S1 | Cold app launch (c64u selected) | 0 ✅ | 0 ✅ | PASS |
-| S2 | Settings page | 0 ✅ | 0 ✅ | PASS |
-| S3 | Diagnostics panel / health cycle (PH6-04 verified) | 0 ✅ | 0 ✅ | **PASS** ✅ |
-| S4 | Home page load | 0 ✅ | 0 ✅ | PASS |
-| S5 | Case light brightness slider | 0 ✅ | 0 ✅ | PASS |
-| S6 | WASD toggle | 0 ✅ | 0 ✅ | PASS |
-| S7 | Config Audio Mixer slider | 0 ✅ | 0 ✅ | PASS |
-| S8 | Play page open | 0 ✅ | 0 ✅ | PASS |
-| S9 | Volume slider + mute/unmute | 0 ✅ | 0 ✅ | PASS |
-| S10 | Play C64U source browsing | 0 ✅ | 0 ✅ | PASS |
-| S11 | Disks page | 0 ✅ | 0 ✅ | PASS |
-| S12 | Disks C64U source browsing | 0 ✅ | 0 ✅ | PASS |
-| S13 | Background / foreground | 0 ✅ | 0 ✅ | PASS |
-| S14 | Force-stop + REST probe | 0 ✅ | 0 ✅ | PASS |
+| #   | Scenario                                           | PRE REST | POST REST | Result      |
+| --- | -------------------------------------------------- | -------- | --------- | ----------- |
+| S1  | Cold app launch (c64u selected)                    | 0 ✅     | 0 ✅      | PASS        |
+| S2  | Settings page                                      | 0 ✅     | 0 ✅      | PASS        |
+| S3  | Diagnostics panel / health cycle (PH6-04 verified) | 0 ✅     | 0 ✅      | **PASS** ✅ |
+| S4  | Home page load                                     | 0 ✅     | 0 ✅      | PASS        |
+| S5  | Case light brightness slider                       | 0 ✅     | 0 ✅      | PASS        |
+| S6  | WASD toggle                                        | 0 ✅     | 0 ✅      | PASS        |
+| S7  | Config Audio Mixer slider                          | 0 ✅     | 0 ✅      | PASS        |
+| S8  | Play page open                                     | 0 ✅     | 0 ✅      | PASS        |
+| S9  | Volume slider + mute/unmute                        | 0 ✅     | 0 ✅      | PASS        |
+| S10 | Play C64U source browsing                          | 0 ✅     | 0 ✅      | PASS        |
+| S11 | Disks page                                         | 0 ✅     | 0 ✅      | PASS        |
+| S12 | Disks C64U source browsing                         | 0 ✅     | 0 ✅      | PASS        |
+| S13 | Background / foreground                            | 0 ✅     | 0 ✅      | PASS        |
+| S14 | Force-stop + REST probe                            | 0 ✅     | 0 ✅      | PASS        |
 
 **14/14 PASS. c64u firmware remained fully healthy throughout all 14 scenarios.**
 

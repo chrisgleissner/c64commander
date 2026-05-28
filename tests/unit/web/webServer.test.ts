@@ -68,7 +68,7 @@ const expectCookieSecurity = (cookie: string, secure: boolean) => {
 afterEach(async () => {
   process.env = { ...originalEnv };
   for (const server of webServers.splice(0)) {
-    await server.close().catch(() => {});
+    await server.close().catch(() => { });
   }
   for (const ftpServer of ftpServers.splice(0)) {
     await ftpServer.close();

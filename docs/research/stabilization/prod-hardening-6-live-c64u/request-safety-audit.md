@@ -9,9 +9,11 @@ Audit status: **COMPLETE** — 2026-05-28.
 All REST calls are routed through `withRestInteraction` (deviceInteractionManager). No raw production `fetch` calls to c64u endpoints were found.
 
 Scan result:
+
 ```
 rg -n "fetch\(" src -g '*.ts' -g '*.tsx'
 ```
+
 All `fetch` usages in `src/lib/c64api/` are wrapped by the REST gateway; no direct fetch in pages or hooks.
 
 ### 2. FTP call paths
@@ -52,6 +54,7 @@ c64u survived all 14 scenarios in the fixed-APK validation run. The single REST 
 ### 9. App-caused crash evidence
 
 One app-caused crash was identified and fixed in this PR:
+
 - S3 from the first live run was caused by the app's unconditional post-auth CRLF in the Telnet health probe even when `authenticateTelnetIfNeeded()` returned early with `passwordSent: false`.
 - FTP and Telnet TCP surviving while REST crashed helped isolate the failure to the c64u REST process rather than a full device freeze.
 - The root cause is now fixed by gating CRLF emission on `authResult.passwordSent`.
@@ -60,6 +63,7 @@ One app-caused crash was identified and fixed in this PR:
 ### 10. No bypass found
 
 Static scan and live evidence confirm:
+
 - No direct production fetch to c64u outside approved gateways.
 - No FTP bridge internal retries beyond 1 (PH6-02).
 - No Telnet mount storms (PH6-03).
