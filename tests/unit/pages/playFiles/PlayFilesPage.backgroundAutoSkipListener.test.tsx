@@ -42,12 +42,10 @@ const renderHarness = () => {
     const [currentIndex, setCurrentIndex] = useState(-1);
     const [isPlaying, setIsPlaying] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
-    const handleNextRef = useRef(
-      async (_reason: "auto", _expectedTrackInstanceId: number) => {
-        handleNext();
-        setCurrentIndex((current) => current + 1);
-      },
-    );
+    const handleNextRef = useRef(async (_reason: "auto", _expectedTrackInstanceId: number) => {
+      handleNext();
+      setCurrentIndex((current) => current + 1);
+    });
     const playbackStateRef = useRef({ isPlaying, isPaused });
     const syncPlaybackTimelineRef = useRef((_options?: { allowAutoAdvance?: boolean }) => {
       syncPlaybackTimeline();

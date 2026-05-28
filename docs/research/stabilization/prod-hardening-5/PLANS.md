@@ -111,8 +111,8 @@ coverage, and Android/device validation evidence required by repository policy.
 - [x] Add deterministic PH5-05 runtime listener-once proof for `PlayFilesPage`.
 - [x] Implement PH5-06 IndexedDB warn routing through `addLog("warn", ...)`.
 - [x] Reconcile touched-area tests that assumed the pre-PH5 `addDisks(...)` two-argument contract.
-- [ ] Run full validation (`npm run test`, `npm run lint`, `npm run build`, `npm run test:coverage`, patch coverage check).
-- [ ] Re-probe `u64` then `c64u`, build/deploy APK, validate on Pixel 4, and update `results.md` / `pr-desc.md`.
+- [x] Run full validation (`npm run test`, `npm run lint`, `npm run build`, `npm run test:coverage`, patch coverage check).
+- [x] Re-probe `u64` then `c64u`, build/deploy APK, validate on Pixel 4, and update `results.md` / `pr-desc.md`.
 
 ### Acceptance criteria for the implementation pass
 
@@ -121,3 +121,9 @@ coverage, and Android/device validation evidence required by repository policy.
 - PH5-05 proves one native listener registration across playback churn and one removal on unmount.
 - PH5-06 eliminates the five raw IndexedDB `console.warn(...)` calls while preserving structured details.
 - No regression to any PH1-PH4 guarantee documented in `research.md` §7.
+
+### Completion note
+
+- Full repo validation completed: `npm run test`, `npm run lint`, `npm run build`, `npm run cap:build`, `npm run android:apk`, `npm run test:coverage`, and a local executable changed-line coverage check.
+- Hardware/mobile evidence recorded on the attached Pixel 4 against live `u64`; `c64u` remained offline during this pass and is documented as a blocker for cross-device validation.
+- `results.md` and `pr-desc.md` now reflect the implementation-pass outcome.

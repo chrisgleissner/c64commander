@@ -73,19 +73,22 @@ export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
     saveDiskLibrary(uniqueId, { disks });
   }, [disks, uniqueId]);
 
-  const addDisks = useCallback((entries: DiskEntry[], runtime: Record<string, File> = {}, options?: AddDisksOptions) => {
-    throwIfSavedDeviceChanged(options?.expectedSelectedDeviceId);
-    setRuntimeFiles((prev) => ({ ...prev, ...runtime }));
-    setDisks((prev) => {
-      const next = [...prev];
-      const existing = new Set(prev.map((disk) => disk.id));
-      entries.forEach((entry) => {
-        if (existing.has(entry.id)) return;
-        next.push(entry);
+  const addDisks = useCallback(
+    (entries: DiskEntry[], runtime: Record<string, File> = {}, options?: AddDisksOptions) => {
+      throwIfSavedDeviceChanged(options?.expectedSelectedDeviceId);
+      setRuntimeFiles((prev) => ({ ...prev, ...runtime }));
+      setDisks((prev) => {
+        const next = [...prev];
+        const existing = new Set(prev.map((disk) => disk.id));
+        entries.forEach((entry) => {
+          if (existing.has(entry.id)) return;
+          next.push(entry);
+        });
+        return next;
       });
-      return next;
-    });
-  }, []);
+    },
+    [],
+  );
 
   const removeDisk = useCallback((diskId: string) => {
     setRuntimeFiles((prev) => {

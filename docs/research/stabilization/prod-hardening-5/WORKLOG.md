@@ -242,3 +242,91 @@ npm run test -- tests/unit/components/disks/HomeDiskManager.branches.test.tsx te
 - `git status --short` still shows unrelated pre-existing edits outside the PH5 scope:
   - `playwright/playback.spec.ts`
 - Left untouched per repository concurrency policy.
+
+## 2026-05-28 11:08:00Z — full validation, coverage, and device evidence
+
+### Repo-wide validation
+
+```bash
+npm run test
+```
+
+- Result: **pass** (`578` files, `6674` tests).
+
+```bash
+npm run lint
+```
+
+- First run failed on Prettier formatting for PH5-touched files and the pre-existing concurrent `playwright/playback.spec.ts`.
+- Applied Prettier formatting and re-ran lint.
+- `playwright/playback.spec.ts` formatting was adjusted only to satisfy the repository-wide Prettier gate; no behavioral changes were made there.
+- Result: **pass**.
+
+```bash
+npm run build
+npm run cap:build
+npm run android:apk
+```
+
+- Result: **pass** for all three commands.
+- Built debug APK:
+  - `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk`
+
+```bash
+npm run test:coverage
+```
+
+- Result: **pass**.
+- Coverage summary:
+  - Statements: `94.62%`
+  - Branches: `91.67%`
+  - Functions: `91.00%`
+  - Lines: `94.62%`
+
+```bash
+python3 <local changed-line coverage check against coverage/lcov.info>
+```
+
+- Result: **pass**.
+- Executable changed TS/TSX lines covered: `14/14 = 100.00%`.
+
+### Hardware probes and APK deployment
+
+```bash
+curl --max-time 10 --no-progress-meter http://u64/v1/info
+curl --max-time 10 --no-progress-meter http://c64u/v1/info
+adb devices -l
+adb -s 9B081FFAZ001WX install -r android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk
+adb -s 9B081FFAZ001WX shell monkey -p uk.gleissner.c64commander -c android.intent.category.LAUNCHER 1
+```
+
+- `u64` probe: **success**.
+  - Product: `Ultimate 64 Elite`
+  - Firmware: `3.14e`
+  - Hostname: `u64`
+  - Unique id: `38C1BA`
+- `c64u` probe: **blocker**.
+  - `curl: (56) Recv failure: Connection reset by peer`
+- Android device attached:
+  - `9B081FFAZ001WX` (Pixel 4)
+- APK install result: **Success**
+- App launch result: **Success**
+
+### On-device validation evidence
+
+- Home page loaded on Pixel 4 with:
+  - app version `0.7.9-rc1`
+  - selected device `u64`
+  - header status badge `U64 HEALTHY`
+- Settings page opened successfully after launch.
+- Long-pressing the header status badge opened the **Switch Device** dialog.
+- The dialog showed the expected saved-device health cycle:
+  - initial state: both entries at `0/6 probes`
+  - settled state: `u64` → `ONLINE / HEALTHY`, `c64u` → `OFFLINE`
+- This confirms the picker still updates while open and reflects the current saved-device health state without regressing the visible switch workflow.
+
+### Hardware validation blockers / limits
+
+- `c64u` remained offline for the entire pass, so cross-device playback proof and a real saved-device switch onto `c64u` could not be completed.
+- The PH5-04 mid-import switch scenario was proven by deterministic JS tests; reproducing the full Android file-picker/import flow in this run was blocked by the combination of the offline secondary target and WebView-only automation surface.
+- PH5-05 auto-advance and PH5-06 logging were validated deterministically rather than through hardware because those contracts do not require live-device evidence.

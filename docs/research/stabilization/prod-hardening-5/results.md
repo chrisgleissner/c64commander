@@ -1,116 +1,120 @@
-# Prod-Hardening-5 Analysis Results
+# Prod-Hardening-5 Implementation Results
 
 ## Scope
 
-DOC_ONLY analysis-and-prompt-generation pass. No production code, tests, build
-files, or prior hardening directories were modified.
+CODE_CHANGE implementation pass for the four PH5 tasks selected in the analysis package:
 
-## What was created
+1. PH5-01 concurrent-worktree landing
+2. PH5-04 import cancellation on saved-device switch
+3. PH5-05 deterministic PlayFilesPage listener-once proof
+4. PH5-06 IndexedDB warning routing through structured logging
 
-All files live under `docs/research/stabilization/prod-hardening-5/`:
+## Implemented changes
 
-- `PLANS.md` — analysis-pass plan.
-- `WORKLOG.md` — chronological evidence log (read order, static scans, worktree
-  state, hardware probes).
-- `issue-ledger.md` — per-finding ledger for prod-hardening-1 through
-  prod-hardening-4, plus the PH5 candidate cross-index.
-- `feature-audit.md` — page-by-page risk audit.
-- `research.md` — the main research report with executive summary, findings,
-  rejected items, non-regression guarantees, and test/hardware strategy.
-- `test-matrix.md` — deterministic test plan per PH5 task.
-- `prompt.md` — execution-ready implementation prompt (starts with `ROLE`).
-- `results.md` — this file.
+### PH5-01 — concurrent worktree landing
 
-## What was inspected
+- Re-inspected the three concurrent worktree files called out by the prompt.
+- Ran the mandated targeted regression command.
+- Result: green, so the edits were kept in the PH5 boundary unchanged.
 
-- All required-read documents (see WORKLOG.md "Required-read pass").
-- Current source: `src/lib/deviceInteraction/deviceInteractionManager.ts`,
-  `src/lib/ftp/ftpClient.ts`, `src/pages/playFiles/hooks/usePlaybackController.ts`,
-  `src/pages/PlayFilesPage.tsx`, `src/hooks/useSavedDeviceSwitching.ts`,
-  `src/hooks/useSavedDeviceHealthChecks.ts`, `src/hooks/useAppConfigState.ts`,
-  `src/components/ConnectionController.tsx`, `src/lib/connection/connectionManager.ts`,
-  `src/lib/diagnostics/healthCheckEngine.ts`, `src/lib/smoke/smokeMode.ts`,
-  `src/lib/startup/fontLoading.ts`, `src/lib/playlistRepository/indexedDbRepository.ts`,
-  `src/pages/playFiles/handlers/addFileSelections.ts`,
-  `src/pages/playFiles/hooks/useQueryFilteredPlaylist.ts`,
-  `src/pages/playFiles/playlistRepositorySync.ts`,
-  `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx`,
-  `src/components/ConfigItemRow.tsx`, `src/pages/OpenSourceLicensesPage.tsx`,
-  `android/app/src/main/java/uk/gleissner/c64commander/HvscIngestionPlugin.kt`,
-  `android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt`,
-  `android/app/src/main/java/uk/gleissner/c64commander/TelnetSocketPlugin.kt`.
-- Test surface: `tests/unit/pages/OpenSourceLicensesPage.test.tsx` and the prior
-  hardening test files referenced in WORKLOG.
+### PH5-04 — saved-device-switch import hardening
 
-## Most important findings
+- `addFileSelections.ts`
+  - Captures the selected saved-device id at import start.
+  - Aborts active Play imports on the existing `c64u-connection-change` event when the reason is `saved-device-switch`.
+  - Re-checks abort state before late playlist mutation and songlength application.
+- `HomeDiskManager.tsx`
+  - Mirrors the same saved-device-switch abort wiring for Disk imports.
+  - Prevents late disk-library mutation after a saved-device switch.
+- `useDiskLibrary.ts`
+  - Adds an `expectedSelectedDeviceId` guard to `addDisks(...)` so the shared disk library cannot be mutated by stale post-switch results.
+- Clean cancellation behavior is preserved:
+  - classified as `"Add cancelled"`
+  - no duplicate error toast
+  - no unclassified failure log on switch-driven cancellation
 
-Four implementation tasks selected for PH5, in deterministic priority order:
+### PH5-05 — deterministic once-only listener proof
 
-1. PH5-01-CONCURRENT-WORKTREE-LANDING (Low, process). Three files are currently
-   modified in the worktree from concurrent LLM work. Coordinate, run targeted
-   tests, and either land or revert with a documented decision before PH5 adds
-   new code.
+- Added a focused PlayFilesPage regression that pins:
+  - one `backgroundAutoSkipDue` listener registration per mount
+  - removal only on unmount
+  - exactly-once auto-advance through the stable-ref control flow
 
-2. PH5-04-IMPORT-CANCEL-GENERATION (Medium). Late native FTP/SAF callbacks
-   delivered after a saved-device switch can mutate the active playlist or
-   disk-library because `addItemsAbortControllerRef` is only aborted on user
-   Cancel and no generation guard exists on the setters. Fix by either
-   subscribing the import abort to a saved-device-switch event or adding a
-   generation token on the setters; either approach passes the deterministic
-   tests described in `test-matrix.md`.
+### PH5-06 — quiet IndexedDB warning channel
 
-3. PH5-05-NATIVE-LISTENER-ONCE-PROOF (Low). PH4-F3 is correct on hardware but
-   lacks a deterministic add/remove counter test at the PlayFilesPage layer. Pin
-   the contract.
+- Replaced the five raw `console.warn(...)` calls in `indexedDbRepository.ts` with `addLog("warn", ...)`.
+- Preserved each message text and details payload.
+- Added regression coverage that proves zero raw `console.warn` emissions and one structured warn log per failure path.
 
-4. PH5-06-IDB-CONSOLE-WARN-ROUTING (Low). Five raw `console.warn(...)` calls in
-   `src/lib/playlistRepository/indexedDbRepository.ts` should route through
-   `addLog("warn", ...)` to quiet the WebView console while preserving
-   diagnostics.
+## Tests and validation
 
-All four are evidence-backed; each has a deterministic test plan and clear
-non-regression guarantees.
+### Targeted regressions
 
-## Hardware / mobile validation attempted
+- `npm run test -- tests/unit/playFiles/usePlaybackController.concurrency.test.tsx tests/unit/lib/deviceInteraction/deviceInteractionManager.test.ts tests/unit/lib/ftp/ftpClient.test.ts`
+  - **pass**
+- `npm run test -- tests/unit/playFiles/addFileSelections.deviceSwitch.test.ts tests/unit/hooks/useDiskLibrary.deviceSwitch.test.ts tests/unit/hooks/useSavedDeviceSwitching.cancelsImport.test.tsx tests/unit/pages/playFiles/PlayFilesPage.backgroundAutoSkipListener.test.tsx tests/unit/lib/playlistRepository/indexedDbRepository.test.ts`
+  - **pass**
+- `npm run test -- tests/unit/components/disks/HomeDiskManager.branches.test.tsx tests/unit/components/disks/HomeDiskManager.extended.test.tsx`
+  - **pass**
 
-This DOC_ONLY pass only probed device availability:
+### Full validation
 
-- `curl http://u64/v1/info` → 200, Ultimate 64 Elite firmware 3.14e.
-- `curl http://c64u/v1/info` → connection reset by peer (consistent with
-  `c64u-flakiness` memory).
-- `adb devices` → `9B081FFAZ001WX` (Pixel 4) attached.
+- `npm run test`
+  - **pass** (`578` files, `6674` tests)
+- `npm run lint`
+  - **pass**
+- `npm run build`
+  - **pass**
+- `npm run cap:build`
+  - **pass**
+- `npm run android:apk`
+  - **pass**
+- `npm run test:coverage`
+  - **pass**
+  - Statements: `94.62%`
+  - Branches: `91.67%`
+  - Functions: `91.00%`
+  - Lines: `94.62%`
+- Local executable changed-line coverage check against `coverage/lcov.info`
+  - **pass** (`14/14 = 100.00%`)
 
-No APK was deployed and no on-device validation was performed. The implementation
-pass must re-probe at runtime and record exact outcomes.
+## Hardware / mobile validation
 
-## Exact blockers
+### Live target probes
 
-- Hardware probes succeeded for `u64` and Pixel 4. `c64u` was unreachable at
-  probe time; this is consistent with the documented `c64u-flakiness` and is not
-  an app defect. The PH5 implementation pass should re-probe at session start.
+- `u64`: reachable
+  - product `Ultimate 64 Elite`
+  - firmware `3.14e`
+  - hostname `u64`
+  - unique id `38C1BA`
+- `c64u`: unreachable
+  - `curl: (56) Recv failure: Connection reset by peer`
 
-## How to use `docs/research/stabilization/prod-hardening-5/prompt.md`
+### Pixel 4 deployment
 
-1. Read the four required-reading items at the top of `prompt.md` (including the
-   analysis-pass `research.md`, `issue-ledger.md`, `feature-audit.md`, and
-   `test-matrix.md`).
-2. Open `PLANS.md` and `WORKLOG.md`. They already exist from this analysis pass.
-   The implementation pass must append to them (do not overwrite); the analysis
-   record is the basis for non-regression verification.
-3. Execute tasks in the deterministic priority order:
-   PH5-01 → PH5-04 → PH5-05 → PH5-06.
-4. After each task, run the narrowest relevant test command, then the full
-   validation suite at the end (`npm run test`, `npm run lint`, `npm run build`,
-   `npm run test:coverage`).
-5. Build and deploy the APK to Pixel 4 (or record the blocker).
-6. Create `results.md` and `pr-desc.md` for the implementation pass.
+- Device: `9B081FFAZ001WX`
+- Installed APK:
+  - `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk`
+- Install result: **Success**
+- Launch result: **Success**
 
-## Remaining uncertainty
+### On-device observations
 
-- HVSC partial browse-index transaction checkpointing remains a larger follow-up
-  flagged by PH3 results.md. It is out of PH5 scope and should drive a dedicated
-  hardening pass.
-- The concurrent worktree edits at HEAD may belong to an in-flight LLM run; PH5
-  must coordinate at landing time (PH5-01).
-- `c64u` host outages will continue to block intermittent cross-device validation.
-  This is a known firmware-side flakiness, not an app defect.
+- Home screen loaded with `u64` selected and healthy.
+- Settings page loaded successfully.
+- Long-press on the header status badge opened the **Switch Device** dialog.
+- The open dialog progressed from the initial `0/6 probes` state to:
+  - `u64` → `ONLINE / HEALTHY`
+  - `c64u` → `OFFLINE`
+
+This provides direct device evidence that the saved-device picker still updates while open and remains truthful under the existing 10-second health-cycle contract.
+
+## Blockers
+
+- `c64u` was offline throughout the pass, so cross-device playback proof and a real switch onto `c64u` could not be completed.
+- The full Android mid-import switch scenario for PH5-04 was not replayed end-to-end on the Pixel because the secondary target stayed offline and the file-picker/import flow is not controllable through the available WebView-only automation surface in this run.
+
+## Remaining risks
+
+- The PH5-04 Android end-to-end scenario should still be re-run against live hardware once `c64u` is reachable again, even though the deterministic JS tests already prove the stale-result isolation contract.
+- No screenshot regeneration was required because no documented visible UI changed.
