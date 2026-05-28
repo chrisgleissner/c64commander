@@ -1042,6 +1042,62 @@ class FtpClientPluginTest {
   }
 
   @Test
+  fun pingFtpUsesDefaultSettingsAndWarnsWhenDisconnectFails() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "")).thenReturn(true)
+    `when`(ftpClient.isConnected).thenReturn(true)
+    doAnswer { throw RuntimeException("disconnect exploded") }.`when`(ftpClient).disconnect()
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(null)
+    `when`(call.getString("username")).thenReturn(null)
+    `when`(call.getString("password")).thenReturn(null)
+
+    var resolved: JSObject? = null
+    doAnswer { invocation ->
+              resolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(any())
+
+    ShadowLog.clear()
+    plugin.pingFtp(call)
+
+    verify(ftpClient).connect("127.0.0.1", 21)
+    verify(ftpClient).login("user", "")
+    verify(ftpClient).sendNoOp()
+    assertEquals(true, resolved?.getBool("ok"))
+    val logs = ShadowLog.getLogsForTag("FtpClientPlugin")
+    assertTrue(logs.any { it.msg?.contains("Failed to disconnect FTP ping client") == true })
+  }
+
+  @Test
+  fun pingFtpRejectsWithConfiguredTimeoutMessage() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.connect(eq("127.0.0.1"), eq(21))).thenThrow(SocketTimeoutException("timed out"))
+    `when`(ftpClient.isConnected).thenReturn(false)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(null)
+    `when`(call.getInt("connectTimeoutMs")).thenReturn(2500)
+
+    plugin.pingFtp(call)
+
+    verify(call).reject(eq("FTP pingFtp timed out after connect 2500ms / transfer 2500ms"), any(Exception::class.java))
+  }
+
+  @Test
   fun pingFtpRejectsOnConnectionError() {
     val plugin = FtpClientPlugin()
     plugin.runTask = { runnable -> runnable.run() }

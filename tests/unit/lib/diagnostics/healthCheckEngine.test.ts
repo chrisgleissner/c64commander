@@ -1088,7 +1088,7 @@ describe("runHealthCheck — TELNET probe", () => {
     expect(mockTelnetSend).toHaveBeenNthCalledWith(2, encodeTelnetText("\r\n"));
   });
 
-  it("does not authenticate when no password prompt is observed", async () => {
+  it("does not send prompt-discovery CRLF when no password prompt is observed", async () => {
     setupAllProbesSuccess();
     vi.mocked(getC64APIConfigSnapshot).mockReturnValue({
       deviceHost: "10.0.0.2:6400",
@@ -1107,8 +1107,7 @@ describe("runHealthCheck — TELNET probe", () => {
     const result = await runHealthCheck();
 
     expect(result!.probes.TELNET.outcome).toBe("Success");
-    expect(mockTelnetSend).toHaveBeenCalledTimes(1);
-    expect(mockTelnetSend).toHaveBeenCalledWith(encodeTelnetText("\r\n"));
+    expect(mockTelnetSend).not.toHaveBeenCalled();
   });
 
   it("runs TELNET through the shared Telnet interaction scheduler", async () => {

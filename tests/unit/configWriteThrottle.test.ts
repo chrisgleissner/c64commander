@@ -161,6 +161,57 @@ describe("configWriteThrottle", () => {
     expect(staleTask).not.toHaveBeenCalled();
   });
 
+  it("uses the default reset reason when a queued write is cancelled by a bare reset", async () => {
+    const firstTask = vi.fn(async () => "first");
+    const staleTask = vi.fn(async () => "stale");
+
+    const first = scheduleConfigWrite(firstTask);
+    const stale = scheduleConfigWrite(staleTask);
+
+    await expect(first).resolves.toBe("first");
+    resetConfigWriteThrottle();
+
+    await expect(stale).rejects.toMatchObject({
+      name: "ConfigWriteCancelledError",
+      reason: "reset",
+      isCancellation: true,
+    });
+    expect(addLog).toHaveBeenCalledWith(
+      "debug",
+      "Config write queue task cancelled",
+      expect.objectContaining({ reason: "reset" }),
+    );
+  });
+
+  it("treats duck-typed cancellation errors as queue cancellations", async () => {
+    const syntheticCancellation = {
+      name: "ConfigWriteCancelledError",
+      message: "synthetic cancellation",
+      reason: "synthetic",
+      isCancellation: true,
+    };
+
+    const first = scheduleConfigWrite(async () => {
+      throw syntheticCancellation;
+    });
+    const secondTask = vi.fn(async () => "ok");
+    const second = scheduleConfigWrite(secondTask);
+
+    await expect(first).rejects.toMatchObject(syntheticCancellation);
+    await vi.advanceTimersByTimeAsync(500);
+    await expect(second).resolves.toBe("ok");
+
+    expect(addLog).toHaveBeenCalledWith(
+      "debug",
+      "Config write queue task cancelled",
+      expect.objectContaining({ reason: "synthetic" }),
+    );
+    expect(addErrorLog).not.toHaveBeenCalledWith(
+      "Config write queue: preceding task failed",
+      expect.objectContaining({ error: "synthetic cancellation" }),
+    );
+  });
+
   it("spaces a sustained checkbox-style burst and preserves the final intended state", async () => {
     saveConfigWriteIntervalMs(100);
     saveDeviceSafetyMode("RELAXED");

@@ -341,6 +341,29 @@ describe("useTelnetActions", () => {
     expect(discoverTelnetCapabilitiesSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("hydrates cached Telnet capabilities without rediscovery", async () => {
+    const capabilityDiscovery = await import("@/lib/telnet/telnetCapabilityDiscovery");
+    const cachedSnapshotSpy = vi
+      .spyOn(capabilityDiscovery, "getCachedTelnetCapabilities")
+      .mockReturnValue(buildSnapshot());
+
+    try {
+      const { result } = renderHook(() => useTelnetActions());
+
+      await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
+      expect(result.current.getActionSupport("powerCycle")).toMatchObject({ status: "supported" });
+      expect(discoverTelnetCapabilitiesSpy).not.toHaveBeenCalled();
+
+      await act(async () => {
+        await result.current.executeAction("powerCycle");
+      });
+
+      expect(discoverTelnetCapabilitiesSpy).not.toHaveBeenCalled();
+    } finally {
+      cachedSnapshotSpy.mockRestore();
+    }
+  });
+
   it("holds the polling pause while capability discovery is running", async () => {
     let resolveDiscovery: ((snapshot: ReturnType<typeof buildSnapshot>) => void) | null = null;
     discoverTelnetCapabilitiesSpy.mockImplementationOnce(
@@ -432,6 +455,34 @@ describe("useTelnetActions", () => {
 
     expect(result.current.discoveryState).toBe("idle");
     expect(discoverTelnetCapabilitiesSpy).not.toHaveBeenCalled();
+  });
+
+  it("clears cached capability state when Telnet becomes unavailable", async () => {
+    const capabilityDiscovery = await import("@/lib/telnet/telnetCapabilityDiscovery");
+    const cachedSnapshotSpy = vi
+      .spyOn(capabilityDiscovery, "getCachedTelnetCapabilities")
+      .mockReturnValue(buildSnapshot());
+
+    try {
+      const { result, rerender } = renderHook(() => useTelnetActions());
+
+      await waitFor(() => expect(result.current.discoveryState).toBe("ready"));
+
+      statusRef.current = {
+        ...statusRef.current,
+        isConnected: false,
+      };
+      rerender();
+
+      await waitFor(() => expect(result.current.discoveryState).toBe("idle"));
+      expect(result.current.discoveryError).toBeNull();
+      expect(result.current.getActionSupport("powerCycle")).toMatchObject({
+        status: "unsupported",
+        reason: "Connect to a C64 Ultimate device to inspect Telnet actions.",
+      });
+    } finally {
+      cachedSnapshotSpy.mockRestore();
+    }
   });
 
   it("returns unavailable fallback support when telnet cannot run on the platform", () => {

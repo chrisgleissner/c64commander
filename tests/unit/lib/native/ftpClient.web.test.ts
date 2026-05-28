@@ -109,6 +109,53 @@ describe("FtpClientWeb retry policy", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("posts FTP ping through the bridge and returns ok=true", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const client = new FtpClientWeb();
+    await expect(
+      client.pingFtp({
+        host: "c64u",
+        port: 21,
+        username: "user",
+        password: "secret",
+      }),
+    ).resolves.toEqual({ ok: true });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://bridge.local/v1/ftp/ping",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          host: "c64u",
+          port: 21,
+          username: "user",
+          password: "secret",
+          traceContext: undefined,
+        }),
+      }),
+    );
+  });
+
+  it("treats a ping payload without ok=true as a failed ping response", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: false }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const client = new FtpClientWeb();
+    await expect(client.pingFtp({ host: "c64u" })).resolves.toEqual({ ok: false });
+  });
 });
 
 describe("FtpClientWeb missing bridge URL", () => {

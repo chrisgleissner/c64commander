@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { FTP_CONNECT_TIMEOUT_MS, listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
+import { FTP_CONNECT_TIMEOUT_MS, listFtpDirectory, pingFtp, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
 import { FtpClient } from "@/lib/native/ftpClient";
 import { withFtpInteraction } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { getActiveAction, runWithImplicitAction } from "@/lib/tracing/actionTrace";
@@ -20,6 +20,7 @@ vi.mock("@/lib/native/ftpClient", () => ({
     listDirectory: vi.fn(),
     readFile: vi.fn(),
     writeFile: vi.fn(),
+    pingFtp: vi.fn(),
   },
 }));
 vi.mock("@/lib/deviceInteraction/deviceInteractionManager", () => ({
@@ -225,6 +226,53 @@ describe("ftpClient", () => {
 
       expect(runWithImplicitAction).not.toHaveBeenCalled();
       expect(recordFtpOperation).toHaveBeenCalledWith(mockAction, expect.anything());
+    });
+  });
+
+  describe("pingFtp", () => {
+    const mockPingOptions = {
+      host: mockHost,
+      port: 21,
+      username: "root",
+      password: "",
+    };
+
+    it("pings FTP through the implicit health action with the default connect timeout", async () => {
+      vi.mocked(FtpClient.pingFtp).mockResolvedValue({ ok: true });
+
+      const result = await pingFtp(mockPingOptions);
+
+      expect(result).toEqual({ ok: true });
+      expect(runWithImplicitAction).toHaveBeenCalledWith("ftp.ping", expect.any(Function));
+      expect(withFtpInteraction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "ping",
+          path: "/",
+          intent: "health",
+          host: mockHost,
+          port: 21,
+        }),
+        expect.any(Function),
+      );
+      expect(FtpClient.pingFtp).toHaveBeenCalledWith(
+        expect.objectContaining({
+          host: mockHost,
+          port: 21,
+          connectTimeoutMs: FTP_CONNECT_TIMEOUT_MS,
+          traceContext: expect.any(Object),
+        }),
+      );
+      expect(incrementFtpInFlight).toHaveBeenCalledTimes(1);
+      expect(decrementFtpInFlight).toHaveBeenCalledTimes(1);
+    });
+
+    it("logs FTP ping failures and releases in-flight state", async () => {
+      vi.mocked(FtpClient.pingFtp).mockRejectedValue(new Error("ping failed"));
+
+      await expect(pingFtp(mockPingOptions)).rejects.toThrow("ping failed");
+
+      expect(addErrorLog).toHaveBeenCalledWith("FTP ping failed", undefined);
+      expect(decrementFtpInFlight).toHaveBeenCalledTimes(1);
     });
   });
 });
