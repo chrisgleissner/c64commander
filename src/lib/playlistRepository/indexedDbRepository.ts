@@ -17,6 +17,7 @@ import type {
 } from "./types";
 import type { PlaylistDataRepository } from "./repository";
 import { buildPlaylistQueryIndex, queryPlaylistIndex, type PersistedPlaylistQueryIndex } from "./queryIndex";
+import { addLog } from "@/lib/logging";
 
 type Options = {
   preferDurableStorage: boolean;
@@ -170,7 +171,7 @@ const isOpenFailure = (error: unknown) => {
 };
 
 const warnReadFailureAndReturn = <T>(error: unknown, fallback: T) => {
-  console.warn("Failed to load playlist repository state from IndexedDB", {
+  addLog("warn", "Failed to load playlist repository state from IndexedDB", {
     error,
   });
   return fallback;
@@ -262,7 +263,7 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
 
     this.initializationPromise = (async () => {
       const schema = await readValue<StoredSchemaRecord>(META_SCHEMA_KEY).catch((error) => {
-        console.warn("Failed to load playlist repository state from IndexedDB", {
+        addLog("warn", "Failed to load playlist repository state from IndexedDB", {
           error,
         });
         return null;
@@ -272,7 +273,7 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
       }
 
       const legacy = await readValue<unknown>(LEGACY_STATE_KEY).catch((error) => {
-        console.warn("Failed to load playlist repository state from IndexedDB", {
+        addLog("warn", "Failed to load playlist repository state from IndexedDB", {
           error,
         });
         return null;
@@ -284,7 +285,7 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
       }
 
       if (typeof legacy !== "object") {
-        console.warn("Incompatible playlist repository schema in IndexedDB. Resetting repository state.", {
+        addLog("warn", "Incompatible playlist repository schema in IndexedDB. Resetting repository state.", {
           expectedVersion: CURRENT_SCHEMA_VERSION,
           foundVersion: null,
         });
@@ -295,7 +296,7 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
 
       const version = (legacy as { version?: unknown }).version;
       if (version !== 1 && version !== 2) {
-        console.warn("Incompatible playlist repository schema in IndexedDB. Resetting repository state.", {
+        addLog("warn", "Incompatible playlist repository schema in IndexedDB. Resetting repository state.", {
           expectedVersion: CURRENT_SCHEMA_VERSION,
           foundVersion: version,
         });

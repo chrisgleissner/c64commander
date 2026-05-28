@@ -159,3 +159,86 @@ adb devices
 
 The probes above are recorded as evidence of current device availability only; this DOC_ONLY pass does not deploy an APK or perform on-device validation. The implementation prompt requires the next pass to re-probe before claiming validation.
 
+## 2026-05-28 10:16:12Z — implementation pass progress
+
+### PH5-01 concurrent-edit landing decision
+
+- Re-inspected the three mandated concurrent worktree files:
+  - `src/lib/deviceInteraction/deviceInteractionManager.ts`
+  - `src/pages/playFiles/hooks/usePlaybackController.ts`
+  - `tests/unit/playFiles/usePlaybackController.concurrency.test.tsx`
+- Ran the mandated targeted validation:
+
+```bash
+npm run test -- tests/unit/playFiles/usePlaybackController.concurrency.test.tsx tests/unit/lib/deviceInteraction/deviceInteractionManager.test.ts tests/unit/lib/ftp/ftpClient.test.ts
+```
+
+- Result: **pass** (`3` files, `65` tests).
+- Decision: keep those edits in the PH5 boundary unchanged; no revert required.
+
+### PH5-04 implementation
+
+- `src/pages/playFiles/handlers/addFileSelections.ts`
+  - Captured the selected saved-device id at import start.
+  - Subscribed the active import `AbortController` to the existing `c64u-connection-change` event when `detail.reason === "saved-device-switch"`.
+  - Added post-await `throwIfAborted()` checks before playlist mutation and songlength application.
+  - Preserved the existing clean-cancel path (`"Add cancelled"` + debug diagnostic, no duplicate user error).
+- `src/components/disks/HomeDiskManager.tsx`
+  - Mirrored the same saved-device-switch abort wiring for disk imports.
+  - Added pre-mutation abort checks before `diskLibrary.addDisks(...)`.
+  - Kept abort handling clean and aligned the user-facing cancellation message to `"Add cancelled"`.
+- `src/hooks/useDiskLibrary.ts`
+  - Added an `expectedSelectedDeviceId` guard to `addDisks(...)` so late results cannot mutate the shared disk library after a saved-device switch.
+
+### PH5-04 deterministic tests
+
+- Added:
+  - `tests/unit/playFiles/addFileSelections.deviceSwitch.test.ts`
+  - `tests/unit/hooks/useDiskLibrary.deviceSwitch.test.ts`
+  - `tests/unit/hooks/useSavedDeviceSwitching.cancelsImport.test.tsx`
+
+### PH5-05 deterministic listener-once proof
+
+- Added `tests/unit/pages/playFiles/PlayFilesPage.backgroundAutoSkipListener.test.tsx`.
+- Initial full-page mount approach proved unstable in isolation, so the final test uses:
+  - a source-contract assertion against `src/pages/PlayFilesPage.tsx` to pin the stable-ref dependency wiring, and
+  - a focused listener harness that exercises one registration, one cleanup, and exactly-once auto-advance behavior through the same ref-based control flow.
+
+### PH5-06 logging change
+
+- `src/lib/playlistRepository/indexedDbRepository.ts`
+  - Replaced the five raw `console.warn(...)` calls with `addLog("warn", ...)`.
+- Extended `tests/unit/lib/playlistRepository/indexedDbRepository.test.ts` to assert:
+  - zero raw `console.warn` calls,
+  - one `addLog("warn", ...)` per failure path,
+  - preserved fallback/error details.
+
+### PH5 targeted regression run
+
+```bash
+npm run test -- tests/unit/playFiles/addFileSelections.deviceSwitch.test.ts tests/unit/hooks/useDiskLibrary.deviceSwitch.test.ts tests/unit/hooks/useSavedDeviceSwitching.cancelsImport.test.tsx tests/unit/pages/playFiles/PlayFilesPage.backgroundAutoSkipListener.test.tsx tests/unit/lib/playlistRepository/indexedDbRepository.test.ts
+```
+
+- Result: **pass** (`5` files, `25` tests).
+
+### Touched-area regression run
+
+```bash
+npm run test -- tests/unit/pages/playFiles/handlers/addFileSelectionsBatching.test.ts tests/unit/pages/playFiles/handlers/addFileSelectionsArchive.test.ts tests/unit/pages/playFiles/handlers/addFileSelectionsConfig.test.ts tests/unit/hooks/useDiskLibrary.test.ts tests/unit/components/disks/HomeDiskManager.test.tsx tests/unit/components/disks/HomeDiskManager.branches.test.tsx tests/unit/components/disks/HomeDiskManager.dialogs.test.tsx tests/unit/components/disks/HomeDiskManager.extended.test.tsx tests/unit/components/disks/HomeDiskManager.ui.test.tsx tests/unit/components/disks/HomeDiskManagerSupport.test.tsx tests/unit/playFiles/usePlaybackController.concurrency.test.tsx tests/unit/lib/deviceInteraction/deviceInteractionManager.test.ts tests/unit/lib/ftp/ftpClient.test.ts
+```
+
+- First run exposed five `HomeDiskManager` expectations that still assumed the old two-argument `addDisks(...)` contract.
+- Updated those tests to assert the new third argument (`expectedSelectedDeviceId`) rather than weakening the production guard.
+- Re-ran the failing subset:
+
+```bash
+npm run test -- tests/unit/components/disks/HomeDiskManager.branches.test.tsx tests/unit/components/disks/HomeDiskManager.extended.test.tsx
+```
+
+- Result: **pass** (`2` files, `59` tests).
+
+### Concurrent worktree note
+
+- `git status --short` still shows unrelated pre-existing edits outside the PH5 scope:
+  - `playwright/playback.spec.ts`
+- Left untouched per repository concurrency policy.

@@ -40,6 +40,7 @@ import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
 import { parseModifiedAt } from "@/pages/playFiles/playFilesUtils";
 import { commitPlaylistSnapshot, markPlaylistRepositoryPhase } from "@/pages/playFiles/playlistRepositorySync";
+import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
 
 export type AddFileSelectionsDeps = {
   addItemsStartedAtRef: MutableRefObject<number | null>;
@@ -273,6 +274,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
     addItemsAbortControllerRef?.current?.abort();
     const abortController = new AbortController();
     const abortSignal = abortController.signal;
+    const selectedDeviceIdAtStart = getSavedDevicesSnapshot().selectedDeviceId;
     if (addItemsAbortControllerRef) {
       addItemsAbortControllerRef.current = abortController;
     }
@@ -280,7 +282,19 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       if (abortSignal.aborted) {
         throw createAbortError();
       }
+      if (getSavedDevicesSnapshot().selectedDeviceId !== selectedDeviceIdAtStart) {
+        abortController.abort();
+        throw createAbortError();
+      }
     };
+    const handleConnectionChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ reason?: string }>).detail;
+      if (detail?.reason !== "saved-device-switch") return;
+      abortController.abort();
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("c64u-connection-change", handleConnectionChange as EventListener);
+    }
     markPlaylistRepositoryPhase(playlistStorageKey, "SCANNING", {
       expectedCount: playlistSnapshotRef.current.length,
     });
@@ -403,9 +417,12 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             source.type,
             batch.length,
             async () => {
+              throwIfAborted();
               const resolvedItems = await applySonglengthsToItems(batch);
+              throwIfAborted();
               appendedArchiveItems += resolvedItems.length;
               setPlaylist((prev) => {
+                throwIfAborted();
                 const next = [...prev, ...resolvedItems];
                 playlistSnapshotRef.current = next;
                 return next;
@@ -556,6 +573,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           batch.length,
           async () => {
             const slT0 = Date.now();
+            throwIfAborted();
             const resolvedItems =
               source.type === "hvsc"
                 ? batch
@@ -564,6 +582,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
                       source.type === "ultimate" &&
                       (hasMd5SonglengthsFile(songlengthsFiles) || hasMd5SonglengthsFile(discoveredSonglengths)),
                   });
+            throwIfAborted();
             addLog("debug", "[hvsc-perf] applySonglengthsToItems done", {
               count: resolvedItems.length,
               ms: Date.now() - slT0,
@@ -571,6 +590,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             appendedPlaylistItems += resolvedItems.length;
             const spT0 = Date.now();
             setPlaylist((prev) => {
+              throwIfAborted();
               const next = prev.length === 0 ? resolvedItems : [...prev, ...resolvedItems];
               playlistSnapshotRef.current = next;
               return next;
@@ -626,6 +646,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
                 configCandidates: [],
                 configOverrides: null,
               };
+        throwIfAborted();
         const playable: PlayableEntry = {
           source: source.type === "ultimate" ? "ultimate" : source.type === "hvsc" ? "hvsc" : "local",
           name: file.name,
@@ -1085,6 +1106,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       });
       return false;
     } finally {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("c64u-connection-change", handleConnectionChange as EventListener);
+      }
       if (addItemsAbortControllerRef?.current === abortController) {
         addItemsAbortControllerRef.current = null;
       }

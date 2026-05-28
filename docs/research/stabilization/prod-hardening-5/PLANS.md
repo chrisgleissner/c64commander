@@ -93,3 +93,31 @@ The analysis pass is complete. The implementation pass should append to
 4. PH5-06-IDB-CONSOLE-WARN-ROUTING (Low).
 
 Items rejected or deferred are documented in `research.md` §5.
+
+---
+
+## 2026-05-28 implementation pass (CODE_CHANGE)
+
+This pass is **CODE_CHANGE** with deterministic regression tests, lint, build,
+coverage, and Android/device validation evidence required by repository policy.
+
+### Current phase
+
+- [x] Re-read required PH5 docs, PH4 contract docs, and architecture docs.
+- [x] Inspect concurrent worktree edits and run the mandated PH5-01 targeted tests.
+- [x] Land PH5-01 as part of the PH5 change boundary because the targeted tests are green.
+- [x] Implement PH5-04 switch-aware import cancellation for Play and Disks.
+- [x] Add deterministic PH5-04 tests for Play import, Disk import, and saved-device-switch event publication.
+- [x] Add deterministic PH5-05 runtime listener-once proof for `PlayFilesPage`.
+- [x] Implement PH5-06 IndexedDB warn routing through `addLog("warn", ...)`.
+- [x] Reconcile touched-area tests that assumed the pre-PH5 `addDisks(...)` two-argument contract.
+- [ ] Run full validation (`npm run test`, `npm run lint`, `npm run build`, `npm run test:coverage`, patch coverage check).
+- [ ] Re-probe `u64` then `c64u`, build/deploy APK, validate on Pixel 4, and update `results.md` / `pr-desc.md`.
+
+### Acceptance criteria for the implementation pass
+
+- PH5-01 concurrent edits stay landed only if the mandated targeted tests remain green.
+- PH5-04 prevents any post-switch playlist/disk-library mutation and treats switch cancellation as a clean cancellation.
+- PH5-05 proves one native listener registration across playback churn and one removal on unmount.
+- PH5-06 eliminates the five raw IndexedDB `console.warn(...)` calls while preserving structured details.
+- No regression to any PH1-PH4 guarantee documented in `research.md` §7.

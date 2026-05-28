@@ -789,7 +789,10 @@ describe("HomeDiskManager targeted branch coverage", () => {
     await waitFor(() => {
       expect(useDiskLibraryMock.addDisks).toHaveBeenCalledWith(
         expect.arrayContaining([expect.objectContaining({ path: "/games/demo.d64", location: "ultimate" })]),
-        expect.any(Object),
+        expect.anything(),
+        expect.objectContaining({
+          expectedSelectedDeviceId: expect.any(String),
+        }),
       );
       expect(toast).toHaveBeenCalledWith(
         expect.objectContaining({
