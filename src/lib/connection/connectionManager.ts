@@ -501,10 +501,11 @@ const clearPinnedDemoMode = () => {
   persistDemoModePinnedState(false);
 };
 
-export function pinDemoModeByUserChoice() {
+export async function pinDemoModeByUserChoice() {
   demoModePinnedByUser = true;
   persistDemoModePinnedState(true);
   dismissDemoInterstitial();
+  await transitionToDemoActive("manual");
 }
 
 const cancelActiveDiscovery = () => {

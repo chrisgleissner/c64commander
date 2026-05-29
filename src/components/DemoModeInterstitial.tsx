@@ -105,7 +105,7 @@ export function DemoModeInterstitial() {
             <Button
               variant="default"
               onClick={() => {
-                pinDemoModeByUserChoice();
+                void pinDemoModeByUserChoice();
               }}
             >
               Continue in Demo Mode

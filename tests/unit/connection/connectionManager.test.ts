@@ -992,6 +992,38 @@ describe("connectionManager", () => {
     expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
   });
 
+  it("pinDemoModeByUserChoice immediately activates demo mode from the offline interstitial", async () => {
+    const { applyC64APIRuntimeConfig } = await import("../../../src/lib/c64api");
+    const { getConnectionSnapshot, initializeConnectionManager, pinDemoModeByUserChoice } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
+    startMockServer.mockResolvedValue({
+      baseUrl: "http://127.0.0.1:7777",
+      ftpPort: 2121,
+    });
+    getActiveMockBaseUrl.mockReturnValue("http://127.0.0.1:7777");
+    getActiveMockFtpPort.mockReturnValue(2121);
+
+    await initializeConnectionManager();
+    expect(getConnectionSnapshot().state).toBe("UNKNOWN");
+
+    await pinDemoModeByUserChoice();
+
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
+    expect(startMockServer).toHaveBeenCalled();
+    expect(vi.mocked(applyC64APIRuntimeConfig)).toHaveBeenCalledWith(
+      "http://127.0.0.1:7777",
+      undefined,
+      "127.0.0.1:7777",
+    );
+  });
+
   it("normalizeUrl returns original value when given an invalid URL", async () => {
     const addLogSpy = vi.spyOn(logging, "addLog");
     const { probeOnce } = await import("../../../src/lib/connection/connectionManager");
@@ -1573,7 +1605,7 @@ describe("connectionManager", () => {
     const { getConnectionSnapshot, pinDemoModeByUserChoice } =
       await import("../../../src/lib/connection/connectionManager");
 
-    expect(() => pinDemoModeByUserChoice()).not.toThrow();
+    await expect(pinDemoModeByUserChoice()).resolves.toBeUndefined();
     expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
 
     Object.defineProperty(globalThis, "sessionStorage", {
