@@ -60,6 +60,10 @@ test.describe("Home page app config management", () => {
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     enforceDeviceTestMapping(testInfo);
     await startStrictUiMonitoring(page, testInfo);
+    await page.addInitScript(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
     server = await createMockC64Server(uiFixtures.configState);
     await seedUiMocks(page, server.baseUrl);
     await page.addInitScript(() => {

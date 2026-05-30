@@ -88,6 +88,10 @@ test.describe("Home interactions", () => {
 
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
+    await page.addInitScript(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
     server = await createMockC64Server();
     await seedUiMocks(page, server.baseUrl);
   });
