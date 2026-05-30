@@ -31,11 +31,19 @@ const waitForConnected = async (page: Page) => {
   );
 };
 
+const waitForDeviceInfo = async (page: Page) => {
+  await waitForConnected(page);
+  await expect(page.getByTestId("home-system-device")).not.toHaveText("Not available", {
+    timeout: 15000,
+  });
+};
+
 const waitForStreamsReady = async (page: Page) => {
   await waitForConnected(page);
-  const streamPattern = /\d+\.\d+\.\d+\.\d+:\d+/;
-  await expect(page.getByTestId("home-stream-endpoint-display-audio")).toHaveText(streamPattern);
-  await expect(page.getByTestId("home-stream-endpoint-display-vic")).toHaveText(streamPattern);
+  await expect(page.getByTestId("home-stream-start-audio")).toBeEnabled();
+  await expect(page.getByTestId("home-stream-stop-audio")).toBeEnabled();
+  await expect(page.getByTestId("home-stream-start-vic")).toBeEnabled();
+  await expect(page.getByTestId("home-stream-stop-vic")).toBeEnabled();
 };
 
 const getTelnetTraces = async (page: Page) => {
@@ -265,13 +273,14 @@ test.describe("Home interactions", () => {
   test("power cycle runs through telnet against the external mock target", async ({ page }: { page: Page }) => {
     await enableFeatureFlags(page, ["home_telnet_power_cycle_enabled"]);
     await page.goto("/");
-    await waitForConnected(page);
+    await waitForDeviceInfo(page);
     await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
     await page.evaluate(() =>
       (window as Window & { __c64uTracing?: { clearTraces?: () => void } }).__c64uTracing?.clearTraces?.(),
     );
 
     const powerCycle = page.getByTestId("home-power-cycle");
+    await expect(powerCycle).toBeVisible({ timeout: 15000 });
     await expect(powerCycle).toBeEnabled();
     await powerCycle.click();
     await confirmMachineAction(page, "Power Cycle");
