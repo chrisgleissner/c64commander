@@ -41,7 +41,9 @@ export function MachineActionConfirmationDialog({
       <AppDialogContent data-testid="machine-action-confirmation">
         <AppDialogHeader>
           <AppDialogTitle>{action ? `${action.actionName}?` : "Confirm action?"}</AppDialogTitle>
-          <AppDialogDescription>{action?.consequence ?? "Confirm the selected machine action."}</AppDialogDescription>
+          <AppDialogDescription>
+            {action ? `Confirm ${action.actionName}.` : "Confirm the selected machine action."}
+          </AppDialogDescription>
         </AppDialogHeader>
         <AppDialogBody>
           <p className="text-sm text-muted-foreground">

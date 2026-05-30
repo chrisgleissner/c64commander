@@ -18,6 +18,14 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_REVIEW_WIDTH = 480;
 const DEFAULT_MAX_DIMENSION = 1999;
 
+const parsePositiveDimension = (value, optionName) => {
+  const dimension = Number(value);
+  if (!Number.isFinite(dimension) || dimension < 1) {
+    throw new Error(`${optionName} must be a finite number greater than or equal to 1`);
+  }
+  return Math.max(1, Math.floor(dimension));
+};
+
 export const resolveReviewDimensions = (metadata, options = {}) => {
   const width = metadata.width;
   const height = metadata.height;
@@ -25,8 +33,8 @@ export const resolveReviewDimensions = (metadata, options = {}) => {
     throw new Error("PNG metadata must include width and height");
   }
 
-  const reviewWidth = Math.max(1, Number(options.reviewWidth ?? DEFAULT_REVIEW_WIDTH));
-  const maxDimension = Math.max(1, Number(options.maxDimension ?? DEFAULT_MAX_DIMENSION));
+  const reviewWidth = parsePositiveDimension(options.reviewWidth ?? DEFAULT_REVIEW_WIDTH, "reviewWidth");
+  const maxDimension = parsePositiveDimension(options.maxDimension ?? DEFAULT_MAX_DIMENSION, "maxDimension");
   const scale = Math.min(1, reviewWidth / width, maxDimension / width, maxDimension / height);
   return {
     width: Math.max(1, Math.floor(width * scale)),

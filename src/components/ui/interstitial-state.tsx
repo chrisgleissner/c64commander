@@ -92,6 +92,15 @@ export function InterstitialStateProvider({ children }: { children: React.ReactN
     };
   }, [register, stack, unregister]);
 
+  const activeInterstitialRef = React.useRef({
+    depth: value.depth,
+    topKind: value.topKind,
+  });
+  activeInterstitialRef.current = {
+    depth: value.depth,
+    topKind: value.topKind,
+  };
+
   React.useEffect(() => {
     if (typeof document === "undefined") return;
     const root = document.documentElement;
@@ -120,9 +129,10 @@ export function InterstitialStateProvider({ children }: { children: React.ReactN
     let removeListener: (() => Promise<void>) | null = null;
 
     void App.addListener("backButton", () => {
+      const activeInterstitial = activeInterstitialRef.current;
       addLog("debug", "Android Back dismissed topmost interstitial", {
-        depth: value.depth,
-        topKind: value.topKind,
+        depth: activeInterstitial.depth,
+        topKind: activeInterstitial.topKind,
       });
       document.dispatchEvent(
         new KeyboardEvent("keydown", {
@@ -149,7 +159,7 @@ export function InterstitialStateProvider({ children }: { children: React.ReactN
       removed = true;
       void removeListener?.();
     };
-  }, [value.active, value.depth, value.topKind]);
+  }, [value.active]);
 
   return <InterstitialStateContext.Provider value={value}>{children}</InterstitialStateContext.Provider>;
 }

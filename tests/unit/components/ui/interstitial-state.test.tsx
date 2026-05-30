@@ -147,6 +147,43 @@ describe("interstitial-state", () => {
     });
   });
 
+  it("keeps one Android Back interceptor while the active interstitial stack changes", async () => {
+    function StackHarness() {
+      const [showSheet, setShowSheet] = React.useState(false);
+      return (
+        <InterstitialStateProvider>
+          <OverlayProbe active kind="modal" label="dialog" />
+          <OverlayProbe active={showSheet} kind="sheet" label="sheet" />
+          <button type="button" onClick={() => setShowSheet(true)}>
+            Show sheet
+          </button>
+        </InterstitialStateProvider>
+      );
+    }
+
+    render(<StackHarness />);
+
+    await waitFor(() => {
+      expect(appListenerState.addListener).toHaveBeenCalledTimes(1);
+    });
+
+    await act(async () => {
+      screen.getByRole("button", { name: "Show sheet" }).click();
+    });
+
+    expect(screen.getByTestId("sheet")).toHaveAttribute("data-depth", "2");
+    expect(appListenerState.addListener).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      appListenerState.backButtonListener?.();
+    });
+
+    expect(addLogMock).toHaveBeenCalledWith("debug", "Android Back dismissed topmost interstitial", {
+      depth: 2,
+      topKind: "sheet",
+    });
+  });
+
   it("logs a warning when Android Back listener registration fails", async () => {
     appListenerState.addListener.mockRejectedValueOnce(new Error("listener unavailable"));
 

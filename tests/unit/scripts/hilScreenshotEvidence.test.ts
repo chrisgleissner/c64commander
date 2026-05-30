@@ -49,4 +49,13 @@ describe("hil screenshot evidence helper", () => {
   it("preserves smaller screenshots without upscaling", () => {
     expect(resolveReviewDimensions({ width: 320, height: 640 })).toEqual({ width: 320, height: 640 });
   });
+
+  it("rejects non-finite review dimensions before resizing", () => {
+    expect(() => resolveReviewDimensions({ width: 1080, height: 2280 }, { reviewWidth: Number.NaN })).toThrow(
+      "reviewWidth must be a finite number greater than or equal to 1",
+    );
+    expect(() => resolveReviewDimensions({ width: 1080, height: 2280 }, { maxDimension: "not-a-number" })).toThrow(
+      "maxDimension must be a finite number greater than or equal to 1",
+    );
+  });
 });

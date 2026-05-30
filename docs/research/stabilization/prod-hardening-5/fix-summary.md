@@ -44,7 +44,7 @@ Implemented the actionable prod-hardening-5 fixes for API cancellation classific
 - Pixel 4 attached: `9B081FFAZ001WX`.
 - Installed APK: `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk`.
 - App package version after install: versionCode `1985`, versionName `0.7.9-rc1`.
-- `c64u` only was used for live target checks. No live `u64` probe was run.
+- Initial implementation HIL used `c64u` only for live target checks.
 - After the user rebooted `c64u`, app HIL showed selected device `debug-c64u` at `192.168.1.167`, `HEALTHY`, device `c64u`, firmware `1.1.0`.
 - Diagnostics opened from the health badge on Pixel 4.
 - Android Back via ADB closed Diagnostics and the route stayed `/`.
@@ -52,7 +52,7 @@ Implemented the actionable prod-hardening-5 fixes for API cancellation classific
 - Reboot confirmation opened, Cancel closed it, and no reset/reboot/power machine request was observed.
 - Android Back closed a Reset confirmation and the route stayed `/`.
 - Final `c64u` `/v1/info` succeeded with hostname `c64u`, unique id `5D4E12`, and empty `errors`.
-- Evidence captured:
+- Evidence captured as locally generated artifacts. The `docs/research/**/evidence/` tree and research PNGs are intentionally gitignored, so these paths document the local HIL evidence locations rather than committed repository files:
   - `docs/research/stabilization/prod-hardening-5/evidence/raw/prod-hardening-5-launch.png`
   - `docs/research/stabilization/prod-hardening-5/evidence/review/prod-hardening-5-launch-review.png`
   - `docs/research/stabilization/prod-hardening-5/evidence/raw/prod-hardening-5-post-back.png`
@@ -70,6 +70,20 @@ Initial HIL limitation: before the user rebooted `c64u`, REST `/v1/info` reset c
 - Power Cycle was not visible in the default connected Home quick actions during HIL.
 - Stale-device supersede behavior was validated with mocks/test doubles, not by switching to or probing the real `u64`.
 
+## PR convergence deploy validation
+
+- Pixel 4 `9B081FFAZ001WX` installed `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk`.
+- App package version after install: versionCode `1986`, versionName `0.7.9-rc1`.
+- Current hardware probe followed repository preference order:
+  - `u64` reachable: product `Ultimate 64 Elite`, firmware `3.14e`, hostname `u64`, unique id `38C1BA`, empty `errors`.
+  - `c64u` REST `/v1/info` reset the connection.
+- On-device validation used selected device `debug-u64` / host `u64`.
+- App showed `HEALTHY`, device `u64`, firmware `3.14e`.
+- Reset confirmation opened, Cancel closed it, and no reset/reboot/power machine request was observed.
+- Android Back closed a Reset confirmation and the route stayed `/`.
+- Diagnostics opened from the health badge; Android Back closed Diagnostics and the route stayed `/`.
+- Final `u64` `/v1/info` succeeded.
+
 ## Known non-issues deliberately left unchanged
 
 - Polling intervals, retry/backoff policy, circuit-breaker thresholds, and device-safety presets were not tuned.
@@ -80,7 +94,7 @@ Initial HIL limitation: before the user rebooted `c64u`, REST `/v1/info` reset c
 
 - `npm run test`
 - `npm run test:coverage`
-- Local changed-line statement coverage check: 357/357 changed `src/**` statements covered.
+- Local changed-line statement coverage check: 378/378 changed executable statements covered.
 - `npm run lint`
 - `npx playwright test playwright/homeInteractivity.spec.ts`
 - `npm run cap:build`
