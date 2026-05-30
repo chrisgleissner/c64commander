@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
+import { InterstitialStateProvider } from "@/components/ui/interstitial-state";
 import { reportUserError } from "@/lib/uiErrors";
 import { shareAllDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
 import { DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT } from "@/lib/diagnostics/diagnosticsTestBridge";
@@ -29,6 +30,18 @@ const { buildActionSummariesMock } = vi.hoisted(() => ({
 const { consumeDiagnosticsOpenRequestMock, clearDiagnosticsOpenRequestMock } = vi.hoisted(() => ({
   consumeDiagnosticsOpenRequestMock: vi.fn(),
   clearDiagnosticsOpenRequestMock: vi.fn(),
+}));
+
+const appListenerState = vi.hoisted(() => ({
+  backButtonListener: null as null | (() => void),
+  addListener: vi.fn(),
+  remove: vi.fn(),
+}));
+
+vi.mock("@capacitor/app", () => ({
+  App: {
+    addListener: appListenerState.addListener,
+  },
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -158,6 +171,11 @@ vi.mock("@/components/diagnostics/DiagnosticsListItem", () => ({
   ),
 }));
 
+const LocationProbe = () => {
+  const location = useLocation();
+  return <div data-testid="route-path">{location.pathname}</div>;
+};
+
 const renderOverlay = (initialPath = "/") => {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -169,9 +187,12 @@ const renderOverlay = (initialPath = "/") => {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[initialPath]}>
-        <Routes>
-          <Route path="*" element={<GlobalDiagnosticsOverlay />} />
-        </Routes>
+        <InterstitialStateProvider>
+          <LocationProbe />
+          <Routes>
+            <Route path="*" element={<GlobalDiagnosticsOverlay />} />
+          </Routes>
+        </InterstitialStateProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -185,6 +206,15 @@ describe("GlobalDiagnosticsOverlay", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     buildActionSummariesMock.mockClear();
+    appListenerState.backButtonListener = null;
+    appListenerState.addListener.mockReset();
+    appListenerState.remove.mockReset();
+    appListenerState.addListener.mockImplementation(async (eventName: string, listener: () => void) => {
+      if (eventName === "backButton") {
+        appListenerState.backButtonListener = listener;
+      }
+      return { remove: appListenerState.remove };
+    });
     resetHealthCheckStateSnapshot();
     consumeDiagnosticsOpenRequestMock.mockReturnValue({ preset: "header", panel: null });
     delete (
@@ -223,6 +253,22 @@ describe("GlobalDiagnosticsOverlay", () => {
       }),
     );
   }, 10_000);
+
+  it("Android Back closes Diagnostics without changing the route", async () => {
+    renderOverlay("/settings");
+
+    await screen.findByRole("dialog");
+    await waitFor(() => expect(appListenerState.backButtonListener).not.toBeNull());
+
+    act(() => {
+      appListenerState.backButtonListener?.();
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId("route-path")).toHaveTextContent("/settings");
+  });
 
   it("reports share-all failures", async () => {
     vi.mocked(shareAllDiagnosticsZip).mockRejectedValue(new Error("zip failed"));

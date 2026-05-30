@@ -1,10 +1,12 @@
 import * as React from "react";
+import { App } from "@capacitor/app";
 
 import {
   resolveInterstitialBackdropOpacity,
   resolveInterstitialBackdropZIndex,
   resolveInterstitialSurfaceZIndex,
 } from "@/components/ui/interstitialStyles";
+import { addLog } from "@/lib/logging";
 
 export type InterstitialSurfaceKind = "modal" | "sheet" | "progress";
 
@@ -106,6 +108,46 @@ export function InterstitialStateProvider({ children }: { children: React.ReactN
       delete root.dataset.interstitialActive;
       delete root.dataset.interstitialDepth;
       delete root.dataset.interstitialTopKind;
+    };
+  }, [value.active, value.depth, value.topKind]);
+
+  React.useEffect(() => {
+    if (!value.active || typeof document === "undefined") {
+      return undefined;
+    }
+
+    let removed = false;
+    let removeListener: (() => Promise<void>) | null = null;
+
+    void App.addListener("backButton", () => {
+      addLog("debug", "Android Back dismissed topmost interstitial", {
+        depth: value.depth,
+        topKind: value.topKind,
+      });
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          key: "Escape",
+        }),
+      );
+    })
+      .then((handle) => {
+        if (removed) {
+          void handle.remove();
+          return;
+        }
+        removeListener = () => handle.remove();
+      })
+      .catch((error) => {
+        addLog("warn", "Failed to register Android Back interstitial handler", {
+          error: error instanceof Error ? error.message : String(error ?? "Unknown listener failure"),
+        });
+      });
+
+    return () => {
+      removed = true;
+      void removeListener?.();
     };
   }, [value.active, value.depth, value.topKind]);
 

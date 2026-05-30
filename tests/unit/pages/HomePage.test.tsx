@@ -1116,6 +1116,8 @@ describe("HomePage SID status", () => {
     renderHomePage();
 
     fireEvent.click(screen.getAllByRole("button", { name: /^Reset$/ })[0]);
+    expect(machineControlPayloadRef.current.reset.mutateAsync).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^Confirm$/ }));
     await waitFor(() => expect(machineControlPayloadRef.current.reset.mutateAsync).toHaveBeenCalled());
     expect(toastSpy).toHaveBeenCalledWith({ title: "Machine reset" });
 

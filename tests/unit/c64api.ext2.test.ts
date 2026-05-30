@@ -20,6 +20,7 @@ import {
 } from "@/lib/c64api";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { getSmokeConfig } from "@/lib/smoke/smokeMode";
+import { recordRestResponse } from "@/lib/tracing/traceSession";
 
 import { CURRENT_DEVICE_HOST_KEY as DEVICE_HOST_KEY } from "@/lib/c64api/hostConfig";
 
@@ -188,6 +189,7 @@ vi.mock("@/lib/secureStorage", () => ({
 const addErrorLogMock = addErrorLog as unknown as ReturnType<typeof vi.fn>;
 const addLogMock = addLog as unknown as ReturnType<typeof vi.fn>;
 const getSmokeConfigMock = getSmokeConfig as unknown as ReturnType<typeof vi.fn>;
+const recordRestResponseMock = recordRestResponse as unknown as ReturnType<typeof vi.fn>;
 
 const okJsonResponse = (body: object = { errors: [] }) =>
   new Response(JSON.stringify(body), {
@@ -343,6 +345,16 @@ describe("c64api utility functions - targeted branch coverage", () => {
 
   // ── parseResponseJson: non-JSON response paths (lines 609-617) ───────────
   describe("parseResponseJson error paths", () => {
+    it("keeps valid JSON responses valid", async () => {
+      const fm = getFetchMock();
+      fm.mockResolvedValue(okJsonResponse({ product: "C64 Ultimate", errors: [] }));
+
+      const api = new C64API("http://c64u");
+
+      await expect(api.getInfo()).resolves.toMatchObject({ product: "C64 Ultimate", errors: [] });
+      expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API parse failed", expect.anything());
+    });
+
     it("throws malformed response error when response is non-JSON content type (line 609)", async () => {
       const fm = getFetchMock();
       fm.mockResolvedValue(
@@ -372,6 +384,35 @@ describe("c64api utility functions - targeted branch coverage", () => {
       await expect(api.getInfo()).rejects.toMatchObject({
         code: "C64API_MALFORMED_JSON_RESPONSE",
       });
+      expect(addErrorLogMock).toHaveBeenCalledWith("C64 API parse failed", expect.anything());
+    });
+
+    it("reports response body cancellation as AbortError instead of malformed JSON", async () => {
+      const fm = getFetchMock();
+      const abortError = new Error("The user aborted a request.");
+      abortError.name = "AbortError";
+      const response = {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: new Headers({ "content-type": "application/json" }),
+        clone: vi
+          .fn()
+          .mockReturnValueOnce({ text: vi.fn(async () => JSON.stringify({ product: "C64 Ultimate", errors: [] })) })
+          .mockReturnValueOnce({ json: vi.fn(async () => Promise.reject(abortError)) }),
+      } as unknown as Response;
+      fm.mockResolvedValue(response);
+
+      const api = new C64API("http://c64u");
+
+      await expect(api.getInfo()).rejects.toMatchObject({ name: "AbortError" });
+      expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API parse failed", expect.anything());
+      expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
+      expect(addLogMock).toHaveBeenCalledWith(
+        "debug",
+        "C64 API response body read cancelled",
+        expect.objectContaining({ path: "/v1/info", status: 200 }),
+      );
     });
   });
 
@@ -423,6 +464,79 @@ describe("c64api utility functions - targeted branch coverage", () => {
       await expect(api.getInfo({ signal: controller.signal, timeoutMs: 5000 })).rejects.toMatchObject({
         name: "AbortError",
       });
+    });
+
+    it("downgrades stale selected-device failures after routing is superseded", async () => {
+      const fm = getFetchMock();
+      let rejectFetch!: (reason?: unknown) => void;
+      fm.mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+          rejectFetch = reject;
+        }),
+      );
+
+      const api = new C64API("http://device-a", undefined, "device-a");
+      const pending = api.getInfo({ __c64uBypassCache: true });
+      api.setDeviceHost("device-b");
+      rejectFetch(new TypeError("Failed to fetch"));
+
+      await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+      expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
+      expect(recordRestResponseMock).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          path: "/v1/info",
+          expectedFailure: true,
+        }),
+      );
+    });
+
+    it("downgrades responses superseded while the stale body is being inspected", async () => {
+      const fm = getFetchMock();
+      let resolveText!: (text: string) => void;
+      const staleResponse = {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: new Headers({ "content-type": "application/json" }),
+        clone: () => ({
+          text: () =>
+            new Promise<string>((resolve) => {
+              resolveText = resolve;
+            }),
+        }),
+        json: async () => ({ product: "stale" }),
+      } as unknown as Response;
+      fm.mockResolvedValueOnce(staleResponse);
+
+      const api = new C64API("http://device-a", undefined, "device-a");
+      const pending = api.getInfo({ __c64uBypassCache: true });
+      await vi.waitFor(() => expect(resolveText).toBeTypeOf("function"));
+
+      api.setDeviceHost("device-b");
+      resolveText(JSON.stringify({ product: "stale" }));
+
+      await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+      expect(addLogMock).toHaveBeenCalledWith(
+        "debug",
+        "C64 API request superseded by routing change",
+        expect.objectContaining({
+          path: "/v1/info",
+          requestDeviceHost: "device-a",
+          currentDeviceHost: "device-b",
+        }),
+      );
+      expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
+    });
+
+    it("still reports selected-device transport failures", async () => {
+      const fm = getFetchMock();
+      fm.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+      const api = new C64API("http://c64u", undefined, "c64u");
+
+      await expect(api.getInfo({ __c64uBypassCache: true })).rejects.toThrow("Host unreachable");
+      expect(addErrorLogMock).toHaveBeenCalledWith("C64 API request failed", expect.anything());
     });
   });
 

@@ -52,6 +52,13 @@ const getAllTraces = async (page: Page) => {
   });
 };
 
+const confirmMachineAction = async (page: Page, name: string) => {
+  const dialog = page.getByRole("dialog", { name: `${name}?` });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Confirm", exact: true }).click();
+  await expect(dialog).toBeHidden();
+};
+
 const enableFeatureFlags = async (
   page: Page,
   flagIds: Array<"home_telnet_clear_ram_reboot_enabled" | "home_telnet_power_cycle_enabled">,
@@ -173,7 +180,9 @@ test.describe("Home interactions", () => {
     const machineControls = page.getByTestId("home-machine-controls");
 
     await machineControls.getByRole("button", { name: "Reset", exact: true }).click();
+    await confirmMachineAction(page, "Reset");
     await machineControls.getByRole("button", { name: "Reboot", exact: true }).click();
+    await confirmMachineAction(page, "Reboot");
     await machineControls.getByRole("button", { name: "Menu", exact: true }).click();
 
     await machineControls.getByRole("button", { name: "Pause", exact: true }).click();
@@ -229,6 +238,7 @@ test.describe("Home interactions", () => {
     const rebootClearMemory = page.getByTestId("home-machine-inline-rebootClearMemory");
     await expect(rebootClearMemory).toBeEnabled();
     await rebootClearMemory.click();
+    await confirmMachineAction(page, "Reboot (Clr Mem)");
 
     await expect
       .poll(() =>
@@ -260,6 +270,7 @@ test.describe("Home interactions", () => {
     const powerCycle = page.getByTestId("home-power-cycle");
     await expect(powerCycle).toBeEnabled();
     await powerCycle.click();
+    await confirmMachineAction(page, "Power Cycle");
 
     await expect
       .poll(async () => {
@@ -324,6 +335,7 @@ test.describe("Home interactions", () => {
       const powerCycle = page.getByTestId("home-power-cycle");
       await expect(powerCycle).toBeEnabled();
       await powerCycle.click();
+      await confirmMachineAction(page, "Power Cycle");
 
       await expect
         .poll(async () => {

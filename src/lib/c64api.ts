@@ -57,6 +57,7 @@ import {
   getIdleContext,
   inspectRequestPayload,
   inspectResponsePayload,
+  isAbortLikeError,
   normalizeUrlPath,
   wait,
   waitWithAbortSignal,
@@ -461,6 +462,7 @@ export class C64API {
   private readonly readRequestBudget = new Map<string, { recordedAtMs: number; value: unknown }>();
   private readonly configCategoryItemsCache = new Map<string, Record<string, unknown>>();
   private activeConfigEnrichmentNamespaceKey: string | null;
+  private requestGeneration = 0;
 
   constructor(baseUrl: string = DEFAULT_BASE_URL, password?: string, deviceHost: string = DEFAULT_DEVICE_HOST) {
     this.deviceHost = normalizeDeviceHost(deviceHost || getDeviceHostFromBaseUrl(baseUrl));
@@ -477,18 +479,21 @@ export class C64API {
     }
     this.apiBaseUrl = resolvePlatformApiBaseUrl(this.deviceHost, url);
     this.resetRequestReadState();
+    this.bumpRequestGeneration();
     this.setActiveConfigEnrichmentNamespaceForCurrentHost();
   }
 
   setPassword(password?: string) {
     this.password = password;
     this.resetRequestReadState();
+    this.bumpRequestGeneration();
   }
 
   setDeviceHost(deviceHost?: string) {
     this.deviceHost = normalizeDeviceHost(deviceHost);
     this.apiBaseUrl = resolvePlatformApiBaseUrl(this.deviceHost, buildBaseUrlFromDeviceHost(this.deviceHost));
     this.resetRequestReadState();
+    this.bumpRequestGeneration();
     this.setActiveConfigEnrichmentNamespaceForCurrentHost();
   }
 
@@ -595,6 +600,14 @@ export class C64API {
     try {
       return (await response.clone().json()) as T;
     } catch (error) {
+      if (isAbortLikeError(error)) {
+        addLog("debug", "C64 API response body read cancelled", {
+          path,
+          status: response.status,
+          contentType,
+        });
+        throw createAbortError();
+      }
       throw this.buildMalformedResponseError(path, response, "invalid-json", {
         contentType,
         parseError: (error as Error).message,
@@ -618,6 +631,10 @@ export class C64API {
   private resetRequestReadState() {
     this.inFlightReadRequests.clear();
     this.readRequestBudget.clear();
+  }
+
+  private bumpRequestGeneration() {
+    this.requestGeneration = (this.requestGeneration + 1) % 1_000_000;
   }
 
   private setActiveConfigEnrichmentNamespaceForCurrentHost() {
@@ -829,6 +846,8 @@ export class C64API {
 
     const baseUrl = this.getBaseUrl();
     const url = `${baseUrl}${path}`;
+    const requestGeneration = this.requestGeneration;
+    const requestDeviceHost = this.deviceHost;
     const method = (options.method || "GET").toString().toUpperCase();
     const timeoutMs = options.timeoutMs;
     const intent = options.__c64uIntent ?? "user";
@@ -910,6 +929,19 @@ export class C64API {
             const requestTrace = await inspectRequestPayload(requestOptions.body);
             let lastError: unknown = null;
             const firstAttemptStartedAt = Date.now();
+            const isSuperseded = () => this.requestGeneration !== requestGeneration;
+            const throwIfSuperseded = () => {
+              if (!isSuperseded()) return;
+              addLog("debug", "C64 API request superseded by routing change", {
+                method,
+                path,
+                url,
+                requestId,
+                requestDeviceHost,
+                currentDeviceHost: this.deviceHost,
+              });
+              throw createAbortError();
+            };
 
             for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
               const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -969,6 +1001,7 @@ export class C64API {
                   }),
                   timedSignal.signal,
                 );
+                throwIfSuperseded();
 
                 status = response.status;
                 const durationMs = Math.max(
@@ -976,6 +1009,7 @@ export class C64API {
                   Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
                 );
                 const responseTrace = await inspectResponsePayload(response);
+                throwIfSuperseded();
                 if (!response.ok) {
                   const err = new Error(buildHttpErrorMessage(response.status, response.statusText));
                   const failure = classifyError(err, "integration");
@@ -1001,7 +1035,7 @@ export class C64API {
                 }
 
                 if (skipSuccessBodyInspection) {
-                  noteRestReachable(url, this.deviceHost);
+                  noteRestReachable(url, requestDeviceHost);
                   recordRestResponse(action, {
                     method,
                     path,
@@ -1021,7 +1055,8 @@ export class C64API {
                 }
 
                 const parsedBody = await this.parseResponseJson<T>(response, path);
-                noteRestReachable(url, this.deviceHost, path === "/v1/info" ? (parsedBody as DeviceInfo) : null);
+                throwIfSuperseded();
+                noteRestReachable(url, requestDeviceHost, path === "/v1/info" ? (parsedBody as DeviceInfo) : null);
                 recordRestResponse(action, {
                   method,
                   path,
@@ -1045,20 +1080,22 @@ export class C64API {
                 const fuzzBlocked = (error as { __fuzzBlocked?: boolean }).__fuzzBlocked;
                 const rawMessage = (error as Error).message || "Request failed";
                 const callerAborted = requestSignal?.aborted === true;
-                const isAbort =
-                  (error as { name?: string }).name === "AbortError" ||
-                  timedSignal.didTimeout() ||
-                  /timed out/i.test(rawMessage);
+                const superseded = isSuperseded();
+                const cancelledAbort = isAbortLikeError(error) && !timedSignal.didTimeout();
+                const isAbort = isAbortLikeError(error) || timedSignal.didTimeout() || /timed out/i.test(rawMessage);
                 const isNetworkFailure = isNetworkFailureMessage(rawMessage);
                 const failure = classifyError(error);
                 const normalizedError =
-                  !callerAborted && (isAbort || isNetworkFailure) ? resolveHostErrorMessage(rawMessage) : rawMessage;
+                  !callerAborted && !superseded && (isAbort || isNetworkFailure)
+                    ? resolveHostErrorMessage(rawMessage)
+                    : rawMessage;
                 const durationMs = Math.max(
                   0,
                   Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
                 );
                 if (!responseRecorded) {
-                  const expectedFailure = callerAborted || expectedFailureOption || failure.isExpected;
+                  const expectedFailure =
+                    callerAborted || superseded || cancelledAbort || expectedFailureOption || failure.isExpected;
                   recordRestResponse(action, {
                     method,
                     path,
@@ -1075,10 +1112,23 @@ export class C64API {
                     recordTraceError(action, error as Error, failure);
                   }
                 }
+                if (superseded) {
+                  addLog("debug", "C64 API request failure ignored after routing change", {
+                    method,
+                    path,
+                    url,
+                    requestId,
+                    requestDeviceHost,
+                    currentDeviceHost: this.deviceHost,
+                    rawError: rawMessage,
+                  });
+                  throw createAbortError();
+                }
                 if (
                   !fuzzBlocked &&
                   intent !== "system" &&
                   !callerAborted &&
+                  !cancelledAbort &&
                   !expectedFailureOption &&
                   !failure.isExpected
                 ) {
@@ -1130,6 +1180,7 @@ export class C64API {
                 const shouldRetry =
                   scheduledRequest &&
                   !callerAborted &&
+                  !superseded &&
                   attempt < maxAttempts &&
                   isAbort &&
                   elapsedSinceFirstAttemptMs <= SCHEDULED_REQUEST_RETRY_GUARD_MS;
@@ -1166,6 +1217,10 @@ export class C64API {
                 }
 
                 if (callerAborted) {
+                  throw createAbortError();
+                }
+
+                if (cancelledAbort) {
                   throw createAbortError();
                 }
 

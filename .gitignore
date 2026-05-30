@@ -94,7 +94,9 @@ filecount*.txt
 
 # Review generated research evidence (machine-generated, ephemeral)
 docs/plans/performance/playback-and-volume-control/runs/
+docs/research/**/*.png
 docs/research/**/artifacts/
+docs/research/**/evidence/
 docs/research/**/logs/
 docs/research/**/*logcat*
 docs/research/**/*meminfo*/
@@ -197,3 +199,4 @@ test-data
 vivipi
 .gstack/
 .codex
+
