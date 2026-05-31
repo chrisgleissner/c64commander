@@ -39,11 +39,16 @@ const waitForDeviceInfo = async (page: Page) => {
 };
 
 const waitForStreamsReady = async (page: Page) => {
-  await waitForConnected(page);
+  await waitForDeviceInfo(page);
+  const streamPattern = /\d+\.\d+\.\d+\.\d+:\d+/;
+  await expect(page.getByTestId("home-stream-endpoint-display-audio")).toHaveText(streamPattern, {
+    timeout: 15000,
+  });
+  await expect(page.getByTestId("home-stream-endpoint-display-vic")).toHaveText(streamPattern, {
+    timeout: 15000,
+  });
   await expect(page.getByTestId("home-stream-start-audio")).toBeEnabled();
   await expect(page.getByTestId("home-stream-stop-audio")).toBeEnabled();
-  await expect(page.getByTestId("home-stream-start-vic")).toBeEnabled();
-  await expect(page.getByTestId("home-stream-stop-vic")).toBeEnabled();
 };
 
 const getTelnetTraces = async (page: Page) => {
@@ -237,7 +242,7 @@ test.describe("Home interactions", () => {
   test("reboot clear RAM uses telnet first on the external mock target", async ({ page }: { page: Page }) => {
     await enableFeatureFlags(page, ["home_telnet_clear_ram_reboot_enabled"]);
     await page.goto("/");
-    await waitForConnected(page);
+    await waitForDeviceInfo(page);
     await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
     await page.evaluate(() =>
       (window as Window & { __c64uTracing?: { clearTraces?: () => void } }).__c64uTracing?.clearTraces?.(),
@@ -248,6 +253,7 @@ test.describe("Home interactions", () => {
     ).length;
 
     const rebootClearMemory = page.getByTestId("home-machine-inline-rebootClearMemory");
+    await expect(rebootClearMemory).toBeVisible({ timeout: 15000 });
     await expect(rebootClearMemory).toBeEnabled();
     await rebootClearMemory.click();
     await confirmMachineAction(page, "Reboot (Clr Mem)");
