@@ -451,7 +451,7 @@ describe("c64api branches", () => {
     expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
   });
 
-  it("suppresses trace errors for internally classified expected abort failures", async () => {
+  it("preserves internally classified abort failures as cancellation", async () => {
     const fetchMock = getFetchMock();
     const abortErr = new Error("The operation was aborted");
     abortErr.name = "AbortError";
@@ -464,7 +464,7 @@ describe("c64api branches", () => {
     });
 
     const api = new C64API("http://c64u");
-    await expect(api.getInfo({ __c64uBypassCache: true })).rejects.toThrow("Host unreachable");
+    await expect(api.getInfo({ __c64uBypassCache: true })).rejects.toMatchObject({ name: "AbortError" });
 
     expect(recordRestResponseMock).toHaveBeenCalledWith(
       expect.anything(),

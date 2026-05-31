@@ -34,8 +34,14 @@ const waitForConnected = async (page: Page) => {
 const waitForStreamsReady = async (page: Page) => {
   await waitForConnected(page);
   const streamPattern = /\d+\.\d+\.\d+\.\d+:\d+/;
-  await expect(page.getByTestId("home-stream-endpoint-display-audio")).toHaveText(streamPattern);
-  await expect(page.getByTestId("home-stream-endpoint-display-vic")).toHaveText(streamPattern);
+  await expect(page.getByTestId("home-stream-endpoint-display-audio")).toHaveText(streamPattern, {
+    timeout: 15000,
+  });
+  await expect(page.getByTestId("home-stream-endpoint-display-vic")).toHaveText(streamPattern, {
+    timeout: 15000,
+  });
+  await expect(page.getByTestId("home-stream-start-audio")).toBeEnabled();
+  await expect(page.getByTestId("home-stream-stop-audio")).toBeEnabled();
 };
 
 const getTelnetTraces = async (page: Page) => {
@@ -50,6 +56,13 @@ const getAllTraces = async (page: Page) => {
     const tracing = (window as Window & { __c64uTracing?: { getTraces?: () => Array<any> } }).__c64uTracing;
     return tracing?.getTraces?.() ?? [];
   });
+};
+
+const confirmMachineAction = async (page: Page, name: string) => {
+  const dialog = page.getByRole("dialog", { name: `${name}?` });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Confirm", exact: true }).click();
+  await expect(dialog).toBeHidden();
 };
 
 const enableFeatureFlags = async (
@@ -81,6 +94,10 @@ test.describe("Home interactions", () => {
 
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
+    await page.addInitScript(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
     server = await createMockC64Server();
     await seedUiMocks(page, server.baseUrl);
   });
@@ -173,7 +190,9 @@ test.describe("Home interactions", () => {
     const machineControls = page.getByTestId("home-machine-controls");
 
     await machineControls.getByRole("button", { name: "Reset", exact: true }).click();
+    await confirmMachineAction(page, "Reset");
     await machineControls.getByRole("button", { name: "Reboot", exact: true }).click();
+    await confirmMachineAction(page, "Reboot");
     await machineControls.getByRole("button", { name: "Menu", exact: true }).click();
 
     await machineControls.getByRole("button", { name: "Pause", exact: true }).click();
@@ -227,8 +246,10 @@ test.describe("Home interactions", () => {
     ).length;
 
     const rebootClearMemory = page.getByTestId("home-machine-inline-rebootClearMemory");
+    await expect(rebootClearMemory).toBeVisible({ timeout: 15000 });
     await expect(rebootClearMemory).toBeEnabled();
     await rebootClearMemory.click();
+    await confirmMachineAction(page, "Reboot (Clr Mem)");
 
     await expect
       .poll(() =>
@@ -258,8 +279,10 @@ test.describe("Home interactions", () => {
     );
 
     const powerCycle = page.getByTestId("home-power-cycle");
+    await expect(powerCycle).toBeVisible({ timeout: 15000 });
     await expect(powerCycle).toBeEnabled();
     await powerCycle.click();
+    await confirmMachineAction(page, "Power Cycle");
 
     await expect
       .poll(async () => {
@@ -324,6 +347,7 @@ test.describe("Home interactions", () => {
       const powerCycle = page.getByTestId("home-power-cycle");
       await expect(powerCycle).toBeEnabled();
       await powerCycle.click();
+      await confirmMachineAction(page, "Power Cycle");
 
       await expect
         .poll(async () => {

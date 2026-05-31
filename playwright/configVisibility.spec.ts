@@ -9,7 +9,7 @@
 import { test, expect } from "@playwright/test";
 import type { Page, TestInfo } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
-import { uiFixtures } from "./uiMocks";
+import { seedUiMocks, uiFixtures } from "./uiMocks";
 import {
   allowWarnings,
   assertNoUiIssues,
@@ -25,6 +25,60 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
+const seedConfigVisibilityMocks = async (page: Page, serverBaseUrl: string, demoBaseUrl: string) => {
+  await seedUiMocks(page, serverBaseUrl);
+
+  const host = new URL(serverBaseUrl).host;
+  await page.addInitScript(
+    ({
+      host: hostArg,
+      demoBaseUrl: demoBaseUrlArg,
+      serverBaseUrl: serverBaseUrlArg,
+      snapshot,
+    }: {
+      host: string;
+      demoBaseUrl: string;
+      serverBaseUrl: string;
+      snapshot: unknown;
+    }) => {
+      const routingWindow = window as Window & {
+        __c64uAllowedBaseUrls?: string[];
+        __c64uExpectedBaseUrl?: string;
+        __c64uMockServerBaseUrl?: string;
+        __c64uSecureStorageOverride?: unknown;
+        __c64uTestProbeEnabled?: boolean;
+      };
+      const allowedBaseUrls = new Set<string>(routingWindow.__c64uAllowedBaseUrls ?? []);
+      allowedBaseUrls.add(serverBaseUrlArg);
+      allowedBaseUrls.add(demoBaseUrlArg);
+      routingWindow.__c64uAllowedBaseUrls = Array.from(allowedBaseUrls);
+      routingWindow.__c64uExpectedBaseUrl = serverBaseUrlArg;
+      routingWindow.__c64uMockServerBaseUrl = demoBaseUrlArg;
+      routingWindow.__c64uTestProbeEnabled = true;
+
+      localStorage.setItem("c64u_startup_discovery_window_ms", "300");
+      localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+      localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
+      localStorage.setItem("c64u_device_host", hostArg);
+      localStorage.setItem("c64u_base_url", serverBaseUrlArg);
+      localStorage.removeItem("c64u_password");
+      localStorage.removeItem("c64u_has_password");
+      delete routingWindow.__c64uSecureStorageOverride;
+      localStorage.setItem(`c64u_initial_snapshot:${serverBaseUrlArg}`, JSON.stringify(snapshot));
+      sessionStorage.setItem(`c64u_initial_snapshot_session:${serverBaseUrlArg}`, "1");
+      localStorage.setItem(`c64u_initial_snapshot:${demoBaseUrlArg}`, JSON.stringify(snapshot));
+      sessionStorage.setItem(`c64u_initial_snapshot_session:${demoBaseUrlArg}`, "1");
+      sessionStorage.setItem("c64u_demo_interstitial_shown", "1");
+    },
+    {
+      host,
+      demoBaseUrl,
+      serverBaseUrl,
+      snapshot: uiFixtures.initialSnapshot,
+    },
+  );
+};
+
 test.describe("Config visibility across modes", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
   let demoServer: Awaited<ReturnType<typeof createMockC64Server>>;
@@ -35,8 +89,12 @@ test.describe("Config visibility across modes", () => {
       await assertNoUiIssues(page, testInfo);
     } finally {
       await finalizeEvidence(page, testInfo);
-      await demoServer?.close?.().catch(() => {});
-      await server?.close?.().catch(() => {});
+      await demoServer?.close?.().catch((error) => {
+        console.warn("Failed to close demo mock server", error);
+      });
+      await server?.close?.().catch((error) => {
+        console.warn("Failed to close primary mock server", error);
+      });
     }
   });
 
@@ -48,41 +106,7 @@ test.describe("Config visibility across modes", () => {
     server = await createMockC64Server(uiFixtures.configState);
     demoServer = await createMockC64Server(uiFixtures.configState);
     server.setReachable(false);
-
-    const host = new URL(server.baseUrl).host;
-    await page.addInitScript(
-      ({
-        host: hostArg,
-        demoBaseUrl,
-        serverBaseUrl,
-        snapshot,
-      }: {
-        host: string;
-        demoBaseUrl: string;
-        serverBaseUrl: string;
-        snapshot: unknown;
-      }) => {
-        (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
-        localStorage.setItem("c64u_startup_discovery_window_ms", "300");
-        localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
-        localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
-        localStorage.setItem("c64u_device_host", hostArg);
-        localStorage.removeItem("c64u_password");
-        localStorage.removeItem("c64u_has_password");
-        delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
-        localStorage.setItem(`c64u_initial_snapshot:${serverBaseUrl}`, JSON.stringify(snapshot));
-        sessionStorage.setItem(`c64u_initial_snapshot_session:${serverBaseUrl}`, "1");
-        localStorage.setItem(`c64u_initial_snapshot:${demoBaseUrl}`, JSON.stringify(snapshot));
-        sessionStorage.setItem(`c64u_initial_snapshot_session:${demoBaseUrl}`, "1");
-        sessionStorage.setItem("c64u_demo_interstitial_shown", "1");
-      },
-      {
-        host,
-        demoBaseUrl: demoServer.baseUrl,
-        serverBaseUrl: server.baseUrl,
-        snapshot: uiFixtures.initialSnapshot,
-      },
-    );
+    await seedConfigVisibilityMocks(page, server.baseUrl, demoServer.baseUrl);
 
     await page.goto("/config", { waitUntil: "domcontentloaded" });
     const demoButton = page.getByRole("button", {
@@ -114,41 +138,7 @@ test.describe("Config visibility across modes", () => {
     server = await createMockC64Server(uiFixtures.configState);
     demoServer = await createMockC64Server(uiFixtures.configState);
     server.setReachable(false);
-
-    const host = new URL(server.baseUrl).host;
-    await page.addInitScript(
-      ({
-        host: hostArg,
-        demoBaseUrl,
-        serverBaseUrl,
-        snapshot,
-      }: {
-        host: string;
-        demoBaseUrl: string;
-        serverBaseUrl: string;
-        snapshot: unknown;
-      }) => {
-        (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
-        localStorage.setItem("c64u_startup_discovery_window_ms", "300");
-        localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
-        localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
-        localStorage.setItem("c64u_device_host", hostArg);
-        localStorage.removeItem("c64u_password");
-        localStorage.removeItem("c64u_has_password");
-        delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
-        localStorage.setItem(`c64u_initial_snapshot:${serverBaseUrl}`, JSON.stringify(snapshot));
-        sessionStorage.setItem(`c64u_initial_snapshot_session:${serverBaseUrl}`, "1");
-        localStorage.setItem(`c64u_initial_snapshot:${demoBaseUrl}`, JSON.stringify(snapshot));
-        sessionStorage.setItem(`c64u_initial_snapshot_session:${demoBaseUrl}`, "1");
-        sessionStorage.setItem("c64u_demo_interstitial_shown", "1");
-      },
-      {
-        host,
-        demoBaseUrl: demoServer.baseUrl,
-        serverBaseUrl: server.baseUrl,
-        snapshot: uiFixtures.initialSnapshot,
-      },
-    );
+    await seedConfigVisibilityMocks(page, server.baseUrl, demoServer.baseUrl);
 
     await page.goto("/config", { waitUntil: "domcontentloaded" });
     const demoButton = page.getByRole("button", {

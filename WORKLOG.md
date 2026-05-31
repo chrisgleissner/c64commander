@@ -1,9 +1,9 @@
 # Production Hardening 2 — Research Worklog
 
 > Research-only task. Evidence log for `docs/research/stabilization/prod-hardening-2/research.md`.
-> The prior device-safety *implementation* worklog is preserved in git history
+> The prior device-safety _implementation_ worklog is preserved in git history
 > (commits `733adf2d`, `f7cd0d4d`, `9963d3e6`, `fa6e711e`). This file logs the
-> *research* investigation that follows it.
+> _research_ investigation that follows it.
 
 ## Entry 1 — Orientation
 
@@ -49,7 +49,8 @@ Files read in full:
 
 Conclusion: a genuine unified-per-protocol gateway exists with priority, coalescing,
 backoff, circuit breaking. Approved boundaries = the three `with*Interaction` wrappers
-+ `scheduleConfigWrite` for config writes.
+
+- `scheduleConfigWrite` for config writes.
 
 ## Entry 3 — Transport layer (Objective 2) — VERIFIED
 
@@ -64,8 +65,9 @@ backoff, circuit breaking. Approved boundaries = the three `with*Interaction` wr
   the readmem/writemem paths resolve to NO cooldown key in `resolveRestPolicy`.
 - Config writes: `setConfigValue` (l.1519), `updateConfigBatch` (l.1563),
   save/load/reset (l.1551-1561) all wrap `scheduleConfigWrite(...)` => double-gated
-  (config queue + REST config-mutation cooldown). `updateConfigBatch`'s `immediate`
-  option (l.1595) now ONLY logs — it no longer bypasses the queue (prior fix holds).
+  (config queue + REST scheduler config-mutation cooldown). `updateConfigBatch`'s
+  `immediate` option (l.1595) now ONLY logs — it no longer bypasses the queue
+  (prior fix holds).
 - Machine control (`machineReset/reboot/pause/resume/poweroff/menu_button`,
   l.1611-1657) route through `request` with MACHINE_CONTROL_COOLDOWN_MS=250.
 
@@ -100,10 +102,10 @@ backoff, circuit breaking. Approved boundaries = the three `with*Interaction` wr
      l.339). Probes ALL saved devices in PARALLEL (`Promise.allSettled(devices.map)`).
      Cadence: picker open => `switchDeviceDialog` ctx, 10s, CONFIG-pulse ALLOWED;
      picker closed => `backgroundMaintenance` ctx, 60s, CONFIG read-only/skipped.
-- Per-device cost per cycle (visible-config-pulse-allowed): REST getInfo +
-  FTP list + TELNET connect/auth/banner + CONFIG roundtrip (up to 2 writes + 3 reads
-  per target, iterates up to 4 targets until one succeeds) + RASTER readMemory(+retry)
-  + JIFFY readMemory(+retry). ~9-13 device ops. Background (read-only) drops CONFIG.
+- Per-device cost per cycle (visible-config-pulse-allowed): REST getInfo + FTP list +
+  TELNET connect/auth/banner + CONFIG roundtrip (up to 2 writes + 3 reads per target,
+  iterates up to 4 targets until one succeeds) + RASTER readMemory(+retry) + JIFFY
+  readMemory(+retry). ~9-13 device ops. Background (read-only) drops CONFIG.
 - Probe intents/bypasses:
   - REST probe: `__c64uIntent:"system"`, `__c64uBypassCache:true`,
     `__c64uBypassCircuit:true`, `__c64uAllowDuringError:true` => bypasses circuit/cache.
@@ -134,7 +136,8 @@ backoff, circuit breaking. Approved boundaries = the three `with*Interaction` wr
   timer + pending ref), single commit on release; pending-intent latches visible value
   and ignores stale device echoes; watchdog releases pause; clears on device switch /
   visibility hidden. Preview/commit both route to caller's `preview`/`commit` which go
-  through `useInteractiveConfigWrite` lane (lighting) or `setConfigValue` (ConfigItemRow).
+  through `useInteractiveConfigWrite` lane (lighting) or `setConfigValue`
+  (ConfigItemRow).
 - `useInteractiveConfigWrite`: `createLatestIntentWriteLane` + 400ms quiet window +
   `waitForMachineTransitionsToSettle` + `beginInteractiveWriteBurst(configsCooldownMs)`;
   always `immediate:false, skipInvalidation:true`; debounced reconciliation invalidate.
@@ -155,6 +158,7 @@ backoff, circuit breaking. Approved boundaries = the three `with*Interaction` wr
 ## Entry 8 — Product-direction clarification (amendment)
 
 User clarified after the initial research draft:
+
 1. The **picker-open 10 s full health cycle is WANTED and kept** (not a risk). The
    real problem is **excessive BACKGROUND health checks** (the 60 s parallel fan-out
    across all saved devices with REST+FTP+Telnet+memory).
@@ -168,5 +172,114 @@ rows 15/24, CTA table, roadmap P1/P2, acceptance criteria, target policy, open
 questions). Authored `docs/research/stabilization/prod-hardening-2/plans.md`
 (implementation plan to fix every finding) and `prompt.md` (executable handoff prompt).
 Best-practice background-health design = traffic-derived health + selected-device-only
-+ freshness gate + single lightweight `/v1/info` probe + adaptive cadence + circuit
-respect; picker-open path untouched.
+
+- freshness gate + single lightweight `/v1/info` probe + adaptive cadence + circuit
+  respect; picker-open path untouched.
+
+## Entry 9 — prod-hardening-5 implementation log (appended)
+
+This entry appends the prod-hardening-5 work instead of replacing the prior research
+worklog above.
+
+### Baseline
+
+- Task started on branch `fix/prod-hardening`.
+- Initial worktree state:
+  - `package-lock.json` modified before this task.
+  - `docs/research/stabilization/prod-hardening-5/evidence/`, `s33-resume-sm.png`, and `s34-sm.png` untracked before this task.
+- Change classification: `DOC_PLUS_CODE` and `UI_CHANGE`.
+- Initial implementation HIL target: `c64u` only. PR convergence deploy validation later followed the current repository preference order and used `u64` when `c64u` reset REST connections.
+
+### Implementation Observations
+
+- Existing Playwright suites include diagnostics, navigation, modal consistency, home interactivity, and playback coverage.
+- Existing scripts include screenshot/evidence helpers in `playwright/testArtifacts.ts`, `scripts/build-maestro-evidence.mjs`, and Android/iOS evidence validation helpers.
+- Pixel 4 was attached as `9B081FFAZ001WX`.
+- Initial `c64u` REST probes resolved to `192.168.1.167` but port 80 reset `/v1/info` connections until the user rebooted `c64u`.
+- After reboot, `c64u` returned `product: C64 Ultimate`, `firmware_version: 1.1.0`, `hostname: c64u`, `unique_id: 5D4E12`, and empty `errors`.
+
+### Failures And Fixes
+
+- Fixed API response-body abort classification by rethrowing abort-like body read failures before malformed JSON handling.
+- Added request-generation supersede detection to downgrade stale selected-device failures after routing changes.
+- Added shared interstitial Android Back handling that dispatches Escape while a modal/sheet/progress overlay is active.
+- Added confirmation dialog for destructive Home machine actions except Power Off, which already delegates to its protected flow.
+- Added screenshot evidence helper that creates raw and review-safe downscaled PNGs, plus optional UI dumps.
+- Targeted tests found and fixed three issues:
+  - body-read aborts still normalized to `Host unreachable` at the final throw;
+  - confirm guard closure could use stale props after rerender;
+  - screenshot test created a raw file before its directory.
+- Full unit run found one stale HomePage expectation for immediate Reset execution; fixed the test to confirm Reset before expecting the mutation/toast.
+- Local changed-line coverage initially found uncovered new cancellation branches; added focused tests for Android Back listener registration failures, abort-like response body inspection failures, and response-inspection supersede logging.
+
+### Validation Completed Before PR Review
+
+- PASS: targeted Vitest suites for API, interstitial state, diagnostics overlay, MachineControls/Home, and screenshot helper.
+- PASS: `npx playwright test playwright/homeInteractivity.spec.ts` (15 passed).
+- PASS: `npm run test` (580 files, 6704 tests).
+- PASS: `npm run test:coverage` with final summary: statements 94.63%, branches 91.70%, functions 91.05%, lines 94.63%.
+- PASS: local changed `src/**` executable statement coverage: 357/357 (100.00%).
+- PASS: `npm run lint`; ESLint reported only existing generated coverage warnings in `.worktrees/stop-ui-validation/coverage/lcov-report/*` and `c64scope/coverage/*`.
+- PASS: `npm run cap:build`; Vite emitted existing chunking warnings, and iOS sync skipped local CocoaPods/xcodebuild on Linux.
+- PASS: `npm run android:apk`; built `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk`.
+
+### HIL Observations
+
+- Installed latest debug APK successfully on Pixel 4.
+- Launched app; app showed selected c64u saved device context but offline while REST reset before the user reboot.
+- Captured local evidence with helper:
+  - raw `docs/research/stabilization/prod-hardening-5/evidence/raw/prod-hardening-5-launch.png` and review `docs/research/stabilization/prod-hardening-5/evidence/review/prod-hardening-5-launch-review.png` (480x1013).
+  - raw `docs/research/stabilization/prod-hardening-5/evidence/raw/prod-hardening-5-post-back.png` and review `docs/research/stabilization/prod-hardening-5/evidence/review/prod-hardening-5-post-back-review.png` (480x1013).
+  - UI dumps under `docs/research/stabilization/prod-hardening-5/evidence/ui/`.
+- CDP validation:
+  - Diagnostics opened from `[data-testid="unified-health-badge"]`.
+  - Android Back via `adb shell input keyevent KEYCODE_BACK` closed the Diagnostics dialog.
+  - Route stayed `/` before and after Back.
+- After `c64u` reboot, app CDP validation showed:
+  - selected device `debug-c64u`, host `192.168.1.167`, name `c64u`;
+  - app body contained `HEALTHY`, `Device c64u`, and `Firmware 1.1.0`;
+  - Diagnostics opened from the health badge and Android Back closed it with route unchanged at `/`;
+  - Reset confirmation text: `Reset?` and `This resets the running C64 session.`;
+  - Reboot confirmation text: `Reboot?` and `This reboots the C64 Ultimate and interrupts the current session.`;
+  - Cancel closed both Reset and Reboot confirmations;
+  - Android Back closed a Reset confirmation with route unchanged at `/`;
+  - monitored machine requests matching reset/reboot/power endpoints: none.
+- Final `curl -sS --max-time 4 http://c64u/v1/info` succeeded.
+- No live `u64` probes were run during the initial implementation HIL pass.
+
+### Intentionally Skipped Destructive HIL Confirmations
+
+- Reset and Reboot live HIL open/cancel checks were performed after `c64u` reboot; no destructive command was sent.
+- Power Cycle was not visible in the default connected Home quick actions during HIL.
+- Destructive actions were not confirmed on the real `c64u`.
+
+## Entry 10 — PR review convergence (appended)
+
+- Review comments retrieved for PR #270 on `fix/prod-hardening`.
+- Restored the prior `PLANS.md` and `WORKLOG.md` content and appended prod-hardening-5 entries instead of replacing the files.
+- Tightened `src/components/ui/interstitial-state.tsx` so the Android Back listener is registered once for the active interstitial period, while a ref keeps the logged depth/top kind current as the stack changes.
+- Added a regression test proving stack changes do not re-register another Back listener.
+- Added finite positive-number validation for `reviewWidth` and `maxDimension` in `scripts/hil-screenshot-evidence.mjs`.
+- Added a regression test for invalid screenshot evidence dimensions.
+- Updated `MachineActionConfirmationDialog` so the `sr-only` description is a short confirmation summary and the detailed consequence appears only in the visible body.
+- Clarified `docs/research/stabilization/prod-hardening-5/fix-summary.md` that evidence PNG paths are local generated artifacts and intentionally gitignored.
+- Ran full PR convergence validation:
+  - `npm run lint` passed with only existing generated coverage warnings in `.worktrees/stop-ui-validation/coverage/lcov-report/*` and `c64scope/coverage/*`.
+  - `npx playwright test playwright/homeInteractivity.spec.ts` passed, 15 tests.
+  - `npm run test` passed, 580 files and 6709 tests.
+  - `npm run build` passed with existing Vite chunking warnings.
+  - `npm run test:coverage` passed with statements 94.63%, branches 91.70%, functions 91.05%, lines 94.63%.
+  - Local changed executable statement coverage passed: 378/378 (100.00%).
+  - `npm run cap:build` passed; iOS pod/xcodebuild steps were skipped locally on Linux.
+  - `npm run android:apk` passed and built versionCode `1986`, versionName `0.7.9-rc1`.
+- Installed `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk` on Pixel 4 `9B081FFAZ001WX`.
+- Current hardware probe results:
+  - `http://u64/v1/info` succeeded with product `Ultimate 64 Elite`, firmware `3.14e`, hostname `u64`, unique id `38C1BA`, and no errors.
+  - `http://c64u/v1/info` failed with `Recv failure: Connection reset by peer`.
+- PR convergence HIL selected `debug-u64` / host `u64` and validated:
+  - app showed `HEALTHY`, device `u64`, firmware `3.14e`;
+  - Reset confirmation opened and Cancel closed it without a machine request;
+  - Android Back closed a Reset confirmation and route stayed `/`;
+  - Diagnostics opened from the health badge and Android Back closed it with route still `/`;
+  - monitored reset/reboot/power machine requests: none.
+- Android logcat after validation had no app fatal exception or destructive command evidence; filtered output contained unrelated system Wi-Fi/Bluetooth/MediaSession messages.

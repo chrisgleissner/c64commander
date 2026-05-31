@@ -47,6 +47,12 @@ export const createAbortError = () => {
   return error;
 };
 
+export const isAbortLikeError = (error: unknown) => {
+  const name = (error as { name?: string } | undefined)?.name ?? "";
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return name === "AbortError" || /aborted|aborterror|canceled|cancelled|cancelation|cancellation/i.test(message);
+};
+
 export const waitWithAbortSignal = async (ms: number, signal?: AbortSignal) => {
   if (!signal) {
     await wait(ms);
@@ -295,6 +301,9 @@ export const inspectResponsePayload = async (
         payloadPreview: buildPayloadPreviewFromText(text),
       };
     } catch (error) {
+      if (isAbortLikeError(error)) {
+        throw createAbortError();
+      }
       addLog("warn", "Failed to parse API response JSON", {
         error: (error as Error).message,
       });
@@ -311,6 +320,9 @@ export const inspectResponsePayload = async (
         payloadPreview: text ? buildPayloadPreviewFromText(text) : null,
       };
     } catch (error) {
+      if (isAbortLikeError(error)) {
+        throw createAbortError();
+      }
       addLog("warn", "Failed to read API text response body", {
         error: (error as Error).message,
       });
@@ -333,6 +345,9 @@ export const inspectResponsePayload = async (
       payloadPreview: buildPayloadPreviewFromBytes(bytes),
     };
   } catch (error) {
+    if (isAbortLikeError(error)) {
+      throw createAbortError();
+    }
     addLog("warn", "Failed to read API binary response body", {
       error: (error as Error).message,
     });

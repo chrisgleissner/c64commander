@@ -60,6 +60,10 @@ test.describe("Home page app config management", () => {
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     enforceDeviceTestMapping(testInfo);
     await startStrictUiMonitoring(page, testInfo);
+    await page.addInitScript(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
     server = await createMockC64Server(uiFixtures.configState);
     await seedUiMocks(page, server.baseUrl);
     await page.addInitScript(() => {
@@ -338,6 +342,8 @@ test.describe("Home page app config management", () => {
           "SID Socket 2": "Disabled",
         },
         "SID Addressing": {
+          "SID Socket 1 Address": "$D400",
+          "SID Socket 2 Address": "Unmapped",
           "UltiSID 1 Address": "",
           "UltiSID 2 Address": "$D420",
         },
