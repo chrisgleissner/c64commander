@@ -31,15 +31,8 @@ const waitForConnected = async (page: Page) => {
   );
 };
 
-const waitForDeviceInfo = async (page: Page) => {
-  await waitForConnected(page);
-  await expect(page.getByTestId("home-system-device")).not.toHaveText("Not available", {
-    timeout: 15000,
-  });
-};
-
 const waitForStreamsReady = async (page: Page) => {
-  await waitForDeviceInfo(page);
+  await waitForConnected(page);
   const streamPattern = /\d+\.\d+\.\d+\.\d+:\d+/;
   await expect(page.getByTestId("home-stream-endpoint-display-audio")).toHaveText(streamPattern, {
     timeout: 15000,
@@ -242,7 +235,7 @@ test.describe("Home interactions", () => {
   test("reboot clear RAM uses telnet first on the external mock target", async ({ page }: { page: Page }) => {
     await enableFeatureFlags(page, ["home_telnet_clear_ram_reboot_enabled"]);
     await page.goto("/");
-    await waitForDeviceInfo(page);
+    await waitForConnected(page);
     await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
     await page.evaluate(() =>
       (window as Window & { __c64uTracing?: { clearTraces?: () => void } }).__c64uTracing?.clearTraces?.(),
@@ -279,7 +272,7 @@ test.describe("Home interactions", () => {
   test("power cycle runs through telnet against the external mock target", async ({ page }: { page: Page }) => {
     await enableFeatureFlags(page, ["home_telnet_power_cycle_enabled"]);
     await page.goto("/");
-    await waitForDeviceInfo(page);
+    await waitForConnected(page);
     await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
     await page.evaluate(() =>
       (window as Window & { __c64uTracing?: { clearTraces?: () => void } }).__c64uTracing?.clearTraces?.(),

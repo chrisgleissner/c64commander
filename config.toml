@@ -1,0 +1,21 @@
+[mcp_servers."mobile-mcp"]
+command = "npx"
+args = ["-y", "@mobilenext/mobile-mcp@latest"]
+
+[mcp_servers.droidmind]
+command = "uvx"
+args = [
+  "--from",
+  "git+https://github.com/hyperb1iss/droidmind",
+  "droidmind",
+  "--transport",
+  "stdio",
+]
+
+[mcp_servers.c64bridge]
+command = "npx"
+args = ["-y", "c64bridge@latest"]
+
+[mcp_servers.c64scope]
+command = "node"
+args = ["c64scope/scripts/start.mjs"]
