@@ -129,6 +129,30 @@ test.describe("Home interactions", () => {
     await waitForStreamsReady(page);
     const startAudio = page.getByTestId("home-stream-start-audio");
     const stopAudio = page.getByTestId("home-stream-stop-audio");
+    const audioEndpointDisplay = page.getByTestId("home-stream-endpoint-display-audio");
+
+    const audioEndpoint = ((await audioEndpointDisplay.textContent()) ?? "").trim();
+    if (!/^\d{1,3}(?:\.\d{1,3}){3}:\d+$/.test(audioEndpoint)) {
+      await page.getByTestId("home-stream-endpoint-edit-audio").click();
+      const dialog = page.getByRole("dialog", { name: "Update audio endpoint" });
+      await expect(dialog).toBeVisible();
+      const input = dialog.getByLabel("Target IPv4 address and port");
+      await input.fill("239.0.1.65:11001");
+      await dialog.getByRole("button", { name: "Confirm", exact: true }).click();
+      await expect(dialog).toBeHidden();
+      await expect
+        .poll(() =>
+          hasRequest(
+            server.requests,
+            (req) =>
+              req.method === "PUT" &&
+              req.url.includes("/v1/configs/Data%20Streams/Stream%20Audio%20to?value=239.0.1.65%3A11001"),
+          ),
+        )
+        .toBe(true);
+      await expect(audioEndpointDisplay).toHaveText("239.0.1.65:11001");
+    }
+
     await startAudio.click();
 
     await expect
@@ -494,7 +518,7 @@ test.describe("Home interactions", () => {
 
     await page.goto("/");
     await waitForConnected(page);
-    await expect(page.getByTestId("home-sid-address-socket1")).toHaveText(/\$[0-9A-F]{4}|\$----/);
+    await expect(page.getByTestId("home-sid-address-socket1")).toHaveAttribute("role", "combobox");
     await page.getByTestId("home-sid-status").getByRole("button", { name: "Reset" }).click();
 
     await expect

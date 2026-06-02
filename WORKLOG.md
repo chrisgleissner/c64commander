@@ -675,3 +675,30 @@ worklog above.
   - Lines: `94.63%`
 - CI interpretation note:
   - the `linux/amd64` failure still looks transient/infrastructure-linked because it is a Docker `@swc/core` postinstall bus error, not a repository assertion regression; it still resets the green-cycle counter, so the next pushed head must prove whether it repeats.
+
+## Entry 31 — 2026-06-02 16:22:11Z UTC — current-head shard-9 stream and SID retry failures fixed locally
+
+- Latest PR `#270` head during this investigation remained `6aa65fb3780c8aac11607698b44eef9bb0ee5145`.
+- Relevant failing CI evidence:
+  - Android run `26830493870`, job `79110491582` (`Web | E2E (sharded) (9, 12)`) failed on the current head.
+  - Downloaded the failed log to `.tmp/ghlogs/android-26830493870-shard9.log`.
+- Failure signatures:
+  - `playwright/homeInteractivity.spec.ts:127:3` `start/stop interactions send stream commands` failed on both the primary attempt and retry #1 because no `PUT /v1/streams/audio:start` request was observed, and strict UI monitoring captured `toast: Invalid stream targetIPv4 address is required.`
+  - `playwright/homeInteractivity.spec.ts:483:3` `SID reset writes deterministic silence register set` failed on the primary attempt only because `home-sid-address-socket1` resolved to the expected `role="combobox"` button but its text content was transiently empty; retry #1 passed.
+- Updated file:
+  - `playwright/homeInteractivity.spec.ts`
+- Fix details:
+  - the stream start test now performs a conditional UI-only endpoint repair when the displayed audio endpoint is invalid, confirms the `PUT /v1/configs/Data Streams/Stream Audio to` request for `239.0.1.65:11001`, and asserts the updated endpoint display before clicking Start;
+  - the SID reset test now asserts that `home-sid-address-socket1` is the expected combobox instead of depending on transient pre-reset text content.
+- Local validation commands and results:
+  - `npx prettier --check playwright/homeInteractivity.spec.ts` — passed
+  - `npx playwright test playwright/homeInteractivity.spec.ts --project=android-phone -g "start/stop interactions send stream commands|SID reset writes deterministic silence register set"` — passed (`2/2`)
+  - `npx playwright test playwright/homeInteractivity.spec.ts --project=android-phone --repeat-each=4 -g "start/stop interactions send stream commands|SID reset writes deterministic silence register set"` — passed (`8/8`)
+  - `npm run test:coverage` — passed
+- Coverage summary after the fix:
+  - Statements: `94.63%`
+  - Branches: `91.70%`
+  - Functions: `91.05%`
+  - Lines: `94.63%`
+- Additional validation context:
+  - the coverage script emitted Android/HVSC perf-budget warnings, including `T1` budget overruns/unmeasured output and `browseLoadSnapshotMs: invalid budget value not-a-number`, but the script exited `0` and the required coverage gate passed.

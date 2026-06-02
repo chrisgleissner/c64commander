@@ -284,3 +284,18 @@ Current follow-up scope on PR 270 head `cabd14409b094dd739b417e5fcf6f74014bc99fb
   - commit and push the two-spec stabilization;
   - monitor the fresh head at job level, with immediate log capture for any repeated `linux/amd64`, shard `3/12`, or shard `9/12` failure;
   - continue toward three consecutive green cycles and final device validation.
+
+### Continuation — 2026-06-02 16:22Z UTC — current-head shard-9 retry on `6aa65fb3780c8aac11607698b44eef9bb0ee5145`
+
+- Current head `6aa65fb3` is still the latest PR `#270` head and Android run `26830493870` failed only on job `79110491582` (`Web | E2E (sharded) (9, 12)`).
+- Exact current failure signatures from `.tmp/ghlogs/android-26830493870-shard9.log`:
+  - `playwright/homeInteractivity.spec.ts:127` `start/stop interactions send stream commands` failed on the primary attempt and retry #1 because no `PUT /v1/streams/audio:start` request was observed and strict UI monitoring captured the toast `Invalid stream targetIPv4 address is required.`
+  - `playwright/homeInteractivity.spec.ts:483` `SID reset writes deterministic silence register set` failed on the primary attempt only because `home-sid-address-socket1` resolved to the expected combobox element but its rendered text was transiently empty; retry #1 passed.
+- Chosen minimal fix:
+  - restore a conditional UI-only stream endpoint repair before clicking Start, but wait on the config `PUT` request and the endpoint display text instead of a brittle post-repair enabled-state assumption;
+  - replace the SID reset precondition text assertion with a structural combobox assertion so the test no longer depends on transient combobox text rendering before the reset action.
+- Validation plan:
+  - run `npx prettier --check playwright/homeInteractivity.spec.ts`;
+  - run the two affected Android-phone tests sequentially;
+  - stress both with `--repeat-each=4`;
+  - run `npm run test:coverage`, confirm branch coverage remains `>= 91%`, then append `WORKLOG.md`, commit, push, and resume job-level CI monitoring toward three consecutive green cycles.
