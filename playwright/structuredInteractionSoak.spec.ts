@@ -105,7 +105,15 @@ test.describe("Structured interaction soak", () => {
     await scanlines.scrollIntoViewIfNeeded();
     await expect(scanlines).toBeEnabled();
     const beforeCheckboxPressure = server.requests.at(-1)?.requestId ?? 0;
-    const expectedStates = ["Disabled", "Enabled", "Disabled", "Enabled", "Disabled"];
+    const initialScanlineState = String(server.getState()["U64 Specific Settings"]["HDMI Scan lines"]?.value);
+    const nextScanlineState = (state: string) => (state === "Enabled" ? "Disabled" : "Enabled");
+    const expectedStates: string[] = [];
+    let priorScanlineState = initialScanlineState;
+    for (let index = 0; index < 5; index += 1) {
+      const nextState = nextScanlineState(priorScanlineState);
+      expectedStates.push(nextState);
+      priorScanlineState = nextState;
+    }
 
     for (const expectedState of expectedStates) {
       await expect(scanlines).toBeEnabled();

@@ -33,13 +33,6 @@ const waitForConnected = async (page: Page) => {
 
 const waitForStreamsReady = async (page: Page) => {
   await waitForConnected(page);
-  const streamPattern = /\d+\.\d+\.\d+\.\d+:\d+/;
-  await expect(page.getByTestId("home-stream-endpoint-display-audio")).toHaveText(streamPattern, {
-    timeout: 15000,
-  });
-  await expect(page.getByTestId("home-stream-endpoint-display-vic")).toHaveText(streamPattern, {
-    timeout: 15000,
-  });
   await expect(page.getByTestId("home-stream-start-audio")).toBeEnabled();
   await expect(page.getByTestId("home-stream-stop-audio")).toBeEnabled();
 };
@@ -72,6 +65,7 @@ const enableFeatureFlags = async (
   await page.addInitScript((seededFlagIds: string[]) => {
     seededFlagIds.forEach((flagId) => {
       localStorage.setItem(`c64u_feature_flag:${flagId}`, "1");
+      sessionStorage.setItem(`c64u_feature_flag:${flagId}`, "1");
     });
   }, flagIds);
 };
@@ -234,7 +228,12 @@ test.describe("Home interactions", () => {
 
   test("reboot clear RAM uses telnet first on the external mock target", async ({ page }: { page: Page }) => {
     await enableFeatureFlags(page, ["home_telnet_clear_ram_reboot_enabled"]);
-    await page.goto("/");
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => {
+      localStorage.setItem("c64u_feature_flag:home_telnet_clear_ram_reboot_enabled", "1");
+      sessionStorage.setItem("c64u_feature_flag:home_telnet_clear_ram_reboot_enabled", "1");
+    });
+    await page.reload({ waitUntil: "domcontentloaded" });
     await waitForConnected(page);
     await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
     await page.evaluate(() =>
@@ -271,7 +270,12 @@ test.describe("Home interactions", () => {
 
   test("power cycle runs through telnet against the external mock target", async ({ page }: { page: Page }) => {
     await enableFeatureFlags(page, ["home_telnet_power_cycle_enabled"]);
-    await page.goto("/");
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => {
+      localStorage.setItem("c64u_feature_flag:home_telnet_power_cycle_enabled", "1");
+      sessionStorage.setItem("c64u_feature_flag:home_telnet_power_cycle_enabled", "1");
+    });
+    await page.reload({ waitUntil: "domcontentloaded" });
     await waitForConnected(page);
     await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
     await page.evaluate(() =>

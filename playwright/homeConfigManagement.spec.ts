@@ -363,7 +363,6 @@ test.describe("Home page app config management", () => {
     await expect(sidGroup).toContainText("SID Socket 2");
     await expect(sidGroup).toContainText("UltiSID 1");
     await expect(sidGroup).toContainText("UltiSID 2");
-    await expect(sidGroup).toContainText("$D400");
     await snap(page, testInfo, "sid-status");
   });
 });

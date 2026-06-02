@@ -192,9 +192,21 @@ existing production-hardening-2 plan above.
 - [x] Fetch all PR 270 comments, review threads, and reviews.
 - [x] Address every unresolved or still-relevant comment.
 - [x] Resolve review threads using `gh`.
-- [ ] Update PR 270 body to mention that PR 271 has been folded in.
-- [ ] Close PR 271 with a clear comment once folded and verified.
-- [ ] Push PR 270 updates.
-- [ ] Track CI for the latest PR 270 head commit.
+- [x] Update PR 270 body to mention that PR 271 has been folded in.
+- [x] Close PR 271 with a clear comment once folded and verified.
+- [x] Push PR 270 updates.
+- [x] Track CI for the latest PR 270 head commit.
 - [ ] Fix CI failures until green.
 - [ ] Final merge-readiness verification.
+
+Current follow-up scope on PR 270 head `27de2418b04d00b37407b1398791a6524398cbfb`:
+
+- [x] Diagnose failing Android workflow shard jobs from run `26807848021`.
+- [x] Reproduce shard-3 / shard-9 / shard-12 failures locally from targeted Playwright specs.
+- [x] Stabilize the affected Playwright assertions with minimal scope.
+- [x] Re-run targeted Playwright specs locally.
+- [x] Re-run `npm run build`.
+- [x] Re-run `npm run test:coverage` and confirm global branch coverage remains >= `91%`.
+- [x] Reinstall latest built APK on the attached Pixel 4 and launch the app.
+- [ ] Commit and push the CI-follow-up fixes to PR 270.
+- [ ] Track the new PR 270 head checks until all required GitHub checks are green.
