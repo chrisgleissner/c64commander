@@ -49,15 +49,6 @@ const waitForStreamsReady = async (page: Page) => {
     });
 };
 
-const waitForStartAudioReady = async (page: Page) => {
-  await waitForConnected(page);
-  await expect
-    .poll(() => page.getByTestId("home-stream-start-audio").isEnabled(), {
-      timeout: 10000,
-    })
-    .toBe(true);
-};
-
 const getTelnetTraces = async (page: Page) => {
   return page.evaluate(() => {
     const tracing = (window as Window & { __c64uTracing?: { getTraces?: () => Array<any> } }).__c64uTracing;
@@ -138,16 +129,6 @@ test.describe("Home interactions", () => {
     await waitForStreamsReady(page);
     const startAudio = page.getByTestId("home-stream-start-audio");
     const stopAudio = page.getByTestId("home-stream-stop-audio");
-    const audioEndpoint = page.getByTestId("home-stream-endpoint-display-audio");
-    if (((await audioEndpoint.textContent())?.trim() ?? "").startsWith("—:")) {
-      await page.getByTestId("home-stream-edit-toggle-audio").click();
-      const endpointInput = page.getByTestId("home-stream-endpoint-audio");
-      await endpointInput.fill("239.0.1.90:11001");
-      await page.getByTestId("home-stream-confirm-audio").click();
-      await expect(audioEndpoint).toHaveText("239.0.1.90:11001");
-      await waitForStartAudioReady(page);
-    }
-
     await startAudio.click();
 
     await expect
