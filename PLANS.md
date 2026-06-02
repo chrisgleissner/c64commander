@@ -226,5 +226,5 @@ Current follow-up scope on PR 270 head `cabd14409b094dd739b417e5fcf6f74014bc99fb
 - [x] Stress-run the remaining `structuredInteractionSoak` Android-phone case across repeated iterations in isolation.
 - [x] Re-run `./gradlew testDebugUnitTest jacocoTestReport` locally to verify the Android unit-test path still passes.
 - [x] Re-run `npm run test:coverage` and confirm global branch coverage remains >= `91%`.
-- [ ] Commit and push the latest shard-3 / shard-9 follow-up fix to PR 270.
+- [x] Commit and push the latest shard-3 / shard-9 follow-up fix to PR 270.
 - [ ] Track the new PR 270 head checks until all required GitHub checks are green.
