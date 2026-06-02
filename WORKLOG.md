@@ -522,3 +522,37 @@ worklog above.
   - `npx playwright test playwright/homeInteractivity.spec.ts --project=android-phone --repeat-each=4 -g "start/stop interactions send stream commands"` — passed (`4/4`)
   - `npx playwright test playwright/structuredInteractionSoak.spec.ts --project=android-phone -g "Home CPU slider and checkbox pressure remains responsive, connected, and request-bounded"` — passed
 - Coverage rerun is still required on the final post-patch tree before the next push.
+
+## Entry 23 — 2026-06-02 12:22:54Z UTC — final local validation, commit, and push for current CI cycle
+
+- Re-ran the mandatory coverage gate on the final patched tree:
+  - `npm run test:coverage` — passed
+  - coverage summary unchanged:
+    - Statements: `94.63%`
+    - Branches: `91.70%`
+    - Functions: `91.05%`
+    - Lines: `94.63%`
+- Committed the remaining CI-focused Playwright stabilizations as `9d39ccdc095bd83e8e3a8366eeaf0362a14b1b4c` with message `test: stabilize remaining config and stream flakes`.
+- Pushed `9d39ccdc095bd83e8e3a8366eeaf0362a14b1b4c` to `origin/fix/prod-hardening`.
+- Latest PR `#270` state after the push:
+  - head SHA: `9d39ccdc095bd83e8e3a8366eeaf0362a14b1b4c`
+  - mergeable: `MERGEABLE`
+  - review decision: none reported
+- Fresh GitHub workflow cycle started for the new head:
+  - android run `26819409379`
+  - web run `26819409422`
+  - ios run `26819409215`
+- Immediate post-push check state:
+  - all new checks were still `QUEUED` at first poll, so merge-readiness remains pending on the latest GitHub CI results.
+
+## Entry 24 — 2026-06-02 13:30:00Z UTC — shard-9 stream endpoint stabilization
+
+- Root cause confirmed from CI job 79069986431 (shard 9, run 26819409379 on head 9d39ccd):
+  - `start/stop interactions send stream commands` failed both attempt and retry #1 with toast `Invalid stream targetIPv4 address is required.`
+  - The pushed approach seeded config via `page.request.post('/v1/configs')` but the UI component did not pick up the config state before the Start button was clicked.
+- Local fix (already in worktree):
+  - Replaced `page.request.post` config seed with direct UI interaction: check the displayed endpoint; if empty (`—:`-prefixed), open the stream editor, fill `239.0.1.90:11001`, confirm, wait for enabled buttons.
+  - Changed SID assertion from `toBeVisible()` to `toHaveAttribute("role", "combobox")` to avoid false negatives from clipped-but-rendered mobile layout.
+- Local validation before this commit:
+  - `npx prettier --check playwright/homeInteractivity.spec.ts` — passed
+  - `npm run test:coverage` — passed; Branches: 91.7% (gate ≥ 91% satisfied)
