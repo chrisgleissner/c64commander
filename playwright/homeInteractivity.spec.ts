@@ -35,6 +35,9 @@ const waitForStreamsReady = async (page: Page) => {
   await waitForConnected(page);
   await expect(page.getByTestId("home-stream-start-audio")).toBeEnabled();
   await expect(page.getByTestId("home-stream-stop-audio")).toBeEnabled();
+  await expect
+    .poll(async () => (await page.getByTestId("home-stream-endpoint-display-audio").textContent())?.trim() ?? "")
+    .toMatch(/^(?!—).+:\d+$/);
 };
 
 const getTelnetTraces = async (page: Page) => {
@@ -117,6 +120,8 @@ test.describe("Home interactions", () => {
         hasRequest(server.requests, (req) => req.method === "PUT" && req.url.includes("/v1/streams/audio:start")),
       )
       .toBe(true);
+    await expect(page.getByTestId("home-stream-start-audio")).toBeEnabled();
+    await expect(page.getByTestId("home-stream-stop-audio")).toBeEnabled();
 
     await page.getByTestId("home-stream-stop-audio").click();
 
@@ -245,6 +250,8 @@ test.describe("Home interactions", () => {
     ).length;
 
     const rebootClearMemory = page.getByTestId("home-machine-inline-rebootClearMemory");
+    await expect(rebootClearMemory).toHaveCount(1, { timeout: 15000 });
+    await rebootClearMemory.scrollIntoViewIfNeeded();
     await expect(rebootClearMemory).toBeVisible({ timeout: 15000 });
     await expect(rebootClearMemory).toBeEnabled();
     await rebootClearMemory.click();
@@ -516,6 +523,7 @@ test.describe("Home interactions", () => {
     expect(socketTag).toBe("SPAN");
 
     const ultiType = page.getByTestId("home-sid-type-ultiSid1");
+    await ultiType.scrollIntoViewIfNeeded();
     await expect(ultiType).toBeVisible();
     const ultiTag = await ultiType.evaluate((el) => el.tagName);
     expect(ultiTag).toBe("BUTTON");

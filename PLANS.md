@@ -199,7 +199,7 @@ existing production-hardening-2 plan above.
 - [ ] Fix CI failures until green.
 - [ ] Final merge-readiness verification.
 
-Current follow-up scope on PR 270 head `27de2418b04d00b37407b1398791a6524398cbfb`:
+Current follow-up scope on PR 270 head `1496beea4480a1d535992d86df467032970a3190`:
 
 - [x] Diagnose failing Android workflow shard jobs from run `26807848021`.
 - [x] Reproduce shard-3 / shard-9 / shard-12 failures locally from targeted Playwright specs.
@@ -209,4 +209,10 @@ Current follow-up scope on PR 270 head `27de2418b04d00b37407b1398791a6524398cbfb
 - [x] Re-run `npm run test:coverage` and confirm global branch coverage remains >= `91%`.
 - [x] Reinstall latest built APK on the attached Pixel 4 and launch the app.
 - [x] Commit and push the CI-follow-up fixes to PR 270.
+- [x] Diagnose the remaining shard-9 rerun failure on head `1496beea4480a1d535992d86df467032970a3190`.
+- [x] Harden the `homeInteractivity` stream and mobile-control assertions with minimal scope.
+- [x] Stress-run the `homeInteractivity` stream start/stop test on `android-phone`.
+- [x] Re-run the affected `homeInteractivity` Android-phone cases locally.
+- [x] Re-run `npm run test:coverage` after the second stabilization and confirm global branch coverage remains >= `91%`.
+- [ ] Commit and push the shard-9 follow-up fix to PR 270.
 - [ ] Track the new PR 270 head checks until all required GitHub checks are green.

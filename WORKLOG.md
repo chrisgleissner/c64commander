@@ -406,3 +406,25 @@ worklog above.
   - android run `26809629499`
   - ios run `26809629615`
 - Began tracking the fresh PR `#270` head checks on top of the new commit.
+
+## Entry 18 — 2026-06-02 09:31:28Z UTC — shard-9 rerun diagnosis and second Playwright stabilization
+
+- GitHub rerun cycle on PR `#270` head `1496beea4480a1d535992d86df467032970a3190` failed again in Android shard `9/12` from run `26809667669`.
+- Pulled raw shard-9 logs via `gh api repos/chrisgleissner/c64commander/actions/jobs/79036415048/logs` and isolated three actionable signals:
+  - `start/stop interactions send stream commands` could still attempt an audio start before the stream endpoint label had resolved from the placeholder state, producing `Invalid stream target`.
+  - The same stream test could click Stop before the Start action had fully settled, missing the `/v1/streams/audio:stop` request in a local stress run.
+  - The mobile assertions for `home-machine-inline-rebootClearMemory` and `home-sid-type-ultiSid1` were safer if they explicitly waited for attachment and scrolled into view before visibility checks.
+- Applied a second minimal stabilization in `playwright/homeInteractivity.spec.ts`:
+  - `waitForStreamsReady` now waits for `home-stream-endpoint-display-audio` to show a non-placeholder `host:port` value.
+  - the stream start/stop test now waits for both Start and Stop controls to be re-enabled after the start request before clicking Stop.
+  - the telnet clear-RAM and SID type tests now scroll the relevant mobile controls into view, with an explicit `toHaveCount(1)` guard on the clear-RAM action before the visibility assertion.
+- Local focused validation after the patch:
+  - `npx prettier --check playwright/homeInteractivity.spec.ts` — passed
+  - `npx playwright test playwright/homeInteractivity.spec.ts --project=android-phone -g "start/stop interactions send stream commands" --repeat-each=8` — passed
+  - `npx playwright test playwright/homeInteractivity.spec.ts --project=android-phone -g "start/stop interactions send stream commands|reboot clear RAM uses telnet first on the external mock target|SID type column renders and LED controls stay inline"` — passed
+  - `npm run test:coverage` — passed
+- Coverage summary remained unchanged after the second stabilization:
+  - Statements: `94.63%`
+  - Branches: `91.70%`
+  - Functions: `91.05%`
+  - Lines: `94.63%`
