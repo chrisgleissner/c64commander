@@ -552,12 +552,14 @@ describe("validation runner", () => {
   it("fails fast when the session store cannot start a run", async () => {
     vi.resetModules();
     vi.doMock("../src/sessionStore.js", () => ({
-      ScopeSessionStore: vi.fn().mockImplementation(() => ({
-        startSession: vi.fn().mockResolvedValue({
-          ok: false,
-          error: { message: "session-start failed" },
-        }),
-      })),
+      ScopeSessionStore: vi.fn().mockImplementation(function ScopeSessionStoreMock() {
+        return {
+          startSession: vi.fn().mockResolvedValue({
+            ok: false,
+            error: { message: "session-start failed" },
+          }),
+        };
+      }),
     }));
 
     const { runCase } = await import("../src/validation/runner.js");

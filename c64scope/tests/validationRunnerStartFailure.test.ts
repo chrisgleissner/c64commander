@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const adbMock = vi.fn();
 const c64uGetMock = vi.fn();
@@ -21,6 +21,10 @@ vi.mock("../src/validation/helpers.js", () => ({
 describe("validation runner start failure", () => {
   beforeEach(() => {
     vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.doUnmock("../src/sessionStore.js");
   });
 
   it("fails immediately when a session cannot be started", async () => {

@@ -176,3 +176,25 @@ existing production-hardening-2 plan above.
   - Android Back closed a Reset confirmation without route navigation or a machine request;
   - Diagnostics opened from the health badge and Android Back closed it without route navigation;
   - final `curl -sS --max-time 4 http://u64/v1/info` succeeded with hostname `u64`, unique id `38C1BA`, and no errors.
+
+## PR 270 / PR 271 Merge-Ready Convergence Plan
+
+- Classification: `DOC_PLUS_CODE`
+- Scope: fold dependency PR `#271` into `#270`, address all actionable PR feedback on `#270`, fix local and GitHub CI failures, update PR metadata, close `#271`, and leave `#270` merge-ready without opening a new PR.
+
+- [x] Capture current PR 270 and PR 271 metadata.
+- [x] Check out PR 270 branch.
+- [x] Fetch PR 271 head.
+- [x] Merge or cherry-pick PR 271 into PR 270.
+- [x] Resolve conflicts, if any.
+- [x] Run dependency install and lockfile validation.
+- [x] Run local tests and builds.
+- [x] Fetch all PR 270 comments, review threads, and reviews.
+- [x] Address every unresolved or still-relevant comment.
+- [x] Resolve review threads using `gh`.
+- [ ] Update PR 270 body to mention that PR 271 has been folded in.
+- [ ] Close PR 271 with a clear comment once folded and verified.
+- [ ] Push PR 270 updates.
+- [ ] Track CI for the latest PR 270 head commit.
+- [ ] Fix CI failures until green.
+- [ ] Final merge-readiness verification.

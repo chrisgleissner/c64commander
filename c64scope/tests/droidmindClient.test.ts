@@ -14,12 +14,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const connectMock = vi.fn();
 const closeMock = vi.fn();
 const callToolMock = vi.fn();
-const clientCtorMock = vi.fn().mockImplementation(() => ({
-  connect: connectMock,
-  close: closeMock,
-  callTool: callToolMock,
-}));
-const transportCtorMock = vi.fn().mockImplementation(() => ({}));
+const clientCtorMock = vi.fn().mockImplementation(function ClientMock() {
+  return {
+    connect: connectMock,
+    close: closeMock,
+    callTool: callToolMock,
+  };
+});
+const transportCtorMock = vi.fn().mockImplementation(function StdioClientTransportMock() {
+  return {};
+});
 
 vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
   Client: clientCtorMock,
