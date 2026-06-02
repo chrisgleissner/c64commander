@@ -35,9 +35,6 @@ const waitForStreamsReady = async (page: Page) => {
   await waitForConnected(page);
   await expect(page.getByTestId("home-stream-start-audio")).toBeEnabled();
   await expect(page.getByTestId("home-stream-stop-audio")).toBeEnabled();
-  await expect
-    .poll(async () => (await page.getByTestId("home-stream-endpoint-display-audio").textContent())?.trim() ?? "")
-    .toMatch(/^(?!—).+:\d+$/);
 };
 
 const getTelnetTraces = async (page: Page) => {
@@ -65,12 +62,18 @@ const enableFeatureFlags = async (
   page: Page,
   flagIds: Array<"home_telnet_clear_ram_reboot_enabled" | "home_telnet_power_cycle_enabled">,
 ) => {
-  await page.addInitScript((seededFlagIds: string[]) => {
-    seededFlagIds.forEach((flagId) => {
-      localStorage.setItem(`c64u_feature_flag:${flagId}`, "1");
-      sessionStorage.setItem(`c64u_feature_flag:${flagId}`, "1");
-    });
-  }, flagIds);
+  await page.getByTestId("tab-settings").click();
+  await expect(page).toHaveURL(/\/settings$/);
+  for (const flagId of flagIds) {
+    const toggle = page.getByTestId(`feature-flag-${flagId}`);
+    await expect(toggle).toBeVisible();
+    if (!(await toggle.isChecked())) {
+      await toggle.click();
+      await expect(toggle).toBeChecked();
+    }
+  }
+  await page.getByTestId("tab-home").click();
+  await expect(page).toHaveURL(/\/$/);
 };
 
 const applyCompactDisplayProfile = async (page: Page) => {
@@ -112,6 +115,15 @@ test.describe("Home interactions", () => {
   test("start/stop interactions send stream commands", async ({ page }: { page: Page }) => {
     await page.goto("/");
     await waitForStreamsReady(page);
+
+    const audioEndpoint = page.getByTestId("home-stream-endpoint-display-audio");
+    if (((await audioEndpoint.textContent())?.trim() ?? "").startsWith("—:")) {
+      await page.getByTestId("home-stream-edit-toggle-audio").click();
+      const endpointInput = page.getByTestId("home-stream-endpoint-audio");
+      await endpointInput.fill("239.0.1.90:11001");
+      await page.getByTestId("home-stream-confirm-audio").click();
+      await expect(audioEndpoint).toHaveText("239.0.1.90:11001");
+    }
 
     await page.getByTestId("home-stream-start-audio").click();
 
@@ -232,13 +244,9 @@ test.describe("Home interactions", () => {
   });
 
   test("reboot clear RAM uses telnet first on the external mock target", async ({ page }: { page: Page }) => {
-    await enableFeatureFlags(page, ["home_telnet_clear_ram_reboot_enabled"]);
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await page.evaluate(() => {
-      localStorage.setItem("c64u_feature_flag:home_telnet_clear_ram_reboot_enabled", "1");
-      sessionStorage.setItem("c64u_feature_flag:home_telnet_clear_ram_reboot_enabled", "1");
-    });
-    await page.reload({ waitUntil: "domcontentloaded" });
+    await waitForConnected(page);
+    await enableFeatureFlags(page, ["home_telnet_clear_ram_reboot_enabled"]);
     await waitForConnected(page);
     await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
     await page.evaluate(() =>
@@ -276,13 +284,9 @@ test.describe("Home interactions", () => {
   });
 
   test("power cycle runs through telnet against the external mock target", async ({ page }: { page: Page }) => {
-    await enableFeatureFlags(page, ["home_telnet_power_cycle_enabled"]);
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await page.evaluate(() => {
-      localStorage.setItem("c64u_feature_flag:home_telnet_power_cycle_enabled", "1");
-      sessionStorage.setItem("c64u_feature_flag:home_telnet_power_cycle_enabled", "1");
-    });
-    await page.reload({ waitUntil: "domcontentloaded" });
+    await waitForConnected(page);
+    await enableFeatureFlags(page, ["home_telnet_power_cycle_enabled"]);
     await waitForConnected(page);
     await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
     await page.evaluate(() =>

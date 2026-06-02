@@ -199,7 +199,7 @@ existing production-hardening-2 plan above.
 - [ ] Fix CI failures until green.
 - [ ] Final merge-readiness verification.
 
-Current follow-up scope on PR 270 head `1496beea4480a1d535992d86df467032970a3190`:
+Current follow-up scope on PR 270 head `cabd14409b094dd739b417e5fcf6f74014bc99fb`:
 
 - [x] Diagnose failing Android workflow shard jobs from run `26807848021`.
 - [x] Reproduce shard-3 / shard-9 / shard-12 failures locally from targeted Playwright specs.
@@ -214,5 +214,11 @@ Current follow-up scope on PR 270 head `1496beea4480a1d535992d86df467032970a3190
 - [x] Stress-run the `homeInteractivity` stream start/stop test on `android-phone`.
 - [x] Re-run the affected `homeInteractivity` Android-phone cases locally.
 - [x] Re-run `npm run test:coverage` after the second stabilization and confirm global branch coverage remains >= `91%`.
-- [ ] Commit and push the shard-9 follow-up fix to PR 270.
+- [x] Diagnose the remaining shard-9 CI failures on head `cabd14409b094dd739b417e5fcf6f74014bc99fb`.
+- [x] Remove the reload-based telnet-flag setup that fought the storage-reset init script.
+- [x] Route telnet-flag enabling through the Settings tab using SPA navigation.
+- [x] Make the stream start/stop test self-heal the audio endpoint when CI leaves it at `—:11001`.
+- [x] Stress-run the three affected Android-phone `homeInteractivity` cases across repeated iterations.
+- [x] Re-run `npm run test:coverage` after the third stabilization and confirm global branch coverage remains >= `91%`.
+- [ ] Commit and push the latest shard-9 follow-up fix to PR 270.
 - [ ] Track the new PR 270 head checks until all required GitHub checks are green.

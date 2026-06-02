@@ -428,3 +428,27 @@ worklog above.
   - Branches: `91.70%`
   - Functions: `91.05%`
   - Lines: `94.63%`
+
+## Entry 19 — 2026-06-02 10:02:26Z UTC — third shard-9 stabilization after CI evidence
+
+- GitHub Android shard `9/12` failed again on PR `#270` head `cabd14409b094dd739b417e5fcf6f74014bc99fb` from run `26811182173`, job `79041597683`.
+- Raw job logs showed two remaining concrete issues:
+  - `start/stop interactions send stream commands` could still observe the audio endpoint stuck at `—:11001` for the full retry window.
+  - `reboot clear RAM uses telnet first on the external mock target` still lost the feature-flagged action entirely, and `power cycle runs through telnet against the external mock target` could lose `home-power-cycle` for the same reason.
+- Root cause for the missing telnet actions:
+  - the spec's `beforeEach` installs a `page.addInitScript` that clears `localStorage` and `sessionStorage` on every full document navigation;
+  - the prior `/settings` -> `page.goto("/")` helper flow re-cleared the just-enabled flags before Home mounted.
+- Applied a third, narrower stabilization in `playwright/homeInteractivity.spec.ts`:
+  - the stream start/stop test now repairs the audio endpoint through the Home stream editor only when CI leaves the display at `—:11001`, then proceeds with the existing start/stop assertions;
+  - telnet-only feature flags are now enabled through SPA tab-bar navigation (`tab-settings` -> toggle -> `tab-home`) so the updated flag state survives into Home without another document reload;
+  - the two telnet-action tests now start on Home, wait for connection, enable the flag through the Settings route, then continue on the same SPA session.
+- Local validation after the third stabilization:
+  - `npx prettier --check playwright/homeInteractivity.spec.ts` — passed
+  - `npx playwright test playwright/homeInteractivity.spec.ts --project=android-phone -g "start/stop interactions send stream commands|reboot clear RAM uses telnet first on the external mock target|power cycle runs through telnet against the external mock target"` — passed
+  - `npx playwright test playwright/homeInteractivity.spec.ts --project=android-phone --repeat-each=4 -g "start/stop interactions send stream commands|reboot clear RAM uses telnet first on the external mock target|power cycle runs through telnet against the external mock target"` — passed
+  - `npm run test:coverage` — passed
+- Coverage summary after the third stabilization:
+  - Statements: `94.63%`
+  - Branches: `91.70%`
+  - Functions: `91.05%`
+  - Lines: `94.63%`
