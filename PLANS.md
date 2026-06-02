@@ -229,3 +229,24 @@ Current follow-up scope on PR 270 head `cabd14409b094dd739b417e5fcf6f74014bc99fb
 - [x] Re-run `npm run test:coverage` and confirm global branch coverage remains >= `91%`.
 - [x] Commit and push the latest shard-3 / shard-9 follow-up fix to PR 270.
 - [ ] Track the new PR 270 head checks until all required GitHub checks are green.
+
+### Continuation — 2026-06-02 13:45Z UTC — PR 270 head `9cf83c005b7f4403d232c46f3b97cba4457e9cb9`
+
+- Classification remains `DOC_PLUS_CODE` because the active convergence work touches executable Playwright specs and requires append-only plan/worklog updates.
+- Latest relevant GitHub evidence is Android run `26822147305` for the current PR head `9cf83c005b7f4403d232c46f3b97cba4457e9cb9`.
+- Confirmed failing required jobs:
+  - `79079771226` — `Web | E2E (sharded) (3, 12)`
+  - `79079771506` — `Web | E2E (sharded) (9, 12)`
+- Exact failure signatures from `.tmp/ghlogs/`:
+  - `playwright/structuredInteractionSoak.spec.ts:66` retry-failed on `Home CPU slider and checkbox pressure remains responsive, connected, and request-bounded`; final assertion failure at line `123` while the scanline checkbox/device state had not converged.
+  - `playwright/homeInteractivity.spec.ts:115` retry-failed on `start/stop interactions send stream commands`; after repairing the endpoint text to `239.0.1.90:11001`, `home-stream-start-audio` was still disabled at line `127`.
+- Root-cause hypotheses under test:
+  - checkbox soak needs an explicit UI-state convergence assertion before asserting mock device state;
+  - stream test needs a stable post-edit ready condition instead of assuming enabled buttons immediately after confirm.
+- Next actions:
+  - patch `playwright/structuredInteractionSoak.spec.ts` to assert checkbox UI state and final state deterministically;
+  - patch `playwright/homeInteractivity.spec.ts` to wait for a durable stream-ready condition after endpoint repair;
+  - run targeted Playwright validations sequentially for the affected specs;
+  - run `npm run test:coverage` and confirm global branch coverage remains `>= 91%`;
+  - append `WORKLOG.md`, commit, push, and resume job-level CI monitoring for three consecutive green cycles;
+  - complete final Pixel 4 deploy/validation on the final touched feature area before completion.

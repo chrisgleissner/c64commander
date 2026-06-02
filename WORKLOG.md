@@ -556,3 +556,44 @@ worklog above.
 - Local validation before this commit:
   - `npx prettier --check playwright/homeInteractivity.spec.ts` — passed
   - `npm run test:coverage` — passed; Branches: 91.7% (gate ≥ 91% satisfied)
+
+## Entry 25 — 2026-06-02 13:45:00Z UTC — current-head CI failure continuation on `9cf83c00`
+
+- Observed PR `#270` head SHA remains `9cf83c005b7f4403d232c46f3b97cba4457e9cb9`; PR state is still `OPEN`, base `main`, head `fix/prod-hardening`, mergeable `MERGEABLE`.
+- Latest relevant failed workflow for the current head is Android run `26822147305`.
+- Failed required jobs on that run:
+  - job `79079771226` — `Web | E2E (sharded) (3, 12)`
+  - job `79079771506` — `Web | E2E (sharded) (9, 12)`
+- Downloaded logs to:
+  - `.tmp/ghlogs/android-26822147305-shard3.log`
+  - `.tmp/ghlogs/android-26822147305-shard9.log`
+- Failure signatures extracted from the logs:
+  - shard `3/12`: `playwright/structuredInteractionSoak.spec.ts:66:3` `Home CPU slider and checkbox pressure remains responsive, connected, and request-bounded` failed on both primary attempt and retry #1; final assertion at line `123`; artifacts referenced `test-results/playwright/structuredInteractionSoak--0f0db-nnected-and-request-bounded-android-phone*/trace.zip`.
+  - shard `9/12`: `playwright/homeInteractivity.spec.ts:115:3` `start/stop interactions send stream commands` failed on both primary attempt and retry #1; endpoint text had updated to `239.0.1.90:11001`, but `expect(startAudio).toBeEnabled()` failed at line `127`; artifacts referenced `test-results/playwright/homeInteractivity-Home-int-68c75-ctions-send-stream-commands-android-phone*/trace.zip`.
+- Current implementation focus:
+  - reintroduce deterministic checkbox UI-state synchronization in `playwright/structuredInteractionSoak.spec.ts`;
+  - strengthen post-endpoint-edit readiness waiting in `playwright/homeInteractivity.spec.ts`.
+
+## Entry 26 — 2026-06-02 15:32:00Z UTC — local validation passed for shard-3 / shard-9 follow-up
+
+- Updated files:
+  - `playwright/homeInteractivity.spec.ts`
+  - `playwright/structuredInteractionSoak.spec.ts`
+- Fix details:
+  - `homeInteractivity`: replaced immediate post-endpoint-edit button assertions with a durable `waitForStreamsReady()` poll so Android CI can settle both Start and Stop controls after the stream endpoint repair.
+  - `structuredInteractionSoak`: restored checkbox UI-state synchronization by polling `data-state` (`checked` / `unchecked`) before asserting the mock device config value for each scanline toggle.
+- Local validation commands and results:
+  - `npx prettier --check playwright/homeInteractivity.spec.ts playwright/structuredInteractionSoak.spec.ts` — passed
+  - `npx playwright test playwright/homeInteractivity.spec.ts --project=android-phone -g "start/stop interactions send stream commands"` — passed
+  - `npx playwright test playwright/structuredInteractionSoak.spec.ts --project=android-phone -g "Home CPU slider and checkbox pressure remains responsive, connected, and request-bounded"` — passed
+  - `npx playwright test playwright/homeInteractivity.spec.ts --project=android-phone --repeat-each=4 -g "start/stop interactions send stream commands"` — passed (`4/4`)
+  - `npx playwright test playwright/structuredInteractionSoak.spec.ts --project=android-phone --repeat-each=4 -g "Home CPU slider and checkbox pressure remains responsive, connected, and request-bounded"` — passed (`4/4`)
+  - `npm run test:coverage` — passed
+- Coverage summary after the fix:
+  - Statements: `94.63%`
+  - Branches: `91.70%`
+  - Functions: `91.05%`
+  - Lines: `94.63%`
+- Diagnostic notes from the coverage run:
+  - the runner printed existing HVSC perf-budget warnings (`Android HVSC perf budgets FAILED`, `HVSC web secondary perf budgets failed`) but exited successfully with code `0`; they were informational output from covered tests rather than a blocking failure for this convergence step.
+- Next step: commit the two-spec stabilization, push to `origin/fix/prod-hardening`, and monitor the new head at job level until required checks are green.

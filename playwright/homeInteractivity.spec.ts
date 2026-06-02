@@ -33,8 +33,20 @@ const waitForConnected = async (page: Page) => {
 
 const waitForStreamsReady = async (page: Page) => {
   await waitForConnected(page);
-  await expect(page.getByTestId("home-stream-start-audio")).toBeEnabled();
-  await expect(page.getByTestId("home-stream-stop-audio")).toBeEnabled();
+  await expect
+    .poll(
+      async () => ({
+        startEnabled: await page.getByTestId("home-stream-start-audio").isEnabled(),
+        stopEnabled: await page.getByTestId("home-stream-stop-audio").isEnabled(),
+      }),
+      {
+        timeout: 10000,
+      },
+    )
+    .toEqual({
+      startEnabled: true,
+      stopEnabled: true,
+    });
 };
 
 const getTelnetTraces = async (page: Page) => {
@@ -124,8 +136,7 @@ test.describe("Home interactions", () => {
       await endpointInput.fill("239.0.1.90:11001");
       await page.getByTestId("home-stream-confirm-audio").click();
       await expect(audioEndpoint).toHaveText("239.0.1.90:11001");
-      await expect(startAudio).toBeEnabled();
-      await expect(stopAudio).toBeEnabled();
+      await waitForStreamsReady(page);
     }
 
     await startAudio.click();

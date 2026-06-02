@@ -44,6 +44,8 @@ const waitForMutationDrain = async (server: MockC64Server, requestId: number) =>
     .toBe(true);
 };
 
+const scanlineCheckboxState = async (page: Page) => page.getByTestId("home-video-scanlines").getAttribute("data-state");
+
 test.describe("Structured interaction soak", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -118,6 +120,7 @@ test.describe("Structured interaction soak", () => {
     for (const expectedState of expectedStates) {
       await expect(scanlines).toBeEnabled();
       await scanlines.click();
+      await expect.poll(() => scanlineCheckboxState(page)).toBe(expectedState === "Enabled" ? "checked" : "unchecked");
       await expect
         .poll(() => String(server.getState()["U64 Specific Settings"]["HDMI Scan lines"]?.value))
         .toBe(expectedState);
