@@ -220,5 +220,11 @@ Current follow-up scope on PR 270 head `cabd14409b094dd739b417e5fcf6f74014bc99fb
 - [x] Make the stream start/stop test self-heal the audio endpoint when CI leaves it at `—:11001`.
 - [x] Stress-run the three affected Android-phone `homeInteractivity` cases across repeated iterations.
 - [x] Re-run `npm run test:coverage` after the third stabilization and confirm global branch coverage remains >= `91%`.
-- [ ] Commit and push the latest shard-9 follow-up fix to PR 270.
+- [x] Diagnose the remaining shard-3 / shard-9 follow-up failures on head `716d0c746ddaf498386b309639cdab8b11681ac6`.
+- [x] Wait for the audio stream controls to re-enable after endpoint repair before clicking Start.
+- [x] Make the scanline soak assert the expected checkbox UI state before checking the mock device state.
+- [x] Stress-run the remaining `structuredInteractionSoak` Android-phone case across repeated iterations in isolation.
+- [x] Re-run `./gradlew testDebugUnitTest jacocoTestReport` locally to verify the Android unit-test path still passes.
+- [x] Re-run `npm run test:coverage` and confirm global branch coverage remains >= `91%`.
+- [ ] Commit and push the latest shard-3 / shard-9 follow-up fix to PR 270.
 - [ ] Track the new PR 270 head checks until all required GitHub checks are green.

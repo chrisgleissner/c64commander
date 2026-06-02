@@ -115,6 +115,8 @@ test.describe("Home interactions", () => {
   test("start/stop interactions send stream commands", async ({ page }: { page: Page }) => {
     await page.goto("/");
     await waitForStreamsReady(page);
+    const startAudio = page.getByTestId("home-stream-start-audio");
+    const stopAudio = page.getByTestId("home-stream-stop-audio");
 
     const audioEndpoint = page.getByTestId("home-stream-endpoint-display-audio");
     if (((await audioEndpoint.textContent())?.trim() ?? "").startsWith("—:")) {
@@ -123,19 +125,21 @@ test.describe("Home interactions", () => {
       await endpointInput.fill("239.0.1.90:11001");
       await page.getByTestId("home-stream-confirm-audio").click();
       await expect(audioEndpoint).toHaveText("239.0.1.90:11001");
+      await expect(startAudio).toBeEnabled();
+      await expect(stopAudio).toBeEnabled();
     }
 
-    await page.getByTestId("home-stream-start-audio").click();
+    await startAudio.click();
 
     await expect
       .poll(() =>
         hasRequest(server.requests, (req) => req.method === "PUT" && req.url.includes("/v1/streams/audio:start")),
       )
       .toBe(true);
-    await expect(page.getByTestId("home-stream-start-audio")).toBeEnabled();
-    await expect(page.getByTestId("home-stream-stop-audio")).toBeEnabled();
+    await expect(startAudio).toBeEnabled();
+    await expect(stopAudio).toBeEnabled();
 
-    await page.getByTestId("home-stream-stop-audio").click();
+    await stopAudio.click();
 
     await expect
       .poll(() =>

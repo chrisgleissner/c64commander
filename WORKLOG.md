@@ -452,3 +452,34 @@ worklog above.
   - Branches: `91.70%`
   - Functions: `91.05%`
   - Lines: `94.63%`
+
+## Entry 20 — 2026-06-02 11:13:30Z UTC — shard-3 / shard-9 follow-up stabilization on head `716d0c74`
+
+- GitHub checks on PR `#270` head `716d0c746ddaf498386b309639cdab8b11681ac6` isolated three remaining failures:
+  - Android job `79046569624` in run `26812714062` failed during Robolectric-backed unit tests with `MavenArtifactFetcher` IO failures across multiple test classes.
+  - shard `3/12`, job `79046909573`, failed in `playwright/structuredInteractionSoak.spec.ts` when the scanline checkbox click had not yet propagated to the UI/device state expected by the assertion.
+  - shard `9/12`, job `79046909698`, failed in `playwright/homeInteractivity.spec.ts` when the audio stream Start button remained disabled immediately after repairing the placeholder endpoint.
+- Applied a fourth, minimal stabilization:
+  - `playwright/homeInteractivity.spec.ts`
+    - bind the Start/Stop locators once in the stream test;
+    - after repairing `—:11001` to `239.0.1.90:11001`, explicitly wait for both controls to re-enable before clicking Start;
+    - reuse the same locators for the post-start and stop assertions.
+  - `playwright/structuredInteractionSoak.spec.ts`
+    - add `scanlineCheckboxState()` so the test checks the expected `data-state` (`checked`/`unchecked`) after every click before polling the mock device value;
+    - derive the final UI assertion from the observed initial scanline state instead of hardcoding `unchecked`.
+- Local validation after the fourth stabilization:
+  - `npx prettier --check playwright/homeInteractivity.spec.ts playwright/structuredInteractionSoak.spec.ts` — passed
+  - `npx playwright test playwright/homeInteractivity.spec.ts --project=android-phone -g "start/stop interactions send stream commands"` — passed
+  - `npx playwright test playwright/homeInteractivity.spec.ts --project=android-phone --repeat-each=4 -g "start/stop interactions send stream commands"` — passed
+  - `npx playwright test playwright/structuredInteractionSoak.spec.ts --project=android-phone -g "Home CPU slider and checkbox pressure remains responsive, connected, and request-bounded"` — passed
+  - `npx playwright test playwright/structuredInteractionSoak.spec.ts --project=android-phone --repeat-each=4 -g "Home CPU slider and checkbox pressure remains responsive, connected, and request-bounded"` — passed in isolation after the coverage run
+  - `./gradlew testDebugUnitTest jacocoTestReport` from `android/` — passed locally
+  - `npm run test:coverage` — passed
+- Coverage summary after the fourth stabilization remained:
+  - Statements: `94.63%`
+  - Branches: `91.70%`
+  - Functions: `91.05%`
+  - Lines: `94.63%`
+- Android job note:
+  - local `testDebugUnitTest` and `jacocoTestReport` passed immediately after the GitHub failure;
+  - the failing GitHub log points at Robolectric dependency fetch IO rather than a reproducible assertion regression, so the next push should revalidate whether the Android check was transient.
