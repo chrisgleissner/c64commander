@@ -346,6 +346,42 @@ describe("requestRuntime", () => {
     });
   });
 
+  it("propagates abort-like response body inspection failures as cancellation", async () => {
+    const createBodyAbort = () => Object.assign(new Error("The user aborted a request."), { name: "AbortError" });
+    const jsonAbortResponse = {
+      headers: new Headers({ "content-type": "application/json" }),
+      status: 200,
+      clone: () => ({
+        text: async () => {
+          throw createBodyAbort();
+        },
+      }),
+    } as unknown as Response;
+    await expect(inspectResponsePayload(jsonAbortResponse)).rejects.toMatchObject({ name: "AbortError" });
+
+    const textAbortResponse = {
+      headers: new Headers({ "content-type": "text/plain" }),
+      status: 200,
+      clone: () => ({
+        text: async () => {
+          throw createBodyAbort();
+        },
+      }),
+    } as unknown as Response;
+    await expect(inspectResponsePayload(textAbortResponse)).rejects.toMatchObject({ name: "AbortError" });
+
+    const binaryAbortResponse = {
+      headers: new Headers(),
+      status: 200,
+      clone: () => ({
+        arrayBuffer: async () => {
+          throw createBodyAbort();
+        },
+      }),
+    } as unknown as Response;
+    await expect(inspectResponsePayload(binaryAbortResponse)).rejects.toMatchObject({ name: "AbortError" });
+  });
+
   it("collects full trace headers and builds byte previews with dot placeholders", async () => {
     expect(
       collectTraceHeaders([

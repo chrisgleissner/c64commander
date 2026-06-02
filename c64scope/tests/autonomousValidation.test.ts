@@ -69,6 +69,12 @@ describe("autonomous validation", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.restoreAllMocks();
+    resolveAdbSerialMock.mockReset();
+    resolvePreferredPhysicalTestDeviceSerialMock.mockReset();
+    runPreflightMock.mockReset();
+    generateReportMock.mockReset();
+    collectHardwareInfoMock.mockReset();
+    runCaseMock.mockReset();
     delete process.env["ANDROID_SERIAL"];
     delete process.env["C64U_HOST"];
     delete process.env["REPEAT"];

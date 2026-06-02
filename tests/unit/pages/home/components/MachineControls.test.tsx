@@ -1,6 +1,23 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MachineControls } from "@/pages/home/components/MachineControls";
+import { InterstitialStateProvider } from "@/components/ui/interstitial-state";
+
+const appListenerState = vi.hoisted(() => ({
+  backButtonListener: null as null | (() => void),
+  addListener: vi.fn(),
+  remove: vi.fn(),
+}));
+
+vi.mock("@capacitor/app", () => ({
+  App: {
+    addListener: appListenerState.addListener,
+  },
+}));
+
+vi.mock("@/lib/logging", () => ({
+  addLog: vi.fn(),
+}));
 
 vi.mock("framer-motion", () => ({
   motion: {
@@ -59,6 +76,13 @@ const defaultProps = {
 describe("MachineControls", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    appListenerState.backButtonListener = null;
+    appListenerState.addListener.mockImplementation(async (eventName: string, listener: () => void) => {
+      if (eventName === "backButton") {
+        appListenerState.backButtonListener = listener;
+      }
+      return { remove: appListenerState.remove };
+    });
   });
 
   it("keeps the canonical primary quick actions in a two-column compact grid", () => {
@@ -87,13 +111,62 @@ describe("MachineControls", () => {
     expect(screen.getByTestId("home-load-ram")).toHaveTextContent("Load RAM");
   });
 
-  it("keeps the primary reboot action enabled without telnet and executes the REST reboot mutation", () => {
+  it("opens Reboot confirmation before executing the REST reboot mutation", () => {
     render(<MachineControls {...defaultProps} />);
 
     fireEvent.click(screen.getByTestId("action-Reboot"));
 
+    expect(screen.getByRole("dialog")).toHaveTextContent("Reboot?");
+    expect(defaultProps.onReboot).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("Confirm"));
+
     expect(defaultProps.onReboot).toHaveBeenCalledTimes(1);
     expect(defaultProps.controls.reboot.mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("opens Reset confirmation and does not call reset immediately", () => {
+    render(<MachineControls {...defaultProps} />);
+
+    fireEvent.click(screen.getByTestId("action-Reset"));
+
+    expect(screen.getByRole("dialog")).toHaveTextContent("Reset?");
+    expect(defaultProps.onAction).not.toHaveBeenCalled();
+    expect(defaultProps.controls.reset.mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("cancels Reset confirmation without sending the machine command", () => {
+    render(<MachineControls {...defaultProps} />);
+
+    fireEvent.click(screen.getByTestId("action-Reset"));
+    fireEvent.click(screen.getByText("Cancel"));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(defaultProps.onAction).not.toHaveBeenCalled();
+    expect(defaultProps.controls.reset.mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("confirms Reset exactly once after re-checking guards", async () => {
+    render(<MachineControls {...defaultProps} />);
+
+    fireEvent.click(screen.getByTestId("action-Reset"));
+    fireEvent.click(screen.getByText("Confirm"));
+
+    await waitFor(() => {
+      expect(defaultProps.controls.reset.mutateAsync).toHaveBeenCalledTimes(1);
+    });
+    expect(defaultProps.onAction).toHaveBeenCalledTimes(1);
+    expect(defaultProps.setMachineExecutionState).toHaveBeenCalledWith("running");
+  });
+
+  it("does not execute confirmed Reset if current guards become disabled", () => {
+    const { rerender } = render(<MachineControls {...defaultProps} />);
+
+    fireEvent.click(screen.getByTestId("action-Reset"));
+    rerender(<MachineControls {...defaultProps} machineTaskBusy={true} />);
+    fireEvent.click(screen.getByText("Confirm"));
+
+    expect(defaultProps.onAction).not.toHaveBeenCalled();
+    expect(defaultProps.controls.reset.mutateAsync).not.toHaveBeenCalled();
   });
 
   it("calls the provided menu toggle handler", () => {
@@ -104,12 +177,22 @@ describe("MachineControls", () => {
     expect(defaultProps.onToggleMenu).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps Power Off delegated to the existing protected flow", () => {
+    render(<MachineControls {...defaultProps} />);
+
+    fireEvent.click(screen.getByTestId("action-Power Off"));
+
+    expect(defaultProps.onPowerOff).toHaveBeenCalledTimes(1);
+    expect(defaultProps.controls.powerOff.mutateAsync).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("omits Power Cycle when no handler is provided", () => {
     render(<MachineControls {...defaultProps} />);
     expect(screen.queryByTestId("home-power-cycle")).toBeNull();
   });
 
-  it("renders and calls Power Cycle when a handler is provided", () => {
+  it("opens Power Cycle confirmation before calling the handler", () => {
     const onPowerCycle = vi.fn();
     render(<MachineControls {...defaultProps} onPowerCycle={onPowerCycle} />);
     const buttons = screen.getByTestId("home-machine-controls").querySelectorAll("button");
@@ -122,6 +205,9 @@ describe("MachineControls", () => {
       "Power Off",
     ]);
     fireEvent.click(screen.getByTestId("home-power-cycle"));
+    expect(onPowerCycle).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toHaveTextContent("Power Cycle?");
+    fireEvent.click(screen.getByText("Confirm"));
     expect(onPowerCycle).toHaveBeenCalledTimes(1);
   });
 
@@ -158,8 +244,49 @@ describe("MachineControls", () => {
     fireEvent.click(screen.getByTestId("home-machine-inline-rebootClearMemory"));
     fireEvent.click(screen.getByTestId("home-machine-inline-saveReuMemory"));
 
+    expect(rebootClearMemory).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toHaveTextContent("Reboot (Clr Mem)?");
+    fireEvent.click(screen.getByText("Confirm"));
+
     expect(rebootClearMemory).toHaveBeenCalledTimes(1);
     expect(saveReu).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not add confirmation to non-destructive extra actions", () => {
+    const saveReu = vi.fn();
+
+    render(
+      <MachineControls
+        {...defaultProps}
+        extraActions={[{ id: "saveReuMemory", label: "Save REU", onSelect: saveReu }]}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("home-machine-inline-saveReuMemory"));
+
+    expect(saveReu).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("Android Back closes destructive confirmation without executing the action", async () => {
+    render(
+      <InterstitialStateProvider>
+        <MachineControls {...defaultProps} />
+      </InterstitialStateProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("action-Reset"));
+    await waitFor(() => expect(appListenerState.backButtonListener).not.toBeNull());
+
+    act(() => {
+      appListenerState.backButtonListener?.();
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    expect(defaultProps.onAction).not.toHaveBeenCalled();
+    expect(defaultProps.controls.reset.mutateAsync).not.toHaveBeenCalled();
   });
 
   it("renders every enabled quick action even in the two-column compact grid", () => {

@@ -33,9 +33,20 @@ const waitForConnected = async (page: Page) => {
 
 const waitForStreamsReady = async (page: Page) => {
   await waitForConnected(page);
-  const streamPattern = /\d+\.\d+\.\d+\.\d+:\d+/;
-  await expect(page.getByTestId("home-stream-endpoint-display-audio")).toHaveText(streamPattern);
-  await expect(page.getByTestId("home-stream-endpoint-display-vic")).toHaveText(streamPattern);
+  await expect
+    .poll(
+      async () => ({
+        startEnabled: await page.getByTestId("home-stream-start-audio").isEnabled(),
+        stopEnabled: await page.getByTestId("home-stream-stop-audio").isEnabled(),
+      }),
+      {
+        timeout: 10000,
+      },
+    )
+    .toEqual({
+      startEnabled: true,
+      stopEnabled: true,
+    });
 };
 
 const getTelnetTraces = async (page: Page) => {
@@ -52,15 +63,29 @@ const getAllTraces = async (page: Page) => {
   });
 };
 
+const confirmMachineAction = async (page: Page, name: string) => {
+  const dialog = page.getByRole("dialog", { name: `${name}?` });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Confirm", exact: true }).click();
+  await expect(dialog).toBeHidden();
+};
+
 const enableFeatureFlags = async (
   page: Page,
   flagIds: Array<"home_telnet_clear_ram_reboot_enabled" | "home_telnet_power_cycle_enabled">,
 ) => {
-  await page.addInitScript((seededFlagIds: string[]) => {
-    seededFlagIds.forEach((flagId) => {
-      localStorage.setItem(`c64u_feature_flag:${flagId}`, "1");
-    });
-  }, flagIds);
+  await page.getByTestId("tab-settings").click();
+  await expect(page).toHaveURL(/\/settings$/);
+  for (const flagId of flagIds) {
+    const toggle = page.getByTestId(`feature-flag-${flagId}`);
+    await expect(toggle).toBeVisible();
+    if (!(await toggle.isChecked())) {
+      await toggle.click();
+      await expect(toggle).toBeChecked();
+    }
+  }
+  await page.getByTestId("tab-home").click();
+  await expect(page).toHaveURL(/\/$/);
 };
 
 const applyCompactDisplayProfile = async (page: Page) => {
@@ -81,6 +106,10 @@ test.describe("Home interactions", () => {
 
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
+    await page.addInitScript(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
     server = await createMockC64Server();
     await seedUiMocks(page, server.baseUrl);
   });
@@ -96,18 +125,33 @@ test.describe("Home interactions", () => {
   });
 
   test("start/stop interactions send stream commands", async ({ page }: { page: Page }) => {
+    await page.request.post(`${server.baseUrl}/v1/configs`, {
+      data: {
+        "Data Streams": {
+          "Stream Audio to": "239.0.1.65:11001",
+        },
+      },
+    });
+
     await page.goto("/");
     await waitForStreamsReady(page);
+    const startAudio = page.getByTestId("home-stream-start-audio");
+    const stopAudio = page.getByTestId("home-stream-stop-audio");
+    const audioEndpointDisplay = page.getByTestId("home-stream-endpoint-display-audio");
+    await expect(audioEndpointDisplay).toHaveText("239.0.1.65:11001");
+    await expect(startAudio).toBeEnabled();
 
-    await page.getByTestId("home-stream-start-audio").click();
+    await startAudio.click();
 
     await expect
       .poll(() =>
         hasRequest(server.requests, (req) => req.method === "PUT" && req.url.includes("/v1/streams/audio:start")),
       )
       .toBe(true);
+    await expect(startAudio).toBeEnabled();
+    await expect(stopAudio).toBeEnabled();
 
-    await page.getByTestId("home-stream-stop-audio").click();
+    await stopAudio.click();
 
     await expect
       .poll(() =>
@@ -173,7 +217,9 @@ test.describe("Home interactions", () => {
     const machineControls = page.getByTestId("home-machine-controls");
 
     await machineControls.getByRole("button", { name: "Reset", exact: true }).click();
+    await confirmMachineAction(page, "Reset");
     await machineControls.getByRole("button", { name: "Reboot", exact: true }).click();
+    await confirmMachineAction(page, "Reboot");
     await machineControls.getByRole("button", { name: "Menu", exact: true }).click();
 
     await machineControls.getByRole("button", { name: "Pause", exact: true }).click();
@@ -214,8 +260,9 @@ test.describe("Home interactions", () => {
   });
 
   test("reboot clear RAM uses telnet first on the external mock target", async ({ page }: { page: Page }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await waitForConnected(page);
     await enableFeatureFlags(page, ["home_telnet_clear_ram_reboot_enabled"]);
-    await page.goto("/");
     await waitForConnected(page);
     await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
     await page.evaluate(() =>
@@ -227,8 +274,12 @@ test.describe("Home interactions", () => {
     ).length;
 
     const rebootClearMemory = page.getByTestId("home-machine-inline-rebootClearMemory");
+    await expect(rebootClearMemory).toHaveCount(1, { timeout: 15000 });
+    await rebootClearMemory.scrollIntoViewIfNeeded();
+    await expect(rebootClearMemory).toBeVisible({ timeout: 15000 });
     await expect(rebootClearMemory).toBeEnabled();
     await rebootClearMemory.click();
+    await confirmMachineAction(page, "Reboot (Clr Mem)");
 
     await expect
       .poll(() =>
@@ -249,8 +300,9 @@ test.describe("Home interactions", () => {
   });
 
   test("power cycle runs through telnet against the external mock target", async ({ page }: { page: Page }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await waitForConnected(page);
     await enableFeatureFlags(page, ["home_telnet_power_cycle_enabled"]);
-    await page.goto("/");
     await waitForConnected(page);
     await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
     await page.evaluate(() =>
@@ -258,8 +310,10 @@ test.describe("Home interactions", () => {
     );
 
     const powerCycle = page.getByTestId("home-power-cycle");
+    await expect(powerCycle).toBeVisible({ timeout: 15000 });
     await expect(powerCycle).toBeEnabled();
     await powerCycle.click();
+    await confirmMachineAction(page, "Power Cycle");
 
     await expect
       .poll(async () => {
@@ -324,6 +378,7 @@ test.describe("Home interactions", () => {
       const powerCycle = page.getByTestId("home-power-cycle");
       await expect(powerCycle).toBeEnabled();
       await powerCycle.click();
+      await confirmMachineAction(page, "Power Cycle");
 
       await expect
         .poll(async () => {
@@ -451,7 +506,7 @@ test.describe("Home interactions", () => {
 
     await page.goto("/");
     await waitForConnected(page);
-    await expect(page.getByTestId("home-sid-address-socket1")).toHaveText(/\$[0-9A-F]{4}|\$----/);
+    await expect(page.getByTestId("home-sid-address-socket1")).toHaveAttribute("role", "combobox");
     await page.getByTestId("home-sid-status").getByRole("button", { name: "Reset" }).click();
 
     await expect
@@ -488,7 +543,8 @@ test.describe("Home interactions", () => {
     expect(socketTag).toBe("SPAN");
 
     const ultiType = page.getByTestId("home-sid-type-ultiSid1");
-    await expect(ultiType).toBeVisible();
+    await ultiType.scrollIntoViewIfNeeded();
+    await expect(ultiType).toHaveAttribute("role", "combobox");
     const ultiTag = await ultiType.evaluate((el) => el.tagName);
     expect(ultiTag).toBe("BUTTON");
 
@@ -569,9 +625,10 @@ test.describe("Home interactions", () => {
     const sidVolume = page.getByTestId("home-sid-volume-socket1");
     const sidPan = page.getByTestId("home-sid-pan-socket1");
 
-    await driveA.scrollIntoViewIfNeeded();
-    await printerBus.scrollIntoViewIfNeeded();
-    await sidEntry.scrollIntoViewIfNeeded();
+    for (const locator of [driveA, driveB, printerBus, printerOutputType, sidEntry, sidVolume, sidPan]) {
+      await locator.scrollIntoViewIfNeeded();
+      await expect(locator).toBeVisible();
+    }
 
     const [driveABox, driveBBox, printerBusBox, printerOutputTypeBox, sidEntryBox, sidVolumeBox, sidPanBox] =
       await Promise.all([

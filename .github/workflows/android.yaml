@@ -743,11 +743,33 @@ jobs:
           MINIFIED_DEBUG_APK=$(ls android/app/build/outputs/apk/minifiedDebug/*.apk | head -n 1)
           bash scripts/verify-android-apk-lzma2.sh "$DEBUG_APK" "$MINIFIED_DEBUG_APK"
 
+      - name: Cache Robolectric Android artifacts
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-${{ runner.os }}-${{ hashFiles('android/app/build.gradle', 'android/variables.gradle') }}
+          restore-keys: |
+            robolectric-${{ runner.os }}-
+
       - name: Run Android tests with coverage
         run: |
           start=$(date +%s)
           cd android
-          ./gradlew testDebugUnitTest jacocoTestReport
+          attempt=1
+          max_attempts=2
+          while true; do
+            if ./gradlew testDebugUnitTest jacocoTestReport; then
+              break
+            fi
+            status=$?
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              exit "$status"
+            fi
+            echo "Android unit tests failed on attempt $attempt/$max_attempts. Retrying once after refreshing Robolectric fetch markers."
+            find ~/.m2/repository/org/robolectric -type f -name '*.lastUpdated' -delete || true
+            attempt=$((attempt + 1))
+            sleep 5
+          done
           end=$(date +%s)
           echo "- android tests: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 

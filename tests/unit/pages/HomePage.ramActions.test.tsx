@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import HomePage from "@/pages/HomePage";
@@ -216,6 +216,11 @@ const renderWithRouter = (ui: JSX.Element) =>
   );
 
 const renderHomePage = () => renderWithRouter(<HomePage />);
+
+const confirmMachineAction = (name: string) => {
+  const dialog = screen.getByRole("dialog", { name: `${name}?` });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Confirm" }));
+};
 
 vi.mock("@/hooks/use-toast", () => ({
   toast: toastSpy,
@@ -492,6 +497,7 @@ describe("HomePage RAM actions", () => {
     renderHomePage();
 
     fireEvent.click(screen.getByRole("button", { name: /^reboot$/i }));
+    confirmMachineAction("Reboot");
 
     await waitFor(() => expect(rebootKeepRamSpy).toHaveBeenCalled(), { timeout: 5000 });
     expect(executeTelnetActionSpy).not.toHaveBeenCalled();
@@ -532,6 +538,7 @@ describe("HomePage RAM actions", () => {
     renderHomePage();
 
     fireEvent.click(screen.getByRole("button", { name: /^power cycle$/i }));
+    confirmMachineAction("Power Cycle");
 
     await waitFor(() => expect(executeTelnetActionSpy).toHaveBeenCalledWith("powerCycle"), { timeout: 5000 });
     await waitFor(() => expect(toastSpy).toHaveBeenCalledWith({ title: "Power cycled" }), { timeout: 5000 });
@@ -558,6 +565,7 @@ describe("HomePage RAM actions", () => {
     renderHomePage();
 
     fireEvent.click(screen.getByTestId("home-machine-inline-rebootClearMemory"));
+    confirmMachineAction("Reboot (Clr Mem)");
 
     await waitFor(() => expect(executeTelnetActionSpy).toHaveBeenCalledWith("rebootClearMemory"), { timeout: 5000 });
     await waitFor(() => expect(toastSpy).toHaveBeenCalledWith({ title: "Machine rebooting" }), { timeout: 5000 });
