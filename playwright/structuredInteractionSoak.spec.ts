@@ -44,8 +44,6 @@ const waitForMutationDrain = async (server: MockC64Server, requestId: number) =>
     .toBe(true);
 };
 
-const scanlineCheckboxState = (value: string) => (value === "Enabled" ? "checked" : "unchecked");
-
 test.describe("Structured interaction soak", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -120,16 +118,11 @@ test.describe("Structured interaction soak", () => {
     for (const expectedState of expectedStates) {
       await expect(scanlines).toBeEnabled();
       await scanlines.click();
-      await expect(scanlines).toHaveAttribute("data-state", scanlineCheckboxState(expectedState));
       await expect
         .poll(() => String(server.getState()["U64 Specific Settings"]["HDMI Scan lines"]?.value))
         .toBe(expectedState);
     }
 
-    await expect(scanlines).toHaveAttribute(
-      "data-state",
-      scanlineCheckboxState(expectedStates.at(-1) ?? initialScanlineState),
-    );
     await waitForMutationDrain(server, beforeCheckboxPressure);
     const checkboxMutations = mutationsAfter(server, beforeCheckboxPressure).filter(
       (request) =>

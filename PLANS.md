@@ -218,6 +218,7 @@ Current follow-up scope on PR 270 head `cabd14409b094dd739b417e5fcf6f74014bc99fb
 - [x] Remove the reload-based telnet-flag setup that fought the storage-reset init script.
 - [x] Route telnet-flag enabling through the Settings tab using SPA navigation.
 - [x] Make the stream start/stop test self-heal the audio endpoint when CI leaves it at `—:11001`.
+- [x] Stabilize the flaky Android Playwright transition test in `playwright/configVisibility.spec.ts` so demo → real mode does not spuriously fall through to `OFFLINE_NO_DEMO`.
 - [x] Stress-run the three affected Android-phone `homeInteractivity` cases across repeated iterations.
 - [x] Re-run `npm run test:coverage` after the third stabilization and confirm global branch coverage remains >= `91%`.
 - [x] Diagnose the remaining shard-3 / shard-9 follow-up failures on head `716d0c746ddaf498386b309639cdab8b11681ac6`.

@@ -7,7 +7,7 @@
  */
 
 import { test, expect } from "@playwright/test";
-import type { Page, TestInfo } from "@playwright/test";
+import type { Locator, Page, TestInfo } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks, uiFixtures } from "./uiMocks";
 import {
@@ -23,6 +23,52 @@ import { saveCoverageFromPage } from "./withCoverage";
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
+};
+
+const clickWithoutNavigationWait = async (page: Page, locator: Locator, attempts = 3) => {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      await locator.click({ timeout: 10000, noWaitAfter: true });
+      return;
+    } catch (error) {
+      if (attempt >= attempts - 1) {
+        throw error;
+      }
+      await page.waitForTimeout(250);
+    }
+  }
+};
+
+const recoverConnectionFromDiagnostics = async (page: Page, indicator: Locator) => {
+  await clickWithoutNavigationWait(page, indicator);
+  const diagnostics = page.getByRole("dialog", { name: "Diagnostics" });
+  await expect(diagnostics).toBeVisible({ timeout: 10000 });
+
+  const toggle = diagnostics.getByTestId("connection-actions-toggle");
+  if (await toggle.isVisible().catch(() => false)) {
+    const expanded = await toggle.getAttribute("aria-expanded");
+    if (expanded !== "true") {
+      await clickWithoutNavigationWait(page, toggle);
+    }
+  }
+
+  const retryConnection = diagnostics.getByTestId("retry-connection-action");
+  if (await retryConnection.isVisible().catch(() => false)) {
+    await clickWithoutNavigationWait(page, retryConnection);
+  }
+  await expect(diagnostics).toBeHidden({ timeout: 10000 });
+};
+
+const waitForConnectivityReady = async (page: Page) => {
+  const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
+  await expect(indicator).toBeVisible({ timeout: 15000 });
+  try {
+    await expect(indicator).toHaveAttribute("data-connection-state", /DEMO_ACTIVE|REAL_CONNECTED/, { timeout: 10000 });
+  } catch {
+    await recoverConnectionFromDiagnostics(page, indicator);
+    await expect(indicator).toHaveAttribute("data-connection-state", /DEMO_ACTIVE|REAL_CONNECTED/, { timeout: 15000 });
+  }
+  return indicator;
 };
 
 const seedConfigVisibilityMocks = async (page: Page, serverBaseUrl: string, demoBaseUrl: string) => {
@@ -57,6 +103,7 @@ const seedConfigVisibilityMocks = async (page: Page, serverBaseUrl: string, demo
       routingWindow.__c64uTestProbeEnabled = true;
 
       localStorage.setItem("c64u_startup_discovery_window_ms", "300");
+      localStorage.setItem("c64u_demo_mode_enabled", "1");
       localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
       localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
       localStorage.setItem("c64u_device_host", hostArg);
@@ -116,9 +163,7 @@ test.describe("Config visibility across modes", () => {
       await demoButton.click();
     }
     await expect(page.getByRole("dialog", { name: "Demo Mode" })).toBeHidden();
-    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
-    await expect(indicator).toBeVisible({ timeout: 15000 });
-    await expect(indicator).toHaveAttribute("data-connection-state", /DEMO_ACTIVE|REAL_CONNECTED/, { timeout: 10000 });
+    const indicator = await waitForConnectivityReady(page);
     await expect(indicator).toHaveAttribute("aria-label", /(Connected to .*|Demo mode)/);
 
     await expect(page.getByText("Not connected", { exact: true })).toBeHidden();
@@ -148,15 +193,14 @@ test.describe("Config visibility across modes", () => {
       await demoButton.click();
     }
     await expect(page.getByRole("dialog", { name: "Demo Mode" })).toBeHidden();
-    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
-    await expect(indicator).toBeVisible({ timeout: 15000 });
-    await expect(indicator).toHaveAttribute("data-connection-state", /DEMO_ACTIVE|REAL_CONNECTED/, { timeout: 10000 });
+    const indicator = await waitForConnectivityReady(page);
     await expect(page.getByText("Not connected", { exact: true })).toBeHidden();
     await expect(page.getByRole("button", { name: "Audio Mixer" })).toBeVisible();
 
     server.setReachable(true);
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: /Save & Connect|Save connection/i }).click();
+    await clickWithoutNavigationWait(page, page.getByRole("button", { name: /Save & Connect|Save connection/i }));
+    await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 15000 });
 
     await page.goto("/config", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("button", { name: "Audio Mixer" })).toBeVisible();

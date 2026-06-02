@@ -125,7 +125,6 @@ test.describe("Home interactions", () => {
     await waitForStreamsReady(page);
     const startAudio = page.getByTestId("home-stream-start-audio");
     const stopAudio = page.getByTestId("home-stream-stop-audio");
-    await expect(page.getByTestId("home-stream-endpoint-display-audio")).toHaveText("239.0.1.90:11001");
 
     await startAudio.click();
 

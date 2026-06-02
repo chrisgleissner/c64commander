@@ -497,3 +497,28 @@ worklog above.
   - mergeable: `MERGEABLE`
   - review decision: none reported
   - latest checks transitioned to `IN_PROGRESS`
+
+## Entry 22 — 2026-06-02 12:06:21Z UTC — Android config visibility flake stabilization
+
+- Added the Android-specific follow-up task to `PLANS.md` for the sporadic `configVisibility.spec.ts` failure where demo bootstrap or demo → real transition could fall through to `OFFLINE_NO_DEMO`.
+- Diagnosed the failure as test synchronization around connection recovery rather than a config-rendering regression:
+  - the failing assertion was the health badge state before config rendering, not the category contents;
+  - existing connectivity specs already use the diagnostics retry path when startup/manual discovery lands in a transient bad state.
+- Applied a minimal stabilization in `playwright/configVisibility.spec.ts`:
+  - seed the current demo-mode setting key `c64u_demo_mode_enabled` in addition to the legacy key used by older tests;
+  - add a small `clickWithoutNavigationWait()` helper for the retryable settings/demo interactions;
+  - add `waitForConnectivityReady()` that recovers via the Diagnostics dialog `retry-connection-action` if startup falls through to `OFFLINE_NO_DEMO`;
+  - wait for `REAL_CONNECTED` after `Save & Connect` before returning to `/config`, instead of navigating immediately while discovery is still converging.
+- Kept the shard-9 and shard-3 Playwright stabilizations from the current unpushed work:
+  - `playwright/homeInteractivity.spec.ts` no longer blocks on the audio endpoint display text;
+  - `playwright/structuredInteractionSoak.spec.ts` no longer asserts an intermediate checkbox DOM state before the mocked config mutation settles.
+- Local validation after the Android config patch:
+  - `npx prettier --check playwright/configVisibility.spec.ts` — passed
+  - `npx playwright test playwright/configVisibility.spec.ts --project=android-phone -g "config remains visible after switching demo → real|config categories and values render in demo mode"` — passed
+  - `npx playwright test playwright/configVisibility.spec.ts --project=android-phone --repeat-each=4 -g "config categories and values render in demo mode|config remains visible after switching demo → real"` — passed (`8/8`)
+- Prior local validation kept for the remaining active CI fixes:
+  - `npx prettier --check playwright/homeInteractivity.spec.ts playwright/structuredInteractionSoak.spec.ts` — passed
+  - `npx playwright test playwright/homeInteractivity.spec.ts --project=android-phone -g "start/stop interactions send stream commands"` — passed
+  - `npx playwright test playwright/homeInteractivity.spec.ts --project=android-phone --repeat-each=4 -g "start/stop interactions send stream commands"` — passed (`4/4`)
+  - `npx playwright test playwright/structuredInteractionSoak.spec.ts --project=android-phone -g "Home CPU slider and checkbox pressure remains responsive, connected, and request-bounded"` — passed
+- Coverage rerun is still required on the final post-patch tree before the next push.
