@@ -208,5 +208,5 @@ Current follow-up scope on PR 270 head `27de2418b04d00b37407b1398791a6524398cbfb
 - [x] Re-run `npm run build`.
 - [x] Re-run `npm run test:coverage` and confirm global branch coverage remains >= `91%`.
 - [x] Reinstall latest built APK on the attached Pixel 4 and launch the app.
-- [ ] Commit and push the CI-follow-up fixes to PR 270.
+- [x] Commit and push the CI-follow-up fixes to PR 270.
 - [ ] Track the new PR 270 head checks until all required GitHub checks are green.
