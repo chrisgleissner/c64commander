@@ -133,7 +133,7 @@ test.describe("Home interactions", () => {
 
     const audioEndpoint = ((await audioEndpointDisplay.textContent()) ?? "").trim();
     if (!/^\d{1,3}(?:\.\d{1,3}){3}:\d+$/.test(audioEndpoint)) {
-      await page.getByTestId("home-stream-endpoint-edit-audio").click();
+      await page.getByTestId("home-stream-edit-toggle-audio").click();
       const dialog = page.getByRole("dialog", { name: "Update audio endpoint" });
       await expect(dialog).toBeVisible();
       const input = dialog.getByLabel("Target IPv4 address and port");
