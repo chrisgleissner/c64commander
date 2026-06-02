@@ -250,3 +250,17 @@ Current follow-up scope on PR 270 head `cabd14409b094dd739b417e5fcf6f74014bc99fb
   - run `npm run test:coverage` and confirm global branch coverage remains `>= 91%`;
   - append `WORKLOG.md`, commit, push, and resume job-level CI monitoring for three consecutive green cycles;
   - complete final Pixel 4 deploy/validation on the final touched feature area before completion.
+
+### Continuation — 2026-06-02 14:42Z UTC — shard-9 follow-up on head `285bccc085121b3baec59c2b116d330882393bbb`
+
+- Current CI cycle for head `285bccc0` failed early at job `79096722735` (`Web | E2E (sharded) (9, 12)`) while the rest of Android is still in progress.
+- Exact new shard-9 signatures from `.tmp/ghlogs/android-26826745400-shard9.log`:
+  - `playwright/homeInteractivity.spec.ts:127` `start/stop interactions send stream commands` retry-failed in `waitForStreamsReady()` after endpoint repair; the broader `startEnabled + stopEnabled` expectation appears too strict for the repaired-but-not-yet-started state.
+  - `playwright/homeInteractivity.spec.ts:613` `compact home stacks drives, printer controls, and SID sliders vertically` failed on the primary attempt only with `locator.boundingBox: Timeout 20000ms exceeded`; retry #1 passed.
+- Chosen minimal fix:
+  - after endpoint repair, wait only for `home-stream-start-audio` to become enabled before clicking Start;
+  - make the compact-layout measurement path wait for the measured controls to be visible and scrolled before requesting bounding boxes.
+- Validation plan:
+  - rerun the two affected Android-phone tests sequentially;
+  - stress both with `--repeat-each=4`;
+  - rerun `npm run test:coverage` and confirm branch coverage remains `>= 91%`.

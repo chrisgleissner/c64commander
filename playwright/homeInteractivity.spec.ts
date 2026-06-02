@@ -49,6 +49,15 @@ const waitForStreamsReady = async (page: Page) => {
     });
 };
 
+const waitForStartAudioReady = async (page: Page) => {
+  await waitForConnected(page);
+  await expect
+    .poll(() => page.getByTestId("home-stream-start-audio").isEnabled(), {
+      timeout: 10000,
+    })
+    .toBe(true);
+};
+
 const getTelnetTraces = async (page: Page) => {
   return page.evaluate(() => {
     const tracing = (window as Window & { __c64uTracing?: { getTraces?: () => Array<any> } }).__c64uTracing;
@@ -136,7 +145,7 @@ test.describe("Home interactions", () => {
       await endpointInput.fill("239.0.1.90:11001");
       await page.getByTestId("home-stream-confirm-audio").click();
       await expect(audioEndpoint).toHaveText("239.0.1.90:11001");
-      await waitForStreamsReady(page);
+      await waitForStartAudioReady(page);
     }
 
     await startAudio.click();
@@ -623,9 +632,10 @@ test.describe("Home interactions", () => {
     const sidVolume = page.getByTestId("home-sid-volume-socket1");
     const sidPan = page.getByTestId("home-sid-pan-socket1");
 
-    await driveA.scrollIntoViewIfNeeded();
-    await printerBus.scrollIntoViewIfNeeded();
-    await sidEntry.scrollIntoViewIfNeeded();
+    for (const locator of [driveA, driveB, printerBus, printerOutputType, sidEntry, sidVolume, sidPan]) {
+      await locator.scrollIntoViewIfNeeded();
+      await expect(locator).toBeVisible();
+    }
 
     const [driveABox, driveBBox, printerBusBox, printerOutputTypeBox, sidEntryBox, sidVolumeBox, sidPanBox] =
       await Promise.all([

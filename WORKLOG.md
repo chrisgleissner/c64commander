@@ -597,3 +597,53 @@ worklog above.
 - Diagnostic notes from the coverage run:
   - the runner printed existing HVSC perf-budget warnings (`Android HVSC perf budgets FAILED`, `HVSC web secondary perf budgets failed`) but exited successfully with code `0`; they were informational output from covered tests rather than a blocking failure for this convergence step.
 - Next step: commit the two-spec stabilization, push to `origin/fix/prod-hardening`, and monitor the new head at job level until required checks are green.
+
+## Entry 27 — 2026-06-02 14:34:00Z UTC — pushed follow-up head `285bccc0`
+
+- Committed the latest shard-3 / shard-9 stabilization as `285bccc085121b3baec59c2b116d330882393bbb` with message `test: stabilize remaining e2e convergence retries`.
+- Pushed `285bccc085121b3baec59c2b116d330882393bbb` to `origin/fix/prod-hardening`.
+- Latest PR `#270` state after the push:
+  - state: `OPEN`
+  - base: `main`
+  - head: `fix/prod-hardening`
+  - head SHA: `285bccc085121b3baec59c2b116d330882393bbb`
+  - mergeable: `MERGEABLE`
+- Fresh workflow cycle observed for the new head:
+  - android run `26826745400`
+  - web run `26826745079`
+  - ios run `26826745016`
+- Immediate monitoring state:
+  - new checks are still queued/in progress; no green cycle is recorded yet for head `285bccc0`.
+  - consecutive green cycle count remains `0` until the full required CI set for a single head completes successfully.
+
+## Entry 28 — 2026-06-02 14:42:00Z UTC — new shard-9 failure on head `285bccc0`
+
+- Android run `26826745400` produced a new failure on job `79096722735` (`Web | E2E (sharded) (9, 12)`) for the current head `285bccc085121b3baec59c2b116d330882393bbb`.
+- Downloaded the failed log to `.tmp/ghlogs/android-26826745400-shard9.log`.
+- Failure signatures:
+  - `playwright/homeInteractivity.spec.ts:127:3` `start/stop interactions send stream commands` failed on both the primary attempt and retry #1; the failure now occurs inside `waitForStreamsReady()` at line `46`, called from line `139` after the endpoint repair path.
+  - `playwright/homeInteractivity.spec.ts:613:3` `compact home stacks drives, printer controls, and SID sliders vertically` failed on the primary attempt only with `locator.boundingBox: Timeout 20000ms exceeded`; retry #1 passed.
+- Root-cause interpretation:
+  - the repaired stream state should only require Start to re-enable before issuing `audio:start`; waiting for Stop too is likely over-constraining the pre-start state.
+  - the compact-layout geometry assertions need a more deterministic visibility/scroll readiness before calling `boundingBox()` on all measured controls.
+
+## Entry 29 — 2026-06-02 15:58:00Z UTC — local validation passed for second shard-9 follow-up
+
+- Updated file:
+  - `playwright/homeInteractivity.spec.ts`
+- Fix details:
+  - after endpoint repair in `start/stop interactions send stream commands`, the test now waits only for `home-stream-start-audio` to become enabled before clicking Start, instead of requiring both Start and Stop to be enabled in the pre-start state;
+  - in `compact home stacks drives, printer controls, and SID sliders vertically`, every measured control now scrolls into view and must become visible before any `boundingBox()` call.
+- Local validation commands and results:
+  - `npx prettier --check playwright/homeInteractivity.spec.ts` — passed
+  - `npx playwright test playwright/homeInteractivity.spec.ts --project=android-phone -g "start/stop interactions send stream commands|compact home stacks drives, printer controls, and SID sliders vertically"` — passed
+  - `npx playwright test playwright/homeInteractivity.spec.ts --project=android-phone --repeat-each=4 -g "start/stop interactions send stream commands|compact home stacks drives, printer controls, and SID sliders vertically"` — passed (`8/8`)
+  - `npm run test:coverage` — passed
+- Coverage summary after the follow-up remained above the branch gate:
+  - Statements: `94.63%`
+  - Branches: `91.70%`
+  - Functions: `91.05%`
+  - Lines: `94.63%`
+- CI context for this fix:
+  - Android run `26826745400` / job `79096722735` failed only on shard `9/12`;
+  - shard `3/12` completed successfully on the same head after the earlier local soak fix.
