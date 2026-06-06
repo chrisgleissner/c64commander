@@ -79,6 +79,30 @@ describe("useStreamData", () => {
     expect(result.current.streamActionPending).toEqual({});
   });
 
+  it("refreshes stream drafts when config data arrives after initial empty render", async () => {
+    const { result, rerender } = renderHook(() =>
+      useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
+    );
+
+    expect(result.current.streamDrafts["audio"]).toEqual({
+      ip: "",
+      port: "11001",
+      endpoint: "—:11001",
+    });
+
+    withStreamConfig("239.0.1.65", "11000");
+
+    rerender();
+
+    await vi.waitFor(() =>
+      expect(result.current.streamDrafts["audio"]).toEqual({
+        ip: "239.0.1.65",
+        port: "11001",
+        endpoint: "239.0.1.65:11001",
+      }),
+    );
+  });
+
   // 2. handleStreamFieldChange updates draft endpoint/ip/port
   it("handleStreamFieldChange updates draft", () => {
     withStreamConfig();
