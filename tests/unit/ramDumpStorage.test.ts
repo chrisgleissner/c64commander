@@ -23,6 +23,7 @@ const { folderPickerMock, storeMock, platformMock, loggingMock, sidUtilsMock } =
     readFileFromTree: vi.fn(),
     listChildren: vi.fn(),
     getPersistedUris: vi.fn(),
+    releasePersistedUris: vi.fn(),
     writeFileToTree: vi.fn(),
   },
   storeMock: {

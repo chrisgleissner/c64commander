@@ -1322,6 +1322,9 @@ const waitForConnected = async (page: Page) => {
       { timeout: 3000 },
     )
     .catch(() => null);
+  await page.evaluate(() =>
+    (window as Window & { __c64uSeedVerifiedIdentity?: () => Promise<void> }).__c64uSeedVerifiedIdentity?.(),
+  );
   await seedBadgeHealthTraceState(page, { health: "Healthy", problemCount: 0 });
   await expect(page.locator('[data-slot-active="true"]').getByTestId("unified-health-badge")).toHaveAttribute(
     "data-health-state",

@@ -59,6 +59,14 @@ Server logs go to `c64scope/logs/` (gitignored).
 
 Both `artifacts/` and `logs/` are gitignored.
 
+For scoped research runs, pass an artifact root through the root npm wrapper:
+
+```bash
+npm run scope:hil:evidence -- --artifact-root docs/research/stabilization/<run>/artifacts/c64scope
+```
+
+`hil:evidence` writes its run subdirectories under that root. `scope:hil:playback-volume-latency` also accepts `--artifact-root` and writes under `<root>/playback-volume-latency/<timestamp-host>/`.
+
 ## Architecture
 
 Three peer MCP servers are orchestrated by a single LLM:

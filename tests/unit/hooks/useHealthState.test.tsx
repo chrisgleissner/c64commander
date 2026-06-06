@@ -14,7 +14,7 @@ const healthCheckStateMock = vi.hoisted(() => ({
 
 const c64ConnectionMock = vi.hoisted(() => ({
   status: {
-    deviceInfo: null as { product?: string | null } | null,
+    deviceInfo: null as { product?: string | null; firmware_version?: string | null } | null,
   },
 }));
 
@@ -145,6 +145,56 @@ describe("useHealthState", () => {
     expect(result.current.state).toBe("Unhealthy");
   });
 
+  it("does not report Healthy while online identity lacks product or firmware", () => {
+    connectionStateMock.state = "REAL_CONNECTED";
+    healthModelMocks.deriveConnectivityState.mockImplementation(() => "Online");
+    healthModelMocks.rollUpHealth.mockImplementation(() => "Healthy");
+    healthModelMocks.deriveRestContributorHealth.mockImplementation(() => ({
+      state: "Healthy",
+      problemCount: 0,
+      totalOperations: 1,
+      failedOperations: 0,
+    }));
+    c64ConnectionMock.status.deviceInfo = {
+      product: "C64 Ultimate",
+      firmware_version: null,
+    };
+    traceEventsMock.events = [{ type: "rest-response", data: { status: 200 } }];
+
+    const { result } = renderHook(() => useHealthState());
+
+    expect(result.current.state).toBe("Degraded");
+    expect(result.current.problemCount).toBe(1);
+    expect(result.current.primaryProblem).toEqual(
+      expect.objectContaining({
+        title: "Device identity unavailable",
+        contributor: "App",
+      }),
+    );
+  });
+
+  it("allows Healthy when online product and firmware identity are verified", () => {
+    connectionStateMock.state = "REAL_CONNECTED";
+    healthModelMocks.deriveConnectivityState.mockImplementation(() => "Online");
+    healthModelMocks.rollUpHealth.mockImplementation(() => "Healthy");
+    healthModelMocks.deriveRestContributorHealth.mockImplementation(() => ({
+      state: "Healthy",
+      problemCount: 0,
+      totalOperations: 1,
+      failedOperations: 0,
+    }));
+    c64ConnectionMock.status.deviceInfo = {
+      product: "C64 Ultimate",
+      firmware_version: "1.1.0",
+    };
+    traceEventsMock.events = [{ type: "rest-response", data: { status: 200 } }];
+
+    const { result } = renderHook(() => useHealthState());
+
+    expect(result.current.state).toBe("Healthy");
+    expect(result.current.problemCount).toBe(0);
+  });
+
   it("does not count 4xx/5xx responses as the first REST success", () => {
     traceEventsMock.events = [
       { type: "rest-response", data: { status: 404 } },
@@ -206,6 +256,33 @@ describe("useHealthState", () => {
       expect.objectContaining({
         contributor: "FTP",
         title: "FTP health check failed",
+        impactLevel: 1,
+      }),
+    );
+  });
+
+  it("counts a TELNET probe failure as a problem and routes primaryProblem to TELNET contributor", () => {
+    healthCheckStateMock.latestResult = {
+      runId: "hc-telnet",
+      overallHealth: "Degraded",
+      endTimestamp: "2024-01-01T00:00:03.250Z",
+      deviceInfo: { product: "Ultimate 64" },
+      probes: {
+        CONFIG: { probe: "CONFIG", outcome: "Success", reason: null },
+        JIFFY: { probe: "JIFFY", outcome: "Success", reason: null },
+        REST: { probe: "REST", outcome: "Success", reason: null },
+        FTP: { probe: "FTP", outcome: "Success", reason: null },
+        TELNET: { probe: "TELNET", outcome: "Fail", reason: "login timeout" },
+      },
+    };
+
+    const { result } = renderHook(() => useHealthState());
+
+    expect(result.current.contributors.TELNET.state).toBe("Unhealthy");
+    expect(result.current.primaryProblem).toEqual(
+      expect.objectContaining({
+        contributor: "TELNET",
+        title: "TELNET health check failed",
         impactLevel: 1,
       }),
     );

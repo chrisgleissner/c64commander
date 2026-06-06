@@ -76,9 +76,9 @@ export const navRouteShell: ValidationCase = {
     // Step 3: Capture logcat for diagnostics
     const logPath = path.join(ctx.artifactDir, "logcat.txt");
     const logcat = await captureLogcat(ctx.serial, logPath);
-    const hasAppLog = logcat.includes("c64commander") || logcat.includes("uk.gleissner");
+    const hasAppLog = logcat.trim().length > 0;
 
-    trace.decisionLog.push(`${ts()} Observed: logcat contains app entries=${hasAppLog}`);
+    trace.decisionLog.push(`${ts()} Observed: app-scoped logcat captured=${hasAppLog}`);
 
     await ctx.store.attachEvidence({
       runId: ctx.runId,

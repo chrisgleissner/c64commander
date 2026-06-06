@@ -8,6 +8,7 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   analyzePlaybackLatencyEnvelope,
   type PlaybackLatencyMetric,
@@ -20,6 +21,7 @@ type ParsedArgs = {
   password?: string;
   songPath: string;
   artifactDir?: string;
+  artifactRoot?: string;
   warmupMs: number;
   settleMs: number;
   burstIntervalMs: number;
@@ -55,18 +57,7 @@ async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const host = args.host ?? (await resolveHealthyHost(args.password));
   const workspaceRoot = resolveWorkspaceRoot();
-  const artifactDir =
-    args.artifactDir ??
-    path.join(
-      workspaceRoot,
-      "c64scope",
-      "artifacts",
-      "playback-volume-latency",
-      `${new Date()
-        .toISOString()
-        .replace(/[:-]/g, "")
-        .replace(/\.\d{3}Z$/, "Z")}-${host}`,
-    );
+  const artifactDir = resolvePlaybackVolumeLatencyArtifactDir(args, workspaceRoot, host);
   await mkdir(artifactDir, { recursive: true });
 
   const baseUrl = `http://${host}`;
@@ -191,7 +182,7 @@ async function main(): Promise<void> {
   console.log(`Summary JSON: ${summaryPath}`);
 }
 
-function parseArgs(argv: string[]): ParsedArgs {
+export function parseArgs(argv: string[]): ParsedArgs {
   const defaults: ParsedArgs = {
     songPath: "tests/fixtures/local-source-assets/demo.sid",
     warmupMs: 1200,
@@ -218,6 +209,13 @@ function parseArgs(argv: string[]): ParsedArgs {
       defaults.artifactDir = args.shift();
       continue;
     }
+    if (flag === "--artifact-root") {
+      defaults.artifactRoot = args.shift();
+      if (!defaults.artifactRoot) {
+        throw new Error("--artifact-root requires a path");
+      }
+      continue;
+    }
     if (flag === "--warmup-ms") {
       defaults.warmupMs = parseIntegerArg(flag, args.shift(), defaults.warmupMs);
       continue;
@@ -233,6 +231,24 @@ function parseArgs(argv: string[]): ParsedArgs {
     throw new Error(`Unknown argument: ${flag}`);
   }
   return defaults;
+}
+
+export function resolvePlaybackVolumeLatencyArtifactDir(
+  args: Pick<ParsedArgs, "artifactDir" | "artifactRoot">,
+  workspaceRoot: string,
+  host: string,
+  timestamp = new Date()
+    .toISOString()
+    .replace(/[:-]/g, "")
+    .replace(/\.\d{3}Z$/, "Z"),
+): string {
+  if (args.artifactDir) {
+    return path.resolve(workspaceRoot, args.artifactDir);
+  }
+  const root = args.artifactRoot
+    ? path.resolve(workspaceRoot, args.artifactRoot)
+    : path.resolve(workspaceRoot, "c64scope", "artifacts");
+  return path.join(root, "playback-volume-latency", `${timestamp}-${host}`);
 }
 
 function parseIntegerArg(flag: string, value: string | undefined, fallback: number): number {
@@ -597,7 +613,14 @@ function percentile(samples: readonly number[], fraction: number): number | null
   return samples[index]!;
 }
 
-void main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
-});
+function isDirectExecution(metaUrl: string): boolean {
+  const entry = process.argv[1];
+  return Boolean(entry) && pathToFileURL(entry!).href === metaUrl;
+}
+
+if (isDirectExecution(import.meta.url)) {
+  void main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  });
+}

@@ -236,6 +236,7 @@ export default function SettingsPage() {
   const lastProbeSucceededAtMs = connectionSnapshot.lastProbeSucceededAtMs;
   const lastProbeFailedAtMs = connectionSnapshot.lastProbeFailedAtMs;
   const [isSaving, setIsSaving] = useState(false);
+  const [connectionRefreshInFlight, setConnectionRefreshInFlight] = useState(false);
   const [deleteDependencySummary, setDeleteDependencySummary] = useState<SavedDeviceDependencySummary | null>(null);
   const [deleteWarningOpen, setDeleteWarningOpen] = useState(false);
   const [deleteDependencyBusy, setDeleteDependencyBusy] = useState(false);
@@ -581,7 +582,6 @@ export default function SettingsPage() {
       });
       updateConfig(nextDeviceHost, hasPassword ? trimmedPassword : undefined);
       await switchSavedDevice(selectedSavedDevice.id);
-      await discoverConnection("manual");
       toast({ title: "Connection settings saved" });
     } catch (error) {
       reportUserError({
@@ -656,6 +656,23 @@ export default function SettingsPage() {
 
   const handleSelectSavedDevice = trace(async function handleSelectSavedDevice(deviceId: string) {
     await switchSavedDevice(deviceId);
+  });
+
+  const handleRefreshConnection = trace(async function handleRefreshConnection() {
+    if (connectionRefreshInFlight) return;
+    setConnectionRefreshInFlight(true);
+    try {
+      await discoverConnection("manual");
+    } catch (error) {
+      reportUserError({
+        operation: "CONNECTION_REFRESH",
+        title: "Unable to refresh connection",
+        description: (error as Error).message,
+        error,
+      });
+    } finally {
+      setConnectionRefreshInFlight(false);
+    }
   });
 
   const handleDeveloperTap = () => {
@@ -958,8 +975,10 @@ export default function SettingsPage() {
                     {savedDevices.devices.map((device) => {
                       const isSelected = device.id === savedDevices.selectedDeviceId;
                       const productCode =
-                        (device.type?.trim() || device.lastKnownProduct) ??
-                        resolveCanonicalProductFamilyCode(status.deviceInfo?.product) ??
+                        device.type?.trim() ||
+                        device.lastKnownProduct ||
+                        savedDevices.summaries[device.id]?.lastVerifiedProduct ||
+                        (isSelected ? resolveCanonicalProductFamilyCode(status.deviceInfo?.product) : null) ||
                         "Unknown";
                       return (
                         <button
@@ -1073,11 +1092,13 @@ export default function SettingsPage() {
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => void discoverConnection("manual")}
-                  disabled={status.isConnecting}
+                  onClick={() => void handleRefreshConnection()}
+                  disabled={status.isConnecting || connectionRefreshInFlight}
                   aria-label="Refresh connection"
                 >
-                  <RefreshCw className={`h-4 w-4 ${status.isConnecting ? "animate-spin" : ""}`} />
+                  <RefreshCw
+                    className={`h-4 w-4 ${status.isConnecting || connectionRefreshInFlight ? "animate-spin" : ""}`}
+                  />
                 </Button>
               </div>
 

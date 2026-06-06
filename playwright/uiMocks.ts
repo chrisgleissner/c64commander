@@ -66,6 +66,39 @@ export const uiFixtures = {
   fixtureBase64,
 };
 
+export async function seedInitialSnapshotConfig(
+  page: Page,
+  baseUrl: string,
+  updates: Record<string, Record<string, string | number>>,
+) {
+  await page.addInitScript(
+    ({
+      baseUrl: baseUrlArg,
+      updates: updatesArg,
+    }: {
+      baseUrl: string;
+      updates: Record<string, Record<string, string | number>>;
+    }) => {
+      const key = `c64u_initial_snapshot:${baseUrlArg}`;
+      const raw = localStorage.getItem(key);
+      if (!raw) return;
+      const snapshot = JSON.parse(raw) as {
+        data?: Record<string, Record<string, { items?: Record<string, { selected?: string | number }> }>>;
+      };
+      Object.entries(updatesArg).forEach(([category, items]) => {
+        Object.entries(items).forEach(([itemName, value]) => {
+          const item = snapshot.data?.[category]?.[category]?.items?.[itemName];
+          if (item) {
+            item.selected = value;
+          }
+        });
+      });
+      localStorage.setItem(key, JSON.stringify(snapshot));
+    },
+    { baseUrl, updates },
+  );
+}
+
 export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSeedOptions = {}) {
   const { seedFeatureFlagsByDefault = true } = options;
   await page.addInitScript(
@@ -118,6 +151,22 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
         __c64uExpectedBaseUrl?: string;
         __c64uAllowedBaseUrls?: string[];
         __c64uTestProbeEnabled?: boolean;
+        __c64uSeedVerifiedIdentity?: () => Promise<void>;
+        __c64uConnectionTestProbe?: {
+          noteReachable: (
+            host: string,
+            source: "rest",
+            deviceInfo: {
+              product: string;
+              firmware_version: string;
+              fpga_version: string;
+              core_version: string;
+              hostname: string;
+              unique_id: string;
+              errors: string[];
+            },
+          ) => void;
+        };
       };
       routingWindow.__c64uExpectedBaseUrl = baseUrlArg;
       routingWindow.__c64uTestProbeEnabled = true;
@@ -140,6 +189,21 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
       }
       routingWindow.__c64uAllowedBaseUrls = Array.from(allowedBaseUrls);
       const host = baseUrlArg?.replace(/^https?:\/\//, "");
+      routingWindow.__c64uSeedVerifiedIdentity = async () => {
+        const probe = routingWindow.__c64uConnectionTestProbe;
+        if (!probe) {
+          throw new Error("C64U connection test probe is not installed");
+        }
+        probe.noteReachable(baseUrlArg || host || "c64u", "rest", {
+          product: "C64 Ultimate",
+          firmware_version: "3.12.0",
+          fpga_version: "1.0.0",
+          core_version: "1.0.0",
+          hostname: "c64u",
+          unique_id: "TEST-123",
+          errors: [],
+        });
+      };
       try {
         const seededSavedDevice = readSeededSavedDevice();
         const seededFtpPort = parseStoredPort(

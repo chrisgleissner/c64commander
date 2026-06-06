@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   pickFile: vi.fn(),
   listChildren: vi.fn(),
   getPersistedUris: vi.fn(),
+  releasePersistedUris: vi.fn(),
   readFile: vi.fn(),
   readFileFromTree: vi.fn(),
 }));
@@ -35,6 +36,7 @@ vi.mock("@capacitor/core", () => ({
     pickFile: mocks.pickFile,
     listChildren: mocks.listChildren,
     getPersistedUris: mocks.getPersistedUris,
+    releasePersistedUris: mocks.releasePersistedUris,
     readFile: mocks.readFile,
     readFileFromTree: mocks.readFileFromTree,
   }),
@@ -50,6 +52,7 @@ describe("FolderPicker", () => {
     mocks.pickFile.mockReset();
     mocks.listChildren.mockReset();
     mocks.getPersistedUris.mockReset();
+    mocks.releasePersistedUris.mockReset();
     mocks.readFile.mockReset();
     mocks.readFileFromTree.mockReset();
   });
@@ -123,6 +126,9 @@ describe("FolderPicker", () => {
 
     await FolderPicker.getPersistedUris();
     expect(mocks.getPersistedUris).toHaveBeenCalled();
+
+    await FolderPicker.releasePersistedUris();
+    expect(mocks.releasePersistedUris).toHaveBeenCalled();
 
     await FolderPicker.readFile({ uri: "" });
     expect(mocks.readFile).toHaveBeenCalled();

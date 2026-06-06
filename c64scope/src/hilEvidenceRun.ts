@@ -41,6 +41,10 @@ interface AppRecorderHandle {
   stop: () => Promise<void>;
 }
 
+interface ParsedHilEvidenceArgs {
+  artifactRoot?: string;
+}
+
 type BridgeAction = "streams.video.start" | "streams.video.stop" | "streams.audio.start" | "streams.audio.stop";
 
 interface BridgeUsageEntry {
@@ -63,6 +67,30 @@ export function sleep(ms: number): Promise<void> {
 
 export function resolveWorkspaceRoot(): string {
   return path.basename(process.cwd()) === "c64scope" ? path.resolve(process.cwd(), "..") : process.cwd();
+}
+
+export function parseHilEvidenceArgs(argv: string[]): ParsedHilEvidenceArgs {
+  const parsed: ParsedHilEvidenceArgs = {};
+  const args = [...argv];
+  while (args.length > 0) {
+    const flag = args.shift();
+    if (!flag) break;
+    if (flag === "--artifact-root") {
+      parsed.artifactRoot = args.shift();
+      if (!parsed.artifactRoot) {
+        throw new Error("--artifact-root requires a path");
+      }
+      continue;
+    }
+    throw new Error(`Unknown argument: ${flag}`);
+  }
+  return parsed;
+}
+
+export function resolveHilArtifactsRoot(workspaceRoot: string, args: ParsedHilEvidenceArgs): string {
+  return args.artifactRoot
+    ? path.resolve(workspaceRoot, args.artifactRoot)
+    : path.resolve(workspaceRoot, "c64scope", "artifacts");
 }
 
 export async function runC64Capture(outputDir: string, durationMs: number, label: string): Promise<void> {
@@ -285,11 +313,12 @@ export async function readDirOrWarn(directoryPath: string): Promise<string[]> {
 }
 
 export async function main(): Promise<void> {
+  const args = parseHilEvidenceArgs(process.argv.slice(2));
   const serialInput = process.env["ANDROID_SERIAL"];
   const serial = serialInput ? await resolveAdbSerial(serialInput) : await resolvePreferredPhysicalTestDeviceSerial();
   const c64uHost = process.env["C64U_HOST"] ?? "c64u";
   const workspaceRoot = resolveWorkspaceRoot();
-  const artifactsRoot = path.resolve(workspaceRoot, "c64scope", "artifacts");
+  const artifactsRoot = resolveHilArtifactsRoot(workspaceRoot, args);
 
   const preflight = await runPreflight({ deviceSerial: serial, c64uHost });
   if (!preflight.ready) {

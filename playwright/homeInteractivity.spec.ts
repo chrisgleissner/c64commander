@@ -11,7 +11,7 @@ import type { Page, TestInfo } from "@playwright/test";
 import { saveCoverageFromPage } from "./withCoverage";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { variant } from "../src/generated/variant";
-import { seedUiMocks } from "./uiMocks";
+import { seedInitialSnapshotConfig, seedUiMocks } from "./uiMocks";
 import { allowWarnings, assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 
 const CURRENT_DEVICE_HOST_KEY = `${variant.id}:device_host`;
@@ -28,6 +28,9 @@ const waitForConnected = async (page: Page) => {
     {
       timeout: 10000,
     },
+  );
+  await page.evaluate(() =>
+    (window as Window & { __c64uSeedVerifiedIdentity?: () => Promise<void> }).__c64uSeedVerifiedIdentity?.(),
   );
 };
 
@@ -125,11 +128,17 @@ test.describe("Home interactions", () => {
   });
 
   test("start/stop interactions send stream commands", async ({ page }: { page: Page }) => {
+    const audioEndpoint = "239.0.1.65:11001";
     await page.request.post(`${server.baseUrl}/v1/configs`, {
       data: {
         "Data Streams": {
-          "Stream Audio to": "239.0.1.65:11001",
+          "Stream Audio to": audioEndpoint,
         },
+      },
+    });
+    await seedInitialSnapshotConfig(page, server.baseUrl, {
+      "Data Streams": {
+        "Stream Audio to": audioEndpoint,
       },
     });
 
@@ -138,7 +147,7 @@ test.describe("Home interactions", () => {
     const startAudio = page.getByTestId("home-stream-start-audio");
     const stopAudio = page.getByTestId("home-stream-stop-audio");
     const audioEndpointDisplay = page.getByTestId("home-stream-endpoint-display-audio");
-    await expect(audioEndpointDisplay).toHaveText("239.0.1.65:11001");
+    await expect(audioEndpointDisplay).toHaveText(audioEndpoint);
     await expect(startAudio).toBeEnabled();
 
     await startAudio.click();
@@ -495,12 +504,26 @@ test.describe("Home interactions", () => {
   test("SID reset writes deterministic silence register set", async ({ page }: { page: Page }) => {
     await page.request.post(`${server.baseUrl}/v1/configs`, {
       data: {
+        "SID Sockets Configuration": {
+          "SID Socket 1": "Enabled",
+        },
         "SID Addressing": {
           "SID Socket 1 Address": "$D400",
           "SID Socket 2 Address": "Unmapped",
           "UltiSID 1 Address": "$D420",
           "UltiSID 2 Address": "Unmapped",
         },
+      },
+    });
+    await seedInitialSnapshotConfig(page, server.baseUrl, {
+      "SID Sockets Configuration": {
+        "SID Socket 1": "Enabled",
+      },
+      "SID Addressing": {
+        "SID Socket 1 Address": "$D400",
+        "SID Socket 2 Address": "Unmapped",
+        "UltiSID 1 Address": "$D420",
+        "UltiSID 2 Address": "Unmapped",
       },
     });
 

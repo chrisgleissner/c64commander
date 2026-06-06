@@ -127,6 +127,50 @@ const filterTraceEventsForConfiguredHost = (
   });
 };
 
+type IdentityDeviceInfo = {
+  product?: string | null;
+  firmware_version?: string | null;
+};
+
+const hasVerifiedDeviceIdentity = (deviceInfo: IdentityDeviceInfo | null | undefined) =>
+  Boolean(deviceInfo?.product?.trim() && deviceInfo?.firmware_version?.trim());
+
+const applyIdentityHealthGate = (
+  health: OverallHealthState,
+  deviceInfo: IdentityDeviceInfo | null | undefined,
+): OverallHealthState => {
+  if (health.connectivity !== "Online" || health.state !== "Healthy" || hasVerifiedDeviceIdentity(deviceInfo)) {
+    return health;
+  }
+
+  const appContributor = health.contributors.App;
+  return {
+    ...health,
+    state: "Degraded",
+    problemCount: health.problemCount + 1,
+    contributors: {
+      ...health.contributors,
+      App: {
+        ...appContributor,
+        state: appContributor.state === "Unhealthy" ? "Unhealthy" : "Degraded",
+        problemCount: appContributor.problemCount + 1,
+        totalOperations: appContributor.totalOperations + 1,
+        failedOperations: appContributor.failedOperations + 1,
+      },
+    },
+    primaryProblem:
+      health.primaryProblem ??
+      ({
+        id: "device-identity-unavailable",
+        title: "Device identity unavailable",
+        contributor: "App",
+        timestampMs: Date.now(),
+        impactLevel: 1,
+        causeHint: "Product and firmware have not been verified for the active target.",
+      } satisfies OverallHealthState["primaryProblem"]),
+  };
+};
+
 export function useHealthState(): OverallHealthState {
   const connectionSnapshot = useConnectionState();
   const healthCheckState = useHealthCheckState();
@@ -171,34 +215,37 @@ export function useHealthState(): OverallHealthState {
       const problemCount = appFailures + restFailures + ftpFailures + telnetFailures;
       const firstFailedProbe = Object.values(latestHealthCheck.probes).find((probe) => probe.outcome === "Fail");
 
-      return {
-        state: latestHealthCheck.overallHealth,
-        connectivity,
-        host,
-        connectedDeviceLabel,
-        problemCount,
-        contributors,
-        lastRestActivity: deriveLastRestActivity(hostScopedTraceEvents),
-        lastFtpActivity: deriveLastFtpActivity(hostScopedTraceEvents),
-        lastTelnetActivity: deriveLastTelnetActivity(hostScopedTraceEvents),
-        primaryProblem: firstFailedProbe
-          ? {
-              id: `${latestHealthCheck.runId}-${firstFailedProbe.probe}`,
-              title: `${firstFailedProbe.probe} health check failed`,
-              contributor:
-                firstFailedProbe.probe === "REST"
-                  ? "REST"
-                  : firstFailedProbe.probe === "FTP"
-                    ? "FTP"
-                    : firstFailedProbe.probe === "TELNET"
-                      ? "TELNET"
-                      : "App",
-              timestampMs: Date.parse(latestHealthCheck.endTimestamp),
-              impactLevel: latestHealthCheck.overallHealth === "Unhealthy" ? 2 : 1,
-              causeHint: firstFailedProbe.reason,
-            }
-          : null,
-      };
+      return applyIdentityHealthGate(
+        {
+          state: latestHealthCheck.overallHealth,
+          connectivity,
+          host,
+          connectedDeviceLabel,
+          problemCount,
+          contributors,
+          lastRestActivity: deriveLastRestActivity(hostScopedTraceEvents),
+          lastFtpActivity: deriveLastFtpActivity(hostScopedTraceEvents),
+          lastTelnetActivity: deriveLastTelnetActivity(hostScopedTraceEvents),
+          primaryProblem: firstFailedProbe
+            ? {
+                id: `${latestHealthCheck.runId}-${firstFailedProbe.probe}`,
+                title: `${firstFailedProbe.probe} health check failed`,
+                contributor:
+                  firstFailedProbe.probe === "REST"
+                    ? "REST"
+                    : firstFailedProbe.probe === "FTP"
+                      ? "FTP"
+                      : firstFailedProbe.probe === "TELNET"
+                        ? "TELNET"
+                        : "App",
+                timestampMs: Date.parse(latestHealthCheck.endTimestamp),
+                impactLevel: latestHealthCheck.overallHealth === "Unhealthy" ? 2 : 1,
+                causeHint: firstFailedProbe.reason,
+              }
+            : null,
+        },
+        deviceInfo,
+      );
     }
 
     // Gate trace-derived health on having seen at least one successful REST response.
@@ -251,17 +298,27 @@ export function useHealthState(): OverallHealthState {
       contributors.FTP.problemCount +
       contributors.TELNET.problemCount;
 
-    return {
-      state,
-      connectivity,
-      host,
-      connectedDeviceLabel,
-      problemCount: totalProblems,
-      contributors,
-      lastRestActivity: deriveLastRestActivity(hostScopedTraceEvents),
-      lastFtpActivity: deriveLastFtpActivity(hostScopedTraceEvents),
-      lastTelnetActivity: deriveLastTelnetActivity(hostScopedTraceEvents),
-      primaryProblem: derivePrimaryProblem(hostScopedTraceEvents, contributors, deviceScope),
-    };
-  }, [connectionSnapshot.state, deviceInfo?.product, healthCheckState.latestResult, savedDevices, traceEvents]);
+    return applyIdentityHealthGate(
+      {
+        state,
+        connectivity,
+        host,
+        connectedDeviceLabel,
+        problemCount: totalProblems,
+        contributors,
+        lastRestActivity: deriveLastRestActivity(hostScopedTraceEvents),
+        lastFtpActivity: deriveLastFtpActivity(hostScopedTraceEvents),
+        lastTelnetActivity: deriveLastTelnetActivity(hostScopedTraceEvents),
+        primaryProblem: derivePrimaryProblem(hostScopedTraceEvents, contributors, deviceScope),
+      },
+      deviceInfo,
+    );
+  }, [
+    connectionSnapshot.state,
+    deviceInfo?.firmware_version,
+    deviceInfo?.product,
+    healthCheckState.latestResult,
+    savedDevices,
+    traceEvents,
+  ]);
 }

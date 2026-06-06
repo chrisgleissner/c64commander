@@ -32,6 +32,7 @@ vi.mock("@/lib/native/folderPicker", () => ({
     listChildren: (...args: unknown[]) => listChildrenMock(...args),
     readFileFromTree: (...args: unknown[]) => readFileFromTreeMock(...args),
     getPersistedUris: vi.fn(),
+    releasePersistedUris: vi.fn(),
   },
 }));
 

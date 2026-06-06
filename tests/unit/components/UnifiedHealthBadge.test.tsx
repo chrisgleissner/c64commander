@@ -771,6 +771,27 @@ describe("UnifiedHealthBadge", () => {
     expect(screen.getByTestId("switch-device-row-device-backup").textContent).toContain("2/6 probes");
   });
 
+  it("reconciles switcher row labels with fresh health before persisted switch status", async () => {
+    vi.useFakeTimers();
+    mockState.switchStatuses["device-office"] = "offline";
+    mockState.switchStatuses["device-backup"] = "offline";
+    delete (mockState.savedDeviceHealthChecks.byDeviceId as Record<string, unknown>)["device-backup"];
+
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    fireEvent.pointerDown(badge);
+    await vi.advanceTimersByTimeAsync(450);
+
+    const selectedRow = screen.getByTestId("switch-device-row-device-office");
+    const backupRow = screen.getByTestId("switch-device-row-device-backup");
+
+    expect(selectedRow).toHaveTextContent("Selected");
+    expect(selectedRow).not.toHaveTextContent("Offline selection");
+    expect(backupRow).toHaveTextContent("Offline");
+    expect(backupRow).toHaveTextContent("Offline selection");
+  });
+
   it("uses the app's stronger selected treatment for the active switch-device card", async () => {
     vi.useFakeTimers();
     render(<UnifiedHealthBadge />);

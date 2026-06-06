@@ -9,9 +9,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FolderPicker } from "@/lib/native/folderPicker";
 
-const { pickDirectoryMock, platformState } = vi.hoisted(() => ({
+const { pickDirectoryMock, releasePersistedUrisMock, platformState } = vi.hoisted(() => ({
   platformState: { value: "web", native: false },
   pickDirectoryMock: vi.fn(),
+  releasePersistedUrisMock: vi.fn(),
+}));
+
+const smokeConfigState = vi.hoisted(() => ({
+  value: null as { localSourceInitialUri?: string; resetLocalSourcePermissions?: boolean } | null,
 }));
 
 vi.mock("@capacitor/core", () => ({
@@ -25,11 +30,16 @@ vi.mock("@capacitor/core", () => ({
 vi.mock("@/lib/native/folderPicker", () => ({
   FolderPicker: {
     pickDirectory: (...args: unknown[]) => pickDirectoryMock(...args),
+    releasePersistedUris: (...args: unknown[]) => releasePersistedUrisMock(...args),
     listChildren: vi.fn(),
     getPersistedUris: vi.fn(),
     readFile: vi.fn(),
     readFileFromTree: vi.fn(),
   },
+}));
+
+vi.mock("@/lib/smoke/smokeMode", () => ({
+  getSmokeConfig: () => smokeConfigState.value,
 }));
 
 import {
@@ -58,8 +68,18 @@ describe("localSourcesStore", () => {
   beforeEach(() => {
     localStorage.clear();
     pickDirectoryMock.mockReset();
+    releasePersistedUrisMock.mockReset();
+    releasePersistedUrisMock.mockResolvedValue({ released: [] });
     platformState.value = "web";
     platformState.native = false;
+    smokeConfigState.value = null;
+    (
+      window as Window & { __c64uTestProbeEnabled?: boolean; __c64uLocalSourceInitialUri?: string }
+    ).__c64uTestProbeEnabled = undefined;
+    (
+      window as Window & { __c64uTestProbeEnabled?: boolean; __c64uLocalSourceInitialUri?: string }
+    ).__c64uLocalSourceInitialUri = undefined;
+    (window as Window & { __c64uPlatformOverride?: string }).__c64uPlatformOverride = undefined;
     (FolderPicker.listChildren as unknown as ReturnType<typeof vi.fn>).mockReset();
   });
 
@@ -106,6 +126,8 @@ describe("localSourcesStore", () => {
   it("uses native folder picker on android", async () => {
     platformState.value = "android";
     platformState.native = true;
+    (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
+    (window as Window & { __c64uPlatformOverride?: string }).__c64uPlatformOverride = "android";
     pickDirectoryMock.mockResolvedValue({
       treeUri: "content://tree/primary%3AMusic",
       rootName: "Phone",
@@ -113,9 +135,67 @@ describe("localSourcesStore", () => {
     });
 
     const result = await createLocalSourceFromPicker(null);
+    expect(pickDirectoryMock).toHaveBeenCalledWith({
+      initialUri: "content://com.android.externalstorage.documents/tree/primary%3ADownload",
+    });
     expect(result?.source.rootName).toBe("Phone");
     expect(result?.source.entries).toBeUndefined();
     expect(result?.source.android?.treeUri).toBe("content://tree/primary%3AMusic");
+  });
+
+  it("uses smoke-configured Android initial URI for native local source picker", async () => {
+    platformState.value = "android";
+    platformState.native = true;
+    smokeConfigState.value = {
+      localSourceInitialUri: "content://com.android.externalstorage.documents/tree/primary%3ADownload%2FCustom",
+    };
+    pickDirectoryMock.mockResolvedValue({
+      treeUri: "content://tree/primary%3ADownload%2FCustom",
+      rootName: "Custom",
+      permissionPersisted: true,
+    });
+
+    await createLocalSourceFromPicker(null);
+
+    expect(pickDirectoryMock).toHaveBeenCalledWith({
+      initialUri: "content://com.android.externalstorage.documents/tree/primary%3ADownload%2FCustom",
+    });
+  });
+
+  it("resets persisted Android SAF grants before smoke local source picker automation", async () => {
+    platformState.value = "android";
+    platformState.native = true;
+    smokeConfigState.value = {
+      localSourceInitialUri: "content://com.android.externalstorage.documents/tree/primary%3ADownload%2FC64LocalSource",
+      resetLocalSourcePermissions: true,
+    };
+    pickDirectoryMock.mockResolvedValue({
+      treeUri: "content://tree/primary%3ADownload%2FC64LocalSource",
+      rootName: "C64LocalSource",
+      permissionPersisted: true,
+    });
+
+    await createLocalSourceFromPicker(null);
+
+    expect(releasePersistedUrisMock.mock.invocationCallOrder[0]).toBeLessThan(
+      pickDirectoryMock.mock.invocationCallOrder[0],
+    );
+    expect(pickDirectoryMock).toHaveBeenCalledWith({
+      initialUri: "content://com.android.externalstorage.documents/tree/primary%3ADownload%2FC64LocalSource",
+    });
+  });
+
+  it("fails before opening DocumentsUI when smoke SAF reset fails", async () => {
+    platformState.value = "android";
+    platformState.native = true;
+    smokeConfigState.value = {
+      localSourceInitialUri: "content://com.android.externalstorage.documents/tree/primary%3ADownload%2FC64LocalSource",
+      resetLocalSourcePermissions: true,
+    };
+    releasePersistedUrisMock.mockRejectedValue(new Error("release failed"));
+
+    await expect(createLocalSourceFromPicker(null)).rejects.toThrow("release failed");
+    expect(pickDirectoryMock).not.toHaveBeenCalled();
   });
 
   it("keeps rootPath as / for SAF sources regardless of rootName", async () => {

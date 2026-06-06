@@ -342,7 +342,7 @@ describe("connectionManager", () => {
     expect(isRealDeviceStickyLockEnabled()).toBe(true);
   });
 
-  it("accepts healthy probe payload without product field", async () => {
+  it("rejects probe payload without product identity", async () => {
     const { probeOnce } = await import("../../../src/lib/connection/connectionManager");
     localStorage.removeItem("c64u_has_password");
 
@@ -354,7 +354,7 @@ describe("connectionManager", () => {
       }),
     );
 
-    await expect(probeOnce()).resolves.toBe(true);
+    await expect(probeOnce()).resolves.toBe(false);
   });
 
   it("verifyCurrentConnectionTarget enters demo only when the feature flag allows it and the user setting enables it", async () => {
@@ -589,7 +589,7 @@ describe("connectionManager", () => {
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
   });
 
-  it("ignores stale manual discovery outcomes when a newer manual run finishes first", async () => {
+  it("coalesces overlapping manual discovery clicks instead of starting a second probe", async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
 
@@ -597,26 +597,12 @@ describe("connectionManager", () => {
     localStorage.removeItem("c64u_has_password");
 
     const fetchStub = vi.mocked(fetch);
-    fetchStub
-      .mockImplementationOnce(
-        () =>
-          new Promise<Response>((_, reject) => {
-            setTimeout(() => reject(new TypeError("first manual probe failed")), 150);
-          }),
-      )
-      .mockImplementationOnce(
-        () =>
-          new Promise<Response>((resolve) => {
-            setTimeout(() => {
-              resolve(
-                new Response(JSON.stringify({ product: "C64 Ultimate", errors: [] }), {
-                  status: 200,
-                  headers: { "content-type": "application/json" },
-                }),
-              );
-            }, 20);
-          }),
-      );
+    fetchStub.mockImplementation(
+      () =>
+        new Promise<Response>((_, reject) => {
+          setTimeout(() => reject(new TypeError("manual probe failed")), 150);
+        }),
+    );
 
     await initializeConnectionManager();
 
@@ -627,7 +613,8 @@ describe("connectionManager", () => {
     await vi.advanceTimersByTimeAsync(250);
     await Promise.all([firstManual, secondManual]);
 
-    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(fetchStub).toHaveBeenCalledTimes(1);
+    expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
   });
 
   it("preserves transition invariants under mixed trigger stress", async () => {
@@ -751,7 +738,7 @@ describe("connectionManager", () => {
     await expect(probeOnce()).resolves.toBe(false);
   });
 
-  it("accepts payload with no product field and no errors", async () => {
+  it("rejects payload with no product field and no errors", async () => {
     const { probeOnce } = await import("../../../src/lib/connection/connectionManager");
     localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
     localStorage.removeItem("c64u_has_password");
@@ -763,7 +750,7 @@ describe("connectionManager", () => {
       }),
     );
 
-    await expect(probeOnce()).resolves.toBe(true);
+    await expect(probeOnce()).resolves.toBe(false);
   });
 
   it("rejects probe when HTTP status is not ok", async () => {
@@ -1520,7 +1507,7 @@ describe("connectionManager", () => {
     localStorage.removeItem("c64u_has_password");
 
     vi.mocked(fetch).mockResolvedValue(
-      new Response(JSON.stringify({ errors: [] }), {
+      new Response(JSON.stringify({ product: "C64 Ultimate", errors: [] }), {
         status: 200,
         headers: { "content-type": "application/json" },
       }),
@@ -1539,7 +1526,7 @@ describe("connectionManager", () => {
     localStorage.removeItem("c64u_has_password");
 
     vi.mocked(fetch).mockResolvedValue(
-      new Response(JSON.stringify({ errors: [] }), {
+      new Response(JSON.stringify({ product: "C64 Ultimate", errors: [] }), {
         status: 200,
         headers: { "content-type": "application/json" },
       }),

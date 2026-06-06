@@ -300,6 +300,20 @@ describe("Maestro flow contracts", () => {
     expect(commonNavigation).not.toContain('point: "25%,95%"');
   });
 
+  it("keeps local binary playback picker navigation independent of DocumentsUI toolbar ids", () => {
+    const rawSource = readFileSync(path.resolve(process.cwd(), ".maestro/local-binary-playback-proof.yaml"), "utf8");
+
+    expect(rawSource).toContain('text: "Use this folder"');
+    expect(rawSource).toContain("${FOLDER_NAME}");
+    expect(rawSource).toContain('visible: "Files in C64Music"');
+    expect(rawSource).toContain('visible: "Files in Download"');
+    expect(rawSource).toContain('tapOn: "Download"');
+    expect(rawSource).toContain("scrollUntilVisible:");
+    expect(rawSource).toContain('element: "demo.d64"');
+    expect(rawSource).not.toContain("com.google.android.documentsui:id/toolbar");
+    expect(rawSource).not.toContain("Internal storage");
+  });
+
   it("covers Home CPU Speed slider persistence with probe-based latency assertions on real hardware", () => {
     const rawSource = readFileSync(path.resolve(process.cwd(), ".maestro/edge-home-cpu-speed-latency.yaml"), "utf8");
 

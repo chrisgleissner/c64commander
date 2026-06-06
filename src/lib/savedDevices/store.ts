@@ -642,7 +642,7 @@ const buildExpectedIdentity = (device: SavedDevice) => {
       product: device.lastKnownProduct,
     };
   }
-  return { kind: "configured-host" as const, host: device.host.toLowerCase() };
+  return { kind: "unverified" as const };
 };
 
 const resolveMismatch = (device: SavedDevice, verified: VerifiedSavedDeviceIdentity) => {
@@ -655,9 +655,6 @@ const resolveMismatch = (device: SavedDevice, verified: VerifiedSavedDeviceIdent
       return verified.hostname.toLowerCase() !== expected.hostname || verified.product !== expected.product;
     }
     return false;
-  }
-  if (verified.hostname) {
-    return verified.hostname.toLowerCase() !== expected.host;
   }
   return false;
 };

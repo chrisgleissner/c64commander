@@ -82,6 +82,18 @@ const resolveDeviceHealthLabel = (
   return snapshot.latestResult.overallHealth === "Unavailable" ? "Offline" : snapshot.latestResult.overallHealth;
 };
 
+const resolveDeviceSwitchStatusFromHealth = (
+  snapshot: ReturnType<typeof useSavedDeviceHealthChecks>["byDeviceId"][string] | undefined,
+): DeviceSwitchStatus | null => {
+  if (!snapshot) return null;
+  if (snapshot.running) return "verifying";
+  if (snapshot.error) return "offline";
+  const result = snapshot.latestResult;
+  if (!result) return null;
+  if (result.connectivity === "Offline" || result.overallHealth === "Unavailable") return "offline";
+  return "connected";
+};
+
 const resolveCompletedProbeCount = (
   snapshot: ReturnType<typeof useSavedDeviceHealthChecks>["byDeviceId"][string] | undefined,
 ) => {
@@ -604,13 +616,11 @@ export function UnifiedHealthBadge({ className }: Props) {
               const verified = savedDevices.verifiedByDeviceId[device.id] ?? null;
               const isSelected = device.id === pickerSelectedDeviceId;
               const isPendingTarget = pendingSwitch?.toDeviceId === device.id;
+              const healthSnapshot = healthByDeviceId[device.id];
               const status = isPendingTarget
                 ? "verifying"
-                : isSelected
-                  ? getSavedDeviceSwitchStatus(device.id)
-                  : "last-known";
+                : (resolveDeviceSwitchStatusFromHealth(healthSnapshot) ?? getSavedDeviceSwitchStatus(device.id));
               const statusLabel = resolvePickerStatusLabel(status, isSelected);
-              const healthSnapshot = healthByDeviceId[device.id];
               const isExpanded = expandedDeviceIdSet.has(device.id);
               const showAndroidHostnameWarning = shouldWarnAboutAndroidHostnameResolution(
                 device,

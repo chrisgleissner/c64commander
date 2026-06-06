@@ -57,6 +57,13 @@ describe("platform", () => {
       expect(getPlatform()).toBe("web");
     });
 
+    it("falls back to Capacitor when probes are enabled without an override", () => {
+      vi.stubEnv("VITE_ENABLE_TEST_PROBES", "1");
+      vi.mocked(Capacitor.getPlatform).mockReturnValue("android");
+
+      expect(getPlatform()).toBe("android");
+    });
+
     it("ignores override when disabled", () => {
       vi.stubEnv("VITE_ENABLE_TEST_PROBES", "0");
       const win = window as any;
@@ -93,6 +100,13 @@ describe("platform", () => {
     it("defaults to false when enabled but no override set", () => {
       vi.stubEnv("VITE_ENABLE_TEST_PROBES", "1");
       expect(isNativePlatform()).toBe(false);
+    });
+
+    it("uses Capacitor native detection when probes are enabled without an override", () => {
+      vi.stubEnv("VITE_ENABLE_TEST_PROBES", "1");
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+
+      expect(isNativePlatform()).toBe(true);
     });
 
     it("accepts the window probe flag without env overrides", () => {

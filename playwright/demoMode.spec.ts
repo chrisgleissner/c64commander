@@ -77,6 +77,12 @@ const seedRoutingExpectations = async (page: Page, realBaseUrl: string) => {
   );
 };
 
+const seedVerifiedMockIdentity = async (page: Page) => {
+  await page.evaluate(() =>
+    (window as Window & { __c64uSeedVerifiedIdentity?: () => Promise<void> }).__c64uSeedVerifiedIdentity?.(),
+  );
+};
+
 const closeConnectionPopover = async (page: Page) => {
   const closeButton = page.getByTestId("connection-status-close");
   await expect(closeButton).toBeVisible();
@@ -156,6 +162,7 @@ test.describe("Automatic Demo Mode", () => {
     const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toBeVisible();
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED");
+    await seedVerifiedMockIdentity(page);
     await expect(indicator).toHaveAttribute("data-health-state", "Healthy");
     await expect(indicator).toContainText("C64U");
     await snap(page, testInfo, "real-connected-indicator");

@@ -215,10 +215,7 @@ const isProbePayloadHealthy = (payload: unknown) => {
   const maybeErrors = (payload as { errors?: unknown }).errors;
   if (Array.isArray(maybeErrors) && maybeErrors.length > 0) return false;
   const product = (payload as { product?: unknown }).product;
-  if (typeof product === "string") {
-    return product.trim().length > 0;
-  }
-  return true;
+  return typeof product === "string" && product.trim().length > 0;
 };
 
 export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<boolean> {
@@ -382,6 +379,7 @@ const DEMO_MODE_PINNED_SESSION_KEY = "c64u_demo_mode_pinned";
 let stickyRealDeviceLock = false;
 let discoveryRunToken = 0;
 let demoModePinnedByUser = false;
+let activeManualDiscovery: { trigger: DiscoveryTrigger; promise: Promise<void> } | null = null;
 
 const emit = () => {
   listeners.forEach((listener) => listener());
@@ -465,6 +463,21 @@ export const noteReachable = (host: string, source: ReachabilitySource, deviceIn
   });
   void transitionToRealConnected(trigger);
 };
+
+const installConnectionTestProbe = () => {
+  if (typeof window === "undefined" || !isTestProbeEnabled()) return;
+  (
+    window as Window & {
+      __c64uConnectionTestProbe?: {
+        noteReachable: typeof noteReachable;
+      };
+    }
+  ).__c64uConnectionTestProbe = {
+    noteReachable,
+  };
+};
+
+installConnectionTestProbe();
 
 export function dismissDemoInterstitial() {
   demoInterstitialShownThisSession = true;
@@ -732,6 +745,8 @@ const handleProbeOutcome = async (
   }
 };
 
+const isManualDiscoveryTrigger = (trigger: DiscoveryTrigger) => trigger === "manual" || trigger === "settings";
+
 /**
  * Centralized discovery entry point used for:
  * - App startup
@@ -739,7 +754,7 @@ const handleProbeOutcome = async (
  * - Background rediscovery
  * - Settings-triggered rediscovery
  */
-export async function discoverConnection(trigger: DiscoveryTrigger): Promise<void> {
+async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
   if (trigger !== "background") {
     clearPinnedDemoMode();
   }
@@ -911,8 +926,33 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
   };
 }
 
+export async function discoverConnection(trigger: DiscoveryTrigger): Promise<void> {
+  if (isManualDiscoveryTrigger(trigger) && activeManualDiscovery) {
+    addLog("info", "Manual discovery request coalesced while another discovery is in flight", {
+      activeTrigger: activeManualDiscovery.trigger,
+      requestedTrigger: trigger,
+    });
+    return activeManualDiscovery.promise;
+  }
+
+  const promise = runDiscoverConnection(trigger);
+  if (!isManualDiscoveryTrigger(trigger)) {
+    return promise;
+  }
+
+  activeManualDiscovery = { trigger, promise };
+  try {
+    await promise;
+  } finally {
+    if (activeManualDiscovery?.promise === promise) {
+      activeManualDiscovery = null;
+    }
+  }
+}
+
 export async function initializeConnectionManager() {
   cancelActiveDiscovery();
+  activeManualDiscovery = null;
   applyFuzzModeDefaults();
   await initializeSmokeMode();
   await featureFlagManager.load();

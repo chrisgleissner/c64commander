@@ -35,11 +35,13 @@ import {
 import { buildSavedDevicePreferredRuntimeHost, getSavedDeviceResolvedAddress } from "@/lib/savedDevices/resolvedTarget";
 import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 
+let activeSavedDeviceSwitch: { deviceId: string; promise: Promise<unknown> } | null = null;
+
 export function useSavedDeviceSwitching() {
   const queryClient = useQueryClient();
   const location = useLocation();
 
-  return useCallback(
+  const executeSavedDeviceSwitch = useCallback(
     async (deviceId: string) => {
       const fromDeviceId = getSavedDevicesSnapshot().selectedDeviceId;
       const device = getSavedDeviceById(deviceId);
@@ -59,7 +61,8 @@ export function useSavedDeviceSwitching() {
       setStoredTelnetPort(device.telnetPort);
       startSavedDeviceVerification(deviceId);
       resetInteractionState("saved-device-switch");
-      const savedDeviceSwitchPrefixes = new Set<string>(getSavedDeviceSwitchPrefixes(location.pathname));
+
+      const savedDeviceSwitchPrefixes = new Set(getSavedDeviceSwitchPrefixes(location.pathname));
       void queryClient
         .cancelQueries({
           predicate: (query) => savedDeviceSwitchPrefixes.has(String(query.queryKey[0] ?? "")),
@@ -115,5 +118,38 @@ export function useSavedDeviceSwitching() {
       }
     },
     [location.pathname, queryClient],
+  );
+
+  return useCallback(
+    async (deviceId: string) => {
+      if (activeSavedDeviceSwitch) {
+        if (activeSavedDeviceSwitch.deviceId === deviceId) {
+          return activeSavedDeviceSwitch.promise;
+        }
+
+        addLog("info", "Saved-device switch request coalesced while another switch is in flight", {
+          activeDeviceId: activeSavedDeviceSwitch.deviceId,
+          requestedDeviceId: deviceId,
+        });
+        const queuedPromise = activeSavedDeviceSwitch.promise.then(
+          () => executeSavedDeviceSwitch(deviceId),
+          () => executeSavedDeviceSwitch(deviceId),
+        );
+        activeSavedDeviceSwitch = { deviceId, promise: queuedPromise };
+        return queuedPromise.finally(() => {
+          if (activeSavedDeviceSwitch?.promise === queuedPromise) {
+            activeSavedDeviceSwitch = null;
+          }
+        });
+      }
+      const switchPromise = executeSavedDeviceSwitch(deviceId);
+      activeSavedDeviceSwitch = { deviceId, promise: switchPromise };
+      return await switchPromise.finally(() => {
+        if (activeSavedDeviceSwitch?.promise === switchPromise) {
+          activeSavedDeviceSwitch = null;
+        }
+      });
+    },
+    [executeSavedDeviceSwitch],
   );
 }
