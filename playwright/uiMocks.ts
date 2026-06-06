@@ -10,9 +10,17 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { Page } from "@playwright/test";
 import { ensureValidSidBase64 } from "./sidFixture";
+import { variant } from "../src/generated/variant";
 
 type UiMockSeedOptions = {
   seedFeatureFlagsByDefault?: boolean;
+  clearStorageBeforeSeeding?: boolean;
+};
+
+type InitialSnapshotConfigUpdates = Record<string, Record<string, string | number>>;
+
+type InitialSnapshotConfigSeedWindow = Window & {
+  __c64uInitialSnapshotConfigUpdates?: Record<string, InitialSnapshotConfigUpdates>;
 };
 
 type HvscFixture = {
@@ -66,56 +74,142 @@ export const uiFixtures = {
   fixtureBase64,
 };
 
-export async function seedInitialSnapshotConfig(
-  page: Page,
-  baseUrl: string,
-  updates: Record<string, Record<string, string | number>>,
-) {
+export async function seedInitialSnapshotConfig(page: Page, baseUrl: string, updates: InitialSnapshotConfigUpdates) {
   await page.addInitScript(
-    ({
-      baseUrl: baseUrlArg,
-      updates: updatesArg,
-    }: {
-      baseUrl: string;
-      updates: Record<string, Record<string, string | number>>;
-    }) => {
-      const key = `c64u_initial_snapshot:${baseUrlArg}`;
-      const raw = localStorage.getItem(key);
-      if (!raw) return;
-      const snapshot = JSON.parse(raw) as {
+    ({ baseUrl: baseUrlArg, updates: updatesArg }: { baseUrl: string; updates: InitialSnapshotConfigUpdates }) => {
+      type Snapshot = {
         data?: Record<string, Record<string, { items?: Record<string, { selected?: string | number }> }>>;
       };
-      Object.entries(updatesArg).forEach(([category, items]) => {
-        Object.entries(items).forEach(([itemName, value]) => {
-          const item = snapshot.data?.[category]?.[category]?.items?.[itemName];
-          if (item) {
-            item.selected = value;
-          }
+      type ConfigUpdates = InitialSnapshotConfigUpdates;
+      const snapshotKeys = Array.from(
+        new Set([
+          `c64u_initial_snapshot:${baseUrlArg}`,
+          `c64u_initial_snapshot:${baseUrlArg.replace(/\/$/, "")}`,
+          `c64u_initial_snapshot:${new URL(baseUrlArg).toString()}`,
+        ]),
+      );
+      const updatesKeys = Array.from(
+        new Set([
+          `c64u_initial_snapshot_updates:${baseUrlArg}`,
+          `c64u_initial_snapshot_updates:${baseUrlArg.replace(/\/$/, "")}`,
+          `c64u_initial_snapshot_updates:${new URL(baseUrlArg).toString()}`,
+        ]),
+      );
+      const mergeUpdates = (left: ConfigUpdates, right: ConfigUpdates) => {
+        const merged: ConfigUpdates = { ...left };
+        Object.entries(right).forEach(([category, items]) => {
+          merged[category] = { ...(merged[category] ?? {}), ...items };
         });
-      });
-      localStorage.setItem(key, JSON.stringify(snapshot));
+        return merged;
+      };
+
+      const seededWindow = window as InitialSnapshotConfigSeedWindow;
+      const seededUpdates = seededWindow.__c64uInitialSnapshotConfigUpdates?.[baseUrlArg] ?? {};
+      let pendingUpdates = mergeUpdates(seededUpdates, updatesArg);
+      seededWindow.__c64uInitialSnapshotConfigUpdates = {
+        ...(seededWindow.__c64uInitialSnapshotConfigUpdates ?? {}),
+        [baseUrlArg]: pendingUpdates,
+      };
+
+      const rawPendingUpdates = updatesKeys.map((updatesKey) => localStorage.getItem(updatesKey)).find(Boolean);
+      if (rawPendingUpdates) {
+        try {
+          pendingUpdates = mergeUpdates(JSON.parse(rawPendingUpdates) as ConfigUpdates, updatesArg);
+        } catch (error) {
+          console.warn("Unable to parse seeded initial snapshot updates", error);
+        }
+      }
+      updatesKeys.forEach((updatesKey) => localStorage.setItem(updatesKey, JSON.stringify(pendingUpdates)));
+
+      const raw = snapshotKeys.map((snapshotKey) => localStorage.getItem(snapshotKey)).find(Boolean);
+      if (!raw) return;
+      try {
+        const snapshot = JSON.parse(raw) as Snapshot;
+        Object.entries(pendingUpdates).forEach(([category, items]) => {
+          Object.entries(items).forEach(([itemName, value]) => {
+            const item = snapshot.data?.[category]?.[category]?.items?.[itemName];
+            if (item) {
+              item.selected = value;
+            }
+          });
+        });
+        snapshotKeys.forEach((snapshotKey) => localStorage.setItem(snapshotKey, JSON.stringify(snapshot)));
+      } catch (error) {
+        console.warn("Unable to apply seeded initial snapshot updates", error);
+      }
     },
     { baseUrl, updates },
   );
 }
 
 export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSeedOptions = {}) {
-  const { seedFeatureFlagsByDefault = true } = options;
+  const { seedFeatureFlagsByDefault = true, clearStorageBeforeSeeding = false } = options;
+  const currentDeviceHostKey = `${variant.id}:device_host`;
   await page.addInitScript(
     ({
       baseUrl: baseUrlArg,
       songData,
       snapshot,
       seedFeatureFlagsByDefault: seedFeatureFlags,
+      clearStorageBeforeSeeding: clearStorage,
+      currentDeviceHostKey: currentDeviceHostKeyArg,
     }: {
       baseUrl: string;
       songData: string;
       snapshot: unknown;
       seedFeatureFlagsByDefault: boolean;
+      clearStorageBeforeSeeding: boolean;
+      currentDeviceHostKey: string;
     }) => {
+      if (clearStorage) {
+        localStorage.clear();
+        sessionStorage.clear();
+      }
+
       const parseStoredPort = (value: string | null, fallback: number) => {
         const parsed = Number(value);
         return Number.isInteger(parsed) && parsed >= 1 && parsed <= 65535 ? parsed : fallback;
+      };
+
+      const applyInitialSnapshotConfigUpdates = (snapshotArg: unknown) => {
+        type Snapshot = {
+          data?: Record<string, Record<string, { items?: Record<string, { selected?: string | number }> }>>;
+        };
+        const mergeUpdates = (left: InitialSnapshotConfigUpdates, right: InitialSnapshotConfigUpdates) => {
+          const merged: InitialSnapshotConfigUpdates = { ...left };
+          Object.entries(right).forEach(([category, items]) => {
+            merged[category] = { ...(merged[category] ?? {}), ...items };
+          });
+          return merged;
+        };
+        const updatesKeys = Array.from(
+          new Set([
+            `c64u_initial_snapshot_updates:${baseUrlArg}`,
+            `c64u_initial_snapshot_updates:${baseUrlArg.replace(/\/$/, "")}`,
+            `c64u_initial_snapshot_updates:${new URL(baseUrlArg).toString()}`,
+          ]),
+        );
+        const seededUpdates =
+          (window as InitialSnapshotConfigSeedWindow).__c64uInitialSnapshotConfigUpdates?.[baseUrlArg] ?? {};
+        const rawUpdates = updatesKeys.map((updatesKey) => localStorage.getItem(updatesKey)).find(Boolean);
+        if (!rawUpdates && Object.keys(seededUpdates).length === 0) return snapshotArg;
+        try {
+          const storedUpdates = rawUpdates ? (JSON.parse(rawUpdates) as InitialSnapshotConfigUpdates) : {};
+          const configUpdates = mergeUpdates(seededUpdates, storedUpdates);
+          const mutableSnapshot = snapshotArg as Snapshot;
+          Object.entries(configUpdates).forEach(([category, items]) => {
+            Object.entries(items).forEach(([itemName, value]) => {
+              const item = mutableSnapshot.data?.[category]?.[category]?.items?.[itemName];
+              if (item) {
+                item.selected = value;
+              }
+            });
+          });
+          return mutableSnapshot;
+        } catch (error) {
+          console.warn("Unable to apply pending initial snapshot updates", error);
+          return snapshotArg;
+        }
       };
 
       const readSeededSavedDevice = () => {
@@ -133,7 +227,8 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
           };
           const devices = Array.isArray(parsed.devices) ? parsed.devices : [];
           return devices.find((device) => device.id === parsed.selectedDeviceId) ?? devices[0] ?? null;
-        } catch {
+        } catch (error) {
+          console.warn("Unable to read seeded saved device", error);
           return null;
         }
       };
@@ -184,8 +279,8 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
         if (ftpBridgeUrl) {
           allowedBaseUrls.add(ftpBridgeUrl);
         }
-      } catch {
-        // ignore storage access failures
+      } catch (error) {
+        console.warn("Unable to read seeded FTP bridge URL", error);
       }
       routingWindow.__c64uAllowedBaseUrls = Array.from(allowedBaseUrls);
       const host = baseUrlArg?.replace(/^https?:\/\//, "");
@@ -241,8 +336,8 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
             const parsedUrl = new URL(baseUrlArg);
             deviceHost = parsedUrl.hostname || "c64u";
             deviceHttpPort = Number(parsedUrl.port) || 80;
-          } catch {
-            // ignore
+          } catch (error) {
+            console.warn("Unable to parse seeded mock base URL", error);
           }
         }
         const testDeviceId = "test-device-mock";
@@ -275,12 +370,26 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
         );
         localStorage.setItem("c64u_device_host", host || "c64u");
         localStorage.setItem("c64commander:device_host", host || "c64u");
+        localStorage.setItem(currentDeviceHostKeyArg, host || "c64u");
         if (baseUrlArg) {
           localStorage.setItem("c64u_base_url", baseUrlArg);
         }
         localStorage.setItem("c64u_notification_visibility", "all");
-        localStorage.setItem(`c64u_initial_snapshot:${baseUrlArg}`, JSON.stringify(snapshot));
-        sessionStorage.setItem(`c64u_initial_snapshot_session:${baseUrlArg}`, "1");
+        const snapshotText = JSON.stringify(applyInitialSnapshotConfigUpdates(snapshot));
+        Array.from(
+          new Set([
+            `c64u_initial_snapshot:${baseUrlArg}`,
+            `c64u_initial_snapshot:${baseUrlArg.replace(/\/$/, "")}`,
+            `c64u_initial_snapshot:${new URL(baseUrlArg).toString()}`,
+          ]),
+        ).forEach((snapshotKey) => localStorage.setItem(snapshotKey, snapshotText));
+        Array.from(
+          new Set([
+            `c64u_initial_snapshot_session:${baseUrlArg}`,
+            `c64u_initial_snapshot_session:${baseUrlArg.replace(/\/$/, "")}`,
+            `c64u_initial_snapshot_session:${new URL(baseUrlArg).toString()}`,
+          ]),
+        ).forEach((snapshotSessionKey) => sessionStorage.setItem(snapshotSessionKey, "1"));
         if (seedFeatureFlags) {
           localStorage.setItem("c64u_dev_mode_enabled", "1");
           localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
@@ -289,7 +398,8 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
           localStorage.setItem("c64u_feature_flag:lighting_studio_enabled", "1");
           localStorage.setItem("c64u_feature_flag:ram_snapshots_enabled", "1");
         }
-      } catch {
+      } catch (error) {
+        console.warn("Unable to seed UI mocks", error);
         return;
       }
 
@@ -377,6 +487,8 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
       songData: fixtureBase64,
       snapshot: initialSnapshot,
       seedFeatureFlagsByDefault,
+      clearStorageBeforeSeeding,
+      currentDeviceHostKey,
     },
   );
 }

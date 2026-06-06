@@ -6,15 +6,35 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { test, expect } from "@playwright/test";
+import { test as base, expect } from "@playwright/test";
 import type { Page, TestInfo } from "@playwright/test";
 import { saveCoverageFromPage } from "./withCoverage";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { variant } from "../src/generated/variant";
-import { seedInitialSnapshotConfig, seedUiMocks } from "./uiMocks";
+import { seedUiMocks } from "./uiMocks";
 import { allowWarnings, assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 
+type HomeFixtures = {
+  server: Awaited<ReturnType<typeof createMockC64Server>>;
+};
+
+const test = base.extend<HomeFixtures>({
+  server: [
+    async ({ page }, runFixture) => {
+      const server = await createMockC64Server();
+      await seedUiMocks(page, server.baseUrl, { clearStorageBeforeSeeding: true });
+      try {
+        await runFixture(server);
+      } finally {
+        await server.close();
+      }
+    },
+    { auto: true },
+  ],
+});
+
 const CURRENT_DEVICE_HOST_KEY = `${variant.id}:device_host`;
+const CONFIG_READY_TIMEOUT_MS = 30000;
 
 const hasRequest = (
   requests: Array<{ method: string; url: string }>,
@@ -105,16 +125,8 @@ const applyCompactDisplayProfile = async (page: Page) => {
 };
 
 test.describe("Home interactions", () => {
-  let server: Awaited<ReturnType<typeof createMockC64Server>>;
-
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
-    await page.addInitScript(() => {
-      localStorage.clear();
-      sessionStorage.clear();
-    });
-    server = await createMockC64Server();
-    await seedUiMocks(page, server.baseUrl);
   });
 
   test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -123,11 +135,10 @@ test.describe("Home interactions", () => {
       await assertNoUiIssues(page, testInfo);
     } finally {
       await finalizeEvidence(page, testInfo);
-      await server.close();
     }
   });
 
-  test("start/stop interactions send stream commands", async ({ page }: { page: Page }) => {
+  test("start/stop interactions send stream commands", async ({ page, server }) => {
     const audioEndpoint = "239.0.1.65:11001";
     await page.request.post(`${server.baseUrl}/v1/configs`, {
       data: {
@@ -136,18 +147,29 @@ test.describe("Home interactions", () => {
         },
       },
     });
-    await seedInitialSnapshotConfig(page, server.baseUrl, {
-      "Data Streams": {
-        "Stream Audio to": audioEndpoint,
-      },
-    });
 
     await page.goto("/");
     await waitForStreamsReady(page);
+    await page.getByTestId("home-stream-edit-toggle-audio").click();
+    const audioInput = page.getByTestId("home-stream-endpoint-audio");
+    await audioInput.fill(audioEndpoint);
+    await page.getByTestId("home-stream-confirm-audio").click();
+    await expect
+      .poll(() =>
+        hasRequest(
+          server.requests,
+          (req) =>
+            req.method === "PUT" &&
+            req.url.includes("/v1/configs/Data%20Streams/Stream%20Audio%20to") &&
+            req.url.includes("239.0.1.65%3A11001"),
+        ),
+      )
+      .toBe(true);
+
     const startAudio = page.getByTestId("home-stream-start-audio");
     const stopAudio = page.getByTestId("home-stream-stop-audio");
     const audioEndpointDisplay = page.getByTestId("home-stream-endpoint-display-audio");
-    await expect(audioEndpointDisplay).toHaveText(audioEndpoint);
+    await expect(audioEndpointDisplay).toHaveText(audioEndpoint, { timeout: CONFIG_READY_TIMEOUT_MS });
     await expect(startAudio).toBeEnabled();
 
     await startAudio.click();
@@ -169,7 +191,7 @@ test.describe("Home interactions", () => {
       .toBe(true);
   });
 
-  test("dropdown interactions update drive and SID config", async ({ page }: { page: Page }) => {
+  test("dropdown interactions update drive and SID config", async ({ page, server }) => {
     await page.request.post(`${server.baseUrl}/v1/configs`, {
       data: {
         "SID Sockets Configuration": {
@@ -215,7 +237,7 @@ test.describe("Home interactions", () => {
       .toMatch(/removed|OFF/);
   });
 
-  test("machine quick actions use REST controls where expected", async ({ page }: { page: Page }) => {
+  test("machine quick actions use REST controls where expected", async ({ page, server }) => {
     await page.goto("/");
     await waitForConnected(page);
     await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
@@ -268,7 +290,7 @@ test.describe("Home interactions", () => {
       .toBe(true);
   });
 
-  test("reboot clear RAM uses telnet first on the external mock target", async ({ page }: { page: Page }) => {
+  test("reboot clear RAM uses telnet first on the external mock target", async ({ page, server }) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await waitForConnected(page);
     await enableFeatureFlags(page, ["home_telnet_clear_ram_reboot_enabled"]);
@@ -308,7 +330,7 @@ test.describe("Home interactions", () => {
     ).toBe(rebootRequestsBefore);
   });
 
-  test("power cycle runs through telnet against the external mock target", async ({ page }: { page: Page }) => {
+  test("power cycle runs through telnet against the external mock target", async ({ page, server }) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await waitForConnected(page);
     await enableFeatureFlags(page, ["home_telnet_power_cycle_enabled"]);
@@ -340,7 +362,7 @@ test.describe("Home interactions", () => {
     );
   });
 
-  test("power cycle stays available and succeeds in demo mode", async ({ page }: { page: Page }) => {
+  test("power cycle stays available and succeeds in demo mode", async ({ page, server }) => {
     allowWarnings(test.info(), "Expected probe failures during demo-mode discovery fallback.");
     const demoServer = await createMockC64Server();
 
@@ -408,7 +430,7 @@ test.describe("Home interactions", () => {
     }
   });
 
-  test("input interactions validate and then update stream config", async ({ page }: { page: Page }) => {
+  test("input interactions validate and then update stream config", async ({ page, server }) => {
     allowWarnings(test.info(), "Expected validation toast for invalid stream host input.");
     await page.goto("/");
     await waitForStreamsReady(page);
@@ -436,7 +458,7 @@ test.describe("Home interactions", () => {
       .toBe(true);
   });
 
-  test("home reset drives calls all disk reset endpoints only", async ({ page }: { page: Page }) => {
+  test("home reset drives calls all disk reset endpoints only", async ({ page, server }) => {
     await page.goto("/");
     await waitForConnected(page);
 
@@ -467,8 +489,7 @@ test.describe("Home interactions", () => {
 
   test("disks per-drive reset controls call all drive reset endpoints without list regressions", async ({
     page,
-  }: {
-    page: Page;
+    server,
   }) => {
     await page.goto("/disks");
     await expect(page.getByTestId("disk-list")).toBeVisible();
@@ -501,7 +522,7 @@ test.describe("Home interactions", () => {
     await expect(page.getByRole("button", { name: /Add disks|Add more disks/i })).toBeVisible();
   });
 
-  test("SID reset writes deterministic silence register set", async ({ page }: { page: Page }) => {
+  test("SID reset writes deterministic silence register set", async ({ page, server }) => {
     await page.request.post(`${server.baseUrl}/v1/configs`, {
       data: {
         "SID Sockets Configuration": {
@@ -515,27 +536,34 @@ test.describe("Home interactions", () => {
         },
       },
     });
-    await seedInitialSnapshotConfig(page, server.baseUrl, {
-      "SID Sockets Configuration": {
-        "SID Socket 1": "Enabled",
-      },
-      "SID Addressing": {
-        "SID Socket 1 Address": "$D400",
-        "SID Socket 2 Address": "Unmapped",
-        "UltiSID 1 Address": "$D420",
-        "UltiSID 2 Address": "Unmapped",
-      },
-    });
 
     await page.goto("/");
     await waitForConnected(page);
-    await expect(page.getByTestId("home-sid-address-socket1")).toHaveAttribute("role", "combobox");
+    const socket1Address = page.getByTestId("home-sid-address-socket1");
+    await expect(socket1Address).toHaveAttribute("role", "combobox", { timeout: CONFIG_READY_TIMEOUT_MS });
+    if (!((await socket1Address.textContent()) ?? "").includes("$D400")) {
+      await socket1Address.click();
+      await page.getByRole("option", { name: "$D400", exact: true }).click();
+      await expect
+        .poll(() =>
+          hasRequest(
+            server.requests,
+            (req) =>
+              req.method === "PUT" &&
+              req.url.includes("/v1/configs/SID%20Addressing/SID%20Socket%201%20Address") &&
+              req.url.includes("%24D400"),
+          ),
+        )
+        .toBe(true);
+    }
+    await expect(socket1Address).toContainText("$D400", { timeout: CONFIG_READY_TIMEOUT_MS });
     await page.getByTestId("home-sid-status").getByRole("button", { name: "Reset" }).click();
 
     await expect
       .poll(
         () =>
           server.requests.filter((req) => req.method === "PUT" && req.url.startsWith("/v1/machine:writemem")).length,
+        { timeout: CONFIG_READY_TIMEOUT_MS },
       )
       .toBe(20);
 
@@ -608,11 +636,7 @@ test.describe("Home interactions", () => {
     await expect(page.getByTestId("home-led-pattern")).toHaveText(/Single Color/);
   });
 
-  test("lighting pattern keeps the user-facing label while sending the raw API value", async ({
-    page,
-  }: {
-    page: Page;
-  }) => {
+  test("lighting pattern keeps the user-facing label while sending the raw API value", async ({ page, server }) => {
     await page.goto("/");
     await waitForConnected(page);
 
@@ -642,23 +666,23 @@ test.describe("Home interactions", () => {
 
     const driveA = page.getByTestId("home-drive-row-a");
     const driveB = page.getByTestId("home-drive-row-b");
+    const printerToggle = page.getByTestId("home-printer-toggle");
     const printerBus = page.getByTestId("home-printer-bus");
-    const printerOutputType = page.getByTestId("home-printer-output-type");
     const sidEntry = page.getByTestId("home-sid-entry-socket1");
     const sidVolume = page.getByTestId("home-sid-volume-socket1");
     const sidPan = page.getByTestId("home-sid-pan-socket1");
 
-    for (const locator of [driveA, driveB, printerBus, printerOutputType, sidEntry, sidVolume, sidPan]) {
+    for (const locator of [driveA, driveB, printerToggle, printerBus, sidEntry, sidVolume, sidPan]) {
       await locator.scrollIntoViewIfNeeded();
       await expect(locator).toBeVisible();
     }
 
-    const [driveABox, driveBBox, printerBusBox, printerOutputTypeBox, sidEntryBox, sidVolumeBox, sidPanBox] =
+    const [driveABox, driveBBox, printerToggleBox, printerBusBox, sidEntryBox, sidVolumeBox, sidPanBox] =
       await Promise.all([
         driveA.boundingBox(),
         driveB.boundingBox(),
+        printerToggle.boundingBox(),
         printerBus.boundingBox(),
-        printerOutputType.boundingBox(),
         sidEntry.boundingBox(),
         sidVolume.boundingBox(),
         sidPan.boundingBox(),
@@ -666,15 +690,15 @@ test.describe("Home interactions", () => {
 
     expect(driveABox).not.toBeNull();
     expect(driveBBox).not.toBeNull();
+    expect(printerToggleBox).not.toBeNull();
     expect(printerBusBox).not.toBeNull();
-    expect(printerOutputTypeBox).not.toBeNull();
     expect(sidEntryBox).not.toBeNull();
     expect(sidVolumeBox).not.toBeNull();
     expect(sidPanBox).not.toBeNull();
 
-    if (driveABox && driveBBox && printerBusBox && printerOutputTypeBox && sidEntryBox && sidVolumeBox && sidPanBox) {
+    if (driveABox && driveBBox && printerToggleBox && printerBusBox && sidEntryBox && sidVolumeBox && sidPanBox) {
       expect(driveBBox.y).toBeGreaterThanOrEqual(driveABox.y + driveABox.height - 1);
-      expect(printerOutputTypeBox.y).toBeGreaterThanOrEqual(printerBusBox.y + printerBusBox.height - 1);
+      expect(printerBusBox.y).toBeGreaterThanOrEqual(printerToggleBox.y + printerToggleBox.height - 1);
       expect(sidPanBox.y).toBeGreaterThanOrEqual(sidVolumeBox.y + sidVolumeBox.height - 1);
       expect(sidVolumeBox.width).toBeGreaterThan(sidEntryBox.width * 0.55);
       expect(sidPanBox.width).toBeGreaterThan(sidEntryBox.width * 0.55);

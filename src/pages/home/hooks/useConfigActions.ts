@@ -32,7 +32,7 @@ export function useConfigActions() {
     value: string | number,
     operation: string,
     successTitle: string,
-    options: { refreshDrives?: boolean; suppressToast?: boolean } = {},
+    options: { refreshDrives?: boolean; suppressToast?: boolean; clearPendingOnSuccess?: boolean } = {},
   ) {
     const key = buildConfigKey(category, itemName);
     const previousEntry = authoritativeValues.entriesRef.current[key];
@@ -52,6 +52,9 @@ export function useConfigActions() {
           queryFn: () => api.getDrives(),
           staleTime: 0,
         });
+      }
+      if (options.clearPendingOnSuccess) {
+        authoritativeValues.clearEntry(key);
       }
     } catch (error) {
       authoritativeValues.restoreEntry(key, previousEntry);
