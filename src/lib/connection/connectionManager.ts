@@ -464,6 +464,21 @@ export const noteReachable = (host: string, source: ReachabilitySource, deviceIn
   void transitionToRealConnected(trigger);
 };
 
+const installConnectionTestProbe = () => {
+  if (typeof window === "undefined" || !isTestProbeEnabled()) return;
+  (
+    window as Window & {
+      __c64uConnectionTestProbe?: {
+        noteReachable: typeof noteReachable;
+      };
+    }
+  ).__c64uConnectionTestProbe = {
+    noteReachable,
+  };
+};
+
+installConnectionTestProbe();
+
 export function dismissDemoInterstitial() {
   demoInterstitialShownThisSession = true;
   if (typeof sessionStorage !== "undefined") {

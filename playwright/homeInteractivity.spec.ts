@@ -29,6 +29,9 @@ const waitForConnected = async (page: Page) => {
       timeout: 10000,
     },
   );
+  await page.evaluate(() =>
+    (window as Window & { __c64uSeedVerifiedIdentity?: () => Promise<void> }).__c64uSeedVerifiedIdentity?.(),
+  );
 };
 
 const waitForStreamsReady = async (page: Page) => {
@@ -125,20 +128,37 @@ test.describe("Home interactions", () => {
   });
 
   test("start/stop interactions send stream commands", async ({ page }: { page: Page }) => {
+    const audioEndpoint = "239.0.1.65:11001";
     await page.request.post(`${server.baseUrl}/v1/configs`, {
       data: {
         "Data Streams": {
-          "Stream Audio to": "239.0.1.65:11001",
+          "Stream Audio to": audioEndpoint,
         },
       },
     });
+    await page.addInitScript(
+      ({ baseUrl, endpoint }: { baseUrl: string; endpoint: string }) => {
+        const key = `c64u_initial_snapshot:${baseUrl}`;
+        const raw = localStorage.getItem(key);
+        if (!raw) return;
+        const snapshot = JSON.parse(raw) as {
+          data?: Record<string, Record<string, { items?: Record<string, { selected?: string }> }>>;
+        };
+        const item = snapshot.data?.["Data Streams"]?.["Data Streams"]?.items?.["Stream Audio to"];
+        if (item) {
+          item.selected = endpoint;
+          localStorage.setItem(key, JSON.stringify(snapshot));
+        }
+      },
+      { baseUrl: server.baseUrl, endpoint: audioEndpoint },
+    );
 
     await page.goto("/");
     await waitForStreamsReady(page);
     const startAudio = page.getByTestId("home-stream-start-audio");
     const stopAudio = page.getByTestId("home-stream-stop-audio");
     const audioEndpointDisplay = page.getByTestId("home-stream-endpoint-display-audio");
-    await expect(audioEndpointDisplay).toHaveText("239.0.1.65:11001");
+    await expect(audioEndpointDisplay).toHaveText(audioEndpoint);
     await expect(startAudio).toBeEnabled();
 
     await startAudio.click();

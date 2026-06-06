@@ -3,18 +3,21 @@
 Run started: 2026-06-05T23:53:04+01:00
 
 ## Setup
+
 - 2026-06-05T23:53:04+01:00 - Replaced stale root prod-hardening-7 `PLANS.md` and `WORKLOG.md` with prod-hardening-8 execution state.
 - 2026-06-05T23:53:04+01:00 - Created required output/artifact directories under `docs/research/stabilization/prod-hardening-8/`.
 - 2026-06-05T23:53:04+01:00 - Change classification for permitted file edits: `DOC_ONLY`; execution still requires build/deploy and hardware-in-the-loop validation by prompt.
 - 2026-06-05T23:53:04+01:00 - Product/source/test/script/dependency edits are prohibited for this research run.
 
 ## Previous Evidence Review
+
 - 2026-06-05T23:54:00+01:00 - Reviewed prod-hardening-7 `FINDINGS.md`, `COVERAGE.md`, `DEVICE-LIVENESS.md`, `RAW-OBSERVATIONS.md`, and `ARTIFACTS.md`; all required previous files exist.
 - 2026-06-05T23:54:00+01:00 - Prior baseline worth reusing: Pixel 4 serial `9B081FFAZ001WX`, u64 `/v1/info` healthy at `u64`/`192.168.1.13`, c64u `/v1/info` healthy at `c64u`/`192.168.1.167`, c64scope preflight passed for both.
 - 2026-06-05T23:54:00+01:00 - Prior gaps carried forward: U64 profile missing/unsaved, switcher long-press unreliable, no actual playback, no disk mount/eject, no config mutation, no stream test, no slider/rate-limit stress, no reconnect/back-off audit, diagnostics export not completed, no c64scope capture, Maestro not run due app-state reset.
 - 2026-06-05T23:54:00+01:00 - Prior anomalies to confirm/reject: transient Healthy badge with Device/Firmware `Not available`, Settings hostname edit not saved, adb coordinate scaling mistakes, diagnostics Share all opened from wrong/uncertain context.
 
 ## Repository Discovery
+
 - 2026-06-05T23:55:00+01:00 - Package manager: npm; `package-lock.json` and `bun.lockb` both present, but root scripts and docs use npm.
 - 2026-06-05T23:55:00+01:00 - Node requirement from `package.json`: `>=24 <25`; current preflight later observed Node v24.11.0.
 - 2026-06-05T23:55:00+01:00 - Android app id/package id: `uk.gleissner.c64commander`; Gradle namespace same; debug APK directory `android/app/build/outputs/apk/debug/`.
@@ -27,12 +30,14 @@ Run started: 2026-06-05T23:53:04+01:00
 - 2026-06-05T23:55:00+01:00 - Build helper debug fast path injects `VITE_DEBUG_SAVED_DEVICES_JSON` with IP-backed `debug-u64` and `debug-c64u` profiles, but existing persisted app data can prevent bootstrap from applying.
 
 ## Device Baseline
+
 - 2026-06-05T23:55:42+01:00 - Pixel 4 baseline captured. Serial `9B081FFAZ001WX`, model Pixel 4, Android 16/API 36, battery 100%, screen awake/interactive, C64 Commander foreground, installed version `0.8.6-rc1` versionCode `1988`. Evidence: `docs/research/stabilization/prod-hardening-8/artifacts/logs/baseline-android-20260605T235542.txt`.
 - 2026-06-05T23:55:48+01:00 - U64 low-risk baseline `/v1/info`: `u64` HTTP 200 in 1.095s, `192.168.1.13` HTTP 200 in 0.050s; product Ultimate 64 Elite firmware 3.14e, unique_id `38C1BA`.
 - 2026-06-05T23:55:48+01:00 - C64U low-risk baseline `/v1/info`: `c64u` HTTP 200 in 0.025s, `192.168.1.167` HTTP 200 in 0.035s; product C64 Ultimate firmware 1.1.0, unique_id `5D4E12`.
 - 2026-06-05T23:56:00+01:00 - Scoped run logcat capture started; pid stored at `docs/research/stabilization/prod-hardening-8/artifacts/logs/logcat-run.pid`, log path `docs/research/stabilization/prod-hardening-8/artifacts/logs/logcat-run-20260605T235600.txt`.
 
 ## Build And Deploy
+
 - 2026-06-05T23:56:14+01:00 - Build/deploy command started: `./build --skip-install --skip-tests --skip-format --install-apk --device-id 9B081FFAZ001WX`.
 - 2026-06-05T23:56:44+01:00 - Build/deploy result: exit 0. Web build, Capacitor sync, Gradle `assembleDebug`, streamed install, and launcher monkey event succeeded. Evidence: `docs/research/stabilization/prod-hardening-8/artifacts/logs/build-deploy-20260605T235614.txt`, summary `docs/research/stabilization/prod-hardening-8/artifacts/logs/build-deploy-summary-20260605T235614.txt`.
 - 2026-06-05T23:56:58+01:00 - Post-deploy app foreground confirmed. APK/app version still `0.8.6-rc1` versionCode `1988`; lastUpdateTime `2026-06-05 23:56:44`. Evidence: `docs/research/stabilization/prod-hardening-8/artifacts/logs/post-deploy-android-20260605T235655.txt`.
@@ -42,12 +47,14 @@ Run started: 2026-06-05T23:53:04+01:00
 - 2026-06-05T23:58:06+01:00 - CDP state captured. `c64u_saved_devices:v1` has exactly one saved device for host `c64u`; no u64 profile exists. Body text still shows `Device Not available` and `Firmware Not available`, while C64U config enrichment cache keys and Home C64U controls are present. Evidence: `docs/research/stabilization/prod-hardening-8/artifacts/logs/cdp-initial-state-20260605T235806.json`.
 
 ## App Profile Setup
+
 - 2026-06-05T23:58:51+01:00 - Used app Settings UI through WebView/CDP to add a test-owned U64 profile because only one saved `c64u` profile existed. Evidence: `docs/research/stabilization/prod-hardening-8/artifacts/logs/profile-setup-u64-20260605T235851.json`.
 - 2026-06-05T23:59:03+01:00 - U64 profile was saved through `Save & Connect`; Home showed `U64 HEALTHY`, Device `Ultimate-64-Elite-F83C87`, Firmware `3.14e`. Evidence screenshots: `profile-settings-u64-filled-1780700337069.png`, `profile-settings-u64-after-save-1780700343924.png`, `profile-home-u64-after-save-1780700351321.png`.
 - 2026-06-05T23:59:03+01:00 - Settings saved-device list showed non-selected `c64u` row as `U64E · c64u` after U64 selection, suggesting cross-device product-label bleed.
 - 2026-06-05T23:59:03+01:00 - Saved-device storage after U64 save retained stale `Unavailable`/`Offline` health summary for the U64 profile despite the active UI being healthy.
 
 ## U64 Workflow Tests
+
 - 2026-06-06T00:11:03+01:00 - Ran bounded U64 app workflow script through app UI test IDs. Evidence: `docs/research/stabilization/prod-hardening-8/artifacts/logs/u64-bounded-workflows-20260606T001103.ndjson`.
 - 2026-06-06T00:11:10+01:00 - Home route showed correct U64 product/firmware, quick config, drives, streams, and no disk mounted. Evidence: `u64-home-before-bounded-1780701069573.png`.
 - 2026-06-06T00:11:11+01:00 - U64 VIC stream Start was enabled and clicked through the app UI; Stop was enabled after start and clicked. Evidence: `u64-stream-before-1780701070522.png`, `u64-stream-after-start-1780701073605.png`, `u64-stream-after-stop-1780701076666.png`.
@@ -55,17 +62,20 @@ Run started: 2026-06-05T23:53:04+01:00
 - 2026-06-06T00:11:30+01:00 - U64 Settings `Refresh connection` accepted a second click about 300 ms after the first click; the button was not disabled at 100 ms. Classified as reconnect/discovery busy-state gating issue.
 
 ## C64U Workflow Tests
+
 - 2026-06-06T00:01:27+01:00 - Attempted conservative app-driven c64u selection through saved-device switcher. App switched selected profile to c64u but reported `OFFLINE`/`Not connected` while direct `/v1/info` remained healthy immediately after the switching loop.
 - 2026-06-06T00:12:37+01:00 - Later low-frequency c64u hostname reprobe returned immediate connection reset. Evidence: `docs/research/stabilization/prod-hardening-8/artifacts/logs/c64u-lowfreq-reprobe-20260606T001237.txt`.
 - 2026-06-06T00:13:08+01:00 - One IP-based c64u reprobe also returned immediate connection reset. Evidence: `docs/research/stabilization/prod-hardening-8/artifacts/logs/c64u-ip-lowfreq-reprobe-20260606T001308.txt`.
 - 2026-06-06T00:13:08+01:00 - Stopped all C64U mutation and further probing after confirmed degradation.
 
 ## Cross-Device Switching
+
 - 2026-06-06T00:00:01+01:00 - Opened saved-device switcher through actual long-press handler via WebView pointer events. Initial switcher showed contradictory status for U64: selected row included `Offline selection` while also showing online/healthy state after probes. Evidence: `docs/research/stabilization/prod-hardening-8/artifacts/screenshots/switcher-open-1780700405972.png`, `docs/research/stabilization/prod-hardening-8/artifacts/logs/device-switch-cdp-20260606T000001.json`.
 - 2026-06-06T00:01:27+01:00 - Performed careful U64 -> c64u -> U64 -> c64u -> U64 switching through saved-device rows. Evidence: `docs/research/stabilization/prod-hardening-8/artifacts/logs/device-switch-cdp-rows-20260606T000127.ndjson`.
 - 2026-06-06T00:01:27+01:00 - Each c64u selection left app `OFFLINE`/`Not connected`; each U64 selection recovered to `U64 HEALTHY`. Direct liveness after switch loop showed both u64 and c64u HTTP 200 at that time. Evidence: `docs/research/stabilization/prod-hardening-8/artifacts/logs/post-switch-liveness-20260606T000230.txt`.
 
 ## Playback
+
 - 2026-06-06T00:03:09+01:00 - Staged safe local playback fixtures to `/sdcard/Download/C64LocalSource`. Evidence: `docs/research/stabilization/prod-hardening-8/artifacts/logs/stage-local-fixtures-20260606T000309.txt`.
 - 2026-06-06T00:03:18+01:00 - Attempted `scripts/run-maestro.sh --mode tags --tags +android-regression-proof --skip-app-reset`; runner exited 1 because the requested flow also has excluded tag `slow`, so no safe playback proof ran. Evidence: `docs/research/stabilization/prod-hardening-8/artifacts/logs/maestro-local-binary-playback-20260606T000318.txt`.
 - 2026-06-06T00:03:42+01:00 - Attempted direct `maestro test .maestro/local-binary-playback-proof.yaml` without app reset; flow exited 1 on Android DocumentsUI toolbar assertion while file picker was open in remembered `C64Music` folder. Evidence: `docs/research/stabilization/prod-hardening-8/artifacts/logs/maestro-direct-local-binary-playback-20260606T000342.txt` and artifacts under `docs/research/stabilization/prod-hardening-8/artifacts/maestro/direct-local-binary-playback/`.
@@ -73,55 +83,67 @@ Run started: 2026-06-05T23:53:04+01:00
 - 2026-06-06T00:13:33+01:00 - Ran c64scope U64 direct playback/volume capture with fixture `tests/fixtures/local-source-assets/demo.sid`; capture passed with 10 operations, 0 failures, 0 stale writes. This proves U64 hardware/capture path, not app playlist playback. Evidence: `docs/research/stabilization/prod-hardening-8/artifacts/logs/c64scope-playback-volume-latency-direct-20260606T001333.txt`.
 
 ## Disk Workflows
+
 - 2026-06-06T00:03:42+01:00 - Disk mount/eject app workflow remained blocked by the same deterministic local fixture picker/harness failure before `demo.d64` could be added or mounted through the app. Classified as testability gap; no disk was mounted by this run.
 
 ## Config Workflows
+
 - 2026-06-06T00:11:20+01:00 - App-driven volume config mutation on U64 was exercised through Play volume slider and restored to original `0 dB`.
 - 2026-06-06T00:13:33+01:00 - c64scope direct Audio Mixer mutation/restore on U64 completed with no failures and restored snapshot.
 - 2026-06-06T00:13:08+01:00 - Broader C64U config mutation was not attempted because c64u degraded.
 
 ## Stream Workflows
+
 - 2026-06-06T00:11:11+01:00 - U64 VIC stream start/stop was performed through app UI and stopped. No streams intentionally left running.
 
 ## Diagnostics Export
+
 - 2026-06-06T00:11:37+01:00 - Opened diagnostics overlay on U64 and captured header/test IDs. Evidence: `diagnostics-open-u64-1780701097011.png`.
 - 2026-06-06T00:11:39+01:00 - Clicked diagnostics overflow then `Share all`. Android intent resolver opened; no deterministic file destination was offered through the app path. Evidence: `diagnostics-overflow-u64-1780701098444.png`, `diagnostics-share-after-click-1780701101961.png`, `post-u64-bounded-focus-20260606T001155.png`.
 
 ## Slider And Back-Off Audit
+
 - 2026-06-06T00:11:20+01:00 - U64 app volume slider accepted bounded 500 ms and 200 ms sequences and UI label tracked requested values; final UI restored to `0 dB`.
 - 2026-06-06T00:13:33+01:00 - c64scope direct U64 playback-volume latency capture showed p95 132 ms, 0 failures, 0 stale writes, 0 cancellations.
 - 2026-06-06T00:13:08+01:00 - C64U slider audit was not run after c64u degradation.
 
 ## Reconnect And Discovery Audit
+
 - 2026-06-06T00:11:30+01:00 - U64 Settings `Refresh connection` did not gate a second click while the first refresh/discovery operation was likely in progress; second click was accepted. Classified as safety/back-off issue.
 - 2026-06-06T00:13:08+01:00 - C64U reconnect/discovery audit stopped after degradation; no further c64u reconnect attempts were made.
 
 ## c64scope Capture
+
 - 2026-06-06T00:13:22+01:00 - `npm run scope:hil:playback-volume-latency -- --host ...` failed before hardware interaction because nested npm argument passing converted options to positional args. Evidence: `docs/research/stabilization/prod-hardening-8/artifacts/logs/c64scope-playback-volume-latency-20260606T001322.txt`.
 - 2026-06-06T00:13:33+01:00 - Direct built c64scope command succeeded with artifacts under prod-hardening-8: `docs/research/stabilization/prod-hardening-8/artifacts/c64scope/playback-volume-latency-20260606T001333/`.
 - 2026-06-06T00:13:33+01:00 - Broader c64scope `hil:evidence` path was not run because source inspection showed its artifact root is hardcoded to `c64scope/artifacts`, outside the run's permitted output directory.
 
 ## Agentic/Maestro/Harness Evaluation
+
 - 2026-06-06T00:03:18+01:00 - Maestro runner usability evaluated with `--skip-app-reset`; tag filtering prevented the intended slow playback proof from running.
 - 2026-06-06T00:03:42+01:00 - Direct Maestro flow avoided app reset but failed in DocumentsUI due brittle selector/remembered picker state.
 - 2026-06-06T00:14:57+01:00 - Scoped logcat capture file was empty after the run, so app-runtime log evidence was not available from the configured capture.
 
 ## Findings
+
 - 2026-06-06T00:14:57+01:00 - Confirmed findings to carry into `research.md`: c64u switch failure, c64u degradation, Healthy-without-identity, switcher/status contradictions, saved-device label bleed, reconnect refresh not gated, diagnostics export nondeterministic, Maestro tag/picker blockers, c64scope artifact/CLI issues, and empty logcat capture.
 
 ## Final Liveness
+
 - 2026-06-06T00:14:35+01:00 - Final app navigation captured Home and Settings on Pixel 4 with U64 selected and app responsive. Evidence: `docs/research/stabilization/prod-hardening-8/artifacts/logs/final-app-navigation-force-20260606T001435.ndjson`.
 - 2026-06-06T00:14:56+01:00 - Final Pixel adb state `device`; foreground app C64 Commander; U64 `/v1/info` HTTP 200 in 0.026s. Evidence: `docs/research/stabilization/prod-hardening-8/artifacts/logs/final-liveness-20260606T001456.txt`.
 - 2026-06-06T00:14:56+01:00 - C64U final liveness was not reprobed again after confirmed degradation to avoid further interaction.
 - 2026-06-06T00:14:57+01:00 - Stopped scoped logcat capture. File was empty (`0` lines); tail artifact preserved.
 
 ## Final Documents
+
 - 2026-06-06T00:15:00+01:00 - Preparing `research.md` and `prompt.md` under `docs/research/stabilization/prod-hardening-8/`.
 - 2026-06-06T00:15:30+01:00 - Wrote `docs/research/stabilization/prod-hardening-8/research.md` with fail verdict and 11 findings.
 - 2026-06-06T00:15:45+01:00 - Wrote `docs/research/stabilization/prod-hardening-8/prompt.md` as execution-ready fix prompt starting with `ROLE`.
 - 2026-06-06T00:16:00+01:00 - Final status check: changed files are `PLANS.md`, `WORKLOG.md`, and untracked `docs/research/stabilization/prod-hardening-8/`; no product code was modified by this run.
 
 ## Fix Pass
+
 - 2026-06-06T00:58:00+01:00 - Started PH8 fix pass from the user-provided prompt. Required reading completed: `.github/copilot-instructions.md`, `AGENTS.md`, `README.md`, `docs/ux-guidelines.md`, `docs/testing/maestro.md`, `docs/testing/agentic-tests/agentic-safety-policy.md`, PH8 `research.md`, and `artifact-index.txt`.
 - 2026-06-06T00:58:00+01:00 - Classified this fix pass as `DOC_PLUS_CODE` and `UI_CHANGE` because it will touch app behavior, visible health/status UI, test scripts, and docs as needed.
 - 2026-06-06T00:58:00+01:00 - Observed pre-existing worktree state before fix edits: modified `PLANS.md`/`WORKLOG.md`, untracked `docs/research/stabilization/prod-hardening-7/`, untracked `docs/research/stabilization/prod-hardening-8/`, and untracked `org/`.
@@ -166,3 +188,35 @@ Run started: 2026-06-05T23:53:04+01:00
 - 2026-06-06T03:10:37+01:00 - Preserved passed-run log artifacts: `docs/research/stabilization/prod-hardening-8/artifacts/logs/maestro-local-binary-playback-passed.txt`, non-empty logcat `docs/research/stabilization/prod-hardening-8/artifacts/logs/maestro-local-binary-playback-passed-logcat.txt` (`6643` lines), and smoke file snapshot `docs/research/stabilization/prod-hardening-8/artifacts/logs/maestro-local-binary-playback-passed-smoke-files.txt`.
 - 2026-06-06T03:31:11+01:00 - Final broad root validation rerun passed after the Maestro/native-smoke fixes: `npm run lint` passed with only existing generated coverage HTML warnings; `npm run test` passed (`581` files, `6737` tests); `npm run test:coverage` passed with global branch coverage `91.71%` (`Statements 94.67%`, `Functions 91.11%`, `Lines 94.67%`).
 - 2026-06-06T08:14:16+01:00 - Continuation started from finalization state. Confirmed `diff.txt` is not present. Confirmed `PLANS.md`/`WORKLOG.md` were still at the pre-continuation state with remaining tasks: final build, final c64scope rerun, changed-line coverage recompute, and final APK deploy/validation.
+
+## Continuation Finalization 2026-06-06
+
+- 2026-06-06T08:17:01+01:00 - Executed final normal build with `unset VITE_ENABLE_TEST_PROBES && npm run build`; output captured in `docs/research/stabilization/prod-hardening-8/artifacts/post-fix/logs/final-build.log`.
+- 2026-06-06T08:19:05+01:00 - Executed `npm run cap:build`; output captured in `docs/research/stabilization/prod-hardening-8/artifacts/post-fix/logs/final-cap-build.log`.
+- 2026-06-06T08:20:54+01:00 - Executed `npm run android:apk`; output captured in `docs/research/stabilization/prod-hardening-8/artifacts/post-fix/logs/final-android-apk.log`.
+- 2026-06-06T08:15:31+01:00 - Re-ran `npm run scope:check` (pass: `33` files, `259` tests); evidence in `docs/research/stabilization/prod-hardening-8/artifacts/post-fix/logs/final-scope-check.log`.
+- 2026-06-06T08:16:33+01:00 - Re-ran `npm run scope:test:coverage` (branch `85.65%`); evidence in `docs/research/stabilization/prod-hardening-8/artifacts/post-fix/logs/final-scope-coverage.log`.
+- 2026-06-06T07:41:33+01:00 - Re-ran `npm run scope:hil:playback-volume-latency -- --host u64 --artifact-root docs/research/stabilization/prod-hardening-8/artifacts/post-fix/c64scope --password` (10 ops, 0 failures, `summary` under `docs/research/stabilization/prod-hardening-8/artifacts/post-fix/c64scope/playback-volume-latency/20260606T071748Z-u64`); evidence in `docs/research/stabilization/prod-hardening-8/artifacts/post-fix/logs/final-scope-playback-volume-latency.log`.
+- 2026-06-06T08:18:21+01:00 - Re-ran full `npm run test:coverage`; final branch coverage remained `91.72%`, summary preserved in `docs/research/stabilization/prod-hardening-8/artifacts/post-fix/logs/final-test-coverage.log`.
+- 2026-06-06T08:40:27+01:00 - Installed latest normal debug APK `android/app/build/outputs/apk/debug/c64commander-0.8.6-rc1-debug.apk` on Pixel 4 via `adb install -r` with success; evidence in `docs/research/stabilization/prod-hardening-8/artifacts/post-fix/final-device-validation/apk-install.log`.
+- 2026-06-06T07:42:12+01:00 - Performed first final-device-validator run with flow path issues (`.maestro/subflows/launch-and-wait.yaml` missing at `/tmp/.maestro/...`); fixed flow path and retried.
+- 2026-06-06T07:42:09+01:00 - Second validator run failed on malformed YAML (`assertVisible` optional formatting); flow was corrected and retried.
+- 2026-06-06T07:42:12+01:00 - Final validator run passed with flow `final-device-validation-flow` after launch/settings diagnostics navigation by ID; evidence in `docs/research/stabilization/prod-hardening-8/artifacts/post-fix/final-device-validation/final-maestro-run.log`.
+- 2026-06-06T08:43:05+01:00 - Captured final device focus/version/package/stack/logcat and health checks (`version.txt`, `package-info.txt`, `focus-check.txt`, `liveness-results.txt`, `post-validate-logcat.txt`) under `docs/research/stabilization/prod-hardening-8/artifacts/post-fix/final-device-validation/`.
+- 2026-06-06T08:43:11+01:00 - Final liveness probes: U64 `/v1/info` succeeded (`product`: `Ultimate 64 Elite`, `firmware_version`: `3.14e`); C64U `/v1/info` probe failed with connection reset and was not retried further, per safety rule.
+- 2026-06-06T08:44:18+01:00 - Recomputed changed-line coverage context from live diff: `git diff --name-only` returned no paths, so root and c64scope patch deltas are not applicable in this continuation state (no working-tree changes after last committed state); outputs: `ROOT_PATCH_COVERAGE_NO_CHANGED_FILES`, `C64SCOPE_PATCH_COVERAGE_NO_CHANGED_FILES`.
+- 2026-06-06T08:44:18+01:00 - Updated `PLANS.md` continuation section with completion status and evidence references; updated this worklog with finalization steps.
+
+## PR 274 Convergence Follow-up
+
+- 2026-06-06: Started PR 274 convergence from `fix/stabilization` with existing modified `PLANS.md`, `WORKLOG.md`, `src/hooks/useSavedDeviceSwitching.ts`, and `tests/unit/hooks/useSavedDeviceSwitching.test.tsx` preserved as in-progress work.
+- 2026-06-06: Confirmed two unresolved Copilot review threads: saved-device switch coalescing and append-only `PLANS.md` stewardship.
+- 2026-06-06: Confirmed CI failures on head `09260bc`: `Web | Screenshots`, `Web | E2E (sharded) (8, 12)`, and `Web | E2E (sharded) (9, 12)`.
+- 2026-06-06: Kept the saved-device switch fix that reuses same-device in-flight promises but queues different-device switch requests after the active switch settles.
+- 2026-06-06: Restored `PLANS.md` to append-only structure by prefixing the prior main-branch plan history and retaining the PH8 plan as an addendum.
+- 2026-06-06: Added deterministic Playwright mock identity seeding through the app connection manager so health-badge tests satisfy the product-plus-firmware gate without weakening production behavior.
+- 2026-06-06: Seeded the stream start/stop Playwright test's initial config snapshot with the same audio endpoint written to the mock server, avoiding stale snapshot display of `—:11001`.
+- 2026-06-06: Targeted validation passed: `npx vitest run tests/unit/hooks/useSavedDeviceSwitching.test.tsx`; `npx playwright test playwright/demoMode.spec.ts --project=android-phone -g "real connection shows green C64U indicator"`; `npx playwright test playwright/homeInteractivity.spec.ts --project=android-phone -g "start/stop interactions send stream commands"`; targeted screenshot subset for the seven failed screenshot captures.
+- 2026-06-06: Broad validation passed: `npm run lint` (existing generated coverage HTML warnings only), `npm run test` (`582` files, `6739` tests), `npm run test:coverage` (`91.72%` branch coverage), `npm run build`, `npm run cap:build`, and `npm run android:apk`.
+- 2026-06-06: Pixel 4 `9B081FFAZ001WX` install succeeded for `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk`; app activity launched as `uk.gleissner.c64commander/.MainActivity`.
+- 2026-06-06: On-device UI dump validation was blocked because Android SystemUI kept `NotificationShade`/quick settings as `mCurrentFocus` after Back, Home, swipe, `cmd statusbar collapse`, statusbar service calls, and `CLOSE_SYSTEM_DIALOGS`; `mFocusedApp` remained C64 Commander. U64 `/v1/info` succeeded and C64U `/v1/info` reset the connection, so no C64U retry/mutation was attempted.

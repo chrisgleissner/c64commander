@@ -436,7 +436,7 @@ describe("useSavedDeviceSwitching", () => {
     window.removeEventListener("c64u-connection-change", handler as EventListener);
   });
 
-  it("coalesces overlapping saved-device switch requests into one verification", async () => {
+  it("coalesces repeated switch requests for the same requested device while verification is in flight", async () => {
     const store = await import("@/lib/savedDevices/store");
     const metrics = await import("@/lib/savedDevices/savedDeviceSwitchMetrics");
     metrics.clearSavedDeviceSwitchMetrics();
@@ -501,6 +501,124 @@ describe("useSavedDeviceSwitching", () => {
     expect(metrics.getSavedDeviceSwitchMetricsSnapshot().attempts[0]).toMatchObject({
       fromDeviceId: initialDeviceId,
       toDeviceId: "device-c64u",
+      outcome: "success",
+    });
+  });
+
+  it("queues a different in-flight saved-device switch request behind the active verification", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    const metrics = await import("@/lib/savedDevices/savedDeviceSwitchMetrics");
+    metrics.clearSavedDeviceSwitchMetrics();
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    store.updateSavedDevice(initialDeviceId, {
+      name: "Office U64",
+      host: "u64",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      hasPassword: false,
+    });
+    store.addSavedDevice({
+      id: "device-c64u",
+      name: "C64U",
+      host: "192.168.1.167",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 64,
+      lastKnownProduct: null,
+      lastKnownHostname: null,
+      lastKnownUniqueId: null,
+      hasPassword: false,
+    });
+    store.addSavedDevice({
+      id: "device-c64u-backup",
+      name: "Backup C64U",
+      host: "10.0.0.12",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 64,
+      lastKnownProduct: null,
+      lastKnownHostname: null,
+      lastKnownUniqueId: null,
+      hasPassword: false,
+    });
+
+    const firstVerification = createDeferred<{
+      ok: boolean;
+      deviceInfo: { product: string; hostname: string; unique_id: string };
+    }>();
+    const secondVerification = createDeferred<{
+      ok: boolean;
+      deviceInfo: { product: string; hostname: string; unique_id: string };
+    }>();
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    mockVerifyCurrentConnectionTarget
+      .mockReturnValueOnce(firstVerification.promise)
+      .mockReturnValueOnce(secondVerification.promise);
+
+    const { result } = renderHook(() => useSavedDeviceSwitching(), {
+      wrapper: createWrapper("/settings"),
+    });
+
+    let primarySwitch!: Promise<unknown>;
+    let queuedSwitch!: Promise<unknown>;
+    act(() => {
+      primarySwitch = result.current("device-c64u");
+      queuedSwitch = result.current("device-c64u-backup");
+    });
+
+    expect(mockVerifyCurrentConnectionTarget).toHaveBeenCalledTimes(1);
+    expect(primarySwitch).not.toBe(queuedSwitch);
+
+    firstVerification.resolve({
+      ok: true,
+      deviceInfo: {
+        product: "C64 Ultimate",
+        hostname: "c64u",
+        unique_id: "UID-C64U",
+      },
+    });
+
+    await waitFor(() => {
+      expect(mockVerifyCurrentConnectionTarget).toHaveBeenCalledTimes(2);
+    });
+
+    secondVerification.resolve({
+      ok: true,
+      deviceInfo: {
+        product: "C64 Ultimate",
+        hostname: "backup-c64u",
+        unique_id: "UID-BACKUP",
+      },
+    });
+
+    await act(async () => {
+      await Promise.all([primarySwitch, queuedSwitch]);
+    });
+
+    expect(mockVerifyCurrentConnectionTarget).toHaveBeenNthCalledWith(1, {
+      deviceHost: "192.168.1.167",
+      password: null,
+      preferResolvedAddress: null,
+    });
+    expect(mockVerifyCurrentConnectionTarget).toHaveBeenNthCalledWith(2, {
+      deviceHost: "10.0.0.12",
+      password: null,
+      preferResolvedAddress: null,
+    });
+    expect(store.getSavedDevicesSnapshot().selectedDeviceId).toBe("device-c64u-backup");
+
+    const attempts = metrics.getSavedDeviceSwitchMetricsSnapshot().attempts;
+    expect(attempts).toHaveLength(2);
+    expect(attempts.find((attempt) => attempt.toDeviceId === "device-c64u")).toMatchObject({
+      fromDeviceId: initialDeviceId,
+      toDeviceId: "device-c64u",
+      outcome: "success",
+    });
+    expect(attempts.find((attempt) => attempt.toDeviceId === "device-c64u-backup")).toMatchObject({
+      fromDeviceId: "device-c64u",
+      toDeviceId: "device-c64u-backup",
       outcome: "success",
     });
   });

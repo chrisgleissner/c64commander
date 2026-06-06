@@ -118,6 +118,22 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
         __c64uExpectedBaseUrl?: string;
         __c64uAllowedBaseUrls?: string[];
         __c64uTestProbeEnabled?: boolean;
+        __c64uSeedVerifiedIdentity?: () => Promise<void>;
+        __c64uConnectionTestProbe?: {
+          noteReachable: (
+            host: string,
+            source: "rest",
+            deviceInfo: {
+              product: string;
+              firmware_version: string;
+              fpga_version: string;
+              core_version: string;
+              hostname: string;
+              unique_id: string;
+              errors: string[];
+            },
+          ) => void;
+        };
       };
       routingWindow.__c64uExpectedBaseUrl = baseUrlArg;
       routingWindow.__c64uTestProbeEnabled = true;
@@ -140,6 +156,21 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
       }
       routingWindow.__c64uAllowedBaseUrls = Array.from(allowedBaseUrls);
       const host = baseUrlArg?.replace(/^https?:\/\//, "");
+      routingWindow.__c64uSeedVerifiedIdentity = async () => {
+        const probe = routingWindow.__c64uConnectionTestProbe;
+        if (!probe) {
+          throw new Error("C64U connection test probe is not installed");
+        }
+        probe.noteReachable(baseUrlArg || host || "c64u", "rest", {
+          product: "C64 Ultimate",
+          firmware_version: "3.12.0",
+          fpga_version: "1.0.0",
+          core_version: "1.0.0",
+          hostname: "c64u",
+          unique_id: "TEST-123",
+          errors: [],
+        });
+      };
       try {
         const seededSavedDevice = readSeededSavedDevice();
         const seededFtpPort = parseStoredPort(
