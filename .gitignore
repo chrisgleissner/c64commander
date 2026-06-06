@@ -127,6 +127,9 @@ agents/runtime/state/
 agents/state/*
 !agents/state/README.md
 
+# Robolectric compiled artifacts (downloaded as Maven dependency, not sources)
+org/
+
 # Android generated files
 android/**/*.apk
 android/**/*.aar
