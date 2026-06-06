@@ -190,4 +190,25 @@ describe("useConfigActions", () => {
     expect(result.current.configWritePending).toEqual({});
     expect(result.current.configOverrides).toEqual({});
   });
+
+  it("can clear pending state immediately after a successful write for controls without resolved values", async () => {
+    const { result } = renderHook(() => useConfigActions());
+
+    await act(async () => {
+      await result.current.updateConfigValue(
+        "Data Streams",
+        "Stream Audio to",
+        "239.0.1.65:11001",
+        "HOME_STREAM_UPDATE",
+        "Updated",
+        {
+          clearPendingOnSuccess: true,
+        },
+      );
+    });
+
+    expect(setConfigValueMock).toHaveBeenCalledWith("Data Streams", "Stream Audio to", "239.0.1.65:11001");
+    expect(result.current.configWritePending).toEqual({});
+    expect(result.current.configOverrides).toEqual({});
+  });
 });

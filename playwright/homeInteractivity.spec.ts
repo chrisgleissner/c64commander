@@ -11,47 +11,18 @@ import type { Page, TestInfo } from "@playwright/test";
 import { saveCoverageFromPage } from "./withCoverage";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { variant } from "../src/generated/variant";
-import { seedUiMocks, type InitialSnapshotConfigUpdates } from "./uiMocks";
+import { seedUiMocks } from "./uiMocks";
 import { allowWarnings, assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 
 type HomeFixtures = {
   server: Awaited<ReturnType<typeof createMockC64Server>>;
 };
 
-const getInitialSnapshotConfigForTest = (title: string): InitialSnapshotConfigUpdates => {
-  if (title === "start/stop interactions send stream commands") {
-    return {
-      "Data Streams": {
-        "Stream Audio to": "239.0.1.65:11001",
-      },
-    };
-  }
-
-  if (title === "SID reset writes deterministic silence register set") {
-    return {
-      "SID Sockets Configuration": {
-        "SID Socket 1": "Enabled",
-      },
-      "SID Addressing": {
-        "SID Socket 1 Address": "$D400",
-        "SID Socket 2 Address": "Unmapped",
-        "UltiSID 1 Address": "$D420",
-        "UltiSID 2 Address": "Unmapped",
-      },
-    };
-  }
-
-  return {};
-};
-
 const test = base.extend<HomeFixtures>({
   server: [
-    async ({ page }, runFixture, testInfo) => {
+    async ({ page }, runFixture) => {
       const server = await createMockC64Server();
-      await seedUiMocks(page, server.baseUrl, {
-        clearStorageBeforeSeeding: true,
-        initialSnapshotConfig: getInitialSnapshotConfigForTest(testInfo.title),
-      });
+      await seedUiMocks(page, server.baseUrl, { clearStorageBeforeSeeding: true });
       try {
         await runFixture(server);
       } finally {
@@ -179,6 +150,22 @@ test.describe("Home interactions", () => {
 
     await page.goto("/");
     await waitForStreamsReady(page);
+    await page.getByTestId("home-stream-edit-toggle-audio").click();
+    const audioInput = page.getByTestId("home-stream-endpoint-audio");
+    await audioInput.fill(audioEndpoint);
+    await page.getByTestId("home-stream-confirm-audio").click();
+    await expect
+      .poll(() =>
+        hasRequest(
+          server.requests,
+          (req) =>
+            req.method === "PUT" &&
+            req.url.includes("/v1/configs/Data%20Streams/Stream%20Audio%20to") &&
+            req.url.includes("239.0.1.65%3A11001"),
+        ),
+      )
+      .toBe(true);
+
     const startAudio = page.getByTestId("home-stream-start-audio");
     const stopAudio = page.getByTestId("home-stream-stop-audio");
     const audioEndpointDisplay = page.getByTestId("home-stream-endpoint-display-audio");
@@ -554,6 +541,21 @@ test.describe("Home interactions", () => {
     await waitForConnected(page);
     const socket1Address = page.getByTestId("home-sid-address-socket1");
     await expect(socket1Address).toHaveAttribute("role", "combobox", { timeout: CONFIG_READY_TIMEOUT_MS });
+    if (!((await socket1Address.textContent()) ?? "").includes("$D400")) {
+      await socket1Address.click();
+      await page.getByRole("option", { name: "$D400", exact: true }).click();
+      await expect
+        .poll(() =>
+          hasRequest(
+            server.requests,
+            (req) =>
+              req.method === "PUT" &&
+              req.url.includes("/v1/configs/SID%20Addressing/SID%20Socket%201%20Address") &&
+              req.url.includes("%24D400"),
+          ),
+        )
+        .toBe(true);
+    }
     await expect(socket1Address).toContainText("$D400", { timeout: CONFIG_READY_TIMEOUT_MS });
     await page.getByTestId("home-sid-status").getByRole("button", { name: "Reset" }).click();
 

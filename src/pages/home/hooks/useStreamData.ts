@@ -34,7 +34,7 @@ export function useStreamData(
     value: string | number,
     actionId: string,
     toastMessage: string,
-    options?: { suppressToast?: boolean; refreshDrives?: boolean },
+    options?: { suppressToast?: boolean; refreshDrives?: boolean; clearPendingOnSuccess?: boolean },
   ) => Promise<void>,
 ) {
   const api = getC64API();
@@ -243,6 +243,7 @@ export function useStreamData(
       buildStreamConfigValue(true, nextIp, nextPort),
       "HOME_STREAM_UPDATE",
       `${entry.label} stream target updated`,
+      { clearPendingOnSuccess: true },
     );
     setActiveStreamEditorKey(null);
     return true;

@@ -15,10 +15,9 @@ import { variant } from "../src/generated/variant";
 type UiMockSeedOptions = {
   seedFeatureFlagsByDefault?: boolean;
   clearStorageBeforeSeeding?: boolean;
-  initialSnapshotConfig?: InitialSnapshotConfigUpdates;
 };
 
-export type InitialSnapshotConfigUpdates = Record<string, Record<string, string | number>>;
+type InitialSnapshotConfigUpdates = Record<string, Record<string, string | number>>;
 
 type InitialSnapshotConfigSeedWindow = Window & {
   __c64uInitialSnapshotConfigUpdates?: Record<string, InitialSnapshotConfigUpdates>;
@@ -144,7 +143,7 @@ export async function seedInitialSnapshotConfig(page: Page, baseUrl: string, upd
 }
 
 export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSeedOptions = {}) {
-  const { seedFeatureFlagsByDefault = true, clearStorageBeforeSeeding = false, initialSnapshotConfig = {} } = options;
+  const { seedFeatureFlagsByDefault = true, clearStorageBeforeSeeding = false } = options;
   const currentDeviceHostKey = `${variant.id}:device_host`;
   await page.addInitScript(
     ({
@@ -153,7 +152,6 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
       snapshot,
       seedFeatureFlagsByDefault: seedFeatureFlags,
       clearStorageBeforeSeeding: clearStorage,
-      initialSnapshotConfig: initialSnapshotConfigArg,
       currentDeviceHostKey: currentDeviceHostKeyArg,
     }: {
       baseUrl: string;
@@ -161,7 +159,6 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
       snapshot: unknown;
       seedFeatureFlagsByDefault: boolean;
       clearStorageBeforeSeeding: boolean;
-      initialSnapshotConfig: InitialSnapshotConfigUpdates;
       currentDeviceHostKey: string;
     }) => {
       if (clearStorage) {
@@ -195,16 +192,10 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
         const seededUpdates =
           (window as InitialSnapshotConfigSeedWindow).__c64uInitialSnapshotConfigUpdates?.[baseUrlArg] ?? {};
         const rawUpdates = updatesKeys.map((updatesKey) => localStorage.getItem(updatesKey)).find(Boolean);
-        if (
-          !rawUpdates &&
-          Object.keys(seededUpdates).length === 0 &&
-          Object.keys(initialSnapshotConfigArg).length === 0
-        ) {
-          return snapshotArg;
-        }
+        if (!rawUpdates && Object.keys(seededUpdates).length === 0) return snapshotArg;
         try {
           const storedUpdates = rawUpdates ? (JSON.parse(rawUpdates) as InitialSnapshotConfigUpdates) : {};
-          const configUpdates = mergeUpdates(mergeUpdates(initialSnapshotConfigArg, seededUpdates), storedUpdates);
+          const configUpdates = mergeUpdates(seededUpdates, storedUpdates);
           const mutableSnapshot = snapshotArg as Snapshot;
           Object.entries(configUpdates).forEach(([category, items]) => {
             Object.entries(items).forEach(([itemName, value]) => {
@@ -497,7 +488,6 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
       snapshot: initialSnapshot,
       seedFeatureFlagsByDefault,
       clearStorageBeforeSeeding,
-      initialSnapshotConfig,
       currentDeviceHostKey,
     },
   );

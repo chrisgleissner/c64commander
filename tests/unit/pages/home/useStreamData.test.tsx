@@ -308,6 +308,7 @@ describe("useStreamData", () => {
       "10.0.0.5:8000",
       "HOME_STREAM_UPDATE",
       "VIC stream target updated",
+      { clearPendingOnSuccess: true },
     );
     expect(result.current.activeStreamEditorKey).toBeNull();
   });
