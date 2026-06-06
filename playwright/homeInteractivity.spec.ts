@@ -11,18 +11,47 @@ import type { Page, TestInfo } from "@playwright/test";
 import { saveCoverageFromPage } from "./withCoverage";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { variant } from "../src/generated/variant";
-import { seedInitialSnapshotConfig, seedUiMocks } from "./uiMocks";
+import { seedUiMocks, type InitialSnapshotConfigUpdates } from "./uiMocks";
 import { allowWarnings, assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 
 type HomeFixtures = {
   server: Awaited<ReturnType<typeof createMockC64Server>>;
 };
 
+const getInitialSnapshotConfigForTest = (title: string): InitialSnapshotConfigUpdates => {
+  if (title === "start/stop interactions send stream commands") {
+    return {
+      "Data Streams": {
+        "Stream Audio to": "239.0.1.65:11001",
+      },
+    };
+  }
+
+  if (title === "SID reset writes deterministic silence register set") {
+    return {
+      "SID Sockets Configuration": {
+        "SID Socket 1": "Enabled",
+      },
+      "SID Addressing": {
+        "SID Socket 1 Address": "$D400",
+        "SID Socket 2 Address": "Unmapped",
+        "UltiSID 1 Address": "$D420",
+        "UltiSID 2 Address": "Unmapped",
+      },
+    };
+  }
+
+  return {};
+};
+
 const test = base.extend<HomeFixtures>({
   server: [
-    async ({ page }, runFixture) => {
+    async ({ page }, runFixture, testInfo) => {
       const server = await createMockC64Server();
-      await seedUiMocks(page, server.baseUrl, { clearStorageBeforeSeeding: true });
+      await seedUiMocks(page, server.baseUrl, {
+        clearStorageBeforeSeeding: true,
+        initialSnapshotConfig: getInitialSnapshotConfigForTest(testInfo.title),
+      });
       try {
         await runFixture(server);
       } finally {
@@ -145,11 +174,6 @@ test.describe("Home interactions", () => {
         "Data Streams": {
           "Stream Audio to": audioEndpoint,
         },
-      },
-    });
-    await seedInitialSnapshotConfig(page, server.baseUrl, {
-      "Data Streams": {
-        "Stream Audio to": audioEndpoint,
       },
     });
 
@@ -523,17 +547,6 @@ test.describe("Home interactions", () => {
           "UltiSID 1 Address": "$D420",
           "UltiSID 2 Address": "Unmapped",
         },
-      },
-    });
-    await seedInitialSnapshotConfig(page, server.baseUrl, {
-      "SID Sockets Configuration": {
-        "SID Socket 1": "Enabled",
-      },
-      "SID Addressing": {
-        "SID Socket 1 Address": "$D400",
-        "SID Socket 2 Address": "Unmapped",
-        "UltiSID 1 Address": "$D420",
-        "UltiSID 2 Address": "Unmapped",
       },
     });
 

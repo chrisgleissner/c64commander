@@ -10,13 +10,15 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { Page } from "@playwright/test";
 import { ensureValidSidBase64 } from "./sidFixture";
+import { variant } from "../src/generated/variant";
 
 type UiMockSeedOptions = {
   seedFeatureFlagsByDefault?: boolean;
   clearStorageBeforeSeeding?: boolean;
+  initialSnapshotConfig?: InitialSnapshotConfigUpdates;
 };
 
-type InitialSnapshotConfigUpdates = Record<string, Record<string, string | number>>;
+export type InitialSnapshotConfigUpdates = Record<string, Record<string, string | number>>;
 
 type InitialSnapshotConfigSeedWindow = Window & {
   __c64uInitialSnapshotConfigUpdates?: Record<string, InitialSnapshotConfigUpdates>;
@@ -142,7 +144,8 @@ export async function seedInitialSnapshotConfig(page: Page, baseUrl: string, upd
 }
 
 export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSeedOptions = {}) {
-  const { seedFeatureFlagsByDefault = true, clearStorageBeforeSeeding = false } = options;
+  const { seedFeatureFlagsByDefault = true, clearStorageBeforeSeeding = false, initialSnapshotConfig = {} } = options;
+  const currentDeviceHostKey = `${variant.id}:device_host`;
   await page.addInitScript(
     ({
       baseUrl: baseUrlArg,
@@ -150,12 +153,16 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
       snapshot,
       seedFeatureFlagsByDefault: seedFeatureFlags,
       clearStorageBeforeSeeding: clearStorage,
+      initialSnapshotConfig: initialSnapshotConfigArg,
+      currentDeviceHostKey: currentDeviceHostKeyArg,
     }: {
       baseUrl: string;
       songData: string;
       snapshot: unknown;
       seedFeatureFlagsByDefault: boolean;
       clearStorageBeforeSeeding: boolean;
+      initialSnapshotConfig: InitialSnapshotConfigUpdates;
+      currentDeviceHostKey: string;
     }) => {
       if (clearStorage) {
         localStorage.clear();
@@ -188,10 +195,16 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
         const seededUpdates =
           (window as InitialSnapshotConfigSeedWindow).__c64uInitialSnapshotConfigUpdates?.[baseUrlArg] ?? {};
         const rawUpdates = updatesKeys.map((updatesKey) => localStorage.getItem(updatesKey)).find(Boolean);
-        if (!rawUpdates && Object.keys(seededUpdates).length === 0) return snapshotArg;
+        if (
+          !rawUpdates &&
+          Object.keys(seededUpdates).length === 0 &&
+          Object.keys(initialSnapshotConfigArg).length === 0
+        ) {
+          return snapshotArg;
+        }
         try {
           const storedUpdates = rawUpdates ? (JSON.parse(rawUpdates) as InitialSnapshotConfigUpdates) : {};
-          const configUpdates = mergeUpdates(seededUpdates, storedUpdates);
+          const configUpdates = mergeUpdates(mergeUpdates(initialSnapshotConfigArg, seededUpdates), storedUpdates);
           const mutableSnapshot = snapshotArg as Snapshot;
           Object.entries(configUpdates).forEach(([category, items]) => {
             Object.entries(items).forEach(([itemName, value]) => {
@@ -223,7 +236,8 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
           };
           const devices = Array.isArray(parsed.devices) ? parsed.devices : [];
           return devices.find((device) => device.id === parsed.selectedDeviceId) ?? devices[0] ?? null;
-        } catch {
+        } catch (error) {
+          console.warn("Unable to read seeded saved device", error);
           return null;
         }
       };
@@ -274,8 +288,8 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
         if (ftpBridgeUrl) {
           allowedBaseUrls.add(ftpBridgeUrl);
         }
-      } catch {
-        // ignore storage access failures
+      } catch (error) {
+        console.warn("Unable to read seeded FTP bridge URL", error);
       }
       routingWindow.__c64uAllowedBaseUrls = Array.from(allowedBaseUrls);
       const host = baseUrlArg?.replace(/^https?:\/\//, "");
@@ -331,8 +345,8 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
             const parsedUrl = new URL(baseUrlArg);
             deviceHost = parsedUrl.hostname || "c64u";
             deviceHttpPort = Number(parsedUrl.port) || 80;
-          } catch {
-            // ignore
+          } catch (error) {
+            console.warn("Unable to parse seeded mock base URL", error);
           }
         }
         const testDeviceId = "test-device-mock";
@@ -365,6 +379,7 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
         );
         localStorage.setItem("c64u_device_host", host || "c64u");
         localStorage.setItem("c64commander:device_host", host || "c64u");
+        localStorage.setItem(currentDeviceHostKeyArg, host || "c64u");
         if (baseUrlArg) {
           localStorage.setItem("c64u_base_url", baseUrlArg);
         }
@@ -392,7 +407,8 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
           localStorage.setItem("c64u_feature_flag:lighting_studio_enabled", "1");
           localStorage.setItem("c64u_feature_flag:ram_snapshots_enabled", "1");
         }
-      } catch {
+      } catch (error) {
+        console.warn("Unable to seed UI mocks", error);
         return;
       }
 
@@ -481,6 +497,8 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
       snapshot: initialSnapshot,
       seedFeatureFlagsByDefault,
       clearStorageBeforeSeeding,
+      initialSnapshotConfig,
+      currentDeviceHostKey,
     },
   );
 }
