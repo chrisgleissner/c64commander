@@ -26,6 +26,7 @@ ci-artifacts/
 dist/
 dist-ssr/
 .tmp*
+tmp/
 vite.config.ts.timestamp-*.mjs
 nohup.out
 __pycache__/
@@ -104,9 +105,11 @@ docs/research/**/metrics/
 docs/research/**/post-fix/logs/
 docs/research/**/post-fix/screenshots/
 docs/research/**/prod-hardening-1-evidence/
+docs/research/**/*-evidence/
 docs/research/**/rollout-artifacts/
 docs/research/**/rollout-artifacts/**
 docs/research/**/screenshots/
+docs/plans/performance/**/runs/
 
 # Full app coverage generated run artifacts
 docs/testing/agentic-tests/full-app-coverage/runs/*
@@ -189,6 +192,7 @@ docs/research/stabilization/responsiveness2/evidence/
 docs/plans/performance/iteration2/runs/
 
 # Symlinked projects
+.worktrees/
 1541ultimate
 android-mcp-server
 c64bridge
@@ -199,4 +203,3 @@ test-data
 vivipi
 .gstack/
 .codex
-

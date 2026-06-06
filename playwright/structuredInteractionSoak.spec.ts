@@ -7,7 +7,7 @@
  */
 
 import { expect, test } from "@playwright/test";
-import type { Page, TestInfo } from "@playwright/test";
+import type { Locator, Page, TestInfo } from "@playwright/test";
 import { createMockC64Server, type MockC64Server, type MockRequestRecord } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
 import { assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
@@ -33,6 +33,34 @@ const isConfigMutation = (request: MockRequestRecord) => {
 
 const mutationsAfter = (server: MockC64Server, requestId: number) =>
   server.requests.filter((request) => request.requestId > requestId && isConfigMutation(request));
+
+const scanlineConfigPathname = "/v1/configs/U64%20Specific%20Settings/HDMI%20Scan%20lines";
+
+const scanlineMutationsAfter = (server: MockC64Server, requestId: number) =>
+  mutationsAfter(server, requestId).filter(
+    (request) => request.method === "PUT" && requestPathname(request) === scanlineConfigPathname,
+  );
+
+const completedScanlineMutationsAfter = (server: MockC64Server, requestId: number) =>
+  scanlineMutationsAfter(server, requestId).filter((request) => request.completedAtMs !== null);
+
+const scanlineConfigValue = (server: MockC64Server) =>
+  String(server.getState()["U64 Specific Settings"]["HDMI Scan lines"]?.value);
+
+const scanlineDomState = (state: string) => (state === "Enabled" ? "checked" : "unchecked");
+
+const waitForScanlineConvergence = async (
+  scanlines: Locator,
+  server: MockC64Server,
+  requestId: number,
+  expectedState: string,
+  expectedCompletedMutations: number,
+) => {
+  await expect.poll(() => scanlineConfigValue(server)).toBe(expectedState);
+  await expect.poll(() => completedScanlineMutationsAfter(server, requestId).length).toBe(expectedCompletedMutations);
+  await expect(scanlines).toHaveAttribute("data-state", scanlineDomState(expectedState));
+  await expect(scanlines).toBeEnabled();
+};
 
 const waitForMutationDrain = async (server: MockC64Server, requestId: number) => {
   await expect
@@ -105,7 +133,8 @@ test.describe("Structured interaction soak", () => {
     await scanlines.scrollIntoViewIfNeeded();
     await expect(scanlines).toBeEnabled();
     const beforeCheckboxPressure = server.requests.at(-1)?.requestId ?? 0;
-    const initialScanlineState = String(server.getState()["U64 Specific Settings"]["HDMI Scan lines"]?.value);
+    const initialScanlineState = scanlineConfigValue(server);
+    await expect(scanlines).toHaveAttribute("data-state", scanlineDomState(initialScanlineState));
     const nextScanlineState = (state: string) => (state === "Enabled" ? "Disabled" : "Enabled");
     const expectedStates: string[] = [];
     let priorScanlineState = initialScanlineState;
@@ -115,20 +144,14 @@ test.describe("Structured interaction soak", () => {
       priorScanlineState = nextState;
     }
 
-    for (const expectedState of expectedStates) {
+    for (const [index, expectedState] of expectedStates.entries()) {
       await expect(scanlines).toBeEnabled();
       await scanlines.click();
-      await expect
-        .poll(() => String(server.getState()["U64 Specific Settings"]["HDMI Scan lines"]?.value))
-        .toBe(expectedState);
+      await waitForScanlineConvergence(scanlines, server, beforeCheckboxPressure, expectedState, index + 1);
     }
 
     await waitForMutationDrain(server, beforeCheckboxPressure);
-    const checkboxMutations = mutationsAfter(server, beforeCheckboxPressure).filter(
-      (request) =>
-        request.method === "PUT" &&
-        requestPathname(request) === "/v1/configs/U64%20Specific%20Settings/HDMI%20Scan%20lines",
-    );
+    const checkboxMutations = scanlineMutationsAfter(server, beforeCheckboxPressure);
     expect(checkboxMutations).toHaveLength(expectedStates.length);
     await waitForConnected(page);
   });
