@@ -273,6 +273,57 @@ describe("useSavedDeviceSwitching", () => {
     });
   });
 
+  it("uses route prefix membership when cancelling old-device queries during a switch", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    store.updateSavedDevice(initialDeviceId, {
+      name: "Office U64",
+      host: "c64u",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      hasPassword: false,
+    });
+    store.addSavedDevice({
+      id: "device-backup",
+      name: "Backup Lab",
+      host: "backup-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      hasPassword: false,
+    });
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    vi.spyOn(queryClient, "cancelQueries").mockImplementationOnce((filters) => {
+      expect(filters.predicate?.({ queryKey: ["c64-info"] } as never)).toBe(true);
+      expect(filters.predicate?.({ queryKey: ["playlist-items"] } as never)).toBe(false);
+      return Promise.resolve();
+    });
+    mockVerifyCurrentConnectionTarget.mockResolvedValueOnce({ ok: false, deviceInfo: null, resolvedAddress: null });
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), {
+      wrapper: createWrapperWithQueryClient(queryClient, "/settings"),
+    });
+
+    await act(async () => {
+      await result.current("device-backup");
+    });
+
+    expect(queryClient.cancelQueries).toHaveBeenCalled();
+    expect(mockAddLog).not.toHaveBeenCalledWith(
+      "warn",
+      "Failed to cancel old-device C64 queries during saved-device switch",
+      expect.anything(),
+    );
+  });
+
   it("prefers a saved resolved address on Android before retrying the raw bare hostname", async () => {
     mockIsMdnsAvailable.mockReturnValue(true);
 

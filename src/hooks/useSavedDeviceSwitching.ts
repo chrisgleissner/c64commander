@@ -62,9 +62,10 @@ export function useSavedDeviceSwitching() {
       startSavedDeviceVerification(deviceId);
       resetInteractionState("saved-device-switch");
 
+      const savedDeviceSwitchPrefixes = new Set(getSavedDeviceSwitchPrefixes(location.pathname));
       void queryClient
         .cancelQueries({
-          predicate: (query) => getSavedDeviceSwitchPrefixes(location.pathname).has(String(query.queryKey[0] ?? "")),
+          predicate: (query) => savedDeviceSwitchPrefixes.has(String(query.queryKey[0] ?? "")),
         })
         .catch((error) => {
           addLog("warn", "Failed to cancel old-device C64 queries during saved-device switch", {

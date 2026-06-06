@@ -66,6 +66,39 @@ export const uiFixtures = {
   fixtureBase64,
 };
 
+export async function seedInitialSnapshotConfig(
+  page: Page,
+  baseUrl: string,
+  updates: Record<string, Record<string, string | number>>,
+) {
+  await page.addInitScript(
+    ({
+      baseUrl: baseUrlArg,
+      updates: updatesArg,
+    }: {
+      baseUrl: string;
+      updates: Record<string, Record<string, string | number>>;
+    }) => {
+      const key = `c64u_initial_snapshot:${baseUrlArg}`;
+      const raw = localStorage.getItem(key);
+      if (!raw) return;
+      const snapshot = JSON.parse(raw) as {
+        data?: Record<string, Record<string, { items?: Record<string, { selected?: string | number }> }>>;
+      };
+      Object.entries(updatesArg).forEach(([category, items]) => {
+        Object.entries(items).forEach(([itemName, value]) => {
+          const item = snapshot.data?.[category]?.[category]?.items?.[itemName];
+          if (item) {
+            item.selected = value;
+          }
+        });
+      });
+      localStorage.setItem(key, JSON.stringify(snapshot));
+    },
+    { baseUrl, updates },
+  );
+}
+
 export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSeedOptions = {}) {
   const { seedFeatureFlagsByDefault = true } = options;
   await page.addInitScript(

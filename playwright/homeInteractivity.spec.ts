@@ -11,7 +11,7 @@ import type { Page, TestInfo } from "@playwright/test";
 import { saveCoverageFromPage } from "./withCoverage";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { variant } from "../src/generated/variant";
-import { seedUiMocks } from "./uiMocks";
+import { seedInitialSnapshotConfig, seedUiMocks } from "./uiMocks";
 import { allowWarnings, assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 
 const CURRENT_DEVICE_HOST_KEY = `${variant.id}:device_host`;
@@ -136,22 +136,11 @@ test.describe("Home interactions", () => {
         },
       },
     });
-    await page.addInitScript(
-      ({ baseUrl, endpoint }: { baseUrl: string; endpoint: string }) => {
-        const key = `c64u_initial_snapshot:${baseUrl}`;
-        const raw = localStorage.getItem(key);
-        if (!raw) return;
-        const snapshot = JSON.parse(raw) as {
-          data?: Record<string, Record<string, { items?: Record<string, { selected?: string }> }>>;
-        };
-        const item = snapshot.data?.["Data Streams"]?.["Data Streams"]?.items?.["Stream Audio to"];
-        if (item) {
-          item.selected = endpoint;
-          localStorage.setItem(key, JSON.stringify(snapshot));
-        }
+    await seedInitialSnapshotConfig(page, server.baseUrl, {
+      "Data Streams": {
+        "Stream Audio to": audioEndpoint,
       },
-      { baseUrl: server.baseUrl, endpoint: audioEndpoint },
-    );
+    });
 
     await page.goto("/");
     await waitForStreamsReady(page);
@@ -515,12 +504,26 @@ test.describe("Home interactions", () => {
   test("SID reset writes deterministic silence register set", async ({ page }: { page: Page }) => {
     await page.request.post(`${server.baseUrl}/v1/configs`, {
       data: {
+        "SID Sockets Configuration": {
+          "SID Socket 1": "Enabled",
+        },
         "SID Addressing": {
           "SID Socket 1 Address": "$D400",
           "SID Socket 2 Address": "Unmapped",
           "UltiSID 1 Address": "$D420",
           "UltiSID 2 Address": "Unmapped",
         },
+      },
+    });
+    await seedInitialSnapshotConfig(page, server.baseUrl, {
+      "SID Sockets Configuration": {
+        "SID Socket 1": "Enabled",
+      },
+      "SID Addressing": {
+        "SID Socket 1 Address": "$D400",
+        "SID Socket 2 Address": "Unmapped",
+        "UltiSID 1 Address": "$D420",
+        "UltiSID 2 Address": "Unmapped",
       },
     });
 
