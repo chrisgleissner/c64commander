@@ -10,6 +10,7 @@ import { FolderPicker } from "@/lib/native/folderPicker";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { addLog } from "@/lib/logging";
 import { redactTreeUri } from "@/lib/native/safUtils";
+import { getSmokeConfig } from "@/lib/smoke/smokeMode";
 import { normalizeSourcePath } from "./paths";
 import { LocalSourceListingError } from "./localSourceErrors";
 import { SOURCE_LABELS } from "./sourceTerms";
@@ -45,6 +46,8 @@ export type LocalSourceBuildResult = {
 };
 
 const STORE_KEY = "c64u_local_sources:v1";
+const DEFAULT_ANDROID_TEST_LOCAL_SOURCE_INITIAL_URI =
+  "content://com.android.externalstorage.documents/tree/primary%3ADownload";
 
 const runtimeFilesBySource = new Map<string, Record<string, File>>();
 
@@ -65,6 +68,41 @@ const buildRootPath = (rootName: string | null) => {
   if (!rootName) return "/";
   const normalized = normalizeSourcePath(rootName);
   return normalized.endsWith("/") ? normalized : `${normalized}/`;
+};
+
+const isTestProbeEnabled = () =>
+  import.meta.env.VITE_ENABLE_TEST_PROBES === "1" ||
+  (typeof window !== "undefined" &&
+    (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled === true);
+
+const resolveNativeDirectoryPickerOptions = () => {
+  const smokeInitialUri = getSmokeConfig()?.localSourceInitialUri;
+  const windowInitialUri =
+    typeof window !== "undefined"
+      ? (window as Window & { __c64uLocalSourceInitialUri?: string }).__c64uLocalSourceInitialUri
+      : undefined;
+  const initialUri =
+    smokeInitialUri ??
+    (windowInitialUri?.trim() ? windowInitialUri.trim() : undefined) ??
+    (getPlatform() === "android" && isTestProbeEnabled() ? DEFAULT_ANDROID_TEST_LOCAL_SOURCE_INITIAL_URI : undefined);
+  return initialUri ? { initialUri } : undefined;
+};
+
+const resetNativeLocalSourcePermissions = async (platform: string) => {
+  if (platform !== "android" || getSmokeConfig()?.resetLocalSourcePermissions !== true) return;
+  try {
+    const result = await FolderPicker.releasePersistedUris();
+    addLog("debug", "Native local source permissions reset", {
+      platform,
+      releasedCount: result.released.length,
+    });
+  } catch (error) {
+    addLog("warn", "Failed to reset native local source permissions", {
+      platform,
+      error: (error as Error).message,
+    });
+    throw error;
+  }
 };
 
 const normalizeLocalSource = (source: LocalSourceRecord): LocalSourceRecord => {
@@ -157,7 +195,8 @@ export const createLocalSourceFromPicker = async (
     addLog("debug", "Native folder picker invoked", { platform });
     let result: Awaited<ReturnType<typeof FolderPicker.pickDirectory>>;
     try {
-      result = await FolderPicker.pickDirectory();
+      await resetNativeLocalSourcePermissions(platform);
+      result = await FolderPicker.pickDirectory(resolveNativeDirectoryPickerOptions());
     } catch (error) {
       addLog("debug", "Native folder picker failed", {
         platform,

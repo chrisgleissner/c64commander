@@ -27,12 +27,15 @@ env:
       id: "add-items-to-playlist"
     direction: DOWN
     timeout: ${TIMEOUT}
-- tapOn:
-    id: "add-items-to-playlist"
-- extendedWaitUntil:
-    visible:
-      text: "Choose source"
-    timeout: ${TIMEOUT}
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          id: "add-items-to-playlist"
+      - extendedWaitUntil:
+          visible:
+            text: "Choose source"
+          timeout: ${TIMEOUT}
 - scrollUntilVisible:
     element:
       id: "import-option-local"
@@ -53,93 +56,82 @@ env:
 
 - extendedWaitUntil:
     visible:
-      id: com.google.android.documentsui:id/toolbar
-    timeout: ${SHORT_TIMEOUT}
-- waitForAnimationToEnd
-- tapOn:
-    text: "Browse"
-    optional: true
-- waitForAnimationToEnd
-- scrollUntilVisible:
-    element: "Internal storage"
-    direction: DOWN
-    timeout: ${TIMEOUT}
-- tapOn:
-    text: "Internal storage"
-    optional: true
-- scrollUntilVisible:
-    element: "Downloads"
-    direction: DOWN
-    timeout: ${TIMEOUT}
-- tapOn:
-    text: "Downloads"
-    optional: true
-- tapOn:
-    text: "Download"
-    optional: true
-- scrollUntilVisible:
-    element: ${FOLDER_NAME}
-    direction: DOWN
-    timeout: ${TIMEOUT}
-- tapOn: ${FOLDER_NAME}
-- extendedWaitUntil:
-    visible:
       text: "Use this folder"
     timeout: ${SHORT_TIMEOUT}
+- runFlow:
+    when:
+      visible: "Files in C64Music"
+    commands:
+      - tapOn: "Download"
+      - extendedWaitUntil:
+          visible: ${FOLDER_NAME}
+          timeout: ${SHORT_TIMEOUT}
+      - tapOn: ${FOLDER_NAME}
+- runFlow:
+    when:
+      visible: "Files in Download"
+    commands:
+      - extendedWaitUntil:
+          visible: ${FOLDER_NAME}
+          timeout: ${SHORT_TIMEOUT}
+      - tapOn: ${FOLDER_NAME}
+- extendedWaitUntil:
+    visible: ${FOLDER_NAME}
+    timeout: ${SHORT_TIMEOUT}
+- waitForAnimationToEnd
 - tapOn: "Use this folder"
 - tapOn:
     text: "Allow"
     optional: true
 
-- extendedWaitUntil:
-    visible:
-      text: "demo.d64"
-    timeout: ${LONG_TIMEOUT}
-- assertVisible: "demo.prg"
-- assertVisible: "demo.crt"
-- assertNotVisible: "No supported files"
-- assertNotVisible: "Add items failed"
-- takeScreenshot: local-source-listed
-
-- tapOn: "Select demo.d64"
-- tapOn: "Select demo.prg"
-- tapOn: "Select demo.crt"
-- tapOn: "Add to playlist"
-
-- extendedWaitUntil:
-    visible:
-      text: "Playlist"
-    timeout: ${TIMEOUT}
 - scrollUntilVisible:
     element: "demo.d64"
     direction: DOWN
-    timeout: ${TIMEOUT}
-- assertVisible: "demo.prg"
+    timeout: ${LONG_TIMEOUT}
 - assertVisible: "demo.crt"
+- scrollUntilVisible:
+    element: "demo.prg"
+    direction: DOWN
+    timeout: ${LONG_TIMEOUT}
+- assertNotVisible: "No supported files"
+- assertNotVisible: "Add items failed"
+- takeScreenshot: local-source-listed
+- scrollUntilVisible:
+    element: "demo.d64"
+    direction: UP
+    timeout: ${TIMEOUT}
 - takeScreenshot: local-playlist-populated
 
 - tapOn: "Play demo.d64"
-- extendedWaitUntil:
-    visible:
-      text: "Stop"
+- scrollUntilVisible:
+    element: "Stop"
+    direction: UP
     timeout: ${LONG_TIMEOUT}
 - assertNotVisible: "Playback failed"
 - takeScreenshot: local-d64-playing
 - tapOn: "Stop"
 
+- scrollUntilVisible:
+    element: "demo.prg"
+    direction: DOWN
+    timeout: ${TIMEOUT}
 - tapOn: "Play demo.prg"
-- extendedWaitUntil:
-    visible:
-      text: "Stop"
+- scrollUntilVisible:
+    element: "Stop"
+    direction: UP
     timeout: ${LONG_TIMEOUT}
 - assertNotVisible: "Playback failed"
 - takeScreenshot: local-prg-playing
 - tapOn: "Stop"
 
+- scrollUntilVisible:
+    element: "demo.crt"
+    direction: DOWN
+    timeout: ${TIMEOUT}
 - tapOn: "Play demo.crt"
-- extendedWaitUntil:
-    visible:
-      text: "Stop"
+- scrollUntilVisible:
+    element: "Stop"
+    direction: UP
     timeout: ${LONG_TIMEOUT}
 - assertNotVisible: "Playback failed"
 - takeScreenshot: local-crt-playing

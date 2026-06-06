@@ -324,6 +324,7 @@ vi.mock("@/lib/native/platform", () => ({
 vi.mock("@/lib/native/folderPicker", () => ({
   FolderPicker: {
     getPersistedUris: vi.fn(),
+    releasePersistedUris: vi.fn(),
     listChildren: vi.fn(),
   },
 }));
@@ -519,7 +520,7 @@ describe("SettingsPage", () => {
       item: () => file,
     } as FileList;
   };
-  it("saves connection settings and triggers a manual discovery after saved-device verification", async () => {
+  it("saves connection settings without starting a redundant manual discovery after saved-device verification", async () => {
     mockSwitchSavedDevice.mockResolvedValue(undefined);
     vi.mocked(discoverConnection).mockResolvedValue(undefined);
 
@@ -530,10 +531,97 @@ describe("SettingsPage", () => {
     await waitFor(() => {
       expect(mockUpdateConfig).toHaveBeenCalledWith("c64u", undefined);
       expect(mockSwitchSavedDevice).toHaveBeenCalledWith("saved-device-1");
-      expect(discoverConnection).toHaveBeenCalledWith("manual");
       expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Connection settings saved" }));
     });
+    expect(discoverConnection).not.toHaveBeenCalled();
   }, 15000);
+
+  it("gates overlapping manual refresh clicks while discovery is in flight", async () => {
+    let resolveRefresh!: () => void;
+    vi.mocked(discoverConnection).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveRefresh = resolve;
+        }),
+    );
+
+    renderSettingsPage();
+
+    const refreshButton = screen.getByLabelText("Refresh connection");
+    fireEvent.click(refreshButton);
+    fireEvent.click(refreshButton);
+
+    expect(discoverConnection).toHaveBeenCalledTimes(1);
+    expect(refreshButton).toBeDisabled();
+
+    await act(async () => {
+      resolveRefresh();
+    });
+
+    await waitFor(() => {
+      expect(refreshButton).not.toBeDisabled();
+    });
+  });
+
+  it("reports manual refresh failures and re-enables the refresh action", async () => {
+    vi.mocked(discoverConnection).mockRejectedValueOnce(new Error("network offline"));
+
+    renderSettingsPage();
+
+    const refreshButton = screen.getByLabelText("Refresh connection");
+    fireEvent.click(refreshButton);
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "CONNECTION_REFRESH",
+          title: "Unable to refresh connection",
+          description: "network offline",
+        }),
+      );
+    });
+    expect(refreshButton).not.toBeDisabled();
+  });
+
+  it("does not borrow the current product label for a non-selected saved device row", () => {
+    savedDevicesRef.current = {
+      ...savedDevicesRef.current,
+      selectedDeviceId: "saved-device-1",
+      devices: [
+        {
+          ...savedDevicesRef.current.devices[0],
+          id: "saved-device-1",
+          name: "Office U64",
+          host: "u64",
+          type: "U64E",
+          lastKnownProduct: "U64E",
+        },
+        {
+          id: "saved-device-2",
+          name: "c64u",
+          host: "c64u",
+          httpPort: 80,
+          ftpPort: 21,
+          telnetPort: 64,
+          lastKnownProduct: null,
+          lastKnownHostname: null,
+          lastKnownUniqueId: null,
+          lastSuccessfulConnectionAt: null,
+          lastUsedAt: null,
+          hasPassword: false,
+        },
+      ],
+    };
+    connectionPayloadRef.current.status.deviceInfo = {
+      product: "Ultimate 64 Elite",
+    };
+
+    renderSettingsPage();
+
+    const backupRow = screen.getByTestId("settings-device-row-saved-device-2");
+    expect(backupRow).toHaveTextContent("Unknown · c64u");
+    expect(backupRow).not.toHaveTextContent("U64E · c64u");
+  });
 
   it("persists HTTP, FTP, and Telnet ports when saving connection settings", async () => {
     vi.mocked(discoverConnection).mockResolvedValue(undefined);

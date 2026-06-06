@@ -38,6 +38,8 @@ export type SmokeConfig = {
   host?: string;
   hvscBaseUrl?: string;
   benchmarkRunId?: string;
+  localSourceInitialUri?: string;
+  resetLocalSourcePermissions?: boolean;
   readOnly?: boolean;
   debugLogging?: boolean;
   featureFlags?: SmokeFeatureFlags;
@@ -84,10 +86,26 @@ const parseSmokeConfig = (raw: unknown): SmokeConfig | null => {
     typeof raw.benchmarkRunId === "string" && raw.benchmarkRunId.trim().length > 0
       ? raw.benchmarkRunId.trim()
       : undefined;
+  const localSourceInitialUri =
+    typeof raw.localSourceInitialUri === "string" && raw.localSourceInitialUri.trim().length > 0
+      ? raw.localSourceInitialUri.trim()
+      : undefined;
+  const resetLocalSourcePermissions =
+    typeof raw.resetLocalSourcePermissions === "boolean" ? raw.resetLocalSourcePermissions : undefined;
   const readOnly = typeof raw.readOnly === "boolean" ? raw.readOnly : true;
   const debugLogging = typeof raw.debugLogging === "boolean" ? raw.debugLogging : true;
   const featureFlags = parseSmokeFeatureFlags(raw.featureFlags);
-  return { target, host, hvscBaseUrl, benchmarkRunId, readOnly, debugLogging, featureFlags };
+  return {
+    target,
+    host,
+    hvscBaseUrl,
+    benchmarkRunId,
+    localSourceInitialUri,
+    resetLocalSourcePermissions,
+    readOnly,
+    debugLogging,
+    featureFlags,
+  };
 };
 
 const sanitizeSmokeScenario = (scenario: string) =>
@@ -183,9 +201,9 @@ export const isSmokeReadOnlyEnabled = () => cachedSmokeConfig?.readOnly !== fals
 export const initializeSmokeMode = async (): Promise<SmokeConfig | null> => {
   cachedSmokeConfig = null;
 
-  let config = readSmokeConfigFromStorage();
+  let config: SmokeConfig | null = null;
 
-  if (!config && shouldReadSmokeConfigFromFilesystem()) {
+  if (shouldReadSmokeConfigFromFilesystem()) {
     // Probe via Filesystem.stat first so a missing optional file does not
     // throw a FileNotFoundException through the JNI bridge into ERROR
     // logcat on every cold launch.
@@ -220,6 +238,8 @@ export const initializeSmokeMode = async (): Promise<SmokeConfig | null> => {
       }
     }
   }
+
+  config ??= readSmokeConfigFromStorage();
 
   if (!config) return null;
 

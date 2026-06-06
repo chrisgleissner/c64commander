@@ -30,10 +30,11 @@ Useful options:
 - `--settle-ms <milliseconds>`
 - `--burst-interval-ms <milliseconds>`
 - `--artifact-dir <path>`
+- `--artifact-root <path>`
 
 ## Output
 
-Artifacts are written under `c64scope/artifacts/playback-volume-latency/<timestamp-host>/`.
+Artifacts are written under `c64scope/artifacts/playback-volume-latency/<timestamp-host>/` by default. Use `--artifact-root <path>` to keep scoped research artifacts under a caller-owned root while preserving the `playback-volume-latency/<timestamp-host>/` subdirectory. Use `--artifact-dir <path>` only when the exact output directory must be controlled.
 
 The harness writes:
 

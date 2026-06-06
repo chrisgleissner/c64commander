@@ -28,10 +28,23 @@ type DiagnosticsShareOverridePayload = {
   zipData: Uint8Array;
 };
 
+export type DiagnosticsAutomationExportResult = {
+  filename: string;
+  path: string;
+  directory: Directory;
+  scope: DiagnosticsExportScope;
+  uri?: string;
+  byteLength: number;
+};
+
 type DiagnosticsShareOverride = (payload: DiagnosticsShareOverridePayload) => Promise<void> | void;
 
 type DiagnosticsShareOverrideWindow = Window & {
   __c64uDiagnosticsShareOverride?: DiagnosticsShareOverride;
+};
+
+type DiagnosticsAutomationExportWindow = Window & {
+  __c64uLastDiagnosticsExport?: DiagnosticsAutomationExportResult;
 };
 
 const isTestProbeEnabled = () => {
@@ -91,6 +104,9 @@ const buildDiagnosticsJsonFilename = (tab: DiagnosticsExportTab, timestamp: stri
 const buildDiagnosticsZipFilename = (scope: DiagnosticsExportScope, timestamp: string) =>
   `${variant.exportedFileBasename}-diagnostics-${scope}-${timestamp}.zip`;
 
+const buildDiagnosticsAutomationPath = (scope: DiagnosticsExportScope) =>
+  `${variant.exportedFileBasename}-diagnostics-${scope}-automation-latest.zip`;
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
@@ -142,6 +158,65 @@ export const buildDiagnosticsZipData = (scope: DiagnosticsExportScope, data: unk
 export const buildDiagnosticsZipBlob = (scope: DiagnosticsExportScope, data: unknown, timestamp: string) =>
   new Blob([buildDiagnosticsZipData(scope, data, timestamp) as BlobPart], { type: "application/zip" });
 
+const recordDiagnosticsAutomationExport = (result: DiagnosticsAutomationExportResult) => {
+  if (typeof window === "undefined") return;
+  (window as DiagnosticsAutomationExportWindow).__c64uLastDiagnosticsExport = result;
+};
+
+const writeDiagnosticsAutomationExport = async (
+  scope: DiagnosticsExportScope,
+  filename: string,
+  base64Data: string,
+  byteLength: number,
+) => {
+  const path = buildDiagnosticsAutomationPath(scope);
+  await Filesystem.writeFile({
+    path,
+    data: base64Data,
+    directory: Directory.Data,
+  });
+
+  const uriResult = await Filesystem.getUri({
+    path,
+    directory: Directory.Data,
+  });
+
+  const result: DiagnosticsAutomationExportResult = {
+    filename,
+    path,
+    directory: Directory.Data,
+    scope,
+    uri: uriResult.uri,
+    byteLength,
+  };
+  recordDiagnosticsAutomationExport(result);
+  return result;
+};
+
+export const writeDiagnosticsZipForAutomation = async (
+  scope: DiagnosticsExportScope,
+  data: unknown,
+  date = new Date(),
+) => {
+  try {
+    const timestamp = formatDiagnosticsExportTimestamp(date);
+    const filename = buildDiagnosticsZipFilename(scope, timestamp);
+    const zipData = buildDiagnosticsZipData(scope, data, timestamp);
+    const blob = new Blob([zipData as BlobPart], { type: "application/zip" });
+    const base64Data = await blobToBase64(blob);
+    return await writeDiagnosticsAutomationExport(scope, filename, base64Data, zipData.byteLength);
+  } catch (error) {
+    addErrorLog("Diagnostics automation export failed", {
+      scope,
+      error: (error as Error).message,
+    });
+    throw error;
+  }
+};
+
+export const writeAllDiagnosticsZipForAutomation = async (data: DiagnosticsExportPayload, date = new Date()) =>
+  writeDiagnosticsZipForAutomation("all", data, date);
+
 const downloadDiagnosticsZip = (filename: string, scope: DiagnosticsExportScope, data: unknown, timestamp: string) => {
   const blob = buildDiagnosticsZipBlob(scope, data, timestamp);
   const url = URL.createObjectURL(blob);
@@ -172,6 +247,10 @@ const shareDiagnosticsExport = async (scope: DiagnosticsExportScope, data: unkno
     try {
       const blob = buildDiagnosticsZipBlob(scope, data, timestamp);
       const base64Data = await blobToBase64(blob);
+
+      if (isTestProbeEnabled()) {
+        await writeDiagnosticsAutomationExport(scope, filename, base64Data, blob.size);
+      }
 
       await Filesystem.writeFile({
         path: filename,

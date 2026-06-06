@@ -24,7 +24,6 @@ export const getPlatform = () => {
   if (typeof window !== "undefined" && allowPlatformOverride()) {
     const override = (window as PlatformOverrideWindow).__c64uPlatformOverride;
     if (override) return override;
-    return "web";
   }
   if (typeof (Capacitor as { getPlatform?: () => string }).getPlatform === "function") {
     return Capacitor.getPlatform();
@@ -38,7 +37,6 @@ export const isNativePlatform = () => {
     if (allowPlatformOverride()) {
       const override = (window as PlatformOverrideWindow).__c64uPlatformOverride;
       if (override) return override !== "web";
-      return false;
     }
     if (typeof (Capacitor as { isNativePlatform?: () => boolean }).isNativePlatform === "function") {
       return Capacitor.isNativePlatform();

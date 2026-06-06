@@ -12,6 +12,7 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const UI_DUMP_DEVICE_PATH = "/sdcard/Download/c64scope-ui.xml";
+const APP_ID = "uk.gleissner.c64commander";
 
 export async function adb(serial: string, ...args: string[]): Promise<string> {
   const { stdout } = await execFileAsync("adb", ["-s", serial, ...args]);
@@ -44,8 +45,32 @@ export async function takeScreenshot(serial: string, localPath: string): Promise
 }
 
 export async function captureLogcat(serial: string, localPath: string, lines: number = 200): Promise<string> {
-  const logcat = await adb(serial, "logcat", "-d", "-t", String(lines), "--format", "threadtime");
+  let pid: string | null = null;
+  try {
+    const pidOutput = await adb(serial, "shell", "pidof", APP_ID);
+    pid =
+      pidOutput
+        .trim()
+        .split(/\s+/)
+        .find((value) => /^\d+$/.test(value)) ?? null;
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`Unable to resolve ${APP_ID} pid for logcat filtering: ${message}`);
+  }
+
+  const args = ["logcat", "-d", "-t", String(lines), "--format", "threadtime"];
+  if (pid) {
+    args.push("--pid", pid);
+  }
+  const logcat = await adb(serial, ...args);
   await writeFile(localPath, logcat, "utf-8");
+  const hasLogContent = logcat.trim().length > 0;
+  const hasAppRuntimeContent = pid ? hasLogContent : logcat.includes(APP_ID) || /c64commander/i.test(logcat);
+  if (!hasLogContent || !hasAppRuntimeContent) {
+    throw new Error(
+      `App logcat capture for ${APP_ID} did not contain runtime logs (pid=${pid ?? "unresolved"}, bytes=${logcat.length}, path=${localPath}).`,
+    );
+  }
   return logcat;
 }
 

@@ -18,10 +18,13 @@ HVSC_PERF_LONG_TIMEOUT_MS=${HVSC_PERF_LONG_TIMEOUT_MS:-600000}
 HVSC_PERF_SETUP_LONG_TIMEOUT_MS=${HVSC_PERF_SETUP_LONG_TIMEOUT_MS:-1800000}
 DEFAULT_TIMEOUT_MS=${DEFAULT_TIMEOUT_MS:-15000}
 DEFAULT_SHORT_TIMEOUT_MS=${DEFAULT_SHORT_TIMEOUT_MS:-5000}
+LOCAL_SOURCE_FIXTURE_DIR="${LOCAL_SOURCE_FIXTURE_DIR:-/sdcard/Download/C64LocalSource}"
+LOCAL_SOURCE_INITIAL_URI="${LOCAL_SOURCE_INITIAL_URI:-}"
 
 MODE=""
 TAG_FILTERS=""
 DEVICE_ID=""
+FLOW_PATH=""
 APK_PATH="$DEFAULT_APK"
 C64U_TARGET="${C64U_TARGET:-mock}"
 C64U_HOST="${C64U_HOST:-C64U}"
@@ -36,6 +39,7 @@ Usage: $(basename "$0") [options]
 Options:
   --mode <ci|all|tags>     Run ci-critical, all, or tag-filtered flows
   --tags <list>            Comma-separated tags; supports +include/-exclude
+  --flow <path>            Run a single Maestro flow file instead of the full .maestro tree
   --device-id <serial>     adb device/emulator id
   --apk-path <path>        APK path to install (default: $DEFAULT_APK)
   --output-dir <path>      Output directory for Maestro artifacts (default: $DEFAULT_OUTPUT_DIR)
@@ -63,7 +67,10 @@ cleanup_maestro_processes() {
   local port="7001"
   local deadline
   local pids
-  pids=$(ps -eo pid=,cmd= | awk '/\.maestro\// {print $1}')
+  pids=$(ps -eo pid=,cmd= | awk -v self="$$" -v parent="$PPID" '
+    $1 == self || $1 == parent { next }
+    $0 ~ /\/\.maestro\// && $0 !~ /scripts\/run-maestro\.sh/ && $0 !~ /run-maestro\.sh/ { print $1 }
+  ')
   if [[ -n "$pids" ]]; then
     log "Stopping stale Maestro process(es): $pids"
     for pid in $pids; do
@@ -180,6 +187,19 @@ resolve_apk_path() {
   return 1
 }
 
+resolve_flow_path() {
+  if [[ -z "$FLOW_PATH" ]]; then
+    return 0
+  fi
+  if [[ "$FLOW_PATH" != /* ]]; then
+    FLOW_PATH="$ROOT_DIR/$FLOW_PATH"
+  fi
+  if [[ ! -f "$FLOW_PATH" ]]; then
+    echo "Maestro flow not found: $FLOW_PATH" >&2
+    exit 1
+  fi
+}
+
 pick_device() {
   if [[ -n "$DEVICE_ID" ]]; then
     return 0
@@ -245,9 +265,49 @@ ensure_hvsc_library() {
   fi
 }
 
+is_local_binary_playback_selected() {
+  [[ "$FLOW_PATH" == *"local-binary-playback-proof.yaml" || "$TAG_FILTERS" == *"android-regression-proof"* ]]
+}
+
+build_local_source_initial_uri() {
+  local target_dir="$1"
+  local relative="${target_dir#/sdcard/}"
+  if [[ "$relative" == "$target_dir" ]]; then
+    relative="${target_dir#/storage/emulated/0/}"
+  fi
+  if [[ "$relative" == "$target_dir" || -z "$relative" ]]; then
+    printf '%s' "$LOCAL_SOURCE_INITIAL_URI"
+    return
+  fi
+  node -e "process.stdout.write('content://com.android.externalstorage.documents/tree/' + encodeURIComponent('primary:' + process.argv[1]));" "$relative"
+}
+
+ensure_local_source_fixtures() {
+  local serial="$1"
+  local fixture_dir="$ROOT_DIR/tests/fixtures/local-source-assets"
+  log "Resetting local source test data at $LOCAL_SOURCE_FIXTURE_DIR"
+  if [[ -z "$LOCAL_SOURCE_INITIAL_URI" ]]; then
+    LOCAL_SOURCE_INITIAL_URI="$(build_local_source_initial_uri "$LOCAL_SOURCE_FIXTURE_DIR")"
+  fi
+  if ! adb -s "$serial" shell "rm -rf '$LOCAL_SOURCE_FIXTURE_DIR' && mkdir -p '$LOCAL_SOURCE_FIXTURE_DIR'" >/dev/null 2>&1; then
+    log "Failed to reset local source fixture directory"
+    return 1
+  fi
+  if ! adb -s "$serial" push "$fixture_dir/." "$LOCAL_SOURCE_FIXTURE_DIR/" >/dev/null 2>&1; then
+    log "Failed to push local source fixtures to device"
+    return 1
+  fi
+  adb -s "$serial" shell "am force-stop com.google.android.documentsui >/dev/null 2>&1; pm clear com.google.android.documentsui >/dev/null 2>&1 || true" || true
+  log "Local source picker initial URI: $LOCAL_SOURCE_INITIAL_URI"
+}
+
 write_smoke_config() {
   local payload
-  payload=$(node -e "const target=process.argv[1];const host=process.argv[2];const hvscBaseUrl=process.argv[3];const benchmarkRunId=process.argv[4];const payload={target,readOnly:target==='real',debugLogging:true,featureFlags:{hvsc_enabled:true}};if(target==='real'&&host){payload.host=host;}if(hvscBaseUrl){payload.hvscBaseUrl=hvscBaseUrl;}if(benchmarkRunId){payload.benchmarkRunId=benchmarkRunId;}process.stdout.write(JSON.stringify(payload));" "$C64U_TARGET" "$C64U_HOST" "$HVSC_BASE_URL" "$BENCHMARK_RUN_ID")
+  local reset_local_source_permissions="false"
+  if is_local_binary_playback_selected; then
+    reset_local_source_permissions="true"
+  fi
+  payload=$(node -e "const target=process.argv[1];const host=process.argv[2];const hvscBaseUrl=process.argv[3];const benchmarkRunId=process.argv[4];const localSourceInitialUri=process.argv[5];const resetLocalSourcePermissions=process.argv[6]==='true';const payload={target,readOnly:target==='real',debugLogging:true,featureFlags:{hvsc_enabled:true}};if(target==='real'&&host){payload.host=host;}if(hvscBaseUrl){payload.hvscBaseUrl=hvscBaseUrl;}if(benchmarkRunId){payload.benchmarkRunId=benchmarkRunId;}if(localSourceInitialUri){payload.localSourceInitialUri=localSourceInitialUri;}if(resetLocalSourcePermissions){payload.resetLocalSourcePermissions=true;}process.stdout.write(JSON.stringify(payload));" "$C64U_TARGET" "$C64U_HOST" "$HVSC_BASE_URL" "$BENCHMARK_RUN_ID" "$LOCAL_SOURCE_INITIAL_URI" "$reset_local_source_permissions")
   adb -s "$DEVICE_ID" shell "run-as $APP_ID sh -c 'mkdir -p files && cat > files/c64u-smoke.json'" <<<"$payload" || true
 }
 
@@ -300,6 +360,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --tags)
       TAG_FILTERS="$2"
+      shift 2
+      ;;
+    --flow)
+      FLOW_PATH="$2"
       shift 2
       ;;
     --device-id)
@@ -370,6 +434,7 @@ if ! resolve_apk_path; then
   echo "Unable to locate APK at $APK_PATH" >&2
   exit 1
 fi
+resolve_flow_path
 
 DEBUG_DIR="$OUTPUT_DIR/debug"
 if [[ -z "$REPORT_PATH" ]]; then
@@ -389,6 +454,10 @@ if ! wait_for_boot "$DEVICE_ID"; then
   exit 1
 fi
 
+if is_local_binary_playback_selected; then
+  ensure_local_source_fixtures "$DEVICE_ID"
+fi
+
 if [[ "$SKIP_APP_RESET" != "true" ]]; then
   install_apk
 
@@ -405,11 +474,17 @@ if [[ "$SKIP_APP_RESET" != "true" ]]; then
   write_smoke_config
 
   ensure_hvsc_library "$DEVICE_ID"
+elif is_local_binary_playback_selected; then
+  write_smoke_config
 fi
 
 ensure_device_ready_for_automation "$DEVICE_ID"
 
-MAESTRO_ARGS=("$ROOT_DIR/.maestro" --udid "$DEVICE_ID" --format JUNIT --output "$REPORT_PATH" --test-output-dir "$OUTPUT_DIR" --debug-output "$DEBUG_DIR")
+MAESTRO_TARGET="$ROOT_DIR/.maestro"
+if [[ -n "$FLOW_PATH" ]]; then
+  MAESTRO_TARGET="$FLOW_PATH"
+fi
+MAESTRO_ARGS=("$MAESTRO_TARGET" --udid "$DEVICE_ID" --format JUNIT --output "$REPORT_PATH" --test-output-dir "$OUTPUT_DIR" --debug-output "$DEBUG_DIR")
 
 TEMP_CONFIG=""
 TAG_INCLUDE=""
@@ -430,6 +505,11 @@ case "$MODE" in
       exit 1
     fi
     parse_tag_filters "$TAG_FILTERS"
+    if [[ -n "$TAG_INCLUDE" || -n "$FLOW_PATH" ]]; then
+      TEMP_CONFIG="$OUTPUT_DIR/maestro-config-tags.yaml"
+      strip_exclude_tags "$CONFIG_PATH" "$TEMP_CONFIG"
+      MAESTRO_ARGS+=(--config "$TEMP_CONFIG")
+    fi
     ;;
   *)
     echo "Unknown mode: $MODE" >&2

@@ -196,7 +196,9 @@ vi.mock("@/lib/config/appSettings", () => ({
 }));
 vi.mock("@/lib/native/platform", () => ({ getPlatform: mocks.getPlatform }));
 vi.mock("@/lib/native/safUtils", () => ({ redactTreeUri: mocks.redactTreeUri }));
-vi.mock("@/lib/native/folderPicker", () => ({ FolderPicker: { getPersistedUris: mocks.getPersistedUris } }));
+vi.mock("@/lib/native/folderPicker", () => ({
+  FolderPicker: { getPersistedUris: mocks.getPersistedUris, releasePersistedUris: vi.fn() },
+}));
 vi.mock("@/lib/i18n", () => ({ t: (_key: string, fallback: string) => fallback }));
 
 vi.mock("@/pages/HomePage", () => ({ default: () => <div>Home Page</div> }));

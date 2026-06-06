@@ -13,6 +13,8 @@ import com.getcapacitor.JSObject
 import com.getcapacitor.Bridge
 import com.getcapacitor.Plugin
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.*
 import org.junit.Before
@@ -168,6 +170,28 @@ class FolderPickerPluginTest {
     assertTrue(latch.await(2, TimeUnit.SECONDS))
     val logs = ShadowLog.getLogsForTag("FolderPickerPlugin")
     assertTrue(logs.any { it.msg?.contains("SAF readFile failed") == true })
+  }
+
+  @Test
+  fun releasePersistedUrisReleasesPersistedSafGrant() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    setPluginBridge(plugin, context)
+    val uri = Uri.parse("content://com.android.externalstorage.documents/tree/primary%3AC64Music")
+    context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    assertTrue(context.contentResolver.persistedUriPermissions.any { it.uri == uri && it.isReadPermission })
+
+    val call = mock(PluginCall::class.java)
+    var resolved: JSObject? = null
+    doAnswer { invocation ->
+      resolved = invocation.getArgument(0) as JSObject
+      null
+    }.`when`(call).resolve(any())
+
+    plugin.releasePersistedUris(call)
+
+    assertNotNull(resolved)
+    assertFalse(context.contentResolver.persistedUriPermissions.any { it.uri == uri })
+    verify(call, never()).reject(anyString(), any(Exception::class.java))
   }
 
 }

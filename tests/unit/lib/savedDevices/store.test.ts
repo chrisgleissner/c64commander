@@ -545,6 +545,37 @@ describe("savedDevices store", () => {
     });
   });
 
+  it("does not mark a first verification as mismatch when the configured host is an IP alias", async () => {
+    const store = await loadStore();
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+
+    store.updateSavedDevice(initialDeviceId, {
+      host: "192.168.1.167",
+      name: "c64u",
+      nameSource: "USER",
+      type: "",
+      typeSource: "INFERRED",
+      lastKnownProduct: null,
+      lastKnownHostname: null,
+      lastKnownUniqueId: null,
+    });
+
+    store.completeSavedDeviceVerification(initialDeviceId, {
+      product: "C64 Ultimate",
+      hostname: "c64u",
+      unique_id: "UID-C64U",
+    });
+
+    expect(store.getSavedDeviceSwitchStatus(initialDeviceId)).toBe("connected");
+    expect(store.getSavedDeviceSwitchSummary(initialDeviceId)).toMatchObject({
+      lastHealthState: "Healthy",
+      lastConnectivityState: "Online",
+      lastVerifiedProduct: "C64U",
+      lastVerifiedHostname: "c64u",
+      lastVerifiedUniqueId: "UID-C64U",
+    });
+  });
+
   it("clears verification summary state when editing a device host", async () => {
     const store = await loadStore();
     const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;

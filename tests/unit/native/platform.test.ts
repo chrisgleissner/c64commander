@@ -84,6 +84,15 @@ describe("platform", () => {
     expect(isNativePlatform()).toBe(true);
   });
 
+  it("falls back to Capacitor in test-probe builds when no override is set", () => {
+    setEnv("VITE_ENABLE_TEST_PROBES", "1");
+    getPlatformMock.mockReturnValue("android");
+    isNativePlatformMock.mockReturnValue(true);
+
+    expect(getPlatform()).toBe("android");
+    expect(isNativePlatform()).toBe(true);
+  });
+
   it("falls back to Capacitor when override is disabled", () => {
     setEnv("VITE_ENABLE_TEST_PROBES", "0");
     getPlatformMock.mockReturnValue("ios");

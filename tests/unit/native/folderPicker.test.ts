@@ -12,6 +12,7 @@ const pickerMocks = vi.hoisted(() => ({
   pickDirectory: vi.fn(),
   listChildren: vi.fn(),
   getPersistedUris: vi.fn(),
+  releasePersistedUris: vi.fn(),
   readFile: vi.fn(),
   readFileFromTree: vi.fn(),
 }));
@@ -21,6 +22,7 @@ vi.mock("@capacitor/core", () => ({
     pickDirectory: pickerMocks.pickDirectory,
     listChildren: pickerMocks.listChildren,
     getPersistedUris: pickerMocks.getPersistedUris,
+    releasePersistedUris: pickerMocks.releasePersistedUris,
     readFile: pickerMocks.readFile,
     readFileFromTree: pickerMocks.readFileFromTree,
   }),
@@ -43,6 +45,7 @@ describe("FolderPicker overrides", () => {
     pickerMocks.pickDirectory.mockReset();
     pickerMocks.listChildren.mockReset();
     pickerMocks.getPersistedUris.mockReset();
+    pickerMocks.releasePersistedUris.mockReset();
     pickerMocks.readFile.mockReset();
     pickerMocks.readFileFromTree.mockReset();
     (import.meta as ImportMeta & { env?: Record<string, string> }).env = {
@@ -150,6 +153,17 @@ describe("FolderPicker overrides", () => {
     const result = await FolderPicker.getPersistedUris({});
     expect(override.getPersistedUris).toHaveBeenCalled();
     expect(result.uris).toEqual(["content://uri1"]);
+  });
+
+  it("uses override for releasePersistedUris when provided", async () => {
+    const override = {
+      releasePersistedUris: vi.fn(async () => ({ released: [{ uri: "content://uri1", read: true, write: false }] })),
+    };
+    (window as Window & { __c64uFolderPickerOverride?: unknown }).__c64uFolderPickerOverride = override;
+
+    const result = await FolderPicker.releasePersistedUris({});
+    expect(override.releasePersistedUris).toHaveBeenCalled();
+    expect(result.released).toHaveLength(1);
   });
 
   it("uses override for readFile when provided", async () => {

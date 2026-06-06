@@ -73,12 +73,19 @@ Use the repo build helper to run Maestro flows locally with consistent filtering
 
 Tag filters are comma-separated. Prefix `+` to include and `-` to exclude. Unprefixed tags are treated as includes.
 
+When calling `scripts/run-maestro.sh` directly, `--mode tags` with explicit include tags or `--flow <path>` strips the default `.maestro/config.yaml` slow/edge exclusions so intentionally selected slow flows can run. For the Android local binary playback proof, use `--skip-app-reset` when preserving app state is required:
+
+```bash
+scripts/run-maestro.sh --mode tags --tags +android-regression-proof --flow .maestro/local-binary-playback-proof.yaml --skip-app-reset --device-id <serial>
+```
+
 ### HVSC fixtures + SAF permissions
 
 - The synthetic update archive lives at android/app/src/test/fixtures/HVSC_Update_mock.7z.
 - Regenerate it with scripts/make-hvsc-7z-fixture.sh (keeps codec structure compatible with the real update).
 - Unit/integration tests download HVSC_Update_84.7z once per machine via $HVSC_UPDATE_84_CACHE or ~/.cache/c64commander/hvsc.
 - scripts/run-maestro.sh pre-grants storage/SAF permissions (including MANAGE_EXTERNAL_STORAGE via appops) to reduce picker dialogs.
+- For `.maestro/local-binary-playback-proof.yaml`, scripts/run-maestro.sh stages deterministic local fixtures under `/sdcard/Download/C64LocalSource`, clears DocumentsUI state only, and writes smoke config with `localSourceInitialUri` pointing at that fixture folder plus `resetLocalSourcePermissions: true`. The app releases previously persisted local-source SAF grants before opening DocumentsUI so no-reset runs do not inherit an older folder.
 
 ### Timeouts
 

@@ -35,83 +35,111 @@ import {
 import { buildSavedDevicePreferredRuntimeHost, getSavedDeviceResolvedAddress } from "@/lib/savedDevices/resolvedTarget";
 import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 
+let activeSavedDeviceSwitch: { deviceId: string; promise: Promise<unknown> } | null = null;
+
 export function useSavedDeviceSwitching() {
   const queryClient = useQueryClient();
   const location = useLocation();
 
   return useCallback(
     async (deviceId: string) => {
-      const fromDeviceId = getSavedDevicesSnapshot().selectedDeviceId;
-      const device = getSavedDeviceById(deviceId);
-      if (!device) {
-        throw new Error(`Unknown saved device: ${deviceId}`);
+      if (activeSavedDeviceSwitch) {
+        addLog("info", "Saved-device switch request coalesced while another switch is in flight", {
+          activeDeviceId: activeSavedDeviceSwitch.deviceId,
+          requestedDeviceId: deviceId,
+        });
+        return activeSavedDeviceSwitch.promise;
       }
 
-      const attemptId = beginSavedDeviceSwitchAttempt({
-        fromDeviceId,
-        toDeviceId: deviceId,
-        routePath: location.pathname,
+      let resolveSwitch!: (value: unknown) => void;
+      let rejectSwitch!: (reason?: unknown) => void;
+      const switchPromise = new Promise<unknown>((resolve, reject) => {
+        resolveSwitch = resolve;
+        rejectSwitch = reject;
       });
+      activeSavedDeviceSwitch = { deviceId, promise: switchPromise };
 
-      selectSavedDevice(deviceId);
-      markSavedDeviceSwitchSelectionApplied(attemptId);
-      setStoredFtpPort(device.ftpPort);
-      setStoredTelnetPort(device.telnetPort);
-      startSavedDeviceVerification(deviceId);
-      resetInteractionState("saved-device-switch");
-      const savedDeviceSwitchPrefixes = new Set<string>(getSavedDeviceSwitchPrefixes(location.pathname));
-      void queryClient
-        .cancelQueries({
-          predicate: (query) => savedDeviceSwitchPrefixes.has(String(query.queryKey[0] ?? "")),
-        })
-        .catch((error) => {
-          addLog("warn", "Failed to cancel old-device C64 queries during saved-device switch", {
-            deviceId,
-            error: error instanceof Error ? error.message : String(error ?? "Unknown query cancellation failure"),
-          });
+      void (async () => {
+        const fromDeviceId = getSavedDevicesSnapshot().selectedDeviceId;
+        const device = getSavedDeviceById(deviceId);
+        if (!device) {
+          throw new Error(`Unknown saved device: ${deviceId}`);
+        }
+
+        const attemptId = beginSavedDeviceSwitchAttempt({
+          fromDeviceId,
+          toDeviceId: deviceId,
+          routePath: location.pathname,
         });
 
-      const password = device.hasPassword ? await getPasswordForDevice(deviceId) : null;
-      const deviceSummary = getSavedDeviceSwitchSummary(deviceId);
-      const nextDeviceHost = buildDeviceHostWithHttpPort(device.host, device.httpPort);
-      const preferredRuntimeHost = buildSavedDevicePreferredRuntimeHost(device, deviceSummary);
-      const preferredResolvedAddress = getSavedDeviceResolvedAddress(deviceSummary);
-      applyC64APIRuntimeConfig(
-        buildBaseUrlFromDeviceHost(preferredRuntimeHost),
-        password ?? undefined,
-        preferredRuntimeHost,
-        { reason: "saved-device-switch" },
-      );
+        selectSavedDevice(deviceId);
+        markSavedDeviceSwitchSelectionApplied(attemptId);
+        setStoredFtpPort(device.ftpPort);
+        setStoredTelnetPort(device.telnetPort);
+        startSavedDeviceVerification(deviceId);
+        resetInteractionState("saved-device-switch");
+        const savedDeviceSwitchPrefixes = new Set<string>(getSavedDeviceSwitchPrefixes(location.pathname));
+        void queryClient
+          .cancelQueries({
+            predicate: (query) => savedDeviceSwitchPrefixes.has(String(query.queryKey[0] ?? "")),
+          })
+          .catch((error) => {
+            addLog("warn", "Failed to cancel old-device C64 queries during saved-device switch", {
+              deviceId,
+              error: error instanceof Error ? error.message : String(error ?? "Unknown query cancellation failure"),
+            });
+          });
 
-      markSavedDeviceSwitchVerificationStarted(attemptId);
+        const password = device.hasPassword ? await getPasswordForDevice(deviceId) : null;
+        const deviceSummary = getSavedDeviceSwitchSummary(deviceId);
+        const nextDeviceHost = buildDeviceHostWithHttpPort(device.host, device.httpPort);
+        const preferredRuntimeHost = buildSavedDevicePreferredRuntimeHost(device, deviceSummary);
+        const preferredResolvedAddress = getSavedDeviceResolvedAddress(deviceSummary);
+        applyC64APIRuntimeConfig(
+          buildBaseUrlFromDeviceHost(preferredRuntimeHost),
+          password ?? undefined,
+          preferredRuntimeHost,
+          { reason: "saved-device-switch" },
+        );
+
+        markSavedDeviceSwitchVerificationStarted(attemptId);
+
+        try {
+          const verification = await verifyCurrentConnectionTarget({
+            deviceHost: nextDeviceHost,
+            password,
+            preferResolvedAddress: preferredResolvedAddress,
+          });
+          if (verification.ok && verification.deviceInfo) {
+            completeSavedDeviceVerification(deviceId, verification.deviceInfo, verification.resolvedAddress ?? null);
+            invalidateForSavedDeviceSwitch(queryClient, location.pathname);
+            completeSavedDeviceSwitchAttempt(attemptId, {
+              outcome: "success",
+              verification,
+            });
+          } else {
+            failSavedDeviceVerification(deviceId);
+            completeSavedDeviceSwitchAttempt(attemptId, {
+              outcome: "offline",
+              verification,
+            });
+          }
+          return verification;
+        } catch (error) {
+          completeSavedDeviceSwitchAttempt(attemptId, {
+            outcome: "error",
+            errorMessage: error instanceof Error ? error.message : String(error ?? "Unknown switch failure"),
+          });
+          throw error;
+        }
+      })().then(resolveSwitch, rejectSwitch);
 
       try {
-        const verification = await verifyCurrentConnectionTarget({
-          deviceHost: nextDeviceHost,
-          password,
-          preferResolvedAddress: preferredResolvedAddress,
-        });
-        if (verification.ok && verification.deviceInfo) {
-          completeSavedDeviceVerification(deviceId, verification.deviceInfo, verification.resolvedAddress ?? null);
-          invalidateForSavedDeviceSwitch(queryClient, location.pathname);
-          completeSavedDeviceSwitchAttempt(attemptId, {
-            outcome: "success",
-            verification,
-          });
-        } else {
-          failSavedDeviceVerification(deviceId);
-          completeSavedDeviceSwitchAttempt(attemptId, {
-            outcome: "offline",
-            verification,
-          });
+        return await switchPromise;
+      } finally {
+        if (activeSavedDeviceSwitch?.promise === switchPromise) {
+          activeSavedDeviceSwitch = null;
         }
-        return verification;
-      } catch (error) {
-        completeSavedDeviceSwitchAttempt(attemptId, {
-          outcome: "error",
-          errorMessage: error instanceof Error ? error.message : String(error ?? "Unknown switch failure"),
-        });
-        throw error;
       }
     },
     [location.pathname, queryClient],

@@ -26,6 +26,7 @@ vi.mock("@capacitor/share", () => ({
 vi.mock("@capacitor/filesystem", () => ({
   Directory: {
     Cache: "CACHE",
+    Data: "DATA",
   },
   Filesystem: {
     writeFile,
@@ -138,6 +139,8 @@ describe("diagnosticsExport", () => {
     vi.clearAllMocks();
     isNativePlatform.mockReturnValue(false);
     (window as unknown as { __c64uDiagnosticsShareOverride?: unknown }).__c64uDiagnosticsShareOverride = undefined;
+    (window as unknown as { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = undefined;
+    (window as unknown as { __c64uLastDiagnosticsExport?: unknown }).__c64uLastDiagnosticsExport = undefined;
   });
 
   it("uses diagnostics share override when present", async () => {
@@ -349,19 +352,78 @@ describe("diagnosticsExport", () => {
     );
   });
 
-  it("isTestProbeEnabled returns true when __c64uTestProbeEnabled flag is set (lines 34, 51)", async () => {
+  it("writes a deterministic automation copy before native share when test probes are enabled", async () => {
     (window as unknown as { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
     isNativePlatform.mockReturnValue(true);
     writeFile.mockResolvedValue(undefined);
-    getUri.mockResolvedValue({ uri: "file://cache/export.zip" });
+    getUri.mockResolvedValueOnce({ uri: "file://data/c64commander-diagnostics-logs-automation-latest.zip" });
+    getUri.mockResolvedValueOnce({ uri: "file://cache/export.zip" });
     share.mockResolvedValue(undefined);
 
     const { shareDiagnosticsZip } = await import("@/lib/diagnostics/diagnosticsExport");
     await shareDiagnosticsZip("logs", [{ id: 1 }]);
 
-    // Native share was called — override is still null even when probe flag is set
+    expect(writeFile).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        path: "c64commander-diagnostics-logs-automation-latest.zip",
+        directory: "DATA",
+      }),
+    );
+    expect(writeFile).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        path: expect.stringMatching(/^c64commander-diagnostics-logs-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}Z\.zip$/),
+        directory: "CACHE",
+      }),
+    );
     expect(share).toHaveBeenCalledTimes(1);
-    delete (window as unknown as { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled;
+    expect(
+      (window as unknown as { __c64uLastDiagnosticsExport?: { path: string; scope: string } })
+        .__c64uLastDiagnosticsExport,
+    ).toEqual(
+      expect.objectContaining({
+        path: "c64commander-diagnostics-logs-automation-latest.zip",
+        scope: "logs",
+      }),
+    );
+  });
+
+  it("writes diagnostics zip to the deterministic automation path without opening share", async () => {
+    writeFile.mockResolvedValue(undefined);
+    getUri.mockResolvedValue({ uri: "file://data/c64commander-diagnostics-all-automation-latest.zip" });
+
+    const { writeAllDiagnosticsZipForAutomation } = await import("@/lib/diagnostics/diagnosticsExport");
+    const result = await writeAllDiagnosticsZipForAutomation(
+      {
+        "error-logs": [],
+        logs: [{ id: "log-1" }],
+        traces: [],
+        actions: [],
+      },
+      new Date("2026-03-12T09:13:33.000Z"),
+    );
+
+    expect(writeFile).toHaveBeenCalledTimes(1);
+    expect(writeFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "c64commander-diagnostics-all-automation-latest.zip",
+        directory: "DATA",
+        data: expect.any(String),
+      }),
+    );
+    expect(share).not.toHaveBeenCalled();
+    expect(result).toEqual(
+      expect.objectContaining({
+        filename: "c64commander-diagnostics-all-2026-03-12-0913-33Z.zip",
+        path: "c64commander-diagnostics-all-automation-latest.zip",
+        directory: "DATA",
+        scope: "all",
+        uri: "file://data/c64commander-diagnostics-all-automation-latest.zip",
+        byteLength: expect.any(Number),
+      }),
+    );
+    expect(result.byteLength).toBeGreaterThan(0);
   });
 
   it("buildDiagnosticsZipBlob null data falls back to empty array", async () => {
@@ -492,6 +554,18 @@ describe("diagnosticsExport", () => {
     expect(addErrorLog).toHaveBeenCalledWith(
       "Diagnostics share failed",
       expect.objectContaining({ error: "disk full" }),
+    );
+  });
+
+  it("logs and rethrows when deterministic automation export fails", async () => {
+    writeFile.mockRejectedValue(new Error("automation disk full"));
+
+    const { writeDiagnosticsZipForAutomation } = await import("@/lib/diagnostics/diagnosticsExport");
+
+    await expect(writeDiagnosticsZipForAutomation("logs", [])).rejects.toThrow("automation disk full");
+    expect(addErrorLog).toHaveBeenCalledWith(
+      "Diagnostics automation export failed",
+      expect.objectContaining({ error: "automation disk full", scope: "logs" }),
     );
   });
 });

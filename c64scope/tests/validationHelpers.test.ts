@@ -42,8 +42,12 @@ describe("validation helpers", () => {
         cb(null, { stdout: "<hierarchy></hierarchy>" });
         return;
       }
+      if (joined.includes("pidof uk.gleissner.c64commander")) {
+        cb(null, { stdout: "1234\n" });
+        return;
+      }
       if (joined.includes("logcat -d")) {
-        cb(null, { stdout: "threadtime log" });
+        cb(null, { stdout: "threadtime app log" });
         return;
       }
       cb(null, { stdout: "" });
@@ -62,8 +66,8 @@ describe("validation helpers", () => {
     const logPath = path.join(os.tmpdir(), `c64scope-log-${Date.now()}.txt`);
 
     try {
-      expect(await captureLogcat("serial-1", logPath, 10)).toBe("threadtime log");
-      expect(await readFile(logPath, "utf-8")).toBe("threadtime log");
+      expect(await captureLogcat("serial-1", logPath, 10)).toBe("threadtime app log");
+      expect(await readFile(logPath, "utf-8")).toBe("threadtime app log");
       await expect(isAppInForeground("serial-1")).resolves.toBe(true);
       await expect(dumpUiHierarchy("serial-1")).resolves.toContain("<hierarchy");
       await expect(readC64Memory("c64u", 0x1000, 3)).resolves.toEqual(new Uint8Array([1, 2, 3]));
@@ -105,6 +109,31 @@ describe("validation helpers", () => {
       await expect(dumpUiHierarchy("serial-1")).rejects.toThrow(/did not produce XML hierarchy/);
     } finally {
       await rm(shotPath, { force: true });
+    }
+  });
+
+  it("fails logcat capture when app runtime logs are empty but preserves the artifact", async () => {
+    execFileMock.mockImplementation((_cmd, args, cb) => {
+      const joined = args.join(" ");
+      if (joined.includes("pidof uk.gleissner.c64commander")) {
+        cb(null, { stdout: "" });
+        return;
+      }
+      if (joined.includes("logcat -d")) {
+        cb(null, { stdout: "system-only log\n" });
+        return;
+      }
+      cb(null, { stdout: "" });
+    });
+
+    const { captureLogcat } = await import("../src/validation/helpers.js");
+    const logPath = path.join(os.tmpdir(), `c64scope-empty-app-log-${Date.now()}.txt`);
+
+    try {
+      await expect(captureLogcat("serial-1", logPath, 10)).rejects.toThrow(/did not contain runtime logs/);
+      expect(await readFile(logPath, "utf-8")).toBe("system-only log\n");
+    } finally {
+      await rm(logPath, { force: true });
     }
   });
 

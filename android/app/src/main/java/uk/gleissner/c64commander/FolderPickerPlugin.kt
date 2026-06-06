@@ -64,6 +64,21 @@ class FolderPickerPlugin : Plugin() {
   @PluginMethod
   fun pickDirectory(call: PluginCall) {
     val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+    val initialUriString = call.getString("initialUri")
+    if (!initialUriString.isNullOrBlank() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      try {
+        intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, Uri.parse(initialUriString))
+      } catch (error: Exception) {
+        AppLogger.warn(
+                pluginContextOrNull(),
+                logTag,
+                "Invalid initial directory URI provided",
+                "FolderPickerPlugin",
+                error,
+                traceFields(call)
+        )
+      }
+    }
     intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
     intent.addFlags(Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
@@ -348,6 +363,54 @@ class FolderPickerPlugin : Plugin() {
     }
     val response = JSObject()
     response.put("uris", entries)
+    call.resolve(response)
+  }
+
+  @PluginMethod
+  fun releasePersistedUris(call: PluginCall) {
+    val released = mutableListOf<JSObject>()
+    val failures = mutableListOf<String>()
+    var firstFailure: Exception? = null
+
+    context.contentResolver.persistedUriPermissions.toList().forEach { permission ->
+      val flags =
+              (if (permission.isReadPermission) Intent.FLAG_GRANT_READ_URI_PERMISSION else 0) or
+                      (if (permission.isWritePermission) Intent.FLAG_GRANT_WRITE_URI_PERMISSION else 0)
+      if (flags == 0) return@forEach
+      val entry = JSObject()
+      entry.put("uri", permission.uri.toString())
+      entry.put("read", permission.isReadPermission)
+      entry.put("write", permission.isWritePermission)
+      entry.put("persistedAt", permission.persistedTime)
+      try {
+        context.contentResolver.releasePersistableUriPermission(permission.uri, flags)
+        released.add(entry)
+      } catch (error: Exception) {
+        if (firstFailure == null) {
+          firstFailure = error
+        }
+        failures.add(permission.uri.toString())
+        AppLogger.warn(
+                pluginContextOrNull(),
+                logTag,
+                "Persisted URI permission release failed",
+                "FolderPickerPlugin",
+                error,
+                traceFields(call)
+        )
+      }
+    }
+
+    if (failures.isNotEmpty()) {
+      call.reject(
+              "Failed to release ${failures.size} persisted URI permission(s): ${failures.joinToString()}",
+              firstFailure
+      )
+      return
+    }
+
+    val response = JSObject()
+    response.put("released", released)
     call.resolve(response)
   }
 

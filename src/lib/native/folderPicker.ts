@@ -54,6 +54,7 @@ export type FolderPickerFileResult = {
 type FolderPickerPlugin = {
   pickDirectory: (options?: {
     extensions?: string[];
+    initialUri?: string;
     traceContext?: NativeTraceContext;
   }) => Promise<FolderPickerDirectoryResult>;
   pickFile: (options?: {
@@ -68,6 +69,7 @@ type FolderPickerPlugin = {
     traceContext?: NativeTraceContext;
   }) => Promise<{ entries: SafFolderEntry[] }>;
   getPersistedUris: (options?: { traceContext?: NativeTraceContext }) => Promise<{ uris: SafPersistedUri[] }>;
+  releasePersistedUris: (options?: { traceContext?: NativeTraceContext }) => Promise<{ released: SafPersistedUri[] }>;
   readFile: (options: { uri: string; traceContext?: NativeTraceContext }) => Promise<{ data: string }>;
   readFileFromTree: (options: {
     treeUri: string;
@@ -148,6 +150,12 @@ export const FolderPicker: FolderPickerPlugin = {
     const withTrace = withTraceContext(options);
     if (override) return override(withTrace);
     return plugin.getPersistedUris(withTrace);
+  },
+  releasePersistedUris: (options) => {
+    const override = resolveOverrideMethod("releasePersistedUris");
+    const withTrace = withTraceContext(options);
+    if (override) return override(withTrace);
+    return plugin.releasePersistedUris(withTrace);
   },
   readFile: (options) => {
     const override = resolveOverrideMethod("readFile");

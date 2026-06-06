@@ -180,6 +180,56 @@ describe("smokeMode", () => {
     expect(saveDebugLoggingEnabled).not.toHaveBeenCalled();
   });
 
+  it("keeps local source initial URI from smoke config for Android picker automation", async () => {
+    localStorage.setItem(
+      SMOKE_CONFIG_STORAGE_KEY,
+      JSON.stringify({
+        target: "mock",
+        localSourceInitialUri:
+          "content://com.android.externalstorage.documents/tree/primary%3ADownload%2FC64LocalSource",
+        resetLocalSourcePermissions: true,
+      }),
+    );
+
+    const config = await initializeSmokeMode();
+
+    expect(config?.localSourceInitialUri).toBe(
+      "content://com.android.externalstorage.documents/tree/primary%3ADownload%2FC64LocalSource",
+    );
+    expect(getSmokeConfig()?.localSourceInitialUri).toBe(
+      "content://com.android.externalstorage.documents/tree/primary%3ADownload%2FC64LocalSource",
+    );
+    expect(config?.resetLocalSourcePermissions).toBe(true);
+  });
+
+  it("prefers the native smoke config file over stale local storage during no-reset automation", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
+    localStorage.setItem(
+      SMOKE_CONFIG_STORAGE_KEY,
+      JSON.stringify({
+        target: "mock",
+        localSourceInitialUri: "content://com.android.externalstorage.documents/tree/primary%3ADownload",
+      }),
+    );
+    vi.mocked(Filesystem.readFile).mockResolvedValue({
+      data: JSON.stringify({
+        target: "mock",
+        localSourceInitialUri:
+          "content://com.android.externalstorage.documents/tree/primary%3ADownload%2FC64LocalSource",
+      }),
+    });
+
+    const config = await initializeSmokeMode();
+
+    expect(config?.localSourceInitialUri).toBe(
+      "content://com.android.externalstorage.documents/tree/primary%3ADownload%2FC64LocalSource",
+    );
+    expect(JSON.parse(localStorage.getItem(SMOKE_CONFIG_STORAGE_KEY) ?? "{}")).toMatchObject({
+      localSourceInitialUri: "content://com.android.externalstorage.documents/tree/primary%3ADownload%2FC64LocalSource",
+    });
+  });
+
   it("reads native smoke config on a cold start when the bootstrap flag is enabled", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
