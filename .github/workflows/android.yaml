@@ -655,6 +655,9 @@ jobs:
           if [[ "${{ steps.detect_android_sdk.outputs.use_preinstalled }}" == "true" ]]; then
             echo "ANDROID_HOME=${{ steps.detect_android_sdk.outputs.android_home }}" >> $GITHUB_ENV
             echo "ANDROID_SDK_ROOT=${{ steps.detect_android_sdk.outputs.android_sdk_root }}" >> $GITHUB_ENV
+            echo "${{ steps.detect_android_sdk.outputs.cmdline_tools_bin }}" >> $GITHUB_PATH
+            echo "${{ steps.detect_android_sdk.outputs.platform_tools_bin }}" >> $GITHUB_PATH
+            echo "${{ steps.detect_android_sdk.outputs.emulator_bin }}" >> $GITHUB_PATH
           elif [[ -n "${ANDROID_SDK_ROOT:-}" ]]; then
             echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           elif [[ -n "${ANDROID_HOME:-}" ]]; then
@@ -662,6 +665,7 @@ jobs:
           fi
 
       - name: Cache Android SDK system images
+        if: steps.detect_android_sdk.outputs.use_preinstalled != 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -930,6 +934,9 @@ jobs:
           if [[ "${{ steps.detect_android_sdk.outputs.use_preinstalled }}" == "true" ]]; then
             echo "ANDROID_HOME=${{ steps.detect_android_sdk.outputs.android_home }}" >> $GITHUB_ENV
             echo "ANDROID_SDK_ROOT=${{ steps.detect_android_sdk.outputs.android_sdk_root }}" >> $GITHUB_ENV
+            echo "${{ steps.detect_android_sdk.outputs.cmdline_tools_bin }}" >> $GITHUB_PATH
+            echo "${{ steps.detect_android_sdk.outputs.platform_tools_bin }}" >> $GITHUB_PATH
+            echo "${{ steps.detect_android_sdk.outputs.emulator_bin }}" >> $GITHUB_PATH
           elif [[ -n "${ANDROID_SDK_ROOT:-}" ]]; then
             echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           elif [[ -n "${ANDROID_HOME:-}" ]]; then
@@ -1517,6 +1524,9 @@ jobs:
           if [[ "${{ steps.detect_android_sdk.outputs.use_preinstalled }}" == "true" ]]; then
             echo "ANDROID_HOME=${{ steps.detect_android_sdk.outputs.android_home }}" >> $GITHUB_ENV
             echo "ANDROID_SDK_ROOT=${{ steps.detect_android_sdk.outputs.android_sdk_root }}" >> $GITHUB_ENV
+            echo "${{ steps.detect_android_sdk.outputs.cmdline_tools_bin }}" >> $GITHUB_PATH
+            echo "${{ steps.detect_android_sdk.outputs.platform_tools_bin }}" >> $GITHUB_PATH
+            echo "${{ steps.detect_android_sdk.outputs.emulator_bin }}" >> $GITHUB_PATH
           elif [[ -n "${ANDROID_SDK_ROOT:-}" ]]; then
             echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           elif [[ -n "${ANDROID_HOME:-}" ]]; then

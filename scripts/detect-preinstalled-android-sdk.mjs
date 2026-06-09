@@ -56,6 +56,9 @@ const parseCmdlineToolsRevision = (sourceProperties) => {
 export const resolvePreinstalledAndroidSdk = async (env = process.env) => {
   for (const sdkRoot of getAndroidSdkRootCandidates(env)) {
     const sdkmanagerPath = path.join(sdkRoot, "cmdline-tools", "latest", "bin", "sdkmanager");
+    const cmdlineToolsBin = path.dirname(sdkmanagerPath);
+    const platformToolsBin = path.join(sdkRoot, "platform-tools");
+    const emulatorBin = path.join(sdkRoot, "emulator");
 
     try {
       await access(sdkmanagerPath, fsConstants.X_OK);
@@ -71,6 +74,9 @@ export const resolvePreinstalledAndroidSdk = async (env = process.env) => {
       androidSdkRoot: sdkRoot,
       androidHome: sdkRoot,
       sdkmanagerPath,
+      cmdlineToolsBin,
+      platformToolsBin,
+      emulatorBin,
       cmdlineToolsRevision: parseCmdlineToolsRevision(sourceProperties),
       sourceProperties,
     };
@@ -81,6 +87,9 @@ export const resolvePreinstalledAndroidSdk = async (env = process.env) => {
     androidSdkRoot: "",
     androidHome: "",
     sdkmanagerPath: "",
+    cmdlineToolsBin: "",
+    platformToolsBin: "",
+    emulatorBin: "",
     cmdlineToolsRevision: "",
     sourceProperties: "",
   };
@@ -91,6 +100,9 @@ const emitGitHubOutputs = (result) => {
   process.stdout.write(`android_sdk_root=${result.androidSdkRoot}\n`);
   process.stdout.write(`android_home=${result.androidHome}\n`);
   process.stdout.write(`sdkmanager_path=${result.sdkmanagerPath}\n`);
+  process.stdout.write(`cmdline_tools_bin=${result.cmdlineToolsBin}\n`);
+  process.stdout.write(`platform_tools_bin=${result.platformToolsBin}\n`);
+  process.stdout.write(`emulator_bin=${result.emulatorBin}\n`);
   process.stdout.write(`cmdline_tools_revision=${result.cmdlineToolsRevision}\n`);
 };
 

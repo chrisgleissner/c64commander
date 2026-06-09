@@ -49,6 +49,9 @@ describe("detect-preinstalled-android-sdk", () => {
     expect(result.usePreinstalled).toBe(true);
     expect(result.androidSdkRoot).toBe(sdkRoot);
     expect(result.sdkmanagerPath).toBe(path.join(sdkRoot, "cmdline-tools", "latest", "bin", "sdkmanager"));
+    expect(result.cmdlineToolsBin).toBe(path.join(sdkRoot, "cmdline-tools", "latest", "bin"));
+    expect(result.platformToolsBin).toBe(path.join(sdkRoot, "platform-tools"));
+    expect(result.emulatorBin).toBe(path.join(sdkRoot, "emulator"));
     expect(result.cmdlineToolsRevision).toBe("12.0");
   });
 
@@ -63,6 +66,7 @@ describe("detect-preinstalled-android-sdk", () => {
     expect(result.usePreinstalled).toBe(false);
     expect(result.androidSdkRoot).toBe("");
     expect(result.sdkmanagerPath).toBe("");
+    expect(result.cmdlineToolsBin).toBe("");
   });
 
   it("deduplicates candidate roots while preserving lookup order", () => {
