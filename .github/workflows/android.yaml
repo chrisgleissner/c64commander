@@ -642,12 +642,20 @@ jobs:
           java-version: 17
           cache: gradle
 
+      - name: Detect preinstalled Android SDK
+        id: detect_android_sdk
+        run: node scripts/detect-preinstalled-android-sdk.mjs >> $GITHUB_OUTPUT
+
       - name: Setup Android SDK
+        if: steps.detect_android_sdk.outputs.use_preinstalled != 'true'
         uses: android-actions/setup-android@v3
 
       - name: Export Android SDK env
         run: |
-          if [[ -n "${ANDROID_SDK_ROOT:-}" ]]; then
+          if [[ "${{ steps.detect_android_sdk.outputs.use_preinstalled }}" == "true" ]]; then
+            echo "ANDROID_HOME=${{ steps.detect_android_sdk.outputs.android_home }}" >> $GITHUB_ENV
+            echo "ANDROID_SDK_ROOT=${{ steps.detect_android_sdk.outputs.android_sdk_root }}" >> $GITHUB_ENV
+          elif [[ -n "${ANDROID_SDK_ROOT:-}" ]]; then
             echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           elif [[ -n "${ANDROID_HOME:-}" ]]; then
             echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
@@ -902,7 +910,12 @@ jobs:
           java-version: 17
           cache: gradle
 
+      - name: Detect preinstalled Android SDK
+        id: detect_android_sdk
+        run: node scripts/detect-preinstalled-android-sdk.mjs >> $GITHUB_OUTPUT
+
       - name: Setup Android SDK
+        if: steps.detect_android_sdk.outputs.use_preinstalled != 'true'
         uses: android-actions/setup-android@v3
 
       - name: Cache Maestro CLI
@@ -914,7 +927,10 @@ jobs:
 
       - name: Export Android SDK env
         run: |
-          if [[ -n "${ANDROID_SDK_ROOT:-}" ]]; then
+          if [[ "${{ steps.detect_android_sdk.outputs.use_preinstalled }}" == "true" ]]; then
+            echo "ANDROID_HOME=${{ steps.detect_android_sdk.outputs.android_home }}" >> $GITHUB_ENV
+            echo "ANDROID_SDK_ROOT=${{ steps.detect_android_sdk.outputs.android_sdk_root }}" >> $GITHUB_ENV
+          elif [[ -n "${ANDROID_SDK_ROOT:-}" ]]; then
             echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           elif [[ -n "${ANDROID_HOME:-}" ]]; then
             echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
@@ -1488,12 +1504,20 @@ jobs:
           java-version: 17
           cache: gradle
 
+      - name: Detect preinstalled Android SDK
+        id: detect_android_sdk
+        run: node scripts/detect-preinstalled-android-sdk.mjs >> $GITHUB_OUTPUT
+
       - name: Setup Android SDK
+        if: steps.detect_android_sdk.outputs.use_preinstalled != 'true'
         uses: android-actions/setup-android@v3
 
       - name: Export Android SDK env
         run: |
-          if [[ -n "${ANDROID_SDK_ROOT:-}" ]]; then
+          if [[ "${{ steps.detect_android_sdk.outputs.use_preinstalled }}" == "true" ]]; then
+            echo "ANDROID_HOME=${{ steps.detect_android_sdk.outputs.android_home }}" >> $GITHUB_ENV
+            echo "ANDROID_SDK_ROOT=${{ steps.detect_android_sdk.outputs.android_sdk_root }}" >> $GITHUB_ENV
+          elif [[ -n "${ANDROID_SDK_ROOT:-}" ]]; then
             echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           elif [[ -n "${ANDROID_HOME:-}" ]]; then
             echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
