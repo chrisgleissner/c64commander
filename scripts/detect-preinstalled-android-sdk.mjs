@@ -53,8 +53,11 @@ const parseCmdlineToolsRevision = (sourceProperties) => {
   return match ? match[1].trim() : "";
 };
 
-export const resolvePreinstalledAndroidSdk = async (env = process.env) => {
-  for (const sdkRoot of getAndroidSdkRootCandidates(env)) {
+export const resolvePreinstalledAndroidSdk = async (
+  env = process.env,
+  candidateRoots = getAndroidSdkRootCandidates(env),
+) => {
+  for (const sdkRoot of normalizeCandidateRoots(candidateRoots)) {
     const sdkmanagerPath = path.join(sdkRoot, "cmdline-tools", "latest", "bin", "sdkmanager");
     const cmdlineToolsBin = path.dirname(sdkmanagerPath);
     const platformToolsBin = path.join(sdkRoot, "platform-tools");

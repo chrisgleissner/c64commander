@@ -44,7 +44,7 @@ describe("detect-preinstalled-android-sdk", () => {
     const result = await resolvePreinstalledAndroidSdk({
       ANDROID_SDK_ROOT: sdkRoot,
       HOME: "/nonexistent-home",
-    });
+    }, [sdkRoot]);
 
     expect(result.usePreinstalled).toBe(true);
     expect(result.androidSdkRoot).toBe(sdkRoot);
@@ -61,7 +61,7 @@ describe("detect-preinstalled-android-sdk", () => {
     const result = await resolvePreinstalledAndroidSdk({
       ANDROID_SDK_ROOT: sdkRoot,
       HOME: "/nonexistent-home",
-    });
+    }, [sdkRoot]);
 
     expect(result.usePreinstalled).toBe(false);
     expect(result.androidSdkRoot).toBe("");
