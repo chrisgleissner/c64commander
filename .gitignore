@@ -176,6 +176,7 @@ ios/xcuserdata/
 ios/capacitor-cordova-ios-plugins/
 ios/App/App/capacitor.config.json
 ios/App/App/config.xml
+ios/native-tests/.build/**
 
 # C64 Scope generated files
 c64scope/**/artifacts/

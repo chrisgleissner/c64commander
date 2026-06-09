@@ -14,6 +14,10 @@ final class FtpRequestNormalizationTests: XCTestCase {
         XCTAssertEqual(FtpRequestNormalization.resolveTimeoutMs(99_000), 60_000)
     }
 
+    func testResolveConnectTimeoutMsUsesNativeFtpDefault() {
+        XCTAssertEqual(FtpRequestNormalization.resolveTimeoutMs(nil, defaultMs: 1_500), 1_500)
+    }
+
     func testResolveTraceDetailsKeepsSupportedKeysOnly() {
         let details = FtpRequestNormalization.resolveTraceDetails([
             "correlationId": "corr-1",
@@ -32,5 +36,36 @@ final class FtpRequestNormalizationTests: XCTestCase {
         XCTAssertEqual(details["localAccessMode"] as? String, "web")
         XCTAssertEqual(details["lifecycleState"] as? String, "playing")
         XCTAssertNil(details["ignored"])
+    }
+
+    func testIOSFtpClientExportsEveryNativeFtpMethod() throws {
+        let source = try iosFtpSource()
+
+        XCTAssertEqual(
+            FtpPluginContract.exportedMethodNames(source: source),
+            FtpPluginContract.expectedExportedMethods
+        )
+    }
+
+    func testIOSFtpClientHasObjcHandlerForEveryExportedMethod() throws {
+        let source = try iosFtpSource()
+        let handlers = FtpPluginContract.objcHandlerNames(source: source)
+
+        for method in FtpPluginContract.expectedExportedMethods {
+            XCTAssertTrue(handlers.contains(method), "Missing @objc handler for \(method)")
+        }
+    }
+
+    private func iosFtpSource() throws -> String {
+        let testsFileUrl = URL(fileURLWithPath: #filePath)
+        let packageRoot = testsFileUrl
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let sourceUrl = packageRoot
+            .deletingLastPathComponent()
+            .appendingPathComponent("App/App/IOSFtp.swift")
+
+        return try String(contentsOf: sourceUrl, encoding: .utf8)
     }
 }

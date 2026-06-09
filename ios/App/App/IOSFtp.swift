@@ -8,6 +8,7 @@ private struct FtpRequestOptions {
     let password: String
     let path: String
     let timeout: TimeInterval
+    let connectTimeout: TimeInterval
     let traceDetails: [String: Any]
 
     init(call: CAPPluginCall) throws {
@@ -20,6 +21,7 @@ private struct FtpRequestOptions {
         self.password = call.getString("password") ?? ""
         self.path = call.getString("path") ?? "/"
         self.timeout = FtpRequestOptions.resolveTimeout(call.getInt("timeoutMs"))
+        self.connectTimeout = FtpRequestOptions.resolveTimeout(call.getInt("connectTimeoutMs"), defaultMs: 1_500)
         self.traceDetails = FtpRequestOptions.resolveTraceDetails(call.getObject("traceContext"))
     }
 }
@@ -48,6 +50,7 @@ public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "listDirectory", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "readFile", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "writeFile", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "pingFtp", returnType: CAPPluginReturnPromise),
     ]
 
     private let queue = DispatchQueue(label: "uk.gleissner.c64commander.ftp")
@@ -56,7 +59,12 @@ public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
         queue.async {
             do {
                 let options = try FtpRequestOptions(call: call)
-                let session = FtpSession(host: options.host, port: options.port, timeout: options.timeout)
+                let session = FtpSession(
+                    host: options.host,
+                    port: options.port,
+                    timeout: options.timeout,
+                    connectTimeout: options.connectTimeout
+                )
                 defer { session.disconnect() }
 
                 try session.connect()
@@ -95,10 +103,16 @@ public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
                     password: options.password,
                     path: explicitPath,
                     timeout: options.timeout,
+                    connectTimeout: options.connectTimeout,
                     traceDetails: options.traceDetails
                 )
 
-                let session = FtpSession(host: options.host, port: options.port, timeout: options.timeout)
+                let session = FtpSession(
+                    host: options.host,
+                    port: options.port,
+                    timeout: options.timeout,
+                    connectTimeout: options.connectTimeout
+                )
                 defer { session.disconnect() }
                 try session.connect()
                 try session.login(username: options.username, password: options.password)
@@ -122,7 +136,8 @@ public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
                 let session = FtpSession(
                     host: options.request.host,
                     port: options.request.port,
-                    timeout: options.request.timeout
+                    timeout: options.request.timeout,
+                    connectTimeout: options.request.connectTimeout
                 )
                 defer { session.disconnect() }
                 try session.connect()
@@ -138,21 +153,55 @@ public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
             }
         }
     }
+
+    @objc public func pingFtp(_ call: CAPPluginCall) {
+        queue.async {
+            do {
+                let options = try FtpRequestOptions(call: call)
+                let session = FtpSession(
+                    host: options.host,
+                    port: options.port,
+                    timeout: options.timeout,
+                    connectTimeout: options.connectTimeout
+                )
+                defer { session.disconnect() }
+
+                try session.connect()
+                try session.login(username: options.username, password: options.password)
+                try session.noop()
+                call.resolve(["ok": true])
+            } catch {
+                let details = FtpRequestOptions.failureDetails(for: call, operation: "pingFtp")
+                IOSDiagnostics.log(.error, "FTP ping failed", details: details, error: error)
+                call.reject(error.localizedDescription)
+            }
+        }
+    }
 }
 
 private extension FtpRequestOptions {
-    init(host: String, port: Int, username: String, password: String, path: String, timeout: TimeInterval, traceDetails: [String: Any]) {
+    init(
+        host: String,
+        port: Int,
+        username: String,
+        password: String,
+        path: String,
+        timeout: TimeInterval,
+        connectTimeout: TimeInterval,
+        traceDetails: [String: Any]
+    ) {
         self.host = host
         self.port = port
         self.username = username
         self.password = password
         self.path = path
         self.timeout = timeout
+        self.connectTimeout = connectTimeout
         self.traceDetails = traceDetails
     }
 
-    static func resolveTimeout(_ timeoutMs: Int?) -> TimeInterval {
-        let clampedMs = min(max(timeoutMs ?? 8_000, 1_000), 60_000)
+    static func resolveTimeout(_ timeoutMs: Int?, defaultMs: Int = 8_000) -> TimeInterval {
+        let clampedMs = min(max(timeoutMs ?? defaultMs, 1_000), 60_000)
         return TimeInterval(clampedMs) / 1_000
     }
 
@@ -185,6 +234,7 @@ private extension FtpRequestOptions {
             "port": call.getInt("port") ?? 21,
             "path": call.getString("path") ?? "/",
             "timeoutMs": Int(timeout * 1_000),
+            "connectTimeoutMs": Int(resolveTimeout(call.getInt("connectTimeoutMs"), defaultMs: 1_500) * 1_000),
         ]
         if let options {
             details.merge(options.traceDetails) { _, new in new }
@@ -207,14 +257,16 @@ final class FtpSession {
     private let host: String
     private let port: Int
     private let timeout: TimeInterval
+    private let connectTimeout: TimeInterval
 
     private var inputStream: InputStream?
     private var outputStream: OutputStream?
 
-    init(host: String, port: Int, timeout: TimeInterval = 30) {
+    init(host: String, port: Int, timeout: TimeInterval = 30, connectTimeout: TimeInterval? = nil) {
         self.host = host
         self.port = port
         self.timeout = timeout
+        self.connectTimeout = connectTimeout ?? timeout
     }
 
     func connect() throws {
@@ -232,7 +284,7 @@ final class FtpSession {
         inputStream?.open()
         outputStream?.open()
 
-        _ = try readResponse(expectPrefix: [220])
+        _ = try readResponse(expectPrefix: [220], timeout: connectTimeout)
     }
 
     func disconnect() {
@@ -269,7 +321,10 @@ final class FtpSession {
         }
 
         _ = try sendAndRead("TYPE I", expected: [200])
-        _ = try sendAndRead("PASV", expected: [227])
+    }
+
+    func noop() throws {
+        _ = try sendAndRead("NOOP", expected: [200])
     }
 
     func listDirectory(path: String) throws -> [FtpEntry] {
@@ -393,11 +448,15 @@ final class FtpSession {
         }
     }
 
-    private func readResponse(expect: [Int]? = nil, expectPrefix: [Int]? = nil) throws -> (code: Int, message: String) {
+    private func readResponse(
+        expect: [Int]? = nil,
+        expectPrefix: [Int]? = nil,
+        timeout responseTimeout: TimeInterval? = nil
+    ) throws -> (code: Int, message: String) {
         var lines: [String] = []
         var responseCode: Int?
         var multilineCode: Int?
-        let deadline = Date().addingTimeInterval(timeout)
+        let deadline = Date().addingTimeInterval(responseTimeout ?? timeout)
 
         while Date() <= deadline {
             let line = try readLine(deadline: deadline)
