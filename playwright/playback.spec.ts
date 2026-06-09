@@ -1411,6 +1411,10 @@ test.describe("Playback file browser", () => {
 
     await page.getByTestId("tab-play").click();
     await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+    // Wait for session restore to complete: track-1 must still be current before auto-advance fires.
+    // The component remounts on navigation; restore is async (IndexedDB). Without this gate the
+    // poll can start before isPlaying/guard are set, so resume signals never trigger advance.
+    await expect(page.getByTestId("playback-current-track")).toContainText("track-1.sid");
     await expect
       .poll(async () => {
         if (server.sidplayRequests.length === 1) {

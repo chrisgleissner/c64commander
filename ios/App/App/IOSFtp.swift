@@ -161,7 +161,7 @@ public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
                 let session = FtpSession(
                     host: options.host,
                     port: options.port,
-                    timeout: options.connectTimeout,
+                    timeout: options.timeout,
                     connectTimeout: options.connectTimeout
                 )
                 defer { session.disconnect() }
