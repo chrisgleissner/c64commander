@@ -713,6 +713,57 @@ describe("c64api", () => {
     }
   });
 
+  it("applies the interactive 1500 ms timeout to batch config writes", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = getFetchMock();
+      fetchMock.mockImplementation((input: RequestInfo | URL, options?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith("/v1/configs/U64%20Specific%20Settings")) {
+          return Promise.resolve(
+            categoryConfigResponse("U64 Specific Settings", {
+              "CPU Speed": {
+                selected: " 1",
+                options: [" 1", " 2", " 4"],
+              },
+              "Turbo Control": {
+                selected: "Off",
+                options: ["Off", "Manual", "U64 Turbo Registers", "TurboEnable Bit"],
+              },
+            }),
+          );
+        }
+        return new Promise<Response>((_resolve, reject) => {
+          options?.signal?.addEventListener(
+            "abort",
+            () => {
+              reject(new DOMException("Aborted", "AbortError"));
+            },
+            { once: true },
+          );
+        });
+      });
+
+      const api = new C64API("http://c64u");
+      const pending = api.updateConfigBatch({
+        "U64 Specific Settings": {
+          "CPU Speed": "2",
+          "Turbo Control": "Manual",
+        },
+      });
+      void pending.catch(() => {});
+
+      await vi.advanceTimersByTimeAsync(1499);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(pending).rejects.toThrow("Host unreachable");
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not apply the scheduled 3-second timeout to user-triggered requests", async () => {
     vi.useFakeTimers();
     try {
@@ -1064,6 +1115,21 @@ describe("c64api", () => {
     );
   });
 
+  it("does not inspect successful stream-stop response bodies", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(new Response("OK", { status: 200, headers: { "content-type": "text/plain" } }));
+
+    const api = new C64API("http://c64u");
+
+    await expect(api.stopStream("audio")).resolves.toEqual({ errors: [] });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://c64u/v1/streams/audio:stop",
+      expect.objectContaining({
+        method: "PUT",
+      }),
+    );
+  });
+
   it("encodes joystick swap config writes with the expected category and item", async () => {
     const fetchMock = getFetchMock();
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
@@ -1201,6 +1267,42 @@ describe("c64api", () => {
         unique_id: null,
       });
     }
+  });
+
+  it("orders U64 turbo control before CPU speed in batch writes to avoid an off-speed firmware pulse", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock
+      .mockResolvedValueOnce(
+        categoryConfigResponse("U64 Specific Settings", {
+          "CPU Speed": {
+            selected: " 1",
+            options: [" 1", " 2", " 4"],
+          },
+          "Turbo Control": {
+            selected: "Off",
+            options: ["Off", "Manual", "U64 Turbo Registers", "TurboEnable Bit"],
+          },
+        }),
+      )
+      .mockResolvedValueOnce(okJsonResponse());
+
+    const api = new C64API("http://c64u");
+
+    await api.updateConfigBatch({
+      "U64 Specific Settings": {
+        "CPU Speed": "2",
+        "Turbo Control": "Manual",
+      },
+    });
+
+    const body = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body)) as {
+      "U64 Specific Settings": Record<string, string>;
+    };
+    expect(Object.keys(body["U64 Specific Settings"])).toEqual(["Turbo Control", "CPU Speed"]);
+    expect(body["U64 Specific Settings"]).toEqual({
+      "Turbo Control": "Manual",
+      "CPU Speed": " 2",
+    });
   });
 
   it("rejects out-of-range numeric batch writes before sending the config POST", async () => {

@@ -95,6 +95,9 @@ const DEDUPEABLE_READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const READ_REQUEST_BUDGET_WINDOW_MS = 500;
 const READ_REQUEST_BUDGET_MAX_ENTRIES = 256;
 const READ_REQUEST_BUDGET_MAX_VALUE_BYTES = 64 * 1024;
+const CONFIG_WRITE_REQUEST_OPTIONS = {
+  timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
+} as const;
 
 // Build a concise HTTP error message. When statusText is empty (common in HTTP/2)
 // omit the trailing colon so the message reads "HTTP 404" instead of "HTTP 404: ".
@@ -104,6 +107,53 @@ const buildHttpErrorMessage = (status: number, statusText: string): string => {
 };
 
 const normalizeConfigWriteToken = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
+const U64_SPECIFIC_SETTINGS_CATEGORY = "U64 Specific Settings";
+const U64_TURBO_CONTROL_ITEM = "Turbo Control";
+const U64_CPU_SPEED_DEPENDENT_ITEMS = new Set(["CPU Speed", "Badline Timing", "SuperCPU Detect (D0BC)"]);
+
+const isTurboControlOffValue = (value: string | number) =>
+  typeof value === "string" && normalizeConfigWriteToken(value) === "off";
+
+const orderFirmwareSafeConfigUpdates = (
+  category: string,
+  updates: Record<string, string | number>,
+): Array<[string, string | number]> => {
+  const entries = Object.entries(updates);
+  if (
+    category !== U64_SPECIFIC_SETTINGS_CATEGORY ||
+    !Object.prototype.hasOwnProperty.call(updates, U64_TURBO_CONTROL_ITEM) ||
+    !entries.some(([item]) => U64_CPU_SPEED_DEPENDENT_ITEMS.has(item))
+  ) {
+    return entries;
+  }
+
+  const turboEntry = entries.find(([item]) => item === U64_TURBO_CONTROL_ITEM);
+  if (!turboEntry) {
+    return entries;
+  }
+
+  const turboFirst = !isTurboControlOffValue(turboEntry[1]);
+  const ordered: Array<[string, string | number]> = [];
+  let turboAdded = false;
+
+  for (const entry of entries) {
+    const [item] = entry;
+    if (item === U64_TURBO_CONTROL_ITEM) {
+      continue;
+    }
+    if (turboFirst && U64_CPU_SPEED_DEPENDENT_ITEMS.has(item) && !turboAdded) {
+      ordered.push(turboEntry);
+      turboAdded = true;
+    }
+    ordered.push(entry);
+  }
+
+  if (!turboAdded) {
+    ordered.push(turboEntry);
+  }
+
+  return ordered;
+};
 
 const resolveDeclaredConfigWriteValue = (
   category: string,
@@ -1599,6 +1649,7 @@ export class C64API {
     const response = await scheduleConfigWrite(() =>
       this.request<ConfigResponse>(`/v1/configs/${catEncoded}/${itemEncoded}?value=${valEncoded}`, {
         method: "PUT",
+        ...CONFIG_WRITE_REQUEST_OPTIONS,
         ...options,
       }),
     );
@@ -1630,7 +1681,7 @@ export class C64API {
           },
         };
         const resolvedUpdates = Object.fromEntries(
-          Object.entries(updates).map(([item, value]) => [
+          orderFirmwareSafeConfigUpdates(category, updates).map(([item, value]) => [
             item,
             resolveConfigWriteValue(category, item, value, categoryPayload),
           ]),
@@ -1646,6 +1697,7 @@ export class C64API {
     const run = (): Promise<{ errors: string[] }> =>
       this.request("/v1/configs", {
         method: "POST",
+        ...CONFIG_WRITE_REQUEST_OPTIONS,
         body: JSON.stringify(resolvedPayload),
       });
     const response = await scheduleConfigWrite(run);
@@ -1718,6 +1770,7 @@ export class C64API {
     return this.request(`/v1/streams/${encodeURIComponent(stream)}:stop`, {
       method: "PUT",
       timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
+      __c64uSkipSuccessBodyInspection: true,
     });
   }
 

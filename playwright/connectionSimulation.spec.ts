@@ -73,6 +73,49 @@ const dismissDemoModeDialogIfVisible = async (page: Page) => {
   await expect(dialog).toBeHidden({ timeout: 5000 });
 };
 
+const clickReconnectFromSettings = async (page: Page) => {
+  const dialog = page.getByRole("dialog", { name: /demo mode/i });
+  const dialogSaveAndRetry = dialog.getByRole("button", { name: /Save & Retry/i });
+  const settingsSaveAndConnect = page.getByRole("button", {
+    name: /Save & Connect|Save connection/i,
+  });
+
+  await expect
+    .poll(
+      async () => {
+        if (await dialogSaveAndRetry.isVisible()) return "dialog-save";
+        if (await settingsSaveAndConnect.isVisible()) return "settings-save";
+        if (await dialog.isVisible()) return "dialog";
+        return "waiting";
+      },
+      { timeout: 15000 },
+    )
+    .toMatch(/dialog-save|settings-save|dialog/);
+
+  if (await dialogSaveAndRetry.isVisible()) {
+    await clickWithoutNavigationWait(page, dialogSaveAndRetry);
+    return;
+  }
+
+  if (await settingsSaveAndConnect.isVisible()) {
+    await page.waitForTimeout(750);
+    if (await dialogSaveAndRetry.isVisible()) {
+      await clickWithoutNavigationWait(page, dialogSaveAndRetry);
+      return;
+    }
+    if (await dialog.isVisible()) {
+      await dismissDemoModeDialogIfVisible(page);
+      await expect(settingsSaveAndConnect).toBeVisible({ timeout: 15000 });
+    }
+    await clickWithoutNavigationWait(page, settingsSaveAndConnect);
+    return;
+  }
+
+  await dismissDemoModeDialogIfVisible(page);
+  await expect(settingsSaveAndConnect).toBeVisible({ timeout: 15000 });
+  await clickWithoutNavigationWait(page, settingsSaveAndConnect);
+};
+
 const openDiagnosticsConnectionActions = async (page: Page, indicator: Locator) => {
   const diagnostics = page.getByRole("dialog", { name: "Diagnostics" });
   const diagnosticsVisible = await diagnostics.isVisible().catch(() => false);
@@ -900,17 +943,8 @@ test.describe("Deterministic Connectivity Simulation", () => {
     await expect(currentUsingInDemo.locator("span")).toHaveText(demoHostname);
     await expect(currentUsingInDemo).toContainText(/HTTP \d+/);
 
-    const autoDemoToggle = page.getByRole("checkbox", { name: /Automatic Demo Mode/i }).first();
-    if (await autoDemoToggle.isChecked().catch(() => false)) {
-      await clickWithoutNavigationWait(page, autoDemoToggle);
-    }
-    await expect(autoDemoToggle).not.toBeChecked();
-
     server.setReachable(true);
-    await dismissDemoModeDialogIfVisible(page);
-    const saveAndConnect = page.getByRole("button", { name: /Save & Connect|Save connection/i });
-    await expect(saveAndConnect).toBeVisible({ timeout: 15000 });
-    await clickWithoutNavigationWait(page, saveAndConnect);
+    await clickReconnectFromSettings(page);
     const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 10000 });
     const currentUsing = page.getByText("Currently using:");
