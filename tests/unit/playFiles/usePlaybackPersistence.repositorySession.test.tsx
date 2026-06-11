@@ -11,7 +11,7 @@ import { useRef, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePlaybackPersistence } from "@/pages/playFiles/hooks/usePlaybackPersistence";
 import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
-import { buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
+import { PLAYBACK_SESSION_KEY, buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
 
 const repository = {
   upsertTracks: vi.fn().mockResolvedValue(undefined),
@@ -52,21 +52,25 @@ const buildPlaylistItem = (entry: PlayableEntry, songNrOverride?: number, addedA
     unavailableReason: null,
   }) satisfies PlaylistItem;
 
-const useHarness = (playlistStorageKey: string) => {
-  const [playlist, setPlaylist] = useState<PlaylistItem[]>([
-    buildPlaylistItem({
-      source: "hvsc",
-      name: "one.sid",
-      path: "/MUSICIANS/Test/one.sid",
-      sourceId: "hvsc-library",
-    }),
-    buildPlaylistItem({
-      source: "hvsc",
-      name: "two.sid",
-      path: "/MUSICIANS/Test/two.sid",
-      sourceId: "hvsc-library",
-    }),
-  ]);
+const useHarness = (playlistStorageKey: string, options?: { startEmpty?: boolean }) => {
+  const [playlist, setPlaylist] = useState<PlaylistItem[]>(
+    options?.startEmpty
+      ? []
+      : [
+          buildPlaylistItem({
+            source: "hvsc",
+            name: "one.sid",
+            path: "/MUSICIANS/Test/one.sid",
+            sourceId: "hvsc-library",
+          }),
+          buildPlaylistItem({
+            source: "hvsc",
+            name: "two.sid",
+            path: "/MUSICIANS/Test/two.sid",
+            sourceId: "hvsc-library",
+          }),
+        ],
+  );
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -119,6 +123,9 @@ const useHarness = (playlistStorageKey: string) => {
   return {
     activePlaylistQuery,
     currentIndex,
+    playlist,
+    isPlaying,
+    elapsedMs,
     setCurrentIndex,
     setActivePlaylistQuery,
   };
@@ -194,6 +201,84 @@ describe("usePlaybackPersistence repository session persistence", () => {
     });
 
     expect(repository.replacePlaylistItems).not.toHaveBeenCalled();
+  });
+
+  it("does not delete a stored playing session while repository hydration is pending (playback survives navigation remount)", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    const trackId = "hvsc:hvsc-library:/MUSICIANS/Test/one.sid";
+    sessionStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({
+        playlistKey: playlistStorageKey,
+        currentItemId: trackId,
+        currentItemLabel: "one.sid",
+        currentIndex: 0,
+        isPlaying: true,
+        isPaused: false,
+        elapsedMs: 5000,
+        playedMs: 5000,
+        durationMs: 60000,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+
+    repository.getPlaylistItemCount.mockResolvedValue(1);
+    let releaseHydration: (items: unknown[]) => void = () => {};
+    repository.getPlaylistItems.mockReturnValueOnce(
+      new Promise((resolve) => {
+        releaseHydration = resolve;
+      }),
+    );
+    repository.getTracksByIds.mockResolvedValue(
+      new Map([
+        [
+          trackId,
+          {
+            trackId,
+            sourceKind: "hvsc",
+            sourceId: "hvsc-library",
+            sourceLocator: "/MUSICIANS/Test/one.sid",
+            path: "/MUSICIANS/Test/one.sid",
+            title: "one.sid",
+            origin: null,
+            configRef: null,
+            archiveRef: null,
+            defaultDurationMs: 60000,
+            subsongCount: null,
+            sizeBytes: null,
+            modifiedAt: null,
+          },
+        ],
+      ]),
+    );
+
+    const { result } = renderHook(() => useHarness(playlistStorageKey, { startEmpty: true }));
+
+    // Hydration is still pending: the freshly mounted (not yet restored)
+    // instance must not delete the live session a navigation remount relies on.
+    expect(sessionStorage.getItem(PLAYBACK_SESSION_KEY)).not.toBeNull();
+
+    await act(async () => {
+      releaseHydration([
+        {
+          trackId,
+          songNr: undefined,
+          configRef: null,
+          configOrigin: null,
+          configOverrides: null,
+          addedAt: new Date().toISOString(),
+          status: "ready",
+          unavailableReason: null,
+        },
+      ]);
+    });
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+      expect(result.current.isPlaying).toBe(true);
+    });
+    expect(result.current.elapsedMs).toBe(5000);
+    expect(JSON.parse(sessionStorage.getItem(PLAYBACK_SESSION_KEY)!).isPlaying).toBe(true);
   });
 
   it("restores the active playlist query from repository session state", async () => {

@@ -1,124 +1,138 @@
-# Logs
-*.log
-lerna-debug.log*
-logs/
-npm-debug.log*
-pnpm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-Logs
-
-# Dependencies
-node_modules/
-
-# Test fixtures
-.cache/hvsc/
-android/app/src/test/fixtures/HVSC_Update_84.7z
-.tools
-ource /home/chris/dev/c64/c64commander/.venv/bin/activate
-
-# Build output
-.gradle/
-android/**/build/
-artifacts/release-size-investigation/
-artifacts/video/
-ci-artifacts/
-dist/
-dist-ssr/
-.tmp*
-tmp/
-vite.config.ts.timestamp-*.mjs
-nohup.out
-__pycache__/
-*.py[cod]
+# Operating system and editor files
+.DS_Store
 *.iml
-.coverage
-.pytest_cache/
-tmp
-
-# Test output
-.nyc_output/
-coverage/
-agents/coverage-agents.xml
-playwright-report/
-playwright-report-coverage/
-test-results/
-.cov-current/
-.cov-native-fresh/
-.cov-new/
-.cov-node/
-.cov-shards/
-.cov-unit/
-.cov-unit-single/
-.cov-cur/
-.cov-latest/
-.cov-v8-current/
-
-# Local config
-*.local
-.env
-
-# Editors
 *.njsproj
 *.ntvs*
 *.sln
 *.suo
 *.sw?
-.DS_Store
 .idea/
 .vscode/*
 !.vscode/extensions.json
-!.vscode/settings.json
 !.vscode/mcp.json
+!.vscode/settings.json
 !.vscode/tasks.json
 
-# Android signing
-*.keystore
+# Local environment and secrets
+.env
+*.local
 android/key.properties
 android/keystore/
+*.keystore
 
-# Other
-golden-trace-reference
-tmp-ci-artifacts
-1541ultimate
+# Dependencies and local tool state
+node_modules/
+.tools/
+
+# Logs
+*.log
+logs/
+Logs/
+lerna-debug.log*
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+nohup.out
+
+# Temporary files and generic build output
+.tmp*/
+tmp/
+tmp-ci-artifacts/
+dist/
+dist-ssr/
+ci-artifacts/
+artifacts/release-size-investigation/
+artifacts/video/
+vite.config.ts.timestamp-*.mjs
+
+# Python artifacts
+**pycache**/
+*.py[cod]
+.coverage
+.pytest_cache/
+
+# JavaScript and test output
+.nyc_output/
+coverage/
+playwright-report/
+playwright-report-coverage/
+test-results/
+
+# Coverage snapshots
+.cov-*/
+agents/coverage-agents.xml
+
+# Test fixtures
+.cache/hvsc/
+android/app/src/test/fixtures/HVSC_Update_84.7z
+
+# Android build and generated files
+.gradle/
+android/**/build/
+android/**/*.aar
+android/**/*.aab
+android/**/*.ap_
+android/**/*.apk
+android/**/*.class
+android/**/*.dex
+android/**/*.hprof
+android/**/.cxx/
+android/.externalNativeBuild/
+android/.navigation/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+android/app/src/main/assets/public/
+android/app/src/main/res/xml/config.xml
+android/bin/
+android/capacitor-cordova-android-plugins/
+android/captures/
+android/fastlane/Preview.html
+android/fastlane/readme.md
+android/fastlane/report.xml
+android/fastlane/screenshots/
+android/fastlane/test_output/
+android/freeline.py
+android/freeline/
+android/freeline_project_description.json
+android/gen/
+android/lint/generated/
+android/lint/intermediates/
+android/lint/outputs/
+android/lint/tmp/
+android/local.properties
+android/out/
+android/proguard/
+android/vcs.xml
+
+# iOS build and generated files
+ios/App/App/capacitor.config.json
+ios/App/App/config.xml
+ios/App/App/public/
+ios/App/Pods/
+ios/App/build/
+ios/App/output/
+ios/DerivedData/
+ios/capacitor-cordova-ios-plugins/
+ios/native-tests/.build/
+ios/xcuserdata/
+
+# C64 Scope generated files
+c64scope/**/artifacts/
+c64scope/**/dist/
+c64scope/**/logs/
+c64scope/**/node_modules/
+
+# Generated project files
+src/version.ts
 
 # Planning artifacts
 .planning/
 
-# Container image analysis artifacts
-dive-report*.json
-dive-ci*.txt
-dive-summary*.json
-docker-history*.txt
-docker-inspect*.json
-filecount*.txt
-
-# Review generated research evidence (machine-generated, ephemeral)
-docs/plans/performance/playback-and-volume-control/runs/
-docs/research/**/*.png
-docs/research/**/artifacts/
-docs/research/**/evidence/
-docs/research/**/logs/
-docs/research/**/*logcat*
-docs/research/**/*meminfo*/
-docs/research/**/metrics/
-docs/research/**/post-fix/logs/
-docs/research/**/post-fix/screenshots/
-docs/research/**/prod-hardening-1-evidence/
-docs/research/**/*-evidence/
-docs/research/**/rollout-artifacts/
-docs/research/**/rollout-artifacts/**
-docs/research/**/screenshots/
-docs/plans/performance/**/runs/
-
-# Full app coverage generated run artifacts
-docs/testing/agentic-tests/full-app-coverage/runs/*
-!docs/testing/agentic-tests/full-app-coverage/runs/README.md
-
 # Agent runtime artifacts
 agents/.coverage
 agents/.pytest_cache/
-agents/**/__pycache__/
+agents/**/**pycache**/
 agents/logs/
 agents/runs/
 agents/runtime/logs/
@@ -127,83 +141,71 @@ agents/runtime/state/
 agents/state/*
 !agents/state/README.md
 
-# Robolectric compiled artifacts (downloaded as Maven dependency, not sources)
-org/
+# Full app coverage generated run artifacts
+docs/testing/agentic-tests/full-app-coverage/runs/*
+!docs/testing/agentic-tests/full-app-coverage/runs/README.md
 
-# Android generated files
-android/**/*.apk
-android/**/*.aar
-android/**/*.ap_
-android/**/*.aab
-android/**/*.dex
-android/**/*.class
-android/bin/
-android/gen/
-android/out/
-android/local.properties
-android/proguard/
-android/.navigation/
-android/captures/
-android/.externalNativeBuild/
-android/**/.cxx/
-android/freeline.py
-android/freeline/
-android/freeline_project_description.json
-android/fastlane/report.xml
-android/fastlane/Preview.html
-android/fastlane/screenshots/
-android/fastlane/test_output/
-android/fastlane/readme.md
-android/vcs.xml
-android/lint/intermediates/
-android/lint/generated/
-android/lint/outputs/
-android/lint/tmp/
-android/**/*.hprof
-android/capacitor-cordova-android-plugins/
-android/app/src/main/assets/public/
-android/app/src/main/assets/capacitor.config.json
-android/app/src/main/assets/capacitor.plugins.json
-android/app/src/main/res/xml/config.xml
+# Generated research, hardening, and performance evidence
+docs/plans/hardening/
+docs/plans/performance/**/runs/
+docs/research/**/*.png
+docs/research/**/*-evidence/
+docs/research/**/*logcat*
+docs/research/**/*meminfo*/
+docs/research/**/artifacts/
+docs/research/**/evidence/
+docs/research/**/logs/
+docs/research/**/metrics/
+docs/research/**/post-fix/logs/
+docs/research/**/post-fix/screenshots/
+docs/research/**/rollout-artifacts/
+docs/research/**/screenshots/
 
-# iOS generated files
-ios/App/build/
-ios/App/Pods/
-ios/App/output/
-ios/App/App/public/
-ios/DerivedData/
-ios/xcuserdata/
-ios/capacitor-cordova-ios-plugins/
-ios/App/App/capacitor.config.json
-ios/App/App/config.xml
-ios/native-tests/.build/**
-
-# C64 Scope generated files
-c64scope/**/artifacts/
-c64scope/**/logs/
-c64scope/**/dist/
-c64scope/**/node_modules/
-
-# Generated version file (written by scripts/resolve-version.sh at build time)
-src/version.ts
-
-# Generated OCR and swipe-transition screenshots (no longer produced)
-docs/img/app/details/page-headers/**/ocr.txt
+# Generated OCR and swipe-transition screenshots
 docs/img/app/details/page-headers/**/header.ocr.png
+docs/img/app/details/page-headers/**/ocr.txt
 docs/img/app/details/page-headers/**/screen.png
 docs/img/app/details/swipe-transitions/
-docs/research/stabilization/responsiveness2/evidence/
-docs/plans/performance/iteration2/runs/
 
-# Symlinked projects
+# Container image analysis artifacts
+dive-ci*.txt
+dive-report*.json
+dive-summary*.json
+docker-history*.txt
+docker-inspect*.json
+filecount*.txt
+
+# Robolectric compiled artifacts
+org/
+
+# Local worktrees and symlinked projects
 .worktrees/
+1541ultimate/
+android-mcp-server/
+c64bridge/
+c64stream/
+droidmind/
+mobile-mcp/
+test-data/
+vivipi/
+
+# Local agent/tooling state
+.codex/
+.gstack/
+
+# Symlinked repos
 1541ultimate
 android-mcp-server
 c64bridge
 c64stream
 droidmind
-mobile-mcp
-test-data
 vivipi
-.gstack/
-.codex
+
+# Other local artifacts
+.tmp-playwright-noweb.config.ts
+BUGS_FOUND.md
+C64U_INCIDENTS.md
+golden-trace-reference
+LESSONS.md
+test-data
+U64_INCIDENTS.md

@@ -35,6 +35,12 @@ import { updateDeviceConnectionState } from "@/lib/deviceInteraction/deviceState
 import { isBareHostname, isMdnsAvailable, resolveMdnsHost } from "@/lib/native/mdnsResolver";
 import { normalizeTransportError } from "@/lib/c64api/transportErrors";
 import { clearConnectivityErrorToastsForHost } from "@/lib/uiErrors";
+import {
+  completeSavedDeviceVerification,
+  getSavedDevicesSnapshot,
+  getSelectedSavedDevice,
+  resolveCanonicalProductFamilyCode,
+} from "@/lib/savedDevices/store";
 
 export type ConnectionState = "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO";
 export type DiscoveryTrigger = "startup" | "manual" | "settings" | "background" | "switch" | "resume";
@@ -315,6 +321,7 @@ export async function verifyCurrentConnectionTarget(options?: {
     lastDiscoveryTrigger: "switch",
     lastProbeAtMs: Date.now(),
     lastProbeError: null,
+    deviceInfo: null,
   });
   const switchConfig =
     typeof options?.deviceHost === "string"
@@ -386,8 +393,41 @@ const emit = () => {
   listeners.forEach((listener) => listener());
 };
 
+const rememberSelectedSavedDeviceIdentity = (deviceInfo: DeviceInfo | null | undefined) => {
+  const product = resolveCanonicalProductFamilyCode(deviceInfo?.product ?? null);
+  if (!product) return;
+
+  const selectedDevice = getSelectedSavedDevice();
+  if (!selectedDevice) return;
+
+  const hostname = deviceInfo?.hostname?.trim() || null;
+  const uniqueId = deviceInfo?.unique_id?.trim() || null;
+  const savedDevices = getSavedDevicesSnapshot();
+  const summary = savedDevices.summaries[selectedDevice.id];
+  const runtimeVerified = savedDevices.verifiedByDeviceId[selectedDevice.id] ?? null;
+
+  if (
+    selectedDevice.lastKnownProduct === product &&
+    selectedDevice.lastKnownHostname === hostname &&
+    selectedDevice.lastKnownUniqueId === uniqueId &&
+    summary?.lastVerifiedProduct === product &&
+    runtimeVerified?.product === product
+  ) {
+    return;
+  }
+
+  completeSavedDeviceVerification(selectedDevice.id, {
+    product: deviceInfo?.product ?? product,
+    hostname,
+    unique_id: uniqueId,
+  });
+};
+
 const setSnapshot = (patch: Partial<ConnectionSnapshot>) => {
   snapshot = Object.freeze({ ...snapshot, ...patch });
+  if (patch.deviceInfo) {
+    rememberSelectedSavedDeviceIdentity(patch.deviceInfo);
+  }
   emit();
 };
 
@@ -576,6 +616,26 @@ const logDiscoveryDecision = (
   }
 };
 
+let identityHealInFlight = false;
+
+// A promotion driven by passive traffic (noteReachable) or a cancelled startup
+// probe can reach REAL_CONNECTED with no device identity; without identity the
+// health gate reports Degraded indefinitely, so fetch it once after connect.
+const ensureDeviceIdentityAfterConnect = async () => {
+  if (identityHealInFlight || snapshot.deviceInfo) return;
+  identityHealInFlight = true;
+  try {
+    const result = await probeInfoOnce();
+    if (result.ok && snapshot.state === "REAL_CONNECTED" && !snapshot.deviceInfo) {
+      setSnapshot({ deviceInfo: result.deviceInfo });
+    } else if (!result.ok) {
+      addLog("debug", "Post-connect identity probe failed", { error: result.error });
+    }
+  } finally {
+    identityHealInFlight = false;
+  }
+};
+
 const transitionToRealConnected = async (
   trigger: DiscoveryTrigger,
   runtimeConfig?: { baseUrl: string; deviceHost: string; password?: string },
@@ -598,6 +658,9 @@ const transitionToRealConnected = async (
     stickyRealDeviceLock = true;
   }
   addLog("info", "Connection switched to real device", { trigger });
+  if (!snapshot.deviceInfo) {
+    void ensureDeviceIdentityAfterConnect();
+  }
 };
 
 const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {

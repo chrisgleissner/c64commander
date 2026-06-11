@@ -174,13 +174,13 @@ appends decisions to `WORKLOG.md` as it goes.
 | ----- | ----- | ---------------- |
 | E0 | complete | Starting tree captured; BUGS_FOUND.md created; WORKLOG section open |
 | E1 | complete | 583/6745 tests pass; lint + build green; 2 pre-existing issues fixed |
-| E2 | pending | |
-| E3 | pending | |
-| E4 | pending | |
-| E5 | pending | |
-| E6 | pending | |
-| E7 | pending | |
-| E8 | pending | |
+| E2 | complete | H-03/H-04 fixed in `26634494`; H-05 audit: 88 sites, 2 borderline → BUG-006 (Low, no fix); H-07 flush GUARANTEED (release/unmount/route); H-02 root-caused as BUG-005 and fixed |
+| E3 | complete (code) | Error policy §3–§6 implemented in `26634494` (uiErrors dedup/stale-clear/background, toast precedence/auto-dismiss); 198 targeted tests green 2026-06-11T08:22 |
+| E4 | complete | Volume coalescing measured on u64: 13 changes → ~3 batch writes, REST 1 (PASS). H-06/U7 idle measurement on c64u after BUG-015: 6 `/v1/drives` reads over 5.5 min at ~60 s cadence, all HTTP 200, no toasts/failures; c64u post-probe healthy |
+| E5 | complete | Latest fast deploy 2026-06-11T17:29 local: versionCode 2012, versionName `0.8.7-rc2-26634`; launches clean on Pixel 4 |
+| E6 | complete-with-documented-exclusions | DONE on u64: S1, H1-partial (prior), PL1 C64U FTP + CommoServe + Local proof + HVSC affordance, PL2, PL3 filter/select-all/remove/view-all, PL4, PL5 (incl. mute-during-drag), navigation-survival, D1–D3, C1–C2, N1, S3, S4-u64. DONE on c64u: S4-c64u AUTO->Conservative, S2/U8 c64u->u64 switch with no stale toast/attribution, U2 safe subset (Pause/Resume/Menu; Reset excluded), U3 play/pause/resume (Stop excluded after reset mapping observed), U4 volume/mute/unmute, U5 mount/eject, U6 safe config change/restore, U7 idle traffic. H2 CPU Speed incident recovered/restored but row remains failed/deferred; see BUG-010 |
+| E7 | in_progress | BUG-005, BUG-007, BUG-008, BUG-009, BUG-011, BUG-012, BUG-013, BUG-014, BUG-015, BUG-016 fixed/mitigated at root w/ regression tests; deployed and verified on Pixel 4 where device-visible. BUG-010 recovered/restored but root cause deferred |
+| E8 | pending | Final sweep: full `npm run test`, lint, coverage gate, build; final report |
 
 ---
 

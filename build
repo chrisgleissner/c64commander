@@ -1662,18 +1662,12 @@ if command -v git >/dev/null 2>&1; then
   if [[ -z "${VITE_GIT_SHA:-}" ]]; then
     export VITE_GIT_SHA="$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || true)"
   fi
-  if [[ -z "${VITE_APP_VERSION:-}" ]]; then
-    GIT_TAG="$(git -C "$ROOT_DIR" describe --tags --exact-match 2>/dev/null || true)"
-    if [[ -n "$GIT_TAG" ]]; then
-      export VITE_APP_VERSION="$GIT_TAG"
-    fi
-  fi
 fi
 if [[ -z "${VITE_BUILD_TIME:-}" ]]; then
   export VITE_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 fi
-if [[ -z "${VITE_APP_VERSION:-}" && -f "$ROOT_DIR/package.json" ]]; then
-  export VITE_APP_VERSION="$(node -p "require('./package.json').version" 2>/dev/null || true)"
+if [[ -z "${VITE_APP_VERSION:-}" ]]; then
+  export VITE_APP_VERSION="$(node "$ROOT_DIR/scripts/resolve-build-version.mjs")"
 fi
 if [[ -n "${VITE_APP_VERSION:-}" && -z "${VERSION_NAME:-}" ]]; then
   export VERSION_NAME="$VITE_APP_VERSION"

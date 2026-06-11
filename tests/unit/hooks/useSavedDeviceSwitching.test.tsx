@@ -132,6 +132,7 @@ describe("useSavedDeviceSwitching", () => {
   it("updates local selection immediately, then persists verified identity and route invalidation on success", async () => {
     const store = await import("@/lib/savedDevices/store");
     const metrics = await import("@/lib/savedDevices/savedDeviceSwitchMetrics");
+    const traceContext = await import("@/lib/tracing/traceContext");
     metrics.clearSavedDeviceSwitchMetrics();
     const c64api = await import("@/lib/c64api");
     const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
@@ -163,6 +164,14 @@ describe("useSavedDeviceSwitching", () => {
     }>();
     mockGetPasswordForDevice.mockResolvedValueOnce("super-secret");
     mockVerifyCurrentConnectionTarget.mockReturnValueOnce(verification.promise);
+    traceContext.setTraceDeviceAttributionContext({
+      savedDeviceId: initialDeviceId,
+      savedDeviceNameSnapshot: "Office C64U",
+      savedDeviceHostSnapshot: "c64u",
+      verifiedUniqueId: "UID-C64U",
+      verifiedHostname: "c64u",
+      verifiedProduct: "C64U",
+    });
 
     const { result } = renderHook(() => useSavedDeviceSwitching(), {
       wrapper: createWrapper("/play"),
@@ -174,6 +183,14 @@ describe("useSavedDeviceSwitching", () => {
     });
 
     expect(store.getSavedDevicesSnapshot().selectedDeviceId).toBe("device-backup");
+    expect(traceContext.getTraceContextSnapshot().device).toMatchObject({
+      savedDeviceId: "device-backup",
+      savedDeviceNameSnapshot: "Backup Lab",
+      savedDeviceHostSnapshot: "backup-c64",
+      verifiedUniqueId: null,
+      verifiedHostname: null,
+      verifiedProduct: null,
+    });
     expect(store.getSavedDeviceSwitchStatus("device-backup")).toBe("verifying");
     expect(mockSetStoredFtpPort).toHaveBeenCalledWith(2021);
     expect(mockSetStoredTelnetPort).toHaveBeenCalledWith(2323);

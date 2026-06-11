@@ -26,7 +26,11 @@ import {
   resetDiagnosticsOverlayState,
   primeDiagnosticsOverlaySuppression,
 } from "@/lib/diagnostics/diagnosticsOverlayState";
-import { DRIVES_POLL_INTERVAL_MS, pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
+import {
+  DRIVES_POLL_INTERVAL_IDLE_MS,
+  DRIVES_POLL_INTERVAL_MS,
+  pollingPauseRegistry,
+} from "@/lib/query/c64PollingGovernance";
 import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 
 const connectionSnapshot = {
@@ -428,6 +432,54 @@ describe("useC64Connection", () => {
 
       expect(mockApi.getDrives).toHaveBeenCalledTimes(1);
     } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("uses the conservative idle interval for drive polling on c64u", async () => {
+    vi.useFakeTimers();
+    const store = await import("@/lib/savedDevices/store");
+    const selectedDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    try {
+      store.updateSavedDevice(selectedDeviceId, {
+        name: "c64u",
+        host: "c64u",
+        type: "C64U",
+        typeSource: "INFERRED",
+        lastKnownProduct: "C64U",
+      });
+      mockApi.getDrives.mockClear();
+
+      const { wrapper } = createWrapper();
+      renderHook(() => useC64Drives({ intent: "user" }), { wrapper });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(mockApi.getDrives).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        vi.advanceTimersByTime(DRIVES_POLL_INTERVAL_MS);
+        await Promise.resolve();
+      });
+
+      expect(mockApi.getDrives).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        vi.advanceTimersByTime(DRIVES_POLL_INTERVAL_IDLE_MS - DRIVES_POLL_INTERVAL_MS);
+        await Promise.resolve();
+      });
+
+      expect(mockApi.getDrives).toHaveBeenCalledTimes(2);
+    } finally {
+      store.updateSavedDevice(selectedDeviceId, {
+        name: "u64",
+        host: "u64",
+        type: "U64E",
+        typeSource: "INFERRED",
+        lastKnownProduct: "U64E",
+      });
       vi.useRealTimers();
     }
   });

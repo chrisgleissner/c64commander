@@ -189,6 +189,9 @@ const isValidConnectionPort = (value: string) => {
   return Number.isInteger(parsed) && parsed >= 1 && parsed <= 65535;
 };
 
+const isOfflineSwitchResult = (value: unknown): value is { ok: false; error?: string | null } =>
+  typeof value === "object" && value !== null && "ok" in value && (value as { ok?: unknown }).ok === false;
+
 export default function SettingsPage() {
   const { profile } = useDisplayProfile();
   const navigate = useNavigate();
@@ -581,14 +584,21 @@ export default function SettingsPage() {
         hasPassword,
       });
       updateConfig(nextDeviceHost, hasPassword ? trimmedPassword : undefined);
-      await switchSavedDevice(selectedSavedDevice.id);
+      const verification = await switchSavedDevice(selectedSavedDevice.id);
+      if (isOfflineSwitchResult(verification)) {
+        throw new Error(
+          verification.error ??
+            `Unable to reach ${nextHost}. Check the hostname/IP address and confirm the device is powered on.`,
+        );
+      }
       toast({ title: "Connection settings saved" });
     } catch (error) {
       reportUserError({
         operation: "CONNECTION_SAVE",
-        title: "Error",
+        title: "Unable to save connection",
         description: (error as Error).message,
         error,
+        deviceHost: stripPortFromDeviceHost(deviceDraft.host),
       });
     } finally {
       setIsSaving(false);

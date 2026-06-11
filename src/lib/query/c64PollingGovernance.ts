@@ -86,6 +86,13 @@ export const getInfoRefreshMinIntervalMs = () => {
   return Math.min(INFO_REFRESH_MIN_CEILING_MS, Math.max(INFO_REFRESH_MIN_FLOOR_MS, candidate));
 };
 
+export const getDrivesPollIntervalMs = () => {
+  const safety = loadDeviceSafetyConfig();
+  return safety.resolution?.effectiveMode === "CONSERVATIVE" || safety.mode === "CONSERVATIVE"
+    ? DRIVES_POLL_INTERVAL_IDLE_MS
+    : DRIVES_POLL_INTERVAL_MS;
+};
+
 export const shouldRunRateLimited = (lastRunAtMs: number | null, minIntervalMs: number, nowMs = Date.now()) => {
   if (!lastRunAtMs) return true;
   return nowMs - lastRunAtMs >= Math.max(0, minIntervalMs);

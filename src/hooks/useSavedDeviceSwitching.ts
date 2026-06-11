@@ -17,6 +17,7 @@ import { setStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { addLog } from "@/lib/logging";
 import { getSavedDeviceSwitchPrefixes, invalidateForSavedDeviceSwitch } from "@/lib/query/c64QueryInvalidation";
 import { getPasswordForDevice } from "@/lib/secureStorage";
+import { setTraceDeviceAttributionContext } from "@/lib/tracing/traceContext";
 import {
   beginSavedDeviceSwitchAttempt,
   completeSavedDeviceSwitchAttempt,
@@ -24,6 +25,7 @@ import {
   markSavedDeviceSwitchVerificationStarted,
 } from "@/lib/savedDevices/savedDeviceSwitchMetrics";
 import {
+  buildSavedDeviceDiagnosticsAttribution,
   completeSavedDeviceVerification,
   failSavedDeviceVerification,
   getSavedDeviceById,
@@ -63,6 +65,7 @@ export function useSavedDeviceSwitching() {
         routePath: location.pathname,
       });
 
+      setTraceDeviceAttributionContext(buildSavedDeviceDiagnosticsAttribution(device, null));
       selectSavedDevice(deviceId);
       markSavedDeviceSwitchSelectionApplied(attemptId);
       setStoredFtpPort(device.ftpPort);

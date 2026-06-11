@@ -870,6 +870,32 @@ describe("SettingsPage", () => {
     });
   });
 
+  it("reports a foreground connection error when saved-device verification finishes offline", async () => {
+    mockSwitchSavedDevice.mockResolvedValueOnce({
+      ok: false,
+      deviceInfo: null,
+      error: "Host unreachable",
+      resolvedAddress: null,
+    });
+
+    renderSettingsPage();
+
+    fireEvent.change(screen.getByLabelText(/c64u hostname \/ ip/i), { target: { value: "nosuchhost-c64u" } });
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "CONNECTION_SAVE",
+          title: "Unable to save connection",
+          description: "Host unreachable",
+          deviceHost: "nosuchhost-c64u",
+        }),
+      );
+    });
+    expect(toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Connection settings saved" }));
+  });
+
   it("hides the automatic demo-mode setting when the feature flag is disabled", () => {
     renderSettingsPage();
 

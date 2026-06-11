@@ -559,6 +559,17 @@ export const resolveCanonicalProductFamilyCode = (product?: string | null): Prod
   return inferConnectedDeviceLabel(product ?? null) ?? null;
 };
 
+const inferSavedDeviceProductFamily = (device: SavedDevice): ProductFamilyCode | null => {
+  const typedProduct = resolveCanonicalProductFamilyCode(device.type);
+  if (typedProduct) return typedProduct;
+
+  const identifiers = [device.host, device.name].map((value) => compact(value).toLowerCase());
+  if (identifiers.some((value) => value === "c64u" || value === "c64ultimate")) {
+    return "C64U";
+  }
+  return null;
+};
+
 export const buildSavedDevicePrimaryLabel = (device: SavedDevice, verified?: VerifiedSavedDeviceIdentity | null) => {
   const currentSnapshot = snapshot;
   if (!currentSnapshot) {
@@ -693,7 +704,13 @@ export const getSelectedSavedDeviceProductFamilySync = (): ProductFamilyCode | n
   const selectedDevice =
     current.devices.find((device) => device.id === current.selectedDeviceId) ?? current.devices[0] ?? null;
   if (!selectedDevice) return null;
-  return selectedDevice.lastKnownProduct ?? current.summaries[selectedDevice.id]?.lastVerifiedProduct ?? null;
+  return (
+    current.verifiedByDeviceId[selectedDevice.id]?.product ??
+    selectedDevice.lastKnownProduct ??
+    current.summaries[selectedDevice.id]?.lastVerifiedProduct ??
+    inferSavedDeviceProductFamily(selectedDevice) ??
+    null
+  );
 };
 
 export const getSavedDeviceById = (deviceId: string) => {

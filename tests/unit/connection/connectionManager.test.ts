@@ -275,6 +275,85 @@ describe("connectionManager", () => {
     expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("127.0.0.1:9999");
   });
 
+  it("startup discovery stores the device identity returned by the successful probe", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          product: "Ultimate 64 Elite",
+          firmware_version: "3.14e",
+          hostname: "u64",
+          unique_id: "38C1BA",
+          errors: [],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await initializeConnectionManager();
+    void discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(getConnectionSnapshot().deviceInfo).toMatchObject({
+      product: "Ultimate 64 Elite",
+      firmware_version: "3.14e",
+    });
+
+    const { getSelectedSavedDeviceProductFamilySync } = await import("../../../src/lib/savedDevices/store");
+    expect(getSelectedSavedDeviceProductFamilySync()).toBe("U64E");
+  });
+
+  it("traffic-derived promotion without identity fetches device identity once", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager, noteReachable } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    await initializeConnectionManager();
+    void discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(800);
+    expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+    expect(getConnectionSnapshot().deviceInfo).toBeNull();
+
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          product: "C64 Ultimate",
+          firmware_version: "1.1.0",
+          hostname: "c64u",
+          unique_id: "5D4E12",
+          errors: [],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    noteReachable("127.0.0.1", "rest");
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(getConnectionSnapshot().deviceInfo).toMatchObject({
+      product: "C64 Ultimate",
+      firmware_version: "1.1.0",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const { getSelectedSavedDeviceProductFamilySync } = await import("../../../src/lib/savedDevices/store");
+    expect(getSelectedSavedDeviceProductFamilySync()).toBe("C64U");
+  });
+
   it("records smoke status transitions when enabled", async () => {
     const { discoverConnection, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
@@ -1380,6 +1459,68 @@ describe("connectionManager", () => {
     );
 
     getInfoSpy.mockRestore();
+  });
+
+  it("clears stale device identity as soon as a device switch starts", async () => {
+    vi.stubEnv("VITEST", "false");
+    vi.stubEnv("NODE_ENV", "production");
+    localStorage.setItem("c64u_device_host", "c64u");
+    localStorage.removeItem("c64u_has_password");
+
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          product: "C64 Ultimate",
+          firmware_version: "1.1.0",
+          hostname: "c64u",
+          unique_id: "5D4E12",
+          errors: [],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager, verifyCurrentConnectionTarget } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    void discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(800);
+    expect(getConnectionSnapshot().deviceInfo?.hostname).toBe("c64u");
+
+    let resolveSwitchProbe: (response: Response) => void = () => undefined;
+    fetchMock.mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        resolveSwitchProbe = resolve;
+      }),
+    );
+
+    const switchPromise = verifyCurrentConnectionTarget({
+      deviceHost: "u64",
+      preferResolvedAddress: "192.168.1.13",
+    });
+
+    expect(getConnectionSnapshot()).toMatchObject({
+      state: "DISCOVERING",
+      deviceInfo: null,
+    });
+
+    resolveSwitchProbe(
+      new Response(
+        JSON.stringify({
+          product: "Ultimate 64 Elite",
+          firmware_version: "3.14e",
+          hostname: "Ultimate-64-Elite-F83C87",
+          unique_id: "38C1BA",
+          errors: [],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await expect(switchPromise).resolves.toEqual(expect.objectContaining({ ok: true }));
+    expect(getConnectionSnapshot().deviceInfo?.hostname).toBe("Ultimate-64-Elite-F83C87");
   });
 
   it("initializeConnectionManager logs warning when stopDemoServer throws", async () => {

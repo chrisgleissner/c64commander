@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "@/hooks/use-toast";
-import { useVolumeOverride } from "@/pages/playFiles/hooks/useVolumeOverride";
+import { resolveUnmuteFallbackIndexForSteps, useVolumeOverride } from "@/pages/playFiles/hooks/useVolumeOverride";
 import { waitForMachineTransitionsToSettle } from "@/lib/deviceInteraction/deviceActivityGate";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
@@ -1290,13 +1290,14 @@ describe("useVolumeOverride", () => {
       result.current.manualMuteSnapshotRef.current = null;
       result.current.handleVolumeDraftChange(0);
     });
+    const draftTarget = "0";
 
     await result.current.handleToggleMute();
 
     expect(mutateAsyncMock).toHaveBeenCalledWith(
       expect.objectContaining({
         category: "Audio Mixer",
-        updates: { "SID 1": "0" },
+        updates: { "SID 1": draftTarget },
       }),
     );
   });
@@ -1374,6 +1375,23 @@ describe("useVolumeOverride", () => {
       }),
     );
     expect(addLog).toHaveBeenCalledWith("info", "Play volume unmute sent", expect.objectContaining({ index: 1 }));
+  });
+
+  it("chooses the zero-dB fallback when unmuting from the mute index without a previous snapshot", () => {
+    expect(
+      resolveUnmuteFallbackIndexForSteps({
+        preferredIndex: null,
+        currentIndex: 1,
+        muteIndex: 1,
+        defaultVolumeIndex: 0,
+        volumeSteps: [
+          { option: "OFF", numeric: null, isOff: true },
+          { option: "-42 dB", numeric: -42, isOff: false },
+          { option: "0 dB", numeric: 0, isOff: false },
+          { option: "5 dB", numeric: 5, isOff: false },
+        ],
+      }),
+    ).toBe(2);
   });
 
   it("does not snap back when the device confirms the committed index and then reverts within the guard window", async () => {

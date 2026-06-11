@@ -113,6 +113,8 @@ const usePlaybackPersistenceHarness = ({
   return {
     playlist,
     currentIndex,
+    isPlaying,
+    elapsedMs,
     setAutoAdvanceDueAtMs: setAutoAdvanceDueAtMsRef.current,
   };
 };
@@ -158,6 +160,61 @@ describe("usePlaybackPersistence", () => {
       expect(result.current.playlist[0].label).toBe("demo.sid");
       expect(result.current.playlist[0].status).toBe("ready");
     });
+  });
+
+  it("does not delete a stored playing session on remount before restore applies (playback survives navigation)", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "local",
+            path: "/Music/demo.sid",
+            name: "demo.sid",
+            sourceId: "local-source",
+            addedAt: new Date().toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+    sessionStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({
+        playlistKey: playlistStorageKey,
+        currentItemId: null,
+        currentItemLabel: "demo.sid",
+        currentIndex: 0,
+        isPlaying: true,
+        isPaused: false,
+        elapsedMs: 5000,
+        playedMs: 5000,
+        durationMs: 60000,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+
+    const localEntriesBySourceId = new Map([["local-source", new Map([["/Music/demo.sid", { name: "demo.sid" }]])]]);
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId,
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    // The freshly mounted (not yet restored) instance must not destroy the
+    // stored session: a navigation remount would otherwise kill live playback.
+    expect(sessionStorage.getItem(PLAYBACK_SESSION_KEY)).not.toBeNull();
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+      expect(result.current.isPlaying).toBe(true);
+    });
+    expect(result.current.elapsedMs).toBe(5000);
+    expect(JSON.parse(sessionStorage.getItem(PLAYBACK_SESSION_KEY)!).isPlaying).toBe(true);
   });
 
   it("hydrates persisted HVSC playlist items with runtime files for playback after restart", async () => {

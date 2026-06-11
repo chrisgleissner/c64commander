@@ -115,6 +115,9 @@ export function usePlaybackPersistence({
   const playlistRepository = getPlaylistDataRepository();
   const repositorySnapshot = usePlaylistRepositorySyncSnapshot(playlistStorageKey);
   const pendingPlaybackRestoreRef = useRef<StoredPlaybackSession | null>(null);
+  // True once the stored session has been read and either applied or rejected;
+  // until then the persist effect must not delete the stored session.
+  const sessionRestoreSettledRef = useRef(false);
   const hydratedPlaylistKeyRef = useRef<string | null>(null);
   const completedInitialRestoreKeyRef = useRef<string | null>(null);
   const hasPlaylistRef = useRef(false);
@@ -255,11 +258,18 @@ export function usePlaybackPersistence({
     if (typeof sessionStorage === "undefined") return;
     try {
       const raw = sessionStorage.getItem(PLAYBACK_SESSION_KEY);
-      if (!raw) return;
+      if (!raw) {
+        sessionRestoreSettledRef.current = true;
+        return;
+      }
       const parsed = JSON.parse(raw) as StoredPlaybackSession;
-      if (!parsed || typeof parsed !== "object") return;
+      if (!parsed || typeof parsed !== "object") {
+        sessionRestoreSettledRef.current = true;
+        return;
+      }
       pendingPlaybackRestoreRef.current = parsed;
     } catch (error) {
+      sessionRestoreSettledRef.current = true;
       addErrorLog("Failed to restore playback session", {
         error: (error as Error).message,
       });
@@ -368,6 +378,7 @@ export function usePlaybackPersistence({
     if (!playlist.length) return;
     if (pending.playlistKey !== playlistStorageKey) {
       pendingPlaybackRestoreRef.current = null;
+      sessionRestoreSettledRef.current = true;
       return;
     }
     const matchedIndexById = pending.currentItemId
@@ -376,6 +387,7 @@ export function usePlaybackPersistence({
     const matchedIndex = matchedIndexById >= 0 ? matchedIndexById : pending.currentIndex;
     if (matchedIndex < 0 || matchedIndex >= playlist.length) {
       pendingPlaybackRestoreRef.current = null;
+      sessionRestoreSettledRef.current = true;
       return;
     }
     setCurrentIndex(matchedIndex);
@@ -415,6 +427,7 @@ export function usePlaybackPersistence({
       playedClockRef.current.hydrate(Math.max(0, pending.playedMs), null);
     }
     pendingPlaybackRestoreRef.current = null;
+    sessionRestoreSettledRef.current = true;
   }, [playlist, playlistStorageKey, setTrackInstanceId, setAutoAdvanceDueAtMs]); // Depends on playlist being set
 
   // Persist Playlist
@@ -495,6 +508,10 @@ export function usePlaybackPersistence({
   useEffect(() => {
     if (typeof sessionStorage === "undefined") return;
     if (!isPlaying && !isPaused) {
+      // A freshly mounted instance starts not-playing; deleting the stored
+      // session here would destroy a live session before the async restore
+      // applies it (navigation remounts the page — playback must survive).
+      if (!sessionRestoreSettledRef.current) return;
       sessionStorage.removeItem(PLAYBACK_SESSION_KEY);
       return;
     }

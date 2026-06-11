@@ -10,7 +10,7 @@ import React from "react";
 import { toast } from "@/hooks/use-toast";
 import { ToastAction, type ToastActionElement } from "@/components/ui/toast";
 import { isHandledUiError } from "@/lib/fileValidation";
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, buildErrorLogDetails } from "@/lib/logging";
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
 
 export type UiErrorReport = {
@@ -58,7 +58,9 @@ const resolveActiveDeviceHost = (): string | undefined => {
     const snapshot = getSavedDevicesSnapshot();
     const selected = snapshot.devices.find((device) => device.id === snapshot.selectedDeviceId);
     return normalizeDeviceHost(selected?.host);
-  } catch {
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    addErrorLog("Failed to resolve active device host for UI error attribution", buildErrorLogDetails(err));
     return undefined;
   }
 };
