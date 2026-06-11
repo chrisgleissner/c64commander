@@ -7,10 +7,11 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
-import { toast } from "@/hooks/use-toast";
+import { __clearToastStateForTests, toast } from "@/hooks/use-toast";
 import { saveNotificationVisibility } from "@/lib/config/appSettings";
 
 beforeEach(() => {
+  __clearToastStateForTests();
   localStorage.clear();
   // Default visibility is errors-only
   saveNotificationVisibility("errors-only");

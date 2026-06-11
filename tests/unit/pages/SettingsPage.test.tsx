@@ -880,10 +880,11 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.change(screen.getByLabelText(/c64u hostname \/ ip/i), { target: { value: "nosuchhost-c64u" } });
+    fireEvent.change(screen.getByLabelText(/c64u hostname \/ ip/i), { target: { value: "  nosuchhost-c64u:8080  " } });
     fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
 
     await waitFor(() => {
+      expect(mockUpdateConfig).toHaveBeenCalledWith("nosuchhost-c64u", undefined);
       expect(reportUserError).toHaveBeenCalledWith(
         expect.objectContaining({
           operation: "CONNECTION_SAVE",

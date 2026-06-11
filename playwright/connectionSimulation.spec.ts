@@ -56,6 +56,23 @@ const clickWithoutNavigationWait = async (page: Page, locator: Locator, attempts
   }
 };
 
+const dismissDemoModeDialogIfVisible = async (page: Page) => {
+  const dialog = page.getByRole("dialog", { name: /demo mode/i });
+  if (!(await dialog.isVisible().catch(() => false))) return;
+
+  const continueButton = dialog
+    .getByRole("button", {
+      name: /Continue in Demo Mode|Close|Dismiss|OK/i,
+    })
+    .first();
+  if (await continueButton.isVisible().catch(() => false)) {
+    await clickWithoutNavigationWait(page, continueButton);
+  } else {
+    await page.keyboard.press("Escape");
+  }
+  await expect(dialog).toBeHidden({ timeout: 5000 });
+};
+
 const openDiagnosticsConnectionActions = async (page: Page, indicator: Locator) => {
   const diagnostics = page.getByRole("dialog", { name: "Diagnostics" });
   const diagnosticsVisible = await diagnostics.isVisible().catch(() => false);
@@ -883,8 +900,17 @@ test.describe("Deterministic Connectivity Simulation", () => {
     await expect(currentUsingInDemo.locator("span")).toHaveText(demoHostname);
     await expect(currentUsingInDemo).toContainText(/HTTP \d+/);
 
+    const autoDemoToggle = page.getByRole("checkbox", { name: /Automatic Demo Mode/i }).first();
+    if (await autoDemoToggle.isChecked().catch(() => false)) {
+      await clickWithoutNavigationWait(page, autoDemoToggle);
+    }
+    await expect(autoDemoToggle).not.toBeChecked();
+
     server.setReachable(true);
-    await clickWithoutNavigationWait(page, page.getByRole("button", { name: /Save & Connect|Save connection/i }));
+    await dismissDemoModeDialogIfVisible(page);
+    const saveAndConnect = page.getByRole("button", { name: /Save & Connect|Save connection/i });
+    await expect(saveAndConnect).toBeVisible({ timeout: 15000 });
+    await clickWithoutNavigationWait(page, saveAndConnect);
     const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 10000 });
     const currentUsing = page.getByText("Currently using:");

@@ -49,14 +49,25 @@ const validateVersion = (value) => {
 
 export const resolveBuildVersion = (env = process.env, repoRoot = DEFAULT_REPO_ROOT) => {
   const explicitVersion = env.VITE_APP_VERSION?.trim() || env.VERSION_NAME?.trim() || env.APP_VERSION?.trim();
-  if (explicitVersion) return explicitVersion;
+  if (explicitVersion) {
+    validateVersionToken(explicitVersion, "Explicit version environment value");
+    validateVersion(explicitVersion);
+    return explicitVersion;
+  }
 
   if (env.GITHUB_REF_TYPE?.trim() === "tag" && env.GITHUB_REF_NAME?.trim()) {
-    return env.GITHUB_REF_NAME.trim();
+    const tagName = env.GITHUB_REF_NAME.trim();
+    validateVersionToken(tagName, "GitHub tag ref name");
+    validateVersion(tagName);
+    return tagName;
   }
 
   const tagRef = resolveTagRefName(env);
-  if (tagRef) return tagRef;
+  if (tagRef) {
+    validateVersionToken(tagRef, "GitHub tag ref");
+    validateVersion(tagRef);
+    return tagRef;
+  }
 
   const inGitRepo = Boolean(runGit(repoRoot, ["rev-parse", "--show-toplevel"]));
   if (inGitRepo) {

@@ -253,6 +253,30 @@ describe("uiErrors", () => {
       expect(toast).toHaveBeenCalledTimes(1);
     });
 
+    it("does not record a dedup entry when the toast layer suppresses the notice", () => {
+      const suppressedDismiss = vi.fn();
+      vi.mocked(toast).mockReturnValue({ id: "", dismiss: suppressedDismiss, update: vi.fn() });
+
+      reportUserError({
+        operation: "LOAD_FILE",
+        title: "Notice",
+        description: "Background notice",
+        severity: "S2",
+        deviceHost: "u64",
+      });
+      reportUserError({
+        operation: "LOAD_FILE",
+        title: "Notice",
+        description: "Background notice",
+        severity: "S2",
+        deviceHost: "u64",
+      });
+      clearToastForSuccessfulOperation("LOAD_FILE", "u64");
+
+      expect(toast).toHaveBeenCalledTimes(2);
+      expect(suppressedDismiss).not.toHaveBeenCalled();
+    });
+
     it("logs every occurrence even when toast is deduplicated", () => {
       vi.mocked(toast).mockReturnValue({ id: "1", dismiss: vi.fn(), update: vi.fn() });
 

@@ -8,11 +8,12 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
-import { reducer, useToast } from "@/hooks/use-toast";
+import { __clearToastStateForTests, reducer, useToast } from "@/hooks/use-toast";
 import { saveNotificationVisibility } from "@/lib/config/appSettings";
 
 beforeEach(() => {
   // Allow all toast variants so hook-level tests are not filtered by visibility setting.
+  __clearToastStateForTests();
   localStorage.clear();
   saveNotificationVisibility("all");
 });
@@ -211,6 +212,28 @@ describe("useToast", () => {
     });
 
     expect(result.current.toasts[0].open).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it("does not schedule auto-dismiss when a live S3 error suppresses an S2 notice", () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useToast());
+
+    act(() => {
+      result.current.toast({ title: "Failed", variant: "destructive" });
+    });
+
+    expect(vi.getTimerCount()).toBe(0);
+
+    let noticeId = "";
+    act(() => {
+      noticeId = result.current.toast({ title: "Saved" }).id;
+    });
+
+    expect(noticeId).toBe("");
+    expect(result.current.toasts).toHaveLength(1);
+    expect(result.current.toasts[0].title).toBe("Failed");
+    expect(vi.getTimerCount()).toBe(0);
     vi.useRealTimers();
   });
 });

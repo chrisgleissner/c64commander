@@ -561,12 +561,12 @@ export default function SettingsPage() {
     const portError = validateSavedDevicePorts(deviceDraft);
     setConnectionFieldError(portError);
     if (hostError || portError || nextDeviceNameError) return;
+    const nextHost = stripPortFromDeviceHost(deviceDraft.host.trim() || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
+    const nextDeviceHost = buildDeviceHostWithHttpPort(nextHost, Number(deviceDraft.httpPort));
     setIsSaving(true);
     try {
       const trimmedPassword = passwordInputRef.current.trim();
       const hasPassword = trimmedPassword.length > 0;
-      const nextHost = stripPortFromDeviceHost(deviceDraft.host.trim() || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
-      const nextDeviceHost = buildDeviceHostWithHttpPort(nextHost, Number(deviceDraft.httpPort));
       setStoredFtpPort(Number(deviceDraft.ftpPort));
       setStoredTelnetPort(Number(deviceDraft.telnetPort));
       if (hasPassword) {
@@ -598,7 +598,7 @@ export default function SettingsPage() {
         title: "Unable to save connection",
         description: (error as Error).message,
         error,
-        deviceHost: stripPortFromDeviceHost(deviceDraft.host),
+        deviceHost: nextHost,
       });
     } finally {
       setIsSaving(false);

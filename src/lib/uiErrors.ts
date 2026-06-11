@@ -218,7 +218,7 @@ export const reportUserError = ({
       : {}),
   });
 
-  if (toastResult) {
+  if (toastResult?.id) {
     const dismiss = toastResult.dismiss ?? (() => {});
     dedupMap.set(dedupKey, { dismiss, timestamp: now, count: 1, deviceHost: attributedHost });
     if (severity === "S2") {

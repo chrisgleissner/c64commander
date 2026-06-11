@@ -375,7 +375,13 @@ export function usePlaybackPersistence({
   useEffect(() => {
     const pending = pendingPlaybackRestoreRef.current;
     if (!pending) return;
-    if (!playlist.length) return;
+    if (!playlist.length) {
+      if (completedInitialRestoreKeyRef.current === playlistStorageKey) {
+        pendingPlaybackRestoreRef.current = null;
+        sessionRestoreSettledRef.current = true;
+      }
+      return;
+    }
     if (pending.playlistKey !== playlistStorageKey) {
       pendingPlaybackRestoreRef.current = null;
       sessionRestoreSettledRef.current = true;
@@ -428,7 +434,7 @@ export function usePlaybackPersistence({
     }
     pendingPlaybackRestoreRef.current = null;
     sessionRestoreSettledRef.current = true;
-  }, [playlist, playlistStorageKey, setTrackInstanceId, setAutoAdvanceDueAtMs]); // Depends on playlist being set
+  }, [playlist, playlistStorageKey, restoreVersion, setTrackInstanceId, setAutoAdvanceDueAtMs]); // Depends on playlist being set
 
   // Persist Playlist
   useEffect(() => {
@@ -546,5 +552,6 @@ export function usePlaybackPersistence({
     playedMs,
     playlist,
     playlistStorageKey,
+    restoreVersion,
   ]);
 }

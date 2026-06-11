@@ -106,6 +106,9 @@ export const reducer = (state: State, action: Action): State => {
       // ! Side effects ! - This could be extracted into a dismissToast() action,
       // but I'll keep it here for simplicity
       if (toastId) {
+        if (!state.toasts.some((toast) => toast.id === toastId)) {
+          return state;
+        }
         addToRemoveQueue(toastId);
       } else {
         state.toasts.forEach((toast) => {
@@ -164,10 +167,27 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id">;
 
+const noopToastHandle = () => ({ id: "" as const, dismiss: () => {}, update: () => {} });
+
+export const __clearToastStateForTests = () => {
+  toastTimeouts.forEach((timeout) => clearTimeout(timeout));
+  toastTimeouts.clear();
+  memoryState = { toasts: [] };
+  count = 0;
+  listeners.forEach((listener) => {
+    listener(memoryState);
+  });
+};
+
 function toast({ ...props }: Toast) {
   // Suppress non-error notifications when visibility is set to errors-only.
   if (loadNotificationVisibility() === "errors-only" && props.variant !== "destructive") {
-    return { id: "" as const, dismiss: () => {}, update: () => {} };
+    return noopToastHandle();
+  }
+
+  const hasLiveDestructive = memoryState.toasts.some((t) => t.variant === "destructive" && t.open !== false);
+  if (hasLiveDestructive && props.variant !== "destructive") {
+    return noopToastHandle();
   }
 
   const id = genId();

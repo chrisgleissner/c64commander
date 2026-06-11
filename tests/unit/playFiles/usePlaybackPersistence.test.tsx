@@ -217,6 +217,37 @@ describe("usePlaybackPersistence", () => {
     expect(JSON.parse(sessionStorage.getItem(PLAYBACK_SESSION_KEY)!).isPlaying).toBe(true);
   });
 
+  it("clears a stored playing session when playlist hydration settles empty", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    sessionStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({
+        playlistKey: playlistStorageKey,
+        currentItemId: null,
+        currentItemLabel: "missing.sid",
+        currentIndex: 0,
+        isPlaying: true,
+        isPaused: false,
+        elapsedMs: 5000,
+        playedMs: 5000,
+        durationMs: 60000,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+
+    renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(sessionStorage.getItem(PLAYBACK_SESSION_KEY)).toBeNull();
+    });
+  });
+
   it("hydrates persisted HVSC playlist items with runtime files for playback after restart", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(

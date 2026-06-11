@@ -203,6 +203,34 @@ describe("resolve-build-version.mjs", () => {
     expect(result.stdout.trim()).toBe("1.2.3");
   });
 
+  it("rejects unsafe explicit version environment values", () => {
+    const repoDir = createTempDir("resolve-build-version-unsafe-env-");
+    const scriptsDir = path.join(repoDir, "scripts");
+    const scriptPath = path.join(scriptsDir, "resolve-build-version.mjs");
+
+    mkdirSync(scriptsDir, { recursive: true });
+    copyFileSync(sourceBuildVersionScriptPath, scriptPath);
+
+    writeFileSync(
+      path.join(repoDir, "package.json"),
+      JSON.stringify({ name: "resolve-build-version-fixture", version: "1.2.3" }, null, 2),
+      "utf8",
+    );
+
+    const result = spawnSync("node", [scriptPath], {
+      cwd: repoDir,
+      encoding: "utf8",
+      env: {
+        ...withoutInjectedVersions(),
+        VITE_APP_VERSION: "1.2.3;rm",
+      },
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("contains unsafe characters");
+    expect(result.stdout).toBe("");
+  });
+
   it("derives the latest git tag and exact five-character commit id for dirty tracked changes", () => {
     const repoDir = createTempDir("resolve-build-version-");
     const scriptsDir = path.join(repoDir, "scripts");
