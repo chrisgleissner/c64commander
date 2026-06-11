@@ -4,8 +4,8 @@
 # Computes the app version and writes it to src/version.ts.
 #
 # Version format:
-#   Clean repo  → <tag>
-#   Dirty repo  → <tag>-<5-char-lowercase-hex-SHA>
+#   Exact clean tag checkout → <tag>
+#   Non-tag or dirty checkout → <tag>-<5-char-lowercase-hex-SHA>
 #
 # Dirty = any uncommitted change (staged or unstaged) to tracked files.
 # Untracked and gitignored files are excluded by construction.
@@ -76,7 +76,12 @@ if [[ "$IN_GIT_REPO" == "true" ]]; then
   # Detect dirty state: staged + unstaged changes to tracked files only.
   # Untracked files are excluded because git diff HEAD does not consider them.
   if git diff --quiet HEAD --; then
-    VERSION="${TAG}"
+    EXACT_TAG="$(git describe --tags --exact-match HEAD 2>/dev/null)" || true
+    if [[ "$EXACT_TAG" == "$TAG" ]]; then
+      VERSION="${TAG}"
+    else
+      VERSION="${TAG}-${SHA}"
+    fi
   else
     VERSION="${TAG}-${SHA}"
   fi
