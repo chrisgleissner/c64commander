@@ -1,3 +1,191 @@
+# Productionization Pass 1 — Fable Handoff Plan (2026-06-10)
+
+> **This is the authoritative plan.** It was produced by a planning-only Fable run
+> (see `WORKLOG.md`, section "Fable Planning/Handoff Run") and is to be executed by a
+> cheaper execution model following `EXECUTOR_PROMPT.md`. Historical plans are
+> preserved below under "Historical Plans".
+>
+> Companion files: `ERROR_POLICY.md`, `REQUEST_PACING_POLICY.md`, `CODE_TOUCHPOINTS.md`,
+> `TEST_MATRIX.md`, `BUG_HYPOTHESIS_BACKLOG.md`, `EXECUTOR_PROMPT.md`, `HANDOFF_SUMMARY.md`,
+> `HANDOFF_RISKS.md`.
+
+## Objective
+
+Productionize the Android app for a release-quality pass on the Pixel 4 against real
+`u64` and `c64u` hardware: no false-positive or background-noise errors shown to the
+user, real user-impacting failures surfaced with bug-report-grade context, real
+defects fixed at the root with regression coverage, and the app verified to behave
+correctly against the load-fragile `c64u`.
+
+## Scope
+
+- Home, Play, Disks, Config, Settings pages and the diagnostics overlay, as
+  enumerated per-flow in `TEST_MATRIX.md`.
+- Error-surfacing behavior per `ERROR_POLICY.md` (chokepoint: `src/lib/uiErrors.ts`).
+- Device pacing behavior per `REQUEST_PACING_POLICY.md` (chokepoint:
+  `src/lib/deviceInteraction/deviceInteractionManager.ts`).
+- Verification of the hypotheses in `BUG_HYPOTHESIS_BACKLOG.md`; root-cause fixes
+  with tests for every confirmed defect.
+- Pixel 4 on-device validation; `u64` as primary target, `c64u` as careful subset.
+
+## Non-Goals
+
+- No broad refactors, formatting-only changes, or cosmetic cleanups.
+- No redesign of the device-picker 10 s health cycle (explicit prior product
+  decision — see prod-hardening-2 research, recoverable via
+  `git show 0524d1f6^:docs/research/stabilization/prod-hardening-2/research.md`).
+- No chase of the exact C64U firmware lock-up trigger; harden against the class.
+- No iOS work. No web-platform (Docker) work beyond keeping existing tests green.
+- No changes to persistent device state on `u64`/`c64u` (no reboot, power-cycle,
+  factory reset, RAM/flash clear); config changes only per the restore rules below.
+
+## Assumptions (verified by Fable unless marked)
+
+- CommoServe is implemented as the Telnet-backed "Online File Archive" source
+  (`src/lib/sourceNavigation/sourceTerms.ts`, `archiveSourceAdapter.ts`,
+  `playwright/commoserve.spec.ts`). It is NOT a product gap.
+- All device I/O is funnelled through `deviceInteractionManager` (priorities
+  user > system > background; REST/Telnet concurrency 1; cooldowns; backoff;
+  circuit breaker). The historical raw-fetch bypasses named in prod-hardening-2
+  research are gone from current source.
+- Background health probes do not toast (`useSavedDeviceHealthChecks.ts` /
+  `healthCheckEngine.ts` contain no `reportUserError`/`toast` calls).
+- UNVERIFIED: whether the prod-hardening-2 "Phase 2" background-health redesign
+  (traffic-derived health, selected-device-only idle probing) landed. Executor
+  verifies before touching health-check code (backlog H-06).
+- Last broad green baseline: 2026-06-06, `npm run test` 582 files / 6739 tests,
+  branch coverage 91.72%, `npm run build` + `npm run android:apk` OK (WORKLOG).
+- Lab facts: Pixel 4 serial `9B081FFAZ001WX` (Android 16/API 36), app
+  `uk.gleissner.c64commander`; `u64` = 192.168.1.13 (Ultimate 64 Elite, fw 3.14e,
+  stable, primary); `c64u` = 192.168.1.167 (C64 Ultimate, fw 1.1.0, drops out when
+  overloaded — a failing c64u probe is NOT a regression).
+
+## Phase Plan for the Executor
+
+| Phase | Work | Gate to next phase |
+| ----- | ---- | ------------------ |
+| E0 | Read handoff files; update this plan's status column; start `WORKLOG.md` section; create `BUGS_FOUND.md` | Plan updated |
+| E1 | Baseline: `npm run test`, `npm run lint`, `npm run build`; record failures as pre-existing or new | Baseline recorded (green or triaged) |
+| E2 | Verify-first hypotheses H-01..H-05 (code-level, no device needed); fix confirmed defects at root, tests with each fix | Each fix has a passing test; no unrelated edits |
+| E3 | Error-policy implementation per `ERROR_POLICY.md` (dedup, severity, stale-clear in `uiErrors.ts`/`use-toast.ts`); targeted vitest + Playwright | Targeted suites green |
+| E4 | Pacing gaps per `REQUEST_PACING_POLICY.md` (only verified gaps; H-06/H-07) | Targeted suites green |
+| E5 | Android build + deploy: `./build --skip-install --skip-tests --skip-format --install-apk --device-id 9B081FFAZ001WX` | App launches on Pixel 4 |
+| E6 | On-device matrix per `TEST_MATRIX.md`: u64 full, then c64u careful subset; evidence per flow | Matrix rows pass/fail with evidence |
+| E7 | Fix-test-redeploy loop for on-device findings; re-run affected matrix rows | All P0/P1 findings fixed or documented |
+| E8 | Final sweep: full unit suite, lint, build, targeted e2e; update `BUGS_FOUND.md`, `HANDOFF_SUMMARY.md`; restore all changed device config values | Termination criteria met |
+
+## Risk-Ranked Task List
+
+1. (P0) Verify and fix error-toast lifecycle: stale destructive toasts (~16.7 min
+   `TOAST_REMOVE_DELAY`, `TOAST_LIMIT = 1`), eviction of error toasts by later info
+   toasts, no dedup on repeated failures (backlog H-03/H-04; `ERROR_POLICY.md` §4–6).
+2. (P0) Verify foreground/background error attribution: no background or
+   inactive-device failure may reach a toast; all toasts must come from
+   user-initiated foreground operations (H-05; `ERROR_POLICY.md` §3).
+3. (P1) Settings hostname edit not persisted (H-01, prior-run observation).
+4. (P1) Transient "Healthy" badge with Device/Firmware "Not available" (H-02).
+5. (P1) Background health probing of all saved devices in parallel vs prod-hardening-2
+   Phase 2 design (H-06) — verify current behavior first.
+6. (P1) Volume slider final-value flush on release/unmount/route-change (H-07).
+7. (P2) `isTransientConnectivityFailure` regex coverage for FTP/Telnet/socket error
+   strings (H-08).
+8. (P2) Device-switch stale-error attribution (H-09).
+9. (P2) On-device matrix gaps never before exercised: real playback, disk
+   mount/eject, config mutation+restore, CommoServe download (prior runs skipped
+   all of these — they are the highest-value unknown territory).
+
+## High-Value Test Matrix
+
+See `TEST_MATRIX.md` (authoritative). Summary of must-run-first set: unit baseline;
+`playwright/connectionSimulation.spec.ts`, `playback.spec.ts`, `playlistControls.spec.ts`,
+`diskManagement.spec.ts`, `configEditingBehavior.spec.ts`, `settingsDiagnostics.spec.ts`,
+`commoserve.spec.ts`, `homeInteractivity.spec.ts`; then Pixel 4 flows u64-first.
+
+## C64U Stop Conditions (binding)
+
+- Before any c64u flow: single `curl -s -m 5 http://c64u/v1/info` probe. On failure:
+  wait ≥60 s, one retry. On second failure: defer ALL c64u testing, record in
+  `C64U_INCIDENTS.md`, continue on u64. Do not loop probes.
+- During c64u flows: if 2 consecutive app operations fail with
+  timeouts/unreachable, or `/v1/info` latency exceeds 2 s on 2 consecutive
+  checks, STOP c64u traffic for ≥5 min. After 2 such episodes in a session,
+  abandon c64u for the session and finish on u64.
+- Never run concurrent/rapid request sequences against c64u deliberately. One
+  flow at a time, ≥2 s between user actions unless the flow requires faster.
+- Never reboot, power-cycle, reset, or clear memory on either device.
+
+## Config Restore Rules (binding)
+
+- Before changing any device config value: read and record the current value in
+  `WORKLOG.md` (item path + old value + timestamp).
+- Only change values from this safe list: audio mixer volumes/pan, SID volume,
+  LED/lighting colors, drive enable toggle (re-enable after), CPU speed quick
+  control (restore after), video output toggles that don't drop the display the
+  test depends on. NEVER touch: network/IP settings, password/auth, flash/save
+  settings, U64 HDMI/system items not on the safe list, anything labeled
+  factory/firmware/update.
+- After each config test (pass or fail): write the recorded old value back and
+  verify the read-back matches. A flow is not "passed" until restore is verified.
+- If a restore fails: retry once after 10 s; if still failing, record as P0 in
+  `BUGS_FOUND.md` with the item path and stranded value, and stop config testing.
+
+## Evidence Requirements
+
+- Every on-device matrix row: screenshot(s) via `adb exec-out screencap`, the
+  relevant logcat slice, and (for error/diagnostics rows) the diagnostics state.
+  Optional richer signal: WebView CDP capture (recipe in `TEST_MATRIX.md` §6).
+- Every fix: failing-then-passing test output, or for UI-only behavior, a
+  before/after evidence pair.
+- Every claim in final reports must cite a command output or file produced
+  during the run. No claims from memory.
+
+## Acceptance Criteria
+
+1. Unit suite, lint, and build green at end of run; no skipped/xfail introduced.
+2. Every confirmed defect fixed at root has a regression test that fails before
+   the fix and passes after; no defect "fixed" by suppressing its symptom.
+3. No false-positive errors observable in the on-device matrix: background probe
+   failures, inactive-device failures, superseded/cancelled operations, and
+   recovered-within-retry operations produce no toast.
+4. Real failures (e.g., pulling a device offline is NOT permitted — instead use a
+   bogus saved-device hostname for the negative test) produce exactly one toast
+   with operation context, and diagnostics contain a bug-report-grade entry.
+5. All changed device config values verified restored.
+6. `c64u` matrix subset either completed or each deferral documented in
+   `C64U_INCIDENTS.md` with probe evidence.
+7. `BUGS_FOUND.md` lists every finding with status fixed/deferred + evidence.
+8. User's pre-existing changes preserved; no commits unless the user asked.
+
+## Termination Criteria
+
+Stop only when: acceptance criteria 1–8 are met, OR genuinely blocked on input
+only the user can provide (record the blocker precisely in `HANDOFF_SUMMARY.md`),
+OR c64u/u64 are both unreachable for >30 min with evidence of probes spaced ≥5 min
+apart (finish all device-independent work first before claiming this).
+
+## Status Tracking
+
+The executor maintains a status table here (phase, state, evidence pointer) and
+appends decisions to `WORKLOG.md` as it goes.
+
+### Executor Run Status (Productionization Pass 1 — 2026-06-10)
+
+| Phase | State | Evidence / Notes |
+| ----- | ----- | ---------------- |
+| E0 | complete | Starting tree captured; BUGS_FOUND.md created; WORKLOG section open |
+| E1 | complete | 583/6745 tests pass; lint + build green; 2 pre-existing issues fixed |
+| E2 | pending | |
+| E3 | pending | |
+| E4 | pending | |
+| E5 | pending | |
+| E6 | pending | |
+| E7 | pending | |
+| E8 | pending | |
+
+---
+
+# Historical Plans (append-only archive)
+
 # Production Hardening 2 — Research Plan (Device Call Safety & Health-Check Load)
 
 > **Task type:** Research-only. No production code/test/format changes.

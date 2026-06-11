@@ -106,4 +106,15 @@ describe("PlayFilesPage feature-flag contracts", () => {
       "const hasNext = hasPlaylist && (currentIndex < playlist.length - 1 || repeatEnabled);",
     );
   });
+
+  it("classifies background-execution and HVSC lifecycle failures per ERROR_POLICY (no destructive toast for system work)", () => {
+    // stopBackgroundExecution cleanup failures are system work: S0, diagnostics only.
+    const stopReports = playFilesPageSource.split('operation: "stopBackgroundExecution"').length - 1;
+    expect(stopReports).toBe(2);
+    const backgroundFlags = playFilesPageSource.split("background: true").length - 1;
+    expect(backgroundFlags).toBeGreaterThanOrEqual(2);
+    // startBackgroundExecution degradation and HVSC disable-cancel failures are S2 notices.
+    expect(playFilesPageSource).toMatch(/operation: "startBackgroundExecution",[\s\S]{0,400}severity: "S2",/);
+    expect(playFilesPageSource).toMatch(/operation: "HVSC_CANCEL",[\s\S]{0,400}severity: "S2",/);
+  });
 });

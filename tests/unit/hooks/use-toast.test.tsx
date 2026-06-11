@@ -18,6 +18,49 @@ beforeEach(() => {
 });
 
 describe("toast reducer", () => {
+  it("S2 notice does not evict a live S3 error toast (ERROR_POLICY §4)", () => {
+    const stateWithError = {
+      toasts: [{ id: "err-1", variant: "destructive" as const, open: true }],
+    };
+    const addNotice = {
+      type: "ADD_TOAST" as const,
+      toast: { id: "notice-1", open: true },
+    };
+
+    const result = reducer(stateWithError, addNotice);
+
+    expect(result.toasts).toHaveLength(1);
+    expect(result.toasts[0].id).toBe("err-1");
+  });
+
+  it("S3 error evicts a live S2 notice (ERROR_POLICY §4)", () => {
+    const stateWithNotice = { toasts: [{ id: "notice-1", open: true }] };
+    const addError = {
+      type: "ADD_TOAST" as const,
+      toast: { id: "err-1", variant: "destructive" as const, open: true },
+    };
+
+    const result = reducer(stateWithNotice, addError);
+
+    expect(result.toasts).toHaveLength(1);
+    expect(result.toasts[0].id).toBe("err-1");
+  });
+
+  it("S3 error evicts a dismissed S3 error (second failure replaces first)", () => {
+    const stateWithDismissed = {
+      toasts: [{ id: "err-1", variant: "destructive" as const, open: false }],
+    };
+    const addNewError = {
+      type: "ADD_TOAST" as const,
+      toast: { id: "err-2", variant: "destructive" as const, open: true },
+    };
+
+    const result = reducer(stateWithDismissed, addNewError);
+
+    expect(result.toasts).toHaveLength(1);
+    expect(result.toasts[0].id).toBe("err-2");
+  });
+
   it("adds, updates, dismisses, and removes toasts", () => {
     const initial = { toasts: [] };
     const added = reducer(initial, {
@@ -136,5 +179,38 @@ describe("useToast", () => {
     });
 
     expect(result.current.toasts[0].open).toBe(false);
+  });
+
+  it("auto-dismisses a non-destructive notice after 8 s (ERROR_POLICY §4)", () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useToast());
+
+    act(() => {
+      result.current.toast({ title: "Saved" });
+    });
+    expect(result.current.toasts[0].open).toBe(true);
+
+    act(() => {
+      vi.advanceTimersByTime(8_000);
+    });
+
+    expect(result.current.toasts[0].open).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it("does not auto-dismiss a destructive error toast (ERROR_POLICY §4)", () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useToast());
+
+    act(() => {
+      result.current.toast({ title: "Failed", variant: "destructive" });
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+
+    expect(result.current.toasts[0].open).toBe(true);
+    vi.useRealTimers();
   });
 });

@@ -314,6 +314,23 @@ describe("useHvscLibrary", () => {
     );
   });
 
+  it("marks the automatic initial folder load as background so its failure never toasts (ERROR_POLICY §3)", async () => {
+    mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 42 }));
+    mocks.getHvscFolderListingMock.mockRejectedValueOnce(new Error("listing unavailable"));
+
+    renderHook(() => useHvscLibrary());
+
+    await waitFor(() => expect(mocks.getHvscFolderListingMock).toHaveBeenCalledWith("/"));
+    await waitFor(() =>
+      expect(mocks.reportUserErrorMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "HVSC_BROWSE",
+          background: true,
+        }),
+      ),
+    );
+  });
+
   it("completes the install flow immediately when HVSC is already up to date", async () => {
     mocks.checkForHvscUpdatesMock.mockResolvedValue({ latestVersion: 5, installedVersion: 5, requiredUpdates: [] });
     mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 5 }));

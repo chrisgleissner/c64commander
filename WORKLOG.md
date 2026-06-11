@@ -220,3 +220,61 @@ Run started: 2026-06-05T23:53:04+01:00
 - 2026-06-06: Broad validation passed: `npm run lint` (existing generated coverage HTML warnings only), `npm run test` (`582` files, `6739` tests), `npm run test:coverage` (`91.72%` branch coverage), `npm run build`, `npm run cap:build`, and `npm run android:apk`.
 - 2026-06-06: Pixel 4 `9B081FFAZ001WX` install succeeded for `android/app/build/outputs/apk/debug/c64commander-0.7.9-rc1-debug.apk`; app activity launched as `uk.gleissner.c64commander/.MainActivity`.
 - 2026-06-06: On-device UI dump validation was blocked because Android SystemUI kept `NotificationShade`/quick settings as `mCurrentFocus` after Back, Home, swipe, `cmd statusbar collapse`, statusbar service calls, and `CLOSE_SYSTEM_DIALOGS`; `mFocusedApp` remained C64 Commander. U64 `/v1/info` succeeded and C64U `/v1/info` reset the connection, so no C64U retry/mutation was attempted.
+
+## Fable Planning/Handoff Run (Productionization Pass 1)
+
+Run started: 2026-06-10T16:55+01:00. Branch `fix/hardening`. Run type: planning/handoff only — no production source changes, no commits, no device traffic, no ADB usage. Prompt: `docs/plans/hardening/1/prompt-research.md` (this run) feeding `docs/plans/hardening/1/prompt.md` (executor source material).
+
+### Commands executed (all read-only)
+
+- 2026-06-10T16:55 `git status --short --branch`, `git log --oneline` — branch `fix/hardening`, only untracked `docs/plans/hardening/`.
+- 2026-06-10T16:56 `ls` of repo root, `docs/`, `docs/plans/hardening/1/`, `src/pages`, `src/lib` and subdirs (`sources`, `sourceNavigation`, `diagnostics`, `playback`, `disks`, `deviceInteraction`, `config`, `connection`, `native`, `playFiles`), `tests/`, `playwright/`, `.maestro/`, `android/app/src/main/java/uk/gleissner/c64commander/`.
+- 2026-06-10T16:57 Read `package.json` scripts; previewed root `PLANS.md` (prod-hardening-2 research plan) and `WORKLOG.md` (prod-hardening-8 log).
+- 2026-06-10T16:59 `rg -il "commoserve|commuserve"` — CommoServe IS implemented: `src/lib/sourceNavigation/sourceTerms.ts` (`commoserve: "CommoServe"` / "Online File Archive"), `archiveSourceAdapter.ts`, Telnet specs in `docs/c64/telnet/`, `playwright/commoserve.spec.ts`.
+- 2026-06-10T17:00 `git show --stat 0524d1f6` — prior stabilization research (prod-hardening-2..8, responsiveness 1-2) was deleted 2026-06-06 but is recoverable via `git show 0524d1f6^:docs/research/stabilization/...`.
+- 2026-06-10T17:02 Read `src/lib/uiErrors.ts` in full; read executive summary of deleted `prod-hardening-2/research.md` and `prod-hardening-7/FINDINGS.md` from git history.
+- 2026-06-10T17:05 `rg` checks: raw-fetch bypasses named in prod-hardening-2 research (`probeWithFetch` in `connectionManager.ts`, raw `fetch` in `GlobalDiagnosticsOverlay.tsx`) are GONE from current source. The only raw `fetch(` to devices are the two legitimate transport sites inside `c64api.ts` (~996, ~1324). `__c64uIntent` is now threaded through `healthCheckEngine.ts` probes (10+ sites).
+- 2026-06-10T17:07 Checked `src/hooks/use-toast.ts`: `TOAST_LIMIT = 1`, `TOAST_REMOVE_DELAY = 1000000` ms (~16.7 min). Checked `deviceSafetySettings.ts`: modes AUTO/RELAXED/BALANCED/CONSERVATIVE/TROUBLESHOOTING. `useSavedDeviceHealthChecks.ts`: `MIN_BACKGROUND_HEALTHY_CADENCE_MS = 60_000`, still uses `Promise.allSettled` across saved devices (line ~329) with supersede-cancellation.
+- 2026-06-10T17:10 `rg -c reportUserError` — ~110 call sites across 17 files, concentrated in page/dialog handlers; `useSavedDeviceHealthChecks.ts` and `healthCheckEngine.ts` contain NO `reportUserError`/`toast` calls (background health probes do not toast).
+- 2026-06-10T17:11 Listed `tests/unit`, `playwright/*.spec.ts` (~50 specs), `.maestro/*.yaml` (48 flows), `docs/testing/maestro.md`; inspected `./build` helper flags.
+
+### Decisions
+
+- Repurposed root `PLANS.md`/`WORKLOG.md` per established repo convention (see PR 274 note above about append-only stewardship): new Fable handoff plan prepended to `PLANS.md` with prior plan preserved below as historical archive; this `WORKLOG.md` section appended.
+- Mined deleted `docs/research/stabilization/` from git (`0524d1f6^`) instead of re-deriving the pacing architecture; prod-hardening-2 research remains the canonical deep-dive and is cited by reference in `REQUEST_PACING_POLICY.md`.
+- Classified prod-hardening-2 "Phase 1" (bypass removal, intent threading) as likely landed (repo evidence: bypass symbols absent, intent threaded); "Phase 2" (background-health redesign) as UNVERIFIED — executor must verify before changing health-check code (see `BUG_HYPOTHESIS_BACKLOG.md` H-06).
+- CommoServe confirmed implemented (Telnet-backed "Online File Archive" source); executor must NOT document it as a product gap.
+- No subagents launched (per prompt). Optional subagent-able subtasks recorded in `HANDOFF_RISKS.md`.
+
+### Skipped checks (intentionally left for the executor)
+
+- No unit/Playwright/Maestro execution: last known-good broad baseline recorded 2026-06-06 above (`npm run test` 582 files / 6739 tests, coverage 91.72%, build + apk OK); re-baselining is executor Phase 1, not a planning need.
+- No ADB/Pixel 4 contact, no u64/c64u probes: planning run produces no device evidence; probing without acting on it would consume c64u headroom for nothing (see memory: c64u drops when overloaded; failing c64u probe is not a regression).
+- Did not read `deviceInteractionManager.ts`/`healthCheckEngine.ts` line-by-line: prod-hardening-2 research already documents them; executor verifies the specific deltas listed in the backlog.
+
+### Outputs
+
+- Created/updated: `PLANS.md` (new authoritative handoff plan prepended), `WORKLOG.md` (this section), `ERROR_POLICY.md`, `REQUEST_PACING_POLICY.md`, `CODE_TOUCHPOINTS.md`, `TEST_MATRIX.md`, `BUG_HYPOTHESIS_BACKLOG.md`, `EXECUTOR_PROMPT.md`, `HANDOFF_SUMMARY.md`, `HANDOFF_RISKS.md`.
+- No production source, test, config, or Android files modified. No commits made.
+
+## Executor Run (Productionization Pass 1)
+
+Run started: 2026-06-10T17:30+01:00. Branch `fix/hardening`. Run type: execution — fixes, tests, build, on-device matrix. Prompt: `EXECUTOR_PROMPT.md`.
+
+### E0 — Setup
+
+- 2026-06-10T17:30 Starting tree (git status): `M PLANS.md`, `M WORKLOG.md`; untracked: `BUG_HYPOTHESIS_BACKLOG.md`, `CODE_TOUCHPOINTS.md`, `ERROR_POLICY.md`, `EXECUTOR_PROMPT.md`, `HANDOFF_RISKS.md`, `HANDOFF_SUMMARY.md`, `REQUEST_PACING_POLICY.md`, `TEST_MATRIX.md`, `docs/plans/hardening/`.
+- 2026-06-10T17:30 Created `BUGS_FOUND.md` (empty findings log).
+- 2026-06-10T17:30 Created artifact directory `docs/plans/hardening/1/artifacts/`.
+- 2026-06-10T17:30 Updated `PLANS.md` status table (E0 in_progress).
+- 2026-06-10T17:30 Appended this WORKLOG section.
+- 2026-06-10T17:30 Read all 7 required handoff files in order. Key takeaways: H-03/H-04 confirmed code-level (use-toast.ts TOAST_LIMIT=1, TOAST_REMOVE_DELAY=1000000ms, no dedup/stale-clear); H-05 grep-audit needed; H-01/H-02/H-07 need code reads; H-06/H-08/H-09 need device work.
+
+### E1 — Baseline
+
+- 2026-06-10T17:51 `npm run test` passed: 583 files / 6745 tests (reference: 582/6739 on 2026-06-06; 1 new file, 6 new tests — pre-existing branch delta).
+- 2026-06-10T17:53 `npm run lint` initially failed: two pre-existing issues:
+  1. `tests/unit/scripts/detectPreinstalledAndroidSdk.test.ts` formatting (committed in `4695a673` without running prettier) — fixed with `npx prettier --write`.
+  2. ESLint scanned `.worktrees/stabilize-structured-soak/` (gitignored but not in eslint ignores), picking up a build artifact with a missing typescript-eslint rule → error. Fixed by adding `.worktrees/**` to `eslint.config.js` ignores. Pre-existing: worktree existed before this run.
+- 2026-06-10T17:55 `npm run lint` passes after fixes. Remaining: 3 warnings from generated `c64scope/coverage/*.js` — pre-existing, not actionable.
+- 2026-06-10T18:00 `npm run build` passed (8.09 s, 47 chunks, all under bundle budget).

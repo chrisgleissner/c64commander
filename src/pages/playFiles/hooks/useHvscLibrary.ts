@@ -74,7 +74,7 @@ export type HvscLibraryState = {
   hvscSongs: HvscSong[];
   selectedHvscFolder: string;
   setHvscFolderFilter: (value: string) => void;
-  loadHvscFolder: (path: string) => Promise<void>;
+  loadHvscFolder: (path: string, options?: { background?: boolean }) => Promise<void>;
   handleHvscInstall: () => Promise<void>;
   handleHvscIngest: () => Promise<void>;
   handleHvscCancel: () => Promise<void>;
@@ -605,7 +605,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
     };
   }, [clearPendingHvscProgress, resolveHvscFailureCategory, updateHvscSummary]);
 
-  const loadHvscFolder = useCallback(async (path: string) => {
+  const loadHvscFolder = useCallback(async (path: string, options?: { background?: boolean }) => {
     try {
       const listing = await getHvscFolderListing(path);
       setHvscFolders(listing.folders);
@@ -618,6 +618,9 @@ export const useHvscLibrary = (): HvscLibraryState => {
         description: (error as Error).message,
         error,
         context: { path },
+        // The automatic initial listing is a prefetch, not a user action;
+        // its failure must not toast (ERROR_POLICY §3).
+        background: options?.background,
       });
     }
   }, []);
@@ -625,7 +628,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
   useEffect(() => {
     if (!hvscStatus?.installedVersion) return;
     if (hvscFolders.length || hvscSongs.length) return;
-    void loadHvscFolder(selectedHvscFolder || "/");
+    void loadHvscFolder(selectedHvscFolder || "/", { background: true });
   }, [hvscStatus?.installedVersion, hvscFolders.length, hvscSongs.length, loadHvscFolder, selectedHvscFolder]);
 
   useEffect(() => {

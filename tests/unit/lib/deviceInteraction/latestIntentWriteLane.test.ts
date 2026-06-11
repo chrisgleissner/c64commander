@@ -34,6 +34,27 @@ describe("createLatestIntentWriteLane", () => {
     expect(writes).toEqual([3]);
   });
 
+  it("runs an abandoned scheduled intent to completion (H-07: final-value flush survives unmount)", async () => {
+    const writes: number[] = [];
+    let resolveRun!: () => void;
+    const ran = new Promise<void>((resolve) => {
+      resolveRun = resolve;
+    });
+    const lane = createLatestIntentWriteLane<number>({
+      run: async (value) => {
+        writes.push(value);
+        resolveRun();
+      },
+    });
+
+    // Fire-and-forget, as a component unmounting right after slider release:
+    // nobody awaits the promise, but the write must still reach the device.
+    void lane.schedule(42);
+
+    await ran;
+    expect(writes).toEqual([42]);
+  });
+
   it("applies the newest queued value after an older in-flight write completes", async () => {
     let releaseFirst!: () => void;
     const firstRunDone = new Promise<void>((resolve) => {

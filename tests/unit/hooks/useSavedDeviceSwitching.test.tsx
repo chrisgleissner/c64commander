@@ -22,6 +22,7 @@ const {
   mockAddLog,
   mockIsMdnsAvailable,
   mockIsBareHostname,
+  mockClearToastsOnDeviceSwitch,
 } = vi.hoisted(() => ({
   mockVerifyCurrentConnectionTarget: vi.fn(),
   mockSetStoredFtpPort: vi.fn(),
@@ -32,6 +33,7 @@ const {
   mockAddLog: vi.fn(),
   mockIsMdnsAvailable: vi.fn(() => false),
   mockIsBareHostname: vi.fn((host: string) => !host.includes(".") && !host.includes(":")),
+  mockClearToastsOnDeviceSwitch: vi.fn(),
 }));
 
 vi.mock("@/lib/connection/connectionManager", () => ({
@@ -59,6 +61,14 @@ vi.mock("@/lib/native/mdnsResolver", () => ({
   isBareHostname: mockIsBareHostname,
   resolveMdnsHost: vi.fn(),
 }));
+
+vi.mock("@/lib/uiErrors", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/uiErrors")>("@/lib/uiErrors");
+  return {
+    ...actual,
+    clearToastsOnDeviceSwitch: mockClearToastsOnDeviceSwitch,
+  };
+});
 
 vi.mock("@/lib/query/c64QueryInvalidation", async () => {
   const actual = await vi.importActual<typeof import("@/lib/query/c64QueryInvalidation")>(
@@ -214,6 +224,43 @@ describe("useSavedDeviceSwitching", () => {
     await expect(result.current("missing-device")).rejects.toThrow("Unknown saved device: missing-device");
     expect(mockSetStoredFtpPort).not.toHaveBeenCalled();
     expect(mockVerifyCurrentConnectionTarget).not.toHaveBeenCalled();
+  });
+
+  it("clears error toasts attributed to the previous device on switch (ERROR_POLICY §6)", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    store.updateSavedDevice(initialDeviceId, {
+      name: "Office C64U",
+      host: "c64u",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      hasPassword: false,
+    });
+    store.addSavedDevice({
+      id: "device-backup",
+      name: "Backup Lab",
+      host: "backup-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      hasPassword: false,
+    });
+    mockVerifyCurrentConnectionTarget.mockResolvedValueOnce({
+      ok: true,
+      deviceInfo: { product: "U64E", hostname: "backup-lab", unique_id: "UID-BACKUP" },
+    });
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), {
+      wrapper: createWrapper("/play"),
+    });
+
+    await act(async () => {
+      await result.current("device-backup");
+    });
+
+    expect(mockClearToastsOnDeviceSwitch).toHaveBeenCalledWith("c64u");
   });
 
   it("logs old-query cancellation failures while continuing the saved-device switch", async () => {

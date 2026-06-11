@@ -6,10 +6,18 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import fs from "node:fs/promises";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { reportUserError } from "@/lib/uiErrors";
+import {
+  reportUserError,
+  clearToastForSuccessfulOperation,
+  clearToastsOnDeviceSwitch,
+  clearConnectivityErrorToastsForHost,
+  __clearDedupStateForTests,
+} from "@/lib/uiErrors";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
+import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
 
 // Mock dependencies
 vi.mock("@/hooks/use-toast", () => ({
@@ -21,9 +29,14 @@ vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
 }));
 
+vi.mock("@/lib/savedDevices/store", () => ({
+  getSavedDevicesSnapshot: vi.fn(() => ({ devices: [], selectedDeviceId: null })),
+}));
+
 describe("uiErrors", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    __clearDedupStateForTests();
   });
 
   it("reports basic error to log and toast", () => {
@@ -190,5 +203,190 @@ describe("uiErrors", () => {
       expect.objectContaining({ recoverableConnectivityIssue: true }),
     );
     expect(addLog).not.toHaveBeenCalledWith("warn", expect.anything(), expect.anything());
+  });
+
+  describe("ERROR_POLICY §3 — background operations are S0 (log only, never toast)", () => {
+    it("suppresses toast when background is true and logs with suppressedReason", () => {
+      reportUserError({
+        operation: "HEALTH_PROBE",
+        title: "Device offline",
+        description: "Connection refused",
+        background: true,
+      });
+
+      expect(toast).not.toHaveBeenCalled();
+      expect(addErrorLog).toHaveBeenCalledWith(
+        "HEALTH_PROBE: Device offline",
+        expect.objectContaining({ suppressedReason: "background-operation" }),
+      );
+    });
+
+    it("background health-check paths contain no reportUserError or toast calls (regression guard)", async () => {
+      const [hcSource, hceSource] = await Promise.all([
+        fs.readFile("src/hooks/useSavedDeviceHealthChecks.ts", "utf8"),
+        fs.readFile("src/lib/diagnostics/healthCheckEngine.ts", "utf8"),
+      ]);
+      expect(hcSource, "useSavedDeviceHealthChecks must not call reportUserError").not.toMatch(/reportUserError/);
+      expect(hcSource, "useSavedDeviceHealthChecks must not call toast directly").not.toMatch(/\btoast\s*\(/);
+      expect(hceSource, "healthCheckEngine must not call reportUserError").not.toMatch(/reportUserError/);
+      expect(hceSource, "healthCheckEngine must not call toast directly").not.toMatch(/\btoast\s*\(/);
+    });
+  });
+
+  describe("ERROR_POLICY §5 — dedup: same key within 30 s produces one toast (H-04)", () => {
+    it("deduplicates repeated errors with same operation and deviceHost within 30 seconds", () => {
+      vi.mocked(toast).mockReturnValue({ id: "1", dismiss: vi.fn(), update: vi.fn() });
+
+      reportUserError({
+        operation: "LOAD_FILE",
+        title: "Error",
+        description: "Host unreachable",
+        deviceHost: "u64",
+      });
+      reportUserError({
+        operation: "LOAD_FILE",
+        title: "Error",
+        description: "Host unreachable",
+        deviceHost: "u64",
+      });
+
+      expect(toast).toHaveBeenCalledTimes(1);
+    });
+
+    it("logs every occurrence even when toast is deduplicated", () => {
+      vi.mocked(toast).mockReturnValue({ id: "1", dismiss: vi.fn(), update: vi.fn() });
+
+      reportUserError({ operation: "LOAD_FILE", title: "E", description: "Host unreachable", deviceHost: "u64" });
+      reportUserError({ operation: "LOAD_FILE", title: "E", description: "Host unreachable", deviceHost: "u64" });
+
+      expect(addErrorLog).toHaveBeenCalledTimes(2);
+    });
+
+    it("creates a new toast after the dedup window expires", () => {
+      vi.useFakeTimers();
+      vi.mocked(toast).mockReturnValue({ id: "1", dismiss: vi.fn(), update: vi.fn() });
+
+      reportUserError({ operation: "LOAD_FILE", title: "E", description: "Host unreachable", deviceHost: "u64" });
+      vi.advanceTimersByTime(31_000);
+      reportUserError({ operation: "LOAD_FILE", title: "E", description: "Host unreachable", deviceHost: "u64" });
+
+      expect(toast).toHaveBeenCalledTimes(2);
+      vi.useRealTimers();
+    });
+  });
+
+  describe("ERROR_POLICY §6 — stale-clear: error toast dismissed on success (H-03)", () => {
+    it("clearToastForSuccessfulOperation dismisses the matching live error toast", () => {
+      const mockDismiss = vi.fn();
+      vi.mocked(toast).mockReturnValue({ id: "1", dismiss: mockDismiss, update: vi.fn() });
+
+      reportUserError({ operation: "LOAD_FILE", title: "Error", description: "Network error", deviceHost: "u64" });
+      clearToastForSuccessfulOperation("LOAD_FILE", "u64");
+
+      expect(mockDismiss).toHaveBeenCalledTimes(1);
+    });
+
+    it("clearToastForSuccessfulOperation does nothing when no matching toast exists", () => {
+      expect(() => clearToastForSuccessfulOperation("LOAD_FILE", "u64")).not.toThrow();
+    });
+
+    it("clearToastsOnDeviceSwitch dismisses all toasts attributed to the switching-away device", () => {
+      const mockDismiss = vi.fn();
+      vi.mocked(toast).mockReturnValue({ id: "1", dismiss: mockDismiss, update: vi.fn() });
+
+      reportUserError({ operation: "LOAD_FILE", title: "Error", description: "Network error", deviceHost: "u64" });
+      clearToastsOnDeviceSwitch("u64");
+
+      expect(mockDismiss).toHaveBeenCalledTimes(1);
+    });
+
+    it("clearToastsOnDeviceSwitch does not dismiss toasts from a different device", () => {
+      const mockDismiss = vi.fn();
+      vi.mocked(toast).mockReturnValue({ id: "1", dismiss: mockDismiss, update: vi.fn() });
+
+      reportUserError({ operation: "LOAD_FILE", title: "Error", description: "Network error", deviceHost: "u64" });
+      clearToastsOnDeviceSwitch("c64u"); // different device
+
+      expect(mockDismiss).not.toHaveBeenCalled();
+    });
+
+    it("normalizes host attribution (protocol/port/case) so clears match", () => {
+      const mockDismiss = vi.fn();
+      vi.mocked(toast).mockReturnValue({ id: "1", dismiss: mockDismiss, update: vi.fn() });
+
+      reportUserError({
+        operation: "LOAD_FILE",
+        title: "Error",
+        description: "Network error",
+        deviceHost: "http://U64:80",
+      });
+      clearToastsOnDeviceSwitch("u64");
+
+      expect(mockDismiss).toHaveBeenCalledTimes(1);
+    });
+
+    it("clearConnectivityErrorToastsForHost dismisses only connectivity-class toasts for that host", () => {
+      const connectivityDismiss = vi.fn();
+      const otherDismiss = vi.fn();
+      vi.mocked(toast).mockReturnValueOnce({ id: "1", dismiss: connectivityDismiss, update: vi.fn() });
+      vi.mocked(toast).mockReturnValueOnce({ id: "2", dismiss: otherDismiss, update: vi.fn() });
+
+      reportUserError({ operation: "LOAD_FILE", title: "E", description: "Host unreachable", deviceHost: "u64" });
+      reportUserError({ operation: "SAVE_CONFIG", title: "E", description: "Invalid value", deviceHost: "u64" });
+
+      clearConnectivityErrorToastsForHost("u64");
+
+      expect(connectivityDismiss).toHaveBeenCalledTimes(1);
+      expect(otherDismiss).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("ERROR_POLICY §3/§6 — default attribution to the active saved device", () => {
+    it("attributes unhosted errors to the active device so device switch clears them", () => {
+      vi.mocked(getSavedDevicesSnapshot).mockReturnValue({
+        devices: [{ id: "dev-1", host: "U64" }],
+        selectedDeviceId: "dev-1",
+      } as never);
+      const mockDismiss = vi.fn();
+      vi.mocked(toast).mockReturnValue({ id: "1", dismiss: mockDismiss, update: vi.fn() });
+
+      reportUserError({ operation: "LOAD_FILE", title: "Error", description: "Network error" });
+      clearToastsOnDeviceSwitch("u64");
+
+      expect(mockDismiss).toHaveBeenCalledTimes(1);
+    });
+
+    it("leaves attribution empty when no device is selected", () => {
+      vi.mocked(getSavedDevicesSnapshot).mockReturnValue({ devices: [], selectedDeviceId: null } as never);
+      const mockDismiss = vi.fn();
+      vi.mocked(toast).mockReturnValue({ id: "1", dismiss: mockDismiss, update: vi.fn() });
+
+      reportUserError({ operation: "LOAD_FILE", title: "Error", description: "Network error" });
+      clearToastsOnDeviceSwitch("u64");
+
+      expect(mockDismiss).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("ERROR_POLICY §5 — retry-storm escalation in diagnostics", () => {
+    it("logs duplicate occurrences with suppressedReason and a growing occurrenceCount", () => {
+      vi.mocked(toast).mockReturnValue({ id: "1", dismiss: vi.fn(), update: vi.fn() });
+
+      reportUserError({ operation: "LOAD_FILE", title: "E", description: "Host unreachable", deviceHost: "u64" });
+      reportUserError({ operation: "LOAD_FILE", title: "E", description: "Host unreachable", deviceHost: "u64" });
+      reportUserError({ operation: "LOAD_FILE", title: "E", description: "Host unreachable", deviceHost: "u64" });
+
+      expect(toast).toHaveBeenCalledTimes(1);
+      expect(addErrorLog).toHaveBeenNthCalledWith(
+        2,
+        expect.any(String),
+        expect.objectContaining({ suppressedReason: "duplicate-toast-deduped", occurrenceCount: 2 }),
+      );
+      expect(addErrorLog).toHaveBeenNthCalledWith(
+        3,
+        expect.any(String),
+        expect.objectContaining({ suppressedReason: "duplicate-toast-deduped", occurrenceCount: 3 }),
+      );
+    });
   });
 });

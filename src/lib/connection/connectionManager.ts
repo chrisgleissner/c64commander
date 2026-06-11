@@ -34,6 +34,7 @@ import { resetInteractionState } from "@/lib/deviceInteraction/deviceInteraction
 import { updateDeviceConnectionState } from "@/lib/deviceInteraction/deviceStateStore";
 import { isBareHostname, isMdnsAvailable, resolveMdnsHost } from "@/lib/native/mdnsResolver";
 import { normalizeTransportError } from "@/lib/c64api/transportErrors";
+import { clearConnectivityErrorToastsForHost } from "@/lib/uiErrors";
 
 export type ConnectionState = "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO";
 export type DiscoveryTrigger = "startup" | "manual" | "settings" | "background" | "switch" | "resume";
@@ -449,6 +450,12 @@ export const noteReachable = (host: string, source: ReachabilitySource, deviceIn
     lastProbeError: null,
     ...(deviceInfo ? { deviceInfo } : {}),
   });
+
+  // Host recovery dismisses live connectivity-class error toasts attributed to
+  // it (ERROR_POLICY §6); aliases of the active device are cleared together.
+  for (const activeHost of activeHosts) {
+    clearConnectivityErrorToastsForHost(activeHost);
+  }
 
   if (snapshot.state !== "OFFLINE_NO_DEMO" && snapshot.state !== "DISCOVERING") {
     return;

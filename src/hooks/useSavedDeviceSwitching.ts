@@ -34,6 +34,7 @@ import {
 } from "@/lib/savedDevices/store";
 import { buildSavedDevicePreferredRuntimeHost, getSavedDeviceResolvedAddress } from "@/lib/savedDevices/resolvedTarget";
 import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
+import { clearToastsOnDeviceSwitch } from "@/lib/uiErrors";
 
 let activeSavedDeviceSwitch: { deviceId: string; promise: Promise<unknown> } | null = null;
 
@@ -47,6 +48,13 @@ export function useSavedDeviceSwitching() {
       const device = getSavedDeviceById(deviceId);
       if (!device) {
         throw new Error(`Unknown saved device: ${deviceId}`);
+      }
+
+      // Stale error toasts attributed to the device being switched away from
+      // must not survive the switch (ERROR_POLICY §6).
+      const fromDevice = fromDeviceId && fromDeviceId !== deviceId ? getSavedDeviceById(fromDeviceId) : null;
+      if (fromDevice) {
+        clearToastsOnDeviceSwitch(fromDevice.host);
       }
 
       const attemptId = beginSavedDeviceSwitchAttempt({

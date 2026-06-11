@@ -41,10 +41,13 @@ describe("detect-preinstalled-android-sdk", () => {
     const sdkRoot = await makeTempDir("android-sdk-");
     await createPreinstalledSdk(sdkRoot, "12.0");
 
-    const result = await resolvePreinstalledAndroidSdk({
-      ANDROID_SDK_ROOT: sdkRoot,
-      HOME: "/nonexistent-home",
-    }, [sdkRoot]);
+    const result = await resolvePreinstalledAndroidSdk(
+      {
+        ANDROID_SDK_ROOT: sdkRoot,
+        HOME: "/nonexistent-home",
+      },
+      [sdkRoot],
+    );
 
     expect(result.usePreinstalled).toBe(true);
     expect(result.androidSdkRoot).toBe(sdkRoot);
@@ -58,10 +61,13 @@ describe("detect-preinstalled-android-sdk", () => {
   it("returns a fallback result when no sdkmanager is available", async () => {
     const sdkRoot = await makeTempDir("android-sdk-empty-");
 
-    const result = await resolvePreinstalledAndroidSdk({
-      ANDROID_SDK_ROOT: sdkRoot,
-      HOME: "/nonexistent-home",
-    }, [sdkRoot]);
+    const result = await resolvePreinstalledAndroidSdk(
+      {
+        ANDROID_SDK_ROOT: sdkRoot,
+        HOME: "/nonexistent-home",
+      },
+      [sdkRoot],
+    );
 
     expect(result.usePreinstalled).toBe(false);
     expect(result.androidSdkRoot).toBe("");

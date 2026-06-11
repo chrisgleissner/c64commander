@@ -13,6 +13,9 @@ import { loadNotificationVisibility } from "@/lib/config/appSettings";
 
 const TOAST_LIMIT = 1;
 const TOAST_REMOVE_DELAY = 1000000;
+// Non-destructive notices auto-dismiss (ERROR_POLICY §4); error toasts stay
+// until dismissed or stale-cleared via uiErrors.
+const NOTICE_AUTO_DISMISS_DELAY = 8000;
 
 type ToasterToast = ToastProps & {
   id: string;
@@ -79,11 +82,17 @@ const addToRemoveQueue = (toastId: string) => {
 
 export const reducer = (state: State, action: Action): State => {
   switch (action.type) {
-    case "ADD_TOAST":
+    case "ADD_TOAST": {
+      // S2 notices must not evict a live S3 error toast (ERROR_POLICY §4).
+      const hasLiveDestructive = state.toasts.some((t) => t.variant === "destructive" && t.open !== false);
+      if (hasLiveDestructive && action.toast.variant !== "destructive") {
+        return state;
+      }
       return {
         ...state,
         toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
       };
+    }
 
     case "UPDATE_TOAST":
       return {
@@ -181,6 +190,10 @@ function toast({ ...props }: Toast) {
       },
     },
   });
+
+  if (props.variant !== "destructive") {
+    setTimeout(dismiss, NOTICE_AUTO_DISMISS_DELAY);
+  }
 
   return {
     id: id,

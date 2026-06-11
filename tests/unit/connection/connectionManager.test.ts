@@ -63,6 +63,14 @@ vi.mock("../../../src/lib/secureStorage", () => ({
   getCachedPassword: vi.fn(() => null),
 }));
 
+vi.mock("../../../src/lib/uiErrors", async () => {
+  const actual = await vi.importActual<typeof import("../../../src/lib/uiErrors")>("../../../src/lib/uiErrors");
+  return {
+    ...actual,
+    clearConnectivityErrorToastsForHost: vi.fn(),
+  };
+});
+
 const startMockServer = vi.fn(async () => {
   throw new Error("Mock C64U server is only available on native platforms.");
 });
@@ -1600,5 +1608,27 @@ describe("connectionManager", () => {
       configurable: true,
       writable: true,
     });
+  });
+
+  it("noteReachable clears connectivity error toasts for the recovered active host (ERROR_POLICY §6)", async () => {
+    localStorage.setItem(DEVICE_HOST_KEY, "u64");
+    const { clearConnectivityErrorToastsForHost } = await import("../../../src/lib/uiErrors");
+    const { noteReachable } = await import("../../../src/lib/connection/connectionManager");
+    vi.mocked(clearConnectivityErrorToastsForHost).mockClear();
+
+    noteReachable("u64", "rest" as never);
+
+    expect(vi.mocked(clearConnectivityErrorToastsForHost)).toHaveBeenCalledWith("u64");
+  });
+
+  it("noteReachable does not clear toasts for a non-active host (ERROR_POLICY §6)", async () => {
+    localStorage.setItem(DEVICE_HOST_KEY, "u64");
+    const { clearConnectivityErrorToastsForHost } = await import("../../../src/lib/uiErrors");
+    const { noteReachable } = await import("../../../src/lib/connection/connectionManager");
+    vi.mocked(clearConnectivityErrorToastsForHost).mockClear();
+
+    noteReachable("some-other-host", "rest" as never);
+
+    expect(vi.mocked(clearConnectivityErrorToastsForHost)).not.toHaveBeenCalled();
   });
 });
