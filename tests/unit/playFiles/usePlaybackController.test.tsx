@@ -363,6 +363,37 @@ describe("usePlaybackController", () => {
     );
   });
 
+  it("propagates songlength via SSL upload for ultimate SID playback instead of skipping it", async () => {
+    const playlist = [
+      createPlaylistItem({
+        category: "sid",
+        label: "10_Orbyte.sid",
+        path: "/USB2/test-data/SID/10_Orbyte.sid",
+        request: {
+          source: "ultimate",
+          path: "/USB2/test-data/SID/10_Orbyte.sid",
+          songNr: 1,
+        },
+        durationMs: 77_000,
+        subsongCount: 1,
+      }),
+    ];
+    const { result } = renderPlaybackController(playlist);
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+    const [, plan, options] = vi.mocked(executePlayPlan).mock.calls[0];
+    expect(plan).toMatchObject({
+      source: "ultimate",
+      path: "/USB2/test-data/SID/10_Orbyte.sid",
+      durationMs: 77_000,
+    });
+    // The device only learns the true song length when the SID is sent as a
+    // REST payload with the SSL songlength attached (duration-propagation contract).
+    expect((options as { skipSidSslPropagation?: boolean } | undefined)?.skipSidSslPropagation).toBeUndefined();
+  });
+
   it("downloads CommoServe playlist items lazily when playback starts", async () => {
     const playlist = [
       createPlaylistItem({

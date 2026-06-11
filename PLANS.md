@@ -631,3 +631,12 @@ Fix the confirmed prod-hardening-8 production-readiness findings in priority ord
 - Docs/state files: append-only updates to `PLANS.md`, `WORKLOG.md`, `BUGS_FOUND.md`, `C64U_INCIDENTS.md`, `U64_INCIDENTS.md`, `LESSONS.md` only as evidence requires.
 - Runtime platforms: Android Pixel 4 primary; web/mock tests for deterministic guard coverage; iOS CI-only if shared version/build scripts are touched.
 - Screenshots: update only newly captured evidence artifacts under `docs/plans/hardening/1/artifacts/`; documentation screenshots under `docs/img/` only if documented visible UI changes.
+
+## Fable hard-reasoning pass (2026-06-11)
+
+- Objective: one high-value hard-reasoning increment after the completed deep HIL sweep. Selected hard problem: **Candidate A — Pixel P5 auto-advance discrepancy** (best-effort `demo.sid` observation stayed at `0:00` and never advanced, while deterministic auto-advance/persistence suites passed).
+- Session-window source of truth: `llm-usage --json` → `.claude.five_hour.remaining` (initial reading 96% at 2026-06-11T23:33+01:00).
+- TODO: build the causal state-machine model for why Pixel P5 `demo.sid` showed elapsed `0:00` with no auto-advance and no toast; decide verdict (benign harness artifact / DEFECT / TEST GAP / INSUFFICIENT EVIDENCE); implement smallest safe fix or targeted regression if warranted; otherwise produce continuation prompt at `docs/plans/hardening/4/prompt.md` and schedule via `llm-scheduler`.
+- Candidate scores (deterministic rubric): A=19 (divergence +5, ambiguous prior evidence +5, timers/persistence +4, tests-could-pass-while-wrong +3, generalizes +2), E=15, B=14, C=10 (S2/U8 current-build Pixel proof −5), D=9 (low severity, dedup-mitigated). A selected per default-priority rule and top score.
+- Key prior-evidence asymmetry driving selection: in P2, `10_Orbyte.sid` elapsed advanced `0:00 → 0:04`; in P5, `demo.sid` elapsed stayed at `0:00` for 35 s. That pattern suggests playback never *started* (or the UI clock never started), i.e. the auto-advance timer was never armed — a different failure class from "auto-advance fired late/never", and one the deterministic suites do not cover. A silent user-initiated Play failure would also violate ERROR_POLICY §2 (no toast surfaced).
+- Stop criteria: verdict reached with causal model + invariants recorded; or queried session window < 25% → handoff sequence per binding requirement.

@@ -720,7 +720,6 @@ export function usePlaybackController({
         const executionOptions = {
           ...(shouldReboot ? { rebootBeforeMount: true } : {}),
           ...(applyPlaybackConfigBeforeLaunch ? { beforeLaunch: applyPlaybackConfigBeforeLaunch } : {}),
-          ...(item.category === "sid" && request.source === "ultimate" ? { skipSidSslPropagation: true } : {}),
           benchmarkMetadata: {
             feedbackKind: "result",
             ...(typeof options?.playlistSize === "number" ? { playlistSize: options.playlistSize } : {}),
