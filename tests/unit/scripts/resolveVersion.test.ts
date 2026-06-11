@@ -170,6 +170,7 @@ case "$*" in
   "rev-parse --show-toplevel") printf '%s\n' "$PWD" ;;
   "fetch --tags --quiet") exit 0 ;;
   "describe --tags --abbrev=0") printf '1.2.3\n' ;;
+  "describe --tags --exact-match HEAD") exit 1 ;;
   "rev-parse --is-shallow-repository") printf 'false\n' ;;
   "rev-parse HEAD") printf 'abc123def4567890abc123def4567890abc123de\n' ;;
   "diff --quiet HEAD --") exit 1 ;;
@@ -195,5 +196,111 @@ esac
     expect(result.status).toBe(0);
     expect(result.stderr).toBe("");
     expect(result.stdout.trim()).toBe("1.2.3-abc12");
+  });
+
+  it("includes the commit id for a clean checkout ahead of the latest git tag", () => {
+    const repoDir = createTempDir("resolve-build-version-ahead-");
+    const scriptsDir = path.join(repoDir, "scripts");
+    const binDir = path.join(repoDir, "bin");
+    const scriptPath = path.join(scriptsDir, "resolve-build-version.mjs");
+    const fakeGitPath = path.join(binDir, "git");
+
+    mkdirSync(scriptsDir, { recursive: true });
+    mkdirSync(binDir, { recursive: true });
+    copyFileSync(sourceBuildVersionScriptPath, scriptPath);
+
+    writeFileSync(
+      path.join(repoDir, "package.json"),
+      JSON.stringify({ name: "resolve-build-version-fixture", version: "0.0.0" }, null, 2),
+      "utf8",
+    );
+
+    writeFileSync(
+      fakeGitPath,
+      `#!/bin/sh
+set -eu
+case "$*" in
+  "rev-parse --show-toplevel") printf '%s\n' "$PWD" ;;
+  "fetch --tags --quiet") exit 0 ;;
+  "describe --tags --abbrev=0") printf '1.2.3\n' ;;
+  "describe --tags --exact-match HEAD") exit 1 ;;
+  "rev-parse --is-shallow-repository") printf 'false\n' ;;
+  "rev-parse HEAD") printf 'abc123def4567890abc123def4567890abc123de\n' ;;
+  "diff --quiet HEAD --") exit 0 ;;
+  *)
+    printf 'unexpected git invocation: %s\n' "$*" >&2
+    exit 2
+    ;;
+esac
+`,
+      "utf8",
+    );
+    chmodSync(fakeGitPath, 0o755);
+
+    const result = spawnSync("node", [scriptPath], {
+      cwd: repoDir,
+      encoding: "utf8",
+      env: {
+        ...withoutInjectedVersions(),
+        PATH: `${binDir}:${process.env.PATH ?? ""}`,
+      },
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(result.stdout.trim()).toBe("1.2.3-abc12");
+  });
+
+  it("uses the plain tag for an exact clean tag checkout", () => {
+    const repoDir = createTempDir("resolve-build-version-exact-tag-");
+    const scriptsDir = path.join(repoDir, "scripts");
+    const binDir = path.join(repoDir, "bin");
+    const scriptPath = path.join(scriptsDir, "resolve-build-version.mjs");
+    const fakeGitPath = path.join(binDir, "git");
+
+    mkdirSync(scriptsDir, { recursive: true });
+    mkdirSync(binDir, { recursive: true });
+    copyFileSync(sourceBuildVersionScriptPath, scriptPath);
+
+    writeFileSync(
+      path.join(repoDir, "package.json"),
+      JSON.stringify({ name: "resolve-build-version-fixture", version: "0.0.0" }, null, 2),
+      "utf8",
+    );
+
+    writeFileSync(
+      fakeGitPath,
+      `#!/bin/sh
+set -eu
+case "$*" in
+  "rev-parse --show-toplevel") printf '%s\n' "$PWD" ;;
+  "fetch --tags --quiet") exit 0 ;;
+  "describe --tags --abbrev=0") printf '1.2.3\n' ;;
+  "describe --tags --exact-match HEAD") printf '1.2.3\n' ;;
+  "rev-parse --is-shallow-repository") printf 'false\n' ;;
+  "rev-parse HEAD") printf 'abc123def4567890abc123def4567890abc123de\n' ;;
+  "diff --quiet HEAD --") exit 0 ;;
+  *)
+    printf 'unexpected git invocation: %s\n' "$*" >&2
+    exit 2
+    ;;
+esac
+`,
+      "utf8",
+    );
+    chmodSync(fakeGitPath, 0o755);
+
+    const result = spawnSync("node", [scriptPath], {
+      cwd: repoDir,
+      encoding: "utf8",
+      env: {
+        ...withoutInjectedVersions(),
+        PATH: `${binDir}:${process.env.PATH ?? ""}`,
+      },
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(result.stdout.trim()).toBe("1.2.3");
   });
 });

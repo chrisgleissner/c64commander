@@ -72,8 +72,9 @@ export const resolveBuildVersion = (env = process.env, repoRoot = DEFAULT_REPO_R
     if (tag) {
       validateVersionToken(tag, "Git tag");
       const sha = runGit(repoRoot, ["rev-parse", "HEAD"]).slice(0, 5).toLowerCase();
+      const exactTag = runGit(repoRoot, ["describe", "--tags", "--exact-match", "HEAD"]);
       const dirtyStatus = runGitStatus(repoRoot, ["diff", "--quiet", "HEAD", "--"]);
-      const version = dirtyStatus === 0 ? tag : `${tag}-${sha}`;
+      const version = dirtyStatus === 0 && exactTag === tag ? tag : `${tag}-${sha}`;
       validateVersion(version);
       return version;
     }
