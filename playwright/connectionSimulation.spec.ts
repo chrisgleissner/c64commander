@@ -33,10 +33,10 @@ const hostnameFromHost = (host: string) => new URL(`http://${host}`).hostname;
 
 const portFromHost = (host: string) => new URL(`http://${host}`).port || "80";
 
-const clickWithoutNavigationWait = async (page: Page, locator: Locator, attempts = 3) => {
+const clickWithoutNavigationWait = async (page: Page, locator: Locator, attempts = 2, timeoutMs = 5000) => {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      await locator.click({ timeout: 10000, noWaitAfter: true });
+      await locator.click({ timeout: timeoutMs, noWaitAfter: true });
       return;
     } catch (error) {
       if (attempt >= attempts - 1) {
@@ -51,7 +51,7 @@ const clickWithoutNavigationWait = async (page: Page, locator: Locator, attempts
         }
         throw error;
       }
-      await page.waitForTimeout(250);
+      await page.waitForTimeout(100);
     }
   }
 };
@@ -73,47 +73,35 @@ const dismissDemoModeDialogIfVisible = async (page: Page) => {
   await expect(dialog).toBeHidden({ timeout: 5000 });
 };
 
-const clickReconnectFromSettings = async (page: Page) => {
-  const dialog = page.getByRole("dialog", { name: /demo mode/i });
-  const dialogSaveAndRetry = dialog.getByRole("button", { name: /Save & Retry/i });
-  const settingsSaveAndConnect = page.getByRole("button", {
-    name: /Save & Connect|Save connection/i,
+const refreshConnectionFromSettings = async (page: Page) => {
+  await dismissDemoModeDialogIfVisible(page);
+  const refreshConnection = page.getByRole("button", {
+    name: /Refresh connection/i,
   });
+  await expect(refreshConnection).toBeVisible({ timeout: 3000 });
+  await clickWithoutNavigationWait(page, refreshConnection, 1, 3000);
+};
 
+const expectCurrentlyUsing = async (
+  currentUsing: Locator,
+  expectedHost: string,
+  expectedHttpPort: string,
+  timeout = 5000,
+) => {
   await expect
     .poll(
-      async () => {
-        if (await dialogSaveAndRetry.isVisible()) return "dialog-save";
-        if (await settingsSaveAndConnect.isVisible()) return "settings-save";
-        if (await dialog.isVisible()) return "dialog";
-        return "waiting";
-      },
-      { timeout: 15000 },
+      async () => ({
+        host: ((await currentUsing.locator("span").textContent()) ?? "").trim(),
+        text: ((await currentUsing.textContent()) ?? "").trim(),
+      }),
+      { timeout },
     )
-    .toMatch(/dialog-save|settings-save|dialog/);
-
-  if (await dialogSaveAndRetry.isVisible()) {
-    await clickWithoutNavigationWait(page, dialogSaveAndRetry);
-    return;
-  }
-
-  if (await settingsSaveAndConnect.isVisible()) {
-    await page.waitForTimeout(750);
-    if (await dialogSaveAndRetry.isVisible()) {
-      await clickWithoutNavigationWait(page, dialogSaveAndRetry);
-      return;
-    }
-    if (await dialog.isVisible()) {
-      await dismissDemoModeDialogIfVisible(page);
-      await expect(settingsSaveAndConnect).toBeVisible({ timeout: 15000 });
-    }
-    await clickWithoutNavigationWait(page, settingsSaveAndConnect);
-    return;
-  }
-
-  await dismissDemoModeDialogIfVisible(page);
-  await expect(settingsSaveAndConnect).toBeVisible({ timeout: 15000 });
-  await clickWithoutNavigationWait(page, settingsSaveAndConnect);
+    .toEqual(
+      expect.objectContaining({
+        host: expectedHost,
+        text: expect.stringContaining(`HTTP ${expectedHttpPort}`),
+      }),
+    );
 };
 
 const openDiagnosticsConnectionActions = async (page: Page, indicator: Locator) => {
@@ -913,10 +901,12 @@ test.describe("Deterministic Connectivity Simulation", () => {
     const hostname = hostnameFromHost(host);
     const port = portFromHost(host);
     const demoHostname = hostnameFromHost(demoHost);
+    const demoPort = portFromHost(demoHost);
     await page.addInitScript(
       ({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
         (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
-        localStorage.setItem("c64u_startup_discovery_window_ms", "300");
+        localStorage.setItem("c64u_startup_discovery_window_ms", "150");
+        localStorage.setItem("c64u_discovery_probe_timeout_ms", "250");
         localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
         localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
         localStorage.setItem("c64u_device_host", hostArg);
@@ -940,17 +930,15 @@ test.describe("Deterministic Connectivity Simulation", () => {
     }
     const currentUsingInDemo = page.getByText("Currently using:");
     await expect(currentUsingInDemo).toBeVisible();
-    await expect(currentUsingInDemo.locator("span")).toHaveText(demoHostname);
-    await expect(currentUsingInDemo).toContainText(/HTTP \d+/);
+    await expectCurrentlyUsing(currentUsingInDemo, demoHostname, demoPort);
 
     server.setReachable(true);
-    await clickReconnectFromSettings(page);
+    await refreshConnectionFromSettings(page);
     const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
-    await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 10000 });
+    await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 5000 });
     const currentUsing = page.getByText("Currently using:");
     await expect(currentUsing).toBeVisible();
-    await expect(currentUsing.locator("span")).toHaveText(hostname);
-    await expect(currentUsing).toContainText(`HTTP ${port}`);
+    await expectCurrentlyUsing(currentUsing, hostname, port);
     await snap(page, testInfo, "currently-using-updated");
   });
 });
