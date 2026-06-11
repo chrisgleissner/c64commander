@@ -1392,14 +1392,8 @@ describe("HomePage SID status", () => {
     expect(thumb).toBeTruthy();
     fireEvent.keyDown(thumb!, { key: "ArrowRight" });
 
-    expect(screen.getByTestId("home-cpu-speed-value").textContent).toBe("2");
-
-    await waitFor(() =>
-      expect(interactiveWriteMockRef.current).toHaveBeenCalledWith({
-        "Turbo Control": "Manual",
-        "CPU Speed": "2",
-      }),
-    );
+    expect(screen.getByTestId("home-cpu-speed-value").textContent).toBe("1");
+    expect(interactiveWriteMockRef.current).not.toHaveBeenCalled();
   });
 
   it("shows RAM Size (REU) only for REU-capable RAM expansion modes", () => {
@@ -1508,7 +1502,7 @@ describe("HomePage SID status", () => {
     selectFolderSpy.mockRestore();
   });
 
-  it("updates CPU speed without touching turbo control when turbo options are unavailable", async () => {
+  it("keeps Home CPU Speed read-only so quick config cannot silently mutate hardware", async () => {
     u64SettingsPayloadRef.current = buildU64SettingsPayload({
       cpuSpeed: "1",
       turboControlOptions: [],
@@ -1519,12 +1513,12 @@ describe("HomePage SID status", () => {
     const slider = screen.getByTestId("home-cpu-speed-slider");
     const thumb = slider.querySelector('[role="slider"]');
     expect(thumb).toBeTruthy();
+    expect(slider).toHaveAttribute("data-disabled");
 
     fireEvent.keyDown(thumb!, { key: "ArrowRight" });
 
-    // CPU speed commit goes via interactive write; setConfigValue is not used for CPU Speed changes.
-    // With no turbo options, no setConfigValue call of any kind should happen.
-    await waitFor(() => expect(screen.getByTestId("home-cpu-speed-value").textContent).toBe("2"));
+    expect(screen.getByTestId("home-cpu-speed-value").textContent).toBe("1");
+    expect(interactiveWriteMockRef.current).not.toHaveBeenCalled();
     expect(c64ApiMockRef.current.setConfigValue).not.toHaveBeenCalledWith(
       "U64 Specific Settings",
       "Turbo Control",
@@ -1532,7 +1526,7 @@ describe("HomePage SID status", () => {
     );
   });
 
-  it("preserves C64U padded CPU speed option tokens when committing from the Home slider", async () => {
+  it("preserves C64U padded CPU speed option tokens while keeping the Home slider guarded", async () => {
     u64SettingsPayloadRef.current = buildU64SettingsPayload({
       cpuSpeed: " 1",
       cpuSpeedOptions: [" 1", " 2", " 4"],
@@ -1548,15 +1542,11 @@ describe("HomePage SID status", () => {
 
     fireEvent.keyDown(thumb!, { key: "ArrowRight" });
 
-    await waitFor(() =>
-      expect(interactiveWriteMockRef.current).toHaveBeenCalledWith({
-        "Turbo Control": "Manual",
-        "CPU Speed": " 2",
-      }),
-    );
+    expect(screen.getByTestId("home-cpu-speed-value")).toHaveTextContent("1");
+    expect(interactiveWriteMockRef.current).not.toHaveBeenCalled();
   });
 
-  it("avoids redundant turbo-control writes when the desired turbo mode is already active", async () => {
+  it("does not write CPU Speed when the desired turbo mode is already active", async () => {
     u64SettingsPayloadRef.current = buildU64SettingsPayload({
       cpuSpeed: "2",
       turboControl: "Manual",
@@ -1571,12 +1561,8 @@ describe("HomePage SID status", () => {
 
     fireEvent.keyDown(thumb!, { key: "ArrowRight" });
 
-    // CPU speed commit goes via interactive write; only Turbo Control auto-adjust uses setConfigValue.
-    // Turbo is already "Manual", so no redundant write should happen.
-    await waitFor(() => expect(screen.getByTestId("home-cpu-speed-value").textContent).toBe("3"));
-    expect(interactiveWriteMockRef.current).toHaveBeenCalledWith({
-      "CPU Speed": "3",
-    });
+    expect(screen.getByTestId("home-cpu-speed-value").textContent).toBe("2");
+    expect(interactiveWriteMockRef.current).not.toHaveBeenCalled();
     expect(c64ApiMockRef.current.setConfigValue).not.toHaveBeenCalledWith(
       "U64 Specific Settings",
       "Turbo Control",
@@ -1584,7 +1570,7 @@ describe("HomePage SID status", () => {
     );
   });
 
-  it("rolls back the CPU speed preview when the interactive commit fails", async () => {
+  it("does not enter the CPU speed commit path while the quick-config guard is active", async () => {
     interactiveWriteMockRef.current = vi.fn().mockRejectedValue(new Error("CPU write failed"));
     u64SettingsPayloadRef.current = buildU64SettingsPayload({
       cpuSpeed: "1",
@@ -1601,9 +1587,7 @@ describe("HomePage SID status", () => {
     fireEvent.keyDown(thumb!, { key: "ArrowRight" });
 
     await waitFor(() => expect(screen.getByTestId("home-cpu-speed-value")).toHaveTextContent("1"));
-    expect(interactiveWriteMockRef.current).toHaveBeenCalledWith({
-      "CPU Speed": "2",
-    });
+    expect(interactiveWriteMockRef.current).not.toHaveBeenCalled();
     expect(c64ApiMockRef.current.setConfigValue).not.toHaveBeenCalledWith(
       "U64 Specific Settings",
       "Turbo Control",
@@ -1869,10 +1853,11 @@ describe("HomePage SID status", () => {
         "Turbo Control",
         "C64U Turbo Registers",
       );
-      expect(interactiveWriteMockRef.current).toHaveBeenCalledWith({
-        "Turbo Control": "Manual",
-        "CPU Speed": "2",
-      });
+      expect(interactiveWriteMockRef.current).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          "CPU Speed": expect.anything(),
+        }),
+      );
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
         "U64 Specific Settings",
         "Badline Timing",

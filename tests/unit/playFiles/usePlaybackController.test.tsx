@@ -6,6 +6,7 @@ import { executePlayPlan } from "@/lib/playback/playbackRouter";
 import { clearArchivePlaybackCacheForTests } from "@/lib/archive/archivePlaybackCache";
 import { getC64API } from "@/lib/c64api";
 import { reportUserError } from "@/lib/uiErrors";
+import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { getHvscDurationByMd5Seconds } from "@/lib/hvsc";
 import { applyConfigFileReference, ensureConfigFileReferenceAccessible } from "@/lib/config/applyConfigFileReference";
@@ -55,6 +56,10 @@ vi.mock("@/lib/logging", () => ({
 
 vi.mock("@/lib/uiErrors", () => ({
   reportUserError: vi.fn(),
+}));
+
+vi.mock("@/hooks/use-toast", () => ({
+  toast: vi.fn(),
 }));
 
 vi.mock("@/lib/config/applyConfigFileReference", () => ({
@@ -135,6 +140,7 @@ const renderPlaybackController = (
     archiveConfigs?: Record<string, { id: string; name: string; baseUrl: string; enabled: boolean }>;
     resolveUnavailableConfigDecision?: ReturnType<typeof vi.fn>;
     buildHvscLocalPlayFile?: ReturnType<typeof vi.fn>;
+    deviceProduct?: string | null;
   },
 ) =>
   renderHook(() =>
@@ -159,7 +165,7 @@ const renderPlaybackController = (
       localEntriesBySourceId: new Map(),
       localSourceTreeUris: new Map(),
       buildHvscLocalPlayFile: options?.buildHvscLocalPlayFile,
-      deviceProduct: "C64 Ultimate",
+      deviceProduct: options?.deviceProduct ?? "Ultimate 64 Elite",
       ensurePlaybackConnection: options?.ensurePlaybackConnection ?? vi.fn().mockResolvedValue(undefined),
       resolveUnavailableConfigDecision: options?.resolveUnavailableConfigDecision,
       resolveSonglengthDurationMsForPath:
@@ -773,7 +779,7 @@ describe("usePlaybackController", () => {
     expect(vi.mocked(applyConfigFileReference)).toHaveBeenCalledWith(
       expect.objectContaining({
         configRef: playlist[0].configRef,
-        deviceProduct: "C64 Ultimate",
+        deviceProduct: "Ultimate 64 Elite",
       }),
     );
     expect(vi.mocked(ensureConfigFileReferenceAccessible)).toHaveBeenCalledWith(
@@ -1592,6 +1598,33 @@ describe("usePlaybackController", () => {
       expect.objectContaining({ operation: "PLAYBACK_STOP", title: "Stop failed" }),
     );
     expect(restoreVolumeOverrides).toHaveBeenCalledWith("stop");
+  });
+
+  it("blocks C64U non-disk stop before it can reset the machine", async () => {
+    const machineReset = vi.fn().mockResolvedValue(undefined);
+    const restoreVolumeOverrides = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+    const { result } = renderPlaybackController([createPlaylistItem()], {
+      isPlaying: true,
+      restoreVolumeOverrides,
+      deviceProduct: "C64 Ultimate",
+    });
+
+    await result.current.handleStop();
+
+    expect(machineReset).not.toHaveBeenCalled();
+    expect(restoreVolumeOverrides).not.toHaveBeenCalled();
+    expect(vi.mocked(toast)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Stop disabled",
+        description: expect.stringContaining("would reset the C64U"),
+      }),
+    );
+    expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+      "warn",
+      "Playback stop blocked on C64U non-disk playback",
+      expect.objectContaining({ reason: "non-disk stop would reset the machine" }),
+    );
   });
 
   it("allows a queued machine reset to finish without emitting a false stop failure", async () => {

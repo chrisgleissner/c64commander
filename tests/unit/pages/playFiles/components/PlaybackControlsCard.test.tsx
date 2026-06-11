@@ -97,4 +97,24 @@ describe("PlaybackControlsCard", () => {
     expect(screen.getByTestId("playback-current-track")).toHaveClass("w-full");
     expect(screen.getByTestId("playback-controls-stack")).toHaveClass("w-full");
   });
+
+  it("disables Stop and shows the reason when non-disk C64U playback would reset the machine", () => {
+    const onStop = vi.fn();
+    render(
+      <PlaybackControlsCard
+        {...buildProps({
+          isPlaying: true,
+          canPause: true,
+          onStop,
+          stopDisabledReason: "Stop disabled on C64U because this item would reset the machine. Use Pause instead.",
+        })}
+      />,
+    );
+
+    const stopButton = screen.getByTestId("playlist-play");
+    expect(stopButton).toBeDisabled();
+    expect(screen.getByTestId("playback-stop-disabled-reason")).toHaveTextContent("Stop disabled on C64U");
+    fireEvent.click(stopButton);
+    expect(onStop).not.toHaveBeenCalled();
+  });
 });

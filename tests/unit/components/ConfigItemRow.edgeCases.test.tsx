@@ -144,13 +144,14 @@ describe("ConfigItemRow — slider edge cases", () => {
     expect(onValueChange).not.toHaveBeenCalled();
   });
 
-  it("allows CPU Speed sliders to reach the new 64x maximum option", async () => {
+  it("guards U64 CPU Speed sliders from direct config writes", async () => {
     const onValueChange = vi.fn();
 
     const CpuSpeedHarness = () => {
       const [value, setValue] = useState("1");
       return (
         <ConfigItemRow
+          category="U64 Specific Settings"
           name="CPU Speed"
           value={value}
           options={["1", "2", "3", "4", "6", "8", "10", "12", "14", "16", "20", "24", "32", "40", "48", "64"]}
@@ -167,12 +168,12 @@ describe("ConfigItemRow — slider edge cases", () => {
     renderWithQuery(<CpuSpeedHarness />);
 
     const slider = screen.getByLabelText("CPU Speed slider");
-    for (let step = 0; step < 15; step += 1) {
-      fireEvent.keyDown(slider, { key: "ArrowRight" });
-    }
 
-    await waitFor(() => expect(screen.getByTestId("cpu-speed-value")).toHaveTextContent("64"));
-    expect(onValueChange).toHaveBeenLastCalledWith("64");
+    expect(slider).toHaveAttribute("data-disabled");
+    fireEvent.keyDown(slider, { key: "ArrowRight" });
+
+    expect(screen.getByTestId("cpu-speed-value")).toHaveTextContent("1");
+    expect(onValueChange).not.toHaveBeenCalled();
   });
 });
 

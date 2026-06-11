@@ -127,7 +127,7 @@ const renderPlaybackHarness = (initialPlaylist: PlaylistItem[], options?: { repe
       repeatEnabled: options?.repeatEnabled ?? false,
       localEntriesBySourceId: new Map(),
       localSourceTreeUris: new Map(),
-      deviceProduct: "C64 Ultimate",
+      deviceProduct: "Ultimate 64 Elite",
       ensurePlaybackConnection: vi.fn().mockResolvedValue(undefined),
       resolveSonglengthDurationMsForPath: vi.fn().mockResolvedValue(null),
       applySonglengthsToItems: vi.fn().mockImplementation(async (items) => items),

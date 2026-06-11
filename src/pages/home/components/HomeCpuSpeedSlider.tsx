@@ -151,6 +151,7 @@ export function HomeCpuSpeedSlider({
     },
   });
   const probeText = useMemo(() => formatHomeCpuSpeedSliderProbe(probeSnapshot), [probeSnapshot]);
+  const cpuSpeedMutationDisabled = true;
 
   useEffect(() => {
     setProbeSnapshot((current) =>
@@ -186,12 +187,13 @@ export function HomeCpuSpeedSlider({
         min={0}
         max={Math.max(sliderOptions.length - 1, 0)}
         step={1}
-        disabled={!isActive || sliderOptions.length <= 1}
+        disabled={cpuSpeedMutationDisabled || !isActive || sliderOptions.length <= 1}
         onValueChange={onValueChange}
         onValueCommit={onValueCommit}
         valueFormatter={(index) => resolveCpuSpeedOption(index)}
         aria-label="CPU Speed slider"
         data-testid="home-cpu-speed-slider"
+        title="CPU Speed changes are disabled for hardware safety"
       />
     </div>
   );
