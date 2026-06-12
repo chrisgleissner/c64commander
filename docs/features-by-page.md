@@ -129,7 +129,7 @@ Playlist and playback surface. Supports Local, C64U, and HVSC sources, mixed-sou
   - SID/MOD/PRG/CRT -> runner REST endpoints
   - disk images -> drive mount endpoints plus autostart injection or DMA first-PRG load
 - Ultimate SID duration propagation is best-effort: FTP fetch + SSL upload when duration exists, otherwise direct `/v1/runners:sidplay`.
-- Playback completion is duration-driven, not device-state-driven. Lock/background recovery depends on JS reconciliation plus `BackgroundExecution.setDueAtMs()` on native.
+- Playback completion is duration-driven, not device-state-driven. Lock/background recovery depends on JS reconciliation plus `BackgroundExecution.setDueAtMs()` on native. When repeat is off and the playlist reaches its final item, the app ends its local playback guard without issuing an additional device stop/reset command.
 - Playlist persistence is split: item list in repository/local storage, current playback session in session storage.
 
 #### Existing Test Coverage

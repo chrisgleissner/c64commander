@@ -22,6 +22,14 @@ export type DeviceControlResult = {
   endpoint: string | string[];
   response: unknown;
   menuOpen: boolean;
+  menuOpenAuthoritative: false;
+  menuOpenSource: "best-effort-client";
+};
+
+export type DeviceControlMenuStateSnapshot = {
+  menuOpen: boolean;
+  authoritative: false;
+  source: "best-effort-client";
 };
 
 type DeviceControlDependencies = {
@@ -41,6 +49,13 @@ type RunControlOperationOptions<T> = {
 };
 
 const DEVICE_CONTROL_COMPONENT = "deviceControl";
+const MENU_STATE_SOURCE = "best-effort-client" as const;
+
+const buildMenuStateSnapshot = (menuOpen: boolean): DeviceControlMenuStateSnapshot => ({
+  menuOpen,
+  authoritative: false,
+  source: MENU_STATE_SOURCE,
+});
 
 const assertRestActionSucceeded = (operation: DeviceControlOperation, response: { errors?: string[] } | undefined) => {
   const errors = Array.isArray(response?.errors) ? response.errors.filter((entry) => entry.trim().length > 0) : [];
@@ -144,6 +159,8 @@ export const createDeviceControl = ({ api, initialMenuOpen = false }: DeviceCont
           endpoint,
           status: "success",
           menuOpen,
+          menuOpenAuthoritative: false,
+          menuOpenSource: MENU_STATE_SOURCE,
         });
 
         return {
@@ -152,6 +169,8 @@ export const createDeviceControl = ({ api, initialMenuOpen = false }: DeviceCont
           endpoint,
           response,
           menuOpen,
+          menuOpenAuthoritative: false,
+          menuOpenSource: MENU_STATE_SOURCE,
         } satisfies DeviceControlResult;
       } catch (error) {
         const cause = asError(error, `${operation} failed`);
@@ -194,6 +213,8 @@ export const createDeviceControl = ({ api, initialMenuOpen = false }: DeviceCont
           status: "error",
           error: cause.message,
           menuOpen,
+          menuOpenAuthoritative: false,
+          menuOpenSource: MENU_STATE_SOURCE,
         });
 
         throw structuredError;
@@ -211,7 +232,8 @@ export const createDeviceControl = ({ api, initialMenuOpen = false }: DeviceCont
         request: {
           endpoint: "/v1/machine:menu_button",
           method: "PUT",
-          currentMenuState: menuOpen ? "open" : "closed",
+          clientEstimatedMenuState: menuOpen ? "open" : "closed",
+          menuStateSource: MENU_STATE_SOURCE,
           desiredMenuState,
         },
         execute: async () => {
@@ -256,12 +278,14 @@ export const createDeviceControl = ({ api, initialMenuOpen = false }: DeviceCont
   };
 
   const getMenuState = () => menuOpen;
+  const getMenuStateSnapshot = () => buildMenuStateSnapshot(menuOpen);
 
   return {
     toggleMenu,
     rebootKeepRam,
     resetMenuState,
     getMenuState,
+    getMenuStateSnapshot,
   };
 };
 

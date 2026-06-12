@@ -34,6 +34,7 @@ const usePlaybackHarness = ({
   initialCurrentIndex = -1,
   initialIsPlaying = false,
   initialIsPaused = false,
+  initialAutoAdvanceDueAtMs = null,
   buildPlaylistItemOverride,
 }: {
   playlistStorageKey: string;
@@ -54,6 +55,7 @@ const usePlaybackHarness = ({
   initialCurrentIndex?: number;
   initialIsPlaying?: boolean;
   initialIsPaused?: boolean;
+  initialAutoAdvanceDueAtMs?: number | null;
   buildPlaylistItemOverride?: (
     entry: PlayableEntry,
     songNrOverride?: number,
@@ -67,6 +69,7 @@ const usePlaybackHarness = ({
   const [elapsedMs, setElapsedMs] = useState(0);
   const [playedMs, setPlayedMs] = useState(0);
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
+  const [autoAdvanceDueAtMs] = useState<number | null>(initialAutoAdvanceDueAtMs);
   const playedClockRef = useRef({ hydrate: vi.fn() });
   const trackStartedAtRef = useRef<number | null>(null);
   const trackInstanceIdRef = useRef(0);
@@ -112,6 +115,7 @@ const usePlaybackHarness = ({
     setPlayedMs,
     durationMs,
     setDurationMs,
+    autoAdvanceDueAtMs,
     setCurrentSubsongCount: vi.fn(),
     setAutoAdvanceDueAtMs: setAutoAdvanceDueAtMsRef.current,
     resolvedDeviceId: "device-1",
@@ -460,6 +464,7 @@ describe("usePlaybackPersistence – edge cases", () => {
 
   it("persist session: out-of-range currentIndex produces null currentItemId", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    const autoAdvanceDueAtMs = Date.now() + 45_000;
     localStorage.setItem(
       playlistStorageKey,
       JSON.stringify({
@@ -482,6 +487,7 @@ describe("usePlaybackPersistence – edge cases", () => {
         initialCurrentIndex: -1,
         initialIsPlaying: true,
         initialIsPaused: false,
+        initialAutoAdvanceDueAtMs: autoAdvanceDueAtMs,
       }),
     );
 
@@ -495,9 +501,11 @@ describe("usePlaybackPersistence – edge cases", () => {
       const parsed = JSON.parse(raw as string) as {
         currentItemId: string | null;
         currentIndex: number;
+        autoAdvanceDueAtMs: number | null;
       };
       expect(parsed.currentItemId).toBeNull();
       expect(parsed.currentIndex).toBe(-1);
+      expect(parsed.autoAdvanceDueAtMs).toBe(autoAdvanceDueAtMs);
     });
   });
 

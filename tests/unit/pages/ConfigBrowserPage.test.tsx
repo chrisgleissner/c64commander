@@ -330,6 +330,50 @@ describe("ConfigBrowserPage", () => {
     });
   });
 
+  it("keeps audio mixer Solo active across item refetch identity changes", async () => {
+    sessionStorage.clear();
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["Audio Mixer"] },
+      isLoading: false,
+    });
+    const updateConfigBatch = vi.fn().mockResolvedValue({ errors: [] });
+    vi.mocked(getC64API).mockReturnValue({ updateConfigBatch } as any);
+
+    let audioMixerItems = {
+      "Vol Ultisid 1": { selected: "0 dB", options: ["OFF", "0 dB"] },
+      "Vol Ultisid 2": { selected: "0 dB", options: ["OFF", "0 dB"] },
+    };
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: {
+        [categoryName]: {
+          items: audioMixerItems,
+        },
+      },
+      isLoading: false,
+      refetch: vi.fn(),
+    }));
+
+    renderConfigBrowserPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
+    fireEvent.click(await screen.findByTestId("audio-mixer-solo-vol-ultisid-1"));
+
+    await waitFor(() => expect(updateConfigBatch).toHaveBeenCalled());
+    updateConfigBatch.mockClear();
+
+    audioMixerItems = {
+      "Vol Ultisid 1": { selected: "0 dB", options: ["OFF", "0 dB"] },
+      "Vol Ultisid 2": { selected: "-6 dB", options: ["OFF", "-6 dB", "0 dB"] },
+    };
+    fireEvent.change(screen.getByPlaceholderText(/search categories/i), {
+      target: { value: "audio" },
+    });
+
+    expect(await screen.findByTestId("audio-mixer-solo-vol-ultisid-1")).toBeChecked();
+    expect(updateConfigBatch).not.toHaveBeenCalled();
+  });
+
   it("reports config update failures", async () => {
     setupDefaultMocks();
     mockUseC64Categories.mockReturnValue({

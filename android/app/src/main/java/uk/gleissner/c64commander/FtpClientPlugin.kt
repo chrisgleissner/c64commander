@@ -27,7 +27,7 @@ import org.apache.commons.net.ftp.FTPFile
 
 @CapacitorPlugin(name = "FtpClient")
 class FtpClientPlugin : Plugin() {
-  private val executor = Executors.newSingleThreadExecutor()
+  private val executor = Executors.newFixedThreadPool(3)
   private val logTag = "FtpClientPlugin"
   private val defaultConnectTimeoutMs = 1_500
   private val defaultTransferTimeoutMs = 8_000

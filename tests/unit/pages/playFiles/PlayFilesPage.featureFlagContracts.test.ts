@@ -73,11 +73,14 @@ describe("PlayFilesPage feature-flag contracts", () => {
     expect(listenerEffect).not.toContain("!isPlaying || isPaused");
   });
 
-  it("stops background execution only on real cleanup, not on track instance churn", () => {
+  it("stops background execution only on inactive cleanup, not active playback unmount or track churn", () => {
     expect(playFilesPageSource).toContain("const stopBackgroundExecutionRef = useRef(stopBackgroundExecution);");
     expect(playFilesPageSource).toContain("stopBackgroundExecutionRef.current = stopBackgroundExecution;");
     expect(playFilesPageSource).toContain("const backgroundCleanupTrackInstanceIdRef = useRef(trackInstanceId);");
     expect(playFilesPageSource).toContain("backgroundCleanupTrackInstanceIdRef.current = trackInstanceId;");
+    expect(playFilesPageSource).toContain("const latestPlaybackState = playbackStateRef.current;");
+    expect(playFilesPageSource).toContain("if (latestPlaybackState.isPlaying && !latestPlaybackState.isPaused) {");
+    expect(playFilesPageSource).toContain("Leaving background playback guard active across Play page unmount");
     expect(playFilesPageSource).toMatch(/void stopBackgroundExecutionRef\s*\.current\(\{/);
     expect(playFilesPageSource).toContain("trackInstanceId: backgroundCleanupTrackInstanceIdRef.current");
     expect(playFilesPageSource).toContain("void queueBackgroundDueAtUpdateRef.current(null);");

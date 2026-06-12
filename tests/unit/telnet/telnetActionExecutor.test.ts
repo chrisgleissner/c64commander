@@ -101,7 +101,24 @@ describe("createActionExecutor", () => {
     it("logs and rethrows on navigation failure", async () => {
       const mock = new TelnetMock({ missingItems: ["Power Cycle"] });
       const session = await createConnectedSession(mock);
+      const sendKeySpy = vi.spyOn(session, "sendKey");
       const executor = createActionExecutor(session);
+      await expect(executor.execute("powerCycle")).rejects.toThrow(TelnetError);
+      expect(sendKeySpy.mock.calls.slice(-2).map(([key]) => key)).toEqual(["ESCAPE", "LEFT"]);
+    });
+
+    it("preserves the original navigation failure when cleanup also fails", async () => {
+      const mock = new TelnetMock({ missingItems: ["Power Cycle"] });
+      const session = await createConnectedSession(mock);
+      const originalSendKey = session.sendKey.bind(session);
+      vi.spyOn(session, "sendKey").mockImplementation(async (key) => {
+        if (key === "ESCAPE") {
+          throw new Error("cleanup transport failed");
+        }
+        return originalSendKey(key);
+      });
+      const executor = createActionExecutor(session);
+
       await expect(executor.execute("powerCycle")).rejects.toThrow(TelnetError);
     });
   });

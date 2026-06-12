@@ -43,6 +43,11 @@ describe("deviceControl", () => {
     expect(results).toEqual([true, false, true, false, true, false, true, false, true, false]);
     expect(api.machineMenuButton).toHaveBeenCalledTimes(10);
     expect(control.getMenuState()).toBe(false);
+    expect(control.getMenuStateSnapshot()).toEqual({
+      menuOpen: false,
+      authoritative: false,
+      source: "best-effort-client",
+    });
   });
 
   it("serializes overlapping menu toggle requests", async () => {
@@ -89,6 +94,10 @@ describe("deviceControl", () => {
       menuOpen: false,
     });
     expect(control.getMenuState()).toBe(false);
+    expect(result).toMatchObject({
+      menuOpenAuthoritative: false,
+      menuOpenSource: "best-effort-client",
+    });
 
     const transportEvent = getTraceEvents().find(
       (event) => event.type === "device-guard" && event.data.phase === "transport_used",
@@ -115,6 +124,8 @@ describe("deviceControl", () => {
         endpoint: "PUT /v1/machine:menu_button",
         request: expect.objectContaining({
           endpoint: "/v1/machine:menu_button",
+          clientEstimatedMenuState: "closed",
+          menuStateSource: "best-effort-client",
           desiredMenuState: "open",
         }),
         errorName: "DeviceControlError",

@@ -184,6 +184,29 @@ describe("diskMount", () => {
       ).rejects.toThrow("too large to mount");
     });
 
+    it("uses a size-aware timeout instead of the old 2 second local read limit", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.mocked(FolderPicker.readFile).mockReturnValue(new Promise(() => undefined));
+        const pending = resolveLocalDiskBlob({
+          path: "/large.d64",
+          localUri: "content://large",
+          location: "local",
+          sizeBytes: 4 * 1024 * 1024,
+        } as any);
+        const rejection = vi.fn();
+        pending.catch(rejection);
+
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(rejection).not.toHaveBeenCalled();
+
+        await vi.advanceTimersByTimeAsync(8000);
+        await expect(pending).rejects.toThrow("Local disk file read timed out after 10000 ms");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("uses an Error abort fallback when DOMException is unavailable", async () => {
       const previousDomException = globalThis.DOMException;
       vi.stubGlobal("DOMException", undefined);
@@ -313,6 +336,32 @@ describe("diskMount", () => {
       expect(blob).toBeInstanceOf(Blob);
     });
 
+    it("stops source fallback after a definitive SAF read timeout", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.mocked(loadLocalSources).mockReturnValue([
+          { id: "src1", android: { treeUri: "tree://timeout" } } as any,
+          { id: "src2", android: { treeUri: "tree://ok" } } as any,
+        ]);
+        vi.mocked(getLocalSourceRuntimeFile).mockReturnValue(null);
+        vi.mocked(getLocalSourceListingMode).mockReturnValue("saf" as any);
+        vi.mocked(FolderPicker.readFileFromTree).mockReset();
+        vi.mocked(FolderPicker.readFileFromTree).mockReturnValue(new Promise(() => undefined));
+
+        const pending = resolveLocalDiskBlob({
+          path: "/test.d64",
+          location: "local",
+        } as any);
+        const rejection = expect(pending).rejects.toThrow("Local disk tree read timed out after 15000 ms");
+
+        await vi.advanceTimersByTimeAsync(15000);
+        await rejection;
+        expect(FolderPicker.readFileFromTree).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("skips sourceId-targeted lookup and iterates all sources when sourceId not found", async () => {
       const runtimeFile = new File(["data"], "test.d64");
       vi.mocked(loadLocalSources).mockReturnValue([{ id: "src1" } as any]);
@@ -382,7 +431,7 @@ describe("diskMount", () => {
         resolveLocalDiskBlob({ path: "/test.d64", location: "local" } as any, undefined, {
           signal: controller.signal,
         }),
-      ).rejects.toThrow("Local disk access is missing");
+      ).rejects.toThrow(/cancelled|aborted/i);
       expect(addErrorLog).toHaveBeenCalledWith(
         "Local source entries resolve failed",
         expect.objectContaining({

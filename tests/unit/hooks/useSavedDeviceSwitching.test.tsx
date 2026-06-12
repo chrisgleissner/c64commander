@@ -243,6 +243,59 @@ describe("useSavedDeviceSwitching", () => {
     expect(mockVerifyCurrentConnectionTarget).not.toHaveBeenCalled();
   });
 
+  it("invalidates C64 queries when saved-device verification reports offline", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    store.addSavedDevice({
+      id: "device-offline",
+      name: "Offline Lab",
+      host: "offline-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      hasPassword: false,
+    });
+    mockVerifyCurrentConnectionTarget.mockResolvedValueOnce({
+      ok: false,
+      deviceInfo: null,
+      error: "Host unreachable",
+    });
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), {
+      wrapper: createWrapper("/play"),
+    });
+
+    await act(async () => {
+      await result.current("device-offline");
+    });
+
+    expect(mockInvalidateForSavedDeviceSwitch).toHaveBeenCalledWith(expect.any(QueryClient), "/play");
+    expect(store.getSavedDeviceSwitchStatus("device-offline")).toBe("offline");
+  });
+
+  it("invalidates C64 queries when saved-device verification throws", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    store.addSavedDevice({
+      id: "device-error",
+      name: "Error Lab",
+      host: "error-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      hasPassword: false,
+    });
+    mockVerifyCurrentConnectionTarget.mockRejectedValueOnce(new Error("verification exploded"));
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), {
+      wrapper: createWrapper("/play"),
+    });
+
+    await expect(result.current("device-error")).rejects.toThrow("verification exploded");
+
+    expect(mockInvalidateForSavedDeviceSwitch).toHaveBeenCalledWith(expect.any(QueryClient), "/play");
+  });
+
   it("clears error toasts attributed to the previous device on switch (ERROR_POLICY §6)", async () => {
     const store = await import("@/lib/savedDevices/store");
     const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
@@ -777,7 +830,7 @@ describe("useSavedDeviceSwitching", () => {
 
     expect(store.getSavedDevicesSnapshot().selectedDeviceId).toBe("device-backup");
     expect(store.getSavedDeviceSwitchStatus("device-backup")).toBe("offline");
-    expect(mockInvalidateForSavedDeviceSwitch).not.toHaveBeenCalled();
+    expect(mockInvalidateForSavedDeviceSwitch).toHaveBeenCalledWith(expect.any(QueryClient), "/config");
 
     expect(metrics.getSavedDeviceSwitchMetricsSnapshot().attempts[0]).toMatchObject({
       fromDeviceId: initialDeviceId,
@@ -826,6 +879,8 @@ describe("useSavedDeviceSwitching", () => {
         await result.current("device-backup");
       }),
     ).rejects.toThrow("Verification exploded");
+
+    expect(mockInvalidateForSavedDeviceSwitch).toHaveBeenCalledWith(expect.any(QueryClient), "/settings");
 
     expect(metrics.getSavedDeviceSwitchMetricsSnapshot().attempts[0]).toMatchObject({
       fromDeviceId: initialDeviceId,

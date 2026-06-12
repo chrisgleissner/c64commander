@@ -125,4 +125,28 @@ describe("createLatestIntentWriteLane", () => {
 
     await expect(lane.schedule(1)).rejects.toThrow("write failed");
   });
+
+  it("resolves superseded waiters when only the final effective write fails", async () => {
+    let allowRuns = false;
+    const lane = createLatestIntentWriteLane<number>({
+      beforeRun: async () => {
+        while (!allowRuns) {
+          await Promise.resolve();
+        }
+      },
+      run: async (value) => {
+        if (value === 2) {
+          throw new Error("final write failed");
+        }
+      },
+    });
+
+    const superseded = lane.schedule(1);
+    const final = lane.schedule(2);
+
+    allowRuns = true;
+
+    await expect(superseded).resolves.toBeUndefined();
+    await expect(final).rejects.toThrow("final write failed");
+  });
 });

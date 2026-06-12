@@ -77,6 +77,7 @@ const useHarness = (playlistStorageKey: string, options?: { startEmpty?: boolean
   const [elapsedMs, setElapsedMs] = useState(0);
   const [playedMs, setPlayedMs] = useState(0);
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
+  const [autoAdvanceDueAtMs] = useState<number | null>(null);
   const [activePlaylistQuery, setActivePlaylistQuery] = useState("");
   const playedClockRef = useRef({ hydrate: vi.fn() });
   const trackStartedAtRef = useRef<number | null>(null);
@@ -98,6 +99,7 @@ const useHarness = (playlistStorageKey: string, options?: { startEmpty?: boolean
     setPlayedMs,
     durationMs,
     setDurationMs,
+    autoAdvanceDueAtMs,
     setCurrentSubsongCount: vi.fn(),
     activePlaylistQuery,
     resolvedDeviceId: "device-1",

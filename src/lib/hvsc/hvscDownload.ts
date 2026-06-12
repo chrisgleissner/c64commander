@@ -21,6 +21,7 @@ import {
 import { HvscIngestion } from "@/lib/native/hvscIngestion";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { beginHvscPerfScope, endHvscPerfScope } from "./hvscPerformance";
+import { createHvscCancellationError } from "./hvscCancellation";
 
 const HVSC_NATIVE_ARCHIVE_READ_CHUNK_BYTES = 512 * 1024;
 
@@ -547,7 +548,7 @@ export const ensureNotCancelledWith = (
   if (!token) return;
   if (cancelTokens.get(token)?.cancelled) {
     stateUpdater?.({ ingestionState: "idle", ingestionError: "Cancelled" });
-    throw new Error("HVSC update cancelled");
+    throw createHvscCancellationError();
   }
 };
 

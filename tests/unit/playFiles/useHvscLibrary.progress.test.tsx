@@ -225,6 +225,33 @@ describe("useHvscLibrary progress coverage", () => {
     expect(result.current.hvscPhase).toBe("download");
   });
 
+  it("keeps stale progress non-terminal while native ingestion is still active", async () => {
+    mocks.loadHvscStatusSummaryMock.mockReturnValue(
+      createSummary({
+        download: {
+          status: "in-progress",
+          startedAt: new Date(Date.now() - 30000).toISOString(),
+        },
+        lastUpdatedAt: new Date(Date.now() - 20000).toISOString(),
+      }),
+    );
+    mocks.getHvscStatusMock.mockResolvedValue(createStatus({ ingestionState: "installing" }));
+
+    const { result } = renderHook(() => useHvscLibrary());
+
+    await waitFor(() => expect(result.current.hvscActionLabel).toBe("HVSC operation still running…"));
+    expect(result.current.hvscDownloadStatus).toBe("in-progress");
+    expect(result.current.hvscSummaryState).not.toBe("failure");
+    expect(mocks.addLogMock).toHaveBeenCalledWith(
+      "warn",
+      "HVSC progress stale while work is still active",
+      expect.objectContaining({
+        ingestionState: "installing",
+        downloadStatus: "in-progress",
+      }),
+    );
+  });
+
   it("reflects download, extraction, indexing, and ready phases during install", async () => {
     let resolveInstall: (() => void) | null = null;
     mocks.installOrUpdateHvscMock.mockImplementation(

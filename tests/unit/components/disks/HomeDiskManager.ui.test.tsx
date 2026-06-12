@@ -288,6 +288,75 @@ describe("HomeDiskManager UI & Interactions", () => {
     expect(toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Disk mounted" }));
   });
 
+  it("clears a mounted override when fresh drive data after the mount reports a different state", async () => {
+    const disk = createMockDisk({
+      id: "optimistic-disk",
+      name: "optimistic.d64",
+      path: "/optimistic.d64",
+    });
+    let drivesResult = {
+      data: { drives: [{ a: createMockDrive() }, { b: createMockDrive() }] },
+      dataUpdatedAt: 1,
+    };
+
+    (useDiskLibrary as any).mockReturnValue({
+      disks: [disk],
+      runtimeFiles: {},
+      removeDisk: mockRemoveDisk,
+    });
+    (useC64Drives as any).mockImplementation(() => drivesResult);
+    (mountDiskToDrive as any).mockResolvedValue(undefined);
+
+    const view = render(<HomeDiskManager />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mount" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("drive-mounted-label-a")).toHaveTextContent("optimistic.d64");
+    });
+
+    drivesResult = {
+      data: { drives: [{ a: createMockDrive({ image_file: "", image_path: "" }) }, { b: createMockDrive() }] },
+      dataUpdatedAt: Date.now() + 1000,
+    };
+    view.rerender(<HomeDiskManager />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("drive-mounted-label-a")).toHaveTextContent("No disk mounted");
+    });
+  });
+
+  it("clears a drive power override when fresh drive data after the toggle disagrees", async () => {
+    let drivesResult = {
+      data: { drives: [{ a: createMockDrive({ enabled: true }) }, { b: createMockDrive() }] },
+      dataUpdatedAt: 1,
+    };
+    (useC64Drives as any).mockImplementation(() => drivesResult);
+    mockApi.driveOff.mockResolvedValueOnce(undefined);
+
+    const view = render(<HomeDiskManager />);
+
+    const toggleBtn = screen.getByTestId("drive-power-toggle-a");
+    fireEvent.click(toggleBtn);
+
+    await waitFor(() => {
+      expect(mockApi.driveOff).toHaveBeenCalledWith("a");
+      expect(toggleBtn).toHaveTextContent("Turn On");
+    });
+
+    drivesResult = {
+      data: { drives: [{ a: createMockDrive({ enabled: true }) }, { b: createMockDrive() }] },
+      dataUpdatedAt: Date.now() + 1000,
+    };
+    view.rerender(<HomeDiskManager />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("drive-power-toggle-a")).toHaveTextContent("Turn Off");
+    });
+  });
+
   it("displays formated keys and dates in disk details", async () => {
     const disk = createMockDisk({
       id: "disk-1",

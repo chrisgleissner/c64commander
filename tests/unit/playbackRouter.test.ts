@@ -260,10 +260,44 @@ describe("playbackRouter", () => {
       expect.anything(),
       expect.objectContaining({
         type: "ssl-propagation-failure",
-        level: "error",
+        level: "warn",
         reason: "ftp-fetch-failed",
       }),
     );
+  });
+
+  it("falls back to direct SID playback after a short FTP preflight deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      const api = createApiMock();
+      vi.mocked(readFtpFile).mockReturnValue(new Promise(() => {}) as any);
+      const plan = buildPlayPlan({
+        source: "ultimate",
+        path: "/MUSIC/SLOW.SID",
+        durationMs: 120000,
+      });
+
+      const pending = executePlayPlan(api as any, plan);
+
+      await vi.advanceTimersByTimeAsync(1199);
+      expect(api.playSid).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1);
+      await pending;
+
+      expect(api.playSid).toHaveBeenCalledWith("/MUSIC/SLOW.SID", undefined);
+      expect(api.playSidUpload).not.toHaveBeenCalled();
+      expect(vi.mocked(recordDeviceGuard)).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          type: "ssl-propagation-failure",
+          level: "warn",
+          reason: "ftp-fetch-failed",
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("merges playback benchmark metadata into smoke snapshots", async () => {
@@ -306,7 +340,7 @@ describe("playbackRouter", () => {
     );
   });
 
-  it("falls back to direct play and records error when SID+SSL upload fails", async () => {
+  it("falls back to direct play and records warning when SID+SSL upload fails", async () => {
     const api = createApiMock();
     const sidBytes = new Uint8Array([0x50, 0x53, 0x49, 0x44]);
     const encoded = Buffer.from(sidBytes).toString("base64");
@@ -329,7 +363,7 @@ describe("playbackRouter", () => {
       expect.anything(),
       expect.objectContaining({
         type: "ssl-propagation-failure",
-        level: "error",
+        level: "warn",
         reason: "upload-failed-with-songlength-available",
       }),
     );

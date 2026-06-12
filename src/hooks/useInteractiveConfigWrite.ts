@@ -22,10 +22,13 @@ import { addLog } from "@/lib/logging";
 
 const INTERACTIVE_WRITE_QUIET_MS = 400;
 
-const waitForInteractiveWriteQuietWindow = () =>
-  new Promise<void>((resolve) => {
-    setTimeout(resolve, INTERACTIVE_WRITE_QUIET_MS);
+const waitForInteractiveWriteQuietUntil = async (quietUntilMs: number) => {
+  const waitMs = Math.max(0, quietUntilMs - Date.now());
+  if (waitMs <= 0) return;
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, waitMs);
   });
+};
 
 export interface InteractiveWriteOptions {
   /** Config category name, e.g. "Audio Mixer", "LED Strip Settings". */
@@ -64,6 +67,8 @@ export function useInteractiveConfigWrite({
   const updateConfigBatch = useC64UpdateConfigBatch();
   const [isPending, setIsPending] = useState(false);
   const reconcileTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const writeBurstActiveRef = useRef(false);
+  const quietUntilRef = useRef(0);
 
   // Stable resolved query key sets for reconciliation.
   const effectiveReconcileKeys = reconcileQueryKeys ?? [["c64-config-items", category]];
@@ -94,7 +99,7 @@ export function useInteractiveConfigWrite({
     laneRef.current = createLatestIntentWriteLane<Record<string, string | number>>({
       beforeRun: async () => {
         await waitForMachineTransitionsToSettle();
-        await waitForInteractiveWriteQuietWindow();
+        await waitForInteractiveWriteQuietUntil(quietUntilRef.current);
       },
       run: async (updates) => {
         const safety = loadDeviceSafetyConfig();
@@ -145,6 +150,12 @@ export function useInteractiveConfigWrite({
   const write = useCallback(
     async (updates: Record<string, string | number>) => {
       setIsPending(true);
+      if (writeBurstActiveRef.current) {
+        quietUntilRef.current = Date.now() + INTERACTIVE_WRITE_QUIET_MS;
+      } else {
+        quietUntilRef.current = 0;
+      }
+      writeBurstActiveRef.current = true;
       addLog("debug", "Interactive config write queued", {
         category: categoryRef.current,
         updates,
@@ -166,6 +177,7 @@ export function useInteractiveConfigWrite({
         });
         throw error;
       } finally {
+        writeBurstActiveRef.current = false;
         setIsPending(false);
         scheduleReconciliation();
       }

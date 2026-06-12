@@ -713,6 +713,43 @@ describe("c64api", () => {
     }
   });
 
+  it("applies the interactive 1500 ms timeout to stream actions", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = getFetchMock();
+      fetchMock.mockImplementation(
+        (_url: string, options?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            options?.signal?.addEventListener(
+              "abort",
+              () => {
+                reject(new DOMException("Aborted", "AbortError"));
+              },
+              { once: true },
+            );
+          }),
+      );
+
+      const api = new C64API("http://c64u");
+      const pendingStart = api.startStream("audio", "192.168.1.20");
+      void pendingStart.catch(() => {});
+
+      await vi.advanceTimersByTimeAsync(1499);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(pendingStart).rejects.toThrow("Host unreachable");
+
+      const pendingStop = api.stopStream("audio");
+      void pendingStop.catch(() => {});
+      await vi.advanceTimersByTimeAsync(1500);
+      await expect(pendingStop).rejects.toThrow("Host unreachable");
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("applies the interactive 1500 ms timeout to batch config writes", async () => {
     vi.useFakeTimers();
     try {
@@ -764,7 +801,7 @@ describe("c64api", () => {
     }
   });
 
-  it("does not apply the scheduled 3-second timeout to user-triggered requests", async () => {
+  it("applies the interactive default timeout to user-triggered requests", async () => {
     vi.useFakeTimers();
     try {
       const fetchMock = getFetchMock();
@@ -780,17 +817,16 @@ describe("c64api", () => {
             );
           }),
       );
-      const controller = new AbortController();
 
       const api = new C64API("http://c64u");
-      const pending = api.getInfo({ signal: controller.signal, __c64uBypassCache: true });
+      const pending = api.getInfo({ __c64uBypassCache: true });
       void pending.catch(() => {});
 
-      await vi.advanceTimersByTimeAsync(3100);
+      await vi.advanceTimersByTimeAsync(INTERACTIVE_CONTROL_TIMEOUT_MS - 1);
       expect(fetchMock).toHaveBeenCalledTimes(1);
 
-      controller.abort();
-      await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(pending).rejects.toThrow("Host unreachable");
     } finally {
       vi.useRealTimers();
     }

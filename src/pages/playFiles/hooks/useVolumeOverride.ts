@@ -265,10 +265,23 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   );
 
   const captureSidMuteSnapshot = useCallback(
-    (items: typeof sidVolumeItems, enablement: SidEnablement) => ({
-      volumes: buildEnabledSidVolumeSnapshot(items, enablement),
-      enablement: { ...enablement },
-    }),
+    (items: typeof sidVolumeItems, enablement: SidEnablement) => {
+      const volumes = buildEnabledSidVolumeSnapshot(items, enablement);
+      const sessionSnapshot = volumeSessionSnapshotRef.current;
+      const snapshotAlreadyMuted =
+        items.length > 0 &&
+        items.every((item) => String(volumes[item.name] ?? "") === String(resolveSidMutedVolumeOption(item.options)));
+      if (snapshotAlreadyMuted && sessionSnapshot) {
+        return {
+          volumes: { ...sessionSnapshot },
+          enablement: { ...enablement },
+        };
+      }
+      return {
+        volumes,
+        enablement: { ...enablement },
+      };
+    },
     [buildEnabledSidVolumeSnapshot],
   );
 

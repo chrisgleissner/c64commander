@@ -116,6 +116,8 @@ const renderPlaybackController = (
     resolveEnabledSidVolumeItems?: ReturnType<typeof vi.fn>;
     enabledSidVolumeItems?: Array<{ name: string; value: string; options?: string[] }>;
     pauseMuteSnapshotRef?: { current: any };
+    pausingFromPauseRef?: { current: boolean };
+    resumingFromPauseRef?: { current: boolean };
     trackStartedAtRef?: { current: number | null };
     trackInstanceIdRef?: { current: number };
     autoAdvanceGuardRef?: { current: any };
@@ -183,8 +185,8 @@ const renderPlaybackController = (
       dispatchVolume: options?.dispatchVolume ?? vi.fn(),
       sidEnablement: {} as any,
       pauseMuteSnapshotRef: options?.pauseMuteSnapshotRef ?? { current: null },
-      pausingFromPauseRef: { current: false },
-      resumingFromPauseRef: { current: false },
+      pausingFromPauseRef: options?.pausingFromPauseRef ?? { current: false },
+      resumingFromPauseRef: options?.resumingFromPauseRef ?? { current: false },
       playedClockRef:
         options?.playedClockRef ??
         ({
@@ -268,12 +270,38 @@ describe("usePlaybackController", () => {
     await result.current.playItem(playlist[0], { playlistIndex: 0 });
 
     expect(setDurationMs).toHaveBeenCalledWith(45_000);
-    const playlistUpdater = setPlaylist.mock.calls.find(([value]) => typeof value === "function")?.[0] as
-      | ((items: PlaylistItem[]) => PlaylistItem[])
-      | undefined;
+    const playlistUpdaters = setPlaylist.mock.calls
+      .map(([value]) => value)
+      .filter((value): value is (items: PlaylistItem[]) => PlaylistItem[] => typeof value === "function");
+    const playlistUpdater = playlistUpdaters[playlistUpdaters.length - 1];
     expect(playlistUpdater).toBeDefined();
     const nextPlaylist = playlistUpdater?.(playlist);
     expect(nextPlaylist?.[0]?.durationMs).toBe(45_000);
+  });
+
+  it("does not update track timeline or playlist metadata when launch fails", async () => {
+    const playlist = [createPlaylistItem()];
+    const setPlaylist = vi.fn();
+    const setElapsedMs = vi.fn();
+    const setDurationMs = vi.fn();
+    const setCurrentSubsongCount = vi.fn();
+    const setIsPlaying = vi.fn();
+    vi.mocked(executePlayPlan).mockRejectedValueOnce(new Error("launch failed"));
+    const { result } = renderPlaybackController(playlist, {
+      setPlaylist,
+      setElapsedMs,
+      setDurationMs,
+      setCurrentSubsongCount,
+      setIsPlaying,
+    });
+
+    await expect(result.current.playItem(playlist[0], { playlistIndex: 0 })).rejects.toThrow("launch failed");
+
+    expect(setElapsedMs).not.toHaveBeenCalledWith(0);
+    expect(setDurationMs).not.toHaveBeenCalled();
+    expect(setCurrentSubsongCount).not.toHaveBeenCalled();
+    expect(setPlaylist).not.toHaveBeenCalled();
+    expect(setIsPlaying).not.toHaveBeenCalledWith(true);
   });
 
   it("preserves imported HVSC SID duration and subsong metadata in the play request", async () => {
@@ -513,7 +541,7 @@ describe("usePlaybackController", () => {
     expect(mockArchiveClient.downloadBinary).toHaveBeenCalledTimes(1);
   });
 
-  it("normalizes extensionless archive entry path on item and request when downloading", async () => {
+  it("normalizes extensionless archive entry path through playlist state after download succeeds", async () => {
     mockArchiveClient.downloadBinary.mockResolvedValueOnce({
       fileName: "joyride",
       bytes: new Uint8Array([0x50, 0x53, 0x49, 0x44]),
@@ -541,7 +569,9 @@ describe("usePlaybackController", () => {
         entryPath: "joyride",
       },
     });
+    const setPlaylist = vi.fn();
     const { result } = renderPlaybackController([item], {
+      setPlaylist,
       archiveConfigs: {
         "archive-commoserve": {
           id: "archive-commoserve",
@@ -554,8 +584,15 @@ describe("usePlaybackController", () => {
 
     await result.current.playItem(item, { playlistIndex: 0 });
 
-    expect(item.request.path).toBe("joyride.sid");
-    expect(item.path).toBe("joyride.sid");
+    expect(item.request.path).toBe("joyride");
+    expect(item.path).toBe("joyride");
+    const playlistUpdaters = setPlaylist.mock.calls
+      .map(([value]) => value)
+      .filter((value): value is (items: PlaylistItem[]) => PlaylistItem[] => typeof value === "function");
+    const playlistUpdater = playlistUpdaters[playlistUpdaters.length - 1];
+    const nextPlaylist = playlistUpdater?.([item]);
+    expect(nextPlaylist?.[0]?.request.path).toBe("joyride.sid");
+    expect(nextPlaylist?.[0]?.path).toBe("joyride.sid");
     expect(vi.mocked(executePlayPlan)).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ path: "joyride.sid" }),
@@ -563,7 +600,7 @@ describe("usePlaybackController", () => {
     );
   });
 
-  it("normalizes extensionless archive entry path on item and request on cache hit", async () => {
+  it("normalizes extensionless archive entry path through playlist state on cache hit", async () => {
     mockArchiveClient.downloadBinary.mockResolvedValueOnce({
       fileName: "joyride",
       bytes: new Uint8Array([0x50, 0x53, 0x49, 0x44]),
@@ -609,14 +646,22 @@ describe("usePlaybackController", () => {
       sourceId: "archive-commoserve",
       archiveRef,
     });
-    const { result } = renderPlaybackController([firstItem, secondItem], { archiveConfigs });
+    const setPlaylist = vi.fn();
+    const { result } = renderPlaybackController([firstItem, secondItem], { archiveConfigs, setPlaylist });
 
     await result.current.playItem(firstItem, { playlistIndex: 0 });
     await result.current.playItem(secondItem, { playlistIndex: 1 });
 
     expect(mockArchiveClient.downloadBinary).toHaveBeenCalledTimes(1);
-    expect(secondItem.request.path).toBe("joyride.sid");
-    expect(secondItem.path).toBe("joyride.sid");
+    expect(secondItem.request.path).toBe("joyride");
+    expect(secondItem.path).toBe("joyride");
+    const playlistUpdaters = setPlaylist.mock.calls
+      .map(([value]) => value)
+      .filter((value): value is (items: PlaylistItem[]) => PlaylistItem[] => typeof value === "function");
+    const playlistUpdater = playlistUpdaters[playlistUpdaters.length - 1];
+    const nextPlaylist = playlistUpdater?.([firstItem, secondItem]);
+    expect(nextPlaylist?.[1]?.request.path).toBe("joyride.sid");
+    expect(nextPlaylist?.[1]?.path).toBe("joyride.sid");
   });
 
   it("reports an archive playback error when playlist metadata is missing", async () => {
@@ -989,6 +1034,50 @@ describe("usePlaybackController", () => {
     expect(applyAudioMixerUpdates).toHaveBeenCalledWith({ "SID 1": "-42 dB" }, "Pause mute");
     expect(dispatchVolume).toHaveBeenCalledWith({ type: "mute", reason: "pause" });
     expect(pauseMuteSnapshotRef.current).toEqual({ volumes: { "SID 1": "0 dB" }, enablement: {} });
+  });
+
+  it("restores the pause mute snapshot when machine pause fails after muting", async () => {
+    const playlist = [
+      createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+    ];
+    const dispatchVolume = vi.fn();
+    const applyAudioMixerUpdates = vi.fn().mockResolvedValue(undefined);
+    const machinePause = vi.fn().mockRejectedValue(new Error("pause failed"));
+    vi.mocked(getC64API).mockReturnValue({ machinePause } as any);
+    const pauseMuteSnapshotRef = { current: null };
+    const pausingFromPauseRef = { current: false };
+    const resumingFromPauseRef = { current: false };
+    const snapshotToUpdates = vi.fn().mockReturnValue({ "SID 1": "0 dB" });
+
+    const { result } = renderPlaybackController(playlist, {
+      isPlaying: true,
+      isPaused: false,
+      dispatchVolume,
+      applyAudioMixerUpdates,
+      enabledSidVolumeItems: [{ name: "SID 1", value: "0 dB", options: ["-42 dB", "0 dB"] }],
+      pauseMuteSnapshotRef,
+      pausingFromPauseRef,
+      resumingFromPauseRef,
+      buildEnabledSidMuteUpdates: vi.fn().mockReturnValue({ "SID 1": "-42 dB" }),
+      captureSidMuteSnapshot: vi.fn().mockReturnValue({ volumes: { "SID 1": "0 dB" }, enablement: {} }),
+      snapshotToUpdates,
+    });
+
+    await result.current.handlePauseResume();
+
+    expect(applyAudioMixerUpdates).toHaveBeenNthCalledWith(1, { "SID 1": "-42 dB" }, "Pause mute");
+    expect(applyAudioMixerUpdates).toHaveBeenNthCalledWith(2, { "SID 1": "0 dB" }, "Pause mute rollback");
+    expect(dispatchVolume).toHaveBeenCalledWith({ type: "mute", reason: "pause" });
+    expect(dispatchVolume).toHaveBeenCalledWith({ type: "unmute", reason: "pause" });
+    expect(pauseMuteSnapshotRef.current).toBeNull();
+    expect(pausingFromPauseRef.current).toBe(false);
+    expect(resumingFromPauseRef.current).toBe(false);
+    expect(vi.mocked(reportUserError)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Playback control failed",
+        description: "pause failed",
+      }),
+    );
   });
 
   it("pauses without mixer writes when no enabled SID outputs are active", async () => {
@@ -1591,12 +1680,18 @@ describe("usePlaybackController", () => {
       durationMs: 1_000,
       subsongCount: 1,
     });
-    const { result } = renderPlaybackController([hvscItem], { buildHvscLocalPlayFile });
+    const setPlaylist = vi.fn();
+    const { result } = renderPlaybackController([hvscItem], { buildHvscLocalPlayFile, setPlaylist });
 
     await result.current.playItem(hvscItem, { playlistIndex: 0 });
 
     expect(buildHvscLocalPlayFile).toHaveBeenCalledWith("/MUSICIANS/Test/demo.sid", "demo.sid");
-    expect(hvscItem.request.file).toBe(hvscFile);
+    expect(hvscItem.request.file).toBeUndefined();
+    const playlistUpdaters = setPlaylist.mock.calls
+      .map(([value]) => value)
+      .filter((value): value is (items: PlaylistItem[]) => PlaylistItem[] => typeof value === "function");
+    const playlistUpdater = playlistUpdaters[playlistUpdaters.length - 1];
+    expect(playlistUpdater?.([hvscItem])?.[0]?.request.file).toBe(hvscFile);
     expect(vi.mocked(executePlayPlan)).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -1626,16 +1721,23 @@ describe("usePlaybackController", () => {
       subsongCount: 1,
     });
     const setIsPlaylistLoading = vi.fn();
+    const setPlaylist = vi.fn();
     const { result } = renderPlaybackController([hvscItem], {
       currentIndex: -1,
       buildHvscLocalPlayFile,
       setIsPlaylistLoading,
+      setPlaylist,
     });
 
     await result.current.handlePlay();
 
     expect(buildHvscLocalPlayFile).toHaveBeenCalledWith("/MUSICIANS/Test/demo.sid", "demo.sid");
-    expect(hvscItem.request.file).toBe(hvscFile);
+    expect(hvscItem.request.file).toBeUndefined();
+    const playlistUpdaters = setPlaylist.mock.calls
+      .map(([value]) => value)
+      .filter((value): value is (items: PlaylistItem[]) => PlaylistItem[] => typeof value === "function");
+    const playlistUpdater = playlistUpdaters[playlistUpdaters.length - 1];
+    expect(playlistUpdater?.([hvscItem])?.[0]?.request.file).toBe(hvscFile);
     expect(vi.mocked(executePlayPlan)).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({

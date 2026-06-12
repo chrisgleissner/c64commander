@@ -431,6 +431,7 @@ export default function PlayFilesPage() {
     setPlayedMs,
     durationMs,
     setDurationMs,
+    autoAdvanceDueAtMs,
     setCurrentSubsongCount,
     setTrackInstanceId,
     repeatEnabled,
@@ -561,6 +562,14 @@ export default function PlayFilesPage() {
   useEffect(
     () => () => {
       if (!backgroundExecutionActiveRef.current) return;
+      const latestPlaybackState = playbackStateRef.current;
+      if (latestPlaybackState.isPlaying && !latestPlaybackState.isPaused) {
+        addLog("debug", "Leaving background playback guard active across Play page unmount", {
+          trackInstanceId: backgroundCleanupTrackInstanceIdRef.current,
+          dueAtMs: autoAdvanceGuardRef.current?.dueAtMs ?? null,
+        });
+        return;
+      }
       backgroundExecutionActiveRef.current = false;
       void stopBackgroundExecutionRef
         .current({

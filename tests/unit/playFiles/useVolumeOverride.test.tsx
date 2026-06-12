@@ -119,6 +119,7 @@ const buildEnabledSidMutedToTargetUpdatesMock = vi.fn((_items: MixerItem[], _ena
 const buildEnabledSidVolumeUpdatesMock = vi.fn((_items: MixerItem[], _enablement: unknown, target: string) => ({
   "SID 1": target,
 }));
+const buildEnabledSidVolumeSnapshotMock = vi.fn(() => ({ "SID 1": "5" }));
 const buildSidEnablementMock = vi.fn(() => ({ sid1: true }));
 const filterEnabledSidVolumeItemsMock = vi.fn((items: MixerItem[]) => items);
 const buildSidVolumeStepsMock = vi.fn(() => [
@@ -130,7 +131,7 @@ vi.mock("@/lib/config/sidVolumeControl", () => ({
   buildEnabledSidMutedToTargetUpdates: (...args: unknown[]) => buildEnabledSidMutedToTargetUpdatesMock(...args),
   buildEnabledSidUnmuteUpdates: (...args: unknown[]) => buildEnabledSidUnmuteUpdatesMock(...args),
   buildEnabledSidRestoreUpdates: (...args: unknown[]) => buildEnabledSidRestoreUpdatesMock(...args),
-  buildEnabledSidVolumeSnapshot: vi.fn(() => ({ "SID 1": "5" })),
+  buildEnabledSidVolumeSnapshot: (...args: unknown[]) => buildEnabledSidVolumeSnapshotMock(...args),
   buildSidEnablement: (...args: unknown[]) => buildSidEnablementMock(...args),
   buildSidVolumeSteps: (...args: unknown[]) => buildSidVolumeStepsMock(...args),
   filterEnabledSidVolumeItems: (...args: unknown[]) => filterEnabledSidVolumeItemsMock(...args),
@@ -172,6 +173,8 @@ describe("useVolumeOverride", () => {
         "SID 1": target,
       }),
     );
+    buildEnabledSidVolumeSnapshotMock.mockReset();
+    buildEnabledSidVolumeSnapshotMock.mockReturnValue({ "SID 1": "5" });
     buildEnabledSidRestoreUpdatesMock.mockReset();
     buildEnabledSidRestoreUpdatesMock.mockReturnValue({});
     buildEnabledSidVolumeUpdatesMock.mockReset();
@@ -1023,6 +1026,19 @@ describe("useVolumeOverride", () => {
       result.current.snapshotToUpdates(snapshot, [{ name: "SID 1", value: "5", options: ["0", "5"] }] as any),
     ).toEqual({
       "SID 1": "5",
+    });
+  });
+
+  it("captures the session baseline instead of an already-muted pause snapshot", () => {
+    buildEnabledSidVolumeSnapshotMock.mockReturnValue({ "SID 1": "-42 dB" });
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+    result.current.volumeSessionSnapshotRef.current = { "SID 1": "5" };
+
+    expect(result.current.captureSidMuteSnapshot(audioMixerItemsRef.current, { sid1: true } as any)).toEqual({
+      volumes: { "SID 1": "5" },
+      enablement: { sid1: true },
     });
   });
 

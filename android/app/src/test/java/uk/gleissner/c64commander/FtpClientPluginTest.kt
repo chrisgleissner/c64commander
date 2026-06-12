@@ -17,6 +17,7 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import java.net.SocketTimeoutException
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import org.apache.commons.net.ftp.FTPClient
 import org.apache.commons.net.ftp.FTPFile
@@ -41,6 +42,16 @@ import org.robolectric.shadows.ShadowLog
 @RunWith(RobolectricTestRunner::class)
 class FtpClientPluginTest {
   @get:Rule val tempFolder = TemporaryFolder()
+
+  @Test
+  fun nativeExecutorMatchesMaximumJsFtpConcurrency() {
+    val plugin = FtpClientPlugin()
+    val field = FtpClientPlugin::class.java.getDeclaredField("executor")
+    field.isAccessible = true
+    val executor = field.get(plugin) as ThreadPoolExecutor
+
+    assertEquals(3, executor.maximumPoolSize)
+  }
 
   @Test
   fun listDirectoryRejectsMissingHost() {

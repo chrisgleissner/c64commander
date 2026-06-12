@@ -133,13 +133,30 @@ describe("useInteractiveConfigWrite", () => {
     expect(mockMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ updates: { "SID1 Volume": "12" } }));
   });
 
-  it("waits for an input-quiet window before the first device write", async () => {
+  it("sends the first idle device write without an input-quiet delay", async () => {
     const { result } = renderHook(() => useInteractiveConfigWrite({ category: "Audio Mixer" }), {
       wrapper: createWrapper(),
     });
 
     act(() => {
       result.current.write({ "SID1 Volume": "4" });
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(mockMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ updates: { "SID1 Volume": "4" } }));
+  });
+
+  it("applies the input-quiet window to the second and later rapid writes", async () => {
+    const { result } = renderHook(() => useInteractiveConfigWrite({ category: "Audio Mixer" }), {
+      wrapper: createWrapper(),
+    });
+
+    act(() => {
+      result.current.write({ "SID1 Volume": "4" });
+      result.current.write({ "SID1 Volume": "9" });
     });
 
     await act(async () => {
@@ -152,7 +169,7 @@ describe("useInteractiveConfigWrite", () => {
       await vi.advanceTimersByTimeAsync(1);
     });
 
-    expect(mockMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ updates: { "SID1 Volume": "4" } }));
+    expect(mockMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ updates: { "SID1 Volume": "9" } }));
   });
 
   it("schedules reconciliation 250 ms after the last write", async () => {

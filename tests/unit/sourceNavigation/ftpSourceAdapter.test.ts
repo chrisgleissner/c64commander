@@ -15,6 +15,10 @@ vi.mock("@/lib/ftp/ftpConfig", () => ({
   getStoredFtpPort: vi.fn(() => 21),
 }));
 
+vi.mock("@/lib/logging", () => ({
+  addLog: vi.fn(),
+}));
+
 vi.mock("@/lib/secureStorage", () => ({
   getPassword: vi.fn(async () => "secret"),
   setPassword: vi.fn(async () => undefined),
@@ -24,6 +28,7 @@ vi.mock("@/lib/secureStorage", () => ({
 }));
 
 import { listFtpDirectory } from "@/lib/ftp/ftpClient";
+import { addLog } from "@/lib/logging";
 import { createUltimateSourceLocation, normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 
 const listFtpDirectoryMock = vi.mocked(listFtpDirectory);
@@ -117,6 +122,54 @@ describe("ftpSourceAdapter", () => {
     const results = await source.listFilesRecursive("/");
 
     expect(results.map((entry) => entry.path).sort()).toEqual(["/music/song.sid", "/root.sid"]);
+  });
+
+  it("returns partial recursive results when one directory listing fails", async () => {
+    listFtpDirectoryMock.mockImplementation(async ({ path }) => {
+      if (path === "/") {
+        return {
+          entries: [
+            { type: "dir", name: "ok", path: "/ok" },
+            { type: "dir", name: "fail", path: "/fail" },
+            {
+              type: "file",
+              name: "root.d64",
+              path: "/root.d64",
+              size: 5,
+              modifiedAt: "now",
+            },
+          ],
+        };
+      }
+      if (path === "/ok") {
+        return {
+          entries: [
+            {
+              type: "file",
+              name: "disk.d64",
+              path: "/ok/disk.d64",
+              size: 10,
+              modifiedAt: "now",
+            },
+          ],
+        };
+      }
+      throw new Error("listing failed");
+    });
+
+    const source = createUltimateSourceLocation();
+    const results = await source.listFilesRecursive("/");
+
+    expect(results.map((entry) => entry.path).sort()).toEqual(["/ok/disk.d64", "/root.d64"]);
+    expect(results.partialFailures).toEqual([{ path: "/fail", message: "listing failed" }]);
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "FTP recursive directory listing skipped folder",
+      expect.objectContaining({
+        path: "/fail",
+        error: expect.objectContaining({ message: "listing failed" }),
+      }),
+    );
   });
 
   it("cancels recursive listing and stops further FTP calls", async () => {

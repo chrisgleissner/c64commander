@@ -52,11 +52,13 @@ describe("uiErrors", () => {
       error: undefined,
     });
 
-    expect(toast).toHaveBeenCalledWith({
-      title: "Something failed",
-      description: "Please try again",
-      variant: "destructive",
-    });
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Something failed",
+        description: "Please try again",
+        variant: "destructive",
+      }),
+    );
   });
 
   it("includes context in error log", () => {
@@ -251,6 +253,27 @@ describe("uiErrors", () => {
       });
 
       expect(toast).toHaveBeenCalledTimes(1);
+    });
+
+    it("allows retry feedback immediately after the user dismisses the previous toast", () => {
+      vi.mocked(toast).mockReturnValue({ id: "1", dismiss: vi.fn(), update: vi.fn() });
+
+      reportUserError({
+        operation: "LOAD_FILE",
+        title: "Error",
+        description: "Host unreachable",
+        deviceHost: "u64",
+      });
+      const firstToast = vi.mocked(toast).mock.calls[0][0] as { onToastDismiss?: () => void };
+      firstToast.onToastDismiss?.();
+      reportUserError({
+        operation: "LOAD_FILE",
+        title: "Error",
+        description: "Host unreachable",
+        deviceHost: "u64",
+      });
+
+      expect(toast).toHaveBeenCalledTimes(2);
     });
 
     it("does not record a dedup entry when the toast layer suppresses the notice", () => {

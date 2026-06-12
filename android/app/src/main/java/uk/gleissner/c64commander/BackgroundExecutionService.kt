@@ -42,18 +42,28 @@ class BackgroundExecutionService : Service() {
         private const val CHANNEL_ID = "c64_background_execution"
         private const val NOTIFICATION_ID = 1
         private const val WAKELOCK_TAG = "c64commander:background_execution"
-        private const val WAKELOCK_TIMEOUT_MS = 30L * 60L * 1000L
 
         const val ACTION_UPDATE_DUE_AT = "uk.gleissner.c64commander.action.UPDATE_DUE_AT"
         const val ACTION_AUTO_SKIP_DUE = "uk.gleissner.c64commander.action.AUTO_SKIP_DUE"
         const val EXTRA_DUE_AT_MS = "dueAtMs"
         const val EXTRA_FIRED_AT_MS = "firedAtMs"
+        const val EXTRA_COMMAND_GENERATION = "commandGeneration"
 
         @Volatile
         var isRunning = false
             private set
         @Volatile
         private var runningInstance: BackgroundExecutionService? = null
+        @Volatile
+        private var commandGeneration = 0L
+        @Volatile
+        private var startPendingGeneration: Long? = null
+
+        @Synchronized
+        private fun nextCommandGeneration(): Long {
+            commandGeneration += 1L
+            return commandGeneration
+        }
 
         fun start(context: Context) {
             if (isRunning) {
@@ -65,7 +75,10 @@ class BackgroundExecutionService : Service() {
                 )
                 return
             }
+            val generation = nextCommandGeneration()
+            startPendingGeneration = generation
             val intent = Intent(context, BackgroundExecutionService::class.java)
+            intent.putExtra(EXTRA_COMMAND_GENERATION, generation)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {
@@ -74,6 +87,8 @@ class BackgroundExecutionService : Service() {
         }
 
         fun stop(context: Context) {
+            nextCommandGeneration()
+            startPendingGeneration = null
             if (!isRunning) {
                 AppLogger.debug(
                         context,
@@ -93,6 +108,18 @@ class BackgroundExecutionService : Service() {
                 return
             }
             if (dueAtMs == null) {
+                val pendingGeneration = startPendingGeneration
+                if (pendingGeneration != null) {
+                    val intent = Intent(context, BackgroundExecutionService::class.java)
+                    intent.action = ACTION_UPDATE_DUE_AT
+                    intent.putExtra(EXTRA_COMMAND_GENERATION, pendingGeneration)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        context.startForegroundService(intent)
+                    } else {
+                        context.startService(intent)
+                    }
+                    return
+                }
                 AppLogger.debug(
                         context,
                         TAG,
@@ -104,6 +131,7 @@ class BackgroundExecutionService : Service() {
             val intent = Intent(context, BackgroundExecutionService::class.java)
             intent.action = ACTION_UPDATE_DUE_AT
             intent.putExtra(EXTRA_DUE_AT_MS, dueAtMs)
+            intent.putExtra(EXTRA_COMMAND_GENERATION, commandGeneration)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {
@@ -140,7 +168,31 @@ class BackgroundExecutionService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val action = intent?.action
+        if (intent == null) {
+            AppLogger.warn(
+                    this,
+                    TAG,
+                    "Ignoring sticky restart without command; JS must explicitly re-register background execution",
+                    "BackgroundExecutionService"
+            )
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
+        val action = intent.action
+        val intentGeneration = intent.getLongExtra(EXTRA_COMMAND_GENERATION, commandGeneration)
+        if (intentGeneration < commandGeneration) {
+            AppLogger.debug(
+                    this,
+                    TAG,
+                    "Ignoring stale background execution command (intentGeneration=$intentGeneration, currentGeneration=$commandGeneration)",
+                    "BackgroundExecutionService"
+            )
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
+        if (startPendingGeneration == intentGeneration) {
+            startPendingGeneration = null
+        }
         if (!isRunning) {
             AppLogger.info(this, TAG, "Service starting", "BackgroundExecutionService")
             startForeground(NOTIFICATION_ID, buildNotification())
@@ -171,6 +223,7 @@ class BackgroundExecutionService : Service() {
         releaseWakeLock()
         isRunning = false
         runningInstance = null
+        startPendingGeneration = null
         super.onDestroy()
     }
 
@@ -222,12 +275,12 @@ class BackgroundExecutionService : Service() {
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock =
                 pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG).apply {
-                    acquire(WAKELOCK_TIMEOUT_MS)
+                    acquire()
                 }
         AppLogger.debug(
                 this,
                 TAG,
-                "WakeLock acquired (timeoutMs=$WAKELOCK_TIMEOUT_MS)",
+                "WakeLock acquired",
                 "BackgroundExecutionService"
         )
     }

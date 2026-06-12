@@ -16,6 +16,7 @@ import android.os.Build
 import android.provider.DocumentsContract
 import androidx.activity.result.ActivityResult
 import androidx.documentfile.provider.DocumentFile
+import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
@@ -28,6 +29,12 @@ import java.util.concurrent.Executors
 class FolderPickerPlugin : Plugin() {
   private val executor = Executors.newSingleThreadExecutor()
   private val logTag = "FolderPickerPlugin"
+
+  private fun toJsArray(entries: List<JSObject>): JSArray {
+    val array = JSArray()
+    entries.forEach { entry -> array.put(entry) }
+    return array
+  }
 
   private fun traceFields(call: PluginCall): AppLogger.TraceFields {
     val trace = call.getObject("traceContext") ?: return AppLogger.TraceFields()
@@ -334,7 +341,7 @@ class FolderPickerPlugin : Plugin() {
         }
                 ?: throw IllegalStateException("Unable to list directory")
         val response = JSObject()
-        response.put("entries", entries)
+        response.put("entries", toJsArray(entries))
         call.resolve(response)
       } catch (error: Exception) {
         AppLogger.error(
@@ -362,7 +369,7 @@ class FolderPickerPlugin : Plugin() {
       entries.add(entry)
     }
     val response = JSObject()
-    response.put("uris", entries)
+    response.put("uris", toJsArray(entries))
     call.resolve(response)
   }
 
@@ -410,7 +417,7 @@ class FolderPickerPlugin : Plugin() {
     }
 
     val response = JSObject()
-    response.put("released", released)
+    response.put("released", toJsArray(released))
     call.resolve(response)
   }
 

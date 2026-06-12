@@ -41,6 +41,7 @@ interface UsePlaybackPersistenceProps {
   setPlayedMs: (value: number) => void;
   durationMs: number | undefined;
   setDurationMs: (value: number | undefined) => void;
+  autoAdvanceDueAtMs: number | null;
   setCurrentSubsongCount: (value: number | null) => void;
   shuffleEnabled?: boolean;
   repeatEnabled?: boolean;
@@ -94,6 +95,7 @@ export function usePlaybackPersistence({
   setPlayedMs,
   durationMs,
   setDurationMs,
+  autoAdvanceDueAtMs,
   setCurrentSubsongCount,
   shuffleEnabled = false,
   repeatEnabled = false,
@@ -412,11 +414,15 @@ export function usePlaybackPersistence({
       playedClockRef.current.hydrate(Math.max(0, pending.playedMs), now);
       if (typeof pending.durationMs === "number" && pending.durationMs > 0) {
         const restoredTrackInstanceId = trackInstanceIdRef.current + 1;
+        const restoredDueAtMs =
+          typeof pending.autoAdvanceDueAtMs === "number" && Number.isFinite(pending.autoAdvanceDueAtMs)
+            ? pending.autoAdvanceDueAtMs
+            : (trackStartedAtRef.current ?? now) + pending.durationMs;
         trackInstanceIdRef.current = restoredTrackInstanceId;
         setTrackInstanceId(restoredTrackInstanceId);
         autoAdvanceGuardRef.current = {
           trackInstanceId: restoredTrackInstanceId,
-          dueAtMs: (trackStartedAtRef.current ?? now) + pending.durationMs,
+          dueAtMs: restoredDueAtMs,
           autoFired: false,
           userCancelled: false,
         };
@@ -532,6 +538,7 @@ export function usePlaybackPersistence({
       elapsedMs,
       playedMs,
       durationMs,
+      autoAdvanceDueAtMs,
       updatedAt: new Date().toISOString(),
     };
     try {
@@ -545,6 +552,7 @@ export function usePlaybackPersistence({
   }, [
     currentIndex,
     currentPlaylistItemId,
+    autoAdvanceDueAtMs,
     durationMs,
     elapsedMs,
     isPaused,

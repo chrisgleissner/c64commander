@@ -134,6 +134,16 @@ function CategorySection({
         ...normalizeConfigItem(config),
       }));
   }, [categoryData, categoryName]);
+  const itemsRef = useRef<ConfigListItem[]>(items);
+  const soloItemRef = useRef<string | null>(soloState.soloItem);
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
+  useEffect(() => {
+    soloItemRef.current = soloState.soloItem;
+  }, [soloState.soloItem]);
 
   const dhcpStatus = useMemo(() => {
     if (categoryName !== "Ethernet Settings" && categoryName !== "WiFi settings") return null;
@@ -278,11 +288,11 @@ function CategorySection({
     }
   }, [applySoloRouting, isAudioMixer, soloState.soloItem]);
 
-  useEffect(() => {
-    if (!isAudioMixer) return undefined;
-    return () => {
-      if (!wasSoloActiveRef.current && !soloState.soloItem) return;
-      const configured = audioConfiguredRef.current.length ? audioConfiguredRef.current : items;
+  const restoreSoloRouting = useCallback(
+    (reason: "close" | "unmount") => {
+      if (!isAudioMixer) return;
+      if (!wasSoloActiveRef.current && !soloItemRef.current) return;
+      const configured = audioConfiguredRef.current.length ? audioConfiguredRef.current : itemsRef.current;
       let snapshot = soloSnapshotRef.current.length ? soloSnapshotRef.current : configured;
       try {
         const stored = sessionStorage.getItem(soloSnapshotKey);
@@ -298,8 +308,24 @@ function CategorySection({
       if (snapshot.length) {
         void applySoloRouting(null, snapshot);
       }
-    };
-  }, [isAudioMixer, applySoloRouting, items, soloState.soloItem]);
+      wasSoloActiveRef.current = false;
+      if (reason === "close") {
+        skipSoloRoutingRef.current = true;
+        dispatchSolo({ type: "reset" });
+      }
+    },
+    [applySoloRouting, isAudioMixer],
+  );
+
+  useEffect(() => {
+    if (!isAudioMixer || isOpen) return;
+    restoreSoloRouting("close");
+  }, [isAudioMixer, isOpen, restoreSoloRouting]);
+
+  useEffect(() => {
+    if (!isAudioMixer) return undefined;
+    return () => restoreSoloRouting("unmount");
+  }, [isAudioMixer, restoreSoloRouting]);
 
   const handleValueChange = async (itemName: string, value: string | number) => {
     const previousEntry = authoritativeValues.entriesRef.current[itemName];

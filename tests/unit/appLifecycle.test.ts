@@ -55,7 +55,7 @@ describe("appLifecycle", () => {
     expect(getLifecycleState()).toBe("background");
   });
 
-  it("returns locked when document is visible but not focused", () => {
+  it("returns unknown when document is visible but not focused", () => {
     Object.defineProperty(document, "visibilityState", {
       value: "visible",
       configurable: true,
@@ -66,6 +66,6 @@ describe("appLifecycle", () => {
     });
     vi.spyOn(document, "hasFocus").mockReturnValue(false);
 
-    expect(getLifecycleState()).toBe("locked");
+    expect(getLifecycleState()).toBe("unknown");
   });
 });

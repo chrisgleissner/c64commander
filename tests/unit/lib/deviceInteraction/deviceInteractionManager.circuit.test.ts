@@ -147,6 +147,88 @@ describe("deviceInteractionManager circuit cooldown", () => {
     expect(setCircuitOpenUntil).toHaveBeenCalledWith(null);
   });
 
+  it("allows exactly one user half-open REST probe while conservative circuit is open", async () => {
+    const { resetInteractionState, withRestInteraction } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const systemMeta = {
+      action: makeAction("rest-circuit-background-noise"),
+      method: "GET",
+      path: "/v1/drives",
+      normalizedUrl: "http://device/v1/drives",
+      intent: "background" as const,
+      baseUrl: "http://device",
+      bypassBackoff: true,
+      bypassCache: true,
+    };
+
+    const failingHandler = vi.fn().mockRejectedValue(new Error("Network error"));
+    await expect(withRestInteraction(systemMeta, failingHandler)).rejects.toThrow("Network error");
+    await expect(withRestInteraction(systemMeta, failingHandler)).rejects.toThrow("Network error");
+
+    await expect(
+      withRestInteraction({ ...systemMeta, intent: "system" as const }, vi.fn().mockResolvedValue({ ok: true })),
+    ).rejects.toThrow("Device circuit open");
+
+    let releaseUserProbe: (() => void) | null = null;
+    const userMeta = {
+      ...systemMeta,
+      action: makeAction("rest-circuit-user-half-open"),
+      intent: "user" as const,
+    };
+    const userProbe = withRestInteraction(
+      userMeta,
+      () =>
+        new Promise<{ ok: boolean }>((resolve) => {
+          releaseUserProbe = () => resolve({ ok: true });
+        }),
+    );
+
+    await expect.poll(() => markDeviceRequestStart.mock.calls.length).toBeGreaterThanOrEqual(3);
+    await expect(withRestInteraction(userMeta, vi.fn().mockResolvedValue({ ok: true }))).rejects.toThrow(
+      "Device circuit probe already in flight",
+    );
+
+    releaseUserProbe?.();
+    await expect(userProbe).resolves.toEqual({ ok: true });
+    expect(setCircuitOpenUntil).toHaveBeenCalledWith(null);
+    expect(recordDeviceGuard).toHaveBeenCalledWith(
+      userMeta.action,
+      expect.objectContaining({ decision: "override", reason: "circuit-open" }),
+    );
+  });
+
+  it("counts structured REST timeouts less aggressively than hard network failures", async () => {
+    const { resetInteractionState, withRestInteraction } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const meta = {
+      action: makeAction("rest-structured-timeout"),
+      method: "GET",
+      path: "/v1/drives",
+      normalizedUrl: "http://device/v1/drives",
+      intent: "system" as const,
+      baseUrl: "http://device",
+      bypassBackoff: true,
+    };
+    const timeoutError = () =>
+      Object.assign(new Error("Host unreachable"), {
+        c64uRestFailureKind: "timeout",
+      });
+    const timeoutHandler = vi.fn(() => Promise.reject(timeoutError()));
+
+    await expect(withRestInteraction(meta, timeoutHandler)).rejects.toThrow("Host unreachable");
+    await expect(withRestInteraction(meta, timeoutHandler)).rejects.toThrow("Host unreachable");
+    await expect(withRestInteraction(meta, timeoutHandler)).rejects.toThrow("Host unreachable");
+    await expect(withRestInteraction(meta, timeoutHandler)).rejects.toThrow("Host unreachable");
+    await expect(withRestInteraction(meta, vi.fn().mockResolvedValue({ ok: true }))).rejects.toThrow(
+      "Device circuit open",
+    );
+    expect(timeoutHandler).toHaveBeenCalledTimes(4);
+  });
+
   it("allows diagnostic REST probes to bypass an open circuit and reset it on success", async () => {
     const { resetInteractionState, withRestInteraction } =
       await import("@/lib/deviceInteraction/deviceInteractionManager");

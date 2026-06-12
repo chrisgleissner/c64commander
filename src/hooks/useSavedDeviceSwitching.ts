@@ -114,6 +114,7 @@ export function useSavedDeviceSwitching() {
           });
         } else {
           failSavedDeviceVerification(deviceId);
+          invalidateForSavedDeviceSwitch(queryClient, location.pathname);
           completeSavedDeviceSwitchAttempt(attemptId, {
             outcome: "offline",
             verification,
@@ -121,6 +122,7 @@ export function useSavedDeviceSwitching() {
         }
         return verification;
       } catch (error) {
+        invalidateForSavedDeviceSwitch(queryClient, location.pathname);
         completeSavedDeviceSwitchAttempt(attemptId, {
           outcome: "error",
           errorMessage: error instanceof Error ? error.message : String(error ?? "Unknown switch failure"),

@@ -22,16 +22,13 @@ import {
 } from "@/lib/sourceNavigation/localSourcesStore";
 import type { DiskEntry } from "./diskTypes";
 
-const base64ToUint8 = (base64: string) => {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-};
-
 const MAX_LOCAL_DISK_IMAGE_BYTES = 64 * 1024 * 1024;
+const LOCAL_DISK_READ_TIMEOUT_BASE_MS = 8000;
+const LOCAL_DISK_READ_TIMEOUT_PER_MIB_MS = 500;
+const LOCAL_DISK_READ_TIMEOUT_MAX_MS = 45000;
+const LOCAL_DISK_READ_TIMEOUT_UNKNOWN_MS = 15000;
+const LOCAL_DISK_BASE64_CHUNK_CHARS = 256 * 1024;
+const LOCAL_DISK_DECODE_YIELD_BYTES = 1024 * 1024;
 
 type ResolveLocalDiskBlobOptions = {
   signal?: AbortSignal;
@@ -52,23 +49,78 @@ const throwIfAborted = (signal: AbortSignal | undefined, context: string) => {
   }
 };
 
-const validateLocalDiskPayloadSize = (base64: string, context: string) => {
+const estimateBase64DecodedBytes = (base64: string) => {
   const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
-  const estimatedBytes = Math.floor((base64.length * 3) / 4) - padding;
+  return Math.floor((base64.length * 3) / 4) - padding;
+};
+
+const validateLocalDiskPayloadSize = (base64: string, context: string) => {
+  const estimatedBytes = estimateBase64DecodedBytes(base64);
   if (estimatedBytes > MAX_LOCAL_DISK_IMAGE_BYTES) {
     throw new Error(`${context} is too large to mount (${estimatedBytes} bytes).`);
   }
+  return estimatedBytes;
 };
 
-const decodeLocalDiskPayload = (base64: string, context: string, signal?: AbortSignal) => {
+const waitForDecodeYield = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+const base64ToUint8 = async (base64: string, signal: AbortSignal | undefined, context: string) => {
+  const expectedBytes = estimateBase64DecodedBytes(base64);
+  const bytes = new Uint8Array(expectedBytes);
+  let outputOffset = 0;
+  let bytesSinceYield = 0;
+
+  for (let offset = 0; offset < base64.length; offset += LOCAL_DISK_BASE64_CHUNK_CHARS) {
+    throwIfAborted(signal, context);
+    const chunk = base64.slice(offset, offset + LOCAL_DISK_BASE64_CHUNK_CHARS);
+    const binary = atob(chunk);
+    for (let i = 0; i < binary.length; i += 1) {
+      bytes[outputOffset] = binary.charCodeAt(i);
+      outputOffset += 1;
+    }
+    bytesSinceYield += binary.length;
+    if (bytesSinceYield >= LOCAL_DISK_DECODE_YIELD_BYTES && offset + LOCAL_DISK_BASE64_CHUNK_CHARS < base64.length) {
+      bytesSinceYield = 0;
+      await waitForDecodeYield();
+    }
+  }
+
+  return outputOffset === bytes.byteLength ? bytes : bytes.slice(0, outputOffset);
+};
+
+const decodeLocalDiskPayload = async (base64: string, context: string, signal?: AbortSignal) => {
   validateLocalDiskPayloadSize(base64, context);
   throwIfAborted(signal, context);
-  const bytes = base64ToUint8(base64);
+  const bytes = await base64ToUint8(base64, signal, context);
   if (bytes.byteLength > MAX_LOCAL_DISK_IMAGE_BYTES) {
     throw new Error(`${context} is too large to mount (${bytes.byteLength} bytes).`);
   }
   throwIfAborted(signal, context);
   return bytes;
+};
+
+const buildLocalDiskReadTimeoutMs = (sizeBytes?: number | null) => {
+  if (typeof sizeBytes !== "number" || !Number.isFinite(sizeBytes) || sizeBytes <= 0) {
+    return LOCAL_DISK_READ_TIMEOUT_UNKNOWN_MS;
+  }
+  const mib = Math.ceil(sizeBytes / (1024 * 1024));
+  return Math.min(
+    LOCAL_DISK_READ_TIMEOUT_MAX_MS,
+    Math.max(LOCAL_DISK_READ_TIMEOUT_BASE_MS, LOCAL_DISK_READ_TIMEOUT_BASE_MS + mib * LOCAL_DISK_READ_TIMEOUT_PER_MIB_MS),
+  );
+};
+
+const createReadTimeoutError = (context: string, timeoutMs: number) => {
+  const error = new Error(`${context} timed out after ${timeoutMs} ms`);
+  error.name = "TimeoutError";
+  return error;
+};
+
+const isDefinitiveLocalDiskReadFailure = (error: unknown) => {
+  const candidate = error as Error | undefined;
+  if (!candidate) return false;
+  if (candidate.name === "TimeoutError" || candidate.name === "AbortError") return true;
+  return /too large to mount/i.test(candidate.message);
 };
 
 export const buildDiskMountType = (path: string) => {
@@ -98,7 +150,7 @@ export const resolveLocalDiskBlob = async (
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     let abortHandler: (() => void) | null = null;
     const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(() => reject(new Error(`${context} timed out`)), timeoutMs);
+      timeoutId = setTimeout(() => reject(createReadTimeoutError(context, timeoutMs)), timeoutMs);
     });
     const abortPromise = signal
       ? new Promise<never>((_, reject) => {
@@ -131,8 +183,12 @@ export const resolveLocalDiskBlob = async (
     return runtimeFile;
   }
   if (disk.localUri) {
-    const data = await withTimeout(FolderPicker.readFile({ uri: disk.localUri }), 2000, "Local disk file read");
-    const bytes = decodeLocalDiskPayload(data.data, "Local disk file read", signal);
+    const data = await withTimeout(
+      FolderPicker.readFile({ uri: disk.localUri }),
+      buildLocalDiskReadTimeoutMs(disk.sizeBytes),
+      "Local disk file read",
+    );
+    const bytes = await decodeLocalDiskPayload(data.data, "Local disk file read", signal);
     logResolvedLocalDiskBytes(disk, "local-uri", bytes);
     return new Blob([bytes], {
       type: "application/octet-stream",
@@ -144,10 +200,10 @@ export const resolveLocalDiskBlob = async (
         treeUri: disk.localTreeUri,
         path: disk.path,
       }),
-      2000,
+      buildLocalDiskReadTimeoutMs(disk.sizeBytes),
       "Local disk tree read",
     );
-    const bytes = decodeLocalDiskPayload(data.data, "Local disk tree read", signal);
+    const bytes = await decodeLocalDiskPayload(data.data, "Local disk tree read", signal);
     logResolvedLocalDiskBytes(disk, "disk.localTreeUri", bytes);
     return new Blob([bytes], {
       type: "application/octet-stream",
@@ -166,10 +222,10 @@ export const resolveLocalDiskBlob = async (
             treeUri: source.android.treeUri,
             path: normalizedPath,
           }),
-          2000,
+          buildLocalDiskReadTimeoutMs(disk.sizeBytes),
           "Local disk tree read",
         );
-        const bytes = decodeLocalDiskPayload(data.data, "Local disk tree read", signal);
+        const bytes = await decodeLocalDiskPayload(data.data, "Local disk tree read", signal);
         logResolvedLocalDiskBytes(disk, `source-tree:${source.id}`, bytes);
         return new Blob([bytes], {
           type: "application/octet-stream",
@@ -180,6 +236,9 @@ export const resolveLocalDiskBlob = async (
           normalizedPath,
           error: (error as Error).message,
         });
+        if (isDefinitiveLocalDiskReadFailure(error)) {
+          throw error;
+        }
         return null;
       }
     }
@@ -188,8 +247,12 @@ export const resolveLocalDiskBlob = async (
         const entries = requireLocalSourceEntries(source, "diskMount.resolveLocalDiskBlob");
         const match = entries.find((entry) => normalizeSourcePath(entry.relativePath) === normalizedPath);
         if (match?.uri) {
-          const data = await withTimeout(FolderPicker.readFile({ uri: match.uri }), 2000, "Local disk file read");
-          const bytes = decodeLocalDiskPayload(data.data, "Local disk file read", signal);
+          const data = await withTimeout(
+            FolderPicker.readFile({ uri: match.uri }),
+            buildLocalDiskReadTimeoutMs(match.sizeBytes ?? disk.sizeBytes),
+            "Local disk file read",
+          );
+          const bytes = await decodeLocalDiskPayload(data.data, "Local disk file read", signal);
           logResolvedLocalDiskBytes(disk, `source-uri:${source.id}`, bytes);
           return new Blob([bytes], {
             type: "application/octet-stream",
@@ -205,6 +268,9 @@ export const resolveLocalDiskBlob = async (
           location: "diskMount.resolveLocalDiskBlob",
           error: (error as Error).message,
         });
+        if (isDefinitiveLocalDiskReadFailure(error)) {
+          throw error;
+        }
         return null;
       }
     }

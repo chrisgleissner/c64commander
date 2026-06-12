@@ -19,7 +19,7 @@ beforeEach(() => {
 });
 
 describe("toast reducer", () => {
-  it("S2 notice does not evict a live S3 error toast (ERROR_POLICY §4)", () => {
+  it("S2 notice renders alongside a live pinned S3 error toast (ERROR_POLICY §4)", () => {
     const stateWithError = {
       toasts: [{ id: "err-1", variant: "destructive" as const, open: true }],
     };
@@ -30,11 +30,11 @@ describe("toast reducer", () => {
 
     const result = reducer(stateWithError, addNotice);
 
-    expect(result.toasts).toHaveLength(1);
-    expect(result.toasts[0].id).toBe("err-1");
+    expect(result.toasts).toHaveLength(2);
+    expect(result.toasts.map((toast) => toast.id)).toEqual(["err-1", "notice-1"]);
   });
 
-  it("S3 error evicts a live S2 notice (ERROR_POLICY §4)", () => {
+  it("S3 error renders alongside a live S2 notice (ERROR_POLICY §4)", () => {
     const stateWithNotice = { toasts: [{ id: "notice-1", open: true }] };
     const addError = {
       type: "ADD_TOAST" as const,
@@ -43,8 +43,8 @@ describe("toast reducer", () => {
 
     const result = reducer(stateWithNotice, addError);
 
-    expect(result.toasts).toHaveLength(1);
-    expect(result.toasts[0].id).toBe("err-1");
+    expect(result.toasts).toHaveLength(2);
+    expect(result.toasts.map((toast) => toast.id)).toEqual(["err-1", "notice-1"]);
   });
 
   it("S3 error evicts a dismissed S3 error (second failure replaces first)", () => {
@@ -136,6 +136,22 @@ describe("useToast", () => {
     expect(result.current.toasts[0].open).toBe(false);
   });
 
+  it("runs the internal dismiss callback when a toast is dismissed", () => {
+    const onToastDismiss = vi.fn();
+    const { result } = renderHook(() => useToast());
+
+    act(() => {
+      result.current.toast({ title: "Temporary", onToastDismiss });
+    });
+
+    const toastId = result.current.toasts[0].id;
+    act(() => {
+      result.current.dismiss(toastId);
+    });
+
+    expect(onToastDismiss).toHaveBeenCalledTimes(1);
+  });
+
   it("removes all toasts when REMOVE_TOAST is dispatched without a toastId", () => {
     const state = {
       toasts: [
@@ -215,7 +231,7 @@ describe("useToast", () => {
     vi.useRealTimers();
   });
 
-  it("does not schedule auto-dismiss when a live S3 error suppresses an S2 notice", () => {
+  it("auto-dismisses an S2 notice while keeping a live S3 error open", () => {
     vi.useFakeTimers();
     const { result } = renderHook(() => useToast());
 
@@ -223,17 +239,21 @@ describe("useToast", () => {
       result.current.toast({ title: "Failed", variant: "destructive" });
     });
 
-    expect(vi.getTimerCount()).toBe(0);
-
     let noticeId = "";
     act(() => {
       noticeId = result.current.toast({ title: "Saved" }).id;
     });
 
-    expect(noticeId).toBe("");
-    expect(result.current.toasts).toHaveLength(1);
+    expect(noticeId).not.toBe("");
+    expect(result.current.toasts).toHaveLength(2);
     expect(result.current.toasts[0].title).toBe("Failed");
-    expect(vi.getTimerCount()).toBe(0);
+
+    act(() => {
+      vi.advanceTimersByTime(8_000);
+    });
+
+    expect(result.current.toasts.find((toast) => toast.id === noticeId)?.open).toBe(false);
+    expect(result.current.toasts.find((toast) => toast.title === "Failed")?.open).toBe(true);
     vi.useRealTimers();
   });
 });

@@ -10,6 +10,24 @@ import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 const mockSliderContext = vi.hoisted(() => ({
   selectedDeviceId: "device-a",
 }));
+const mockSafetyConfig = vi.hoisted(() => ({
+  current: {
+    mode: "BALANCED",
+    ftpMaxConcurrency: 2,
+    infoCacheMs: 600,
+    configsCacheMs: 1000,
+    configsCooldownMs: 500,
+    drivesCooldownMs: 500,
+    ftpListCooldownMs: 300,
+    backoffBaseMs: 200,
+    backoffMaxMs: 3000,
+    backoffFactor: 1.8,
+    circuitBreakerThreshold: 4,
+    circuitBreakerCooldownMs: 4000,
+    discoveryProbeIntervalMs: 700,
+    allowUserOverrideCircuit: true,
+  },
+}));
 const addLogMock = vi.hoisted(() => vi.fn());
 
 const createDeferred = () => {
@@ -28,6 +46,10 @@ vi.mock("@/hooks/useSavedDevices", () => ({
   }),
 }));
 
+vi.mock("@/lib/config/deviceSafetySettings", () => ({
+  loadDeviceSafetyConfig: () => mockSafetyConfig.current,
+}));
+
 vi.mock("@/lib/logging", () => ({
   addLog: addLogMock,
 }));
@@ -36,6 +58,22 @@ describe("useDeviceBoundSlider", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     mockSliderContext.selectedDeviceId = "device-a";
+    mockSafetyConfig.current = {
+      mode: "BALANCED",
+      ftpMaxConcurrency: 2,
+      infoCacheMs: 600,
+      configsCacheMs: 1000,
+      configsCooldownMs: 500,
+      drivesCooldownMs: 500,
+      ftpListCooldownMs: 300,
+      backoffBaseMs: 200,
+      backoffMaxMs: 3000,
+      backoffFactor: 1.8,
+      circuitBreakerThreshold: 4,
+      circuitBreakerCooldownMs: 4000,
+      discoveryProbeIntervalMs: 700,
+      allowUserOverrideCircuit: true,
+    };
     pollingPauseRegistry.__resetForTest();
     addLogMock.mockClear();
   });
@@ -538,6 +576,46 @@ describe("useDeviceBoundSlider", () => {
       "debug",
       "Device-bound slider reconciliation watchdog expired",
       expect.objectContaining({ pendingValue: 8 }),
+    );
+  });
+
+  it("derives the default reconciliation watchdog from conservative safety timing", async () => {
+    mockSafetyConfig.current = {
+      ...mockSafetyConfig.current,
+      mode: "CONSERVATIVE",
+      configsCacheMs: 2000,
+      configsCooldownMs: 1200,
+      backoffBaseMs: 300,
+    };
+    const commit = vi.fn();
+    const { result } = renderHook(() =>
+      useDeviceBoundSlider({
+        deviceValue: 1,
+        domain: createNumericSliderDomain({ min: 0, max: 31, round: Math.round }),
+        previewMode: "commitOnly",
+        commit,
+      }),
+    );
+
+    await act(async () => {
+      result.current.onValueCommit([8]);
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(4_499);
+    });
+    expect(result.current.isAwaitingReconciliation).toBe(true);
+    expect(result.current.sliderValue).toBe(8);
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(result.current.isAwaitingReconciliation).toBe(false);
+    expect(result.current.sliderValue).toBe(1);
+    expect(addLogMock).toHaveBeenCalledWith(
+      "debug",
+      "Device-bound slider reconciliation watchdog expired",
+      expect.objectContaining({ pendingValue: 8, watchdogMs: 4_500 }),
     );
   });
 

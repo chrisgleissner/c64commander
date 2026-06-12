@@ -112,5 +112,6 @@ export type StoredPlaybackSession = {
   elapsedMs: number;
   playedMs: number;
   durationMs?: number;
+  autoAdvanceDueAtMs?: number | null;
   updatedAt: string;
 };

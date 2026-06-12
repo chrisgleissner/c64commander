@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { APP_SETTINGS_KEYS, loadVolumeSliderPreviewIntervalMs } from "@/lib/config/appSettings";
+import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import { pollingPauseRegistry, type PollingPauseHandle } from "@/lib/query/c64PollingGovernance";
 import { clampSliderValue } from "@/lib/ui/sliderBehavior";
 import { addLog } from "@/lib/logging";
@@ -101,7 +102,19 @@ export const createNumericSliderDomain = (params: {
 };
 
 const DEFAULT_WATCHDOG_MS = 2000;
+const WATCHDOG_RECONCILIATION_MARGIN_MS = 1000;
 const POLLING_PAUSE_TAIL_GRACE_MS = 250;
+
+export const resolveDeviceBoundSliderWatchdogMs = (watchdogMs?: number) => {
+  if (typeof watchdogMs === "number" && Number.isFinite(watchdogMs) && watchdogMs > 0) {
+    return watchdogMs;
+  }
+  const safety = loadDeviceSafetyConfig();
+  return Math.max(
+    DEFAULT_WATCHDOG_MS,
+    safety.configsCacheMs + safety.configsCooldownMs + safety.backoffBaseMs + WATCHDOG_RECONCILIATION_MARGIN_MS,
+  );
+};
 
 const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
   typeof value === "object" && value !== null && "then" in value && typeof value.then === "function";
@@ -115,7 +128,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
   preview,
   onDraftChange,
   previewThrottleMs,
-  watchdogMs = DEFAULT_WATCHDOG_MS,
+  watchdogMs,
   onError,
 }: UseDeviceBoundSliderOptions<T>) {
   const { selectedDeviceId } = useSavedDevices();
@@ -150,6 +163,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
   }, []);
 
   const equals = domain.equals ?? areDeviceBoundSliderValuesEqual;
+  const resolvedWatchdogMs = resolveDeviceBoundSliderWatchdogMs(watchdogMs);
   const deviceSliderValue = useMemo(
     () => domain.clampSliderValue(domain.toSliderValue(deviceValue)),
     [deviceValue, domain],
@@ -323,15 +337,15 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
               slider: debugName,
               pendingValue: current.value,
               pendingSliderValue: current.sliderValue,
-              watchdogMs,
+              watchdogMs: resolvedWatchdogMs,
             });
           }
           return null;
         });
       }
       releasePollingPause();
-    }, watchdogMs);
-  }, [clearPauseTailGraceTimer, clearWatchdogTimer, debugName, releasePollingPause, watchdogMs]);
+    }, resolvedWatchdogMs);
+  }, [clearPauseTailGraceTimer, clearWatchdogTimer, debugName, releasePollingPause, resolvedWatchdogMs]);
 
   const schedulePollingPauseRelease = useCallback(() => {
     clearPauseTailGraceTimer();

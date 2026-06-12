@@ -646,7 +646,9 @@ open class HvscIngestionPlugin : Plugin() {
                         cancelled,
                         traceFields(call)
                 )
-                withContext(Dispatchers.Main) { call.reject("HVSC ingestion cancelled", cancelled) }
+                withContext(Dispatchers.Main) {
+                  call.reject("HVSC ingestion cancelled", "HVSC_CANCELLED", cancelled)
+                }
               } catch (error: Exception) {
                 // Clean up staging artifacts on failure
                 if (resetLibrary) {

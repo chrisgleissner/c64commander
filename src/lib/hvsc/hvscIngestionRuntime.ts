@@ -82,6 +82,7 @@ import {
 } from "./hvscIngestionRuntimeSupport";
 import { HvscIngestion } from "@/lib/native/hvscIngestion";
 import { beginHvscPerfScope, endHvscPerfScope } from "./hvscPerformance";
+import { createHvscCancellationError } from "./hvscCancellation";
 const runtimeState = getHvscIngestionRuntimeState();
 
 export { isIngestionRuntimeActive, recoverStaleIngestionState } from "./hvscIngestionRuntimeSupport";
@@ -338,7 +339,7 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
   const ensureNotCancelledLocal = () => {
     if (cancelTokens.get(cancelToken)?.cancelled) {
       updateHvscState({ ingestionState: "idle", ingestionError: "Cancelled" });
-      throw new Error("HVSC update cancelled");
+      throw createHvscCancellationError();
     }
   };
 

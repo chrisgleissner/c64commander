@@ -802,6 +802,40 @@ describe("HomeDiskManager targeted branch coverage", () => {
     });
   });
 
+  it("surfaces partial success when recursive disk import skips folders", async () => {
+    const { toast } = await import("@/hooks/use-toast");
+    const nested = [{ type: "file", path: "/games/demo.d64", name: "demo.d64", sizeBytes: 1024 }];
+    Object.defineProperty(nested, "partialFailures", {
+      value: [{ path: "/games/bad", message: "listing failed" }],
+    });
+    dialogMockState.addItemsSource = createDialogSource({
+      listFilesRecursive: vi.fn().mockResolvedValue(nested),
+    });
+    dialogMockState.addItemsSelections = [{ type: "dir", path: "/games", name: "games" }];
+
+    renderComponent();
+    act(() => {
+      screen.getByRole("button", { name: "Add disks" }).click();
+    });
+    act(() => {
+      screen.getByRole("button", { name: "Confirm Add Items" }).click();
+    });
+
+    await waitFor(() => {
+      expect(useDiskLibraryMock.addDisks).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ path: "/games/demo.d64", location: "ultimate" })]),
+        expect.anything(),
+        expect.anything(),
+      );
+      expect(toast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Items added",
+          description: "1 disk(s) added. 1 folder(s) could not be scanned.",
+        }),
+      );
+    });
+  });
+
   it("supports auto-confirm add flow after closing the browser first", async () => {
     dialogMockState.addItemsSource = createDialogSource({
       listFilesRecursive: vi.fn().mockResolvedValue([{ type: "file", path: "/games/demo.d64", name: "demo.d64" }]),

@@ -100,6 +100,24 @@ const CONFIG_WRITE_REQUEST_OPTIONS = {
   timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
 } as const;
 
+const resolveDefaultRestRequestTimeoutMs = (intent: InteractionIntent) =>
+  intent === "background" ? BACKGROUND_REQUEST_TIMEOUT_MS : INTERACTIVE_CONTROL_TIMEOUT_MS;
+
+type RestFailureKind = "timeout" | "abort" | "network" | "http-status";
+
+const annotateRestFailure = <T extends Error>(
+  error: T,
+  kind: RestFailureKind,
+  details: { httpStatus?: number; callerCancelled?: boolean } = {},
+): T => {
+  Object.assign(error, {
+    c64uRestFailureKind: kind,
+    ...(details.httpStatus !== undefined ? { c64uHttpStatus: details.httpStatus } : {}),
+    ...(details.callerCancelled ? { c64uCallerCancelled: true } : {}),
+  });
+  return error;
+};
+
 // Build a concise HTTP error message. When statusText is empty (common in HTTP/2)
 // omit the trailing colon so the message reads "HTTP 404" instead of "HTTP 404: ".
 const buildHttpErrorMessage = (status: number, statusText: string): string => {
@@ -973,7 +991,7 @@ export class C64API {
             const requestId = buildRequestId();
             const idleContext = getIdleContext();
             const scheduledRequest = intent === "background";
-            const requestTimeoutMs = timeoutMs ?? (scheduledRequest ? SCHEDULED_REQUEST_TIMEOUT_MS : undefined);
+            const requestTimeoutMs = timeoutMs ?? resolveDefaultRestRequestTimeoutMs(intent);
             const maxAttempts = scheduledRequest ? SCHEDULED_REQUEST_MAX_ATTEMPTS : 1;
             const requestTrace = await inspectRequestPayload(requestOptions.body);
             let lastError: unknown = null;
@@ -1060,7 +1078,11 @@ export class C64API {
                 const responseTrace = await inspectResponsePayload(response);
                 throwIfSuperseded();
                 if (!response.ok) {
-                  const err = new Error(buildHttpErrorMessage(response.status, response.statusText));
+                  const err = annotateRestFailure(
+                    new Error(buildHttpErrorMessage(response.status, response.statusText)),
+                    "http-status",
+                    { httpStatus: response.status },
+                  );
                   const failure = classifyError(err, "integration");
                   const expectedFailure =
                     (expectedMissing && method === "GET" && response.status === 404) || expectedFailureOption;
@@ -1266,15 +1288,18 @@ export class C64API {
                 }
 
                 if (callerAborted) {
-                  throw createAbortError();
+                  throw annotateRestFailure(createAbortError(), "abort", { callerCancelled: true });
                 }
 
                 if (cancelledAbort) {
-                  throw createAbortError();
+                  throw annotateRestFailure(createAbortError(), "abort", { callerCancelled: true });
                 }
 
                 if (isAbort || isNetworkFailure) {
-                  throw new Error(resolveHostErrorMessage(rawMessage));
+                  throw annotateRestFailure(
+                    new Error(resolveHostErrorMessage(rawMessage)),
+                    timedSignal.didTimeout() || /timed out/i.test(rawMessage) ? "timeout" : "network",
+                  );
                 }
                 throw error;
               } finally {
@@ -1462,7 +1487,10 @@ export class C64API {
               }),
             );
             if (isAbort || isNetworkFailure) {
-              throw new Error(resolveHostErrorMessage(rawMessage));
+              throw annotateRestFailure(
+                new Error(resolveHostErrorMessage(rawMessage)),
+                timedSignal.didTimeout() || /timed out/i.test(rawMessage) ? "timeout" : "network",
+              );
             }
             throw error;
           } finally {

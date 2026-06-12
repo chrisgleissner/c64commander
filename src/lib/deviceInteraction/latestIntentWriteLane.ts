@@ -73,6 +73,7 @@ export const createLatestIntentWriteLane = <T>(params: {
           }
           const err = error as Error;
           settledVersion = Math.max(settledVersion, job.version);
+          resolveUpTo(job.version - 1);
           rejectUpTo(job.version, err);
         }
       }

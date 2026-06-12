@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { addLog } from "@/lib/logging";
+
 type DeviceActivitySnapshot = Readonly<{
   machineTransitionCount: number;
   machineTransitionCooldownUntilMs: number;
@@ -20,6 +22,7 @@ let machineTransitionCooldownUntilMs = 0;
 let playbackWriteCount = 0;
 let playbackWriteCooldownUntilMs = 0;
 let expiryTimer: ReturnType<typeof setTimeout> | null = null;
+const ADVISORY_GATE_MAX_WAIT_MS = 10_000;
 
 const now = () => Date.now();
 
@@ -131,20 +134,36 @@ export const beginPlaybackWriteBurst = (cooldownMs = 150) =>
     },
   });
 
-const waitFor = (predicate: () => boolean) => {
+const waitFor = (predicate: () => boolean, label: string) => {
   if (predicate()) return Promise.resolve();
   return new Promise<void>((resolve) => {
+    let settled = false;
     const unsubscribe = subscribeDeviceActivityGate(() => {
       if (!predicate()) return;
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
       unsubscribe();
       resolve();
     });
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      unsubscribe();
+      addLog("warn", "Device activity advisory gate wait timed out", {
+        gate: label,
+        maxWaitMs: ADVISORY_GATE_MAX_WAIT_MS,
+        snapshot: getDeviceActivitySnapshot(),
+      });
+      resolve();
+    }, ADVISORY_GATE_MAX_WAIT_MS);
   });
 };
 
-export const waitForMachineTransitionsToSettle = () => waitFor(() => !isMachineTransitionActive());
+export const waitForMachineTransitionsToSettle = () =>
+  waitFor(() => !isMachineTransitionActive(), "machine-transition");
 
-export const waitForBackgroundReadsToResume = () => waitFor(() => !areBackgroundReadsSuspended());
+export const waitForBackgroundReadsToResume = () => waitFor(() => !areBackgroundReadsSuspended(), "background-read");
 
 /** Alias for {@link beginPlaybackWriteBurst} for use outside the playback context. */
 export const beginInteractiveWriteBurst = beginPlaybackWriteBurst;

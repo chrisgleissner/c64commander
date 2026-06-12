@@ -207,6 +207,9 @@ export const reportUserError = ({
     title,
     description,
     variant,
+    onToastDismiss: () => {
+      dedupMap.delete(dedupKey);
+    },
     ...(retry
       ? {
           action: React.createElement(
