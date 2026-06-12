@@ -168,6 +168,65 @@ apart (finish all device-independent work first before claiming this).
 The executor maintains a status table here (phase, state, evidence pointer) and
 appends decisions to `WORKLOG.md` as it goes.
 
+### Ralph loop iteration 2026-06-12 #23 (Codex Play A/V playback progression HIL)
+
+- Classification: `DOC_ONLY` for state/ledger/continuation edits; no source change selected at startup. Android build/deploy is not required because the installed Pixel APK identity already matches the current source identity.
+- Branch/head at startup: `fix/hardening` at `0a839c37`; pre-existing modified files preserved: `PLANS.md`, `WORKLOG.md`, `android/app/src/main/java/uk/gleissner/c64commander/BackgroundExecutionService.kt`, `android/app/src/test/java/uk/gleissner/c64commander/BackgroundExecutionPluginTest.kt`, and `android/app/src/test/java/uk/gleissner/c64commander/BackgroundExecutionServiceTest.kt`.
+- Source identity: `./scripts/resolve-version.sh` returned `0.8.7-rc2-0a839`.
+- Installed Pixel APK identity: `versionName=0.8.7-rc2-0a839`, `versionCode=2027`; current-build HIL evidence is allowed without redeploy.
+- Peer discovery: droidmind namespace exposed and `android_device list_devices` found Pixel 4 `9B081FFAZ001WX` on Android 16; c64scope namespace exposed and lab calls succeeded; c64bridge namespace exposed and `c64_config info` returned VICE backend `127.0.0.1:6502`, so it is callable but not a C64U hardware oracle.
+- Hardware reachability: cautious C64U `/v1/info` succeeded for C64 Ultimate fw `1.1.0` id `5D4E12`; U64 `/v1/info` succeeded for Ultimate 64 Elite fw `3.14e` id `38C1BA`.
+- Ralph Robin runtime context: selected provider `codex`; usable with 5h window 100% and weekly 50%. Session-window policy permits one focused HIL proof and a small fix loop only if a defect is found.
+- Previous iteration verdict: `FIXED` from #22, with Play background/lock cleanup fixed and validated; residual gap is missing UDP/A/V proof plus classification of a C64U `sidplay` log line that referenced source host `192.168.1.13`.
+- Candidate scores:
+  - Play playback start/progression with c64scope UDP/A/V oracle: `+17` unchecked Play Required Tests plus `+15` Pixel HIL gap plus `+12` playback/CTA/timing plus `+11` missing c64scope A/V evidence plus `+9` weak oracle residual = `64`; selected.
+  - Disks mount/eject/rotate HIL: `+17` unchecked Required Tests plus `+15` Pixel HIL gap plus `+7` stateful device risk = `39`; not selected because Play A/V proof is the current physical-device matrix gap.
+  - Settings diagnostics/persistence HIL: `+17` unchecked Required Tests plus `+15` Pixel HIL gap plus `+10` diagnostics/export risk = `42`; not selected because Play has a stronger A/V oracle requirement.
+- Selected objective: exercise one deterministic Play production playback CTA on Pixel 4 against C64U if safe, attempt c64scope UDP/audio capture for start/progression, inspect app/logcat diagnostics, and update the CTA ledger with the oracle adequacy.
+- Stop criteria: stop after one bounded app-driven Play start/progression/Stop proof or confirmed defect, c64scope finalization if started, diagnostics/log inspection, cleanup/state record, CTA ledger update, and refreshed Ralph Robin continuation prompt if release-known-clean criteria remain unmet.
+- Primary TODO: [x] INSUFFICIENT EVIDENCE 2026-06-12T16:55+01:00. Drove Play route and `Ninja Demo` playback through droidmind on current APK. UI/request/background-service evidence was clean: C64U routes used `machine:reboot`, `drives/a:mount`, and keyboard-buffer writes; Play UI advanced to Stop/progress and post-Stop returned idle; `Wake Locks: size=0`; C64U `/v1/info` healthy post-flow. c64scope session `pt-20260612T155011Z` captured C64U audio stream packets but failed the physical audio assertion (`1504` packets, `0` dropped, RMS `0.0000496` vs required `0.005`). The selected visible item was disk playback, so this does not prove audible playback progression. No source code changed and no build/deploy ran.
+- Iteration verdict: `INSUFFICIENT EVIDENCE`. CTA action count: `3` meaningful droidmind product actions (`tab-play`, Play, Stop). Capture artifacts are under `docs/plans/hardening/4/artifacts/iter23/`; c64scope wrote relative artifacts under `c64scope/docs/...` and copies were preserved in the iteration artifact folder.
+- Remaining next highest-risk TODO: repeat Play A/V proof with a deterministic audio-first item/fixture and a safe cleanup plan, preferably avoiding disk-loader silence and avoiding unsafe non-disk Stop reset paths. Classify #22's source-host log-line only if it recurs; #23 did not show `FtpClient.readFile host=192.168.1.13`.
+
+### Ralph loop iteration 2026-06-12 #22 (Codex Play background/lock HIL)
+
+- Classification: `DOC_ONLY` for state/ledger/continuation edits; HIL setup requires Android build/deploy because the installed APK identity is stale. No production source edit is planned unless the Play HIL finds a defect.
+- Branch/head at startup: `fix/hardening` at `0a839c37`; pre-existing modified files preserved: `PLANS.md`, `WORKLOG.md`.
+- Source identity: `./scripts/resolve-version.sh` returned `0.8.7-rc2-0a839`.
+- Installed Pixel APK identity: `versionName=0.8.7-rc2-fb887`, `versionCode=2025`; current-source redeploy is required before any current-build HIL verdict.
+- Peer discovery: droidmind namespace exposed and `android_device list_devices` found Pixel 4 `9B081FFAZ001WX` on Android 16; c64scope namespace exposed and lab state/readiness calls succeeded but peers are unknown until health is reported/capture starts; c64bridge namespace exposed and `c64_config info` returned VICE backend `127.0.0.1:6502`, so it is callable but not a C64U hardware oracle.
+- Hardware reachability: cautious C64U `/v1/info` probe at 2026-06-12T16:28+01:00 failed with connection reset, so one delayed retry is allowed before stopping C64U traffic for this iteration; U64 `/v1/info` succeeded for Ultimate 64 Elite fw `3.14e` id `38C1BA`.
+- Ralph Robin runtime context: selected provider `codex`; usable with 5h window 100% and weekly 50%. Session-window policy permits one focused deploy plus HIL proof.
+- Previous iteration verdict: `RALPH ROBIN CONTINUATION READY` from #21, with Play background/lock HIL planned after current-source redeploy.
+- Candidate scores:
+  - Play import/playback/background-lock current-build HIL: `+18` stale planned CTA ledger/current safe production CTA plus `+17` unchecked Play Required Tests plus `+15` Pixel HIL gap plus `+12` lifecycle/lock/background plus `+11` c64scope A/V gap = `73`; selected.
+  - Disks mount/eject/rotate HIL: `+17` unchecked Required Tests plus `+15` Pixel HIL gap plus `+7` stateful device risk = `39`; not selected because Play background/lock was already planned and higher risk.
+  - Settings diagnostics/persistence HIL: `+17` unchecked Required Tests plus `+15` Pixel HIL gap plus `+10` diagnostics/export risk = `42`; not selected because Play has A/V/lifecycle coverage gap.
+- Selected objective: deploy the current source-derived APK, then exercise the Play background/lock production CTA through droidmind on Pixel 4 using U64 fallback if C64U remains unsafe, with c64scope timeline/evidence where practical.
+- Stop criteria: stop after one bounded Play background/lock CTA proof or confirmed defect, app/logcat diagnostics inspection, cleanup/state record, CTA ledger update, and refreshed Ralph Robin continuation prompt if release-known-clean criteria remain unmet.
+- Primary TODO: [x] FIXED 2026-06-12T16:43+01:00. Deployed `0.8.7-rc2-0a839` (`versionCode=2027`) to Pixel 4, drove Play start/background/foreground/cleanup through droidmind, found BUG-024, fixed the Android native background-execution service restart/wake-lock leak, ran focused Android JVM regression tests, redeployed, and revalidated the Play/Stop cleanup path on Pixel 4 with no remaining service and `Wake Locks: size=0` after 6 s.
+- Iteration verdict: `FIXED`. Code changed: yes, `BackgroundExecutionService.kt` plus focused native tests. Build/deploy: yes, `./build --skip-tests --install-apk --device-id 9B081FFAZ001WX` before and after the fix. Focused regression: `cd android && ./gradlew testDebugUnitTest --tests uk.gleissner.c64commander.BackgroundExecutionPluginTest --tests uk.gleissner.c64commander.BackgroundExecutionServiceTest`. Coverage/lint/broad tests were not run under the HIL-first policy.
+- Product evidence: droidmind Pixel 4 screenshots/UI trees/logcat and Android dumpsys artifacts under `docs/plans/hardening/4/artifacts/iter22/`; c64scope timeline run `pt-20260612T153047Z` finalized pass with product-failure-fixed summary; post-flow C64U `/v1/info` healthy.
+- Remaining next highest-risk TODO: add c64scope UDP/A/V playback progression proof when capture endpoints are available, and classify the #22 source-host log line `FtpClient.readFile host=192.168.1.13` during C64U `sidplay` as expected source metadata or stale target attribution.
+
+### Ralph loop iteration 2026-06-12 #21 (Codex session-threshold handoff refresh)
+
+- Classification: `DOC_ONLY` state/continuation update. No executable code, runtime assets, tests, or screenshots changed.
+- Branch/head at startup: `fix/hardening` at `6951ef0e` (`refactor: update session-window capacity behavior thresholds and handoff criteria in documentation`); pre-existing modified files: `PLANS.md`, `WORKLOG.md`.
+- Source identity: `./scripts/resolve-version.sh` returned `0.8.7-rc2-6951e`.
+- Installed Pixel APK identity: `adb -s 9B081FFAZ001WX shell dumpsys package uk.gleissner.c64commander` reported `versionName=0.8.7-rc2-fb887`, `versionCode=2025`; current-source redeploy is required before any current-build HIL verdict.
+- Peer discovery: droidmind namespace exposed and `android_device list_devices` found Pixel 4 `9B081FFAZ001WX` on Android 16; c64scope namespace exposed and lab state/readiness calls succeeded; c64bridge namespace exposed and `c64_config info` returned VICE backend `127.0.0.1:6502`, so c64bridge is callable but degraded/not a C64U hardware oracle.
+- Hardware reachability: cautious shell probes returned C64U `/v1/info` HTTP success for C64 Ultimate fw `1.1.0` id `5D4E12`, and U64 `/v1/info` HTTP success for Ultimate 64 Elite fw `3.14e` id `38C1BA`.
+- Ralph Robin runtime context: selected provider `codex`; latest usage decision says Codex usable but at 21% 5h window remaining. Session-window policy band 15-24% applies: no new tests, HIL, source edits, captures, deploys, or device mutations.
+- Previous iteration verdict: `RALPH ROBIN CONTINUATION READY` from #20, with Play background/lock HIL planned after current-source redeploy.
+- Candidate scores:
+  - Play import/playback/background-lock current-build HIL: `+18` stale CTA ledger/current safe production CTA plus `+17` unchecked Required Tests plus `+15` Pixel HIL gap plus `+12` lifecycle/lock/background plus `+11` c64scope A/V gap = `73`; blocked for this invocation by session window below 25%.
+  - BUG-022 SAF persisted URI investigation: `+10` diagnostics issue plus `+6` stale ambiguous evidence = `16`; not selected because safe production HIL candidate is higher and current session cannot edit.
+  - Settings/Docs UI-only broadening: `+15` Pixel HIL gap, lower risk than Play background/lock; not selected.
+- Selected objective: preserve and hand off the Play import/playback/background-lock CTA family without starting HIL, deploy, or source edits.
+- Stop criteria: stop after appending state, updating the CTA ledger, refreshing `docs/plans/hardening/4/prompt.md`, and recording that no scheduler command was run because Ralph Robin owns provider rotation.
+- Primary TODO for next invocation: when Codex session window is `>=25%`, redeploy the current-source APK to Pixel 4 if it still reports `0.8.7-rc2-fb887`, then execute the Play background/lock production CTA through droidmind with c64scope A/V/timing evidence where practical.
+
 ### Executor Run Status (Productionization Pass 1 — 2026-06-10)
 
 | Phase | State | Evidence / Notes |
@@ -964,3 +1023,23 @@ Fix the confirmed prod-hardening-8 production-readiness findings in priority ord
 - Primary TODO: [ ] Next Ralph Robin turn with Codex >=25% should run the app-first Pixel 4 Play background/lock playback CTA proof on the current source-derived APK, using c64scope when practical, and record UI/logcat/app-log/background-execution evidence plus cleanup.
 - Stop criteria: append state and CTA-ledger planning update, refresh `docs/plans/hardening/4/prompt.md`, record that no scheduler command was run because Ralph Robin owns provider rotation, and stop without product actions due the allowed session-threshold blocker.
 - Post-entry reconciliation: while this handoff was being finalized, HEAD advanced to `6951ef0e` (`refactor: update session-window capacity behavior thresholds and handoff criteria in documentation`). New source identity is `0.8.7-rc2-6951e`; Pixel remains installed at `0.8.7-rc2-fb887` / `versionCode=2025`. The next runnable HIL turn must redeploy before claiming current-build evidence.
+
+## Ralph loop iteration 2026-06-12 #24 (Claude Play A/V audio-first SID playback HIL)
+
+- Branch/head: `fix/hardening` at `0a839c37`; entry `git status --short` shows pre-existing modified `PLANS.md`, `WORKLOG.md`, and `android/.../BackgroundExecution*` files from prior iterations.
+- Change classification: `DOC_ONLY` for state/CTA-ledger/continuation updates; upgrade to `CODE_CHANGE` only if the A/V proof surfaces a confirmed source defect.
+- Source identity: `./scripts/resolve-version.sh` -> `0.8.7-rc2-0a839`.
+- Installed Pixel identity: droidmind `get_app_info` reports `0.8.7-rc2-0a839` (matches source); no redeploy needed before current-build HIL.
+- Peer discovery: droidmind namespace exposed, `get_app_info` succeeded for Pixel 4 `9B081FFAZ001WX` (Android 16); c64scope namespace exposed; c64bridge namespace exposed but VICE-backed/degraded, not a C64U product oracle.
+- Hardware reachability (re-probed this iteration): u64 `192.168.1.13` healthy (Ultimate 64 Elite fw `3.14e`); c64u `192.168.1.167` healthy (C64 Ultimate fw `1.1.0`). c64u is primary and healthy.
+- Ralph Robin runtime: selected provider `claude`, usable at 94% five-hour / 81% weekly. Interpretation: >=40% band; one focused investigation + safe HIL proof (+ fix/redeploy if a defect appears) is allowed.
+- Previous iteration verdict: #23 `INSUFFICIENT EVIDENCE` — Play disk item `Ninja Demo` gave near-silent c64scope audio capture (RMS 0.0000496 vs 0.005 required), session `inconclusive`.
+- Candidate scores: Play transport A/V audio-first SID proof = +17 unchecked Play Required Tests/PLANNED ledger row, +15 safe Pixel HIL gap, +11 missing/conflicting A/V evidence, +12 transport/timing = 55, selected. BUG-022/SAF diagnostic cleanup = 11 (Low/debug-only). Disks mount/eject = higher destructive/setup risk.
+- Selected objective: drive Play through droidmind, start a deterministic audio-first SID item on c64u, capture c64scope UDP audio and assert RMS above threshold, then safe Stop cleanup with wake-lock/service verification and c64u health re-probe.
+- Stop criteria: record `CLEAN PASS` (audible streamed audio asserted), `DEFECT`, `INSUFFICIENT EVIDENCE`, or `INCONCLUSIVE`; restore Play/idle state, verify wake locks cleared and c64u healthy; update CTA ledger + continuation prompt.
+- Primary TODO: [ ] Audio-first SID Play A/V proof on c64u with c64scope RMS assertion and safe cleanup.
+
+- Primary TODO outcome: [x] CLEAN PASS 2026-06-12T17:12+01:00. Drove Play -> row Play `10_Orbyte.sid` through droidmind on current APK `0.8.7-rc2-0a839`; app POST `c64u/v1/runners:sidplay` produced strong audible UltiSID audio captured by c64scope (run `pt-20260612T160519Z`, RMS 0.13008 vs 0.005 threshold, 1253 packets, dominant 515 Hz, assertion PASSED). Resolves iter23 INCONCLUSIVE (Ninja-Demo near-silence was disk-demo specific, not a playback defect). Clean BackgroundExecution start/stop + WakeLock acquire/release; destructive-Stop guard on the SID item confirmed working ("Use Pause instead"); Pause/Unmute exercised the known UltiSID-volume Mute mechanism (BUG-016 restore holds); c64u healthy, UltiSID restored to 0 dB. No new blocker/high/medium defect.
+- Iteration verdict: `CLEAN PASS`. Code changed: no. Build/deploy/tests/coverage: not run. Droidmind HIL: yes. c64scope: yes (pass). c64bridge: discovery only (VICE-degraded, not oracle). Diagnostics/logs inspected: yes. Latency: sidplay POST 599 ms; UI transport feedback <1 s. UDP/A/V oracle: yes.
+- Carry-forward open question (not a confirmed defect): cross-device FTP source attribution — SID `/USB2/test-data/SID/10_Orbyte.sid` labeled "C64U file" but read from u64 (192.168.1.13) FTP (the library item's stored host); playback correct via sidplay upload to c64u. Classify intended design (pin source host vs follow active device) and re-check disk-mount paths. Matches iter22 note.
+- Next primary TODO: classify the cross-device FTP source-attribution open question against intended design, OR exercise the next unexercised safe CTA family (Disks mount/eject on c64u with read-back, or Play background/lock with c64scope A/V on a SID item for a true A/V-backed lifecycle proof).

@@ -92,11 +92,18 @@ class BackgroundExecutionService : Service() {
                 activeService.applyDueAtUpdate(dueAtMs)
                 return
             }
+            if (dueAtMs == null) {
+                AppLogger.debug(
+                        context,
+                        TAG,
+                        "Not running — ignoring dueAt clear request",
+                        "BackgroundExecutionService"
+                )
+                return
+            }
             val intent = Intent(context, BackgroundExecutionService::class.java)
             intent.action = ACTION_UPDATE_DUE_AT
-            if (dueAtMs != null) {
-                intent.putExtra(EXTRA_DUE_AT_MS, dueAtMs)
-            }
+            intent.putExtra(EXTRA_DUE_AT_MS, dueAtMs)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {

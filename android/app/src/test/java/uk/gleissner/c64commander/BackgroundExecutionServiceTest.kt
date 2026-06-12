@@ -229,6 +229,17 @@ class BackgroundExecutionServiceTest {
     }
 
     @Test
+    fun updateDueAtNullDoesNotStartStoppedService() {
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+
+        BackgroundExecutionService.updateDueAt(appContext, null)
+
+        assertFalse("Stopped service should remain stopped after clearing dueAt", BackgroundExecutionService.isRunning)
+        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
+        assertNull("Expected no service start for a stopped-service dueAt clear", shadowApp.nextStartedService)
+    }
+
+    @Test
     fun updateDueAtUpdatesRunningServiceWithoutRestartingForegroundService() {
         controller.create()
         controller.startCommand(0, 0)
