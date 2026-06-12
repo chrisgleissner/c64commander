@@ -1247,6 +1247,7 @@ describe("c64api", () => {
           errors: [],
         }),
       )
+      .mockResolvedValueOnce(okJsonResponse())
       .mockResolvedValueOnce(okJsonResponse());
 
     const api = new C64API("http://c64u");
@@ -1254,10 +1255,16 @@ describe("c64api", () => {
     try {
       await api.updateConfigBatch({ "U64 Specific Settings": { "CPU Speed": "4", "Turbo Control": "Manual" } });
 
+      // Turbo + CPU speed batches are split into sequential single-item
+      // writes; the padded CPU speed value lands in the final request.
+      expect(JSON.parse(String(fetchMock.mock.calls.at(-2)?.[1]?.body))).toEqual({
+        "U64 Specific Settings": {
+          "Turbo Control": "Manual",
+        },
+      });
       expect(JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body))).toEqual({
         "U64 Specific Settings": {
           "CPU Speed": " 4",
-          "Turbo Control": "Manual",
         },
       });
     } finally {
@@ -1269,7 +1276,11 @@ describe("c64api", () => {
     }
   });
 
-  it("orders U64 turbo control before CPU speed in batch writes to avoid an off-speed firmware pulse", async () => {
+  it("splits U64 turbo control and CPU speed into sequential single-item writes, turbo first", async () => {
+    // Combined Turbo Control + CPU Speed POSTs have twice coincided with the
+    // Ultimate dropping off the network mid-write (BUG-010 on u64 3.14e,
+    // 2026-06-12 on c64u 1.1.0). The batch must arrive as one request per
+    // item, with the turbo enable landing before the dependent speed change.
     const fetchMock = getFetchMock();
     fetchMock
       .mockResolvedValueOnce(
@@ -1284,6 +1295,7 @@ describe("c64api", () => {
           },
         }),
       )
+      .mockResolvedValueOnce(okJsonResponse())
       .mockResolvedValueOnce(okJsonResponse());
 
     const api = new C64API("http://c64u");
@@ -1295,14 +1307,13 @@ describe("c64api", () => {
       },
     });
 
-    const body = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body)) as {
-      "U64 Specific Settings": Record<string, string>;
-    };
-    expect(Object.keys(body["U64 Specific Settings"])).toEqual(["Turbo Control", "CPU Speed"]);
-    expect(body["U64 Specific Settings"]).toEqual({
-      "Turbo Control": "Manual",
-      "CPU Speed": " 2",
-    });
+    const postBodies = fetchMock.mock.calls
+      .filter(([, init]) => (init as RequestInit | undefined)?.method === "POST")
+      .map(([, init]) => JSON.parse(String((init as RequestInit).body)) as Record<string, Record<string, string>>);
+    expect(postBodies).toEqual([
+      { "U64 Specific Settings": { "Turbo Control": "Manual" } },
+      { "U64 Specific Settings": { "CPU Speed": " 2" } },
+    ]);
   });
 
   it("rejects out-of-range numeric batch writes before sending the config POST", async () => {

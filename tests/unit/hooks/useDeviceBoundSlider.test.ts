@@ -495,7 +495,7 @@ describe("useDeviceBoundSlider", () => {
     expect(preview).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps the desired value latched after the pause watchdog expires until the device catches up", () => {
+  it("keeps the desired value latched through the reconciliation window, then defers to the device", async () => {
     const commit = vi.fn();
     const { result, rerender } = renderHook(
       ({ deviceValue }) =>
@@ -511,19 +511,34 @@ describe("useDeviceBoundSlider", () => {
       },
     );
 
-    act(() => {
+    await act(async () => {
       result.current.onValueCommit([8]);
     });
     expect(result.current.isAwaitingReconciliation).toBe(true);
     expect(result.current.sliderValue).toBe(8);
 
+    // A stale device echo inside the watchdog window must not snap the
+    // slider back; the latched intent is still authoritative here.
     act(() => {
-      vi.advanceTimersByTime(500);
+      vi.advanceTimersByTime(499);
     });
-
     rerender({ deviceValue: 1 });
     expect(result.current.isAwaitingReconciliation).toBe(true);
     expect(result.current.sliderValue).toBe(8);
+
+    // Once the watchdog (re-armed at commit settle) expires without the
+    // device ever confirming the write, the device value wins again so the
+    // UI cannot keep displaying a value the hardware never accepted.
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(result.current.isAwaitingReconciliation).toBe(false);
+    expect(result.current.sliderValue).toBe(1);
+    expect(addLogMock).toHaveBeenCalledWith(
+      "debug",
+      "Device-bound slider reconciliation watchdog expired",
+      expect.objectContaining({ pendingValue: 8 }),
+    );
   });
 
   it("treats stale remote echoes as non-authoritative until the current target is confirmed", () => {

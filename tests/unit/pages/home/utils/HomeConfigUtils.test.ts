@@ -213,6 +213,21 @@ describe("HomeConfigUtils", () => {
     it("matches case-insensitively", () => {
       expect(resolveTurboControlValue("2 MHz", ["off", "manual"])).toBe("manual");
     });
+
+    it("keeps the current Off/Manual mode at stock speed to avoid a redundant turbo write", () => {
+      expect(resolveTurboControlValue("1 MHz", ["Off", "Manual"], "Manual")).toBe("Manual");
+      expect(resolveTurboControlValue("1 MHz", ["Off", "Manual"], "Off")).toBe("Off");
+    });
+
+    it("still forces Off at stock speed when the current mode is an automatic turbo mode", () => {
+      expect(resolveTurboControlValue("1 MHz", ["Off", "Manual", "U64 Turbo Registers"], "U64 Turbo Registers")).toBe(
+        "Off",
+      );
+    });
+
+    it("ignores the current mode when speeding up", () => {
+      expect(resolveTurboControlValue("2 MHz", ["Off", "Manual"], "Off")).toBe("Manual");
+    });
   });
 
   describe("formatPrinterLabel", () => {

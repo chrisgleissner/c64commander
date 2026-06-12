@@ -156,6 +156,17 @@ const orderFirmwareSafeConfigUpdates = (
   return ordered;
 };
 
+// Combined POSTs that write Turbo Control together with a CPU-speed-dependent
+// item have twice coincided with the Ultimate dropping off the network
+// mid-write (BUG-010 on u64 3.14e, 2026-06-12 on c64u 1.1.0), while
+// single-item writes are reliable. Send such batches as sequential
+// single-item requests; the config write throttle spaces them out.
+const requiresSequentialItemWrites = (category: string, entries: Array<[string, string | number]>) =>
+  category === U64_SPECIFIC_SETTINGS_CATEGORY &&
+  entries.length > 1 &&
+  entries.some(([item]) => item === U64_TURBO_CONTROL_ITEM) &&
+  entries.some(([item]) => U64_CPU_SPEED_DEPENDENT_ITEMS.has(item));
+
 const resolveDeclaredConfigWriteValue = (
   category: string,
   item: string,
@@ -1660,7 +1671,7 @@ export class C64API {
 
   async updateConfigBatch(payload: Record<string, Record<string, string | number>>): Promise<{ errors: string[] }> {
     const categories = Object.entries(payload);
-    const resolvedPayload: Record<string, Record<string, string | number>> = {};
+    const resolvedEntriesByCategory: Record<string, Array<[string, string | number]>> = {};
     await Promise.all(
       categories.map(async ([category, updates]) => {
         const categoryPayload = {
@@ -1668,34 +1679,53 @@ export class C64API {
             items: await this.ensureConfigCategoryItems(category, Object.keys(updates)),
           },
         };
-        const resolvedUpdates = Object.fromEntries(
-          orderFirmwareSafeConfigUpdates(category, updates).map(([item, value]) => [
+        const resolvedEntries = orderFirmwareSafeConfigUpdates(category, updates).map(
+          ([item, value]): [string, string | number] => [
             item,
             resolveConfigWriteValue(category, item, value, categoryPayload),
-          ]),
+          ],
         );
-        resolvedPayload[category] = resolvedUpdates;
+        resolvedEntriesByCategory[category] = resolvedEntries;
         validateConfigBatchWrite({
           category,
-          updates: resolvedUpdates,
+          updates: Object.fromEntries(resolvedEntries),
           categoryPayload,
         });
       }),
     );
-    const run = (): Promise<{ errors: string[] }> =>
-      this.request("/v1/configs", {
-        method: "POST",
-        ...CONFIG_WRITE_REQUEST_OPTIONS,
-        body: JSON.stringify(resolvedPayload),
-      });
-    const response = await scheduleConfigWrite(run);
-    this.assertConfigWriteAccepted(response, { payload: resolvedPayload });
-    Object.entries(resolvedPayload).forEach(([category, updates]) => {
-      Object.entries(updates).forEach(([item, value]) => {
-        this.setCachedConfigValue(category, item, value);
-      });
+    const mergedPayload: Record<string, Record<string, string | number>> = {};
+    const sequentialPayloads: Array<Record<string, Record<string, string | number>>> = [];
+    Object.entries(resolvedEntriesByCategory).forEach(([category, entries]) => {
+      if (requiresSequentialItemWrites(category, entries)) {
+        entries.forEach(([item, value]) => {
+          sequentialPayloads.push({ [category]: { [item]: value } });
+        });
+        return;
+      }
+      mergedPayload[category] = Object.fromEntries(entries);
     });
-    return response;
+    const requestPayloads = [
+      ...(Object.keys(mergedPayload).length ? [mergedPayload] : []),
+      ...sequentialPayloads,
+    ];
+    const errors: string[] = [];
+    for (const requestPayload of requestPayloads) {
+      const run = (): Promise<{ errors: string[] }> =>
+        this.request("/v1/configs", {
+          method: "POST",
+          ...CONFIG_WRITE_REQUEST_OPTIONS,
+          body: JSON.stringify(requestPayload),
+        });
+      const response = await scheduleConfigWrite(run);
+      this.assertConfigWriteAccepted(response, { payload: requestPayload });
+      Object.entries(requestPayload).forEach(([category, updates]) => {
+        Object.entries(updates).forEach(([item, value]) => {
+          this.setCachedConfigValue(category, item, value);
+        });
+      });
+      errors.push(...(response.errors ?? []));
+    }
+    return { errors };
   }
 
   // Machine control endpoints
