@@ -108,12 +108,19 @@ const resolveDefaultRestRequestTimeoutMs = (intent: InteractionIntent) =>
 // instrumentation across parallel CI shards, all of which inflate wall-clock
 // time far beyond the production-tuned interactive budget. Floor every timed
 // request's effective timeout in those builds so a healthy-but-slow mocked
-// response is not aborted as "Host unreachable". Resolves to 0 (no-op) in
-// production builds, where it is dead-code-eliminated.
-const TEST_PROBE_REQUEST_TIMEOUT_FLOOR_MS = import.meta.env.VITE_ENABLE_TEST_PROBES === "1" ? 8000 : 0;
+// response is not aborted as "Host unreachable". Production budgets are unchanged.
+const TEST_PROBE_REQUEST_TIMEOUT_FLOOR_MS = 8000;
+
+// Read lazily and defensively: `import.meta.env` is undefined when this module is
+// loaded by the Playwright runner in Node (e.g. `playwright test --list`), so
+// touching it at module scope would throw there and break test collection.
+const isTestProbeTimeoutFloorEnabled = () => {
+  const env = (import.meta as ImportMeta).env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
+  return env?.VITE_ENABLE_TEST_PROBES === "1";
+};
 
 const resolveEffectiveRequestTimeoutMs = (timeoutMs?: number) =>
-  timeoutMs !== undefined && TEST_PROBE_REQUEST_TIMEOUT_FLOOR_MS > timeoutMs
+  timeoutMs !== undefined && isTestProbeTimeoutFloorEnabled() && TEST_PROBE_REQUEST_TIMEOUT_FLOOR_MS > timeoutMs
     ? TEST_PROBE_REQUEST_TIMEOUT_FLOOR_MS
     : timeoutMs;
 
