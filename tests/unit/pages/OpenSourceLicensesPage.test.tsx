@@ -50,6 +50,7 @@ describe("OpenSourceLicensesPage", () => {
     const closeButton = screen.getByRole("button", { name: "Close licenses overlay" });
 
     expect(overlay).toHaveClass("fixed", "z-[1100]");
+    expect(overlay.parentElement).toBe(document.body);
 
     fireEvent.pointerUp(closeButton, { pointerType: "touch" });
 

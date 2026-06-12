@@ -11,6 +11,7 @@ import { App } from "@capacitor/app";
 import { addErrorLog } from "@/lib/logging";
 import { StatefulButton } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
 
 type MarkdownBlock =
   | { type: "heading"; level: number; text: string }
@@ -262,7 +263,7 @@ export default function OpenSourceLicensesPage() {
     };
   }, [navigate]);
 
-  return (
+  const content = (
     <div
       data-testid="open-source-licenses-overlay"
       className="fixed inset-0 z-[1100] overflow-hidden bg-background/96 backdrop-blur-sm supports-[backdrop-filter]:bg-background/88"
@@ -437,4 +438,7 @@ export default function OpenSourceLicensesPage() {
       </div>
     </div>
   );
+
+  if (typeof document === "undefined") return content;
+  return createPortal(content, document.body);
 }
