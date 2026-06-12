@@ -67,14 +67,16 @@ const DocsSlot = () => <DocsPage />;
 
 const SettingsSlot = () => {
   const location = useLocation();
-  if (location.pathname === "/settings/open-source-licenses") {
-    return (
-      <Suspense fallback={null}>
-        <OpenSourceLicensesPage />
-      </Suspense>
-    );
-  }
-  return <SettingsPage />;
+  return (
+    <>
+      <SettingsPage />
+      {location.pathname === "/settings/open-source-licenses" ? (
+        <Suspense fallback={null}>
+          <OpenSourceLicensesPage />
+        </Suspense>
+      ) : null}
+    </>
+  );
 };
 
 const SLOT_COMPONENTS: Array<() => React.ReactNode> = [
