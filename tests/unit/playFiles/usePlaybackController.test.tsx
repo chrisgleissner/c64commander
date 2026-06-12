@@ -394,6 +394,29 @@ describe("usePlaybackController", () => {
     expect((options as { skipSidSslPropagation?: boolean } | undefined)?.skipSidSslPropagation).toBeUndefined();
   });
 
+  it("reports a play start superseded by a routing change as a notice, not a destructive error", async () => {
+    const playlist = [
+      createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+    ];
+    const abortError = new Error("Aborted");
+    abortError.name = "AbortError";
+    vi.mocked(executePlayPlan).mockRejectedValueOnce(abortError);
+    const setIsPlaying = vi.fn();
+    const { result } = renderPlaybackController(playlist, { currentIndex: 0, setIsPlaying });
+
+    await result.current.handlePlay();
+
+    expect(vi.mocked(reportUserError)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "PLAYBACK_START",
+        title: "Playback interrupted",
+        severity: "S2",
+      }),
+    );
+    expect(vi.mocked(reportUserError)).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Playback failed" }));
+    expect(setIsPlaying).not.toHaveBeenCalledWith(true);
+  });
+
   it("downloads CommoServe playlist items lazily when playback starts", async () => {
     const playlist = [
       createPlaylistItem({
@@ -1033,6 +1056,54 @@ describe("usePlaybackController", () => {
 
     expect(setIsPlaylistLoading).not.toHaveBeenCalled();
     expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+  });
+
+  it("drops a duplicate startPlaylist while a start is already in flight", async () => {
+    const playlist = [createPlaylistItem()];
+    const setIsPlaylistLoading = vi.fn();
+    const playStartInFlightRef = { current: true };
+    const { result } = renderPlaybackController(playlist, {
+      setIsPlaylistLoading,
+      playStartInFlightRef,
+    });
+
+    await result.current.startPlaylist(playlist, 0);
+
+    expect(setIsPlaylistLoading).not.toHaveBeenCalled();
+    expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+  });
+
+  it("releases the startPlaylist single-flight guard so a later start succeeds", async () => {
+    const playlist = [createPlaylistItem()];
+    const playStartInFlightRef = { current: false };
+    const { result } = renderPlaybackController(playlist, {
+      playStartInFlightRef,
+    });
+
+    await result.current.startPlaylist(playlist, 0);
+
+    expect(playStartInFlightRef.current).toBe(false);
+    await result.current.startPlaylist(playlist, 0);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(2);
+  });
+
+  it("cancels the previous track's auto-advance guard before a playlist row start", async () => {
+    // Regression: a paused session kept its overdue auto-advance guard; a row
+    // tap (startPlaylist) flipped isPaused false without cancelling it, so
+    // timeline reconciliation fired the stale guard and started the previous
+    // playlist's next item (machine reboot included) over the fresh start.
+    const playlist = [createPlaylistItem()];
+    const cancelAutoAdvance = vi.fn();
+    const { result } = renderPlaybackController(playlist, {
+      cancelAutoAdvance,
+    });
+
+    await result.current.startPlaylist(playlist, 0);
+
+    expect(cancelAutoAdvance).toHaveBeenCalled();
+    const cancelOrder = cancelAutoAdvance.mock.invocationCallOrder[0];
+    const playOrder = vi.mocked(executePlayPlan).mock.invocationCallOrder[0];
+    expect(cancelOrder).toBeLessThan(playOrder);
   });
 
   it("merges resolved playlist entries with existing extras when starting playback", async () => {

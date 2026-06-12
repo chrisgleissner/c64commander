@@ -157,4 +157,35 @@ describe("fileLibraryUtils", () => {
     expect(request.source).toBe("hvsc");
     expect(request.path).toBe(entry.path);
   });
+
+  it("rejects a never-settling native read instead of blocking the play pipeline forever", async () => {
+    vi.useFakeTimers();
+    try {
+      const { FolderPicker } = await import("@/lib/native/folderPicker");
+      (FolderPicker.readFileFromTree as ReturnType<typeof vi.fn>).mockImplementation(
+        () => new Promise(() => undefined),
+      );
+      const file = buildLocalPlayFileFromTree("demo.sid", "/path/demo.sid", "content://tree/primary");
+
+      const read = file.arrayBuffer();
+      const outcome = expect(read).rejects.toThrow("Local file unavailable. Re-add it to the playlist.");
+      await vi.advanceTimersByTimeAsync(15_000);
+      await outcome;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears the read timeout when the native read settles in time", async () => {
+    vi.useFakeTimers();
+    try {
+      await mockFolderPicker(btoa("ok"));
+      const file = buildLocalPlayFileFromUri("demo.sid", "/path/demo.sid", "content://doc/1");
+      const buffer = await file.arrayBuffer();
+      expect(new Uint8Array(buffer)).toEqual(new Uint8Array([111, 107]));
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -19,6 +19,7 @@ import {
   SupersededMachineTransitionError,
 } from "@/lib/deviceInteraction/machineTransitionCoordinator";
 import { addErrorLog, addLog } from "@/lib/logging";
+import { isAbortLikeError } from "@/lib/c64api/requestRuntime";
 import { reportUserError } from "@/lib/uiErrors";
 import { toast } from "@/hooks/use-toast";
 import { inferConnectedDeviceCode } from "@/lib/diagnostics/targetDisplayMapper";
@@ -811,49 +812,89 @@ export function usePlaybackController({
     ],
   );
 
+  // A foreground play start that is superseded/aborted by a routing change must
+  // still give the user feedback, but as a notice rather than a destructive
+  // error: the device target changed mid-start, so "press Play again" is the
+  // correct recovery, not an alarm (ERROR_POLICY §2 vs §3 boundary).
+  const reportPlaybackStartFailure = useCallback(
+    (report: { operation: string; title: string; error: unknown; context?: Record<string, unknown> }) => {
+      if (isAbortLikeError(report.error)) {
+        reportUserError({
+          operation: report.operation,
+          title: "Playback interrupted",
+          description: "The connection changed while starting playback. Press Play again.",
+          error: report.error,
+          context: report.context,
+          severity: "S2",
+        });
+        return;
+      }
+      reportUserError({
+        operation: report.operation,
+        title: report.title,
+        description: (report.error as Error).message,
+        error: report.error,
+        context: report.context,
+      });
+    },
+    [],
+  );
+
   const startPlaylist = useCallback(
     async (items: PlaylistItem[], startIndex = 0) => {
       if (!items.length) return;
-      playedClockRef.current.reset();
-      setPlayedMs(0);
-      const resolvedItems = await applySonglengthsToItems(items);
-      setPlaylist((prev) => {
-        if (!prev.length) return resolvedItems;
-        const baseIds = new Set(resolvedItems.map((item) => item.id));
-        const extras = prev.filter((item) => !baseIds.has(item.id));
-        return extras.length ? [...resolvedItems, ...extras] : resolvedItems;
-      });
+      // Playlist row/title taps call this directly, so it needs the same
+      // duplicate-start drop as handlePlay, and it must invalidate the
+      // previous track's auto-advance guard before isPaused flips false —
+      // a stale overdue guard otherwise fires on timeline reconciliation
+      // and starts the previous playlist's next item over this fresh start.
+      if (!tryAcquireSingleFlight(playStartInFlightRef)) return;
       setIsPlaylistLoading(true);
-      setIsPaused(false);
       try {
-        await playItem(resolvedItems[startIndex], {
-          playlistIndex: startIndex,
-          playlistSize: resolvedItems.length,
+        cancelAutoAdvance();
+        playedClockRef.current.reset();
+        setPlayedMs(0);
+        const resolvedItems = await applySonglengthsToItems(items);
+        setPlaylist((prev) => {
+          if (!prev.length) return resolvedItems;
+          const baseIds = new Set(resolvedItems.map((item) => item.id));
+          const extras = prev.filter((item) => !baseIds.has(item.id));
+          return extras.length ? [...resolvedItems, ...extras] : resolvedItems;
         });
-      } catch (error) {
-        if (!isHandledUiError(error)) {
-          reportUserError({
-            operation: "PLAYBACK_START",
-            title: "Playback failed",
-            description: (error as Error).message,
-            error,
-            context: {
-              item: resolvedItems[startIndex]?.label,
-            },
-          });
-        }
-        setIsPlaying(false);
         setIsPaused(false);
-        trackStartedAtRef.current = null;
-        autoAdvanceGuardRef.current = null;
-        setAutoAdvanceDueAtMs(null);
+        try {
+          await playItem(resolvedItems[startIndex], {
+            playlistIndex: startIndex,
+            playlistSize: resolvedItems.length,
+          });
+        } catch (error) {
+          if (!isHandledUiError(error)) {
+            reportPlaybackStartFailure({
+              operation: "PLAYBACK_START",
+              title: "Playback failed",
+              error,
+              context: {
+                item: resolvedItems[startIndex]?.label,
+              },
+            });
+          }
+          setIsPlaying(false);
+          setIsPaused(false);
+          trackStartedAtRef.current = null;
+          autoAdvanceGuardRef.current = null;
+          setAutoAdvanceDueAtMs(null);
+        }
       } finally {
+        releaseSingleFlight(playStartInFlightRef);
         setIsPlaylistLoading(false);
       }
     },
     [
       applySonglengthsToItems,
+      cancelAutoAdvance,
       playItem,
+      playStartInFlightRef,
+      reportPlaybackStartFailure,
       playedClockRef,
       setAutoAdvanceDueAtMs,
       setIsPaused,
@@ -870,21 +911,21 @@ export function usePlaybackController({
     trace(async function handlePlay() {
       const targetIndex = resolvePlayTargetIndex(playlist.length, currentIndex);
       if (targetIndex === null) return;
+      if (currentIndex < 0) {
+        // startPlaylist handles its own single-flight and guard cancellation.
+        await startPlaylist(playlist, targetIndex);
+        return;
+      }
       if (!tryAcquireSingleFlight(playStartInFlightRef)) return;
       setIsPlaylistLoading(true);
       try {
-        if (currentIndex < 0) {
-          await startPlaylist(playlist, targetIndex);
-          return;
-        }
         cancelAutoAdvance();
         await playItem(playlist[targetIndex], { playlistIndex: targetIndex, playlistSize: playlist.length });
       } catch (error) {
         if (!isHandledUiError(error)) {
-          reportUserError({
+          reportPlaybackStartFailure({
             operation: "PLAYBACK_START",
             title: "Playback failed",
-            description: (error as Error).message,
             error,
             context: {
               item: playlist[targetIndex]?.label,
@@ -901,6 +942,7 @@ export function usePlaybackController({
       currentIndex,
       playItem,
       playlist,
+      reportPlaybackStartFailure,
       startPlaylist,
       trace,
       playStartInFlightRef,
@@ -1109,10 +1151,9 @@ export function usePlaybackController({
       settle();
     } catch (error) {
       if (!isHandledUiError(error)) {
-        reportUserError({
+        reportPlaybackStartFailure({
           operation: pending.operation,
           title: pending.title,
-          description: (error as Error).message,
           error,
           context: {
             originIndex: pending.originIndex,
@@ -1131,6 +1172,7 @@ export function usePlaybackController({
     enqueueUserTransport,
     playItem,
     playedClockRef,
+    reportPlaybackStartFailure,
     setAutoAdvanceDueAtMs,
     setIsPaused,
     setIsPlaying,

@@ -640,3 +640,80 @@ Fix the confirmed prod-hardening-8 production-readiness findings in priority ord
 - Candidate scores (deterministic rubric): A=19 (divergence +5, ambiguous prior evidence +5, timers/persistence +4, tests-could-pass-while-wrong +3, generalizes +2), E=15, B=14, C=10 (S2/U8 current-build Pixel proof −5), D=9 (low severity, dedup-mitigated). A selected per default-priority rule and top score.
 - Key prior-evidence asymmetry driving selection: in P2, `10_Orbyte.sid` elapsed advanced `0:00 → 0:04`; in P5, `demo.sid` elapsed stayed at `0:00` for 35 s. That pattern suggests playback never *started* (or the UI clock never started), i.e. the auto-advance timer was never armed — a different failure class from "auto-advance fired late/never", and one the deterministic suites do not cover. A silent user-initiated Play failure would also violate ERROR_POLICY §2 (no toast surfaced).
 - Stop criteria: verdict reached with causal model + invariants recorded; or queried session window < 25% → handoff sequence per binding requirement.
+- Status update 2026-06-11T23:52: Candidate A analysis complete — playback start + auto-advance arming verified healthy on-device (3 successful starts; watchdog armed at true duration); original P5 anomaly not reproduced; most probable cause: start superseded by the routing change recorded at 21:40:46Z, suppressed per superseded-operation policy. Mid-session user redirect identified the real defect: ultimate-source SIDs were played via direct path so the device never knew the true song length. Filed and FIXED BUG-019 (removed hardcoded `skipSidSslPropagation`); regression test added; Pixel proof shows multipart `track.sid` + `songlengths.ssl` (01 17 = 1:17) upload. u64 volumes restored.
+- TODO (continuation): (1) confirm full `npm run test` / lint / coverage / build gates green after BUG-019 fix and re-run any Playwright spec that exercises ultimate SID playback with duration (mock FTP fetch now fails → fallback path); (2) decide the policy question left by Candidate A — a background routing change that supersedes a foreground user Play currently yields zero user feedback; either retry the start after routing settles or surface a foreground notice, with a deterministic regression.
+- Status update 2026-06-12T00:05 (user-directed continuation with ~50% window): both TODOs executed in-session. (1) Full `npm run test` green post-BUG-019 (584 files / 6797 tests); lint + coverage running as final background gates. (2) Implemented as BUG-020 fix: abort-like play-start failures now surface a non-destructive S2 "Playback interrupted" notice at all three user-start catch sites, and lazy local-file native reads are bounded at 15 s. Focused suites 4 files / 122 tests green. Remaining for continuation: record/lint+coverage outcomes if not yet finished, optional Playwright spot-check of ultimate-SID specs (fallback path now exercised in mock envs), and final Pixel launch sanity on the last deploy.
+
+## Fable hard-reasoning continuation
+
+- Objective: finish the bounded remainder after the Fable hard-reasoning pass closed Candidate A and fixed BUG-019/BUG-020. No re-derivation of established facts; no device work required.
+- Session-window source of truth: `llm-usage --json` → `.claude.five_hour.remaining` (reading 8% at 2026-06-12T00:03:46+01:00 — below the <25% Task-1-only threshold and below the <20% immediate-handoff stop criterion).
+- TODO:
+  - [ ] Task 1 — Close the remaining quality gates. WORKLOG records NO outcome for the prior session's background `npm run lint && npm run test:coverage` (it was still running at the 00:14 handoff and left no recoverable output; `coverage/` has no summary, `build-errors.log` is from 2026-03-20). Therefore run fresh: `npm run lint`, `npm run test:coverage` (>= 91% branch), then `npm run test` once to confirm BUG-020 edits keep the full suite green, then `npm run build`. Fix only regressions caused by the BUG-019/BUG-020 changes; never weaken their regression tests.
+  - [ ] Task 2 — Playwright spot-check of the restored SSL-upload path: targeted runs of `playwright/hvscPerf.spec.ts` and `playwright/commoserve.spec.ts` (default project, `--grep` where possible); minimal intent-preserving spec updates only; never assert the removed `skipSidSslPropagation` skip back into existence.
+- Status 2026-06-12T00:03+01:00: session window 8% — handoff per stop criterion. State files appended; `docs/plans/hardening/4/prompt.md` updated to the true remainder; continuation re-scheduled via `llm-scheduler --tool claude --prompt-file docs/plans/hardening/4/prompt.md --suspend-until-ready`.
+
+## Deep HIL sweep and fix 2026-06-12
+
+- Objective: close the deep-HIL release-readiness matrix on the *current* source/build. The full matrix passed on `0.8.7-rc2-9e0b0` (2026-06-11); since then only the Play transport start chain changed (BUG-019 committed `2da5fb77`, BUG-020 uncommitted working-tree edits). Installed APK `versionCode=2020` / `versionName=0.8.7-rc2-2da5f` was built from the current tree, so no redeploy is needed unless source changes again.
+- Classification: `DOC_PLUS_CODE` only if a new defect requires source/test edits; otherwise gates + evidence appends.
+- Carry-forward rule applied (per prompt): rows whose subsystems are byte-identical since their PASS evidence on `0.8.7-rc2-9e0b0` carry forward as PASS (S1–S4, H1–H4, D1–D4, C1–C3, N1, N2). Rows touching the changed playback subsystem are re-verified on the current build: P2, P3 (guard lives in the changed file), P5; P1/P4 carried with deterministic-adjacency note. Q1 gates re-run fresh because lint/coverage/build have NO green record post-BUG-020.
+
+### Deep Matrix Checklist 2026-06-12
+
+| Row | Status | Evidence / next action |
+| --- | --- | --- |
+| S0 Preflight and baseline | PASS | Pixel awake/unlocked/focused; installed APK byte-identical to local BUG-020 build (14,616,701 bytes, BUG-020 string present); u64 `/v1/info` healthy. WORKLOG 05:44. |
+| S1–S4 | CARRY-PASS | Subsystems unchanged since `0.8.7-rc2-9e0b0` evidence (connection/settings/diagnostics untouched by BUG-019/020/021). |
+| H1–H4 | CARRY-PASS | Home/quick-config/guard subsystems unchanged; H3 CPU guard + BUG-018 fix committed pre-`2da5f`. |
+| P1 Play source import | CARRY-PASS + live adjacency | Source surfaces unchanged; CommoServe/HVSC Playwright spot-check 3/3 green this session. |
+| P2 Play transport, u64 | PASS (re-verified) | APK 2020: play/pause/resume/next/previous/route-survival, zero toasts; BUG-019 SSL multipart live-proven (logcat `track.sid`+`songlengths.ssl`=`ARc=`). `deep-hil/p2-u64-transport-rerun-20260612.json`. |
+| P3 Play Stop safety | PASS (guard) / c64u live re-verify deferred | Guard code unchanged since 2026-06-11 Pixel c64u proof; unit regressions green on current source. c64u unreachable this session (2× connection reset) — incident in `C64U_INCIDENTS.md`. |
+| P4 Play volume/mute | CARRY-PASS | `useVolumeOverride` untouched; prior u64+c64u REST read-back proof on guarded build. |
+| P5 Play background/auto-advance | FIXED+PASS | First attempt exposed BUG-021 (stale auto-advance guard rebooted into wrong item after fresh row start). Fix deployed and Pixel-verified with exact repro (zero reboots); clean auto-advance proven pre- and post-fix (demo.sid → Sid_Kidz at 0:30 boundary). Artifacts `deep-hil/p5-*-20260612.json`, `bug021-pixel-verify-20260612.json`. |
+| D1–D4, C1–C3, N1, N2 | CARRY-PASS | Subsystems unchanged since PASS evidence. |
+| Q1 Final quality gates | PASS | Post-BUG-021-fix fresh chain all green: test 584 files / 6803 tests (0 skipped), lint clean, coverage branches 91.69% (≥91%), build OK. Playwright spot-check 3/3. APK redeployed 06:07; Pixel verification + final launch screenshot `deep-hil/q1-final-launch-20260612.png`. |
+
+- Carried-in TODOs from Fable hard-reasoning continuation: Task 1 (fresh gates) and Task 2 (Playwright SSL-path spot-check) — both completed this session.
+- Unresolved blockers: none. BUG-010/BUG-017 guards committed and Pixel-verified; BUG-001..BUG-021 all closed in BUGS_FOUND.md. c64u hardware unavailable this session (probe + retry reset) — only deferred item is the optional c64u live re-confirmation of the unchanged Stop guard.
+
+## Deep HIL follow-up 2026-06-12
+
+- Objective: close the single item deferred from `Deep HIL sweep and fix 2026-06-12` — the c64u live re-confirmation of the (unchanged, unit-green, previously Pixel-proven) non-disk Play Stop guard. No other matrix work is carried; all rows are PASS/CARRY-PASS/FIXED+PASS per the checklist above.
+- Required reading before any device automation: WORKLOG.md section `Deep HIL sweep and fix 2026-06-12` and LESSONS.md (newest-first log store; playlist rows are play CTAs).
+- Working-tree note: uncommitted BUG-019/BUG-020/BUG-021 changes are fully validated (test/lint/coverage/build green, Pixel-verified). If directed to commit, keep them as **one** commit citing BUG-019, BUG-020, BUG-021 from BUGS_FOUND.md.
+
+### TODO
+
+- [x] Re-confirm the c64u non-disk Play Stop guard live. CLOSED 2026-06-12T07:11+01:00: preflight healthy; APK 2020 Pixel proof — Stop disabled with reset-safety reason during demo.sid playback (elapsed 0:03→0:18→paused 0:22), 0 machine:reset/reboot in logcat, 1 sidplay multipart (incl. songlengths.ssl), c64u healthy post-flow, u64 restored. Artifacts `deep-hil/p3-c64u-stop-guard-reverify-20260612.json`, `p3-c64u-stop-guard-logcat-20260612.txt`. Preflight protocol: one-shot `curl -sS -m 5 http://c64u/v1/info`; if it fails, wait 60 s and retry once; if the retry also fails, ask the user whether c64u is powered on before filing an incident in `C64U_INCIDENTS.md`. On a healthy preflight: select c64u with conservative pacing, start a non-disk (SID) playback, and prove on-device that Stop is disabled with the explicit reset-safety reason and that zero `/v1/machine:reset` requests are issued (per the 2026-06-11 P3 proof `deep-hil/p3-c64u-stop-disabled-current.png`).
+
+## Raph loop iteration 2026-06-12 (P3 c64u Stop-guard live re-confirmation)
+
+- Branch: `fix/hardening`. Git status: uncommitted validated BUG-019/020/021 edits (`usePlaybackController.ts`, `fileLibraryUtils.ts`, 2 test files) + state-file appends; `.claude/` untracked.
+- Build identity: installed Pixel APK `versionCode=2020 / 0.8.7-rc2-2da5f` (lastUpdateTime 2026-06-12 06:07:34) == current tree build incl. BUG-021 fix; no redeploy needed.
+- Pixel 4 `9B081FFAZ001WX`: attached, app focused on `MainActivity`.
+- Peer servers: droidmind/c64scope/c64bridge MCP servers connected. c64scope session not planned: this case's oracle is CTA state + request-trail absence (zero `machine:reset`) + REST read-back, not fundamentally audiovisual; skipping capture also minimizes c64u request load per I15/I24 pacing.
+- C64U reachability: one-shot `curl -sS -m 5 http://c64u/v1/info` HEALTHY (fw 1.1.0, id 5D4E12, errors []). Decision: proceed with c64u P3 proof under conservative pacing (>=2 s between c64u UI actions).
+- Session window: `llm-usage` (shared usage data per `llm-scheduler --tool claude --help`) → Claude 5h remaining **69%** at 2026-06-12T07:0x+01:00. >=60% rule: full work incl. one targeted HIL flow permitted.
+- Previous iteration status: Deep HIL sweep 2026-06-12 complete; all matrix rows PASS/CARRY-PASS/FIXED+PASS; final gates green (6803 tests, lint, coverage 91.69% branch, build); BUG-001..BUG-021 closed. Single deferred item: c64u live Stop-guard re-confirmation (c64u was unreachable that session, incident filed).
+- Selected objective (scoring: this is the only open release-relevant TODO; +7 user-triggerable, +6 c64u safety, +8 prior verdict deferred for infrastructure reasons; no open defects → no higher candidate): live re-confirm on c64u that non-disk (SID) Play Stop is disabled with the explicit reset-safety reason and zero `/v1/machine:reset` requests are issued, on the current build.
+- Primary TODO: [x] P3 c64u live proof (PASS 2026-06-12T07:11, see WORKLOG + artifacts): select c64u (conservative pacing), start SID playback via app, prove Stop disabled + reset-safety reason + elapsed advancing + zero machine:reset in logcat; restore u64 selection; verify c64u healthy after.
+- Stop criteria: proof PASS recorded with artifacts and u64 restored → close TODO and evaluate RELEASE-KNOWN-CLEAN; c64u preflight/in-flow degradation → stop c64u traffic, file incident, handoff; session window <25% → handoff sequence.
+
+- Iteration outcome: PASS / CLOSED. The last deferred deep-HIL item is closed; BUGS_FOUND.md remains all-closed (BUG-001..BUG-021). RELEASE-KNOWN-CLEAN not yet met: (a) criterion 17/18 — c64scope playback start/progression evidence predates the BUG-019/020/021 playback-chain changes and must be refreshed on the current build; (b) criterion 29 — this is consecutive-clean iteration #1 of the required >=3 across distinct families. Continuation via active Ralph loop (llm-scheduler deliberately not run while the in-session loop is active; see WORKLOG 07:12 rationale).
+- Next iteration objective (pre-selected): current-build c64scope-backed playback start + progression session (distinct family: physical A/V evidence; closes criterion-17 freshness). Candidate #2: latency evidence refresh for simple CTAs (criterion 16).
+
+## Raph loop iteration 2026-06-12 #2 (c64scope playback start + progression refresh)
+
+- Branch: `fix/hardening`; same uncommitted validated BUG-019/020/021 tree as iteration #1; installed APK 2020 = current tree.
+- Pixel 4 `9B081FFAZ001WX` attached, app focused (verified iteration #1, same session).
+- Session window: `llm-usage` → Claude 5h **42%** at 2026-06-12T07:1x+01:00. Band 40-59%: one focused proof; re-check before HIL.
+- Previous iteration status: P3 c64u Stop-guard live proof PASS/CLOSED; consecutive-clean #1; criteria 17/18+29 outstanding.
+- Selected objective (pre-selected in continuation context; unchallenged by new evidence): current-build c64scope-backed playback start + progression session — the existing c64scope playback evidence (2026-06-06) predates the BUG-019/020/021 playback-chain changes.
+- c64scope session plan: check lab readiness → start session (case: playback start + progression, guarded mutation class) → reserve/start capture → app-path playback start (demo.sid 0:30) via CDP/droidmind → timeline steps per action → A/V assertions for start + progression across the 0:30 auto-advance boundary → attach app/REST/log evidence → finalize → stop capture/streams.
+- Target decision: u64 preferred for the A/V leg (c64u flaky per C64U_INCIDENTS.md; u64 is the validated streaming source in prior scope runs); c64u not required for this criterion.
+- C64U reachability: not probed this iteration (no c64u traffic planned).
+- Primary TODO: [ ] c64scope session finalized PASS with playback-start and progression assertions on current build; device state restored; logs clean.
+- Stop criteria: session finalized with verdict; or infrastructure failure classified + incident; or window <25% → handoff.
+- Iteration #2 outcome: PASS / CLOSED. c64scope session pt-20260612T061627Z finalized pass; criterion 17+18 satisfied on current build; consecutive-clean #2 of >=3. Primary TODO closed: [x] c64scope playback start + progression session PASS with device state restored and clean logs.
+- Next iteration: window will be at/below 25% → handoff mode per protocol (state files → refresh docs/plans/hardening/4/prompt.md → llm-scheduler → end in-session loop). The scheduled fresh session should run the third clean-family iteration: latency evidence refresh for simple CTAs (criterion 16 documentation) or another untouched high-risk family.
