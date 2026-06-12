@@ -138,7 +138,16 @@ describe("connectionManager", () => {
     localStorage.clear();
     sessionStorage.clear();
     vi.useFakeTimers();
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ errors: ["offline"] }), {
+          status: 503,
+          statusText: "Service Unavailable",
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
     vi.mocked(isFuzzModeEnabled).mockReturnValue(false);
     vi.mocked(getFuzzMockBaseUrl).mockReturnValue(null);
     vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(false);
@@ -257,7 +266,13 @@ describe("connectionManager", () => {
     localStorage.removeItem("c64u_has_password");
     vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
     vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
-    vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ errors: ["offline"] }), {
+        status: 503,
+        statusText: "Service Unavailable",
+        headers: { "content-type": "application/json" },
+      }),
+    );
 
     await initializeConnectionManager();
     const result = await verifyCurrentConnectionTarget();
@@ -1176,10 +1191,9 @@ describe("connectionManager", () => {
     const abort = new AbortController();
     abort.abort();
 
-    vi.mocked(fetch).mockRejectedValue(new DOMException("Aborted", "AbortError"));
-
     const result = await probeOnce({ signal: abort.signal });
     expect(result).toBe(false);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("demo fallback uses stored device host when no mock server is active", async () => {
@@ -1199,8 +1213,9 @@ describe("connectionManager", () => {
     vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
 
     await initializeConnectionManager();
-    void discoverConnection("startup");
+    const discovery = discoverConnection("startup");
     await vi.advanceTimersByTimeAsync(800);
+    await discovery;
 
     expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
     // Should fallback to stored host-based URL

@@ -227,6 +227,27 @@ const isNetworkFailureMessage = (message: string) =>
 const resolveHostErrorMessage = (message: string) =>
   isDnsFailure(message) ? "Host unreachable (DNS)" : "Host unreachable";
 const isDeviceNotReadyRequestGate = (message: string) => /device not ready for requests/i.test(message);
+const isUnsupportedSignalError = (error: unknown) =>
+  error instanceof Error && error.message.includes("Expected signal") && error.message.includes("AbortSignal");
+
+const fetchWithSignalCompatibility = async (
+  input: string,
+  init: RequestInit,
+  signal?: AbortSignal,
+): Promise<Response> => {
+  const { signal: _ignoredSignal, ...initWithoutSignal } = init;
+  try {
+    return await fetch(input, {
+      ...initWithoutSignal,
+      ...(signal ? { signal } : {}),
+    });
+  } catch (error) {
+    if (!signal?.aborted && isUnsupportedSignalError(error)) {
+      return fetch(input, initWithoutSignal);
+    }
+    throw error;
+  }
+};
 
 const parseHttpStatusFromErrorMessage = (message: string) => {
   const match = /http\s+(\d{3})/i.exec(message);
@@ -1060,12 +1081,15 @@ export class C64API {
 
                 // Keep C64U REST calls stateless and avoid cookie bridge churn on native startup.
                 const response = await awaitPromiseWithAbortSignal(
-                  fetch(url, {
-                    ...requestOptions,
-                    headers,
-                    credentials: requestOptions.credentials ?? "omit",
-                    ...(timedSignal.signal ? { signal: timedSignal.signal } : {}),
-                  }),
+                  fetchWithSignalCompatibility(
+                    url,
+                    {
+                      ...requestOptions,
+                      headers,
+                      credentials: requestOptions.credentials ?? "omit",
+                    },
+                    timedSignal.signal,
+                  ),
                   timedSignal.signal,
                 );
                 throwIfSuperseded();
@@ -1395,12 +1419,15 @@ export class C64API {
           const timedSignal = createTimedRequestSignal(options.signal ?? undefined, timeoutMs);
           try {
             const response = await awaitPromiseWithAbortSignal(
-              fetch(url, {
-                ...options,
-                body: normalizedBody.body,
-                credentials: options.credentials ?? "omit",
-                ...(timedSignal.signal ? { signal: timedSignal.signal } : {}),
-              }),
+              fetchWithSignalCompatibility(
+                url,
+                {
+                  ...options,
+                  body: normalizedBody.body,
+                  credentials: options.credentials ?? "omit",
+                },
+                timedSignal.signal,
+              ),
               timedSignal.signal,
             );
             if (response.ok) {
@@ -1732,10 +1759,7 @@ export class C64API {
       }
       mergedPayload[category] = Object.fromEntries(entries);
     });
-    const requestPayloads = [
-      ...(Object.keys(mergedPayload).length ? [mergedPayload] : []),
-      ...sequentialPayloads,
-    ];
+    const requestPayloads = [...(Object.keys(mergedPayload).length ? [mergedPayload] : []), ...sequentialPayloads];
     const errors: string[] = [];
     for (const requestPayload of requestPayloads) {
       const run = (): Promise<{ errors: string[] }> =>

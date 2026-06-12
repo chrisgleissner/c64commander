@@ -317,7 +317,9 @@ export const resetInteractionState = (reason: string) => {
   // work cannot land against the new device's context. Already-running
   // tasks complete naturally; their late results are stale and ignored
   // by their callers because device-state has moved on.
-  const resetIntents: readonly InteractionIntent[] = preserveQueuedUserWork ? ["system", "background"] : ["user", "system", "background"];
+  const resetIntents: readonly InteractionIntent[] = preserveQueuedUserWork
+    ? ["system", "background"]
+    : ["user", "system", "background"];
   const restCancelled = restScheduler.cancelAll(reason, resetIntents);
   const ftpCancelled = ftpScheduler.cancelAll(reason, resetIntents);
   const telnetCancelled = telnetScheduler.cancelAll(reason, resetIntents);
@@ -668,9 +670,9 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
 
   const now = Date.now();
   const circuitOpen = restCircuitUntilMs > now && !meta.bypassCircuit;
-  const userHalfOpenProbe = circuitOpen && meta.intent === "user";
+  const userHalfOpenProbe = circuitOpen && meta.intent === "user" && config.allowUserOverrideCircuit;
   let reservedUserHalfOpenProbe = false;
-  if (circuitOpen && meta.intent !== "user") {
+  if (circuitOpen && !userHalfOpenProbe) {
     recordDeviceGuard(meta.action, {
       decision: "block",
       reason: "circuit-open",

@@ -237,7 +237,11 @@ const probeInfoWithConnectionConfig = async (
     if (healthy) {
       clearMdnsResolvedProbeFailures(config.deviceHost, config.resolvedAddress);
     } else {
-      recordMdnsResolvedProbeFailure(config.deviceHost, config.resolvedAddress, "Probe payload missing required identity");
+      recordMdnsResolvedProbeFailure(
+        config.deviceHost,
+        config.resolvedAddress,
+        "Probe payload missing required identity",
+      );
     }
     return {
       ok: healthy,
@@ -292,7 +296,11 @@ export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: num
     if (healthy) {
       clearMdnsResolvedProbeFailures(config.deviceHost, config.resolvedAddress);
     } else {
-      recordMdnsResolvedProbeFailure(config.deviceHost, config.resolvedAddress, "Probe payload missing required identity");
+      recordMdnsResolvedProbeFailure(
+        config.deviceHost,
+        config.resolvedAddress,
+        "Probe payload missing required identity",
+      );
     }
     return healthy;
   } catch (error) {

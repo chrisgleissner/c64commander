@@ -1636,6 +1636,36 @@ describe("c64api", () => {
     expect(urls).toContain("http://c64u/v1/runners:run_crt?file=%2Fcartridges%2Ftest.crt");
   });
 
+  it("retries without a fetch signal when the runtime rejects AbortSignal instances", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock
+      .mockImplementationOnce((_input: RequestInfo | URL, options?: RequestInit) => {
+        expect(options?.signal).toBeInstanceOf(AbortSignal);
+        throw new Error('Expected signal ("AbortSignal {}") to be an instance of AbortSignal.');
+      })
+      .mockImplementationOnce((_input: RequestInfo | URL, options?: RequestInit) => {
+        expect(options?.signal).toBeUndefined();
+        return Promise.resolve(
+          okJsonResponse({
+            "Test Category": {
+              items: {
+                Drive: { selected: "Enabled", options: ["Enabled", "Disabled"] },
+              },
+            },
+            errors: [],
+          }),
+        );
+      });
+
+    const api = new C64API("http://c64u");
+    const response = await api.getConfigItem("Test Category", "Drive", {
+      signal: new AbortController().signal,
+    });
+
+    expect(response["Test Category"]?.items?.Drive?.options).toEqual(["Enabled", "Disabled"]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("logs and throws for upload failures across mod/prg/crt helpers", async () => {
     const fetchMock = getFetchMock();
     fetchMock

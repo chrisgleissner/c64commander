@@ -116,10 +116,7 @@ const listEntries = async (path: string): Promise<SourceEntry[]> => {
   return entries;
 };
 
-const attachPartialFailures = (
-  entries: SourceEntry[],
-  failures: SourceRecursiveFailure[],
-): SourceRecursiveResult => {
+const attachPartialFailures = (entries: SourceEntry[], failures: SourceRecursiveFailure[]): SourceRecursiveResult => {
   if (!failures.length) return entries as SourceRecursiveResult;
   Object.defineProperty(entries, "partialFailures", {
     value: failures,

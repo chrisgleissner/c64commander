@@ -70,6 +70,10 @@ jobs:
       - name: Run web-platform tests
         run: npm run test:web-platform
 
+      - name: Fix broken apt repos
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/azure-cli.sources /etc/apt/sources.list.d/azure-cli.list || true
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 

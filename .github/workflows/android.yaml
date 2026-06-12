@@ -257,6 +257,10 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json', 'bun.lockb') }}
 
+      - name: Fix broken apt repos
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/azure-cli.sources /etc/apt/sources.list.d/azure-cli.list || true
+
       - name: Install Playwright browsers
         run: |
           start=$(date +%s)

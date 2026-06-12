@@ -147,7 +147,7 @@ describe("deviceInteractionManager circuit cooldown", () => {
     expect(setCircuitOpenUntil).toHaveBeenCalledWith(null);
   });
 
-  it("allows exactly one user half-open REST probe while conservative circuit is open", async () => {
+  it("blocks user REST probes while circuit override is disabled", async () => {
     const { resetInteractionState, withRestInteraction } =
       await import("@/lib/deviceInteraction/deviceInteractionManager");
     resetInteractionState("test");
@@ -171,31 +171,17 @@ describe("deviceInteractionManager circuit cooldown", () => {
       withRestInteraction({ ...systemMeta, intent: "system" as const }, vi.fn().mockResolvedValue({ ok: true })),
     ).rejects.toThrow("Device circuit open");
 
-    let releaseUserProbe: (() => void) | null = null;
     const userMeta = {
       ...systemMeta,
       action: makeAction("rest-circuit-user-half-open"),
       intent: "user" as const,
     };
-    const userProbe = withRestInteraction(
-      userMeta,
-      () =>
-        new Promise<{ ok: boolean }>((resolve) => {
-          releaseUserProbe = () => resolve({ ok: true });
-        }),
-    );
-
-    await expect.poll(() => markDeviceRequestStart.mock.calls.length).toBeGreaterThanOrEqual(3);
-    await expect(withRestInteraction(userMeta, vi.fn().mockResolvedValue({ ok: true }))).rejects.toThrow(
-      "Device circuit probe already in flight",
-    );
-
-    releaseUserProbe?.();
-    await expect(userProbe).resolves.toEqual({ ok: true });
-    expect(setCircuitOpenUntil).toHaveBeenCalledWith(null);
+    const userProbeHandler = vi.fn().mockResolvedValue({ ok: true });
+    await expect(withRestInteraction(userMeta, userProbeHandler)).rejects.toThrow("Device circuit open");
+    expect(userProbeHandler).not.toHaveBeenCalled();
     expect(recordDeviceGuard).toHaveBeenCalledWith(
       userMeta.action,
-      expect.objectContaining({ decision: "override", reason: "circuit-open" }),
+      expect.objectContaining({ decision: "block", reason: "circuit-open" }),
     );
   });
 

@@ -23,8 +23,6 @@ export const isHvscCancellationError = (error: unknown) => {
   if (!error || typeof error !== "object") return false;
   const candidate = error as { code?: unknown; isCancellation?: unknown; name?: unknown };
   return (
-    candidate.code === HVSC_CANCELLATION_CODE ||
-    candidate.isCancellation === true ||
-    candidate.name === "AbortError"
+    candidate.code === HVSC_CANCELLATION_CODE || candidate.isCancellation === true || candidate.name === "AbortError"
   );
 };

@@ -106,7 +106,10 @@ const buildLocalDiskReadTimeoutMs = (sizeBytes?: number | null) => {
   const mib = Math.ceil(sizeBytes / (1024 * 1024));
   return Math.min(
     LOCAL_DISK_READ_TIMEOUT_MAX_MS,
-    Math.max(LOCAL_DISK_READ_TIMEOUT_BASE_MS, LOCAL_DISK_READ_TIMEOUT_BASE_MS + mib * LOCAL_DISK_READ_TIMEOUT_PER_MIB_MS),
+    Math.max(
+      LOCAL_DISK_READ_TIMEOUT_BASE_MS,
+      LOCAL_DISK_READ_TIMEOUT_BASE_MS + mib * LOCAL_DISK_READ_TIMEOUT_PER_MIB_MS,
+    ),
   );
 };
 
