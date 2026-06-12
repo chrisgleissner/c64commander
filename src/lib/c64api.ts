@@ -71,6 +71,7 @@ import {
 import { buildBinaryFingerprint } from "@/lib/binaryFingerprint";
 import { TransmissionGuard, type SupportedC64FileType, type TransmissionValidationContext } from "@/lib/fileValidation";
 import { collectTraceHeaders } from "@/lib/tracing/payloadPreview";
+import { notifyReachable } from "@/lib/connection/reachabilityEvents";
 // Two timeout budgets for non-upload, non-playback requests:
 // - INTERACTIVE: user-tappable controls and config writes the user is
 //   staring at. Tighter than the firmware p99 (~600 ms) so a stuck
@@ -295,8 +296,6 @@ const createTimedRequestSignal = (outerSignal: AbortSignal | undefined, timeoutM
   };
 };
 
-let connectionManagerImport: Promise<typeof import("@/lib/connection/connectionManager")> | null = null;
-
 const noteRestReachable = (url: string, deviceHost: string, deviceInfo: DeviceInfo | null = null) => {
   const host = (() => {
     try {
@@ -305,18 +304,7 @@ const noteRestReachable = (url: string, deviceHost: string, deviceInfo: DeviceIn
       return deviceHost;
     }
   })();
-  connectionManagerImport ??= import("@/lib/connection/connectionManager");
-  void connectionManagerImport
-    .then(({ noteReachable }) => {
-      noteReachable(host, "rest", deviceInfo);
-    })
-    .catch((error) => {
-      addLog("warn", "Failed to note REST reachability", {
-        host,
-        error: error instanceof Error ? error.message : String(error ?? "Unknown import failure"),
-      });
-      connectionManagerImport = null;
-    });
+  notifyReachable(host, "rest", deviceInfo);
 };
 
 let lastDeviceHost: string | null = null;

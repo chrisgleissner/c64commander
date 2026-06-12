@@ -35,6 +35,7 @@ import { updateDeviceConnectionState } from "@/lib/deviceInteraction/deviceState
 import { isBareHostname, isMdnsAvailable, resolveMdnsHost } from "@/lib/native/mdnsResolver";
 import { normalizeTransportError } from "@/lib/c64api/transportErrors";
 import { clearConnectivityErrorToastsForHost } from "@/lib/uiErrors";
+import { registerReachabilityListener, type ReachabilitySource } from "@/lib/connection/reachabilityEvents";
 import {
   completeSavedDeviceVerification,
   getSavedDevicesSnapshot,
@@ -449,8 +450,6 @@ export function subscribeConnection(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
-type ReachabilitySource = "rest" | "ftp" | "telnet";
-
 const normalizeReachabilityHost = (value: string | null | undefined): string | null => {
   const trimmed = value?.trim();
   if (!trimmed) return null;
@@ -510,6 +509,8 @@ export const noteReachable = (host: string, source: ReachabilitySource, deviceIn
   });
   void transitionToRealConnected(trigger);
 };
+
+registerReachabilityListener(noteReachable);
 
 const installConnectionTestProbe = () => {
   if (typeof window === "undefined" || !isTestProbeEnabled()) return;

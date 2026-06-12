@@ -1,21 +1,12 @@
 {
   "servers": {
-    "mobile-mcp": {
-      "command": "npx",
-      "args": ["-y", "@mobilenext/mobile-mcp@latest"]
-    },
+    "mobile-mcp": { "type": "stdio", "command": "npx", "args": ["-y", "@mobilenext/mobile-mcp@latest"] },
     "droidmind": {
+      "type": "stdio",
       "command": "uvx",
       "args": ["--from", "git+https://github.com/hyperb1iss/droidmind", "droidmind", "--transport", "stdio"]
     },
-    "c64bridge": {
-      "command": "npx",
-      "args": ["-y", "c64bridge@latest"]
-    },
-    "c64scope": {
-      "command": "node",
-      "args": ["c64scope/scripts/start.mjs"],
-      "type": "stdio"
-    }
+    "c64bridge": { "type": "stdio", "command": "npx", "args": ["-y", "c64bridge@latest"] },
+    "c64scope": { "type": "stdio", "command": "node", "args": ["c64scope/scripts/start.mjs"] }
   }
 }

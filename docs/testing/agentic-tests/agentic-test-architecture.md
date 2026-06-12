@@ -35,11 +35,11 @@ Before implementation or execution, read:
 
 The LLM is the only orchestrator. The MCP servers remain peers.
 
-| Role | Current implementation | Owns | Must not own |
-| --- | --- | --- | --- |
-| Mobile controller | `droidmind` on Android | App lifecycle, UI interaction, screenshots, log access, file staging, diagnostics access | Direct C64 control outside the app path, physical verdict logic |
-| Direct C64 gap filler | `c64bridge` | Stream start/stop, RAM/state reads, emergency recovery, calibration-only direct control | Primary product-validation control path |
-| Physical evidence server | `c64scope` | Capture, signal analysis, session timeline, artifact packaging, A/V assertions | Android control, direct C64 control |
+| Role                     | Current implementation | Owns                                                                                     | Must not own                                                    |
+| ------------------------ | ---------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Mobile controller        | `droidmind` on Android | App lifecycle, UI interaction, screenshots, log access, file staging, diagnostics access | Direct C64 control outside the app path, physical verdict logic |
+| Direct C64 gap filler    | `c64bridge`            | Stream start/stop, RAM/state reads, emergency recovery, calibration-only direct control  | Primary product-validation control path                         |
+| Physical evidence server | `c64scope`             | Capture, signal analysis, session timeline, artifact packaging, A/V assertions           | Android control, direct C64 control                             |
 
 Important note:
 
@@ -110,6 +110,7 @@ Discovery happens in four layers:
 
 Bootstrap files:
 
+- `docs/testing/agentic-tests/mcp-setup.md`
 - `docs/testing/agentic-tests/c64scope-delivery-prompt.md`
 - `.github/prompts/agentic-test.prompt.md`
 - `.opencode/agents/c64-agentic-tester.md`

@@ -296,6 +296,26 @@ Violating this rule is a release blocker.
 - This exception exists only to optimize local deploy/debug turnaround.
 - When the user invokes `.github/prompts/pr-converge.prompt.md`, the exception no longer applies and full validation plus coverage are mandatory again.
 
+### Exception: Ralph / Productionization HIL loop
+
+When the active prompt is a Ralph, productionization, hardening,
+device-stabilization, Pixel 4 HIL, droidmind, c64scope, or no-coverage device-loop
+prompt, do not run `npm run test:coverage` merely because code changes exist.
+
+For these loops:
+
+- Pixel 4 HIL evidence is the primary deliverable.
+- Targeted regression tests are required for confirmed code defects.
+- Coverage and changed-line coverage are finalization or PR-convergence gates only.
+- Do not run coverage while a HIL-capable process is active or while HIL deliverables
+  remain open.
+- If this provider lacks droidmind/c64scope and another process owns the HIL window,
+  do not select code/build/coverage validation work. Update handoff state if needed,
+  then stop or schedule the peer-enabled continuation.
+- Run coverage only when the selected objective is explicitly final PR/release
+  convergence, the user explicitly asks for coverage, or all current HIL deliverables
+  are complete or explicitly blocked.
+
 ## Mandatory handling of concurrent changes
 
 - If unexpected changes appear in the worktree, keep them as-is and continue.

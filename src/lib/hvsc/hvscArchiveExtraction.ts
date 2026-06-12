@@ -41,16 +41,26 @@ const readHeapUsageBytes = () => {
 
 let sevenZipModulePromise: ReturnType<SevenZipFactory> | null = null;
 
+const filePathToFileUrl = (filePath: string) => {
+  const normalizedPath = filePath.replace(/\\/g, "/");
+  const absolutePath = normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`;
+  const encodedPath = absolutePath
+    .split("/")
+    .map((segment, index) => (index === 0 ? segment : encodeURIComponent(segment).replace(/%3A/gi, ":")))
+    .join("/");
+  return `file://${encodedPath}`;
+};
+
 const getSevenZipModule = async () => {
   if (!sevenZipModulePromise) {
     const initPromise = (async () => {
       const { default: SevenZip } = await import("7z-wasm");
       let wasmUrl = new URL("7z-wasm/7zz.wasm", import.meta.url).toString();
       if (typeof process !== "undefined" && process.versions?.node) {
-        const [{ createRequire }, { pathToFileURL }] = await Promise.all([import("module"), import("url")]);
+        const { createRequire } = await import("module");
         const require = createRequire(import.meta.url);
         const wasmPath = require.resolve("7z-wasm/7zz.wasm");
-        wasmUrl = pathToFileURL(wasmPath).toString();
+        wasmUrl = filePathToFileUrl(wasmPath);
       }
       return (SevenZip as SevenZipFactory)({
         locateFile: (url) => (url.endsWith(".wasm") ? wasmUrl : url),

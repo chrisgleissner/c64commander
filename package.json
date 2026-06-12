@@ -21,6 +21,8 @@
     "format:check:eslint": "eslint .",
     "assets:brand": "node scripts/sync-brand-assets.mjs",
     "assets:brand:check": "node scripts/sync-brand-assets.mjs --check",
+    "agentic:mcp:setup": "node scripts/setup-agentic-mcp.mjs",
+    "agentic:mcp:check": "node scripts/setup-agentic-mcp.mjs --check",
     "variant:generate": "npm run assets:brand && node scripts/generate-variant.mjs",
     "variant:check": "npm run assets:brand:check && node scripts/generate-variant.mjs --check",
     "prebuild": "{ [ -n \"${VITE_APP_VERSION:-}\" ] || bash scripts/resolve-version.sh; } && npm run variant:generate && npm run feature-flags:compile && npm run notices:generate",
