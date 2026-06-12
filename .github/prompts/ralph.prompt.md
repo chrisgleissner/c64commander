@@ -221,12 +221,12 @@ Re-check or restate the session-window interpretation after objective selection,
 
 Capacity behavior:
 
-- `>= 60%`: one focused investigation, fix, redeploy, and safe HIL proof are allowed.
-- `40% to 59%`: one focused HIL proof or one focused fix with redeploy and narrow validation. Avoid broad discovery.
-- `25% to 39%`: finish only if close, safe, and narrow. Otherwise hand off.
-- `15% to 24%`: no new tests, HIL, or source edits. Update state, write continuation, stop.
-- `< 15%`: immediate handoff.
-- If session-window state is ambiguous below 40%, hand off.
+- `>= 40%`: one focused investigation, fix, redeploy, and safe HIL proof are allowed.
+- `20% to 39%`: one focused HIL proof or one focused fix with redeploy and narrow validation. Avoid broad discovery.
+- `10% to 19%`: finish only if close, safe, and narrow. Otherwise hand off.
+- `5% to 9%`: no new tests, HIL, or source edits. Update state, write continuation, stop.
+- `<= 4%`: immediate handoff.
+- If session-window state is ambiguous below 30%, hand off.
 
 Do not run `llm-scheduler` from inside an active Ralph Robin provider run unless the injected runtime context explicitly permits it. The normal handoff action is: update state files, write `prompt.md`, record the exact blocker or completed bounded increment, record that no scheduler command was run because Ralph Robin owns scheduling, and stop. Do not use handoff as a substitute for available tool use.
 
