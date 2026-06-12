@@ -1804,33 +1804,6 @@ describe("usePlaybackController", () => {
     expect(restoreVolumeOverrides).toHaveBeenCalledWith("stop");
   });
 
-  it("blocks C64U non-disk stop before it can reset the machine", async () => {
-    const machineReset = vi.fn().mockResolvedValue(undefined);
-    const restoreVolumeOverrides = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
-    const { result } = renderPlaybackController([createPlaylistItem()], {
-      isPlaying: true,
-      restoreVolumeOverrides,
-      deviceProduct: "C64 Ultimate",
-    });
-
-    await result.current.handleStop();
-
-    expect(machineReset).not.toHaveBeenCalled();
-    expect(restoreVolumeOverrides).not.toHaveBeenCalled();
-    expect(vi.mocked(toast)).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: "Stop disabled",
-        description: expect.stringContaining("would reset the C64U"),
-      }),
-    );
-    expect(vi.mocked(addLog)).toHaveBeenCalledWith(
-      "warn",
-      "Playback stop blocked on C64U non-disk playback",
-      expect.objectContaining({ reason: "non-disk stop would reset the machine" }),
-    );
-  });
-
   it("allows a queued machine reset to finish without emitting a false stop failure", async () => {
     vi.useFakeTimers();
     try {

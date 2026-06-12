@@ -424,7 +424,17 @@ test.describe("Playback file browser", () => {
     await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/runners:sidplay")));
 
     const lastRequest = [...server.requests].reverse().find((req) => req.url.startsWith("/v1/runners:sidplay"));
-    expect(lastRequest?.method).toBe("PUT");
+    // Ultimate SIDs with a known song length upload via POST (multipart) so the
+    // derived song-length (.ssl) travels alongside the SID payload — the device
+    // otherwise has no duration metadata. See playbackRouter "ultimate-ssl-upload".
+    expect(lastRequest?.method).toBe("POST");
+
+    await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
+    const uploadRequest = [...server.sidplayRequests].reverse().find((req) => req.method === "POST");
+    expect(uploadRequest).toBeTruthy();
+    const uploadBody = uploadRequest!.body.toString("latin1");
+    expect(uploadBody).toContain('filename="track.sid"');
+    expect(uploadBody).toContain('filename="songlengths.ssl"');
 
     const { requestEvent, related } = await expectRestTraceSequence(page, testInfo, /\/v1\/runners:sidplay/);
     expect((requestEvent.data as { target?: string }).target).toBe("external-mock");

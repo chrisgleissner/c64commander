@@ -21,8 +21,20 @@ export const createHvscCancellationError = (message = "HVSC update cancelled"): 
 
 export const isHvscCancellationError = (error: unknown) => {
   if (!error || typeof error !== "object") return false;
-  const candidate = error as { code?: unknown; isCancellation?: unknown; name?: unknown };
-  return (
-    candidate.code === HVSC_CANCELLATION_CODE || candidate.isCancellation === true || candidate.name === "AbortError"
-  );
+  const candidate = error as { code?: unknown; isCancellation?: unknown; name?: unknown; message?: unknown };
+  if (
+    candidate.code === HVSC_CANCELLATION_CODE ||
+    candidate.isCancellation === true ||
+    candidate.name === "AbortError"
+  ) {
+    return true;
+  }
+  // A cancellation raised behind the native HVSC bridge (or any structured-clone
+  // boundary) arrives as a plain Error: the marker props are stripped and only the
+  // message survives. Fall back to matching the app's own cancellation messages
+  // ("HVSC update cancelled", "Cancelled") — which all end in "cancelled" — so a
+  // user-initiated cancel is never surfaced as a failure toast. The match is
+  // anchored to the end so an incidental network failure that merely mentions the
+  // word (e.g. "cancelled by network peer") still surfaces as a real failure.
+  return typeof candidate.message === "string" && /cancell?ed\.?$/i.test(candidate.message.trim());
 };

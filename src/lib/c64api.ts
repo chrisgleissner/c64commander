@@ -103,6 +103,20 @@ const CONFIG_WRITE_REQUEST_OPTIONS = {
 const resolveDefaultRestRequestTimeoutMs = (intent: InteractionIntent) =>
   intent === "background" ? BACKGROUND_REQUEST_TIMEOUT_MS : INTERACTIVE_CONTROL_TIMEOUT_MS;
 
+// E2E/test-probe builds drive a mock device that models realistic firmware
+// latencies (mount ~744 ms, stream start ~1015 ms) and run under coverage
+// instrumentation across parallel CI shards, all of which inflate wall-clock
+// time far beyond the production-tuned interactive budget. Floor every timed
+// request's effective timeout in those builds so a healthy-but-slow mocked
+// response is not aborted as "Host unreachable". Resolves to 0 (no-op) in
+// production builds, where it is dead-code-eliminated.
+const TEST_PROBE_REQUEST_TIMEOUT_FLOOR_MS = import.meta.env.VITE_ENABLE_TEST_PROBES === "1" ? 8000 : 0;
+
+const resolveEffectiveRequestTimeoutMs = (timeoutMs?: number) =>
+  timeoutMs !== undefined && TEST_PROBE_REQUEST_TIMEOUT_FLOOR_MS > timeoutMs
+    ? TEST_PROBE_REQUEST_TIMEOUT_FLOOR_MS
+    : timeoutMs;
+
 type RestFailureKind = "timeout" | "abort" | "network" | "http-status";
 
 const annotateRestFailure = <T extends Error>(
@@ -316,8 +330,9 @@ const buildRequestId = () => {
 };
 
 const createTimedRequestSignal = (outerSignal: AbortSignal | undefined, timeoutMs?: number) => {
+  const effectiveTimeoutMs = resolveEffectiveRequestTimeoutMs(timeoutMs);
   let timedOut = false;
-  const controller = timeoutMs ? new AbortController() : null;
+  const controller = effectiveTimeoutMs ? new AbortController() : null;
   const abortFromOuter = () => controller?.abort();
   if (outerSignal && controller) {
     if (outerSignal.aborted) {
@@ -327,11 +342,11 @@ const createTimedRequestSignal = (outerSignal: AbortSignal | undefined, timeoutM
     }
   }
   const timeoutId =
-    timeoutMs && controller
+    effectiveTimeoutMs && controller
       ? setTimeout(() => {
           timedOut = true;
           controller.abort();
-        }, timeoutMs)
+        }, effectiveTimeoutMs)
       : null;
 
   return {

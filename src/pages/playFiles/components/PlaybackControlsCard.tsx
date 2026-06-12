@@ -29,7 +29,6 @@ export type PlaybackControlsCardProps = {
   onPrevious: () => void;
   onPlay: () => void;
   onStop: () => void;
-  stopDisabledReason?: string | null;
   onPauseResume: () => void;
   onNext: () => void;
   progressPercent: number;
@@ -66,7 +65,6 @@ export const PlaybackControlsCard = ({
   onPrevious,
   onPlay,
   onStop,
-  stopDisabledReason,
   onPauseResume,
   onNext,
   progressPercent,
@@ -119,12 +117,12 @@ export const PlaybackControlsCard = ({
             variant={isPlaying ? "destructive" : "default"}
             size="icon"
             onClick={isPlaying ? onStop : onPlay}
-            disabled={!hasPlaylist || isPlaylistLoading || (isPlaying && Boolean(stopDisabledReason))}
+            disabled={!hasPlaylist || isPlaylistLoading}
             data-c64-persistent-active={isPlaying && !isPaused ? "true" : undefined}
             id="playlist-play"
             data-testid="playlist-play"
             aria-label={isPlaying ? "Stop" : "Play"}
-            title={isPlaying ? (stopDisabledReason ?? "Stop") : "Play"}
+            title={isPlaying ? "Stop" : "Play"}
           >
             {isPlaying ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
           </Button>
@@ -153,11 +151,6 @@ export const PlaybackControlsCard = ({
             <SkipForward className="h-4 w-4" />
           </Button>
         </div>
-        {isPlaying && stopDisabledReason ? (
-          <p className="text-xs text-muted-foreground" data-testid="playback-stop-disabled-reason">
-            {stopDisabledReason}
-          </p>
-        ) : null}
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span className="shrink-0" data-testid="playback-elapsed">

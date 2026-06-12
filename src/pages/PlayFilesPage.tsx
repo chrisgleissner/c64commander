@@ -58,7 +58,6 @@ import { prepareDirectoryInput } from "@/lib/sourceNavigation/localSourcesStore"
 import type { SelectedItem, SourceLocation } from "@/lib/sourceNavigation/types";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { buildSelectedDeviceBoundOrigin } from "@/lib/savedDevices/deviceBoundOrigin";
-import { inferConnectedDeviceCode } from "@/lib/diagnostics/targetDisplayMapper";
 
 import { buildEnabledSidMuteUpdates } from "@/lib/config/sidVolumeControl";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
@@ -1351,10 +1350,6 @@ export default function PlayFilesPage() {
   const canPause = isPlaying;
   const hasPrev = hasPlaylist && (currentIndex > 0 || repeatEnabled);
   const hasNext = hasPlaylist && (currentIndex < playlist.length - 1 || repeatEnabled);
-  const stopDisabledReason =
-    isPlaying && inferConnectedDeviceCode(status.deviceInfo?.product) === "c64u" && currentItem?.category !== "disk"
-      ? "Stop disabled on C64U because this item would reset the machine. Use Pause instead."
-      : null;
 
   const togglePlaylistTypeFilter = (category: PlayFileCategory) => {
     setPlaylistTypeFilters((prev) =>
@@ -1694,7 +1689,6 @@ export default function PlayFilesPage() {
                 onPrevious={() => void handlePrevious()}
                 onPlay={() => void handlePlay()}
                 onStop={() => void handleStop()}
-                stopDisabledReason={stopDisabledReason}
                 onPauseResume={() => void handlePauseResume()}
                 onNext={() => void handleNext()}
                 progressPercent={progressPercent}

@@ -22,7 +22,6 @@ import { addErrorLog, addLog } from "@/lib/logging";
 import { isAbortLikeError } from "@/lib/c64api/requestRuntime";
 import { reportUserError } from "@/lib/uiErrors";
 import { toast } from "@/hooks/use-toast";
-import { inferConnectedDeviceCode } from "@/lib/diagnostics/targetDisplayMapper";
 import {
   buildPlayPlan,
   executePlayPlan,
@@ -1055,20 +1054,6 @@ export function usePlaybackController({
       if (!isPlaying && !isPaused) return;
       const currentItem = playlist[currentIndex];
       const shouldReboot = currentItem?.category === "disk";
-      const c64uNonDiskStopGuarded = inferConnectedDeviceCode(deviceProduct) === "c64u" && !shouldReboot;
-      if (c64uNonDiskStopGuarded) {
-        addLog("warn", "Playback stop blocked on C64U non-disk playback", {
-          currentIndex,
-          category: currentItem?.category,
-          product: deviceProduct,
-          reason: "non-disk stop would reset the machine",
-        });
-        toast({
-          title: "Stop disabled",
-          description: "Pause playback instead; stopping this item would reset the C64U.",
-        });
-        return;
-      }
       try {
         const api = getC64API();
         if (isPaused) {
@@ -1117,7 +1102,6 @@ export function usePlaybackController({
     }),
     [
       currentIndex,
-      deviceProduct,
       isPaused,
       isPlaying,
       playlist,
