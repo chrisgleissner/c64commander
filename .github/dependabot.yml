@@ -1,5 +1,25 @@
 version: 2
 
+# Update strategy
+# ---------------
+# Routine "keep fresh" version updates are deliberately restricted to minor and
+# patch bumps (all major bumps are ignored below) and batched into a single
+# weekly cross-ecosystem PR. Minor/patch upgrades carry a high likelihood of
+# merging cleanly, and the full CI suite (web + android + iOS, including the
+# c64scope subproject) runs on every Dependabot PR, so breakages surface in the
+# PR itself rather than after merge.
+#
+# Security updates are NOT restricted by the rules below. Per GitHub's docs, the
+# `ignore` + `update-types` filter applies to version updates only; Dependabot
+# security updates are raised automatically for every manifest in the repo
+# (including ones not listed here) and may cross the major-version boundary when
+# that is the only available fix. This keeps us protected against advisories
+# while major *routine* upgrades stay behind a manual review.
+#
+# Major upgrades are intentionally opt-in: bump the manifest by hand (or run
+# `@dependabot ignore <dep> major version` / unignore) so the breaking change
+# gets dedicated CI + review attention.
+
 multi-ecosystem-groups:
   weekly-rollup:
     schedule:
@@ -16,6 +36,19 @@ multi-ecosystem-groups:
 updates:
   - package-ecosystem: npm
     directory: /
+    multi-ecosystem-group: weekly-rollup
+    patterns:
+      - "*"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
+
+  # c64scope is a standalone npm project (not a root workspace), so it needs its
+  # own entry to receive routine freshness updates. Without it, c64scope only
+  # ever gets automatic security PRs and otherwise drifts out of date.
+  - package-ecosystem: npm
+    directory: /c64scope
     multi-ecosystem-group: weekly-rollup
     patterns:
       - "*"
