@@ -868,8 +868,10 @@ export default function SettingsPage() {
                   const isActive = theme === option.value;
 
                   return (
-                    <button
+                    <Button
                       key={option.value}
+                      type="button"
+                      variant={isActive ? "default" : "outline"}
                       onClick={wrapUserEvent(
                         () => setTheme(option.value),
                         "select",
@@ -877,11 +879,11 @@ export default function SettingsPage() {
                         { title: option.label },
                         "ThemeOption",
                       )}
-                      className={`flex flex-col items-center gap-2 rounded-lg border p-4 transition-colors ${isActive ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground"}`}
+                      className="h-auto flex-col gap-2 whitespace-normal rounded-lg p-4"
                     >
                       <Icon className={`h-6 w-6 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
                       <span className={`text-sm ${isActive ? "font-medium" : ""}`}>{option.label}</span>
-                    </button>
+                    </Button>
                   );
                 })}
               </div>

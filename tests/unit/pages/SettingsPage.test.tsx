@@ -1005,6 +1005,33 @@ describe("SettingsPage", () => {
     expect(document.documentElement.dataset.displayProfile).toBe("expanded");
   });
 
+  it("applies theme selection on touch pointer up", () => {
+    renderSettingsPage();
+
+    fireEvent.pointerUp(screen.getByRole("button", { name: "Dark" }), { pointerType: "touch" });
+
+    expect(mockSetTheme).toHaveBeenCalledWith("dark");
+  });
+
+  it("toggles auto rotation exactly once per touch tap (no synthetic-click double-fire)", () => {
+    renderSettingsPage();
+
+    const checkbox = screen.getByRole("checkbox", { name: /adapt layout on screen rotation/i });
+    expect(checkbox).not.toBeChecked();
+
+    // A real touch tap emits pointerup followed by the browser's natural click.
+    // The checkbox must NOT add a synthetic click() on pointerup, otherwise the
+    // toggle fires twice and nets to no change (BUG-031).
+    fireEvent.pointerUp(checkbox, { pointerType: "touch" });
+    fireEvent.click(checkbox);
+    expect(checkbox).toBeChecked();
+
+    // A second tap toggles it back off — exactly one net toggle per tap.
+    fireEvent.pointerUp(checkbox, { pointerType: "touch" });
+    fireEvent.click(checkbox);
+    expect(checkbox).not.toBeChecked();
+  });
+
   it("shows persisted SAF URIs after refresh", async () => {
     vi.mocked(FolderPicker.getPersistedUris).mockResolvedValue({
       uris: [{ uri: "content://example" }],
