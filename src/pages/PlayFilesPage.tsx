@@ -63,7 +63,11 @@ import { buildEnabledSidMuteUpdates } from "@/lib/config/sidVolumeControl";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import { redactTreeUri } from "@/lib/native/safUtils";
-import { startBackgroundExecution, stopBackgroundExecution } from "@/lib/native/backgroundExecutionManager";
+import {
+  isBackgroundExecutionActive,
+  startBackgroundExecution,
+  stopBackgroundExecution,
+} from "@/lib/native/backgroundExecutionManager";
 import { BackgroundExecution, onBackgroundAutoSkipDue } from "@/lib/native/backgroundExecution";
 
 import { AppBar } from "@/components/AppBar";
@@ -320,7 +324,11 @@ export default function PlayFilesPage() {
   const autoAdvanceGuardRef = useRef<AutoAdvanceGuard | null>(null);
   const [autoAdvanceDueAtMs, setAutoAdvanceDueAtMs] = useState<number | null>(null);
   const backgroundDueWriteLaneRef = useRef<LatestIntentWriteLane<number | null> | null>(null);
-  const backgroundExecutionActiveRef = useRef(false);
+  // Adopt an already-running background-execution session on remount (e.g. after
+  // navigating away from Play while playing) instead of issuing a second start,
+  // which would unbalance the manager's reference count and leak the wake lock
+  // after Stop (BUG-025).
+  const backgroundExecutionActiveRef = useRef(isBackgroundExecutionActive());
   const hvscDisableCancellationRequestedRef = useRef(false);
   const [configPickerState, setConfigPickerState] = useState<ConfigPickerState | null>(null);
   const [activeConfigItemId, setActiveConfigItemId] = useState<string | null>(null);

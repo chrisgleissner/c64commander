@@ -65,3 +65,9 @@ export const stopBackgroundExecution = async (logContext: BackgroundExecutionLog
 export const resetBackgroundExecutionState = () => {
   activeCount = 0;
 };
+
+// True while a native background-execution session is outstanding. The Play page
+// uses this so a remounted instance adopts the existing session instead of
+// issuing a second `start` (which would unbalance the reference count and leak
+// the wake lock after Stop — see BUG-025).
+export const isBackgroundExecutionActive = () => activeCount > 0;
