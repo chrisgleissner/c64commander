@@ -9,12 +9,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { inflateSync } from "fflate";
 const addErrorLog = vi.fn();
+const addLog = vi.fn();
 const share = vi.fn();
 const writeFile = vi.fn();
 const getUri = vi.fn();
 
 vi.mock("@/lib/logging", () => ({
   addErrorLog,
+  addLog,
 }));
 
 vi.mock("@capacitor/share", () => ({
@@ -555,6 +557,19 @@ describe("diagnosticsExport", () => {
       "Diagnostics share failed",
       expect.objectContaining({ error: "disk full" }),
     );
+  });
+
+  it("does not report an error when native share is cancelled by the user", async () => {
+    isNativePlatform.mockReturnValue(true);
+    writeFile.mockResolvedValue(undefined);
+    getUri.mockResolvedValue({ uri: "file:///cache/diagnostics.zip" });
+    share.mockRejectedValue({ message: "Share canceled" });
+
+    const { shareDiagnosticsZip } = await import("@/lib/diagnostics/diagnosticsExport");
+
+    await expect(shareDiagnosticsZip("error-logs", [])).resolves.toBeUndefined();
+    expect(writeFile).toHaveBeenCalled();
+    expect(addErrorLog).not.toHaveBeenCalledWith("Diagnostics share failed", expect.anything());
   });
 
   it("logs and rethrows when deterministic automation export fails", async () => {

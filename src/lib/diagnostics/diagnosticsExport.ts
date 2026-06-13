@@ -11,7 +11,7 @@ import { Share } from "@capacitor/share";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Capacitor } from "@capacitor/core";
 import { variant } from "@/generated/variant";
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 
 export type DiagnosticsExportTab = "error-logs" | "logs" | "traces" | "actions";
 export type DiagnosticsExportScope = DiagnosticsExportTab | "all";
@@ -20,6 +20,7 @@ export type DiagnosticsExportPayload = Record<DiagnosticsExportTab, unknown> & {
 };
 
 const DIAGNOSTICS_EXPORT_TABS: DiagnosticsExportTab[] = ["error-logs", "logs", "traces", "actions"];
+const SHARE_CANCELLED_MESSAGES = new Set(["Share canceled", "Share cancelled"]);
 
 type DiagnosticsShareOverridePayload = {
   filename: string;
@@ -38,6 +39,20 @@ export type DiagnosticsAutomationExportResult = {
 };
 
 type DiagnosticsShareOverride = (payload: DiagnosticsShareOverridePayload) => Promise<void> | void;
+
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error !== null && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+  return null;
+};
+
+const isShareCancelledError = (error: unknown) => {
+  const message = getErrorMessage(error);
+  return message !== null && SHARE_CANCELLED_MESSAGES.has(message);
+};
 
 type DiagnosticsShareOverrideWindow = Window & {
   __c64uDiagnosticsShareOverride?: DiagnosticsShareOverride;
@@ -263,13 +278,21 @@ const shareDiagnosticsExport = async (scope: DiagnosticsExportScope, data: unkno
         directory: Directory.Cache,
       });
 
-      await Share.share({
-        title: "Diagnostics Export",
-        files: [uriResult.uri],
-      });
+      try {
+        await Share.share({
+          title: "Diagnostics Export",
+          files: [uriResult.uri],
+        });
+      } catch (error) {
+        if (isShareCancelledError(error)) {
+          addLog("info", "Diagnostics share cancelled", { scope, filename });
+          return;
+        }
+        throw error;
+      }
     } catch (error) {
       addErrorLog("Diagnostics share failed", {
-        error: (error as Error).message,
+        error: getErrorMessage(error) ?? String(error),
       });
       throw error;
     }

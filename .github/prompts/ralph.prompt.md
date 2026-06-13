@@ -168,7 +168,9 @@ Score candidate families (higher wins):
 - `+11`: c64scope A/V/playback/stream/timing evidence is missing or conflicting.
 - `+10`: diagnostics issue, silent foreground failure, background noise, or local tests could pass while real behavior is wrong.
 - `+9`: unexplained release-relevant warnings/errors or a weak/forbidden oracle verdict.
+- `+8`: a production surface that has NEVER been exercised on the current build (no `EXERCISED_CLEAN`/`DEFECT_*` ledger row), advancing real coverage instead of re-proving green.
 - `+6`: stale/ambiguous/contradictory evidence, or a likely local root-cause fix for a known real-device defect.
+- `-18`: re-validating an already-FIXED bug that is current-build-confirmed clean, while any production surface remains unexercised (advance coverage instead).
 - `-20`: candidate has no user-visible CTA/control interaction and no direct relation to a confirmed defect.
 - `-15`: HIL peers proven unavailable and candidate depends on HIL, or candidate is coverage/unit/broad-local tests.
 - `-12`: static-only while safe HIL remains runnable, or already fixed and current-build verified.
@@ -192,7 +194,7 @@ Inside the selected family, enumerate every currently visible enabled control fr
    - `BLOCKED_INFRA`: required peer/device/network/asset is concretely unavailable.
    - `DESTRUCTIVE_GUARDED`: destructive but guarded; exercise only the guard/cancel path, never the destructive completion.
    - `OUT_OF_SCOPE`: test-only or unrouted; not a production CTA.
-4. Exercise every `SAFE_TO_EXERCISE` control before leaving the family. For `DESTRUCTIVE_GUARDED`, exercise the open/cancel and guard-block paths.
+4. Exercise every `SAFE_TO_EXERCISE` control before leaving the family, each one MULTIPLE times per TRUE-USER-INPUT FIDELITY & REPEATED INTERACTION, and verify true actuation (handler fired, not just a synthetic gesture dispatched). For `DESTRUCTIVE_GUARDED`, exercise the open/cancel and guard-block paths.
 5. Update `docs/agentic/CTA_LEDGER.md` rows for EVERY visible control, not only the ones exercised. Map the checklist classification to ledger Status: `SAFE_TO_EXERCISE` → `EXERCISED_CLEAN` or `DEFECT_OPEN`; `NEEDS_SETUP` → `PLANNED` or `DISCOVERED`; `BLOCKED_SAFE` → `BLOCKED_SAFE`; `BLOCKED_INFRA` → `BLOCKED_INFRA`; `DESTRUCTIVE_GUARDED` → `EXERCISED_CLEAN` (guard proven) or `BLOCKED_SAFE`; `OUT_OF_SCOPE` → `OUT_OF_SCOPE_TEST_ONLY` or `UNCERTAIN_UNROUTED`.
 
 A family CLEAN PASS is valid only if every `SAFE_TO_EXERCISE` control was exercised and the action-budget minimum was met, OR an allowed reduced-budget reason is recorded.
@@ -206,13 +208,34 @@ After fast-path startup, before any handoff/closure decision, execute the probe 
 3. For each `SAFE_TO_EXERCISE` control, drive the action through droidmind and observe UI feedback at ≈200 ms, ≈1 second, and completion when practical.
 4. Verify each effect with the strongest practical oracle: UI-only route/control → screenshot/UI tree + browser console/logcat/diagnostics; device state → c64bridge read-back as support only; playback/stream/timing/A/V → c64scope when practical; c64u-safe device effect → c64u first, u64 only with recorded reason + c64u follow-up.
 5. Perform at least one required adversarial-but-safe transition for the family (see ADVERSARIAL-BUT-SAFE INTERACTIONS).
-6. After the batch, run a diagnostics/log sweep: diagnostics surface, app logs, browser console, Android logcat, request traces, peer-server output, c64scope artifacts, and c64bridge output.
+6. After the batch — and again at family entry for a baseline — run the full sweep defined in DEVICE LOG & IN-APP DIAGNOSTICS EVIDENCE (mandatory): package-filtered Android logcat, the in-app Diagnostics dialog tabs, a pulled-and-analyzed Diagnostics "Share all" export, browser/WebView console, request traces, peer-server output, c64scope artifacts, and c64bridge output. Correlate every surface with the actions just performed; treat any app-package error/warning, silent failure, or UI-versus-diagnostics discrepancy as a defect candidate, never as background noise.
 7. Restore or record device/app state (e.g., restore UltiSID to 0 dB).
 8. Collect all action evidence in an in-memory batch during the pack; write it as one consolidated WORKLOG block and one batched CTA_LEDGER update afterward.
 
 These never count as meaningful product actions: `adb dumpsys` package/focus checks; `./scripts/resolve-version.sh`; logcat sampling without a preceding app action; peer health/status/list calls; static source inspection; creating or editing state files; build/deploy alone; c64bridge-only mutation or read-back; direct REST/FTP/Telnet not initiated by the app path.
 
 If no hardware-affecting CTA is safe without setup, exhaust a UI-only production family (Settings diagnostics/theme, Docs accordions, Open Source Licenses close/back, route navigation, Not Found). UI-only work driven by droidmind on the Pixel 4 is still a product action. Record why a higher-risk hardware family was deferred.
+
+DEVICE LOG & IN-APP DIAGNOSTICS EVIDENCE (MANDATORY EACH LOOP)
+
+This is the highest-yield bug-detection surface and is mandatory every loop, not optional. Historically the strongest defects (stale/false toasts, cold-start DEGRADED, playback-session-lost-on-navigation, silent Save&Connect failure, diagnostics-export gaps) were found by mining these surfaces and correlating them with actions — not by poking one CTA. Do all three.
+
+1. Android logcat — capture and ATTRIBUTE, never sample-and-dismiss.
+   - Clear logcat before the batch (`adb -s 9B081FFAZ001WX logcat -c`, via droidmind shell), then after each action cluster capture logcat filtered to the app package and its PID (`adb -s 9B081FFAZ001WX logcat -d --pid $(pidof uk.gleissner.c64commander)` or `logcat -d | grep -F uk.gleissner.c64commander`). Save slices under `docs/agentic/artifacts/iterN/logcat/`.
+   - Classify every app-package line by severity: FATAL/ANR/crash, uncaught exception, StrictMode violation, Capacitor/WebView/Chromium error, native plugin error, and warnings. Attribute each to the action that produced it. An app-package error or warning is a defect candidate until explained. Only genuinely unrelated framework/system lines (e.g. `android.xr` flag-export, ashmem) may be set aside, and only by naming them — do not blanket-dismiss logcat as "system noise".
+
+2. In-app Diagnostics panel — INSPECT every tab AND EXPORT + PULL + ANALYZE the ZIP.
+   - Open the Diagnostics dialog (app-bar activity indicator, or Settings → Diagnostics) and inspect each tab as a bug scan: Logs, Traces, Actions, Errors, Latency analysis, Heat map, Config drift, Device detail, Decision state. The Errors tab and Latency analysis are first-class bug sources; a non-empty Errors tab or an over-budget latency sample is a defect candidate.
+   - Export via "Share all" (`shareAllDiagnosticsZip`). The app writes a timestamped ZIP to its cache dir (Capacitor `Directory.Cache`, named like `c64commander-diagnostics-all-<UTC>.zip`). Pull it off the device (locate under the app cache, e.g. `adb -s 9B081FFAZ001WX exec-out run-as uk.gleissner.c64commander find cache -name 'c64commander-diagnostics-*.zip'` then pull/copy it) into `docs/agentic/artifacts/iterN/diagnostics/`, unzip, and analyze: logs, traceEvents, actions, errors, latencySamples, healthSnapshot/healthHistory, recoveryEvidence, deviceSafetyResolution, and the network snapshot. Inspecting/closing the dialog without exporting and analyzing the ZIP does NOT satisfy this requirement.
+
+3. Cross-surface correlation. For each action cluster, correlate the THREE log surfaces — in-app diagnostics (export + tabs), app/WebView console via droidmind, and package-filtered logcat — plus REST request traces. A discrepancy is itself a defect: UI shows success but diagnostics record a silent failure; diagnostics log a request the UI never reflected; a CTA emits duplicate/zero requests; a store/session value (e.g. a playback or connection session key) vanishes after a lifecycle/route change while hardware state diverges.
+
+TRUE-USER-INPUT FIDELITY & REPEATED INTERACTION (MANDATORY)
+
+Synthetic gestures are not automatically real user input. Prove actuation, and repeat like a real user.
+
+1. Actuation verification. A control counts as EXERCISED only if the product's own handler actually fired — proven by an emitted request, a store/state change, a diagnostics/trace entry, or a verified UI effect — not merely by dispatching a synthetic gesture. droidmind synthetic `tap` does NOT actuate some controls (e.g. Radix UI sliders require a real drag; some targets need a precise-coordinate tap from the UI-tree bounds). If a gesture produces no handler effect, switch to the primitive that does (real drag, long-press, precise-bounds tap) and re-verify. Never record EXERCISED_CLEAN from a synthetic input that did not actuate the handler; record the tooling caveat and use the working primitive.
+2. Repeated/sustained interaction. Real users tap repeatedly and drag across ranges; a single touch hides race, debounce, double-fire, leak, and divergence bugs. For each safe control, exercise it MULTIPLE times, not once: press buttons 3–10× (watch for debounce failure, double-fire, duplicate or zero requests, stuck busy state, wake-lock/refcount leaks); drag sliders across several intermediate values and to both extremes (watch for jump-back on release, mid-drag write floods, missing or duplicated commit); repeat mount/eject/rotate, dialog open/cancel, and route-in/route-out cycles (watch for state divergence, session loss, stale labels, leaked resources). Record the repetition count per control in the evidence block.
 
 PROBE-PACK TEMPLATES
 
@@ -301,6 +324,8 @@ C64U SAFETY AND TRAFFIC
 
 Prefer c64u for all safe product flows; use u64 only when c64u is unreachable, unsafe, or needed to isolate app logic, with a recorded reason and a c64u follow-up. Re-probe c64u immediately before cross-device proofs. Probe c64u cautiously; if it is slow, unstable, or unreachable, do not escalate traffic. Treat app-induced c64u degradation as a C64 Commander defect until a non-app cause is proven; prefer app-side pacing, dedupe, cancellation, back-pressure, retry suppression, route/CTA/background behavior, diagnostics, or transport fixes.
 
+A single c64u dropout or degradation is NOT a reason to end the loop early with a reduced budget. When c64u goes unreachable mid-loop, immediately PIVOT — do not hand off — to work that still finds bugs without escalating device traffic: mine the in-app Diagnostics export and package-filtered logcat (the dropout itself is evidence: confirm the app reported it correctly, with no false-positive foreground error and no silent failure), and exhaust a UI-only production family (Settings/Diagnostics/Docs/Config read-back/route navigation) to keep meeting the action-budget minimum. Only claim reduced-budget reason 5 or 6 after proving that NO safe family — including diagnostics-mining and every UI-only family — can reach the minimum this loop.
+
 HIGH-LEVEL TESTS ONLY
 
 Do not run routine coverage, changed-line coverage, unit tests, component tests, broad `npm run test`, broad Playwright suites, lint-as-progress, warning-cleanup-as-progress, static-only validation while HIL remains available, repeated local tests without source changes, or any local test whose result cannot change the selected objective.
@@ -385,6 +410,12 @@ FORBIDDEN SLOW LOOP PATTERNS
 - Do not spend a normal HIL-capable loop only reading files.
 - Do not spend a normal HIL-capable loop only creating or grooming `docs/agentic/CTA_LEDGER.md`.
 - Do not stop after one CTA when more safe CTAs in the selected family are visible or cheaply reachable.
+- Do not exercise a control only once when repeated real-user interaction (per TRUE-USER-INPUT FIDELITY) is what surfaces race/debounce/leak/divergence bugs.
+- Do not record a control as exercised from a synthetic gesture that did not actuate the product's handler (no request, no state/trace change, no UI effect).
+- Do not skip the in-app Diagnostics export-and-analyze and the package-filtered logcat sweep; opening and closing the diagnostics dialog without exporting and analyzing the ZIP is not the sweep.
+- Do not dismiss app-package logcat lines as "system noise"; attribute or explain each one.
+- Do not end a loop with a reduced budget on a single c64u dropout while diagnostics-mining or any UI-only family can still reach the action-budget minimum.
+- Do not re-validate an already-FIXED, current-build-confirmed bug while any production surface remains unexercised.
 - Do not treat app launch, package focus, APK identity, build success, empty logs, or peer health as product progress.
 - Do not choose a documentation-only objective while a safe production CTA is unexercised.
 - Do not perform broad static analysis before the first HIL probe pack unless required for safety.
@@ -411,6 +442,9 @@ FINAL RESPONSE FORMAT
 - Adversarial transitions attempted: integer and list.
 - CTA rows created/updated: integer; clean rows / defect rows / blocked rows: integers.
 - Latency checks performed: integer (and any over-budget findings).
+- Repeated-interaction: per-control repetition counts (controls exercised once vs. multiple times); actuation-verified controls vs. synthetic-only.
+- Package-filtered logcat: inspected yes/no; app-package error/warning lines found and how each was attributed/explained.
+- In-app Diagnostics export: pulled + analyzed yes/no + artifact path; Errors-tab and Latency-analysis findings; any UI-versus-diagnostics discrepancy.
 - Diagnostics/log surfaces inspected: list.
 - Fix/redeploy/validation status.
 - Code changed: yes/no. Build/deploy: yes/no + command.
@@ -440,4 +474,4 @@ If `droidmind_cta_action_count` is `0`, the response must name the allowed pre-a
 
 START NOW
 
-Change to `/home/chris/dev/c64/c64commander`. Run FAST-PATH STARTUP. Read `docs/agentic/STATE_DIGEST.md` first; read full docs only under the digest's reread conditions. Discover droidmind, c64scope, and c64bridge through the actual tool namespace or safe calls — not provider name, not shell-command absence. Append one compact `Ralph loop iteration` entry to `PLANS.md` and `WORKLOG.md`. Select exactly one probe family, enumerate and classify its visible controls, and execute a full probe pack: exhaust every `SAFE_TO_EXERCISE` control, perform at least one adversarial-but-safe transition, observe ≈200 ms and ≈1 s behavior, use c64bridge/c64scope as supporting oracle, sweep diagnostics/logs, and restore state. Meet the action-budget minimum for the current capacity or record an allowed reason. Write one consolidated WORKLOG evidence block, batch-update the CTA ledger for every visible control, refresh the digest, and hand off via the continuation prompt. Do not stop after one CTA, do not run coverage or low-level tests unless the user asked, and do not declare no work remains while any production CTA/control family lacks current-build evidence.
+Change to `/home/chris/dev/c64/c64commander`. Run FAST-PATH STARTUP. Read `docs/agentic/STATE_DIGEST.md` first; read full docs only under the digest's reread conditions. Discover droidmind, c64scope, and c64bridge through the actual tool namespace or safe calls — not provider name, not shell-command absence. Append one compact `Ralph loop iteration` entry to `PLANS.md` and `WORKLOG.md`. Select exactly one probe family, enumerate and classify its visible controls, and execute a full probe pack: exhaust every `SAFE_TO_EXERCISE` control — each exercised MULTIPLE times with verified true actuation — perform at least one adversarial-but-safe transition, observe ≈200 ms and ≈1 s behavior, use c64bridge/c64scope as supporting oracle, run the mandatory DEVICE LOG & IN-APP DIAGNOSTICS sweep (package-filtered logcat + in-app Diagnostics export pulled and analyzed), and restore state. On a c64u dropout, pivot to diagnostics-mining and a UI-only family rather than ending early. Meet the action-budget minimum for the current capacity or record an allowed reason. Write one consolidated WORKLOG evidence block, batch-update the CTA ledger for every visible control, refresh the digest, and hand off via the continuation prompt. Do not stop after one CTA, do not run coverage or low-level tests unless the user asked, and do not declare no work remains while any production CTA/control family lacks current-build evidence.
