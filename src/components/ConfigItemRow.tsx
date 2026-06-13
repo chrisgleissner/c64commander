@@ -357,13 +357,18 @@ export function ConfigItemRow({
         displayValue,
     ),
     domain: createIndexedSliderDomain(safeSliderOptions),
-    previewMode: "throttled",
+    // BUG-026: Config sliders write to the device ONLY on commit/release. The old
+    // "throttled" mode issued a burst of mid-drag preview writes; against the
+    // flash-saving c64u /v1/configs endpoint (Auto Save Config=Yes ⇒ one flash
+    // commit per write) a single drag wedged the firmware REST task, and a failed
+    // final commit left the label diverged from the device. onDraftChange keeps the
+    // thumb/label live locally during the drag (no device traffic); the commit path's
+    // reconciliation latches the committed value until the device echoes it and
+    // self-heals to the authoritative device value if the write fails. Matches the
+    // already-safe Home CPU Speed and Play volume sliders.
+    previewMode: "commitOnly",
     onDraftChange: (nextValue) => {
       setInputValue(String(nextValue));
-    },
-    preview: (nextValue) => {
-      if (controlKind !== "slider" || String(nextValue) === lastCommittedRef.current) return;
-      return sliderWriteLaneRef.current?.schedule(String(nextValue));
     },
     commit: (nextValue) => {
       if (controlKind !== "slider" || String(nextValue) === lastCommittedRef.current) return;

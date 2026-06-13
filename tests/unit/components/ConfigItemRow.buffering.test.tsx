@@ -132,49 +132,52 @@ describe("ConfigItemRow text input buffering", () => {
     mockProfile = "medium";
   });
 
-  it("coalesces rapid slider drags to one in-flight write plus one trailing latest value", async () => {
-    vi.useFakeTimers();
+  it("writes only once on commit for a rapid slider drag and never mid-drag (BUG-026)", async () => {
     const pending: Array<() => void> = [];
     const onValueChange = vi.fn(() => new Promise<void>((resolve) => pending.push(resolve)));
 
-    try {
-      render(
-        <ConfigItemRow
-          category="Audio Mixer"
-          name="Vol UltiSid 1"
-          value="10"
-          options={Array.from({ length: 21 }, (_, index) => String(index))}
-          onValueChange={onValueChange}
-          sliderTestId="volume-slider"
-        />,
-      );
+    render(
+      <ConfigItemRow
+        category="Audio Mixer"
+        name="Vol UltiSid 1"
+        value="10"
+        options={Array.from({ length: 21 }, (_, index) => String(index))}
+        onValueChange={onValueChange}
+        sliderTestId="volume-slider"
+      />,
+    );
 
-      const slider = screen.getByLabelText("Vol UltiSid 1 slider");
+    const slider = screen.getByLabelText("Vol UltiSid 1 slider");
 
-      for (let index = 1; index <= 20; index += 1) {
-        fireEvent.change(slider, { target: { value: String(index) } });
-      }
-      fireEvent.mouseUp(slider, { target: { value: "20" } });
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      expect(onValueChange).toHaveBeenCalledTimes(1);
-      expect(screen.getByDisplayValue("20")).toBeInTheDocument();
-
-      pending.shift()?.();
-
-      await act(async () => {
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-
-      expect(onValueChange).toHaveBeenCalledTimes(2);
-      expect(onValueChange).toHaveBeenLastCalledWith("20");
-      expect(screen.getByDisplayValue("20")).toBeInTheDocument();
-    } finally {
-      vi.useRealTimers();
+    for (let index = 1; index <= 20; index += 1) {
+      fireEvent.change(slider, { target: { value: String(index) } });
     }
+
+    // Config sliders are commit-only: a drag must emit ZERO device writes while
+    // moving (no mid-drag /v1/configs flash-commit flood), but the label tracks
+    // the drag locally via onDraftChange.
+    expect(onValueChange).toHaveBeenCalledTimes(0);
+    expect(screen.getByDisplayValue("20")).toBeInTheDocument();
+
+    fireEvent.mouseUp(slider, { target: { value: "20" } });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Exactly one write — the committed/released value.
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenLastCalledWith("20");
+
+    pending.shift()?.();
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Still a single write after the commit settles — no trailing/coalesced second write.
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(screen.getByDisplayValue("20")).toBeInTheDocument();
   });
 });
