@@ -7,6 +7,7 @@
  */
 
 import { addLog, type LogLevel } from "@/lib/logging";
+import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { getActiveAction } from "@/lib/tracing/actionTrace";
 import { getPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
 
@@ -156,6 +157,12 @@ const normalizeConsoleForwardArgs = (args: unknown[]) => {
   return [normalizeConsoleMessage(args), ...args.slice(1)];
 };
 
+const shouldSuppressConsoleErrorForwarding = (args: unknown[]) => {
+  if (!args.length) return false;
+  const first = args[0];
+  return classifyError(first).failureClass === "user-cancellation";
+};
+
 export const installConsoleDiagnosticsBridge = (options: ConsoleBridgeOptions = {}) => {
   if (bridgeState.installed) {
     return () => {
@@ -196,6 +203,7 @@ export const installConsoleDiagnosticsBridge = (options: ConsoleBridgeOptions = 
 
   console.error = (...args: unknown[]) => {
     bridgeState.originalError?.(...args);
+    if (shouldSuppressConsoleErrorForwarding(args)) return;
     if (inConsoleForwarding) return;
     inConsoleForwarding = true;
     try {

@@ -254,6 +254,16 @@ describe("logger", () => {
       }
     });
 
+    it("suppresses user-cancellation objects in console.error forwarding", () => {
+      const uninstall = logger.installConsoleDiagnosticsBridge();
+      try {
+        console.error({ message: "Share canceled" });
+        expect(addLog).not.toHaveBeenCalledWith("error", '{"message":"Share canceled"}', expect.anything());
+      } finally {
+        uninstall();
+      }
+    });
+
     it("handles non-string non-error non-object arguments", () => {
       const uninstall = logger.installConsoleDiagnosticsBridge();
       try {
