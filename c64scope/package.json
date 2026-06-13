@@ -24,12 +24,12 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.20.2",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@types/node": "^24.7.2",
-    "@vitest/coverage-v8": "^4.1.0",
+    "@types/node": "^24.13.2",
+    "@vitest/coverage-v8": "^4.1.8",
     "tsx": "^4.22.4",
     "typescript": "^5.8.3",
     "vitest": "^4.1.0"

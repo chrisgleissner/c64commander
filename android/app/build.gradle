@@ -359,7 +359,7 @@ dependencies {
     implementation "commons-net:commons-net:3.13.0"
     implementation "org.apache.commons:commons-compress:1.28.0"
     implementation "org.tukaani:xz:1.12"
-    compileOnly "com.google.errorprone:error_prone_annotations:2.49.0"
+    compileOnly "com.google.errorprone:error_prone_annotations:2.50.0"
     compileOnly "com.google.code.findbugs:jsr305:3.0.2"
     implementation project(':capacitor-android')
     implementation project(':capacitor-cordova-android-plugins')
