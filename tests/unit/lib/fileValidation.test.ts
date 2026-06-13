@@ -354,4 +354,12 @@ describe("fileValidation", () => {
       detectedType: "d81",
     });
   });
+
+  it("treats internal cancellation errors as handled UI errors", () => {
+    const error = Object.assign(new Error("rest queued task cancelled: transition-real-connected"), {
+      isCancellation: true,
+    });
+
+    expect(isHandledUiError(error)).toBe(true);
+  });
 });

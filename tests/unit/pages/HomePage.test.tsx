@@ -1396,8 +1396,8 @@ describe("HomePage SID status", () => {
 
     await waitFor(() =>
       expect(interactiveWriteMockRef.current).toHaveBeenCalledWith({
-        "CPU Speed": "2",
         "Turbo Control": "Manual",
+        "CPU Speed": "2",
       }),
     );
   });
@@ -1550,8 +1550,8 @@ describe("HomePage SID status", () => {
 
     await waitFor(() =>
       expect(interactiveWriteMockRef.current).toHaveBeenCalledWith({
-        "CPU Speed": " 2",
         "Turbo Control": "Manual",
+        "CPU Speed": " 2",
       }),
     );
   });
@@ -1574,6 +1574,9 @@ describe("HomePage SID status", () => {
     // CPU speed commit goes via interactive write; only Turbo Control auto-adjust uses setConfigValue.
     // Turbo is already "Manual", so no redundant write should happen.
     await waitFor(() => expect(screen.getByTestId("home-cpu-speed-value").textContent).toBe("3"));
+    expect(interactiveWriteMockRef.current).toHaveBeenCalledWith({
+      "CPU Speed": "3",
+    });
     expect(c64ApiMockRef.current.setConfigValue).not.toHaveBeenCalledWith(
       "U64 Specific Settings",
       "Turbo Control",
@@ -1600,7 +1603,6 @@ describe("HomePage SID status", () => {
     await waitFor(() => expect(screen.getByTestId("home-cpu-speed-value")).toHaveTextContent("1"));
     expect(interactiveWriteMockRef.current).toHaveBeenCalledWith({
       "CPU Speed": "2",
-      "Turbo Control": "Manual",
     });
     expect(c64ApiMockRef.current.setConfigValue).not.toHaveBeenCalledWith(
       "U64 Specific Settings",
@@ -1868,8 +1870,8 @@ describe("HomePage SID status", () => {
         "C64U Turbo Registers",
       );
       expect(interactiveWriteMockRef.current).toHaveBeenCalledWith({
-        "CPU Speed": "2",
         "Turbo Control": "Manual",
+        "CPU Speed": "2",
       });
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
         "U64 Specific Settings",

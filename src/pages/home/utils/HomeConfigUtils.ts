@@ -57,8 +57,18 @@ export const parseNumericValue = (value: string | number, fallback: number) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-export const resolveTurboControlValue = (cpuSpeed: string, options: string[]) => {
+export const resolveTurboControlValue = (cpuSpeed: string, options: string[], currentValue?: string) => {
   const speed = parseNumericValue(cpuSpeed, 1);
+  if (speed <= 1 && currentValue !== undefined) {
+    const normalizedCurrent = normalizeOptionToken(currentValue);
+    // At stock speed, "Manual" with CPU Speed 1 behaves exactly like "Off",
+    // so keep the current mode and skip the redundant Turbo Control write.
+    // Turbo Control writes have coincided with Ultimate network dropouts
+    // (BUG-010), so every write we can avoid is a win.
+    if (normalizedCurrent === "off" || normalizedCurrent === "manual") {
+      return currentValue;
+    }
+  }
   const desired = speed <= 1 ? "Off" : "Manual";
   const match = options.find((option) => normalizeOptionToken(option) === normalizeOptionToken(desired));
   return match ?? options[0] ?? desired;

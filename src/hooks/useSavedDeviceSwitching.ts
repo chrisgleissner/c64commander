@@ -17,6 +17,7 @@ import { setStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { addLog } from "@/lib/logging";
 import { getSavedDeviceSwitchPrefixes, invalidateForSavedDeviceSwitch } from "@/lib/query/c64QueryInvalidation";
 import { getPasswordForDevice } from "@/lib/secureStorage";
+import { setTraceDeviceAttributionContext } from "@/lib/tracing/traceContext";
 import {
   beginSavedDeviceSwitchAttempt,
   completeSavedDeviceSwitchAttempt,
@@ -24,6 +25,7 @@ import {
   markSavedDeviceSwitchVerificationStarted,
 } from "@/lib/savedDevices/savedDeviceSwitchMetrics";
 import {
+  buildSavedDeviceDiagnosticsAttribution,
   completeSavedDeviceVerification,
   failSavedDeviceVerification,
   getSavedDeviceById,
@@ -34,6 +36,7 @@ import {
 } from "@/lib/savedDevices/store";
 import { buildSavedDevicePreferredRuntimeHost, getSavedDeviceResolvedAddress } from "@/lib/savedDevices/resolvedTarget";
 import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
+import { clearToastsOnDeviceSwitch } from "@/lib/uiErrors";
 
 let activeSavedDeviceSwitch: { deviceId: string; promise: Promise<unknown> } | null = null;
 
@@ -49,12 +52,20 @@ export function useSavedDeviceSwitching() {
         throw new Error(`Unknown saved device: ${deviceId}`);
       }
 
+      // Stale error toasts attributed to the device being switched away from
+      // must not survive the switch (ERROR_POLICY §6).
+      const fromDevice = fromDeviceId && fromDeviceId !== deviceId ? getSavedDeviceById(fromDeviceId) : null;
+      if (fromDevice) {
+        clearToastsOnDeviceSwitch(fromDevice.host);
+      }
+
       const attemptId = beginSavedDeviceSwitchAttempt({
         fromDeviceId,
         toDeviceId: deviceId,
         routePath: location.pathname,
       });
 
+      setTraceDeviceAttributionContext(buildSavedDeviceDiagnosticsAttribution(device, null));
       selectSavedDevice(deviceId);
       markSavedDeviceSwitchSelectionApplied(attemptId);
       setStoredFtpPort(device.ftpPort);
@@ -103,6 +114,7 @@ export function useSavedDeviceSwitching() {
           });
         } else {
           failSavedDeviceVerification(deviceId);
+          invalidateForSavedDeviceSwitch(queryClient, location.pathname);
           completeSavedDeviceSwitchAttempt(attemptId, {
             outcome: "offline",
             verification,
@@ -110,6 +122,7 @@ export function useSavedDeviceSwitching() {
         }
         return verification;
       } catch (error) {
+        invalidateForSavedDeviceSwitch(queryClient, location.pathname);
         completeSavedDeviceSwitchAttempt(attemptId, {
           outcome: "error",
           errorMessage: error instanceof Error ? error.message : String(error ?? "Unknown switch failure"),

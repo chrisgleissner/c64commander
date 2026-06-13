@@ -14,12 +14,15 @@ import {
 } from "@/lib/deviceInteraction/deviceActivityGate";
 import { updateDeviceConnectionState } from "@/lib/deviceInteraction/deviceStateStore";
 import { resetInteractionState, withRestInteraction } from "@/lib/deviceInteraction/deviceInteractionManager";
+import { saveDeviceSafetyMode } from "@/lib/config/deviceSafetySettings";
 
 const action = {} as any;
 
 describe("withRestInteraction", () => {
   beforeEach(() => {
     (globalThis as { __c64uForceInteractionScheduling?: boolean }).__c64uForceInteractionScheduling = true;
+    localStorage.clear();
+    saveDeviceSafetyMode("BALANCED");
     updateDeviceConnectionState("REAL_CONNECTED");
     resetDeviceActivityGate();
     resetInteractionState("test");
@@ -29,6 +32,7 @@ describe("withRestInteraction", () => {
     delete (globalThis as { __c64uForceInteractionScheduling?: boolean }).__c64uForceInteractionScheduling;
     resetDeviceActivityGate();
     resetInteractionState("test-cleanup");
+    localStorage.clear();
   });
 
   it("serializes overlapping machine and config mutations for the same device", async () => {
@@ -175,6 +179,7 @@ describe("withRestInteraction", () => {
 
       await vi.runOnlyPendingTimersAsync();
       await first;
+      await vi.advanceTimersByTimeAsync(0);
 
       const second = withRestInteraction(
         {
@@ -230,6 +235,7 @@ describe("withRestInteraction", () => {
 
       await vi.runOnlyPendingTimersAsync();
       await expect(first).rejects.toThrow("Host unreachable");
+      await vi.advanceTimersByTimeAsync(0);
 
       const second = withRestInteraction(
         {
@@ -285,6 +291,7 @@ describe("withRestInteraction", () => {
 
       await vi.runOnlyPendingTimersAsync();
       await first;
+      await vi.advanceTimersByTimeAsync(0);
 
       const second = withRestInteraction(
         {
@@ -337,6 +344,7 @@ describe("withRestInteraction", () => {
 
       await vi.runOnlyPendingTimersAsync();
       await first;
+      await vi.advanceTimersByTimeAsync(0);
 
       const second = withRestInteraction(
         {

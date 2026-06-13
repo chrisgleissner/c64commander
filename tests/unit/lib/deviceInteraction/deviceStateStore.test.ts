@@ -76,6 +76,26 @@ describe("deviceStateStore branch coverage", () => {
     setCircuitOpenUntil(null);
   });
 
+  it("recomputes the ERROR snapshot when the circuit-open window expires", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-06-12T12:00:00Z"));
+      updateDeviceConnectionState("REAL_CONNECTED");
+      markDeviceRequestEnd({ success: true });
+
+      setCircuitOpenUntil(Date.now() + 6000, "test circuit");
+      expect(getDeviceStateSnapshot().state).toBe("ERROR");
+
+      await vi.advanceTimersByTimeAsync(6000);
+
+      expect(getDeviceStateSnapshot().state).toBe("READY");
+      expect(getDeviceStateSnapshot().circuitOpenUntilMs).toBe(Date.parse("2026-06-12T12:00:06Z"));
+    } finally {
+      setCircuitOpenUntil(null);
+      vi.useRealTimers();
+    }
+  });
+
   it("setCircuitOpenUntil falls back to existing lastErrorMessage when reason is undefined (line 122 ?? fallback)", () => {
     markDeviceRequestEnd({ success: false, errorMessage: "prev error" });
     // Call setCircuitOpenUntil without reason — should keep prev error

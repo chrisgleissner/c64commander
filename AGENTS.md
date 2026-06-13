@@ -80,15 +80,36 @@ Rules:
 - preserve determinism and diagnosability
 - add regression tests for bug fixes
 
-### Phase 5 - Validate honestly
+### Phase 5 - Stabilize on the real target first
+
+For productionization, hardening, exploratory regression, or device-stabilization
+tasks, do not spend the main execution window on broad builds, full-suite tests, or
+coverage before the user-facing device deliverables are actually working on the
+Pixel 4.
+
+Priority order for these runs:
+
+1. Reproduce and stabilize the behavior on the Pixel 4.
+2. Prefer `c64u` when it is available; use `u64` as fallback or comparison.
+3. If `c64u` becomes unavailable during testing, assume first that app-driven
+   traffic from the Pixel 4 may have caused it. Stop further `c64u` traffic,
+   preserve app/request diagnostics, and root-cause the request pattern before
+   treating the device as externally flaky.
+4. Add focused regression tests for confirmed code defects as the fixes are made.
+5. Run full tests and coverage only after the core device deliverables are done
+   or explicitly paused/blocked.
+
+### Phase 5a - Validate honestly
 
 Run the smallest validation set that the change classification requires.
 
 - `DOC_ONLY` does **not** require builds or tests unless the task explicitly says otherwise.
 - `CODE_CHANGE` requires targeted code validation.
 - `UI_CHANGE` requires targeted code validation plus the smallest honest UI validation and screenshot refresh only where needed.
+- For productionization/device-stabilization runs, broad suites and coverage are
+  finalization gates, not a substitute for real Pixel 4 evidence.
 
-### Phase 5a - Deploy the latest APK before completion
+### Phase 5b - Deploy the latest APK before completion
 
 Before declaring any task complete, deploy the most recent built APK from `android/app/build/outputs/apk/` to the attached Pixel 4.
 
@@ -97,6 +118,13 @@ Before declaring any task complete, deploy the most recent built APK from `andro
 - If installation fails because an earlier installed copy blocks the update, uninstall the existing `uk.gleissner.c64commander` package from that Pixel 4 and retry the installation.
 - Launch the newly deployed build on that Pixel 4 and validate the user-visible behavior there for the touched feature area before closing the task.
 - Record the deployment and on-device validation result in the completion summary; do not claim the work is finished until this deploy-and-validate step has succeeded or a concrete hardware/adb blocker is documented.
+
+### Phase 5c - Version identity must match Git
+
+The app version shown by built APK/IPA artifacts and in-app diagnostics must be
+derived from the latest Git tag plus the current Git commit ID. Do not let
+`package.json`, Gradle defaults, Xcode defaults, or stale environment values produce
+a different displayed version from the source revision being built.
 
 ### Phase 6 - Report precisely
 
@@ -267,6 +295,26 @@ Violating this rule is a release blocker.
 - If the user establishes an ongoing preference for this workflow, keep using the fast deploy path after each completed task until the user explicitly asks to run tests or widen validation.
 - This exception exists only to optimize local deploy/debug turnaround.
 - When the user invokes `.github/prompts/pr-converge.prompt.md`, the exception no longer applies and full validation plus coverage are mandatory again.
+
+### Exception: Ralph / Productionization HIL loop
+
+When the active prompt is a Ralph, productionization, hardening,
+device-stabilization, Pixel 4 HIL, droidmind, c64scope, or no-coverage device-loop
+prompt, do not run `npm run test:coverage` merely because code changes exist.
+
+For these loops:
+
+- Pixel 4 HIL evidence is the primary deliverable.
+- Targeted regression tests are required for confirmed code defects.
+- Coverage and changed-line coverage are finalization or PR-convergence gates only.
+- Do not run coverage while a HIL-capable process is active or while HIL deliverables
+  remain open.
+- If this provider lacks droidmind/c64scope and another process owns the HIL window,
+  do not select code/build/coverage validation work. Update handoff state if needed,
+  then stop or schedule the peer-enabled continuation.
+- Run coverage only when the selected objective is explicitly final PR/release
+  convergence, the user explicitly asks for coverage, or all current HIL deliverables
+  are complete or explicitly blocked.
 
 ## Mandatory handling of concurrent changes
 

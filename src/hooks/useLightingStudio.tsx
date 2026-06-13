@@ -269,12 +269,15 @@ export function LightingStudioProvider({ children }: { children: React.ReactNode
   const lastAppliedSignatureRef = React.useRef<string | null>(null);
   const lastAmbientConnectionRef = React.useRef<{ state: LightingConnectionSentinelState; at: number } | null>(null);
   const lightingQueryItems = studioOpen || contextLensOpen ? LIGHTING_CATEGORY_ITEMS : LIGHTING_SUMMARY_ITEMS;
+  const routeNeedsLightingSummary =
+    location.pathname === "/" || location.pathname.startsWith("/play") || location.pathname.startsWith("/disks");
+  const lightingSummaryEnabled = routeNeedsLightingSummary || studioOpen || contextLensOpen;
   const summaryQueryOptions = React.useMemo(() => ({ ...VISIBLE_C64_QUERY_OPTIONS, skipEnrichment: true }), []);
 
   const { data: caseLightingCategory } = useC64ConfigItems(
     "LED Strip Settings",
     [...lightingQueryItems],
-    status.isConnected || status.isConnecting,
+    (status.isConnected || status.isConnecting) && lightingSummaryEnabled,
     studioOpen || contextLensOpen ? VISIBLE_C64_QUERY_OPTIONS : summaryQueryOptions,
   );
   const { data: keyboardLightingCategory } = useC64ConfigItems(

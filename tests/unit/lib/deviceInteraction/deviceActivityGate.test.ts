@@ -7,6 +7,13 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const mockAddLog = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/logging", () => ({
+  addLog: mockAddLog,
+}));
+
 import {
   areBackgroundReadsSuspended,
   beginInteractiveWriteBurst,
@@ -23,6 +30,7 @@ import {
 
 beforeEach(() => {
   resetDeviceActivityGate();
+  mockAddLog.mockClear();
   vi.useFakeTimers();
 });
 
@@ -165,6 +173,23 @@ describe("waitForMachineTransitionsToSettle", () => {
     const promise = waitForMachineTransitionsToSettle();
     end();
     await expect(promise).resolves.toBeUndefined();
+  });
+
+  it("resolves with a warning after the advisory max wait", async () => {
+    beginMachineTransition(0);
+    const promise = waitForMachineTransitionsToSettle();
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    await expect(promise).resolves.toBeUndefined();
+    expect(mockAddLog).toHaveBeenCalledWith(
+      "warn",
+      "Device activity advisory gate wait timed out",
+      expect.objectContaining({
+        gate: "machine-transition",
+        maxWaitMs: 10_000,
+      }),
+    );
   });
 });
 

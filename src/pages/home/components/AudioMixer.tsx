@@ -127,6 +127,7 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
         nextValue,
         "HOME_SID_ENABLED",
         `${entry.label} ${enabled ? "disabled" : "enabled"}`,
+        { clearPendingOnSuccess: true },
       );
       return;
     }

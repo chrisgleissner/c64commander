@@ -32,6 +32,8 @@ import {
   writeStagingFile,
   promoteLibraryStagingDir,
   cleanupStaleStagingDir,
+  getHvscCacheDir,
+  deleteCachedArchive,
 } from "./hvscFilesystem";
 import { loadHvscState, updateHvscState, isUpdateApplied, markUpdateApplied, type HvscState } from "./hvscStateStore";
 import { getDefaultHvscStatusSummary, loadHvscStatusSummary, saveHvscStatusSummary } from "./hvscStatusStore";
@@ -80,6 +82,7 @@ import {
 } from "./hvscIngestionRuntimeSupport";
 import { HvscIngestion } from "@/lib/native/hvscIngestion";
 import { beginHvscPerfScope, endHvscPerfScope } from "./hvscPerformance";
+import { createHvscCancellationError } from "./hvscCancellation";
 const runtimeState = getHvscIngestionRuntimeState();
 
 export { isIngestionRuntimeActive, recoverStaleIngestionState } from "./hvscIngestionRuntimeSupport";
@@ -336,7 +339,7 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
   const ensureNotCancelledLocal = () => {
     if (cancelTokens.get(cancelToken)?.cancelled) {
       updateHvscState({ ingestionState: "idle", ingestionError: "Cancelled" });
-      throw new Error("HVSC update cancelled");
+      throw createHvscCancellationError();
     }
   };
 
@@ -641,7 +644,6 @@ const ingestArchivePathNative = async (options: {
     archiveName,
   });
 
-  const { getHvscCacheDir } = await import("./hvscFilesystem");
   const relativeArchivePath = `${getHvscCacheDir()}/${archivePath}`;
 
   const progressListener = await HvscIngestion.addProgressListener((nativeEvent) => {
@@ -931,7 +933,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
       } else {
         currentArchiveComplete = true;
         try {
-          const cacheDir = (await import("./hvscFilesystem")).getHvscCacheDir();
+          const cacheDir = getHvscCacheDir();
           const stat = await Filesystem.stat({
             directory: Directory.Data,
             path: `${cacheDir}/${archivePath}`,
@@ -994,7 +996,6 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
   } catch (error) {
     const failure = classifyError(error);
     if (currentArchive && (!currentArchiveComplete || isCorruptedArchiveError(error))) {
-      const { deleteCachedArchive } = await import("./hvscFilesystem");
       await deleteCachedArchive(currentArchive);
     }
     if (failure.category === "cancelled") {
@@ -1145,7 +1146,7 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
       currentPipelineState = pipeline.current();
 
       try {
-        const cacheDir = (await import("./hvscFilesystem")).getHvscCacheDir();
+        const cacheDir = getHvscCacheDir();
         const stat = await Filesystem.stat({
           directory: Directory.Data,
           path: `${cacheDir}/${cached}`,
@@ -1206,7 +1207,6 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
   } catch (error) {
     const failure = classifyError(error);
     if (currentArchive && isCorruptedArchiveError(error)) {
-      const { deleteCachedArchive } = await import("./hvscFilesystem");
       await deleteCachedArchive(currentArchive);
     }
     if (failure.category === "cancelled") {

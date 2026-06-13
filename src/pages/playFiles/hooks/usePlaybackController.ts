@@ -19,6 +19,7 @@ import {
   SupersededMachineTransitionError,
 } from "@/lib/deviceInteraction/machineTransitionCoordinator";
 import { addErrorLog, addLog } from "@/lib/logging";
+import { isAbortLikeError } from "@/lib/c64api/requestRuntime";
 import { reportUserError } from "@/lib/uiErrors";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -77,6 +78,7 @@ type AutoAdvanceGuard = {
 type PendingUserSkip = {
   timer: number | null;
   originIndex: number;
+  originTrackInstanceId: number;
   targetIndex: number | null;
   stopAtEnd: boolean;
   operation: "PLAYBACK_NEXT" | "PLAYBACK_PREVIOUS";
@@ -84,6 +86,11 @@ type PendingUserSkip = {
   resolvers: Array<{
     resolve: () => void;
   }>;
+};
+
+type RuntimePlaybackRequest = {
+  request: PlayRequest;
+  path: string;
 };
 
 export const USER_TRANSPORT_COALESCE_MS = 120;
@@ -239,12 +246,17 @@ export function usePlaybackController({
   const sessionDeclinedPlaybackConfigRef = useRef(new Map<string, string>());
   const playlistRef = useRef(playlist);
   const currentIndexRef = useRef(currentIndex);
+  const isPlayingRef = useRef(isPlaying);
+  const isPausedRef = useRef(isPaused);
   const userTransportQueueRef = useRef(Promise.resolve());
   const pendingUserSkipRef = useRef<PendingUserSkip | null>(null);
+  const flushPendingUserSkipRef = useRef<() => Promise<void>>(async () => undefined);
   const STOP_MACHINE_TIMEOUT_MS = 6000;
 
   playlistRef.current = playlist;
   currentIndexRef.current = currentIndex;
+  isPlayingRef.current = isPlaying;
+  isPausedRef.current = isPaused;
 
   const withTimeout = useCallback(async <T>(promise: Promise<T>, timeoutMs: number, operation: string) => {
     let timeoutId: number | null = null;
@@ -353,6 +365,49 @@ export function usePlaybackController({
     snapshotToUpdates,
   ]);
 
+  const rollbackMuteAfterFailedPause = useCallback(
+    async (pauseError: unknown) => {
+      const snapshot = pauseMuteSnapshotRef.current;
+      if (!snapshot && !pausingFromPauseRef.current) return;
+      try {
+        const currentItems = enabledSidVolumeItems.length ? enabledSidVolumeItems : undefined;
+        let updates = snapshotToUpdates(snapshot, currentItems);
+        if (!Object.keys(updates).length && snapshot) {
+          updates = snapshotToUpdates(snapshot);
+        }
+        if (Object.keys(updates).length) {
+          await applyAudioMixerUpdates(updates, "Pause mute rollback");
+        } else {
+          await ensureUnmuted({ force: true, refreshItems: true });
+        }
+        dispatchVolume({ type: "unmute", reason: "pause" });
+        addLog("warn", "Playback pause mute rolled back after machine pause failed", {
+          updateCount: Object.keys(updates).length,
+          pauseError: pauseError instanceof Error ? pauseError.message : String(pauseError),
+        });
+      } catch (rollbackError) {
+        addErrorLog("Playback pause mute rollback failed", {
+          error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
+          pauseError: pauseError instanceof Error ? pauseError.message : String(pauseError),
+        });
+      } finally {
+        pauseMuteSnapshotRef.current = null;
+        pausingFromPauseRef.current = false;
+        resumingFromPauseRef.current = false;
+      }
+    },
+    [
+      applyAudioMixerUpdates,
+      dispatchVolume,
+      enabledSidVolumeItems,
+      ensureUnmuted,
+      pauseMuteSnapshotRef,
+      pausingFromPauseRef,
+      resumingFromPauseRef,
+      snapshotToUpdates,
+    ],
+  );
+
   const stopMachineWithGracePeriod = useCallback(
     async (api: ReturnType<typeof getC64API>, shouldReboot: boolean) => {
       const endTransition = beginMachineTransition();
@@ -447,9 +502,9 @@ export function usePlaybackController({
     [],
   );
 
-  const resolveCommoServeRuntimeFile = useCallback(
-    async (item: PlaylistItem) => {
-      if (item.request.source !== "commoserve" || item.request.file) return;
+  const resolveCommoServeRuntimeRequest = useCallback(
+    async (item: PlaylistItem): Promise<RuntimePlaybackRequest | null> => {
+      if (item.request.source !== "commoserve" || item.request.file) return null;
       const archiveRef = item.archiveRef;
       if (!archiveRef) {
         throw new Error("Archive item metadata is missing. Re-add it to the playlist.");
@@ -457,10 +512,10 @@ export function usePlaybackController({
 
       const cachedPlayback = getCachedArchivePlayback(archiveRef);
       if (cachedPlayback) {
-        item.request.file = cachedPlayback.file;
-        item.request.path = cachedPlayback.path;
-        item.path = cachedPlayback.path;
-        return;
+        return {
+          request: { ...item.request, file: cachedPlayback.file, path: cachedPlayback.path },
+          path: cachedPlayback.path,
+        };
       }
 
       const archiveConfig = archiveConfigs?.[archiveRef.sourceId];
@@ -485,26 +540,45 @@ export function usePlaybackController({
         path: playPlan.path,
         file: playPlan.file,
       });
-      item.request.file = cached.file;
-      item.request.path = cached.path;
-      item.path = cached.path;
+      return {
+        request: { ...item.request, file: cached.file, path: cached.path },
+        path: cached.path,
+      };
     },
     [archiveConfigs],
   );
 
-  const resolveHvscRuntimeFile = useCallback(
-    async (item: PlaylistItem) => {
-      if (item.request.source !== "hvsc" || item.request.file) return;
+  const resolveHvscRuntimeRequest = useCallback(
+    async (item: PlaylistItem): Promise<RuntimePlaybackRequest | null> => {
+      if (item.request.source !== "hvsc" || item.request.file) return null;
       const normalizedPath = normalizeSourcePath(item.path);
       const runtimeFile = buildHvscLocalPlayFile?.(normalizedPath, item.label);
       if (!runtimeFile) {
         throw new Error("HVSC file unavailable. Reinstall or re-add it to the playlist.");
       }
-      item.request.file = runtimeFile;
-      item.request.path = normalizedPath;
-      item.path = normalizedPath;
+      return {
+        request: { ...item.request, file: runtimeFile, path: normalizedPath },
+        path: normalizedPath,
+      };
     },
     [buildHvscLocalPlayFile],
+  );
+
+  const finishPlaylistPlayback = useCallback(
+    (reason: "auto-end" | "user-next-end") => {
+      const now = Date.now();
+      playedClockRef.current.pause(now);
+      setIsPlaying(false);
+      setIsPaused(false);
+      autoAdvanceGuardRef.current = null;
+      setAutoAdvanceDueAtMs(null);
+      addLog("info", "Playlist playback ended without device stop", {
+        reason,
+        currentIndex: currentIndexRef.current,
+        deviceAction: "none",
+      });
+    },
+    [autoAdvanceGuardRef, playedClockRef, setAutoAdvanceDueAtMs, setIsPaused, setIsPlaying],
   );
 
   const playItem = useCallback(
@@ -513,9 +587,15 @@ export function usePlaybackController({
       options?: { rebootBeforePlay?: boolean; playlistIndex?: number; playlistSize?: number },
     ) => {
       return enqueuePlayTransition(async () => {
-        if (item.request.source === "commoserve" && !item.request.file) {
+        let effectiveRequest = item.request;
+        let effectivePath = item.path;
+        if (effectiveRequest.source === "commoserve" && !effectiveRequest.file) {
           try {
-            await resolveCommoServeRuntimeFile(item);
+            const resolved = await resolveCommoServeRuntimeRequest(item);
+            if (resolved) {
+              effectiveRequest = resolved.request;
+              effectivePath = resolved.path;
+            }
           } catch (error) {
             reportUserError({
               operation: "PLAYBACK_ARCHIVE_RESOLVE",
@@ -532,9 +612,13 @@ export function usePlaybackController({
             throw error;
           }
         }
-        if (item.request.source === "hvsc" && !item.request.file) {
+        if (effectiveRequest.source === "hvsc" && !effectiveRequest.file) {
           try {
-            await resolveHvscRuntimeFile(item);
+            const resolved = await resolveHvscRuntimeRequest(item);
+            if (resolved) {
+              effectiveRequest = resolved.request;
+              effectivePath = resolved.path;
+            }
           } catch (error) {
             reportUserError({
               operation: "PLAYBACK_HVSC_RESOLVE",
@@ -551,53 +635,63 @@ export function usePlaybackController({
             throw error;
           }
         }
-        if (item.request.source === "local" && !item.request.file) {
+        if (effectiveRequest.source === "local" && !effectiveRequest.file) {
           const sourceId = item.sourceId;
           const treeUri = sourceId ? localSourceTreeUris.get(sourceId) : null;
           if (treeUri) {
             const normalizedPath = normalizeSourcePath(item.path);
-            item.request.file = buildLocalPlayFileFromTree(item.label, normalizedPath, treeUri);
+            effectiveRequest = {
+              ...effectiveRequest,
+              file: buildLocalPlayFileFromTree(item.label, normalizedPath, treeUri),
+            };
           }
           const localEntry = sourceId
             ? localEntriesBySourceId.get(sourceId)?.get(normalizeSourcePath(item.path))
             : null;
-          if (!item.request.file && localEntry?.uri) {
-            item.request.file = buildLocalPlayFileFromUri(item.label, normalizeSourcePath(item.path), localEntry.uri);
+          if (!effectiveRequest.file && localEntry?.uri) {
+            effectiveRequest = {
+              ...effectiveRequest,
+              file: buildLocalPlayFileFromUri(item.label, normalizeSourcePath(item.path), localEntry.uri),
+            };
           }
-          if (!item.request.file) {
+          if (!effectiveRequest.file) {
             throw new Error("Local file unavailable. Re-add it to the playlist.");
           }
         }
         let durationOverride: number | undefined = item.durationMs;
         let subsongCount: number | undefined = item.subsongCount ?? undefined;
-        if (item.category === "sid" && item.request.source !== "ultimate") {
+        if (item.category === "sid" && effectiveRequest.source !== "ultimate") {
           if (durationOverride === undefined || subsongCount === undefined) {
-            const metadata = await resolveSidMetadata(item.request.file, item.request.songNr ?? null);
+            const metadata = await resolveSidMetadata(effectiveRequest.file, effectiveRequest.songNr ?? null);
             durationOverride ??= metadata.durationMs;
             subsongCount ??= metadata.subsongCount;
             if (!metadata.readable) {
               throw new Error(
-                item.request.source === "hvsc"
+                effectiveRequest.source === "hvsc"
                   ? "HVSC file unavailable. Reinstall or re-add it to the playlist."
                   : "Local file unavailable. Re-add it to the playlist.",
               );
             }
           }
-        } else if (item.category === "sid" && item.request.source === "ultimate" && !item.durationMs) {
+        } else if (item.category === "sid" && effectiveRequest.source === "ultimate" && !item.durationMs) {
           try {
-            const pathMs = await resolveSonglengthDurationMsForPath(item.path, null, item.request.songNr ?? null);
+            const pathMs = await resolveSonglengthDurationMsForPath(
+              effectivePath,
+              null,
+              effectiveRequest.songNr ?? null,
+            );
             if (pathMs !== null) {
               durationOverride = pathMs;
             } else {
-              const md5Ms = await resolveUltimateSidDurationByMd5(item.path, item.request.songNr ?? null);
+              const md5Ms = await resolveUltimateSidDurationByMd5(effectivePath, effectiveRequest.songNr ?? null);
               if (md5Ms !== null) durationOverride = md5Ms;
             }
           } catch (error) {
             addLog("debug", "Ultimate SID duration resolution failed", {
-              path: item.path,
+              path: effectivePath,
             });
             addErrorLog("Ultimate SID duration resolution failed", {
-              path: item.path,
+              path: effectivePath,
               error: (error as Error).message,
             });
           }
@@ -618,16 +712,11 @@ export function usePlaybackController({
         }
         await ensureUnmuted({ refreshItems: true });
         const api = getC64API();
-        if (isSongCategory(item.category)) {
-          setCurrentSubsongCount(subsongCount ?? item.subsongCount ?? null);
-        } else {
-          setCurrentSubsongCount(null);
-        }
         const resolvedDurationBase = durationOverride ?? item.durationMs;
         const request: PlayRequest =
           typeof resolvedDurationBase === "number"
-            ? { ...item.request, durationMs: resolvedDurationBase }
-            : item.request;
+            ? { ...effectiveRequest, durationMs: resolvedDurationBase }
+            : effectiveRequest;
         const plan = buildPlayPlan(request);
         const shouldReboot = options?.rebootBeforePlay ?? item.category === "disk";
         const configOrigin = item.configOrigin ?? resolveStoredConfigOrigin(item.configRef ?? null, null);
@@ -719,7 +808,6 @@ export function usePlaybackController({
         const executionOptions = {
           ...(shouldReboot ? { rebootBeforeMount: true } : {}),
           ...(applyPlaybackConfigBeforeLaunch ? { beforeLaunch: applyPlaybackConfigBeforeLaunch } : {}),
-          ...(item.category === "sid" && request.source === "ultimate" ? { skipSidSslPropagation: true } : {}),
           benchmarkMetadata: {
             feedbackKind: "result",
             ...(typeof options?.playlistSize === "number" ? { playlistSize: options.playlistSize } : {}),
@@ -737,16 +825,21 @@ export function usePlaybackController({
           durationMs: request.durationMs ?? null,
           rebootBeforePlay: Boolean(executionOptions?.rebootBeforeMount),
         });
-        setElapsedMs(0);
-        setDurationMs(resolvedDuration);
-        if (typeof options?.playlistIndex === "number" && options.playlistIndex >= 0) {
-          setVisibleCurrentIndex(options.playlistIndex);
-        }
         await executePlayPlan(api, plan, executionOptions);
         const now = Date.now();
         const nextTrackInstanceId = trackInstanceIdRef.current + 1;
         trackInstanceIdRef.current = nextTrackInstanceId;
         setTrackInstanceId(nextTrackInstanceId);
+        setElapsedMs(0);
+        setDurationMs(resolvedDuration);
+        if (isSongCategory(item.category)) {
+          setCurrentSubsongCount(subsongCount ?? item.subsongCount ?? null);
+        } else {
+          setCurrentSubsongCount(null);
+        }
+        if (typeof options?.playlistIndex === "number" && options.playlistIndex >= 0) {
+          setVisibleCurrentIndex(options.playlistIndex);
+        }
         trackStartedAtRef.current = now;
         playedClockRef.current.start(now, true);
         setPlayedMs(playedClockRef.current.current(now));
@@ -762,12 +855,19 @@ export function usePlaybackController({
           autoAdvanceGuardRef.current = null;
           setAutoAdvanceDueAtMs(null);
         }
-        if (resolvedDuration !== item.durationMs || subsongCount !== item.subsongCount) {
+        if (
+          resolvedDuration !== item.durationMs ||
+          subsongCount !== item.subsongCount ||
+          effectiveRequest !== item.request ||
+          effectivePath !== item.path
+        ) {
           setPlaylist((prev) =>
             prev.map((entry) =>
               entry.id === item.id
                 ? {
                     ...entry,
+                    request,
+                    path: effectivePath,
                     durationMs: resolvedDuration,
                     subsongCount: subsongCount ?? entry.subsongCount,
                   }
@@ -789,8 +889,8 @@ export function usePlaybackController({
       buildHvscLocalPlayFile,
       localEntriesBySourceId,
       localSourceTreeUris,
-      resolveCommoServeRuntimeFile,
-      resolveHvscRuntimeFile,
+      resolveCommoServeRuntimeRequest,
+      resolveHvscRuntimeRequest,
       resolveSidMetadata,
       resolveSonglengthDurationMsForPath,
       resolveUltimateSidDurationByMd5,
@@ -811,49 +911,89 @@ export function usePlaybackController({
     ],
   );
 
+  // A foreground play start that is superseded/aborted by a routing change must
+  // still give the user feedback, but as a notice rather than a destructive
+  // error: the device target changed mid-start, so "press Play again" is the
+  // correct recovery, not an alarm (ERROR_POLICY §2 vs §3 boundary).
+  const reportPlaybackStartFailure = useCallback(
+    (report: { operation: string; title: string; error: unknown; context?: Record<string, unknown> }) => {
+      if (isAbortLikeError(report.error)) {
+        reportUserError({
+          operation: report.operation,
+          title: "Playback interrupted",
+          description: "The connection changed while starting playback. Press Play again.",
+          error: report.error,
+          context: report.context,
+          severity: "S2",
+        });
+        return;
+      }
+      reportUserError({
+        operation: report.operation,
+        title: report.title,
+        description: (report.error as Error).message,
+        error: report.error,
+        context: report.context,
+      });
+    },
+    [],
+  );
+
   const startPlaylist = useCallback(
     async (items: PlaylistItem[], startIndex = 0) => {
       if (!items.length) return;
-      playedClockRef.current.reset();
-      setPlayedMs(0);
-      const resolvedItems = await applySonglengthsToItems(items);
-      setPlaylist((prev) => {
-        if (!prev.length) return resolvedItems;
-        const baseIds = new Set(resolvedItems.map((item) => item.id));
-        const extras = prev.filter((item) => !baseIds.has(item.id));
-        return extras.length ? [...resolvedItems, ...extras] : resolvedItems;
-      });
+      // Playlist row/title taps call this directly, so it needs the same
+      // duplicate-start drop as handlePlay, and it must invalidate the
+      // previous track's auto-advance guard before isPaused flips false —
+      // a stale overdue guard otherwise fires on timeline reconciliation
+      // and starts the previous playlist's next item over this fresh start.
+      if (!tryAcquireSingleFlight(playStartInFlightRef)) return;
       setIsPlaylistLoading(true);
-      setIsPaused(false);
       try {
-        await playItem(resolvedItems[startIndex], {
-          playlistIndex: startIndex,
-          playlistSize: resolvedItems.length,
+        cancelAutoAdvance();
+        playedClockRef.current.reset();
+        setPlayedMs(0);
+        const resolvedItems = await applySonglengthsToItems(items);
+        setPlaylist((prev) => {
+          if (!prev.length) return resolvedItems;
+          const baseIds = new Set(resolvedItems.map((item) => item.id));
+          const extras = prev.filter((item) => !baseIds.has(item.id));
+          return extras.length ? [...resolvedItems, ...extras] : resolvedItems;
         });
-      } catch (error) {
-        if (!isHandledUiError(error)) {
-          reportUserError({
-            operation: "PLAYBACK_START",
-            title: "Playback failed",
-            description: (error as Error).message,
-            error,
-            context: {
-              item: resolvedItems[startIndex]?.label,
-            },
-          });
-        }
-        setIsPlaying(false);
         setIsPaused(false);
-        trackStartedAtRef.current = null;
-        autoAdvanceGuardRef.current = null;
-        setAutoAdvanceDueAtMs(null);
+        try {
+          await playItem(resolvedItems[startIndex], {
+            playlistIndex: startIndex,
+            playlistSize: resolvedItems.length,
+          });
+        } catch (error) {
+          if (!isHandledUiError(error)) {
+            reportPlaybackStartFailure({
+              operation: "PLAYBACK_START",
+              title: "Playback failed",
+              error,
+              context: {
+                item: resolvedItems[startIndex]?.label,
+              },
+            });
+          }
+          setIsPlaying(false);
+          setIsPaused(false);
+          trackStartedAtRef.current = null;
+          autoAdvanceGuardRef.current = null;
+          setAutoAdvanceDueAtMs(null);
+        }
       } finally {
+        releaseSingleFlight(playStartInFlightRef);
         setIsPlaylistLoading(false);
       }
     },
     [
       applySonglengthsToItems,
+      cancelAutoAdvance,
       playItem,
+      playStartInFlightRef,
+      reportPlaybackStartFailure,
       playedClockRef,
       setAutoAdvanceDueAtMs,
       setIsPaused,
@@ -870,21 +1010,21 @@ export function usePlaybackController({
     trace(async function handlePlay() {
       const targetIndex = resolvePlayTargetIndex(playlist.length, currentIndex);
       if (targetIndex === null) return;
+      if (currentIndex < 0) {
+        // startPlaylist handles its own single-flight and guard cancellation.
+        await startPlaylist(playlist, targetIndex);
+        return;
+      }
       if (!tryAcquireSingleFlight(playStartInFlightRef)) return;
       setIsPlaylistLoading(true);
       try {
-        if (currentIndex < 0) {
-          await startPlaylist(playlist, targetIndex);
-          return;
-        }
         cancelAutoAdvance();
         await playItem(playlist[targetIndex], { playlistIndex: targetIndex, playlistSize: playlist.length });
       } catch (error) {
         if (!isHandledUiError(error)) {
-          reportUserError({
+          reportPlaybackStartFailure({
             operation: "PLAYBACK_START",
             title: "Playback failed",
-            description: (error as Error).message,
             error,
             context: {
               item: playlist[targetIndex]?.label,
@@ -901,6 +1041,7 @@ export function usePlaybackController({
       currentIndex,
       playItem,
       playlist,
+      reportPlaybackStartFailure,
       startPlaylist,
       trace,
       playStartInFlightRef,
@@ -1012,7 +1153,12 @@ export function usePlaybackController({
             }
 
             await muteBeforeMachinePause();
-            await withTimeout(api.machinePause(), 3000, "Pause");
+            try {
+              await withTimeout(api.machinePause(), 3000, "Pause");
+            } catch (pauseError) {
+              await rollbackMuteAfterFailedPause(pauseError);
+              throw pauseError;
+            }
             const now = Date.now();
             playedClockRef.current.pause(now);
             setPlayedMs(playedClockRef.current.current(now));
@@ -1051,6 +1197,7 @@ export function usePlaybackController({
       resumingFromPauseRef,
       playedClockRef,
       muteBeforeMachinePause,
+      rollbackMuteAfterFailedPause,
       resumeMachineWithRetry,
       unmuteAfterMachineResume,
       setAutoAdvanceDueAtMs,
@@ -1073,31 +1220,54 @@ export function usePlaybackController({
       await enqueueUserTransport(async () => {
         const activePlaylist = playlistRef.current;
         if (!activePlaylist.length) return;
-        if (pending.stopAtEnd || pending.targetIndex === null) {
-          playedClockRef.current.pause(Date.now());
-          setIsPlaying(false);
-          setIsPaused(false);
-          autoAdvanceGuardRef.current = null;
-          setAutoAdvanceDueAtMs(null);
+        const activeIndex = currentIndexRef.current;
+        const anotherTransitionAdvanced =
+          activeIndex !== pending.originIndex &&
+          (trackInstanceIdRef.current !== pending.originTrackInstanceId ||
+            Boolean(autoAdvanceGuardRef.current?.autoFired));
+        let resolvedTargetIndex = pending.targetIndex;
+        let resolvedStopAtEnd = pending.stopAtEnd;
+        if (anotherTransitionAdvanced) {
+          if (pending.operation === "PLAYBACK_NEXT") {
+            resolvedTargetIndex = activeIndex + 1;
+            if (resolvedTargetIndex >= activePlaylist.length) {
+              if (repeatEnabled) {
+                resolvedTargetIndex = 0;
+              } else {
+                resolvedTargetIndex = null;
+                resolvedStopAtEnd = true;
+              }
+            }
+          } else {
+            resolvedTargetIndex =
+              activeIndex > 0
+                ? activeIndex - 1
+                : repeatEnabled && activePlaylist.length > 1
+                  ? activePlaylist.length - 1
+                  : 0;
+            resolvedStopAtEnd = false;
+          }
+        }
+        if (resolvedStopAtEnd || resolvedTargetIndex === null) {
+          finishPlaylistPlayback("user-next-end");
           return;
         }
-        const currentItem = activePlaylist[pending.originIndex];
-        const targetItem = activePlaylist[pending.targetIndex];
+        const currentItem = activePlaylist[anotherTransitionAdvanced ? activeIndex : pending.originIndex];
+        const targetItem = activePlaylist[resolvedTargetIndex];
         if (!targetItem) return;
         const shouldReboot = currentItem?.category === "disk" || targetItem.category === "disk";
         await playItem(targetItem, {
           rebootBeforePlay: shouldReboot,
-          playlistIndex: pending.targetIndex,
+          playlistIndex: resolvedTargetIndex,
         });
         setIsPaused(false);
       });
       settle();
     } catch (error) {
       if (!isHandledUiError(error)) {
-        reportUserError({
+        reportPlaybackStartFailure({
           operation: pending.operation,
           title: pending.title,
-          description: (error as Error).message,
           error,
           context: {
             originIndex: pending.originIndex,
@@ -1114,14 +1284,20 @@ export function usePlaybackController({
     }
   }, [
     enqueueUserTransport,
+    finishPlaylistPlayback,
     playItem,
     playedClockRef,
+    reportPlaybackStartFailure,
+    repeatEnabled,
     setAutoAdvanceDueAtMs,
     setIsPaused,
     setIsPlaying,
     trackStartedAtRef,
     autoAdvanceGuardRef,
+    trackInstanceIdRef,
   ]);
+
+  flushPendingUserSkipRef.current = flushPendingUserSkip;
 
   const scheduleUserSkip = useCallback(
     (
@@ -1147,6 +1323,7 @@ export function usePlaybackController({
             void flushPendingUserSkip();
           }, USER_TRANSPORT_COALESCE_MS),
           originIndex: pending?.originIndex ?? originIndex,
+          originTrackInstanceId: pending?.originTrackInstanceId ?? trackInstanceIdRef.current,
           targetIndex,
           stopAtEnd,
           operation,
@@ -1154,7 +1331,7 @@ export function usePlaybackController({
           resolvers,
         };
       }),
-    [flushPendingUserSkip],
+    [flushPendingUserSkip, trackInstanceIdRef],
   );
 
   useEffect(
@@ -1163,6 +1340,11 @@ export function usePlaybackController({
       if (!pending) return;
       if (pending.timer !== null) {
         window.clearTimeout(pending.timer);
+      }
+      if (isPlayingRef.current || isPausedRef.current) {
+        pending.timer = null;
+        void flushPendingUserSkipRef.current();
+        return;
       }
       pendingUserSkipRef.current = null;
       pending.resolvers.forEach(({ resolve }) => resolve());
@@ -1209,11 +1391,7 @@ export function usePlaybackController({
         const currentItem = activePlaylist[activeIndex];
         if (nextIndex >= activePlaylist.length) {
           if (!repeatEnabled) {
-            playedClockRef.current.pause(Date.now());
-            setIsPlaying(false);
-            setIsPaused(false);
-            autoAdvanceGuardRef.current = null;
-            setAutoAdvanceDueAtMs(null);
+            finishPlaylistPlayback("auto-end");
             return;
           }
           nextIndex = 0;
@@ -1253,6 +1431,7 @@ export function usePlaybackController({
     },
     [
       cancelAutoAdvance,
+      finishPlaylistPlayback,
       playItem,
       repeatEnabled,
       playedClockRef,

@@ -56,8 +56,8 @@ const startDeferredStartupBootstrap = () => {
   registerFetchTrace();
   registerUserInteractionCapture();
   markStartupBootstrapComplete();
-  void import("./lib/secureStorage")
-    .then(({ primeStoredPassword }) => primeStoredPassword())
+  void import("./lib/startup/secureStorageBootstrap")
+    .then(({ primeSecureStorageAfterStartup }) => primeSecureStorageAfterStartup())
     .catch((error) => {
       const err = error as Error;
       addErrorLog("Deferred secure storage bootstrap failed", {

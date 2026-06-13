@@ -31,6 +31,7 @@ let lastSuccessAtMs: number | null = null;
 let lastFailureAtMs: number | null = null;
 let circuitOpenUntilMs: number | null = null;
 let hasSuccessfulRequest = false;
+let circuitExpiryTimer: ReturnType<typeof setTimeout> | null = null;
 let snapshot: DeviceStateSnapshot = Object.freeze({
   state: "UNKNOWN",
   connectionState: null,
@@ -85,7 +86,29 @@ const updateSnapshot = (note?: string) => {
   emit();
 };
 
-export const getDeviceStateSnapshot = () => snapshot;
+const clearCircuitExpiryTimer = () => {
+  if (!circuitExpiryTimer) return;
+  clearTimeout(circuitExpiryTimer);
+  circuitExpiryTimer = null;
+};
+
+const syncCircuitExpiryTimer = () => {
+  clearCircuitExpiryTimer();
+  if (!circuitOpenUntilMs) return;
+  const waitMs = circuitOpenUntilMs - Date.now();
+  if (waitMs <= 0) return;
+  circuitExpiryTimer = setTimeout(() => {
+    circuitExpiryTimer = null;
+    updateSnapshot("circuit-expired");
+  }, waitMs);
+};
+
+export const getDeviceStateSnapshot = () => {
+  if (snapshot.state === "ERROR" && snapshot.circuitOpenUntilMs && Date.now() >= snapshot.circuitOpenUntilMs) {
+    updateSnapshot("circuit-expired-read");
+  }
+  return snapshot;
+};
 
 export const subscribeDeviceState = (listener: () => void) => {
   listeners.add(listener);
@@ -132,5 +155,6 @@ export const setCircuitOpenUntil = (untilMs: number | null, reason?: string) => 
   if (untilMs) {
     lastErrorMessage = reason ?? lastErrorMessage;
   }
+  syncCircuitExpiryTimer();
   updateSnapshot("circuit-change");
 };

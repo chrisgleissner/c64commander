@@ -228,11 +228,11 @@ describe("deviceSafetySettings AUTO mode", () => {
     expect(safety.loadDeviceSafetyConfig()).toMatchObject({
       mode: "AUTO",
       resolution: expect.objectContaining({
-        effectiveMode: "BALANCED",
-        resolvedPreset: "BALANCED",
-        isProvisional: true,
+        effectiveMode: "CONSERVATIVE",
+        resolvedPreset: "CONSERVATIVE",
+        isProvisional: false,
       }),
-      ...BALANCED_EXPECTATIONS,
+      ...CONSERVATIVE_EXPECTATIONS,
     });
   });
 
@@ -244,10 +244,11 @@ describe("deviceSafetySettings AUTO mode", () => {
     expect(safety.loadDeviceSafetyConfig()).toMatchObject({
       mode: "AUTO",
       resolution: expect.objectContaining({
-        effectiveMode: "BALANCED",
-        isProvisional: true,
+        effectiveMode: "CONSERVATIVE",
+        resolvedPreset: "CONSERVATIVE",
+        isProvisional: false,
       }),
-      ...BALANCED_EXPECTATIONS,
+      ...CONSERVATIVE_EXPECTATIONS,
     });
   });
 

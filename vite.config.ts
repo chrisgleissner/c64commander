@@ -148,9 +148,6 @@ export default defineConfig(() => ({
         // scripts/check-bundle-budgets.mjs.
         manualChunks(id) {
           if (!id.includes("node_modules")) return undefined;
-          if (id.includes("/react-dom/") || id.includes("/scheduler/") || id.includes("/react/")) {
-            return "vendor-react";
-          }
           if (id.includes("/react-router-dom/") || id.includes("/react-router/") || id.includes("/@remix-run/")) {
             return "vendor-router";
           }

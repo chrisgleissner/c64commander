@@ -17,6 +17,7 @@ export default tseslint.config(
       "test-results/**",
       "coverage/**",
       "playwright-report/**",
+      ".worktrees/**",
     ],
   },
   {

@@ -269,6 +269,12 @@ npm run build
 - This exception is only for local iteration speed.
 - `.github/prompts/pr-converge.prompt.md` overrides this exception and restores the full validation and coverage requirements.
 
+## Ralph / device-stabilization HIL loop exception
+
+- When the active prompt is a Ralph, productionization, hardening, device-stabilization, Pixel 4 HIL, droidmind, c64scope, or no-coverage device-loop prompt, the coverage expectations above do **not** apply: do not run `npm run test:coverage`, changed-line coverage checks, lint gates, or full test suites merely because code changes exist.
+- In those loops, real Pixel 4 device evidence is the deliverable; focused regression tests for confirmed defect fixes are still required.
+- Coverage and patch coverage become mandatory again only in PR convergence (`.github/prompts/pr-converge.prompt.md`).
+
 ## Android (local)
 
 ```bash

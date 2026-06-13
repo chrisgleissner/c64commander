@@ -9,8 +9,9 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { App } from "@capacitor/app";
 import { addErrorLog } from "@/lib/logging";
-import { Button } from "@/components/ui/button";
+import { StatefulButton } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
 
 type MarkdownBlock =
   | { type: "heading"; level: number; text: string }
@@ -262,10 +263,10 @@ export default function OpenSourceLicensesPage() {
     };
   }, [navigate]);
 
-  return (
+  const content = (
     <div
       data-testid="open-source-licenses-overlay"
-      className="absolute inset-0 z-50 overflow-hidden bg-background/84 backdrop-blur-sm supports-[backdrop-filter]:bg-background/72"
+      className="fixed inset-0 z-[1100] overflow-hidden bg-background/96 backdrop-blur-sm supports-[backdrop-filter]:bg-background/88"
     >
       <div className="mx-auto flex h-full w-full max-w-6xl min-w-0 flex-col px-3 py-3 sm:px-6 sm:py-4">
         <div className="mb-3 flex min-w-0 flex-wrap items-start justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
@@ -273,7 +274,8 @@ export default function OpenSourceLicensesPage() {
             <h1 className="break-words text-lg font-semibold">Open Source Licenses</h1>
             <p className="break-words text-sm text-muted-foreground">Rendered from bundled `THIRD_PARTY_NOTICES.md`.</p>
           </div>
-          <Button
+          <StatefulButton
+            type="button"
             variant="ghost"
             size="icon"
             className="shrink-0"
@@ -281,7 +283,7 @@ export default function OpenSourceLicensesPage() {
             aria-label="Close licenses overlay"
           >
             <span className="text-lg leading-none">×</span>
-          </Button>
+          </StatefulButton>
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-card">
@@ -436,4 +438,7 @@ export default function OpenSourceLicensesPage() {
       </div>
     </div>
   );
+
+  if (typeof document === "undefined") return content;
+  return createPortal(content, document.body);
 }

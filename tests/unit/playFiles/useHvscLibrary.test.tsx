@@ -236,6 +236,7 @@ describe("useHvscLibrary", () => {
 
     const { result } = renderHook(() => useHvscLibrary());
 
+    await waitFor(() => expect(result.current.hvscStatus).toMatchObject({ ingestionState: "idle" }));
     await waitFor(() => expect(mocks.saveHvscStatusSummaryMock).toHaveBeenCalled());
     expect(mocks.addLogMock).toHaveBeenCalledWith(
       "warn",
@@ -314,6 +315,23 @@ describe("useHvscLibrary", () => {
     );
   });
 
+  it("marks the automatic initial folder load as background so its failure never toasts (ERROR_POLICY §3)", async () => {
+    mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 42 }));
+    mocks.getHvscFolderListingMock.mockRejectedValueOnce(new Error("listing unavailable"));
+
+    renderHook(() => useHvscLibrary());
+
+    await waitFor(() => expect(mocks.getHvscFolderListingMock).toHaveBeenCalledWith("/"));
+    await waitFor(() =>
+      expect(mocks.reportUserErrorMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "HVSC_BROWSE",
+          background: true,
+        }),
+      ),
+    );
+  });
+
   it("completes the install flow immediately when HVSC is already up to date", async () => {
     mocks.checkForHvscUpdatesMock.mockResolvedValue({ latestVersion: 5, installedVersion: 5, requiredUpdates: [] });
     mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 5 }));
@@ -385,8 +403,10 @@ describe("useHvscLibrary", () => {
     expect(result.current.hvscSummaryState).toBe("failure");
   });
 
-  it("swallows cancelled install failures without surfacing a user error", async () => {
-    mocks.installOrUpdateHvscMock.mockRejectedValueOnce(new Error("cancelled by user"));
+  it("swallows structured cancelled install failures without surfacing a user error", async () => {
+    mocks.installOrUpdateHvscMock.mockRejectedValueOnce(
+      Object.assign(new Error("native cancellation"), { code: "HVSC_CANCELLED" }),
+    );
     const { result } = renderHook(() => useHvscLibrary());
 
     await act(async () => {
@@ -396,6 +416,23 @@ describe("useHvscLibrary", () => {
     expect(mocks.reportUserErrorMock).not.toHaveBeenCalled();
     expect(result.current.hvscSummaryState).toBe("failure");
     expect(result.current.hvscInlineError).toBeNull();
+  });
+
+  it("does not treat a cancellation-like install message as expected cancellation without a code", async () => {
+    mocks.installOrUpdateHvscMock.mockRejectedValueOnce(new Error("cancelled by network peer"));
+    const { result } = renderHook(() => useHvscLibrary());
+
+    await act(async () => {
+      await result.current.handleHvscInstall();
+    });
+
+    expect(mocks.reportUserErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "HVSC_DOWNLOAD",
+        description: "cancelled by network peer",
+      }),
+    );
+    expect(result.current.hvscInlineError).toBe("cancelled by network peer");
   });
 
   it("refuses ingest when there is no cached HVSC data", async () => {

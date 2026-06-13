@@ -17,6 +17,8 @@ import { HOME_CPU_SPEED_OPTIONS } from "../constants";
 import { createHomeCpuSpeedSliderProbeSnapshot, formatHomeCpuSpeedSliderProbe } from "./homeCpuSpeedSliderProbe";
 import { resolveTurboControlValue } from "../utils/HomeConfigUtils";
 
+const normalizeControlToken = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
+
 type HomeCpuSpeedSliderProps = {
   isActive: boolean;
   cpuSpeedOptions: string[];
@@ -50,6 +52,7 @@ export function HomeCpuSpeedSlider({
       const nextTurboControl = resolveTurboControlValue(
         nextCpuSpeed,
         turboControlOptions.length ? turboControlOptions : [turboControlValue],
+        turboControlValue,
       );
       const releasedAtMs = Date.now();
       const releasedAtIso = new Date(releasedAtMs).toISOString();
@@ -74,10 +77,11 @@ export function HomeCpuSpeedSlider({
         },
       });
       try {
-        await interactiveWrite({
-          "CPU Speed": nextCpuSpeed,
-          "Turbo Control": nextTurboControl,
-        });
+        const updates: Record<string, string> =
+          normalizeControlToken(nextTurboControl) === normalizeControlToken(turboControlValue)
+            ? { "CPU Speed": nextCpuSpeed }
+            : { "Turbo Control": nextTurboControl, "CPU Speed": nextCpuSpeed };
+        await interactiveWrite(updates);
         const completedAtMs = Date.now();
         const completedAtIso = new Date(completedAtMs).toISOString();
         const durationMs = Math.max(0, completedAtMs - releasedAtMs);

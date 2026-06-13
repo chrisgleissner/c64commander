@@ -28,6 +28,26 @@ const base64ToArrayBuffer = (base64: string) => {
   return bytes.buffer;
 };
 
+// A native SAF read that never settles would otherwise hold the playback
+// single-flight guard and block the play transition queue forever; bound it so
+// a stuck read becomes a visible, recoverable failure.
+const LOCAL_READ_TIMEOUT_MS = 15_000;
+
+const readWithTimeout = async <T>(read: Promise<T>): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error("Local file unavailable. Re-add it to the playlist.")),
+      LOCAL_READ_TIMEOUT_MS,
+    );
+  });
+  try {
+    return await Promise.race([read, timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+};
+
 export const buildLocalPlayFileFromUri = (
   name: string,
   path: string,
@@ -38,7 +58,7 @@ export const buildLocalPlayFileFromUri = (
   webkitRelativePath: path,
   lastModified: lastModified ?? Date.now(),
   arrayBuffer: async () => {
-    const data = await FolderPicker.readFile({ uri });
+    const data = await readWithTimeout(FolderPicker.readFile({ uri }));
     return base64ToArrayBuffer(data.data);
   },
 });
@@ -53,7 +73,7 @@ export const buildLocalPlayFileFromTree = (
   webkitRelativePath: path,
   lastModified: lastModified ?? Date.now(),
   arrayBuffer: async () => {
-    const data = await FolderPicker.readFileFromTree({ treeUri, path });
+    const data = await readWithTimeout(FolderPicker.readFileFromTree({ treeUri, path }));
     return base64ToArrayBuffer(data.data);
   },
 });

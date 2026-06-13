@@ -74,6 +74,7 @@ const DISK_AUTOPLAY_DRIVE_MODE_BY_EXTENSION: Partial<Record<string, PhysicalDriv
   d71: "1571",
   d81: "1581",
 };
+const SID_SSL_PROPAGATION_PREFLIGHT_TIMEOUT_MS = 1200;
 
 export const buildPlayPlan = (request: PlayRequest): PlayPlan => {
   const category = getPlayCategory(request.path);
@@ -142,7 +143,7 @@ const ensureDiskAutoplayDriveReady = async (api: C64API, drive: "a" | "b", path:
 
 const emitDurationPropagationEvent = (payload: {
   type: "ssl-propagation-failure" | "playback-no-duration";
-  level: "error" | "info";
+  level: "error" | "warn" | "info";
   reason: string;
   path: string;
   songlengthEntryMs?: number;
@@ -160,6 +161,8 @@ const emitDurationPropagationEvent = (payload: {
 
   if (payload.level === "error") {
     addErrorLog("Ultimate SID SSL propagation failure", eventContext);
+  } else if (payload.level === "warn") {
+    addLog("warn", "Ultimate SID SSL propagation failed; direct playback fallback will be used", eventContext);
   } else {
     addLog("info", "Ultimate SID has no duration metadata", eventContext);
   }
@@ -226,6 +229,26 @@ const recordPlaybackBenchmarkSnapshot = (
       mode,
     },
   });
+};
+
+const withSidPropagationPreflightDeadline = async <T>(promise: Promise<T>, path: string): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(
+        new Error(
+          `SID SSL propagation preflight timed out after ${SID_SSL_PROPAGATION_PREFLIGHT_TIMEOUT_MS}ms for ${path}`,
+        ),
+      );
+    }, SID_SSL_PROPAGATION_PREFLIGHT_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+    }
+  }
 };
 
 export const tryFetchUltimateSidBlob = async (path: string) => {
@@ -355,7 +378,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
 
           let propagationFailure: Error | null = null;
           try {
-            const ftpBlob = await tryFetchUltimateSidBlob(plan.path);
+            const ftpBlob = await withSidPropagationPreflightDeadline(tryFetchUltimateSidBlob(plan.path), plan.path);
             if (!ftpBlob) {
               throw new Error("SID FTP fetch failed for SSL propagation");
             }
@@ -371,14 +394,14 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
           } catch (error) {
             propagationFailure = error as Error;
             const message = propagationFailure.message;
-            const reason = /ftp/i.test(message)
+            const reason = /ftp|preflight|timed out/i.test(message)
               ? "ftp-fetch-failed"
               : /invalid sid duration|duration/i.test(message)
                 ? "ssl-payload-invalid"
                 : "upload-failed-with-songlength-available";
             emitDurationPropagationEvent({
               type: "ssl-propagation-failure",
-              level: "error",
+              level: "warn",
               reason,
               path: plan.path,
               songlengthEntryMs: plan.durationMs,

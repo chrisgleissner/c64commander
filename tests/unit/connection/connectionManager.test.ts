@@ -16,8 +16,15 @@ import {
 } from "../../../src/lib/config/appSettings";
 import { featureFlagManager } from "../../../src/lib/config/featureFlags";
 import { getSmokeConfig, isSmokeModeEnabled, recordSmokeStatus } from "../../../src/lib/smoke/smokeMode";
+import { getPassword as loadStoredPassword } from "../../../src/lib/secureStorage";
 
 import { CURRENT_DEVICE_HOST_KEY as DEVICE_HOST_KEY } from "../../../src/lib/c64api/hostConfig";
+
+const mdnsMocks = vi.hoisted(() => ({
+  isMdnsAvailable: vi.fn(() => false),
+  isBareHostname: vi.fn((host: string) => /^[a-z0-9-]+$/i.test(host)),
+  resolveMdnsHost: vi.fn(),
+}));
 
 vi.mock("../../../src/lib/config/appSettings", () => ({
   loadAutomaticDemoModeEnabled: vi.fn(() => false),
@@ -62,6 +69,20 @@ vi.mock("../../../src/lib/secureStorage", () => ({
   hasStoredPasswordFlag: vi.fn(() => false),
   getCachedPassword: vi.fn(() => null),
 }));
+
+vi.mock("../../../src/lib/native/mdnsResolver", () => ({
+  isMdnsAvailable: (...args: unknown[]) => mdnsMocks.isMdnsAvailable(...args),
+  isBareHostname: (...args: [string]) => mdnsMocks.isBareHostname(...args),
+  resolveMdnsHost: (...args: unknown[]) => mdnsMocks.resolveMdnsHost(...args),
+}));
+
+vi.mock("../../../src/lib/uiErrors", async () => {
+  const actual = await vi.importActual<typeof import("../../../src/lib/uiErrors")>("../../../src/lib/uiErrors");
+  return {
+    ...actual,
+    clearConnectivityErrorToastsForHost: vi.fn(),
+  };
+});
 
 const startMockServer = vi.fn(async () => {
   throw new Error("Mock C64U server is only available on native platforms.");
@@ -117,7 +138,16 @@ describe("connectionManager", () => {
     localStorage.clear();
     sessionStorage.clear();
     vi.useFakeTimers();
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ errors: ["offline"] }), {
+          status: 503,
+          statusText: "Service Unavailable",
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
     vi.mocked(isFuzzModeEnabled).mockReturnValue(false);
     vi.mocked(getFuzzMockBaseUrl).mockReturnValue(null);
     vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(false);
@@ -127,6 +157,9 @@ describe("connectionManager", () => {
     vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: false } } as never);
     vi.mocked(recordSmokeStatus).mockResolvedValue(undefined);
     vi.mocked(getSmokeConfig as any).mockReturnValue(null);
+    mdnsMocks.isMdnsAvailable.mockReturnValue(false);
+    mdnsMocks.isBareHostname.mockImplementation((host: string) => /^[a-z0-9-]+$/i.test(host));
+    mdnsMocks.resolveMdnsHost.mockReset();
     startMockServer.mockImplementation(async () => {
       throw new Error("Mock C64U server is only available on native platforms.");
     });
@@ -233,7 +266,13 @@ describe("connectionManager", () => {
     localStorage.removeItem("c64u_has_password");
     vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
     vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
-    vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ errors: ["offline"] }), {
+        status: 503,
+        statusText: "Service Unavailable",
+        headers: { "content-type": "application/json" },
+      }),
+    );
 
     await initializeConnectionManager();
     const result = await verifyCurrentConnectionTarget();
@@ -265,6 +304,85 @@ describe("connectionManager", () => {
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
     expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
     expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("127.0.0.1:9999");
+  });
+
+  it("startup discovery stores the device identity returned by the successful probe", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          product: "Ultimate 64 Elite",
+          firmware_version: "3.14e",
+          hostname: "u64",
+          unique_id: "38C1BA",
+          errors: [],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await initializeConnectionManager();
+    void discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(getConnectionSnapshot().deviceInfo).toMatchObject({
+      product: "Ultimate 64 Elite",
+      firmware_version: "3.14e",
+    });
+
+    const { getSelectedSavedDeviceProductFamilySync } = await import("../../../src/lib/savedDevices/store");
+    expect(getSelectedSavedDeviceProductFamilySync()).toBe("U64E");
+  });
+
+  it("traffic-derived promotion without identity fetches device identity once", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager, noteReachable } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    await initializeConnectionManager();
+    void discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(800);
+    expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+    expect(getConnectionSnapshot().deviceInfo).toBeNull();
+
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          product: "C64 Ultimate",
+          firmware_version: "1.1.0",
+          hostname: "c64u",
+          unique_id: "5D4E12",
+          errors: [],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    noteReachable("127.0.0.1", "rest");
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(getConnectionSnapshot().deviceInfo).toMatchObject({
+      product: "C64 Ultimate",
+      firmware_version: "1.1.0",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const { getSelectedSavedDeviceProductFamilySync } = await import("../../../src/lib/savedDevices/store");
+    expect(getSelectedSavedDeviceProductFamilySync()).toBe("C64U");
   });
 
   it("records smoke status transitions when enabled", async () => {
@@ -1073,10 +1191,9 @@ describe("connectionManager", () => {
     const abort = new AbortController();
     abort.abort();
 
-    vi.mocked(fetch).mockRejectedValue(new DOMException("Aborted", "AbortError"));
-
     const result = await probeOnce({ signal: abort.signal });
     expect(result).toBe(false);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("demo fallback uses stored device host when no mock server is active", async () => {
@@ -1096,8 +1213,9 @@ describe("connectionManager", () => {
     vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
 
     await initializeConnectionManager();
-    void discoverConnection("startup");
+    const discovery = discoverConnection("startup");
     await vi.advanceTimersByTimeAsync(800);
+    await discovery;
 
     expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
     // Should fallback to stored host-based URL
@@ -1335,6 +1453,43 @@ describe("connectionManager", () => {
     getInfoSpy.mockRestore();
   });
 
+  it("invalidates a cached mDNS address after repeated probe failures", async () => {
+    vi.stubEnv("VITEST", "false");
+    vi.stubEnv("NODE_ENV", "production");
+    localStorage.setItem("c64u_device_host", "mdns-negative");
+    localStorage.removeItem("c64u_has_password");
+    mdnsMocks.isMdnsAvailable.mockReturnValue(true);
+    mdnsMocks.resolveMdnsHost.mockResolvedValue({
+      ip: "192.168.1.13",
+      resolvedHost: "mdns-negative.local",
+      ttlMs: 60_000,
+    });
+    const addLogSpy = vi.spyOn(logging, "addLog");
+
+    const { C64API } = await import("../../../src/lib/c64api");
+    const getInfoSpy = vi.spyOn(C64API.prototype, "getInfo").mockRejectedValue(new Error("Host unreachable"));
+    const { probeOnce } = await import("../../../src/lib/connection/connectionManager");
+
+    await expect(probeOnce()).resolves.toBe(false);
+    await expect(probeOnce()).resolves.toBe(false);
+    expect(mdnsMocks.resolveMdnsHost).toHaveBeenCalledTimes(1);
+
+    await expect(probeOnce()).resolves.toBe(false);
+    expect(mdnsMocks.resolveMdnsHost).toHaveBeenCalledTimes(2);
+    expect(addLogSpy).toHaveBeenCalledWith(
+      "warn",
+      "Invalidated cached mDNS address after repeated probe failures",
+      expect.objectContaining({
+        host: "mdns-negative",
+        resolvedAddress: "192.168.1.13",
+        failureCount: 2,
+      }),
+    );
+
+    getInfoSpy.mockRestore();
+    addLogSpy.mockRestore();
+  });
+
   it("verifyCurrentConnectionTarget uses switch probe flags for explicit device targets", async () => {
     vi.stubEnv("VITEST", "false");
     vi.stubEnv("NODE_ENV", "production");
@@ -1372,6 +1527,68 @@ describe("connectionManager", () => {
     );
 
     getInfoSpy.mockRestore();
+  });
+
+  it("clears stale device identity as soon as a device switch starts", async () => {
+    vi.stubEnv("VITEST", "false");
+    vi.stubEnv("NODE_ENV", "production");
+    localStorage.setItem("c64u_device_host", "c64u");
+    localStorage.removeItem("c64u_has_password");
+
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          product: "C64 Ultimate",
+          firmware_version: "1.1.0",
+          hostname: "c64u",
+          unique_id: "5D4E12",
+          errors: [],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager, verifyCurrentConnectionTarget } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    void discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(800);
+    expect(getConnectionSnapshot().deviceInfo?.hostname).toBe("c64u");
+
+    let resolveSwitchProbe: (response: Response) => void = () => undefined;
+    fetchMock.mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        resolveSwitchProbe = resolve;
+      }),
+    );
+
+    const switchPromise = verifyCurrentConnectionTarget({
+      deviceHost: "u64",
+      preferResolvedAddress: "192.168.1.13",
+    });
+
+    expect(getConnectionSnapshot()).toMatchObject({
+      state: "DISCOVERING",
+      deviceInfo: null,
+    });
+
+    resolveSwitchProbe(
+      new Response(
+        JSON.stringify({
+          product: "Ultimate 64 Elite",
+          firmware_version: "3.14e",
+          hostname: "Ultimate-64-Elite-F83C87",
+          unique_id: "38C1BA",
+          errors: [],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await expect(switchPromise).resolves.toEqual(expect.objectContaining({ ok: true }));
+    expect(getConnectionSnapshot().deviceInfo?.hostname).toBe("Ultimate-64-Elite-F83C87");
   });
 
   it("initializeConnectionManager logs warning when stopDemoServer throws", async () => {
@@ -1472,6 +1689,41 @@ describe("connectionManager", () => {
     void discoverConnection("startup");
     await vi.advanceTimersByTimeAsync(600);
     expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+  });
+
+  it("continues discovery after a probe preamble rejection clears the in-flight latch", async () => {
+    const addLogSpy = vi.spyOn(logging, "addLog");
+    vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(3000);
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ product: "U64", errors: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    vi.mocked(loadStoredPassword).mockRejectedValueOnce(new Error("secure storage unavailable"));
+    vi.mocked(loadStoredPassword).mockResolvedValue(null);
+    void discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(getConnectionSnapshot()).toMatchObject({
+      state: "DISCOVERING",
+      lastProbeError: "secure storage unavailable",
+    });
+    expect(addLogSpy).toHaveBeenCalledWith(
+      "warn",
+      "Discovery probe failed before completion",
+      expect.objectContaining({ trigger: "startup", error: "secure storage unavailable" }),
+    );
+
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    addLogSpy.mockRestore();
   });
 
   it("transitionToDemoActive: shouldStartDemoServer false when demoServerStartedThisSession", async () => {
@@ -1600,5 +1852,27 @@ describe("connectionManager", () => {
       configurable: true,
       writable: true,
     });
+  });
+
+  it("noteReachable clears connectivity error toasts for the recovered active host (ERROR_POLICY §6)", async () => {
+    localStorage.setItem(DEVICE_HOST_KEY, "u64");
+    const { clearConnectivityErrorToastsForHost } = await import("../../../src/lib/uiErrors");
+    const { noteReachable } = await import("../../../src/lib/connection/connectionManager");
+    vi.mocked(clearConnectivityErrorToastsForHost).mockClear();
+
+    noteReachable("u64", "rest" as never);
+
+    expect(vi.mocked(clearConnectivityErrorToastsForHost)).toHaveBeenCalledWith("u64");
+  });
+
+  it("noteReachable does not clear toasts for a non-active host (ERROR_POLICY §6)", async () => {
+    localStorage.setItem(DEVICE_HOST_KEY, "u64");
+    const { clearConnectivityErrorToastsForHost } = await import("../../../src/lib/uiErrors");
+    const { noteReachable } = await import("../../../src/lib/connection/connectionManager");
+    vi.mocked(clearConnectivityErrorToastsForHost).mockClear();
+
+    noteReachable("some-other-host", "rest" as never);
+
+    expect(vi.mocked(clearConnectivityErrorToastsForHost)).not.toHaveBeenCalled();
   });
 });

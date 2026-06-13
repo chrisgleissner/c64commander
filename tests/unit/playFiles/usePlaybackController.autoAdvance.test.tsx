@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { USER_TRANSPORT_COALESCE_MS, usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { executePlayPlan } from "@/lib/playback/playbackRouter";
+import { addLog } from "@/lib/logging";
 
 vi.mock("@/lib/archive/client", () => ({
   createArchiveClient: vi.fn(),
@@ -127,7 +128,7 @@ const renderPlaybackHarness = (initialPlaylist: PlaylistItem[], options?: { repe
       repeatEnabled: options?.repeatEnabled ?? false,
       localEntriesBySourceId: new Map(),
       localSourceTreeUris: new Map(),
-      deviceProduct: "C64 Ultimate",
+      deviceProduct: "Ultimate 64 Elite",
       ensurePlaybackConnection: vi.fn().mockResolvedValue(undefined),
       resolveSonglengthDurationMsForPath: vi.fn().mockResolvedValue(null),
       applySonglengthsToItems: vi.fn().mockImplementation(async (items) => items),
@@ -215,6 +216,14 @@ describe("usePlaybackController auto advance", () => {
     expect(result.current.isPaused).toBe(false);
     expect(result.current.autoAdvanceGuardRef.current).toBeNull();
     expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+      "info",
+      "Playlist playback ended without device stop",
+      expect.objectContaining({
+        reason: "auto-end",
+        deviceAction: "none",
+      }),
+    );
   });
 
   it("wraps back to the first playlist item when repeat is enabled", async () => {
@@ -304,6 +313,38 @@ describe("usePlaybackController auto advance", () => {
     expect(result.current.isPlaying).toBe(false);
     expect(result.current.isPaused).toBe(false);
     expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+  });
+
+  it("manual next resolves from the current track if auto-advance completes before the user skip flushes", async () => {
+    vi.useFakeTimers();
+    const playlist = [
+      createPlaylistItem("one", 1_000),
+      createPlaylistItem("two", 1_000),
+      createPlaylistItem("three", 1_000),
+    ];
+    const { result } = renderPlaybackHarness(playlist);
+
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+
+    const next = result.current.handleNext("user");
+    await act(async () => {
+      await result.current.playItem(playlist[1], { playlistIndex: 1 });
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(USER_TRANSPORT_COALESCE_MS);
+    });
+    await next;
+
+    expect(result.current.currentIndex).toBe(2);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ path: "/PROGRAMS/three.prg" }),
+      expect.anything(),
+    );
   });
 
   it("manual next at the end wraps when repeat is on and launches only the first item", async () => {

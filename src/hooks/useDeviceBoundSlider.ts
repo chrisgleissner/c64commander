@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { APP_SETTINGS_KEYS, loadVolumeSliderPreviewIntervalMs } from "@/lib/config/appSettings";
+import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import { pollingPauseRegistry, type PollingPauseHandle } from "@/lib/query/c64PollingGovernance";
 import { clampSliderValue } from "@/lib/ui/sliderBehavior";
 import { addLog } from "@/lib/logging";
@@ -101,7 +102,19 @@ export const createNumericSliderDomain = (params: {
 };
 
 const DEFAULT_WATCHDOG_MS = 2000;
+const WATCHDOG_RECONCILIATION_MARGIN_MS = 1000;
 const POLLING_PAUSE_TAIL_GRACE_MS = 250;
+
+export const resolveDeviceBoundSliderWatchdogMs = (watchdogMs?: number) => {
+  if (typeof watchdogMs === "number" && Number.isFinite(watchdogMs) && watchdogMs > 0) {
+    return watchdogMs;
+  }
+  const safety = loadDeviceSafetyConfig();
+  return Math.max(
+    DEFAULT_WATCHDOG_MS,
+    safety.configsCacheMs + safety.configsCooldownMs + safety.backoffBaseMs + WATCHDOG_RECONCILIATION_MARGIN_MS,
+  );
+};
 
 const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
   typeof value === "object" && value !== null && "then" in value && typeof value.then === "function";
@@ -115,7 +128,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
   preview,
   onDraftChange,
   previewThrottleMs,
-  watchdogMs = DEFAULT_WATCHDOG_MS,
+  watchdogMs,
   onError,
 }: UseDeviceBoundSliderOptions<T>) {
   const { selectedDeviceId } = useSavedDevices();
@@ -132,6 +145,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
   const lastIgnoredDeviceValueRef = useRef<string | null>(null);
   const watchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pauseTailGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const commitInFlightRef = useRef(false);
   // Drives/info polling pauses while the user is dragging or while we are
   // waiting for the device to echo back the committed value. Pause is
   // released on commit + reconciliation settle (or on watchdog expiry, or
@@ -149,6 +163,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
   }, []);
 
   const equals = domain.equals ?? areDeviceBoundSliderValuesEqual;
+  const resolvedWatchdogMs = resolveDeviceBoundSliderWatchdogMs(watchdogMs);
   const deviceSliderValue = useMemo(
     () => domain.clampSliderValue(domain.toSliderValue(deviceValue)),
     [deviceValue, domain],
@@ -310,9 +325,27 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
     watchdogTimerRef.current = setTimeout(() => {
       clearWatchdogTimer();
       clearPauseTailGraceTimer();
+      // The device never echoed the committed value back. Drop the pending
+      // intent so the slider falls back to the authoritative device value
+      // instead of displaying the stale intent forever. While the commit is
+      // still in flight the intent stays latched; the watchdog is re-armed
+      // when the commit settles, so the deadline counts from completion.
+      if (!commitInFlightRef.current) {
+        setPendingIntent((current) => {
+          if (current !== null) {
+            addLog("debug", "Device-bound slider reconciliation watchdog expired", {
+              slider: debugName,
+              pendingValue: current.value,
+              pendingSliderValue: current.sliderValue,
+              watchdogMs: resolvedWatchdogMs,
+            });
+          }
+          return null;
+        });
+      }
       releasePollingPause();
-    }, watchdogMs);
-  }, [clearPauseTailGraceTimer, clearWatchdogTimer, releasePollingPause, watchdogMs]);
+    }, resolvedWatchdogMs);
+  }, [clearPauseTailGraceTimer, clearWatchdogTimer, debugName, releasePollingPause, resolvedWatchdogMs]);
 
   const schedulePollingPauseRelease = useCallback(() => {
     clearPauseTailGraceTimer();
@@ -485,11 +518,18 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
         coalescing: "latest-intent",
       });
       armWatchdog();
+      commitInFlightRef.current = true;
       void Promise.resolve(commit(nextValue))
         .then(() => {
+          commitInFlightRef.current = false;
+          // Restart the reconciliation deadline from commit completion so a
+          // slow write lane cannot eat the whole watchdog window before the
+          // device has a chance to echo the new value.
+          armWatchdog();
           schedulePollingPauseRelease();
         })
         .catch((error) => {
+          commitInFlightRef.current = false;
           clearLatchedState();
           onError?.(error, {
             phase: "commit",

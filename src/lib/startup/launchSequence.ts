@@ -21,7 +21,7 @@ type LaunchSequenceCanceller = (handle: TimerHandle) => void;
 
 export const DEFAULT_LAUNCH_SEQUENCE_TIMINGS: LaunchSequenceTimings = {
   fadeInMs: 300,
-  holdMs: 1700,
+  holdMs: 500,
   fadeOutMs: 250,
 };
 

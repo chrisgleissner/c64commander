@@ -280,6 +280,7 @@ describe("AudioMixer", () => {
           expect.any(String),
           "HOME_SID_ENABLED",
           expect.stringContaining("SID Socket 1"),
+          { clearPendingOnSuccess: true },
         );
       });
     });
@@ -301,6 +302,7 @@ describe("AudioMixer", () => {
           expect.any(String),
           "HOME_SID_ENABLED",
           expect.stringContaining("SID Socket 2"),
+          { clearPendingOnSuccess: true },
         );
       });
     });

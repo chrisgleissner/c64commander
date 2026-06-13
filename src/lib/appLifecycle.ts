@@ -6,11 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export type AppLifecycleState = "foreground" | "background" | "locked" | "unknown";
+export type AppLifecycleState = "foreground" | "background" | "unknown";
 
 export const getLifecycleState = (): AppLifecycleState => {
   if (typeof document === "undefined") return "unknown";
   if (document.visibilityState === "hidden" || document.hidden) return "background";
-  if (typeof document.hasFocus === "function" && !document.hasFocus()) return "locked";
+  if (typeof document.hasFocus === "function" && !document.hasFocus()) return "unknown";
   return "foreground";
 };

@@ -86,11 +86,14 @@ const resolveErrorType = (error: Error) => {
 export const classifyError = (error: unknown, categoryHint?: FailureCategory): FailureClassification => {
   const err = error instanceof Error ? error : new Error(normalizeMessage(error) || "Unknown error");
   const message = normalizeMessage(err).toLowerCase();
+  const isStructuredCancellation =
+    Boolean(error && typeof error === "object" && (error as { isCancellation?: unknown }).isCancellation === true) ||
+    Boolean(error && typeof error === "object" && (error as { code?: unknown }).code === "HVSC_CANCELLED");
 
   let category: FailureCategory = categoryHint ?? "unknown";
 
   if (!categoryHint) {
-    if (isAbortError(err, message)) {
+    if (isStructuredCancellation || isAbortError(err, message)) {
       category = "cancelled";
     } else if (isTimeoutError(message)) {
       category = "timeout";
@@ -108,7 +111,7 @@ export const classifyError = (error: unknown, categoryHint?: FailureCategory): F
   const isExpected = category === "cancelled" || category === "user";
 
   let failureClass: FailureClass = "unknown";
-  if (isAbortError(err, message)) {
+  if (isStructuredCancellation || isAbortError(err, message)) {
     failureClass = "user-cancellation";
   } else if (isPermissionError(message)) {
     failureClass = "permission-denied";

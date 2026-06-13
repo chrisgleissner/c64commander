@@ -133,6 +133,20 @@ const NavigationProbe = () => {
   );
 };
 
+const SettingsOverlayNavigationProbe = () => {
+  const navigate = useNavigate();
+  return (
+    <>
+      <button type="button" onClick={() => navigate("/settings/open-source-licenses")}>
+        Open Licenses Route
+      </button>
+      <button type="button" onClick={() => navigate("/settings")}>
+        Close Licenses Route
+      </button>
+    </>
+  );
+};
+
 const InterstitialRegistrar = ({ active }: { active: boolean }) => {
   useRegisterInterstitial("sheet", active);
   return null;
@@ -195,9 +209,28 @@ describe("SwipeNavigationLayer", () => {
 
   it("renders the requested slot and settings sub-routes", async () => {
     renderLayer("/settings/open-source-licenses");
+    expect(await screen.findByText("Settings Page")).toBeInTheDocument();
     expect(await screen.findByText("Open Source Licenses Page")).toBeInTheDocument();
     expect(screen.getByTestId("swipe-slot-settings")).toHaveAttribute("data-slot-active", "true");
     expect(screen.getByTestId("swipe-slot-config")).toHaveAttribute("inert", "");
+  });
+
+  it("keeps Settings mounted when opening and closing the licenses overlay", async () => {
+    renderLayer("/settings", <SettingsOverlayNavigationProbe />);
+
+    expect(await screen.findByText("Settings Page")).toBeInTheDocument();
+    expect(mocks.mountCounts.settings).toBe(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Licenses Route" }));
+
+    expect(await screen.findByText("Open Source Licenses Page")).toBeInTheDocument();
+    expect(mocks.mountCounts.settings).toBe(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Close Licenses Route" }));
+
+    expect(screen.queryByText("Open Source Licenses Page")).not.toBeInTheDocument();
+    expect(screen.getByText("Settings Page")).toBeInTheDocument();
+    expect(mocks.mountCounts.settings).toBe(1);
   });
 
   it("maps diagnostics deep links into the settings slot", async () => {

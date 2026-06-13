@@ -430,6 +430,7 @@ export default function PlayFilesPage() {
     setPlayedMs,
     durationMs,
     setDurationMs,
+    autoAdvanceDueAtMs,
     setCurrentSubsongCount,
     setTrackInstanceId,
     repeatEnabled,
@@ -512,6 +513,9 @@ export default function PlayFilesPage() {
           description: "Foreground playback continues, but background auto-advance may be interrupted.",
           error,
           context: { trackInstanceId },
+          // Playback itself succeeded; degraded background capability is a
+          // notice, not a destructive error (ERROR_POLICY §1 S2).
+          severity: "S2",
         });
       });
       void queueBackgroundDueAtUpdate(autoAdvanceDueAtMs);
@@ -539,6 +543,9 @@ export default function PlayFilesPage() {
         description: "Background playback guard could not be fully stopped.",
         error,
         context: { trackInstanceId, reason: isPaused ? "pause" : "stop" },
+        // Background guard cleanup is system work; failures are diagnostics
+        // material, never a toast (ERROR_POLICY §3).
+        background: true,
       });
     });
     void queueBackgroundDueAtUpdate(null);
@@ -554,6 +561,14 @@ export default function PlayFilesPage() {
   useEffect(
     () => () => {
       if (!backgroundExecutionActiveRef.current) return;
+      const latestPlaybackState = playbackStateRef.current;
+      if (latestPlaybackState.isPlaying && !latestPlaybackState.isPaused) {
+        addLog("debug", "Leaving background playback guard active across Play page unmount", {
+          trackInstanceId: backgroundCleanupTrackInstanceIdRef.current,
+          dueAtMs: autoAdvanceGuardRef.current?.dueAtMs ?? null,
+        });
+        return;
+      }
       backgroundExecutionActiveRef.current = false;
       void stopBackgroundExecutionRef
         .current({
@@ -571,6 +586,8 @@ export default function PlayFilesPage() {
               trackInstanceId: backgroundCleanupTrackInstanceIdRef.current,
               reason: "cleanup",
             },
+            // Unmount-time cleanup is never user-initiated (ERROR_POLICY §3).
+            background: true,
           });
         });
       void queueBackgroundDueAtUpdateRef.current(null);
@@ -642,6 +659,9 @@ export default function PlayFilesPage() {
         description: "HVSC was disabled, but the active preparation task could not be cancelled cleanly.",
         error,
         context: { preparationState: hvsc.hvscPreparationState },
+        // The disable itself succeeded; a lingering background task is a
+        // notice, not a destructive error (ERROR_POLICY §1 S2).
+        severity: "S2",
       });
     });
   }, [hvsc.handleHvscCancel, hvsc.hvscPreparationState, hvscControlsEnabled, hvscPreparationOpen]);

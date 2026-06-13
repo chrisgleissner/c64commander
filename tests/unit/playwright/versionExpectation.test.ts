@@ -64,7 +64,7 @@ describe("playwright version expectation", () => {
         readGeneratedVersion: () => "0.7.8",
         readPackageVersion: () => "0.7.9-rc1",
       }),
-    ).toEqual(["0.7.9-rc1", "0.7.9"]);
+    ).toEqual(["0.7.9-rc1"]);
     expect(
       resolveExpectedVersionPattern({
         env,
@@ -75,7 +75,7 @@ describe("playwright version expectation", () => {
     ).toBe(true);
   });
 
-  it("accepts the latest clean tag because resolve-version.sh emits that label on non-tag branch builds", () => {
+  it("expects the latest tag plus commit id for non-tag branch builds", () => {
     const env = {
       VITE_APP_VERSION: "",
       VERSION_NAME: "",
@@ -100,7 +100,7 @@ describe("playwright version expectation", () => {
         readGeneratedVersion: () => "",
         readPackageVersion: () => "0.7.9-rc1",
       }),
-    ).toContain("0.7.8");
+    ).toEqual(expect.arrayContaining(["0.7.8-d2072", "0.7.9-rc1"]));
     expect(
       resolveExpectedVersionPattern({
         env,
@@ -116,6 +116,14 @@ describe("playwright version expectation", () => {
         readGeneratedVersion: () => "",
         readPackageVersion: () => "0.7.9-rc1",
       })?.test("0.7.8"),
+    ).toBe(false);
+    expect(
+      resolveExpectedVersionPattern({
+        env,
+        runGit,
+        readGeneratedVersion: () => "",
+        readPackageVersion: () => "0.7.9-rc1",
+      })?.test("0.7.8-d2072"),
     ).toBe(true);
   });
 });

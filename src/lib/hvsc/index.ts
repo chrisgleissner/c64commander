@@ -63,3 +63,4 @@ export type {
   HvscStepStatus,
 } from "./hvscStatusStore";
 export { HvscSongSource } from "./hvscSource";
+export { createHvscCancellationError, HVSC_CANCELLATION_CODE, isHvscCancellationError } from "./hvscCancellation";

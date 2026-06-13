@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "@/hooks/use-toast";
-import { useVolumeOverride } from "@/pages/playFiles/hooks/useVolumeOverride";
+import { resolveUnmuteFallbackIndexForSteps, useVolumeOverride } from "@/pages/playFiles/hooks/useVolumeOverride";
 import { waitForMachineTransitionsToSettle } from "@/lib/deviceInteraction/deviceActivityGate";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
@@ -119,6 +119,7 @@ const buildEnabledSidMutedToTargetUpdatesMock = vi.fn((_items: MixerItem[], _ena
 const buildEnabledSidVolumeUpdatesMock = vi.fn((_items: MixerItem[], _enablement: unknown, target: string) => ({
   "SID 1": target,
 }));
+const buildEnabledSidVolumeSnapshotMock = vi.fn(() => ({ "SID 1": "5" }));
 const buildSidEnablementMock = vi.fn(() => ({ sid1: true }));
 const filterEnabledSidVolumeItemsMock = vi.fn((items: MixerItem[]) => items);
 const buildSidVolumeStepsMock = vi.fn(() => [
@@ -130,7 +131,7 @@ vi.mock("@/lib/config/sidVolumeControl", () => ({
   buildEnabledSidMutedToTargetUpdates: (...args: unknown[]) => buildEnabledSidMutedToTargetUpdatesMock(...args),
   buildEnabledSidUnmuteUpdates: (...args: unknown[]) => buildEnabledSidUnmuteUpdatesMock(...args),
   buildEnabledSidRestoreUpdates: (...args: unknown[]) => buildEnabledSidRestoreUpdatesMock(...args),
-  buildEnabledSidVolumeSnapshot: vi.fn(() => ({ "SID 1": "5" })),
+  buildEnabledSidVolumeSnapshot: (...args: unknown[]) => buildEnabledSidVolumeSnapshotMock(...args),
   buildSidEnablement: (...args: unknown[]) => buildSidEnablementMock(...args),
   buildSidVolumeSteps: (...args: unknown[]) => buildSidVolumeStepsMock(...args),
   filterEnabledSidVolumeItems: (...args: unknown[]) => filterEnabledSidVolumeItemsMock(...args),
@@ -172,6 +173,8 @@ describe("useVolumeOverride", () => {
         "SID 1": target,
       }),
     );
+    buildEnabledSidVolumeSnapshotMock.mockReset();
+    buildEnabledSidVolumeSnapshotMock.mockReturnValue({ "SID 1": "5" });
     buildEnabledSidRestoreUpdatesMock.mockReset();
     buildEnabledSidRestoreUpdatesMock.mockReturnValue({});
     buildEnabledSidVolumeUpdatesMock.mockReset();
@@ -1026,6 +1029,19 @@ describe("useVolumeOverride", () => {
     });
   });
 
+  it("captures the session baseline instead of an already-muted pause snapshot", () => {
+    buildEnabledSidVolumeSnapshotMock.mockReturnValue({ "SID 1": "-42 dB" });
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+    result.current.volumeSessionSnapshotRef.current = { "SID 1": "5" };
+
+    expect(result.current.captureSidMuteSnapshot(audioMixerItemsRef.current, { sid1: true } as any)).toEqual({
+      volumes: { "SID 1": "5" },
+      enablement: { sid1: true },
+    });
+  });
+
   it("returns null snapshots when playback is inactive or no SID items are available", async () => {
     const inactive = renderHook(() => useVolumeOverride({ isPlaying: false, isPaused: false, previewIntervalMs: 200 }));
     await expect(inactive.result.current.ensureVolumeSessionSnapshot()).resolves.toBeNull();
@@ -1290,13 +1306,14 @@ describe("useVolumeOverride", () => {
       result.current.manualMuteSnapshotRef.current = null;
       result.current.handleVolumeDraftChange(0);
     });
+    const draftTarget = "0";
 
     await result.current.handleToggleMute();
 
     expect(mutateAsyncMock).toHaveBeenCalledWith(
       expect.objectContaining({
         category: "Audio Mixer",
-        updates: { "SID 1": "0" },
+        updates: { "SID 1": draftTarget },
       }),
     );
   });
@@ -1374,6 +1391,23 @@ describe("useVolumeOverride", () => {
       }),
     );
     expect(addLog).toHaveBeenCalledWith("info", "Play volume unmute sent", expect.objectContaining({ index: 1 }));
+  });
+
+  it("chooses the zero-dB fallback when unmuting from the mute index without a previous snapshot", () => {
+    expect(
+      resolveUnmuteFallbackIndexForSteps({
+        preferredIndex: null,
+        currentIndex: 1,
+        muteIndex: 1,
+        defaultVolumeIndex: 0,
+        volumeSteps: [
+          { option: "OFF", numeric: null, isOff: true },
+          { option: "-42 dB", numeric: -42, isOff: false },
+          { option: "0 dB", numeric: 0, isOff: false },
+          { option: "5 dB", numeric: 5, isOff: false },
+        ],
+      }),
+    ).toBe(2);
   });
 
   it("does not snap back when the device confirms the committed index and then reverts within the guard window", async () => {

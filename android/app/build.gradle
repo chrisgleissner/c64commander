@@ -100,16 +100,26 @@ if (keyPropsFile.exists()) {
 logger.lifecycle("Signing config keys loaded: ${keystoreProps.keySet()}")
 
 def resolveAppVersionName = { ->
-    def envVersion = System.getenv("VERSION_NAME") ?: System.getenv("VITE_APP_VERSION")
+    def envVersion = System.getenv("VERSION_NAME") ?: System.getenv("VITE_APP_VERSION") ?: System.getenv("APP_VERSION")
     if (envVersion) return envVersion
-    def refType = System.getenv("GITHUB_REF_TYPE")
-    def refName = System.getenv("GITHUB_REF_NAME")
-    if (refType == "tag" && refName) return refName
+
+    def repoRoot = rootProject.file("..")
     try {
-        def tag = "git describe --tags --exact-match".execute(null, rootDir).text.trim()
-        if (tag) return tag
+        def stdout = new StringBuffer()
+        def stderr = new StringBuffer()
+        def process = ["node", "scripts/resolve-build-version.mjs"].execute(null, repoRoot)
+        process.consumeProcessOutput(stdout, stderr)
+        process.waitFor()
+        def resolvedVersion = stdout.toString().trim()
+        if (process.exitValue() == 0 && resolvedVersion) return resolvedVersion
+        def errorText = stderr.toString().trim()
+        if (errorText) {
+            logger.warn("Failed to derive Android versionName from shared build-version resolver: ${errorText}")
+        } else {
+            logger.warn("Failed to derive Android versionName from shared build-version resolver; exit code ${process.exitValue()}")
+        }
     } catch (Exception error) {
-        logger.warn("Failed to derive Android versionName from git tag; falling back to package.json version", error)
+        logger.warn("Failed to derive Android versionName from shared build-version resolver; falling back to package.json version", error)
     }
     def pkgFile = rootProject.file("../package.json")
     if (pkgFile.exists()) {

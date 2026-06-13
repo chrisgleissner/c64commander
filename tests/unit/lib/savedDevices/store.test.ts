@@ -102,6 +102,7 @@ describe("savedDevices store", () => {
       host: "c64u",
       telnetPort: 23,
     });
+    expect(store.getSelectedSavedDeviceProductFamilySync()).toBe("C64U");
   });
 
   it("logs corrupted saved-device envelopes before falling back to legacy initialization", async () => {

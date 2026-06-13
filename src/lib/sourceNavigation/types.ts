@@ -20,6 +20,15 @@ export type SourceEntry = {
   modifiedAt?: string | null;
 };
 
+export type SourceRecursiveFailure = {
+  path: string;
+  message: string;
+};
+
+export type SourceRecursiveResult = SourceEntry[] & {
+  partialFailures?: SourceRecursiveFailure[];
+};
+
 export type SourceLocationType = "ultimate" | "local" | "hvsc" | "commoserve";
 
 export type SelectedItem = {
@@ -52,6 +61,6 @@ export type SourceLocation = {
     offset?: number;
     limit?: number;
   }) => Promise<SourceEntryPage>;
-  listFilesRecursive: (path: string, options?: { signal?: AbortSignal }) => Promise<SourceEntry[]>;
+  listFilesRecursive: (path: string, options?: { signal?: AbortSignal }) => Promise<SourceRecursiveResult>;
   clearCacheForPath?: (path: string) => void;
 };

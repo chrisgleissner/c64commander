@@ -70,7 +70,7 @@ import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { getLocalSourceListingMode, requireLocalSourceEntries } from "@/lib/sourceNavigation/localSourcesStore";
 import { LocalSourceListingError } from "@/lib/sourceNavigation/localSourceErrors";
 import { prepareDirectoryInput } from "@/lib/sourceNavigation/localSourcesStore";
-import type { SelectedItem, SourceEntry, SourceLocation } from "@/lib/sourceNavigation/types";
+import type { SelectedItem, SourceEntry, SourceLocation, SourceRecursiveFailure } from "@/lib/sourceNavigation/types";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
@@ -150,7 +150,7 @@ export const HomeDiskManager = () => {
   const { profile } = useDisplayProfile();
   const screenActive = useScreenActivity();
   const { status } = useC64Connection();
-  const { data: drivesData } = useC64Drives(HOME_SUMMARY_QUERY_OPTIONS);
+  const { data: drivesData, dataUpdatedAt: drivesDataUpdatedAt = 0 } = useC64Drives(HOME_SUMMARY_QUERY_OPTIONS);
   const trace = useActionTrace("HomeDiskManager");
 
   const diskLibrary = useDiskLibrary(SHARED_DISK_LIBRARY_ID);
@@ -163,8 +163,10 @@ export const HomeDiskManager = () => {
   const [activeDisk, setActiveDisk] = useState<DiskEntry | null>(null);
   const [driveErrors, setDriveErrors] = useState<Record<string, string>>({});
   const [mountedByDrive, setMountedByDrive] = useState<Record<string, string>>({});
+  const mountedByDriveSetAtRef = useRef<Record<string, number>>({});
   const mountCompletionGenerationRef = useRef<Record<DriveKey, number>>({ a: 0, b: 0 });
   const [drivePowerOverride, setDrivePowerOverride] = useState<Record<string, boolean>>({});
+  const drivePowerOverrideSetAtRef = useRef<Record<string, number>>({});
   const [drivePowerPending, setDrivePowerPending] = useState<Record<string, boolean>>({});
   const [driveResetPending, setDriveResetPending] = useState<Record<string, boolean>>({});
   const [browserOpen, setBrowserOpen] = useState(false);
@@ -317,25 +319,32 @@ export const HomeDiskManager = () => {
   }, [disksById]);
 
   useEffect(() => {
-    if (!drivesData?.drives?.length) return;
-    setDrivePowerOverride((prev) => {
+    if (!drivesData?.drives?.length || drivesDataUpdatedAt <= 0) return;
+    setMountedByDrive((prev) => {
       let changed = false;
       const next = { ...prev };
-      const actualStates: Record<string, boolean | undefined> = {
-        a: normalizedDriveModel.devices.find((entry) => entry.class === "PHYSICAL_DRIVE_A")?.enabled,
-        b: normalizedDriveModel.devices.find((entry) => entry.class === "PHYSICAL_DRIVE_B")?.enabled,
-        softiec: normalizedDriveModel.devices.find((entry) => entry.class === SOFT_IEC_CONTROL.class)?.enabled,
-      };
-      Object.entries(actualStates).forEach(([key, actual]) => {
-        if (typeof actual !== "boolean") return;
-        if (next[key] !== undefined && next[key] === actual) {
-          delete next[key];
-          changed = true;
-        }
+      Object.keys(next).forEach((drive) => {
+        const setAt = mountedByDriveSetAtRef.current[drive];
+        if (typeof setAt !== "number" || drivesDataUpdatedAt < setAt) return;
+        delete next[drive];
+        delete mountedByDriveSetAtRef.current[drive];
+        changed = true;
       });
       return changed ? next : prev;
     });
-  }, [drivesData?.drives, normalizedDriveModel.devices]);
+    setDrivePowerOverride((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      Object.keys(next).forEach((key) => {
+        const setAt = drivePowerOverrideSetAtRef.current[key];
+        if (typeof setAt !== "number" || drivesDataUpdatedAt < setAt) return;
+        delete next[key];
+        delete drivePowerOverrideSetAtRef.current[key];
+        changed = true;
+      });
+      return changed ? next : prev;
+    });
+  }, [drivesData?.drives, drivesDataUpdatedAt]);
 
   useEffect(() => {
     prepareDirectoryInput(localSourceInputRef.current);
@@ -479,12 +488,14 @@ export const HomeDiskManager = () => {
         });
         return;
       }
+      mountedByDriveSetAtRef.current[drive] = Date.now();
       setMountedByDrive((prev) => ({ ...prev, [drive]: disk.id }));
       setDriveErrors((prev) => ({ ...prev, [drive]: "" }));
       toast({
         title: "Disk mounted",
         description: `${disk.name} mounted in ${buildDriveLabel(drive)}`,
       });
+      queryClient.invalidateQueries({ queryKey: ["c64-drives"] });
     } catch (error) {
       if (mountCompletionGenerationRef.current[drive] !== mountGeneration) {
         addLog("debug", "Ignoring stale disk mount failure", {
@@ -532,12 +543,14 @@ export const HomeDiskManager = () => {
   const handleEject = trace(async (drive: DriveKey) => {
     try {
       await api.unmountDrive(drive);
+      mountedByDriveSetAtRef.current[drive] = Date.now();
       setMountedByDrive((prev) => ({ ...prev, [drive]: "" }));
       setDriveErrors((prev) => ({ ...prev, [drive]: "" }));
       toast({
         title: "Disk ejected",
         description: `${buildDriveLabel(drive)} cleared`,
       });
+      queryClient.invalidateQueries({ queryKey: ["c64-drives"] });
     } catch (error) {
       setDriveErrors((prev) => ({
         ...prev,
@@ -557,6 +570,7 @@ export const HomeDiskManager = () => {
     async (driveKey: string, driveLabel: string, targetEnabled: boolean, errorKey: string) => {
       if (!status.isConnected) return;
       setDrivePowerPending((prev) => ({ ...prev, [errorKey]: true }));
+      drivePowerOverrideSetAtRef.current[errorKey] = Date.now();
       setDrivePowerOverride((prev) => ({ ...prev, [errorKey]: targetEnabled }));
       try {
         if (targetEnabled) {
@@ -576,6 +590,7 @@ export const HomeDiskManager = () => {
           delete next[errorKey];
           return next;
         });
+        delete drivePowerOverrideSetAtRef.current[errorKey];
         setDriveErrors((prev) => ({
           ...prev,
           [errorKey]: (error as Error).message,
@@ -603,6 +618,7 @@ export const HomeDiskManager = () => {
         [typedDriveKey]: (mountCompletionGenerationRef.current[typedDriveKey] ?? 0) + 1,
       };
       await api.resetDrive(driveKey);
+      delete mountedByDriveSetAtRef.current[typedDriveKey];
       setMountedByDrive((prev) => {
         const next = { ...prev };
         delete next[typedDriveKey];
@@ -825,6 +841,7 @@ export const HomeDiskManager = () => {
           const next = { ...prev };
           mountedDrives.forEach((drive) => {
             delete next[drive];
+            delete mountedByDriveSetAtRef.current[drive];
           });
           return next;
         });
@@ -954,6 +971,7 @@ export const HomeDiskManager = () => {
           modifiedAt?: string | null;
           sourceId?: string | null;
         }> = [];
+        const partialScanFailures: SourceRecursiveFailure[] = [];
         const listingCache = new Map<string, SourceEntry[]>();
         const resolveSelectionEntry = async (filePath: string) => {
           const normalizedPath = normalizeSourcePath(filePath);
@@ -981,6 +999,15 @@ export const HomeDiskManager = () => {
             const nested = await source.listFilesRecursive(selection.path, {
               signal: abortSignal,
             });
+            if (nested.partialFailures?.length) {
+              partialScanFailures.push(...nested.partialFailures);
+              addLog("warn", "Disk import completed with skipped folders", {
+                sourceId: source.id,
+                sourceType: source.type,
+                selectionPath: selection.path,
+                skippedFolders: nested.partialFailures,
+              });
+            }
             throwIfAborted();
             updateProgress(nested.length);
             nested.forEach((entry) => {
@@ -1053,7 +1080,7 @@ export const HomeDiskManager = () => {
           setAddItemsProgress((prev) => ({
             ...prev,
             status: "error",
-            message: "No disk files found.",
+            message: partialScanFailures.length ? "No disk files found in scanned folders." : "No disk files found.",
           }));
           showNoDiskWarning();
           return false;
@@ -1138,11 +1165,13 @@ export const HomeDiskManager = () => {
         setAddItemsProgress((prev) => ({
           ...prev,
           status: "done",
-          message: "Added to library",
+          message: partialScanFailures.length ? "Added with skipped folders" : "Added to library",
         }));
         toast({
           title: "Items added",
-          description: `${disks.length} disk(s) added to library.`,
+          description: partialScanFailures.length
+            ? `${disks.length} disk(s) added. ${partialScanFailures.length} folder(s) could not be scanned.`
+            : `${disks.length} disk(s) added to library.`,
         });
         return true;
       } catch (error) {

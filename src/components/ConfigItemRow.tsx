@@ -262,7 +262,8 @@ export function ConfigItemRow({
   );
 
   const displayValue = inputValue;
-  const isReadOnly = readOnly || name.startsWith("SID Detected Socket");
+  const isCpuSpeedWriteGuarded = category === "U64 Specific Settings" && name === "CPU Speed";
+  const isReadOnly = readOnly || name.startsWith("SID Detected Socket") || isCpuSpeedWriteGuarded;
   const normalizeOption = (option: string) => option.trim().replace(/\s+/g, " ").toLowerCase();
   const parseNumeric = (option: string) => {
     const match = option.trim().match(/[+-]?\d+(?:\.\d+)?/);

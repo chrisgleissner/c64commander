@@ -21,6 +21,7 @@ const usePlaybackPersistenceHarness = ({
   playlistStorageKey,
   localEntriesBySourceId,
   localSourceTreeUris,
+  initialAutoAdvanceDueAtMs = null,
 }: {
   resolvedDeviceId?: string | null;
   playlistStorageKey: string;
@@ -37,6 +38,7 @@ const usePlaybackPersistenceHarness = ({
     >
   >;
   localSourceTreeUris: Map<string, string | null>;
+  initialAutoAdvanceDueAtMs?: number | null;
 }) => {
   const [playlist, setPlaylist] = useState<PlaylistItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
@@ -45,6 +47,7 @@ const usePlaybackPersistenceHarness = ({
   const [elapsedMs, setElapsedMs] = useState(0);
   const [playedMs, setPlayedMs] = useState(0);
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
+  const [autoAdvanceDueAtMs] = useState<number | null>(initialAutoAdvanceDueAtMs);
   const playedClockRef = useRef({
     hydrate: vi.fn(),
   });
@@ -69,6 +72,7 @@ const usePlaybackPersistenceHarness = ({
     setPlayedMs,
     durationMs,
     setDurationMs,
+    autoAdvanceDueAtMs,
     setCurrentSubsongCount: vi.fn(),
     setAutoAdvanceDueAtMs: setAutoAdvanceDueAtMsRef.current,
     resolvedDeviceId,
@@ -113,6 +117,8 @@ const usePlaybackPersistenceHarness = ({
   return {
     playlist,
     currentIndex,
+    isPlaying,
+    elapsedMs,
     setAutoAdvanceDueAtMs: setAutoAdvanceDueAtMsRef.current,
   };
 };
@@ -157,6 +163,92 @@ describe("usePlaybackPersistence", () => {
       expect(result.current.playlist).toHaveLength(1);
       expect(result.current.playlist[0].label).toBe("demo.sid");
       expect(result.current.playlist[0].status).toBe("ready");
+    });
+  });
+
+  it("does not delete a stored playing session on remount before restore applies (playback survives navigation)", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "local",
+            path: "/Music/demo.sid",
+            name: "demo.sid",
+            sourceId: "local-source",
+            addedAt: new Date().toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+    sessionStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({
+        playlistKey: playlistStorageKey,
+        currentItemId: null,
+        currentItemLabel: "demo.sid",
+        currentIndex: 0,
+        isPlaying: true,
+        isPaused: false,
+        elapsedMs: 5000,
+        playedMs: 5000,
+        durationMs: 60000,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+
+    const localEntriesBySourceId = new Map([["local-source", new Map([["/Music/demo.sid", { name: "demo.sid" }]])]]);
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId,
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    // The freshly mounted (not yet restored) instance must not destroy the
+    // stored session: a navigation remount would otherwise kill live playback.
+    expect(sessionStorage.getItem(PLAYBACK_SESSION_KEY)).not.toBeNull();
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+      expect(result.current.isPlaying).toBe(true);
+    });
+    expect(result.current.elapsedMs).toBe(5000);
+    expect(JSON.parse(sessionStorage.getItem(PLAYBACK_SESSION_KEY)!).isPlaying).toBe(true);
+  });
+
+  it("clears a stored playing session when playlist hydration settles empty", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    sessionStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({
+        playlistKey: playlistStorageKey,
+        currentItemId: null,
+        currentItemLabel: "missing.sid",
+        currentIndex: 0,
+        isPlaying: true,
+        isPaused: false,
+        elapsedMs: 5000,
+        playedMs: 5000,
+        durationMs: 60000,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+
+    renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(sessionStorage.getItem(PLAYBACK_SESSION_KEY)).toBeNull();
     });
   });
 
@@ -996,6 +1088,63 @@ describe("usePlaybackPersistence", () => {
       const dueAt = numericCalls[numericCalls.length - 1][0] as number;
       expect(dueAt).toBeGreaterThan(Date.now() - 120000); // sanity: within last 2 min
       expect(dueAt).toBeLessThan(Date.now() + durationMs + 5000); // sanity: not too far in the future
+    });
+  });
+
+  it("restores stored absolute auto-advance due-at so overdue playback advances promptly after remount", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    const durationMs = 60000;
+    const elapsedMs = 10000;
+    const storedDueAtMs = Date.now() - 2_000;
+
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "hvsc",
+            path: "/MUSICIANS/Test/overdue.sid",
+            name: "overdue.sid",
+            sourceId: "hvsc-library",
+            addedAt: new Date().toISOString(),
+            durationMs,
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+
+    sessionStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({
+        playlistKey: playlistStorageKey,
+        currentItemId: "hvsc:hvsc-library:/MUSICIANS/Test/overdue.sid",
+        currentIndex: 0,
+        isPlaying: true,
+        isPaused: false,
+        elapsedMs,
+        playedMs: elapsedMs,
+        durationMs,
+        autoAdvanceDueAtMs: storedDueAtMs,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+      expect(result.current.isPlaying).toBe(true);
+    });
+
+    await waitFor(() => {
+      expect(result.current.setAutoAdvanceDueAtMs).toHaveBeenCalledWith(storedDueAtMs);
     });
   });
 

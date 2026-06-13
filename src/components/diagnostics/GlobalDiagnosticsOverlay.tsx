@@ -43,6 +43,7 @@ import { getActiveAutoResolutionContext, loadDeviceSafetyConfig } from "@/lib/co
 import { createActionContext, runWithActionTrace } from "@/lib/tracing/actionTrace";
 import { recordActionEnd, recordActionStart, recordRestResponse } from "@/lib/tracing/traceSession";
 import { getRecoveryEvidence, clearRecoveryEvidence, recordRecoveryEvidence } from "@/lib/diagnostics/recoveryEvidence";
+import { buildDiagnosticsBugReportContext } from "@/lib/diagnostics/bugReportContext";
 import {
   DIAGNOSTICS_TEST_ANALYTICS_EVENT,
   DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT,
@@ -115,6 +116,22 @@ export const GlobalDiagnosticsOverlay = () => {
     () => (actionSummariesReady ? buildActionSummaries(traceEvents) : []),
     [actionSummariesReady, traceEvents],
   );
+  // §14 — Extract device info from last health check result or live connection state
+  const deviceInfo: DeviceDetailInfo | null = useMemo(() => {
+    if (healthCheckState.latestResult?.deviceInfo) {
+      return healthCheckState.latestResult.deviceInfo;
+    }
+    if (!connectionSnapshot.deviceInfo) {
+      return null;
+    }
+    return {
+      product: connectionSnapshot.deviceInfo.product ?? null,
+      firmware: connectionSnapshot.deviceInfo.firmware_version ?? null,
+      fpga: connectionSnapshot.deviceInfo.fpga_version ?? null,
+      core: connectionSnapshot.deviceInfo.core_version ?? null,
+      uptimeSeconds: null,
+    };
+  }, [connectionSnapshot.deviceInfo, healthCheckState.latestResult]);
 
   const finishPendingDiagnosticsOpenAction = useCallback((error?: Error | null) => {
     const action = diagnosticsOpenActionRef.current;
@@ -284,6 +301,17 @@ export const GlobalDiagnosticsOverlay = () => {
   const buildDiagnosticsExportData = useCallback(() => {
     const safetyConfig = loadDeviceSafetyConfig();
     const safetyContext = getActiveAutoResolutionContext();
+    const deviceSafetyResolution = safetyConfig.resolution
+      ? {
+          storedMode: safetyConfig.mode,
+          effectiveMode: safetyConfig.resolution.effectiveMode,
+          resolvedPreset: safetyConfig.resolution.resolvedPreset,
+          isProvisional: safetyConfig.resolution.isProvisional,
+          reason: safetyConfig.resolution.reason,
+          activeProduct: safetyContext.activeProduct,
+          activeDeviceId: safetyContext.activeDeviceId,
+        }
+      : null;
     const exportActionSummaries =
       actionSummaries.length > 0 || !overlayOpen ? actionSummaries : buildActionSummaries(traceEvents);
     return {
@@ -298,20 +326,25 @@ export const GlobalDiagnosticsOverlay = () => {
         hvscPerfTimings: collectHvscPerfTimings(),
         latencySamples: getAllLatencySamples(),
         recoveryEvidence: getRecoveryEvidence(),
-        deviceSafetyResolution: safetyConfig.resolution
-          ? {
-              storedMode: safetyConfig.mode,
-              effectiveMode: safetyConfig.resolution.effectiveMode,
-              resolvedPreset: safetyConfig.resolution.resolvedPreset,
-              isProvisional: safetyConfig.resolution.isProvisional,
-              reason: safetyConfig.resolution.reason,
-              activeProduct: safetyContext.activeProduct,
-              activeDeviceId: safetyContext.activeDeviceId,
-            }
-          : null,
+        deviceSafetyResolution,
+        bugReportContext: buildDiagnosticsBugReportContext({
+          activeDeviceHost: healthState.host,
+          activeDeviceLabel: healthState.connectedDeviceLabel,
+          deviceInfo,
+          deviceSafetyResolution,
+        }),
       },
     };
-  }, [actionSummaries, errorLogs, healthCheckState.latestResult, healthState, logs, overlayOpen, traceEvents]);
+  }, [
+    actionSummaries,
+    deviceInfo,
+    errorLogs,
+    healthCheckState.latestResult,
+    healthState,
+    logs,
+    overlayOpen,
+    traceEvents,
+  ]);
 
   const handleShareAll = trace(async function handleShareAll() {
     try {
@@ -521,23 +554,6 @@ export const GlobalDiagnosticsOverlay = () => {
     }),
     [handleRetryConnectionAsync, handleSwitchDevice],
   );
-
-  // §14 — Extract device info from last health check result or live connection state
-  const deviceInfo: DeviceDetailInfo | null = useMemo(() => {
-    if (healthCheckState.latestResult?.deviceInfo) {
-      return healthCheckState.latestResult.deviceInfo;
-    }
-    if (!connectionSnapshot.deviceInfo) {
-      return null;
-    }
-    return {
-      product: connectionSnapshot.deviceInfo.product ?? null,
-      firmware: connectionSnapshot.deviceInfo.firmware_version ?? null,
-      fpga: connectionSnapshot.deviceInfo.fpga_version ?? null,
-      core: connectionSnapshot.deviceInfo.core_version ?? null,
-      uptimeSeconds: null,
-    };
-  }, [connectionSnapshot.deviceInfo, healthCheckState.latestResult]);
 
   return (
     <DiagnosticsDialog

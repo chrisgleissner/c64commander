@@ -11,14 +11,18 @@ import * as React from "react";
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
 import { loadNotificationVisibility } from "@/lib/config/appSettings";
 
-const TOAST_LIMIT = 1;
-const TOAST_REMOVE_DELAY = 1000000;
+const TOAST_LIMIT = 2;
+const TOAST_REMOVE_DELAY = 1000;
+// Non-destructive notices auto-dismiss (ERROR_POLICY §4); error toasts stay
+// until dismissed or stale-cleared via uiErrors.
+const NOTICE_AUTO_DISMISS_DELAY = 8000;
 
 type ToasterToast = ToastProps & {
   id: string;
   title?: React.ReactNode;
   description?: React.ReactNode;
   action?: ToastActionElement;
+  onToastDismiss?: () => void;
 };
 
 const actionTypes = {
@@ -61,6 +65,21 @@ interface State {
 
 const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
 
+const limitToasts = (toasts: ToasterToast[]) => {
+  const pinnedDestructive = toasts.find((toast) => toast.variant === "destructive" && toast.open !== false);
+  const next: ToasterToast[] = [];
+  if (pinnedDestructive) {
+    next.push(pinnedDestructive);
+  }
+  for (const toast of toasts) {
+    if (toast.id === pinnedDestructive?.id) continue;
+    if (toast.open === false) continue;
+    next.push(toast);
+    if (next.length >= TOAST_LIMIT) break;
+  }
+  return next;
+};
+
 const addToRemoveQueue = (toastId: string) => {
   if (toastTimeouts.has(toastId)) {
     return;
@@ -79,11 +98,12 @@ const addToRemoveQueue = (toastId: string) => {
 
 export const reducer = (state: State, action: Action): State => {
   switch (action.type) {
-    case "ADD_TOAST":
+    case "ADD_TOAST": {
       return {
         ...state,
-        toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
+        toasts: limitToasts([action.toast, ...state.toasts]),
       };
+    }
 
     case "UPDATE_TOAST":
       return {
@@ -97,9 +117,15 @@ export const reducer = (state: State, action: Action): State => {
       // ! Side effects ! - This could be extracted into a dismissToast() action,
       // but I'll keep it here for simplicity
       if (toastId) {
+        const toast = state.toasts.find((toast) => toast.id === toastId);
+        if (!toast) {
+          return state;
+        }
+        toast.onToastDismiss?.();
         addToRemoveQueue(toastId);
       } else {
         state.toasts.forEach((toast) => {
+          toast.onToastDismiss?.();
           addToRemoveQueue(toast.id);
         });
       }
@@ -155,13 +181,26 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id">;
 
+const noopToastHandle = () => ({ id: "" as const, dismiss: () => {}, update: () => {} });
+
+export const __clearToastStateForTests = () => {
+  toastTimeouts.forEach((timeout) => clearTimeout(timeout));
+  toastTimeouts.clear();
+  memoryState = { toasts: [] };
+  count = 0;
+  listeners.forEach((listener) => {
+    listener(memoryState);
+  });
+};
+
 function toast({ ...props }: Toast) {
   // Suppress non-error notifications when visibility is set to errors-only.
   if (loadNotificationVisibility() === "errors-only" && props.variant !== "destructive") {
-    return { id: "" as const, dismiss: () => {}, update: () => {} };
+    return noopToastHandle();
   }
 
   const id = genId();
+  const onOpenChange = props.onOpenChange;
 
   const update = (props: ToasterToast) =>
     dispatch({
@@ -177,10 +216,15 @@ function toast({ ...props }: Toast) {
       id,
       open: true,
       onOpenChange: (open) => {
+        onOpenChange?.(open);
         if (!open) dismiss();
       },
     },
   });
+
+  if (props.variant !== "destructive") {
+    setTimeout(dismiss, NOTICE_AUTO_DISMISS_DELAY);
+  }
 
   return {
     id: id,

@@ -10,6 +10,24 @@ import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 const mockSliderContext = vi.hoisted(() => ({
   selectedDeviceId: "device-a",
 }));
+const mockSafetyConfig = vi.hoisted(() => ({
+  current: {
+    mode: "BALANCED",
+    ftpMaxConcurrency: 2,
+    infoCacheMs: 600,
+    configsCacheMs: 1000,
+    configsCooldownMs: 500,
+    drivesCooldownMs: 500,
+    ftpListCooldownMs: 300,
+    backoffBaseMs: 200,
+    backoffMaxMs: 3000,
+    backoffFactor: 1.8,
+    circuitBreakerThreshold: 4,
+    circuitBreakerCooldownMs: 4000,
+    discoveryProbeIntervalMs: 700,
+    allowUserOverrideCircuit: true,
+  },
+}));
 const addLogMock = vi.hoisted(() => vi.fn());
 
 const createDeferred = () => {
@@ -28,6 +46,10 @@ vi.mock("@/hooks/useSavedDevices", () => ({
   }),
 }));
 
+vi.mock("@/lib/config/deviceSafetySettings", () => ({
+  loadDeviceSafetyConfig: () => mockSafetyConfig.current,
+}));
+
 vi.mock("@/lib/logging", () => ({
   addLog: addLogMock,
 }));
@@ -36,6 +58,22 @@ describe("useDeviceBoundSlider", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     mockSliderContext.selectedDeviceId = "device-a";
+    mockSafetyConfig.current = {
+      mode: "BALANCED",
+      ftpMaxConcurrency: 2,
+      infoCacheMs: 600,
+      configsCacheMs: 1000,
+      configsCooldownMs: 500,
+      drivesCooldownMs: 500,
+      ftpListCooldownMs: 300,
+      backoffBaseMs: 200,
+      backoffMaxMs: 3000,
+      backoffFactor: 1.8,
+      circuitBreakerThreshold: 4,
+      circuitBreakerCooldownMs: 4000,
+      discoveryProbeIntervalMs: 700,
+      allowUserOverrideCircuit: true,
+    };
     pollingPauseRegistry.__resetForTest();
     addLogMock.mockClear();
   });
@@ -495,7 +533,7 @@ describe("useDeviceBoundSlider", () => {
     expect(preview).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps the desired value latched after the pause watchdog expires until the device catches up", () => {
+  it("keeps the desired value latched through the reconciliation window, then defers to the device", async () => {
     const commit = vi.fn();
     const { result, rerender } = renderHook(
       ({ deviceValue }) =>
@@ -511,19 +549,74 @@ describe("useDeviceBoundSlider", () => {
       },
     );
 
-    act(() => {
+    await act(async () => {
       result.current.onValueCommit([8]);
     });
     expect(result.current.isAwaitingReconciliation).toBe(true);
     expect(result.current.sliderValue).toBe(8);
 
+    // A stale device echo inside the watchdog window must not snap the
+    // slider back; the latched intent is still authoritative here.
     act(() => {
-      vi.advanceTimersByTime(500);
+      vi.advanceTimersByTime(499);
     });
-
     rerender({ deviceValue: 1 });
     expect(result.current.isAwaitingReconciliation).toBe(true);
     expect(result.current.sliderValue).toBe(8);
+
+    // Once the watchdog (re-armed at commit settle) expires without the
+    // device ever confirming the write, the device value wins again so the
+    // UI cannot keep displaying a value the hardware never accepted.
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(result.current.isAwaitingReconciliation).toBe(false);
+    expect(result.current.sliderValue).toBe(1);
+    expect(addLogMock).toHaveBeenCalledWith(
+      "debug",
+      "Device-bound slider reconciliation watchdog expired",
+      expect.objectContaining({ pendingValue: 8 }),
+    );
+  });
+
+  it("derives the default reconciliation watchdog from conservative safety timing", async () => {
+    mockSafetyConfig.current = {
+      ...mockSafetyConfig.current,
+      mode: "CONSERVATIVE",
+      configsCacheMs: 2000,
+      configsCooldownMs: 1200,
+      backoffBaseMs: 300,
+    };
+    const commit = vi.fn();
+    const { result } = renderHook(() =>
+      useDeviceBoundSlider({
+        deviceValue: 1,
+        domain: createNumericSliderDomain({ min: 0, max: 31, round: Math.round }),
+        previewMode: "commitOnly",
+        commit,
+      }),
+    );
+
+    await act(async () => {
+      result.current.onValueCommit([8]);
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(4_499);
+    });
+    expect(result.current.isAwaitingReconciliation).toBe(true);
+    expect(result.current.sliderValue).toBe(8);
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(result.current.isAwaitingReconciliation).toBe(false);
+    expect(result.current.sliderValue).toBe(1);
+    expect(addLogMock).toHaveBeenCalledWith(
+      "debug",
+      "Device-bound slider reconciliation watchdog expired",
+      expect.objectContaining({ pendingValue: 8, watchdogMs: 4_500 }),
+    );
   });
 
   it("treats stale remote echoes as non-authoritative until the current target is confirmed", () => {

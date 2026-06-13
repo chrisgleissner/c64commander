@@ -10,7 +10,8 @@ import { listFtpDirectory } from "@/lib/ftp/ftpClient";
 import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { getC64APIConfigSnapshot } from "@/lib/c64api";
 import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
-import type { SourceEntry, SourceLocation } from "./types";
+import { addLog } from "@/lib/logging";
+import type { SourceEntry, SourceLocation, SourceRecursiveFailure, SourceRecursiveResult } from "./types";
 import { SOURCE_LABELS } from "./sourceTerms";
 
 type FtpCacheRecord = {
@@ -115,10 +116,21 @@ const listEntries = async (path: string): Promise<SourceEntry[]> => {
   return entries;
 };
 
-const listFilesRecursive = async (path: string, options?: { signal?: AbortSignal }): Promise<SourceEntry[]> => {
+const attachPartialFailures = (entries: SourceEntry[], failures: SourceRecursiveFailure[]): SourceRecursiveResult => {
+  if (!failures.length) return entries as SourceRecursiveResult;
+  Object.defineProperty(entries, "partialFailures", {
+    value: failures,
+    enumerable: false,
+    configurable: true,
+  });
+  return entries as SourceRecursiveResult;
+};
+
+const listFilesRecursive = async (path: string, options?: { signal?: AbortSignal }): Promise<SourceRecursiveResult> => {
   const queue = [path || "/"];
   const visited = new Set<string>();
   const results: SourceEntry[] = [];
+  const partialFailures: SourceRecursiveFailure[] = [];
   const maxConcurrent = 3;
   const pending = new Set<Promise<void>>();
   const signal = options?.signal;
@@ -134,7 +146,28 @@ const listFilesRecursive = async (path: string, options?: { signal?: AbortSignal
     assertNotAborted();
     if (!current || visited.has(current)) return;
     visited.add(current);
-    const entries = await listEntries(current);
+    let entries: SourceEntry[];
+    try {
+      entries = await listEntries(current);
+    } catch (error) {
+      if (signal?.aborted || (error as Error).name === "AbortError") {
+        throw error;
+      }
+      const err = error as Error;
+      partialFailures.push({
+        path: current,
+        message: err.message,
+      });
+      addLog("warn", "FTP recursive directory listing skipped folder", {
+        path: current,
+        error: {
+          name: err.name,
+          message: err.message,
+          stack: err.stack,
+        },
+      });
+      return;
+    }
     assertNotAborted();
     entries.forEach((entry) => {
       if (entry.type === "dir") {
@@ -161,7 +194,7 @@ const listFilesRecursive = async (path: string, options?: { signal?: AbortSignal
       }
     }
 
-    return results;
+    return attachPartialFailures(results, partialFailures);
   } catch (error) {
     if (signal?.aborted) {
       await Promise.allSettled(Array.from(pending));

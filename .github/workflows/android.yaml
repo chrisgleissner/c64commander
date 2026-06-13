@@ -153,7 +153,7 @@ jobs:
       - name: Run c64scope tests with coverage
         run: |
           start=$(date +%s)
-          cd c64scope && npm install --ignore-scripts && npm run test:coverage
+          cd c64scope && npm ci --ignore-scripts && npm run test:coverage
           end=$(date +%s)
           echo "- c64scope tests: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
@@ -256,6 +256,10 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json', 'bun.lockb') }}
+
+      - name: Fix broken apt repos
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/azure-cli.sources /etc/apt/sources.list.d/azure-cli.list || true
 
       - name: Install Playwright browsers
         run: |

@@ -335,6 +335,25 @@ describe("LightingStudioProvider", () => {
     });
   });
 
+  it("does not fetch lighting summaries from Settings while the studio is closed", async () => {
+    renderProvider("/settings");
+
+    await waitFor(() =>
+      expect(mocks.useC64ConfigItems).toHaveBeenCalledWith("LED Strip Settings", [...LIGHTING_SUMMARY_ITEMS], false, {
+        intent: "user",
+        skipEnrichment: true,
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "open-studio" }));
+
+    await waitFor(() =>
+      expect(mocks.useC64ConfigItems).toHaveBeenCalledWith("LED Strip Settings", [...LIGHTING_CATEGORY_ITEMS], true, {
+        intent: "user",
+      }),
+    );
+  });
+
   it("uses retrying and held ambient connection states after a real connection was already seen", async () => {
     const statusRef = {
       current: {

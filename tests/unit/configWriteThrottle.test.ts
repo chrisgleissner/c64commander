@@ -27,6 +27,7 @@ describe("configWriteThrottle", () => {
     resetConfigWriteThrottle();
     vi.useFakeTimers();
     vi.setSystemTime(1000);
+    saveDeviceSafetyMode("RELAXED");
     saveConfigWriteIntervalMs(500);
     vi.mocked(addErrorLog).mockClear();
     vi.mocked(addLog).mockClear();
@@ -47,6 +48,7 @@ describe("configWriteThrottle", () => {
     const second = scheduleConfigWrite(task);
 
     await first;
+    await vi.advanceTimersByTimeAsync(0);
     expect(times).toEqual([1000]);
 
     await vi.advanceTimersByTimeAsync(500);
@@ -97,6 +99,7 @@ describe("configWriteThrottle", () => {
     const second = scheduleConfigWrite(successTask);
 
     await expect(first).rejects.toThrow("write failed");
+    await vi.advanceTimersByTimeAsync(0);
 
     await vi.advanceTimersByTimeAsync(500);
     const result = await second;
@@ -198,6 +201,7 @@ describe("configWriteThrottle", () => {
     const second = scheduleConfigWrite(secondTask);
 
     await expect(first).rejects.toMatchObject(syntheticCancellation);
+    await vi.advanceTimersByTimeAsync(0);
     await vi.advanceTimersByTimeAsync(500);
     await expect(second).resolves.toBe("ok");
 

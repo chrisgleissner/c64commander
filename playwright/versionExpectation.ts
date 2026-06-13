@@ -85,17 +85,10 @@ export const resolveExpectedVersions = ({
   });
 
   const candidates = new Set<string>();
-  if (latestTag) {
-    candidates.add(latestTag);
-    const latestReleaseBaseVersion = resolveReleaseBaseVersion(latestTag);
-    if (latestReleaseBaseVersion) {
-      candidates.add(latestReleaseBaseVersion);
-    }
-  }
   if (derivedFromGit) {
     candidates.add(derivedFromGit);
     const derivedReleaseBaseVersion = resolveReleaseBaseVersion(derivedFromGit);
-    if (derivedReleaseBaseVersion) {
+    if (!gitDescribe && derivedReleaseBaseVersion) {
       candidates.add(derivedReleaseBaseVersion);
     }
   }

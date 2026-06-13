@@ -35,6 +35,7 @@ import {
   installOrUpdateHvsc,
   isHvscBridgeAvailable,
   isHvscIngestionBridgeAvailable,
+  isHvscCancellationError,
   recoverStaleIngestionState,
   type HvscPreparationPhase,
   type HvscPreparationSnapshot,
@@ -74,7 +75,7 @@ export type HvscLibraryState = {
   hvscSongs: HvscSong[];
   selectedHvscFolder: string;
   setHvscFolderFilter: (value: string) => void;
-  loadHvscFolder: (path: string) => Promise<void>;
+  loadHvscFolder: (path: string, options?: { background?: boolean }) => Promise<void>;
   handleHvscInstall: () => Promise<void>;
   handleHvscIngest: () => Promise<void>;
   handleHvscCancel: () => Promise<void>;
@@ -310,9 +311,21 @@ export const useHvscLibrary = (): HvscLibraryState => {
     const summaryInProgress =
       hvscStatusSummary.download.status === "in-progress" || hvscStatusSummary.extraction.status === "in-progress";
     const activeIngestion = ["installing", "updating"].includes(hvscStatus.ingestionState);
+    const activeHookIngestion = hvscActiveToken !== null && hvscLoading;
     const lastUpdatedAtMs = hvscStatusSummary.lastUpdatedAt ? Date.parse(hvscStatusSummary.lastUpdatedAt) : null;
     const isStale = lastUpdatedAtMs ? Date.now() - lastUpdatedAtMs > 15000 : true;
-    if (!summaryInProgress || activeIngestion || !isStale) return;
+    if (!summaryInProgress || !isStale) return;
+    if (activeIngestion || activeHookIngestion) {
+      setHvscActionLabel((prev) => prev ?? "HVSC operation still running…");
+      addLog("warn", "HVSC progress stale while work is still active", {
+        ingestionState: hvscStatus.ingestionState,
+        activeToken: hvscActiveToken,
+        downloadStatus: hvscStatusSummary.download.status,
+        extractionStatus: hvscStatusSummary.extraction.status,
+        lastUpdatedAt: hvscStatusSummary.lastUpdatedAt ?? null,
+      });
+      return;
+    }
 
     const now = new Date().toISOString();
     updateHvscSummary((prev) => ({
@@ -344,7 +357,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
       downloadStatus: hvscStatusSummary.download.status,
       extractionStatus: hvscStatusSummary.extraction.status,
     });
-  }, [hvscStatus, hvscStatusSummary, updateHvscSummary]);
+  }, [hvscActiveToken, hvscLoading, hvscStatus, hvscStatusSummary, updateHvscSummary]);
 
   useEffect(() => {
     if (!isHvscBridgeAvailable()) return;
@@ -605,7 +618,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
     };
   }, [clearPendingHvscProgress, resolveHvscFailureCategory, updateHvscSummary]);
 
-  const loadHvscFolder = useCallback(async (path: string) => {
+  const loadHvscFolder = useCallback(async (path: string, options?: { background?: boolean }) => {
     try {
       const listing = await getHvscFolderListing(path);
       setHvscFolders(listing.folders);
@@ -618,6 +631,9 @@ export const useHvscLibrary = (): HvscLibraryState => {
         description: (error as Error).message,
         error,
         context: { path },
+        // The automatic initial listing is a prefetch, not a user action;
+        // its failure must not toast (ERROR_POLICY §3).
+        background: options?.background,
       });
     }
   }, []);
@@ -625,7 +641,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
   useEffect(() => {
     if (!hvscStatus?.installedVersion) return;
     if (hvscFolders.length || hvscSongs.length) return;
-    void loadHvscFolder(selectedHvscFolder || "/");
+    void loadHvscFolder(selectedHvscFolder || "/", { background: true });
   }, [hvscStatus?.installedVersion, hvscFolders.length, hvscSongs.length, loadHvscFolder, selectedHvscFolder]);
 
   useEffect(() => {
@@ -786,7 +802,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
             description: HVSC_READY_MESSAGE,
           });
         } catch (error) {
-          if (/cancelled/i.test((error as Error).message)) {
+          if (isHvscCancellationError(error)) {
             const cancelledAt = new Date().toISOString();
             updateHvscSummary((prev) => ({
               ...prev,
@@ -902,7 +918,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
             description: HVSC_READY_MESSAGE,
           });
         } catch (error) {
-          if (/cancelled/i.test((error as Error).message)) {
+          if (isHvscCancellationError(error)) {
             const cancelledAt = new Date().toISOString();
             updateHvscSummary((prev) => ({
               ...prev,

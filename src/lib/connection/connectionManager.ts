@@ -34,6 +34,14 @@ import { resetInteractionState } from "@/lib/deviceInteraction/deviceInteraction
 import { updateDeviceConnectionState } from "@/lib/deviceInteraction/deviceStateStore";
 import { isBareHostname, isMdnsAvailable, resolveMdnsHost } from "@/lib/native/mdnsResolver";
 import { normalizeTransportError } from "@/lib/c64api/transportErrors";
+import { clearConnectivityErrorToastsForHost } from "@/lib/uiErrors";
+import { registerReachabilityListener, type ReachabilitySource } from "@/lib/connection/reachabilityEvents";
+import {
+  completeSavedDeviceVerification,
+  getSavedDevicesSnapshot,
+  getSelectedSavedDevice,
+  resolveCanonicalProductFamilyCode,
+} from "@/lib/savedDevices/store";
 
 export type ConnectionState = "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO";
 export type DiscoveryTrigger = "startup" | "manual" | "settings" | "background" | "switch" | "resume";
@@ -101,6 +109,40 @@ const isDemoModeAvailable = () => featureFlagManager.getSnapshot().flags.demo_mo
 const isDemoModeRequested = () => isDemoModeAvailable() && loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
 
 const mdnsResolutionCache = new Map<string, { ip: string; expiresAtMs: number }>();
+const mdnsResolvedProbeFailures = new Map<string, { ip: string; count: number }>();
+const MDNS_RESOLVED_PROBE_FAILURE_THRESHOLD = 2;
+
+const buildMdnsProbeFailureKey = (deviceHost: string, resolvedAddress: string) => `${deviceHost}|${resolvedAddress}`;
+
+const clearMdnsResolvedProbeFailures = (deviceHost: string, resolvedAddress?: string | null) => {
+  if (!resolvedAddress) return;
+  mdnsResolvedProbeFailures.delete(buildMdnsProbeFailureKey(deviceHost, resolvedAddress));
+};
+
+const recordMdnsResolvedProbeFailure = (
+  deviceHost: string,
+  resolvedAddress: string | null | undefined,
+  reason: string,
+) => {
+  if (!resolvedAddress) return;
+  const key = buildMdnsProbeFailureKey(deviceHost, resolvedAddress);
+  const current = mdnsResolvedProbeFailures.get(key);
+  const nextCount = current?.ip === resolvedAddress ? current.count + 1 : 1;
+  mdnsResolvedProbeFailures.set(key, { ip: resolvedAddress, count: nextCount });
+  if (nextCount < MDNS_RESOLVED_PROBE_FAILURE_THRESHOLD) return;
+
+  const cached = mdnsResolutionCache.get(deviceHost);
+  if (cached?.ip === resolvedAddress) {
+    mdnsResolutionCache.delete(deviceHost);
+    addLog("warn", "Invalidated cached mDNS address after repeated probe failures", {
+      host: deviceHost,
+      resolvedAddress,
+      failureCount: nextCount,
+      reason,
+    });
+  }
+  mdnsResolvedProbeFailures.delete(key);
+};
 
 const resolveDeviceHostForProbe = async (deviceHost: string): Promise<string> => {
   if (!isMdnsAvailable()) return deviceHost;
@@ -117,6 +159,7 @@ const resolveDeviceHostForProbe = async (deviceHost: string): Promise<string> =>
       ip: resolved.ip,
       expiresAtMs: Date.now() + Math.max(1000, resolved.ttlMs),
     });
+    clearMdnsResolvedProbeFailures(deviceHost, resolved.ip);
     addLog("info", "Resolved bare hostname via mDNS", {
       host: deviceHost,
       resolvedHost: resolved.resolvedHost,
@@ -140,7 +183,12 @@ const loadPersistedConnectionConfig = async () => {
   const deviceHost = resolveDeviceHostFromStorage();
   const probeHost = await resolveDeviceHostForProbe(deviceHost);
   const baseUrl = buildBaseUrlFromDeviceHost(probeHost === deviceHost ? deviceHost : probeHost);
-  return { baseUrl, password: password ?? undefined, deviceHost };
+  return {
+    baseUrl,
+    password: password ?? undefined,
+    deviceHost,
+    resolvedAddress: probeHost !== deviceHost ? stripPortFromDeviceHost(probeHost) : null,
+  };
 };
 
 const loadSwitchConnectionConfig = async (options: {
@@ -185,14 +233,25 @@ const probeInfoWithConnectionConfig = async (
       __c64uAllowDuringError: true,
       __c64uBypassCache: true,
     });
+    const healthy = isProbePayloadHealthy(response);
+    if (healthy) {
+      clearMdnsResolvedProbeFailures(config.deviceHost, config.resolvedAddress);
+    } else {
+      recordMdnsResolvedProbeFailure(
+        config.deviceHost,
+        config.resolvedAddress,
+        "Probe payload missing required identity",
+      );
+    }
     return {
-      ok: isProbePayloadHealthy(response),
+      ok: healthy,
       deviceInfo: response,
-      error: isProbePayloadHealthy(response) ? null : "Probe payload missing required identity",
+      error: healthy ? null : "Probe payload missing required identity",
       resolvedAddress: config.resolvedAddress,
     };
   } catch (error) {
     const message = (error as Error | undefined)?.message ?? "Unknown probe failure";
+    recordMdnsResolvedProbeFailure(config.deviceHost, config.resolvedAddress, message);
     if (/^HTTP\s+\d+/.test(message)) {
       return {
         ok: false,
@@ -233,10 +292,22 @@ export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: num
       __c64uAllowDuringError: true,
       __c64uBypassCache: true,
     });
-    return isProbePayloadHealthy(response);
+    const healthy = isProbePayloadHealthy(response);
+    if (healthy) {
+      clearMdnsResolvedProbeFailures(config.deviceHost, config.resolvedAddress);
+    } else {
+      recordMdnsResolvedProbeFailure(
+        config.deviceHost,
+        config.resolvedAddress,
+        "Probe payload missing required identity",
+      );
+    }
+    return healthy;
   } catch (error) {
-    const message = (error as Error | undefined)?.message ?? "";
-    if (!/^HTTP\s+\d+/.test(message)) {
+    const message = (error as Error | undefined)?.message ?? "Unknown probe failure";
+    recordMdnsResolvedProbeFailure(config.deviceHost, config.resolvedAddress, message);
+    const normalizedMessage = message;
+    if (!/^HTTP\s+\d+/.test(normalizedMessage)) {
       const host = (() => {
         try {
           return new URL(config.baseUrl).hostname;
@@ -314,6 +385,7 @@ export async function verifyCurrentConnectionTarget(options?: {
     lastDiscoveryTrigger: "switch",
     lastProbeAtMs: Date.now(),
     lastProbeError: null,
+    deviceInfo: null,
   });
   const switchConfig =
     typeof options?.deviceHost === "string"
@@ -385,8 +457,41 @@ const emit = () => {
   listeners.forEach((listener) => listener());
 };
 
+const rememberSelectedSavedDeviceIdentity = (deviceInfo: DeviceInfo | null | undefined) => {
+  const product = resolveCanonicalProductFamilyCode(deviceInfo?.product ?? null);
+  if (!product) return;
+
+  const selectedDevice = getSelectedSavedDevice();
+  if (!selectedDevice) return;
+
+  const hostname = deviceInfo?.hostname?.trim() || null;
+  const uniqueId = deviceInfo?.unique_id?.trim() || null;
+  const savedDevices = getSavedDevicesSnapshot();
+  const summary = savedDevices.summaries[selectedDevice.id];
+  const runtimeVerified = savedDevices.verifiedByDeviceId[selectedDevice.id] ?? null;
+
+  if (
+    selectedDevice.lastKnownProduct === product &&
+    selectedDevice.lastKnownHostname === hostname &&
+    selectedDevice.lastKnownUniqueId === uniqueId &&
+    summary?.lastVerifiedProduct === product &&
+    runtimeVerified?.product === product
+  ) {
+    return;
+  }
+
+  completeSavedDeviceVerification(selectedDevice.id, {
+    product: deviceInfo?.product ?? product,
+    hostname,
+    unique_id: uniqueId,
+  });
+};
+
 const setSnapshot = (patch: Partial<ConnectionSnapshot>) => {
   snapshot = Object.freeze({ ...snapshot, ...patch });
+  if (patch.deviceInfo) {
+    rememberSelectedSavedDeviceIdentity(patch.deviceInfo);
+  }
   emit();
 };
 
@@ -407,8 +512,6 @@ export function subscribeConnection(listener: () => void) {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
-
-type ReachabilitySource = "rest" | "ftp" | "telnet";
 
 const normalizeReachabilityHost = (value: string | null | undefined): string | null => {
   const trimmed = value?.trim();
@@ -450,6 +553,12 @@ export const noteReachable = (host: string, source: ReachabilitySource, deviceIn
     ...(deviceInfo ? { deviceInfo } : {}),
   });
 
+  // Host recovery dismisses live connectivity-class error toasts attributed to
+  // it (ERROR_POLICY §6); aliases of the active device are cleared together.
+  for (const activeHost of activeHosts) {
+    clearConnectivityErrorToastsForHost(activeHost);
+  }
+
   if (snapshot.state !== "OFFLINE_NO_DEMO" && snapshot.state !== "DISCOVERING") {
     return;
   }
@@ -463,6 +572,8 @@ export const noteReachable = (host: string, source: ReachabilitySource, deviceIn
   });
   void transitionToRealConnected(trigger);
 };
+
+registerReachabilityListener(noteReachable);
 
 const installConnectionTestProbe = () => {
   if (typeof window === "undefined" || !isTestProbeEnabled()) return;
@@ -569,6 +680,26 @@ const logDiscoveryDecision = (
   }
 };
 
+let identityHealInFlight = false;
+
+// A promotion driven by passive traffic (noteReachable) or a cancelled startup
+// probe can reach REAL_CONNECTED with no device identity; without identity the
+// health gate reports Degraded indefinitely, so fetch it once after connect.
+const ensureDeviceIdentityAfterConnect = async () => {
+  if (identityHealInFlight || snapshot.deviceInfo) return;
+  identityHealInFlight = true;
+  try {
+    const result = await probeInfoOnce();
+    if (result.ok && snapshot.state === "REAL_CONNECTED" && !snapshot.deviceInfo) {
+      setSnapshot({ deviceInfo: result.deviceInfo });
+    } else if (!result.ok) {
+      addLog("debug", "Post-connect identity probe failed", { error: result.error });
+    }
+  } finally {
+    identityHealInFlight = false;
+  }
+};
+
 const transitionToRealConnected = async (
   trigger: DiscoveryTrigger,
   runtimeConfig?: { baseUrl: string; deviceHost: string; password?: string },
@@ -591,6 +722,9 @@ const transitionToRealConnected = async (
     stickyRealDeviceLock = true;
   }
   addLog("info", "Connection switched to real device", { trigger });
+  if (!snapshot.deviceInfo) {
+    void ensureDeviceIdentityAfterConnect();
+  }
 };
 
 const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
@@ -880,30 +1014,45 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
     if (cancelled || probeInFlight) return;
     probeInFlight = true;
     setSnapshot({ lastProbeAtMs: Date.now() });
-    const ok = await probeOnce({ signal: abort.signal });
-    probeInFlight = false;
-    if (cancelled) return;
-    if (ok) {
-      if (!discoveryRun.isCurrent()) return;
-      setSnapshot({ lastProbeSucceededAtMs: Date.now(), lastProbeError: null });
-      addLog("info", "Discovery probe succeeded", { trigger });
-      if (isSmokeModeEnabled()) {
-        console.info("C64U_PROBE_OK", JSON.stringify({ trigger }));
+    try {
+      const ok = await probeOnce({ signal: abort.signal });
+      if (cancelled) return;
+      if (ok) {
+        if (!discoveryRun.isCurrent()) return;
+        setSnapshot({ lastProbeSucceededAtMs: Date.now(), lastProbeError: null });
+        addLog("info", "Discovery probe succeeded", { trigger });
+        if (isSmokeModeEnabled()) {
+          console.info("C64U_PROBE_OK", JSON.stringify({ trigger }));
+        }
+        cancelled = true;
+        globalThis.clearTimeout(windowTimer);
+        globalThis.clearInterval(probeTimer);
+        await transitionToRealConnected(trigger);
+      } else {
+        if (!discoveryRun.isCurrent()) return;
+        if (windowExpired) {
+          await handleWindowExpiry();
+          return;
+        }
+        setSnapshot({ lastProbeFailedAtMs: Date.now() });
+        if (isSmokeModeEnabled()) {
+          console.warn("C64U_PROBE_FAILED", JSON.stringify({ trigger }));
+        }
       }
-      cancelled = true;
-      globalThis.clearTimeout(windowTimer);
-      globalThis.clearInterval(probeTimer);
-      await transitionToRealConnected(trigger);
-    } else {
-      if (!discoveryRun.isCurrent()) return;
-      if (windowExpired) {
-        await handleWindowExpiry();
-        return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error ?? "Unknown discovery probe failure");
+      addLog("warn", "Discovery probe failed before completion", {
+        trigger,
+        error: message,
+      });
+      if (!cancelled && discoveryRun.isCurrent()) {
+        setSnapshot({ lastProbeFailedAtMs: Date.now(), lastProbeError: message });
+        if (windowExpired) {
+          await handleWindowExpiry();
+        }
       }
-      setSnapshot({ lastProbeFailedAtMs: Date.now() });
-      if (isSmokeModeEnabled()) {
-        console.warn("C64U_PROBE_FAILED", JSON.stringify({ trigger }));
-      }
+    } finally {
+      probeInFlight = false;
     }
   };
 

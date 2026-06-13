@@ -27,7 +27,7 @@ import { invalidateForConnectionSettingsChange } from "@/lib/query/c64QueryInval
 import {
   getInfoRefreshMinIntervalMs,
   shouldRunRateLimited,
-  DRIVES_POLL_INTERVAL_MS,
+  getDrivesPollIntervalMs,
   pollingPauseRegistry,
 } from "@/lib/query/c64PollingGovernance";
 import { addLog } from "@/lib/logging";
@@ -530,7 +530,7 @@ export function useC64Drives(options: C64QueryOptions = {}) {
     staleTime: options.staleTime ?? 10000,
     refetchOnMount: options.refetchOnMount,
     refetchInterval:
-      !queryActive || diagnosticsSuppressionActive ? false : () => (pollingPaused ? false : DRIVES_POLL_INTERVAL_MS),
+      !queryActive || diagnosticsSuppressionActive ? false : () => (pollingPaused ? false : getDrivesPollIntervalMs()),
   });
 }
 

@@ -15,6 +15,7 @@ import type { MenuPath } from "@/lib/telnet/telnetTypes";
 import { addLog } from "@/lib/logging";
 
 const LOG_TAG = "TelnetActionExecutor";
+const NAVIGATION_CLEANUP_TIMEOUT_MS = 750;
 
 export interface TelnetActionExecutor {
   /** Execute a Telnet-only action by its ID (e.g., 'powerCycle') */
@@ -31,6 +32,36 @@ interface CreateActionExecutorOptions {
   menuKey?: "F5" | "F1";
   resolvedTargets?: Partial<Record<TelnetActionId, TelnetResolvedActionTarget>>;
 }
+
+const withCleanupTimeout = async (operation: Promise<void>) =>
+  Promise.race([
+    operation,
+    new Promise<void>((_, reject) => {
+      globalThis.setTimeout(
+        () => reject(new TelnetError("Telnet navigation cleanup timed out", "TIMEOUT")),
+        NAVIGATION_CLEANUP_TIMEOUT_MS,
+      );
+    }),
+  ]);
+
+const attemptNavigationCleanup = async (session: TelnetSessionApi, actionId: string) => {
+  try {
+    await withCleanupTimeout(
+      (async () => {
+        await session.sendKey("ESCAPE");
+        await session.sendKey("LEFT");
+      })(),
+    );
+    addLog("debug", `${LOG_TAG}: attempted cleanup after navigation failure`, { actionId });
+  } catch (cleanupError) {
+    const error = cleanupError as Error;
+    addLog("warn", `${LOG_TAG}: cleanup after navigation failure failed`, {
+      actionId,
+      error: error.message,
+      stack: error.stack ?? null,
+    });
+  }
+};
 
 /**
  * Creates a high-level action executor that:
@@ -78,6 +109,7 @@ export function createActionExecutor(
         elapsed: Date.now() - startTime,
       });
     } catch (error) {
+      await attemptNavigationCleanup(session, actionId);
       addLog("error", `${LOG_TAG}: action "${action.label}" failed`, {
         actionId,
         elapsed: Date.now() - startTime,

@@ -640,6 +640,42 @@ describe("SettingsPage", () => {
     });
   });
 
+  it("persists an edited hostname into the saved-devices store (H-01)", async () => {
+    vi.mocked(discoverConnection).mockResolvedValue(undefined);
+    // Seed the real store with the device the page edits so the persistence
+    // path (updateSavedDevice → localStorage) is exercised end to end.
+    const store = await import("@/lib/savedDevices/store");
+    if (!store.getSavedDeviceById("saved-device-1")) {
+      store.addSavedDevice({
+        id: "saved-device-1",
+        name: "Office U64",
+        host: "c64u",
+        httpPort: 80,
+        ftpPort: 21,
+        telnetPort: 64,
+        lastKnownProduct: "U64",
+        lastKnownHostname: "office-u64",
+        lastKnownUniqueId: "UID-1",
+        hasPassword: false,
+      });
+    }
+
+    renderSettingsPage();
+
+    fireEvent.change(screen.getByLabelText(/c64u hostname \/ ip/i), { target: { value: "edited-host.local" } });
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(mockUpdateConfig).toHaveBeenCalledWith("edited-host.local", undefined);
+    });
+
+    const persisted = JSON.parse(localStorage.getItem(SAVED_DEVICES_STORAGE_KEY) ?? "{}");
+    const savedDevice = (persisted.devices as Array<{ id: string; host: string }>).find(
+      (device) => device.id === "saved-device-1",
+    );
+    expect(savedDevice?.host).toBe("edited-host.local");
+  });
+
   it("persists the saved-device password flag before switching devices", async () => {
     renderSettingsPage();
 
@@ -832,6 +868,33 @@ describe("SettingsPage", () => {
         }),
       );
     });
+  });
+
+  it("reports a foreground connection error when saved-device verification finishes offline", async () => {
+    mockSwitchSavedDevice.mockResolvedValueOnce({
+      ok: false,
+      deviceInfo: null,
+      error: "Host unreachable",
+      resolvedAddress: null,
+    });
+
+    renderSettingsPage();
+
+    fireEvent.change(screen.getByLabelText(/c64u hostname \/ ip/i), { target: { value: "  nosuchhost-c64u:8080  " } });
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(mockUpdateConfig).toHaveBeenCalledWith("nosuchhost-c64u", undefined);
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "CONNECTION_SAVE",
+          title: "Unable to save connection",
+          description: "Host unreachable",
+          deviceHost: "nosuchhost-c64u",
+        }),
+      );
+    });
+    expect(toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Connection settings saved" }));
   });
 
   it("hides the automatic demo-mode setting when the feature flag is disabled", () => {

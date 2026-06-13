@@ -36,6 +36,8 @@ class BackgroundExecutionServiceTest {
     fun setUp() {
         setIsRunning(false)
         setRunningInstance(null)
+        setCompanionField("commandGeneration", 0L)
+        setCompanionField("startPendingGeneration", null)
         controller = Robolectric.buildService(BackgroundExecutionService::class.java)
         service = controller.get()
     }
@@ -49,6 +51,8 @@ class BackgroundExecutionServiceTest {
         }
         setIsRunning(false)
         setRunningInstance(null)
+        setCompanionField("commandGeneration", 0L)
+        setCompanionField("startPendingGeneration", null)
     }
 
     // Helper to set the static isRunning field via reflection for testing
@@ -64,23 +68,33 @@ class BackgroundExecutionServiceTest {
         field.set(null, value)
     }
 
+    private fun setCompanionField(name: String, value: Any?) {
+        val field = BackgroundExecutionService::class.java.getDeclaredField(name)
+        field.isAccessible = true
+        field.set(null, value)
+    }
+
     private fun getPrivateField(name: String): Any? {
         val field = BackgroundExecutionService::class.java.getDeclaredField(name)
         field.isAccessible = true
         return field.get(service)
     }
 
+    private fun startService(startId: Int = 0) {
+        service.onStartCommand(Intent(service, BackgroundExecutionService::class.java), 0, startId)
+    }
+
     @Test
     fun serviceStartsSetsIsRunning() {
         controller.create()
-        controller.startCommand(0, 0)
+        startService()
         assertTrue("Service should be running after start", BackgroundExecutionService.isRunning)
     }
 
     @Test
     fun serviceStopClearsIsRunning() {
         controller.create()
-        controller.startCommand(0, 0)
+        startService()
         assertTrue(BackgroundExecutionService.isRunning)
 
         controller.destroy()
@@ -90,18 +104,18 @@ class BackgroundExecutionServiceTest {
     @Test
     fun startCommandIsIdempotent() {
         controller.create()
-        controller.startCommand(0, 0)
+        startService()
         assertTrue(BackgroundExecutionService.isRunning)
 
         // Second start command should not fail
-        controller.startCommand(0, 1)
+        startService(1)
         assertTrue("Service should still be running after second startCommand", BackgroundExecutionService.isRunning)
     }
 
     @Test
     fun updateDueAtAcceptsPositiveValue() {
         controller.create()
-        controller.startCommand(0, 0)
+        startService()
 
         val intent = Intent(BackgroundExecutionService.ACTION_UPDATE_DUE_AT)
         intent.putExtra(BackgroundExecutionService.EXTRA_DUE_AT_MS, System.currentTimeMillis() + 30_000L)
@@ -114,7 +128,7 @@ class BackgroundExecutionServiceTest {
     @Test
     fun updateDueAtClearsOnNegativeValue() {
         controller.create()
-        controller.startCommand(0, 0)
+        startService()
 
         val intent = Intent(BackgroundExecutionService.ACTION_UPDATE_DUE_AT)
         intent.putExtra(BackgroundExecutionService.EXTRA_DUE_AT_MS, -1L)
@@ -126,7 +140,7 @@ class BackgroundExecutionServiceTest {
     @Test
     fun updateDueAtClearsOnMissingExtra() {
         controller.create()
-        controller.startCommand(0, 0)
+        startService()
 
         val intent = Intent(BackgroundExecutionService.ACTION_UPDATE_DUE_AT)
         // No EXTRA_DUE_AT_MS set — should clear
@@ -154,7 +168,7 @@ class BackgroundExecutionServiceTest {
     @Test
     fun destroyReleasesResources() {
         controller.create()
-        controller.startCommand(0, 0)
+        startService()
         assertTrue(BackgroundExecutionService.isRunning)
 
         controller.destroy()
@@ -164,7 +178,7 @@ class BackgroundExecutionServiceTest {
     @Test
     fun serviceDoesNotAutoStopWithoutDueAt() {
         controller.create()
-        controller.startCommand(0, 0)
+        startService()
 
         ShadowLooper.shadowMainLooper().idleFor(2, TimeUnit.MINUTES)
 
@@ -172,9 +186,23 @@ class BackgroundExecutionServiceTest {
     }
 
     @Test
+    fun stickyRestartWithoutCommandDoesNotLeaveOrphanServiceRunning() {
+        controller.create()
+
+        val result = service.onStartCommand(null, 0, 1)
+
+        assertEquals(
+            "Null sticky restart should not keep a foreground service alive without JS re-registration",
+            android.app.Service.START_NOT_STICKY,
+            result,
+        )
+        assertFalse("Null sticky restart should not mark service running", BackgroundExecutionService.isRunning)
+    }
+
+    @Test
     fun serviceStartInitializesMediaSessionAndAudioFocusState() {
         controller.create()
-        controller.startCommand(0, 0)
+        startService()
 
         assertNotNull("MediaSession should be initialized when service starts", getPrivateField("mediaSession"))
         assertNotNull("AudioManager should be initialized when service starts", getPrivateField("audioManager"))
@@ -183,7 +211,7 @@ class BackgroundExecutionServiceTest {
     @Test
     fun serviceDestroyReleasesMediaSessionAndAudioFocusState() {
         controller.create()
-        controller.startCommand(0, 0)
+        startService()
 
         controller.destroy()
 
@@ -229,9 +257,50 @@ class BackgroundExecutionServiceTest {
     }
 
     @Test
+    fun updateDueAtNullDoesNotStartStoppedService() {
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+
+        BackgroundExecutionService.updateDueAt(appContext, null)
+
+        assertFalse("Stopped service should remain stopped after clearing dueAt", BackgroundExecutionService.isRunning)
+        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
+        assertNull("Expected no service start for a stopped-service dueAt clear", shadowApp.nextStartedService)
+    }
+
+    @Test
+    fun updateDueAtNullDuringPendingStartQueuesClearIntent() {
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+
+        BackgroundExecutionService.start(appContext)
+        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
+        assertNotNull("Expected initial start intent", shadowApp.nextStartedService)
+
+        BackgroundExecutionService.updateDueAt(appContext, null)
+
+        val clearIntent = shadowApp.nextStartedService
+        assertNotNull("Expected dueAt clear intent while start is pending", clearIntent)
+        assertEquals(BackgroundExecutionService.ACTION_UPDATE_DUE_AT, clearIntent?.action)
+    }
+
+    @Test
+    fun staleQueuedStartAfterStopDoesNotStartService() {
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+
+        BackgroundExecutionService.start(appContext)
+        val startIntent = Shadows.shadowOf(appContext as android.app.Application).nextStartedService
+        assertNotNull("Expected initial start intent", startIntent)
+
+        BackgroundExecutionService.stop(appContext)
+        controller.create()
+        service.onStartCommand(startIntent, 0, 1)
+
+        assertFalse("Stale start intent should not leave service running", BackgroundExecutionService.isRunning)
+    }
+
+    @Test
     fun updateDueAtUpdatesRunningServiceWithoutRestartingForegroundService() {
         controller.create()
-        controller.startCommand(0, 0)
+        startService()
         val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
         val dueAtMs = System.currentTimeMillis() + 10_000L
 
@@ -246,7 +315,7 @@ class BackgroundExecutionServiceTest {
     @Test
     fun updateDueAtInternalFiresBroadcastWhenDueIsInPast() {
         controller.create()
-        controller.startCommand(0, 0)
+        startService()
 
         val update = Intent(BackgroundExecutionService.ACTION_UPDATE_DUE_AT)
         update.putExtra(BackgroundExecutionService.EXTRA_DUE_AT_MS, System.currentTimeMillis() - 10L)

@@ -413,7 +413,7 @@ describe("c64api branches", () => {
   it("marks expected abort responses and suppresses diagnostics side effects", async () => {
     const fetchMock = getFetchMock();
     const controller = new AbortController();
-    const abortErr = new Error("signal is aborted without reason");
+    const abortErr = new Error("The operation was aborted");
     abortErr.name = "AbortError";
     fetchMock.mockImplementation(
       () =>
@@ -444,7 +444,10 @@ describe("c64api branches", () => {
       expect.anything(),
       expect.objectContaining({
         expectedFailure: true,
-        error: abortErr,
+        error: expect.objectContaining({
+          name: "AbortError",
+          message: "The operation was aborted",
+        }),
       }),
     );
     expect(recordTraceErrorMock).not.toHaveBeenCalled();

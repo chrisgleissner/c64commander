@@ -34,6 +34,27 @@ describe("createLatestIntentWriteLane", () => {
     expect(writes).toEqual([3]);
   });
 
+  it("runs an abandoned scheduled intent to completion (H-07: final-value flush survives unmount)", async () => {
+    const writes: number[] = [];
+    let resolveRun!: () => void;
+    const ran = new Promise<void>((resolve) => {
+      resolveRun = resolve;
+    });
+    const lane = createLatestIntentWriteLane<number>({
+      run: async (value) => {
+        writes.push(value);
+        resolveRun();
+      },
+    });
+
+    // Fire-and-forget, as a component unmounting right after slider release:
+    // nobody awaits the promise, but the write must still reach the device.
+    void lane.schedule(42);
+
+    await ran;
+    expect(writes).toEqual([42]);
+  });
+
   it("applies the newest queued value after an older in-flight write completes", async () => {
     let releaseFirst!: () => void;
     const firstRunDone = new Promise<void>((resolve) => {
@@ -103,5 +124,29 @@ describe("createLatestIntentWriteLane", () => {
     });
 
     await expect(lane.schedule(1)).rejects.toThrow("write failed");
+  });
+
+  it("resolves superseded waiters when only the final effective write fails", async () => {
+    let allowRuns = false;
+    const lane = createLatestIntentWriteLane<number>({
+      beforeRun: async () => {
+        while (!allowRuns) {
+          await Promise.resolve();
+        }
+      },
+      run: async (value) => {
+        if (value === 2) {
+          throw new Error("final write failed");
+        }
+      },
+    });
+
+    const superseded = lane.schedule(1);
+    const final = lane.schedule(2);
+
+    allowRuns = true;
+
+    await expect(superseded).resolves.toBeUndefined();
+    await expect(final).rejects.toThrow("final write failed");
   });
 });

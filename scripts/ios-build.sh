@@ -21,5 +21,10 @@ if [[ "$1" == "sim" ]]; then
   sdk="iphonesimulator"
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+APP_VERSION_VALUE="${APP_VERSION:-$(node "$REPO_ROOT/scripts/resolve-build-version.mjs")}"
+APP_BUILD_NUMBER_VALUE="${APP_BUILD_NUMBER:-$(git -C "$REPO_ROOT" rev-list --count HEAD 2>/dev/null || printf '1')}"
+
 cd ios/App
-xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug -sdk "$sdk" -derivedDataPath build CODE_SIGNING_ALLOWED=NO
+xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug -sdk "$sdk" -derivedDataPath build MARKETING_VERSION="$APP_VERSION_VALUE" CURRENT_PROJECT_VERSION="$APP_BUILD_NUMBER_VALUE" CODE_SIGNING_ALLOWED=NO

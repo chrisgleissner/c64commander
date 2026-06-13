@@ -71,6 +71,7 @@ import {
 import { buildBinaryFingerprint } from "@/lib/binaryFingerprint";
 import { TransmissionGuard, type SupportedC64FileType, type TransmissionValidationContext } from "@/lib/fileValidation";
 import { collectTraceHeaders } from "@/lib/tracing/payloadPreview";
+import { notifyReachable } from "@/lib/connection/reachabilityEvents";
 // Two timeout budgets for non-upload, non-playback requests:
 // - INTERACTIVE: user-tappable controls and config writes the user is
 //   staring at. Tighter than the firmware p99 (~600 ms) so a stuck
@@ -95,6 +96,48 @@ const DEDUPEABLE_READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const READ_REQUEST_BUDGET_WINDOW_MS = 500;
 const READ_REQUEST_BUDGET_MAX_ENTRIES = 256;
 const READ_REQUEST_BUDGET_MAX_VALUE_BYTES = 64 * 1024;
+const CONFIG_WRITE_REQUEST_OPTIONS = {
+  timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
+} as const;
+
+const resolveDefaultRestRequestTimeoutMs = (intent: InteractionIntent) =>
+  intent === "background" ? BACKGROUND_REQUEST_TIMEOUT_MS : INTERACTIVE_CONTROL_TIMEOUT_MS;
+
+// E2E/test-probe builds drive a mock device that models realistic firmware
+// latencies (mount ~744 ms, stream start ~1015 ms) and run under coverage
+// instrumentation across parallel CI shards, all of which inflate wall-clock
+// time far beyond the production-tuned interactive budget. Floor every timed
+// request's effective timeout in those builds so a healthy-but-slow mocked
+// response is not aborted as "Host unreachable". Production budgets are unchanged.
+const TEST_PROBE_REQUEST_TIMEOUT_FLOOR_MS = 8000;
+
+// Read lazily and defensively: `import.meta.env` is undefined when this module is
+// loaded by the Playwright runner in Node (e.g. `playwright test --list`), so
+// touching it at module scope would throw there and break test collection.
+const isTestProbeTimeoutFloorEnabled = () => {
+  const env = (import.meta as ImportMeta).env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
+  return env?.VITE_ENABLE_TEST_PROBES === "1";
+};
+
+const resolveEffectiveRequestTimeoutMs = (timeoutMs?: number) =>
+  timeoutMs !== undefined && isTestProbeTimeoutFloorEnabled() && TEST_PROBE_REQUEST_TIMEOUT_FLOOR_MS > timeoutMs
+    ? TEST_PROBE_REQUEST_TIMEOUT_FLOOR_MS
+    : timeoutMs;
+
+type RestFailureKind = "timeout" | "abort" | "network" | "http-status";
+
+const annotateRestFailure = <T extends Error>(
+  error: T,
+  kind: RestFailureKind,
+  details: { httpStatus?: number; callerCancelled?: boolean } = {},
+): T => {
+  Object.assign(error, {
+    c64uRestFailureKind: kind,
+    ...(details.httpStatus !== undefined ? { c64uHttpStatus: details.httpStatus } : {}),
+    ...(details.callerCancelled ? { c64uCallerCancelled: true } : {}),
+  });
+  return error;
+};
 
 // Build a concise HTTP error message. When statusText is empty (common in HTTP/2)
 // omit the trailing colon so the message reads "HTTP 404" instead of "HTTP 404: ".
@@ -104,6 +147,64 @@ const buildHttpErrorMessage = (status: number, statusText: string): string => {
 };
 
 const normalizeConfigWriteToken = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
+const U64_SPECIFIC_SETTINGS_CATEGORY = "U64 Specific Settings";
+const U64_TURBO_CONTROL_ITEM = "Turbo Control";
+const U64_CPU_SPEED_DEPENDENT_ITEMS = new Set(["CPU Speed", "Badline Timing", "SuperCPU Detect (D0BC)"]);
+
+const isTurboControlOffValue = (value: string | number) =>
+  typeof value === "string" && normalizeConfigWriteToken(value) === "off";
+
+const orderFirmwareSafeConfigUpdates = (
+  category: string,
+  updates: Record<string, string | number>,
+): Array<[string, string | number]> => {
+  const entries = Object.entries(updates);
+  if (
+    category !== U64_SPECIFIC_SETTINGS_CATEGORY ||
+    !Object.prototype.hasOwnProperty.call(updates, U64_TURBO_CONTROL_ITEM) ||
+    !entries.some(([item]) => U64_CPU_SPEED_DEPENDENT_ITEMS.has(item))
+  ) {
+    return entries;
+  }
+
+  const turboEntry = entries.find(([item]) => item === U64_TURBO_CONTROL_ITEM);
+  if (!turboEntry) {
+    return entries;
+  }
+
+  const turboFirst = !isTurboControlOffValue(turboEntry[1]);
+  const ordered: Array<[string, string | number]> = [];
+  let turboAdded = false;
+
+  for (const entry of entries) {
+    const [item] = entry;
+    if (item === U64_TURBO_CONTROL_ITEM) {
+      continue;
+    }
+    if (turboFirst && U64_CPU_SPEED_DEPENDENT_ITEMS.has(item) && !turboAdded) {
+      ordered.push(turboEntry);
+      turboAdded = true;
+    }
+    ordered.push(entry);
+  }
+
+  if (!turboAdded) {
+    ordered.push(turboEntry);
+  }
+
+  return ordered;
+};
+
+// Combined POSTs that write Turbo Control together with a CPU-speed-dependent
+// item have twice coincided with the Ultimate dropping off the network
+// mid-write (BUG-010 on u64 3.14e, 2026-06-12 on c64u 1.1.0), while
+// single-item writes are reliable. Send such batches as sequential
+// single-item requests; the config write throttle spaces them out.
+const requiresSequentialItemWrites = (category: string, entries: Array<[string, string | number]>) =>
+  category === U64_SPECIFIC_SETTINGS_CATEGORY &&
+  entries.length > 1 &&
+  entries.some(([item]) => item === U64_TURBO_CONTROL_ITEM) &&
+  entries.some(([item]) => U64_CPU_SPEED_DEPENDENT_ITEMS.has(item));
 
 const resolveDeclaredConfigWriteValue = (
   category: string,
@@ -147,6 +248,27 @@ const isNetworkFailureMessage = (message: string) =>
 const resolveHostErrorMessage = (message: string) =>
   isDnsFailure(message) ? "Host unreachable (DNS)" : "Host unreachable";
 const isDeviceNotReadyRequestGate = (message: string) => /device not ready for requests/i.test(message);
+const isUnsupportedSignalError = (error: unknown) =>
+  error instanceof Error && error.message.includes("Expected signal") && error.message.includes("AbortSignal");
+
+const fetchWithSignalCompatibility = async (
+  input: string,
+  init: RequestInit,
+  signal?: AbortSignal,
+): Promise<Response> => {
+  const { signal: _ignoredSignal, ...initWithoutSignal } = init;
+  try {
+    return await fetch(input, {
+      ...initWithoutSignal,
+      ...(signal ? { signal } : {}),
+    });
+  } catch (error) {
+    if (!signal?.aborted && isUnsupportedSignalError(error)) {
+      return fetch(input, initWithoutSignal);
+    }
+    throw error;
+  }
+};
 
 const parseHttpStatusFromErrorMessage = (message: string) => {
   const match = /http\s+(\d{3})/i.exec(message);
@@ -215,8 +337,9 @@ const buildRequestId = () => {
 };
 
 const createTimedRequestSignal = (outerSignal: AbortSignal | undefined, timeoutMs?: number) => {
+  const effectiveTimeoutMs = resolveEffectiveRequestTimeoutMs(timeoutMs);
   let timedOut = false;
-  const controller = timeoutMs ? new AbortController() : null;
+  const controller = effectiveTimeoutMs ? new AbortController() : null;
   const abortFromOuter = () => controller?.abort();
   if (outerSignal && controller) {
     if (outerSignal.aborted) {
@@ -226,11 +349,11 @@ const createTimedRequestSignal = (outerSignal: AbortSignal | undefined, timeoutM
     }
   }
   const timeoutId =
-    timeoutMs && controller
+    effectiveTimeoutMs && controller
       ? setTimeout(() => {
           timedOut = true;
           controller.abort();
-        }, timeoutMs)
+        }, effectiveTimeoutMs)
       : null;
 
   return {
@@ -245,8 +368,6 @@ const createTimedRequestSignal = (outerSignal: AbortSignal | undefined, timeoutM
   };
 };
 
-let connectionManagerImport: Promise<typeof import("@/lib/connection/connectionManager")> | null = null;
-
 const noteRestReachable = (url: string, deviceHost: string, deviceInfo: DeviceInfo | null = null) => {
   const host = (() => {
     try {
@@ -255,18 +376,7 @@ const noteRestReachable = (url: string, deviceHost: string, deviceInfo: DeviceIn
       return deviceHost;
     }
   })();
-  connectionManagerImport ??= import("@/lib/connection/connectionManager");
-  void connectionManagerImport
-    .then(({ noteReachable }) => {
-      noteReachable(host, "rest", deviceInfo);
-    })
-    .catch((error) => {
-      addLog("warn", "Failed to note REST reachability", {
-        host,
-        error: error instanceof Error ? error.message : String(error ?? "Unknown import failure"),
-      });
-      connectionManagerImport = null;
-    });
+  notifyReachable(host, "rest", deviceInfo);
 };
 
 let lastDeviceHost: string | null = null;
@@ -924,7 +1034,7 @@ export class C64API {
             const requestId = buildRequestId();
             const idleContext = getIdleContext();
             const scheduledRequest = intent === "background";
-            const requestTimeoutMs = timeoutMs ?? (scheduledRequest ? SCHEDULED_REQUEST_TIMEOUT_MS : undefined);
+            const requestTimeoutMs = timeoutMs ?? resolveDefaultRestRequestTimeoutMs(intent);
             const maxAttempts = scheduledRequest ? SCHEDULED_REQUEST_MAX_ATTEMPTS : 1;
             const requestTrace = await inspectRequestPayload(requestOptions.body);
             let lastError: unknown = null;
@@ -993,12 +1103,15 @@ export class C64API {
 
                 // Keep C64U REST calls stateless and avoid cookie bridge churn on native startup.
                 const response = await awaitPromiseWithAbortSignal(
-                  fetch(url, {
-                    ...requestOptions,
-                    headers,
-                    credentials: requestOptions.credentials ?? "omit",
-                    ...(timedSignal.signal ? { signal: timedSignal.signal } : {}),
-                  }),
+                  fetchWithSignalCompatibility(
+                    url,
+                    {
+                      ...requestOptions,
+                      headers,
+                      credentials: requestOptions.credentials ?? "omit",
+                    },
+                    timedSignal.signal,
+                  ),
                   timedSignal.signal,
                 );
                 throwIfSuperseded();
@@ -1011,7 +1124,11 @@ export class C64API {
                 const responseTrace = await inspectResponsePayload(response);
                 throwIfSuperseded();
                 if (!response.ok) {
-                  const err = new Error(buildHttpErrorMessage(response.status, response.statusText));
+                  const err = annotateRestFailure(
+                    new Error(buildHttpErrorMessage(response.status, response.statusText)),
+                    "http-status",
+                    { httpStatus: response.status },
+                  );
                   const failure = classifyError(err, "integration");
                   const expectedFailure =
                     (expectedMissing && method === "GET" && response.status === 404) || expectedFailureOption;
@@ -1217,15 +1334,18 @@ export class C64API {
                 }
 
                 if (callerAborted) {
-                  throw createAbortError();
+                  throw annotateRestFailure(createAbortError(), "abort", { callerCancelled: true });
                 }
 
                 if (cancelledAbort) {
-                  throw createAbortError();
+                  throw annotateRestFailure(createAbortError(), "abort", { callerCancelled: true });
                 }
 
                 if (isAbort || isNetworkFailure) {
-                  throw new Error(resolveHostErrorMessage(rawMessage));
+                  throw annotateRestFailure(
+                    new Error(resolveHostErrorMessage(rawMessage)),
+                    timedSignal.didTimeout() || /timed out/i.test(rawMessage) ? "timeout" : "network",
+                  );
                 }
                 throw error;
               } finally {
@@ -1321,12 +1441,15 @@ export class C64API {
           const timedSignal = createTimedRequestSignal(options.signal ?? undefined, timeoutMs);
           try {
             const response = await awaitPromiseWithAbortSignal(
-              fetch(url, {
-                ...options,
-                body: normalizedBody.body,
-                credentials: options.credentials ?? "omit",
-                ...(timedSignal.signal ? { signal: timedSignal.signal } : {}),
-              }),
+              fetchWithSignalCompatibility(
+                url,
+                {
+                  ...options,
+                  body: normalizedBody.body,
+                  credentials: options.credentials ?? "omit",
+                },
+                timedSignal.signal,
+              ),
               timedSignal.signal,
             );
             if (response.ok) {
@@ -1413,7 +1536,10 @@ export class C64API {
               }),
             );
             if (isAbort || isNetworkFailure) {
-              throw new Error(resolveHostErrorMessage(rawMessage));
+              throw annotateRestFailure(
+                new Error(resolveHostErrorMessage(rawMessage)),
+                timedSignal.didTimeout() || /timed out/i.test(rawMessage) ? "timeout" : "network",
+              );
             }
             throw error;
           } finally {
@@ -1599,6 +1725,7 @@ export class C64API {
     const response = await scheduleConfigWrite(() =>
       this.request<ConfigResponse>(`/v1/configs/${catEncoded}/${itemEncoded}?value=${valEncoded}`, {
         method: "PUT",
+        ...CONFIG_WRITE_REQUEST_OPTIONS,
         ...options,
       }),
     );
@@ -1621,7 +1748,7 @@ export class C64API {
 
   async updateConfigBatch(payload: Record<string, Record<string, string | number>>): Promise<{ errors: string[] }> {
     const categories = Object.entries(payload);
-    const resolvedPayload: Record<string, Record<string, string | number>> = {};
+    const resolvedEntriesByCategory: Record<string, Array<[string, string | number]>> = {};
     await Promise.all(
       categories.map(async ([category, updates]) => {
         const categoryPayload = {
@@ -1629,33 +1756,50 @@ export class C64API {
             items: await this.ensureConfigCategoryItems(category, Object.keys(updates)),
           },
         };
-        const resolvedUpdates = Object.fromEntries(
-          Object.entries(updates).map(([item, value]) => [
+        const resolvedEntries = orderFirmwareSafeConfigUpdates(category, updates).map(
+          ([item, value]): [string, string | number] => [
             item,
             resolveConfigWriteValue(category, item, value, categoryPayload),
-          ]),
+          ],
         );
-        resolvedPayload[category] = resolvedUpdates;
+        resolvedEntriesByCategory[category] = resolvedEntries;
         validateConfigBatchWrite({
           category,
-          updates: resolvedUpdates,
+          updates: Object.fromEntries(resolvedEntries),
           categoryPayload,
         });
       }),
     );
-    const run = (): Promise<{ errors: string[] }> =>
-      this.request("/v1/configs", {
-        method: "POST",
-        body: JSON.stringify(resolvedPayload),
-      });
-    const response = await scheduleConfigWrite(run);
-    this.assertConfigWriteAccepted(response, { payload: resolvedPayload });
-    Object.entries(resolvedPayload).forEach(([category, updates]) => {
-      Object.entries(updates).forEach(([item, value]) => {
-        this.setCachedConfigValue(category, item, value);
-      });
+    const mergedPayload: Record<string, Record<string, string | number>> = {};
+    const sequentialPayloads: Array<Record<string, Record<string, string | number>>> = [];
+    Object.entries(resolvedEntriesByCategory).forEach(([category, entries]) => {
+      if (requiresSequentialItemWrites(category, entries)) {
+        entries.forEach(([item, value]) => {
+          sequentialPayloads.push({ [category]: { [item]: value } });
+        });
+        return;
+      }
+      mergedPayload[category] = Object.fromEntries(entries);
     });
-    return response;
+    const requestPayloads = [...(Object.keys(mergedPayload).length ? [mergedPayload] : []), ...sequentialPayloads];
+    const errors: string[] = [];
+    for (const requestPayload of requestPayloads) {
+      const run = (): Promise<{ errors: string[] }> =>
+        this.request("/v1/configs", {
+          method: "POST",
+          ...CONFIG_WRITE_REQUEST_OPTIONS,
+          body: JSON.stringify(requestPayload),
+        });
+      const response = await scheduleConfigWrite(run);
+      this.assertConfigWriteAccepted(response, { payload: requestPayload });
+      Object.entries(requestPayload).forEach(([category, updates]) => {
+        Object.entries(updates).forEach(([item, value]) => {
+          this.setCachedConfigValue(category, item, value);
+        });
+      });
+      errors.push(...(response.errors ?? []));
+    }
+    return { errors };
   }
 
   // Machine control endpoints
@@ -1718,6 +1862,7 @@ export class C64API {
     return this.request(`/v1/streams/${encodeURIComponent(stream)}:stop`, {
       method: "PUT",
       timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
+      __c64uSkipSuccessBodyInspection: true,
     });
   }
 

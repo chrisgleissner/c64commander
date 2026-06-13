@@ -18,6 +18,11 @@ describe("launchSequence", () => {
     resetStartupLaunchSequenceStateForTests();
   });
 
+  it("keeps the default cold-start splash hold short enough for early interaction", () => {
+    expect(DEFAULT_LAUNCH_SEQUENCE_TIMINGS.holdMs).toBeLessThanOrEqual(500);
+    expect(getLaunchSequenceTotalMs()).toBeLessThanOrEqual(1050);
+  });
+
   it("emits the cold-start launch phases in order with the expected timings", () => {
     vi.useFakeTimers();
 

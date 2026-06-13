@@ -388,7 +388,10 @@ const markHandled = (error: ReportableValidationError) => {
 };
 
 export const isHandledUiError = (error: unknown) =>
-  Boolean((error as ReportableValidationError | undefined)?.c64uHandled);
+  Boolean(
+    (error as ReportableValidationError | undefined)?.c64uHandled ||
+    (error as { isCancellation?: boolean } | undefined)?.isCancellation,
+  );
 
 export class FileValidationError extends Error {
   readonly code: FileValidationFailureCode;

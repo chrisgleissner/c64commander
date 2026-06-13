@@ -72,6 +72,51 @@ const isAbortLikeError = (error: unknown) => {
 
 const shouldToastRestoreFailure = (context: string) => context !== "Restore (navigate)";
 
+type VolumeFallbackStep = {
+  option: string;
+  numeric: number | null;
+  isOff?: boolean;
+};
+
+const isKnownMuteVolumeStep = (step: VolumeFallbackStep | undefined) => {
+  if (!step) return false;
+  if (step.isOff) return true;
+  return step.option.trim().replace(/\s+/g, " ").toLowerCase() === "-42 db";
+};
+
+export const resolveUnmuteFallbackIndexForSteps = ({
+  preferredIndex,
+  currentIndex,
+  muteIndex,
+  defaultVolumeIndex,
+  volumeSteps,
+}: {
+  preferredIndex: number | null | undefined;
+  currentIndex: number;
+  muteIndex: number;
+  defaultVolumeIndex: number;
+  volumeSteps: VolumeFallbackStep[];
+}) => {
+  const isMutedIndex = (candidate: number) => {
+    if (isKnownMuteVolumeStep(volumeSteps[candidate])) return true;
+    if (!isKnownMuteVolumeStep(volumeSteps[muteIndex])) return false;
+    const candidateOption = volumeSteps[candidate]?.option?.trim();
+    const muteOption = volumeSteps[muteIndex]?.option?.trim();
+    return Boolean(candidateOption && muteOption && candidateOption === muteOption);
+  };
+  const safeFallback = (candidate: number) => {
+    if (!isMutedIndex(candidate)) return candidate;
+    const zeroDbIndex = volumeSteps.findIndex(
+      (option, index) => !option.isOff && option.numeric === 0 && index !== muteIndex,
+    );
+    if (zeroDbIndex >= 0) return zeroDbIndex;
+    const firstUnmutedIndex = volumeSteps.findIndex((option, index) => !option.isOff && index !== muteIndex);
+    if (firstUnmutedIndex >= 0) return firstUnmutedIndex;
+    return defaultVolumeIndex !== muteIndex ? defaultVolumeIndex : candidate;
+  };
+  return safeFallback(preferredIndex ?? currentIndex);
+};
+
 export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProps) {
   const { status } = useC64Connection();
   const updateConfigBatch = useC64UpdateConfigBatch();
@@ -144,6 +189,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   const volumeSessionSnapshotRef = useRef<Record<string, string | number> | null>(null);
   const volumeSessionActiveRef = useRef(false);
   const previousVolumeIndexRef = useRef<number | null>(null);
+  const mutedDraftVolumeIndexRef = useRef<number | null>(null);
   const volumeUpdateTimerRef = useRef<number | null>(null);
   const volumeUpdateSeqRef = useRef(0);
   const volumeUiTargetRef = useRef<{ index: number; setAtMs: number } | null>(null);
@@ -205,11 +251,37 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     [resolveVolumeIndex],
   );
 
+  const resolveUnmuteFallbackIndex = useCallback(
+    (preferredIndex: number | null | undefined, currentIndex: number, muteIndex: number) => {
+      return resolveUnmuteFallbackIndexForSteps({
+        preferredIndex,
+        currentIndex,
+        muteIndex,
+        defaultVolumeIndex,
+        volumeSteps,
+      });
+    },
+    [defaultVolumeIndex, volumeSteps],
+  );
+
   const captureSidMuteSnapshot = useCallback(
-    (items: typeof sidVolumeItems, enablement: SidEnablement) => ({
-      volumes: buildEnabledSidVolumeSnapshot(items, enablement),
-      enablement: { ...enablement },
-    }),
+    (items: typeof sidVolumeItems, enablement: SidEnablement) => {
+      const volumes = buildEnabledSidVolumeSnapshot(items, enablement);
+      const sessionSnapshot = volumeSessionSnapshotRef.current;
+      const snapshotAlreadyMuted =
+        items.length > 0 &&
+        items.every((item) => String(volumes[item.name] ?? "") === String(resolveSidMutedVolumeOption(item.options)));
+      if (snapshotAlreadyMuted && sessionSnapshot) {
+        return {
+          volumes: { ...sessionSnapshot },
+          enablement: { ...enablement },
+        };
+      }
+      return {
+        volumes,
+        enablement: { ...enablement },
+      };
+    },
     [buildEnabledSidVolumeSnapshot],
   );
 
@@ -634,6 +706,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       const updates = buildEnabledSidVolumeUpdates(sidVolumeItems, sidEnablement, target);
       manualMuteSnapshotRef.current = null;
       manualMuteIntentRef.current = false;
+      mutedDraftVolumeIndexRef.current = null;
       previousVolumeIndexRef.current = nextIndex;
       volumeUpdateSeqRef.current += 1;
       reserveVolumeUiTarget(nextIndex);
@@ -697,6 +770,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       dispatchTrackedVolume({ type: "set-index", index: nextIndex });
       reserveVolumeUiTarget(nextIndex);
       if (!volumeMuted) return;
+      mutedDraftVolumeIndexRef.current = nextIndex;
       previousVolumeIndexRef.current = nextIndex;
       const snapshot = manualMuteSnapshotRef.current;
       const target = volumeSteps[nextIndex]?.option;
@@ -724,6 +798,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       dispatchTrackedVolume({ type: "set-index", index: nextIndex });
       reserveVolumeUiTarget(nextIndex);
       if (volumeMuted) {
+        mutedDraftVolumeIndexRef.current = nextIndex;
         previousVolumeIndexRef.current = nextIndex;
         const snapshot = manualMuteSnapshotRef.current;
         const target = volumeSteps[nextIndex]?.option;
@@ -793,7 +868,11 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       return;
     }
     const toggleIntent = beginMuteToggleIntent(false);
-    const fallbackIndex = previousVolumeIndexRef.current ?? effectiveState.index;
+    const fallbackIndex = resolveUnmuteFallbackIndex(
+      mutedDraftVolumeIndexRef.current ?? volumeUiTargetRef.current?.index ?? previousVolumeIndexRef.current,
+      effectiveState.index,
+      muteIndex,
+    );
     lastManualWriteRef.current = {
       index: fallbackIndex,
       muted: false,
@@ -835,6 +914,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
           index: fallbackIndex,
         });
       }
+      mutedDraftVolumeIndexRef.current = null;
     } catch (error) {
       if (isCurrentMuteToggleIntent(toggleIntent)) {
         manualMuteIntentRef.current = true;
@@ -852,6 +932,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     isCurrentMuteToggleIntent,
     queuePlaybackMixerWrite,
     resolveMutedVolumeIndex,
+    resolveUnmuteFallbackIndex,
     resolveEffectiveVolumeState,
     resolveSidEnablement,
     resolveSidVolumeItems,
@@ -1017,7 +1098,12 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
           ? enabledSidVolumeItems
           : await resolveEnabledSidVolumeItems();
       if (!items.length) return;
-      const fallbackIndex = previousVolumeIndexRef.current ?? volumeIndex;
+      const muteIndex = resolveMutedVolumeIndex(items);
+      const fallbackIndex = resolveUnmuteFallbackIndex(
+        mutedDraftVolumeIndexRef.current ?? volumeUiTargetRef.current?.index ?? previousVolumeIndexRef.current,
+        volumeIndex,
+        muteIndex,
+      );
       const target = volumeSteps[fallbackIndex]?.option;
       let updates = target ? buildEnabledSidMutedToTargetUpdates(items, sidEnablement, target) : {};
       if (!Object.keys(updates).length && target) {
@@ -1045,6 +1131,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       dispatchTrackedVolume({ type: "unmute", reason: "manual", index: fallbackIndex });
       manualMuteIntentRef.current = false;
       manualMuteSnapshotRef.current = null;
+      mutedDraftVolumeIndexRef.current = null;
     },
     [
       buildEnabledSidMutedToTargetUpdates,
@@ -1052,6 +1139,8 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       dispatchTrackedVolume,
       queuePlaybackMixerWrite,
       resolveEnabledSidVolumeItems,
+      resolveMutedVolumeIndex,
+      resolveUnmuteFallbackIndex,
       sidEnablement,
       volumeIndex,
       volumeMuted,

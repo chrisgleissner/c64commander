@@ -73,9 +73,16 @@ type TelnetRequestMeta = {
   intent: InteractionIntent;
 };
 
+type RestFailureKind = "timeout" | "abort" | "network" | "http-status";
+
 type CacheEntry<T> = {
   value: T;
   expiresAt: number;
+};
+
+type InflightEntry<T> = {
+  promise: Promise<T>;
+  generation: number;
 };
 
 type QueueTask<T> = {
@@ -159,10 +166,10 @@ class InteractionScheduler {
   // device's context. Running tasks cannot be revoked here — they complete
   // or fail naturally; their late results are handled by the caller (or
   // simply ignored when state has moved on).
-  cancelAll(reason: string): number {
+  cancelAll(reason: string, intents: readonly InteractionIntent[] = ["user", "system", "background"]): number {
     this.clearDeferredDrainTimer();
     let cancelled = 0;
-    for (const intent of ["user", "system", "background"] as const) {
+    for (const intent of intents) {
       const queue = this.queues[intent];
       while (queue.length > 0) {
         const task = queue.shift();
@@ -263,6 +270,7 @@ const logEffectivePresetChange = (nextConfig: DeviceSafetyConfig) => {
 
 const updateConfig = () => {
   config = loadDeviceSafetyConfig();
+  restInflightGeneration += 1;
   restCache.clear();
   restCooldownUntil.clear();
   ftpConnectCooldownUntil.clear();
@@ -271,6 +279,7 @@ const updateConfig = () => {
   restErrorStreak = 0;
   restBackoffUntilMs = 0;
   restCircuitUntilMs = 0;
+  restUserCircuitProbeInFlight = false;
   ftpErrorStreak = 0;
   ftpBackoffUntilMs = 0;
   ftpCircuitUntilMs = 0;
@@ -283,15 +292,20 @@ const updateConfig = () => {
 };
 
 export const resetInteractionState = (reason: string) => {
+  const preserveQueuedUserWork = reason === "transition-real-connected";
+  restInflightGeneration += 1;
   restCache.clear();
   restCooldownUntil.clear();
   restInflight.clear();
-  resetConfigWriteThrottle(reason);
+  if (!preserveQueuedUserWork) {
+    resetConfigWriteThrottle(reason);
+  }
   ftpConnectCooldownUntil.clear();
   ftpInflight.clear();
   restErrorStreak = 0;
   restBackoffUntilMs = 0;
   restCircuitUntilMs = 0;
+  restUserCircuitProbeInFlight = false;
   ftpErrorStreak = 0;
   ftpBackoffUntilMs = 0;
   ftpCircuitUntilMs = 0;
@@ -303,9 +317,12 @@ export const resetInteractionState = (reason: string) => {
   // work cannot land against the new device's context. Already-running
   // tasks complete naturally; their late results are stale and ignored
   // by their callers because device-state has moved on.
-  const restCancelled = restScheduler.cancelAll(reason);
-  const ftpCancelled = ftpScheduler.cancelAll(reason);
-  const telnetCancelled = telnetScheduler.cancelAll(reason);
+  const resetIntents: readonly InteractionIntent[] = preserveQueuedUserWork
+    ? ["system", "background"]
+    : ["user", "system", "background"];
+  const restCancelled = restScheduler.cancelAll(reason, resetIntents);
+  const ftpCancelled = ftpScheduler.cancelAll(reason, resetIntents);
+  const telnetCancelled = telnetScheduler.cancelAll(reason, resetIntents);
   addLog("info", "Device interaction state reset", {
     reason,
     cancelledQueuedRest: restCancelled,
@@ -326,7 +343,7 @@ const ftpScheduler = new InteractionScheduler(() => config.ftpMaxConcurrency, "f
 const telnetScheduler = new InteractionScheduler(() => TELNET_MAX_CONCURRENCY, "telnet");
 
 const restCache = new Map<string, CacheEntry<unknown>>();
-const restInflight = new Map<string, Promise<unknown>>();
+const restInflight = new Map<string, InflightEntry<unknown>>();
 const restCooldownUntil = new Map<string, number>();
 
 const ftpInflight = new Map<string, Promise<unknown>>();
@@ -335,6 +352,8 @@ const ftpConnectCooldownUntil = new Map<string, number>();
 let restErrorStreak = 0;
 let restBackoffUntilMs = 0;
 let restCircuitUntilMs = 0;
+let restUserCircuitProbeInFlight = false;
+let restInflightGeneration = 0;
 
 let ftpErrorStreak = 0;
 let ftpBackoffUntilMs = 0;
@@ -344,7 +363,21 @@ let telnetErrorStreak = 0;
 let telnetBackoffUntilMs = 0;
 let telnetCircuitUntilMs = 0;
 
+const getRestFailureKind = (error: Error): RestFailureKind | null => {
+  const kind = (error as { c64uRestFailureKind?: RestFailureKind }).c64uRestFailureKind;
+  return kind ?? null;
+};
+
 const isCriticalRestError = (error: Error) => {
+  if ((error as { isCancellation?: boolean; c64uCallerCancelled?: boolean }).isCancellation) return false;
+  if ((error as { c64uCallerCancelled?: boolean }).c64uCallerCancelled) return false;
+  const structuredKind = getRestFailureKind(error);
+  if (structuredKind) {
+    if (structuredKind === "abort") return false;
+    if (structuredKind === "timeout" || structuredKind === "network") return true;
+    const status = (error as { c64uHttpStatus?: number }).c64uHttpStatus;
+    return typeof status === "number" && (status >= 500 || status === 429);
+  }
   const message = error.message.toLowerCase();
   if (message.includes("smoke mode blocked")) return false;
   if (message.includes("fuzz mode blocked")) return false;
@@ -359,6 +392,12 @@ const isCriticalRestError = (error: Error) => {
   return false;
 };
 
+const getCriticalRestFailureWeight = (error: Error) => {
+  const structuredKind = getRestFailureKind(error);
+  if (structuredKind === "timeout") return 0.5;
+  return isCriticalRestError(error) ? 1 : 0;
+};
+
 const computeBackoff = (streak: number) => {
   if (config.backoffBaseMs <= 0 || config.backoffMaxMs <= 0 || streak <= 0) return 0;
   const factor = Math.max(1, config.backoffFactor);
@@ -367,8 +406,9 @@ const computeBackoff = (streak: number) => {
 };
 
 const updateRestFailure = (error: Error) => {
-  if (!isCriticalRestError(error)) return;
-  restErrorStreak += 1;
+  const failureWeight = getCriticalRestFailureWeight(error);
+  if (failureWeight <= 0) return;
+  restErrorStreak += failureWeight;
   const backoffMs = computeBackoff(restErrorStreak);
   const now = Date.now();
   if (backoffMs > 0) {
@@ -384,6 +424,7 @@ const resetRestFailure = () => {
   restErrorStreak = 0;
   restBackoffUntilMs = 0;
   restCircuitUntilMs = 0;
+  restUserCircuitProbeInFlight = false;
   setCircuitOpenUntil(null);
 };
 
@@ -493,14 +534,16 @@ const resolveRestPolicy = (method: string, path: string, baseUrl: string) => {
 
 const shouldBlockForState = (intent: InteractionIntent, allowDuringDiscovery?: boolean, allowDuringError?: boolean) => {
   if (isTestEnv()) return false;
-  const state = getDeviceStateSnapshot().state;
+  const snapshot = getDeviceStateSnapshot();
+  const state = snapshot.state;
   if (state === "UNKNOWN" || state === "DISCOVERING") {
-    if (state === "DISCOVERING" && intent === "user") return false;
+    if (intent === "user") return false;
     return !(allowDuringDiscovery && intent === "system");
   }
   if (state === "ERROR") {
     if (intent === "background") return true;
     if (intent === "system" && allowDuringError) return false;
+    if (intent === "user" && snapshot.circuitOpenUntilMs && Date.now() < snapshot.circuitOpenUntilMs) return false;
     if (intent === "user" && config.allowUserOverrideCircuit) return false;
     return true;
   }
@@ -605,7 +648,7 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
   if (meta.intent !== "user" && isReadOnlyRestMethod(meta.method)) {
     if (getDeviceStateSnapshot().state === "BUSY") {
       recordDeviceGuard(meta.action, {
-        decision: "defer",
+        decision: "observe",
         reason: "device-busy",
       });
     }
@@ -626,13 +669,28 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
   }
 
   const now = Date.now();
-  if (restCircuitUntilMs > now && !meta.bypassCircuit && !(meta.intent === "user" && config.allowUserOverrideCircuit)) {
+  const circuitOpen = restCircuitUntilMs > now && !meta.bypassCircuit;
+  const userHalfOpenProbe = circuitOpen && meta.intent === "user" && config.allowUserOverrideCircuit;
+  let reservedUserHalfOpenProbe = false;
+  if (circuitOpen && !userHalfOpenProbe) {
     recordDeviceGuard(meta.action, {
       decision: "block",
       reason: "circuit-open",
       untilMs: restCircuitUntilMs,
     });
     throw new Error("Device circuit open");
+  }
+  if (userHalfOpenProbe && restUserCircuitProbeInFlight) {
+    recordDeviceGuard(meta.action, {
+      decision: "block",
+      reason: "circuit-open",
+      untilMs: restCircuitUntilMs,
+    });
+    throw new Error("Device circuit probe already in flight");
+  }
+  if (userHalfOpenProbe) {
+    restUserCircuitProbeInFlight = true;
+    reservedUserHalfOpenProbe = true;
   }
   if (restCircuitUntilMs > now && meta.bypassCircuit) {
     recordDeviceGuard(meta.action, {
@@ -641,7 +699,7 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
       untilMs: restCircuitUntilMs,
     });
   }
-  if (restCircuitUntilMs > now && meta.intent === "user" && config.allowUserOverrideCircuit) {
+  if (userHalfOpenProbe) {
     recordDeviceGuard(meta.action, {
       decision: "override",
       reason: "circuit-open",
@@ -651,7 +709,8 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
 
   const canonicalPath = canonicalizeRestPath(meta.path, meta.baseUrl);
   const policy = resolveRestPolicy(meta.method, canonicalPath, meta.baseUrl);
-  const usesSharedReadState = isReadOnlyRestMethod(meta.method) && Boolean(policy.key) && !meta.bypassCache;
+  const usesSharedReadState =
+    isReadOnlyRestMethod(meta.method) && Boolean(policy.key) && !meta.bypassCache && !userHalfOpenProbe;
   const defersReadWaitsInScheduler = isReadOnlyRestMethod(meta.method);
 
   if (usesSharedReadState && policy.key) {
@@ -671,12 +730,12 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
         reason: "inflight",
         key: policy.key,
       });
-      return inflight as Promise<T>;
+      return inflight.promise as Promise<T>;
     }
   }
 
   const scheduleTask = async () => {
-    if (!defersReadWaitsInScheduler && !meta.bypassBackoff && restBackoffUntilMs > Date.now()) {
+    if (!defersReadWaitsInScheduler && !meta.bypassBackoff && !userHalfOpenProbe && restBackoffUntilMs > Date.now()) {
       const waitMs = restBackoffUntilMs - Date.now();
       recordDeviceGuard(meta.action, {
         decision: "defer",
@@ -695,11 +754,11 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
       await sleep(waitMs);
     }
 
-    if (!defersReadWaitsInScheduler && !meta.bypassCooldown) {
+    if (!defersReadWaitsInScheduler && !meta.bypassCooldown && !userHalfOpenProbe) {
       await applyCooldown(policy.key, policy.cooldownMs, meta.intent, meta.action);
     }
 
-    if (!meta.bypassCooldown && policy.key && policy.cooldownMs > 0) {
+    if (!meta.bypassCooldown && !userHalfOpenProbe && policy.key && policy.cooldownMs > 0) {
       restCooldownUntil.set(policy.key, Date.now() + policy.cooldownMs);
     }
 
@@ -748,10 +807,6 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
         error: err.message,
       });
       throw error;
-    } finally {
-      if (usesSharedReadState && policy.key) {
-        restInflight.delete(policy.key);
-      }
     }
   };
 
@@ -761,10 +816,10 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
     getReadyAtMs: defersReadWaitsInScheduler
       ? () => {
           let readyAtMs = Date.now();
-          if (!meta.bypassBackoff) {
+          if (!meta.bypassBackoff && !userHalfOpenProbe) {
             readyAtMs = Math.max(readyAtMs, restBackoffUntilMs);
           }
-          if (!meta.bypassCooldown && policy.key && policy.cooldownMs > 0) {
+          if (!meta.bypassCooldown && !userHalfOpenProbe && policy.key && policy.cooldownMs > 0) {
             readyAtMs = Math.max(readyAtMs, restCooldownUntil.get(policy.key) ?? 0);
           }
           return readyAtMs;
@@ -773,10 +828,23 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
   });
 
   if (usesSharedReadState && policy.key) {
-    restInflight.set(policy.key, scheduledPromise as Promise<unknown>);
+    restInflight.set(policy.key, {
+      promise: scheduledPromise as Promise<unknown>,
+      generation: restInflightGeneration,
+    });
   }
 
-  return scheduledPromise;
+  return scheduledPromise.finally(() => {
+    if (reservedUserHalfOpenProbe) {
+      restUserCircuitProbeInFlight = false;
+    }
+    if (usesSharedReadState && policy.key) {
+      const current = restInflight.get(policy.key);
+      if (current?.promise === scheduledPromise && current.generation === restInflightGeneration) {
+        restInflight.delete(policy.key);
+      }
+    }
+  });
 };
 
 const applyFtpConnectPacing = async (hostScope: string, action: TraceActionContext, intent: InteractionIntent) => {

@@ -92,6 +92,19 @@ class BackgroundExecutionPluginTest {
     }
 
     @Test
+    fun setDueAtMsNullDoesNotRestartStoppedService() {
+        val call = mock(PluginCall::class.java)
+        `when`(call.getLong("dueAtMs")).thenReturn(null)
+
+        plugin.setDueAtMs(call)
+
+        verify(call).resolve()
+        assertFalse("Stopped service should remain stopped after clearing dueAt", BackgroundExecutionService.isRunning)
+        val shadowApp = Shadows.shadowOf(context as android.app.Application)
+        assertNull("Clearing dueAt must not start a foreground service", shadowApp.nextStartedService)
+    }
+
+    @Test
     fun setDueAtMsResolvesWithZeroValue() {
         val call = mock(PluginCall::class.java)
         `when`(call.getLong("dueAtMs")).thenReturn(0L)

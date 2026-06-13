@@ -187,6 +187,58 @@ describe("deviceInteractionManager", () => {
     await expect(Promise.all(requests)).resolves.toEqual(Array.from({ length: 20 }, () => ({ product: "C64U" })));
   });
 
+  it("keeps newer inflight REST entries after an older running read is reset and completes", async () => {
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const meta = {
+      action: makeAction("rest-inflight-generation"),
+      method: "GET",
+      path: "/v1/drives",
+      normalizedUrl: "http://device/v1/drives",
+      intent: "system" as const,
+      baseUrl: "http://device",
+    };
+
+    let releaseFirst!: () => void;
+    const firstBlocked = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let releaseSecond!: () => void;
+    const secondBlocked = new Promise<void>((resolve) => {
+      releaseSecond = resolve;
+    });
+    const firstHandler = vi.fn(async () => {
+      await firstBlocked;
+      return { drive: "old" };
+    });
+    const secondHandler = vi.fn(async () => {
+      await secondBlocked;
+      return { drive: "new" };
+    });
+    const thirdHandler = vi.fn().mockResolvedValue({ drive: "unexpected" });
+
+    const first = withRestInteraction(meta, firstHandler);
+    await expect.poll(() => firstHandler.mock.calls.length).toBe(1);
+
+    resetInteractionState("device-safety-update-test");
+    const second = withRestInteraction(meta, secondHandler);
+
+    releaseFirst();
+    await expect(first).resolves.toEqual({ drive: "old" });
+    await expect.poll(() => secondHandler.mock.calls.length).toBe(1);
+
+    const third = withRestInteraction(meta, thirdHandler);
+    releaseSecond();
+
+    await expect(second).resolves.toEqual({ drive: "new" });
+    await expect(third).resolves.toEqual({ drive: "new" });
+    expect(secondHandler).toHaveBeenCalledTimes(1);
+    expect(thirdHandler).not.toHaveBeenCalled();
+    expect(recordDeviceGuard).toHaveBeenCalledWith(meta.action, expect.objectContaining({ decision: "coalesce" }));
+  });
+
   it("does not coalesce concurrent config writes that share the same mutation lane", async () => {
     const { withRestInteraction, resetInteractionState } =
       await import("@/lib/deviceInteraction/deviceInteractionManager");
@@ -936,6 +988,29 @@ describe("deviceInteractionManager", () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
+  it("allows user intent during UNKNOWN so startup initialization does not block Home quick actions", async () => {
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    deviceStateValue = "UNKNOWN";
+
+    const action = makeAction("rest-unknown-user");
+    const meta = {
+      action,
+      method: "PUT",
+      path: "/v1/machine:pause",
+      normalizedUrl: "http://device/v1/machine:pause",
+      intent: "user" as const,
+      baseUrl: "http://device",
+    };
+
+    const handler = vi.fn().mockResolvedValue({ errors: [] });
+    const result = await withRestInteraction(meta, handler);
+    expect(result).toEqual({ errors: [] });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
   it("allows user intent to override ERROR state when configured", async () => {
     const { withRestInteraction, resetInteractionState } =
       await import("@/lib/deviceInteraction/deviceInteractionManager");
@@ -982,6 +1057,35 @@ describe("deviceInteractionManager", () => {
     const result = await withRestInteraction(meta, handler);
     expect(result).toEqual({ product: "Ultimate 64 Elite" });
     expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("records BUSY non-user read guard as observe-only when no defer is applied", async () => {
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    deviceStateValue = "BUSY";
+    const action = makeAction("busy-observe");
+    const handler = vi.fn().mockResolvedValue({ drives: [] });
+
+    await expect(
+      withRestInteraction(
+        {
+          action,
+          method: "GET",
+          path: "/v1/drives",
+          normalizedUrl: "http://device/v1/drives",
+          intent: "system" as const,
+          baseUrl: "http://device",
+        },
+        handler,
+      ),
+    ).resolves.toEqual({ drives: [] });
+
+    expect(recordDeviceGuard).toHaveBeenCalledWith(
+      action,
+      expect.objectContaining({ decision: "observe", reason: "device-busy" }),
+    );
   });
 
   it("bypasses cache when bypassCache is set", async () => {
@@ -1383,6 +1487,72 @@ describe("deviceInteractionManager", () => {
         newHandler,
       ),
     ).resolves.toBe("new-device");
+  });
+
+  it("keeps queued user REST work when same-host connection promotion resets background/system work", async () => {
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    let releaseRunning: (() => void) | null = null;
+    const running = withRestInteraction(
+      {
+        action: makeAction("promotion-running"),
+        method: "GET",
+        path: "/v1/info",
+        normalizedUrl: "http://u64/v1/info",
+        intent: "system" as const,
+        baseUrl: "http://u64",
+        bypassCache: true,
+      },
+      () =>
+        new Promise<string>((resolve) => {
+          releaseRunning = () => resolve("running");
+        }),
+    );
+    await expect.poll(() => markDeviceRequestStart.mock.calls.length).toBeGreaterThanOrEqual(1);
+
+    const backgroundHandler = vi.fn().mockResolvedValue("background");
+    const background = withRestInteraction(
+      {
+        action: makeAction("promotion-background"),
+        method: "GET",
+        path: "/v1/drives",
+        normalizedUrl: "http://u64/v1/drives",
+        intent: "background" as const,
+        baseUrl: "http://u64",
+        bypassCache: true,
+      },
+      backgroundHandler,
+    );
+    const userHandler = vi.fn().mockResolvedValue("user");
+    const user = withRestInteraction(
+      {
+        action: makeAction("promotion-user"),
+        method: "PUT",
+        path: "/v1/machine:pause",
+        normalizedUrl: "http://u64/v1/machine:pause",
+        intent: "user" as const,
+        baseUrl: "http://u64",
+        bypassCache: true,
+      },
+      userHandler,
+    );
+
+    await expect(Promise.race([background.then(() => "resolved"), Promise.resolve("queued")])).resolves.toBe("queued");
+    resetInteractionState("transition-real-connected");
+
+    await expect(background).rejects.toMatchObject({
+      name: "InteractionCancelledError",
+      reason: "transition-real-connected",
+      isCancellation: true,
+    });
+    expect(backgroundHandler).not.toHaveBeenCalled();
+
+    releaseRunning?.();
+    await expect(running).resolves.toBe("running");
+    await expect(user).resolves.toBe("user");
+    expect(userHandler).toHaveBeenCalledTimes(1);
   });
 
   it("PH10: resetInteractionState rejects queued config writes before stale device mutation", async () => {
