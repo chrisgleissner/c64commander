@@ -37,6 +37,7 @@ import {
 import { buildSavedDevicePreferredRuntimeHost, getSavedDeviceResolvedAddress } from "@/lib/savedDevices/resolvedTarget";
 import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 import { clearToastsOnDeviceSwitch } from "@/lib/uiErrors";
+import { setHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
 
 let activeSavedDeviceSwitch: { deviceId: string; promise: Promise<unknown> } | null = null;
 
@@ -57,6 +58,14 @@ export function useSavedDeviceSwitching() {
       const fromDevice = fromDeviceId && fromDeviceId !== deviceId ? getSavedDeviceById(fromDeviceId) : null;
       if (fromDevice) {
         clearToastsOnDeviceSwitch(fromDevice.host);
+        // BUG-036 — The comprehensive health-check result (latestResult) is a single
+        // global slot with no target identity, and useHealthState applies its
+        // overallHealth to whatever device is currently selected. Without clearing it
+        // here, switching from a Healthy device to a different (e.g. unreachable) one
+        // re-attributes the old device's "Healthy/green" to the new target until a
+        // fresh comprehensive check runs. Invalidate it on a real device change so the
+        // badge/health-card fall back to host-scoped trace-derived health.
+        setHealthCheckStateSnapshot({ latestResult: null });
       }
 
       const attemptId = beginSavedDeviceSwitchAttempt({
