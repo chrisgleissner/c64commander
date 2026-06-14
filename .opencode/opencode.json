@@ -1,0 +1,47 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "mobile-mcp": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@mobilenext/mobile-mcp@latest"
+      ],
+      "enabled": true,
+      "env": {}
+    },
+    "droidmind": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "--from",
+        "git+https://github.com/hyperb1iss/droidmind",
+        "droidmind",
+        "--transport",
+        "stdio"
+      ],
+      "enabled": true,
+      "env": {}
+    },
+    "c64bridge": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "c64bridge@latest"
+      ],
+      "enabled": true,
+      "env": {}
+    },
+    "c64scope": {
+      "type": "local",
+      "command": [
+        "node",
+        "c64scope/scripts/start.mjs"
+      ],
+      "enabled": true,
+      "env": {}
+    }
+  }
+}
