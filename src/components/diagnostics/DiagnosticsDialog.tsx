@@ -37,6 +37,8 @@ import {
   AppSheetHeader,
   AppSheetTitle,
 } from "@/components/ui/app-surface";
+import { DismissableLayer } from "@radix-ui/react-dismissable-layer";
+
 import { Button } from "@/components/ui/button";
 import { SavedDeviceEditorFields } from "@/components/devices/SavedDeviceEditorFields";
 import { Input } from "@/components/ui/input";
@@ -1621,22 +1623,38 @@ export function DiagnosticsDialog({
     </>
   );
 
-  const overflowPanel =
-    overflowOpen && profile === "compact" ? (
-      <div
-        className="fixed inset-x-4 top-[5.25rem] z-[220] max-h-[min(16rem,calc(100dvh-7rem))] overflow-y-auto overscroll-contain rounded-lg border border-border bg-background py-1 shadow-lg"
-        data-testid="diagnostics-overflow-panel"
-      >
-        {overflowPanelContent}
-      </div>
-    ) : overflowOpen ? (
-      <div
-        className="absolute right-0 top-full z-10 mt-1 w-max max-w-[min(13rem,calc(100vw-2rem))] rounded-lg border border-border bg-background py-1 shadow-lg"
-        data-testid="diagnostics-overflow-panel"
-      >
-        {overflowPanelContent}
-      </div>
-    ) : null;
+  // The diagnostics overflow ("Views") menu was a bare conditionally-rendered panel rather than a Radix
+  // popover, so it never joined the Radix dismissal layer stack (BUG-032). As a result Android Back
+  // dispatched its Escape straight to the enclosing Diagnostics dialog and closed the WHOLE dialog
+  // instead of just the menu, and an outside tap neither dismissed the menu nor was absorbed (it fell
+  // through to controls beneath). Wrapping the panel in a DismissableLayer makes it the topmost layer
+  // under the dialog: Radix's isHighestLayer guard then closes ONLY the menu on Back/Escape (the dialog
+  // defers), and `disableOutsidePointerEvents` dismisses + absorbs outside taps. `asChild` keeps the
+  // existing panel markup/positioning unchanged.
+  const overflowPanel = overflowOpen ? (
+    <DismissableLayer
+      asChild
+      disableOutsidePointerEvents
+      onFocusOutside={(event) => event.preventDefault()}
+      onDismiss={() => setOverflowOpen(false)}
+    >
+      {profile === "compact" ? (
+        <div
+          className="fixed inset-x-4 top-[5.25rem] z-[220] max-h-[min(16rem,calc(100dvh-7rem))] overflow-y-auto overscroll-contain rounded-lg border border-border bg-background py-1 shadow-lg"
+          data-testid="diagnostics-overflow-panel"
+        >
+          {overflowPanelContent}
+        </div>
+      ) : (
+        <div
+          className="absolute right-0 top-full z-10 mt-1 w-max max-w-[min(13rem,calc(100vw-2rem))] rounded-lg border border-border bg-background py-1 shadow-lg"
+          data-testid="diagnostics-overflow-panel"
+        >
+          {overflowPanelContent}
+        </div>
+      )}
+    </DismissableLayer>
+  ) : null;
 
   return (
     <>

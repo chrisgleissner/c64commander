@@ -29,7 +29,7 @@ import { addErrorLog } from "@/lib/logging";
 import { resolveAudioMixerResetValue } from "@/lib/config/audioMixer";
 import { useRefreshControl } from "@/hooks/useRefreshControl";
 import { isAudioMixerValueEqual } from "@/lib/config/audioMixer";
-import { getC64API, type ConfigCategory } from "@/lib/c64api";
+import { getC64API, type ConfigCategory, type ConfigResponse } from "@/lib/c64api";
 import { cn } from "@/lib/utils";
 import { buildSoloRoutingUpdates, isSidVolumeName, soloReducer } from "@/lib/config/audioMixerSolo";
 import { normalizeConfigItem, type NormalizedConfigItem } from "@/lib/config/normalizeConfigItem";
@@ -45,6 +45,23 @@ type ConfigListItem = {
   options?: string[];
   details?: NormalizedConfigItem["details"];
 };
+
+// Extract the normalized item list for a category from a raw config response.
+// Shared between the `items` memo and the post-refetch re-sync in
+// resetAudioMixer/handleRefresh so the latter reads the FRESH device values
+// straight from the refetch result instead of a possibly-lagging ref (BUG-033).
+function extractConfigItems(categoryData: ConfigResponse | undefined, categoryName: string): ConfigListItem[] {
+  if (!categoryData) return [];
+  const catData = categoryData[categoryName] as ConfigCategory | undefined;
+  if (!catData || typeof catData !== "object" || Array.isArray(catData)) return [];
+  const itemsData = (catData as ConfigCategory & { items?: ConfigCategory }).items ?? catData;
+  return Object.entries(itemsData)
+    .filter(([key]) => key !== "errors")
+    .map(([name, config]) => ({
+      name,
+      ...normalizeConfigItem(config),
+    }));
+}
 
 const DHCP_STATIC_FIELDS = new Set(["Static IP", "Static Netmask", "Static Gateway", "Static DNS"]);
 const CLOCK_MONTH_OPTIONS = [
@@ -107,6 +124,10 @@ function CategorySection({
   const [isEditingVolumes, setIsEditingVolumes] = useState(false);
   const editTimeoutRef = useRef<number | null>(null);
   const skipSoloRoutingRef = useRef(false);
+  // True while an explicit device re-sync (Reset/Refresh) is awaiting its
+  // refetch. Suppresses the snapshot effect's stale-snapshot short-circuit so an
+  // out-of-band device change reconciles instead of being masked (BUG-033).
+  const resyncPendingRef = useRef(false);
   const soloSnapshotKey = "c64u_audio_mixer_solo_snapshot";
 
   useEffect(() => {
@@ -119,21 +140,10 @@ function CategorySection({
     onOpenChange(isOpen);
   }, [isOpen, onOpenChange]);
 
-  const items = useMemo<ConfigListItem[]>(() => {
-    if (!categoryData) return [];
-
-    const catData = categoryData[categoryName] as ConfigCategory | undefined;
-    if (!catData || typeof catData !== "object" || Array.isArray(catData)) return [];
-
-    const itemsData = (catData as ConfigCategory & { items?: ConfigCategory }).items ?? catData;
-
-    return Object.entries(itemsData)
-      .filter(([key]) => key !== "errors")
-      .map(([name, config]) => ({
-        name,
-        ...normalizeConfigItem(config),
-      }));
-  }, [categoryData, categoryName]);
+  const items = useMemo<ConfigListItem[]>(
+    () => extractConfigItems(categoryData, categoryName),
+    [categoryData, categoryName],
+  );
   const itemsRef = useRef<ConfigListItem[]>(items);
   const soloItemRef = useRef<string | null>(soloState.soloItem);
 
@@ -171,6 +181,16 @@ function CategorySection({
       if (!audioConfiguredItems.length) {
         syncAudioConfiguredItems(items);
       }
+      return;
+    }
+    // During an explicit device re-sync (Reset/Refresh) always adopt the freshest
+    // `items` and do NOT cache them into soloSnapshotRef: an intermediate render
+    // still carries the pre-refetch (stale) values, and latching those into the
+    // snapshot is exactly what made Reset/Refresh fail to reconcile (BUG-033).
+    // The triggering handler performs the authoritative re-sync from the refetch
+    // result once it resolves.
+    if (resyncPendingRef.current) {
+      syncAudioConfiguredItems(items);
       return;
     }
     const snapshot = soloSnapshotRef.current.length ? soloSnapshotRef.current : items;
@@ -474,6 +494,7 @@ function CategorySection({
     skipSoloRoutingRef.current = true;
     dispatchSolo({ type: "reset" });
     soloSnapshotRef.current = [];
+    resyncPendingRef.current = true;
     setIsResetting(true);
     try {
       const updates: Record<string, string | number> = {};
@@ -493,7 +514,21 @@ function CategorySection({
       }
 
       await updateConfigBatch.mutateAsync({ category: categoryName, updates });
-      await refetch();
+      const refreshed = await refetch();
+      // The batch reset changes device values out-of-band relative to any
+      // optimistic override left by an earlier user edit. Those overrides will
+      // never echo their pinned value back, so drop them and let the freshly
+      // refetched device values show through (BUG-033).
+      authoritativeValues.clearAll();
+      // Re-sync the Audio Mixer snapshot straight from the refetch result. The
+      // snapshot effect may have re-captured stale pre-refetch values during the
+      // await window; this authoritative write reconciles the rendered values
+      // (and the solo snapshot) to the post-reset device truth (BUG-033).
+      const fresh = extractConfigItems(refreshed.data, categoryName);
+      if (fresh.length) {
+        syncAudioConfiguredItems(fresh);
+        soloSnapshotRef.current = fresh;
+      }
       markChanged();
       toast({
         title: "Audio Mixer reset",
@@ -508,6 +543,7 @@ function CategorySection({
         context: { category: categoryName },
       });
     } finally {
+      resyncPendingRef.current = false;
       setIsResetting(false);
     }
   };
@@ -517,9 +553,29 @@ function CategorySection({
       skipSoloRoutingRef.current = true;
       dispatchSolo({ type: "reset" });
       soloSnapshotRef.current = [];
+      resyncPendingRef.current = true;
       syncAudioConfiguredItems([]);
     }
-    await refetch();
+    try {
+      const refreshed = await refetch();
+      // Refresh is an explicit "re-sync from device truth" affordance: drop any
+      // optimistic overrides so a value changed out-of-band (e.g. a stale pin
+      // that will never echo its pinned value) reconciles to the device value
+      // instead of staying latched until unmount (BUG-033).
+      authoritativeValues.clearAll();
+      // Re-sync the Audio Mixer snapshot from the fresh refetch result so the
+      // rendered values (and the solo snapshot) reconcile to device truth even
+      // if the snapshot effect re-captured stale values mid-refetch (BUG-033).
+      if (isAudioMixer) {
+        const fresh = extractConfigItems(refreshed.data, categoryName);
+        if (fresh.length) {
+          syncAudioConfiguredItems(fresh);
+          soloSnapshotRef.current = fresh;
+        }
+      }
+    } finally {
+      resyncPendingRef.current = false;
+    }
   };
 
   const displayItems = useMemo(

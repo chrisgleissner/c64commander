@@ -1,6 +1,0 @@
-{
-  "dependencies": {
-    "@kilocode/plugin": "7.3.0",
-    "@opencode-ai/plugin": "1.15.5"
-  }
-}
