@@ -1682,3 +1682,225 @@ Branch `fix/hardening-2` @ `c03964d3` (worktree dirty). Source/installed `0.8.7-
 - Deterministic yield: 92855 < 665303 ⇒ I (665303) defer; 727549 (canonical, authored #51 FIXED BUG-033) proceeds.
 - Allowed pre-action blocker #3 (another active process owns the HIL window). droidmind_cta_action_count=0. No CTA, no source edit, no build/deploy, no Pixel/c64u mutation. STATE_DIGEST.md / prompt.md intentionally NOT written (sibling owns finalization). No scheduler invoked (Ralph Robin owns rotation). Capacity 5h 16% (10–19% band; blocker supersedes the min-3-actions rule).
 - HUMAN ACTION (CRITICAL, 7 consecutive aborts ~26h): kill redundant supervisor 665303 (cleanest) OR kill stale lineage 92855+92853+727549 only between its iterations. Do not self-resolve mid-HIL.
+
+## WORKLOG — 2026-06-14 #58 (Codex) — ABORTED: Android HIL infrastructure unavailable before first action
+
+Branch `fix/hardening-2` @ `bd14d99ab35d7b6f3cbe1457bea2673cf76ecf1c`. Source label `0.8.7-rc3-bd14d`. Capacity from authoritative runtime context = codex 100% (>=40% band), but a pre-action infrastructure blocker ended the loop before any CTA family could start.
+
+- Read on startup: `docs/agentic/STATE_DIGEST.md`, latest `PLANS.md`/`WORKLOG.md` loop sections, open `docs/agentic/BUGS_FOUND.md`, and `docs/agentic/CTA_LEDGER.md` rows for Config/Settings/Disks candidates. Digest is stale against current head (`bd14d99` vs `c03964d3`), so current source identity now wins.
+- Process state: the earlier duplicate-supervisor blocker does not appear live now. `ps -eo pid,ppid,lstart,etime,stat,command | rg 'ralph-robin|claude --print|codex|llm-scheduler'` showed one Ralph lineage (`92855` -> current `codex exec` child) and no competing `665303` supervisor/child.
+- Peer discovery:
+  - `tool_search` exposed `mcp__droidmind`, `mcp__c64scope`, and `mcp__c64bridge`.
+  - `mcp__c64scope.scope_catalog_list_cases()` succeeded.
+  - `mcp__c64bridge.c64_config({op:'info'})` succeeded and reported only the local VICE bridge (`127.0.0.1:6502`), confirming bridge presence but not usable as a Pixel/c64u oracle.
+  - `mcp__droidmind.android_device({action:'list_devices'})` returned `No devices connected`.
+  - `mcp__droidmind.android_app({action:'get_app_info', serial:'9B081FFAZ001WX', package:'uk.gleissner.c64commander'})` returned `Error: Device 9B081FFAZ001WX not found`.
+  - `mcp__mobile_mcp.mobile_list_available_devices()` returned `{"devices":[]}`.
+  - Host `adb devices -l` returned no attached devices.
+- Hardware reachability spot-check: `ping -c 1 c64u` and `ping -c 1 u64` both succeeded, but direct host `curl --max-time 2 http://c64u/v1/info` and `http://u64/v1/info` both failed with `Recv failure: Connection reset by peer`. This is not yet a product verdict, but it raises a second pre-probe caution for the next loop.
+- Candidate family deferred by blocker: `Config /config edit controls` on c64u primary (`ConfigItemRow` text/number input commit + remaining select/toggle persistence, with diagnostics export and logcat sweep).
+
+Verdict #58: `RALPH ROBIN CONTINUATION READY`. `droidmind_cta_action_count=0`, justified by allowed pre-action blocker #4 (required Android HIL peer/device concretely unavailable). No source edits. No build/deploy. No CTA attempts. No scheduler invoked because Ralph Robin owns scheduling.
+
+## WORKLOG — 2026-06-14 #59 (Claude) — ABORTED: Android HIL device unavailable before first action; capacity ambiguous
+
+Branch `fix/hardening-2` @ `bd14d99a` (unchanged since #58). Source label `0.8.7-rc3-bd14d`. Two stacked allowed pre-action blockers; the HIL one is decisive.
+
+- Capacity: injected Ralph Robin context selected `claude`, recorded **rate-limited 5h 0% / weekly 62%, until 2026-06-14 13:40:00 BST**. `date` at startup = `Sun 14 Jun 13:40:41 BST 2026` — the rate-limit window had just expired (~41s prior), so the `0%` value is stale and current capacity cannot be reliably parsed as above the 30% safe-decision threshold ⇒ conservative handoff. `codex` shown usable; Ralph Robin owns provider rotation, so no scheduler/rotation command was issued.
+- Fast-path startup (read-only): `git status` (clean except local `PLANS.md`/`WORKLOG.md`), `date`, `docs/agentic/STATE_DIGEST.md` (last loop #58), latest `PLANS.md`/`WORKLOG.md` loop sections. Digest matches current head `bd14d99a`.
+- Concrete HIL peer discovery (live):
+  - `mcp__droidmind.android-device({action:'list_devices'})` => `No devices connected`.
+  - `mcp__mobile-mcp.mobile_list_available_devices()` => `{"devices":[]}`.
+  - Host `adb devices -l` => `List of devices attached` (empty).
+  - droidmind, mobile-mcp, c64scope, c64bridge namespaces all callable; c64bridge is VICE-backed `127.0.0.1` only, not a Pixel/c64u oracle. ToolSearch surfaced all peer schemas.
+- Hardware spot-check: cheap `ping` to a candidate c64u IP got 100% loss (likely wrong IP vs digest's `192.168.1.167`; non-authoritative). Not a product verdict; re-probe `c64u`/`u64` `/v1/info` on the next device-capable loop (both were reset-by-peer in #58).
+- NO-HIL-PEER fix exception checked: only Low-severity defects open (BUG-030 dev-only Radix aria warning stripped from prod APK; BUG-022 SAF startup diagnostic). No safe high-value no-HIL root-cause fix for a blocker/high/medium defect exists, and capacity ambiguity forbids source edits — so no code change this loop.
+- Candidate family deferred by blocker (carried from #58): `Config /config edit controls` on c64u primary (`ConfigItemRow` text/number commit + remaining select/toggle persistence, with diagnostics ZIP pull + package-filtered logcat).
+
+Verdict #59: `RALPH ROBIN CONTINUATION READY`. `droidmind_cta_action_count=0`, justified by allowed pre-action blocker #4 (required Android HIL peer/device concretely unavailable, proven by three discovery calls before any CTA). No source edits. No build/deploy. No CTA attempts. No scheduler invoked because Ralph Robin owns scheduling. 2nd consecutive no-device loop — human action: reattach Pixel 4 `9B081FFAZ001WX` to the host (USB/adb) so droidmind/mobile-mcp can drive HIL.
+
+## WORKLOG — 2026-06-14 #60 (Claude) — BLOCKED: Pixel attached but in MIDI-only USB mode (no ADB interface)
+
+Branch `fix/hardening-2` @ `bd14d99a` (unchanged). Source label `0.8.7-rc3-bd14d`. Capacity is fine (`claude` 5h 94% / weekly 62%); the blocker is pure HIL infrastructure.
+
+- Concrete HIL device discovery (live, escalated beyond #59 because the host now shows a USB device):
+  - `mcp__droidmind.android-device(list_devices)` => `No devices connected`.
+  - `mcp__mobile-mcp.mobile_list_available_devices()` => `{"devices":[]}`.
+  - `adb devices -l` (after `pkill -9 adb` + clean `adb start-server`) => empty.
+  - `adb reconnect offline` => no effect.
+  - `lsusb` => `ID 18d1:4eea Google Inc. Pixel` present; `lsusb -v -d 18d1:4eea` shows ONLY `bInterfaceClass 1 Audio` (MIDI function) interfaces — the ADB/vendor interface is not exposed. ⇒ The Pixel is in MIDI USB mode, so adb (and therefore droidmind/mobile-mcp) cannot bind it. This is not fixable from the host without ADB or physical screen access (chicken-and-egg).
+- Why no remote workaround: no wireless-adb IP recorded for the Pixel (only WebView DevTools socket forwarding, which itself needs adb); cannot switch USB mode without adb or touching the device.
+- Hardware spot-check (host-side, cheap, non-authoritative): `ping 192.168.1.167` (c64u) OK, `ping 192.168.1.13` (u64) OK; `curl -m4 http://<ip>/v1/info` returns empty body for both — consistent with #58's reset-by-peer. Re-probe before any mutation family once HIL returns.
+- NO-HIL-PEER fix exception checked: only Low-severity defects open (BUG-030 dev-only Radix aria warning stripped from prod APK; BUG-022 SAF startup diagnostic). No safe high-value no-HIL root-cause fix for a blocker/high/medium defect exists ⇒ no code change this loop (a documentation-only or coverage loop is forbidden).
+- Candidate family deferred (carried from #58/#59): `Config /config edit controls` on c64u primary.
+
+Verdict #60: `RALPH ROBIN CONTINUATION READY`. `droidmind_cta_action_count=0`, justified by allowed pre-action blocker #4 (Android HIL device concretely unusable — ADB interface absent because Pixel is in MIDI USB mode), proven before any CTA, edit, build, or deploy. No source edits. No build/deploy. No scheduler invoked (Ralph Robin owns scheduling). HUMAN ACTION: on the Pixel set USB mode to File transfer/MTP or enable USB debugging so the ADB interface appears; re-plug if needed.
+
+## WORKLOG — 2026-06-14 #61 (Claude) — BLOCKED: Pixel still in MIDI-only USB mode (no ADB interface); 4th consecutive no-HIL loop
+
+Branch `fix/hardening-2` @ `bd14d99a` (unchanged). Source label `0.8.7-rc3-bd14d`. Capacity fine (`claude` 5h 89% / weekly 61%); blocker is pure HIL infrastructure, unchanged since #60.
+
+- Concrete HIL device discovery (live, re-verified this loop):
+  - `lsusb -d 18d1:4eea` => `Bus 001 Device 016: ID 18d1:4eea Google Inc. Pixel` present; `lsusb -v -d 18d1:4eea` => only `bInterfaceClass 1 Audio` (MIDI function) interfaces, no ADB/vendor interface.
+  - `adb kill-server` + `adb start-server` (daemon OK) + `adb reconnect offline` => `adb devices -l` still empty.
+  - `mcp__droidmind.android-device(list_devices)` => `No devices connected`.
+  - `mcp__mobile-mcp.mobile_list_available_devices()` => `{"devices":[]}`.
+  - No wireless-adb IP recorded; cannot switch USB mode without adb or physical screen access (chicken-and-egg). Not fixable from the host.
+- Hardware spot-check (host-side, non-authoritative): `ping 192.168.1.167` (c64u) OK; `ping 192.168.1.13` (u64) OK; `curl -m4 http://<ip>/v1/info` empty body for both — still reset-by-peer. Re-probe before any mutation family once HIL returns.
+- NO-HIL-PEER fix exception checked: only Low-severity defects open (BUG-030, BUG-022). No safe high-value no-HIL root-cause fix for a blocker/high/medium defect ⇒ no code change (doc-only/coverage loop forbidden).
+- Candidate family deferred (carried from #58–#60): `Config /config edit controls` on c64u primary.
+
+Verdict #61: `RALPH ROBIN CONTINUATION READY`. `droidmind_cta_action_count=0`, justified by allowed pre-action blocker #4 (Android HIL device concretely unusable — ADB interface absent, Pixel in MIDI USB mode), proven before any CTA/edit/build/deploy. No source edits. No build/deploy. No scheduler invoked (Ralph Robin owns scheduling). HUMAN ACTION OUTSTANDING: on the Pixel set USB mode to File transfer/MTP or enable USB debugging so the ADB interface appears; re-plug if needed.
+
+## Ralph loop iteration — 2026-06-14 #62 (Claude — HIL restored, rebuild+redeploy, Config/Diagnostics probe pack)
+
+- Startup: branch `fix/hardening-2` @ `bd14d99a`; worktree dirty only in `PLANS.md`/`WORKLOG.md`.
+- **HIL blocker cleared (live):** `adb devices -l` => `9B081FFAZ001WX  device usb:1-1 product:flame model:Pixel_4 transport_id:1`. `droidmind list_devices` => Pixel 4, Android 16. 4-loop MIDI-USB blocker resolved (human switched USB mode).
+- Peers: droidmind callable + device live; c64scope callable; c64bridge callable (VICE-backed). mobile-mcp available.
+- Capacity checkpoint: `claude` 5h 82% / weekly 61% (`>=40%`).
+- Identity: source `0.8.7-rc3-bd14d` vs installed `0.8.7-rc3-c0396` → MISMATCH → rebuild+redeploy in progress (`npm run build && cap sync android && gradlew assembleDebug`, log `/tmp/iter62-build.log`).
+- Selected family: Config immediate-write + Diagnostics dialog (the two files changed by HEAD `bd14d99a`).
+
+### iter62 — Probe pack: Diagnostics dialog + Config Drift (current build 0.8.7-rc3-bd14d, c64u primary)
+
+Build/deploy: build1 `npm run build`+`cap sync`+`assembleDebug` → installed `0.8.7-rc3-bd14d` (native versionName confirmed) to match HEAD before any CTA. After BUG-034 source fix: build2 same chain → reinstalled. Both BUILD SUCCESSFUL.
+
+Consolidated action evidence (droidmind-driven unless noted):
+
+| Action ID | Route/Page | UI element | User op | Expected | ~200ms | ~1s/effect | Oracle | Latency | Diagnostics/log | Status | Artifacts | Cleanup |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| A1 | Diagnostics | overflow "…" Views menu | tap open | menu opens | menu shown | VIEWS list | screenshot | <=200ms | n/a | EXERCISED_CLEAN | iter62 shots | menu open |
+| A2 | Diagnostics | Android Back over overflow menu | Back | **only menu closes, dialog stays** (BUG-032) | menu closed | dialog still open | screenshot | <=200ms | clean | EXERCISED_CLEAN (BUG-032 ✓) | - | dialog open |
+| A3 | Diagnostics | overflow → Filters/funnel | tap | filters panel | panel | chips shown | screenshot | <=1s | - | EXERCISED_CLEAN | - | - |
+| A4 | Diagnostics | Filters "Logs" chip | tap | toggle Logs | ✓Logs | count 192→"1 of 692" | screenshot | <=1s | - | EXERCISED_CLEAN | - | - |
+| A5 | Diagnostics | Filters "Reset" | tap | reset filters | activity rechecked | count 338/792; SEVERITY stayed "Errors" | screenshot | <=1s | observation (see note) | EXERCISED_CLEAN | - | - |
+| A6 | Diagnostics | Filters SEVERITY "All" | tap | severity=All | view → main list | 192/192 applied | screenshot | <=1s | - | EXERCISED_CLEAN | - | - |
+| A7 | Diagnostics | overflow → Config Drift | tap | open drift view | view opens | auto-ran computeConfigDrift | screenshot+export | over-budget | **load_from_flash PUT ERR1 + Connection reset** | DEFECT_OPEN→FIXED (BUG-034) | iter62/diagnostics | - |
+| A8 | Config Drift | Refresh icon | tap | recompute | spinner | "Connection reset" again | screenshot | over-budget | same cascade | DEFECT_OPEN (BUG-034) | - | - |
+| A9 | Config Drift | back arrow | tap | return to list | main list | error rows visible | screenshot | <=1s | 5 BUG-034 errors @14:03 | DEFECT_OPEN | - | - |
+| A10 | Diagnostics | "Share all" export (system-fired) | export | ZIP to cache | - | ZIP written | pulled+analyzed | n/a | actions: 2× load_from_flash (COR-0082/0106); errors: 8 BUG-034 entries | evidence | iter62/diagnostics/diag-all.zip | - |
+| --- POST-FIX (build2) --- | | | | | | | | | | | | |
+| A11 | Home | connection status pill | tap | open Diagnostics | dialog | activity list | screenshot | <=1s | clean | EXERCISED_CLEAN | - | - |
+| A12 | Diagnostics | overflow → Config Drift | tap | open drift view | view opens | **read-only msg, NO request** | screenshot+logcat | <=200ms | 0 load_from_flash | EXERCISED_CLEAN (BUG-034 fix ✓) | iter62/logcat/app-postfix.log | - |
+| A13 | Config Drift | Refresh ×2 | tap×2 | recompute | read-only msg | **0 device requests** | logcat | <=200ms | 0 load_from_flash/reset | EXERCISED_CLEAN (fix ✓) | - | - |
+| A14 | Config Drift | back arrow | tap | return to list | main list | **no new error rows** | screenshot | <=1s | clean Activity | EXERCISED_CLEAN | - | - |
+| A15 | Diagnostics | Android Back | Back | close dialog | dialog closing | Home shown (no trap) | screenshot | <=200ms | clean | EXERCISED_CLEAN | - | dialog closed |
+
+Mandatory sweeps:
+- **Package-filtered logcat**: pre-fix PID 5062 (29 lines, only benign Capacitor verbose + one Filesystem writeFile for the diag ZIP); post-fix PID 6788 (186 lines) — **0** load_from_flash/Connection-reset; E/W lines all benign WebView/AppCompat startup (hiddenapi reflection ALLOWED, chromium HTTP-cache-size info, AdrenoVK driver path, nativeloader webview) — no FATAL/exception/ANR/StrictMode, no app-package errors. Saved under `docs/agentic/artifacts/iter62/logcat/`.
+- **In-app Diagnostics "Share all" export**: pulled `c64commander-diagnostics-all-2026-06-14-…Z.zip` (66KB) → `docs/agentic/artifacts/iter62/diagnostics/`, unzipped + analyzed. Errors tab/error-logs: 178 entries (170 historical c64u-flakiness from prior sessions; 8 from this loop = the BUG-034 cascade ×2). Actions: 26, incl. **2× `rest.put /v1/configs:load_from_flash`** (origin system, c64u) — the BUG-034 smoking gun. Latency: drift run over-budget (errored).
+- **CDP (read-only oracle)**: confirmed live DOM version (settled BUG-035) and earlier settled the cold-start version-render transient; confirmed `swCount:0`, no service worker / cache on native (ruled out a stale-asset hypothesis).
+
+Findings this loop:
+- **BUG-032 (overflow-menu DismissableLayer) RE-VALIDATED on current build** — Android Back closes only the menu, dialog stays.
+- **BUG-034 (NEW, High) FOUND + FIXED + HIL-validated** — Config Drift issued destructive `PUT /v1/configs:load_from_flash` on open; now strictly read-only (0 requests).
+- **BUG-035 (NEW, Medium) FOUND** — in-app/web version label diverges from native APK/tag (stale package.json fallback); left for maintainer.
+- Observation (unconfirmed, NOT in HEAD diff, suspected hydration/panel-toggle artifact): Diagnostics Filters editor showed transient cross-group states and "Reset" appeared to leave SEVERITY=Errors; applied filter (main list) stayed stable at Problems+Actions throughout. Needs a deterministic re-check; not filed as a bug.
+- Version-label cold-start transient: Home briefly shows `0.7.9-rc1` on cold start — this is the SAME BUG-035 stale package.json value (not a separate render glitch as first suspected).
+
+Capacity: `claude` ~82% (>=40% band). droidmind CTA actions: 15+ actuated (target 12-20 met). Adversarial transitions: Android Back over overflow menu, repeated Refresh ×3, repeated overflow opens, route nav, Back-to-close dialog.
+Cleanup: no device mutation by this loop's CTAs (filter toggles are UI-only; pre-fix load_from_flash ERR'd and c64u stayed HEALTHY, errors:[]); UltiSID untouched. Device left HEALTHY on Home.
+
+## WORKLOG — 2026-06-14 #63 (Claude) — HIL Diagnostics-dialog probe pack; BUG-034 fix re-confirmed on current build
+
+Branch `fix/hardening-2` @ `bd14d99a`. Installed APK `0.8.7-rc3-bd14d` == source `0.8.7-rc3-bd14d`. c64u 192.168.1.167 HEALTHY (fw 1.1.0, `errors:[]`) throughout; u64 192.168.1.13 HEALTHY (fw 3.14e). Capacity: `claude` 5h 47% / weekly 58% (`>=40%`). Continuation of interrupted #62 (which discovered+fixed+deployed+validated BUG-034 and found BUG-035 but did not finalize state docs).
+
+- **HIL blocker cleared:** `adb devices` => `9B081FFAZ001WX device`; `droidmind list_devices` => Pixel 4 Android 16. The 4-loop (#58–#61) MIDI-USB-mode blocker is gone (human switched USB mode). `get_app_info` versionName `0.8.7-rc3-bd14d`.
+- **Probe family: Diagnostics dialog** (global app-bar). Logcat cleared at loop start. Entry via app-bar health pill.
+- droidmind-driven CTA actions (consolidated; ≈200ms feedback unless noted):
+  | # | UI element | Operation | Observed result | Oracle | Latency | Status |
+  |---|---|---|---|---|---|---|
+  | 1 | App-bar health pill | Tap → open Diagnostics | Dialog opens; `diagnostics.open success` recorded; activity feed renders | screenshot + activity | <=200ms-feedback | EXERCISED_CLEAN |
+  | 2 | Run health check | Tap (1st) | Health Check Detail expands: REST 156ms/FTP 44ms/TELNET 309ms/CONFIG 1614ms/RASTER 105ms/JIFFY 276ms all Success; Result Healthy 2618ms; "Last check 0s ago" | screenshot | <=1s-effect (multi-probe ~2.6s) | EXERCISED_CLEAN |
+  | 3 | Run health check | Tap (2nd, repeat) | Clean re-run, fresh values (TELNET 533ms/CONFIG 1673ms/Healthy 2869ms); no double-fire, button not stuck | screenshot | n/a | EXERCISED_CLEAN |
+  | 4 | Health card chevron | Collapse Health Detail | Detail collapses | screenshot | <=200ms-feedback | EXERCISED_CLEAN |
+  | 5 | Inline "Problems" chip | Tap (×2 across views) | Toggles (✓ in funnel); count unchanged because 0 problem-type events present | screenshot + funnel state | n/a | EXERCISED_CLEAN |
+  | 6 | Filter funnel icon | Tap → open Filters panel | Full filter UI: Device/Activity-types/Contributor/Severity/Quick-filters | screenshot | <=200ms-feedback | EXERCISED_CLEAN |
+  | 7 | "Errors only" quick filter | Tap | Count 208/208 → **352 of 850**; all activity types ✓; severity=✓Errors | screenshot | <=200ms-feedback | EXERCISED_CLEAN |
+  | 8 | Activity error row | Tap → expand detail | `error·system` 14:12:10.389 expands: `InteractionCancelledError` "rest queued task cancelled", origin system, COR-0001 (benign request-supersede) | screenshot | <=200ms-feedback | EXERCISED_CLEAN |
+  | 9 | "…" overflow | Tap → open VIEWS menu | Connection details/Manage devices/Config drift/Decision state/Latency/Health history/REST·FTP·Config heat maps/Share all/Share filtered/Clear all | screenshot | <=200ms-feedback | EXERCISED_CLEAN |
+  | 10 | **Config drift** view | Tap open | Renders read-only message ("Persisted-config comparison is unavailable… Config Drift stays read-only.") — **NO load_from_flash** | screenshot + logcat + ZIP | <=200ms-feedback | EXERCISED_CLEAN (BUG-034 fix confirmed) |
+  | 11-12 | Config Drift Refresh ↻ | Tap ×2 (repeat) | Read-only message unchanged; no error, no stuck spinner; **0 device requests** | screenshot + logcat | n/a | EXERCISED_CLEAN |
+  | 13 | Config Drift "←" back | Tap | (clean repro) returns to Diagnostics activity view, dialog stays open — **correct** (earlier apparent dialog-dismiss NOT reproducible → no defect) | screenshot | <=200ms-feedback | EXERCISED_CLEAN |
+  | 14 | App-bar health pill | Reopen Diagnostics (close/reopen adversarial) | Dialog reopens cleanly; filters reset to default | screenshot | <=200ms-feedback | EXERCISED_CLEAN |
+  | 15 | "Share all" | Tap → export | `c64commander-diagnostics-all-2026-06-14-1327-46Z.zip` written to cache; Android share sheet shown; dismissed via Android Back (not sent externally) | logcat (Filesystem saved) + pulled ZIP | <=1s-effect | EXERCISED_CLEAN |
+- **Adversarial transitions:** repeated rapid taps (health-check ×2, Config-Drift Refresh ×2); dialog close-via-back + reopen; Android Back to dismiss share sheet; selector/quick-filter changes; Config-Drift "←" navigation isolation repro.
+- **BUG-034 current-build validation (decisive):** pulled Share-all ZIP (`artifacts/iter63/diagnostics/`, 6 JSON files) — EVERY `load_from_flash` (12 refs) and `Connection reset` (10 refs) is timestamped **13:02:50 / 13:03:23 UTC** (=14:02–14:03 BST, iter62 pre-fix repro); max hit 13:03:23.370Z. My Config-Drift open + 2× Refresh at **14:25–14:26 BST issued ZERO** of either. `Config drift computation failed` only at 13:02:50/13:03:23 (pre-fix), none at my open. ⇒ destructive path gone on deployed build.
+- **Errors sweep:** Errors filter = 352 of 850; newest errors at **14:12:10** (c64u `/v1/info` ERR + `InteractionCancelledError` traces) — ~8 min BEFORE loop start; transient pre-loop c64u flakiness / benign request supersede. My actions added **zero** new errors (in-app activity shows only `success` rows for my taps incl. stray Home `click home-cpu-summary/system-info`).
+- **Package-filtered logcat** (cleared at start → final, `artifacts/iter63/logcat/iter63-final-pkg.log`, 36 lines): ZERO load_from_flash/Connection reset/drift/FATAL/Exception/StrictMode. Only benign framework lines: Capacitor `File ... saved!` (ZIP), Share callback + ChooserActivity (share sheet), ImeTracker/CoreBackPreview (keyboard/back callbacks), ActivityThread "REPLACED…Assuming REMOVED" (benign), and one `W InteractionJankMonitor: Initializing without READ_DEVICE_CONFIG permission` (standard Android framework, app-unrelated, disabled). All attributed.
+- **BUG-035 re-confirmed live:** Home System Info shows `App 0.7.9-rc1` while `Git bd14d99a` / native APK `0.8.7-rc3-bd14d`. Already recorded (Medium, maintainer fix).
+- **Cleanup:** read-only family — NO device state mutated (no config write; UltiSID untouched). Dialog closed. c64u re-checked HEALTHY `errors:[]` at loop end.
+- Code changed: NO (BUG-034 fix already in working tree from #62, deployed, now re-validated). Build/deploy: NO (installed == source). Tests: none (HIL-only). Coverage: none. droidmind: YES; c64scope: no (no A/V this loop); c64bridge: no.
+- `droidmind_cta_action_count` = 22 (incl. repeats + repro). Action-budget minimum (8) far exceeded.
+
+Verdict #63: `CLEAN PASS` (Diagnostics-dialog family) + BUG-034 **FIXED** re-confirmed on current build. No new defects. `RALPH ROBIN CONTINUATION READY`. No scheduler invoked (Ralph Robin owns rotation).
+
+## Ralph loop iteration — 2026-06-14 #64 (Claude) — Config immediate-write family (never-exercised text/number input)
+
+Branch `fix/hardening-2` @ `bd14d99a`; installed APK `0.8.7-rc3-bd14d` == source (current-build claims valid). c64u 192.168.1.167 HEALTHY (fw 1.1.0, errors:[]) throughout; u64 HEALTHY. Peers droidmind/c64scope/c64bridge all callable. Capacity `claude` ~40% (>=40% band).
+
+Probe family: **Config `/config` immediate-write** — centered on the previously NEVER-exercised `ConfigItemRow` text/number input (LED Strip Settings → Strip Intensity), plus adjacent checkbox + category expand + search + adversarial out-of-range.
+
+TOOLING NOTE (durable): droidmind `android-ui tap` uses **device-native pixel coordinates (1080×2280)**, NOT the downscaled screenshot space (~948×1980). Earlier tab-bar taps in screenshot coords silently mis-landed on Home content. Use mobile-mcp element bounds (device-native) directly for droidmind taps. This is why several startup taps hit the wrong target / opened Diagnostics; the recurring "auto-open Diagnostics" was MY taps landing on the top-right connection badge — not an app defect.
+
+| Action ID | Route/Page | UI element | User operation | Expected | ≈200ms feedback | ≈1s/effect | Oracle | Latency | Diagnostics/log | Status | Artifact | Cleanup |
+|-----------|-----------|-----------|----------------|----------|-----------------|------------|--------|---------|-----------------|--------|----------|---------|
+| 64-1 | /config | Search categories input | Type "LED" (re-exercise) | Filter to LED Strip Settings | List narrows instantly | Only LED Strip shown | UI screenshot | <=200ms-feedback | n/a | EXERCISED_CLEAN | iter64/logcat | search cleared on leave |
+| 64-2 | /config | LED Strip Settings category header | Tap expand (lazy fetch) | Category opens, items fetched | Accordion opens | 6 per-item GET 23-34ms HTTP200 | UI + REST + Diag actions | <=1s-effect | all 200, sub-40ms | EXERCISED_CLEAN | iter64/logcat | n/a |
+| 64-3 | /config | **Strip Intensity text/number input** (NEW) | Clear + type 30 + Enter commit | Write 30, UI==device | Field shows 30 | 1 PUT value=30 66ms, REST=30 | App logcat PUT + REST read-back | <=1s-effect | exactly 1 PUT, no error | EXERCISED_CLEAN | iter64/logcat | restored to 25 |
+| 64-4 | /config | Strip Intensity input (ADVERSARIAL) | Type 99 (>max 31) + Enter | Reject out-of-range, no bad write | Field shows 99 while editing | NO PUT; UI reverts to 30; REST stays 30 | App logcat + REST | n/a | 0 PUT (validated) | EXERCISED_CLEAN | iter64/logcat | n/a (no write) |
+| 64-5 | /config | Strip Intensity input (restore) | Clear + type 25 + Enter | Write 25 (original) | Field 25 | 1 PUT value=25 65ms, REST=25 | App logcat + REST | <=1s-effect | exactly 1 PUT | EXERCISED_CLEAN | iter64/logcat | original restored |
+| 64-6 | /config | LedStrip Auto SID Mode checkbox | Tap to Disable | Toggle off, write Disabled | Check clears | 1 PUT value=Disabled 37ms, REST=Disabled | App logcat + REST | <=1s-effect | 1 PUT, no double-fire | EXERCISED_CLEAN | iter64/logcat | re-enabled |
+| 64-7 | /config | LedStrip Auto SID Mode checkbox (restore) | Tap to Enable | Toggle on, write Enabled | Check sets | 1 PUT value=Enabled 39ms, REST=Enabled | App logcat + REST | <=1s-effect | 1 PUT (click+toggle log, one write) | EXERCISED_CLEAN | iter64/logcat | original restored |
+| 64-8 | global diag | Config Drift surface (incidental) | Open (read-only) | Read-only "unavailable" msg, 0 device req | Surface renders | 0 load_from_flash in logcat | UI + logcat | n/a | BUG-034 fix holds | EXERCISED_CLEAN | iter64/logcat | n/a |
+| 64-9 | global diag | Diagnostics "Share all" export | Overflow → Share all | Timestamped ZIP created | Share sheet opens | ZIP c64commander-diagnostics-all-2026-06-14-1337-33Z.zip (1 file) | Android share sheet | n/a | export OK | EXERCISED_CLEAN | iter64/diagnostics | sheet dismissed |
+| 64-10 | global diag | Filters Reset / Back over overflow + Config Drift (adversarial) | Reset tap; Android Back ×2 | Back closes overlay only | overlay dismiss | dialog stays (BUG-032 holds) | UI | n/a | clean | EXERCISED_CLEAN | iter64/logcat | n/a |
+
+Repeated-interaction: Strip Intensity input exercised 3 commit cycles (30, 99-rejected, 25) + 1 focus-miss retry = multiple; actuation verified by emitted PUTs in logcat (not synthetic-only). Auto SID Mode checkbox 2 taps (off/on), actuation verified by PUTs. Search + category-expand 1 each.
+
+droidmind CTA action count: **~15** (well above >=40%-band min 8 / target 12-20). Adversarial transitions: 4 (out-of-range 99 input; empty-field commit state; Android Back over Config Drift surface; Android Back over overflow menu). Latency checks: 8 (all under budget, 23-66ms; ZERO over-budget). Actuation-verified controls: all (every CTA confirmed via REST read-back and/or emitted PUT).
+
+DEVICE LOG & DIAGNOSTICS SWEEP (mandatory):
+- Package-filtered logcat: CLEAN. Only E-lines = `FeatureFlagsImplExport android.xr` from SYSTEM PIDs (8516/9117), not app PID 6788 — known Android 16 flag-export noise, named & set aside. WebView console: 4 benign PUT-timing lines, zero errors. BUG-030 aria warning did NOT reproduce.
+- In-app Diagnostics: dialog Activity inspected — all 280 entries Problems+Actions, every session entry info/success (no red error dots); my writes show HTTP 200 with sub-100ms badges. "Share all" export SUCCEEDED (ZIP created, share-sheet confirmed). ZIP PULL was infra-blocked this session (droidmind shell rejects `run-as`; `/data/data/...cache` permission-denied; external cache empty) — content analyzed equivalently via the live Diagnostics Activity + package-logcat + REST read-backs. Errors tab: no NEW errors this session. Latency: all session requests 23-66ms (no over-budget).
+- Cross-surface correlation: UI ↔ diagnostics Activity ↔ logcat ↔ REST all agree for every CTA (single write each, correct value, correct latency). No silent failures, no UI-vs-diagnostics discrepancy, no duplicate/zero-request anomalies.
+
+Findings #64:
+- **Config text/number input (Strip Intensity) — NEW current-build coverage, EXERCISED_CLEAN.** Commits exactly one PUT on Enter (~65ms), UI==device, and correctly REJECTS out-of-range input (99 > max 31): no PUT, UI reverts to last valid value, device unchanged — robust validation, no false write/divergence.
+- **Auto SID Mode checkbox: synthetic-click double-fire fix (c03964d3) HOLDS** — exactly one PUT per tap.
+- **BUG-034 fix re-confirmed in passing** (Config Drift read-only, 0 load_from_flash). The diagnostics-history "ERROR Config drift computation failed" (14:03:23) is a STALE pre-fix artifact (string absent from current source), not current-build behavior.
+- Minor UX observation (NOT filed as bug): current-build Config Drift renders the intentional "unavailable" state in red `text-destructive` (state="error"), which reads like a failure rather than a deliberate read-only limitation. Cosmetic; maintainer may prefer neutral/muted styling. No functional impact.
+- No new blocker/high/medium defect. c64u HEALTHY throughout; all mutated config restored (Strip Intensity 25, Auto SID Mode Enabled).
+
+POST-WORK NOTE (#64): after the probe pack + diagnostics sweep + cleanup all completed, a final c64u re-probe showed c64u UNREACHABLE (`/v1/info` http_code=000, instant fail) while u64 stayed HEALTHY (200, 9ms) — network is fine. This is the known intermittent [[c64u-flakiness]] dropout, NOT app-induced: this loop's traffic was light/paced (4 single PUTs ~65ms each + a handful of GETs over ~5 min; NO Audio-Mixer ~20-GET Refresh burst). All CTAs landed and ALL cleanup (Strip Intensity→25, Auto SID Mode→Enabled) was REST-confirmed BEFORE the dropout (14:34:48 / 14:35:55). No data left mutated. Re-probe c64u at next loop startup.
+
+## Ralph loop iteration — 2026-06-14 #64 (CONTINUATION, Claude) — Config selector + Diagnostics-overflow pivot on c64u dropout
+Branch `fix/hardening-2` head `bd14d99a`; source==installed APK `0.8.7-rc3-bd14d` (no rebuild). Capacity claude ~21% (20-39% band; min 5 / target 6-10). droidmind LIVE (Pixel 4). At THIS invocation's startup c64u had RECOVERED from the prior #64 post-work dropout: `/v1/info` 200, fw1.1.0, errors:[] (HEALTHY); u64 HEALTHY (3.14e). Picked up the Config immediate-write family to add the remaining selectors.
+
+Probe pack (continuation): opened Config (LED Strip Settings group, search="LED"). Read baseline via c64u REST (Mode=Default, AutoSID=Enabled, Pattern=SingleColor, SID=UltiSID1-A, Intensity=25, FixedColor=Royal Blue, tint=Pure). Exercised **LedStrip Pattern selector** (SingleColor→Left to Right): Radix Select opened (5 options), tapped "Left to Right".
+
+| Action ID | Route/Page | UI element | User operation | Expected | ≈200ms | ≈1s/effect | Oracle | Latency | Diag/log | Status | Artifacts | Cleanup |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| C64-A1 | /config | LedStrip Pattern Radix Select | open dropdown | options list | dropdown shown | 5 options (SingleColor/L-to-R/R-to-L/Serpentine/Outward) | screenshot | <=200ms-feedback | n/a | EXERCISED_CLEAN | iter64/ | n/a |
+| C64-A2 | /config | LedStrip Pattern Radix Select | select "Left to Right" | one PUT, value persists | error toast "Connection reset" | value REVERTED to SingleColor (write failed) | UI + logcat + ZIP traces + c64u REST | <=1s-effect (failed 54ms) | EVT-0357 user click→EVT-0364 ONE PUT?value=Left+to+Right→EVT-0367 error Connection reset→EVT-0368 action-end status=error; PUT status:null (no fake 200) | EXERCISED_CLEAN (app error-handling) / write BLOCKED_INFRA | iter64/diagnostics | none (write reverted) |
+| C64-A3 | global diag | Health card `Run health check` | tap (device down) | detect unreachable | spinner | UNHEALTHY: REST Fail 63ms "Host unreachable"; FTP/TELNET/CONFIG/RASTER/JIFFY Cancelled "Skipped: REST probe failed" | UI + ZIP lastHealthCheckResult | <=1s-effect (73ms total) | overallHealth Unhealthy, connectivity "Online" (Wi-Fi up, device unreachable correctly distinguished) | EXERCISED_CLEAN | iter64/ | n/a |
+| C64-A4 | global diag | overflow → Connection details | open + close | read-only conn info | dialog | Name=c64u Type=C64U Host=c64u HTTP=80 FTP=21 Telnet=23 + Edit | screenshot | <=200ms-feedback | n/a | EXERCISED_CLEAN | iter64/ | n/a |
+| C64-A5 | global diag | overflow → Latency (current build) | open + filter chip + ←back | latency view | view | P50 38ms/P90 55ms/P99 55ms/4 samples; chart P50/P90/P99; "All call types" chip (no visible change on tap); in-panel ← returned to Diagnostics | screenshot + ZIP latencySamples(3, 0 over-1s) | <=200ms-feedback | n/a | EXERCISED_CLEAN | iter64/ | n/a |
+| C64-A6 | global diag | overflow → Decision state | open + close | reconciler state | view | Playback State UNKNOWN/Conf LOW; Config reconciler idle; Playback+Diagnostics reconcilers success @14:42:11 Drift=no "No stale diagnostics execution"; Resync/Repair NOT pressed (would hit down c64u) | screenshot | <=200ms-feedback | n/a | EXERCISED_CLEAN | iter64/ | n/a |
+| C64-A7 | global diag | overflow → Share all | tap export | timestamped ZIP | share sheet | ZIP c64commander-diagnostics-all-2026-06-14-1345-07Z.zip (73KB, 5 JSON) pulled via run-as + analyzed | adb run-as pull + python | <=1s-effect | full analysis below | EXERCISED_CLEAN | iter64/diagnostics/unz | n/a |
+
+droidmind CTA action count: **~13 meaningful** (Pattern open, Pattern select, open Diagnostics via pill, Run health check, Connection details open+close, Latency open + chip + in-panel back, Decision state open+close, Share all; plus close-dialog nav). Above 20-39% band min 5 / target 6-10. Adversarial transitions: 3 — (a) selector change while device dropped → error path; (b) Run health check against DOWN device → short-circuit; (c) in-panel ←back nav between overflow views. Latency checks: Latency view P99 55ms + health 73ms + failed PUT 54ms — ZERO over-budget. Repeated-interaction CAVEAT: c64u dropped after the FIRST Pattern write, so multi-repeat config writes were impossible this invocation (overflow menu reopened 4×; the prior #64 window had already done repeated Intensity/checkbox writes). Actuation: Pattern select actuated (emitted PUT, logged user click); "All call types" chip showed no visible change (likely a popover needing different primitive — minor tooling caveat, recorded UNCERTAIN).
+
+DEVICE LOG & IN-APP DIAGNOSTICS SWEEP (mandatory):
+- Package-filtered logcat (PID 6788): cluster1 = single Pattern PUT then `java.net.SocketException: Connection reset` stack (expected). cluster2 (final, 36 lines): NO crash/ANR/StrictMode/unexplained app error; only the network stack + benign `perf_hint: PowerHintSessions are not supported` framework line (named, set aside).
+- In-app Diagnostics: Activity inspected (291 entries); the failure cluster captured correctly. "Share all" ZIP PULLED this loop via `run-as cat` (prior #64 noted run-as blocked — it WORKED here) and fully analyzed.
+- ZIP analysis: traces (289) — single PUT per write, NO bursts; earlier #64 successful writes (Intensity 30/25, AutoSID Disabled/Enabled) each = PUT+GET read-back (paced). error-logs (185 total; 6 in my 13:40-13:42Z window, ALL explained): SocketException → "C64 API request failed" → "Config write queue: preceding task failed" → "CONFIG_UPDATE: Error" (layered, correctly attributed; confirms SERIALIZED config write queue that aborts on failure) + 2 periodic /v1/info + health-probe failures. latencySamples 3 (0 over-1s). deviceSafetyResolution: C64U→CONSERVATIVE preset (correct guard). lastHealthCheckResult Unhealthy/Online/REST Fail 63ms.
+- Cross-surface correlation: UI ↔ Activity ↔ logcat ↔ ZIP traces ALL agree. No silent failure, no false success (failed PUT status:null), no duplicate/zero-request anomaly, no UI-vs-diagnostics discrepancy.
+
+Findings #64 (continuation):
+- **App handling of a c64u dropout during a config write is EXEMPLARY.** One user click → exactly one PUT → Connection reset → error toast + value revert + layered/attributed error logging + serialized-queue abort. No false success, no silent failure, no burst. This is strong release-hardening evidence for the Config-write error path.
+- **Health check correctly detects the dropout**: UNHEALTHY, fast-fail REST (63ms), short-circuits dependent probes (no hammering a dead host), connectivity "Online" vs device-unreachable correctly distinguished.
+- **Diagnostics-overflow read-only views (Connection details, Latency current-build, Decision state) EXERCISED_CLEAN** on current build `0.8.7-rc3-bd14d` — coherent, no errors, in-panel ←back works.
+- **BUG-035 re-confirmed OPEN**: ZIP `bugReportContext.app.version`/`versionLabel` = `0.7.9-rc1` (diverges from native `0.8.7-rc3-bd14d`). Maintainer/release fix.
+- Minor observation (NOT filed): the Connection-reset error is logged `errorCategory:"unknown" / failureClass:"unknown" / isExpected:false` though a `{"code":"SocketException"}` entry exists — could be categorized "network"/"transport" and treated as expected-transient. Cosmetic diagnostics-quality nit; no functional impact.
+- **c64u device fragility today**: a single paced PUT dropped a freshly-recovered c64u (recovered by 14:38 startup, dropped again 14:40:31 on first write, still down through 14:45:30 / 18 re-probes). App traffic was NOT a burst. Classified known [[c64u-flakiness]] device-side fragility, NOT an app regression. c64u remained down at finalization (000); u64 HEALTHY. No device state mutated (only write attempt failed+reverted; UltiSID untouched at 0 dB).

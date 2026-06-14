@@ -1556,3 +1556,106 @@ Fix the confirmed prod-hardening-8 production-readiness findings in priority ord
 - droidmind_cta_action_count=0 — conflict detected during READ-ONLY startup (git status, STATE_DIGEST read, ps/process-tree, relaunch-log double-sample with tail, PLANS tail) BEFORE any CTA, source edit, build, or deploy. NO source edits. NO build/deploy (avoided the #53 build-race trap). STATE_DIGEST.md and docs/agentic/prompt.md deliberately NOT written (sibling 727549 owns iter finalization; racing corrupts them). No scheduler invoked (Ralph Robin owns rotation).
 - ACTION REQUIRED (human, now CRITICAL — 7 consecutive aborts, ~26h unresolved): reduce to exactly ONE supervisor. CLEANEST (zero in-flight work to lose): kill MY redundant supervisor **665303** so only the active 92855/727549 loop remains. If the single-`claude` config (665303) is canonical instead, kill the stale lineage **92855 + 92853 + (current child) 727549** — but only BETWEEN sibling iterations (when 92855 has no live `claude --print` child) to avoid corrupting an in-flight build/HIL/device/c64u state. Do NOT have an agent self-resolve by killing the other mid-HIL.
 - Verdict #57: RALPH ROBIN CONTINUATION READY (blocker). Identical root cause persists; no 665303 iteration can make HIL progress until a human removes one supervisor.
+
+## Ralph loop iteration — 2026-06-14 #58 (Codex — ABORTED: no Android HIL device attached / current build identity drift)
+
+- Branch/head: `fix/hardening-2` @ `bd14d99ab35d7b6f3cbe1457bea2673cf76ecf1c`; worktree clean. Source `./scripts/resolve-version.sh` = `0.8.7-rc3-bd14d`.
+- Capacity: Ralph Robin selected `codex`, usable 5h 100% / weekly 19% (`>=40%` band), but blocker is pre-action infra, not capacity.
+- Previous duplicate-supervisor blocker appears RESOLVED in live process state: `ps` shows only one active Ralph lineage (`92855` -> current `codex exec` child), no competing `665303` supervisor/child.
+- Concrete HIL discovery:
+  - `tool_search` exposed `mcp__droidmind`, `mcp__c64scope`, `mcp__c64bridge`.
+  - `mcp__droidmind.android_device(list_devices)` => `No devices connected`.
+  - `mcp__droidmind.android_app(get_app_info, 9B081FFAZ001WX)` => `Error: Device 9B081FFAZ001WX not found`.
+  - `mcp__mobile_mcp.mobile_list_available_devices()` => `{"devices":[]}`.
+  - Host `adb devices -l` => no attached devices.
+  - `mcp__c64bridge.c64_config(info)` still works but is VICE-backed only (`127.0.0.1`), not a Pixel/c64u oracle.
+- Hardware side note: both `c64u` and `u64` respond to ping, but direct host `curl http://c64u/v1/info` and `curl http://u64/v1/info` both failed with `Recv failure: Connection reset by peer`, so even after Pixel reattachment the device hosts should be re-probed before choosing a mutation family.
+- Selected candidate family (deferred by blocker): `Config /config edit controls` (text/number input commit + remaining selectors/toggles persistence) on current build, c64u primary.
+- Stop criteria reached via allowed pre-action blocker #4: required HIL peer/device unavailable. No CTA attempted; no source edits; no build/deploy. Next loop must first restore Pixel 4 visibility to droidmind/adb, then compare installed APK identity vs source `0.8.7-rc3-bd14d` and rebuild/redeploy before any current-build HIL claim.
+
+## Ralph loop iteration — 2026-06-14 #59 (Claude — ABORTED: no Android HIL device attached; capacity ambiguous)
+
+- Branch/head: `fix/hardening-2` @ `bd14d99a` (unchanged since #58). Worktree dirty only in local agentic state (`PLANS.md`, `WORKLOG.md`). No source/build/deploy/CTA this loop.
+- Capacity: injected Ralph Robin context selected `claude` but recorded it **rate-limited 5h 0% / weekly 62%, until 2026-06-14 13:40:00 BST**; `date` at startup = **13:40:41 BST**, i.e. the rate-limit window expired ~41s before startup, so the `0%` reading is stale and current capacity is **unparseable as >30%** → conservative handoff per the "capacity below safe-decision threshold ⇒ hand off" rule. `codex` shown usable (5h 99% / weekly 19%); Ralph Robin owns rotation. The HIL blocker below is decisive regardless of capacity.
+- Concrete HIL discovery (live, not from stale digest):
+  - `mcp__droidmind.android-device(list_devices)` => `No devices connected`.
+  - `mcp__mobile-mcp.mobile_list_available_devices()` => `{"devices":[]}`.
+  - Host `adb devices -l` => empty (no attached devices).
+  - droidmind/mobile-mcp/c64scope/c64bridge namespaces all callable; c64bridge remains VICE-backed `127.0.0.1` only (not a Pixel/c64u oracle).
+- No open blocker/high/medium defect has a safe no-HIL root-cause fix available (only BUG-030/BUG-022 Low remain), so the NO-HIL-PEER fix exception does not apply; and capacity ambiguity forbids source edits anyway.
+- `droidmind_cta_action_count=0` — allowed pre-action blocker #4 (required Android HIL peer/device concretely unavailable), proven by the three discovery calls above before any CTA, source edit, build, or deploy. Duplicate-supervisor conflict from #51–#57 stays resolved (this loop blocked earlier on no-device). No scheduler invoked (Ralph Robin owns rotation). STATE_DIGEST.md refreshed to #59; prompt.md re-confirmed.
+- Verdict #59: `RALPH ROBIN CONTINUATION READY` (blocker). 2nd consecutive no-device loop. Next loop must first restore Pixel 4 visibility to droidmind/adb/mobile-mcp, then compare installed APK identity vs source `0.8.7-rc3-bd14d` and rebuild/redeploy before any current-build HIL claim.
+
+## Ralph loop iteration — 2026-06-14 #60 (Claude — BLOCKED: Pixel attached but in MIDI-only USB mode, no ADB interface)
+
+- Branch/head: `fix/hardening-2` @ `bd14d99a` (unchanged). Worktree dirty only in local `PLANS.md`/`WORKLOG.md`. No source/build/deploy/CTA this loop.
+- Capacity: Ralph Robin selected `claude`, usable 5h 94% / weekly 62% (`>=40%` band). Capacity is NOT the blocker this loop — infra is.
+- NEW root-cause diagnosis (differs from #58/#59 "no device at all"): the Pixel 4 IS physically connected over USB, but in **MIDI/Audio USB mode** with **no ADB interface exposed**, so droidmind/mobile-mcp/adb all see zero devices.
+  - `lsusb` => `Bus 001 Device 016: ID 18d1:4eea Google Inc. Pixel` (present).
+  - `lsusb -v -d 18d1:4eea` => only `bInterfaceClass 1 Audio` / `iInterface MIDI function` interfaces; NO vendor/ADB interface.
+  - `adb kill-server`/`pkill -9 adb`/`adb start-server` clean restart => daemon started OK but `adb devices -l` still empty; `adb reconnect offline` => empty.
+  - `mcp__droidmind.android-device(list_devices)` => `No devices connected`; `mcp__mobile-mcp.mobile_list_available_devices()` => `{"devices":[]}`.
+  - No wireless-adb IP is recorded for the Pixel, so network adb is not an option without on-device pairing.
+- HUMAN ACTION REQUIRED (more specific than #59's "reattach"): on the Pixel, change USB mode from MIDI to **File transfer / MTP** (or enable **USB debugging** under Developer options) so the ADB interface is exposed. Re-plugging alone may not help if the saved USB default is MIDI.
+- Hardware spot-check (cheap, host-side): `c64u` 192.168.1.167 and `u64` 192.168.1.13 both **ping OK** but `curl http://<ip>/v1/info` returns **empty body** (consistent with #58 reset-by-peer). Re-probe `/v1/info` before any mutation family once Pixel HIL is restored.
+- Source identity: `./scripts/resolve-version.sh` => `0.8.7-rc3-bd14d` (matches digest). Installed APK identity still UNKNOWN (no ADB).
+- Selected candidate family (deferred by blocker): `Config /config edit controls` (text/number commit + remaining selectors/toggles persistence) on c64u primary.
+- `droidmind_cta_action_count=0` — allowed pre-action blocker #4 (required Android HIL device concretely unusable: ADB interface absent), proven before any CTA. No scheduler invoked (Ralph Robin owns rotation).
+- Verdict #60: `RALPH ROBIN CONTINUATION READY` (blocker). 3rd consecutive no-HIL loop; first to pinpoint USB-mode (MIDI) as the cause.
+
+## Ralph loop iteration — 2026-06-14 #61 (Claude — BLOCKED: Pixel still in MIDI-only USB mode, no ADB interface; 4th consecutive no-HIL loop)
+
+- Branch/head: `fix/hardening-2` @ `bd14d99a` (unchanged). Worktree dirty only in local `PLANS.md`/`WORKLOG.md`. No source/build/deploy/CTA this loop.
+- Capacity: Ralph Robin selected `claude`, usable 5h 89% / weekly 61% (`>=40%` band). Capacity is NOT the blocker — pure HIL infrastructure (unchanged since #60).
+- Live concrete HIL discovery (re-verified, not from digest):
+  - `lsusb -d 18d1:4eea` => Pixel present; `lsusb -v` shows ONLY `bInterfaceClass 1 Audio` / `iInterface MIDI function` interfaces — still no vendor/ADB interface.
+  - `adb kill-server`+`adb start-server`+`adb reconnect offline` => `adb devices -l` still empty.
+  - `mcp__droidmind.android-device(list_devices)` => `No devices connected`; `mcp__mobile-mcp.mobile_list_available_devices()` => `{"devices":[]}`.
+- HUMAN ACTION REQUIRED (unchanged, still outstanding from #60): on the Pixel set USB mode from MIDI to **File transfer / MTP** (or enable **USB debugging** in Developer options) so the ADB interface is exposed; re-plug if the saved default is MIDI. Confirm with `lsusb -v -d 18d1:4eea` showing a vendor/ADB interface and `adb devices` listing `9B081FFAZ001WX`.
+- Hardware spot-check (host-side, cheap): `c64u` 192.168.1.167 and `u64` 192.168.1.13 both **ping OK** but `curl -m4 http://<ip>/v1/info` returns **empty body** for both (still reset-by-peer, consistent with #58/#60). Re-probe before any mutation family once Pixel HIL is restored.
+- NO-HIL-PEER fix exception re-checked: only Low-severity defects open (BUG-030 dev-only Radix aria warning stripped from prod; BUG-022 SAF startup diagnostic). No safe high-value no-HIL root-cause fix for a blocker/high/medium defect ⇒ no code change (a doc-only/coverage loop is forbidden).
+- Selected candidate family (deferred by blocker): `Config /config edit controls` (text/number commit + remaining selectors/toggles persistence) on c64u primary.
+- `droidmind_cta_action_count=0` — allowed pre-action blocker #4 (required Android HIL device concretely unusable: ADB interface absent), proven before any CTA/edit/build/deploy. No scheduler invoked (Ralph Robin owns rotation).
+- Verdict #61: `RALPH ROBIN CONTINUATION READY` (blocker). 4th consecutive no-HIL loop; same MIDI-USB-mode root cause as #60, still requires human action.
+
+## Ralph loop iteration — 2026-06-14 #62 (Claude — HIL RESTORED: Pixel ADB interface back; rebuild+redeploy then Config/Diagnostics probe pack)
+
+- Branch/head: `fix/hardening-2` @ `bd14d99a`. Worktree dirty only in local `PLANS.md`/`WORKLOG.md`.
+- **Blocker cleared:** `adb devices -l` => `9B081FFAZ001WX device` (transport_id:1); `droidmind list_devices` => Pixel 4 Android 16. The 4-loop MIDI-USB-mode blocker is GONE. HIL is live again.
+- Capacity: Ralph Robin `claude` usable 5h 82% / weekly 61% (`>=40%` band → min 8 / target 12-20 actions, ≥1 adversarial).
+- Identity: source `0.8.7-rc3-bd14d`; installed APK `0.8.7-rc3-c0396` (one commit behind; HEAD `bd14d99a` changed `DiagnosticsDialog.tsx` + `ConfigBrowserPage.tsx` + `useAuthoritativeConfigValueState.ts`). REBUILD+REDEPLOY required before any current-build claim — build started (`/tmp/iter62-build.log`).
+- Selected probe family: **Config /config immediate-write + Diagnostics dialog** (exercises exactly the two files HEAD changed; highest-value current-build validation). c64u primary; re-probe `/v1/info` before any mutation.
+- Stop criteria: complete the Config/Diagnostics probe pack (visible-control exhaustion, ≥1 adversarial transition, mandatory logcat + Diagnostics export sweep, cleanup), or a proven blocker.
+- Primary TODO: validate the diagnostics-dialog + config-handling changes in `bd14d99a` on real c64u; restore UltiSID 0 dB on cleanup.
+
+## Ralph loop iteration — 2026-06-14 #63 (Claude — continuation of interrupted #62; finalize BUG-034 + advance Diagnostics dialog family)
+
+- Branch/head: `fix/hardening-2` @ `bd14d99a`. Worktree dirty: `PLANS.md`/`WORKLOG.md` + uncommitted BUG-034 fix (`src/lib/diagnostics/configDrift.ts` + its unit test) left by interrupted #62.
+- HIL live: `adb devices` => `9B081FFAZ001WX device`; `droidmind list_devices` => Pixel 4 Android 16. Installed APK `0.8.7-rc3-bd14d` == source. c64u 192.168.1.167 HEALTHY (fw 1.1.0, errors:[]); u64 192.168.1.13 HEALTHY (fw 3.14e). Both `/v1/info` recovered (no longer reset-by-peer).
+- Capacity: Ralph Robin `claude` 5h 47% / weekly 58% (`>=40%` band → min 8 / target 12-20 actions, ≥1 adversarial).
+- Context: prior #62 invocation discovered+fixed+rebuilt+redeployed+HIL-validated **BUG-034** (Config Drift destructive `load_from_flash` from a read-only diagnostics view + unpaced burst tripping c64u Connection reset) and discovered **BUG-035** (web version label `0.7.9-rc1` diverges from native APK `0.8.7-rc3-bd14d`; maintainer fix). It was cut off before finalizing PLANS/WORKLOG/ledger/digest.
+- Selected probe family: **Diagnostics dialog** (full tab/control exhaustion: Logs, Traces, Actions, Errors, Latency, Heat map, Config drift, Device detail, Decision state, Share-all export, Refresh, close/reopen, Android Back). Advances real coverage AND re-confirms BUG-034 fix in passing (zero `load_from_flash` on Config Drift open).
+- Stop criteria: complete the Diagnostics-dialog probe pack (visible-control exhaustion, ≥1 adversarial transition, mandatory package-filtered logcat + Diagnostics export pulled+analyzed, cleanup), then finalize all state docs + digest, or a proven blocker.
+- Primary TODO: exhaust the Diagnostics dialog family on the current build; confirm Config Drift issues zero device requests; pull+analyze the Share-all ZIP; finalize #62/#63 state.
+
+- Verdict #62: **FIXED** — HIL restored (4-loop MIDI-USB blocker gone). Rebuilt+redeployed `0.8.7-rc3-bd14d` (native versionName confirmed). Validated BUG-032 (overflow-menu Back) on current build. Found+fixed+HIL-validated **BUG-034 (High)**: Config Drift issued destructive `PUT /v1/configs:load_from_flash` on open → now strictly read-only (0 device requests, c64u stayed HEALTHY). Found **BUG-035 (Medium, open)**: web version label `0.7.9-rc1` diverges from native APK/tag `0.8.7-rc3`. 15+ droidmind CTAs; mandatory logcat + Diagnostics-export sweeps done. Code (BUG-034 fix) UNCOMMITTED. Ralph Robin continuation ready.
+
+## Ralph loop iteration — 2026-06-14 #64 (Claude — Config immediate-write family, never-exercised text/number input)
+
+- Branch/head: `fix/hardening-2` @ `bd14d99a`. Worktree dirty: `PLANS.md`/`WORKLOG.md` + uncommitted BUG-034 fix (`src/lib/diagnostics/configDrift.ts` + test) from #62.
+- HIL live: droidmind => Pixel 4 Android 16; installed APK `0.8.7-rc3-bd14d` == source (current-build claims valid). c64u 192.168.1.167 HEALTHY (fw 1.1.0, errors:[]); u64 192.168.1.13 HEALTHY. All peers (droidmind/c64scope/c64bridge) callable.
+- Capacity: Ralph Robin `claude` 5h 40% / weekly 57% (`>=40%` band → min 8 / target 12-20 actions, ≥1 adversarial).
+- Selected probe family: **Config `/config` immediate-write family on c64u** — centered on the NEVER-exercised `ConfigItemRow` text/number input commit (DISCOVERED on every prior loop), plus adjacent re-exercise (select write, slider via keyboard-actuation, SOLO toggle) with c64u REST read-back + latency.
+- Stop criteria: exhaust safe Config immediate-write controls (text input first), ≥1 adversarial transition, mandatory package-filtered logcat + Diagnostics export pulled+analyzed, restore UltiSID 0 dB / all mutated values, then finalize state + digest, or a proven blocker.
+- Primary TODO: exercise a benign config text/number input commit on c64u with REST read-back + <1s effect latency; advance real coverage on the last unexercised Config control.
+- **Verdict #63: `CLEAN PASS` (Diagnostics-dialog family) + BUG-034 FIXED re-confirmed on current build.** 22 droidmind CTA actions (min 8 / target 12-20 exceeded); visible controls discovered ~14, exercised 11 (remaining overflow views Connection details/Decision state/Latency/Health history/3 heat maps/Share filtered = PLANNED next loop; Clear all = DESTRUCTIVE_GUARDED, not confirmed). No new defects; no false-positive errors; package logcat + pulled Diagnostics ZIP both clean. No code change, no build (installed == source). c64u HEALTHY throughout; read-only family so no device cleanup. `RALPH ROBIN CONTINUATION READY`; no scheduler invoked (Ralph Robin owns rotation). Next family: Config `/config` immediate-write (text/number commit + selector/toggle persistence) on c64u, OR remaining Diagnostics overflow read-only views.
+
+## Ralph loop iteration #64 (2026-06-14, Claude)
+- Branch `fix/hardening-2`, head `bd14d99a`. Working tree dirty: BUG-034 fix (configDrift.ts+test) uncommitted + local state.
+- Identity: source `0.8.7-rc3-bd14d` == installed APK `0.8.7-rc3-bd14d` (no rebuild).
+- Peers: droidmind LIVE (Pixel 4 9B081FFAZ001WX, Android 16); c64scope/c64bridge callable. c64u 192.168.1.167 HEALTHY (fw1.1.0, errors:[]); u64 192.168.1.13 HEALTHY (fw3.14e).
+- Capacity: claude ~21% 5h / 56% weekly => 20-39% band (min 5 actions, target 6-10, one focused family, narrow).
+- Prev verdict (#63): CLEAN PASS Diagnostics-dialog + BUG-034 re-confirmed FIXED.
+- Selected family: **Config `/config` immediate-write** (toggles/selectors/inputs + slider drag/release no-jump-back) on c64u primary.
+- Stop criteria: exhaust safe Config controls (min 5 actions), >=1 adversarial transition, mandatory logcat + Diagnostics export sweep, restore UltiSID 0dB, then hand off.
+- Primary TODO: exercise Config immediate-write controls with c64u read-back + persistence check.
