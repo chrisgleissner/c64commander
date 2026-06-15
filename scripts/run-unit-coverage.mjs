@@ -134,6 +134,10 @@ export function getVitestCoverageArgs(rootDir, runConfig, reportsDirectory) {
     "--minWorkers=1",
     "--no-file-parallelism",
     "--reporter=dot",
+    // High-visibility flaky-test reporter (stop-gap): surfaces any unit test that
+    // passes only on retry via GitHub annotations + job summary + console banner.
+    // See docs/flaky-tests.md.
+    "--reporter=./tests/reporters/vitestFlakyReporter.ts",
   ];
 
   const projectFiles = getProjectFilesForRun(rootDir, runConfig);
