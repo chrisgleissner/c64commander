@@ -1038,6 +1038,7 @@ export function DiagnosticsDialog({
   const [decisionStateOpen, setDecisionStateOpen] = useState(false);
   const [heatMapVariant, setHeatMapVariant] = useState<HeatMapVariant | null>(null);
   const [overflowOpen, setOverflowOpen] = useState(false);
+  const overflowTriggerRef = useRef<HTMLButtonElement>(null);
   const longPressTimerRef = useRef<number | null>(null);
   const longPressHandledRef = useRef(false);
   const firstVisibleNotifiedRef = useRef(false);
@@ -1631,10 +1632,20 @@ export function DiagnosticsDialog({
   // under the dialog: Radix's isHighestLayer guard then closes ONLY the menu on Back/Escape (the dialog
   // defers), and `disableOutsidePointerEvents` dismisses + absorbs outside taps. `asChild` keeps the
   // existing panel markup/positioning unchanged.
+  //
+  // `disableOutsidePointerEvents` also makes the trigger non-interactive while the menu is open, so a
+  // second tap on the ⋯ button would be swallowed as an outside-dismiss instead of toggling the menu
+  // shut via its own onClick. We keep the trigger pointer-interactive (below) and exclude it here so a
+  // repeat tap toggles cleanly (single close), while every other outside tap still dismisses + absorbs.
   const overflowPanel = overflowOpen ? (
     <DismissableLayer
       asChild
       disableOutsidePointerEvents
+      onPointerDownOutside={(event) => {
+        if (overflowTriggerRef.current?.contains(event.target as Node)) {
+          event.preventDefault();
+        }
+      }}
       onFocusOutside={(event) => event.preventDefault()}
       onDismiss={() => setOverflowOpen(false)}
     >
@@ -1664,10 +1675,14 @@ export function DiagnosticsDialog({
             actions={
               <div className="relative z-10">
                 <Button
+                  ref={overflowTriggerRef}
                   type="button"
                   variant="ghost"
                   size="sm"
                   className="h-8 w-8 p-0 opacity-70"
+                  // Keep the trigger clickable while the menu's DismissableLayer disables outside
+                  // pointer events, so a repeat tap routes to onClick and toggles the menu shut.
+                  style={overflowOpen ? { pointerEvents: "auto" } : undefined}
                   onClick={() => setOverflowOpen((v) => !v)}
                   data-testid="diagnostics-overflow-menu"
                 >

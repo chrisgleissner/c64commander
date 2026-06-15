@@ -349,12 +349,19 @@ export function ConfigItemRow({
     () => (controlKind === "slider" ? getSliderOptions(optionList) : optionList),
     [controlKind, optionList],
   );
-  const safeSliderOptions = sliderOptions.length ? sliderOptions : [String(displayValue)];
+  const safeSliderOptions = sliderOptions.length ? sliderOptions : [String(mergedValue)];
   const sliderControl = useDeviceBoundSlider({
+    // Feed the AUTHORITATIVE device value (mergedValue), never the optimistic
+    // `displayValue`/`inputValue`. `onDraftChange` pushes the live drag value into
+    // `inputValue`, so deriving deviceValue from `displayValue` made the hook believe
+    // the device already held the dragged value: its commit-time `equals(deviceValue,
+    // nextValue)` guard then skipped the real write (and reconciliation never had a
+    // truth to converge on). The old "throttled" preview write hid this; commitOnly
+    // exposed it. The hook tracks its own draft/pending state for the thumb + label.
     deviceValue: String(
-      safeSliderOptions.find((option) => normalizeOption(option) === normalizeOption(String(displayValue))) ??
+      safeSliderOptions.find((option) => normalizeOption(option) === normalizeOption(String(mergedValue))) ??
         safeSliderOptions[0] ??
-        displayValue,
+        mergedValue,
     ),
     domain: createIndexedSliderDomain(safeSliderOptions),
     // BUG-026: Config sliders write to the device ONLY on commit/release. The old
