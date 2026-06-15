@@ -26,10 +26,6 @@ export type PlaybackControlsCardProps = {
   hasPlaylist: boolean;
   isPlaylistLoading: boolean;
   canPause: boolean;
-  /** BUG-017: disable Stop while playing (e.g. C64U non-disk, where Stop would reset the machine). */
-  stopDisabled?: boolean;
-  /** Tooltip explaining why Stop is disabled (shown on the Stop button). */
-  stopDisabledReason?: string;
   onPrevious: () => void;
   onPlay: () => void;
   onStop: () => void;
@@ -66,8 +62,6 @@ export const PlaybackControlsCard = ({
   hasPlaylist,
   isPlaylistLoading,
   canPause,
-  stopDisabled = false,
-  stopDisabledReason,
   onPrevious,
   onPlay,
   onStop,
@@ -123,12 +117,12 @@ export const PlaybackControlsCard = ({
             variant={isPlaying ? "destructive" : "default"}
             size="icon"
             onClick={isPlaying ? onStop : onPlay}
-            disabled={!hasPlaylist || isPlaylistLoading || (isPlaying && stopDisabled)}
+            disabled={!hasPlaylist || isPlaylistLoading}
             data-c64-persistent-active={isPlaying && !isPaused ? "true" : undefined}
             id="playlist-play"
             data-testid="playlist-play"
             aria-label={isPlaying ? "Stop" : "Play"}
-            title={isPlaying ? (stopDisabled ? (stopDisabledReason ?? "Stop") : "Stop") : "Play"}
+            title={isPlaying ? "Stop" : "Play"}
           >
             {isPlaying ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
           </Button>

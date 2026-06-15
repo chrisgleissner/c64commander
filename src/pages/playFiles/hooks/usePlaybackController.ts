@@ -19,7 +19,6 @@ import {
   SupersededMachineTransitionError,
 } from "@/lib/deviceInteraction/machineTransitionCoordinator";
 import { addErrorLog, addLog } from "@/lib/logging";
-import { getSelectedSavedDeviceProductFamilySync } from "@/lib/savedDevices/store";
 import { isAbortLikeError } from "@/lib/c64api/requestRuntime";
 import { reportUserError } from "@/lib/uiErrors";
 import { toast } from "@/hooks/use-toast";
@@ -1055,19 +1054,6 @@ export function usePlaybackController({
       if (!isPlaying && !isPaused) return;
       const currentItem = playlist[currentIndex];
       const shouldReboot = currentItem?.category === "disk";
-      // BUG-017 safety guard: on a C64U, a non-disk (e.g. SID) Stop maps to
-      // PUT /v1/machine:reset, which silently resets the machine to BASIC. The Stop
-      // control is disabled in the UI for this case (PlaybackControlsCard), so reaching
-      // here for C64U non-disk means a programmatic/unexpected call — refuse it: do not
-      // reset the machine and do not run the volume restore. Users pause non-disk
-      // playback on a C64U instead of stopping it.
-      if (!shouldReboot && getSelectedSavedDeviceProductFamilySync() === "C64U") {
-        addLog("warn", "Blocked C64U non-disk Stop to avoid a silent machine reset (BUG-017)", {
-          currentIndex,
-          category: currentItem?.category ?? null,
-        });
-        return;
-      }
       try {
         const api = getC64API();
         if (isPaused) {

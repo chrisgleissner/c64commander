@@ -11,7 +11,6 @@ import { addErrorLog, addLog } from "@/lib/logging";
 import { getHvscDurationByMd5Seconds } from "@/lib/hvsc";
 import { applyConfigFileReference, ensureConfigFileReferenceAccessible } from "@/lib/config/applyConfigFileReference";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
-import { getSelectedSavedDeviceProductFamilySync } from "@/lib/savedDevices/store";
 
 const mockArchiveClient = {
   downloadBinary: vi.fn(),
@@ -70,14 +69,6 @@ vi.mock("@/lib/config/applyConfigFileReference", () => ({
     Boolean((error as Error & { c64uConfigUnavailable?: boolean })?.c64uConfigUnavailable),
   ),
 }));
-
-// BUG-017: keep all real store exports, but make the product family controllable so the
-// C64U non-disk Stop safety guard can be exercised. Defaults to null (no guard) so the
-// existing non-C64U stop tests keep their machine:reset behaviour.
-vi.mock("@/lib/savedDevices/store", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/savedDevices/store")>();
-  return { ...actual, getSelectedSavedDeviceProductFamilySync: vi.fn(() => null) };
-});
 
 const createPlaylistItem = (overrides: Partial<PlaylistItem> = {}): PlaylistItem => ({
   id: "item-1",
@@ -1811,52 +1802,6 @@ describe("usePlaybackController", () => {
       expect.objectContaining({ operation: "PLAYBACK_STOP", title: "Stop failed" }),
     );
     expect(restoreVolumeOverrides).toHaveBeenCalledWith("stop");
-  });
-
-  it("blocks a C64U non-disk Stop without resetting the machine or restoring volume (BUG-017)", async () => {
-    vi.mocked(getSelectedSavedDeviceProductFamilySync).mockReturnValue("C64U");
-    try {
-      const machineReset = vi.fn().mockResolvedValue(undefined);
-      const restoreVolumeOverrides = vi.fn().mockResolvedValue(undefined);
-      vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
-      const { result } = renderPlaybackController([createPlaylistItem()], {
-        isPlaying: true,
-        restoreVolumeOverrides,
-      });
-
-      await result.current.handleStop();
-
-      expect(machineReset).not.toHaveBeenCalled();
-      expect(restoreVolumeOverrides).not.toHaveBeenCalled();
-      expect(vi.mocked(reportUserError)).not.toHaveBeenCalled();
-      expect(vi.mocked(addLog)).toHaveBeenCalledWith(
-        "warn",
-        expect.stringContaining("BUG-017"),
-        expect.any(Object),
-      );
-    } finally {
-      vi.mocked(getSelectedSavedDeviceProductFamilySync).mockReturnValue(null);
-    }
-  });
-
-  it("still reboots on a C64U disk Stop because the guard only covers non-disk playback (BUG-017)", async () => {
-    vi.mocked(getSelectedSavedDeviceProductFamilySync).mockReturnValue("C64U");
-    try {
-      const machineReboot = vi.fn().mockResolvedValue(undefined);
-      const restoreVolumeOverrides = vi.fn().mockResolvedValue(undefined);
-      vi.mocked(getC64API).mockReturnValue({ machineReboot } as any);
-      const { result } = renderPlaybackController([createPlaylistItem({ category: "disk" })], {
-        isPlaying: true,
-        restoreVolumeOverrides,
-      });
-
-      await result.current.handleStop();
-
-      expect(machineReboot).toHaveBeenCalledTimes(1);
-      expect(restoreVolumeOverrides).toHaveBeenCalledWith("stop");
-    } finally {
-      vi.mocked(getSelectedSavedDeviceProductFamilySync).mockReturnValue(null);
-    }
   });
 
   it("allows a queued machine reset to finish without emitting a false stop failure", async () => {

@@ -58,7 +58,6 @@ import { prepareDirectoryInput } from "@/lib/sourceNavigation/localSourcesStore"
 import type { SelectedItem, SourceLocation } from "@/lib/sourceNavigation/types";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { buildSelectedDeviceBoundOrigin } from "@/lib/savedDevices/deviceBoundOrigin";
-import { resolveCanonicalProductFamilyCode } from "@/lib/savedDevices/store";
 
 import { buildEnabledSidMuteUpdates } from "@/lib/config/sidVolumeControl";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
@@ -1247,12 +1246,6 @@ export default function PlayFilesPage() {
   }, [autoAdvanceGuardRef, handleNextRef, playbackStateRef, queueBackgroundDueAtUpdateRef, syncPlaybackTimelineRef]);
 
   const currentItem = playlist[currentIndex];
-  // BUG-017: on a C64U, a non-disk (e.g. SID) Stop maps to a destructive machine reset.
-  // Disable the Stop control for that case (users pause non-disk playback instead).
-  const stopResetUnsafe =
-    resolveCanonicalProductFamilyCode(status.deviceInfo?.product ?? null) === "C64U" &&
-    Boolean(currentItem) &&
-    currentItem?.category !== "disk";
   const { setPlaybackContext, resolved: lightingResolved, openStudio, openContextLens } = useLightingStudio();
   const currentDurationMs = currentItem ? playlistItemDuration(currentItem, currentIndex) : undefined;
   const sourceKind = useMemo<TraceSourceKind | null>(() => {
@@ -1701,8 +1694,6 @@ export default function PlayFilesPage() {
                 hasPlaylist={hasPlaylist}
                 isPlaylistLoading={isPlaylistLoading}
                 canPause={canPause}
-                stopDisabled={stopResetUnsafe}
-                stopDisabledReason="Stop is disabled on a C64U for non-disk playback because it would reset the machine. Use Pause instead."
                 onPrevious={() => void handlePrevious()}
                 onPlay={() => void handlePlay()}
                 onStop={() => void handleStop()}
