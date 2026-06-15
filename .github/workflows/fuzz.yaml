@@ -170,6 +170,7 @@ jobs:
             ci-artifacts/telemetry/fuzz-deterministic/summary.json
             ci-artifacts/telemetry/fuzz-deterministic/summary.md
             ci-artifacts/telemetry/fuzz-deterministic/charts/**
+          retention-days: 7
 
       - name: Telemetry gates
         if: always()
@@ -362,6 +363,7 @@ jobs:
             ci-artifacts/telemetry/fuzz/summary.json
             ci-artifacts/telemetry/fuzz/summary.md
             ci-artifacts/telemetry/fuzz/charts/**
+          retention-days: 7
 
       - name: Telemetry gates
         if: always()
