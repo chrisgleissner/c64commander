@@ -3,7 +3,10 @@ import { cpSync, existsSync, globSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-export const jsdomChunkCount = 32;
+// Bumped 32 -> 40 to shrink each jsdom chunk: under v8 coverage instrumentation,
+// chunk 6/32 grew past the heap and OOMed ("Ineffective mark-compacts near heap
+// limit"), failing the unit job. Fewer files per chunk lowers peak memory.
+export const jsdomChunkCount = 40;
 export const coverageRunMaxAttempts = 2;
 
 export const dedicatedJsdomCoverageFiles = [
@@ -117,7 +120,9 @@ export function getProjectFilesForRun(rootDir, runConfig) {
 
 export function getVitestCoverageArgs(rootDir, runConfig, reportsDirectory) {
   const args = [
-    "--max-old-space-size=6144",
+    // 6144 -> 8192: give v8 coverage runs headroom above the limit that chunk 6
+    // was thrashing against (ubuntu-latest has ~16GB, so 8GB heap is safe).
+    "--max-old-space-size=8192",
     path.join(rootDir, "node_modules/vitest/vitest.mjs"),
     "run",
     "--project",
