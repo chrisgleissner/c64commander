@@ -269,6 +269,32 @@ Violating this rule is a release blocker.
 - Keep the repository buildable. If changes break builds, fix them before declaring work complete.
 - Exceptions must never be ignored; log them or let them bubble up.
 
+## React effect/setState safety (infinite re-render & coverage-hang prevention)
+
+A `setState` driven from an effect (or a callback the effect invokes) that feeds a
+**referentially-unstable but value-equal** value, while that value is an effect
+dependency, creates an infinite synchronous re-render loop. It pegs one CPU core
+and **starves the event loop, so Vitest's test timeout never fires** — it surfaces
+as an indefinite `npm run test:coverage` hang (one file/chunk never finishes), NOT
+a failing test. Real regression: `src/pages/ConfigBrowserPage.tsx` fed `items`
+(rebuilt fresh each render) straight into `setAudioConfiguredItems` during re-sync.
+
+- **Never** set state from a value that may be a new reference each render when
+  that value is also an effect dependency. Stabilize the reference (`useMemo` on
+  the true inputs, or a ref), or guard the setter with a value-equality bail so
+  React short-circuits: `if (equal(prev, next)) return;`.
+- React-query `data` is referentially stable in production (structural sharing),
+  but **hook mocks that return a fresh object each render are not**. Write the
+  component so an unstable-but-equal upstream cannot loop it — the mock is the
+  realistic adversary, not something to paper over in the test.
+- A Vitest file/chunk that hangs with a worker pegged at ~100% CPU (and prints no
+  further dots) is a synchronous render/compute loop, not an open handle. Bisect
+  to the file, then the test/code path, and fix the loop at source — never add a
+  timeout. Note: `timeout`-killing a hung run orphans tinypool worker children
+  that keep spinning; `pkill -9 -f vitest` between bisect iterations.
+- Treat `await refetch()` (and similar query results) defensively: use optional
+  chaining (`refreshed?.data`); the result can be undefined in tests and edge cases.
+
 ## Mandatory bug-fix regression coverage
 
 - Every bug fix must add or update a dedicated regression test that fails before the fix and passes after it.
