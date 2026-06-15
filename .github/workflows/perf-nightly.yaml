@@ -87,3 +87,4 @@ jobs:
         with:
           name: hvsc-perf-${{ env.HVSC_PERF_PROFILE }}
           path: ci-artifacts/hvsc-performance/**
+          retention-days: 7

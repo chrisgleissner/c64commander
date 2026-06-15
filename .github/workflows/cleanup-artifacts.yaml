@@ -1,0 +1,72 @@
+name: Cleanup old artifacts
+
+# Insurance against artifact-storage blowout. The per-workflow `retention-days`
+# settings are the primary control (hand-offs 1 day, evidence 7 days); this job is
+# a belt-and-braces sweep that removes any *test-evidence* / hand-off artifact that
+# somehow outlived its retention window. It NEVER deletes release/publish artifacts
+# (APK / AAB / IPA / third-party-notices / Pages) and never touches GitHub Releases.
+
+on:
+  schedule:
+    - cron: "0 3 * * *" # daily at 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      max_age_days:
+        description: Delete eligible artifacts older than this many days
+        required: false
+        default: "7"
+      dry_run:
+        description: "List what would be deleted without deleting (true/false)"
+        required: false
+        default: "false"
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: cleanup-artifacts
+  cancel-in-progress: false
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete stale, non-release artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const maxAgeDays = Number(process.env.MAX_AGE_DAYS || '7');
+            const dryRun = (process.env.DRY_RUN || 'false') === 'true';
+            const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+
+            // Release / publish (class C) artifacts are deliverables — never delete them here.
+            // The GitHub Release / Pages deployment is the source of truth for these.
+            const KEEP = /(release-apk|release-aab|ios-ipa|third-party-notices|github-pages|pages-artifact)/i;
+
+            const arts = await github.paginate(
+              github.rest.actions.listArtifactsForRepo,
+              { owner: context.repo.owner, repo: context.repo.repo, per_page: 100 }
+            );
+
+            let deleted = 0, freed = 0, keptRelease = 0, keptRecent = 0;
+            for (const a of arts) {
+              if (a.expired) continue;
+              if (KEEP.test(a.name)) { keptRelease++; continue; }
+              if (new Date(a.created_at).getTime() >= cutoff) { keptRecent++; continue; }
+
+              if (dryRun) {
+                core.info(`[dry-run] would delete #${a.id} ${a.name} (${(a.size_in_bytes/1048576).toFixed(1)} MB, ${a.created_at})`);
+              } else {
+                await github.rest.actions.deleteArtifact({
+                  owner: context.repo.owner, repo: context.repo.repo, artifact_id: a.id });
+              }
+              deleted++; freed += a.size_in_bytes;
+            }
+
+            const verb = dryRun ? 'Would delete' : 'Deleted';
+            core.notice(`${verb} ${deleted} artifacts, ${(freed/1073741824).toFixed(2)} GB freed. ` +
+                        `Kept ${keptRelease} release/publish + ${keptRecent} within ${maxAgeDays}d.`);
+        env:
+          MAX_AGE_DAYS: ${{ github.event.inputs.max_age_days }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}

@@ -143,6 +143,7 @@ jobs:
             ios/
             dist/
           if-no-files-found: error
+          retention-days: 1
 
   ios-maestro-tests:
     name: iOS | Maestro
@@ -576,6 +577,7 @@ jobs:
             artifacts/ios/_infra/telemetry/summary.md
             artifacts/ios/_infra/telemetry/charts/**
           if-no-files-found: warn
+          retention-days: 7
 
       - name: Create evidence archive on tag
         if: always() && github.ref_type == 'tag'
@@ -591,6 +593,7 @@ jobs:
           name: ios-maestro-evidence-tgz
           path: artifacts/ios/_combined/ios-maestro-evidence.tgz
           if-no-files-found: warn
+          retention-days: 7
 
       - name: Enforce iOS telemetry gates
         if: always()
@@ -670,6 +673,7 @@ jobs:
             artifacts/ios/_infra/simulator/**
             artifacts/ios/_infra/xcodebuild/**
           if-no-files-found: warn
+          retention-days: 7
 
       - name: Shutdown and delete simulator
         if: always()
@@ -786,6 +790,7 @@ jobs:
           path: |
             ios/build/${{ steps.resolve_variant.outputs.variant_artifact_basename }}-${{ steps.resolve_version.outputs.app_version }}-ios.ipa
           if-no-files-found: error
+          retention-days: 7
 
       - name: Upload iOS package diagnostics on failure
         if: failure()
@@ -795,6 +800,7 @@ jobs:
           path: |
             artifacts/ios/_infra/xcodebuild/**
           if-no-files-found: warn
+          retention-days: 7
 
       - name: Ensure GitHub release exists
         if: startsWith(github.ref, 'refs/tags/')

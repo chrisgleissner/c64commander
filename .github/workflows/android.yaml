@@ -111,6 +111,7 @@ jobs:
             THIRD_PARTY_NOTICES.md
             dist/THIRD_PARTY_NOTICES.md
           if-no-files-found: warn
+          retention-days: 7
 
   web-unit:
     name: Web | Unit tests (coverage)
@@ -165,6 +166,7 @@ jobs:
           path: |
             coverage/lcov.info
             coverage/coverage-final.json
+          retention-days: 1
 
   perf-benchmark-quick:
     name: Perf | Quick HVSC web benchmark
@@ -214,6 +216,7 @@ jobs:
         with:
           name: hvsc-perf-quick
           path: ci-artifacts/hvsc-performance/**
+          retention-days: 7
 
   web-screenshots:
     name: Web | Screenshots
@@ -319,6 +322,7 @@ jobs:
         with:
           name: playwright-evidence-screenshots
           path: test-results/evidence/**
+          retention-days: 1
 
   web-build-coverage:
     name: Web | Build (coverage)
@@ -355,6 +359,7 @@ jobs:
         with:
           name: web-dist-coverage
           path: dist
+          retention-days: 1
 
   web-e2e:
     name: Web | E2E (sharded)
@@ -473,6 +478,7 @@ jobs:
           path: .nyc_output/**
           if-no-files-found: ignore
           include-hidden-files: true
+          retention-days: 1
 
       - name: Upload e2e evidence shard
         if: always()
@@ -480,6 +486,7 @@ jobs:
         with:
           name: playwright-evidence-e2e-${{ matrix.shard }}
           path: test-results/evidence/**
+          retention-days: 1
 
   web-coverage-merge:
     name: Web | Coverage + evidence merge
@@ -599,6 +606,7 @@ jobs:
         with:
           name: playwright-evidence
           path: test-results/evidence/**
+          retention-days: 7
 
   android-tests:
     name: Android | Tests + Coverage
@@ -1377,6 +1385,7 @@ jobs:
             ci-artifacts/telemetry/summary.json
             ci-artifacts/telemetry/summary.md
             ci-artifacts/telemetry/charts/**
+          retention-days: 7
 
       - name: Enforce Android telemetry gates
         if: always()
@@ -1610,6 +1619,7 @@ jobs:
           name: ${{ steps.resolve_variant.outputs.variant_artifact_basename }}-release-apk
           path: |
             android/app/build/outputs/apk/release/${{ steps.resolve_variant.outputs.variant_artifact_basename }}-${{ steps.resolve_version.outputs.app_version }}-android.apk
+          retention-days: 7
 
       - name: Rename AAB for publishing
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
@@ -1623,6 +1633,7 @@ jobs:
         with:
           name: ${{ steps.resolve_variant.outputs.variant_artifact_basename }}-release-aab
           path: android/app/build/outputs/bundle/release/${{ steps.resolve_variant.outputs.variant_artifact_basename }}-${{ steps.resolve_version.outputs.app_version }}-android-play.aab
+          retention-days: 7
 
   release-prerelease:
     name: Release | Create prerelease

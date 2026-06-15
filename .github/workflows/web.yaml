@@ -241,6 +241,7 @@ jobs:
             ci-artifacts/telemetry/charts/**
             /tmp/web-health.json
           if-no-files-found: warn
+          retention-days: 7
 
       - name: Enforce Docker telemetry gates
         if: success()
