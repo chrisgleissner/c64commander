@@ -349,21 +349,33 @@ export function ConfigItemRow({
     () => (controlKind === "slider" ? getSliderOptions(optionList) : optionList),
     [controlKind, optionList],
   );
-  const safeSliderOptions = sliderOptions.length ? sliderOptions : [String(displayValue)];
+  const safeSliderOptions = sliderOptions.length ? sliderOptions : [String(mergedValue)];
   const sliderControl = useDeviceBoundSlider({
+    // Feed the AUTHORITATIVE device value (mergedValue), never the optimistic
+    // `displayValue`/`inputValue`. `onDraftChange` pushes the live drag value into
+    // `inputValue`, so deriving deviceValue from `displayValue` made the hook believe
+    // the device already held the dragged value: its commit-time `equals(deviceValue,
+    // nextValue)` guard then skipped the real write (and reconciliation never had a
+    // truth to converge on). The old "throttled" preview write hid this; commitOnly
+    // exposed it. The hook tracks its own draft/pending state for the thumb + label.
     deviceValue: String(
-      safeSliderOptions.find((option) => normalizeOption(option) === normalizeOption(String(displayValue))) ??
+      safeSliderOptions.find((option) => normalizeOption(option) === normalizeOption(String(mergedValue))) ??
         safeSliderOptions[0] ??
-        displayValue,
+        mergedValue,
     ),
     domain: createIndexedSliderDomain(safeSliderOptions),
-    previewMode: "throttled",
+    // BUG-026: Config sliders write to the device ONLY on commit/release. The old
+    // "throttled" mode issued a burst of mid-drag preview writes; against the
+    // flash-saving c64u /v1/configs endpoint (Auto Save Config=Yes ⇒ one flash
+    // commit per write) a single drag wedged the firmware REST task, and a failed
+    // final commit left the label diverged from the device. onDraftChange keeps the
+    // thumb/label live locally during the drag (no device traffic); the commit path's
+    // reconciliation latches the committed value until the device echoes it and
+    // self-heals to the authoritative device value if the write fails. Matches the
+    // already-safe Home CPU Speed and Play volume sliders.
+    previewMode: "commitOnly",
     onDraftChange: (nextValue) => {
       setInputValue(String(nextValue));
-    },
-    preview: (nextValue) => {
-      if (controlKind !== "slider" || String(nextValue) === lastCommittedRef.current) return;
-      return sliderWriteLaneRef.current?.schedule(String(nextValue));
     },
     commit: (nextValue) => {
       if (controlKind !== "slider" || String(nextValue) === lastCommittedRef.current) return;

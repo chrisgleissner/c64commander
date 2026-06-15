@@ -30,7 +30,7 @@ function hasDedicatedFiles(runConfig: UnitCoverageRun): runConfig is UnitCoverag
 
 describe("run-unit-coverage", () => {
   it("locks unit coverage to split jsdom shards and node project runs", () => {
-    expect(jsdomChunkCount).toBe(32);
+    expect(jsdomChunkCount).toBe(40);
     expect(dedicatedJsdomCoverageFiles).toEqual([
       "tests/unit/components/diagnostics/GlobalDiagnosticsOverlay.test.tsx",
       "tests/unit/hooks/useLightingStudio.test.tsx",

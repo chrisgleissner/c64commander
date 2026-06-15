@@ -51,6 +51,11 @@ vi.mock("@/hooks/useDeviceBoundSlider", async () => {
           const nextValue = resolveValue(index);
           setDisplayValue(nextValue);
           onDraftChange?.(nextValue);
+          // Mirror the real hook's commit-time guard: a committed value that
+          // already equals the AUTHORITATIVE `deviceValue` is a no-op write. If
+          // ConfigItemRow feeds the optimistic draft in as `deviceValue`, this
+          // guard silently swallows every commit (the BUG this asserts against).
+          if (String(nextValue) === String(deviceValue)) return undefined;
           return commit?.(nextValue);
         },
       };
@@ -132,49 +137,88 @@ describe("ConfigItemRow text input buffering", () => {
     mockProfile = "medium";
   });
 
-  it("coalesces rapid slider drags to one in-flight write plus one trailing latest value", async () => {
-    vi.useFakeTimers();
+  it("writes only once on commit for a rapid slider drag and never mid-drag (BUG-026)", async () => {
     const pending: Array<() => void> = [];
     const onValueChange = vi.fn(() => new Promise<void>((resolve) => pending.push(resolve)));
 
-    try {
-      render(
-        <ConfigItemRow
-          category="Audio Mixer"
-          name="Vol UltiSid 1"
-          value="10"
-          options={Array.from({ length: 21 }, (_, index) => String(index))}
-          onValueChange={onValueChange}
-          sliderTestId="volume-slider"
-        />,
-      );
+    render(
+      <ConfigItemRow
+        category="Audio Mixer"
+        name="Vol UltiSid 1"
+        value="10"
+        options={Array.from({ length: 21 }, (_, index) => String(index))}
+        onValueChange={onValueChange}
+        sliderTestId="volume-slider"
+      />,
+    );
 
-      const slider = screen.getByLabelText("Vol UltiSid 1 slider");
+    const slider = screen.getByLabelText("Vol UltiSid 1 slider");
 
-      for (let index = 1; index <= 20; index += 1) {
-        fireEvent.change(slider, { target: { value: String(index) } });
-      }
-      fireEvent.mouseUp(slider, { target: { value: "20" } });
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      expect(onValueChange).toHaveBeenCalledTimes(1);
-      expect(screen.getByDisplayValue("20")).toBeInTheDocument();
-
-      pending.shift()?.();
-
-      await act(async () => {
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-
-      expect(onValueChange).toHaveBeenCalledTimes(2);
-      expect(onValueChange).toHaveBeenLastCalledWith("20");
-      expect(screen.getByDisplayValue("20")).toBeInTheDocument();
-    } finally {
-      vi.useRealTimers();
+    for (let index = 1; index <= 20; index += 1) {
+      fireEvent.change(slider, { target: { value: String(index) } });
     }
+
+    // Config sliders are commit-only: a drag must emit ZERO device writes while
+    // moving (no mid-drag /v1/configs flash-commit flood), but the label tracks
+    // the drag locally via onDraftChange.
+    expect(onValueChange).toHaveBeenCalledTimes(0);
+    expect(screen.getByDisplayValue("20")).toBeInTheDocument();
+
+    fireEvent.mouseUp(slider, { target: { value: "20" } });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Exactly one write — the committed/released value.
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenLastCalledWith("20");
+
+    pending.shift()?.();
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Still a single write after the commit settles — no trailing/coalesced second write.
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(screen.getByDisplayValue("20")).toBeInTheDocument();
+  });
+
+  it("still writes on commit even though onDraftChange has mirrored the value locally (commitOnly regression)", async () => {
+    // Regression for the commitOnly slider write being silently dropped: the row
+    // passed its optimistic `displayValue` (which onDraftChange keeps in lock-step
+    // with the live drag) into the slider hook as `deviceValue`. By commit time the
+    // hook believed the device already held the dragged value, so its
+    // `equals(deviceValue, nextValue)` guard skipped the actual device write — the
+    // throttled-mode preview write had been hiding this. The fix feeds the
+    // AUTHORITATIVE device value (mergedValue) as deviceValue instead.
+    const onValueChange = vi.fn(() => Promise.resolve());
+
+    render(
+      <ConfigItemRow
+        category="Audio Mixer"
+        name="Vol UltiSid 1"
+        value="0"
+        options={Array.from({ length: 21 }, (_, index) => String(index))}
+        onValueChange={onValueChange}
+        sliderTestId="volume-slider"
+      />,
+    );
+
+    const slider = screen.getByLabelText("Vol UltiSid 1 slider");
+
+    // A single tap-to-max: onValueChange fires onDraftChange (mirroring "20" into
+    // the row's local display) and the commit lands at the same value.
+    fireEvent.change(slider, { target: { value: "20" } });
+    fireEvent.mouseUp(slider, { target: { value: "20" } });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenLastCalledWith("20");
   });
 });

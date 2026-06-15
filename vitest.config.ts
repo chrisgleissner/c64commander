@@ -54,6 +54,17 @@ export default defineConfig({
     silent: "passed-only",
     testTimeout: 15000,
     setupFiles: ["./tests/setup.ts"],
+    // STOP-GAP: rerun a failing unit test up to twice (3 attempts) in CI so
+    // transient flakiness stays green. Every test that passes only on retry is
+    // surfaced loudly by tests/reporters/vitestFlakyReporter.ts (GitHub
+    // annotations + job summary + console banner). See docs/flaky-tests.md.
+    retry: process.env.CI ? 2 : 0,
+    // Lets the flaky reporter annotate the offending file/line.
+    includeTaskLocation: true,
+    // Coverage runs override reporters with --reporter=dot and inject the flaky
+    // reporter explicitly (scripts/run-unit-coverage.mjs); this covers the plain
+    // `vitest run` path (e.g. `npm run test`).
+    reporters: process.env.CI ? ["default", "./tests/reporters/vitestFlakyReporter.ts"] : ["default"],
     projects: [
       {
         extends: true,

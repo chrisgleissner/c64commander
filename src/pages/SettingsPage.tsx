@@ -640,10 +640,6 @@ export default function SettingsPage() {
     setDeleteDependencyBusy(true);
     try {
       const summary = await getSavedDeviceDependencySummary(selectedSavedDevice.id);
-      if (summary.totalCount <= 0) {
-        await performDeleteSelectedDevice();
-        return;
-      }
       setDeleteDependencySummary(summary);
       setDeleteWarningOpen(true);
     } catch (error) {
@@ -868,8 +864,10 @@ export default function SettingsPage() {
                   const isActive = theme === option.value;
 
                   return (
-                    <button
+                    <Button
                       key={option.value}
+                      type="button"
+                      variant={isActive ? "default" : "outline"}
                       onClick={wrapUserEvent(
                         () => setTheme(option.value),
                         "select",
@@ -877,11 +875,11 @@ export default function SettingsPage() {
                         { title: option.label },
                         "ThemeOption",
                       )}
-                      className={`flex flex-col items-center gap-2 rounded-lg border p-4 transition-colors ${isActive ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground"}`}
+                      className="h-auto flex-col gap-2 whitespace-normal rounded-lg p-4"
                     >
                       <Icon className={`h-6 w-6 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
                       <span className={`text-sm ${isActive ? "font-medium" : ""}`}>{option.label}</span>
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
@@ -1129,27 +1127,47 @@ export default function SettingsPage() {
                     <AlertDialogHeader>
                       <AlertDialogTitle>Delete device?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Removing{" "}
-                        {selectedSavedDevice ? buildSavedDevicePrimaryLabel(selectedSavedDevice) : "this device"}
-                        will disconnect {deleteDependencySummary?.totalCount ?? 0} saved item
-                        {(deleteDependencySummary?.totalCount ?? 0) === 1 ? "" : "s"} that still point to it.
+                        {(deleteDependencySummary?.totalCount ?? 0) > 0 ? (
+                          <>
+                            Removing{" "}
+                            {selectedSavedDevice ? buildSavedDevicePrimaryLabel(selectedSavedDevice) : "this device"}{" "}
+                            will disconnect {deleteDependencySummary?.totalCount ?? 0} saved item
+                            {(deleteDependencySummary?.totalCount ?? 0) === 1 ? "" : "s"} that still point to it.
+                          </>
+                        ) : (
+                          <>
+                            Remove{" "}
+                            {selectedSavedDevice ? buildSavedDevicePrimaryLabel(selectedSavedDevice) : "this device"}{" "}
+                            from your saved devices? This can&apos;t be undone.
+                          </>
+                        )}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
-                    <div className="space-y-1 text-sm text-muted-foreground">
-                      <p>Those items will stay in your playlists and disk library.</p>
-                      <p>
-                        Playlist items: {deleteDependencySummary?.playlistItemCount ?? 0} item
-                        {(deleteDependencySummary?.playlistItemCount ?? 0) === 1 ? "" : "s"}
-                      </p>
-                      <p>
-                        Disk library items: {deleteDependencySummary?.diskCount ?? 0} item
-                        {(deleteDependencySummary?.diskCount ?? 0) === 1 ? "" : "s"}
-                      </p>
-                      <p>
-                        After you delete the device, those items will no longer open until you import them again or
-                        remove them.
-                      </p>
-                    </div>
+                    {(deleteDependencySummary?.totalCount ?? 0) > 0 ? (
+                      <div className="space-y-1 text-sm text-muted-foreground">
+                        <p>Those items will stay in your playlists and disk library.</p>
+                        <p>
+                          Playlist items: {deleteDependencySummary?.playlistItemCount ?? 0} item
+                          {(deleteDependencySummary?.playlistItemCount ?? 0) === 1 ? "" : "s"}
+                        </p>
+                        <p>
+                          Disk library items: {deleteDependencySummary?.diskCount ?? 0} item
+                          {(deleteDependencySummary?.diskCount ?? 0) === 1 ? "" : "s"}
+                        </p>
+                        <p>
+                          After you delete the device, those items will no longer open until you import them again or
+                          remove them.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1 text-sm text-muted-foreground">
+                        <p>
+                          Remove{" "}
+                          {selectedSavedDevice ? buildSavedDevicePrimaryLabel(selectedSavedDevice) : "this device"}{" "}
+                          from your saved devices? This can&apos;t be undone.
+                        </p>
+                      </div>
+                    )}
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                       <AlertDialogAction

@@ -13,6 +13,13 @@ import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { wrapValueChange } from "@/lib/tracing/userTrace";
 
+// NOTE: Unlike Button, the checkbox must NOT bridge touch via a synthetic
+// `element.click()` in onPointerUp. Radix's Root toggles internally on every
+// click, and the browser already emits a natural touch-click after pointerup,
+// so a synthetic click double-fires the toggle (false→true) and nets to no
+// visible change — making the control appear inert (BUG-031). The natural
+// touch-click toggles Radix once on its own; the global pointer-up interaction
+// model (buttonInteraction.ts) supplies the tap-flash for [role="checkbox"].
 const Checkbox = React.forwardRef<
   React.ElementRef<typeof CheckboxPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof CheckboxPrimitive.Root>

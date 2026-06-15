@@ -828,6 +828,35 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getAllByTestId("open-config-heatmap-screen")).toHaveLength(1);
   });
 
+  it("dismisses the overflow menu on an outside pointerdown but excludes its own trigger (BUG-032 hardening)", async () => {
+    setViewportWidth(600);
+
+    renderDialog();
+
+    const openMenu = () => fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
+    // DismissableLayer attaches its outside-pointerdown listener on a setTimeout(0),
+    // so let that microtask/timer settle before dispatching the pointerdown.
+    const settleDismissLayer = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    // An outside pointerdown closes the menu via the DismissableLayer dismiss path.
+    openMenu();
+    expect(screen.getByTestId("diagnostics-share-all")).toBeVisible();
+    await settleDismissLayer();
+    fireEvent.pointerDown(document.body);
+    await waitFor(() => expect(screen.queryByTestId("diagnostics-share-all")).toBeNull());
+
+    // A pointerdown on the trigger itself must NOT auto-dismiss — the trigger is
+    // excluded so its own click can toggle the menu shut. Without that exclusion
+    // (and with disableOutsidePointerEvents disabling the trigger), a re-tap would
+    // be swallowed instead of closing the menu.
+    openMenu();
+    await settleDismissLayer();
+    fireEvent.pointerDown(screen.getByTestId("diagnostics-overflow-menu"));
+    expect(screen.getByTestId("diagnostics-share-all")).toBeVisible();
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
+    expect(screen.queryByTestId("diagnostics-share-all")).toBeNull();
+  });
+
   it("anchors the compact diagnostics overflow panel flush to the viewport edge", () => {
     setViewportWidth(360);
 

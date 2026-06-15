@@ -37,12 +37,20 @@ import {
 } from "@/lib/diagnostics/diagnosticsReconciler";
 import { useNavigationGuardBlocker } from "@/lib/navigation/navigationGuards";
 import { tabIndexForPath } from "@/lib/navigation/tabRoutes";
+import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { t } from "@/lib/i18n";
 
 const isAbortLikeError = (error: unknown) => {
-  const name = (error as { name?: string } | undefined)?.name;
-  const message = error instanceof Error ? error.message : String(error ?? "");
-  return name === "AbortError" || /aborted/i.test(message);
+  return classifyError(error).failureClass === "user-cancellation";
+};
+
+const describeUnhandledRejectionReason = (error: unknown) => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error !== null && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+  return String(error ?? "AbortError");
 };
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import { SwipeNavigationLayer } from "@/components/SwipeNavigationLayer";
@@ -309,7 +317,7 @@ const GlobalErrorListener = () => {
       if (isAbortLikeError(event.reason)) {
         event.preventDefault();
         addLog("debug", "Ignored abort-like unhandled rejection", {
-          reason: event.reason instanceof Error ? event.reason.message : String(event.reason ?? "AbortError"),
+          reason: describeUnhandledRejectionReason(event.reason),
         });
         return;
       }

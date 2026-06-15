@@ -85,6 +85,16 @@ export function useAuthoritativeConfigValueState(options: { equals?: Authoritati
     });
   }, []);
 
+  // Drop every optimistic override so the next render reveals the authoritative
+  // device value. Used when the user explicitly re-syncs from the device
+  // (Refresh) or applies a batch reset (Audio Mixer Reset): an override that
+  // will never echo back its pinned value — because the device value changed
+  // out-of-band to something else — would otherwise stay latched until unmount
+  // (BUG-033), since resolveValue only self-clears on an exact device echo.
+  const clearAll = useCallback(() => {
+    setEntries((previous) => (Object.keys(previous).length === 0 ? previous : {}));
+  }, []);
+
   const scheduleClearEntry = useCallback(
     (key: string) => {
       if (queuedClearsRef.current.has(key)) return;
@@ -133,6 +143,7 @@ export function useAuthoritativeConfigValueState(options: { equals?: Authoritati
     replaceEntry,
     restoreEntry,
     clearEntry,
+    clearAll,
     resolveValue,
   };
 }

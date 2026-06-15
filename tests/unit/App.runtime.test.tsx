@@ -653,6 +653,33 @@ describe("App runtime wiring", () => {
     );
   });
 
+  it("ignores share-cancelled unhandled rejections from structured plugin payloads", async () => {
+    render(<App />);
+    await screen.findByText("Home Page");
+
+    const rejection = new Event("unhandledrejection", { cancelable: true });
+    Object.defineProperty(rejection, "reason", {
+      configurable: true,
+      value: { message: "Share canceled" },
+    });
+
+    act(() => {
+      window.dispatchEvent(rejection);
+    });
+
+    expect(rejection.defaultPrevented).toBe(true);
+    expect(mocks.recordTraceError).not.toHaveBeenCalledWith(expect.anything(), expect.anything());
+    expect(mocks.addErrorLog).not.toHaveBeenCalledWith(
+      "Unhandled promise rejection",
+      expect.objectContaining({ reason: expect.objectContaining({ message: "Share canceled" }) }),
+    );
+    expect(mocks.addLog).toHaveBeenCalledWith(
+      "debug",
+      "Ignored abort-like unhandled rejection",
+      expect.objectContaining({ reason: "Share canceled" }),
+    );
+  });
+
   it("records window errors against the current active action when one exists", async () => {
     const activeAction = { id: "active-action" };
     mocks.getActiveAction.mockReturnValue(activeAction);

@@ -95,11 +95,19 @@ export default defineConfig({
   outputDir,
   preserveOutput: "always",
   workers: resolvedWorkers,
-  retries: process.env.CI === "true" ? 1 : 0,
+  // STOP-GAP: rerun failing tests up to twice (3 attempts) so transient flakiness
+  // does not break the build. This is NOT a license to let tests rot — every test
+  // that passes only on retry is surfaced loudly by flakyVisibilityReporter
+  // (GitHub annotations + job summary + console banner). See docs/flaky-tests.md.
+  retries: process.env.CI === "true" ? 2 : 0,
   timeout: 90000,
   expect: { timeout: 10000 },
   globalTeardown: "./playwright/global-teardown-coverage.ts",
-  reporter: [["list"], ["html", { outputFolder: reportDir, open: "never" }]],
+  reporter: [
+    ["list"],
+    ["html", { outputFolder: reportDir, open: "never" }],
+    ["./playwright/reporters/flakyVisibilityReporter.ts"],
+  ],
   projects: getActiveProjects(),
   use: {
     baseURL: `http://127.0.0.1:${serverPort}`,

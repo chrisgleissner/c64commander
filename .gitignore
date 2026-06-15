@@ -145,6 +145,10 @@ agents/state/*
 docs/testing/agentic-tests/full-app-coverage/runs/*
 !docs/testing/agentic-tests/full-app-coverage/runs/README.md
 
+# Agentic loop working state (machine-maintained, local-only); README.md is tracked
+docs/agentic/*
+!docs/agentic/README.md
+
 # Generated research, hardening, and performance evidence
 docs/plans/hardening/
 docs/plans/performance/**/runs/

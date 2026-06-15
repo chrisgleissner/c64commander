@@ -31,6 +31,7 @@ vi.mock("@/lib/tracing/failureTaxonomy", () => ({
 }));
 
 import {
+  isBackgroundExecutionActive,
   resetBackgroundExecutionState,
   startBackgroundExecution,
   stopBackgroundExecution,
@@ -127,6 +128,16 @@ describe("backgroundExecutionManager", () => {
       reason: "stop",
     });
     expect(mocks.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports an outstanding native session via isBackgroundExecutionActive", async () => {
+    expect(isBackgroundExecutionActive()).toBe(false);
+
+    await startBackgroundExecution({ source: "playback-controller", reason: "play" });
+    expect(isBackgroundExecutionActive()).toBe(true);
+
+    await stopBackgroundExecution({ source: "playback-controller", reason: "stop" });
+    expect(isBackgroundExecutionActive()).toBe(false);
   });
 
   it("normalizes non-Error failures when start rejects", async () => {
