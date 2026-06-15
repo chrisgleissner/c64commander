@@ -81,6 +81,41 @@ describe("PlaybackControlsCard", () => {
     vi.useRealTimers();
   });
 
+  it("disables Stop with the reset-safety reason while playing when stopDisabled is set (BUG-017)", () => {
+    const onStop = vi.fn();
+    render(
+      <PlaybackControlsCard
+        {...buildProps({
+          isPlaying: true,
+          canPause: true,
+          stopDisabled: true,
+          stopDisabledReason: "Stop is disabled on a C64U for non-disk playback. Use Pause instead.",
+          onStop,
+        })}
+      />,
+    );
+
+    const stopButton = screen.getByTestId("playlist-play");
+    expect(stopButton).toBeDisabled();
+    expect(stopButton).toHaveAttribute(
+      "title",
+      "Stop is disabled on a C64U for non-disk playback. Use Pause instead.",
+    );
+    fireEvent.click(stopButton, { detail: 1 });
+    expect(onStop).not.toHaveBeenCalled();
+  });
+
+  it("keeps Stop enabled while playing when stopDisabled is not set", () => {
+    const onStop = vi.fn();
+    render(<PlaybackControlsCard {...buildProps({ isPlaying: true, canPause: true, onStop })} />);
+
+    const stopButton = screen.getByTestId("playlist-play");
+    expect(stopButton).not.toBeDisabled();
+    expect(stopButton).toHaveAttribute("title", "Stop");
+    fireEvent.click(stopButton, { detail: 1 });
+    expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps track metadata and transport controls stacked full-width", () => {
     render(
       <PlaybackControlsCard
