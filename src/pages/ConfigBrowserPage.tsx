@@ -63,6 +63,22 @@ function extractConfigItems(categoryData: ConfigResponse | undefined, categoryNa
     }));
 }
 
+// Value-equality for configured-item snapshots. extractConfigItems rebuilds a
+// fresh array (new object identities) on every render, so when the upstream
+// config data is not referentially stable, feeding `items` straight into
+// setAudioConfiguredItems would re-render forever during a re-sync (the snapshot
+// effect's `items` dep changes each render). The arrays are small and built from
+// a single normalizer, so a per-item serialized compare is deterministic and
+// lets syncAudioConfiguredItems bail on redundant identical-content updates.
+function configListItemsEqual(a: ConfigListItem[], b: ConfigListItem[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (JSON.stringify(a[i]) !== JSON.stringify(b[i])) return false;
+  }
+  return true;
+}
+
 const DHCP_STATIC_FIELDS = new Set(["Static IP", "Static Netmask", "Static Gateway", "Static DNS"]);
 const CLOCK_MONTH_OPTIONS = [
   "January",
@@ -165,8 +181,13 @@ function CategorySection({
   const isDhcpEnabled = dhcpStatus ? ["enabled", "on", "true", "yes", "1"].includes(dhcpStatus) : false;
 
   const syncAudioConfiguredItems = useCallback((next: ConfigListItem[]) => {
-    setAudioConfiguredItems(next);
+    // Bail on value-equal updates: the snapshot effect re-runs whenever `items`
+    // changes identity, and during a Reset/Refresh re-sync it feeds `items`
+    // directly. Without this guard a referentially-unstable (but value-equal)
+    // upstream would loop the effect forever (BUG-033 follow-up).
+    if (configListItemsEqual(audioConfiguredRef.current, next)) return;
     audioConfiguredRef.current = next;
+    setAudioConfiguredItems(next);
   }, []);
 
   useEffect(() => {
@@ -524,7 +545,7 @@ function CategorySection({
       // snapshot effect may have re-captured stale pre-refetch values during the
       // await window; this authoritative write reconciles the rendered values
       // (and the solo snapshot) to the post-reset device truth (BUG-033).
-      const fresh = extractConfigItems(refreshed.data, categoryName);
+      const fresh = extractConfigItems(refreshed?.data, categoryName);
       if (fresh.length) {
         syncAudioConfiguredItems(fresh);
         soloSnapshotRef.current = fresh;
@@ -567,7 +588,7 @@ function CategorySection({
       // rendered values (and the solo snapshot) reconcile to device truth even
       // if the snapshot effect re-captured stale values mid-refetch (BUG-033).
       if (isAudioMixer) {
-        const fresh = extractConfigItems(refreshed.data, categoryName);
+        const fresh = extractConfigItems(refreshed?.data, categoryName);
         if (fresh.length) {
           syncAudioConfiguredItems(fresh);
           soloSnapshotRef.current = fresh;

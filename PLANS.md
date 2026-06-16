@@ -1885,3 +1885,59 @@ Fix the confirmed prod-hardening-8 production-readiness findings in priority ord
 - Stop criteria: PLANS/WORKLOG iteration entries appended; continuation prompt confirms #84 carry-forward intact (no device/source change this loop); digest notes #85 handoff; `Ralph Robin continuation ready`.
 - Primary TODO (UNCHANGED from #84, carried): **when c64u UP — FIRST restore Drive A Drive Type 1571→1541** (left non-baseline by #84 dropout; benign, drive empty), then finish Disks selectors (Bus ID 8→11→8, Soft IEC on/reset/off, Default Path picker — all BLOCKED_INFRA #84). Then BUG-040 fix loop (Medium, top defect, needs clean worktree + exclusive build + ≥40% capacity) OR BUG-041 fix (cheap, high-value).
 - **Verdict #85: `RALPH ROBIN CONTINUATION READY` (capacity-limited handoff, allowed pre-action blocker #1).** No HIL, no source change, no build/deploy, no tests, no device mutation. droidmind_cta_action_count=0 (named blocker: 5h capacity 5%, below the 10% HIL threshold). #84 device deviation UNCHANGED and still pending: **Drive A Drive Type = 1571 on c64u (baseline 1541) — restore when c64u recovers.** No scheduler invoked (Ralph Robin owns rotation). Next: same as #84 TODO above.
+
+---
+
+# Coverage Hang Fix — ConfigBrowserPage Re-render Loop (2026-06-15)
+
+> Branch `fix/hardening-3`, HEAD `e9bdc85b`. Classification: `CODE_CHANGE` (one
+> source file: `src/pages/ConfigBrowserPage.tsx`). No UI/behaviour change in
+> production; no Android build, no device HIL. Full investigation timeline in
+> `WORKLOG.md` (section "Coverage hang fix 2026-06-15").
+
+## Problem
+
+`npm run test:coverage` (`scripts/run-unit-coverage.mjs`, 45 sequential Vitest
+batches) hung indefinitely — CI seen running >1h28m. Regression landed in
+`e9bdc85b` (Device Hardening 2). Last known-good: run 27464522591.
+
+## Root cause
+
+`src/pages/ConfigBrowserPage.tsx` `CategorySection`: the BUG-033 re-sync added a
+new snapshot-effect branch
+
+```ts
+if (resyncPendingRef.current) { syncAudioConfiguredItems(items); return; }
+```
+
+that feeds `items` straight into `setAudioConfiguredItems`. `items` is rebuilt by
+`extractConfigItems` whenever `categoryData` changes identity. While
+`resyncPendingRef.current` is true (the whole Reset/Refresh `await` window), any
+referentially-unstable-but-equal `items` → setState(new ref) → re-render → effect
+re-runs (`items` is a dep) → setState → … an **infinite synchronous re-render
+loop** that pegs one core and starves the event loop (so Vitest's event-loop
+timeout never fires → permanent hang). The old code fed the *stable*
+`soloSnapshotRef.current`, so React bailed out. Exposed by `mockUseC64Category`
+returning a fresh object each render; production react-query structural-sharing
+keeps `data` stable, so the device never looped.
+
+## Fix
+
+1. **Loop (root cause):** added `configListItemsEqual(a, b)` and made
+   `syncAudioConfiguredItems` bail when the next items are value-equal to the
+   current ones. React stops re-rendering once content matches; genuinely-changed
+   items are still adopted (BUG-033 intent preserved). Hardens the component
+   against any referentially-unstable upstream.
+2. **Latent NPE the hang masked:** `resetAudioMixer`/`handleRefresh` read
+   `refreshed.data` from `await refetch()`; the test mocks `refetch` → `undefined`
+   → `TypeError`. Made both sites `refreshed?.data` (extractConfigItems treats
+   `undefined` as `[]`). No production change (react-query always returns a
+   result object).
+
+## Verification
+
+- `ConfigBrowserPage.test.tsx`: 20/20 pass, no hang (no coverage).
+- Chunk-6 "half-B" with coverage: 90/90 (6 jsdom files; `generatePlayAssets` is
+  unit-node).
+- ESLint + Prettier clean on the changed file.
+- Full `npm run test:coverage` run to completion as the final gate.
