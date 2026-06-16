@@ -344,6 +344,11 @@ describe("useHomeActions", () => {
     // connection, before the /v1/drives poll resolves, so drivesData is still empty.
     drivesState.value = null;
     const freshDrives = { drives: [{ a: { enabled: true } }] };
+    // The cache is empty, so handleResetDrives must fetch fresh device state via
+    // api.getDrives() before resetting. Without this mock, getDrives() resolves to
+    // undefined and resetDiskDevices is never reached (regression introduced by an
+    // overzealous autofix that dropped this line).
+    getDrivesMock.mockResolvedValue(freshDrives);
     const refreshDrivesFromDevice = vi.fn().mockResolvedValue(undefined);
     const { result } = renderHook(() => useHomeActions());
 
