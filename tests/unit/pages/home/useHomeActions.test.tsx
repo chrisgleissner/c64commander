@@ -274,7 +274,7 @@ describe("useHomeActions", () => {
   });
 
   it("resets drives and printer from cached drive data, then refreshes drive data", async () => {
-    drivesState.value = { drives: [{ drive_a: { id: 1 } }] };
+    drivesState.value = { drives: [{ a: { enabled: true } }] };
     const refreshDrivesFromDevice = vi.fn().mockResolvedValue(undefined);
     const { result } = renderHook(() => useHomeActions());
 
