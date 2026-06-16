@@ -462,11 +462,10 @@ test.describe("Home interactions", () => {
     await page.goto("/");
     await waitForConnected(page);
 
-    // Wait for the drive list to load before resetting. Clicking reset before the
-    // device's /v1/drives response populates the list yields "No resettable disk
-    // devices found" — a race that fails deterministically on slower CI runners.
+    // The drive cards render from static specs, so their visibility does not imply the
+    // /v1/drives poll has resolved. handleResetDrives fetches fresh device state when the
+    // cache is still empty, so reset is safe to trigger as soon as the connection is up.
     await expect(page.getByTestId("home-drives-group")).toBeVisible();
-    await expect(page.getByTestId("home-drive-toggle-a")).toBeVisible();
 
     await page.getByTestId("home-drives-reset").click();
 

@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const statusState = { isConnected: true };
 const drivesState: { value: unknown } = { value: null };
 
-const apiMock = {};
+const getDrivesMock = vi.fn();
+const apiMock = { getDrives: getDrivesMock };
 const pauseMutateAsyncMock = vi.fn();
 const resumeMutateAsyncMock = vi.fn();
 const powerOffMutateAsyncMock = vi.fn();
@@ -137,6 +138,7 @@ describe("useHomeActions", () => {
     });
     resetDiskDevicesMock.mockResolvedValue(undefined);
     resetPrinterDeviceMock.mockResolvedValue(undefined);
+    getDrivesMock.mockResolvedValue({ drives: [] });
   });
 
   it("pauses and resumes machine execution when connected", async () => {
@@ -271,8 +273,8 @@ describe("useHomeActions", () => {
     expect(result.current.folderTaskPending).toBe(false);
   });
 
-  it("resets drives and printer, then refreshes drive data", async () => {
-    drivesState.value = { drive_a: { id: 1 } };
+  it("resets drives and printer from cached drive data, then refreshes drive data", async () => {
+    drivesState.value = { drives: [{ drive_a: { id: 1 } }] };
     const refreshDrivesFromDevice = vi.fn().mockResolvedValue(undefined);
     const { result } = renderHook(() => useHomeActions());
 
@@ -281,6 +283,8 @@ describe("useHomeActions", () => {
       await result.current.handleResetPrinter(refreshDrivesFromDevice);
     });
 
+    // Drive data is already cached, so reset must not issue an extra /v1/drives fetch.
+    expect(getDrivesMock).not.toHaveBeenCalled();
     expect(resetDiskDevicesMock).toHaveBeenCalledWith(apiMock, drivesState.value);
     expect(resetPrinterDeviceMock).toHaveBeenCalledWith(apiMock, drivesState.value);
     expect(refreshDrivesFromDevice).toHaveBeenCalledTimes(2);
@@ -335,7 +339,12 @@ describe("useHomeActions", () => {
     );
   });
 
-  it("handleResetDrives and handleResetPrinter pass null when drivesData is null (lines 213, 225)", async () => {
+  it("fetches fresh drive data before reset when the cache has not populated yet", async () => {
+    // Reproduces the race fixed on fix/reset-drives: the reset button is enabled on
+    // connection, before the /v1/drives poll resolves, so drivesData is still empty.
+    drivesState.value = null;
+    const freshDrives = { drives: [{ drive_a: { id: 1 } }] };
+    getDrivesMock.mockResolvedValue(freshDrives);
     const refreshDrivesFromDevice = vi.fn().mockResolvedValue(undefined);
     const { result } = renderHook(() => useHomeActions());
 
@@ -344,8 +353,10 @@ describe("useHomeActions", () => {
       await result.current.handleResetPrinter(refreshDrivesFromDevice);
     });
 
-    expect(resetDiskDevicesMock).toHaveBeenCalledWith(apiMock, null);
-    expect(resetPrinterDeviceMock).toHaveBeenCalledWith(apiMock, null);
+    expect(getDrivesMock).toHaveBeenCalledWith({ __c64uIntent: "user" });
+    expect(resetDiskDevicesMock).toHaveBeenCalledWith(apiMock, freshDrives);
+    expect(resetPrinterDeviceMock).toHaveBeenCalledWith(apiMock, freshDrives);
+    expect(reportUserErrorMock).not.toHaveBeenCalled();
   });
 
   it("updates a snapshot comment in the store", () => {
