@@ -343,8 +343,7 @@ describe("useHomeActions", () => {
     // Reproduces the race fixed on fix/reset-drives: the reset button is enabled on
     // connection, before the /v1/drives poll resolves, so drivesData is still empty.
     drivesState.value = null;
-    const freshDrives = { drives: [{ drive_a: { id: 1 } }] };
-    getDrivesMock.mockResolvedValue(freshDrives);
+    const freshDrives = { drives: [{ a: { enabled: true } }] };
     const refreshDrivesFromDevice = vi.fn().mockResolvedValue(undefined);
     const { result } = renderHook(() => useHomeActions());
 
