@@ -113,8 +113,14 @@ const writeBinaryFile = (filePath: string, contents: Buffer) => {
   writeFileSync(filePath, contents);
 };
 
+// A conformant 1x1 transparent RGBA PNG produced by sharp itself. It MUST be a
+// strictly-valid PNG: the previous hand-crafted fixture used a "Sub" scanline
+// filter that older libpng tolerated but libpng >= 1.6.50 (shipped with sharp
+// 0.35 / libvips 8.18) rejects on read with "vipspng: libpng read error",
+// breaking every test that compiles a variant. Using sharp's own output keeps
+// this fixture valid across future sharp/libvips upgrades. See docs/flaky-tests.md.
 const TINY_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aF9sAAAAASUVORK5CYII=",
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNgYGBgAAAABQABh6FO1AAAAABJRU5ErkJggg==",
   "base64",
 );
 
