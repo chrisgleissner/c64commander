@@ -118,7 +118,8 @@ const writeBinaryFile = (filePath: string, contents: Buffer) => {
 // filter that older libpng tolerated but libpng >= 1.6.50 (shipped with sharp
 // 0.35 / libvips 8.18) rejects on read with "vipspng: libpng read error",
 // breaking every test that compiles a variant. Using sharp's own output keeps
-// this fixture valid across future sharp/libvips upgrades. See docs/flaky-tests.md.
+// this fixture valid across future sharp/libvips upgrades (sharp uses 0.x
+// versioning, so Dependabot "minor" bumps routinely carry libvips changes).
 const TINY_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNgYGBgAAAABQABh6FO1AAAAABJRU5ErkJggg==",
   "base64",
