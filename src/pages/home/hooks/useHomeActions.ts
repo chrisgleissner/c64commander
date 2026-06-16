@@ -227,11 +227,22 @@ export function useHomeActions() {
     await handleAction(() => controls.powerOff.mutateAsync(), "Powering off...");
   });
 
+  // The drives poll resolves independently of the connection badge, so a reset can be
+  // triggered (button enabled on `isConnected`) before `drivesData` is populated. Computing
+  // reset targets from an empty payload throws "No resettable disk devices found."; fetch
+  // fresh device state in that window instead of relying on the possibly-undefined cache.
+  const resolveDrivesPayload = async () => {
+    if (drivesData?.drives?.length) {
+      return drivesData;
+    }
+    return api.getDrives({ __c64uIntent: "user" });
+  };
+
   const handleResetDrives = trace(async function handleResetDrives(refreshDrivesFromDevice: () => Promise<void>) {
     await runMachineTask(
       "reset-drives",
       async () => {
-        await resetDiskDevices(api, drivesData ?? null);
+        await resetDiskDevices(api, await resolveDrivesPayload());
         await refreshDrivesFromDevice();
       },
       "Drives reset",
@@ -243,7 +254,7 @@ export function useHomeActions() {
     await runMachineTask(
       "reset-printer",
       async () => {
-        await resetPrinterDevice(api, drivesData ?? null);
+        await resetPrinterDevice(api, await resolveDrivesPayload());
         await refreshDrivesFromDevice();
       },
       "Printer reset",

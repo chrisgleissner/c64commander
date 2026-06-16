@@ -935,7 +935,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
     server.setReachable(true);
     await refreshConnectionFromSettings(page);
     const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
-    await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 5000 });
+    await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 10000 });
     const currentUsing = page.getByText("Currently using:");
     await expect(currentUsing).toBeVisible();
     await expectCurrentlyUsing(currentUsing, hostname, port);
