@@ -836,23 +836,17 @@ describe("SettingsPage", () => {
     expect(aboutIndex).toBe(headings.length - 1);
 
     const connectionSection = screen.getByRole("heading", { name: "Connection" }).closest(".rounded-xl");
-    const configSection = screen.getByRole("heading", { name: "Config" }).closest(".rounded-xl");
+    const configHeading = screen.queryByRole("heading", { name: "Config" });
     const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-xl");
 
     expect(connectionSection).toBeTruthy();
-    expect(configSection).toBeTruthy();
+    expect(configHeading).toBeNull();
     expect(deviceSafetySection).toBeTruthy();
 
     if (connectionSection) {
       expect(within(connectionSection).queryByText("Startup Discovery Window (seconds)")).toBeNull();
       expect(within(connectionSection).queryByText("Background Rediscovery Interval (seconds)")).toBeNull();
       expect(within(connectionSection).queryByText("Discovery Probe Timeout (seconds)")).toBeNull();
-    }
-
-    if (configSection) {
-      expect(within(configSection).queryByText("Startup Discovery Window (seconds)")).toBeNull();
-      expect(within(configSection).queryByText("Background Rediscovery Interval (seconds)")).toBeNull();
-      expect(within(configSection).queryByText("Discovery Probe Timeout (seconds)")).toBeNull();
     }
 
     if (deviceSafetySection) {

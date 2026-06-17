@@ -2077,6 +2077,7 @@ keeps `data` stable, so the device never looped.
 - BUG-047 (always-on relaxed-safety warning) fixed in `SettingsPage.tsx` (gate on `isRelaxedSafetyActive`), rebuilt+redeployed, HIL-validated both ways. BUG-046 (duplicate discovery-timing fields/ids) documented OPEN (needs canonical-location decision; no UI deleted on a guess).
 - 17 droidmind CTA actions, 6 adversarial transitions, all actuation-verified. Mandatory logcat + Diagnostics-export sweep clean (all errors = c64u-down family). State restored. c64u down all loop (UI-only family).
 - droidmind_cta_action_count = 17.
+
 ## Ralph loop iteration #94 (2026-06-17, Codex) — startup
 
 - Branch `fix/hardening-4`, HEAD `37f0eeff0e5f`; working tree dirty with pre-existing hardening/source/assets/state changes (preserved). Classification: `CODE_CHANGE` + `UI_CHANGE` for BUG-046 Settings dedupe.
@@ -2087,3 +2088,68 @@ keeps `data` stable, so the device never looped.
 - Previous verdict: #93 fixed BUG-047 and opened BUG-046.
 - Selected probe family: Settings BUG-046 Device-Safety/network-timing dedupe validation. Primary TODO: remove duplicate Config-section discovery timing inputs, add a focused regression for unique controls/ids, rebuild/redeploy to Pixel 4, then droidmind-exercise Settings Network timing fields + adjacent safety/diagnostics controls with mandatory logcat + Diagnostics ZIP sweep.
 - Stop criteria: dedupe visible on Pixel (only one Startup Discovery Window and one Background Rediscovery Interval), canonical fields edit/clamp/restore with true actuation, >=8 droidmind product actions, Android Back/background adversarial transition, package logcat + Diagnostics export analyzed, CTA ledger/BUGS/digest/prompt refreshed. No coverage per Ralph HIL loop.
+
+### #94 verdict: `FIXED` (BUG-046) + `DEFECT` (BUG-048 Low) + `RALPH ROBIN CONTINUATION READY`
+- Fixed BUG-046 in `src/pages/SettingsPage.tsx`: removed duplicate Config-section discovery timing controls, kept Device Safety → Network timing canonical, and made the Config card conditional so Demo Mode disabled does not leave a blank card. Added focused regression in `tests/unit/pages/SettingsPage.test.tsx`.
+- Built/redeployed `0.8.8-rc1-b860f` to Pixel 4. HIL validated: no blank Config card between Connection and Diagnostics; Startup Discovery Window `3→9`, `99→15`, restored `3`; Background Rediscovery `0→1`, restored `5`; Discovery Probe Timeout `99→10`, restored `2.5`; Settings route survived background/foreground.
+- Mandatory diagnostics/log sweep pulled `docs/agentic/artifacts/iter94/diagnostics/c64commander-diagnostics-all-2026-06-17-2150-06Z.zip` and package logcat. Timing-control actions all succeeded, latency sample max 37ms, current health Healthy/c64u. New Low BUG-048 filed for fresh in-window HVSC filesystem/cache error logs during non-HVSC Settings route activity.
+- Validation: `npx vitest run tests/unit/pages/SettingsPage.test.tsx --testNamePattern "orders core sections and places network timing under Device Safety"`; `npm run build`; `npx cap sync android`; `cd android && ./gradlew assembleDebug`; droidmind install/start. No coverage per Ralph HIL loop.
+- Next: if prioritizing defects, run a focused HVSC diagnostics cleanup slice for BUG-048. If prioritizing unexercised hardware coverage and c64u remains healthy, resume Disks disk-row/menu/import/rename/remove-guard/rotation.
+
+## Ralph loop iteration #95 (2026-06-17, Codex) — startup
+
+- Branch `fix/hardening-4`, HEAD `b860f57d`; working tree dirty with prior hardening edits in `PLANS.md`, `WORKLOG.md`, `src/pages/SettingsPage.tsx`, and `tests/unit/pages/SettingsPage.test.tsx` (preserved). Classification: `CODE_CHANGE` only if BUG-048 is fixed this loop; otherwise HIL/state evidence only.
+- Source/APK identity: `./scripts/resolve-version.sh` = `0.8.8-rc1-b860f`; Pixel package `versionName=0.8.8-rc1-b860f`, `versionCode=2019`, attached Pixel 4 `9B081FFAZ001WX`. Current-build HIL valid; no deploy needed before the probe.
+- Peers discovered from callable namespaces/safe calls: droidmind YES (`list_devices`, `android_shell`), c64scope YES (`scope_lab_report_peer_health`), c64bridge YES (`c64_system performance_report`, VICE-backed/status only). c64bridge will not replace app-path proof.
+- Hardware start probe: c64u `/v1/info` HTTP 200 (~9 ms, C64 Ultimate fw 1.1.0); u64 `/v1/info` HTTP 200 (~18 ms, Ultimate 64 Elite fw 3.14e). No hardware mutation planned.
+- Capacity: Ralph Robin selected `codex`, 5h 76% left / weekly 96% left -> >=40% band, min 8 / target 12-20 actions.
+- Previous verdict: #94 fixed BUG-046 and opened BUG-048 Low.
+- Selected probe family: **BUG-048 HVSC diagnostics cleanup / Settings-to-Diagnostics export pack**. Primary TODO: reproduce fresh HVSC filesystem/cache diagnostics noise from non-HVSC Settings activity, inspect source if confirmed, fix only if root cause is bounded and app-controlled, then redeploy and validate with the same Pixel diagnostics export path.
+- Stop criteria: >=8 droidmind product actions, every visible safe control in the selected Settings/Diagnostics slice exercised repeatedly, Android Back/background or dialog adversarial transition, package logcat + Diagnostics ZIP pulled/analyzed, BUG/ledger/digest/prompt refreshed. No coverage or broad low-level tests per Ralph HIL loop.
+
+### #95 verdict: `INCONCLUSIVE` (BUG-048 not reproduced fresh) + `DEFECT` (BUG-049 Low) + `RALPH ROBIN CONTINUATION READY`
+
+- Ran the BUG-048 Settings/Diagnostics export/log sweep on Pixel build `0.8.8-rc1-b860f` with c64u healthy. Diagnostics open, manual health check, overflow secondary views, Share all export, Android Back cancel, and background/foreground were droidmind-driven.
+- BUG-048 did not reproduce fresh: ZIP `docs/agentic/artifacts/iter95/diagnostics/c64commander-diagnostics-all-2026-06-17-2208-54Z.zip` still retained #94 HVSC errors at 21:37Z, but scans found 0 HVSC/warn/error entries after #95 start (`22:01Z`), and package logcat had no HVSC lines. No code change made.
+- New BUG-049 Low filed: after successful Share all export and Android Back cancel, backgrounding/stopping the app emitted `E Capacitor: Couldn't save last Share's Plugin share call` in package-filtered logcat. BUG-029 in-app diagnostics export error remained fixed.
+- Mandatory diagnostics/log sweep complete: package logcat `docs/agentic/artifacts/iter95/logcat/app-package-final.log`; diagnostics ZIP pulled/unzipped/analyzed; c64u final `/v1/info` HTTP 200. Known BUG-030 Radix missing-description warnings reproduced.
+- Action budget met: 27 droidmind production interactions, 8 actuation-verified controls, 3 adversarial transitions. No build/deploy/tests/coverage; no source files changed in #95.
+- Next: prioritize BUG-049 cleanup if logcat cleanliness is selected, or run a true HVSC startup/browse cleanup slice for BUG-048 (not another non-HVSC Settings export), otherwise resume high-value Disks disk-row/menu/import/rename/remove-guard/rotation with c64u healthy.
+
+## Ralph loop iteration #96 (2026-06-17, Codex) — startup
+
+- Branch `fix/hardening-4`, HEAD `b860f57d`; working tree dirty with prior hardening/state edits in `PLANS.md`, `WORKLOG.md`, `src/pages/SettingsPage.tsx`, and `tests/unit/pages/SettingsPage.test.tsx` (preserved). Classification: HIL/state evidence unless BUG-049 receives a bounded source fix.
+- Source/APK identity: `./scripts/resolve-version.sh` = `0.8.8-rc1-b860f`; Pixel package `uk.gleissner.c64commander` version `0.8.8-rc1-b860f`, status Running. Installed build matches the current source label used for HIL.
+- Peers discovered by actual callable tools/safe calls: droidmind YES (`get_app_info`), c64scope YES (`scope_lab_report_peer_health`), c64bridge YES (`c64_system performance_report`, status only). c64bridge will not replace app-path proof.
+- Hardware start probe: c64u `/v1/info` HTTP 200 (~10 ms, C64 Ultimate fw 1.1.0); u64 `/v1/info` HTTP 200 (~11 ms, Ultimate 64 Elite fw 3.14e). No hardware mutation planned.
+- Capacity: Ralph Robin selected `codex`, 5h 65% left / weekly 95% left -> >=40% band, min 8 / target 12-20 actions.
+- Previous verdict: #95 inconclusive for BUG-048 and opened BUG-049 Low.
+- Selected probe family: **BUG-049 Diagnostics Share-all cancel/lifecycle cleanup pack**. Primary TODO: reproduce and characterize the package-logcat `E Capacitor: Couldn't save last Share's Plugin share call` across repeated Diagnostics Share-all cancel/background variants; fix only if app-controllable and bounded.
+- Stop criteria: >=8 droidmind product actions, repeated Share-all cancel and lifecycle variants with true actuation, at least one Android Back/background adversarial transition, mandatory package logcat + Diagnostics ZIP export/pull/analyze, BUG/ledger/digest/prompt refreshed. No coverage or broad low-level tests per Ralph HIL loop.
+
+### #96 verdict: `FIXED` BUG-049 + `RALPH ROBIN CONTINUATION READY`
+
+- Reproduced BUG-049 twice on the pre-fix installed build: Diagnostics `Share all` → Android Back cancel → Home emitted `E Capacitor: Couldn't save last Share's Plugin share call`; closing Diagnostics before Home still reproduced it.
+- Root-caused to Capacitor Android retaining an unpersistable pending `Share.share` activity call for `BridgeActivity.onSaveInstanceState`. Fixed in `MainActivity.kt` by clearing only pending `Share/share` activity calls before state save; added focused `MainActivityTest` regression coverage.
+- Built/redeployed fresh debug APK `android/app/build/outputs/apk/debug/c64commander-0.8.8-rc1-b860f-debug.apk` to Pixel 4. Post-fix HIL repeated both variants cleanly: 0 old Share state-save errors, one targeted `D MainActivity: Cleared unpersistable Share activity call before state save` per app-stop slice, final package log E=0/F=0.
+- Mandatory diagnostics/log sweep complete: pulled/analyzed `docs/agentic/artifacts/iter96/diagnostics/c64commander-diagnostics-all-2026-06-17-2227-07Z.zip`; package logs under `docs/agentic/artifacts/iter96/logcat/`; screenshots/UI XML under `docs/agentic/artifacts/iter96/ui/`.
+- Action budget met: 28 droidmind production interactions, 6 actuation-verified controls, 5 adversarial transitions. c64u and u64 final `/v1/info` probes HTTP 200. No coverage or broad low-level tests run.
+- Next: no open blocker/high/medium known. Highest-value follow-up is either true HVSC startup/browse cleanup for BUG-048, or Disks c64u disk-row/menu/import/rename/remove-guard/rotation after verifying Soft IEC OFF.
+## Ralph loop iteration #97 (2026-06-17, Codex) — startup
+
+- Branch `fix/hardening-4`, HEAD `b860f57d`; working tree dirty with prior hardening/source/state edits preserved. Classification: HIL/state evidence unless the Disks pack exposes a bounded app defect.
+- Runtime context selects `codex` with 5h 52% / weekly 93% remaining, so the >=40% action budget applies: minimum 8, target 12-20 droidmind production actions.
+- Digest #96 read first; source identity `./scripts/resolve-version.sh` = `0.8.8-rc1-b860f`; Pixel package `uk.gleissner.c64commander` version `0.8.8-rc1-b860f`, status Running. Current-build HIL is valid without rebuild at startup.
+- Peer discovery by actual callable tools/safe calls: droidmind YES (`list_devices`, `get_app_info`, foreground); c64scope YES (`scope_lab_get_lab_state`, lab peers unknown until reported); c64bridge YES (`c64_config info`) but VICE-backed/status only, not a c64u oracle.
+- Hardware startup probe: c64u `/v1/info` HTTP 200 in ~10 ms (C64 Ultimate fw 1.1.0); u64 `/v1/info` HTTP 200 in ~11 ms (Ultimate 64 Elite fw 3.14e). c64u selected as primary.
+- Selected probe family: **Disks c64u disk-row/menu/import/rename/remove-guard/rotation after Soft IEC sanity**. Primary TODO: verify Soft IEC is not left enabled from #90, then use droidmind to exercise safe Disks library/import/row/menu/guard controls on current build, with package logcat and Diagnostics ZIP export/pull/analyze.
+- Stop criteria: exhaust visible safe Disks controls with repeated true actuation, avoid destructive delete completion, restore any changed disk/app state, >=1 adversarial transition, mandatory diagnostics/log sweep, batch CTA ledger/digest/prompt refresh. No coverage or broad low-level tests per Ralph HIL loop.
+
+### #97 verdict: `CLEAN PASS` + known `BUG-045` reproduced + `RALPH ROBIN CONTINUATION READY`
+
+- Disks c64u disk-row/import/menu/mount/eject pack completed on current Pixel build `0.8.8-rc1-b860f`: imported one safe C64U disk image (`/USB0/Games/3D_Pinball.d64`) into the local disk collection, exercised row selection, bulk/per-item remove guard cancel paths, item menu Back, Rename cancel, Set group cancel, View all, list filter/clear, app-driven Drive A mount, and Drive A eject/restore.
+- c64u product effect was clean: `PUT /v1/drives/a:mount?...3D_Pinball.d64` HTTP 200 in 720ms, then `PUT /v1/drives/a:remove` HTTP 200 in 164ms. Final c64u `/v1/drives` shows Drive A/B empty, Soft IEC OFF, no errors; c64u and u64 final `/v1/info` HTTP 200.
+- Known BUG-045 reproduced: at the default Disks entry, the visible `Add disks` area still overlaps the bottom TabBar enough that an Add tap routed to Settings. Scrolling made the control reachable; no new defect filed.
+- Mandatory diagnostics/log sweep complete: ZIP `docs/agentic/artifacts/iter97/diagnostics/c64commander-diagnostics-all-2026-06-17-2246-31Z.zip` pulled/analyzed; final package log `docs/agentic/artifacts/iter97/logcat/app-package-final.log` had E=0/F=0. Fresh diagnostics warn/error entries after #97 start: 0; retained old BUG-048/#94 errors only. Known BUG-030 Radix warnings reproduced.
+- Action budget met: ~80 droidmind production actions, 9 adversarial transitions, 35 actuation-verified controls, 0 synthetic-only clean controls. No source code changed; no build/deploy/tests/coverage run.
+- Next: highest-value follow-up is either fix/validate BUG-045 Disks bottom TabBar overlap now that it has fresh current-build repro, or a true HVSC startup/browse cleanup slice for BUG-048.

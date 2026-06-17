@@ -9,6 +9,8 @@
 package uk.gleissner.c64commander
 
 import com.getcapacitor.BridgeActivity
+import com.getcapacitor.JSObject
+import com.getcapacitor.PluginCall
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -66,6 +68,38 @@ class MainActivityTest {
         it.msg?.contains("MimeMap prewarm failed; continuing without prewarm") == true
       },
     )
+  }
+
+  @Test
+  fun clearUnpersistableShareActivityCallClearsOnlyShareShareCalls() {
+    val activity = MainActivity()
+    val shareCall = PluginCall(null, "Share", "callback-1", "share", JSObject())
+    var cleared = false
+
+    val didClear =
+      activity.clearUnpersistableShareActivityCall(
+        getPendingCall = { shareCall },
+        clearPendingCall = { cleared = true },
+      )
+
+    assertTrue(didClear)
+    assertTrue(cleared)
+  }
+
+  @Test
+  fun clearUnpersistableShareActivityCallLeavesOtherActivityCallsIntact() {
+    val activity = MainActivity()
+    val browserCall = PluginCall(null, "Browser", "callback-2", "open", JSObject())
+    var cleared = false
+
+    val didClear =
+      activity.clearUnpersistableShareActivityCall(
+        getPendingCall = { browserCall },
+        clearPendingCall = { cleared = true },
+      )
+
+    assertFalse(didClear)
+    assertFalse(cleared)
   }
 
   @Test

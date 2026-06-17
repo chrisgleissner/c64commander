@@ -1397,21 +1397,21 @@ export default function SettingsPage() {
           </ProfileSplitSection>
 
           {/* 5. Config */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="bg-card border border-border rounded-xl p-4 space-y-4"
-          >
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Cpu className="h-5 w-5 text-primary" />
+          {demoModeFeatureEnabled ? (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="bg-card border border-border rounded-xl p-4 space-y-4"
+            >
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Cpu className="h-5 w-5 text-primary" />
+                </div>
+                <h2 className="font-medium">Config</h2>
               </div>
-              <h2 className="font-medium">Config</h2>
-            </div>
 
-            <div className="space-y-4">
-              {demoModeFeatureEnabled ? (
+              <div className="space-y-4">
                 <div className="flex items-start justify-between gap-3 min-w-0">
                   <div className="space-y-1 min-w-0">
                     <Label htmlFor="demo-mode-enabled" className="font-medium">
@@ -1431,9 +1431,9 @@ export default function SettingsPage() {
                     }}
                   />
                 </div>
-              ) : null}
-            </div>
-          </motion.div>
+              </div>
+            </motion.div>
+          ) : null}
 
           {featureGroups.map((group, index) => (
             <motion.div
