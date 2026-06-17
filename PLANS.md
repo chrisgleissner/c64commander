@@ -1722,6 +1722,17 @@ Fix the confirmed prod-hardening-8 production-readiness findings in priority ord
 - Primary TODO: fix + current-build HIL-validate BUG-037 (unguarded dependency-free saved-device delete now requires confirmation).
 - **Verdict #70: `FIXED` + `CLEAN PASS` (Settings device-management) — BUG-037 fixed + current-build HIL-validated (`0.8.7-rc3-d05c7`).** 16 droidmind CTA actions (>=40% band min 8 / target 12-20 EXCEEDED), 3 adversarial (Android Back from dialog, background/foreground, target-switch while offline-probe in flight). **BUG-037 FIXED**: dependency-free 🗑 now opens a confirm `AlertDialog` (Cancel keeps / Android Back closes-no-delete / Delete device removes). **Sub-bug found+fixed same loop**: first fix put the body text in `sr-only` `<AlertDialogDescription>` → empty dialog; re-fixed to visible content `<div>` (rebuilt+reinstalled+re-validated). BUG-036 re-validated holding across 4 u64↔c64u↔c64u-2 switches (correct U64 HEALTHY / C64U IDLE→OFFLINE, no stale). All actions actuation-verified via diagnostics actions trace (outcome=success, errs=None). logcat + Diagnostics ZIP sweeps clean (only c64u-offline Host-unreachable + benign mDNS invalidation; latency >1s samples are all `/v1/info` probes to DOWN c64u). c64u DOWN whole loop (UI-/app-storage family; u64 only for HEALTHY switch checks; c64u follow-up still required); UltiSID untouched; throwaways removed; active target restored to c64u. **Fix UNCOMMITTED** (working tree `M src/pages/SettingsPage.tsx`), built into installed APK. BUG-035 re-confirmed OPEN (Home/Settings header `App 0.7.9-rc1`). `RALPH ROBIN CONTINUATION READY`; no scheduler invoked. Next family: commit BUG-037+BUG-036 (clear stale-label confusion); then Config selector successful write-back on HEALTHY c64u (re-probe first) or u64 fallback; then Play+c64scope (no recent A/V evidence); fix BUG-035 (trivial, opportunistic on next rebuild).
 
+## Ralph loop iteration #86 (2026-06-17, Codex) — Disks disk-list/menu/guard UI pack on current `fix/hardening-4`
+- Branch `fix/hardening-4`, HEAD `37f0eeff` (`deps: Bump the "weekly-rollup" group with 3 updates across multiple ecosystems (#279)`); `git status --short --branch` clean at startup. `resolve-version.sh` = `0.8.8-rc1`.
+- Digest was stale (last substantive context from old `fix/hardening-2` / #85). Read digest first, then latest PLANS/WORKLOG tails and Disks ledger/features rows needed for selection.
+- Installed Pixel APK at startup = `0.8.7-rc3-ed5cd`, not source label `0.8.8-rc1` → rebuild/deploy required before any current-build HIL claim.
+- Peers discovered through actual tool namespaces/calls: droidmind Pixel 4 `9B081FFAZ001WX` callable; c64scope namespace callable; c64bridge callable but reports VICE (`127.0.0.1:6502`), so it is not a c64u/u64 oracle this loop.
+- Hardware probe: `u64` HTTP 200 healthy; `c64u` timed out after 3s. The pending c64u Drive A type restore remains blocked until c64u recovers.
+- Capacity: Ralph Robin selected `codex`, 5h 98% / weekly 11% → `>=40%` band (minimum 8 production actions, target 12-20, at least one adversarial transition).
+- Selected family: **Disks disk-list/menu/guard UI pack** on Pixel 4 current build after deploy: filter invalid/valid/clear, disk-row select/deselect, bulk remove guard cancel, item menu open, Details/Config info, Set group no-op/cancel, Rename open/cancel, single remove guard cancel, View all open/back if visible, Diagnostics export/log sweep. Hardware mutation is avoided because c64u is down; u64 fallback is available but not needed for this UI/app-storage slice.
+- Stop criteria: deploy source-matching APK, launch via droidmind, enumerate visible Disks controls, exercise every safe visible control repeatedly with actuation evidence, include Android Back/dialog/menu adversarial transition, collect package-filtered logcat and Diagnostics ZIP, update WORKLOG/CTA ledger/digest/prompt, and leave c64u restore explicitly pending.
+- **Verdict #86: `FIXED` + `CLEAN PASS` (Disks selector/dialog/filter UI pack on current `0.8.8-rc1-37f0e`).** Setup found and fixed BUG-044: in-app/WebView version still displayed stale `0.8.7-rc3` because package metadata lagged the `0.8.8-rc1` Git tag and generated native version label. Bumped `package.json` + root `package-lock.json` to `0.8.8-rc1`, added release-metadata regression test, rebuilt, fully uninstalled/reinstalled on Pixel 4 due versionCode downgrade, and verified Home + Diagnostics show `0.8.8-rc1-37f0e`. HIL pack: 19 visible controls classified, 12 safe controls exercised, 49 droidmind CTA/control actions, 5 adversarial Back/share-sheet transitions. Drive/Soft IEC selectors, mount/add dialogs, filters, empty Select all, and Diagnostics export all behaved cleanly; no hardware commit/destructive action completed. Package-filtered logcat: 0 app errors/FATAL/ANR; one benign WebView Autofill warning. Diagnostics ZIP pulled/analyzed: 99 actions, 0 failed; 17 startup c64u mDNS/host errors attributed before the probe; latency 0 over-budget. c64u recovered by end; read-only `/v1/drives` showed Drive A restored to `1541` bus8 empty, resolving the #84 deviation by evidence. Coverage not run per HIL policy. `RALPH ROBIN CONTINUATION READY`; no scheduler invoked.
+
 ## Ralph loop iteration #71 (2026-06-15, Claude) — Settings connection/diagnostics/persistence family + BUG-035 verify (>=40% capacity)
 - Branch `fix/hardening-2`, HEAD `d05c7a7a`. git status pre-loop: M PLANS.md, M WORKLOG.md, M src/pages/SettingsPage.tsx (BUG-037 fix UNCOMMITTED, in installed APK). Source label `0.8.7-rc3-d05c7`.
 - Installed APK `0.8.7-rc3-d05c7` == resolve-version.sh == get_app_info → **current-build HIL VALID** (no rebuild needed unless BUG-035 turns real).
@@ -1941,3 +1952,138 @@ keeps `data` stable, so the device never looped.
   unit-node).
 - ESLint + Prettier clean on the changed file.
 - Full `npm run test:coverage` run to completion as the final gate.
+
+## Ralph loop iteration #87 (2026-06-17, Claude/Opus)
+
+- **Branch** `fix/hardening-4`; HEAD `37f0eeff`; working tree: icon/version assets + state files modified, `tests/unit/scripts/releaseVersionMetadata.test.ts` untracked (from #86). Installed APK `0.8.8-rc1-37f0e` == source identity → current build.
+- **Peers:** droidmind callable (UI dump + screenshot OK). c64scope/c64bridge namespaces present; c64bridge is VICE-backed (not a c64u oracle). **c64u HEALTHY** (badge "Connected to c64u, system healthy"; REST `http://c64u/v1/info` 200; resolves via mDNS from host). u64 not needed.
+- **Capacity:** Ralph claude 5h 97% left (>=40% band → min 8, target 12-20 actions, >=1 adversarial).
+- **Prev verdict:** #86 FIXED+CLEAN PASS (BUG-044 version label). #85 was capacity handoff.
+- **Selected family:** Disks **drive/IEC selector + power + reset round-trips on c64u** — exactly the `BLOCKED_INFRA` rows from #84 (Bus ID, Soft IEC, Default Path), now unblocked by healthy c64u. REST `/v1/configs/*` + `/v1/drives` read-back oracle.
+- **Baseline (REST):** Drive A enabled/bus8/1541; Drive B disabled/bus9/1541; IEC disabled/bus11/DOS `/USB0/`; Printer disabled/bus4. (Drive A already 1541 → #84 pending-1571-restore is moot.)
+- **Stop criteria:** exhaust safe selector/power/reset controls (each multiple times, REST-verified), >=1 adversarial transition, diagnostics+logcat sweep, restore ALL to baseline, then hand off. Pivot to UI-only family if c64u drops.
+- **Primary TODO:** Drive A/B Bus ID + Drive Type round-trips, Soft IEC reset + Default Path open/cancel, Drive B power round-trip, all REST-confirmed and restored.
+
+## Ralph loop iteration #88 (2026-06-17, Claude/Opus)
+
+- **Branch** `fix/hardening-4`; HEAD `37f0eeff`; installed APK `0.8.8-rc1-37f0e` == source → current build. Working tree: icon/version assets + state files (pre-existing from #86/#87).
+- **Peers:** droidmind callable (app started). c64u HEALTHY (`http://c64u/v1/info` 200, fw 1.1.0 id 5D4E12). c64scope namespace present (for SID A/V if needed). c64bridge VICE-backed (not c64u oracle).
+- **Capacity:** Ralph claude 5h ~87% left (>=40% band → min 8, target 12-20 actions, >=1 adversarial).
+- **Prev verdict:** #87 CLEAN PASS (Disks drive/IEC family closed).
+- **Selected family:** **Play background-execution / lifecycle (BUG-040)** — top open Medium. Reproduce on current build: start c64u SID playback, sample `dumpsys power` Wake Locks + `BgExecService` logcat across Play→other-tab nav + background/lock, confirm premature wake-lock release when backgrounding from a non-Play route. Root-cause in source; if a safe bounded fix is clear, fix→deploy→revalidate, else refine BUG-040 with current evidence + hand off.
+- **Stop criteria:** confirm/deny BUG-040 on current build with dumpsys+logcat evidence; exercise Play transport + tab-nav + background/lock lifecycle CTAs (each repeated), >=1 adversarial transition; diagnostics+logcat sweep; restore UltiSID to 0 dB + Stop/Pause cleanup; then fix-or-handoff.
+- **Primary TODO:** current-build BUG-040 reproduction with wake-lock evidence on c64u SID playback.
+
+### #88 VERDICT: FIXED + CLEAN PASS — BUG-040 (top open Medium) root-caused, fixed at source, HIL-validated on current build.
+
+- **Root cause (CDP+logcat proven):** transient 2nd PlayFilesPage instance during SwipeNav transition adopts the active bg-exec session (`isBackgroundExecutionActive()`=true) but is isPlaying=false before its async session restore → its policy effect/unmount cleanup tears down the live FGS/wake lock. BUG-025 sibling (premature STOP by adopter, not double START). Real instance correctly KEEPS (logs "Leaving guard active"); transient then "Service stopping". Persisted session isPlaying:true while dumpsys size=0.
+- **Fix:** `src/pages/PlayFilesPage.tsx` `hasObservedActivePlaybackRef` — only an instance that observed isPlaying=true may release bg-exec (main stop effect + unmount cleanup early-return when false, keeping the adopted flag so no double-start). Uncommitted; APK rebuilt/reinstalled `0.8.8-rc1-37f0e`.
+- **HIL-validated (c64u HEALTHY, SID):** nav Play→Home while playing → `size=1` held (was 0); background from Home → `size=1`, `F/S/FGS` protected (was 0/prev-LAST); Pause→`size=0`; Resume→re-acquire. Unit +2 cases 7/7; persistence/controller 93/93. UltiSID restored, c64u healthy.
+- **Open Medium defects after #88: NONE** (BUG-040 was the last open Medium). Remaining open: BUG-041 (Low/borderline), BUG-039/042/043/038/030/022 (Low). Next: c64scope A/V over the fixed nav/lock cycle + screen lock/unlock variant; then Low-defect sweep or release gate.
+- **Note:** fix is uncommitted in working tree (maintainer commits). Stop NOT used on c64u SID (Pause per safety policy); c64u not reset.
+
+## Ralph loop iteration #89 (2026-06-17, Codex) — Play c64scope A/V + screen lock/unlock over fixed bg-exec cycle
+
+- Branch `fix/hardening-4`, HEAD `37f0eeff`; git status includes pre-existing uncommitted BUG-040 fix/test plus icon/version/package assets and state files. Installed APK identity `0.8.8-rc1-37f0e` == `./scripts/resolve-version.sh` == source identity, so current-build HIL is valid without rebuild.
+- Peers discovered callable from actual tool namespaces: droidmind, mobile-mcp, c64scope, c64bridge. c64bridge is stream/setup only for this loop, not a product-action oracle.
+- Hardware start probe: c64u HEALTHY (`http://c64u/v1/info` HTTP 200, ~9.6 ms) and u64 HEALTHY (HTTP 200, ~15.8 ms). c64u selected as primary.
+- Capacity: Ralph Robin selected provider `codex`, 5h 82% left / weekly 8% left. Binding weekly 8% normally maps to 5-9%, but the injected runtime explicitly directs current provider usable for this loop; reduced scope if needed. Target: complete one bounded Play follow-up pack and hand off.
+- Selected family: Play playback background-execution A/V follow-up — start a safe SID on c64u, capture c64scope audio over Play->Home, Android Home background, screen lock/unlock, foreground, Play return, Pause/Resume cleanup. Do not use c64u Stop for SID; use Pause and restore UltiSID to 0 dB on cleanup.
+- Stop criteria: >=8 droidmind-driven product actions if capacity allows, at least one adversarial screen lock/unlock while playing, c64scope audio RMS evidence over the fixed nav/background cycle, wake-lock evidence remains held until Pause, package logcat + Diagnostics ZIP pulled/analyzed, final device/audio state restored, CTA ledger/digest/prompt refreshed. No coverage or broad local tests.
+
+### #89 VERDICT: CLEAN PASS + RALPH ROBIN CONTINUATION READY — Play c64scope A/V + screen lock/unlock follow-up closed
+
+- Current-build Pixel 4/c64u HIL succeeded on installed `0.8.8-rc1-37f0e`; no build/deploy needed and no source changed this loop.
+- c64scope run `pt-20260617T195555Z` finalized pass. SID audio stayed continuous across Resume, Play->Home while playing, Android Home background from Home, screen lock/doze, unlock/foreground, and return to Play. RMS stayed ~`0.01053`, packet drops 0 in every copied capture.
+- BUG-040 follow-up closed: `c64commander:background_execution` wake lock/FGS stayed active through route-away/background/lock and was absent after natural release observation. No c64u dropout; c64u and u64 both HTTP 200 at final probe.
+- Mandatory diagnostics/log sweep complete: Diagnostics ZIP `docs/agentic/artifacts/iter89/diagnostics/c64commander-diagnostics-all-2026-06-17-2002-59Z.zip` pulled/analyzed; health Healthy/problemCount 0; latencySamples 19 max 461ms; 0 in-pack diagnostics error/warn entries. Package logcat E/F=0; only two Android predictive-back W lines, plus five info-level `Capacitor/Console Msg: undefined` lines.
+- Action count: 14 droidmind product actions, 4 adversarial transitions, visible Play family controls classified; c64u SID Stop left BLOCKED_SAFE and never tapped. CTA ledger updated for Play bg-exec/A-V/background plus Diagnostics latency/export rows.
+- Remaining next work: Low-defect sweep or another unexercised production family; recommended next family is Disks disk-row/mount/menu re-population on c64u, or BUG-041 health-staleness fix/validation if selected as next highest user-facing risk.
+
+## Ralph loop iteration #90 (2026-06-17, Codex) — Disks disk-row/library UI pack with c64u-dropout pivot
+
+- Branch `fix/hardening-4`, HEAD `37f0eeff`; working tree already dirty with pre-existing #88 BUG-040 fix/test, icon/version/package assets, package files, and state files. No unrelated changes reverted.
+- Source/APK identity: `./scripts/resolve-version.sh` = `0.8.8-rc1-37f0e`; Pixel package `versionName=0.8.8-rc1-37f0e`, app running. Current-build HIL valid; no rebuild needed at startup.
+- Peer discovery: droidmind, mobile-mcp, c64scope, and c64bridge tool namespaces are callable. c64scope is not expected for this non-A/V Disks UI/library pack; c64bridge use remains limited to setup/state support and will not replace app-path proof.
+- Hardware start probe: c64u `http://c64u/v1/info` failed immediately with `Recv failure: Connection reset by peer` / HTTP 000; u64 healthy HTTP 200 (~10.5 ms, Ultimate 64 Elite fw 3.14e). Per dropout policy, stop further c64u traffic and pivot inside the selected family to safe UI/library controls plus diagnostics mining rather than ending early.
+- Capacity: Ralph Robin selected provider `codex`, 5h 72% left / weekly 7% left, explicitly marked usable by injected runtime. Run one bounded probe pack; meet >=8 droidmind product actions if safe.
+- Selected family: Disks disk-row/library management UI pack after the disk library was empty in #86. Primary TODO: foreground `/disks`, enumerate visible controls, exercise safe row/library controls (Add disks sheet, filter, select-all, view/all or empty-state controls, menu/guard paths if a throwaway row is present or cheaply importable), perform Android Back/dialog adversarial paths, then mandatory logcat + Diagnostics ZIP export/analyze.
+- Stop criteria: no destructive disk deletion; no c64u-mutating actions while c64u is in reset/dropout state; >=8 verified droidmind product actions if reachable; package-filtered logcat plus Diagnostics export pulled/analyzed; CTA ledger/digest/prompt refreshed; state restored.
+
+### #90 VERDICT: DEFECT + RALPH ROBIN CONTINUATION READY — Disks empty-library UI pack completed; c64u dropout documented
+
+- Current-build Pixel 4 evidence stayed valid (`0.8.8-rc1-37f0e` installed == source label); no build/deploy needed and no source code changed.
+- c64u was already failing at startup (`/v1/info` reset-by-peer / HTTP 000). The loop pivoted to safe Disks UI/library controls and diagnostics mining; u64 was healthy at startup. No intentional c64u hardware pack was run.
+- Disks empty-library/source-sheet/mount-dialog/filter/select/diagnostics pack completed: 32 droidmind product actions, 5 adversarial transitions, 14 actuation-verified controls, 0 synthetic-only clean verdicts. Add disks sheet cancel/back, filter type/clear, empty Select all repeat, Drive B mount empty filter/back, Soft IEC Default Path cancel, Soft IEC Bus ID open/back, Diagnostics Latency/Share-all all exercised cleanly.
+- New **BUG-045 Low** filed: at Disks entry the disk-list `Add disks`/`Select all` area can sit partly under the fixed bottom TabBar; the first Add tap hit Settings instead of the button. Scrolling makes controls reachable.
+- c64u incident #90 recorded: app Diagnostics/logcat correctly attributed c64u unreachable state (`healthSnapshot` Unhealthy/problemCount 35). An accidental stale-coordinate Soft IEC enable attempt failed with retry-once + inline `Connection reset`; final Soft IEC hardware state is unverified because further c64u traffic was stopped.
+- Mandatory diagnostics/log sweep complete: ZIP `docs/agentic/artifacts/iter90/diagnostics/c64commander-diagnostics-all-2026-06-17-2015-02Z.zip` pulled/analyzed; package logcat `docs/agentic/artifacts/iter90/logcat/app-package-full.log` inspected. No crash/ANR/fatal; errors are attributed to c64u `Connection reset`/`Host unreachable` and expected Share-canceled.
+- CTA ledger updated for Disks Add/filter/select/mount/Soft IEC rows and BUG-045. Open issues after #90: no blocker/high/medium known; Low/borderline open defects include BUG-045, BUG-043, BUG-042, BUG-041, BUG-039, BUG-038, BUG-030, BUG-022.
+- Next: when c64u is healthy, verify Soft IEC remains OFF, then either import/repopulate a safe test disk and exercise disk-row menu/rename/group/remove-guard, or run the BUG-045 layout fix/validation if UI polish is prioritized.
+
+## Ralph loop iteration #91 (2026-06-17, Codex) — Settings UI-only persistence/About pack while c64u remains down
+
+- Branch `fix/hardening-4`, HEAD `37f0eeff`; working tree already dirty with #88 BUG-040 fix/test, icon/version/package assets, package files, #90 state docs, and local artifacts. No unrelated changes reverted.
+- Source/APK identity: `./scripts/resolve-version.sh` = `0.8.8-rc1-37f0e`; Pixel package `versionName=0.8.8-rc1-37f0e`, app running. Current-build HIL valid; no rebuild needed at startup.
+- Peer discovery from callable tools: droidmind YES; mobile-mcp YES; c64scope YES (`scope_lab_get_lab_state` callable, peers unknown until reported); c64bridge YES (`performance_report` callable, VICE-backed idle). c64scope not expected for this non-A/V Settings pack; c64bridge will not replace app-path proof.
+- Hardware start probe: c64u `http://c64u/v1/info` failed immediately (`Recv failure: Connection reset by peer`, HTTP 000); u64 healthy HTTP 200 (~13.6 ms). Per dropout policy, stop c64u traffic and use a safe UI-only production family.
+- Capacity: Ralph Robin selected provider `codex`, 5h 66% left / weekly 6% left, marked usable. Bounded probe pack selected; target 12-20 droidmind actions and minimum 8 if safe.
+- Selected family: Settings UI-only persistence/About pack. Primary TODO: foreground `/settings`, enumerate visible controls, exercise safe local controls (theme/display/rotation where visible), About/Open Source Licenses close flow and external REST API link, Android Back/background-foreground adversarial paths, then mandatory package logcat + Diagnostics ZIP export/pull/analyze.
+- Stop criteria: no c64u-mutating actions while c64u is in reset/dropout state; >=8 verified droidmind product actions if reachable; package-filtered logcat plus Diagnostics export pulled/analyzed; CTA ledger/digest/prompt refreshed; local preferences restored where changed.
+
+### #91 VERDICT: CLEAN PASS + RALPH ROBIN CONTINUATION READY — Settings appearance/SAF/transfer/diagnostics pack completed
+
+- Current-build Pixel 4 evidence stayed valid (`0.8.8-rc1-37f0e` installed == source label); no build/deploy needed and no source code changed.
+- c64u remained failing at startup (`/v1/info` reset-by-peer / HTTP 000). The loop avoided intentional c64u-mutating controls and used a safe Settings UI-only pack. u64 was healthy at startup.
+- Settings UI-only pack completed: 58 droidmind product actions, 7 adversarial transitions, 27 actuation-verified controls, 0 synthetic-only clean verdicts. Theme Light/Dark/Auto, Display Small/Large/Standard/Auto, auto-rotation on/off restore, SAF List persisted URIs repeat, Export settings, Import settings DocumentsUI open/cancel, Diagnostics secondary views, heat-map toggles, Config Drift refresh read-only, and Share-all export all exercised.
+- No new product defect filed. Known BUG-030 reproduced as three Diagnostics secondary-dialog Radix missing-description warnings. Logcat E lines were attributed to c64u periodic `/v1/info` connection resets; no crash/ANR/fatal/StrictMode.
+- Mandatory diagnostics/log sweep complete: ZIP `docs/agentic/artifacts/iter91/diagnostics/c64commander-diagnostics-all-2026-06-17-2031-00Z.zip` pulled/analyzed; package logcat `docs/agentic/artifacts/iter91/logcat/app-package-full.log` inspected. ZIP healthSnapshot Unhealthy/problemCount 21; latencySamples count 2, max 52ms; versionLabel `0.8.8-rc1-37f0e`.
+- CTA ledger updated for Settings appearance, SAF, transfer, Diagnostics views/export/logcat, and lower Settings controls classified as planned. Open issues after #91: no blocker/high/medium known; Low/borderline open defects remain BUG-045, BUG-043, BUG-042, BUG-041, BUG-039, BUG-038, BUG-030, BUG-022.
+- Next: if c64u is healthy, verify Soft IEC remains OFF and re-populate/import a safe test disk for Disks disk-row/menu/group/rename/remove-guard/rotation. If c64u remains unhealthy, a focused Settings About/Open Source Licenses external-link slice or BUG-045 layout fix/validation is the next safe UI-only option.
+
+## Ralph loop iteration #92 (2026-06-17, Claude) — Settings lower-fields / About / Open Source Licenses UI-only pack while c64u down
+
+- Branch `fix/hardening-4`, HEAD `37f0eeff`; working tree dirty with pre-existing #88 BUG-040 fix/test, icon/version/package assets, package files, and #90/#91 state docs/artifacts. No unrelated changes reverted.
+- Source/APK identity: `./scripts/resolve-version.sh` = `0.8.8-rc1-37f0e`; Pixel `get_app_info` versionName `0.8.8-rc1-37f0e`, Running. Current-build HIL valid; no rebuild.
+- Peer discovery from callable tool namespace: droidmind YES; mobile-mcp YES; c64scope YES (`scope_*` callable); c64bridge YES (`c64_system` callable, VICE-backed). c64scope not expected for non-A/V Settings pack; c64bridge will not replace app-path proof.
+- Hardware start probe: c64u `http://c64u/v1/info` HTTP 000 (connection reset, immediate); u64 healthy HTTP 200 (~12.6 ms). Per dropout policy, no c64u-mutating actions; use safe UI-only family. Matches c64u flakiness/down state from #90/#91.
+- Capacity: Ralph Robin selected provider `claude`, 5h 65% left / weekly 6% left, marked usable. >=40% on 5h window → target 12-20 droidmind actions, min 8; weekly tight so avoid source edits / long fix loops.
+- Selected family: Settings lower-fields / About / Open Source Licenses external-link UI-only pack (PLANNED carry-forward from #91 where About was not reached). Primary TODO: foreground `/settings`, scroll to lower controls + About, enumerate/classify visible controls, exercise safe local controls (feature flags, HVSC override field, About accordions, Open Source Licenses open/close, REST API external link guard), Android Back / background-foreground adversarial paths, mandatory package logcat + Diagnostics ZIP export/pull/analyze, restore preferences.
+- Stop criteria: no c64u-mutating actions; >=8 verified droidmind product actions; package-filtered logcat + Diagnostics export pulled/analyzed; CTA ledger/digest/prompt refreshed; local preferences restored.
+
+### #92 VERDICT: CLEAN PASS + RALPH ROBIN CONTINUATION READY — Settings lower-fields/HVSC/CommoServe/About pack
+
+- Current-build Pixel 4 evidence valid (`0.8.8-rc1-37f0e` installed == source); no build/deploy, no source change.
+- c64u down all loop (`/v1/info` HTTP 000); u64 healthy. No c64u-mutating action. UI-only family per dropout policy.
+- ~24 droidmind production CTA actions, 6 adversarial transitions, 8 actuation-verified controls (0 synthetic-only). Exercised CLEAN: 3 Home-Telnet feature flags (on/off restore), HVSC base URL override (commit-on-blur + clear), HVSC update interval (min-1 clamp), CommoServe Host override (valid/invalid-fallback+inline-error/clear), CommoServe Client-Id override (set/clear), About `Ultimate REST API Documentation` external link, `Open Source Licenses` dialog, Diagnostics open + Share-all export. Lifecycle background/foreground persisted all state.
+- No new product defect. healthSnapshot Idle/Online/problemCount 0 while c64u down is adjacent to existing BUG-041 (not new; app-bar honestly shows "IDLE"). Diagnostics export: every #92 user action outcome=success; zero user-origin errors; all error-logs are c64u/#90 carryover. Logcat: no crash/ANR/fatal/StrictMode; all E/W attributed (c64u resets, Pixel perf_hint, WebView autofill, OnBackInvokedCallback, Share lifecycle). Export timestamps UTC vs UI local BST (verified equivalence, no staleness).
+- Diagnostics ZIP `docs/agentic/artifacts/iter92/diagnostics/c64commander-diagnostics-all-2026-06-17-2049-33Z.zip` pulled/analyzed; package logcat `docs/agentic/artifacts/iter92/logcat/app-package-full.log` inspected.
+- All changed settings restored (flags OFF, HVSC blank/interval 7, CommoServe overrides cleared). CTA ledger batch-updated for all exercised + PLANNED controls.
+- Remaining in Settings family (PLANNED): CommoServe User-Agent override; `Open archive browser` (NEEDS_SETUP/network); Device Safety mode selector; Network timing + resilience numeric fields; `Reset to mode defaults`; Allow-circuit-override toggle; Notifications Visibility selector + Duration Radix slider (needs real drag).
+- Next: if c64u healthy → Soft IEC verify + Disks disk-row/menu/rename/rotation; if c64u down → Settings resilience/Device-Safety/Notifications persistence pack OR BUG-045 layout fix.
+
+## Ralph loop iteration #93 (2026-06-17, Claude)
+
+- Branch `fix/hardening-4`, HEAD `37f0eeff`; git tree dirty (pre-existing #88/#90-92 state+asset changes; do not revert). Source+APK identity `0.8.8-rc1-37f0e` (resolve-version == Pixel get_app_info). 
+- Peers: droidmind/mobile-mcp/c64scope/c64bridge all callable. Pixel `9B081FFAZ001WX`.
+- Hardware: c64u `/v1/info` HTTP 000 (down, as #92); u64 also HTTP 000 this loop (was healthy #92). UI-only family per dropout policy — no hardware-mutating CTA.
+- Provider: claude (Ralph-selected), ~52% 5h window — >=40% band: min 8 / target 12-20 actions.
+- Prev verdict: #92 CLEAN PASS.
+- Probe family: **Settings resilience / Device-Safety / Notifications persistence pack** (remaining PLANNED: CommoServe User-Agent override; Device Safety mode selector; Network timing/resilience numeric fields; Reset-to-mode-defaults; Allow-circuit-override toggle; Notifications Visibility selector + Duration Radix slider via real drag).
+- Stop criteria: exhaust SAFE_TO_EXERCISE Settings resilience/safety/notification controls (each repeated, true actuation), >=1 adversarial transition, mandatory logcat + Diagnostics-export sweep, restore state; then refresh digest + handoff.
+- TODO: exercise the resilience/safety/notification Settings controls and verify persistence across background/foreground + route-away.
+
+### #93 verdict: `DEFECT FIXED` (BUG-047) + `DEFECT FOUND` (BUG-046) + `CLEAN PASS` + `RALPH ROBIN CONTINUATION READY`
+- BUG-047 (always-on relaxed-safety warning) fixed in `SettingsPage.tsx` (gate on `isRelaxedSafetyActive`), rebuilt+redeployed, HIL-validated both ways. BUG-046 (duplicate discovery-timing fields/ids) documented OPEN (needs canonical-location decision; no UI deleted on a guess).
+- 17 droidmind CTA actions, 6 adversarial transitions, all actuation-verified. Mandatory logcat + Diagnostics-export sweep clean (all errors = c64u-down family). State restored. c64u down all loop (UI-only family).
+- droidmind_cta_action_count = 17.
+## Ralph loop iteration #94 (2026-06-17, Codex) — startup
+
+- Branch `fix/hardening-4`, HEAD `37f0eeff0e5f`; working tree dirty with pre-existing hardening/source/assets/state changes (preserved). Classification: `CODE_CHANGE` + `UI_CHANGE` for BUG-046 Settings dedupe.
+- Source/APK identity before edits: `./scripts/resolve-version.sh` = `0.8.8-rc1-37f0e`; Pixel package `versionName=0.8.8-rc1-37f0e`, Running. Current installed APK matches HEAD label but will require rebuild/redeploy after this source edit.
+- Peers discovered from callable namespaces/safe calls: droidmind YES (`get_app_info`, `start_app`), mobile-mcp YES (`list_available_devices`), c64scope YES (`scope_lab_get_lab_state`; lab readiness unknown/degraded because peers not reported), c64bridge YES (`performance_report`).
+- Hardware start probe: c64u `/v1/info` HTTP 000 with connection reset; u64 HTTP 200 (~12ms, Ultimate 64 Elite fw 3.14e). No c64u-mutating action planned.
+- Capacity: Ralph Robin selected `codex`, 5h 99% left / weekly 100% left → >=40% band, min 8 / target 12-20 actions.
+- Previous verdict: #93 fixed BUG-047 and opened BUG-046.
+- Selected probe family: Settings BUG-046 Device-Safety/network-timing dedupe validation. Primary TODO: remove duplicate Config-section discovery timing inputs, add a focused regression for unique controls/ids, rebuild/redeploy to Pixel 4, then droidmind-exercise Settings Network timing fields + adjacent safety/diagnostics controls with mandatory logcat + Diagnostics ZIP sweep.
+- Stop criteria: dedupe visible on Pixel (only one Startup Discovery Window and one Background Rediscovery Interval), canonical fields edit/clamp/restore with true actuation, >=8 droidmind product actions, Android Back/background adversarial transition, package logcat + Diagnostics export analyzed, CTA ledger/BUGS/digest/prompt refreshed. No coverage per Ralph HIL loop.

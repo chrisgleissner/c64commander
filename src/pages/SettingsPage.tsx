@@ -346,6 +346,14 @@ export default function SettingsPage() {
       "active device";
     return `Effective preset: ${presetLabel} - resolved from active device (${productLabel}, verified).`;
   }, [deviceSafetyConfig.resolution, deviceSafetyMode, safetyResolutionContext.activeProduct]);
+  const isRelaxedSafetyActive = useMemo(() => {
+    if (deviceSafetyMode === "RELAXED") {
+      return true;
+    }
+    // AUTO resolves per-device to a concrete preset (Conservative/Balanced); surface the
+    // hardware-stability warning only when the effective preset is actually RELAXED.
+    return deviceSafetyConfig.resolution?.effectiveMode === "RELAXED";
+  }, [deviceSafetyMode, deviceSafetyConfig.resolution]);
   const commitHvscBaseUrl = useCallback(() => {
     const trimmed = hvscBaseUrlInput.trim();
     setHvscBaseUrlOverride(trimmed || null);
@@ -1163,8 +1171,8 @@ export default function SettingsPage() {
                       <div className="space-y-1 text-sm text-muted-foreground">
                         <p>
                           Remove{" "}
-                          {selectedSavedDevice ? buildSavedDevicePrimaryLabel(selectedSavedDevice) : "this device"}{" "}
-                          from your saved devices? This can&apos;t be undone.
+                          {selectedSavedDevice ? buildSavedDevicePrimaryLabel(selectedSavedDevice) : "this device"} from
+                          your saved devices? This can&apos;t be undone.
                         </p>
                       </div>
                     )}
@@ -1424,46 +1432,6 @@ export default function SettingsPage() {
                   />
                 </div>
               ) : null}
-
-              <div className="space-y-2">
-                <Label htmlFor="startup-discovery-window" className="font-medium">
-                  Startup Discovery Window (seconds)
-                </Label>
-                <Input
-                  id="startup-discovery-window"
-                  type="number"
-                  min={0.5}
-                  max={15}
-                  step={0.1}
-                  value={startupDiscoveryWindowInput}
-                  onChange={(event) => setStartupDiscoveryWindowInput(event.target.value)}
-                  onBlur={commitStartupDiscoveryWindow}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") commitStartupDiscoveryWindow();
-                  }}
-                />
-                <p className="text-xs text-muted-foreground">Default 3s. Range 0.5s–15s.</p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="background-rediscovery-interval" className="font-medium">
-                  Background Rediscovery Interval (seconds)
-                </Label>
-                <Input
-                  id="background-rediscovery-interval"
-                  type="number"
-                  min={1}
-                  max={60}
-                  step={0.1}
-                  value={backgroundRediscoveryIntervalInput}
-                  onChange={(event) => setBackgroundRediscoveryIntervalInput(event.target.value)}
-                  onBlur={commitBackgroundRediscoveryInterval}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") commitBackgroundRediscoveryInterval();
-                  }}
-                />
-                <p className="text-xs text-muted-foreground">Default 5s. Range 1s–60s.</p>
-              </div>
             </div>
           </motion.div>
 
@@ -1709,9 +1677,11 @@ export default function SettingsPage() {
               <h2 className="font-medium">Device Safety</h2>
             </div>
 
-            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
-              Relaxed safety mode may affect hardware stability.
-            </div>
+            {isRelaxedSafetyActive ? (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                Relaxed safety mode may affect hardware stability.
+              </div>
+            ) : null}
 
             <div className="space-y-2">
               <Label className="text-sm font-medium">Safety Mode</Label>

@@ -836,9 +836,11 @@ describe("SettingsPage", () => {
     expect(aboutIndex).toBe(headings.length - 1);
 
     const connectionSection = screen.getByRole("heading", { name: "Connection" }).closest(".rounded-xl");
+    const configSection = screen.getByRole("heading", { name: "Config" }).closest(".rounded-xl");
     const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-xl");
 
     expect(connectionSection).toBeTruthy();
+    expect(configSection).toBeTruthy();
     expect(deviceSafetySection).toBeTruthy();
 
     if (connectionSection) {
@@ -847,11 +849,22 @@ describe("SettingsPage", () => {
       expect(within(connectionSection).queryByText("Discovery Probe Timeout (seconds)")).toBeNull();
     }
 
+    if (configSection) {
+      expect(within(configSection).queryByText("Startup Discovery Window (seconds)")).toBeNull();
+      expect(within(configSection).queryByText("Background Rediscovery Interval (seconds)")).toBeNull();
+      expect(within(configSection).queryByText("Discovery Probe Timeout (seconds)")).toBeNull();
+    }
+
     if (deviceSafetySection) {
       expect(within(deviceSafetySection).getByText("Startup Discovery Window (seconds)")).toBeInTheDocument();
       expect(within(deviceSafetySection).getByText("Background Rediscovery Interval (seconds)")).toBeInTheDocument();
       expect(within(deviceSafetySection).getByText("Discovery Probe Timeout (seconds)")).toBeInTheDocument();
     }
+
+    expect(screen.getAllByLabelText(/startup discovery window/i)).toHaveLength(1);
+    expect(screen.getAllByLabelText(/background rediscovery interval/i)).toHaveLength(1);
+    expect(document.querySelectorAll("#startup-discovery-window")).toHaveLength(1);
+    expect(document.querySelectorAll("#background-rediscovery-interval")).toHaveLength(1);
   });
 
   it("reports connection save errors", async () => {
