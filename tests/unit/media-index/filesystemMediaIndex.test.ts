@@ -88,6 +88,17 @@ describe("FilesystemMediaIndexStorage", () => {
       expect(readback).toEqual(snapshot);
     });
 
+    it("writes the snapshot when the recursive directory already exists", async () => {
+      const snapshot = makeSnapshot();
+      const storage = new FilesystemMediaIndexStorage();
+      mkdirMock.mockRejectedValueOnce(new Error("Directory exists"));
+
+      await storage.write(snapshot);
+
+      expect(mkdirMock).toHaveBeenCalledOnce();
+      expect(writeFileMock).toHaveBeenCalledOnce();
+    });
+
     it("uses Buffer fallback for decoding when atob is unavailable", async () => {
       // Covers the typeof atob !== 'function' branch in decodeUtf8Base64
       const snapshot = makeSnapshot();

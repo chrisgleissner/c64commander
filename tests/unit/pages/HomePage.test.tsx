@@ -1611,7 +1611,7 @@ describe("HomePage SID status", () => {
     );
   });
 
-  it("renders the quick actions RAM folder row, case lighting card, and deferred keyboard card in order", async () => {
+  it("renders the quick actions RAM folder row and LED lighting case + keyboard cards in order", async () => {
     userInterfacePayloadRef.current = buildUserInterfacePayload();
     ledStripPayloadRef.current = {
       "LED Strip Settings": buildLightingPayload(),
@@ -1632,11 +1632,10 @@ describe("HomePage SID status", () => {
     expect(within(screen.getByTestId("home-lighting-group")).getByText("LED LIGHTING")).toBeTruthy();
     expectLightingControls("home-led", "Case Light");
     expect(screen.getByTestId("home-led-pattern")).toHaveTextContent("Single Color");
-    expect(screen.getByTestId("home-keyboard-lighting-deferred")).toHaveAttribute(
-      "data-section-label",
-      "Keyboard Light",
-    );
-    expect(screen.getByTestId("home-keyboard-lighting-load")).toBeInTheDocument();
+    expect(screen.getByTestId("home-keyboard-lighting-summary")).toBeInTheDocument();
+    expect(screen.getByTestId("home-keyboard-lighting-pattern")).toHaveTextContent("Single Color");
+    expect(screen.queryByTestId("home-keyboard-lighting-deferred")).toBeNull();
+    expect(screen.queryByTestId("home-keyboard-lighting-load")).toBeNull();
 
     const machineSection = screen.getByTestId("home-machine-controls").closest('[data-section-label="Quick Actions"]');
     const ramFolderRow = screen.getByTestId("home-ram-folder-row");
@@ -1651,7 +1650,7 @@ describe("HomePage SID status", () => {
     const userInterfaceCard = within(cardColumn).getByTestId("home-user-interface-summary");
     const lightingGroup = within(cardColumn).getByTestId("home-lighting-group");
     const caseLightingCard = within(cardColumn).getByTestId("home-led-summary");
-    const keyboardLightingCard = within(cardColumn).getByTestId("home-keyboard-lighting-deferred");
+    const keyboardLightingCard = within(cardColumn).getByTestId("home-keyboard-lighting-summary");
     expect(userInterfaceCard.getAttribute("data-section-label")).toBe("User Interface");
     expect(caseLightingCard.getAttribute("data-section-label")).toBe("Case Light");
     expect(keyboardLightingCard.getAttribute("data-section-label")).toBe("Keyboard Light");
@@ -1701,7 +1700,6 @@ describe("HomePage SID status", () => {
     };
 
     renderHomePage();
-    fireEvent.click(screen.getByTestId("home-keyboard-lighting-load"));
 
     fireEvent.click(screen.getByTestId("home-led-pattern"));
     fireEvent.click(await screen.findByRole("option", { name: /^Single Color$/i }));
@@ -1760,7 +1758,6 @@ describe("HomePage SID status", () => {
     };
 
     renderHomePage();
-    fireEvent.click(screen.getByTestId("home-keyboard-lighting-load"));
 
     fireEvent.click(screen.getByTestId("home-cpu-turbo-control"));
     fireEvent.click(await screen.findByRole("option", { name: /C64U Turbo Registers/i }));
@@ -1996,7 +1993,7 @@ describe("HomePage SID status", () => {
     });
   }, 90000);
 
-  it("defers keyboard lighting controls until requested from the Home card", async () => {
+  it("renders keyboard lighting controls by default on the Home card without requiring a Load action", async () => {
     keyboardLightingPayloadRef.current = {
       "Keyboard Lighting": buildLightingPayload({
         fixedColor: "Magenta",
@@ -2009,12 +2006,9 @@ describe("HomePage SID status", () => {
 
     renderHomePage();
 
-    expect(screen.queryByTestId("home-keyboard-lighting-summary")).toBeNull();
-    expect(screen.getByTestId("home-keyboard-lighting-deferred")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId("home-keyboard-lighting-load"));
-
-    await waitFor(() => expect(screen.getByTestId("home-keyboard-lighting-summary")).toBeInTheDocument());
+    expect(screen.getByTestId("home-keyboard-lighting-summary")).toBeInTheDocument();
+    expect(screen.queryByTestId("home-keyboard-lighting-deferred")).toBeNull();
+    expect(screen.queryByTestId("home-keyboard-lighting-load")).toBeNull();
     expect(screen.getByTestId("home-keyboard-lighting-pattern")).toHaveTextContent("Single Color");
   });
 

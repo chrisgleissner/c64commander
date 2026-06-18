@@ -13,11 +13,14 @@ import android.graphics.Color
 import android.os.Bundle
 import android.webkit.MimeTypeMap
 import androidx.core.view.WindowCompat
+import com.getcapacitor.Bridge
 import com.getcapacitor.BridgeActivity
+import com.getcapacitor.PluginCall
 import java.io.File
+import java.lang.reflect.Field
 import java.net.CookieHandler
 
-class MainActivity : BridgeActivity() {
+open class MainActivity : BridgeActivity() {
   internal fun ensureCapacitorPluginAssetPath(filesDirectory: File = filesDir) {
     val pluginsPath = File(filesDirectory, "public/plugins")
     // Recoverable: file already exists in the expected shape. Bridge will read it.
@@ -120,6 +123,68 @@ class MainActivity : BridgeActivity() {
             "Android memory class detected: memoryClass=$memoryClass, largeMemoryClass=$largeMemoryClass",
             "MainActivity",
     )
+  }
+
+  internal fun isUnpersistableShareActivityCall(call: PluginCall?): Boolean {
+    return call?.pluginId == "Share" && call.methodName == "share"
+  }
+
+  internal fun clearUnpersistableShareActivityCall(
+    getPendingCall: () -> PluginCall?,
+    clearPendingCall: () -> Unit,
+  ): Boolean {
+    val pendingCall = getPendingCall() ?: return false
+
+    if (!isUnpersistableShareActivityCall(pendingCall)) {
+      return false
+    }
+
+    clearPendingCall()
+    AppLogger.debug(
+      null,
+      "MainActivity",
+      "Cleared unpersistable Share activity call before state save",
+      "MainActivity",
+    )
+    return true
+  }
+
+  internal fun clearUnpersistableShareActivityCall(capacitorBridge: Bridge = bridge): Boolean {
+    return try {
+      val pendingCallField = resolvePendingActivityCallField()
+      pendingCallField.isAccessible = true
+      clearUnpersistableShareActivityCall(
+        getPendingCall = { pendingCallField.get(capacitorBridge) as? PluginCall },
+        clearPendingCall = { pendingCallField.set(capacitorBridge, null) },
+      )
+    } catch (error: NoSuchFieldException) {
+      AppLogger.warn(
+        null,
+        "MainActivity",
+        "Unable to inspect pending Capacitor activity call before state save",
+        "MainActivity",
+        error,
+      )
+      false
+    } catch (error: IllegalAccessException) {
+      AppLogger.warn(
+        null,
+        "MainActivity",
+        "Unable to clear pending Capacitor activity call before state save",
+        "MainActivity",
+        error,
+      )
+      false
+    }
+  }
+
+  internal open fun resolvePendingActivityCallField(): Field {
+    return Bridge::class.java.getDeclaredField("pluginCallForLastActivity")
+  }
+
+  override fun onSaveInstanceState(outState: Bundle) {
+    clearUnpersistableShareActivityCall()
+    super.onSaveInstanceState(outState)
   }
 
   internal fun keepWebViewPlaybackAliveDuringBackgroundExecution(

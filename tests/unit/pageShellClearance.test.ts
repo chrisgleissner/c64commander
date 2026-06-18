@@ -34,12 +34,18 @@ describe("page-shell bounded viewport contract", () => {
     expect(css).toMatch(/--app-tab-bar-safe-area-bottom:\s*var\(--safe-area-inset-bottom\)\s*;/);
     expect(css).toMatch(/--app-tab-bar-visual-height:\s*3\.5rem\s*;/);
     expect(css).toMatch(
-      /--app-tab-bar-reserved-height:\s*calc\(\s*var\(--app-tab-bar-visual-height\)\s*\+\s*var\(--app-tab-bar-safe-area-bottom\)\s*\)/,
+      /--app-tab-bar-frame-height:\s*calc\([\s\S]*?--app-tab-bar-visual-height\)[\s\S]*?--app-tab-bar-safe-area-bottom[\s\S]*?\)/,
     );
-    expect(css).toMatch(/\.tab-bar-frame\s*\{[^}]*min-height:\s*var\(--app-tab-bar-reserved-height\)/s);
+    expect(css).not.toMatch(/2\s*\*\s*var\(--app-tab-bar-safe-area-bottom\)/);
+    expect(css).toMatch(/--app-tab-bar-reserved-height:\s*var\(--app-tab-bar-frame-height\)\s*;/);
+    expect(css).toMatch(/\.tab-bar-frame\s*\{[^}]*min-height:\s*var\(--app-tab-bar-frame-height\)/s);
+    expect(css).toMatch(/\.tab-bar-frame\s*\{[^}]*pointer-events:\s*none/s);
     expect(css).toMatch(/\.tab-bar\s*\{[^}]*min-height:\s*var\(--app-tab-bar-visual-height\)/s);
+    expect(css).toMatch(/\.tab-bar\s*\{[^}]*pointer-events:\s*auto/s);
     expect(block).toMatch(/overflow-y:\s*auto/);
     expect(block).toMatch(/min-height:\s*0/);
+    expect(block).toMatch(/padding-bottom:\s*var\(--display-profile-page-padding-y\)\s*;/);
+    expect(block).not.toMatch(/padding-bottom:[^;]*var\(--app-tab-bar-reserved-height\)/);
     expect(swipeNavSource).toContain('height: "calc(100dvh - var(--app-tab-bar-reserved-height))"');
   });
 

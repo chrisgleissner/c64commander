@@ -98,6 +98,9 @@ const getErrorMessage = (error: unknown) => {
 const isMissingPathError = (error: unknown) =>
   /does not exist|not exist|no such file|not found/i.test(getErrorMessage(error));
 
+const isDirectoryExistsError = (error: unknown) =>
+  /Directory exists|EEXIST|already exists/i.test(getErrorMessage(error));
+
 const ensureSonglengthDirectory = async (path: string) => {
   try {
     await Filesystem.mkdir({
@@ -106,6 +109,9 @@ const ensureSonglengthDirectory = async (path: string) => {
       recursive: true,
     });
   } catch (error) {
+    if (isDirectoryExistsError(error)) {
+      return;
+    }
     if (isMissingPathError(error)) {
       addLog("debug", "HVSC songlengths directory missing during bootstrap", {
         service: "hvsc-songlengths",

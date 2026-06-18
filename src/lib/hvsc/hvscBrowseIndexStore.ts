@@ -21,6 +21,11 @@ const isFileNotFoundError = (error: unknown) => {
   return /not found|ENOENT|does not exist|no such file|File does not exist/i.test(message);
 };
 
+const isDirectoryExistsError = (error: unknown) => {
+  const message = ((error as { message?: unknown })?.message ?? "").toString();
+  return /Directory exists|EEXIST|already exists/i.test(message);
+};
+
 const describeError = (error: unknown, extras: Record<string, unknown> = {}) => ({
   ...extras,
   error: (error as Error)?.message ?? String(error),
@@ -491,11 +496,7 @@ export const clearHvscBrowseIndexSnapshot = async () => {
 };
 
 const writeFilesystemSnapshot = async (snapshot: HvscBrowseIndexSnapshot) => {
-  await Filesystem.mkdir({
-    directory: Directory.Data,
-    path: "hvsc/index",
-    recursive: true,
-  });
+  await ensureFilesystemIndexDirectory();
   await Filesystem.writeFile({
     directory: Directory.Data,
     path: STORAGE_PATH,
@@ -505,16 +506,25 @@ const writeFilesystemSnapshot = async (snapshot: HvscBrowseIndexSnapshot) => {
 
 const writeFilesystemMediaIndexSnapshot = async (snapshot: HvscBrowseIndexSnapshot) => {
   const mediaIndexSnapshot = buildPersistedMediaIndexSnapshot(snapshot);
-  await Filesystem.mkdir({
-    directory: Directory.Data,
-    path: "hvsc/index",
-    recursive: true,
-  });
+  await ensureFilesystemIndexDirectory();
   await Filesystem.writeFile({
     directory: Directory.Data,
     path: MEDIA_INDEX_STORAGE_PATH,
     data: encodeUtf8Base64(JSON.stringify(mediaIndexSnapshot)),
   });
+};
+
+const ensureFilesystemIndexDirectory = async () => {
+  try {
+    await Filesystem.mkdir({
+      directory: Directory.Data,
+      path: "hvsc/index",
+      recursive: true,
+    });
+  } catch (error) {
+    if (isDirectoryExistsError(error)) return;
+    throw error;
+  }
 };
 
 const readLocalStorageSnapshot = () => {

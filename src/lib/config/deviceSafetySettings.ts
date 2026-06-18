@@ -62,6 +62,7 @@ const CIRCUIT_BREAKER_THRESHOLD_KEY = "c64u_device_safety_circuit_breaker_thresh
 const CIRCUIT_BREAKER_COOLDOWN_MS_KEY = "c64u_device_safety_circuit_breaker_cooldown_ms";
 const DISCOVERY_PROBE_INTERVAL_MS_KEY = "c64u_device_safety_discovery_probe_interval_ms";
 const ALLOW_USER_OVERRIDE_CIRCUIT_KEY = "c64u_device_safety_allow_user_override_circuit";
+const APP_SETTINGS_CONFIG_WRITE_INTERVAL_KEY = "c64u_config_write_min_interval_ms";
 
 export const DEFAULT_DEVICE_SAFETY_MODE: DeviceSafetyMode = "AUTO";
 
@@ -255,8 +256,14 @@ export const resetDeviceSafetyOverrides = () => {
     CIRCUIT_BREAKER_COOLDOWN_MS_KEY,
     DISCOVERY_PROBE_INTERVAL_MS_KEY,
     ALLOW_USER_OVERRIDE_CIRCUIT_KEY,
+    APP_SETTINGS_CONFIG_WRITE_INTERVAL_KEY,
   ].forEach((key) => localStorage.removeItem(key));
   broadcast("c64u-device-safety-reset", Date.now());
+  window.dispatchEvent(
+    new CustomEvent("c64u-app-settings-updated", {
+      detail: { key: APP_SETTINGS_CONFIG_WRITE_INTERVAL_KEY },
+    }),
+  );
 };
 
 const resolveOverride = (key: string, fallback: number) => {

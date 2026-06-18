@@ -264,6 +264,50 @@ describe("logger", () => {
       }
     });
 
+    it("suppresses benign Capacitor Filesystem file-not-found objects in console.error forwarding", () => {
+      const uninstall = logger.installConsoleDiagnosticsBridge();
+      try {
+        console.error({ message: "File does not exist" });
+        expect(addLog).not.toHaveBeenCalledWith("error", '{"message":"File does not exist"}', expect.anything());
+      } finally {
+        uninstall();
+      }
+    });
+
+    it("suppresses benign Capacitor Filesystem directory-exists objects in console.error forwarding", () => {
+      const uninstall = logger.installConsoleDiagnosticsBridge();
+      try {
+        console.error({ message: "Directory exists" });
+        expect(addLog).not.toHaveBeenCalledWith("error", '{"message":"Directory exists"}', expect.anything());
+      } finally {
+        uninstall();
+      }
+    });
+
+    it("forwards mixed-arg console.error with benign filesystem message so caller context is preserved", () => {
+      const uninstall = logger.installConsoleDiagnosticsBridge();
+      try {
+        addLog.mockClear();
+        console.error({ message: "File does not exist" }, { path: "hvsc/index/x.json" });
+        const errorCalls = addLog.mock.calls.filter((c) => c[0] === "error");
+        expect(errorCalls.length).toBeGreaterThan(0);
+      } finally {
+        uninstall();
+      }
+    });
+
+    it("does not suppress non-benign console.error objects with a message field", () => {
+      const uninstall = logger.installConsoleDiagnosticsBridge();
+      try {
+        addLog.mockClear();
+        console.error({ message: "Something truly unexpected" });
+        const errorCalls = addLog.mock.calls.filter((c) => c[0] === "error");
+        expect(errorCalls.length).toBeGreaterThan(0);
+      } finally {
+        uninstall();
+      }
+    });
+
     it("handles non-string non-error non-object arguments", () => {
       const uninstall = logger.installConsoleDiagnosticsBridge();
       try {

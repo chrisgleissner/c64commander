@@ -329,6 +329,13 @@ export default function PlayFilesPage() {
   // which would unbalance the manager's reference count and leak the wake lock
   // after Stop (BUG-025).
   const backgroundExecutionActiveRef = useRef(isBackgroundExecutionActive());
+  // True once THIS Play instance has actually observed active playback. A fresh
+  // instance adopts the running session above (BUG-025) but starts isPlaying=false
+  // until its async session restore runs. A transient instance created during a
+  // tab transition can therefore mount-and-unmount while still isPlaying=false and
+  // would otherwise tear down the wake lock owned by the live playback session
+  // (BUG-040). Only an instance that genuinely owned playback may release it.
+  const hasObservedActivePlaybackRef = useRef(false);
   const hvscDisableCancellationRequestedRef = useRef(false);
   const [configPickerState, setConfigPickerState] = useState<ConfigPickerState | null>(null);
   const [activeConfigItemId, setActiveConfigItemId] = useState<string | null>(null);
@@ -482,6 +489,9 @@ export default function PlayFilesPage() {
   const playbackStateRef = useRef({ isPlaying, isPaused });
   useEffect(() => {
     playbackStateRef.current = { isPlaying, isPaused };
+    if (isPlaying) {
+      hasObservedActivePlaybackRef.current = true;
+    }
   }, [isPlaying, isPaused]);
 
   useEffect(() => {
@@ -539,6 +549,12 @@ export default function PlayFilesPage() {
     ) {
       return;
     }
+    // Never let an instance that only adopted the running session (and has not
+    // itself observed playback) stop it — that transient case is BUG-040. Keep
+    // the adopted flag so a later restore on this instance does not double-start.
+    if (!hasObservedActivePlaybackRef.current) {
+      return;
+    }
     backgroundExecutionActiveRef.current = false;
     void stopBackgroundExecution({
       source: "playback-controller",
@@ -570,7 +586,10 @@ export default function PlayFilesPage() {
     () => () => {
       if (!backgroundExecutionActiveRef.current) return;
       const latestPlaybackState = playbackStateRef.current;
-      if (latestPlaybackState.isPlaying && !latestPlaybackState.isPaused) {
+      // Keep the wake lock when this instance is still playing OR when it never
+      // observed playback (a transient instance that only adopted the running
+      // session must not release the live session's lock — BUG-040).
+      if ((latestPlaybackState.isPlaying && !latestPlaybackState.isPaused) || !hasObservedActivePlaybackRef.current) {
         addLog("debug", "Leaving background playback guard active across Play page unmount", {
           trackInstanceId: backgroundCleanupTrackInstanceIdRef.current,
           dueAtMs: autoAdvanceGuardRef.current?.dueAtMs ?? null,
