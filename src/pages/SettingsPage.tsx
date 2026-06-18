@@ -76,6 +76,7 @@ import {
 } from "@/lib/hvsc/hvscReleaseService";
 import {
   APP_SETTINGS_KEYS,
+  DEFAULT_CONFIG_WRITE_INTERVAL_MS,
   loadArchiveClientIdOverride,
   loadArchiveHostOverride,
   loadArchiveUserAgentOverride,
@@ -1815,7 +1816,7 @@ export default function SettingsPage() {
                   }}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Minimum delay between consecutive config write calls. Default 500 ms.
+                  Minimum delay between consecutive config write calls. Default {DEFAULT_CONFIG_WRITE_INTERVAL_MS} ms.
                 </p>
               </div>
 

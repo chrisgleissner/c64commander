@@ -31,12 +31,18 @@
   --safe-area-inset-left: max(env(safe-area-inset-left, 0px), var(--native-safe-area-inset-left));
   --app-tab-bar-safe-area-bottom: var(--safe-area-inset-bottom);
   --app-tab-bar-visual-height: 3.5rem;
+  --app-tab-bar-nav-padding-y: calc(0.5rem + 0.125rem);
+  --app-tab-bar-border-height: 1px;
   --app-header-top-inset: 0px;
   --app-chrome-rail-padding-y: 0.125rem;
   --app-chrome-surface: var(--card);
   --app-chrome-badge-surface: var(--muted);
   --app-chrome-badge-surface-hover: var(--secondary);
-  --app-tab-bar-reserved-height: calc(var(--app-tab-bar-visual-height) + var(--app-tab-bar-safe-area-bottom));
+  --app-tab-bar-frame-height: calc(
+    var(--app-tab-bar-visual-height) + var(--app-tab-bar-nav-padding-y) + var(--app-tab-bar-border-height) +
+      (2 * var(--app-tab-bar-safe-area-bottom))
+  );
+  --app-tab-bar-reserved-height: var(--app-tab-bar-frame-height);
 }
 
 :root[data-c64-motion-mode="reduced"] {
@@ -558,7 +564,7 @@ button:focus-visible,
     max-width: var(--display-profile-page-max-width);
     margin-inline: auto;
     padding-top: var(--display-profile-page-padding-top);
-    padding-bottom: var(--display-profile-page-padding-y);
+    padding-bottom: calc(var(--display-profile-page-padding-y) + var(--app-tab-bar-reserved-height));
     padding-left: calc(var(--display-profile-page-padding-x) + var(--safe-area-inset-left));
     padding-right: calc(var(--display-profile-page-padding-x) + var(--safe-area-inset-right));
   }
@@ -600,8 +606,9 @@ button:focus-visible,
 
   /* Tab navigation (mobile-native feel) */
   .tab-bar-frame {
-    min-height: var(--app-tab-bar-reserved-height);
+    min-height: var(--app-tab-bar-frame-height);
     padding-bottom: var(--app-tab-bar-safe-area-bottom);
+    pointer-events: none;
   }
 
   .tab-bar {
@@ -611,6 +618,7 @@ button:focus-visible,
     padding-top: var(--app-chrome-rail-padding-y);
     padding-bottom: 0.5rem;
     min-height: var(--app-tab-bar-visual-height);
+    pointer-events: auto;
   }
 
   .tab-item {

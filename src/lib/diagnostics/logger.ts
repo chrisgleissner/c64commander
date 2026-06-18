@@ -157,10 +157,27 @@ const normalizeConsoleForwardArgs = (args: unknown[]) => {
   return [normalizeConsoleMessage(args), ...args.slice(1)];
 };
 
+const BENIGN_FILESYSTEM_MESSAGE_PATTERN =
+  /^(?:.+ )?(does not exist|directory exists|not found|no such file|already exists|eexist|enoent)$/i;
+
+const isPlainObjectMessageShape = (value: unknown) =>
+  !!value && typeof value === "object" && typeof (value as { message?: unknown }).message === "string";
+
+const isBenignFilesystemErrorObject = (value: unknown) => {
+  if (!isPlainObjectMessageShape(value)) return false;
+  const message = (value as { message: string }).message;
+  return BENIGN_FILESYSTEM_MESSAGE_PATTERN.test(message.trim());
+};
+
 const shouldSuppressConsoleErrorForwarding = (args: unknown[]) => {
   if (!args.length) return false;
   const first = args[0];
-  return classifyError(first).failureClass === "user-cancellation";
+  const classification = classifyError(first);
+  if (classification.failureClass === "user-cancellation") return true;
+  // Suppress the lone known-benign Capacitor Filesystem plugin rejection shapes
+  // (file/dir existence races) that callers already handle internally.
+  if (args.length === 1 && isBenignFilesystemErrorObject(first)) return true;
+  return false;
 };
 
 export const installConsoleDiagnosticsBridge = (options: ConsoleBridgeOptions = {}) => {

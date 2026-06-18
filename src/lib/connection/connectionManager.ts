@@ -260,10 +260,21 @@ const probeInfoWithConnectionConfig = async (
         resolvedAddress: config.resolvedAddress,
       };
     }
+    // Contextualize raw transport failures (e.g. mDNS/DNS "Unable to resolve host")
+    // so the connection snapshot, UnifiedHealthBadge, and downstream diagnostics
+    // see a user-friendly message instead of the raw fetch / plugin error text.
+    const failure = normalizeTransportError(error, { host: config.deviceHost });
+    addLog(failure.class === 'dns' ? 'info' : 'warn', 'Probe request failed', {
+      baseUrl: config.baseUrl,
+      deviceHost: config.deviceHost,
+      class: failure.class,
+      userMessage: failure.userMessage,
+      error: failure.rawMessage,
+    });
     return {
       ok: false,
       deviceInfo: null,
-      error: message,
+      error: failure.userMessage,
       resolvedAddress: config.resolvedAddress,
     };
   }
@@ -364,10 +375,11 @@ export async function probeInfoOnce(
         error: message,
       };
     }
+    const failure = normalizeTransportError(error, { host: config.deviceHost });
     return {
       ok: false,
       deviceInfo: null,
-      error: message,
+      error: failure.userMessage,
     };
   }
 }

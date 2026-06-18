@@ -398,6 +398,7 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveDebugLoggingEnabled: vi.fn(),
   saveDiskAutostartMode: vi.fn(),
   saveVolumeSliderPreviewIntervalMs: vi.fn(),
+  DEFAULT_CONFIG_WRITE_INTERVAL_MS: 200,
   loadNotificationVisibility: vi.fn(() => "errors-only"),
   saveNotificationVisibility: vi.fn(),
   loadNotificationDurationMs: vi.fn(() => 4000),
@@ -1532,6 +1533,18 @@ describe("SettingsPage", () => {
     fireEvent.change(trigger, { target: { value: "TROUBLESHOOTING" } });
 
     expect(saveDebugLoggingEnabled).toHaveBeenCalledWith(true);
+  });
+
+  it("shows the actual Config write spacing default in Device Safety advanced controls", () => {
+    renderSettingsPage();
+
+    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-xl");
+
+    expect(deviceSafetySection).toBeTruthy();
+    const configWriteInput = within(deviceSafetySection as HTMLElement).getByLabelText("Config write spacing (ms)");
+    expect(configWriteInput.closest(".space-y-2")).toHaveTextContent(
+      "Minimum delay between consecutive config write calls. Default 200 ms.",
+    );
   });
 
   it("responds to c64u-app-settings-updated events for all tracked keys", async () => {

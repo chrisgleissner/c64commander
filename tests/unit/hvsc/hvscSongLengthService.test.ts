@@ -338,6 +338,18 @@ describe("hvscSongLengthService", () => {
   });
 
   describe("ensureSonglengthDirectory", () => {
+    it("handles existing directory errors without logging a bootstrap failure", async () => {
+      vi.mocked(Filesystem.mkdir).mockRejectedValueOnce(new Error("Directory exists"));
+
+      await __test__.ensureSonglengthDirectory("hvsc/library");
+
+      expect(addLog).not.toHaveBeenCalledWith(
+        expect.any(String),
+        expect.stringContaining("HVSC songlengths directory bootstrap failed"),
+        expect.anything(),
+      );
+    });
+
     it("handles mkdir errors for missing paths", async () => {
       vi.mocked(Filesystem.mkdir).mockRejectedValueOnce(new Error("does not exist"));
       await __test__.ensureSonglengthDirectory("hvsc/library");

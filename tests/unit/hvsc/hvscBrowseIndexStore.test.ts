@@ -336,6 +336,28 @@ describe("hvscBrowseIndexStore", () => {
     }
   });
 
+  it("continues filesystem persistence when the recursive directory already exists", async () => {
+    const { saveHvscBrowseIndexSnapshot, buildHvscBrowseIndexFromEntries: build } =
+      await import("@/lib/hvsc/hvscBrowseIndexStore");
+    const snapshot = build([{ path: "/test.sid", name: "test.sid", type: "sid" }]);
+    vi.mocked(Filesystem.mkdir).mockRejectedValue(new Error("Directory exists") as any);
+    vi.mocked(Filesystem.writeFile).mockResolvedValue(undefined as any);
+    if (typeof localStorage !== "undefined") localStorage.clear();
+
+    await saveHvscBrowseIndexSnapshot(snapshot);
+
+    expect(Filesystem.writeFile).toHaveBeenCalledTimes(2);
+    expect(addLog).not.toHaveBeenCalledWith(
+      "warn",
+      "HVSC browse snapshot filesystem persistence failed; falling back to localStorage",
+      expect.anything(),
+    );
+    if (typeof localStorage !== "undefined") {
+      expect(localStorage.getItem(BROWSE_INDEX_STORAGE_KEY)).toBeNull();
+      expect(localStorage.getItem(MEDIA_INDEX_STORAGE_KEY)).toBeNull();
+    }
+  });
+
   it("persists only the compact media index when the browse snapshot is too large", async () => {
     const { saveHvscBrowseIndexSnapshot, buildHvscBrowseIndexFromEntries: build } =
       await import("@/lib/hvsc/hvscBrowseIndexStore");
