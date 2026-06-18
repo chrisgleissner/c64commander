@@ -5,7 +5,7 @@ Note: the Android-first V1 scope is corrected by [addendum-v1/variant-spec-adden
 > Historical naming note: the placeholder secondary variant referred to below as
 > `c64u-controller` / "C64U Controller" was migrated to the Android-only
 > `c64u-remote` / "C64U Remote" (`uk.gleissner.c64uremote`). For the current,
-> authoritative design see [`docs/research/callback8020/sailfish-callback-8020-android-compatibility.md`](../callback8020/sailfish-callback-8020-android-compatibility.md).
+> authoritative design see [`docs/plans/callback8020/sailfish-callback-8020-android-compatibility.md`](../../plans/callback8020/sailfish-callback-8020-android-compatibility.md).
 > The old name is retained below only as historical context.
 
 ## 1. Goal

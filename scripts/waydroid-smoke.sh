@@ -119,48 +119,92 @@ ensure_compositor() {
   log "Compositor ready: WAYLAND_DISPLAY=$WAYLAND_DISPLAY (XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR)"
 }
 
+pm_ready() { [[ "$(waydroid app list 2>/dev/null | grep -c packageName)" -gt 0 ]]; }
+
 start_session() {
-  local st; st="$(waydroid status 2>/dev/null)"
-  if echo "$st" | grep -qi "Session.*RUNNING"; then log "Waydroid session already running."; return 0; fi
   ensure_compositor || return 1
-  log "Starting Waydroid session..."
-  nohup waydroid session start >"$SESSION_LOG" 2>&1 &
-  disown || true
-  local n=0
-  until waydroid status 2>/dev/null | grep -qi "Session.*RUNNING" || [[ $n -ge 60 ]]; do sleep 3; n=$((n+1)); done
-  waydroid status 2>/dev/null | grep -qi "Session.*RUNNING" || { log "ERROR: session did not start (see $SESSION_LOG)"; return 1; }
-  # let Android finish booting
-  local b=0
-  until waydroid shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q 1 || [[ $b -ge 60 ]]; do sleep 3; b=$((b+1)); done
-  log "Waydroid session running."
+  if waydroid status 2>/dev/null | grep -qi "Session.*RUNNING"; then
+    log "Waydroid session already running."
+  else
+    log "Starting Waydroid session..."
+    nohup env WAYLAND_DISPLAY="$WAYLAND_DISPLAY" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" waydroid session start >"$SESSION_LOG" 2>&1 &
+    disown || true
+    local n=0
+    until waydroid status 2>/dev/null | grep -qi "Session.*RUNNING" || [[ $n -ge 60 ]]; do sleep 3; n=$((n+1)); done
+    waydroid status 2>/dev/null | grep -qi "Session.*RUNNING" || { log "ERROR: session did not start (see $SESSION_LOG)"; return 1; }
+  fi
+  # Readiness WITHOUT root: the Android package manager is up once `waydroid app
+  # list` returns packages (avoids `waydroid shell`, which needs root).
+  log "Waiting for the Android package manager..."
+  local b=0; until pm_ready || [[ $b -ge 80 ]]; do sleep 3; b=$((b+1)); done
+  pm_ready && log "Waydroid session ready (package manager up)." || log "WARN: package manager not confirmed; continuing."
 }
 
 waydroid_serial() {
   local ip; ip="$(waydroid status 2>/dev/null | awk -F'\t' '/IP address/{print $2}' | tr -d ' \r')"
-  [[ -z "$ip" ]] && ip="$(waydroid shell ip route 2>/dev/null | awk '/scope link/{print $9; exit}' | tr -d '\r')"
   echo "${ip:+$ip:5555}"
-}
-
-adb_connect() {
-  adb start-server >/dev/null 2>&1 || true
-  local serial; serial="$(waydroid_serial)"
-  if [[ -n "$serial" ]]; then adb connect "$serial" >/dev/null 2>&1 || true; echo "$serial"; return; fi
-  # fall back to any already-listed device that isn't a physical phone/emulator
-  adb devices | awk 'NR>1 && $2=="device"{print $1}' | grep -E '^[0-9]+\.' | head -n1
 }
 
 run() {
   local apk_glob="${1:-$DEFAULT_APK_GLOB}" pkg="${2:-$DEFAULT_PACKAGE}"
   have waydroid || { log "ERROR: waydroid not installed. Run: sudo $0 setup"; exit 2; }
   start_session || exit 6
-  local serial; serial="$(adb_connect)"
-  [[ -z "$serial" ]] && { log "ERROR: could not resolve a Waydroid adb serial"; exit 7; }
-  log "Waydroid adb serial: $serial"
-  log "Running keypad/no-GMS smoke against $pkg inside Waydroid..."
-  bash scripts/android-keypad-smoke.sh "$serial" "$apk_glob" "$pkg" "artifacts/android-apks/validation/waydroid"
+  smoke_waydroid "$apk_glob" "$pkg"
 }
 
-smoke() { run "$@"; }
+# Waydroid-native smoke. The core checks (no-GMS + install + launch) use only
+# user-level `waydroid app *` commands so they work WITHOUT root. Deeper runtime
+# inspection (resumed activity, screenshot, logcat) is best-effort and used only
+# when root `waydroid shell` or an authorized adb connection is available
+# (e.g. on CI runners with passwordless sudo).
+smoke_waydroid() {
+  local apk_glob="$1" pkg="$2"
+  local apk; apk="$(ls $apk_glob 2>/dev/null | head -n1)"
+  [[ -f "$apk" ]] || { log "ERROR: APK not found: $apk_glob"; exit 7; }
+  local out="artifacts/android-apks/validation/waydroid"; mkdir -p "$out"
+  local fails=0
+
+  log "1. No hard Google Play Services dependency (static)"
+  if node scripts/verify-apk-no-gms.mjs "$apk"; then log "   OK"; else log "   FAIL"; fails=$((fails+1)); fi
+
+  log "2. Waydroid image has no Google services (VANILLA)"
+  local gms; gms="$(waydroid app list 2>/dev/null | grep -c 'com.google.android.gms')"
+  if [[ "$gms" == "0" ]]; then log "   OK (0 com.google.android.gms packages on the image)"; else log "   FAIL ($gms gms packages)"; fails=$((fails+1)); fi
+
+  log "3. Install $pkg into Waydroid"
+  waydroid app install "$apk" >/tmp/waydroid-install.log 2>&1 || true
+  if waydroid app list 2>/dev/null | grep -q "packageName: $pkg"; then log "   OK (installed; listed by 'waydroid app list')"; else log "   FAIL (not listed after install)"; fails=$((fails+1)); fi
+
+  log "4. Launch $pkg"
+  if waydroid app launch "$pkg" >/tmp/waydroid-launch.log 2>&1; then log "   OK (launch issued; container active)"; else log "   FAIL (launch error; see /tmp/waydroid-launch.log)"; fails=$((fails+1)); fi
+  sleep 6
+  # Still listed after launch (proxy for "did not crash-uninstall").
+  waydroid app list 2>/dev/null | grep -q "packageName: $pkg" && log "   OK ($pkg still present after launch)" || { log "   FAIL ($pkg vanished after launch)"; fails=$((fails+1)); }
+
+  log "5. Runtime inspection (best-effort; needs root waydroid shell or authorized adb)"
+  local serial; serial="$(waydroid_serial)"
+  if [[ -n "$serial" ]] && adb connect "$serial" >/dev/null 2>&1 && adb -s "$serial" shell true >/dev/null 2>&1; then
+    adb -s "$serial" shell dumpsys activity activities 2>/dev/null | grep -i ResumedActivity | grep -q "$pkg" \
+      && log "   OK (adb): $pkg is the resumed activity" || log "   note (adb): $pkg not currently resumed"
+    adb -s "$serial" exec-out screencap -p > "$out/c64u-remote-waydroid.png" 2>/dev/null && log "   screenshot: $out/c64u-remote-waydroid.png"
+    adb -s "$serial" logcat -d 2>/dev/null | grep -iE 'GooglePlayServicesNotAvailable|SERVICE_MISSING|FATAL EXCEPTION' | grep -i "$pkg" \
+      && { log "   FAIL (adb logcat shows GMS/fatal)"; fails=$((fails+1)); } || log "   OK (adb): no GMS/fatal in logcat"
+  elif is_root || sudo -n true 2>/dev/null; then
+    local SU=""; is_root || SU="sudo -n"
+    $SU waydroid shell dumpsys activity activities 2>/dev/null | grep -i ResumedActivity | grep -q "$pkg" \
+      && log "   OK (shell): $pkg is the resumed activity" || log "   note (shell): $pkg not currently resumed"
+    if $SU waydroid shell screencap -p /sdcard/c64u-waydroid.png 2>/dev/null; then
+      $SU cp /var/lib/waydroid/data/media/0/c64u-waydroid.png "$out/c64u-remote-waydroid.png" 2>/dev/null && log "   screenshot: $out/c64u-remote-waydroid.png"
+    fi
+  else
+    log "   skipped (no root / authorized adb). Install + launch verified above; on CI (passwordless sudo) this step also captures a screenshot + resumed-activity + logcat."
+  fi
+
+  log "Waydroid smoke result: $([[ $fails -eq 0 ]] && echo PASS || echo "$fails CHECK(S) FAILED") for $pkg"
+  [[ $fails -eq 0 ]] || exit 1
+}
+
+smoke() { local a="${1:-$DEFAULT_APK_GLOB}" p="${2:-$DEFAULT_PACKAGE}"; smoke_waydroid "$a" "$p"; }
 
 teardown() {
   waydroid session stop 2>/dev/null || true

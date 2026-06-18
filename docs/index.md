@@ -38,4 +38,4 @@ This folder is the canonical location for durable repository documentation.
 
 Time-scoped analysis and rollout records remain under `docs/research/` and `docs/testing/investigations/`. They are useful as historical evidence, but the current-state reference docs above are the canonical source for present repository behavior.
 
-- [research/callback8020/](research/callback8020/) - Sailfish OS / Commodore Callback 8020 support: keypad-only (touch-free) operation, the C64U Remote variant, the Android compatibility review, the keymap reference, and the emulation/test tooling.
+- [plans/callback8020/](plans/callback8020/) - Sailfish OS / Commodore Callback 8020 support: keypad-only (touch-free) operation, the C64U Remote variant, the Android compatibility review, the keymap reference, the emulation/test tooling, and the handover/Ralph progression.

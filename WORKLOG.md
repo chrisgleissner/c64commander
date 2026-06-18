@@ -132,7 +132,7 @@ test fixtures `tests/unit/{fuzz/fuzzMode,scripts/generateVariant,scripts/syncBra
 (pre-existing prettier nit fixed).
 Renamed: `variants/assets/c64u-controller/` → `variants/assets/c64u-remote/`,
 `variants/feature-flags/c64u-controller.yaml` → `…/c64u-remote.yaml` (rewritten).
-Added: `docs/research/callback8020/sailfish-callback-8020-android-compatibility.md`, `docs/research/callback8020/keymap.md`,
+Added: `docs/plans/callback8020/sailfish-callback-8020-android-compatibility.md`, `docs/plans/callback8020/keymap.md`,
 `src/lib/input/**` (keyEvent, keymap, t9, focusController, profiles, index),
 `src/hooks/useT9Input.ts`, `scripts/{build-android-apks,verify-apk-metadata,check-stale-variant-names}.mjs`,
 and 6 new test files (+ 4 input-subsystem test files from the fork).
@@ -214,7 +214,7 @@ best practices, and finish the remaining follow-ups.
   480×640@240dpi, touchScreen=no/dPad=yes — `config` dry-run verified.
 - `scripts/android-keypad-smoke.sh`: no-GMS + install/launch + keypad-only + logcat smoke,
   runnable on the emulator or a real device.
-- `docs/research/callback8020/sailfish-callback-8020-emulation.md`: 3-layer strategy (Playwright /
+- `docs/plans/callback8020/sailfish-callback-8020-emulation.md`: 3-layer strategy (Playwright /
   AOSP emulator / Waydroid VANILLA + Pixel 4) with exact commands + caveats.
 
 ### Real-browser small-screen layout (was Low risk → RESOLVED)
@@ -240,5 +240,31 @@ Evidence saved under `artifacts/android-apks/validation/`:
 - Real Sailfish AppSupport / Callback 8020 hardware (pre-release). The emulation doc gives
   the closest substitutes (Waydroid VANILLA, AOSP no-GMS 480×640 emulator) to run when a
   binder-capable kernel + Wayland host (or the device) is available.
+
+## Waydroid validation — RAN locally (2026-06-18)
+
+- Added `scripts/waydroid-smoke.sh` (self-contained; `WAYDROID_SMOKE_DISABLE=1` toggle),
+  opt-in non-blocking CI `.github/workflows/waydroid-smoke.yaml`, npm `test:waydroid*`.
+- Environment: Ubuntu 24.04, kernel 6.17, `binder_linux` module loaded, Waydroid installed
+  + `init -s VANILLA` (no-GMS), container service active. No weston → harness fell back to
+  **`kwin_wayland --virtual`** (headless, under dbus-run-session) for the Wayland socket.
+- Blockers found + handled: `waydroid shell` needs root; adb-over-TCP to the container fails
+  RSA auth headlessly. So the smoke uses **user-level `waydroid app install`/`launch` +
+  `waydroid app list`** (no root) for the core checks; adb/shell-based screenshot+dumpsys is
+  best-effort (auto-runs on CI's passwordless-sudo runners).
+- Result (`scripts/waydroid-smoke.sh run` → PASS): static no-GMS OK; image has 0
+  `com.google.android.gms`; **C64U Remote installed** (`waydroid app list` → `Name: C64U
+  Remote` / `packageName: uk.gleissner.c64uremote`) and **launched** (container active, still
+  listed after launch). The VANILLA app list is LineageOS/AOSP only (no `com.google.*`).
+
+## Issue: "Web | Unit tests (coverage)" (2026-06-18)
+
+- CI failure = `releaseVersionMetadata.test.ts` (Received `0.8.8-rc1` vs Expected `0.8.8-rc2`)
+  — CI ran a pre-bump commit. HEAD already has the `rc2` bump → the test passes on HEAD.
+- Perf-budget lines in the log ("Android HVSC perf budgets FAILED: T1 25000>20000",
+  "browseLoadSnapshotMs: invalid budget value not-a-number") are benign console output
+  (runner-speed dependent), not test failures — the run reported exactly 1 failed test.
+- Verifying the coverage run is green on HEAD and the 91% line/branch gate still holds with
+  the new `src/` (input subsystem, useT9Input, Settings/host-field wiring).
 
 

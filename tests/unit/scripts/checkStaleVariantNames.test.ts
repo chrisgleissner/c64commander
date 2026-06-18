@@ -20,8 +20,8 @@ describe("check-stale-variant-names", () => {
     expect(isAllowed("PLANS.md")).toBe(true);
     expect(isAllowed("docs/research/variants/variant-spec.md")).toBe(true);
     expect(ALLOWED_PREFIXES).toContain("docs/research/");
-    // The Sailfish/Callback 8020 docs live under docs/research/callback8020/ → covered by prefix.
-    expect(isAllowed("docs/research/callback8020/sailfish-callback-8020-android-compatibility.md")).toBe(true);
+    // The Sailfish/Callback 8020 docs live under docs/plans/callback8020/ → covered by prefix.
+    expect(isAllowed("docs/plans/callback8020/sailfish-callback-8020-android-compatibility.md")).toBe(true);
     // The Android-only variant test asserts the old variant is absent (migration guard).
     expect(ALLOWED_FILES.has("tests/unit/scripts/variantAndroidOnly.test.ts")).toBe(true);
   });

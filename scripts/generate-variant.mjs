@@ -116,10 +116,14 @@ const requireBoolean = (value, label) => {
 
 const requireHexColor = (value, label) => {
     const normalized = requireNonEmptyString(value, label);
-    if (!/^#?[0-9a-fA-F]{6}$/.test(normalized)) {
+    const match = /^#?([0-9a-fA-F]{6})$/.exec(normalized);
+    if (!match) {
         fail(`${label} must be a 6-digit hex color`);
     }
-    return normalized;
+    // Always return the canonical `#RRGGBB` form. The value flows into CSS colors
+    // (renderWebIndexHtml) and Android color resources (renderAndroidLauncherBackgroundXml),
+    // both of which require the leading `#`; a `#`-less input would silently break them.
+    return `#${match[1]}`;
 };
 
 const parseYamlFile = (filePath, failureLabel) => {
@@ -254,11 +258,13 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
         themeColor = requireHexColor(themeRaw.theme_color, `variants.${variantId}.theme.theme_color`);
         backgroundColor = requireHexColor(themeRaw.background_color, `variants.${variantId}.theme.background_color`);
     } else if (hasWeb) {
-        themeColor = requireNonEmptyString(
+        // These colors are reused for Android color resources and image backgrounds, so the
+        // web fallback must enforce the same hex constraint/normalization as the theme block.
+        themeColor = requireHexColor(
             raw.platform.web.theme_color,
             `variants.${variantId}.platform.web.theme_color`,
         );
-        backgroundColor = requireNonEmptyString(
+        backgroundColor = requireHexColor(
             raw.platform.web.background_color,
             `variants.${variantId}.platform.web.background_color`,
         );
@@ -578,6 +584,12 @@ export const renderVariantJson = (selection) => `${JSON.stringify(selection, nul
 
 export const renderWebIndexHtml = (selection) => {
     const { variant } = selection;
+    // The web manifest is only emitted for variants that declare a `platform.web` block
+    // (see compileVariant). Android-only variants never generate manifest.webmanifest, so
+    // omit the <link rel="manifest"> for them to avoid a guaranteed 404 in the Capacitor WebView.
+    const manifestLink = variant.platform.web
+        ? '\n    <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />'
+        : '';
     return `<!doctype html>
 <html lang="en">
   <head>
@@ -601,8 +613,7 @@ export const renderWebIndexHtml = (selection) => {
 
     <link rel="icon" href="%BASE_URL%${variant.assets.public.faviconPng.slice(1)}" type="image/png" />
     <link rel="icon" href="%BASE_URL%${variant.assets.public.icon512Png.slice(1)}" type="image/png" />
-    <link rel="apple-touch-icon" href="%BASE_URL%${variant.assets.public.icon512Png.slice(1)}" />
-    <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="%BASE_URL%${variant.assets.public.icon512Png.slice(1)}" />${manifestLink}
 
     <meta property="og:title" content="${variant.displayName}" />
     <meta

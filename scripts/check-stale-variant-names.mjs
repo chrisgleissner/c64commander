@@ -32,9 +32,10 @@ export const ALLOWED_FILES = new Set([
     'tests/unit/scripts/variantAndroidOnly.test.ts',
 ]);
 
-// Directory prefixes whose contents are historical/research and exempt
-// (the Sailfish/Callback 8020 design docs live under docs/research/callback8020/).
-export const ALLOWED_PREFIXES = ['docs/research/'];
+// Directory prefixes whose contents are historical/research/plan docs and exempt.
+// The Sailfish/Callback 8020 design docs live under docs/plans/callback8020/;
+// the historical variant spec lives under docs/research/.
+export const ALLOWED_PREFIXES = ['docs/research/', 'docs/plans/callback8020/'];
 
 export const isAllowed = (relativePath) => {
     if (ALLOWED_FILES.has(relativePath)) return true;

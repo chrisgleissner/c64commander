@@ -161,6 +161,76 @@ describe("Android-only variant schema", () => {
     expect(remote.theme).toEqual({ themeColor: "#2F6B8B", backgroundColor: "#2F6B8B" });
   });
 
+  it("normalizes theme colors that omit the leading # to the canonical #RRGGBB form", () => {
+    const repoRoot = createTempDir("variant-android-only-");
+    writeAndroidOnlyFixtureRepo(repoRoot);
+    const raw = {
+      schema_version: 1,
+      repo: { default_variant: "c64u-remote", publish_defaults: { release: ["c64u-remote"], ci: ["c64u-remote"] } },
+      variants: {
+        "c64u-remote": {
+          display_name: "C64U Remote",
+          app_id: "c64u-remote",
+          description: "x",
+          exported_file_basename: "c64u-remote",
+          theme: { theme_color: "2F6B8B", background_color: "2f6b8b" },
+          platform: {
+            android: { application_id: "uk.gleissner.c64uremote", custom_url_scheme: "uk.gleissner.c64uremote" },
+          },
+          assets: {
+            sources: {
+              icon: { path: "variants/assets/c64u-remote/icon.png", format: "png" },
+              logo: { path: "variants/assets/c64u-remote/logo.png", format: "png" },
+              splash: { path: "variants/assets/c64u-remote/splash.png", format: "png" },
+            },
+          },
+          runtime: { endpoints: { device_host: "c64u" } },
+        },
+      },
+    };
+    const config = validateVariantConfig(raw, { repoRoot }) as any;
+    // The leading "#" is required for CSS/Android color resources, so a "#"-less input
+    // must be normalized rather than passed through unchanged.
+    expect(config.variants["c64u-remote"].theme).toEqual({ themeColor: "#2F6B8B", backgroundColor: "#2f6b8b" });
+  });
+
+  it("rejects a web-fallback theme color that is not a valid hex color", () => {
+    const repoRoot = createTempDir("variant-android-only-");
+    writeAndroidOnlyFixtureRepo(repoRoot);
+    const raw = {
+      schema_version: 1,
+      repo: { default_variant: "c64commander", publish_defaults: { release: ["c64commander"], ci: ["c64commander"] } },
+      variants: {
+        c64commander: {
+          display_name: "C64 Commander",
+          app_id: "c64commander",
+          description: "x",
+          exported_file_basename: "c64commander",
+          platform: {
+            android: { application_id: "uk.gleissner.c64commander", custom_url_scheme: "uk.gleissner.c64commander" },
+            // No top-level theme block: colors fall back to platform.web, which must still be hex-validated.
+            web: {
+              short_name: "x",
+              theme_color: "blue",
+              background_color: "#000000",
+              login_title: "x",
+              login_heading: "x",
+            },
+          },
+          assets: {
+            sources: {
+              icon: { path: "variants/assets/c64u-remote/icon.png", format: "png" },
+              logo: { path: "variants/assets/c64u-remote/logo.png", format: "png" },
+              splash: { path: "variants/assets/c64u-remote/splash.png", format: "png" },
+            },
+          },
+          runtime: { endpoints: { device_host: "c64u" } },
+        },
+      },
+    };
+    expect(() => validateVariantConfig(raw, { repoRoot })).toThrow(/theme_color must be a 6-digit hex color/);
+  });
+
   it("rejects a variant that is missing the mandatory platform.android block", () => {
     const repoRoot = createTempDir("variant-android-only-");
     writeAndroidOnlyFixtureRepo(repoRoot);
@@ -241,6 +311,11 @@ describe("Android-only variant schema", () => {
     expect(existsSync(path.join(repoRoot, "src/generated/variant.json"))).toBe(true);
     expect(existsSync(path.join(repoRoot, "index.html"))).toBe(true);
     expect(existsSync(path.join(repoRoot, "android/app/src/main/res/values/strings.xml"))).toBe(true);
+
+    // The generated index.html must not link a web manifest for an Android-only variant:
+    // the file is never emitted, so the link would be a guaranteed 404 in the Capacitor WebView.
+    const indexHtml = readFileSync(path.join(repoRoot, "index.html"), "utf8");
+    expect(indexHtml).not.toContain('rel="manifest"');
 
     // Web + iOS artifacts are NOT generated for an Android-only variant.
     expect(existsSync(path.join(repoRoot, "public/manifest.webmanifest"))).toBe(false);

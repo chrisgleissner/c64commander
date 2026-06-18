@@ -9,8 +9,7 @@ marked as an on-device validation item.
 
 **What was actually validated (this work):** both APKs build and pass metadata +
 no-GMS checks; the C64U Remote APK installs, launches, and runs on a **physical
-Pixel 4 running a de-Googled Android (no Google Play Services, GMS package count
-0)**; both variants coexist (distinct application ids); the app is operable with
+Pixel 4 running a de-Googled Android (no Google Play Services, GMS package count 0)**; both variants coexist (distinct application ids); the app is operable with
 **hardware keys only** (d-pad focus navigation); C64U Remote's pruned features are
 absent from Home and Settings on-device; the C64U Remote APK ships **only the
 INTERNET permission**; and the layout has **no horizontal overflow at 480×640 or
@@ -36,7 +35,7 @@ are vendor-stated.**
 
 - Flip phone. **Internal display 3.25", 480×640**; separate 1.77" cover display
   (not an app surface). (Brief baseline said "640×480" — same panel, portrait.)
-- **Jolla Sailfish OS + Android AppSupport** (compatibility layer, *not* stock
+- **Jolla Sailfish OS + Android AppSupport** (compatibility layer, _not_ stock
   Android). Claims "99% of Android apps".
 - **No Google Play / no Google services** (except a Maps exception). Browsers and
   social apps blocked at the system level ("patent-pending" + DNS blocking);
@@ -81,12 +80,12 @@ licensed/installed/enabled from the Jolla Store.
    behaviour, not installability) but is an on-device validation item.
 2. No Google Play Services. The app must run with zero GMS dependency.
 3. Touch may be off by default; the app must be fully operable from the physical
-   keypad and must not *require* touch or the on-screen keyboard.
+   keypad and must not _require_ touch or the on-screen keyboard.
 4. Local network HTTP to the C64U/Ultimate device must work over cleartext, by
    raw IPv4 first (hostname/mDNS resolution inside AppSupport is unproven).
 5. The install path for an unsigned/unknown APK on the 8020 is unconfirmed; we
-   produce a normal debug + signable release APK and document that the *install
-   channel* (Aurora/F-Droid/sideload/Jolla-certified store) is out of our control.
+   produce a normal debug + signable release APK and document that the _install
+   channel_ (Aurora/F-Droid/sideload/Jolla-certified store) is out of our control.
 
 ---
 
@@ -97,21 +96,21 @@ Classification of every feature flag / Home surface, from code + the registry
 includes `stable-core` only; everything else is excluded by the variant's flag
 overlay.
 
-| Feature / flag | Surface | Base default | Maturity | In C64U Remote? |
-| --- | --- | --- | --- | --- |
-| Core device control (connect, play/pause/stop, reboot, menu, config browse, drives view, system info, audio mixer) | Home / Play / Disks / Config tabs | always on (not flag-gated) | **stable-core** | ✅ included |
-| `hvsc_enabled` (HVSC downloads) | Play › Add Items | on | unrelated (internet content) | ❌ excluded |
-| `commoserve_enabled` (CommoServe) | Play › Add Items | on | unrelated (internet content) | ❌ excluded |
-| `demo_mode_enabled` (simulated device) | Settings / connect | off | stable-supporting, not needed | ❌ excluded |
-| `background_execution_enabled` | Play (native FGS scheduling) | on, dev-only | immature for AppSupport (background restricted) | ❌ excluded |
-| `lighting_studio_enabled` | Home/Disks/Play/Config | off, dev-only | immature/experimental | ❌ excluded |
-| `ram_snapshots_enabled` | Home (Save/Load RAM) | off | immature/experimental | ❌ excluded |
-| `home_telnet_reu_snapshot_enabled` | Home (REU save/restore) | off, dev-only | immature (fragile Telnet) | ❌ excluded |
-| `home_telnet_config_actions_enabled` | Home (file save/load, Clear Flash) | off | immature (fragile Telnet) | ❌ excluded |
-| `home_telnet_drive_actions_enabled` | Home (drive reset, Soft IEC, Drive B) | off | immature (fragile Telnet) | ❌ excluded |
-| `home_telnet_printer_actions_enabled` | Home (printer on/flush/reset) | off | immature (fragile Telnet) | ❌ excluded |
-| `home_telnet_power_cycle_enabled` | Home (power cycle) | off | immature (fragile Telnet) | ❌ excluded |
-| `home_telnet_clear_ram_reboot_enabled` | Home (Reboot Clr Mem) | off | immature (fragile Telnet) | ❌ excluded |
+| Feature / flag                                                                                                     | Surface                               | Base default               | Maturity                                        | In C64U Remote? |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------- | -------------------------- | ----------------------------------------------- | --------------- |
+| Core device control (connect, play/pause/stop, reboot, menu, config browse, drives view, system info, audio mixer) | Home / Play / Disks / Config tabs     | always on (not flag-gated) | **stable-core**                                 | ✅ included     |
+| `hvsc_enabled` (HVSC downloads)                                                                                    | Play › Add Items                      | on                         | unrelated (internet content)                    | ❌ excluded     |
+| `commoserve_enabled` (CommoServe)                                                                                  | Play › Add Items                      | on                         | unrelated (internet content)                    | ❌ excluded     |
+| `demo_mode_enabled` (simulated device)                                                                             | Settings / connect                    | off                        | stable-supporting, not needed                   | ❌ excluded     |
+| `background_execution_enabled`                                                                                     | Play (native FGS scheduling)          | on, dev-only               | immature for AppSupport (background restricted) | ❌ excluded     |
+| `lighting_studio_enabled`                                                                                          | Home/Disks/Play/Config                | off, dev-only              | immature/experimental                           | ❌ excluded     |
+| `ram_snapshots_enabled`                                                                                            | Home (Save/Load RAM)                  | off                        | immature/experimental                           | ❌ excluded     |
+| `home_telnet_reu_snapshot_enabled`                                                                                 | Home (REU save/restore)               | off, dev-only              | immature (fragile Telnet)                       | ❌ excluded     |
+| `home_telnet_config_actions_enabled`                                                                               | Home (file save/load, Clear Flash)    | off                        | immature (fragile Telnet)                       | ❌ excluded     |
+| `home_telnet_drive_actions_enabled`                                                                                | Home (drive reset, Soft IEC, Drive B) | off                        | immature (fragile Telnet)                       | ❌ excluded     |
+| `home_telnet_printer_actions_enabled`                                                                              | Home (printer on/flush/reset)         | off                        | immature (fragile Telnet)                       | ❌ excluded     |
+| `home_telnet_power_cycle_enabled`                                                                                  | Home (power cycle)                    | off                        | immature (fragile Telnet)                       | ❌ excluded     |
+| `home_telnet_clear_ram_reboot_enabled`                                                                             | Home (Reboot Clr Mem)                 | off                        | immature (fragile Telnet)                       | ❌ excluded     |
 
 **Why flag overrides are sufficient (no separate route guard needed):** none of
 the excluded features owns a whole tab route — they are all rendered conditionally
@@ -200,12 +199,12 @@ this is harmless (an unused permission), and noted as a residual risk.
   background) now reads the resolved `variant.theme`.
 - **C64U Remote** (`variants/variants.yaml`): `display_name: C64U Remote`,
   `app_id: c64u-remote`, Android `application_id`/`custom_url_scheme:
-  uk.gleissner.c64uremote`, `exported_file_basename: c64u-remote`, theme
+uk.gleissner.c64uremote`, `exported_file_basename: c64u-remote`, theme
   `#2F6B8B`, assets under `variants/assets/c64u-remote/`. No iOS/web blocks.
 - **Feature pruning** (`variants/feature-flags/c64u-remote.yaml`): every one of
   the 12 flags is set to `{enabled: false, visible_to_user: false}`. The variant
   overlay is merged into the feature definition at build time (baked into
-  `src/generated/variant.ts`), *before* any runtime/user override; a flag with
+  `src/generated/variant.ts`), _before_ any runtime/user override; a flag with
   `visible_to_user: false` is hidden from Settings and is non-editable, so a
   persisted user override / stale local storage **cannot re-enable it**. C64U
   Remote also uses a distinct app id → a separate storage sandbox, so no
@@ -265,7 +264,7 @@ doesn't track the DOM caret), so it is a non-intrusive fallback.
 - `c64u` — multitap: `2·3`(c) `6·4`(6) `4·4`(4) `8·2`(u) (`n·k` = key n, k taps).
 - `c64u.local` — multitap: `c64u` `1·1`(.) `5·3`(l) `6·3`(o) `2·3`(c) `2·1`(a) `5·3`(l).
 
-Full mapping in `docs/keymap.md`.
+Full mapping in `docs/plans/callback8020/keymap.md`.
 
 **CTA / keyboard-only operation:** the app uses standard focusable elements
 (native buttons, Radix controls) which are Tab-focusable and Enter/Space
@@ -305,10 +304,10 @@ Automated (all green locally — see the build-command evidence in `WORKLOG.md`)
 
 APK build evidence (local, Android SDK + Gradle 9.5.1 + aapt2 + Java 21):
 
-| Variant | Application id | Label | APK | Size |
-| --- | --- | --- | --- | --- |
+| Variant      | Application id            | Label         | APK                                                   | Size     |
+| ------------ | ------------------------- | ------------- | ----------------------------------------------------- | -------- |
 | c64commander | uk.gleissner.c64commander | C64 Commander | `artifacts/android-apks/c64commander-<ver>-debug.apk` | ~14.7 MB |
-| c64u-remote | uk.gleissner.c64uremote | C64U Remote | `artifacts/android-apks/c64u-remote-<ver>-debug.apk` | ~14.7 MB |
+| c64u-remote  | uk.gleissner.c64uremote   | C64U Remote   | `artifacts/android-apks/c64u-remote-<ver>-debug.apk`  | ~14.7 MB |
 
 Both built from a single `npm run android:apk:all --verify-metadata`; metadata
 verified via `aapt2 dump badging` (label + application id match the variant).
@@ -349,16 +348,16 @@ AOSP no-GMS 480×640 emulator) are documented in
 
 ## 12. Remaining risks
 
-| Area | Finding | Impact | Variant affected | Severity | Evidence | Mitigation | Remaining risk | Est. effort |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| AppSupport WebView | WebView version on the Callback is undocumented | App may hit an unsupported WebView feature | both | High | §1, §6; AppSupport docs | Conservative feature set; **app launches + renders + runs cleanly on a real de-Googled Android WebView (Pixel 4)** | Sailfish AppSupport's specific WebView still unverified | 0.5d to run + triage on AppSupport |
-| Local networking | Cleartext + LAN + mDNS/`.local` behaviour inside AppSupport unknown | Device discovery/connection could fail | both | High | §7; `network_security_config.xml`; Jolla docs silent | Raw IPv4 first-class + T9 hostname mode; no internet needed | mDNS may not resolve in container | 0.5–1d if a fallback resolver is needed |
-| Install path | 8020 sideload policy for unknown APKs undisclosed | C64U Remote may not be installable by users on the 8020 | c64u-remote | High | §1 (TechSpot/heise) | Produce standard debug + signable release APK/AAB; document Aurora/F-Droid/sideload | Distribution channel out of our control | external |
-| targetSdk vs AppSupport | `targetSdk 35` may exceed device AppSupport API (≤33) | Behavioural quirks (not install failure) | both | Medium | `android/variables.gradle`; §1 | targetSdk gates behaviour, not install; monitor on-device | Unverified | 0.5d if a downshift is needed |
-| Touch-off default | Callback ships with touch disabled | Touch-only flows would be unreachable | both | Medium→Low | §1 (heise); §11 | T9 + keypad subsystem; hostname/IP without soft keyboard; **keypad-only d-pad operability validated on the Pixel 4** | Full per-CTA FocusController registration is incremental; physical-keypad T9 unverified | 2–4d for exhaustive CTA registration |
-| Shared manifest perms | FGS/`WAKE_LOCK` previously declared but unused in C64U Remote | Broader permission set than needed | c64u-remote | **RESOLVED** | §5; verified via `aapt2 dump permissions` | Variant-driven manifest swap: C64U Remote now ships **only INTERNET**; full app keeps FGS/WAKE_LOCK (parity test `androidManifestParity.test.ts`) | none | done |
-| Small-screen pixel overflow | jsdom can't measure layout | A specific screen could overflow at 320–480 px | both | **RESOLVED** | `playwright/callbackSmallScreen.spec.ts` | **Real-browser test asserts no horizontal overflow at 480×640 and 320×480 across all primary routes (passing)** | none | done |
-| Background lifecycle | AppSupport restricts background services | Background playback unreliable | c64commander only | Low | §1, §5 | C64U Remote disables background execution entirely | Affects full app only | n/a for c64u-remote |
+| Area                        | Finding                                                             | Impact                                                  | Variant affected  | Severity     | Evidence                                             | Mitigation                                                                                                                                        | Remaining risk                                                                          | Est. effort                             |
+| --------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------- | ----------------- | ------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------- |
+| AppSupport WebView          | WebView version on the Callback is undocumented                     | App may hit an unsupported WebView feature              | both              | High         | §1, §6; AppSupport docs                              | Conservative feature set; **app launches + renders + runs cleanly on a real de-Googled Android WebView (Pixel 4)**                                | Sailfish AppSupport's specific WebView still unverified                                 | 0.5d to run + triage on AppSupport      |
+| Local networking            | Cleartext + LAN + mDNS/`.local` behaviour inside AppSupport unknown | Device discovery/connection could fail                  | both              | High         | §7; `network_security_config.xml`; Jolla docs silent | Raw IPv4 first-class + T9 hostname mode; no internet needed                                                                                       | mDNS may not resolve in container                                                       | 0.5–1d if a fallback resolver is needed |
+| Install path                | 8020 sideload policy for unknown APKs undisclosed                   | C64U Remote may not be installable by users on the 8020 | c64u-remote       | High         | §1 (TechSpot/heise)                                  | Produce standard debug + signable release APK/AAB; document Aurora/F-Droid/sideload                                                               | Distribution channel out of our control                                                 | external                                |
+| targetSdk vs AppSupport     | `targetSdk 35` may exceed device AppSupport API (≤33)               | Behavioural quirks (not install failure)                | both              | Medium       | `android/variables.gradle`; §1                       | targetSdk gates behaviour, not install; monitor on-device                                                                                         | Unverified                                                                              | 0.5d if a downshift is needed           |
+| Touch-off default           | Callback ships with touch disabled                                  | Touch-only flows would be unreachable                   | both              | Medium→Low   | §1 (heise); §11                                      | T9 + keypad subsystem; hostname/IP without soft keyboard; **keypad-only d-pad operability validated on the Pixel 4**                              | Full per-CTA FocusController registration is incremental; physical-keypad T9 unverified | 2–4d for exhaustive CTA registration    |
+| Shared manifest perms       | FGS/`WAKE_LOCK` previously declared but unused in C64U Remote       | Broader permission set than needed                      | c64u-remote       | **RESOLVED** | §5; verified via `aapt2 dump permissions`            | Variant-driven manifest swap: C64U Remote now ships **only INTERNET**; full app keeps FGS/WAKE_LOCK (parity test `androidManifestParity.test.ts`) | none                                                                                    | done                                    |
+| Small-screen pixel overflow | jsdom can't measure layout                                          | A specific screen could overflow at 320–480 px          | both              | **RESOLVED** | `playwright/callbackSmallScreen.spec.ts`             | **Real-browser test asserts no horizontal overflow at 480×640 and 320×480 across all primary routes (passing)**                                   | none                                                                                    | done                                    |
+| Background lifecycle        | AppSupport restricts background services                            | Background playback unreliable                          | c64commander only | Low          | §1, §5                                               | C64U Remote disables background execution entirely                                                                                                | Affects full app only                                                                   | n/a for c64u-remote                     |
 
 Severity = impact if it occurs; the three High items are all "cannot be proven
 without the device", not known defects.

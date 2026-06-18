@@ -9,7 +9,7 @@
  * dependency (the GMS client libraries are designed to degrade gracefully), so
  * this static check intentionally only flags required manifest declarations.
  * The authoritative complement is a runtime launch test on a non-GMS image
- * (see docs/research/callback8020/sailfish-callback-8020-emulation.md).
+ * (see docs/plans/callback8020/sailfish-callback-8020-emulation.md).
  *
  * Usage:
  *   node scripts/verify-apk-no-gms.mjs <apk> [--json]
