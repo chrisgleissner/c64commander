@@ -6,19 +6,19 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const getInfoMock = vi.fn();
 const addLogMock = vi.fn();
 const normalizeTransportErrorSpy = vi.fn();
 
-vi.mock('@/lib/c64api', () => ({
+vi.mock("@/lib/c64api", () => ({
   C64API: class {
     getInfo = getInfoMock;
   },
   buildBaseUrlFromDeviceHost: (host: string) => `http://${host}`,
-  getC64APIConfigSnapshot: () => ({ deviceHost: 'u64' }),
-  resolveDeviceHostFromStorage: () => 'u64',
+  getC64APIConfigSnapshot: () => ({ deviceHost: "u64" }),
+  resolveDeviceHostFromStorage: () => "u64",
   stripPortFromDeviceHost: (host: string) => host,
   getDeviceHostHttpPort: () => 80,
   buildDeviceHostWithHttpPort: (host: string) => host,
@@ -27,110 +27,110 @@ vi.mock('@/lib/c64api', () => ({
   getDeviceHostFromBaseUrl: (url: string) => url.replace(/^https?:\/\//, ""),
 }));
 
-vi.mock('@/lib/c64api/hostConfig', () => ({
+vi.mock("@/lib/c64api/hostConfig", () => ({
   buildDeviceHostWithHttpPort: (host: string) => host,
   getDeviceHostHttpPort: () => 80,
   stripPortFromDeviceHost: (host: string) => host,
 }));
 
-vi.mock('@/lib/secureStorage', () => ({
+vi.mock("@/lib/secureStorage", () => ({
   getPassword: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('@/lib/ftp/ftpConfig', () => ({
+vi.mock("@/lib/ftp/ftpConfig", () => ({
   setRuntimeFtpPortOverride: vi.fn(),
   clearRuntimeFtpPortOverride: vi.fn(),
 }));
 
-vi.mock('@/lib/mock/mockServer', () => ({
+vi.mock("@/lib/mock/mockServer", () => ({
   startMockServer: vi.fn(),
   stopMockServer: vi.fn(),
   getActiveMockBaseUrl: () => null,
   getActiveMockFtpPort: () => null,
 }));
 
-vi.mock('@/lib/config/appSettings', () => ({
+vi.mock("@/lib/config/appSettings", () => ({
   loadAutomaticDemoModeEnabled: () => false,
   loadDiscoveryProbeTimeoutMs: () => 2500,
   loadStartupDiscoveryWindowMs: () => 5000,
 }));
 
-vi.mock('@/lib/config/featureFlags', () => ({
+vi.mock("@/lib/config/featureFlags", () => ({
   featureFlagManager: { getSnapshot: () => ({ flags: { demo_mode_enabled: false } }) },
 }));
 
-vi.mock('@/lib/config/deviceSafetySettings', () => ({
+vi.mock("@/lib/config/deviceSafetySettings", () => ({
   loadDeviceSafetyConfig: () => ({ enabled: false }),
 }));
 
-vi.mock('@/lib/fuzz/fuzzMode', () => ({
+vi.mock("@/lib/fuzz/fuzzMode", () => ({
   applyFuzzModeDefaults: vi.fn(),
   getFuzzMockBaseUrl: () => null,
   isFuzzModeEnabled: () => false,
 }));
 
-vi.mock('@/lib/smoke/smokeMode', () => ({
+vi.mock("@/lib/smoke/smokeMode", () => ({
   getSmokeConfig: () => ({}),
   initializeSmokeMode: vi.fn(),
   isSmokeModeEnabled: () => false,
   recordSmokeStatus: vi.fn(),
 }));
 
-vi.mock('@/lib/deviceInteraction/deviceInteractionManager', () => ({
+vi.mock("@/lib/deviceInteraction/deviceInteractionManager", () => ({
   resetInteractionState: vi.fn(),
 }));
 
-vi.mock('@/lib/deviceInteraction/deviceStateStore', () => ({
+vi.mock("@/lib/deviceInteraction/deviceStateStore", () => ({
   updateDeviceConnectionState: vi.fn(),
 }));
 
-vi.mock('@/lib/native/mdnsResolver', () => ({
+vi.mock("@/lib/native/mdnsResolver", () => ({
   isBareHostname: (host: string) => /^[a-z][a-z0-9-]*$/i.test(host),
   isMdnsAvailable: () => false,
   resolveMdnsHost: vi.fn(),
 }));
 
-vi.mock('@/lib/c64api/transportErrors', () => ({
+vi.mock("@/lib/c64api/transportErrors", () => ({
   normalizeTransportError: (error: unknown, ctx: { host?: string }) => {
     normalizeTransportErrorSpy(error, ctx);
     const raw = error instanceof Error ? error.message : String(error ?? "");
     if (/(unknown host|enotfound|getaddrinfo|cannot resolve|unable to resolve)/i.test(raw)) {
       return {
-        class: 'dns',
+        class: "dns",
         userMessage: `Cannot resolve '${ctx.host}'. On Android, prefer the device IP address.`,
         rawMessage: raw,
       };
     }
     if (/^HTTP\s+\d+/.test(raw)) {
-      return { class: 'unknown', userMessage: raw, rawMessage: raw };
+      return { class: "unknown", userMessage: raw, rawMessage: raw };
     }
-    return { class: 'unknown', userMessage: raw || 'Unknown transport error', rawMessage: raw };
+    return { class: "unknown", userMessage: raw || "Unknown transport error", rawMessage: raw };
   },
 }));
 
-vi.mock('@/lib/uiErrors', () => ({
+vi.mock("@/lib/uiErrors", () => ({
   clearConnectivityErrorToastsForHost: vi.fn(),
 }));
 
-vi.mock('@/lib/connection/reachabilityEvents', () => ({
+vi.mock("@/lib/connection/reachabilityEvents", () => ({
   registerReachabilityListener: vi.fn(),
 }));
 
-vi.mock('@/lib/savedDevices/store', () => ({
+vi.mock("@/lib/savedDevices/store", () => ({
   completeSavedDeviceVerification: vi.fn(),
   getSavedDevicesSnapshot: () => ({ summaries: {}, verifiedByDeviceId: {} }),
   getSelectedSavedDevice: () => null,
   resolveCanonicalProductFamilyCode: () => null,
 }));
 
-vi.mock('@/lib/logging', () => ({
+vi.mock("@/lib/logging", () => ({
   addLog: (...args: unknown[]) => addLogMock(...args),
 }));
 
 // Import after mocks are registered
-import { probeInfoOnce } from '@/lib/connection/connectionManager';
+import { probeInfoOnce } from "@/lib/connection/connectionManager";
 
-describe('BUG-052 - probeInfoOnce contextualizes DNS-class transport errors before returning', () => {
+describe("BUG-052 - probeInfoOnce contextualizes DNS-class transport errors before returning", () => {
   beforeEach(() => {
     getInfoMock.mockReset();
     addLogMock.mockReset();
@@ -141,7 +141,7 @@ describe('BUG-052 - probeInfoOnce contextualizes DNS-class transport errors befo
     vi.clearAllMocks();
   });
 
-  it('returns the user-friendly DNS message for the BUG-052 hostname-resolver failure path', async () => {
+  it("returns the user-friendly DNS message for the BUG-052 hostname-resolver failure path", async () => {
     // Reproduce the BUG-052 repro: mDNS resolver rejects and the JS layer
     // falls through to a direct fetch that fails with the raw DNS fetch
     // error. Before the fix, probeInfoOnce returned the raw fetch text.
@@ -156,30 +156,30 @@ describe('BUG-052 - probeInfoOnce contextualizes DNS-class transport errors befo
     // The returned error must be the user-friendly DNS guidance, not the raw
     // fetch / plugin error text. This is the core BUG-052 invariant.
     expect(result.error).toBe("Cannot resolve 'u64'. On Android, prefer the device IP address.");
-    expect(result.error).not.toContain('Unable to resolve host');
-    expect(result.error).not.toContain('via mDNS');
+    expect(result.error).not.toContain("Unable to resolve host");
+    expect(result.error).not.toContain("via mDNS");
     // The mapper must be invoked with the original error and the active host.
     expect(normalizeTransportErrorSpy).toHaveBeenCalledWith(
       expect.any(TypeError),
-      expect.objectContaining({ host: 'u64' }),
+      expect.objectContaining({ host: "u64" }),
     );
   });
 
-  it('preserves HTTP-class error messages unchanged (no false DNS normalization)', async () => {
-    getInfoMock.mockRejectedValueOnce(new Error('HTTP 503 Service Unavailable'));
+  it("preserves HTTP-class error messages unchanged (no false DNS normalization)", async () => {
+    getInfoMock.mockRejectedValueOnce(new Error("HTTP 503 Service Unavailable"));
 
     const result = await probeInfoOnce();
 
     expect(result.ok).toBe(false);
-    expect(result.error).toBe('HTTP 503 Service Unavailable');
+    expect(result.error).toBe("HTTP 503 Service Unavailable");
   });
 
-  it('preserves the raw error verbatim when the mapper returns the same text (e.g. unknown transport)', async () => {
-    getInfoMock.mockRejectedValueOnce(new Error('Some bespoke transport failure'));
+  it("preserves the raw error verbatim when the mapper returns the same text (e.g. unknown transport)", async () => {
+    getInfoMock.mockRejectedValueOnce(new Error("Some bespoke transport failure"));
 
     const result = await probeInfoOnce();
 
     expect(result.ok).toBe(false);
-    expect(result.error).toBe('Some bespoke transport failure');
+    expect(result.error).toBe("Some bespoke transport failure");
   });
 });

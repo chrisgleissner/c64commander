@@ -13,10 +13,7 @@ import { Check, ChevronRight, Circle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePopoverBackDismissRoot } from "@/components/ui/interstitial-state";
 
-const ContextMenu = ({
-  onOpenChange,
-  ...props
-}: React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Root>) => {
+const ContextMenu = ({ onOpenChange, ...props }: React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Root>) => {
   // Radix ContextMenu has no controllable `open`; it opens on the contextmenu event, so we only
   // intercept `onOpenChange` to track open/close for Android-Back dismissal.
   const backDismiss = usePopoverBackDismissRoot({ onOpenChange });

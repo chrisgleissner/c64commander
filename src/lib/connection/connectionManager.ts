@@ -264,7 +264,7 @@ const probeInfoWithConnectionConfig = async (
     // so the connection snapshot, UnifiedHealthBadge, and downstream diagnostics
     // see a user-friendly message instead of the raw fetch / plugin error text.
     const failure = normalizeTransportError(error, { host: config.deviceHost });
-    addLog(failure.class === 'dns' ? 'info' : 'warn', 'Probe request failed', {
+    addLog(failure.class === "dns" ? "info" : "warn", "Probe request failed", {
       baseUrl: config.baseUrl,
       deviceHost: config.deviceHost,
       class: failure.class,

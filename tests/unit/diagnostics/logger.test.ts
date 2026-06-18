@@ -268,11 +268,7 @@ describe("logger", () => {
       const uninstall = logger.installConsoleDiagnosticsBridge();
       try {
         console.error({ message: "File does not exist" });
-        expect(addLog).not.toHaveBeenCalledWith(
-          "error",
-          '{"message":"File does not exist"}',
-          expect.anything(),
-        );
+        expect(addLog).not.toHaveBeenCalledWith("error", '{"message":"File does not exist"}', expect.anything());
       } finally {
         uninstall();
       }
@@ -282,11 +278,7 @@ describe("logger", () => {
       const uninstall = logger.installConsoleDiagnosticsBridge();
       try {
         console.error({ message: "Directory exists" });
-        expect(addLog).not.toHaveBeenCalledWith(
-          "error",
-          '{"message":"Directory exists"}',
-          expect.anything(),
-        );
+        expect(addLog).not.toHaveBeenCalledWith("error", '{"message":"Directory exists"}', expect.anything());
       } finally {
         uninstall();
       }
