@@ -5,16 +5,21 @@ import { spawnSync } from "node:child_process";
 const readJson = (path: string) => JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
 
 const latestGitTag = () => {
-  const result = spawnSync("git", ["describe", "--tags", "--abbrev=0"], {
-    cwd: process.cwd(),
-    encoding: "utf8",
-  });
+  const describe = () =>
+    spawnSync('git', ['describe', '--tags', '--abbrev=0'], { cwd: process.cwd(), encoding: 'utf8' });
 
+  let result = describe();
   if (result.status !== 0) {
-    throw new Error(`Unable to resolve latest Git tag: ${result.stderr || result.stdout}`);
+    spawnSync('git', ['fetch', '--tags', '--quiet'], { cwd: process.cwd(), encoding: 'utf8' });
+    result = describe();
   }
 
-  return result.stdout.trim();
+  if (result.status === 0) return result.stdout.trim();
+
+  const pkgVersion = readJson('package.json').version;
+  if (typeof pkgVersion === 'string' && pkgVersion.trim()) return pkgVersion.trim();
+
+  throw new Error(`Unable to resolve latest Git tag: ${result.stderr || result.stdout}`);
 };
 
 describe("release version metadata", () => {
