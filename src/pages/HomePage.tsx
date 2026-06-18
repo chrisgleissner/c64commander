@@ -113,7 +113,7 @@ export default function HomePage() {
 function HomePageContent() {
   const { status } = useC64Connection();
   const isActive = status.isConnected;
-  const [keyboardLightingRequested, setKeyboardLightingRequested] = useState(false);
+  const [keyboardLightingRequested, setKeyboardLightingRequested] = useState(true);
 
   const { data: u64SettingsCategory } = useC64ConfigItems(
     "U64 Specific Settings",
@@ -1469,26 +1469,7 @@ function HomePageContent() {
                     successLabel="Keyboard light"
                     testIdPrefix="home-keyboard-lighting"
                   />
-                ) : (
-                  <div
-                    className="bg-card border border-border rounded-xl p-3 space-y-2"
-                    data-section-label="Keyboard Light"
-                    data-testid="home-keyboard-lighting-deferred"
-                  >
-                    <p className="text-xs font-semibold text-primary uppercase tracking-wider">Keyboard Light</p>
-                    <p className="text-xs text-muted-foreground">
-                      Load keyboard lighting controls on demand to keep cold start responsive.
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setKeyboardLightingRequested(true)}
-                      data-testid="home-keyboard-lighting-load"
-                    >
-                      Load controls
-                    </Button>
-                  </div>
-                )}
+                ) : null}
               </div>
             </ProfileSplitSection>
           </motion.div>

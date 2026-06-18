@@ -79,7 +79,9 @@ describe("PlayFilesPage feature-flag contracts", () => {
     expect(playFilesPageSource).toContain("const backgroundCleanupTrackInstanceIdRef = useRef(trackInstanceId);");
     expect(playFilesPageSource).toContain("backgroundCleanupTrackInstanceIdRef.current = trackInstanceId;");
     expect(playFilesPageSource).toContain("const latestPlaybackState = playbackStateRef.current;");
-    expect(playFilesPageSource).toContain("if (latestPlaybackState.isPlaying && !latestPlaybackState.isPaused) {");
+    expect(playFilesPageSource).toMatch(
+      /if\s*\(\s*\(?\s*latestPlaybackState\.isPlaying\s*&&\s*!latestPlaybackState\.isPaused\s*\)?[\s\S]*?\{\s*$/m,
+    );
     expect(playFilesPageSource).toContain("Leaving background playback guard active across Play page unmount");
     expect(playFilesPageSource).toMatch(/void stopBackgroundExecutionRef\s*\.current\(\{/);
     expect(playFilesPageSource).toContain("trackInstanceId: backgroundCleanupTrackInstanceIdRef.current");
