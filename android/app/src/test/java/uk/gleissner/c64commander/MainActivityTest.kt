@@ -8,6 +8,7 @@
 
 package uk.gleissner.c64commander
 
+import com.getcapacitor.Bridge
 import com.getcapacitor.BridgeActivity
 import com.getcapacitor.JSObject
 import com.getcapacitor.PluginCall
@@ -16,8 +17,11 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mockito.Mockito.mock
+import org.mockito.Mockito.`when`
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.shadows.ShadowLog
+import java.lang.reflect.Field
 
 @RunWith(RobolectricTestRunner::class)
 class MainActivityTest {
@@ -100,6 +104,67 @@ class MainActivityTest {
 
     assertFalse(didClear)
     assertFalse(cleared)
+  }
+
+  @Test
+  fun clearUnpersistableShareActivityCallReflectiveWrapperReturnsFalseWhenFieldMissing() {
+    ShadowLog.clear()
+    val activity =
+      object : MainActivity() {
+        override fun resolvePendingActivityCallField(): Field {
+          throw NoSuchFieldException("simulated missing Capacitor field")
+        }
+      }
+    val bridge = mock(Bridge::class.java)
+
+    val didClear = activity.clearUnpersistableShareActivityCall(bridge)
+
+    assertFalse(didClear)
+    assertTrue(
+      ShadowLog.getLogsForTag("MainActivity").any {
+        it.msg?.contains("Unable to inspect pending Capacitor activity call before state save") == true
+      },
+    )
+  }
+
+  @Test
+  fun clearUnpersistableShareActivityCallReflectiveWrapperReturnsFalseWhenFieldInaccessible() {
+    ShadowLog.clear()
+    val inaccessibleField = mock(Field::class.java)
+    `when`<Any>(inaccessibleField.get(org.mockito.ArgumentMatchers.any())).thenThrow(
+      IllegalAccessException("simulated inaccessible Capacitor field"),
+    )
+    val activity =
+      object : MainActivity() {
+        override fun resolvePendingActivityCallField(): Field = inaccessibleField
+      }
+    val bridge = mock(Bridge::class.java)
+
+    val didClear = activity.clearUnpersistableShareActivityCall(bridge)
+
+    assertFalse(didClear)
+    assertTrue(
+      ShadowLog.getLogsForTag("MainActivity").any {
+        it.msg?.contains("Unable to clear pending Capacitor activity call before state save") == true
+      },
+    )
+  }
+
+  @Test
+  fun clearUnpersistableShareActivityCallReflectiveWrapperClearsShareCallThroughResolvedField() {
+    val shareCall = PluginCall(null, "Share", "callback-3", "share", JSObject())
+    val resolvedField = mock(Field::class.java)
+    `when`<Any>(resolvedField.get(org.mockito.ArgumentMatchers.any())).thenReturn(shareCall)
+    val bridge = mock(Bridge::class.java)
+    val activity =
+      object : MainActivity() {
+        override fun resolvePendingActivityCallField(): Field = resolvedField
+      }
+
+    val didClear = activity.clearUnpersistableShareActivityCall(bridge)
+
+    assertTrue(didClear)
+    org.mockito.Mockito.verify(resolvedField).set(bridge, null)
   }
 
   @Test

@@ -17,9 +17,10 @@ import com.getcapacitor.Bridge
 import com.getcapacitor.BridgeActivity
 import com.getcapacitor.PluginCall
 import java.io.File
+import java.lang.reflect.Field
 import java.net.CookieHandler
 
-class MainActivity : BridgeActivity() {
+open class MainActivity : BridgeActivity() {
   internal fun ensureCapacitorPluginAssetPath(filesDirectory: File = filesDir) {
     val pluginsPath = File(filesDirectory, "public/plugins")
     // Recoverable: file already exists in the expected shape. Bridge will read it.
@@ -149,10 +150,10 @@ class MainActivity : BridgeActivity() {
   }
 
   internal fun clearUnpersistableShareActivityCall(capacitorBridge: Bridge = bridge): Boolean {
-    try {
-      val pendingCallField = Bridge::class.java.getDeclaredField("pluginCallForLastActivity")
+    return try {
+      val pendingCallField = resolvePendingActivityCallField()
       pendingCallField.isAccessible = true
-      return clearUnpersistableShareActivityCall(
+      clearUnpersistableShareActivityCall(
         getPendingCall = { pendingCallField.get(capacitorBridge) as? PluginCall },
         clearPendingCall = { pendingCallField.set(capacitorBridge, null) },
       )
@@ -164,7 +165,7 @@ class MainActivity : BridgeActivity() {
         "MainActivity",
         error,
       )
-      return false
+      false
     } catch (error: IllegalAccessException) {
       AppLogger.warn(
         null,
@@ -173,8 +174,12 @@ class MainActivity : BridgeActivity() {
         "MainActivity",
         error,
       )
-      return false
+      false
     }
+  }
+
+  internal open fun resolvePendingActivityCallField(): Field {
+    return Bridge::class.java.getDeclaredField("pluginCallForLastActivity")
   }
 
   override fun onSaveInstanceState(outState: Bundle) {
