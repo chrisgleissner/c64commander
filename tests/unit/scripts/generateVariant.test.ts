@@ -176,32 +176,32 @@ const buildVariantsYaml = (overrides: VariantYamlOverrides = {}) => {
           },
         },
       },
-      "c64u-controller": {
-        display_name: "C64U Controller",
-        app_id: "c64u-controller",
+      "c64u-remote": {
+        display_name: "C64U Remote",
+        app_id: "c64u-remote",
         description: "Configure and control your Commodore 64 Ultimate over your local network.",
-        exported_file_basename: "c64u-controller",
+        exported_file_basename: "c64u-remote",
         platform: {
           android: {
-            application_id: "uk.gleissner.c64ucontroller",
-            custom_url_scheme: "uk.gleissner.c64ucontroller",
+            application_id: "uk.gleissner.c64uremote",
+            custom_url_scheme: "uk.gleissner.c64uremote",
           },
           ios: {
-            bundle_id: "uk.gleissner.c64ucontroller",
+            bundle_id: "uk.gleissner.c64uremote",
           },
           web: {
-            short_name: "C64U Controller",
+            short_name: "C64U Remote",
             theme_color: "#2F6B8B",
             background_color: "#2F6B8B",
-            login_title: "C64U Controller Login",
-            login_heading: "C64U Controller",
+            login_title: "C64U Remote Login",
+            login_heading: "C64U Remote",
           },
         },
         assets: {
           sources: {
-            icon: { path: "variants/assets/c64u-controller/icon.png", format: "png" },
-            logo: { path: "variants/assets/c64u-controller/logo.png", format: "png" },
-            splash: { path: "variants/assets/c64u-controller/splash.png", format: "png" },
+            icon: { path: "variants/assets/c64u-remote/icon.png", format: "png" },
+            logo: { path: "variants/assets/c64u-remote/logo.png", format: "png" },
+            splash: { path: "variants/assets/c64u-remote/splash.png", format: "png" },
           },
         },
         runtime: {
@@ -279,9 +279,9 @@ const writeRepoFixtures = (repoRoot: string) => {
   writePng(repoRoot, "variants/assets/c64commander/icon.png");
   writePng(repoRoot, "variants/assets/c64commander/logo.png");
   writePng(repoRoot, "variants/assets/c64commander/splash.png");
-  writePng(repoRoot, "variants/assets/c64u-controller/icon.png");
-  writePng(repoRoot, "variants/assets/c64u-controller/logo.png");
-  writePng(repoRoot, "variants/assets/c64u-controller/splash.png");
+  writePng(repoRoot, "variants/assets/c64u-remote/icon.png");
+  writePng(repoRoot, "variants/assets/c64u-remote/logo.png");
+  writePng(repoRoot, "variants/assets/c64u-remote/splash.png");
   writeFile(
     path.join(repoRoot, "src/lib/config/feature-flags.yaml"),
     [
@@ -310,7 +310,7 @@ const writeRepoFixtures = (repoRoot: string) => {
   );
   writeFile(path.join(repoRoot, "variants/feature-flags/c64commander.yaml"), "overrides: {}\n");
   writeFile(
-    path.join(repoRoot, "variants/feature-flags/c64u-controller.yaml"),
+    path.join(repoRoot, "variants/feature-flags/c64u-remote.yaml"),
     ["overrides:", "  hvsc_enabled:", "    enabled: false", ""].join("\n"),
   );
 };
@@ -328,7 +328,7 @@ describe("generate-variant", () => {
     const config = parseVariantSource(buildVariantsYaml(), { repoRoot }) as any;
     expect(config.repo.defaultVariant).toBe("c64commander");
     expect(config.repo.publishDefaults.release).toEqual(["c64commander"]);
-    expect(config.variants["c64u-controller"].platform.web.loginHeading).toBe("C64U Controller");
+    expect(config.variants["c64u-remote"].platform.web.loginHeading).toBe("C64U Remote");
   });
 
   it("fails when schema_version is absent", () => {
@@ -415,9 +415,9 @@ describe("generate-variant", () => {
         },
         assets: {
           sources: {
-            icon: { path: "variants/assets/c64u-controller/icon.png", format: "png" },
-            logo: { path: "variants/assets/c64u-controller/logo.png", format: "png" },
-            splash: { path: "variants/assets/c64u-controller/splash.png", format: "png" },
+            icon: { path: "variants/assets/c64u-remote/icon.png", format: "png" },
+            logo: { path: "variants/assets/c64u-remote/logo.png", format: "png" },
+            splash: { path: "variants/assets/c64u-remote/splash.png", format: "png" },
           },
         },
         runtime: { endpoints: { device_host: "c64u" } },
@@ -449,7 +449,7 @@ describe("generate-variant", () => {
   it("fails when a declared asset path is missing", () => {
     const repoRoot = createTempDir("variant-config-");
     writeRepoFixtures(repoRoot);
-    rmSync(path.join(repoRoot, "variants/assets/c64u-controller/logo.png"));
+    rmSync(path.join(repoRoot, "variants/assets/c64u-remote/logo.png"));
     expect(() => parseVariantSource(buildVariantsYaml(), { repoRoot })).toThrow(/assets.sources.logo.path is missing/);
   });
 
@@ -509,7 +509,7 @@ describe("generate-variant", () => {
     expect(() =>
       parseFeatureFlagOverlaySource(["overrides:", "  missing_feature:", "    enabled: false", ""].join("\n"), {
         featureIds: new Set(["hvsc_enabled"]),
-        variantId: "c64u-controller",
+        variantId: "c64u-remote",
       }),
     ).toThrow(/unknown feature id/);
   });
@@ -518,7 +518,7 @@ describe("generate-variant", () => {
     expect(() =>
       parseFeatureFlagOverlaySource(["overrides:", "  hvsc_enabled:", "    title: Nope", ""].join("\n"), {
         featureIds: new Set(["hvsc_enabled"]),
-        variantId: "c64u-controller",
+        variantId: "c64u-remote",
       }),
     ).toThrow(/disallowed fields: title/);
   });
@@ -537,26 +537,22 @@ describe("generate-variant", () => {
       overlaysDir: path.join(repoRoot, "variants/feature-flags"),
       runtimeTsPath,
       runtimeJsonPath,
-      variantId: "c64u-controller",
-      explicitPublishVariants: ["c64commander", "c64u-controller"],
+      variantId: "c64u-remote",
+      explicitPublishVariants: ["c64commander", "c64u-remote"],
     });
 
     expect(first.changed).toBe(true);
     expect(first.selection.variant.featureFlags.hvsc_enabled.enabled).toBe(false);
     expect(first.selection.variant.featureFlags.commoserve_enabled.enabled).toBe(true);
-    expect(first.selection.repo.selectedPublishVariants).toEqual(["c64commander", "c64u-controller"]);
-    expect(readFileSync(runtimeJsonPath, "utf8")).toContain('"selectedVariantId": "c64u-controller"');
+    expect(first.selection.repo.selectedPublishVariants).toEqual(["c64commander", "c64u-remote"]);
+    expect(readFileSync(runtimeJsonPath, "utf8")).toContain('"selectedVariantId": "c64u-remote"');
     expect(readFileSync(runtimeTsPath, "utf8")).not.toContain("buildLocalStorageKey");
-    expect(readFileSync(path.join(repoRoot, "index.html"), "utf8")).toContain("C64U Controller");
+    expect(readFileSync(path.join(repoRoot, "index.html"), "utf8")).toContain("C64U Remote");
     expect(readFileSync(path.join(repoRoot, "index.html"), "utf8")).toContain("background: #2F6B8B;");
-    expect(readFileSync(path.join(repoRoot, "public/manifest.webmanifest"), "utf8")).toContain(
-      "c64u-controller-192.png",
-    );
-    expect(readFileSync(path.join(repoRoot, "web/server/src/variant.generated.ts"), "utf8")).toContain(
-      "C64U Controller",
-    );
+    expect(readFileSync(path.join(repoRoot, "public/manifest.webmanifest"), "utf8")).toContain("c64u-remote-192.png");
+    expect(readFileSync(path.join(repoRoot, "web/server/src/variant.generated.ts"), "utf8")).toContain("C64U Remote");
     expect(readFileSync(path.join(repoRoot, "android/app/src/main/res/values/strings.xml"), "utf8")).toContain(
-      '<string name="app_name">C64U Controller</string>',
+      '<string name="app_name">C64U Remote</string>',
     );
     expect(
       readFileSync(path.join(repoRoot, "android/app/src/main/res/values/ic_launcher_background.xml"), "utf8"),
@@ -568,7 +564,7 @@ describe("generate-variant", () => {
       "systemBackgroundColor",
     );
     expect(readFileSync(path.join(repoRoot, "ios/App/App/Config/Variant.generated.xcconfig"), "utf8")).toContain(
-      "VARIANT_BUNDLE_IDENTIFIER = uk.gleissner.c64ucontroller",
+      "VARIANT_BUNDLE_IDENTIFIER = uk.gleissner.c64uremote",
     );
     expect(existsSync(path.join(repoRoot, "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"))).toBe(true);
     expect(existsSync(path.join(repoRoot, "ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png"))).toBe(
@@ -581,8 +577,8 @@ describe("generate-variant", () => {
       overlaysDir: path.join(repoRoot, "variants/feature-flags"),
       runtimeTsPath,
       runtimeJsonPath,
-      variantId: "c64u-controller",
-      explicitPublishVariants: ["c64commander", "c64u-controller"],
+      variantId: "c64u-remote",
+      explicitPublishVariants: ["c64commander", "c64u-remote"],
     });
     expect(second.changed).toBe(false);
   });
@@ -662,9 +658,9 @@ describe("generate-variant", () => {
     writeRepoFixtures(repoRoot);
     const config = parseVariantSource(buildVariantsYaml(), { repoRoot }) as any;
     expect(resolvePublishVariantsTyped(config)).toEqual(["c64commander"]);
-    expect(resolvePublishVariantsTyped(config, { explicitVariants: ["c64u-controller", "c64commander"] })).toEqual([
+    expect(resolvePublishVariantsTyped(config, { explicitVariants: ["c64u-remote", "c64commander"] })).toEqual([
       "c64commander",
-      "c64u-controller",
+      "c64u-remote",
     ]);
   });
 
@@ -692,7 +688,7 @@ describe("generate-variant", () => {
     writeRepoFixtures(repoRoot);
     const variantsPath = path.join(repoRoot, "variants/variants.yaml");
     writeFile(variantsPath, buildVariantsYaml());
-    rmSync(path.join(repoRoot, "variants/feature-flags/c64u-controller.yaml"));
+    rmSync(path.join(repoRoot, "variants/feature-flags/c64u-remote.yaml"));
 
     await expect(
       compileVariantTyped({
@@ -701,7 +697,7 @@ describe("generate-variant", () => {
         overlaysDir: path.join(repoRoot, "variants/feature-flags"),
         runtimeTsPath: path.join(repoRoot, "src/generated/variant.ts"),
         runtimeJsonPath: path.join(repoRoot, "src/generated/variant.json"),
-        variantId: "c64u-controller",
+        variantId: "c64u-remote",
       }),
     ).rejects.toThrow(VariantCompileError);
   });
@@ -714,7 +710,7 @@ describe("generate-variant", () => {
     const runtimeTsPath = path.join(repoRoot, "src/generated/variant.ts");
     const runtimeJsonPath = path.join(repoRoot, "src/generated/variant.json");
 
-    process.env.APP_PUBLISH_VARIANTS = "c64u-controller,c64commander";
+    process.env.APP_PUBLISH_VARIANTS = "c64u-remote,c64commander";
     const result = await compileVariantTyped({
       variantsPath,
       featureFlagsPath: path.join(repoRoot, "src/lib/config/feature-flags.yaml"),
@@ -728,7 +724,7 @@ describe("generate-variant", () => {
         .filter(Boolean),
     });
 
-    expect(result.selection.repo.selectedPublishVariants).toEqual(["c64commander", "c64u-controller"]);
+    expect(result.selection.repo.selectedPublishVariants).toEqual(["c64commander", "c64u-remote"]);
     delete process.env.APP_PUBLISH_VARIANTS;
   });
 

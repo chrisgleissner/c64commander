@@ -33,7 +33,7 @@ export function StartupLaunchSequence({
 }) {
   const { profile } = useDisplayProfile();
   const launchSequenceStyle = {
-    backgroundColor: variant.platform.web.backgroundColor,
+    backgroundColor: variant.theme.backgroundColor,
     "--startup-launch-copy-width": PROFILE_COPY_WIDTH[profile],
     "--startup-launch-fade-in-ms": `${timings.fadeInMs}ms`,
     "--startup-launch-fade-out-ms": `${timings.fadeOutMs}ms`,

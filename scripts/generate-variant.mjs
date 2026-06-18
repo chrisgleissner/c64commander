@@ -114,6 +114,14 @@ const requireBoolean = (value, label) => {
     return value;
 };
 
+const requireHexColor = (value, label) => {
+    const normalized = requireNonEmptyString(value, label);
+    if (!/^#?[0-9a-fA-F]{6}$/.test(normalized)) {
+        fail(`${label} must be a 6-digit hex color`);
+    }
+    return normalized;
+};
+
 const parseYamlFile = (filePath, failureLabel) => {
     let source;
     try {
@@ -220,11 +228,45 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
     }
     requireMapping(raw, `variants.${variantId}`);
     requireMapping(raw.platform, `variants.${variantId}.platform`);
+    // Android is the only mandatory platform: a variant may target Android only
+    // (no iOS, no web). iOS and web platform blocks are optional.
     requireMapping(raw.platform.android, `variants.${variantId}.platform.android`);
-    requireMapping(raw.platform.ios, `variants.${variantId}.platform.ios`);
-    requireMapping(raw.platform.web, `variants.${variantId}.platform.web`);
+    const hasIos = raw.platform.ios !== undefined && raw.platform.ios !== null;
+    const hasWeb = raw.platform.web !== undefined && raw.platform.web !== null;
+    if (hasIos) {
+        requireMapping(raw.platform.ios, `variants.${variantId}.platform.ios`);
+    }
+    if (hasWeb) {
+        requireMapping(raw.platform.web, `variants.${variantId}.platform.web`);
+    }
     requireMapping(raw.assets, `variants.${variantId}.assets`);
     requireMapping(raw.assets.sources, `variants.${variantId}.assets.sources`);
+
+    // Theme colors are platform-independent. An explicit top-level `theme:` block
+    // is the canonical source (required for Android-only variants); for variants
+    // that still declare a `platform.web` block the web colors are used as the
+    // fallback so existing web-capable configs stay byte-for-byte identical.
+    const themeRaw = raw.theme;
+    let themeColor;
+    let backgroundColor;
+    if (themeRaw !== undefined && themeRaw !== null) {
+        requireMapping(themeRaw, `variants.${variantId}.theme`);
+        themeColor = requireHexColor(themeRaw.theme_color, `variants.${variantId}.theme.theme_color`);
+        backgroundColor = requireHexColor(themeRaw.background_color, `variants.${variantId}.theme.background_color`);
+    } else if (hasWeb) {
+        themeColor = requireNonEmptyString(
+            raw.platform.web.theme_color,
+            `variants.${variantId}.platform.web.theme_color`,
+        );
+        backgroundColor = requireNonEmptyString(
+            raw.platform.web.background_color,
+            `variants.${variantId}.platform.web.background_color`,
+        );
+    } else {
+        fail(
+            `variants.${variantId} must declare a theme block (theme.theme_color and theme.background_color) when no platform.web block is present`,
+        );
+    }
 
     const runtime = raw.runtime ?? {};
     requireMapping(runtime, `variants.${variantId}.runtime`);
@@ -238,6 +280,45 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
         requireNonEmptyString(runtimeEndpointsRaw[key], `variants.${variantId}.runtime.endpoints.${key}`);
     });
 
+    const platform = {
+        android: {
+            applicationId: requireNonEmptyString(
+                raw.platform.android.application_id,
+                `variants.${variantId}.platform.android.application_id`,
+            ),
+            customUrlScheme: requireNonEmptyString(
+                raw.platform.android.custom_url_scheme,
+                `variants.${variantId}.platform.android.custom_url_scheme`,
+            ),
+        },
+    };
+    if (hasIos) {
+        platform.ios = {
+            bundleId: requireNonEmptyString(raw.platform.ios.bundle_id, `variants.${variantId}.platform.ios.bundle_id`),
+        };
+    }
+    if (hasWeb) {
+        platform.web = {
+            shortName: requireNonEmptyString(raw.platform.web.short_name, `variants.${variantId}.platform.web.short_name`),
+            themeColor: requireNonEmptyString(
+                raw.platform.web.theme_color,
+                `variants.${variantId}.platform.web.theme_color`,
+            ),
+            backgroundColor: requireNonEmptyString(
+                raw.platform.web.background_color,
+                `variants.${variantId}.platform.web.background_color`,
+            ),
+            loginTitle: requireNonEmptyString(
+                raw.platform.web.login_title,
+                `variants.${variantId}.platform.web.login_title`,
+            ),
+            loginHeading: requireNonEmptyString(
+                raw.platform.web.login_heading,
+                `variants.${variantId}.platform.web.login_heading`,
+            ),
+        };
+    }
+
     return {
         id: variantId,
         displayName: requireNonEmptyString(raw.display_name, `variants.${variantId}.display_name`),
@@ -247,39 +328,10 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
             raw.exported_file_basename,
             `variants.${variantId}.exported_file_basename`,
         ),
-        platform: {
-            android: {
-                applicationId: requireNonEmptyString(
-                    raw.platform.android.application_id,
-                    `variants.${variantId}.platform.android.application_id`,
-                ),
-                customUrlScheme: requireNonEmptyString(
-                    raw.platform.android.custom_url_scheme,
-                    `variants.${variantId}.platform.android.custom_url_scheme`,
-                ),
-            },
-            ios: {
-                bundleId: requireNonEmptyString(raw.platform.ios.bundle_id, `variants.${variantId}.platform.ios.bundle_id`),
-            },
-            web: {
-                shortName: requireNonEmptyString(raw.platform.web.short_name, `variants.${variantId}.platform.web.short_name`),
-                themeColor: requireNonEmptyString(
-                    raw.platform.web.theme_color,
-                    `variants.${variantId}.platform.web.theme_color`,
-                ),
-                backgroundColor: requireNonEmptyString(
-                    raw.platform.web.background_color,
-                    `variants.${variantId}.platform.web.background_color`,
-                ),
-                loginTitle: requireNonEmptyString(
-                    raw.platform.web.login_title,
-                    `variants.${variantId}.platform.web.login_title`,
-                ),
-                loginHeading: requireNonEmptyString(
-                    raw.platform.web.login_heading,
-                    `variants.${variantId}.platform.web.login_heading`,
-                ),
-            },
+        platform,
+        theme: {
+            themeColor,
+            backgroundColor,
         },
         assets: {
             sources: {
@@ -324,9 +376,11 @@ export const validateVariantConfig = (raw, { repoRoot = REPO_ROOT } = {}) => {
         const uniquenessChecks = [
             ['app_id', normalized.appId, appIds],
             ['application_id', normalized.platform.android.applicationId, applicationIds],
-            ['bundle_id', normalized.platform.ios.bundleId, bundleIds],
             ['custom_url_scheme', normalized.platform.android.customUrlScheme, customUrlSchemes],
         ];
+        if (normalized.platform.ios) {
+            uniquenessChecks.push(['bundle_id', normalized.platform.ios.bundleId, bundleIds]);
+        }
 
         uniquenessChecks.forEach(([label, value, seen]) => {
             if (seen.has(value)) {
@@ -537,7 +591,7 @@ export const renderWebIndexHtml = (selection) => {
       name="apple-mobile-web-app-status-bar-style"
       content="black-translucent"
     />
-    <meta name="theme-color" content="${variant.platform.web.themeColor}" />
+    <meta name="theme-color" content="${variant.theme.themeColor}" />
     <title>${variant.displayName}</title>
     <meta
       name="description"
@@ -563,7 +617,7 @@ export const renderWebIndexHtml = (selection) => {
             #root {
                 min-height: 100%;
                 margin: 0;
-                background: ${variant.platform.web.backgroundColor};
+                background: ${variant.theme.backgroundColor};
             }
         </style>
   </head>
@@ -696,7 +750,7 @@ export const renderAndroidStringsXml = (selection) => `${GENERATED_XML_BANNER}<r
 `;
 
 export const renderAndroidLauncherBackgroundXml = (selection) => `${GENERATED_XML_BANNER}<resources>
-    <color name="ic_launcher_background">${xmlEscape(selection.variant.platform.web.backgroundColor)}</color>
+    <color name="ic_launcher_background">${xmlEscape(selection.variant.theme.backgroundColor)}</color>
 </resources>
 `;
 
@@ -706,8 +760,8 @@ VARIANT_BUNDLE_IDENTIFIER = ${selection.variant.platform.ios.bundleId}
 
 export const renderIosLaunchScreenStoryboard = (selection) => {
     const { red, green, blue } = hexColorToStoryboardRgb(
-        selection.variant.platform.web.backgroundColor,
-        'variant.platform.web.backgroundColor',
+        selection.variant.theme.backgroundColor,
+        'variant.theme.backgroundColor',
     );
 
     return `<?xml version="1.0" encoding="UTF-8"?>
@@ -861,7 +915,7 @@ const renderPublicAssets = async ({ repoRoot, selection, check }) => {
             content: await renderImageAsPng(iconPath, {
                 size: 512,
                 fit: 'contain',
-                background: selection.variant.platform.web.backgroundColor,
+                background: selection.variant.theme.backgroundColor,
             }),
             check,
         }),
@@ -890,7 +944,7 @@ const renderAndroidAssets = async ({ repoRoot, selection, check }) => {
             content: await renderImageAsPng(splashPath, {
                 size: 1366,
                 fit: 'contain',
-                background: selection.variant.platform.web.backgroundColor,
+                background: selection.variant.theme.backgroundColor,
             }),
             check,
         }),
@@ -932,7 +986,7 @@ const renderIosAssets = async ({ repoRoot, selection, check }) => {
     const splashPng = await renderImageAsPng(splashPath, {
         size: 2732,
         fit: 'contain',
-        background: selection.variant.platform.web.backgroundColor,
+        background: selection.variant.theme.backgroundColor,
     });
 
     const changes = [
@@ -1014,7 +1068,10 @@ export const compileVariant = async ({
         publishVariants,
     });
 
-    const changed = [
+    // Always-generated outputs: the runtime config, the Vite entry (index.html),
+    // and the Android resources. These are required for every build, including
+    // an Android-only variant.
+    const outputs = [
         writeOutputFile({
             outputPath: resolvedRuntimeTsPath,
             rendered: await formatGeneratedText({
@@ -1032,20 +1089,40 @@ export const compileVariant = async ({
             check,
         }),
         writeOutputFile({ outputPath: resolvedWebIndexPath, rendered: renderWebIndexHtml(selection), check }),
-        writeOutputFile({ outputPath: resolvedWebManifestPath, rendered: renderWebManifest(selection), check }),
-        writeOutputFile({ outputPath: resolvedWebServiceWorkerPath, rendered: renderWebServiceWorker(selection), check }),
-        writeOutputFile({
-            outputPath: resolvedWebServerVariantTsPath,
-            rendered: await formatGeneratedText({
-                outputPath: resolvedWebServerVariantTsPath,
-                rendered: renderWebServerVariantModule(selection),
-            }),
-            check,
-        }),
-        await renderPublicAssets({ repoRoot, selection, check }),
         await renderAndroidAssets({ repoRoot, selection, check }),
-        await renderIosAssets({ repoRoot, selection, check }),
-    ].some(Boolean);
+    ];
+
+    // Web-only artifacts (PWA favicons/icons, manifest, service worker, web-server
+    // variant module) are emitted only for variants that declare a `platform.web`
+    // block. An Android-only variant uses Android mipmap launcher icons instead;
+    // the favicon links in its index.html are inert inside the WebView.
+    if (selection.variant.platform.web) {
+        outputs.push(
+            await renderPublicAssets({ repoRoot, selection, check }),
+            writeOutputFile({ outputPath: resolvedWebManifestPath, rendered: renderWebManifest(selection), check }),
+            writeOutputFile({
+                outputPath: resolvedWebServiceWorkerPath,
+                rendered: renderWebServiceWorker(selection),
+                check,
+            }),
+            writeOutputFile({
+                outputPath: resolvedWebServerVariantTsPath,
+                rendered: await formatGeneratedText({
+                    outputPath: resolvedWebServerVariantTsPath,
+                    rendered: renderWebServerVariantModule(selection),
+                }),
+                check,
+            }),
+        );
+    }
+
+    // iOS artifacts (xcconfig, launch storyboard, app icon/splash) are emitted only
+    // for variants that declare a `platform.ios` block.
+    if (selection.variant.platform.ios) {
+        outputs.push(await renderIosAssets({ repoRoot, selection, check }));
+    }
+
+    const changed = outputs.some(Boolean);
 
     return {
         changed,

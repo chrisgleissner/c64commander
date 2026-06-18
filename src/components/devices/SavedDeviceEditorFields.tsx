@@ -1,5 +1,6 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useT9Input } from "@/hooks/useT9Input";
 import {
   MAX_SAVED_DEVICE_NAME_LENGTH,
   applySavedDeviceDraftHostInput,
@@ -31,6 +32,20 @@ export function SavedDeviceEditorFields({
   hostHint = null,
   onHostBlur,
 }: Props) {
+  // Physical T9 / keypad fallback so the device name and host/IP can be entered
+  // without the on-screen keyboard (Commodore Callback 8020 is keypad-first).
+  // The host field uses "hostname" mode (digits insert directly; star inserts
+  // separators like "." and ":"); the name field uses multi-tap text mode.
+  const nameT9 = useT9Input({
+    value: draft.name,
+    setValue: (next) => onChange(applySavedDeviceDraftNameInput(draft, next)),
+    mode: "multitap",
+  });
+  const hostT9 = useT9Input({
+    value: draft.host,
+    setValue: (next) => onChange(applySavedDeviceDraftHostInput(draft, next)),
+    mode: "hostname",
+  });
   return (
     <div className="space-y-3">
       <div className="space-y-2">
@@ -48,6 +63,7 @@ export function SavedDeviceEditorFields({
           id={`${idPrefix}-name`}
           value={draft.name}
           onChange={(event) => onChange(applySavedDeviceDraftNameInput(draft, event.target.value))}
+          onKeyDown={nameT9.onKeyDown}
           placeholder="Defaults to the current host"
           className="font-sans"
           maxLength={MAX_SAVED_DEVICE_NAME_LENGTH}
@@ -73,6 +89,7 @@ export function SavedDeviceEditorFields({
           id={`${idPrefix}-host`}
           value={draft.host}
           onChange={(event) => onChange(applySavedDeviceDraftHostInput(draft, event.target.value))}
+          onKeyDown={hostT9.onKeyDown}
           onBlur={(event) => onHostBlur?.(event.target.value)}
           className="font-sans"
           aria-describedby={hostError ? `${idPrefix}-host-error` : hostHint ? `${idPrefix}-host-help` : undefined}

@@ -6,18 +6,18 @@ const readJson = (path: string) => JSON.parse(readFileSync(path, "utf8")) as Rec
 
 const latestGitTag = () => {
   const describe = () =>
-    spawnSync('git', ['describe', '--tags', '--abbrev=0'], { cwd: process.cwd(), encoding: 'utf8' });
+    spawnSync("git", ["describe", "--tags", "--abbrev=0"], { cwd: process.cwd(), encoding: "utf8" });
 
   let result = describe();
   if (result.status !== 0) {
-    spawnSync('git', ['fetch', '--tags', '--quiet'], { cwd: process.cwd(), encoding: 'utf8' });
+    spawnSync("git", ["fetch", "--tags", "--quiet"], { cwd: process.cwd(), encoding: "utf8" });
     result = describe();
   }
 
   if (result.status === 0) return result.stdout.trim();
 
-  const pkgVersion = readJson('package.json').version;
-  if (typeof pkgVersion === 'string' && pkgVersion.trim()) return pkgVersion.trim();
+  const pkgVersion = readJson("package.json").version;
+  if (typeof pkgVersion === "string" && pkgVersion.trim()) return pkgVersion.trim();
 
   throw new Error(`Unable to resolve latest Git tag: ${result.stderr || result.stdout}`);
 };

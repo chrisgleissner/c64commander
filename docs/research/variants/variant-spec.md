@@ -2,6 +2,12 @@
 
 Note: the Android-first V1 scope is corrected by [addendum-v1/variant-spec-addendum-v1.md](addendum-v1/variant-spec-addendum-v1.md). Where this document conflicts with the addendum, the addendum wins.
 
+> Historical naming note: the placeholder secondary variant referred to below as
+> `c64u-controller` / "C64U Controller" was migrated to the Android-only
+> `c64u-remote` / "C64U Remote" (`uk.gleissner.c64uremote`). For the current,
+> authoritative design see [`docs/research/callback8020/sailfish-callback-8020-android-compatibility.md`](../callback8020/sailfish-callback-8020-android-compatibility.md).
+> The old name is retained below only as historical context.
+
 ## 1. Goal
 
 This repository must support a small number of centrally defined app variants without creating a maintenance fork of the codebase.

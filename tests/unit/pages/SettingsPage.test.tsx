@@ -1325,6 +1325,26 @@ describe("SettingsPage", () => {
     );
   });
 
+  it("hides the HVSC and Online Archive sections when those features are disabled (C64U Remote pruning)", () => {
+    featureFlagsRef.current.hvsc_enabled = false;
+    featureFlagsRef.current.commoserve_enabled = false;
+    renderSettingsPage();
+
+    expect(screen.queryByTestId("hvsc-base-url")).toBeNull();
+    expect(screen.queryByTestId("settings-online-archive")).toBeNull();
+    expect(screen.queryByTestId("open-online-archive")).toBeNull();
+    expect(screen.queryByText("HVSC base URL override")).toBeNull();
+  });
+
+  it("shows the HVSC and Online Archive sections when those features are enabled", () => {
+    featureFlagsRef.current.hvsc_enabled = true;
+    featureFlagsRef.current.commoserve_enabled = true;
+    renderSettingsPage();
+
+    expect(screen.getByTestId("hvsc-base-url")).toBeInTheDocument();
+    expect(screen.getByTestId("settings-online-archive")).toBeInTheDocument();
+  });
+
   it("requires confirmation when switching into relaxed safety mode", async () => {
     const saveSpy = vi.spyOn(deviceSafetySettings, "saveDeviceSafetyMode");
 

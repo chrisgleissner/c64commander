@@ -15,10 +15,10 @@ export const variantConfig = {
   repo: {
     defaultVariant: "c64commander",
     publishDefaults: {
-      ci: ["c64commander"],
-      release: ["c64commander"],
+      ci: ["c64commander", "c64u-remote"],
+      release: ["c64commander", "c64u-remote"],
     },
-    selectedPublishVariants: ["c64commander"],
+    selectedPublishVariants: ["c64commander", "c64u-remote"],
   },
   schemaVersion: 1,
   selectedVariantId: "c64commander",
@@ -136,6 +136,10 @@ export const variantConfig = {
         device_host: "c64u",
         hvsc_base_url: "https://hvsc.brona.dk/HVSC/",
       },
+    },
+    theme: {
+      backgroundColor: "#6C7EB7",
+      themeColor: "#6C7EB7",
     },
   },
 } as const;

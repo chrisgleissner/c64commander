@@ -161,6 +161,17 @@ def variantMetadata = loadVariantMetadata()
 def androidApplicationId = variantMetadata.platform.android.applicationId.toString()
 def androidArtifactBasename = variantMetadata.exportedFileBasename.toString()
 
+// Variants that disable background execution (e.g. C64U Remote) use a reduced
+// manifest without the media-playback foreground service and its
+// FOREGROUND_SERVICE / FOREGROUND_SERVICE_MEDIA_PLAYBACK / WAKE_LOCK permissions,
+// which are unused when the feature is off and which AppSupport restricts anyway.
+// A missing flag defaults to the full manifest (safe).
+def backgroundExecutionEnabled = !(variantMetadata.featureFlags?.background_execution_enabled?.enabled == false)
+def selectedAndroidManifest = backgroundExecutionEnabled
+    ? "src/main/AndroidManifest.xml"
+    : "src/main/AndroidManifest.no-background.xml"
+logger.lifecycle("Manifest for variant ${androidApplicationId}: ${selectedAndroidManifest} (backgroundExecution=${backgroundExecutionEnabled})")
+
 android {
     namespace "uk.gleissner.c64commander"
     compileSdk rootProject.ext.compileSdkVersion
@@ -197,6 +208,9 @@ android {
     }
 
     sourceSets {
+        main {
+            manifest.srcFile selectedAndroidManifest
+        }
         debug {
             jniLibs.srcDirs += [upstream7zipGeneratedJniLibsDirForVariant("debug")]
         }

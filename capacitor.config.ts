@@ -10,7 +10,10 @@ import type { CapacitorConfig } from "@capacitor/cli";
 import { variant } from "./src/generated/variant";
 
 const config: CapacitorConfig = {
-  appId: variant.platform.ios.bundleId,
+  // Capacitor's appId drives iOS; on Android the Gradle applicationId from
+  // src/generated/variant.json governs. Android-only variants omit the iOS
+  // block, so fall back to the Android application id.
+  appId: variant.platform.ios?.bundleId ?? variant.platform.android.applicationId,
   appName: variant.displayName,
   webDir: "dist",
   server: {
