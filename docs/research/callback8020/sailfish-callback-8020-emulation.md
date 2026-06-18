@@ -79,24 +79,37 @@ hostname/IP entry without the on-screen keyboard.
 **LXC container sharing the host kernel**, AOSP-based, each app a Wayland surface.
 With the **VANILLA** image it has **no Google services** — matching Sailfish.
 
+A self-contained harness automates this: **`scripts/waydroid-smoke.sh`** (and
+`npm run test:waydroid:preflight` / `npm run test:waydroid`). It brings up a
+headless compositor, starts the Waydroid session, `adb`-connects to the
+container, and runs the keypad/no-GMS smoke against the C64U Remote APK.
+
 ```bash
-curl -s https://repo.waydro.id | sudo bash
-sudo apt install -y waydroid
-sudo waydroid init -s VANILLA          # VANILLA = AOSP, NO Google services
-sudo waydroid container start          # terminal 1 (root)
-waydroid session start                 # terminal 2
-waydroid show-full-ui                  # needs a Wayland compositor; headless: `weston --backend=headless` + `cage`
-waydroid app install artifacts/android-apks/c64u-remote-*.apk
-waydroid app launch uk.gleissner.c64uremote
-# or adb: connect to the container IP (Settings ▸ About), then `adb install ...`
+scripts/waydroid-smoke.sh preflight     # report prerequisites (never fails the build)
+sudo scripts/waydroid-smoke.sh setup    # one-time: load binder, install waydroid + a compositor,
+                                         #           `waydroid init -s VANILLA`, start the container
+scripts/waydroid-smoke.sh run           # start session + adb-connect + smoke C64U Remote
+scripts/waydroid-smoke.sh teardown
 ```
 
-Requirements: kernel **binder** (`/dev/binder*`; mainline 6.x ships it), a Wayland
-compositor, and root to start the container. **Caveats:** mDNS/`.local` does not
-resolve through the container bridge (use a raw IP); ARM-only APKs need native
-bridge translation on x86; headless is community-tier. Waydroid does **not**
-reproduce the Callback's API level, its T9 IME, or Jolla host integration — treat
-a pass as indicative, not device-validated.
+It is deliberately **easy to disable** if it proves unstable: set
+`WAYDROID_SMOKE_DISABLE=1` (every subcommand then exits 0), and the CI job
+([`.github/workflows/waydroid-smoke.yaml`](../../../.github/workflows/waydroid-smoke.yaml))
+is **opt-in** (`workflow_dispatch` + a weekly schedule) and `continue-on-error`,
+so it never blocks the main pipeline — delete that one file to retire it entirely.
+
+**Headless compositor:** the harness uses `weston --backend=headless` when
+present, otherwise falls back to **`kwin_wayland --virtual`** (KDE, offscreen
+framebuffer) under `dbus-run-session` — so no full desktop session is required.
+
+Requirements: kernel **binder** (`/dev/binder*`; mainline 6.x ships the
+`binder_linux` module — `sudo modprobe binder_linux`), a Wayland compositor
+(weston or kwin_wayland), and root to install Waydroid and start the container.
+**Caveats:** mDNS/`.local` does not resolve through the container bridge (use a
+raw IP); ARM-only APKs need native-bridge translation on x86 (our debug APK ships
+an x86_64 ABI, so it installs natively); headless is community-tier. Waydroid does
+**not** reproduce the Callback's API level, its T9 IME, or Jolla host integration
+— treat a pass as indicative, not device-validated.
 
 **Physical Pixel 4 (de-Googled, no GMS)** — the most realistic check available
 here for cleartext-LAN + keypad-only behaviour on a real, Google-less Android.

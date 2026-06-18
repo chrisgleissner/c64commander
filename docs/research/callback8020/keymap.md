@@ -1,9 +1,3 @@
-<!--
-  C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
-  Copyright (C) 2026 Christian Gleissner
-  Licensed under the GNU General Public License v3.0 or later.
--->
-
 # Keypad / T9 input subsystem
 
 `src/lib/input/` is a self-contained, dependency-free subsystem that lets the
