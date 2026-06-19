@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { SelectableActionList, type ActionListItem } from "@/components/lists/SelectableActionList";
 import type { PlayFileCategory } from "@/lib/playback/fileTypes";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { useFocusItem } from "@/hooks/useFocusNavigation";
 
 export type PlaylistPanelProps = {
   previewItems: ActionListItem[];
@@ -34,6 +35,11 @@ export type PlaylistPanelProps = {
   onViewAllEndReached: () => void;
 };
 
+const PLAY_PLAYLIST_FOCUS_ORDER = {
+  addItems: 300,
+  clear: 310,
+} as const;
+
 export const PlaylistPanel = ({
   previewItems,
   viewAllItems,
@@ -56,6 +62,16 @@ export const PlaylistPanel = ({
   onViewAllEndReached,
 }: PlaylistPanelProps) => {
   const { profile } = useDisplayProfile();
+  const addItemsFocusRef = useFocusItem<HTMLButtonElement>({
+    id: "play-playlist-add-items",
+    order: PLAY_PLAYLIST_FOCUS_ORDER.addItems,
+    group: "play-playlist",
+  });
+  const clearPlaylistFocusRef = useFocusItem<HTMLButtonElement>({
+    id: hasPlaylist ? "play-playlist-clear" : "",
+    order: PLAY_PLAYLIST_FOCUS_ORDER.clear,
+    group: "play-playlist",
+  });
 
   const compactSheetCategoryLabels: Partial<Record<PlayFileCategory, string>> = {
     sid: "SID",
@@ -119,6 +135,7 @@ export const PlaylistPanel = ({
         headerActions={
           <div className="flex flex-wrap items-center gap-2">
             <Button
+              ref={addItemsFocusRef}
               variant="outline"
               size="sm"
               onClick={onAddItems}
@@ -130,6 +147,7 @@ export const PlaylistPanel = ({
             </Button>
             {hasPlaylist ? (
               <Button
+                ref={clearPlaylistFocusRef}
                 variant="outline"
                 size="sm"
                 onClick={onClearPlaylist}

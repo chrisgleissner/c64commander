@@ -14,13 +14,13 @@ import {
 } from "@/lib/displayProfiles";
 
 /**
- * Small-screen layout contract for the Commodore Callback 8020 (3.25" /
- * 480x640) and narrower fallback viewports. jsdom has no layout engine, so this
- * asserts the deterministic display-profile selection and the fluid-width token
- * contract that structurally prevents horizontal overflow; pixel-accurate
- * rendering is covered by the Playwright screenshot suite.
+ * Small-screen layout contract for a compact 3.25" / 480x640 panel and narrower
+ * fallback viewports. jsdom has no layout engine, so this asserts the
+ * deterministic display-profile selection and the fluid-width token contract
+ * that structurally prevents horizontal overflow; pixel-accurate rendering is
+ * covered by the Playwright screenshot suite.
  */
-describe("small-screen layout — Callback 8020 + narrow fallbacks", () => {
+describe("small-screen layout — compact 480x640 panel + narrow fallbacks", () => {
   it("selects the expected profile for each required viewport width", () => {
     // The brief's required viewport widths.
     expect(resolveDisplayProfile(480)).toBe("medium"); // 480x640 portrait width
@@ -29,7 +29,7 @@ describe("small-screen layout — Callback 8020 + narrow fallbacks", () => {
     expect(resolveDisplayProfile(320)).toBe("compact"); // 320x480 narrow fallback
   });
 
-  it("classifies the Callback 8020 panel from viewport + physical screen", () => {
+  it("classifies the compact 480x640 panel from viewport + physical screen", () => {
     // Portrait: 480 wide viewport on a 480x640 panel -> medium.
     expect(resolveAutomaticDisplayProfile(480, 480, 640)).toBe("medium");
     // Landscape: 640 wide viewport on a 640x480 panel -> short edge 480 -> expanded by width.

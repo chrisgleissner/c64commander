@@ -40,6 +40,7 @@ describe("featureFlags persistence and logging", () => {
       "home_telnet_printer_actions_enabled",
       "home_telnet_power_cycle_enabled",
       "home_telnet_clear_ram_reboot_enabled",
+      "keypad_input_enabled",
     ]);
   });
 
@@ -60,7 +61,20 @@ describe("featureFlags persistence and logging", () => {
       home_telnet_printer_actions_enabled: "experimental",
       home_telnet_power_cycle_enabled: "experimental",
       home_telnet_clear_ram_reboot_enabled: "experimental",
+      keypad_input_enabled: "experimental",
     });
+  });
+
+  it("ships keypad / T9 input as a user-visible, default-off experimental flag", () => {
+    const keypad = FEATURE_FLAG_DEFINITIONS.find((definition) => definition.id === "keypad_input_enabled");
+    expect(keypad).toBeDefined();
+    expect(keypad?.enabled).toBe(false);
+    expect(keypad?.visible_to_user).toBe(true);
+    expect(keypad?.developer_only).toBe(false);
+    expect(keypad?.group).toBe("experimental");
+    // Standard-user toggleable is derived as visible_to_user && !developer_only,
+    // so this row appears under Experimental Features for every variant.
+    expect(Boolean(keypad?.visible_to_user) && !keypad?.developer_only).toBe(true);
   });
 
   it("persists a non-default override and it survives a reload through a fresh manager", async () => {
@@ -126,6 +140,7 @@ describe("featureFlags persistence and logging", () => {
         home_telnet_printer_actions_enabled: false,
         home_telnet_power_cycle_enabled: false,
         home_telnet_clear_ram_reboot_enabled: false,
+        keypad_input_enabled: false,
       }),
     ).toBe(false);
     expect(
@@ -142,6 +157,7 @@ describe("featureFlags persistence and logging", () => {
         home_telnet_printer_actions_enabled: false,
         home_telnet_power_cycle_enabled: false,
         home_telnet_clear_ram_reboot_enabled: false,
+        keypad_input_enabled: false,
       }),
     ).toBe(true);
   });

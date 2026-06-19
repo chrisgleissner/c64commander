@@ -7,7 +7,7 @@
  */
 
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Disc, ArrowLeftRight, ArrowRightLeft, HardDrive, X, Folder, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -85,6 +85,7 @@ import {
 import { formatDiskDosStatus } from "@/lib/disks/dosStatusFormatter";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useScreenActivity } from "@/hooks/useScreenActivity";
+import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { ProfileSplitSection } from "@/components/layout/PageContainer";
 import { HOME_SUMMARY_QUERY_OPTIONS } from "@/pages/home/constants";
 import {
@@ -144,6 +145,35 @@ const waitAtLeast = async (startedAt: number, durationMs: number) => {
   if (elapsed < durationMs) {
     await new Promise((resolve) => setTimeout(resolve, durationMs - elapsed));
   }
+};
+
+type FocusableDiskButtonProps = ComponentProps<typeof Button> & {
+  focusId: string;
+  focusOrder: number;
+  focusGroup?: string;
+};
+
+const DISKS_LIBRARY_FOCUS_ORDER = {
+  addDisks: 600,
+} as const;
+
+const driveFocusOrder = (driveIndex: number, offset: number) => 100 + driveIndex * 100 + offset;
+
+const FocusableDiskButton = ({
+  focusId,
+  focusOrder,
+  focusGroup = "disks-drive-controls",
+  disabled,
+  ...props
+}: FocusableDiskButtonProps) => {
+  const focusRef = useFocusItem<HTMLButtonElement>({
+    id: focusId,
+    order: focusOrder,
+    group: focusGroup,
+    disabled: Boolean(disabled),
+  });
+
+  return <Button ref={focusRef} disabled={disabled} {...props} />;
 };
 
 export const HomeDiskManager = () => {
@@ -1505,7 +1535,9 @@ export const HomeDiskManager = () => {
                   <div className="flex min-w-0 items-baseline justify-between gap-2">
                     <span className="truncate text-sm font-semibold">{driveLabel}</span>
                     <div className="flex shrink-0 items-center gap-1.5">
-                      <Button
+                      <FocusableDiskButton
+                        focusId={`disks-drive-${key}-status-toggle`}
+                        focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 0)}
                         variant="outline"
                         size="sm"
                         className={cn(ROW1_CONTROL_CLASS, getOnOffButtonClass(powerEnabled))}
@@ -1514,8 +1546,10 @@ export const HomeDiskManager = () => {
                         data-testid={`drive-status-toggle-${key}`}
                       >
                         {powerEnabled ? "ON" : "OFF"}
-                      </Button>
-                      <Button
+                      </FocusableDiskButton>
+                      <FocusableDiskButton
+                        focusId={`disks-drive-${key}-mount-toggle`}
+                        focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 10)}
                         variant={mounted ? "secondary" : "outline"}
                         size="sm"
                         className={ROW1_CONTROL_CLASS}
@@ -1531,7 +1565,7 @@ export const HomeDiskManager = () => {
                         aria-label={`${driveLabel} ${mounted ? "Eject disk" : "Mount disk"}`}
                       >
                         <Disc className={cn("h-4 w-4", mounted ? "text-success" : "text-muted-foreground")} />
-                      </Button>
+                      </FocusableDiskButton>
                     </div>
                   </div>
 
@@ -1637,7 +1671,9 @@ export const HomeDiskManager = () => {
                       ) : null}
                       {canRotate ? (
                         <div className="flex shrink-0 items-center gap-0.5">
-                          <Button
+                          <FocusableDiskButton
+                            focusId={`disks-drive-${key}-rotate-previous`}
+                            focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 20)}
                             variant="ghost"
                             size="sm"
                             className="h-7 w-7 p-0"
@@ -1646,8 +1682,10 @@ export const HomeDiskManager = () => {
                             aria-label={`${driveLabel} previous disk`}
                           >
                             <ArrowRightLeft className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
+                          </FocusableDiskButton>
+                          <FocusableDiskButton
+                            focusId={`disks-drive-${key}-rotate-next`}
+                            focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 30)}
                             variant="ghost"
                             size="sm"
                             className="h-7 w-7 p-0"
@@ -1656,12 +1694,14 @@ export const HomeDiskManager = () => {
                             aria-label={`${driveLabel} next disk`}
                           >
                             <ArrowLeftRight className="h-3.5 w-3.5" />
-                          </Button>
+                          </FocusableDiskButton>
                         </div>
                       ) : null}
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
-                      <Button
+                      <FocusableDiskButton
+                        focusId={`disks-drive-${key}-reset`}
+                        focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 40)}
                         variant="outline"
                         size="sm"
                         className="h-8 w-8 p-0"
@@ -1671,8 +1711,10 @@ export const HomeDiskManager = () => {
                         data-testid={`drive-reset-${key}`}
                       >
                         <RotateCcw className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
+                      </FocusableDiskButton>
+                      <FocusableDiskButton
+                        focusId={`disks-drive-${key}-power-toggle`}
+                        focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 50)}
                         variant="default"
                         size="sm"
                         className="h-8 px-3 text-xs"
@@ -1681,7 +1723,7 @@ export const HomeDiskManager = () => {
                         data-testid={`drive-power-toggle-${key}`}
                       >
                         {powerLabel}
-                      </Button>
+                      </FocusableDiskButton>
                     </div>
                   </div>
 
@@ -1719,7 +1761,9 @@ export const HomeDiskManager = () => {
               <div className="flex min-w-0 items-baseline justify-between gap-2">
                 <span className="truncate text-sm font-semibold">Soft IEC Drive</span>
                 <div className="flex shrink-0 items-center gap-1.5">
-                  <Button
+                  <FocusableDiskButton
+                    focusId="disks-soft-iec-status-toggle"
+                    focusOrder={300}
                     variant="outline"
                     size="sm"
                     className={cn(ROW1_CONTROL_CLASS, getOnOffButtonClass(softIecPowerEnabled))}
@@ -1735,8 +1779,10 @@ export const HomeDiskManager = () => {
                     data-testid="drive-status-toggle-soft-iec"
                   >
                     {softIecPowerEnabled ? "ON" : "OFF"}
-                  </Button>
-                  <Button
+                  </FocusableDiskButton>
+                  <FocusableDiskButton
+                    focusId="disks-soft-iec-mount-toggle"
+                    focusOrder={310}
                     variant={softIecMounted ? "secondary" : "outline"}
                     size="sm"
                     className={ROW1_CONTROL_CLASS}
@@ -1746,7 +1792,7 @@ export const HomeDiskManager = () => {
                     aria-label="Soft IEC Drive select directory"
                   >
                     <Disc className={cn("h-4 w-4", softIecMounted ? "text-success" : "text-muted-foreground")} />
-                  </Button>
+                  </FocusableDiskButton>
                 </div>
               </div>
 
@@ -1789,7 +1835,9 @@ export const HomeDiskManager = () => {
                   </span>
                 )}
                 <span className="shrink-0">Default Path</span>
-                <Button
+                <FocusableDiskButton
+                  focusId="disks-soft-iec-default-path"
+                  focusOrder={320}
                   variant="ghost"
                   size="sm"
                   className="h-7 min-w-0 max-w-full justify-start px-1.5 text-xs font-medium"
@@ -1799,7 +1847,7 @@ export const HomeDiskManager = () => {
                   aria-label="Select directory for Soft IEC Default Path"
                 >
                   <span className="truncate">Select directory ({softIecDefaultPath})</span>
-                </Button>
+                </FocusableDiskButton>
               </div>
 
               <div
@@ -1812,7 +1860,9 @@ export const HomeDiskManager = () => {
                   dataTestId="drive-mounted-label-soft-iec"
                 />
                 <div className="flex shrink-0 items-center gap-1.5">
-                  <Button
+                  <FocusableDiskButton
+                    focusId="disks-soft-iec-reset"
+                    focusOrder={340}
                     variant="outline"
                     size="sm"
                     className="h-8 w-8 p-0"
@@ -1822,8 +1872,10 @@ export const HomeDiskManager = () => {
                     data-testid="drive-reset-soft-iec"
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
+                  </FocusableDiskButton>
+                  <FocusableDiskButton
+                    focusId="disks-soft-iec-power-toggle"
+                    focusOrder={350}
                     variant="default"
                     size="sm"
                     className="h-8 px-3 text-xs"
@@ -1836,7 +1888,7 @@ export const HomeDiskManager = () => {
                     data-testid="drive-power-toggle-soft-iec"
                   >
                     {softIecPowerLabel}
-                  </Button>
+                  </FocusableDiskButton>
                 </div>
               </div>
 
@@ -1908,9 +1960,16 @@ export const HomeDiskManager = () => {
               rowTestId="disk-row"
               viewAllMode="non-empty"
               headerActions={
-                <Button variant="outline" size="sm" onClick={() => setBrowserOpen(true)}>
+                <FocusableDiskButton
+                  focusId="disks-library-add-disks"
+                  focusOrder={DISKS_LIBRARY_FOCUS_ORDER.addDisks}
+                  focusGroup="disks-library"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setBrowserOpen(true)}
+                >
                   {diskLibrary.disks.length ? "Add more disks" : "Add disks"}
-                </Button>
+                </FocusableDiskButton>
               }
             />
           </div>

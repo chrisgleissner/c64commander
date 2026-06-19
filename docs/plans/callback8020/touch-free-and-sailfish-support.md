@@ -28,6 +28,18 @@ hardware keys alone, and no text field may depend on the on-screen keyboard. Thi
 is handled by a dedicated, centralized input subsystem rather than ad-hoc key
 handlers scattered across the UI.
 
+> **MVP status (2026-06):** the C64U Remote MVP ships **touch-first** — the
+> device's touchscreen and the standard Android soft keyboard cover all text
+> entry on the 480×640 panel. The keypad subsystem below (D-pad focus
+> navigation + T9 multi-tap) is fully built and unit-tested but ships **behind a
+> user-visible, default-off experimental feature flag, `keypad_input_enabled`**
+> (Settings ▸ Experimental Features ▸ *Keypad / T9 input*). With the flag off,
+> the global key listener stays detached and text fields insert literal digits.
+> Turning it on enables the keypad/T9 path described here. The flag exists on
+> every variant; it is intentionally **not** hidden by the C64U Remote overlay so
+> a keypad-only device can opt in. Completing the keypad path against real
+> hardware key codes is tracked in the post-MVP backlog.
+
 ### 1.1 Semantic input subsystem (`src/lib/input/`)
 
 Raw browser/Android key events are normalized **once** into a small set of
@@ -111,7 +123,7 @@ imposes.
 | --- | --- |
 | **No Google Play Services** (microG only, opt-in) | The app has **zero** GMS/Firebase/FCM/Maps/Play dependency (audited in Gradle, manifest, Capacitor plugins, and JS deps). A static gate (`npm run apk:no-gms`) fails the build on any required GMS `uses-library`/`uses-feature`. Verified building + launching on a de-Googled device with 0 GMS packages. |
 | **No Google Play Store** (sideload / Aurora / F-Droid) | Standard installable debug APK plus a signable release APK/AAB; no Play-only APIs (no in-app updates, no Play Integrity). |
-| **Touchscreen off by default; keypad-first** | The full keypad / T9 input subsystem in §1; no touch-only or soft-keyboard-only path for core operation. |
+| **Touchscreen off by default; keypad-first** | The MVP is touch-first (touchscreen + system soft keyboard). The full keypad / T9 input subsystem in §1 is available behind the default-off `keypad_input_enabled` experimental flag for devices that run with touch disabled. |
 | **Background services restricted** | C64U Remote disables background execution entirely; its APK therefore declares **only the `INTERNET` permission** (the foreground-service and wake-lock permissions are stripped via a variant-specific manifest). |
 | **Local, cleartext device access** | `usesCleartextTraffic="true"` + a network-security config permit `http://<device-ip>`; **raw IPv4 entry is first-class** and the T9 hostname mode is optimized for it, so the app does not depend on mDNS/`.local` name resolution (which is unreliable in a container). No internet is required for core function — C64U Remote declares only the local `device_host` endpoint. |
 | **Small screen (3.25", 480×640)** | Responsive display profiles with fluid widths on the smallest screens; verified with no horizontal overflow at 480×640 and 320×480 in a real browser. |
@@ -126,6 +138,17 @@ Telnet-dependent Home actions), and background execution — these are removed f
 navigation, Home, dialogs, **and Settings**, and cannot be re-enabled by a user
 override or stale local storage. It produces no iOS or web artifacts. Full design:
 the [compatibility review](sailfish-callback-8020-android-compatibility.md).
+
+**Branding / logo.** Every variant's name and logo come from single sources of
+truth — `variant.displayName` and `variant.assets.public.homeLogoPng` — so no
+copy or image path is hard-coded. To give C64U Remote its own logo, replace the
+source artifact `variants/assets/c64u-remote/logo.png` (currently byte-identical
+to the C64 Commander artwork) and regenerate with
+`APP_VARIANT=c64u-remote npm run variant:generate`. That rewrites
+`public/c64u-remote.png` (the in-app Home/startup logo, emitted for the
+Android-only variant) without touching any other variant. The Home header (logo +
+the "Home" label) is shared, variant-agnostic JSX, so the new logo appears
+automatically.
 
 ### 2.3 Installing on a Sailfish device
 

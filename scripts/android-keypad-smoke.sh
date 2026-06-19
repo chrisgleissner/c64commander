@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Keypad-first / touch-free / no-GMS smoke test for a built APK, runnable against
-# any adb target (the Callback-8020 emulator from scripts/sailfish-callback-emulator.sh
-# OR a physical device such as the de-Googled Pixel 4). It validates the Callback
-# 8020 constraints that CAN be checked off a real Sailfish device:
+# any adb target (the compact-screen emulator from scripts/sailfish-callback-emulator.sh
+# OR a physical device such as the de-Googled Pixel 4). It validates the
+# keypad-first / no-touch constraints that CAN be checked on a de-Googled Android device:
 #
 #   1. the APK has no hard Google Play Services dependency (static, via aapt),
 #   2. it installs and launches to a RESUMED activity on a no-GMS Android,

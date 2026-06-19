@@ -1,5 +1,5 @@
-# Waydroid smoke test for the C64U Remote APK — the closest CI analog to Sailfish
-# OS Android AppSupport (LXC, AOSP, no Google services).
+# Waydroid smoke test for the C64U Remote APK — a CI stand-in for a de-Googled,
+# container-based Android host (LXC, AOSP, no Google services).
 #
 # Deliberately SELF-CONTAINED and EASILY DISABLED so it can never destabilise the
 # main build:

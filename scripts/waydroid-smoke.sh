@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Waydroid smoke test for the C64U Remote APK.
 #
-# Waydroid is the closest analog to Sailfish OS Android AppSupport: both run an
-# AOSP-derived Android in an LXC container sharing the host kernel, and the
-# Waydroid VANILLA image has NO Google services (like Sailfish). This harness
-# brings Waydroid up and runs the keypad-only / no-GMS smoke
+# Waydroid is a useful stand-in for a de-Googled, container-based Android host:
+# it runs an AOSP-derived Android in an LXC container sharing the host kernel,
+# and the Waydroid VANILLA image has NO Google services. This harness brings
+# Waydroid up and runs the keypad-only / no-GMS smoke
 # (scripts/android-keypad-smoke.sh) against the C64U Remote APK inside it.
 #
 # It is intentionally SELF-CONTAINED and EASILY DISABLED:
@@ -33,7 +33,7 @@ cd "$ROOT_DIR"
 DEFAULT_APK_GLOB="artifacts/android-apks/c64u-remote-*.apk"
 DEFAULT_PACKAGE="uk.gleissner.c64uremote"
 WAYLAND_SOCKET="${WAYDROID_WAYLAND_SOCKET:-wayland-waydroid}"
-IMAGE_TYPE="${WAYDROID_IMAGE_TYPE:-VANILLA}"   # VANILLA = AOSP, NO Google services (like Sailfish)
+IMAGE_TYPE="${WAYDROID_IMAGE_TYPE:-VANILLA}"   # VANILLA = AOSP, NO Google services
 WESTON_LOG="/tmp/waydroid-weston.log"
 SESSION_LOG="/tmp/waydroid-session.log"
 

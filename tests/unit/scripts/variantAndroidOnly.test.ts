@@ -323,6 +323,14 @@ describe("Android-only variant schema", () => {
     expect(existsSync(path.join(repoRoot, "web/server/src/variant.generated.ts"))).toBe(false);
     expect(existsSync(path.join(repoRoot, "ios/App/App/Config/Variant.generated.xcconfig"))).toBe(false);
 
+    // The in-app home logo IS emitted even for an Android-only variant: it renders
+    // in the running app (Home header / startup splash) via homeLogoPng, unlike
+    // the web-only PWA favicon/icons, so a missing file would 404 in the WebView.
+    expect(existsSync(path.join(repoRoot, "public/c64u-remote.png"))).toBe(true);
+    // PWA favicon/icons remain web-only (not emitted without a platform.web block).
+    expect(existsSync(path.join(repoRoot, "public/favicon.png"))).toBe(false);
+    expect(existsSync(path.join(repoRoot, "public/c64u-remote-512.png"))).toBe(false);
+
     // The Android string resources carry the C64U Remote identity.
     const strings = readFileSync(path.join(repoRoot, "android/app/src/main/res/values/strings.xml"), "utf8");
     expect(strings).toContain('<string name="app_name">C64U Remote</string>');
@@ -380,11 +388,20 @@ describe("real c64u-remote feature-flag overlay", () => {
     { featureIds: new Set(baseRegistry.features.map((f: any) => f.id)), variantId: "c64u-remote" },
   );
 
-  it("disables AND hides every feature flag for C64U Remote", () => {
+  it("disables AND hides every feature flag for C64U Remote, except the keypad opt-in", () => {
     const resolved = resolveVariantFeatureRegistry(baseRegistry, overlay);
     for (const feature of resolved.features) {
+      // Every feature ships off on C64U Remote (including keypad/T9, which stays
+      // experimental and default-off).
       expect(feature.enabled, `${feature.id}.enabled`).toBe(false);
-      expect(feature.visible_to_user, `${feature.id}.visible_to_user`).toBe(false);
+      if (feature.id === "keypad_input_enabled") {
+        // The one deliberate exception: keypad / T9 input stays user-visible so a
+        // keypad-only device can opt into it from Experimental Features. It is NOT
+        // added to the c64u-remote disable overlay for exactly this reason.
+        expect(feature.visible_to_user, "keypad_input_enabled.visible_to_user").toBe(true);
+      } else {
+        expect(feature.visible_to_user, `${feature.id}.visible_to_user`).toBe(false);
+      }
     }
   });
 

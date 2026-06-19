@@ -33,7 +33,7 @@ export const ALLOWED_FILES = new Set([
 ]);
 
 // Directory prefixes whose contents are historical/research/plan docs and exempt.
-// The Sailfish/Callback 8020 design docs live under docs/plans/callback8020/;
+// The C64U Remote / keypad design docs live under docs/plans/callback8020/;
 // the historical variant spec lives under docs/research/.
 export const ALLOWED_PREFIXES = ['docs/research/', 'docs/plans/callback8020/'];
 

@@ -13,6 +13,7 @@ import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { SOURCE_EXPLANATIONS, SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
+import { variant } from "@/generated/variant";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 
 interface DocSection {
@@ -30,8 +31,8 @@ const docSections: DocSection[] = [
     content: (
       <div className="space-y-3 text-sm">
         <p>
-          C64 Commander connects to your <strong>{SOURCE_LABELS.c64u}</strong> over the REST API. Stay on the same
-          network and make sure the device is reachable.
+          {variant.displayName} connects to your <strong>{SOURCE_LABELS.c64u}</strong> over the REST API. Stay on the
+          same network and make sure the device is reachable.
         </p>
         <p className="font-medium">Connect in 4 steps:</p>
         <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
@@ -362,7 +363,7 @@ export default function DocsPage() {
         >
           <h3 className="font-medium">External Resources</h3>
           <p className="text-sm text-muted-foreground">
-            These links point to the upstream device manuals and API references used throughout C64 Commander.
+            These links point to the upstream device manuals and API references used throughout {variant.displayName}.
           </p>
           <div className="space-y-2">
             <a

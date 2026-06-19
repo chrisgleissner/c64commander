@@ -2,7 +2,7 @@
 /*
  * Asserts that an APK has NO HARD dependency on Google Play Services / Google
  * Mobile Services, so it can install and run on a Google-less environment
- * (Sailfish OS Android AppSupport, AOSP emulator image, de-Googled device).
+ * (an AOSP emulator image or any de-Googled / no-Google-services Android host).
  *
  * A hard dependency is a REQUIRED `<uses-library>` or `<uses-feature>` naming a
  * Google component. Mere code references to GMS symbols are NOT a hard

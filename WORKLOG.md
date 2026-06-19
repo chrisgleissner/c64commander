@@ -268,3 +268,259 @@ Evidence saved under `artifacts/android-apks/validation/`:
   the new `src/` (input subsystem, useT9Input, Settings/host-field wiring).
 
 
+
+## Ralph loop (2026-06-18): M2 NavigationController (semantic-action dispatch + back chain)
+
+- Selected slice: M2 keyboard-only operability — the enabling dispatch layer (the keystone both
+  M2.1 CTA-registration and M2.2 deterministic-back depend on; `FocusController` had no consumer
+  and no action→operation mapping).
+- Added `src/lib/input/focusNavigation.ts` (`NavigationController`): wraps a `FocusController`,
+  maps `dpadDown`/`nextField`→focusNext, `dpadUp`/`previousField`→focusPrevious,
+  `center`/`enter`/`activate`→activateCurrent (with `onFocus`/`onActivate` callbacks for the
+  adapter's `element.focus()`); implements the deterministic `back`/`escape` chain via a LIFO
+  dismissible-layer stack → engaged-field disengage → `onNavigateBack`; `closeMenu` dismisses the
+  topmost menu-kind layer only. Horizontal d-pad + soft keys return `ignored` so the focused
+  widget/context handler owns them. DOM-free + timer-free (unit-testable in isolation).
+- Tests: `tests/unit/lib/input/focusNavigation.test.ts` (22 tests, 6 describe blocks) — traversal,
+  activation (enabled/disabled/empty), full back chain + LIFO unwind + field-disengage +
+  navigate-back + pushLayer-replace + removeLayer (no dismiss), closeMenu, and `ignored` actions.
+- Gates: input subset `vitest run` → 30 pass; scoped coverage of the new file → 100%
+  stmts/branch/funcs/lines; `npm run lint` full chain → exit 0; `npm run test` → 6955 pass.
+- M1 closed (gates verified green on HEAD; perf-budget lines documented benign). Backlog M2.1 +
+  M2.2 marked `[~]` partial (model + tests done; React adapter + per-screen wiring still to do).
+- No shared C64 Commander screens touched (pure new module + barrel export) → zero regression risk.
+
+## Ralph loop (2026-06-18): M2 React adapter (FocusNavigationProvider + useFocusItem)
+
+- Selected slice: M2 keyboard-only operability — the React adapter that drives the
+  `NavigationController` (built last loop) from real key events and registers per-screen CTAs.
+  This is the explicitly-named "still to do" half of M2.1/M2.2; the dispatcher had no consumer.
+- Added `src/hooks/useFocusNavigation.tsx`:
+  - `FocusNavigationProvider` — one global `window` `keydown` listener; `normalizeKeyEvent(event,
+    resolveInputProfile(profileId))` → `controller.dispatch(action)`; `onFocus` → resolved
+    `element.focus()`, `onNavigateBack` → router back; `event.preventDefault()` only when the
+    outcome is not `ignored`. Skips dispatch entirely when `event.target` is editable
+    (INPUT/TEXTAREA/SELECT/contenteditable) so the field + its `useT9Input` composer keep the key.
+    `enabled` prop detaches the listener (registry still usable programmatically).
+  - `useFocusItem(id, order, group?, disabled?, onActivate?)` — registers a `FocusItem` with the
+    surrounding provider for the component's lifetime (activate defaults to clicking the element),
+    returns a ref callback for the DOM node; no-op (no throw) outside a provider.
+  - `useFocusNavigation()` — returns the active controller (null outside a provider) for future
+    dialog/menu `pushLayer` + field `setFieldEngaged` wiring (M2.2 follow-up).
+- Tests: `tests/unit/hooks/useFocusNavigation.test.tsx` (11 jsdom integration tests, testing-library)
+  — traversal/skip-disabled/wrap (fwd+back), activation via Enter/Space (click + custom onActivate),
+  back→onNavigateBack (and undefined-handler no-throw), editable skip (input + contenteditable +
+  non-element document target), preventDefault-only-on-consume, `enabled:false`, keypad profile
+  (`DpadDown`/`DpadCenter`), unmount-unregister, provider-absent no-op.
+- Gates: new test → 11 pass; scoped coverage of the new module → 100% stmts/funcs/lines, 97.61%
+  branch (≥ 91% gate); `npx tsc --noEmit` → exit 0; `npm run lint` full chain → exit 0
+  (stale-name guard: "no stale c64u-controller naming"; variant:check + feature-flags:check green).
+- Robustness fix during the loop: `isEditableTarget` also checks the `contenteditable` attribute
+  (jsdom — and some engines — don't compute `isContentEditable`), so the skip is reliable on-device.
+- Additive only — no existing src files edited (two new files; barrel already exported
+  `NavigationController`). Default C64 Commander variant behaviour unchanged. Backlog M2.1 + M2.2
+  notes advanced: adapter + integration proof done; App mount + per-screen CTA registration remain.
+
+## M2.1 — mounted the keyboard-only focus-nav adapter + registered the primary tab navigation
+
+- Branch `feat/introduce-new-variant`. The `FocusNavigationProvider` / `useFocusItem` adapter (built
+  + integration-tested the prior loop) had no consumer in the running app; this loop wired it in and
+  proved it on a real, always-present screen, additively and behind a variant gate.
+- `src/App.tsx`:
+  - New `KeypadFocusNavigation` wrapper component (inside `BrowserRouter`) mounts
+    `FocusNavigationProvider` around all of `AppRoutes`' content + `TabBar`, with
+    `onNavigateBack={() => navigate(-1)}` and `profileId="commodoreCallback8020"`.
+  - `keypadFocusNavigationEnabled = variant.appId === "c64u-remote"` gates the global key listener.
+    Default C64 Commander variant: provider mounts `enabled={false}` → listener detached, existing
+    pointer + desktop-keyboard behaviour untouched, registrations inert. C64U Remote: listener live.
+- `src/components/TabBar.tsx`:
+  - Extracted `TabBarButton` (a `useFocusItem` call per tab needs a component, not a `.map` body).
+  - Each rendered tab registers via `useFocusItem({ id: "tab-<label>", order: 1000 + index, group:
+    "primary-tabs" })`; the high order base keeps the persistent tab bar after page content in the
+    single keypad focus ring. All existing attributes/handlers/classes preserved verbatim; the ref is
+    purely additive. Center-activation falls through to the element's existing onClick → `navigate`.
+- Tests: `tests/unit/components/TabBar.test.tsx` (+2, now 5):
+  - Under `FocusNavigationProvider profileId="commodoreCallback8020"`: `DpadDown`×2 moves focus
+    Home→Play→Disks (asserted via `document.activeElement`), `DpadCenter` activates Disks and the
+    router navigates to `/disks` (asserted via a `useLocation` probe).
+  - With no provider, `DpadCenter` is inert (event not prevented, no navigation, no throw) — the
+    default-variant safety contract.
+- Gates: affected `vitest` subset (App.runtime, PageErrorBoundary, AppBar, TabBar,
+  useFocusNavigation, focusNavigation — 82 pass); **full `npm run test` → 605 files / 6990 tests pass
+  (exit 0)** since App.tsx + TabBar are core; `npx tsc --noEmit` exit 0; `npm run lint` full chain
+  exit 0 (stale-name guard green; variant:check + feature-flags:check green). `test:coverage` not
+  re-run — narrow additive change, both new branches covered, 91% gate margin intact.
+- Backlog M2.1 advanced (`[~]`): adapter mounted + tab navigation registered + proven; per-page
+  primary-CTA registration (Home/Play/Disks/Config/Settings) and the per-screen reachability audit
+  remain. No README/Callback references added; default variant unchanged.
+
+## M2.1 — registered HomePage's Config-action CTAs in the keypad focus ring (2026-06-18)
+
+- Continued M2.1 from the mounted provider + registered tab bar: the HomePage **Config Actions**
+  grid (the densest cluster of primary CTAs) now joins the touch-free d-pad/center ring.
+- `src/hooks/useFocusNavigation.tsx`: `useFocusItem` opt-out on empty `id` (`if (!context || !id)
+  return`). Lets a shared CTA primitive call the hook unconditionally and register only when given a
+  real id; the ref callback still tracks the element regardless.
+- `src/components/QuickActionCard.tsx`: optional `focusId` / `focusOrder`; registers via
+  `useFocusItem` (group `home-actions`, `disabled: disabled || loading`) and attaches the ref to the
+  existing `<button>`. Disabled/loading cards register disabled → skipped by `FocusController.step`,
+  so an inactive CTA can never be reached/activated by repeated d-pad/center. No `focusId` ⇒ no
+  registration (MachineControls' 10 cards unchanged). Inert in the default variant (provider
+  `enabled={false}`). Pointer onClick + all styling preserved verbatim.
+- `src/pages/HomePage.tsx`: `focusId` + `focusOrder` (100…190) on all 10 Config-action cards
+  (save/load/reset-to-flash, save/load/manage/revert app configs, advanced save-to-file/load-from-
+  file, telnet clear-flash). Gated cards self-register only when rendered, so pruned-feature CTAs
+  (telnet clear-flash) never enter the c64u-remote ring.
+- Tests: `tests/unit/components/QuickActionCard.test.tsx` (+3, now 11):
+  - Under `FocusNavigationProvider profileId="commodoreCallback8020"`: `DpadDown`×2 moves focus
+    Save→Load→Reset by `focusOrder` (asserted via `document.activeElement`); `DpadCenter` fires only
+    the focused card's onClick.
+  - A `disabled` card is skipped (single step jumps Save→Reset; center then activates Reset).
+  - A card without `focusId` never enters the ring (only the registered card's onClick fires).
+- Gates: affected `vitest` (QuickActionCard test + density + TabBar + useFocusNavigation = 30 pass;
+  HomePage + HomePage.ramActions = 56 pass); `npx tsc --noEmit` exit 0; `npm run lint` full chain
+  exit 0 (stale-name guard + variant:check + feature-flags:check green). `test:coverage` not re-run —
+  narrow additive change, every new branch (`focusId` present/absent, `!context`/`!id`, disabled)
+  covered, 91% gate margin intact.
+- Backlog M2.1 still `[~]`: HomePage Config CTAs done; remaining HomePage sections (MachineControls,
+  drives/printer, quick-config) + other pages (Play/Disks/Config/Settings) and the per-screen
+  reachability audit remain. No README/Callback references added; default variant unchanged.
+
+## M2.1 — registered MachineControls' primary CTAs in the keypad focus ring (2026-06-18)
+
+- Branch `feat/introduce-new-variant`. Slice (M2.1): bring HomePage's MachineControls "Quick Actions"
+  into the touch-free d-pad/center focus ring, after the provider mount + TabBar + Config-grid work.
+- `src/pages/home/components/MachineControls.tsx`: each `QuickActionCard` now carries `focusId` +
+  `focusOrder` in band 100–190 (Reset 100 / Reboot 110 / Pause-Resume 120 / Menu 130 / Save RAM 140 /
+  Load RAM 150 / Power Cycle 160 / extraActions 170+ / Power Off 190). In c64u-remote only
+  Reset/Reboot/Pause/Menu/Power Off render, so RAM/power-cycle/clear-ram/save-REU stay pruned and out
+  of the ring. Disabled cards register as disabled → skipped during traversal.
+- `src/pages/HomePage.tsx`: renumbered the Config-action grid from 100–190 → **600–690** so the
+  single global focus registry traverses top→bottom (Machine 100–190 → reserved Drives 300 / Printers
+  400 → Config 600–690 → TabBar 1000+). Documented the band scheme in a comment. No behaviour change —
+  `focusOrder` only affects keypad traversal sequence and is inert in the default variant.
+- Tests: `tests/unit/pages/home/components/MachineControls.focus.test.tsx` (+4, new). Uses the REAL
+  `QuickActionCard` (the existing MachineControls suite mocks it) inside
+  `FocusNavigationProvider profileId="commodoreCallback8020"`:
+  - `DpadDown`×3 walks Reset→Reboot→Pause→Menu (asserted via `document.activeElement`); `DpadCenter`
+    fires only `onToggleMenu` — no dialog opens, no other handler runs.
+  - A backward step from the section top wraps to Power Off (highest order 190); center fires
+    `onPowerOff`, proving it traverses last.
+  - Pruned RAM/Power-Cycle buttons are absent and exactly five canonical actions cycle the ring.
+  - While disconnected every card is disabled, so d-pad + center is a no-op: no handler fires and no
+    confirmation dialog opens (destructive CTA unreachable while inactive).
+- Gates: affected `vitest` (MachineControls.focus 4 + MachineControls 18 + QuickActionCard 11 +
+  TabBar 5 + useFocusNavigation 11 + focusNavigation 22 = 71 pass; HomePage + ramActions = 56 pass);
+  `npx tsc --noEmit` exit 0; `npm run lint` full chain exit 0 (stale-name guard + variant:check +
+  feature-flags:check green). `test:coverage` not re-run — narrow additive change, every new branch
+  exercised, 91% gate margin intact.
+- Backlog M2.1 still `[~]`: HomePage Config + MachineControls done; remaining HomePage sections
+  (drives/printer, quick-config selects) + other pages (Play/Disks/Config/Settings) and the per-screen
+  reachability audit remain. No README/Callback references added; default variant unchanged (provider
+  `enabled={false}`, `focusId`-less cards inert).
+
+## M2.1 — registered HomePage's Drives + Printers button CTAs in the keypad focus ring (2026-06-18)
+
+- Slice (backlog M2.1): bring the always-rendered button CTAs of HomePage's Drives + Printers sections
+  into the C64U Remote keypad focus ring, completing HomePage's button-level touch-free reachability.
+  In c64u-remote the telnet drive/printer sub-actions are pruned (`home_telnet_drive_actions_enabled` /
+  `home_telnet_printer_actions_enabled` false) so they never render; what remains in both sections is
+  the section `Reset` button and the per-device ON/OFF enable toggles — those are now registered.
+- Code:
+  - `src/components/SectionHeader.tsx`: optional `focusId`/`focusOrder` props; the reset `<Button>` gets
+    a `useFocusItem` ref (`group "home-sections"`, `disabled: resetDisabled`). Inert without a `focusId`
+    (`id: focusId ?? ""`) and outside a provider, so every other SectionHeader usage is unchanged.
+  - `src/pages/home/DriveCard.tsx`: optional `focusId`/`focusOrder`; the ON/OFF enable toggle gets a
+    `useFocusItem` ref (`group "home-drives"`, `disabled: !isConnected || Boolean(togglePending)`).
+  - `src/pages/home/components/DriveManager.tsx`: passes `focusId="home-drives-reset"`/`focusOrder=300`
+    to the section header and `focusId="home-drive-toggle-${suffix}"`/`focusOrder=310+index*10` to each
+    `DriveCard` (A 310 / B 320 / Soft IEC 330).
+  - `src/pages/home/components/PrinterManager.tsx`: registers the ON/OFF toggle (`home-printer-toggle`,
+    order 410, `group "home-printers"`, `disabled: !isConnected || printerEnabledPending`) and passes
+    `focusId="home-printer-reset"`/`focusOrder=400` to its section header.
+  - `src/pages/HomePage.tsx`: refreshed the band-map comment (Drives 300/310–330, Printers 400/410;
+    mount/status dialogs → M2.2, bus/type/printer selects → M2.5).
+- Ring now reads DOM top→bottom: Machine 100–190 → Reset Drives 300 → drive toggles 310/320/330 →
+  Reset Printer 400 → Printer toggle 410 → Config 600–690 → TabBar 1000+. Disabled (disconnected /
+  pending) CTAs register as disabled and are skipped; the pruned telnet buttons never enter the ring.
+- Tests (new):
+  - `tests/unit/pages/home/components/DriveManager.focus.test.tsx` (+4): real `DriveCard`+`SectionHeader`
+    in `FocusNavigationProvider profileId="commodoreCallback8020"`. `DpadDown` walks Reset→A→B→Soft IEC
+    then wraps to Reset (proves Reset sorts top); center on the initial selection fires `onResetDrives`
+    only (no `updateConfigValue`); center on a stepped-to toggle fires `updateConfigValue("HOME_DRIVE_
+    ENABLED")` only; disconnected → every CTA disabled, d-pad+center is a no-op.
+  - `tests/unit/pages/home/components/PrinterManager.focus.test.tsx` (+4): Reset 400 → toggle 410
+    traversal + wrap; center fires the focused reset vs toggle in isolation; disconnected skips both.
+- Gates: affected `vitest` subset (DriveManager.focus 4, PrinterManager.focus 4, DriveManager 27,
+  PrinterManager 24, DriveCard 16, plus the full `tests/unit/pages/home` set = 32 files / 493 pass);
+  `npx tsc --noEmit` exit 0; `npm run lint` full chain exit 0 (stale-name guard + variant:check +
+  feature-flags:check green); `npm run test:coverage` re-run because `SectionHeader` is a broadly-shared
+  primitive and the global branch gate margin is thin — merged result recorded below.
+- Backlog M2.1 still `[~]` (HomePage Config + MachineControls + Drives + Printers buttons now done);
+  remaining: quick-config selects/sliders (M2.5) + other pages (Play/Disks/Config/Settings) + the
+  per-screen reachability audit. No README/Callback references added; default variant unchanged.
+
+## M2.1 — registered the Settings connection flow (Save & Connect / Refresh) in the keypad focus ring (2026-06-18)
+
+- First non-HomePage screen wired into the touch-free focus ring. `src/pages/SettingsPage.tsx`'s
+  Connection card now registers its two primary CTAs via `useFocusItem` so the keypad-first C64U
+  Remote can save/connect and refresh with no taps:
+  - **Save & Connect** — `id "settings-save-connection"`, order **300**, `disabled: isSaving`.
+  - **Refresh connection** — `id "settings-refresh-connection"`, order **310**,
+    `disabled: status.isConnecting || connectionRefreshInFlight`.
+  - group `settings-connection`. Refs attached to the existing `<Button>`s (forwardRef) — onClick
+    paths unchanged. Per-page band reserves 100 (Appearance) + 200 (saved-devices / host field) for
+    later registration above, so the ring reads top→bottom; documented inline.
+- The host/IP `<input>` was intentionally left out: the global key listener skips editable targets
+  (so T9 digits reach the field), so registering it without field-engagement/exit wiring would trap
+  focus — that is the M2.2/M3 slice, not this one.
+- Tests (new): `tests/unit/pages/SettingsPage.test.tsx` (+5, `keypad focus ring` describe) — added a
+  `renderSettingsPageInFocusRing` helper rendering the real SettingsPage inside
+  `FocusNavigationProvider profileId="commodoreCallback8020"`:
+  - top→bottom order + d-pad focus move (initial Save & Connect → `DpadDown` → Refresh → wrap → Save);
+  - `DpadCenter` on the initial selection fires Save (`updateConfig("c64u", undefined)`) and never the
+    manual refresh path (`discoverConnection` not called with `"manual"`);
+  - `DpadCenter` on the stepped-to Refresh fires `discoverConnection("manual")` and not Save;
+  - a connect-in-flight (`status.isConnecting`) disables Refresh so d-pad never lands on it;
+  - no provider → no global listener → d-pad never moves focus (default-variant safety).
+- Gates: `npx vitest run tests/unit/pages/SettingsPage.test.tsx` → **70 pass** (5 new + 65 existing);
+  `npx tsc --noEmit` exit 0; `npm run lint` full chain exit 0 (stale-name guard + variant:check +
+  feature-flags:check green). Coverage not re-run — narrow additive single-page change; new branches
+  exercised by the 5 new tests (+ the existing refresh-gating test for `connectionRefreshInFlight`).
+- Backlog M2.1 still `[~]`: HomePage buttons + Settings connection CTAs done; remaining = HomePage
+  quick-config selects/sliders (M2.5), the rest of Settings (host/IP via field-engagement,
+  saved-device rows, Appearance), the other pages (Play/Disks/Config), then the per-screen audit. No
+  README/Callback references added; default variant unchanged.
+
+## M2.1 — registered the Config page category headers in the keypad focus ring (2026-06-18)
+
+- Branch `feat/introduce-new-variant`. First non-Home/Settings page wired into the touch-free ring,
+  continuing M2.1. The Config page's primary CTAs are the collapsible category headers (one per config
+  category); every category must be reachable + expandable by keypad on the touch-off C64U Remote.
+- `src/pages/ConfigBrowserPage.tsx`:
+  - imported `useFocusItem`; added module constants `CONFIG_CATEGORY_FOCUS_ORDER_BASE = 100` and
+    `CONFIG_CATEGORY_FOCUS_ORDER_STEP = 10` (this route's only band; tabs sort after at 1000+);
+  - `CategorySection` gained a `focusOrder: number` prop and registers its header `<button>` via
+    `useFocusItem` (`id "config-category-<slug>"` matching the existing `data-testid`, `group
+    "config-categories"`, `order = focusOrder`); the ref is attached to the existing header — its
+    `onClick` toggle (`setIsOpen(!isOpen)`) is untouched, so center-activate = click = expand/collapse;
+  - the parent `.map` passes `focusOrder = BASE + index * STEP` so the ring reads top→bottom; the STEP
+    gap reserves room to slot each category's group actions (Refresh/Reset/Sync clock) right after its
+    header in a later slice without renumbering.
+- Tests (new): `tests/unit/pages/ConfigBrowserPage.test.tsx` (+3, `keypad focus ring` describe) —
+  imported `FocusNavigationProvider`, added `renderConfigBrowserPageInFocusRing` (real page inside
+  `FocusNavigationProvider profileId="commodoreCallback8020"`):
+  - d-pad walks headers top→bottom (Audio Mixer 100 → Clock Settings 110 → General 120 → wrap), and
+    DpadUp from the first wraps to the last;
+  - DpadCenter on the stepped-to header expands only that section (`setConfigExpanded("Clock
+    Settings", true)`, asserted NOT called with `true` for the other categories);
+  - no provider → no global listener → d-pad never moves focus (default-variant safety).
+- Gates: `npx vitest run tests/unit/pages/ConfigBrowserPage.test.tsx` → **23 pass** (3 new + 20
+  existing); `npx tsc --noEmit` exit 0; `npm run lint` full chain exit 0 (stale-name guard +
+  variant:check + feature-flags:check green; bundle-budgets re-built clean). Coverage not re-run —
+  narrow additive change (one page + one new prop); new branches exercised by the 3 new tests.
+- Backlog M2.1 still `[~]`: Home buttons + Settings connection CTAs + Config category headers done;
+  remaining = Config's per-category group actions, Play/Disks pages, HomePage quick-config
+  selects/sliders (M2.5), the rest of Settings (host/IP field-engagement, saved-device rows,
+  Appearance), then the per-screen reachability audit. No README/Callback references; default variant
+  unchanged.

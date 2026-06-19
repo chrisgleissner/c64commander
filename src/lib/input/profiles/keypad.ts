@@ -7,10 +7,10 @@
  */
 
 /**
- * Commodore Callback 8020 keypad profile (designed for Callback 8020
- * constraints — NOT validated on real hardware; the exact KeyboardEvent codes
- * surfaced by Sailfish Android AppSupport for this device are unconfirmed, so
- * each hardware key is bound by several plausible aliases).
+ * Generic keypad profile for a D-pad + numeric keypad device (NOT validated on
+ * specific hardware; the exact KeyboardEvent codes a given Android WebView host
+ * surfaces for these keys vary, so each key is bound by several plausible
+ * aliases).
  *
  * Physical key → semantic action:
  *   D-pad up/down/left/right → dpadUp/Down/Left/Right
@@ -69,8 +69,8 @@ const keypadBindings: KeyBinding[] = [
   { keyCode: 82, action: "openMenu" },
 ];
 
-export const commodoreCallback8020Profile = mergeKeymaps(defaultKeyboardProfile, {
-  id: "commodoreCallback8020",
+export const keypadProfile = mergeKeymaps(defaultKeyboardProfile, {
+  id: "keypad",
   bindings: keypadBindings,
   timing: { multiTapTimeoutMs: 1000 },
 });

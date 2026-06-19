@@ -8,17 +8,17 @@
 
 /**
  * Input profile registry. A profile is just a {@link Keymap}; auto-detection
- * is unreliable inside Sailfish AppSupport, so a settings/developer override
+ * is unreliable in some Android WebView hosts, so a settings/developer override
  * can pick a profile explicitly via {@link resolveInputProfile}.
  */
 
 import type { Keymap } from "../keymap";
 import { defaultKeyboardProfile } from "./defaultKeyboard";
-import { commodoreCallback8020Profile } from "./commodoreCallback8020";
+import { keypadProfile } from "./keypad";
 
 export const INPUT_PROFILES = {
   defaultKeyboard: defaultKeyboardProfile,
-  commodoreCallback8020: commodoreCallback8020Profile,
+  keypad: keypadProfile,
 } as const satisfies Record<string, Keymap>;
 
 export type InputProfileId = keyof typeof INPUT_PROFILES;
@@ -38,4 +38,4 @@ export const resolveInputProfile = (id?: string | null): Keymap => {
   return INPUT_PROFILES[DEFAULT_INPUT_PROFILE_ID];
 };
 
-export { defaultKeyboardProfile, commodoreCallback8020Profile };
+export { defaultKeyboardProfile, keypadProfile };

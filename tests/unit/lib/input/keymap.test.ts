@@ -56,19 +56,19 @@ describe("mergeKeymaps", () => {
 
 describe("profile registry", () => {
   it("exposes both profiles by id", () => {
-    expect(INPUT_PROFILE_IDS).toEqual(["defaultKeyboard", "commodoreCallback8020"]);
+    expect(INPUT_PROFILE_IDS).toEqual(["defaultKeyboard", "keypad"]);
     expect(INPUT_PROFILES.defaultKeyboard.id).toBe("defaultKeyboard");
-    expect(INPUT_PROFILES.commodoreCallback8020.id).toBe("commodoreCallback8020");
+    expect(INPUT_PROFILES.keypad.id).toBe("keypad");
   });
 
   it("resolves a known id and falls back to the default for unknown/undefined", () => {
-    expect(resolveInputProfile("commodoreCallback8020").id).toBe("commodoreCallback8020");
+    expect(resolveInputProfile("keypad").id).toBe("keypad");
     expect(resolveInputProfile(undefined).id).toBe(DEFAULT_INPUT_PROFILE_ID);
     expect(resolveInputProfile("does-not-exist").id).toBe(DEFAULT_INPUT_PROFILE_ID);
     expect(resolveInputProfile(null).id).toBe(DEFAULT_INPUT_PROFILE_ID);
   });
 
   it("gives the device profile a longer multi-tap window", () => {
-    expect(INPUT_PROFILES.commodoreCallback8020.timing.multiTapTimeoutMs).toBe(1000);
+    expect(INPUT_PROFILES.keypad.timing.multiTapTimeoutMs).toBe(1000);
   });
 });

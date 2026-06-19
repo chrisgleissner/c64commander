@@ -26,6 +26,7 @@ import {
   Trash,
 } from "lucide-react";
 import { useC64Connection } from "@/hooks/useC64Connection";
+import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useSavedDeviceSwitching } from "@/hooks/useSavedDeviceSwitching";
 import { C64_DEFAULTS, resolveDeviceHostFromStorage } from "@/lib/c64api";
@@ -241,6 +242,24 @@ export default function SettingsPage() {
   const lastProbeFailedAtMs = connectionSnapshot.lastProbeFailedAtMs;
   const [isSaving, setIsSaving] = useState(false);
   const [connectionRefreshInFlight, setConnectionRefreshInFlight] = useState(false);
+  // Keypad focus ring (C64U Remote): register the Connection card's two primary
+  // CTAs so the touch-off device can save/connect and refresh with no taps. Inert
+  // in the default variant (no provider listener) and skipped while disabled, so
+  // pointer behaviour is unchanged. Orders read top→bottom on the Settings page;
+  // lower bands (100 Appearance, 200 saved-devices/host field) stay reserved for
+  // later registration above these buttons.
+  const saveConnectionFocusRef = useFocusItem<HTMLButtonElement>({
+    id: "settings-save-connection",
+    order: 300,
+    group: "settings-connection",
+    disabled: isSaving,
+  });
+  const refreshConnectionFocusRef = useFocusItem<HTMLButtonElement>({
+    id: "settings-refresh-connection",
+    order: 310,
+    group: "settings-connection",
+    disabled: status.isConnecting || connectionRefreshInFlight,
+  });
   const [deleteDependencySummary, setDeleteDependencySummary] = useState<SavedDeviceDependencySummary | null>(null);
   const [deleteWarningOpen, setDeleteWarningOpen] = useState(false);
   const [deleteDependencyBusy, setDeleteDependencyBusy] = useState(false);
@@ -1041,6 +1060,7 @@ export default function SettingsPage() {
                     hostLabel="C64U Hostname / IP"
                     hostHint="Hostname or IP from the C64 menu."
                     onHostBlur={(value) => setHostnameError(validateDeviceHost(value))}
+                    keypadInput={flags.keypad_input_enabled}
                   />
                   <p className="text-xs text-muted-foreground">
                     Currently using: <span className="font-sans break-all">{runtimeDeviceHost}</span>
@@ -1104,11 +1124,17 @@ export default function SettingsPage() {
               ) : null}
 
               <div className="flex gap-2 pt-2">
-                <Button onClick={handleSaveConnection} disabled={isSaving} className="flex-1">
+                <Button
+                  ref={saveConnectionFocusRef}
+                  onClick={handleSaveConnection}
+                  disabled={isSaving}
+                  className="flex-1"
+                >
                   {isSaving ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
                   Save & Connect
                 </Button>
                 <Button
+                  ref={refreshConnectionFocusRef}
                   variant="outline"
                   onClick={() => void handleRefreshConnection()}
                   disabled={status.isConnecting || connectionRefreshInFlight}

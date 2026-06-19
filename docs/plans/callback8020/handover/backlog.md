@@ -1,69 +1,67 @@
-# Callback 8020 support — backlog & definition of done
+# Callback 8020 / C64U Remote — post-MVP backlog
 
-Single source of truth for "feature-complete and bug-free" Callback 8020 /
-Sailfish support. Milestones are ordered roughly by priority; each unchecked item
-is sized to be (at most) one handover session. Tick items as sessions complete
-them, and add new items as bugs/gaps are discovered.
+Forward-looking work, deferred out of the C64U Remote MVP. The MVP ships the
+existing app reskinned, **Android-only, touch-first** (touchscreen + the system
+soft keyboard cover all text entry on the 480×640 panel). The keypad/T9 input
+subsystem is fully built and unit-tested but ships **behind the user-visible,
+default-off experimental feature flag `keypad_input_enabled`** (Settings ▸
+Experimental Features ▸ *Keypad / T9 input*). Everything below is picked up from
+there.
 
-Legend: `[x]` done & verified · `[~]` partial · `[ ]` todo.
+Legend: `[ ]` todo · `[~]` partial.
 
-## Done so far (foundation — verified)
+## Keypad / T9 — finish against real hardware (gated by `keypad_input_enabled`)
 
-- [x] Android-only variant support in the generator (optional iOS/web, resolved `theme`), with tests.
-- [x] `c64u-controller` → `c64u-remote` migration (`C64U Remote`, `uk.gleissner.c64uremote`, Android-only); publish matrix includes both; stale-name guard.
-- [x] Feature pruning: all 12 flags `enabled:false, visible_to_user:false` for c64u-remote; HVSC + Online Archive Settings cards gated; cannot be re-enabled by user/localStorage (baked pre-override).
-- [x] Both APKs from one build (`android:apk:all`) + deterministic names + metadata check + no-GMS gate; CI builds/uploads/verifies both.
-- [x] Per-variant permission scoping: c64u-remote APK ships **only INTERNET** (manifest swap + parity test).
-- [x] T9 / keypad input subsystem (`src/lib/input/`) + `useT9Input` wired into device name + host/IP fields; 53+ tests.
-- [x] Small-screen layout: jsdom profile contract + real-browser overflow at 480×640 & 320×480 (Playwright).
-- [x] Docs: compatibility review, emulation guide, touch-free/Sailfish doc, keymap — all under `docs/plans/callback8020/`; README kept free of variant references.
-- [x] Device validation on a physical de-Googled (no-GMS) Pixel 4: install + coexist + launch + "C64U Remote" name + pruned features absent + keypad-only operable + no GMS/fatal.
-- [x] Waydroid VANILLA (no-GMS, closest Sailfish analog) smoke: C64U Remote installed + launched + verified (PASS) via `scripts/waydroid-smoke.sh` (self-contained, toggleable, opt-in CI).
+- [ ] **Keypad / T9 feature completion.** Finish the touch-free path (per-screen
+  CTA reachability audit, deterministic `back` chain wired to real dialogs/menus/
+  fields, soft-key context actions, slider/select operability via d-pad), validate
+  on real hardware, then — once it is no longer experimental — optionally default
+  `keypad_input_enabled: true` for C64U Remote via its
+  `variants/feature-flags/c64u-remote.yaml` overlay. (See the prior loop state
+  under `docs/agentic/callback8020/handover/backlog.prev.md` for the detailed
+  M2–M7 breakdown.)
+- [ ] **Replace the guessed `commodoreCallback8020` key codes** with codes
+  captured from real hardware, and add per-binding parity tests for the non-d-pad
+  bindings (soft keys, back, call, menu). (review §4.3, §4.7)
+- [ ] **Double-activation handling.** A focused button can receive both the
+  native `Enter`/`Space` activation and the controller's `activate()` →
+  `element.click()`. On real hardware the OK key emits `DPAD_CENTER` (no native
+  button activation), but under keyboard-driven emulation `Enter` may fire both.
+  Add a guard + test before relying on emulator runs. (review §4.3)
+- [ ] **Per-CTA focus-ring registration completeness.** Finish registering the
+  remaining surfaces (Play/Disks pages, HomePage quick-config selects/sliders,
+  Config per-category group actions, the rest of Settings) via `useFocusItem`,
+  then a full per-screen reachability audit. (review §4.3)
+- [ ] **T9 input mode UX.** Visible input-mode indicator (multitap vs hostname)
+  and how to switch (`#`) on the small screen; a developer/settings control to
+  pick the input profile (`defaultKeyboard` ↔ `commodoreCallback8020`) since
+  AppSupport auto-detection is unreliable; audit all reachable text inputs.
 
-## M1 — CI / quality gates green and durable
+## Schema / build consolidation
 
-- [ ] Confirm "Web | Unit tests (coverage)" green on HEAD (rc2 bump fixes the version test) and the 91% line/branch coverage gate holds with the new `src/` (input subsystem, `useT9Input`, Settings/host wiring); add targeted tests for any uncovered branches (e.g. `useT9Input` reconciliation branch, `t9` mode edges, `focusController` wrap/disabled).
-- [ ] Triage the HVSC perf-budget log lines ("T1 25000>20000", "browseLoadSnapshotMs not-a-number"): confirm benign/runner-speed (not a real regression) or fix the budget config; document the conclusion.
-- [ ] Ensure `npm run lint`, `npm run test`, `variant:check`, `feature-flags:check` are all green on HEAD and in CI.
+- [ ] **`android_only: true` schema flag** to consolidate the Android-only
+  enforcement now spread across schema, manifest selection, capacitor fallback,
+  and CI, so the constraint is validated in one place rather than emerging from
+  the absence of `ios`/`web` blocks. (review §4.1)
 
-## M2 — Keyboard-only operability completeness (touch-free)
+## Docs
 
-- [ ] Audit every primary CTA on Home/Play/Disks/Config/Settings for keyboard/d-pad reachability + activation; register the ones needing deterministic order through `FocusController`.
-- [ ] Deterministic `back` behaviour wiring (close dialog → leave menu → leave field → navigate back) verified per screen.
-- [ ] Soft-key (`softLeft`/`softRight`) → context actions where the device exposes them; map and test.
-- [ ] Destructive confirmations: safe default focus + cannot be triggered by repeated T9 input; keyboard-only confirm/cancel.
-- [ ] Sliders/toggles/selects operable via `dpadLeft/Right` + `activate`; add tests.
-- [ ] On-device proof: drive a full connect→play flow with hardware keys only (no taps) on the Pixel 4 / Waydroid (root) and capture evidence.
+- [ ] **Doc citations.** Add a "Sources" section (URLs + access dates) to the
+  Sailfish compatibility review for the AppSupport / no-Google-services / LXC
+  claims, and an inline "unvalidated on hardware" caveat to the `keymap.md`
+  keycode table so a scanning reader is not misled. (review §4.6)
 
-## M3 — T9 text-input completeness
+## CI hygiene
 
-- [ ] Audit ALL text inputs in the c64u-remote surface (not just device name/host) and attach `useT9Input` (or confirm not reachable in the variant).
-- [ ] Visible input-mode indicator (multitap vs hostname) + how to switch (`#`), on the small screen.
-- [ ] Settings/developer UI to select the input profile (`defaultKeyboard` ↔ `commodoreCallback8020`) since AppSupport auto-detection is unreliable.
-- [ ] On-device T9 entry visual proof: focus the host field via keypad and enter `192.168.1.13` with a screenshot (needs root waydroid shell / authorized adb / real keypad).
+- [ ] **Pin or replace the unpinned `curl … | bash` Waydroid installer** in
+  `scripts/waydroid-smoke.sh:76` (supply-chain smell); prefer a pinned version or
+  the distro package directly. (review §4.5)
+- [ ] **Retire `check-stale-variant-names.mjs`** (`npm run lint:stale-names`)
+  once the `c64u-controller` → `c64u-remote` rename has fully settled on `main`.
+  (review §4.1)
 
-## M4 — Small-screen UX polish (480×640 first)
+## Real-hardware validation (external; unlocks wording upgrade)
 
-- [ ] Extend overflow/layout checks to 640×480 landscape + assert dialogs/toasts/bottom-sheets/dropdowns fit within the viewport.
-- [ ] High-contrast, always-visible focus outline at 480×640; no focus trapped off-screen; no scroll traps for critical controls.
-- [ ] Connection setup screen reviewed for tiny-screen task-first layout; status/error messages short + actionable.
-
-## M5 — Sailfish/AppSupport substitute coverage (CI + deeper)
-
-- [ ] Make the Waydroid CI job capture the deeper smoke (resumed activity + screenshot + logcat) on the passwordless-sudo runner; attach evidence; keep it non-blocking.
-- [ ] Actually exercise the AOSP no-GMS 480×640 emulator (`scripts/sailfish-callback-emulator.sh`) end-to-end at least once; record results/limits.
-- [ ] Validate cleartext HTTP to a mock device server from inside Waydroid/emulator (host LAN IP / `10.0.2.2`); confirm mDNS/`.local` does NOT resolve and the raw-IP path is sufficient.
-- [ ] Decide on an mDNS/`.local` fallback (resolver or documented "manual IP only") and implement/document.
-
-## M6 — Real-hardware validation (external; unlocks wording upgrade)
-
-- [ ] Run the §11 manual checklist on a real Sailfish OS AppSupport device; record WebView version + behaviour.
-- [ ] Run it on real Commodore Callback 8020 hardware (post-ship); confirm install/sideload path, touch-off keypad UX, cleartext LAN.
-- [ ] Only then change docs from "designed for / validated against constraints" to "validated on Sailfish/Callback".
-
-## M7 — Bug-free hardening
-
-- [ ] AppSupport lifecycle: flip close/open, screen lock, process kill, container freeze/restart — verify no broken state in c64u-remote.
-- [ ] Error/dropout UX on the tiny screen (device unreachable, timeouts, concurrent REST) — short, actionable, keyboard-dismissible.
-- [ ] Regression sweep of the c64u-remote surface for any stray immature/internet features reachable by deep link / stale state.
-- [ ] `targetSdk 35` behaviour spot-check on an API-33 image (AppSupport ceiling).
+- [ ] Run the manual checklist on a real Sailfish OS AppSupport device and on
+  real Commodore Callback 8020 hardware; only then change docs from "designed for
+  / validated against constraints" to "validated on Sailfish/Callback".

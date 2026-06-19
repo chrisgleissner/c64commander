@@ -1,12 +1,12 @@
 # Feature-flag overrides for the C64U Remote variant.
 #
-# C64U Remote is a focused, stable, local remote-control app for the Commodore
-# Callback 8020 (small keypad-first screen, Sailfish Android AppSupport, no
-# Google Play Services, browsers/social blocked). It deliberately excludes:
+# C64U Remote is a focused, stable, local remote-control app for compact,
+# keypad-first Android devices (small screen, no Google Play Services,
+# background-restricted host). It deliberately excludes:
 #   - internet-content integrations (HVSC, CommoServe),
 #   - immature / experimental features (lighting studio, RAM/REU snapshots,
 #     the Telnet-dependent Home actions),
-#   - background execution (AppSupport restricts Android background services).
+#   - background execution (the target host restricts Android background services).
 #
 # Each excluded feature is BOTH disabled (enabled: false) AND hidden from the
 # normal-user Settings (visible_to_user: false). With visible_to_user: false a

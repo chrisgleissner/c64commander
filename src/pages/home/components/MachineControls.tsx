@@ -152,6 +152,8 @@ export function MachineControls({
               label="Reset"
               variant="danger"
               className="border-destructive/40 bg-destructive/[0.04]"
+              focusId="home-machine-reset"
+              focusOrder={100}
               onClick={() =>
                 openDestructiveConfirmation({
                   actionName: "Reset",
@@ -172,6 +174,8 @@ export function MachineControls({
               label="Reboot"
               variant="danger"
               className="border-destructive/40 bg-destructive/[0.04]"
+              focusId="home-machine-reboot"
+              focusOrder={110}
               onClick={() =>
                 openDestructiveConfirmation({
                   actionName: "Reboot",
@@ -187,6 +191,8 @@ export function MachineControls({
               icon={machineExecutionState === "paused" ? Play : Pause}
               label={machineExecutionState === "paused" ? "Resume" : "Pause"}
               className={machineExecutionState === "paused" ? "border-primary/60 bg-primary/10" : undefined}
+              focusId="home-machine-pause-resume"
+              focusOrder={120}
               onClick={() => void onPauseResume()}
               disabled={!status.isConnected || effectiveBusy}
               loading={pauseResumePending}
@@ -194,6 +200,8 @@ export function MachineControls({
             <QuickActionCard
               icon={Menu}
               label="Menu"
+              focusId="home-machine-menu"
+              focusOrder={130}
               onClick={() => void onToggleMenu()}
               disabled={!status.isConnected || effectiveBusy}
               loading={menuLoading}
@@ -204,6 +212,8 @@ export function MachineControls({
                   icon={Download}
                   label="Save RAM"
                   dataTestId="home-save-ram"
+                  focusId="home-machine-save-ram"
+                  focusOrder={140}
                   onClick={() => void onSaveRam()}
                   disabled={!status.isConnected || effectiveBusy}
                   loading={machineTaskId === "save-ram"}
@@ -212,6 +222,8 @@ export function MachineControls({
                   icon={Upload}
                   label="Load RAM"
                   dataTestId="home-load-ram"
+                  focusId="home-machine-load-ram"
+                  focusOrder={150}
                   onClick={() => void onLoadRam()}
                   disabled={!status.isConnected || effectiveBusy}
                   loading={machineTaskId === "load-ram"}
@@ -225,6 +237,8 @@ export function MachineControls({
                 variant="danger"
                 className="border-destructive/40 bg-destructive/[0.04]"
                 dataTestId="home-power-cycle"
+                focusId="home-machine-power-cycle"
+                focusOrder={160}
                 onClick={() =>
                   openDestructiveConfirmation({
                     actionName: "Power Cycle",
@@ -237,7 +251,7 @@ export function MachineControls({
                 loading={powerCycleLoading}
               />
             ) : null}
-            {extraActions.map((action) => {
+            {extraActions.map((action, index) => {
               const Icon = action.icon ?? RefreshCw;
               const requiresConfirmation = REBOOT_CLEAR_MEMORY_ACTION_IDS.has(action.id);
               return (
@@ -246,6 +260,8 @@ export function MachineControls({
                   icon={Icon}
                   label={action.loading ? `${action.label}…` : action.label}
                   dataTestId={`home-machine-inline-${action.id}`}
+                  focusId={`home-machine-${action.id}`}
+                  focusOrder={170 + index * 2}
                   onClick={() => {
                     if (!requiresConfirmation) {
                       void action.onSelect();
@@ -270,6 +286,8 @@ export function MachineControls({
               label="Power Off"
               variant="danger"
               className="border-destructive/30 bg-destructive/[0.03] opacity-80"
+              focusId="home-machine-power-off"
+              focusOrder={190}
               onClick={() => void onPowerOff()}
               disabled={!status.isConnected || effectiveBusy}
               loading={controls.powerOff.isPending}

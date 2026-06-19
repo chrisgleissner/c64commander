@@ -8,8 +8,8 @@
 
 /**
  * React adapter that lets ANY controlled text input accept physical T9 / keypad
- * input as a fallback when the on-screen keyboard is impractical (e.g. the
- * keypad-first Commodore Callback 8020). It is a thin bridge over the pure
+ * input as a fallback when the on-screen keyboard is impractical (e.g. a
+ * keypad-first device). It is a thin bridge over the pure
  * composer in `@/lib/input`: it does not own the value, it composes onto the
  * value the parent already controls.
  *
@@ -72,7 +72,7 @@ export interface UseT9InputOptions {
   readonly setValue: (next: string) => void;
   /** Initial composition mode. Connection (host/IP) fields use "hostname". */
   readonly mode?: T9Mode;
-  /** Input profile id (e.g. "commodoreCallback8020"); falls back to default. */
+  /** Input profile id (e.g. "keypad"); falls back to default. */
   readonly profileId?: string | null;
   readonly config?: Partial<T9Config>;
   /** When false the adapter is inert and all keys pass through. */

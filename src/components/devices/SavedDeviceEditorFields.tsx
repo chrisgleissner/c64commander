@@ -19,6 +19,13 @@ type Props = {
   hostLabel?: string;
   hostHint?: string | null;
   onHostBlur?: (value: string) => void;
+  /**
+   * Enables the physical T9 / keypad composer on the name and host fields.
+   * Off by default so digit keys insert literal digits (the soft-keyboard /
+   * hardware-keyboard path). Callers gate this on the `keypad_input_enabled`
+   * feature flag; keeping it a prop keeps this component decoupled and testable.
+   */
+  keypadInput?: boolean;
 };
 
 export function SavedDeviceEditorFields({
@@ -31,20 +38,24 @@ export function SavedDeviceEditorFields({
   hostLabel = "Host",
   hostHint = null,
   onHostBlur,
+  keypadInput = false,
 }: Props) {
   // Physical T9 / keypad fallback so the device name and host/IP can be entered
-  // without the on-screen keyboard (Commodore Callback 8020 is keypad-first).
+  // without the on-screen keyboard (for keypad-first devices).
   // The host field uses "hostname" mode (digits insert directly; star inserts
   // separators like "." and ":"); the name field uses multi-tap text mode.
+  // Inert unless `keypadInput` is enabled — every key then passes through.
   const nameT9 = useT9Input({
     value: draft.name,
     setValue: (next) => onChange(applySavedDeviceDraftNameInput(draft, next)),
     mode: "multitap",
+    enabled: keypadInput,
   });
   const hostT9 = useT9Input({
     value: draft.host,
     setValue: (next) => onChange(applySavedDeviceDraftHostInput(draft, next)),
     mode: "hostname",
+    enabled: keypadInput,
   });
   return (
     <div className="space-y-3">

@@ -896,19 +896,30 @@ const loadSourcePng = async (inputPath, format) => {
     return renderImageAsPng(inputPath);
 };
 
+/**
+ * Writes the in-app home logo PNG (`public/<app_id>.png`). Unlike the PWA
+ * favicon/icons/manifest, this image is rendered inside the running app
+ * (HomePage header, startup splash) via `variant.assets.public.homeLogoPng`, so
+ * it is required for EVERY variant — including Android-only ones that declare no
+ * `platform.web` block and are served from the Capacitor WebView. A missing file
+ * means the home logo 404s.
+ */
+const renderHomeLogoAsset = async ({ repoRoot, selection, check }) => {
+    const logoPath = path.join(repoRoot, selection.variant.assets.sources.logo.path);
+    return writeBinaryOutputFile({
+        outputPath: path.join(repoRoot, 'public', selection.variant.assets.public.homeLogoPng.slice(1)),
+        content: await loadSourcePng(logoPath, selection.variant.assets.sources.logo.format),
+        check,
+    });
+};
+
 const renderPublicAssets = async ({ repoRoot, selection, check }) => {
     const iconPath = path.join(repoRoot, selection.variant.assets.sources.icon.path);
-    const logoPath = path.join(repoRoot, selection.variant.assets.sources.logo.path);
 
     const changes = [
         await writeBinaryOutputFile({
             outputPath: path.join(repoRoot, 'public', selection.variant.assets.public.faviconPng.slice(1)),
             content: await renderImageAsPng(iconPath, { size: 64 }),
-            check,
-        }),
-        await writeBinaryOutputFile({
-            outputPath: path.join(repoRoot, 'public', selection.variant.assets.public.homeLogoPng.slice(1)),
-            content: await loadSourcePng(logoPath, selection.variant.assets.sources.logo.format),
             check,
         }),
         await writeBinaryOutputFile({
@@ -1101,6 +1112,9 @@ export const compileVariant = async ({
         }),
         writeOutputFile({ outputPath: resolvedWebIndexPath, rendered: renderWebIndexHtml(selection), check }),
         await renderAndroidAssets({ repoRoot, selection, check }),
+        // The in-app home logo is rendered by the running app on every platform,
+        // so it must be emitted even for Android-only variants (no web block).
+        await renderHomeLogoAsset({ repoRoot, selection, check }),
     ];
 
     // Web-only artifacts (PWA favicons/icons, manifest, service worker, web-server

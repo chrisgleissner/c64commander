@@ -102,6 +102,11 @@ export const webServerVariantConfig = {
         enabled: true,
         visible_to_user: true,
       },
+      keypad_input_enabled: {
+        developer_only: false,
+        enabled: false,
+        visible_to_user: true,
+      },
       lighting_studio_enabled: {
         developer_only: true,
         enabled: false,

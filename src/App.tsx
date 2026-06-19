@@ -22,7 +22,8 @@ import { addErrorLog, addLog } from "@/lib/logging";
 import { loadDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
-import { FeatureFlagsProvider } from "@/hooks/useFeatureFlags";
+import { FeatureFlagsProvider, useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
 import { TraceContextBridge } from "@/components/TraceContextBridge";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
 import { InterstitialStateProvider } from "@/components/ui/interstitial-state";
@@ -187,43 +188,77 @@ const DeviceSwitchLabAutoLauncher = ({ enabled }: { enabled: boolean }) => {
   return null;
 };
 
+/**
+ * Input profile that drives the keypad-first focus ring for keypad/T9 input. No
+ * runtime profile selector exists yet, so the only profile is the generic
+ * keypad keymap (D-pad + numeric keypad).
+ */
+const KEYPAD_FOCUS_PROFILE_ID = "keypad";
+
+/**
+ * Keyboard-only (D-pad + center) navigation is gated on the user-visible,
+ * default-off experimental `keypad_input_enabled` flag — for devices without a
+ * usable touchscreen (a keypad-first device). With the
+ * flag off (the default on every variant/platform) the provider still mounts but
+ * with `enabled={false}`, so the global key listener is detached and existing
+ * pointer/keyboard behaviour is untouched (any registered CTAs stay inert).
+ *
+ * `KeypadFocusNavigation` renders inside `FeatureFlagsProvider`, so reading the
+ * flag here is safe.
+ */
+const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
+  const navigate = useNavigate();
+  const { flags } = useFeatureFlags();
+  return (
+    <FocusNavigationProvider
+      enabled={flags.keypad_input_enabled}
+      profileId={KEYPAD_FOCUS_PROFILE_ID}
+      onNavigateBack={() => navigate(-1)}
+    >
+      {children}
+    </FocusNavigationProvider>
+  );
+};
+
 const AppRoutes = () => {
   const coverageProbeEnabled = shouldEnableCoverageProbe();
   return (
     <BrowserRouter>
       <LightingStudioProvider>
         <InterstitialStateProvider>
-          <DeviceSwitchLabAutoLauncher enabled={coverageProbeEnabled} />
-          <GlobalErrorListener />
-          <GlobalButtonInteractionModel />
-          <GlobalNavigationBlocker />
-          <RouteRefresher />
-          <DebugStartupLogger />
-          <DiagnosticsRuntimeBridge />
-          <TraceContextBridge />
-          <GlobalDiagnosticsOverlay />
-          <ConnectionController />
-          <DemoModeInterstitial />
-          <LightingStudioDialog />
-          {coverageProbeEnabled && TestHeartbeat ? (
-            <Suspense fallback={null}>
-              <TestHeartbeat />
+          <KeypadFocusNavigation>
+            <DeviceSwitchLabAutoLauncher enabled={coverageProbeEnabled} />
+            <GlobalErrorListener />
+            <GlobalButtonInteractionModel />
+            <GlobalNavigationBlocker />
+            <RouteRefresher />
+            <DebugStartupLogger />
+            <DiagnosticsRuntimeBridge />
+            <TraceContextBridge />
+            <GlobalDiagnosticsOverlay />
+            <ConnectionController />
+            <DemoModeInterstitial />
+            <LightingStudioDialog />
+            {coverageProbeEnabled && TestHeartbeat ? (
+              <Suspense fallback={null}>
+                <TestHeartbeat />
+              </Suspense>
+            ) : null}
+            <DeviceSwitchLabLauncherGate enabled={coverageProbeEnabled} />
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <SwipeNavigationLayer />
+              <Routes>
+                {coverageProbeEnabled && CoverageProbePage ? (
+                  <Route path="/__coverage__" element={<CoverageProbePage />} />
+                ) : null}
+                {coverageProbeEnabled && DeviceSwitchLabPage ? (
+                  <Route path="/__device-switch__" element={<DeviceSwitchLabPage />} />
+                ) : null}
+                <Route path="*" element={<NotFoundForUnknownPaths />} />
+              </Routes>
             </Suspense>
-          ) : null}
-          <DeviceSwitchLabLauncherGate enabled={coverageProbeEnabled} />
-          <Suspense fallback={<RouteLoadingFallback />}>
-            <SwipeNavigationLayer />
-            <Routes>
-              {coverageProbeEnabled && CoverageProbePage ? (
-                <Route path="/__coverage__" element={<CoverageProbePage />} />
-              ) : null}
-              {coverageProbeEnabled && DeviceSwitchLabPage ? (
-                <Route path="/__device-switch__" element={<DeviceSwitchLabPage />} />
-              ) : null}
-              <Route path="*" element={<NotFoundForUnknownPaths />} />
-            </Routes>
-          </Suspense>
-          <TabBar />
+            <TabBar />
+          </KeypadFocusNavigation>
         </InterstitialStateProvider>
       </LightingStudioProvider>
     </BrowserRouter>

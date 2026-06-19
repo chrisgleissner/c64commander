@@ -13,6 +13,7 @@ import {
   PlaybackControlsCard,
   type PlaybackControlsCardProps,
 } from "@/pages/playFiles/components/PlaybackControlsCard";
+import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
 
 const buildProps = (overrides: Partial<PlaybackControlsCardProps> = {}): PlaybackControlsCardProps => ({
   hasCurrentItem: false,
@@ -96,5 +97,65 @@ describe("PlaybackControlsCard", () => {
     expect(screen.getByTestId("playback-controls-layout")).toHaveClass("flex-col");
     expect(screen.getByTestId("playback-current-track")).toHaveClass("w-full");
     expect(screen.getByTestId("playback-controls-stack")).toHaveClass("w-full");
+  });
+
+  it("registers transport CTAs into the keypad focus ring in playback order", () => {
+    const props = buildProps({
+      hasPrev: true,
+      hasNext: true,
+      canPause: true,
+      reshuffleDisabled: false,
+    });
+
+    render(
+      <FocusNavigationProvider profileId="keypad">
+        <PlaybackControlsCard {...props} />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "DpadCenter" });
+    expect(props.onPrevious).toHaveBeenCalledTimes(1);
+
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(screen.getByTestId("playlist-play")).toHaveFocus();
+
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(screen.getByTestId("playlist-pause")).toHaveFocus();
+
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(screen.getByTestId("playlist-next")).toHaveFocus();
+
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(screen.getByTestId("playlist-reshuffle")).toHaveFocus();
+
+    fireEvent.keyDown(document.body, { code: "DpadCenter" });
+    expect(props.onReshuffle).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips disabled transport CTAs in the keypad focus ring", () => {
+    const props = buildProps({
+      hasPrev: false,
+      canPause: false,
+      hasNext: true,
+      reshuffleDisabled: true,
+    });
+
+    render(
+      <FocusNavigationProvider profileId="keypad">
+        <PlaybackControlsCard {...props} />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "DpadCenter" });
+    expect(props.onPlay).toHaveBeenCalledTimes(1);
+
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(screen.getByTestId("playlist-next")).toHaveFocus();
+
+    fireEvent.keyDown(document.body, { code: "DpadCenter" });
+    expect(props.onNext).toHaveBeenCalledTimes(1);
+    expect(props.onPrevious).not.toHaveBeenCalled();
+    expect(props.onPauseResume).not.toHaveBeenCalled();
+    expect(props.onReshuffle).not.toHaveBeenCalled();
   });
 });

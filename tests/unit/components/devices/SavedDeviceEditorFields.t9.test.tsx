@@ -16,12 +16,13 @@ const INITIAL: SavedDeviceEditorDraft = {
 };
 
 // A controlled harness so composed values flow back into the field, exactly
-// like the real Settings/connection editors.
-function Harness() {
+// like the real Settings/connection editors. `keypadInput` mirrors the gate the
+// real call sites derive from the `keypad_input_enabled` feature flag.
+function Harness({ keypadInput = true }: { keypadInput?: boolean }) {
   const [draft, setDraft] = useState<SavedDeviceEditorDraft>(INITIAL);
   return (
     <div>
-      <SavedDeviceEditorFields draft={draft} onChange={setDraft} idPrefix="t9" />
+      <SavedDeviceEditorFields draft={draft} onChange={setDraft} idPrefix="t9" keypadInput={keypadInput} />
       <output data-testid="host-value">{draft.host}</output>
       <output data-testid="name-value">{draft.name}</output>
     </div>
@@ -62,5 +63,21 @@ describe("SavedDeviceEditorFields — physical T9 / keypad entry", () => {
     expect(screen.getByTestId("name-value").textContent).toBe("a");
     fireEvent.keyDown(name, { code: "Digit2", key: "2" });
     expect(screen.getByTestId("name-value").textContent).toBe("b");
+  });
+
+  it("does not intercept keys when keypad input is disabled (the MVP default)", () => {
+    // With the composer off, keydown is a no-op: it never composes a multi-tap
+    // letter and never flips composer mode. (Native typing/`onChange` still
+    // inserts literal digits via the on-screen / hardware keyboard.)
+    render(<Harness keypadInput={false} />);
+    const name = screen.getByLabelText(/device name/i);
+    fireEvent.keyDown(name, { code: "Digit2", key: "2" });
+    fireEvent.keyDown(name, { code: "Digit2", key: "2" });
+    expect(screen.getByTestId("name-value").textContent).toBe("");
+
+    const host = screen.getByTestId("t9-host");
+    fireEvent.keyDown(host, { key: "#", code: "Backquote" });
+    fireEvent.keyDown(host, { code: "Digit5", key: "5" });
+    expect(screen.getByTestId("host-value").textContent).toBe("");
   });
 });

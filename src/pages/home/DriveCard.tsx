@@ -8,6 +8,7 @@
 
 import React from "react";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -52,6 +53,14 @@ export interface DriveCardProps {
   className?: string;
   testIdSuffix: string;
   footer?: React.ReactNode;
+  /**
+   * When set, registers this drive's enable (ON/OFF) toggle into the keypad
+   * focus ring (C64U Remote) so it is reachable by d-pad traversal and
+   * center-activation. Inert in the default variant (no provider listener).
+   */
+  focusId?: string;
+  /** Lower sorts earlier in keypad d-pad traversal. Defaults to 0. */
+  focusOrder?: number;
 }
 
 const inlineSelectTriggerClass =
@@ -84,9 +93,19 @@ export function DriveCard({
   className,
   testIdSuffix,
   footer,
+  focusId,
+  focusOrder = 0,
 }: DriveCardProps) {
   const { profile } = useDisplayProfile();
   const formatSelectOptionLabel = (value: string) => (value === "" ? "Default" : value);
+  // The enable toggle is registered as disabled while the toggle itself is
+  // disabled (disconnected / pending) so the keypad ring skips it.
+  const toggleFocusRef = useFocusItem<HTMLButtonElement>({
+    id: focusId ?? "",
+    order: focusOrder,
+    group: "home-drives",
+    disabled: !isConnected || Boolean(togglePending),
+  });
 
   return (
     <div
@@ -97,6 +116,7 @@ export function DriveCard({
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-semibold text-primary uppercase tracking-wide">{name}</p>
         <Button
+          ref={toggleFocusRef}
           variant="outline"
           size="sm"
           onClick={onToggle}

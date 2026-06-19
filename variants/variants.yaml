@@ -46,9 +46,9 @@ variants:
         commoserve_base_url: http://commoserve.files.commodore.net
 
   # C64U Remote — a focused, Android-only local remote-control variant for the
-  # Commodore 64 Ultimate / C64U, designed for the keypad-first Commodore
-  # Callback 8020 (Sailfish OS Android AppSupport). It declares no iOS or web
-  # platform block: no iOS or web artifacts are produced for this variant.
+  # Commodore 64 Ultimate / C64U, targeting compact, keypad-first Android
+  # devices. It declares no iOS or web platform block: no iOS or web artifacts
+  # are produced for this variant.
   c64u-remote:
     display_name: C64U Remote
     app_id: c64u-remote

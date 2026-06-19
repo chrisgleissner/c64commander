@@ -15,7 +15,7 @@ import {
   type KeyEventLike,
   type SemanticAction,
 } from "@/lib/input/keyEvent";
-import { defaultKeyboardProfile, commodoreCallback8020Profile } from "@/lib/input/profiles";
+import { defaultKeyboardProfile, keypadProfile } from "@/lib/input/profiles";
 
 const ev = (partial: Partial<KeyEventLike> & { code?: string; key?: string }): KeyEventLike => ({
   key: partial.key ?? "",
@@ -92,9 +92,9 @@ describe("defaultKeyboard profile", () => {
   });
 });
 
-describe("commodoreCallback8020 profile", () => {
+describe("keypad profile", () => {
   const resolve = (partial: Parameters<typeof ev>[0]): SemanticAction | null =>
-    resolveSemanticAction(commodoreCallback8020Profile, ev(partial));
+    resolveSemanticAction(keypadProfile, ev(partial));
 
   it("maps the d-pad and center", () => {
     expect(resolve({ code: "DpadUp" })).toBe("dpadUp");

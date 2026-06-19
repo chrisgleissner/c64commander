@@ -50,6 +50,14 @@ export {
 export type { FocusItem } from "./focusController";
 export { FocusController } from "./focusController";
 
+export type {
+  DismissibleLayer,
+  NavigationOutcome,
+  NavigationCallbacks,
+  NavigationControllerOptions,
+} from "./focusNavigation";
+export { NavigationController } from "./focusNavigation";
+
 export type { InputProfileId } from "./profiles";
 export {
   INPUT_PROFILES,
@@ -57,5 +65,5 @@ export {
   DEFAULT_INPUT_PROFILE_ID,
   resolveInputProfile,
   defaultKeyboardProfile,
-  commodoreCallback8020Profile,
+  keypadProfile,
 } from "./profiles";
