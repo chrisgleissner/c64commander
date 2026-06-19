@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getC64API,
@@ -357,8 +357,36 @@ export function useC64Category(category: string, enabled = true, options: C64Que
   });
 }
 
+// Connection "routing epoch": increments whenever the active API routing is
+// re-applied (a "c64u-connection-change" event). Establishing a connection
+// re-applies the runtime config — sometimes with the SAME host (mock mode
+// preserves the localhost base URL) — which bumps the API request generation and
+// aborts in-flight reads as "superseded by routing change". React Query does not
+// retry those, so config-driven controls (e.g. the Home SID address Select) can
+// stay blank under coverage/parallel-shard load. Reads keyed by this epoch get a
+// fresh query each time the routing changes, so the post-bump fetch runs against
+// the settled host instead of reviving the cancelled one. The c64-info query has
+// always self-healed this way because its key includes the base URL; this gives
+// config reads the same property without changing any connection behaviour.
+let connectionRoutingEpoch = 0;
+const connectionRoutingEpochListeners = new Set<() => void>();
+if (typeof window !== "undefined") {
+  window.addEventListener("c64u-connection-change", () => {
+    connectionRoutingEpoch += 1;
+    connectionRoutingEpochListeners.forEach((listener) => listener());
+  });
+}
+const subscribeConnectionRoutingEpoch = (onChange: () => void) => {
+  connectionRoutingEpochListeners.add(onChange);
+  return () => connectionRoutingEpochListeners.delete(onChange);
+};
+const getConnectionRoutingEpoch = () => connectionRoutingEpoch;
+export const useConnectionRoutingEpoch = () =>
+  useSyncExternalStore(subscribeConnectionRoutingEpoch, getConnectionRoutingEpoch, getConnectionRoutingEpoch);
+
 export function useC64ConfigItems(category: string, items: string[], enabled = true, options: C64QueryOptions = {}) {
   const itemKey = items.join("|");
+  const routingEpoch = useConnectionRoutingEpoch();
   const intent = options.intent ?? "background";
   const screenActive = useScreenActivity();
   const appVisible = useAppVisibilityState();
@@ -385,7 +413,9 @@ export function useC64ConfigItems(category: string, items: string[], enabled = t
     } as ConfigResponse;
   })();
   return useQuery({
-    queryKey: ["c64-config-items", category, itemKey],
+    // routingEpoch is appended (not prepended) so prefix-based invalidation —
+    // ["c64-config-items"] and ["c64-config-items", category] — still matches.
+    queryKey: ["c64-config-items", category, itemKey, routingEpoch],
     queryFn: async () => {
       const api = getC64API();
       return api.getConfigItems(category, items, {

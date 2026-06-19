@@ -42,9 +42,9 @@ tmp-ci-artifacts/
 dist/
 dist-ssr/
 ci-artifacts/
-artifacts/release-size-investigation/
-artifacts/video/
-artifacts/android-apks/
+# Local validation / test scratch outputs (APK screenshots, perf profiles, etc.)
+# are never committed; ignore the whole tree. Use `git add -f` for a deliberate file.
+artifacts/
 vite.config.ts.timestamp-*.mjs
 
 # Python artifacts
