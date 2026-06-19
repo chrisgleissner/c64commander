@@ -243,6 +243,8 @@ export function DriveManager({
         resetDisabled={!isConnected || machineTaskBusy}
         isResetting={machineTaskId === "reset-drives"}
         resetTestId="home-drives-reset"
+        focusId="home-drives-reset"
+        focusOrder={300}
       />
       <div
         className={
@@ -254,7 +256,7 @@ export function DriveManager({
         }
         data-testid="home-drives-group"
       >
-        {DRIVE_CONTROL_SPECS.map((spec) => {
+        {DRIVE_CONTROL_SPECS.map((spec, index) => {
           let category: Record<string, unknown> | undefined;
           let summary: { mountedLabel: string; isMounted: boolean } | undefined;
 
@@ -398,6 +400,8 @@ export function DriveManager({
               pathPending={pathPending}
               isConnected={isConnected}
               testIdSuffix={testIdSuffix}
+              focusId={`home-drive-toggle-${testIdSuffix}`}
+              focusOrder={310 + index * 10}
               footer={
                 telnetActions.length > 0 ? (
                   <div className="space-y-1 pt-1">

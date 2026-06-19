@@ -11,6 +11,7 @@ import { Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square } from "luc
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
+import { useFocusItem } from "@/hooks/useFocusNavigation";
 
 export type PlaybackControlsCardProps = {
   hasCurrentItem: boolean;
@@ -48,6 +49,14 @@ export type PlaybackControlsCardProps = {
   reshuffleDisabled: boolean;
 };
 
+const PLAY_TRANSPORT_FOCUS_ORDER = {
+  previous: 100,
+  play: 110,
+  pause: 120,
+  next: 130,
+  reshuffle: 180,
+} as const;
+
 export const PlaybackControlsCard = ({
   hasCurrentItem,
   currentItemIcon,
@@ -83,6 +92,37 @@ export const PlaybackControlsCard = ({
   reshuffleActive,
   reshuffleDisabled,
 }: PlaybackControlsCardProps) => {
+  const previousFocusRef = useFocusItem<HTMLButtonElement>({
+    id: "play-transport-previous",
+    order: PLAY_TRANSPORT_FOCUS_ORDER.previous,
+    group: "play-transport",
+    disabled: !canTransport || !hasPrev,
+  });
+  const playFocusRef = useFocusItem<HTMLButtonElement>({
+    id: "play-transport-play",
+    order: PLAY_TRANSPORT_FOCUS_ORDER.play,
+    group: "play-transport",
+    disabled: !hasPlaylist || isPlaylistLoading,
+  });
+  const pauseFocusRef = useFocusItem<HTMLButtonElement>({
+    id: "play-transport-pause",
+    order: PLAY_TRANSPORT_FOCUS_ORDER.pause,
+    group: "play-transport",
+    disabled: !canPause || isPlaylistLoading,
+  });
+  const nextFocusRef = useFocusItem<HTMLButtonElement>({
+    id: "play-transport-next",
+    order: PLAY_TRANSPORT_FOCUS_ORDER.next,
+    group: "play-transport",
+    disabled: !canTransport || !hasNext,
+  });
+  const reshuffleFocusRef = useFocusItem<HTMLButtonElement>({
+    id: "play-transport-reshuffle",
+    order: PLAY_TRANSPORT_FOCUS_ORDER.reshuffle,
+    group: "play-transport",
+    disabled: reshuffleDisabled,
+  });
+
   return (
     <div className="flex flex-col items-stretch gap-3" data-testid="playback-controls-layout">
       <div className="w-full text-xs text-muted-foreground" data-testid="playback-current-track">
@@ -102,6 +142,7 @@ export const PlaybackControlsCard = ({
       <div className="flex w-full flex-col gap-3" data-testid="playback-controls-stack">
         <div className="grid grid-cols-4 gap-2">
           <Button
+            ref={previousFocusRef}
             variant="outline"
             size="icon"
             onClick={onPrevious}
@@ -114,6 +155,7 @@ export const PlaybackControlsCard = ({
             <SkipBack className="h-4 w-4" />
           </Button>
           <Button
+            ref={playFocusRef}
             variant={isPlaying ? "destructive" : "default"}
             size="icon"
             onClick={isPlaying ? onStop : onPlay}
@@ -127,6 +169,7 @@ export const PlaybackControlsCard = ({
             {isPlaying ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
           </Button>
           <Button
+            ref={pauseFocusRef}
             variant="outline"
             size="icon"
             onClick={onPauseResume}
@@ -139,6 +182,7 @@ export const PlaybackControlsCard = ({
             {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
           </Button>
           <Button
+            ref={nextFocusRef}
             variant="outline"
             size="icon"
             onClick={onNext}
@@ -203,6 +247,7 @@ export const PlaybackControlsCard = ({
             </span>
           </label>
           <Button
+            ref={reshuffleFocusRef}
             variant="outline"
             size="sm"
             onClick={onReshuffle}

@@ -15,6 +15,11 @@ import { DiagnosticsDialog } from "@/components/diagnostics/DiagnosticsDialog";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import type { OverallHealthState } from "@/lib/diagnostics/healthModel";
 
+// The connection editor surface reads the keypad/T9 flag; default it off.
+vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlags: () => ({ flags: { keypad_input_enabled: false } }),
+}));
+
 const healthyHealthState: OverallHealthState = {
   state: "Healthy",
   connectivity: "Online",

@@ -1,0 +1,60 @@
+# Feature-flag overrides for the C64U Remote variant.
+#
+# C64U Remote is a focused, stable, local remote-control app for compact,
+# keypad-first Android devices (small screen, no Google Play Services,
+# background-restricted host). It deliberately excludes:
+#   - internet-content integrations (HVSC, CommoServe),
+#   - immature / experimental features (lighting studio, RAM/REU snapshots,
+#     the Telnet-dependent Home actions),
+#   - background execution (the target host restricts Android background services).
+#
+# Each excluded feature is BOTH disabled (enabled: false) AND hidden from the
+# normal-user Settings (visible_to_user: false). With visible_to_user: false a
+# feature is not shown in standard Settings and is not user-editable, so a
+# persisted user override / stale local storage cannot re-enable it. Because the
+# variant override is merged into the feature definition at build time (baked
+# into src/generated/variant.ts) it takes effect before any runtime override.
+#
+# This keeps the excluded features absent from navigation, Home cards, action
+# panels, dialogs, settings toggles, and any direct-route/deep-link surface,
+# since all of these are gated on the same feature flags.
+overrides:
+  # --- Stable group: internet-content + demo features excluded ---
+  hvsc_enabled:
+    enabled: false
+    visible_to_user: false
+  commoserve_enabled:
+    enabled: false
+    visible_to_user: false
+  demo_mode_enabled:
+    enabled: false
+    visible_to_user: false
+
+  # --- Experimental group: all excluded ---
+  background_execution_enabled:
+    enabled: false
+    visible_to_user: false
+  lighting_studio_enabled:
+    enabled: false
+    visible_to_user: false
+  ram_snapshots_enabled:
+    enabled: false
+    visible_to_user: false
+  home_telnet_reu_snapshot_enabled:
+    enabled: false
+    visible_to_user: false
+  home_telnet_config_actions_enabled:
+    enabled: false
+    visible_to_user: false
+  home_telnet_drive_actions_enabled:
+    enabled: false
+    visible_to_user: false
+  home_telnet_printer_actions_enabled:
+    enabled: false
+    visible_to_user: false
+  home_telnet_power_cycle_enabled:
+    enabled: false
+    visible_to_user: false
+  home_telnet_clear_ram_reboot_enabled:
+    enabled: false
+    visible_to_user: false

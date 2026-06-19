@@ -15,10 +15,10 @@ export const webServerVariantConfig = {
   repo: {
     defaultVariant: "c64commander",
     publishDefaults: {
-      ci: ["c64commander"],
-      release: ["c64commander"],
+      ci: ["c64commander", "c64u-remote"],
+      release: ["c64commander", "c64u-remote"],
     },
-    selectedPublishVariants: ["c64commander"],
+    selectedPublishVariants: ["c64commander", "c64u-remote"],
   },
   schemaVersion: 1,
   selectedVariantId: "c64commander",
@@ -102,6 +102,11 @@ export const webServerVariantConfig = {
         enabled: true,
         visible_to_user: true,
       },
+      keypad_input_enabled: {
+        developer_only: false,
+        enabled: false,
+        visible_to_user: true,
+      },
       lighting_studio_enabled: {
         developer_only: true,
         enabled: false,
@@ -136,6 +141,10 @@ export const webServerVariantConfig = {
         device_host: "c64u",
         hvsc_base_url: "https://hvsc.brona.dk/HVSC/",
       },
+    },
+    theme: {
+      backgroundColor: "#6C7EB7",
+      themeColor: "#6C7EB7",
     },
   },
 } as const;

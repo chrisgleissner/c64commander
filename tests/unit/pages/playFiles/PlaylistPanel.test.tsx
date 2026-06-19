@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { DisplayProfileProvider, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
+import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
 import { PlaylistPanel } from "@/pages/playFiles/components/PlaylistPanel";
 import type { ActionListItem } from "@/components/lists/SelectableActionList";
 import type { PlayFileCategory } from "@/lib/playback/fileTypes";
@@ -184,5 +185,27 @@ describe("PlaylistPanel", () => {
     expect(screen.getByTestId("playlist-remove-selected-label")).toBeEmptyDOMElement();
     expect(screen.getByRole("button", { name: "Add items to playlist" })).toHaveTextContent("Add items");
     expect(screen.queryByRole("button", { name: "Clear playlist" })).not.toBeInTheDocument();
+  });
+
+  it("registers playlist header CTAs into the keypad focus ring", () => {
+    const onAddItems = vi.fn();
+    const onClearPlaylist = vi.fn();
+
+    render(
+      <DisplayProfileProvider>
+        <FocusNavigationProvider profileId="keypad">
+          <PlaylistPanelHarness hasPlaylist onAddItems={onAddItems} onClearPlaylist={onClearPlaylist} />
+        </FocusNavigationProvider>
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "DpadCenter" });
+    expect(onAddItems).toHaveBeenCalledTimes(1);
+
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(screen.getByRole("button", { name: "Clear playlist" })).toHaveFocus();
+
+    fireEvent.keyDown(document.body, { code: "DpadCenter" });
+    expect(onClearPlaylist).toHaveBeenCalledTimes(1);
   });
 });

@@ -1550,6 +1550,15 @@ function HomePageContent() {
           <StreamStatus isConnected={isActive} />
 
           {/* Config Actions */}
+          {/*
+           * Keypad focus ring (C64U Remote) reads top→bottom, so order bands
+           * follow DOM order: MachineControls 100–190, Drives 300–390 (Reset 300,
+           * per-drive ON/OFF toggles 310/320/330; mount/status/selects reserved
+           * for M2.2/M2.5), Printers 400–490 (Reset 400, ON/OFF toggle 410;
+           * bus/config selects reserved for M2.5), and these Config actions
+           * 600–690 (they render last). The persistent TabBar sits above all page
+           * content at 1000+.
+           */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1566,6 +1575,8 @@ function HomePageContent() {
                 label="Save"
                 description="To flash"
                 variant="success"
+                focusId="home-config-save-flash"
+                focusOrder={600}
                 onClick={() => handleAction(() => controls.saveConfig.mutateAsync(), "Config saved to flash")}
                 disabled={!isActive || machineTaskBusy}
                 loading={controls.saveConfig.isPending}
@@ -1574,6 +1585,8 @@ function HomePageContent() {
                 icon={RefreshCw}
                 label="Load"
                 description="From flash"
+                focusId="home-config-load-flash"
+                focusOrder={610}
                 onClick={() => handleAction(() => controls.loadConfig.mutateAsync(), "Config loaded from flash")}
                 disabled={!isActive || machineTaskBusy}
                 loading={controls.loadConfig.isPending}
@@ -1583,6 +1596,8 @@ function HomePageContent() {
                 label="Reset"
                 description="To default"
                 variant="danger"
+                focusId="home-config-reset"
+                focusOrder={620}
                 onClick={() => handleAction(() => controls.resetConfig.mutateAsync(), "Config reset to defaults")}
                 disabled={!isActive || machineTaskBusy}
                 loading={controls.resetConfig.isPending}
@@ -1593,6 +1608,8 @@ function HomePageContent() {
                 description="To App"
                 variant="success"
                 dataTestId="home-config-save-app"
+                focusId="home-config-save-app"
+                focusOrder={630}
                 onClick={() => setSaveDialogOpen(true)}
                 disabled={!isActive || isSaving || machineTaskBusy}
                 loading={isSaving}
@@ -1602,6 +1619,8 @@ function HomePageContent() {
                 label="Load"
                 description="From App"
                 dataTestId="home-config-load-app"
+                focusId="home-config-load-app"
+                focusOrder={640}
                 onClick={() => setLoadDialogOpen(true)}
                 disabled={!isActive || appConfigs.length === 0 || machineTaskBusy}
               />
@@ -1610,6 +1629,8 @@ function HomePageContent() {
                 label="Revert"
                 description="Changes"
                 dataTestId="home-config-revert-changes"
+                focusId="home-config-revert-changes"
+                focusOrder={650}
                 onClick={() => void handleRevertInitialConfig()}
                 disabled={!isActive || isApplying || !hasChanges || machineTaskBusy}
                 loading={isApplying}
@@ -1619,6 +1640,8 @@ function HomePageContent() {
                 label="Manage"
                 description="App Configs"
                 dataTestId="home-config-manage-app"
+                focusId="home-config-manage-app"
+                focusOrder={660}
                 onClick={() => setManageDialogOpen(true)}
                 disabled={!isActive || appConfigs.length === 0 || machineTaskBusy}
               />
@@ -1628,6 +1651,8 @@ function HomePageContent() {
                   label="Save"
                   description={saveConfigDisabledReason ?? "To File"}
                   dataTestId="home-config-save-file"
+                  focusId="home-config-save-file"
+                  focusOrder={670}
                   onClick={() => void handleSaveToFile()}
                   disabled={!isActive || machineTaskBusy || telnet.isBusy || saveConfigDisabledReason !== null}
                   loading={configFileTaskPending === "save"}
@@ -1639,6 +1664,8 @@ function HomePageContent() {
                   label="Load"
                   description="From File"
                   dataTestId="home-config-load-file"
+                  focusId="home-config-load-file"
+                  focusOrder={680}
                   onClick={() => void handleLoadFromFile()}
                   disabled={!isActive || machineTaskBusy || telnet.isBusy}
                   loading={configFileTaskPending === "load"}
@@ -1651,6 +1678,8 @@ function HomePageContent() {
                   description={clearFlashDisabledReason ?? "Factory Reset"}
                   variant="danger"
                   dataTestId="home-config-clear-flash"
+                  focusId="home-config-clear-flash"
+                  focusOrder={690}
                   onClick={() => setClearFlashDialogOpen(true)}
                   disabled={!isActive || machineTaskBusy || telnet.isBusy || clearFlashDisabledReason !== null}
                   loading={telnet.activeActionId === "clearFlashConfig"}

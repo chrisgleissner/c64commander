@@ -26,6 +26,7 @@ import {
   Trash,
 } from "lucide-react";
 import { useC64Connection } from "@/hooks/useC64Connection";
+import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useSavedDeviceSwitching } from "@/hooks/useSavedDeviceSwitching";
 import { C64_DEFAULTS, resolveDeviceHostFromStorage } from "@/lib/c64api";
@@ -241,6 +242,24 @@ export default function SettingsPage() {
   const lastProbeFailedAtMs = connectionSnapshot.lastProbeFailedAtMs;
   const [isSaving, setIsSaving] = useState(false);
   const [connectionRefreshInFlight, setConnectionRefreshInFlight] = useState(false);
+  // Keypad focus ring (C64U Remote): register the Connection card's two primary
+  // CTAs so the touch-off device can save/connect and refresh with no taps. Inert
+  // in the default variant (no provider listener) and skipped while disabled, so
+  // pointer behaviour is unchanged. Orders read top→bottom on the Settings page;
+  // lower bands (100 Appearance, 200 saved-devices/host field) stay reserved for
+  // later registration above these buttons.
+  const saveConnectionFocusRef = useFocusItem<HTMLButtonElement>({
+    id: "settings-save-connection",
+    order: 300,
+    group: "settings-connection",
+    disabled: isSaving,
+  });
+  const refreshConnectionFocusRef = useFocusItem<HTMLButtonElement>({
+    id: "settings-refresh-connection",
+    order: 310,
+    group: "settings-connection",
+    disabled: status.isConnecting || connectionRefreshInFlight,
+  });
   const [deleteDependencySummary, setDeleteDependencySummary] = useState<SavedDeviceDependencySummary | null>(null);
   const [deleteWarningOpen, setDeleteWarningOpen] = useState(false);
   const [deleteDependencyBusy, setDeleteDependencyBusy] = useState(false);
@@ -316,6 +335,7 @@ export default function SettingsPage() {
     [resolved],
   );
   const commoserveEnabled = flags.commoserve_enabled;
+  const hvscEnabled = flags.hvsc_enabled;
   const demoModeFeatureEnabled = flags.demo_mode_enabled;
   const resolvedArchiveConfig = useMemo(
     () =>
@@ -1040,6 +1060,7 @@ export default function SettingsPage() {
                     hostLabel="C64U Hostname / IP"
                     hostHint="Hostname or IP from the C64 menu."
                     onHostBlur={(value) => setHostnameError(validateDeviceHost(value))}
+                    keypadInput={flags.keypad_input_enabled}
                   />
                   <p className="text-xs text-muted-foreground">
                     Currently using: <span className="font-sans break-all">{runtimeDeviceHost}</span>
@@ -1103,11 +1124,17 @@ export default function SettingsPage() {
               ) : null}
 
               <div className="flex gap-2 pt-2">
-                <Button onClick={handleSaveConnection} disabled={isSaving} className="flex-1">
+                <Button
+                  ref={saveConnectionFocusRef}
+                  onClick={handleSaveConnection}
+                  disabled={isSaving}
+                  className="flex-1"
+                >
                   {isSaving ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
                   Save & Connect
                 </Button>
                 <Button
+                  ref={refreshConnectionFocusRef}
                   variant="outline"
                   onClick={() => void handleRefreshConnection()}
                   disabled={status.isConnecting || connectionRefreshInFlight}
@@ -1491,178 +1518,183 @@ export default function SettingsPage() {
             </motion.div>
           ))}
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.25 }}
-            className="bg-card border border-border rounded-xl p-4 space-y-4"
-          >
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Cpu className="h-5 w-5 text-primary" />
+          {/* 6. HVSC (hidden when the HVSC feature is disabled for the variant) */}
+          {hvscEnabled && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25 }}
+              className="bg-card border border-border rounded-xl p-4 space-y-4"
+            >
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Cpu className="h-5 w-5 text-primary" />
+                </div>
+                <h2 className="font-medium">HVSC</h2>
               </div>
-              <h2 className="font-medium">HVSC</h2>
-            </div>
 
-            <div className="space-y-3 text-sm">
-              <p className="text-xs text-muted-foreground">
-                HVSC visibility follows the unified feature registry, and the archive mirror can be overridden here when
-                you need to point downloads at a different source.
-              </p>
-
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">HVSC base URL override</Label>
-                <Input
-                  value={hvscBaseUrlInput}
-                  onChange={(event) => setHvscBaseUrlInput(event.target.value)}
-                  onBlur={commitHvscBaseUrl}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") commitHvscBaseUrl();
-                  }}
-                  placeholder={hvscBaseUrlPreview}
-                  data-testid="hvsc-base-url"
-                />
+              <div className="space-y-3 text-sm">
                 <p className="text-xs text-muted-foreground">
-                  Leave blank to use the default HVSC mirror. Current base URL: {hvscBaseUrlPreview}
+                  HVSC visibility follows the unified feature registry, and the archive mirror can be overridden here
+                  when you need to point downloads at a different source.
                 </p>
-              </div>
 
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Automatic update check interval (days)</Label>
-                <Input
-                  type="number"
-                  min={MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS}
-                  step={1}
-                  value={hvscUpdateCheckIntervalInput}
-                  onChange={(event) => setHvscUpdateCheckIntervalInput(event.target.value)}
-                  onBlur={commitHvscUpdateCheckInterval}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") commitHvscUpdateCheckInterval();
-                  }}
-                  data-testid="hvsc-update-check-interval"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Automatic HVSC update checks run from the Play page when HVSC is installed and ready. The minimum
-                  interval is {MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS} day
-                  {MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS === 1 ? "" : "s"} to avoid unnecessary mirror load.
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Last automatic update check:{" "}
-                  {hvscLastUpdateCheckAt ? new Date(hvscLastUpdateCheckAt).toLocaleString() : "Never"}
-                </p>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* 7. Online Archive */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="bg-card border border-border rounded-xl p-4 space-y-4"
-            data-testid="settings-online-archive"
-          >
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Globe className="h-5 w-5 text-primary" />
-              </div>
-              <h2 className="font-medium">Online Archive</h2>
-            </div>
-
-            <div className="space-y-3">
-              <p className="text-xs text-muted-foreground">
-                CommoServe availability now follows the unified Experimental Features registry. Host and header
-                overrides remain independent operational settings.
-              </p>
-
-              <div className="space-y-2">
-                <Label htmlFor="archive-host-override" className="text-sm font-medium">
-                  Host override
-                </Label>
-                <Input
-                  id="archive-host-override"
-                  value={archiveHostOverride}
-                  onChange={(event) => {
-                    const next = event.target.value;
-                    setArchiveHostOverride(next);
-                    setArchiveHostError(validateArchiveHost(next));
-                    saveArchiveHostOverride(next);
-                  }}
-                  placeholder={resolvedArchiveConfig.host}
-                  aria-describedby={archiveHostError ? "archive-host-override-error" : undefined}
-                  aria-invalid={archiveHostError ? true : undefined}
-                  data-testid="archive-host-override"
-                />
-                {archiveHostError ? (
-                  <p id="archive-host-override-error" className="text-xs text-destructive" role="alert">
-                    {archiveHostError}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">HVSC base URL override</Label>
+                  <Input
+                    value={hvscBaseUrlInput}
+                    onChange={(event) => setHvscBaseUrlInput(event.target.value)}
+                    onBlur={commitHvscBaseUrl}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") commitHvscBaseUrl();
+                    }}
+                    placeholder={hvscBaseUrlPreview}
+                    data-testid="hvsc-base-url"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Leave blank to use the default HVSC mirror. Current base URL: {hvscBaseUrlPreview}
                   </p>
-                ) : null}
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Automatic update check interval (days)</Label>
+                  <Input
+                    type="number"
+                    min={MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS}
+                    step={1}
+                    value={hvscUpdateCheckIntervalInput}
+                    onChange={(event) => setHvscUpdateCheckIntervalInput(event.target.value)}
+                    onBlur={commitHvscUpdateCheckInterval}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") commitHvscUpdateCheckInterval();
+                    }}
+                    data-testid="hvsc-update-check-interval"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Automatic HVSC update checks run from the Play page when HVSC is installed and ready. The minimum
+                    interval is {MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS} day
+                    {MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS === 1 ? "" : "s"} to avoid unnecessary mirror load.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Last automatic update check:{" "}
+                    {hvscLastUpdateCheckAt ? new Date(hvscLastUpdateCheckAt).toLocaleString() : "Never"}
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* 7. Online Archive (hidden when CommoServe is disabled for the variant) */}
+          {commoserveEnabled && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="bg-card border border-border rounded-xl p-4 space-y-4"
+              data-testid="settings-online-archive"
+            >
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Globe className="h-5 w-5 text-primary" />
+                </div>
+                <h2 className="font-medium">Online Archive</h2>
+              </div>
+
+              <div className="space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  Enter a hostname only. Invalid values fall back to the default archive host immediately.
+                  CommoServe availability now follows the unified Experimental Features registry. Host and header
+                  overrides remain independent operational settings.
                 </p>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="archive-client-id-override" className="text-sm font-medium">
-                  Client-Id override
-                </Label>
-                <Input
-                  id="archive-client-id-override"
-                  value={archiveClientIdOverride}
-                  onChange={(event) => {
-                    const next = event.target.value;
-                    setArchiveClientIdOverride(next);
-                    saveArchiveClientIdOverride(next);
-                  }}
-                  placeholder={resolvedArchiveConfig.clientId}
-                  data-testid="archive-client-id-override"
-                />
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="archive-host-override" className="text-sm font-medium">
+                    Host override
+                  </Label>
+                  <Input
+                    id="archive-host-override"
+                    value={archiveHostOverride}
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      setArchiveHostOverride(next);
+                      setArchiveHostError(validateArchiveHost(next));
+                      saveArchiveHostOverride(next);
+                    }}
+                    placeholder={resolvedArchiveConfig.host}
+                    aria-describedby={archiveHostError ? "archive-host-override-error" : undefined}
+                    aria-invalid={archiveHostError ? true : undefined}
+                    data-testid="archive-host-override"
+                  />
+                  {archiveHostError ? (
+                    <p id="archive-host-override-error" className="text-xs text-destructive" role="alert">
+                      {archiveHostError}
+                    </p>
+                  ) : null}
+                  <p className="text-xs text-muted-foreground">
+                    Enter a hostname only. Invalid values fall back to the default archive host immediately.
+                  </p>
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="archive-user-agent-override" className="text-sm font-medium">
-                  User-Agent override
-                </Label>
-                <Input
-                  id="archive-user-agent-override"
-                  value={archiveUserAgentOverride}
-                  onChange={(event) => {
-                    const next = event.target.value;
-                    setArchiveUserAgentOverride(next);
-                    saveArchiveUserAgentOverride(next);
-                  }}
-                  placeholder={resolvedArchiveConfig.userAgent}
-                  data-testid="archive-user-agent-override"
-                />
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="archive-client-id-override" className="text-sm font-medium">
+                    Client-Id override
+                  </Label>
+                  <Input
+                    id="archive-client-id-override"
+                    value={archiveClientIdOverride}
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      setArchiveClientIdOverride(next);
+                      saveArchiveClientIdOverride(next);
+                    }}
+                    placeholder={resolvedArchiveConfig.clientId}
+                    data-testid="archive-client-id-override"
+                  />
+                </div>
 
-              <div className="rounded-lg border border-border/70 p-3 text-xs text-muted-foreground">
-                <div>
-                  Resolved host: <span className="font-sans text-foreground">{resolvedArchiveConfig.host}</span>
+                <div className="space-y-2">
+                  <Label htmlFor="archive-user-agent-override" className="text-sm font-medium">
+                    User-Agent override
+                  </Label>
+                  <Input
+                    id="archive-user-agent-override"
+                    value={archiveUserAgentOverride}
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      setArchiveUserAgentOverride(next);
+                      saveArchiveUserAgentOverride(next);
+                    }}
+                    placeholder={resolvedArchiveConfig.userAgent}
+                    data-testid="archive-user-agent-override"
+                  />
                 </div>
-                <div>
-                  Resolved Client-Id: <span className="text-foreground">{resolvedArchiveConfig.clientId}</span>
-                </div>
-                <div>
-                  Resolved User-Agent: <span className="text-foreground">{resolvedArchiveConfig.userAgent}</span>
-                </div>
-                <div className="mt-2">
-                  Native apps allow the default cleartext hosts. Override hosts can be blocked by platform security,
-                  especially on iOS, until the native allow-list is updated.
-                </div>
-              </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setArchiveDialogOpen(true)}
-                data-testid="open-online-archive"
-              >
-                Open archive browser
-              </Button>
-            </div>
-          </motion.div>
+                <div className="rounded-lg border border-border/70 p-3 text-xs text-muted-foreground">
+                  <div>
+                    Resolved host: <span className="font-sans text-foreground">{resolvedArchiveConfig.host}</span>
+                  </div>
+                  <div>
+                    Resolved Client-Id: <span className="text-foreground">{resolvedArchiveConfig.clientId}</span>
+                  </div>
+                  <div>
+                    Resolved User-Agent: <span className="text-foreground">{resolvedArchiveConfig.userAgent}</span>
+                  </div>
+                  <div className="mt-2">
+                    Native apps allow the default cleartext hosts. Override hosts can be blocked by platform security,
+                    especially on iOS, until the native allow-list is updated.
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setArchiveDialogOpen(true)}
+                  data-testid="open-online-archive"
+                >
+                  Open archive browser
+                </Button>
+              </div>
+            </motion.div>
+          )}
 
           {/* 8. Device Safety */}
           <motion.div

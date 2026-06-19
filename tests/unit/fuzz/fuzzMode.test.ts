@@ -19,8 +19,8 @@ import {
 } from "@/lib/fuzz/fuzzMode";
 
 const { FUZZ_MODE_KEY, FUZZ_MOCK_BASE_URL_KEY, FUZZ_STORAGE_SEEDED_KEY } = fuzzModeKeys;
-const OTHER_VARIANT_LOCAL_KEY = "c64u-controller:debug_logging_enabled";
-const OTHER_VARIANT_SESSION_KEY = "c64u-controller:session";
+const OTHER_VARIANT_LOCAL_KEY = "c64u-remote:debug_logging_enabled";
+const OTHER_VARIANT_SESSION_KEY = "c64u-remote:session";
 const OTHER_LOCAL_KEY = "c64u_other";
 const OTHER_SESSION_KEY = "c64u_other";
 

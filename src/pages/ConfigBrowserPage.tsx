@@ -19,6 +19,7 @@ import {
 } from "@/hooks/useC64Connection";
 import { ConfigItemRow } from "@/components/ConfigItemRow";
 import { useC64UpdateConfigBatch } from "@/hooks/useC64Connection";
+import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -79,6 +80,15 @@ function configListItemsEqual(a: ConfigListItem[], b: ConfigListItem[]): boolean
   return true;
 }
 
+// Keypad focus-ring ordering for the Config page (C64U Remote). Each category
+// header toggle registers at CONFIG_CATEGORY_FOCUS_ORDER_BASE + index * STEP so
+// the keypad ring walks the collapsible categories top→bottom (this route's only
+// band); the STEP gap leaves room for a category's group actions (Refresh / Reset
+// / Sync clock) to slot in just after its header in a later slice. Inert in the
+// default variant (no FocusNavigationProvider listener).
+const CONFIG_CATEGORY_FOCUS_ORDER_BASE = 100;
+const CONFIG_CATEGORY_FOCUS_ORDER_STEP = 10;
+
 const DHCP_STATIC_FIELDS = new Set(["Static IP", "Static Netmask", "Static Gateway", "Static DNS"]);
 const CLOCK_MONTH_OPTIONS = [
   "January",
@@ -120,17 +130,34 @@ function CategorySection({
   categoryName,
   onOpenChange,
   markChanged,
+  focusOrder,
 }: {
   categoryName: string;
   onOpenChange: (isOpen: boolean) => void;
   markChanged: () => void;
+  focusOrder: number;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  // Register this category's collapsible header into the keypad focus ring so the
+  // touch-off C64U Remote can reach and expand/collapse every config category by
+  // d-pad + center. No-op in the default variant (no provider) and unchanged for
+  // pointer/touch. The header `<button>` activates by click, toggling the section.
+  const categoryHeaderFocusRef = useFocusItem<HTMLButtonElement>({
+    id: `config-category-${categoryName.toLowerCase().replace(/\s+/g, "-")}`,
+    order: focusOrder,
+    group: "config-categories",
+  });
   const [isResetting, setIsResetting] = useState(false);
   const { data: categoryData, isLoading, refetch } = useC64Category(categoryName, isOpen, VISIBLE_C64_QUERY_OPTIONS);
   const setConfig = useC64SetConfig();
   const updateConfigBatch = useC64UpdateConfigBatch();
   const isAudioMixer = categoryName === "Audio Mixer";
+  const isClockSettings = categoryName === "Clock Settings";
+  // Only Audio Mixer (Reset) and Clock Settings (Sync clock) expose a leading
+  // group action; every open section also shows Refresh. Used to gate keypad
+  // focus-ring registration of those CTAs below.
+  const hasCategoryGroupAction = isAudioMixer || isClockSettings;
+  const categorySlug = categoryName.toLowerCase().replace(/\s+/g, "-");
   const [soloState, dispatchSolo] = useReducer(soloReducer, { soloItem: null });
   const authoritativeValues = useAuthoritativeConfigValueState();
   const [audioConfiguredItems, setAudioConfiguredItems] = useState<ConfigListItem[]>([]);
@@ -160,6 +187,30 @@ function CategorySection({
     () => extractConfigItems(categoryData, categoryName),
     [categoryData, categoryName],
   );
+
+  // Register this category's group-action CTAs into the keypad focus ring so the
+  // touch-off C64U Remote can reach them just after the category header. They mount
+  // only inside an open section, so the ids are empty (opt-out) while collapsed and
+  // the ring register/unregisters as the section expands/collapses. They slot into
+  // the STEP gap reserved after the header's `focusOrder`: the leading action
+  // (Audio Mixer Reset / Clock Settings Sync clock — mutually exclusive) at +1, then
+  // Refresh at +2, matching their left→right DOM order. No-op in the default variant
+  // (no provider) and unchanged for pointer/touch (the buttons keep their onClick).
+  const categoryActionDisabled = isAudioMixer
+    ? isResetting || isLoading || items.length === 0
+    : isLoading || items.length === 0 || updateConfigBatch.isPending;
+  const categoryActionFocusRef = useFocusItem<HTMLButtonElement>({
+    id: isOpen && hasCategoryGroupAction ? `config-category-action-${categorySlug}` : "",
+    order: focusOrder + 1,
+    group: "config-group-actions",
+    disabled: categoryActionDisabled,
+  });
+  const refreshFocusRef = useFocusItem<HTMLButtonElement>({
+    id: isOpen ? `config-refresh-${categorySlug}` : "",
+    order: focusOrder + 2,
+    group: "config-group-actions",
+  });
+
   const itemsRef = useRef<ConfigListItem[]>(items);
   const soloItemRef = useRef<string | null>(soloState.soloItem);
 
@@ -193,7 +244,13 @@ function CategorySection({
   useEffect(() => {
     if (!isAudioMixer) return;
     if (items.length === 0) {
-      setAudioConfiguredItems([]);
+      // Bail on value-equality: `items` can be referentially unstable (a fresh
+      // empty array each render) while staying value-equal, and `setState([])`
+      // would otherwise create a new array every time, re-render, re-run this
+      // effect (its `items` dep just changed identity), and loop forever. Reusing
+      // the previous empty array when already empty lets React's Object.is bail
+      // out (same guard rationale as `syncAudioConfiguredItems`, BUG-033).
+      setAudioConfiguredItems((prev) => (prev.length === 0 ? prev : []));
       audioConfiguredRef.current = [];
       soloSnapshotRef.current = [];
       return;
@@ -616,6 +673,7 @@ function CategorySection({
       className="bg-card border border-border rounded-xl overflow-hidden"
     >
       <button
+        ref={categoryHeaderFocusRef}
         onClick={wrapUserEvent(
           () => setIsOpen(!isOpen),
           "toggle",
@@ -653,6 +711,7 @@ function CategorySection({
                 <div className="flex items-center gap-2">
                   {categoryName === "Audio Mixer" && (
                     <Button
+                      ref={categoryActionFocusRef}
                       variant="outline"
                       size="sm"
                       onClick={resetAudioMixer}
@@ -664,6 +723,7 @@ function CategorySection({
                   )}
                   {categoryName === "Clock Settings" && (
                     <Button
+                      ref={categoryActionFocusRef}
                       variant="outline"
                       size="sm"
                       onClick={handleSyncClock}
@@ -674,7 +734,7 @@ function CategorySection({
                     </Button>
                   )}
                 </div>
-                <Button variant="ghost" size="sm" onClick={handleRefresh} className="text-xs">
+                <Button ref={refreshFocusRef} variant="ghost" size="sm" onClick={handleRefresh} className="text-xs">
                   <RefreshCw className="h-3 w-3 mr-1" />
                   Refresh
                 </Button>
@@ -818,6 +878,7 @@ export default function ConfigBrowserPage() {
                   categoryName={category}
                   onOpenChange={(isOpen) => setConfigExpanded(category, isOpen)}
                   markChanged={markChanged}
+                  focusOrder={CONFIG_CATEGORY_FOCUS_ORDER_BASE + index * CONFIG_CATEGORY_FOCUS_ORDER_STEP}
                 />
               </motion.div>
             ))

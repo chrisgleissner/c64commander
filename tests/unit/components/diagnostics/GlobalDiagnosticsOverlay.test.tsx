@@ -13,6 +13,12 @@ import {
   setHealthCheckStateSnapshot,
 } from "@/lib/diagnostics/healthCheckState";
 
+// The overlay renders the real DiagnosticsDialog, whose connection editor reads
+// the keypad/T9 flag; default it off so this test needs no FeatureFlagsProvider.
+vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlags: () => ({ flags: { keypad_input_enabled: false } }),
+}));
+
 const { buildActionSummariesMock } = vi.hoisted(() => ({
   buildActionSummariesMock: vi.fn(() => [
     {

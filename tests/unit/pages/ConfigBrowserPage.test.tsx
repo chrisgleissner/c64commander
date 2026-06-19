@@ -11,6 +11,7 @@ import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ConfigBrowserPage from "@/pages/ConfigBrowserPage";
+import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
 import { reportUserError } from "@/lib/uiErrors";
 import { getC64API } from "@/lib/c64api";
 import { resolveAudioMixerResetValue } from "@/lib/config/audioMixer";
@@ -23,6 +24,29 @@ const mockUseC64SetConfig = vi.fn();
 const mockUseC64UpdateConfigBatch = vi.fn();
 const mockSetConfigExpanded = vi.fn();
 const mockUpdateHasChanges = vi.fn();
+
+// framer-motion's `AnimatePresence` + `animate={{ height: "auto" }}` expand
+// animation spins in jsdom (no real layout to measure), which can wedge the
+// renderer when a section is expanded. Match the rest of the suite
+// (DocsPage/HomePage/etc.) and render motion elements as plain DOM, stripping
+// the animation-only props so React doesn't warn about unknown attributes.
+vi.mock("framer-motion", () => {
+  const Motion = ({
+    children,
+    animate: _animate,
+    initial: _initial,
+    exit: _exit,
+    transition: _transition,
+    layout: _layout,
+    whileTap: _whileTap,
+    whileHover: _whileHover,
+    ...rest
+  }: Record<string, unknown> & { children?: ReactNode }) => <div {...rest}>{children}</div>;
+  return {
+    AnimatePresence: ({ children }: { children: ReactNode }) => <>{children}</>,
+    motion: { div: Motion },
+  };
+});
 
 vi.mock("@/components/ThemeProvider", () => ({
   useThemeContext: () => ({
@@ -95,6 +119,23 @@ const renderConfigBrowserPage = () =>
   render(
     <RouterProvider
       router={buildRouter(<ConfigBrowserPage />)}
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    />,
+  );
+
+// Same page, but mounted inside the keypad focus ring (C64U Remote) so d-pad +
+// center exercise the category-header registration.
+const renderConfigBrowserPageInFocusRing = () =>
+  render(
+    <RouterProvider
+      router={buildRouter(
+        <FocusNavigationProvider profileId="keypad">
+          <ConfigBrowserPage />
+        </FocusNavigationProvider>,
+      )}
       future={{
         v7_startTransition: true,
         v7_relativeSplatPath: true,
@@ -860,5 +901,157 @@ describe("ConfigBrowserPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /general/i }));
     expect(await screen.findByText(/no settings available/i)).toBeInTheDocument();
+  });
+});
+
+describe("ConfigBrowserPage keypad focus ring (C64U Remote)", () => {
+  it("walks the category headers top-to-bottom in focusOrder via d-pad", () => {
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["Audio Mixer", "Clock Settings", "General"] },
+      isLoading: false,
+    });
+
+    renderConfigBrowserPageInFocusRing();
+
+    // Selection starts on the first registered header (Audio Mixer, order 100);
+    // stepping down walks 100 → 110 (Clock Settings) → 120 (General), then wraps.
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: /clock settings/i }));
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: /general/i }));
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: /audio mixer/i }));
+
+    // DpadUp from the first header wraps back to the last (General).
+    fireEvent.keyDown(document.body, { code: "DpadUp" });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: /general/i }));
+  });
+
+  it("center-activates the focused category header, expanding only that section", () => {
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["Audio Mixer", "Clock Settings", "General"] },
+      isLoading: false,
+    });
+
+    renderConfigBrowserPageInFocusRing();
+
+    // Move focus to the second header (Clock Settings), then drop the mount-time
+    // onOpenChange(false) calls so the activation is the only signal we assert on.
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    mockSetConfigExpanded.mockClear();
+
+    fireEvent.keyDown(document.body, { code: "DpadCenter" });
+
+    expect(mockSetConfigExpanded).toHaveBeenCalledWith("Clock Settings", true);
+    expect(mockSetConfigExpanded).not.toHaveBeenCalledWith("Audio Mixer", true);
+    expect(mockSetConfigExpanded).not.toHaveBeenCalledWith("General", true);
+  });
+
+  it("is inert without a FocusNavigationProvider (default variant)", () => {
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["Audio Mixer", "Clock Settings"] },
+      isLoading: false,
+    });
+
+    renderConfigBrowserPage();
+
+    // No provider → no global key listener, so d-pad moves no focus and the
+    // category headers keep their plain pointer behaviour.
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("registers a category's Reset + Refresh group actions into the ring when expanded", async () => {
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["Audio Mixer", "General"] },
+      isLoading: false,
+    });
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: {
+        [categoryName]: {
+          items: { "Vol Ultisid 1": { selected: "0 dB", options: ["-6 dB", "0 dB"] } },
+        },
+      },
+      isLoading: false,
+      refetch: vi.fn(),
+    }));
+
+    renderConfigBrowserPageInFocusRing();
+
+    // Audio Mixer header is the initial selection (order 100). Center expands it,
+    // mounting its Reset (101) + Refresh (102) group actions into the ring.
+    fireEvent.keyDown(document.body, { code: "DpadCenter" });
+    const resetButton = await screen.findByRole("button", { name: /^reset$/i });
+    const refreshButton = await screen.findByRole("button", { name: /refresh/i });
+
+    // From the header, d-pad steps Reset → Refresh → next category header (General, 110).
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(document.activeElement).toBe(resetButton);
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(document.activeElement).toBe(refreshButton);
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: /general/i }));
+  });
+
+  it("center-activates Clock Settings' Sync clock group action", async () => {
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["Clock Settings"] },
+      isLoading: false,
+    });
+    const mutateAsync = vi.fn().mockResolvedValue(undefined);
+    mockUseC64UpdateConfigBatch.mockReturnValue({ mutateAsync, isPending: false });
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: {
+        [categoryName]: {
+          items: { Year: { selected: 2024 }, Month: { selected: 1 }, Day: { selected: 1 } },
+        },
+      },
+      isLoading: false,
+      refetch: vi.fn(),
+    }));
+
+    renderConfigBrowserPageInFocusRing();
+
+    // Expand Clock Settings (initial selection), step to its Sync clock action (101).
+    fireEvent.keyDown(document.body, { code: "DpadCenter" });
+    const syncButton = await screen.findByRole("button", { name: /sync clock/i });
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(document.activeElement).toBe(syncButton);
+
+    // Center activates it → the clock-sync batch fires for this category.
+    fireEvent.keyDown(document.body, { code: "DpadCenter" });
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ category: "Clock Settings" }));
+    });
+  });
+
+  it("skips a disabled category action and still reaches Refresh", async () => {
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["Audio Mixer", "General"] },
+      isLoading: false,
+    });
+    // Audio Mixer with no items → Reset is disabled (skipped in the ring), but
+    // Refresh always renders and stays reachable by d-pad.
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: { [categoryName]: { items: {} } },
+      isLoading: false,
+      refetch: vi.fn(),
+    }));
+
+    renderConfigBrowserPageInFocusRing();
+
+    fireEvent.keyDown(document.body, { code: "DpadCenter" });
+    const refreshButton = await screen.findByRole("button", { name: /refresh/i });
+    expect(screen.getByRole("button", { name: /^reset$/i })).toBeDisabled();
+
+    // d-pad from the header skips the disabled Reset (101) and lands on Refresh (102).
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(document.activeElement).toBe(refreshButton);
   });
 });

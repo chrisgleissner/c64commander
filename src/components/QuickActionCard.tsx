@@ -9,6 +9,7 @@
 import { LucideIcon } from "lucide-react";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useProfileActionGridDensity } from "@/components/layout/PageContainer";
+import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { cn } from "@/lib/utils";
 import { handlePointerButtonClick } from "@/lib/ui/buttonInteraction";
 
@@ -22,6 +23,14 @@ interface QuickActionCardProps {
   loading?: boolean;
   className?: string;
   dataTestId?: string;
+  /**
+   * When set, registers this card into the keypad focus ring (C64U Remote) so it
+   * is reachable by d-pad traversal and center-activation. Inert in the default
+   * variant (no provider listener), so it never changes pointer behaviour.
+   */
+  focusId?: string;
+  /** Lower sorts earlier in keypad d-pad traversal. Defaults to 0. */
+  focusOrder?: number;
 }
 
 export function QuickActionCard({
@@ -34,9 +43,19 @@ export function QuickActionCard({
   loading = false,
   className,
   dataTestId,
+  focusId,
+  focusOrder = 0,
 }: QuickActionCardProps) {
   const { profile } = useDisplayProfile();
   const density = useProfileActionGridDensity();
+  // A disabled/loading card is registered as disabled so the keypad ring skips
+  // it (a never-reachable CTA can't be activated by accident while inactive).
+  const focusRef = useFocusItem<HTMLButtonElement>({
+    id: focusId ?? "",
+    order: focusOrder,
+    group: "home-actions",
+    disabled: disabled || loading,
+  });
   const compact = density === "compact" || (density === "adaptive" && profile === "compact");
   const variantClasses = {
     default: "hover:border-primary hover:bg-primary/5",
@@ -46,6 +65,7 @@ export function QuickActionCard({
 
   return (
     <button
+      ref={focusRef}
       onClick={(event) => {
         onClick();
         handlePointerButtonClick(event);

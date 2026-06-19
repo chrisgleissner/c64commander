@@ -8,6 +8,7 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
+import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { cn } from "@/lib/utils";
 
 interface SectionHeaderProps {
@@ -20,6 +21,15 @@ interface SectionHeaderProps {
   children?: React.ReactNode;
   actions?: React.ReactNode;
   resetTestId?: string;
+  /**
+   * When set, registers the section's reset button into the keypad focus ring
+   * (C64U Remote) so it is reachable by d-pad traversal and center-activation.
+   * Inert in the default variant (no provider listener) and skipped while the
+   * reset is disabled, so it never changes pointer behaviour.
+   */
+  focusId?: string;
+  /** Lower sorts earlier in keypad d-pad traversal. Defaults to 0. */
+  focusOrder?: number;
 }
 
 export function SectionHeader({
@@ -32,7 +42,15 @@ export function SectionHeader({
   children,
   actions,
   resetTestId,
+  focusId,
+  focusOrder = 0,
 }: SectionHeaderProps) {
+  const resetFocusRef = useFocusItem<HTMLButtonElement>({
+    id: focusId ?? "",
+    order: focusOrder,
+    group: "home-sections",
+    disabled: resetDisabled,
+  });
   return (
     <div className={cn("flex items-center justify-between gap-2", className)}>
       <h3 className="category-header">
@@ -43,7 +61,14 @@ export function SectionHeader({
       <div className="flex items-center gap-2">
         {actions}
         {resetAction && (
-          <Button variant="outline" size="sm" onClick={resetAction} disabled={resetDisabled} data-testid={resetTestId}>
+          <Button
+            ref={resetFocusRef}
+            variant="outline"
+            size="sm"
+            onClick={resetAction}
+            disabled={resetDisabled}
+            data-testid={resetTestId}
+          >
             {isResetting ? "Resetting…" : resetLabel}
           </Button>
         )}

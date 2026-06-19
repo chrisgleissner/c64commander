@@ -1598,6 +1598,22 @@ jobs:
           end=$(date +%s)
           echo "- apk debug: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
+      - name: Verify APK metadata (debug)
+        run: |
+          DEBUG_APK="$(ls android/app/build/outputs/apk/debug/${VARIANT_ARTIFACT_BASENAME}-*.apk | head -n1)"
+          echo "Inspecting $DEBUG_APK for variant ${APP_VARIANT}"
+          node scripts/verify-apk-metadata.mjs "$DEBUG_APK" \
+            --expect-application-id "$ANDROID_APPLICATION_ID" \
+            --expect-label "$(node -e "console.log(JSON.parse(require('fs').readFileSync('src/generated/variant.json','utf8')).variant.displayName)")"
+          echo "- apk metadata verified: ${VARIANT_ARTIFACT_BASENAME} (${ANDROID_APPLICATION_ID})" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload APK artifact (debug)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.resolve_variant.outputs.variant_artifact_basename }}-debug-apk
+          path: android/app/build/outputs/apk/debug/${{ steps.resolve_variant.outputs.variant_artifact_basename }}-*.apk
+          retention-days: 7
+
       - name: Build APK (release)
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         run: cd android && ./gradlew assembleRelease
