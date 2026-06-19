@@ -135,6 +135,7 @@ export const webServerVariantConfig = {
         themeColor: "#6C7EB7",
       },
     },
+    publishToGooglePlay: true,
     runtime: {
       endpoints: {
         commoserve_base_url: "http://commoserve.files.commodore.net",

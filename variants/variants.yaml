@@ -50,6 +50,7 @@ variants:
   # devices. It declares no iOS or web platform block: no iOS or web artifacts
   # are produced for this variant.
   c64u-remote:
+    publish_to_google_play: false
     display_name: C64U Remote
     app_id: c64u-remote
     description: Configure and control your Commodore 64 Ultimate over your local network.

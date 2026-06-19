@@ -325,6 +325,11 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
         };
     }
 
+    const publishToGooglePlay =
+        raw.publish_to_google_play !== undefined
+            ? requireBoolean(raw.publish_to_google_play, `variants.${variantId}.publish_to_google_play`)
+            : true;
+
     return {
         id: variantId,
         displayName: requireNonEmptyString(raw.display_name, `variants.${variantId}.display_name`),
@@ -334,6 +339,7 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
             raw.exported_file_basename,
             `variants.${variantId}.exported_file_basename`,
         ),
+        publishToGooglePlay,
         platform,
         theme: {
             themeColor,
