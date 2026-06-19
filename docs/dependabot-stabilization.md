@@ -31,14 +31,30 @@ tolerated gets rejected by the new one. _Fix:_ never embed hand-built binary
 blobs in tests — generate them with the same library under test (sharp's own
 output round-trips across libvips upgrades).
 
-**B — Timing races exposed by load / version churn.** Rollups add shard load and
-shift timings, tipping already-tight awaits over the edge — usually a Playwright
-`locator.click` timeout. _Fix:_ root-cause the await, do **not** loosen the
-timeout. The recurring offender is the inline `Select` triggers on the Home page:
-`inlineSelectTriggerClass` hides the chevron and zeroes the padding, so a trigger
-**collapses to zero size (Playwright: "not visible") until its config value
-loads**. Wait for `toBeVisible()` before reading text or clicking it. The 2-retry
-net (`docs/flaky-tests.md`) is the safety layer, not the fix.
+**B — Timing races exposed by load / version churn.** Rollups add shard load
+(and coverage instrumentation), which widens windows that are invisible at normal
+speed. _Fix:_ root-cause the race, do **not** loosen the timeout or lean on the
+2-retry net (`docs/flaky-tests.md` is the safety layer, not the fix). A
+representative case, found while greening #287: the Home `SID reset` E2E flaked
+because the SID address `Select` rendered blank. The trigger uses
+`inlineSelectTriggerClass`, which hides the chevron and zeroes the padding, so it
+**collapses to zero size ("not visible") whenever its config value is empty** —
+which made the symptom load-bearing but was not the cause. The cause was upstream:
+establishing the connection re-applied the runtime API config with the **same**
+host (mock mode preserves the localhost base URL), and `setBaseUrl` /
+`setDeviceHost` / `setPassword` **unconditionally bumped the request generation**,
+aborting the in-flight Home config "summary" reads (`useC64ConfigItems`,
+intent `"background"`) as "superseded by routing change". React Query does not
+retry those, and the connection-change handler early-returns when nothing
+changed, so the reads stayed empty and the control rendered blank. _Durable fix
+(`src/hooks/useC64Connection.ts`):_ key the config "summary" reads
+(`useC64ConfigItems`) by a connection **routing epoch** that increments on every
+`c64u-connection-change`. A re-route then mints a _fresh_ query that fetches
+against the settled host instead of reviving the cancelled one — the same
+self-healing the `c64-info` query already gets from including the base URL in its
+key. General: it protects every config-driven control on every page, not just the
+one test, and changes no connection/setter behaviour (so it can't regress the
+connection state machine).
 
 **C — Lockfile drift.** Two Dependabot PRs merged together can leave
 `package-lock.json` inconsistent with `package.json`, breaking `npm ci`.

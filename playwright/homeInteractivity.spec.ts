@@ -546,12 +546,6 @@ test.describe("Home interactions", () => {
     await waitForConnected(page);
     const socket1Address = page.getByTestId("home-sid-address-socket1");
     await expect(socket1Address).toHaveAttribute("role", "combobox", { timeout: CONFIG_READY_TIMEOUT_MS });
-    // The inline SID address trigger hides its chevron and drops its padding, so it
-    // collapses to zero size (Playwright reports it as not visible) until its seeded
-    // config value loads. Wait for it to become visible before reading its text or
-    // clicking, otherwise an interaction issued during that load window fails with
-    // "element is not visible" under heavy CI shard load.
-    await expect(socket1Address).toBeVisible({ timeout: CONFIG_READY_TIMEOUT_MS });
     if (!((await socket1Address.textContent()) ?? "").includes("$D400")) {
       await socket1Address.click();
       await page.getByRole("option", { name: "$D400", exact: true }).click();
