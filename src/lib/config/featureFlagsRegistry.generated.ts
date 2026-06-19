@@ -25,7 +25,8 @@ export type FeatureFlagId =
   | "home_telnet_drive_actions_enabled"
   | "home_telnet_printer_actions_enabled"
   | "home_telnet_power_cycle_enabled"
-  | "home_telnet_clear_ram_reboot_enabled";
+  | "home_telnet_clear_ram_reboot_enabled"
+  | "keypad_input_enabled";
 
 export type FeatureFlagGroupKey = keyof typeof FEATURE_FLAG_GROUPS;
 
@@ -166,6 +167,15 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     group: "experimental",
     title: "Home clear-RAM reboot action",
     description: "Show the Reboot (Clr Mem) quick action on Home. Depends on the Telnet interface.",
+  },
+  {
+    id: "keypad_input_enabled",
+    enabled: false,
+    visible_to_user: true,
+    developer_only: false,
+    group: "experimental",
+    title: "Keypad / T9 input",
+    description: "Experimental. Drive the app with a physical keypad (D-pad navigation and activation) and enter text in fields via T9 multi-tap, for devices without a usable touchscreen. Leave off when using touch and the on-screen keyboard.",
   },
 ] as const;
 

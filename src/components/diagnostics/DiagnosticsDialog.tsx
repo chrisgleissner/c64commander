@@ -43,6 +43,7 @@ import { Button } from "@/components/ui/button";
 import { SavedDeviceEditorFields } from "@/components/devices/SavedDeviceEditorFields";
 import { Input } from "@/components/ui/input";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import type { ActionSummary } from "@/lib/diagnostics/actionSummaries";
 import { getC64APIConfigSnapshot, updateC64APIConfig } from "@/lib/c64api";
@@ -867,6 +868,7 @@ const ConnectionSurface = ({
   portError: string | null;
   productCode: string;
 }) => {
+  const { flags } = useFeatureFlags();
   return (
     <AppDialog open={open} onOpenChange={onOpenChange}>
       <AppDialogContent data-testid={mode === "view" ? "connection-view-surface" : "connection-edit-surface"}>
@@ -907,6 +909,7 @@ const ConnectionSurface = ({
               hostError={hostError}
               portError={portError}
               idPrefix="connection-edit"
+              keypadInput={flags.keypad_input_enabled}
             />
           )}
         </AppDialogBody>

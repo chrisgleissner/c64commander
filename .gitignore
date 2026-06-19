@@ -44,6 +44,7 @@ dist-ssr/
 ci-artifacts/
 artifacts/release-size-investigation/
 artifacts/video/
+artifacts/android-apks/
 vite.config.ts.timestamp-*.mjs
 
 # Python artifacts

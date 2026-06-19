@@ -5,8 +5,10 @@ repo:
   publish_defaults:
     release:
       - c64commander
+      - c64u-remote
     ci:
       - c64commander
+      - c64u-remote
 
 variants:
   c64commander:
@@ -43,36 +45,36 @@ variants:
         hvsc_base_url: https://hvsc.brona.dk/HVSC/
         commoserve_base_url: http://commoserve.files.commodore.net
 
-  c64u-controller:
-    display_name: C64U Controller
-    app_id: c64u-controller
+  # C64U Remote — a focused, Android-only local remote-control variant for the
+  # Commodore 64 Ultimate / C64U, targeting compact, keypad-first Android
+  # devices. It declares no iOS or web platform block: no iOS or web artifacts
+  # are produced for this variant.
+  c64u-remote:
+    display_name: C64U Remote
+    app_id: c64u-remote
     description: Configure and control your Commodore 64 Ultimate over your local network.
-    exported_file_basename: c64u-controller
+    exported_file_basename: c64u-remote
     platform:
       android:
-        application_id: uk.gleissner.c64ucontroller
-        custom_url_scheme: uk.gleissner.c64ucontroller
-      ios:
-        bundle_id: uk.gleissner.c64ucontroller
-      web:
-        short_name: C64U Controller
-        theme_color: "#2F6B8B"
-        background_color: "#2F6B8B"
-        login_title: C64U Controller Login
-        login_heading: C64U Controller
+        application_id: uk.gleissner.c64uremote
+        custom_url_scheme: uk.gleissner.c64uremote
+    theme:
+      theme_color: "#2F6B8B"
+      background_color: "#2F6B8B"
     assets:
       sources:
         icon:
-          path: variants/assets/c64u-controller/icon.png
+          path: variants/assets/c64u-remote/icon.png
           format: png
         logo:
-          path: variants/assets/c64u-controller/logo.png
+          path: variants/assets/c64u-remote/logo.png
           format: png
         splash:
-          path: variants/assets/c64u-controller/splash.png
+          path: variants/assets/c64u-remote/splash.png
           format: png
     runtime:
       endpoints:
+        # Local device host only. Internet-content endpoints (HVSC, CommoServe)
+        # are intentionally omitted because those features are disabled for this
+        # variant (see variants/feature-flags/c64u-remote.yaml).
         device_host: c64u
-        hvsc_base_url: https://hvsc.brona.dk/HVSC/
-        commoserve_base_url: http://commoserve.files.commodore.net

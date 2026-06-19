@@ -13,6 +13,7 @@ import { Music } from "lucide-react";
 import { ProfileActionGrid } from "@/components/layout/PageContainer";
 import { QuickActionCard } from "@/components/QuickActionCard";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
+import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
 
 vi.mock("@/lib/ui/buttonInteraction", () => ({
   handlePointerButtonClick: vi.fn(),
@@ -98,5 +99,75 @@ describe("QuickActionCard", () => {
   it("renders description when provided", () => {
     render(<QuickActionCard {...baseProps} description="Play a file" />);
     expect(screen.getByText("Play a file")).toBeInTheDocument();
+  });
+
+  describe("keypad focus ring (C64U Remote)", () => {
+    it("joins the d-pad ring in focusOrder when given a focusId and center-activates", () => {
+      const onSave = vi.fn();
+      const onLoad = vi.fn();
+      const onReset = vi.fn();
+
+      render(
+        <FocusNavigationProvider profileId="keypad">
+          <QuickActionCard icon={Music} label="Save" focusId="save" focusOrder={100} onClick={onSave} />
+          <QuickActionCard icon={Music} label="Load" focusId="load" focusOrder={110} onClick={onLoad} />
+          <QuickActionCard icon={Music} label="Reset" focusId="reset" focusOrder={120} onClick={onReset} />
+        </FocusNavigationProvider>,
+      );
+
+      // Selection starts on the first registered card; d-pad steps land in focusOrder.
+      fireEvent.keyDown(document.body, { code: "DpadDown" });
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Load" }));
+      fireEvent.keyDown(document.body, { code: "DpadDown" });
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Reset" }));
+
+      fireEvent.keyDown(document.body, { code: "DpadCenter" });
+      expect(onReset).toHaveBeenCalledTimes(1);
+      expect(onSave).not.toHaveBeenCalled();
+      expect(onLoad).not.toHaveBeenCalled();
+    });
+
+    it("skips a disabled card during d-pad traversal so it cannot be activated", () => {
+      const onReset = vi.fn();
+
+      render(
+        <FocusNavigationProvider profileId="keypad">
+          <QuickActionCard icon={Music} label="Save" focusId="save" focusOrder={100} onClick={vi.fn()} />
+          <QuickActionCard icon={Music} label="Load" focusId="load" focusOrder={110} disabled onClick={vi.fn()} />
+          <QuickActionCard icon={Music} label="Reset" focusId="reset" focusOrder={120} onClick={onReset} />
+        </FocusNavigationProvider>,
+      );
+
+      // One step from Save jumps past the disabled Load straight to Reset.
+      fireEvent.keyDown(document.body, { code: "DpadDown" });
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Reset" }));
+      fireEvent.keyDown(document.body, { code: "DpadCenter" });
+      expect(onReset).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not register a card without a focusId (inert in the ring)", () => {
+      const onRegistered = vi.fn();
+      const onUnregistered = vi.fn();
+
+      render(
+        <FocusNavigationProvider profileId="keypad">
+          <QuickActionCard
+            icon={Music}
+            label="Registered"
+            focusId="registered"
+            focusOrder={100}
+            onClick={onRegistered}
+          />
+          <QuickActionCard icon={Music} label="Unregistered" onClick={onUnregistered} />
+        </FocusNavigationProvider>,
+      );
+
+      // Only the card with a focusId is in the ring, so it is the only one a
+      // d-pad/center sequence can ever reach.
+      fireEvent.keyDown(document.body, { code: "DpadDown" });
+      fireEvent.keyDown(document.body, { code: "DpadCenter" });
+      expect(onRegistered).toHaveBeenCalledTimes(1);
+      expect(onUnregistered).not.toHaveBeenCalled();
+    });
   });
 });

@@ -76,8 +76,15 @@ jobs:
           import fs from 'node:fs';
 
           const config = JSON.parse(fs.readFileSync('src/generated/variant.json', 'utf8'));
+          const bundleId = config.variant.platform.ios?.bundleId;
+          if (!bundleId) {
+            throw new Error(
+              `The iOS lane requires a variant with a platform.ios block, but "${config.variant.id}" declares none ` +
+                `(Android-only). Select an iOS-capable variant before running this workflow.`,
+            );
+          }
           const lines = [
-            `APP_ID=${config.variant.platform.ios.bundleId}`,
+            `APP_ID=${bundleId}`,
             `VARIANT_ARTIFACT_BASENAME=${config.variant.exportedFileBasename}`,
           ];
           fs.appendFileSync(process.env.GITHUB_ENV, `${lines.join('\n')}\n`);
@@ -179,8 +186,15 @@ jobs:
           import fs from 'node:fs';
 
           const config = JSON.parse(fs.readFileSync('src/generated/variant.json', 'utf8'));
+          const bundleId = config.variant.platform.ios?.bundleId;
+          if (!bundleId) {
+            throw new Error(
+              `The iOS lane requires a variant with a platform.ios block, but "${config.variant.id}" declares none ` +
+                `(Android-only). Select an iOS-capable variant before running this workflow.`,
+            );
+          }
           const lines = [
-            `APP_ID=${config.variant.platform.ios.bundleId}`,
+            `APP_ID=${bundleId}`,
             `VARIANT_ARTIFACT_BASENAME=${config.variant.exportedFileBasename}`,
           ];
           fs.appendFileSync(process.env.GITHUB_ENV, `${lines.join('\n')}\n`);
@@ -730,8 +744,15 @@ jobs:
           import fs from 'node:fs';
 
           const config = JSON.parse(fs.readFileSync('src/generated/variant.json', 'utf8'));
+          const bundleId = config.variant.platform.ios?.bundleId;
+          if (!bundleId) {
+            throw new Error(
+              `The iOS lane requires a variant with a platform.ios block, but "${config.variant.id}" declares none ` +
+                `(Android-only). Select an iOS-capable variant before running this workflow.`,
+            );
+          }
           const entries = {
-            APP_ID: config.variant.platform.ios.bundleId,
+            APP_ID: bundleId,
             VARIANT_ARTIFACT_BASENAME: config.variant.exportedFileBasename,
           };
           fs.appendFileSync(

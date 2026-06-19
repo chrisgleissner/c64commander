@@ -19,6 +19,7 @@ import {
 } from "../utils/HomeConfigUtils";
 import { buildBusIdOptions } from "@/lib/drives/driveDevices";
 import { SectionHeader } from "@/components/SectionHeader";
+import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -73,6 +74,17 @@ export function PrinterManager({
     ),
   );
   const printerEnabled = printerEnabledValue.trim().toLowerCase() === "enabled";
+  const printerEnabledPending = Boolean(
+    configWritePending[buildConfigKey(PRINTER_CONTROL_SPEC.category, PRINTER_CONTROL_SPEC.enabledItem)],
+  );
+  // Register the printer enable (ON/OFF) toggle into the keypad focus ring
+  // (C64U Remote); disabled while disconnected / pending so the ring skips it.
+  const printerToggleFocusRef = useFocusItem<HTMLButtonElement>({
+    id: "home-printer-toggle",
+    order: 410,
+    group: "home-printers",
+    disabled: !isConnected || printerEnabledPending,
+  });
   const printerTelnetActions =
     telnetAvailable && typeof onTelnetAction === "function" && typeof getTelnetActionSupport === "function"
       ? buildPrinterTelnetActions(printerEnabled).map((action) => ({
@@ -153,21 +165,19 @@ export function PrinterManager({
         resetDisabled={!isConnected || machineTaskBusy}
         isResetting={machineTaskId === "reset-printer"}
         resetTestId="home-printer-reset"
+        focusId="home-printer-reset"
+        focusOrder={400}
       />
       <div className="space-y-2" data-testid="home-printer-group">
         <div className="bg-card border border-border rounded-xl p-3 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-semibold text-primary uppercase tracking-wide">Printer</p>
             <Button
+              ref={printerToggleFocusRef}
               variant="outline"
               size="sm"
               onClick={() => void handleEnabledToggle("Printer", PRINTER_CONTROL_SPEC, printerEnabled)}
-              disabled={
-                !isConnected ||
-                Boolean(
-                  configWritePending[buildConfigKey(PRINTER_CONTROL_SPEC.category, PRINTER_CONTROL_SPEC.enabledItem)],
-                )
-              }
+              disabled={!isConnected || printerEnabledPending}
               data-testid="home-printer-toggle"
               className={cn("h-6 px-2 text-xs", getOnOffButtonClass(printerEnabled))}
             >

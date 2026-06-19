@@ -34,6 +34,12 @@ vi.mock("@/lib/tracing/traceFormatter", async () => {
   };
 });
 
+// The connection editor surface reads the keypad/T9 flag; default it off so
+// digit keys insert literal digits (the touch / hardware-keyboard path).
+vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlags: () => ({ flags: { keypad_input_enabled: false } }),
+}));
+
 type DiagnosticsDialogProps = ComponentProps<typeof DiagnosticsDialog>;
 
 import { CURRENT_DEVICE_HOST_KEY as DEVICE_HOST_KEY } from "@/lib/c64api/hostConfig";

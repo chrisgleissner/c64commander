@@ -11,6 +11,7 @@ import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SettingsPage from "@/pages/SettingsPage";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
+import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
 import { reportUserError } from "@/lib/uiErrors";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import { discoverConnection } from "@/lib/connection/connectionManager";
@@ -301,6 +302,22 @@ const renderSettingsPageWithDisplayProfileProvider = () =>
         }}
       />
     </DisplayProfileProvider>,
+  );
+
+// Renders the real SettingsPage inside the keypad focus ring (C64U Remote) so the
+// Connection card's primary CTAs are exercised through d-pad traversal +
+// center-activation, exactly as on the touch-off device.
+const renderSettingsPageInFocusRing = () =>
+  render(
+    <FocusNavigationProvider profileId="keypad">
+      <RouterProvider
+        router={buildRouter(<SettingsPage />)}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      />
+    </FocusNavigationProvider>,
   );
 
 vi.mock("@/lib/uiErrors", () => ({
@@ -1325,6 +1342,26 @@ describe("SettingsPage", () => {
     );
   });
 
+  it("hides the HVSC and Online Archive sections when those features are disabled (C64U Remote pruning)", () => {
+    featureFlagsRef.current.hvsc_enabled = false;
+    featureFlagsRef.current.commoserve_enabled = false;
+    renderSettingsPage();
+
+    expect(screen.queryByTestId("hvsc-base-url")).toBeNull();
+    expect(screen.queryByTestId("settings-online-archive")).toBeNull();
+    expect(screen.queryByTestId("open-online-archive")).toBeNull();
+    expect(screen.queryByText("HVSC base URL override")).toBeNull();
+  });
+
+  it("shows the HVSC and Online Archive sections when those features are enabled", () => {
+    featureFlagsRef.current.hvsc_enabled = true;
+    featureFlagsRef.current.commoserve_enabled = true;
+    renderSettingsPage();
+
+    expect(screen.getByTestId("hvsc-base-url")).toBeInTheDocument();
+    expect(screen.getByTestId("settings-online-archive")).toBeInTheDocument();
+  });
+
   it("requires confirmation when switching into relaxed safety mode", async () => {
     const saveSpy = vi.spyOn(deviceSafetySettings, "saveDeviceSafetyMode");
 
@@ -1755,5 +1792,87 @@ describe("SettingsPage", () => {
 
       await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
     });
+  });
+});
+
+describe("SettingsPage keypad focus ring (C64U Remote)", () => {
+  vi.setConfig({ testTimeout: 20000 });
+
+  it("registers the Connection card's primary CTAs in top-to-bottom order and moves focus by d-pad", () => {
+    renderSettingsPageInFocusRing();
+
+    const saveButton = screen.getByRole("button", { name: /save & connect/i });
+    const refreshButton = screen.getByLabelText("Refresh connection");
+
+    // The initial selection is the first registered CTA (Save & Connect, order
+    // 300). Stepping down lands on Refresh (310); stepping down again wraps back
+    // to Save & Connect — proving both connection CTAs (and only those two) cycle.
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(document.activeElement).toBe(refreshButton);
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(document.activeElement).toBe(saveButton);
+  });
+
+  it("center-activates the focused connection CTA only (Save & Connect, not Refresh)", async () => {
+    mockSwitchSavedDevice.mockResolvedValue(undefined);
+    vi.mocked(discoverConnection).mockResolvedValue(undefined);
+
+    renderSettingsPageInFocusRing();
+
+    // Initial focus is Save & Connect; center fires the save handler and never
+    // the manual refresh discovery path. (The mount-time "settings" discover is
+    // independent, so we assert on the "manual" intent specifically.)
+    fireEvent.keyDown(document.body, { code: "DpadCenter" });
+
+    await waitFor(() => {
+      expect(mockUpdateConfig).toHaveBeenCalledWith("c64u", undefined);
+    });
+    expect(discoverConnection).not.toHaveBeenCalledWith("manual");
+  });
+
+  it("center-activates Refresh after stepping to it", async () => {
+    vi.mocked(discoverConnection).mockResolvedValue(undefined);
+
+    renderSettingsPageInFocusRing();
+
+    // Step down to Refresh, then center triggers the manual discovery path
+    // (a refresh uses the "manual" intent; save/mount never do).
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(document.activeElement).toBe(screen.getByLabelText("Refresh connection"));
+
+    fireEvent.keyDown(document.body, { code: "DpadCenter" });
+
+    await waitFor(() => {
+      expect(discoverConnection).toHaveBeenCalledWith("manual");
+    });
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+  });
+
+  it("skips the Refresh CTA while a connection attempt is in flight", () => {
+    // A disabled CTA must be unreachable: with a connect in flight, Refresh is
+    // disabled, so d-pad never lands on it and the ring holds only Save & Connect.
+    connectionPayloadRef.current.status.isConnecting = true;
+
+    renderSettingsPageInFocusRing();
+
+    const saveButton = screen.getByRole("button", { name: /save & connect/i });
+    expect(screen.getByLabelText("Refresh connection")).toBeDisabled();
+
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(document.activeElement).toBe(saveButton);
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(document.activeElement).toBe(saveButton);
+  });
+
+  it("leaves the connection CTAs inert without a focus provider (default variant)", () => {
+    renderSettingsPage();
+
+    const saveButton = screen.getByRole("button", { name: /save & connect/i });
+
+    // No provider means no global key listener, so d-pad keys never move focus —
+    // pointer behaviour in the default C64 Commander variant is untouched.
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(document.activeElement).not.toBe(saveButton);
+    expect(document.activeElement).not.toBe(screen.getByLabelText("Refresh connection"));
   });
 });
