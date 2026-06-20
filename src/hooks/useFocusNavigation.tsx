@@ -234,6 +234,7 @@ export const FocusNavigationProvider = ({
       new FocusDiscoveryEngine({
         controller: controller.focus,
         listExplicit: () => Array.from(descriptorsRef.current.values()),
+        freezeDuringTransientLayer: () => controller.layerDepth > 0,
         onAfterAssemble: () => notifyRing(),
       }),
     [controller, notifyRing],

@@ -67,6 +67,12 @@ export interface FocusDiscoveryEngineOptions {
   readonly controller: FocusController;
   /** Live snapshot of the explicit `useFocusItem`/`useFocusGroup` registrations. */
   readonly listExplicit: () => ExplicitRegistration[];
+  /**
+   * True while a focused widget has opened a transient popup (for example a
+   * Radix Select listbox) and owns its own option navigation. During that window
+   * the underlying ring must not rebuild onto the popup and lose its trigger.
+   */
+  readonly freezeDuringTransientLayer?: () => boolean;
   /** Run after every (re)assembly so the adapter can re-apply the highlight / bar. */
   readonly onAfterAssemble?: () => void;
   readonly doc?: Document;
@@ -112,6 +118,7 @@ const OBSERVED_ATTRIBUTES = [
 export class FocusDiscoveryEngine {
   private readonly controller: FocusController;
   private readonly listExplicit: () => ExplicitRegistration[];
+  private readonly freezeDuringTransientLayer: () => boolean;
   private readonly onAfterAssemble?: () => void;
   private readonly doc: Document;
   private observer: MutationObserver | null = null;
@@ -125,6 +132,7 @@ export class FocusDiscoveryEngine {
   constructor(options: FocusDiscoveryEngineOptions) {
     this.controller = options.controller;
     this.listExplicit = options.listExplicit;
+    this.freezeDuringTransientLayer = options.freezeDuringTransientLayer ?? (() => false);
     this.onAfterAssemble = options.onAfterAssemble;
     this.doc = options.doc ?? document;
   }
@@ -186,6 +194,11 @@ export class FocusDiscoveryEngine {
   /** Re-scans the active scope and rebuilds the ring in one batch. */
   refresh(): void {
     if (!this.started) return;
+    if (this.freezeDuringTransientLayer()) {
+      this.observer?.takeRecords();
+      this.onAfterAssemble?.();
+      return;
+    }
     const scope = resolveActiveScope(this.doc);
     const nodes = this.collectRingNodes(scope);
     const items = this.assemble(nodes, scope.element);

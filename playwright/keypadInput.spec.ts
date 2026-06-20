@@ -153,8 +153,11 @@ test.describe("Keypad / T9 input", () => {
     await expect(slider).toBeVisible();
     const thumb = slider.getByRole("slider");
 
-    expect(await ringFocus(page, page.getByTestId("home-cpu-summary"))).toBe(true);
-    await page.keyboard.press("ArrowRight");
+    const quickConfig = page.locator('[data-section-label="Quick Config"]').first();
+    expect(await ringFocus(page, quickConfig)).toBe(true);
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("home-cpu-summary")).toHaveAttribute(SELECTED, "true");
+    await page.keyboard.press("Enter");
     await expect(page.getByTestId("home-cpu-turbo-control")).toHaveAttribute(SELECTED, "true");
     await page.keyboard.press("ArrowDown");
     await expect(thumb).toHaveAttribute(SELECTED, "true");

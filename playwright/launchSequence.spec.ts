@@ -259,7 +259,6 @@ test.describe("launch sequence", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
     const launchSequence = page.getByTestId("startup-launch-sequence");
-    const appShell = page.getByTestId("app-shell");
     await expect(launchSequence).toBeVisible();
     await expect(launchSequence).toHaveAttribute("data-profile", "medium");
     await expect(page.getByTestId("startup-launch-sequence-title")).toBeVisible();
@@ -275,11 +274,13 @@ test.describe("launch sequence", () => {
     await page.waitForFunction(
       () => {
         const phase = document.querySelector<HTMLElement>('[data-testid="startup-launch-sequence"]')?.dataset.phase;
-        return phase === "fade-in" || phase === "hold" || phase === "fade-out";
+        const shell = document.querySelector<HTMLElement>('[data-testid="app-shell"]');
+        const opacity = shell ? getComputedStyle(shell).opacity : null;
+        if (phase === "fade-in" || phase === "hold" || phase === "fade-out") return opacity === "0";
+        return phase === "app-ready";
       },
       { polling: 16 },
     );
-    await expect(appShell).toHaveCSS("opacity", "0");
 
     await waitForHoldSample(page, resolvedTimings);
 

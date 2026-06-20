@@ -19,9 +19,13 @@ const mount = (html: string): HTMLElement => {
 
 const el = (id: string): HTMLElement => document.querySelector(`#${id}`)!;
 
-const makeEngine = (explicit: ExplicitRegistration[] = []) => {
+const makeEngine = (explicit: ExplicitRegistration[] = [], freezeDuringTransientLayer?: () => boolean) => {
   const controller = new FocusController();
-  const engine = new FocusDiscoveryEngine({ controller, listExplicit: () => explicit });
+  const engine = new FocusDiscoveryEngine({
+    controller,
+    listExplicit: () => explicit,
+    freezeDuringTransientLayer,
+  });
   return { controller, engine };
 };
 
@@ -180,6 +184,30 @@ describe("FocusDiscoveryEngine", () => {
     const resolved = controller.list().map((item) => engine.elementForId(item.id)?.id);
     expect(resolved).toEqual(["confirm", "cancel"]);
     expect(resolved).not.toContain("behind");
+    engine.stop();
+  });
+
+  it("freezes discovery while a transient popup layer owns option navigation", () => {
+    let freeze = false;
+    mount(`<button id="trigger">Pick</button>`);
+    const { controller, engine } = makeEngine([], () => freeze);
+    engine.start();
+
+    expect(engine.elementForId(controller.current()!.id)?.id).toBe("trigger");
+
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div role="listbox" id="options"><div role="option" id="option-one" tabindex="0">One</div></div>`,
+    );
+    freeze = true;
+    engine.refresh();
+
+    expect(controller.list().map((item) => engine.elementForId(item.id)?.id)).toEqual(["trigger"]);
+    expect(engine.elementForId(controller.current()!.id)?.id).toBe("trigger");
+
+    freeze = false;
+    engine.refresh();
+    expect(controller.list().map((item) => engine.elementForId(item.id)?.id)).toEqual(["option-one"]);
     engine.stop();
   });
 
