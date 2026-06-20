@@ -271,16 +271,20 @@ test.describe("launch sequence", () => {
     // runner the preamble above can take long enough that the sequence has already
     // advanced to fade-out by the time we sample, so accept it too; excluding it
     // made this assertion race the hold→fade-out transition and time out.
-    await page.waitForFunction(
-      () => {
-        const phase = document.querySelector<HTMLElement>('[data-testid="startup-launch-sequence"]')?.dataset.phase;
-        const shell = document.querySelector<HTMLElement>('[data-testid="app-shell"]');
-        const opacity = shell ? getComputedStyle(shell).opacity : null;
-        if (phase === "fade-in" || phase === "hold" || phase === "fade-out") return opacity === "0";
-        return phase === "app-ready";
-      },
-      { polling: 16 },
-    );
+    const shellSample = await page.evaluate((homeReadyTestId) => {
+      const phase = document.querySelector<HTMLElement>('[data-testid="startup-launch-sequence"]')?.dataset.phase;
+      const shell = document.querySelector<HTMLElement>('[data-testid="app-shell"]');
+      return {
+        phase,
+        opacity: shell ? getComputedStyle(shell).opacity : null,
+        homeReady: Boolean(document.querySelector(`[data-testid="${homeReadyTestId}"]`)),
+      };
+    }, HOME_READY_TEST_ID);
+    if (shellSample.phase === "fade-in" || shellSample.phase === "hold" || shellSample.phase === "fade-out") {
+      expect(shellSample.opacity).toBe("0");
+    } else {
+      expect(shellSample.homeReady).toBe(true);
+    }
 
     await waitForHoldSample(page, resolvedTimings);
 
