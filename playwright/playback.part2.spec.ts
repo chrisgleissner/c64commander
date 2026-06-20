@@ -1268,9 +1268,12 @@ test.describe("Playback file browser (part 2)", () => {
     await thumb.focus();
     await thumb.press("ArrowRight");
 
-    const updatedState = server.getState()["Audio Mixer"];
     await expect.poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"]?.value).not.toBe(initialSocket1);
     await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"]?.value).not.toBe(initialUlti2);
+    // Read the settled state AFTER the polls: a key-driven step commits via the
+    // slider's coalescing debounce (one device write per burst), so the device
+    // converges asynchronously. Snapshotting before the polls raced a transient.
+    const updatedState = server.getState()["Audio Mixer"];
     const target = updatedState["Vol Socket 1"]?.value;
     expect(target).toBeDefined();
     expect(updatedState["Vol UltiSid 2"]?.value).toBe(target);

@@ -140,7 +140,19 @@ describe("FocusNavigationProvider + useFocusItem", () => {
     expect(onClick).not.toHaveBeenCalled();
   });
 
-  it("invokes onNavigateBack when back is pressed with nothing to dismiss", () => {
+  it("invokes onNavigateBack when the hardware back key is pressed with nothing to dismiss", () => {
+    const onNavigateBack = vi.fn();
+    render(
+      <FocusNavigationProvider profileId="keypad" onNavigateBack={onNavigateBack}>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "GoBack" });
+    expect(onNavigateBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not navigate the route on Escape with nothing to dismiss", () => {
     const onNavigateBack = vi.fn();
     render(
       <FocusNavigationProvider onNavigateBack={onNavigateBack}>
@@ -148,8 +160,31 @@ describe("FocusNavigationProvider + useFocusItem", () => {
       </FocusNavigationProvider>,
     );
 
+    // Escape only unwinds in-app state; with nothing to dismiss it defers to the
+    // browser / an open Radix overlay instead of calling navigate(-1).
     fireEvent.keyDown(document.body, { code: "Escape" });
-    expect(onNavigateBack).toHaveBeenCalledTimes(1);
+    expect(onNavigateBack).not.toHaveBeenCalled();
+  });
+
+  it("stays inert while focus is inside an open Radix overlay", () => {
+    const onActivate = vi.fn();
+    const InDialog = () => {
+      const ref = useFocusItem<HTMLButtonElement>({ id: "dlg-cta", order: 0, onActivate });
+      return (
+        <div role="dialog">
+          <button ref={ref}>X</button>
+        </div>
+      );
+    };
+    const { getByText } = render(
+      <FocusNavigationProvider>
+        <InDialog />
+      </FocusNavigationProvider>,
+    );
+
+    // Enter on a CTA inside the dialog must reach the overlay, not the global ring.
+    fireEvent.keyDown(getByText("X"), { code: "Enter" });
+    expect(onActivate).not.toHaveBeenCalled();
   });
 
   it("does not steal keys from editable targets (input, textarea, contenteditable)", () => {

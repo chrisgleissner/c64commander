@@ -86,6 +86,20 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
   return editableAttr !== null && editableAttr !== "false";
 };
 
+/**
+ * Radix overlays (dialog, alert dialog, dropdown/context menu, select listbox,
+ * popover) own the keyboard while focus is inside them: they handle Enter,
+ * arrows, typeahead, and their own Escape-to-dismiss. The global focus ring sits
+ * behind them, so it must stay inert there — otherwise a key would activate a CTA
+ * underneath a modal or steal Enter from a dialog's focused row. Dismissible
+ * Selects also push a controller layer (handled in `dispatch`), but app dialogs
+ * do not, so we additionally detect the open overlay from the focused subtree.
+ */
+const OPEN_OVERLAY_ANCESTOR_SELECTOR =
+  '[role="dialog"],[role="alertdialog"],[role="menu"],[role="listbox"],[data-radix-popper-content-wrapper]';
+const isWithinOpenOverlay = (target: EventTarget | null): boolean =>
+  target instanceof Element && target.closest(OPEN_OVERLAY_ANCESTOR_SELECTOR) !== null;
+
 export interface FocusNavigationProviderProps {
   readonly children: ReactNode;
   /** Input profile id selecting the active keymap (e.g. "keypad"). */
@@ -186,6 +200,9 @@ export const FocusNavigationProvider = ({
       // Never touch editable targets (the field + its T9 composer own them); and
       // never log them, so typed text is never captured by diagnostics.
       if (isEditableTarget(event.target)) return;
+      // While focus is inside an open Radix overlay, that overlay owns the key —
+      // the global ring (behind the modal) must not activate/move underneath it.
+      if (isWithinOpenOverlay(event.target)) return;
       // NB: we intentionally do NOT bail on `event.defaultPrevented`. A focused
       // slider `preventDefault`s Up/Down to suppress Radix's value step while
       // STILL relying on this handler to move focus; HAZARD 2 (open dropdowns)

@@ -170,7 +170,7 @@ describe("NavigationController — deterministic back chain", () => {
     expect(onNavigateBack).toHaveBeenCalledTimes(1);
   });
 
-  it("back climbs out of a nested CTA scope before route navigation", () => {
+  it("escape climbs out of a nested CTA scope but never navigates the route", () => {
     const onFocus = vi.fn();
     const onNavigateBack = vi.fn();
     const nav = new NavigationController({ callbacks: { onFocus, onNavigateBack } });
@@ -181,13 +181,24 @@ describe("NavigationController — deterministic back chain", () => {
     expect(nav.dispatch("escape")).toEqual({ type: "focusMoved", item: expect.objectContaining({ id: "card" }) });
     expect(onNavigateBack).not.toHaveBeenCalled();
 
-    expect(nav.dispatch("escape")).toEqual({ type: "navigatedBack" });
+    // Chain exhausted: keyboard escape resolves to `ignored` (Radix/browser owns
+    // it) and must NOT call navigate(-1); only the hardware back button does.
+    expect(nav.dispatch("escape")).toEqual({ type: "ignored" });
+    expect(onNavigateBack).not.toHaveBeenCalled();
+  });
+
+  it("hardware back navigates the route once the back chain is exhausted", () => {
+    const onNavigateBack = vi.fn();
+    const nav = new NavigationController({ callbacks: { onNavigateBack } });
+    nav.focus.register(item("card", 0));
+
+    expect(nav.dispatch("back")).toEqual({ type: "navigatedBack" });
     expect(onNavigateBack).toHaveBeenCalledTimes(1);
   });
 
   it("navigatedBack is a no-op-safe outcome when no callback is wired", () => {
     const nav = new NavigationController();
-    expect(nav.dispatch("escape")).toEqual({ type: "navigatedBack" });
+    expect(nav.dispatch("back")).toEqual({ type: "navigatedBack" });
   });
 
   it("pushLayer replaces an existing layer with the same id (no duplicate dismiss)", () => {

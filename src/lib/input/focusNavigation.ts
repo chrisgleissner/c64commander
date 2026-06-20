@@ -126,9 +126,13 @@ export class NavigationController {
   dispatch(action: SemanticAction): NavigationOutcome {
     // The `back` chain stays global regardless of open overlays, so a keypad
     // `back` (Android keyCode 4 — which Radix does not recognize) can always
-    // unwind the topmost dismissible layer / engaged field / route.
+    // unwind the topmost dismissible layer / engaged field / nested scope. Only
+    // the hardware `back` button navigates the route once that chain is
+    // exhausted; keyboard `escape` stops there and resolves to `ignored` so it
+    // never steals a dismissal from a Radix dialog (whose DismissableLayer bails
+    // on `defaultPrevented`) nor calls `navigate(-1)` underneath an open overlay.
     if (BACK_ACTIONS.has(action)) {
-      return this.back();
+      return this.back(action === "back");
     }
     if (action === "closeMenu") {
       return this.closeTopMenu();
@@ -177,8 +181,13 @@ export class NavigationController {
     return { type: "activated", item };
   }
 
-  /** The deterministic `back` chain: close popup → leave menu → leave field → navigate back. */
-  private back(): NavigationOutcome {
+  /**
+   * The deterministic `back` chain: dismiss layer → leave field → climb scope →
+   * (optionally) navigate the route. `navigateOnExhaust` is false for keyboard
+   * `escape`, which must not navigate or `preventDefault` once nothing in-app is
+   * left to unwind — the browser / Radix overlay owns the key from there.
+   */
+  private back(navigateOnExhaust: boolean): NavigationOutcome {
     const top = this.topLayer();
     if (top) {
       this.removeLayer(top.id);
@@ -194,6 +203,9 @@ export class NavigationController {
     if (parent) {
       this.callbacks.onFocus?.(parent);
       return { type: "focusMoved", item: parent };
+    }
+    if (!navigateOnExhaust) {
+      return { type: "ignored" };
     }
     this.callbacks.onNavigateBack?.();
     return { type: "navigatedBack" };
