@@ -1291,18 +1291,16 @@ describe("c64api", () => {
     try {
       await api.updateConfigBatch({ "U64 Specific Settings": { "CPU Speed": "4", "Turbo Control": "Manual" } });
 
-      // Turbo + CPU speed batches are split into sequential single-item
-      // writes; the padded CPU speed value lands in the final request.
-      expect(JSON.parse(String(fetchMock.mock.calls.at(-2)?.[1]?.body))).toEqual({
-        "U64 Specific Settings": {
-          "Turbo Control": "Manual",
-        },
-      });
-      expect(JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body))).toEqual({
-        "U64 Specific Settings": {
-          "CPU Speed": " 4",
-        },
-      });
+      // Turbo + CPU speed batches are split into sequential single-item writes,
+      // each sent via the device-safe body-less PUT endpoint; the padded CPU speed
+      // value lands in the final request.
+      const putWrites = fetchMock.mock.calls
+        .filter(([, init]) => (init as RequestInit | undefined)?.method === "PUT")
+        .map(([input]) => String(input));
+      expect(putWrites).toEqual([
+        expect.stringContaining("/v1/configs/U64%20Specific%20Settings/Turbo%20Control?value=Manual"),
+        expect.stringContaining("/v1/configs/U64%20Specific%20Settings/CPU%20Speed?value=%204"),
+      ]);
     } finally {
       completeSavedDeviceVerification(selectedDevice.id, {
         product: null,
@@ -1312,11 +1310,13 @@ describe("c64api", () => {
     }
   });
 
-  it("splits U64 turbo control and CPU speed into sequential single-item writes, turbo first", async () => {
+  it("splits U64 turbo control and CPU speed into sequential single-item PUT writes, turbo first", async () => {
     // Combined Turbo Control + CPU Speed POSTs have twice coincided with the
     // Ultimate dropping off the network mid-write (BUG-010 on u64 3.14e,
     // 2026-06-12 on c64u 1.1.0). The batch must arrive as one request per
     // item, with the turbo enable landing before the dependent speed change.
+    // Each single-item write uses the body-less PUT endpoint, not the
+    // temp-file-buffering POST /v1/configs handler that drops the device.
     const fetchMock = getFetchMock();
     fetchMock
       .mockResolvedValueOnce(
@@ -1343,12 +1343,12 @@ describe("c64api", () => {
       },
     });
 
-    const postBodies = fetchMock.mock.calls
-      .filter(([, init]) => (init as RequestInit | undefined)?.method === "POST")
-      .map(([, init]) => JSON.parse(String((init as RequestInit).body)) as Record<string, Record<string, string>>);
-    expect(postBodies).toEqual([
-      { "U64 Specific Settings": { "Turbo Control": "Manual" } },
-      { "U64 Specific Settings": { "CPU Speed": " 2" } },
+    const putWrites = fetchMock.mock.calls
+      .filter(([, init]) => (init as RequestInit | undefined)?.method === "PUT")
+      .map(([input]) => String(input));
+    expect(putWrites).toEqual([
+      expect.stringContaining("/v1/configs/U64%20Specific%20Settings/Turbo%20Control?value=Manual"),
+      expect.stringContaining("/v1/configs/U64%20Specific%20Settings/CPU%20Speed?value=%202"),
     ]);
   });
 

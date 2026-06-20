@@ -442,9 +442,14 @@ describe("C64API request identity", () => {
       api.updateConfigBatch({ "Audio Mixer": { "Vol Socket 1": "0 dB" } }),
     ]);
 
+    // Single-item writes go via the body-less PUT endpoint (device-safe), not the
+    // temp-file-buffering POST batch handler. Two identical writes must still both
+    // be sent (writes are never deduped).
     const writeCalls = vi
       .mocked(globalThis.fetch)
-      .mock.calls.filter(([input, init]) => String(input).endsWith("/v1/configs") && init?.method === "POST");
+      .mock.calls.filter(
+        ([input, init]) => String(input).includes("/v1/configs/Audio%20Mixer/Vol%20Socket%201") && init?.method === "PUT",
+      );
     expect(writeCalls).toHaveLength(2);
   });
 

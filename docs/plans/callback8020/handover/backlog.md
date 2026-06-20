@@ -37,6 +37,17 @@ Legend: `[ ]` todo · `[~]` partial.
   pick the input profile (`defaultKeyboard` ↔ `commodoreCallback8020`) since
   AppSupport auto-detection is unreliable; audit all reachable text inputs.
 
+## UI / settings
+
+- [ ] **Configurable screen rotation.** Add a screen-orientation setting under
+  Settings with three choices — **Portrait (default)**, **Landscape**, and
+  **Auto** (follow device sensor). The app must default to Portrait and lock to
+  the chosen orientation; "Auto" restores sensor-driven rotation. Persist the
+  choice and apply it on launch. (Capacitor: `@capacitor/screen-orientation`
+  `lock(...)`/`unlock()`; Android also honours `android:screenOrientation` /
+  activity orientation. Verify on the Pixel 4 across all three modes, and that
+  the launch sequence + safe-area insets stay correct after rotation.)
+
 ## Schema / build consolidation
 
 - [ ] **`android_only: true` schema flag** to consolidate the Android-only

@@ -1102,8 +1102,11 @@ describe("c64api branches", () => {
     expect(fetchMock).toHaveBeenCalled();
     const [, opts] = fetchMock.mock.calls.at(-1)!;
     const [url] = fetchMock.mock.calls.at(-1)!;
-    expect(opts.method).toBe("POST");
-    expect(url).toContain("/v1/configs");
+    // Single-item writes use the body-less PUT endpoint (device-safe — avoids the
+    // firmware's temp-file-buffering POST /v1/configs handler).
+    expect(opts.method).toBe("PUT");
+    expect(url).toContain("/v1/configs/Audio/Volume");
+    expect(url).toContain("value=0%20dB");
   });
 
   // #32: stream start/stop URL encoding
