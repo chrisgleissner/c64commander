@@ -180,3 +180,60 @@ describe("FocusController", () => {
     expect(controller.current()?.id).toBe("root");
   });
 });
+
+describe("FocusController.setItems — DOM-order batch population", () => {
+  it("traverses in the given array (DOM) order regardless of `order`", () => {
+    const controller = new FocusController();
+    // `order` values are deliberately reversed; DOM order (array position) wins.
+    controller.setItems([item("first", 99), item("second", 5), item("third", 1)]);
+    expect(controller.list().map((entry) => entry.id)).toEqual(["first", "second", "third"]);
+    expect(controller.current()?.id).toBe("first");
+    expect(controller.focusNext()?.id).toBe("second");
+    expect(controller.focusNext()?.id).toBe("third");
+  });
+
+  it("preserves `current` across a re-scan when its id is still present", () => {
+    const controller = new FocusController();
+    controller.setItems([item("a", 0), item("b", 0), item("c", 0)]);
+    expect(controller.focusNext()?.id).toBe("b");
+    // A DOM mutation re-scans: b survives, so selection stays on b.
+    controller.setItems([item("a", 0), item("b", 0), item("c", 0), item("d", 0)]);
+    expect(controller.current()?.id).toBe("b");
+  });
+
+  it("re-derives `current` to the first enabled item when the prior selection vanished", () => {
+    const controller = new FocusController();
+    controller.setItems([item("a", 0), item("b", 0)]);
+    expect(controller.focusNext()?.id).toBe("b");
+    controller.setItems([item("a", 0), item("c", 0)]); // b gone
+    expect(controller.current()?.id).toBe("a");
+  });
+
+  it("keeps a nested scope when the parent survives, and exits it when it vanishes", () => {
+    const controller = new FocusController();
+    controller.setItems([item("card", 0), item("child", 0, { parentId: "card" })]);
+    controller.focusFirstChild();
+    expect(controller.currentScopeParentId()).toBe("card");
+    // card persists across the re-scan → still inside it.
+    controller.setItems([item("card", 0), item("child", 0, { parentId: "card" })]);
+    expect(controller.currentScopeParentId()).toBe("card");
+    // card removed → scope resets to root.
+    controller.setItems([item("other", 0)]);
+    expect(controller.currentScopeParentId()).toBeNull();
+    expect(controller.current()?.id).toBe("other");
+  });
+
+  it("exposes enabled children and group-ness for the OK descend/activate decision", () => {
+    const controller = new FocusController();
+    controller.setItems([
+      item("group", 0),
+      item("g-leaf-1", 0, { parentId: "group" }),
+      item("g-leaf-2", 0, { parentId: "group", disabled: true }),
+      item("leaf", 0),
+    ]);
+    expect(controller.hasEnabledChildren("group")).toBe(true);
+    expect(controller.enabledChildrenOf("group").map((entry) => entry.id)).toEqual(["g-leaf-1"]);
+    expect(controller.hasEnabledChildren("leaf")).toBe(false);
+    expect(controller.enabledChildrenOf("leaf")).toEqual([]);
+  });
+});
