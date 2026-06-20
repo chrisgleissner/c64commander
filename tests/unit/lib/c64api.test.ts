@@ -448,7 +448,8 @@ describe("C64API request identity", () => {
     const writeCalls = vi
       .mocked(globalThis.fetch)
       .mock.calls.filter(
-        ([input, init]) => String(input).includes("/v1/configs/Audio%20Mixer/Vol%20Socket%201") && init?.method === "PUT",
+        ([input, init]) =>
+          String(input).includes("/v1/configs/Audio%20Mixer/Vol%20Socket%201") && init?.method === "PUT",
       );
     expect(writeCalls).toHaveLength(2);
   });

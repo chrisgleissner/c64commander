@@ -1,12 +1,9 @@
 # Callback 8020 / C64U Remote — post-MVP backlog
 
-Forward-looking work, deferred out of the C64U Remote MVP. The MVP ships the
-existing app reskinned, **Android-only, touch-first** (touchscreen + the system
-soft keyboard cover all text entry on the 480×640 panel). The keypad/T9 input
-subsystem is fully built and unit-tested but ships **behind the user-visible,
-default-off experimental feature flag `keypad_input_enabled`** (Settings ▸
-Experimental Features ▸ *Keypad / T9 input*). Everything below is picked up from
-there.
+Forward-looking work, deferred out of the C64U Remote MVP. C64U Remote is
+Android-only and now inherits the stable, default-on `keypad_input_enabled`
+keyboard/keypad navigation feature, with numeric-keypad T9 reserved for the
+keypad-first variant default.
 
 Legend: `[ ]` todo · `[~]` partial.
 
@@ -36,17 +33,6 @@ Legend: `[ ]` todo · `[~]` partial.
   and how to switch (`#`) on the small screen; a developer/settings control to
   pick the input profile (`defaultKeyboard` ↔ `commodoreCallback8020`) since
   AppSupport auto-detection is unreliable; audit all reachable text inputs.
-
-## UI / settings
-
-- [ ] **Configurable screen rotation.** Add a screen-orientation setting under
-  Settings with three choices — **Portrait (default)**, **Landscape**, and
-  **Auto** (follow device sensor). The app must default to Portrait and lock to
-  the chosen orientation; "Auto" restores sensor-driven rotation. Persist the
-  choice and apply it on launch. (Capacitor: `@capacitor/screen-orientation`
-  `lock(...)`/`unlock()`; Android also honours `android:screenOrientation` /
-  activity orientation. Verify on the Pixel 4 across all three modes, and that
-  the launch sequence + safe-area insets stay correct after rotation.)
 
 ## Schema / build consolidation
 
