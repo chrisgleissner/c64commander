@@ -180,7 +180,17 @@ export const FocusNavigationProvider = ({
       new NavigationController({
         callbacks: {
           onFocus: (item) => focusRingElement(engineRef.current?.elementForId(item.id) ?? null),
-          onActivate: (item) => focusRingElement(engineRef.current?.elementForId(item.id) ?? null),
+          // After activation, keep the ring element focused — BUT respect an
+          // activation that intentionally moved focus into the item's own subtree
+          // (the field-row pattern focuses its inner <input> for editing). Yanking
+          // focus back to the row there would break OK-to-edit; the synchronous
+          // `contains` check lets that focus stand while still re-anchoring a plain
+          // button/control that did not move focus.
+          onActivate: (item) => {
+            const element = engineRef.current?.elementForId(item.id) ?? null;
+            if (element && element.contains(document.activeElement)) return;
+            focusRingElement(element);
+          },
           onNavigateBack: () => onNavigateBackRef.current?.(),
           onOpenMenu: (item) => openContextMenuFor(item ? (engineRef.current?.elementForId(item.id) ?? null) : null),
         },
