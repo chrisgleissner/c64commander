@@ -65,13 +65,29 @@ const buildGuidanceState = (context: FocusNavigationContextValue): GuidanceState
   };
 };
 
-/** Show/hide a soft-key slot and set its action text in one imperative write. */
+/**
+ * Imperative writes with a VALUE-EQUALITY BAIL — only touch the DOM when the value
+ * actually changed. This is load-bearing, not just an optimisation: the engine's
+ * MutationObserver watches the whole body subtree, and a redundant write here
+ * (text-node replacement, attribute toggle) would queue a mutation → re-scan →
+ * `onAfterAssemble` → notifyRing → another write … i.e. an infinite refresh loop
+ * (the project's CPU-pegged coverage hang). Writing only on real change makes the
+ * cycle converge after one settle.
+ */
+const setTextIfChanged = (element: HTMLElement | null, text: string): void => {
+  if (element && element.textContent !== text) element.textContent = text;
+};
+const setAttrIfChanged = (element: HTMLElement | null, name: string, value: string): void => {
+  if (element && element.getAttribute(name) !== value) element.setAttribute(name, value);
+};
+
+/** Show/hide a soft-key slot and set its action text, each guarded by a value bail. */
 const applySlot = (slot: HTMLElement | null, action: HTMLElement | null, label: string | null): void => {
   if (!slot || !action) return;
   if (label) {
-    action.textContent = label;
-    slot.removeAttribute("hidden");
-  } else {
+    setTextIfChanged(action, label);
+    if (slot.hasAttribute("hidden")) slot.removeAttribute("hidden");
+  } else if (!slot.hasAttribute("hidden")) {
     slot.setAttribute("hidden", "");
   }
 };
@@ -91,17 +107,15 @@ export const KeypadGuidanceBar = () => {
     if (!root || !context) return;
     const labels = resolveGuidanceLabels(buildGuidanceState(context));
     if (!labels.visible) {
-      root.setAttribute("data-visible", "false");
+      setAttrIfChanged(root, "data-visible", "false");
       return;
     }
-    root.setAttribute("data-visible", "true");
-    if (breadcrumbRef.current) {
-      // One joined text node (not per-segment elements): the bar is aria-hidden
-      // chrome that mirrors on-screen text, so a single string keeps it out of
-      // role/text queries for the real controls behind it.
-      breadcrumbRef.current.textContent = labels.breadcrumb.length > 0 ? labels.breadcrumb.join("  ›  ") : "Navigation";
-    }
-    if (leftActionRef.current) leftActionRef.current.textContent = labels.left;
+    setAttrIfChanged(root, "data-visible", "true");
+    // One joined text node (not per-segment elements): the bar is aria-hidden
+    // chrome that mirrors on-screen text, so a single string keeps it out of
+    // role/text queries for the real controls behind it.
+    setTextIfChanged(breadcrumbRef.current, labels.breadcrumb.length > 0 ? labels.breadcrumb.join("  ›  ") : "Navigation");
+    setTextIfChanged(leftActionRef.current, labels.left);
     applySlot(centerSlotRef.current, centerActionRef.current, labels.center);
     applySlot(rightSlotRef.current, rightActionRef.current, labels.right);
   }, [context]);

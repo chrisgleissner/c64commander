@@ -196,12 +196,13 @@ const DeviceSwitchLabAutoLauncher = ({ enabled }: { enabled: boolean }) => {
 const KEYPAD_FOCUS_PROFILE_ID = "keypad";
 
 /**
- * Keyboard-only (D-pad + center) navigation is gated on the user-visible,
- * default-off experimental `keypad_input_enabled` flag — for devices without a
- * usable touchscreen (a keypad-first device). With the
- * flag off (the default on every variant/platform) the provider still mounts but
- * with `enabled={false}`, so the global key listener is detached and existing
- * pointer/keyboard behaviour is untouched (any registered CTAs stay inert).
+ * Keyboard / D-pad / keypad navigation is gated on the user-visible,
+ * **default-on** experimental `keypad_input_enabled` flag (group `experimental`;
+ * users can still disable it; the C64U Remote variant bakes its own override).
+ * The provider ALWAYS mounts; the flag only drives `enabled`. With the flag off
+ * the global key listener + scope-discovery engine are detached, no `tabindex`/
+ * attributes are written, and pointer/keyboard behaviour is byte-for-byte
+ * baseline (the Prime Directive).
  *
  * `KeypadFocusNavigation` renders inside `FeatureFlagsProvider`, so reading the
  * flag here is safe.

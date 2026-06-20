@@ -31,6 +31,55 @@ This profile layer sits above the existing viewport-validation infrastructure ra
 - The display-profile resolver gives those viewport tests a stable semantic target, so Compact, Medium, and Expanded behavior can be asserted directly without scattering width heuristics throughout feature code.
 - Screenshot and layout validation remain viewport-driven, while profile-aware tests verify that the correct layout mode is selected and preserved when overrides are used.
 
+## Keyboard / D-pad / keypad navigation
+
+The app is operable entirely by hardware keyboard, D-pad/joystick, and numeric
+keypad as a first-class alternative to mouse/touch — for keypad-first devices
+(e.g. the Callback 8020) and any attached keyboard. The subsystem lives in
+`src/lib/input/` (pure, DOM-free or DOM-aware-but-stateless, unit-tested) with a
+thin React adapter in `src/hooks/useFocusNavigation.tsx`. The full key map is in
+[docs/plans/callback8020/keymap.md](plans/callback8020/keymap.md).
+
+- **Semantic actions, not key codes.** `keyEvent.ts` normalizes a raw key event
+  into a `SemanticAction` via a data-driven `keymap.ts` + profiles
+  (`defaultKeyboard`, `keypad`). UI never inspects raw key codes.
+- **Scope-based auto-discovery.** `discovery.ts` (stateless) + `focusDiscovery.ts`
+  (`FocusDiscoveryEngine`, stateful) build the focus ring from the live DOM of the
+  **active scope** — the topmost open overlay (`[role=dialog/alertdialog/menu/
+  listbox]`, poppers) or else the routed page; the bottom `TabBar` is its own
+  scope appended last. Every interactive element is reachable **by construction**;
+  a debounced `MutationObserver` keeps the ring in sync. `useFocusItem` /
+  `useFocusGroup` are optional refinements (id / order / group / custom activation
+  / opt-out), not the gate for reachability.
+- **"OK to go in, Back to go out."** `focusNavigation.ts` (`NavigationController`)
+  maps actions to moves: Up/Down (and Tab) move between siblings in the current
+  scope; Center/Enter/Call **descend** into a group (a card/section with enabled
+  children) or **activate** a leaf; Back/Escape/left-soft-key run a deterministic
+  chain — dismiss overlay → disengage field → ascend the group scope → (hardware
+  Back / soft-left only) navigate the route. Left/Right belong to the focused value
+  control (slider/tabs/segmented), falling back to sibling nav only when unconsumed.
+- **Modality + highlight.** `inputModality.ts` is an imperative module singleton
+  (`pointer` | `key-navigation`, value-equality bail, subscribe — never React
+  state, to avoid the project's setState-in-effect coverage hang). The provider
+  toggles `data-key-selected` (current item) and `data-key-scope` (enclosing
+  group) imperatively, gated on `keypad_input_enabled` **and** key-navigation
+  modality; a pointer/touch clears them in the same frame.
+- **Context guidance bar.** `guidance.ts` (pure `resolveGuidanceLabels`) +
+  `src/components/input/KeypadGuidanceBar.tsx` render a fixed, modality-gated
+  soft-key + breadcrumb strip (Back/Exit · Open/Edit/Select/Toggle/Activate ·
+  Menu) — the discoverability device for keypad-first use. Same visibility gate as
+  the highlight, `pointer-events:none`, updated imperatively from the ring
+  subscription (no React state).
+- **T9 entry.** `t9.ts` (pure, timer-free) + `useT9Input.ts` give numeric-keypad
+  text entry (multitap + hostname/IP mode). Literal typing is the default; T9 is
+  keypad-mode only.
+- **Prime Directive + deferral invariants.** With the flag off the engine never
+  runs, no attributes/`tabindex` are written, no key is `preventDefault`ed — the
+  app is byte-for-byte baseline. The global capture-phase handler additionally:
+  (1) never lets keyboard `Escape` navigate the route (so Radix's own
+  `DismissableLayer` closes a dialog); (2) bails when focus is inside an open
+  overlay; (3) defers Enter/Space to a focused native control outside the ring.
+
 ## Stack and Layers
 
 - **UI**: React pages in [src/pages](../src/pages) with shared components in [src/components](../src/components).
