@@ -30,6 +30,7 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadBackgroundRediscoveryIntervalMs: vi.fn(),
   loadDiscoveryProbeTimeoutMs: vi.fn(),
   loadDiskAutostartMode: vi.fn(),
+  loadScreenOrientationMode: vi.fn(),
   loadVolumeSliderPreviewIntervalMs: vi.fn(),
   loadArchiveHostOverride: vi.fn(),
   loadArchiveClientIdOverride: vi.fn(),
@@ -42,6 +43,7 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveBackgroundRediscoveryIntervalMs: vi.fn(),
   saveDiscoveryProbeTimeoutMs: vi.fn(),
   saveDiskAutostartMode: vi.fn(),
+  saveScreenOrientationMode: vi.fn(),
   saveVolumeSliderPreviewIntervalMs: vi.fn(),
   saveArchiveHostOverride: vi.fn(),
   saveArchiveClientIdOverride: vi.fn(),
@@ -94,6 +96,7 @@ describe("settingsTransfer", () => {
     it("collects all settings and explicit feature overrides", async () => {
       vi.mocked(appSettings.loadDebugLoggingEnabled).mockReturnValue(true);
       vi.mocked(appSettings.loadVolumeSliderPreviewIntervalMs).mockReturnValue(250);
+      vi.mocked(appSettings.loadScreenOrientationMode).mockReturnValue("landscape");
       vi.mocked(appSettings.loadArchiveHostOverride).mockReturnValue("");
       vi.mocked(appSettings.loadArchiveClientIdOverride).mockReturnValue("");
       vi.mocked(appSettings.loadArchiveUserAgentOverride).mockReturnValue("");
@@ -106,6 +109,7 @@ describe("settingsTransfer", () => {
       expect(result.version).toBe(SETTINGS_EXPORT_VERSION);
       expect(result.appSettings.debugLoggingEnabled).toBe(true);
       expect(result.appSettings.volumeSliderPreviewIntervalMs).toBe(250);
+      expect(result.appSettings.screenOrientationMode).toBe("landscape");
       expect(result.featureFlags).toEqual({ commoserve_enabled: true });
       expect(result.deviceSafety.mode).toBe("RELAXED");
     });
@@ -122,6 +126,7 @@ describe("settingsTransfer", () => {
         backgroundRediscoveryIntervalMs: 60000,
         discoveryProbeTimeoutMs: 2000,
         diskAutostartMode: "dma",
+        screenOrientationMode: "portrait",
         volumeSliderPreviewIntervalMs: 200,
         archiveHostOverride: "",
         archiveClientIdOverride: "",
@@ -151,6 +156,7 @@ describe("settingsTransfer", () => {
       expect(result).toEqual({ ok: true });
 
       expect(appSettings.saveDebugLoggingEnabled).toHaveBeenCalledWith(true);
+      expect(appSettings.saveScreenOrientationMode).toHaveBeenCalledWith("portrait");
       expect(appSettings.saveVolumeSliderPreviewIntervalMs).toHaveBeenCalledWith(200);
       expect(deviceSafetySettings.saveDeviceSafetyMode).toHaveBeenCalledWith("BALANCED");
       expect(featureFlagManagerMocks.replaceOverrides).toHaveBeenCalledWith({});
@@ -233,6 +239,7 @@ describe("settingsTransfer", () => {
         ["backgroundRediscoveryIntervalMs", "bad", "backgroundRediscoveryIntervalMs must be a number."],
         ["discoveryProbeTimeoutMs", "notanumber", "discoveryProbeTimeoutMs must be a number."],
         ["diskAutostartMode", "usb", "diskAutostartMode must be kernal or dma."],
+        ["screenOrientationMode", "sideways", "screenOrientationMode must be portrait, landscape, or auto."],
         ["volumeSliderPreviewIntervalMs", "slow", "volumeSliderPreviewIntervalMs must be a number."],
         ["archiveHostOverride", 1, "archiveHostOverride must be a string."],
         ["archiveClientIdOverride", 1, "archiveClientIdOverride must be a string."],

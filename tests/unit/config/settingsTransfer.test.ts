@@ -17,6 +17,7 @@ import {
   loadDebugLoggingEnabled,
   loadDiscoveryProbeTimeoutMs,
   loadDiskAutostartMode,
+  loadScreenOrientationMode,
   loadStartupDiscoveryWindowMs,
   loadVolumeSliderPreviewIntervalMs,
 } from "@/lib/config/appSettings";
@@ -36,6 +37,7 @@ describe("settingsTransfer", () => {
     expect(snapshot.version).toBe(SETTINGS_EXPORT_VERSION);
     expect(snapshot.appSettings).toHaveProperty("debugLoggingEnabled");
     expect(snapshot.appSettings).toHaveProperty("volumeSliderPreviewIntervalMs");
+    expect(snapshot.appSettings).toHaveProperty("screenOrientationMode");
     expect(snapshot.appSettings).toHaveProperty("archiveHostOverride");
     expect(snapshot).toHaveProperty("featureFlags");
     expect(snapshot.deviceSafety).toHaveProperty("mode");
@@ -53,6 +55,7 @@ describe("settingsTransfer", () => {
         backgroundRediscoveryIntervalMs: 5000,
         discoveryProbeTimeoutMs: 2500,
         diskAutostartMode: "kernal",
+        screenOrientationMode: "portrait",
         volumeSliderPreviewIntervalMs: 200,
         archiveHostOverride: "",
         archiveClientIdOverride: "",
@@ -94,6 +97,7 @@ describe("settingsTransfer", () => {
         backgroundRediscoveryIntervalMs: 7000,
         discoveryProbeTimeoutMs: 3200,
         diskAutostartMode: "dma",
+        screenOrientationMode: "landscape",
         volumeSliderPreviewIntervalMs: 300,
         archiveHostOverride: "archive.local:3002",
         archiveClientIdOverride: "Custom",
@@ -131,6 +135,7 @@ describe("settingsTransfer", () => {
     expect(loadBackgroundRediscoveryIntervalMs()).toBe(7000);
     expect(loadDiscoveryProbeTimeoutMs()).toBe(3200);
     expect(loadDiskAutostartMode()).toBe("dma");
+    expect(loadScreenOrientationMode()).toBe("landscape");
     expect(loadVolumeSliderPreviewIntervalMs()).toBe(300);
     expect(loadArchiveHostOverride()).toBe("archive.local:3002");
     expect(loadArchiveClientIdOverride()).toBe("Custom");
@@ -184,6 +189,7 @@ describe("settingsTransfer", () => {
         backgroundRediscoveryIntervalMs: 5000,
         discoveryProbeTimeoutMs: 2500,
         diskAutostartMode: "never",
+        screenOrientationMode: "portrait",
         volumeSliderPreviewIntervalMs: 200,
         archiveHostOverride: "",
         archiveClientIdOverride: "",
@@ -224,6 +230,7 @@ describe("settingsTransfer", () => {
         backgroundRediscoveryIntervalMs: 5000,
         discoveryProbeTimeoutMs: 2500,
         diskAutostartMode: "kernal",
+        screenOrientationMode: "portrait",
         volumeSliderPreviewIntervalMs: 200,
         archiveHostOverride: "",
         archiveClientIdOverride: "",

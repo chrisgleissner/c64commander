@@ -180,6 +180,43 @@ describe("appSettings", () => {
     });
   });
 
+  describe("screenOrientationMode", () => {
+    it("defaults to portrait and derives auto rotation as disabled", () => {
+      expect(appSettings.loadScreenOrientationMode()).toBe(appSettings.DEFAULT_SCREEN_ORIENTATION_MODE);
+      expect(appSettings.loadAutoRotationEnabled()).toBe(false);
+    });
+
+    it("persists portrait, landscape, and auto while keeping the legacy auto-rotation key derived", () => {
+      appSettings.saveScreenOrientationMode("landscape");
+      expect(appSettings.loadScreenOrientationMode()).toBe("landscape");
+      expect(appSettings.loadAutoRotationEnabled()).toBe(false);
+      expect(localStorage.getItem(APP_SETTINGS_KEYS.AUTO_ROTATION_ENABLED_KEY)).toBe("0");
+
+      appSettings.saveScreenOrientationMode("auto");
+      expect(appSettings.loadScreenOrientationMode()).toBe("auto");
+      expect(appSettings.loadAutoRotationEnabled()).toBe(true);
+      expect(localStorage.getItem(APP_SETTINGS_KEYS.AUTO_ROTATION_ENABLED_KEY)).toBe("1");
+
+      appSettings.saveScreenOrientationMode("portrait");
+      expect(appSettings.loadScreenOrientationMode()).toBe("portrait");
+      expect(appSettings.loadAutoRotationEnabled()).toBe(false);
+      expect(localStorage.getItem(APP_SETTINGS_KEYS.AUTO_ROTATION_ENABLED_KEY)).toBe("0");
+    });
+
+    it("migrates the legacy auto-rotation boolean when no orientation mode is saved", () => {
+      localStorage.setItem(APP_SETTINGS_KEYS.AUTO_ROTATION_ENABLED_KEY, "1");
+      expect(appSettings.loadScreenOrientationMode()).toBe("auto");
+
+      localStorage.setItem(APP_SETTINGS_KEYS.AUTO_ROTATION_ENABLED_KEY, "0");
+      expect(appSettings.loadScreenOrientationMode()).toBe("portrait");
+    });
+
+    it("normalizes invalid stored orientation modes to portrait", () => {
+      localStorage.setItem(APP_SETTINGS_KEYS.SCREEN_ORIENTATION_MODE_KEY, "sideways");
+      expect(appSettings.loadScreenOrientationMode()).toBe("portrait");
+    });
+  });
+
   // Edge case: localStorage undefined
   describe("environment without localStorage", () => {
     let originalLocalStorage: any;
@@ -203,6 +240,7 @@ describe("appSettings", () => {
       expect(() => appSettings.saveDiscoveryProbeTimeoutMs(1000)).not.toThrow();
       expect(() => appSettings.saveDiskAutostartMode("dma")).not.toThrow();
       expect(() => appSettings.saveVolumeSliderPreviewIntervalMs(250)).not.toThrow();
+      expect(() => appSettings.saveScreenOrientationMode("landscape")).not.toThrow();
       expect(() => appSettings.saveEnableSwipeNavigation(true)).not.toThrow();
       expect(() => appSettings.saveArchiveHostOverride("archive.local")).not.toThrow();
       expect(() => appSettings.saveArchiveClientIdOverride("Custom Client")).not.toThrow();
@@ -216,6 +254,7 @@ describe("appSettings", () => {
       expect(appSettings.loadArchiveClientIdOverride()).toBe("");
       expect(appSettings.loadArchiveUserAgentOverride()).toBe("");
       expect(appSettings.loadEnableSwipeNavigation()).toBe(appSettings.DEFAULT_ENABLE_SWIPE_NAVIGATION);
+      expect(appSettings.loadScreenOrientationMode()).toBe(appSettings.DEFAULT_SCREEN_ORIENTATION_MODE);
     });
 
     it("handles numeric reads without storage", () => {

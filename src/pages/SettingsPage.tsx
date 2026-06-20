@@ -108,13 +108,14 @@ import {
   saveNotificationDurationMs,
   NOTIFICATION_DURATION_MIN_MS,
   NOTIFICATION_DURATION_MAX_MS,
-  loadAutoRotationEnabled,
+  loadScreenOrientationMode,
   saveArchiveClientIdOverride,
   saveArchiveHostOverride,
   saveArchiveUserAgentOverride,
-  saveAutoRotationEnabled,
+  saveScreenOrientationMode,
   type DiskAutostartMode,
   type NotificationVisibility,
+  type ScreenOrientationMode,
 } from "@/lib/config/appSettings";
 import {
   getActiveAutoResolutionContext,
@@ -171,6 +172,8 @@ import {
 } from "@/lib/savedDevices/deviceDependencies";
 import { clearPasswordForDevice, getPasswordForDevice, setPasswordForDevice } from "@/lib/secureStorage";
 import { FEATURE_FLAG_DEFINITIONS, FEATURE_FLAG_GROUPS } from "@/lib/config/featureFlags";
+import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
+import { applyScreenOrientationMode } from "@/lib/native/screenOrientation";
 
 type Theme = "light" | "dark" | "system";
 
@@ -300,7 +303,7 @@ export default function SettingsPage() {
   const [notificationVisibility, setNotificationVisibility] =
     useState<NotificationVisibility>(loadNotificationVisibility);
   const [notificationDurationMs, setNotificationDurationMs] = useState(loadNotificationDurationMs);
-  const [autoRotationEnabled, setAutoRotationEnabled] = useState(loadAutoRotationEnabled);
+  const [screenOrientationMode, setScreenOrientationMode] = useState<ScreenOrientationMode>(loadScreenOrientationMode);
   const [hvscBaseUrlInput, setHvscBaseUrlInput] = useState(() => getHvscBaseUrlOverride() ?? "");
   const [hvscBaseUrlPreview, setHvscBaseUrlPreview] = useState(() => getHvscBaseUrl());
   const [hvscUpdateCheckIntervalInput, setHvscUpdateCheckIntervalInput] = useState(() =>
@@ -739,6 +742,20 @@ export default function SettingsPage() {
     value,
     label: DISPLAY_PROFILE_OVERRIDE_LABELS[value],
   }));
+  const screenOrientationOptions: Array<{ value: ScreenOrientationMode; label: string }> = [
+    { value: "portrait", label: "Portrait" },
+    { value: "landscape", label: "Landscape" },
+    { value: "auto", label: "Auto" },
+  ];
+
+  useEffect(() => {
+    void applyScreenOrientationMode(screenOrientationMode);
+  }, [screenOrientationMode]);
+
+  const commitScreenOrientationMode = (mode: ScreenOrientationMode) => {
+    setScreenOrientationMode(mode);
+    saveScreenOrientationMode(mode);
+  };
 
   const commitListPreviewLimit = () => {
     const parsed = Number(listPreviewInput);
@@ -935,26 +952,29 @@ export default function SettingsPage() {
                   Auto currently resolves to {DISPLAY_PROFILE_OVERRIDE_LABELS[autoProfile]}. Use an override to preview
                   or lock a profile explicitly.
                 </p>
-              </div>
-
-              <div className="flex items-start justify-between gap-3 min-w-0">
-                <div className="space-y-1 min-w-0">
-                  <Label htmlFor="auto-rotation" className="font-medium">
-                    Adapt layout on screen rotation
-                  </Label>
+                <div className="space-y-2 pt-2">
+                  <Label className="text-sm font-medium">Screen orientation</Label>
+                  <div className="grid grid-cols-3 gap-2" data-testid="settings-screen-orientation-mode">
+                    {screenOrientationOptions.map((option) => {
+                      const isActive = screenOrientationMode === option.value;
+                      return (
+                        <Button
+                          key={option.value}
+                          type="button"
+                          variant={isActive ? "default" : "outline"}
+                          className="h-auto justify-center whitespace-normal px-3 py-2 text-center"
+                          onClick={() => commitScreenOrientationMode(option.value)}
+                        >
+                          {option.label}
+                        </Button>
+                      );
+                    })}
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    When enabled, the display profile adjusts automatically when the device is rotated. Off by default.
+                    Portrait locks the app upright by default. Landscape locks wide controls. Auto unlocks rotation and
+                    lets the display profile track the rotated viewport.
                   </p>
                 </div>
-                <Checkbox
-                  id="auto-rotation"
-                  checked={autoRotationEnabled}
-                  onCheckedChange={(checked) => {
-                    const enabled = checked === true;
-                    setAutoRotationEnabled(enabled);
-                    saveAutoRotationEnabled(enabled);
-                  }}
-                />
               </div>
             </motion.div>
 
@@ -1060,7 +1080,7 @@ export default function SettingsPage() {
                     hostLabel="C64U Hostname / IP"
                     hostHint="Hostname or IP from the C64 menu."
                     onHostBlur={(value) => setHostnameError(validateDeviceHost(value))}
-                    keypadInput={flags.keypad_input_enabled}
+                    keypadInput={flags.keypad_input_enabled && isDefaultT9InputEnabled()}
                   />
                   <p className="text-xs text-muted-foreground">
                     Currently using: <span className="font-sans break-all">{runtimeDeviceHost}</span>

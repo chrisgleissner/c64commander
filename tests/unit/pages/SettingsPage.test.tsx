@@ -28,6 +28,7 @@ import {
   saveDebugLoggingEnabled,
   saveDiscoveryProbeTimeoutMs,
   saveStartupDiscoveryWindowMs,
+  saveScreenOrientationMode,
   saveVolumeSliderPreviewIntervalMs,
   APP_SETTINGS_KEYS,
 } from "@/lib/config/appSettings";
@@ -41,6 +42,7 @@ import {
   loadDiscoveryProbeTimeoutMs,
   loadDiskAutostartMode,
   loadVolumeSliderPreviewIntervalMs,
+  loadScreenOrientationMode,
 } from "@/lib/config/appSettings";
 import { FEATURE_FLAG_DEFINITIONS, type FeatureFlagId } from "@/lib/config/featureFlagsRegistry.generated";
 
@@ -111,6 +113,7 @@ const {
       home_telnet_clear_ram_reboot_enabled: false,
       lighting_studio_enabled: false,
       home_telnet_reu_snapshot_enabled: false,
+      keypad_input_enabled: true,
     },
   },
   savedDevicesRef: {
@@ -424,6 +427,8 @@ vi.mock("@/lib/config/appSettings", () => ({
   NOTIFICATION_DURATION_MAX_MS: 8000,
   loadAutoRotationEnabled: vi.fn(() => false),
   saveAutoRotationEnabled: vi.fn(),
+  loadScreenOrientationMode: vi.fn(() => "portrait"),
+  saveScreenOrientationMode: vi.fn(),
   APP_SETTINGS_KEYS: {
     DEBUG_LOGGING_KEY: "c64u_debug_logging_enabled",
     CONFIG_WRITE_INTERVAL_KEY: "c64u_config_write_min_interval_ms",
@@ -436,10 +441,15 @@ vi.mock("@/lib/config/appSettings", () => ({
     VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY: "c64u_volume_slider_preview_interval_ms",
     NOTIFICATION_DURATION_MS_KEY: "c64u_notification_duration_ms",
     AUTO_ROTATION_ENABLED_KEY: "c64u_auto_rotation_enabled",
+    SCREEN_ORIENTATION_MODE_KEY: "c64u_screen_orientation_mode",
     ARCHIVE_HOST_OVERRIDE_KEY: "c64u_archive_host_override",
     ARCHIVE_CLIENT_ID_OVERRIDE_KEY: "c64u_archive_client_id_override",
     ARCHIVE_USER_AGENT_OVERRIDE_KEY: "c64u_archive_user_agent_override",
   },
+}));
+
+vi.mock("@/lib/native/screenOrientation", () => ({
+  applyScreenOrientationMode: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/components/archive/OnlineArchiveDialog", () => ({
@@ -516,6 +526,7 @@ beforeEach(() => {
   featureFlagsRef.current.home_telnet_printer_actions_enabled = false;
   featureFlagsRef.current.home_telnet_power_cycle_enabled = false;
   featureFlagsRef.current.home_telnet_clear_ram_reboot_enabled = false;
+  featureFlagsRef.current.keypad_input_enabled = true;
   mockSetFeatureFlag.mockReset();
   vi.mocked(getLogs).mockReturnValue([]);
   vi.mocked(getErrorLogs).mockReturnValue([]);
@@ -1038,23 +1049,18 @@ describe("SettingsPage", () => {
     expect(mockSetTheme).toHaveBeenCalledWith("dark");
   });
 
-  it("toggles auto rotation exactly once per touch tap (no synthetic-click double-fire)", () => {
+  it("renders the screen orientation mode card and persists the selected lock", () => {
+    vi.mocked(loadScreenOrientationMode).mockReturnValue("portrait");
     renderSettingsPage();
 
-    const checkbox = screen.getByRole("checkbox", { name: /adapt layout on screen rotation/i });
-    expect(checkbox).not.toBeChecked();
+    expect(screen.queryByRole("checkbox", { name: /adapt layout on screen rotation/i })).toBeNull();
+    const card = screen.getByTestId("settings-screen-orientation-mode");
+    expect(within(card).getByRole("button", { name: "Portrait" })).toHaveClass("bg-primary");
+    expect(within(card).getByRole("button", { name: "Landscape" })).toBeInTheDocument();
+    expect(within(card).getByRole("button", { name: "Auto" })).toBeInTheDocument();
 
-    // A real touch tap emits pointerup followed by the browser's natural click.
-    // The checkbox must NOT add a synthetic click() on pointerup, otherwise the
-    // toggle fires twice and nets to no change (BUG-031).
-    fireEvent.pointerUp(checkbox, { pointerType: "touch" });
-    fireEvent.click(checkbox);
-    expect(checkbox).toBeChecked();
-
-    // A second tap toggles it back off — exactly one net toggle per tap.
-    fireEvent.pointerUp(checkbox, { pointerType: "touch" });
-    fireEvent.click(checkbox);
-    expect(checkbox).not.toBeChecked();
+    fireEvent.click(within(card).getByRole("button", { name: "Landscape" }));
+    expect(saveScreenOrientationMode).toHaveBeenCalledWith("landscape");
   });
 
   it("shows persisted SAF URIs after refresh", async () => {
@@ -1798,19 +1804,37 @@ describe("SettingsPage", () => {
 describe("SettingsPage keypad focus ring (C64U Remote)", () => {
   vi.setConfig({ testTimeout: 20000 });
 
-  it("registers the Connection card's primary CTAs in top-to-bottom order and moves focus by d-pad", () => {
+  const pressDpadDown = (times: number) => {
+    for (let index = 0; index < times; index += 1) {
+      fireEvent.keyDown(document.body, { code: "DpadDown" });
+    }
+  };
+
+  it("registers connection fields and primary CTAs in top-to-bottom order and moves focus by d-pad", () => {
     renderSettingsPageInFocusRing();
 
+    const nameRow = screen.getByTestId("settings-device-name-field");
+    const hostRow = screen.getByTestId("settings-device-host-field");
+    const httpRow = screen.getByTestId("settings-device-http-field");
+    const ftpRow = screen.getByTestId("settings-device-ftp-field");
+    const telnetRow = screen.getByTestId("settings-device-telnet-field");
     const saveButton = screen.getByRole("button", { name: /save & connect/i });
     const refreshButton = screen.getByLabelText("Refresh connection");
 
-    // The initial selection is the first registered CTA (Save & Connect, order
-    // 300). Stepping down lands on Refresh (310); stepping down again wraps back
-    // to Save & Connect — proving both connection CTAs (and only those two) cycle.
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(document.activeElement).toBe(hostRow);
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(document.activeElement).toBe(httpRow);
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(document.activeElement).toBe(ftpRow);
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(document.activeElement).toBe(telnetRow);
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    expect(document.activeElement).toBe(saveButton);
     fireEvent.keyDown(document.body, { code: "DpadDown" });
     expect(document.activeElement).toBe(refreshButton);
     fireEvent.keyDown(document.body, { code: "DpadDown" });
-    expect(document.activeElement).toBe(saveButton);
+    expect(document.activeElement).toBe(nameRow);
   });
 
   it("center-activates the focused connection CTA only (Save & Connect, not Refresh)", async () => {
@@ -1819,9 +1843,11 @@ describe("SettingsPage keypad focus ring (C64U Remote)", () => {
 
     renderSettingsPageInFocusRing();
 
-    // Initial focus is Save & Connect; center fires the save handler and never
-    // the manual refresh discovery path. (The mount-time "settings" discover is
-    // independent, so we assert on the "manual" intent specifically.)
+    // Step to Save & Connect; center fires the save handler and never the manual
+    // refresh discovery path. (The mount-time "settings" discover is independent,
+    // so we assert on the "manual" intent specifically.)
+    pressDpadDown(5);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: /save & connect/i }));
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
 
     await waitFor(() => {
@@ -1837,7 +1863,7 @@ describe("SettingsPage keypad focus ring (C64U Remote)", () => {
 
     // Step down to Refresh, then center triggers the manual discovery path
     // (a refresh uses the "manual" intent; save/mount never do).
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    pressDpadDown(6);
     expect(document.activeElement).toBe(screen.getByLabelText("Refresh connection"));
 
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
@@ -1858,10 +1884,10 @@ describe("SettingsPage keypad focus ring (C64U Remote)", () => {
     const saveButton = screen.getByRole("button", { name: /save & connect/i });
     expect(screen.getByLabelText("Refresh connection")).toBeDisabled();
 
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    pressDpadDown(5);
     expect(document.activeElement).toBe(saveButton);
     fireEvent.keyDown(document.body, { code: "DpadDown" });
-    expect(document.activeElement).toBe(saveButton);
+    expect(document.activeElement).toBe(screen.getByTestId("settings-device-name-field"));
   });
 
   it("leaves the connection CTAs inert without a focus provider (default variant)", () => {
