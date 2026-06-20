@@ -9,7 +9,7 @@
 import { ReactNode } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useFocusItem, useFocusNavigationContext } from "@/hooks/useFocusNavigation";
+import { useFocusGroup, useFocusItem } from "@/hooks/useFocusNavigation";
 import {
   formatSelectOptionLabel,
   normalizeOptionToken,
@@ -50,23 +50,19 @@ type SummaryConfigControlRowProps = {
 
 export function SummaryConfigCard({
   children,
-  focusGroup = "home-controls",
   focusId,
   focusOrder = 0,
   sectionLabel,
   testId,
   title,
 }: SummaryConfigCardProps) {
-  const focusNav = useFocusNavigationContext();
-  const focusRef = useFocusItem<HTMLDivElement>({
+  // A card is a focus GROUP: OK descends into its control rows, Back ascends.
+  // (The old model overloaded dpadRight to descend; the controller now does this
+  // automatically for any group with enabled children.)
+  const focusRef = useFocusGroup<HTMLDivElement>({
     id: focusId ?? "",
+    label: title,
     order: focusOrder,
-    group: focusGroup,
-    onActivate: () => {
-      if (focusNav?.controller.focus.currentHasEnabledChildren()) {
-        focusNav.controller.dispatch("dpadRight");
-      }
-    },
   });
 
   return (

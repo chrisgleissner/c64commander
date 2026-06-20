@@ -51,6 +51,39 @@ export {
 export type { FocusItem } from "./focusController";
 export { FocusController } from "./focusController";
 
+export type { ActiveScope, ActiveScopeKind, DiscoverOptions } from "./discovery";
+export {
+  INTERACTIVE_SELECTOR,
+  OVERLAY_SELECTOR,
+  HORIZONTAL_OWNER_SELECTOR,
+  SKIP_ATTR,
+  GROUP_ATTR,
+  SCOPE_ATTR,
+  TABBAR_SCOPE_SELECTOR,
+  compareFocusables,
+  discoverInteractiveElements,
+  isFocusVisible,
+  isFocusDisabled,
+  isHorizontalKeyOwner,
+  isNativelyFocusable,
+  isSkipped,
+  nearestGroupElement,
+  resolveActiveScope,
+} from "./discovery";
+
+export type { FocusDescriptor, ExplicitRegistration, FocusDiscoveryEngineOptions } from "./focusDiscovery";
+export { FocusDiscoveryEngine } from "./focusDiscovery";
+
+export type { FocusKind, GuidanceState, GuidanceLabels } from "./guidance";
+export {
+  CONTEXT_MENU_SELECTOR,
+  MAX_BREADCRUMB_SEGMENTS,
+  resolveGuidanceLabels,
+  classifyFocusKind,
+  accessibleLabelFor,
+  hasContextMenu,
+} from "./guidance";
+
 export type { InputModality } from "./inputModality";
 export { getInputModality, setInputModality, subscribeInputModality, resetInputModality } from "./inputModality";
 

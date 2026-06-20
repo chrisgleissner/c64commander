@@ -66,12 +66,12 @@ describe("Slider — keypad navigation (HAZARD 1)", () => {
     fireEvent.keyDown(thumb, { key: "ArrowRight", code: "ArrowRight" });
     expect(onValueChange).toHaveBeenLastCalledWith([3]);
     expect(thumb).toHaveAttribute("aria-valuenow", "3");
-    expect(document.activeElement).not.toBe(screen.getByText("Next CTA"));
+    expect(document.activeElement).not.toBe(screen.getByRole("button", { name: "Next CTA" }));
 
     fireEvent.keyDown(thumb, { key: "ArrowLeft", code: "ArrowLeft" });
     expect(onValueChange).toHaveBeenLastCalledWith([2]);
     expect(thumb).toHaveAttribute("aria-valuenow", "2");
-    expect(document.activeElement).not.toBe(screen.getByText("Next CTA"));
+    expect(document.activeElement).not.toBe(screen.getByRole("button", { name: "Next CTA" }));
   });
 
   it("Up/Down move focus and do NOT change the value", () => {
@@ -80,7 +80,7 @@ describe("Slider — keypad navigation (HAZARD 1)", () => {
     const thumb = screen.getByRole("slider");
 
     fireEvent.keyDown(thumb, { key: "ArrowDown", code: "ArrowDown" });
-    expect(document.activeElement).toBe(screen.getByText("Next CTA"));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Next CTA" }));
     expect(onValueChange).not.toHaveBeenCalled();
     expect(thumb).toHaveAttribute("aria-valuenow", "2");
   });
@@ -110,6 +110,6 @@ describe("Slider — keypad navigation (HAZARD 1)", () => {
     // No data-key-selected ever appears, and focus never jumps to the CTA via Down.
     fireEvent.keyDown(thumb, { key: "ArrowDown", code: "ArrowDown" });
     expect(thumb).not.toHaveAttribute("data-key-selected");
-    expect(document.activeElement).not.toBe(screen.getByText("Next CTA"));
+    expect(document.activeElement).not.toBe(screen.getByRole("button", { name: "Next CTA" }));
   });
 });

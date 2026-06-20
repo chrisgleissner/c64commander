@@ -7,27 +7,31 @@
  */
 
 /**
- * React adapter that drives keyboard-only (D-pad + center) navigation from real
- * key events, for keypad-first devices (touch disabled).
+ * React adapter that drives keyboard / D-pad / keypad navigation from real key
+ * events, for keypad-first devices (and any hardware keyboard).
  *
  * The pure logic lives in `@/lib/input`: {@link NavigationController} turns a
- * semantic action into a focus move / activate / back-chain step over an ordered
- * registry, and {@link normalizeKeyEvent} maps a raw key event to that action via
- * the active input profile. This file is the thin, DOM-aware glue:
+ * semantic action into a focus move / descend / activate / back-chain step over
+ * an ordered registry, {@link FocusDiscoveryEngine} keeps that registry in sync
+ * with the live DOM of the active scope (so reachability is complete by
+ * construction — every interactive element is in the ring without per-component
+ * wiring), and {@link normalizeKeyEvent} maps a raw key event to a semantic
+ * action via the active profile. This file is the thin, DOM-aware glue:
  *
- *   - {@link FocusNavigationProvider} mounts ONE global `keydown` listener,
- *     normalizes each event through the active profile's keymap, dispatches the
- *     action, and applies the DOM side-effects the pure layer cannot: focusing
- *     the resolved element and calling back to the router on an exhausted `back`.
- *   - {@link useFocusItem} registers a CTA's element (and an optional explicit
- *     activation) into the controller for the lifetime of the component, so
- *     d-pad traversal and center-activation reach it in a deterministic order.
+ *   - {@link FocusNavigationProvider} mounts ONE global capture-phase `keydown`
+ *     listener + capture pointer/touch listeners (which flip modality), runs the
+ *     discovery engine while the flag is on, and applies the DOM side-effects the
+ *     pure layer cannot (focus the resolved element, scroll it into view, toggle
+ *     the highlight, call the router on an exhausted Back, open a context menu).
+ *   - {@link useFocusItem} / {@link useFocusGroup} are OPTIONAL refinements:
+ *     they give an element an explicit id / order / group membership / custom
+ *     activation / opt-out. Basic reachability needs neither.
  *
- * It is additive: with no items registered the dispatcher resolves everything to
- * `ignored`, so the listener never calls `preventDefault` and existing
- * pointer/touch behaviour is untouched. Keys are not stolen from an engaged text
- * field — events whose target is editable are left for the field (and its
- * `useT9Input` composer) to handle.
+ * Prime Directive: with the flag OFF the engine never starts, no `tabindex` or
+ * other attribute is written, no key is `preventDefault`ed, and modality stays
+ * `pointer` — the app is byte-for-byte baseline. With the flag ON but modality
+ * `pointer`, there is still no highlight and no guidance bar; a pointer/touch
+ * always wins and clears both in the same frame.
  */
 
 import {
@@ -42,27 +46,39 @@ import {
 } from "react";
 
 import {
+  CONTEXT_MENU_SELECTOR,
+  FocusDiscoveryEngine,
   NavigationController,
   getInputModality,
+  isHorizontalKeyOwner,
   normalizeKeyEvent,
   resolveInputProfile,
   setInputModality,
   subscribeInputModality,
   type DismissibleLayer,
+  type FocusDescriptor,
   type FocusItem,
   type Keymap,
 } from "@/lib/input";
 import { emitKeyInputDiagnostics } from "@/lib/diagnostics/keyInputDiagnostics";
+import { KeypadGuidanceBar } from "@/components/input/KeypadGuidanceBar";
 
 /** DOM attribute marking the current focus-ring item while in key-navigation modality. */
 const KEY_SELECTED_ATTR = "data-key-selected";
+/** DOM attribute outlining the enclosing group while the ring is descended inside it. */
+const KEY_SCOPE_ATTR = "data-key-scope";
 
-interface FocusNavigationContextValue {
+export interface FocusNavigationContextValue {
   readonly controller: NavigationController;
-  /** Registers an item and a lazy resolver for its current DOM element. */
-  readonly register: (item: FocusItem, resolveElement: () => HTMLElement | null) => void;
-  readonly unregister: (id: string) => void;
-  /** Whether the global key listener is active (the `keypad_input_enabled` flag). */
+  readonly engine: FocusDiscoveryEngine;
+  /** Registers an explicit refinement (id / order / group / activation / opt-out). */
+  readonly registerDescriptor: (descriptor: FocusDescriptor, resolveElement: () => HTMLElement | null) => void;
+  readonly unregisterDescriptor: (id: string) => void;
+  /** Asks the engine to re-scan (e.g. after an element ref attaches). */
+  readonly scheduleRefresh: () => void;
+  /** Subscribe to ring/scope/modality changes (the guidance bar mirrors this imperatively). */
+  readonly subscribeRingChange: (listener: () => void) => () => void;
+  /** Whether the global key listener + discovery engine are active (the flag). */
   readonly enabled: boolean;
   /** Active keymap, so a focused widget (e.g. a slider) can normalize its own keys. */
   readonly keymap: Keymap;
@@ -80,20 +96,16 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
   const tag = target.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
   if (target.isContentEditable) return true;
-  // Fall back to the attribute: some engines (and jsdom) don't compute
-  // `isContentEditable`, but `contenteditable` / `contenteditable="true"` is set.
   const editableAttr = target.getAttribute("contenteditable");
   return editableAttr !== null && editableAttr !== "false";
 };
 
 /**
  * Radix overlays (dialog, alert dialog, dropdown/context menu, select listbox,
- * popover) own the keyboard while focus is inside them: they handle Enter,
- * arrows, typeahead, and their own Escape-to-dismiss. The global focus ring sits
- * behind them, so it must stay inert there — otherwise a key would activate a CTA
- * underneath a modal or steal Enter from a dialog's focused row. Dismissible
- * Selects also push a controller layer (handled in `dispatch`), but app dialogs
- * do not, so we additionally detect the open overlay from the focused subtree.
+ * popover) own the keyboard while focus is inside them. The global focus ring
+ * sits behind them, so it must stay inert there (HAZARD 2). The discovery engine
+ * already switches scope to the open overlay, but app dialogs that do not push a
+ * controller layer still need this guard so an Enter never reaches a CTA behind.
  */
 const OPEN_OVERLAY_ANCESTOR_SELECTOR =
   '[role="dialog"],[role="alertdialog"],[role="menu"],[role="listbox"],[data-radix-popper-content-wrapper]';
@@ -113,13 +125,19 @@ const isNativelyActivatable = (element: Element): boolean => {
   return false;
 };
 
+const focusRingElement = (element: HTMLElement | null): void => {
+  if (!element) return;
+  element.focus({ preventScroll: false });
+  element.scrollIntoView({ block: "nearest", inline: "nearest" });
+};
+
 export interface FocusNavigationProviderProps {
   readonly children: ReactNode;
   /** Input profile id selecting the active keymap (e.g. "keypad"). */
   readonly profileId?: string | null;
   /** Called when the `back` chain is exhausted (adapter wires this to router back). */
   readonly onNavigateBack?: () => void;
-  /** When false the global listener is detached (the registry still works programmatically). */
+  /** When false the engine + global listener are detached (byte-for-byte baseline). */
   readonly enabled?: boolean;
 }
 
@@ -129,80 +147,151 @@ export const FocusNavigationProvider = ({
   onNavigateBack,
   enabled = true,
 }: FocusNavigationProviderProps) => {
-  const resolversRef = useRef(new Map<string, () => HTMLElement | null>());
+  const descriptorsRef = useRef(
+    new Map<string, { descriptor: FocusDescriptor; resolveElement: () => HTMLElement | null }>(),
+  );
   const onNavigateBackRef = useRef(onNavigateBack);
   onNavigateBackRef.current = onNavigateBack;
-  // `enabled` mirrors `keypad_input_enabled`; read it from a ref inside the
-  // window listeners so the highlight gate always sees the current flag value.
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
   // The element currently carrying `data-key-selected`, tracked imperatively so
-  // the highlight toggle never goes through React state (HAZARD 3 — avoids the
-  // known setState-in-effect coverage hang).
+  // the highlight toggle never goes through React state (avoids the known
+  // setState-in-effect coverage hang).
   const selectedElementRef = useRef<HTMLElement | null>(null);
+  const scopeElementRef = useRef<HTMLElement | null>(null);
+  const ringListenersRef = useRef(new Set<() => void>());
+  const engineRef = useRef<FocusDiscoveryEngine | null>(null);
+
+  const openContextMenuFor = useCallback((element: HTMLElement | null): boolean => {
+    if (!element) return false;
+    const host = element.closest("[data-key-nav-menu-host]") ?? element;
+    const trigger = element.matches(CONTEXT_MENU_SELECTOR)
+      ? element
+      : (host.querySelector(CONTEXT_MENU_SELECTOR) as HTMLElement | null);
+    if (trigger instanceof HTMLElement) {
+      trigger.click();
+      return true;
+    }
+    return false;
+  }, []);
 
   const controller = useMemo(
     () =>
       new NavigationController({
         callbacks: {
-          onFocus: (item) => resolversRef.current.get(item.id)?.()?.focus(),
+          onFocus: (item) => focusRingElement(engineRef.current?.elementForId(item.id) ?? null),
+          onActivate: (item) => focusRingElement(engineRef.current?.elementForId(item.id) ?? null),
           onNavigateBack: () => onNavigateBackRef.current?.(),
+          onOpenMenu: (item) => openContextMenuFor(item ? (engineRef.current?.elementForId(item.id) ?? null) : null),
         },
       }),
-    [],
+    [openContextMenuFor],
   );
 
   /**
    * Applies the selected-control highlight imperatively: `data-key-selected` sits
-   * on exactly the current focus-ring item's element, iff the flag is on AND
-   * modality is `key-navigation`. Moves to the new element and clears the old one
-   * on every change; clears entirely otherwise (flag off / pointer modality).
+   * on exactly the current ring item, and `data-key-scope` outlines the enclosing
+   * group while descended — both iff the flag is on AND modality is
+   * `key-navigation`. Cleared entirely otherwise (flag off / pointer modality).
    */
   const refreshHighlight = useCallback(() => {
     const shouldShow = enabledRef.current && getInputModality() === "key-navigation";
+    const engine = engineRef.current;
     const currentId = controller.focus.current()?.id;
-    const nextElement = shouldShow && currentId ? (resolversRef.current.get(currentId)?.() ?? null) : null;
-    const previousElement = selectedElementRef.current;
-    if (previousElement && previousElement !== nextElement) {
-      previousElement.removeAttribute(KEY_SELECTED_ATTR);
-    }
-    if (nextElement) {
-      nextElement.setAttribute(KEY_SELECTED_ATTR, "true");
-    }
+    const nextElement = shouldShow && currentId ? (engine?.elementForId(currentId) ?? null) : null;
+
+    const previous = selectedElementRef.current;
+    if (previous && previous !== nextElement) previous.removeAttribute(KEY_SELECTED_ATTR);
+    if (nextElement) nextElement.setAttribute(KEY_SELECTED_ATTR, "true");
     selectedElementRef.current = nextElement;
+
+    // Outline the innermost group the ring is currently inside (the descended card).
+    const scopeId = controller.focus.currentScopeParentId();
+    const nextScope = shouldShow && scopeId ? (engine?.elementForId(scopeId) ?? null) : null;
+    const previousScope = scopeElementRef.current;
+    if (previousScope && previousScope !== nextScope) previousScope.removeAttribute(KEY_SCOPE_ATTR);
+    if (nextScope && nextScope !== nextElement) nextScope.setAttribute(KEY_SCOPE_ATTR, "true");
+    scopeElementRef.current = nextScope;
   }, [controller]);
 
-  const register = useCallback<FocusNavigationContextValue["register"]>(
-    (item, resolveElement) => {
-      resolversRef.current.set(item.id, resolveElement);
-      controller.focus.register(item);
+  const notifyRing = useCallback(() => {
+    refreshHighlight();
+    ringListenersRef.current.forEach((listener) => listener());
+  }, [refreshHighlight]);
+
+  const engine = useMemo(
+    () =>
+      new FocusDiscoveryEngine({
+        controller: controller.focus,
+        listExplicit: () => Array.from(descriptorsRef.current.values()),
+        onAfterAssemble: () => notifyRing(),
+      }),
+    [controller, notifyRing],
+  );
+  engineRef.current = engine;
+
+  const registerDescriptor = useCallback<FocusNavigationContextValue["registerDescriptor"]>(
+    (descriptor, resolveElement) => {
+      descriptorsRef.current.set(descriptor.id, { descriptor, resolveElement });
+      engineRef.current?.scheduleRefresh();
     },
-    [controller],
+    [],
   );
 
-  const unregister = useCallback<FocusNavigationContextValue["unregister"]>(
-    (id) => {
-      resolversRef.current.delete(id);
-      controller.focus.unregister(id);
-      // The highlighted item may have just unmounted; re-derive the attribute.
-      refreshHighlight();
-    },
-    [controller, refreshHighlight],
-  );
+  const unregisterDescriptor = useCallback<FocusNavigationContextValue["unregisterDescriptor"]>((id) => {
+    descriptorsRef.current.delete(id);
+    engineRef.current?.scheduleRefresh();
+  }, []);
+
+  const scheduleRefresh = useCallback(() => engineRef.current?.scheduleRefresh(), []);
+
+  const subscribeRingChange = useCallback<FocusNavigationContextValue["subscribeRingChange"]>((listener) => {
+    ringListenersRef.current.add(listener);
+    return () => {
+      ringListenersRef.current.delete(listener);
+    };
+  }, []);
 
   const keymap = useMemo(() => resolveInputProfile(profileId), [profileId]);
 
-  // Re-apply the highlight whenever modality flips (key press, slider key
-  // adjust, T9 composer key, or a pointer touch flipping back to `pointer`).
-  useEffect(() => subscribeInputModality(refreshHighlight), [refreshHighlight]);
+  // Re-apply the highlight + notify the guidance bar whenever modality flips.
+  useEffect(() => subscribeInputModality(notifyRing), [notifyRing]);
+
+  // Run the discovery engine only while the flag is on (Prime Directive).
+  useEffect(() => {
+    if (!enabled) return;
+    engine.start();
+    return () => engine.stop();
+  }, [enabled, engine]);
+
+  /**
+   * On the first key after pointer use, adopt whatever the pointer last focused
+   * (or the current `document.activeElement`) as the ring's current item, so the
+   * highlight appears WHERE THE USER IS rather than jumping to the top of the ring.
+   */
+  const adoptActiveElement = useCallback(() => {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement)) return;
+    for (const item of controller.focus.list()) {
+      const element = engineRef.current?.elementForId(item.id);
+      if (element && (element === active || element.contains(active))) {
+        controller.focus.setCurrent(item.id);
+        return;
+      }
+    }
+  }, [controller]);
 
   useEffect(() => {
     if (!enabled) {
-      // Flag turned off: drop any lingering highlight and reset modality so the
-      // app returns to the byte-for-byte baseline.
+      // Flag turned off: drop any lingering highlight / scope outline and reset
+      // modality so the app returns to the byte-for-byte baseline.
       if (selectedElementRef.current) {
         selectedElementRef.current.removeAttribute(KEY_SELECTED_ATTR);
         selectedElementRef.current = null;
+      }
+      if (scopeElementRef.current) {
+        scopeElementRef.current.removeAttribute(KEY_SCOPE_ATTR);
+        scopeElementRef.current = null;
       }
       setInputModality("pointer");
       return;
@@ -213,17 +302,22 @@ export const FocusNavigationProvider = ({
       // Never touch editable targets (the field + its T9 composer own them); and
       // never log them, so typed text is never captured by diagnostics.
       if (isEditableTarget(event.target)) return;
-      // While focus is inside an open Radix overlay, that overlay owns the key —
-      // the global ring (behind the modal) must not activate/move underneath it.
+      // While focus is inside an open Radix overlay, that overlay owns the key.
       if (isWithinOpenOverlay(event.target)) return;
-      // NB: we intentionally do NOT bail on `event.defaultPrevented`. A focused
-      // slider `preventDefault`s Up/Down to suppress Radix's value step while
-      // STILL relying on this handler to move focus; HAZARD 2 (open dropdowns)
-      // is handled by the controller's layer guard, not here.
       const activeElement = document.activeElement;
+      // Left/Right belong to a focused value control (slider / tabs / segmented /
+      // radio). Capture runs before the widget's bubble handler, so we bow out
+      // here (no dispatch, no preventDefault) and let the widget own them; they
+      // only fall back to sibling navigation when nothing owns horizontal. The
+      // event TARGET is where the key is headed (it equals the focused element in
+      // a real browser), so it is the right thing to test.
+      if (
+        (action === "dpadLeft" || action === "dpadRight") &&
+        (isHorizontalKeyOwner(event.target as Element | null) || isHorizontalKeyOwner(activeElement))
+      ) {
+        return;
+      }
       if (action === null) {
-        // Unmapped key on a navigable target — log raw fields so a binding can
-        // be added from an export. Never silently dropped.
         emitKeyInputDiagnostics({
           rawEvent: event,
           normalizedAction: null,
@@ -237,32 +331,27 @@ export const FocusNavigationProvider = ({
         });
         return;
       }
-      // A deeper open layer (e.g. a Radix popup's own document-level Escape
-      // handler, which `preventDefault`s) may have already consumed a dismissal
-      // key. Do NOT also run the global back chain — it could `navigate(-1)` once
-      // the layer has already closed itself. Scoped to back/escape so a slider's
-      // Up/Down `preventDefault` (dpad actions) still moves focus normally.
-      if (event.defaultPrevented && (action === "back" || action === "escape")) {
+      // A deeper open layer (e.g. a Radix popup's document-level Escape handler)
+      // may have already consumed a dismissal key; do NOT also run the back chain.
+      if (event.defaultPrevented && (action === "back" || action === "escape" || action === "softLeft")) {
         return;
       }
-      // If a real interactive element (button/link/summary) other than the ring's
-      // current item holds DOM focus — via Tab, programmatic focus, or assistive
-      // tech — the browser activates it on Enter/Space, so the ring must not fire
-      // its own (out-of-sync) current item and `preventDefault` that activation.
+      // Defer activation to a real focused control outside the ring (invariant 3).
       if (
         (action === "enter" || action === "center" || action === "activate") &&
         activeElement instanceof HTMLElement &&
         isNativelyActivatable(activeElement) &&
-        activeElement !== (resolversRef.current.get(controller.focus.current()?.id ?? "")?.() ?? null)
+        activeElement !== (engineRef.current?.elementForId(controller.focus.current()?.id ?? "") ?? null)
       ) {
         return;
       }
+      // Seamless pointer → key hand-off: start the move from where the user is.
+      if (getInputModality() === "pointer") adoptActiveElement();
+
       const handled = controller.dispatch(action).type !== "ignored";
       if (handled) {
-        // A recognized key produced an effect → key-navigation modality + the
-        // selected-control highlight (refreshHighlight reads the new current item).
         setInputModality("key-navigation");
-        refreshHighlight();
+        notifyRing();
         event.preventDefault();
       }
       emitKeyInputDiagnostics({
@@ -278,7 +367,7 @@ export const FocusNavigationProvider = ({
       });
     };
     // Pointer/touch always wins: capture-phase so it flips modality (and clears
-    // the highlight via the subscription) before any other handler runs.
+    // the highlight + guidance bar via the subscription) before any other handler.
     const handlePointer = () => setInputModality("pointer");
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("pointerdown", handlePointer, true);
@@ -288,24 +377,47 @@ export const FocusNavigationProvider = ({
       window.removeEventListener("pointerdown", handlePointer, true);
       window.removeEventListener("touchstart", handlePointer, true);
     };
-  }, [controller, enabled, keymap, refreshHighlight]);
+  }, [adoptActiveElement, controller, enabled, keymap, notifyRing]);
 
   const value = useMemo<FocusNavigationContextValue>(
-    () => ({ controller, register, unregister, enabled, keymap }),
-    [controller, register, unregister, enabled, keymap],
+    () => ({
+      controller,
+      engine,
+      registerDescriptor,
+      unregisterDescriptor,
+      scheduleRefresh,
+      subscribeRingChange,
+      enabled,
+      keymap,
+    }),
+    [
+      controller,
+      engine,
+      registerDescriptor,
+      unregisterDescriptor,
+      scheduleRefresh,
+      subscribeRingChange,
+      enabled,
+      keymap,
+    ],
   );
 
-  return <FocusNavigationContext.Provider value={value}>{children}</FocusNavigationContext.Provider>;
+  return (
+    <FocusNavigationContext.Provider value={value}>
+      {children}
+      <KeypadGuidanceBar />
+    </FocusNavigationContext.Provider>
+  );
 };
 
-/** The active {@link NavigationController}, or `null` outside a provider (e.g. to push dismissible layers). */
+/** The active {@link NavigationController}, or `null` outside a provider. */
 export const useFocusNavigation = (): NavigationController | null =>
   useContext(FocusNavigationContext)?.controller ?? null;
 
 /**
- * The full focus-navigation context (controller + `enabled` flag + active
- * keymap), or `null` outside a provider. Used by focused widgets that own their
- * own keys (e.g. sliders) and need to know whether keypad nav is active.
+ * The full focus-navigation context (controller + engine + `enabled` flag +
+ * active keymap), or `null` outside a provider. Used by focused widgets that own
+ * their own keys (e.g. sliders) and by the guidance bar.
  */
 export const useFocusNavigationContext = (): FocusNavigationContextValue | null => useContext(FocusNavigationContext);
 
@@ -313,13 +425,10 @@ let dismissibleLayerSeq = 0;
 
 /**
  * Registers an open overlay (Radix Select/dropdown/popover) as a dismissible
- * layer on the {@link NavigationController} while `open` is true and keypad
- * navigation is enabled. The layer guard then makes the open widget — not the
- * underlying focus ring — own vertical/activate keys (HAZARD 2), and keypad
- * `back` (keyCode 4, which Radix ignores) closes it via `dismiss`.
- *
- * No-op outside a provider or when the flag is off, so it never perturbs the
- * baseline (the controller's key listener is detached then anyway).
+ * layer on the {@link NavigationController} while `open` is true and the flag is
+ * on. The layer guard then makes the open widget — not the underlying focus ring
+ * — own vertical/activate keys (HAZARD 2), and keypad `back` (keyCode 4) closes
+ * it via `dismiss`.
  */
 export const useDismissibleNavigationLayer = (
   open: boolean,
@@ -348,58 +457,124 @@ export interface UseFocusItemOptions {
   /**
    * Stable, unique id for this CTA within the screen. An empty string opts the
    * caller out of registration (the returned ref still tracks the element), so a
-   * shared primitive can call this hook unconditionally and only join the focus
+   * shared primitive can call this hook unconditionally and only refine the focus
    * ring when a real id is supplied.
    */
   readonly id: string;
-  /** Lower sorts earlier in d-pad traversal; ties broken by registration order. */
-  readonly order: number;
+  /** Tiebreaker only — the ring is DOM-ordered; supply when DOM order is wrong. */
+  readonly order?: number;
+  /** Free-text/scope label (surfaced in the breadcrumb when this is a group). */
   readonly group?: string;
-  /** Optional parent focus item id for nested card / hierarchical CTA traversal. */
+  /** Explicit parent focus id (normally inferred from DOM containment). */
   readonly parentId?: string;
   /** Disabled items are skipped during traversal and refuse activation. */
   readonly disabled?: boolean;
+  /** Remove this element from the ring entirely. */
+  readonly skip?: boolean;
   /** Custom activation; defaults to clicking the registered element. */
   readonly onActivate?: () => void;
 }
 
-/**
- * Registers a CTA with the surrounding {@link FocusNavigationProvider} and
- * returns a `ref` callback to attach to its DOM element. No-op outside a
- * provider (or when `id` is empty), so a component using it is safe to render
- * anywhere.
- */
-export function useFocusItem<T extends HTMLElement = HTMLElement>(options: UseFocusItemOptions): RefCallback<T> {
-  const { id, order, group, parentId, disabled = false, onActivate } = options;
+const useDescriptorRegistration = (
+  descriptor: FocusDescriptor | null,
+  elementRef: React.MutableRefObject<HTMLElement | null>,
+): RefCallback<HTMLElement> => {
   const context = useContext(FocusNavigationContext);
-  const elementRef = useRef<T | null>(null);
-  const onActivateRef = useRef(onActivate);
-  onActivateRef.current = onActivate;
+  const descriptorRef = useRef(descriptor);
+  descriptorRef.current = descriptor;
+
+  // Re-register whenever the stable parts of the descriptor change.
+  const id = descriptor?.id ?? "";
+  const order = descriptor?.order;
+  const group = descriptor?.group;
+  const label = descriptor?.label;
+  const parentId = descriptor?.parentId;
+  const disabled = descriptor?.disabled;
+  const skip = descriptor?.skip;
+  const kind = descriptor?.kind;
 
   useEffect(() => {
     if (!context || !id) return;
-    context.register(
+    const current = descriptorRef.current;
+    if (!current) return;
+    context.registerDescriptor(
       {
-        id,
-        order,
-        group,
-        parentId,
-        disabled,
-        activate: () => {
-          const handler = onActivateRef.current;
-          if (handler) {
-            handler();
-          } else {
-            elementRef.current?.click();
-          }
-        },
+        ...current,
+        // Stable activate closure: always read the latest from the descriptor ref.
+        activate: () => descriptorRef.current?.activate?.(),
       },
       () => elementRef.current,
     );
-    return () => context.unregister(id);
-  }, [context, id, order, group, parentId, disabled]);
+    return () => context.unregisterDescriptor(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [context, id, order, group, label, parentId, disabled, skip, kind]);
 
-  return useCallback((element: T | null) => {
-    elementRef.current = element;
-  }, []);
+  return useCallback(
+    (element: HTMLElement | null) => {
+      elementRef.current = element;
+      context?.scheduleRefresh();
+    },
+    [context],
+  );
+};
+
+/**
+ * Refines a CTA in the focus ring: explicit id / order / group membership /
+ * custom activation / opt-out. Reachability does NOT require it — auto-discovery
+ * already puts every interactive element in the ring. No-op outside a provider or
+ * when `id` is empty.
+ */
+export function useFocusItem<T extends HTMLElement = HTMLElement>(options: UseFocusItemOptions): RefCallback<T> {
+  const { id, order, group, parentId, disabled = false, skip = false, onActivate } = options;
+  const elementRef = useRef<HTMLElement | null>(null);
+  const onActivateRef = useRef(onActivate);
+  onActivateRef.current = onActivate;
+
+  const descriptor = useMemo<FocusDescriptor | null>(
+    () =>
+      id
+        ? {
+            id,
+            kind: "item",
+            order,
+            group,
+            parentId,
+            disabled,
+            skip,
+            activate: () => {
+              const handler = onActivateRef.current;
+              if (handler) handler();
+              else elementRef.current?.click();
+            },
+          }
+        : null,
+    [id, order, group, parentId, disabled, skip],
+  );
+
+  return useDescriptorRegistration(descriptor, elementRef) as RefCallback<T>;
+}
+
+export interface UseFocusGroupOptions {
+  /** Stable, unique id for this group (used as the breadcrumb segment id). */
+  readonly id: string;
+  /** Human label for the breadcrumb (e.g. "Audio Mixer"). */
+  readonly label?: string;
+  /** Tiebreaker only — groups sort by DOM order. */
+  readonly order?: number;
+  readonly disabled?: boolean;
+}
+
+/**
+ * Declares a card/section/dialog-region a focus GROUP: its discovered descendants
+ * become its children automatically (no per-CTA `parentId`), so OK descends into
+ * it and Back ascends. Attach the returned ref to the container element.
+ */
+export function useFocusGroup<T extends HTMLElement = HTMLElement>(options: UseFocusGroupOptions): RefCallback<T> {
+  const { id, label, order, disabled = false } = options;
+  const elementRef = useRef<HTMLElement | null>(null);
+  const descriptor = useMemo<FocusDescriptor | null>(
+    () => (id ? { id, kind: "group", label, group: label, order, disabled } : null),
+    [id, label, order, disabled],
+  );
+  return useDescriptorRegistration(descriptor, elementRef) as RefCallback<T>;
 }

@@ -415,6 +415,113 @@ button:focus-visible,
     0 0 16px -4px hsl(var(--ring) / 0.8) !important;
 }
 
+/*
+ * The enclosing GROUP outline, shown while the ring is descended inside a card /
+ * section (OK-to-enter model). Subtler than the selected-item ring so the current
+ * child still reads as the focus; this is just the "you are inside this card" cue.
+ * Set/removed by the FocusNavigationProvider alongside data-key-selected.
+ */
+[data-key-scope="true"] {
+  outline: 1px dashed hsl(var(--ring) / 0.65);
+  outline-offset: 3px;
+  border-radius: 0.5rem;
+}
+
+/*
+ * Context guidance bar (keypad_input_enabled). A fixed strip just above the bottom
+ * tab bar that names the current scope and labels the Back / OK / Menu keys. The
+ * component renders it ONLY while key-navigation modality is active, so it never
+ * appears for pointer/touch users; pointer-events:none guarantees it can never
+ * intercept a tap even if it visually overlaps an overlay.
+ */
+.keypad-guidance-bar[data-visible="false"] {
+  display: none;
+}
+
+.keypad-guidance-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: var(--app-tab-bar-frame-height, 0px);
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.15;
+  background: hsl(var(--background) / 0.97);
+  border-top: 1px solid hsl(var(--border));
+  box-shadow: 0 -2px 10px -6px hsl(var(--ring) / 0.7);
+  pointer-events: none;
+  backdrop-filter: blur(2px);
+}
+
+.keypad-guidance-breadcrumb {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: hsl(var(--muted-foreground));
+}
+
+.keypad-guidance-crumb {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.keypad-guidance-crumb:last-child {
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+
+.keypad-guidance-crumb-muted {
+  color: hsl(var(--muted-foreground));
+  font-weight: 500;
+}
+
+.keypad-guidance-sep {
+  margin: 0 0.3rem;
+  color: hsl(var(--muted-foreground) / 0.7);
+}
+
+.keypad-guidance-keys {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 0 0 auto;
+}
+
+.keypad-guidance-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+
+.keypad-guidance-cap {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.3rem;
+}
+
+.keypad-guidance-action {
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
 @layer base {
   * {
     @apply border-border;

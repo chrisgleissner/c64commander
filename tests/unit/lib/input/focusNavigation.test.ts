@@ -127,7 +127,10 @@ describe("NavigationController — activation", () => {
     expect(cardActivate).not.toHaveBeenCalled();
     expect(onFocus).toHaveBeenCalledWith(expect.objectContaining({ id: "primary" }));
     // Down/Up move among the descended children; Back ascends to the card.
-    expect(nav.dispatch("dpadDown")).toEqual({ type: "focusMoved", item: expect.objectContaining({ id: "secondary" }) });
+    expect(nav.dispatch("dpadDown")).toEqual({
+      type: "focusMoved",
+      item: expect.objectContaining({ id: "secondary" }),
+    });
     expect(nav.dispatch("back")).toEqual({ type: "focusMoved", item: expect.objectContaining({ id: "card" }) });
   });
 
