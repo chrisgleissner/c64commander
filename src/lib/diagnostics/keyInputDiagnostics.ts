@@ -17,6 +17,12 @@
  *     global handler, which never sees editable targets → never typed text), and
  *     for composer-consumed keys (from `useT9Input`). Never per-keystroke typing.
  *   - logs lengths/indices for T9 state, NEVER raw text or the field value.
+ *   - redacts the key IDENTITY (`key`/`code`/`keyCode`/`which`/`normalizedAction`)
+ *     when {@link KeyInputDiagnosticsParams.redactKeyIdentity} is set — the
+ *     composer path (`useT9Input`) uses this so a field's typed characters are
+ *     never reconstructable from the log, while `keyFamily` (digit/star/…) is
+ *     retained for calibration grouping. The global handler leaves it unset
+ *     because it only ever sees non-editable targets (nav keys, never text).
  *   - cheap-gates on {@link loadDebugLoggingEnabled} + suppression BEFORE building
  *     the details object, so the hot keydown path allocates nothing when off.
  *   - structures `details` so the existing recursive export redactor sanitizes
@@ -87,6 +93,14 @@ export interface KeyInputDiagnosticsParams {
   readonly selectedControlId?: string | null;
   readonly activeElement?: Element | null;
   readonly t9State?: KeyInputT9State;
+  /**
+   * When true, the key identity (`key`/`code`/`keyCode`/`which` and
+   * `normalizedAction`) is withheld from the emitted details so a field's typed
+   * characters cannot be reconstructed from a diagnostics export. `keyFamily` is
+   * still recorded (it groups by hardware, e.g. "digit", without revealing which
+   * digit). Set by the field composer path; left unset by the global nav handler.
+   */
+  readonly redactKeyIdentity?: boolean;
 }
 
 const DIGIT_CODE = /^Digit[0-9]$/;
@@ -150,7 +164,10 @@ const resolveRoute = (): string => {
  * should prefer {@link emitKeyInputDiagnostics}, which cheap-gates first.
  */
 export const buildKeyInputDetails = (params: KeyInputDiagnosticsParams): Record<string, unknown> => {
-  const { rawEvent } = params;
+  const { rawEvent, redactKeyIdentity = false } = params;
+  // Classify the physical key BEFORE redaction so calibration grouping stays
+  // correct even when the key's identity is withheld from the log.
+  const keyFamily = resolveKeyFamily(rawEvent, params.normalizedAction);
   const details: Record<string, unknown> = {
     category: "key-input",
     timestamp: Date.now(),
@@ -159,10 +176,10 @@ export const buildKeyInputDetails = (params: KeyInputDiagnosticsParams): Record<
     selectedControlId: params.selectedControlId ?? null,
     rawEvent: {
       type: rawEvent.type ?? null,
-      key: rawEvent.key ?? null,
-      code: rawEvent.code ?? null,
-      keyCode: rawEvent.keyCode ?? null,
-      which: rawEvent.which ?? null,
+      key: redactKeyIdentity ? null : (rawEvent.key ?? null),
+      code: redactKeyIdentity ? null : (rawEvent.code ?? null),
+      keyCode: redactKeyIdentity ? null : (rawEvent.keyCode ?? null),
+      which: redactKeyIdentity ? null : (rawEvent.which ?? null),
       location: rawEvent.location ?? null,
       repeat: Boolean(rawEvent.repeat),
       isComposing: Boolean(rawEvent.isComposing),
@@ -171,8 +188,8 @@ export const buildKeyInputDetails = (params: KeyInputDiagnosticsParams): Record<
       metaKey: Boolean(rawEvent.metaKey),
       shiftKey: Boolean(rawEvent.shiftKey),
     },
-    normalizedAction: params.normalizedAction,
-    keyFamily: resolveKeyFamily(rawEvent, params.normalizedAction),
+    normalizedAction: redactKeyIdentity ? null : params.normalizedAction,
+    keyFamily,
     handled: params.handled,
     preventDefaultApplied: params.preventDefaultApplied,
     keypadEnabled: params.keypadEnabled,

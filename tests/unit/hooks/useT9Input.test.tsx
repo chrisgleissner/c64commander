@@ -136,12 +136,33 @@ describe("useT9Input — key-input diagnostics (GAP 4)", () => {
 
     const entries = keyInputEntries();
     expect(entries).toHaveLength(3);
-    const serialized = JSON.stringify(entries.map((entry) => entry.details));
-    // Never the accumulated host/field text — only counts.
-    expect(serialized).not.toContain("192");
     entries.forEach((entry) => {
-      const details = entry.details as { t9State?: { committedLength?: unknown } };
+      const details = entry.details as {
+        normalizedAction?: unknown;
+        keyFamily?: unknown;
+        rawEvent?: { key?: unknown; code?: unknown; keyCode?: unknown; which?: unknown };
+        t9State?: { committedLength?: unknown };
+      };
+      // Key identity is redacted on the composer path — the typed digit never
+      // reaches the log via the raw event or the normalized action.
+      expect(details.normalizedAction).toBeNull();
+      expect(details.rawEvent?.key).toBeNull();
+      expect(details.rawEvent?.code).toBeNull();
+      expect(details.rawEvent?.keyCode).toBeNull();
+      expect(details.rawEvent?.which).toBeNull();
+      // The hardware family is retained for calibration; T9 state is lengths-only.
+      expect(details.keyFamily).toBe("digit");
       expect(typeof details.t9State?.committedLength).toBe("number");
     });
+    // Never the accumulated host/field text — only counts. The volatile
+    // wall-clock timestamp is excluded because it can coincidentally contain a
+    // digit substring (e.g. "…192…") unrelated to anything the user typed.
+    const serialized = JSON.stringify(
+      entries.map((entry) => {
+        const { timestamp: _timestamp, ...rest } = entry.details as Record<string, unknown>;
+        return rest;
+      }),
+    );
+    expect(serialized).not.toContain("192");
   });
 });

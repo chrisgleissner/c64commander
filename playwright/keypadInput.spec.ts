@@ -25,22 +25,21 @@ const SELECTED = "data-key-selected";
 
 const snap = (page: Page, testInfo: TestInfo, label: string) => attachStepScreenshot(page, testInfo, label);
 
-const enableKeypad = (page: Page) =>
-  page.addInitScript((key) => {
+// The init script first runs against the very first `about:blank` document,
+// whose opaque origin (`location.origin === "null"`) makes localStorage throw by
+// design — that is expected and ignored. On a real origin any failure is genuine
+// (e.g. storage denied) and is rethrown so a silently-unapplied flag cannot let
+// a test pass against a broken toggle.
+const setFlagInitScript = (page: Page, key: string) =>
+  page.addInitScript((flagKey) => {
     try {
-      localStorage.setItem(key, "1");
-    } catch {
-      /* opaque-origin init doc — ignore */
+      localStorage.setItem(flagKey, "1");
+    } catch (error) {
+      if (location.origin !== "null") throw error;
     }
-  }, KEYPAD_FLAG_KEY);
-const enableDebugLogging = (page: Page) =>
-  page.addInitScript((key) => {
-    try {
-      localStorage.setItem(key, "1");
-    } catch {
-      /* opaque-origin init doc — ignore */
-    }
-  }, DEBUG_LOG_KEY);
+  }, key);
+const enableKeypad = (page: Page) => setFlagInitScript(page, KEYPAD_FLAG_KEY);
+const enableDebugLogging = (page: Page) => setFlagInitScript(page, DEBUG_LOG_KEY);
 
 const selectedCount = (page: Page) => page.locator(`[${SELECTED}="true"]`).count();
 
@@ -53,15 +52,16 @@ const ringFocus = async (page: Page, target: Locator, maxSteps = 60): Promise<bo
   return (await target.getAttribute(SELECTED)) === "true";
 };
 
+// Runs only after `page.goto(...)`, so the page is on the real origin and
+// localStorage is accessible. "No log key yet" is the one expected empty case and
+// returns []. A JSON parse failure means the log serialization itself regressed,
+// so it is left to throw and fail the test loudly rather than masked as "no
+// entries".
 const readKeyInputLogs = (page: Page) =>
   page.evaluate(() => {
-    try {
-      const raw = localStorage.getItem("c64u_app_logs");
-      if (!raw) return [] as Array<Record<string, unknown>>;
-      return (JSON.parse(raw) as Array<{ message?: string }>).filter((entry) => entry?.message === "key-input");
-    } catch {
-      return [] as Array<Record<string, unknown>>;
-    }
+    const raw = localStorage.getItem("c64u_app_logs");
+    if (!raw) return [] as Array<Record<string, unknown>>;
+    return (JSON.parse(raw) as Array<{ message?: string }>).filter((entry) => entry?.message === "key-input");
   });
 
 test.describe("Keypad / T9 input", () => {

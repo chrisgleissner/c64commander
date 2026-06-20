@@ -100,6 +100,34 @@ describe("buildKeyInputDetails", () => {
     expect(JSON.stringify(details)).not.toMatch(/192\.168/);
   });
 
+  it("redacts the key identity but keeps keyFamily when redactKeyIdentity is set", () => {
+    const details = buildKeyInputDetails({
+      rawEvent: raw({ code: "Digit9", key: "9", keyCode: 57, which: 57, location: 0 }),
+      normalizedAction: "digit9",
+      handled: true,
+      preventDefaultApplied: true,
+      keypadEnabled: true,
+      modality: "key-navigation",
+      redactKeyIdentity: true,
+      t9State: {
+        active: true,
+        mode: "hostname",
+        pendingLength: 0,
+        candidateIndex: -1,
+        candidateCount: 0,
+        committedLength: 2,
+      },
+    });
+
+    // The typed digit must not be reconstructable from the raw event or action…
+    expect(details.normalizedAction).toBeNull();
+    expect(details.rawEvent).toMatchObject({ key: null, code: null, keyCode: null, which: null });
+    // …but the hardware family is retained for calibration grouping.
+    expect(details.keyFamily).toBe("digit");
+    // Non-identifying structural fields are preserved.
+    expect(details.rawEvent).toMatchObject({ type: "keydown", repeat: false });
+  });
+
   it("redacts host-bearing values by key name on export", () => {
     const details = buildKeyInputDetails({
       rawEvent: raw({ code: "Digit1", key: "1" }),
