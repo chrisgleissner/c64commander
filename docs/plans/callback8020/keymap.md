@@ -33,9 +33,9 @@ SemanticAction ──FocusController──────────▶ focus / ac
 
 ### Profiles
 
-| Profile                 | id                | Purpose                                                        |
-| ----------------------- | ----------------- | -------------------------------------------------------------- |
-| Default keyboard        | `defaultKeyboard` | Desktop/dev — the whole UX is exercisable on a normal keyboard |
+| Profile                 | id                | Purpose                                                               |
+| ----------------------- | ----------------- | --------------------------------------------------------------------- |
+| Default keyboard        | `defaultKeyboard` | Desktop/dev — the whole UX is exercisable on a normal keyboard        |
 | Commodore Callback 8020 | `keypad`          | Physical D-pad + numeric keypad mapping (extends the desktop profile) |
 
 > The keypad profile's code id is **`keypad`** (see `src/lib/input/profiles/`).
@@ -137,14 +137,17 @@ bar is its own scope appended last) and builds the focus ring in reading order
 (`src/lib/input/discovery.ts` + `focusDiscovery.ts`). `useFocusItem` /
 `useFocusGroup` are optional refinements (stable id, explicit order, group
 membership, custom activation, opt-out) — not the gate for reachability.
+Existing labelled sections (`data-section-label`) and app dialog/sheet content
+roots are implicit groups, so dense cards and modals are navigated as **OK in /
+Back out** containers without per-CTA wiring.
 
-| Keys                                                    | Meaning                                                                                  |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| **Up / Down**, D-pad up/down, Tab / Shift+Tab           | Move between CTAs in the current scope (wrap; skip disabled)                              |
-| **Center / OK / Enter / Call**                          | **Go in:** descend into a group (a card/section with children), else **activate** a leaf |
-| **Back / Escape / Left soft key / hardware Back**       | **Go out:** dismiss overlay → disengage field → ascend the group scope → navigate¹       |
-| **Left / Right**                                        | Owned by the focused control (slider value, tabs, segmented); else previous/next sibling |
-| **Right soft key / Menu**                               | Open the current item's / scope's context menu (`openMenu`), if any                       |
+| Keys                                              | Meaning                                                                                  |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **Up / Down**, D-pad up/down, Tab / Shift+Tab     | Move between CTAs in the current scope (wrap; skip disabled)                             |
+| **Center / OK / Enter / Call**                    | **Go in:** descend into a group (a card/section with children), else **activate** a leaf |
+| **Back / Escape / Left soft key / hardware Back** | **Go out:** dismiss overlay → disengage field → ascend the group scope → navigate¹       |
+| **Left / Right**                                  | Owned by the focused control (slider value, tabs, segmented); else previous/next sibling |
+| **Right soft key / Menu**                         | Open the current item's / scope's context menu (`openMenu`), if any                      |
 
 ¹ Only the **hardware Back** key (and the left soft key) navigate the route once
 the in-app chain is exhausted; keyboard **Escape never navigates** — it lets the

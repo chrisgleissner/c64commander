@@ -11,7 +11,11 @@ import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ConfigBrowserPage from "@/pages/ConfigBrowserPage";
-import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
+import {
+  FocusNavigationProvider,
+  useFocusNavigationContext,
+  type FocusNavigationContextValue,
+} from "@/hooks/useFocusNavigation";
 import { reportUserError } from "@/lib/uiErrors";
 import { getC64API } from "@/lib/c64api";
 import { resolveAudioMixerResetValue } from "@/lib/config/audioMixer";
@@ -128,11 +132,17 @@ const renderConfigBrowserPage = () =>
 
 // Same page, but mounted inside the keypad focus ring (C64U Remote) so d-pad +
 // center exercise the category-header registration.
-const renderConfigBrowserPageInFocusRing = () =>
+const FocusContextCapture = ({ target }: { target: { current: FocusNavigationContextValue | null } }) => {
+  target.current = useFocusNavigationContext();
+  return null;
+};
+
+const renderConfigBrowserPageInFocusRing = (focusContext?: { current: FocusNavigationContextValue | null }) =>
   render(
     <RouterProvider
       router={buildRouter(
         <FocusNavigationProvider profileId="keypad">
+          {focusContext ? <FocusContextCapture target={focusContext} /> : null}
           <ConfigBrowserPage />
         </FocusNavigationProvider>,
       )}
@@ -905,41 +915,42 @@ describe("ConfigBrowserPage", () => {
 });
 
 describe("ConfigBrowserPage keypad focus ring (C64U Remote)", () => {
-  it("walks the category headers top-to-bottom in focusOrder via d-pad", () => {
+  it("keeps category headers DOM-backed in the keypad focus ring", () => {
+    const focusContext = { current: null as FocusNavigationContextValue | null };
     setupDefaultMocks();
     mockUseC64Categories.mockReturnValue({
       data: { categories: ["Audio Mixer", "Clock Settings", "General"] },
       isLoading: false,
     });
 
-    renderConfigBrowserPageInFocusRing();
+    renderConfigBrowserPageInFocusRing(focusContext);
 
-    // Selection starts on the first registered header (Audio Mixer, order 100);
-    // stepping down walks 100 → 110 (Clock Settings) → 120 (General), then wraps.
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: /clock settings/i }));
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: /general/i }));
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: /audio mixer/i }));
+    expect(focusContext.current?.engine.sourceForId("config-category-audio-mixer")).toBe("dom+explicit");
+    expect(focusContext.current?.engine.sourceForId("config-category-clock-settings")).toBe("dom+explicit");
+    expect(focusContext.current?.engine.sourceForId("config-category-general")).toBe("dom+explicit");
 
-    // DpadUp from the first header wraps back to the last (General).
-    fireEvent.keyDown(document.body, { code: "DpadUp" });
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: /general/i }));
+    const enabledIds = new Set(
+      focusContext.current?.controller.focus
+        .list()
+        .filter((item) => !item.disabled)
+        .map((item) => item.id),
+    );
+    expect(enabledIds.has("config-category-audio-mixer")).toBe(true);
+    expect(enabledIds.has("config-category-clock-settings")).toBe(true);
+    expect(enabledIds.has("config-category-general")).toBe(true);
   });
 
   it("center-activates the focused category header, expanding only that section", () => {
+    const focusContext = { current: null as FocusNavigationContextValue | null };
     setupDefaultMocks();
     mockUseC64Categories.mockReturnValue({
       data: { categories: ["Audio Mixer", "Clock Settings", "General"] },
       isLoading: false,
     });
 
-    renderConfigBrowserPageInFocusRing();
+    renderConfigBrowserPageInFocusRing(focusContext);
 
-    // Move focus to the second header (Clock Settings), then drop the mount-time
-    // onOpenChange(false) calls so the activation is the only signal we assert on.
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    focusContext.current?.controller.focus.setCurrent("config-category-clock-settings");
     mockSetConfigExpanded.mockClear();
 
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
@@ -965,6 +976,7 @@ describe("ConfigBrowserPage keypad focus ring (C64U Remote)", () => {
   });
 
   it("registers a category's Reset + Refresh group actions into the ring when expanded", async () => {
+    const focusContext = { current: null as FocusNavigationContextValue | null };
     setupDefaultMocks();
     mockUseC64Categories.mockReturnValue({
       data: { categories: ["Audio Mixer", "General"] },
@@ -980,21 +992,19 @@ describe("ConfigBrowserPage keypad focus ring (C64U Remote)", () => {
       refetch: vi.fn(),
     }));
 
-    renderConfigBrowserPageInFocusRing();
+    renderConfigBrowserPageInFocusRing(focusContext);
 
-    // Audio Mixer header is the initial selection (order 100). Center expands it,
-    // mounting its Reset (101) + Refresh (102) group actions into the ring.
+    // Expand Audio Mixer, mounting its Reset + Refresh group actions into the ring.
+    focusContext.current?.controller.focus.setCurrent("config-category-audio-mixer");
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
-    const resetButton = await screen.findByRole("button", { name: /^reset$/i });
-    const refreshButton = await screen.findByRole("button", { name: /refresh/i });
+    await Promise.resolve();
+    const resetButton = screen.getByRole("button", { name: /^reset$/i });
+    const refreshButton = screen.getByRole("button", { name: /refresh/i });
+    expect(focusContext.current?.engine.sourceForId("config-category-action-audio-mixer")).toBe("dom+explicit");
+    expect(focusContext.current?.engine.sourceForId("config-refresh-audio-mixer")).toBe("dom+explicit");
 
-    // From the header, d-pad steps Reset → Refresh → next category header (General, 110).
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
-    expect(document.activeElement).toBe(resetButton);
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
-    expect(document.activeElement).toBe(refreshButton);
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: /general/i }));
+    expect(focusContext.current?.engine.elementForId("config-category-action-audio-mixer")).toBe(resetButton);
+    expect(focusContext.current?.engine.elementForId("config-refresh-audio-mixer")).toBe(refreshButton);
   });
 
   it("center-activates Clock Settings' Sync clock group action", async () => {
@@ -1015,15 +1025,19 @@ describe("ConfigBrowserPage keypad focus ring (C64U Remote)", () => {
       refetch: vi.fn(),
     }));
 
-    renderConfigBrowserPageInFocusRing();
+    const focusContext = { current: null as FocusNavigationContextValue | null };
+    renderConfigBrowserPageInFocusRing(focusContext);
 
-    // Expand Clock Settings (initial selection), step to its Sync clock action (101).
+    // Expand Clock Settings, then select its Sync clock action by stable focus id.
+    focusContext.current?.controller.focus.setCurrent("config-category-clock-settings");
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
-    const syncButton = await screen.findByRole("button", { name: /sync clock/i });
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
-    expect(document.activeElement).toBe(syncButton);
+    await Promise.resolve();
+    const syncButton = screen.getByRole("button", { name: /sync clock/i });
+    expect(focusContext.current?.engine.elementForId("config-category-action-clock-settings")).toBe(syncButton);
 
     // Center activates it → the clock-sync batch fires for this category.
+    focusContext.current?.controller.focus.setCurrent("config-category-action-clock-settings");
+    syncButton.focus();
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
     await waitFor(() => {
       expect(mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ category: "Clock Settings" }));
@@ -1044,14 +1058,16 @@ describe("ConfigBrowserPage keypad focus ring (C64U Remote)", () => {
       refetch: vi.fn(),
     }));
 
-    renderConfigBrowserPageInFocusRing();
+    const focusContext = { current: null as FocusNavigationContextValue | null };
+    renderConfigBrowserPageInFocusRing(focusContext);
 
+    focusContext.current?.controller.focus.setCurrent("config-category-audio-mixer");
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
-    const refreshButton = await screen.findByRole("button", { name: /refresh/i });
+    await Promise.resolve();
+    const refreshButton = screen.getByRole("button", { name: /refresh/i });
     expect(screen.getByRole("button", { name: /^reset$/i })).toBeDisabled();
 
-    // d-pad from the header skips the disabled Reset (101) and lands on Refresh (102).
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
-    expect(document.activeElement).toBe(refreshButton);
+    expect(focusContext.current?.engine.sourceForId("config-category-action-audio-mixer")).toBeNull();
+    expect(focusContext.current?.engine.elementForId("config-refresh-audio-mixer")).toBe(refreshButton);
   });
 });

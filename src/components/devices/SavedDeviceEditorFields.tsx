@@ -1,9 +1,10 @@
-import { useCallback, useRef, type KeyboardEvent } from "react";
+import { useCallback, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { useT9Input } from "@/hooks/useT9Input";
+import { getInputModality, subscribeInputModality, type T9Mode } from "@/lib/input";
 import {
   MAX_SAVED_DEVICE_NAME_LENGTH,
   applySavedDeviceDraftHostInput,
@@ -28,6 +29,31 @@ type Props = {
    */
   keypadInput?: boolean;
 };
+
+const useInputModalitySnapshot = () => useSyncExternalStore(subscribeInputModality, getInputModality, getInputModality);
+
+function T9ModeIndicator({
+  enabled,
+  mode,
+  testId,
+  visible,
+}: {
+  readonly enabled: boolean;
+  readonly mode: T9Mode;
+  readonly testId: string;
+  readonly visible: boolean;
+}) {
+  const modality = useInputModalitySnapshot();
+  if (!enabled || !visible || modality !== "key-navigation") return null;
+  return (
+    <span
+      className="rounded-full border border-border/70 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+      data-testid={testId}
+    >
+      T9 {mode === "hostname" ? "Hostname" : "Multitap"} · #
+    </span>
+  );
+}
 
 const useFieldFocusTarget = (id: string, order: number, group: string) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -66,6 +92,7 @@ export function SavedDeviceEditorFields({
   onHostBlur,
   keypadInput = false,
 }: Props) {
+  const [activeT9Field, setActiveT9Field] = useState<"name" | "host" | null>(null);
   // Physical T9 / keypad fallback so the device name and host/IP can be entered
   // without the on-screen keyboard (for keypad-first devices).
   // The host field uses "hostname" mode (digits insert directly; star inserts
@@ -109,6 +136,12 @@ export function SavedDeviceEditorFields({
           <Label htmlFor={`${idPrefix}-name`} className="text-sm">
             Device name
           </Label>
+          <T9ModeIndicator
+            enabled={keypadInput}
+            mode={nameT9.mode}
+            testId={`${idPrefix}-name-t9-mode`}
+            visible={activeT9Field === "name"}
+          />
           {draft.nameSource === "INFERRED" ? (
             <span className="rounded-full border border-border/70 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               Auto
@@ -121,6 +154,8 @@ export function SavedDeviceEditorFields({
           value={draft.name}
           onChange={(event) => onChange(applySavedDeviceDraftNameInput(draft, event.target.value))}
           onKeyDown={handleNameKeyDown}
+          onFocus={() => setActiveT9Field("name")}
+          onBlur={() => setActiveT9Field(null)}
           placeholder="Defaults to the current host"
           className="font-sans"
           maxLength={MAX_SAVED_DEVICE_NAME_LENGTH}
@@ -144,16 +179,28 @@ export function SavedDeviceEditorFields({
         className="space-y-2 rounded-md outline-none"
         data-testid={`${idPrefix}-host-field`}
       >
-        <Label htmlFor={`${idPrefix}-host`} className="text-sm">
-          {hostLabel}
-        </Label>
+        <div className="flex items-center gap-2">
+          <Label htmlFor={`${idPrefix}-host`} className="text-sm">
+            {hostLabel}
+          </Label>
+          <T9ModeIndicator
+            enabled={keypadInput}
+            mode={hostT9.mode}
+            testId={`${idPrefix}-host-t9-mode`}
+            visible={activeT9Field === "host"}
+          />
+        </div>
         <Input
           ref={hostFocus.inputRef}
           id={`${idPrefix}-host`}
           value={draft.host}
           onChange={(event) => onChange(applySavedDeviceDraftHostInput(draft, event.target.value))}
           onKeyDown={handleHostKeyDown}
-          onBlur={(event) => onHostBlur?.(event.target.value)}
+          onFocus={() => setActiveT9Field("host")}
+          onBlur={(event) => {
+            setActiveT9Field(null);
+            onHostBlur?.(event.target.value);
+          }}
           className="font-sans"
           aria-describedby={hostError ? `${idPrefix}-host-error` : hostHint ? `${idPrefix}-host-help` : undefined}
           aria-invalid={hostError ? true : undefined}

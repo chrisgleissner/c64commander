@@ -114,7 +114,10 @@ export const KeypadGuidanceBar = () => {
     // One joined text node (not per-segment elements): the bar is aria-hidden
     // chrome that mirrors on-screen text, so a single string keeps it out of
     // role/text queries for the real controls behind it.
-    setTextIfChanged(breadcrumbRef.current, labels.breadcrumb.length > 0 ? labels.breadcrumb.join("  ›  ") : "Navigation");
+    setTextIfChanged(
+      breadcrumbRef.current,
+      labels.breadcrumb.length > 0 ? labels.breadcrumb.join("  ›  ") : "Navigation",
+    );
     setTextIfChanged(leftActionRef.current, labels.left);
     applySlot(centerSlotRef.current, centerActionRef.current, labels.center);
     applySlot(rightSlotRef.current, rightActionRef.current, labels.right);

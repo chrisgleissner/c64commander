@@ -46,11 +46,14 @@ thin React adapter in `src/hooks/useFocusNavigation.tsx`. The full key map is in
 - **Scope-based auto-discovery.** `discovery.ts` (stateless) + `focusDiscovery.ts`
   (`FocusDiscoveryEngine`, stateful) build the focus ring from the live DOM of the
   **active scope** — the topmost open overlay (`[role=dialog/alertdialog/menu/
-  listbox]`, poppers) or else the routed page; the bottom `TabBar` is its own
+listbox]`, poppers) or else the routed page; the bottom `TabBar` is its own
   scope appended last. Every interactive element is reachable **by construction**;
   a debounced `MutationObserver` keeps the ring in sync. `useFocusItem` /
   `useFocusGroup` are optional refinements (id / order / group / custom activation
-  / opt-out), not the gate for reachability.
+  / opt-out), not the gate for reachability. Existing labelled sections
+  (`data-section-label`) and app modal/sheet roots are implicit focus groups, so
+  dense cards and dialogs use the same OK-in/Back-out model without per-button
+  wiring.
 - **"OK to go in, Back to go out."** `focusNavigation.ts` (`NavigationController`)
   maps actions to moves: Up/Down (and Tab) move between siblings in the current
   scope; Center/Enter/Call **descend** into a group (a card/section with enabled
@@ -72,7 +75,8 @@ thin React adapter in `src/hooks/useFocusNavigation.tsx`. The full key map is in
   subscription (no React state).
 - **T9 entry.** `t9.ts` (pure, timer-free) + `useT9Input.ts` give numeric-keypad
   text entry (multitap + hostname/IP mode). Literal typing is the default; T9 is
-  keypad-mode only.
+  keypad-mode only. Fields that enable T9 show a small modality-gated mode
+  indicator (`T9 Hostname` / `T9 Multitap`) while the composer is active.
 - **Prime Directive + deferral invariants.** With the flag off the engine never
   runs, no attributes/`tabindex` are written, no key is `preventDefault`ed — the
   app is byte-for-byte baseline. The global capture-phase handler additionally:

@@ -29,6 +29,9 @@ export const SKIP_ATTR = "data-key-nav-skip";
 /** Declares an element a focus group (its discovered descendants become children). Value is an optional id. */
 export const GROUP_ATTR = "data-focus-group";
 
+/** Existing section label attribute; sections carrying it become implicit focus groups. */
+export const SECTION_LABEL_ATTR = "data-section-label";
+
 /**
  * Names a focus scope region. `page` is an explicit page-content root (optional —
  * discovery falls back to `document.body`); `tabbar` is the persistent bottom tab
@@ -49,6 +52,19 @@ export const HORIZONTAL_OWNER_SELECTOR =
 /** Open Radix-style overlays that own the keyboard while focus is inside them. */
 export const OVERLAY_SELECTOR =
   "[role='dialog'],[role='alertdialog'],[role='menu'],[role='listbox'],[data-radix-popper-content-wrapper]";
+
+/**
+ * Containers that should be traversed as groups without per-surface hook wiring:
+ * explicit focus groups, existing labelled page sections/cards, and app modal /
+ * sheet content roots.
+ */
+export const GROUP_CONTAINER_SELECTOR = [
+  `[${GROUP_ATTR}]`,
+  `[${SECTION_LABEL_ATTR}]`,
+  "[data-app-surface]",
+  "[data-modal-surface]",
+  "[data-sheet-presentation]",
+].join(",");
 
 /**
  * The interactive elements the ring can land on. Mirrors the native

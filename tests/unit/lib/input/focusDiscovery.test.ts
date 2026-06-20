@@ -75,6 +75,50 @@ describe("FocusDiscoveryEngine", () => {
     engine.stop();
   });
 
+  it("treats existing labelled sections as implicit focus groups", () => {
+    mount(`
+      <section id="streams" data-section-label="Streams">
+        <button id="edit">edit</button>
+        <button id="start">start</button>
+      </section>
+      <section id="docs" data-section-label="Docs">
+        <button id="toggle">toggle</button>
+      </section>
+    `);
+    const { controller, engine } = makeEngine();
+    engine.start();
+
+    expect(controller.current()?.group).toBe("Streams");
+    expect(engine.elementForId(controller.current()!.id)?.id).toBe("streams");
+    expect(
+      controller.enabledChildrenOf(controller.current()!.id).map((item) => engine.elementForId(item.id)?.id),
+    ).toEqual(["edit", "start"]);
+    expect(engine.elementForId(controller.focusNext()!.id)?.id).toBe("docs");
+    engine.stop();
+  });
+
+  it("treats app modal and sheet content roots as implicit focus groups", () => {
+    mount(`
+      <button id="behind">behind</button>
+      <div role="dialog" id="dialog" data-modal-surface="confirmation">
+        <button id="confirm">confirm</button>
+        <button id="cancel">cancel</button>
+      </div>
+    `);
+    const { controller, engine } = makeEngine();
+    engine.start();
+
+    const current = controller.current();
+    expect(current?.group).toBe("confirmation");
+    expect(engine.elementForId(current!.id)?.id).toBe("dialog");
+    expect(controller.enabledChildrenOf(current!.id).map((item) => engine.elementForId(item.id)?.id)).toEqual([
+      "confirm",
+      "cancel",
+    ]);
+    expect(controller.list().map((item) => engine.elementForId(item.id)?.id)).not.toContain("behind");
+    engine.stop();
+  });
+
   it("shims tabindex on non-natively-focusable elements while running and removes it on stop", () => {
     mount(`<div data-focus-group="card" id="card"><button id="btn">b</button></div>`);
     const { engine } = makeEngine();
@@ -124,7 +168,7 @@ describe("FocusDiscoveryEngine", () => {
     engine.stop();
   });
 
-  it("switches scope to an open dialog and makes the page behind inert", () => {
+  it("switches scope to an ungrouped open dialog and makes the page behind inert", () => {
     mount(`
       <button id="behind">behind</button>
       <div role="dialog" id="dialog"><button id="confirm">confirm</button><button id="cancel">cancel</button></div>

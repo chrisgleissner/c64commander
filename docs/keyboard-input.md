@@ -1,15 +1,15 @@
 # Keyboard / Keypad / T9 input
 
-C64 Commander is a touch-first app. The optional, default-off experimental
-feature **Keypad / T9 input** (`keypad_input_enabled`) makes the app fully
-operable — and testable — without a touchscreen, for keypad-first devices (e.g. a
-flip phone / D-pad remote) and Bluetooth keyboards. It is purely additive: it
-never changes the touch UX.
+C64 Commander is a touch-first app, but **Keyboard and keypad navigation**
+(`keypad_input_enabled`) is enabled by default as a user-visible experimental
+feature. It makes the app fully operable — and testable — without a touchscreen,
+for keypad-first devices (for example a flip phone / D-pad remote) and Bluetooth
+keyboards. It is additive: pointer/touch use keeps the normal touch UX.
 
 ## 1. Enabling it
 
-Settings → Experimental → **"Keypad / T9 input"**. Off by default on every
-variant/platform.
+Settings → Experimental → **Keyboard and keypad navigation**. It is on by
+default and can be disabled there.
 
 ## 2. The Prime Directive and `data-key-selected`
 
@@ -23,9 +23,9 @@ focus-ring item, and **only** when:
 
 There are exactly four states:
 
-1. **Flag OFF (default).** DOM/behavior is byte-for-byte identical to a build
-   without the feature. No `data-key-selected`, no extra attributes/tabindex, the
-   global key listener is detached.
+1. **Flag OFF.** DOM/behavior is byte-for-byte identical to a build without the
+   feature. No `data-key-selected`, no extra attributes/tabindex, the global key
+   listener is detached.
 2. **Flag ON, before any recognized key, and during pointer/touch use.** Still
    byte-for-byte identical to the flag-off baseline; modality is `pointer`.
 3. **Flag ON, a recognized key takes effect** (focus moved, control activated,
@@ -56,9 +56,17 @@ Physical keys are normalized to **semantic actions**; the authoritative list is
 
 ## 4. Key-only operation
 
+- **Reachability:** the provider scans the active scope (topmost dialog/menu/
+  sheet, otherwise the routed page plus the bottom TabBar) and discovers every
+  interactive element. `useFocusItem` and `useFocusGroup` only refine id/order,
+  labels, grouping, custom activation, or opt-out.
+- **Groups:** labelled sections (`data-section-label`), app dialogs/sheets, and
+  explicit `data-focus-group` / `useFocusGroup` containers become groups. Up/Down
+  traverse sibling CTAs/groups; **OK goes in**, **Back exits**. Groups with one
+  enabled leaf activate that leaf directly.
 - **CTAs:** `dpadUp`/`dpadDown` (Arrow Up/Down) and `previousField`/`nextField`
-  (Shift+Tab/Tab) traverse the ring; `center`/`enter`/`activate` (Space/Enter)
-  activate the highlighted control.
+  (Shift+Tab/Tab) traverse the current scope; `center`/`enter`/`activate`
+  (Space/Enter/Call) descend into a group or activate the highlighted leaf.
 - **Sliders** (HomeCpuSpeed, Play volume, Config sliders): when the thumb is
   focused, **Left/Right adjust the value** (the always-on value label and
   `aria-valuenow` update) and do **not** move focus; **Up/Down move focus** and do
@@ -74,10 +82,17 @@ Physical keys are normalized to **semantic actions**; the authoritative list is
   (Backspace, arrows, Enter, Tab, letters) passes through untouched. Hostname
   fields use hostname mode (digits insert directly; `*` cycles separators
   `. : - _ /`); name fields use multi-tap. `#`/`toggleInputMode` switches mode.
-- **Back / `navigate(-1)`:** the `back`/`escape` chain is deterministic —
-  close popup → leave menu → leave field → **router back** (`navigate(-1)`). With
-  the flag on, an exhausted back navigates the router back; this is intentional
-  keypad behavior.
+  When numeric-keypad T9 is active and the field has key-navigation modality, a
+  small `T9 Hostname` / `T9 Multitap` indicator appears.
+- **Back / `navigate(-1)`:** the back chain is deterministic — dismiss overlay →
+  leave field → ascend group → route back. Keyboard **Escape never navigates**;
+  only the hardware Back key and left soft key navigate when the chain is
+  exhausted.
+- **Guidance bar:** while key-navigation modality is active, a fixed bar above
+  the TabBar shows the current breadcrumb plus Back/OK/Menu labels. It clears in
+  the same frame as the highlight when the user touches/clicks.
+- **Soft keys/Menu:** left soft key follows the back chain; right soft key/Menu
+  opens the current item or scope's context menu when one exists.
 
 ## 5. Diagnostics
 

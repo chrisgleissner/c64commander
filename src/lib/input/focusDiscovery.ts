@@ -23,6 +23,8 @@
 import type { FocusController, FocusItem } from "./focusController";
 import {
   GROUP_ATTR,
+  GROUP_CONTAINER_SELECTOR,
+  SECTION_LABEL_ATTR,
   TABBAR_SCOPE_SELECTOR,
   compareFocusables,
   discoverInteractiveElements,
@@ -234,7 +236,11 @@ export class FocusDiscoveryEngine {
       // interactive group <div>) still joins the ring.
       if (!elements.includes(element)) elements.push(element);
     }
-    for (const element of scopeEl.querySelectorAll(`[${GROUP_ATTR}]`)) {
+    const implicitGroupCandidates = [
+      ...(scopeEl instanceof HTMLElement && scopeEl.matches(GROUP_CONTAINER_SELECTOR) ? [scopeEl] : []),
+      ...Array.from(scopeEl.querySelectorAll(GROUP_CONTAINER_SELECTOR)),
+    ];
+    for (const element of implicitGroupCandidates) {
       if (element instanceof HTMLElement && isFocusVisible(element) && !isSkipped(element, scopeEl)) {
         groupElements.add(element);
         if (!elements.includes(element)) elements.push(element);
@@ -268,11 +274,7 @@ export class FocusDiscoveryEngine {
         const isGroup = groupElements.has(element);
         const groupAttr = isGroup ? element.getAttribute(GROUP_ATTR) : null;
         const id = registration?.descriptor.id || (groupAttr ? groupAttr : autoIdFor(element));
-        const source = registration
-          ? discoveredSet.has(element)
-            ? "dom+explicit"
-            : "explicit"
-          : "dom";
+        const source = registration ? (discoveredSet.has(element) ? "dom+explicit" : "explicit") : "dom";
         return { element, id, isGroup, source, registration };
       })
       .filter((node, _index, all) => {
@@ -312,12 +314,21 @@ export class FocusDiscoveryEngine {
           element.click();
         });
 
+      const implicitGroupLabel = node.isGroup
+        ? element.getAttribute(SECTION_LABEL_ATTR) ||
+          element.getAttribute("aria-label") ||
+          element.getAttribute("data-modal-surface") ||
+          element.getAttribute("data-app-surface") ||
+          element.getAttribute("data-sheet-presentation") ||
+          undefined
+        : undefined;
+
       focusItems.push({
         id: node.id,
         order: descriptor?.order ?? 0,
         // `group` now carries the human breadcrumb label (Objective 5 — `group`
         // given real meaning), falling back to the legacy free-text group field.
-        group: descriptor?.label ?? descriptor?.group,
+        group: descriptor?.label ?? descriptor?.group ?? implicitGroupLabel,
         parentId: parentId ?? undefined,
         disabled: descriptor?.disabled,
         activate,

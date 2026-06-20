@@ -524,3 +524,28 @@ Evidence saved under `artifacts/android-apks/validation/`:
   selects/sliders (M2.5), the rest of Settings (host/IP field-engagement, saved-device rows,
   Appearance), then the per-screen reachability audit. No README/Callback references; default variant
   unchanged.
+
+## Ralph loop (2026-06-20): guidance-bar component test
+
+- Branch `feat/keyboard-input` (NOT `feat/introduce-new-variant` from prior entries). The working
+  tree carries a large uncommitted prior-loop increment: DOM auto-discovery reachability
+  (`src/lib/input/discovery.ts`, `focusDiscovery.ts`) + the keypad guidance bar
+  (`src/lib/input/guidance.ts` + `src/components/input/KeypadGuidanceBar.tsx`) + a 453-line
+  `useFocusNavigation.tsx` refactor. This loop verified that increment is green at unit+tsc+lint level
+  and closed its single coverage gap.
+- Gap found: `KeypadGuidanceBar.tsx` had 72.22% branch coverage and no dedicated test. Added
+  `tests/unit/components/input/KeypadGuidanceBar.test.tsx` (6 tests) exercising the component's
+  imperative branches: null-context no-op render, the flag/modality visibility gate, the focused-item
+  breadcrumb + OK action wiring, the Menu soft key for `aria-haspopup` items, and the empty-scope
+  "Navigation" fallback. No source files changed.
+- After: `KeypadGuidanceBar.tsx` 100% lines/statements/functions, 91.66% branch (combined with the
+  existing group tests in `useFocusNavigation.test.tsx`). Remaining uncovered branches (lines 70, 91)
+  are defensive `useRef(null).current` guards unreachable through the component; not contorting tests
+  to hit dead defensive branches.
+- Gates run: `npx tsc --noEmit` (0); `npx vitest run` over the input subsystem -> 199 pass (+6);
+  `npm run lint` (0, full chain incl. stale-names + variant:check + feature-flags:check). No
+  README/Callback references touched; default `c64commander` variant unchanged.
+- Working tree left uncommitted for the operator (the in-flight refactor is not this loop's authored
+  work and lacks a full per-screen reachability audit). Backlog: "Per-CTA focus-ring registration
+  completeness" annotated `[~]` (the discovery engine supersedes per-CTA registration but is unmerged
+  and unaudited per-screen).

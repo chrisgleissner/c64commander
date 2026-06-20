@@ -1,8 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { SavedDeviceEditorFields } from "@/components/devices/SavedDeviceEditorFields";
 import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
+import { resetInputModality } from "@/lib/input";
 import type { SavedDeviceEditorDraft } from "@/lib/savedDevices/deviceEditor";
 
 const INITIAL: SavedDeviceEditorDraft = {
@@ -31,6 +32,10 @@ function Harness({ keypadInput = true }: { keypadInput?: boolean }) {
 }
 
 describe("SavedDeviceEditorFields — physical T9 / keypad entry", () => {
+  afterEach(() => {
+    resetInputModality();
+  });
+
   it("enters an IPv4 address into the host field with no on-screen keyboard", () => {
     render(<Harness />);
     const host = screen.getByTestId("t9-host");
@@ -64,6 +69,33 @@ describe("SavedDeviceEditorFields — physical T9 / keypad entry", () => {
     expect(screen.getByTestId("name-value").textContent).toBe("a");
     fireEvent.keyDown(name, { code: "Digit2", key: "2" });
     expect(screen.getByTestId("name-value").textContent).toBe("b");
+  });
+
+  it("shows the T9 mode indicator only after keypad composition enters key-navigation modality", () => {
+    render(<Harness />);
+    const host = screen.getByTestId("t9-host");
+
+    fireEvent.focus(host);
+    expect(screen.queryByTestId("t9-host-t9-mode")).not.toBeInTheDocument();
+
+    fireEvent.keyDown(host, { code: "Digit1", key: "1" });
+    expect(screen.getByTestId("t9-host-t9-mode")).toHaveTextContent("T9 Hostname · #");
+
+    fireEvent.keyDown(host, { code: "Backquote", key: "#" });
+    expect(screen.getByTestId("t9-host-t9-mode")).toHaveTextContent("T9 Multitap · #");
+
+    fireEvent.blur(host);
+    expect(screen.queryByTestId("t9-host-t9-mode")).not.toBeInTheDocument();
+  });
+
+  it("does not show the T9 mode indicator when keypad input is disabled", () => {
+    render(<Harness keypadInput={false} />);
+    const host = screen.getByTestId("t9-host");
+
+    fireEvent.focus(host);
+    fireEvent.keyDown(host, { code: "Digit1", key: "1" });
+
+    expect(screen.queryByTestId("t9-host-t9-mode")).not.toBeInTheDocument();
   });
 
   it("does not intercept keys when keypad input is disabled (the MVP default)", () => {

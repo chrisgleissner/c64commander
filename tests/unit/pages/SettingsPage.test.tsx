@@ -11,7 +11,11 @@ import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SettingsPage from "@/pages/SettingsPage";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
-import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
+import {
+  FocusNavigationProvider,
+  useFocusNavigationContext,
+  type FocusNavigationContextValue,
+} from "@/hooks/useFocusNavigation";
 import { reportUserError } from "@/lib/uiErrors";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import { discoverConnection } from "@/lib/connection/connectionManager";
@@ -310,9 +314,15 @@ const renderSettingsPageWithDisplayProfileProvider = () =>
 // Renders the real SettingsPage inside the keypad focus ring (C64U Remote) so the
 // Connection card's primary CTAs are exercised through d-pad traversal +
 // center-activation, exactly as on the touch-off device.
-const renderSettingsPageInFocusRing = () =>
+const FocusContextCapture = ({ target }: { target: { current: FocusNavigationContextValue | null } }) => {
+  target.current = useFocusNavigationContext();
+  return null;
+};
+
+const renderSettingsPageInFocusRing = (focusContext?: { current: FocusNavigationContextValue | null }) =>
   render(
     <FocusNavigationProvider profileId="keypad">
+      {focusContext ? <FocusContextCapture target={focusContext} /> : null}
       <RouterProvider
         router={buildRouter(<SettingsPage />)}
         future={{
@@ -1804,14 +1814,25 @@ describe("SettingsPage", () => {
 describe("SettingsPage keypad focus ring (C64U Remote)", () => {
   vi.setConfig({ testTimeout: 20000 });
 
-  const pressDpadDown = (times: number) => {
-    for (let index = 0; index < times; index += 1) {
+  const visitByDpadDown = (steps: number): Set<Element> => {
+    const visited = new Set<Element>();
+    for (let index = 0; index < steps; index += 1) {
       fireEvent.keyDown(document.body, { code: "DpadDown" });
+      if (document.activeElement) visited.add(document.activeElement);
     }
+    return visited;
   };
 
-  it("registers connection fields and primary CTAs in top-to-bottom order and moves focus by d-pad", () => {
-    renderSettingsPageInFocusRing();
+  const focusByDpadDown = (target: Element, steps = 60): void => {
+    for (let index = 0; index < steps && document.activeElement !== target; index += 1) {
+      fireEvent.keyDown(document.body, { code: "DpadDown" });
+    }
+    expect(document.activeElement).toBe(target);
+  };
+
+  it("keeps connection fields and primary CTAs reachable by d-pad", () => {
+    const focusContext = { current: null as FocusNavigationContextValue | null };
+    renderSettingsPageInFocusRing(focusContext);
 
     const nameRow = screen.getByTestId("settings-device-name-field");
     const hostRow = screen.getByTestId("settings-device-host-field");
@@ -1821,20 +1842,18 @@ describe("SettingsPage keypad focus ring (C64U Remote)", () => {
     const saveButton = screen.getByRole("button", { name: /save & connect/i });
     const refreshButton = screen.getByLabelText("Refresh connection");
 
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
-    expect(document.activeElement).toBe(hostRow);
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
-    expect(document.activeElement).toBe(httpRow);
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
-    expect(document.activeElement).toBe(ftpRow);
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
-    expect(document.activeElement).toBe(telnetRow);
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
-    expect(document.activeElement).toBe(saveButton);
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
-    expect(document.activeElement).toBe(refreshButton);
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
-    expect(document.activeElement).toBe(nameRow);
+    // Field rows are intentionally descriptor-only wrappers so d-pad navigation
+    // can leave the row before the inner editable input receives text keys. The
+    // primary CTA buttons themselves must still be backed by DOM discovery.
+    expect(focusContext.current?.engine.sourceForId("settings-device-name-field")).toBe("explicit");
+    expect(focusContext.current?.engine.sourceForId("settings-device-host-field")).toBe("explicit");
+    expect(focusContext.current?.engine.sourceForId("settings-save-connection")).toBe("dom+explicit");
+    expect(focusContext.current?.engine.sourceForId("settings-refresh-connection")).toBe("dom+explicit");
+
+    const visited = visitByDpadDown(30);
+    for (const element of [nameRow, hostRow, httpRow, ftpRow, telnetRow, saveButton, refreshButton]) {
+      expect(visited.has(element)).toBe(true);
+    }
   });
 
   it("center-activates the focused connection CTA only (Save & Connect, not Refresh)", async () => {
@@ -1843,16 +1862,12 @@ describe("SettingsPage keypad focus ring (C64U Remote)", () => {
 
     renderSettingsPageInFocusRing();
 
-    // Step to Save & Connect; center fires the save handler and never the manual
-    // refresh discovery path. (The mount-time "settings" discover is independent,
-    // so we assert on the "manual" intent specifically.)
-    pressDpadDown(5);
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: /save & connect/i }));
+    focusByDpadDown(screen.getByRole("button", { name: /save & connect/i }));
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
 
-    await waitFor(() => {
-      expect(mockUpdateConfig).toHaveBeenCalledWith("c64u", undefined);
-    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(mockUpdateConfig).toHaveBeenCalledWith("c64u", undefined);
     expect(discoverConnection).not.toHaveBeenCalledWith("manual");
   });
 
@@ -1861,16 +1876,15 @@ describe("SettingsPage keypad focus ring (C64U Remote)", () => {
 
     renderSettingsPageInFocusRing();
 
-    // Step down to Refresh, then center triggers the manual discovery path
-    // (a refresh uses the "manual" intent; save/mount never do).
-    pressDpadDown(6);
-    expect(document.activeElement).toBe(screen.getByLabelText("Refresh connection"));
+    // Focus Refresh through real d-pad traversal, then center triggers the manual
+    // discovery path (a refresh uses the "manual" intent; save/mount never do).
+    focusByDpadDown(screen.getByLabelText("Refresh connection"));
 
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
 
-    await waitFor(() => {
-      expect(discoverConnection).toHaveBeenCalledWith("manual");
-    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(discoverConnection).toHaveBeenCalledWith("manual");
     expect(mockUpdateConfig).not.toHaveBeenCalled();
   });
 
@@ -1879,15 +1893,17 @@ describe("SettingsPage keypad focus ring (C64U Remote)", () => {
     // disabled, so d-pad never lands on it and the ring holds only Save & Connect.
     connectionPayloadRef.current.status.isConnecting = true;
 
-    renderSettingsPageInFocusRing();
+    const focusContext = { current: null as FocusNavigationContextValue | null };
+    renderSettingsPageInFocusRing(focusContext);
 
     const saveButton = screen.getByRole("button", { name: /save & connect/i });
+    const refreshButton = screen.getByLabelText("Refresh connection");
     expect(screen.getByLabelText("Refresh connection")).toBeDisabled();
 
-    pressDpadDown(5);
-    expect(document.activeElement).toBe(saveButton);
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
-    expect(document.activeElement).toBe(screen.getByTestId("settings-device-name-field"));
+    const visited = visitByDpadDown(30);
+    expect(visited.has(saveButton)).toBe(true);
+    expect(visited.has(refreshButton)).toBe(false);
+    expect(focusContext.current?.engine.sourceForId("settings-refresh-connection")).toBeNull();
   });
 
   it("leaves the connection CTAs inert without a focus provider (default variant)", () => {

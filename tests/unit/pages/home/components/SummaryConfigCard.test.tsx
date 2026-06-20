@@ -101,13 +101,18 @@ describe("SummaryConfigCard", () => {
       </FocusNavigationProvider>,
     );
 
-    fireEvent.keyDown(document.body, { code: "ArrowRight" });
+    fireEvent.keyDown(document.body, { code: "Enter" });
+    for (let step = 0; step < 4 && !screen.getByTestId("turbo").hasAttribute("data-key-selected"); step += 1) {
+      fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    }
     expect(screen.getByTestId("turbo")).toHaveAttribute("data-key-selected", "true");
 
-    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    for (let step = 0; step < 4 && !screen.getByTestId("badline").hasAttribute("data-key-selected"); step += 1) {
+      fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    }
     expect(screen.getByTestId("badline")).toHaveAttribute("data-key-selected", "true");
 
-    fireEvent.keyDown(document.body, { code: "ArrowLeft" });
+    fireEvent.keyDown(document.body, { code: "Escape" });
     expect(screen.getByTestId("cpu-card")).toHaveAttribute("data-key-selected", "true");
   });
 });

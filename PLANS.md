@@ -484,3 +484,37 @@ See the brief's TERMINATION CRITERIA — tracked in the checklist below.
 - Next: Play/Disks primary CTAs (mirror this pattern), Config's per-category group actions
   (Refresh/Reset/Sync, slot into the STEP gap), M2.5 HomePage quick-config selects/sliders, or M2.2
   dialog `pushLayer` wiring + the Settings host/IP field-engagement slice.
+
+## Ralph loop (2026-06-20): guidance-bar component test (defend 91% coverage gate on in-flight discovery work)
+
+- Branch `feat/keyboard-input`. The branch carries a large UNCOMMITTED in-flight increment a
+  prior loop authored: "complete by construction" reachability (DOM auto-discovery via
+  `src/lib/input/discovery.ts` + `focusDiscovery.ts`, so `useFocusItem` becomes optional
+  refinement) plus the keypad guidance bar (`src/lib/input/guidance.ts` pure label policy +
+  `src/components/input/KeypadGuidanceBar.tsx` imperative React adapter), with a 453-line
+  refactor of `useFocusNavigation.tsx`. None of it was recorded in PLANS/WORKLOG.
+- Slice this loop: close the one coverage gap in that work. `KeypadGuidanceBar.tsx` (new, 159
+  lines) had NO dedicated test; measured branch coverage was 72.22% (uncovered: the null-context
+  guards, the empty-breadcrumb "Navigation" fallback, the not-visible early return). The pure
+  `guidance.ts` was already covered (49 tests) but the component's imperative DOM-writing branches
+  were not. The 91% line/branch gate is real and aggregate, so this protects it as the increment lands.
+- `tests/unit/components/input/KeypadGuidanceBar.test.tsx` (new, 6 tests): no-provider inert null
+  render (covers `!context`); hidden in pointer modality; hidden while the keypad flag is off;
+  visible after a nav key with the focused label + OK="Activate" + Back + Menu-slot hidden; Menu
+  soft key revealed when the current item has `aria-haspopup="menu"`; "Navigation" fallback when the
+  visible ring item resolves to no readable label. No source changed.
+- Result: `KeypadGuidanceBar.tsx` now 100% lines/statements/functions, 91.66% branch (combined with
+  the existing `useFocusNavigation` group tests); the two remaining uncovered branches (lines 70, 91)
+  are TS-mandated defensive `useRef(null).current` guards unreachable through the component.
+- Gates: `npx tsc --noEmit` exit 0; input subsystem `npx vitest run tests/unit/lib/input/
+  tests/unit/components/input/ tests/unit/hooks/useFocusNavigation.test.tsx
+  tests/unit/components/ui/slider.keypad.test.tsx` -> 199 pass (12 files, +6 new); full `npm run lint`
+  exit 0 (format/eslint/bundle-budgets/stale-names/variant:check/feature-flags:check). Coverage
+  measured per-file with `--coverage.include` rather than the full merged suite (narrow additive,
+  test-only change). Playwright/Waydroid/emulator: n/a this loop (no layout or packaging change).
+- Working tree left UNCOMMITTED (operator/next loop commits): the in-flight discovery+guidance
+  refactor plus this test are one coherent unit but were not authored this loop, and a full per-screen
+  reachability audit under the new discovery engine has not been run, so the increment is not sealed.
+- Next: a per-screen reachability audit under the discovery engine (verify pages reachable without
+  per-CTA `useFocusItem`); then the deterministic `back` chain wired to real dialogs/menus; T9 input
+  mode indicator (multitap vs hostname) + profile selector.

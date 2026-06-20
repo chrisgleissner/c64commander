@@ -13,7 +13,11 @@ import {
   PlaybackControlsCard,
   type PlaybackControlsCardProps,
 } from "@/pages/playFiles/components/PlaybackControlsCard";
-import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
+import {
+  FocusNavigationProvider,
+  useFocusNavigationContext,
+  type FocusNavigationContextValue,
+} from "@/hooks/useFocusNavigation";
 
 const buildProps = (overrides: Partial<PlaybackControlsCardProps> = {}): PlaybackControlsCardProps => ({
   hasCurrentItem: false,
@@ -50,6 +54,11 @@ const buildProps = (overrides: Partial<PlaybackControlsCardProps> = {}): Playbac
   reshuffleDisabled: true,
   ...overrides,
 });
+
+const FocusContextCapture = ({ target }: { target: { current: FocusNavigationContextValue | null } }) => {
+  target.current = useFocusNavigationContext();
+  return null;
+};
 
 describe("PlaybackControlsCard", () => {
   it("promotes the play button from transient flash to persistent highlight while playback is active", () => {
@@ -99,7 +108,8 @@ describe("PlaybackControlsCard", () => {
     expect(screen.getByTestId("playback-controls-stack")).toHaveClass("w-full");
   });
 
-  it("registers transport CTAs into the keypad focus ring in playback order", () => {
+  it("keeps transport CTAs DOM-backed and reachable in the keypad focus ring", () => {
+    const focusContext = { current: null as FocusNavigationContextValue | null };
     const props = buildProps({
       hasPrev: true,
       hasNext: true,
@@ -109,9 +119,16 @@ describe("PlaybackControlsCard", () => {
 
     render(
       <FocusNavigationProvider profileId="keypad">
+        <FocusContextCapture target={focusContext} />
         <PlaybackControlsCard {...props} />
       </FocusNavigationProvider>,
     );
+
+    expect(focusContext.current?.engine.sourceForId("play-transport-previous")).toBe("dom+explicit");
+    expect(focusContext.current?.engine.sourceForId("play-transport-play")).toBe("dom+explicit");
+    expect(focusContext.current?.engine.sourceForId("play-transport-pause")).toBe("dom+explicit");
+    expect(focusContext.current?.engine.sourceForId("play-transport-next")).toBe("dom+explicit");
+    expect(focusContext.current?.engine.sourceForId("play-transport-reshuffle")).toBe("dom+explicit");
 
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
     expect(props.onPrevious).toHaveBeenCalledTimes(1);
@@ -125,7 +142,9 @@ describe("PlaybackControlsCard", () => {
     fireEvent.keyDown(document.body, { code: "DpadDown" });
     expect(screen.getByTestId("playlist-next")).toHaveFocus();
 
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    for (let step = 0; step < 8 && document.activeElement !== screen.getByTestId("playlist-reshuffle"); step += 1) {
+      fireEvent.keyDown(document.body, { code: "DpadDown" });
+    }
     expect(screen.getByTestId("playlist-reshuffle")).toHaveFocus();
 
     fireEvent.keyDown(document.body, { code: "DpadCenter" });

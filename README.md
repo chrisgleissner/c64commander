@@ -253,6 +253,20 @@ The layout adapts automatically based on viewport width: Small (phones), Standar
   </tbody>
 </table>
 
+## Keyboard & Keypad Navigation
+
+C64 Commander can be operated with a hardware keyboard, D-pad/joystick, or
+numeric keypad.
+
+The visible highlight shows the selected control; use
+Up/Down to move, OK/Enter to open a card or activate a control, and Back/Escape
+to leave a card, close a dialog, or go back. A soft-key guidance bar appears only
+while key navigation is active and clears immediately on touch/mouse input.
+
+Disable it in **Settings > Experimental > Keyboard and keypad navigation** if a
+device should remain touch-only. Numeric-keypad T9 text entry is reserved for
+keypad-first mode; hardware keyboard typing remains literal.
+
 ## Troubleshooting
 
 ### Can't reach the device

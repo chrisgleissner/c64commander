@@ -516,7 +516,6 @@ const useDescriptorRegistration = (
       () => elementRef.current,
     );
     return () => context.unregisterDescriptor(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context, id, order, group, label, parentId, disabled, skip, kind]);
 
   return useCallback(
