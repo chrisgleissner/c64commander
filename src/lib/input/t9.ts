@@ -137,6 +137,13 @@ const toggleCharCase = (ch: string): string => {
 export const commitPending = (state: T9State): T9State => (state.pending ? { ...state, pending: null } : state);
 
 /**
+ * Number of candidates the current pending key cycles through (0 when nothing is
+ * pending). Pure read-only helper for diagnostics — reports a count, never text.
+ */
+export const pendingCandidateCount = (state: T9State, config: T9Config): number =>
+  state.pending ? candidatesForKey(state.pending.key, config).length : 0;
+
+/**
  * Generic multi-tap press for a candidate-bearing key. A repeated same-key
  * press inside the timeout cycles candidates in place; otherwise the prior
  * pending char is committed and a fresh candidate is inserted at the cursor.

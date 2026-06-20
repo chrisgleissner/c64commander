@@ -7,9 +7,18 @@
  */
 
 import { fireEvent, render } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import { FocusNavigationProvider, useFocusItem, useFocusNavigation } from "@/hooks/useFocusNavigation";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  FocusNavigationProvider,
+  useDismissibleNavigationLayer,
+  useFocusItem,
+  useFocusNavigation,
+} from "@/hooks/useFocusNavigation";
 import { NavigationController } from "@/lib/input";
+import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
+import { clearLogs, getLogs } from "@/lib/logging";
+
+const SELECTED = "data-key-selected";
 
 /**
  * Integration coverage for the React adapter that drives keypad-only navigation:
@@ -278,5 +287,175 @@ describe("FocusNavigationProvider + useFocusItem", () => {
     expect(getByText("Lonely")).toBeInTheDocument();
     // No provider → no global listener → key press changes nothing and does not throw.
     expect(fireEvent.keyDown(document.body, { code: "ArrowDown" })).toBe(true);
+  });
+});
+
+describe("FocusNavigationProvider — modality + selected-control highlight (Prime Directive)", () => {
+  it("flag OFF: a key never sets data-key-selected (byte-for-byte baseline)", () => {
+    const { getByText } = render(
+      <FocusNavigationProvider enabled={false}>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(getByText("A")).not.toHaveAttribute(SELECTED);
+    expect(getByText("B")).not.toHaveAttribute(SELECTED);
+  });
+
+  it("flag ON: no highlight before a key; highlight on the focused item after a recognized key", () => {
+    const { getByText } = render(
+      <FocusNavigationProvider enabled>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+    // State 2: flag on, pre-key → still no affordance.
+    expect(getByText("A")).not.toHaveAttribute(SELECTED);
+    expect(getByText("B")).not.toHaveAttribute(SELECTED);
+
+    // State 3: a recognized nav key → modality key-navigation → highlight on B.
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(getByText("B")).toHaveAttribute(SELECTED, "true");
+    expect(getByText("A")).not.toHaveAttribute(SELECTED);
+  });
+
+  it("an unrecognized / ignored key does not flip modality or set the highlight", () => {
+    const { getByText } = render(
+      <FocusNavigationProvider enabled>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+    // ArrowLeft → dpadLeft → ignored by the controller; KeyQ → no binding.
+    fireEvent.keyDown(document.body, { code: "ArrowLeft" });
+    fireEvent.keyDown(document.body, { code: "KeyQ", key: "q" });
+    expect(getByText("A")).not.toHaveAttribute(SELECTED);
+    expect(getByText("B")).not.toHaveAttribute(SELECTED);
+  });
+
+  it("the highlight moves to the new item on each focus change", () => {
+    const { getByText } = render(
+      <FocusNavigationProvider enabled>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" }); // → B
+    expect(getByText("B")).toHaveAttribute(SELECTED, "true");
+    fireEvent.keyDown(document.body, { code: "ArrowDown" }); // wraps → A
+    expect(getByText("A")).toHaveAttribute(SELECTED, "true");
+    expect(getByText("B")).not.toHaveAttribute(SELECTED);
+  });
+
+  it("State 4: a pointer/touch interaction clears the highlight the same frame", () => {
+    const { getByText } = render(
+      <FocusNavigationProvider enabled>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(getByText("B")).toHaveAttribute(SELECTED, "true");
+
+    fireEvent.pointerDown(document.body);
+    expect(getByText("B")).not.toHaveAttribute(SELECTED);
+  });
+
+  it("clears the highlight when the flag is turned off", () => {
+    const { getByText, rerender } = render(
+      <FocusNavigationProvider enabled>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(getByText("B")).toHaveAttribute(SELECTED, "true");
+
+    rerender(
+      <FocusNavigationProvider enabled={false}>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+    expect(getByText("B")).not.toHaveAttribute(SELECTED);
+  });
+});
+
+describe("useDismissibleNavigationLayer (dropdown/layer gating, HAZARD 2)", () => {
+  const Dropdown = ({ open, dismiss }: { open: boolean; dismiss: () => void }) => {
+    useDismissibleNavigationLayer(open, { dismiss });
+    return null;
+  };
+  const Capture = ({ onController }: { onController: (c: NavigationController | null) => void }) => {
+    onController(useFocusNavigation());
+    return null;
+  };
+
+  it("pushes a layer while open so vertical nav is suppressed; back dismisses it", () => {
+    let controller: NavigationController | null = null;
+    const dismiss = vi.fn();
+    const tree = (open: boolean) => (
+      <FocusNavigationProvider enabled>
+        <Capture onController={(c) => (controller = c)} />
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+        <Dropdown open={open} dismiss={dismiss} />
+      </FocusNavigationProvider>
+    );
+    const { getByText, rerender } = render(tree(false));
+    expect(controller?.layerDepth).toBe(0);
+
+    rerender(tree(true));
+    expect(controller?.layerDepth).toBe(1);
+
+    // With the layer open the underlying ring must not move on Down (HAZARD 2).
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(document.activeElement).not.toBe(getByText("B"));
+
+    // The back chain still runs so keypad back closes the layer.
+    fireEvent.keyDown(document.body, { code: "Escape" });
+    expect(dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not push a layer when the flag is off", () => {
+    let controller: NavigationController | null = null;
+    render(
+      <FocusNavigationProvider enabled={false}>
+        <Capture onController={(c) => (controller = c)} />
+        <Dropdown open dismiss={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+    expect(controller?.layerDepth).toBe(0);
+  });
+});
+
+describe("FocusNavigationProvider — key-input diagnostics gating (GAP 4)", () => {
+  afterEach(() => {
+    saveDebugLoggingEnabled(false);
+    clearLogs();
+  });
+
+  const keyInputEntries = () => getLogs().filter((entry) => entry.message === "key-input");
+
+  it("debug logging OFF → no key-input entries reach addLog", () => {
+    saveDebugLoggingEnabled(false);
+    clearLogs();
+    render(
+      <FocusNavigationProvider enabled>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    fireEvent.keyDown(document.body, { code: "KeyQ", key: "q" });
+    expect(keyInputEntries()).toHaveLength(0);
+  });
+
+  it("debug logging ON → recognized AND unmapped keys are logged (unknown not dropped)", () => {
+    saveDebugLoggingEnabled(true);
+    clearLogs();
+    render(
+      <FocusNavigationProvider enabled>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    fireEvent.keyDown(document.body, { code: "KeyQ", key: "q" });
+
+    const details = keyInputEntries().map((entry) => entry.details as Record<string, unknown>);
+    expect(details.some((d) => d.normalizedAction === "dpadDown" && d.handled === true)).toBe(true);
+    expect(details.some((d) => d.normalizedAction === null && d.ignoredReason === "no-binding")).toBe(true);
   });
 });

@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createIndexedSliderDomain, useDeviceBoundSlider } from "@/hooks/useDeviceBoundSlider";
+import { useDismissibleNavigationLayer, useFocusItem } from "@/hooks/useFocusNavigation";
 import { createLatestIntentWriteLane } from "@/lib/deviceInteraction/latestIntentWriteLane";
 import type { LatestIntentWriteLane } from "@/lib/deviceInteraction/latestIntentWriteLane";
 import { emitUiTraceMarker } from "@/lib/tracing/userTrace";
@@ -384,6 +385,26 @@ export function ConfigItemRow({
     },
   });
 
+  // Keypad focus-ring participation for the shared select/slider controls
+  // (GAP 2/3). Stable ids derived from category+name; the testid is a test hook
+  // (inert, not a user-visible affordance). The Select is made controlled so the
+  // dismissible layer can close it on keypad `back`; opening pushes a `popup`
+  // layer so Radix — not the underlying ring — owns option navigation (HAZARD 2).
+  const keypadControlKey = `${category ?? ""}:${name}`;
+  const selectTestId = `config-select-trigger:${keypadControlKey}`;
+  const [selectOpen, setSelectOpen] = useState(false);
+  const selectFocusRef = useFocusItem<HTMLButtonElement>({
+    id: controlKind === "select" ? `config-select:${keypadControlKey}` : "",
+    order: 100,
+    group: category ?? "config",
+    disabled: isLoading || isItemLoading || isReadOnly,
+    // center/enter OPENS the dropdown (idempotent: avoids a toggle race with
+    // Radix's own native Enter-to-open, and works for keypad center/keyCode 23
+    // which Radix does not recognize). Radix then moves focus into the listbox.
+    onActivate: () => setSelectOpen(true),
+  });
+  useDismissibleNavigationLayer(selectOpen, { kind: "popup", dismiss: () => setSelectOpen(false) });
+
   if (controlKind === "checkbox" && checkboxMapping) {
     const checked = String(displayValue).trim().toLowerCase() === checkboxMapping.checkedValue.trim().toLowerCase();
 
@@ -437,6 +458,8 @@ export function ConfigItemRow({
         <div className={layout === "horizontal" ? "min-w-[160px] max-w-[220px]" : "w-full"}>
           <Select
             value={selectedValue}
+            open={selectOpen}
+            onOpenChange={setSelectOpen}
             onValueChange={(newValue) => {
               if (isReadOnly) return;
               const nextValue = newValue === emptySentinel ? "" : newValue;
@@ -446,7 +469,7 @@ export function ConfigItemRow({
             }}
             disabled={isLoading || isItemLoading || isReadOnly}
           >
-            <SelectTrigger aria-label={`${displayLabel} select`}>
+            <SelectTrigger ref={selectFocusRef} data-testid={selectTestId} aria-label={`${displayLabel} select`}>
               <SelectValue placeholder={isItemLoading ? "Loading…" : displayValueLabel || "Select"} />
             </SelectTrigger>
             <SelectContent>
@@ -510,6 +533,9 @@ export function ConfigItemRow({
               valueFormatter={formatSliderLabel}
               aria-label={`${displayLabel} slider`}
               data-testid={sliderTestId}
+              keypadFocusId={`config-slider:${keypadControlKey}`}
+              keypadFocusGroup={category ?? "config"}
+              keypadFocusOrder={100}
             />
           </div>
           {rightAccessory ? <div className="flex items-center gap-2">{rightAccessory}</div> : null}

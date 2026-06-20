@@ -1,0 +1,78 @@
+# Keypad / T9 input smoke (LOCAL / DEVICE-ONLY — NOT CI-gated).
+#
+# Proves, on a real Android device/emulator, that the keypad_input_enabled
+# feature can be toggled on from Settings and that touch still works (touch
+# clears the selected-control highlight). It does NOT inject D-pad / Star keys:
+# Maestro `pressKey` cannot send DPAD_*/STAR, so OS-level key navigation is
+# driven separately by the bash+adb harness `scripts/android-keypad-smoke.sh`
+# (run it around this flow). The CI-enforced FUNCTIONAL proof of the four
+# Prime-Directive states, both hazards, and T9 is the Playwright spec
+# `playwright/keypadInput.spec.ts` (`npm run test:e2e`).
+#
+# CI does NOT run this flow: keypad needs special key injection and would bloat
+# the <=6-min CI Maestro budget. Tagged `device` + `keypad` (not `ci-critical`).
+#
+# Maestro assumption: >= 1.39 (id: selectors with `checked:`/`optional:`; the
+# feature-flag toggle testid is `feature-flag-<id>`). On WebView accessibility
+# gaps, fall back to the text label "Keypad / T9 input".
+#
+# adb key-injection fallback (run after enabling the flag, app on Home):
+#   for k in 20 19 22 21 23 66 8 9 10 16 17 18 67; do \
+#     adb shell input keyevent "$k"; sleep 0.4; done
+# (DPAD down/up/right/left/center, ENTER, digits, STAR, POUND, DEL) — or just
+#   scripts/android-keypad-smoke.sh <serial> <apk> <package>
+
+appId: uk.gleissner.c64commander
+env:
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
+tags:
+  - device
+  - keypad
+---
+- runFlow: subflows/launch-and-wait.yaml
+
+# Open Settings and enable the experimental "Keypad / T9 input" flag.
+- tapOn:
+    id: "tab-settings"
+    optional: true
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: ${TIMEOUT}
+- scrollUntilVisible:
+    element:
+      text: "Keypad / T9 input"
+    direction: DOWN
+    speed: 80
+    timeout: ${LONG_TIMEOUT}
+- tapOn:
+    id: "feature-flag-keypad_input_enabled"
+    checked: false
+    optional: true
+# Text fallback when the WebView a11y tree does not expose the testid.
+- tapOn:
+    text: "Keypad / T9 input"
+    optional: true
+- takeScreenshot: keypad-flag-enabled
+
+# Return Home. Key injection (D-pad/Star) is done by the adb harness above; the
+# selected-control highlight (data-key-selected) appears only once a recognized
+# key takes effect, so capture Home for review after injecting keys externally.
+- tapOn:
+    id: "tab-home"
+    optional: true
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: ${TIMEOUT}
+- takeScreenshot: keypad-home-before-keys
+
+# Prove touch still works (and would clear any key-selected highlight): a plain
+# tap navigates as always, with no keypad affordance left behind.
+- tapOn:
+    id: "tab-config"
+    optional: true
+- extendedWaitUntil:
+    visible: "Config"
+    timeout: ${TIMEOUT}
+- takeScreenshot: keypad-touch-still-works

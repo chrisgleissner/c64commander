@@ -397,6 +397,24 @@ button:focus-visible,
   filter: brightness(1.04) saturate(1.05);
 }
 
+/*
+ * Keypad / T9 "selected control" highlight (the keypad_input_enabled feature).
+ * Appears ONLY while key-navigation modality is active (the FocusNavigationProvider
+ * toggles this attribute), layered ON TOP OF the existing :focus-visible /
+ * focus-flash / ARIA treatment — never replacing it. Unlike the 160ms focus-flash
+ * (which fades to nothing), this is a STEADY ring so it works as a persistent
+ * "where am I" indicator for touch-free navigation. Removed the instant the user
+ * touches the screen (modality flips back to pointer).
+ */
+[data-key-selected="true"] {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  border-radius: 0.375rem;
+  box-shadow:
+    0 0 0 4px hsl(var(--ring) / 0.3),
+    0 0 16px -4px hsl(var(--ring) / 0.8);
+}
+
 @layer base {
   * {
     @apply border-border;

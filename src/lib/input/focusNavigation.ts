@@ -121,6 +121,24 @@ export class NavigationController {
 
   /** Applies a semantic action and returns what it resolved to. */
   dispatch(action: SemanticAction): NavigationOutcome {
+    // The `back` chain stays global regardless of open overlays, so a keypad
+    // `back` (Android keyCode 4 — which Radix does not recognize) can always
+    // unwind the topmost dismissible layer / engaged field / route.
+    if (BACK_ACTIONS.has(action)) {
+      return this.back();
+    }
+    if (action === "closeMenu") {
+      return this.closeTopMenu();
+    }
+    // While a dismissible layer is open (an open Radix Select/dialog/menu), the
+    // layer owns vertical option navigation, activation, and typeahead — the
+    // open widget already handles Up/Down/Enter natively. The global ring must
+    // NOT move underneath it (HAZARD 2), so vertical-nav/activate resolve to
+    // `ignored` here; the React adapter then leaves `preventDefault` unset and
+    // the native (Radix) handler runs.
+    if (this.layers.length > 0) {
+      return { type: "ignored" };
+    }
     if (FOCUS_NEXT_ACTIONS.has(action)) {
       return this.move(() => this.focus.focusNext());
     }
@@ -129,12 +147,6 @@ export class NavigationController {
     }
     if (ACTIVATE_ACTIONS.has(action)) {
       return this.activate();
-    }
-    if (BACK_ACTIONS.has(action)) {
-      return this.back();
-    }
-    if (action === "closeMenu") {
-      return this.closeTopMenu();
     }
     // Horizontal d-pad, soft keys, digits, and openMenu are owned elsewhere
     // (focused widget / T9 composer / context handlers), not by global nav.

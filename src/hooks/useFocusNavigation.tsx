@@ -41,13 +41,31 @@ import {
   type RefCallback,
 } from "react";
 
-import { NavigationController, normalizeKeyEvent, resolveInputProfile, type FocusItem } from "@/lib/input";
+import {
+  NavigationController,
+  getInputModality,
+  normalizeKeyEvent,
+  resolveInputProfile,
+  setInputModality,
+  subscribeInputModality,
+  type DismissibleLayer,
+  type FocusItem,
+  type Keymap,
+} from "@/lib/input";
+import { emitKeyInputDiagnostics } from "@/lib/diagnostics/keyInputDiagnostics";
+
+/** DOM attribute marking the current focus-ring item while in key-navigation modality. */
+const KEY_SELECTED_ATTR = "data-key-selected";
 
 interface FocusNavigationContextValue {
   readonly controller: NavigationController;
   /** Registers an item and a lazy resolver for its current DOM element. */
   readonly register: (item: FocusItem, resolveElement: () => HTMLElement | null) => void;
   readonly unregister: (id: string) => void;
+  /** Whether the global key listener is active (the `keypad_input_enabled` flag). */
+  readonly enabled: boolean;
+  /** Active keymap, so a focused widget (e.g. a slider) can normalize its own keys. */
+  readonly keymap: Keymap;
 }
 
 const FocusNavigationContext = createContext<FocusNavigationContextValue | null>(null);
@@ -87,6 +105,14 @@ export const FocusNavigationProvider = ({
   const resolversRef = useRef(new Map<string, () => HTMLElement | null>());
   const onNavigateBackRef = useRef(onNavigateBack);
   onNavigateBackRef.current = onNavigateBack;
+  // `enabled` mirrors `keypad_input_enabled`; read it from a ref inside the
+  // window listeners so the highlight gate always sees the current flag value.
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
+  // The element currently carrying `data-key-selected`, tracked imperatively so
+  // the highlight toggle never goes through React state (HAZARD 3 — avoids the
+  // known setState-in-effect coverage hang).
+  const selectedElementRef = useRef<HTMLElement | null>(null);
 
   const controller = useMemo(
     () =>
@@ -98,6 +124,26 @@ export const FocusNavigationProvider = ({
       }),
     [],
   );
+
+  /**
+   * Applies the selected-control highlight imperatively: `data-key-selected` sits
+   * on exactly the current focus-ring item's element, iff the flag is on AND
+   * modality is `key-navigation`. Moves to the new element and clears the old one
+   * on every change; clears entirely otherwise (flag off / pointer modality).
+   */
+  const refreshHighlight = useCallback(() => {
+    const shouldShow = enabledRef.current && getInputModality() === "key-navigation";
+    const currentId = controller.focus.current()?.id;
+    const nextElement = shouldShow && currentId ? (resolversRef.current.get(currentId)?.() ?? null) : null;
+    const previousElement = selectedElementRef.current;
+    if (previousElement && previousElement !== nextElement) {
+      previousElement.removeAttribute(KEY_SELECTED_ATTR);
+    }
+    if (nextElement) {
+      nextElement.setAttribute(KEY_SELECTED_ATTR, "true");
+    }
+    selectedElementRef.current = nextElement;
+  }, [controller]);
 
   const register = useCallback<FocusNavigationContextValue["register"]>(
     (item, resolveElement) => {
@@ -111,29 +157,100 @@ export const FocusNavigationProvider = ({
     (id) => {
       resolversRef.current.delete(id);
       controller.focus.unregister(id);
+      // The highlighted item may have just unmounted; re-derive the attribute.
+      refreshHighlight();
     },
-    [controller],
+    [controller, refreshHighlight],
   );
 
   const keymap = useMemo(() => resolveInputProfile(profileId), [profileId]);
 
+  // Re-apply the highlight whenever modality flips (key press, slider key
+  // adjust, T9 composer key, or a pointer touch flipping back to `pointer`).
+  useEffect(() => subscribeInputModality(refreshHighlight), [refreshHighlight]);
+
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      // Flag turned off: drop any lingering highlight and reset modality so the
+      // app returns to the byte-for-byte baseline.
+      if (selectedElementRef.current) {
+        selectedElementRef.current.removeAttribute(KEY_SELECTED_ATTR);
+        selectedElementRef.current = null;
+      }
+      setInputModality("pointer");
+      return;
+    }
     const handleKeyDown = (event: KeyboardEvent) => {
+      const normalized = normalizeKeyEvent(event, keymap);
+      const { action } = normalized;
+      // Never touch editable targets (the field + its T9 composer own them); and
+      // never log them, so typed text is never captured by diagnostics.
       if (isEditableTarget(event.target)) return;
-      const { action } = normalizeKeyEvent(event, keymap);
-      if (action === null) return;
-      if (controller.dispatch(action).type !== "ignored") {
+      // NB: we intentionally do NOT bail on `event.defaultPrevented`. A focused
+      // slider `preventDefault`s Up/Down to suppress Radix's value step while
+      // STILL relying on this handler to move focus; HAZARD 2 (open dropdowns)
+      // is handled by the controller's layer guard, not here.
+      const activeElement = document.activeElement;
+      if (action === null) {
+        // Unmapped key on a navigable target — log raw fields so a binding can
+        // be added from an export. Never silently dropped.
+        emitKeyInputDiagnostics({
+          rawEvent: event,
+          normalizedAction: null,
+          handled: false,
+          ignoredReason: "no-binding",
+          preventDefaultApplied: false,
+          keypadEnabled: enabledRef.current,
+          modality: getInputModality(),
+          selectedControlId: controller.focus.current()?.id ?? null,
+          activeElement,
+        });
+        return;
+      }
+      // A deeper open layer (e.g. a Radix popup's own document-level Escape
+      // handler, which `preventDefault`s) may have already consumed a dismissal
+      // key. Do NOT also run the global back chain — it could `navigate(-1)` once
+      // the layer has already closed itself. Scoped to back/escape so a slider's
+      // Up/Down `preventDefault` (dpad actions) still moves focus normally.
+      if (event.defaultPrevented && (action === "back" || action === "escape")) {
+        return;
+      }
+      const handled = controller.dispatch(action).type !== "ignored";
+      if (handled) {
+        // A recognized key produced an effect → key-navigation modality + the
+        // selected-control highlight (refreshHighlight reads the new current item).
+        setInputModality("key-navigation");
+        refreshHighlight();
         event.preventDefault();
       }
+      emitKeyInputDiagnostics({
+        rawEvent: event,
+        normalizedAction: action,
+        handled,
+        ignoredReason: handled ? undefined : "ignored-by-controller",
+        preventDefaultApplied: handled,
+        keypadEnabled: enabledRef.current,
+        modality: getInputModality(),
+        selectedControlId: controller.focus.current()?.id ?? null,
+        activeElement,
+      });
     };
+    // Pointer/touch always wins: capture-phase so it flips modality (and clears
+    // the highlight via the subscription) before any other handler runs.
+    const handlePointer = () => setInputModality("pointer");
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [controller, enabled, keymap]);
+    window.addEventListener("pointerdown", handlePointer, true);
+    window.addEventListener("touchstart", handlePointer, true);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("pointerdown", handlePointer, true);
+      window.removeEventListener("touchstart", handlePointer, true);
+    };
+  }, [controller, enabled, keymap, refreshHighlight]);
 
   const value = useMemo<FocusNavigationContextValue>(
-    () => ({ controller, register, unregister }),
-    [controller, register, unregister],
+    () => ({ controller, register, unregister, enabled, keymap }),
+    [controller, register, unregister, enabled, keymap],
   );
 
   return <FocusNavigationContext.Provider value={value}>{children}</FocusNavigationContext.Provider>;
@@ -142,6 +259,48 @@ export const FocusNavigationProvider = ({
 /** The active {@link NavigationController}, or `null` outside a provider (e.g. to push dismissible layers). */
 export const useFocusNavigation = (): NavigationController | null =>
   useContext(FocusNavigationContext)?.controller ?? null;
+
+/**
+ * The full focus-navigation context (controller + `enabled` flag + active
+ * keymap), or `null` outside a provider. Used by focused widgets that own their
+ * own keys (e.g. sliders) and need to know whether keypad nav is active.
+ */
+export const useFocusNavigationContext = (): FocusNavigationContextValue | null => useContext(FocusNavigationContext);
+
+let dismissibleLayerSeq = 0;
+
+/**
+ * Registers an open overlay (Radix Select/dropdown/popover) as a dismissible
+ * layer on the {@link NavigationController} while `open` is true and keypad
+ * navigation is enabled. The layer guard then makes the open widget — not the
+ * underlying focus ring — own vertical/activate keys (HAZARD 2), and keypad
+ * `back` (keyCode 4, which Radix ignores) closes it via `dismiss`.
+ *
+ * No-op outside a provider or when the flag is off, so it never perturbs the
+ * baseline (the controller's key listener is detached then anyway).
+ */
+export const useDismissibleNavigationLayer = (
+  open: boolean,
+  { kind = "popup", dismiss }: { kind?: DismissibleLayer["kind"]; dismiss: () => void },
+): void => {
+  const context = useContext(FocusNavigationContext);
+  const dismissRef = useRef(dismiss);
+  dismissRef.current = dismiss;
+  const idRef = useRef<string>("");
+  if (!idRef.current) {
+    idRef.current = `nav-layer-${(dismissibleLayerSeq += 1)}`;
+  }
+
+  const controller = context?.controller ?? null;
+  const enabled = context?.enabled ?? false;
+
+  useEffect(() => {
+    if (!controller || !enabled || !open) return;
+    const id = idRef.current;
+    controller.pushLayer({ id, kind, dismiss: () => dismissRef.current() });
+    return () => controller.removeLayer(id);
+  }, [controller, enabled, open, kind]);
+};
 
 export interface UseFocusItemOptions {
   /**

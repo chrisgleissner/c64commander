@@ -1,6 +1,8 @@
 import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { useT9Input, type UseT9InputOptions } from "@/hooks/useT9Input";
+import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
+import { clearLogs, getLogs } from "@/lib/logging";
 
 type KeyInit = { code?: string; key?: string; shiftKey?: boolean };
 
@@ -101,5 +103,45 @@ describe("useT9Input", () => {
     const { state, press } = createDriver({ mode: "hostname", enabled: false, now: () => 1 });
     press({ code: "Digit5", key: "5" });
     expect(state.value).toBe("");
+  });
+});
+
+describe("useT9Input — key-input diagnostics (GAP 4)", () => {
+  afterEach(() => {
+    saveDebugLoggingEnabled(false);
+    clearLogs();
+  });
+
+  const keyInputEntries = () => getLogs().filter((entry) => entry.message === "key-input");
+
+  it("does not emit when debug logging is off", () => {
+    saveDebugLoggingEnabled(false);
+    clearLogs();
+    const { press } = createDriver({ mode: "hostname", now: () => 1 });
+    press({ code: "Digit1", key: "1" });
+    expect(keyInputEntries()).toHaveLength(0);
+  });
+
+  it("emits ONLY for consumed composer keys, with lengths-only state and no field text", () => {
+    saveDebugLoggingEnabled(true);
+    clearLogs();
+    const { state, press } = createDriver({ mode: "hostname", now: () => 1 });
+    // Compose "192": each digit is a consumed composer key → one entry each.
+    press({ code: "Digit1", key: "1" });
+    press({ code: "Digit9", key: "9" });
+    press({ code: "Digit2", key: "2" });
+    // A passthrough (letter) is NOT consumed → no entry.
+    press({ code: "KeyC", key: "c" });
+    expect(state.value).toBe("192");
+
+    const entries = keyInputEntries();
+    expect(entries).toHaveLength(3);
+    const serialized = JSON.stringify(entries.map((entry) => entry.details));
+    // Never the accumulated host/field text — only counts.
+    expect(serialized).not.toContain("192");
+    entries.forEach((entry) => {
+      const details = entry.details as { t9State?: { committedLength?: unknown } };
+      expect(typeof details.t9State?.committedLength).toBe("number");
+    });
   });
 });

@@ -193,6 +193,9 @@ export function HomeCpuSpeedSlider({
         valueFormatter={(index) => resolveCpuSpeedOption(index)}
         aria-label="CPU Speed slider"
         data-testid="home-cpu-speed-slider"
+        keypadFocusId="home-cpu-speed-slider"
+        keypadFocusGroup="home-controls"
+        keypadFocusOrder={50}
       />
     </div>
   );

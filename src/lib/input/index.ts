@@ -35,6 +35,7 @@ export {
   DEFAULT_T9_CONFIG,
   resolveT9Config,
   createT9State,
+  pendingCandidateCount,
   pressDigit,
   pressPunctuation,
   commitPending,
@@ -49,6 +50,9 @@ export {
 
 export type { FocusItem } from "./focusController";
 export { FocusController } from "./focusController";
+
+export type { InputModality } from "./inputModality";
+export { getInputModality, setInputModality, subscribeInputModality, resetInputModality } from "./inputModality";
 
 export type {
   DismissibleLayer,

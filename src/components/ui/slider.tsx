@@ -10,6 +10,8 @@ import * as React from "react";
 import * as SliderPrimitive from "@radix-ui/react-slider";
 
 import { cn } from "@/lib/utils";
+import { useFocusItem, useFocusNavigationContext } from "@/hooks/useFocusNavigation";
+import { normalizeKeyEvent, setInputModality } from "@/lib/input";
 import { emitUiTraceMarker, wrapValueChange } from "@/lib/tracing/userTrace";
 import {
   clampSliderValue,
@@ -45,7 +47,27 @@ type SliderProps = React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root> &
   nativeInputAriaLabel?: string;
   nativeInputTestId?: string;
   nativeInputClassName?: string;
+  /**
+   * When set, registers this slider's thumb into the keypad focus ring (the
+   * `keypad_input_enabled` feature) so it is reachable by d-pad traversal. Inert
+   * unless the feature flag is on; the thumb is already `tabIndex=0` today, so
+   * registration adds NO new affordance (Prime Directive states 1–2).
+   */
+  keypadFocusId?: string;
+  /** Lower sorts earlier in keypad d-pad traversal. Defaults to 0. */
+  keypadFocusOrder?: number;
+  keypadFocusGroup?: string;
+  /** Force the ring to skip this slider (in addition to `disabled`). */
+  keypadFocusDisabled?: boolean;
 };
+
+/**
+ * Debounce window for coalescing a key-repeat burst into a SINGLE device write.
+ * Each Left/Right press updates the draft (label + aria-valuenow) immediately;
+ * the commit (the device write) fires once the burst settles, mirroring a drag
+ * release — so repeated presses never bypass the `useDeviceBoundSlider` throttle.
+ */
+export const SLIDER_KEY_COMMIT_DEBOUNCE_MS = 400;
 
 const normalizeSliderValue = (value: number, min: number, max: number) =>
   Number.isFinite(value) ? clampSliderValue(value, min, max) : min;
@@ -79,10 +101,15 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
       nativeInputAriaLabel,
       nativeInputTestId,
       nativeInputClassName,
+      keypadFocusId,
+      keypadFocusOrder = 0,
+      keypadFocusGroup,
+      keypadFocusDisabled,
       onPointerDown,
       onPointerUp,
       onPointerCancel,
       onBlur,
+      onKeyDown,
       ...props
     },
     ref,
@@ -100,6 +127,28 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
     const popupSessionOpenRef = React.useRef(false);
     const lastValueRef = React.useRef<number | null>(null);
     const lastHapticAtRef = React.useRef<number | null>(null);
+    // Keypad focus-ring participation (HAZARD 1). `keypadActive` is false unless a
+    // `keypadFocusId` is set AND the feature flag is on, so everything below is
+    // inert at baseline. The thumb (registered element) is already `tabIndex=0`,
+    // so registration adds no new affordance.
+    const focusNav = useFocusNavigationContext();
+    const keypadActive = Boolean(keypadFocusId) && Boolean(focusNav?.enabled);
+    const keypadThumbRef = useFocusItem<HTMLSpanElement>({
+      id: keypadFocusId ?? "",
+      order: keypadFocusOrder,
+      group: keypadFocusGroup,
+      disabled: Boolean(props.disabled) || Boolean(keypadFocusDisabled),
+    });
+    // Key-driven horizontal stepping coalesces a burst into ONE commit (device
+    // write) via this debounce, reusing the existing onValueChange/onValueCommit
+    // throttle path — no separate key-repeat write lane.
+    const keyCommitTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const keyDraftRef = React.useRef<number | null>(null);
+    const clearKeyCommitTimer = React.useCallback(() => {
+      if (keyCommitTimerRef.current === null) return;
+      clearTimeout(keyCommitTimerRef.current);
+      keyCommitTimerRef.current = null;
+    }, []);
 
     const normalizedMidpoint = React.useMemo(() => normalizeSliderMidpoint(midpoint, min, max), [max, midpoint, min]);
     const normalizedValue = React.useMemo(
@@ -204,10 +253,15 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
 
     const handlePointerDown = React.useCallback(
       (event: React.PointerEvent<HTMLDivElement>) => {
+        // A pointer drag supersedes any in-flight key-driven step; drop the
+        // pending key commit so the drag's own commit is authoritative. (The
+        // global capture listener flips modality to pointer + clears the highlight.)
+        clearKeyCommitTimer();
+        keyDraftRef.current = null;
         registerPopupInteraction("interaction-start");
         onPointerDown?.(event);
       },
-      [onPointerDown, registerPopupInteraction],
+      [clearKeyCommitTimer, onPointerDown, registerPopupInteraction],
     );
 
     const handlePointerUp = React.useCallback(
@@ -308,6 +362,70 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
       },
       [displayValue, dragValue, handleValueCommit, onBlur],
     );
+    const flushKeyCommit = React.useCallback(() => {
+      clearKeyCommitTimer();
+      const pending = keyDraftRef.current;
+      keyDraftRef.current = null;
+      if (pending !== null) {
+        handleValueCommit([pending]);
+      }
+    }, [clearKeyCommitTimer, handleValueCommit]);
+
+    const scheduleKeyCommit = React.useCallback(
+      (nextValue: number) => {
+        keyDraftRef.current = nextValue;
+        clearKeyCommitTimer();
+        keyCommitTimerRef.current = setTimeout(() => {
+          keyCommitTimerRef.current = null;
+          flushKeyCommit();
+        }, SLIDER_KEY_COMMIT_DEBOUNCE_MS);
+      },
+      [clearKeyCommitTimer, flushKeyCommit],
+    );
+
+    const handleKeypadKeyDown = React.useCallback(
+      (event: React.KeyboardEvent<HTMLSpanElement>) => {
+        onKeyDown?.(event);
+        if (event.defaultPrevented) return;
+        if (!keypadActive || !focusNav || props.disabled) return;
+        const { action } = normalizeKeyEvent(event, focusNav.keymap);
+        if (action === "dpadUp" || action === "dpadDown") {
+          // Suppress Radix's value step on Up/Down (composeEventHandlers skips its
+          // internal handler once we preventDefault); the global handler still
+          // moves focus (Up/Down → focusPrevious/Next). Value-only ⊥ focus-only.
+          event.preventDefault();
+          flushKeyCommit();
+          return;
+        }
+        if (action === "dpadLeft" || action === "dpadRight") {
+          const stepSize = Number.isFinite(step) && step ? (step as number) : 1;
+          const base = keyDraftRef.current ?? displayValue;
+          const direction = action === "dpadRight" ? 1 : -1;
+          const next = normalizeSliderValue(base + direction * stepSize, min, max);
+          if (next === base) return; // at the edge → no effect → don't preventDefault / flip modality
+          event.preventDefault(); // we own horizontal stepping; routes through onValueChange/Commit
+          keyDraftRef.current = next;
+          setInputModality("key-navigation");
+          handleValueChange([next]); // draft + popup + consumer onValueChange (label + aria-valuenow)
+          scheduleKeyCommit(next); // one coalesced commit per burst
+        }
+      },
+      [
+        displayValue,
+        flushKeyCommit,
+        focusNav,
+        handleValueChange,
+        keypadActive,
+        max,
+        min,
+        onKeyDown,
+        props.disabled,
+        scheduleKeyCommit,
+        step,
+      ],
+    );
+
+    React.useEffect(() => () => clearKeyCommitTimer(), [clearKeyCommitTimer]);
 
     return (
       <SliderPrimitive.Root
@@ -315,6 +433,7 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
         onValueChange={tracedChange}
         onValueCommit={tracedCommit}
         onBlur={handleBlur}
+        onKeyDown={handleKeypadKeyDown}
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
@@ -374,6 +493,7 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
           </div>
         ) : null}
         <SliderPrimitive.Thumb
+          ref={keypadThumbRef}
           className={cn(
             "block h-5 w-5 rounded-full border-2 border-primary bg-background ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
             thumbClassName,

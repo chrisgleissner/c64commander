@@ -209,6 +209,41 @@ describe("NavigationController — closeMenu", () => {
   });
 });
 
+describe("NavigationController — open-layer guard (HAZARD 2)", () => {
+  it("ignores vertical nav and activation while a dismissible layer is open", () => {
+    const onFocus = vi.fn();
+    const onActivate = vi.fn();
+    const nav = withItems({ onFocus, onActivate });
+    nav.pushLayer(layer("dropdown", "popup"));
+
+    // The open layer (e.g. a Radix Select) owns Up/Down/Enter — the underlying
+    // ring must NOT move underneath it.
+    expect(nav.dispatch("dpadDown")).toEqual({ type: "ignored" });
+    expect(nav.dispatch("dpadUp")).toEqual({ type: "ignored" });
+    expect(nav.dispatch("nextField")).toEqual({ type: "ignored" });
+    expect(nav.dispatch("center")).toEqual({ type: "ignored" });
+    expect(nav.dispatch("enter")).toEqual({ type: "ignored" });
+    expect(nav.dispatch("activate")).toEqual({ type: "ignored" });
+    expect(onFocus).not.toHaveBeenCalled();
+    expect(onActivate).not.toHaveBeenCalled();
+  });
+
+  it("still runs the back chain so keypad back can close the open layer", () => {
+    const dismiss = vi.fn();
+    const onNavigateBack = vi.fn();
+    const nav = withItems({ onNavigateBack });
+    nav.pushLayer(layer("dropdown", "popup", dismiss));
+
+    expect(nav.dispatch("back").type).toBe("layerDismissed");
+    expect(dismiss).toHaveBeenCalledTimes(1);
+    expect(nav.layerDepth).toBe(0);
+    expect(onNavigateBack).not.toHaveBeenCalled();
+
+    // With the layer gone, vertical nav resumes normally.
+    expect(nav.dispatch("dpadDown")).toEqual({ type: "focusMoved", item: expect.objectContaining({ id: "b" }) });
+  });
+});
+
 describe("NavigationController — actions owned elsewhere", () => {
   it.each<["dpadLeft" | "dpadRight" | "softLeft" | "softRight" | "openMenu" | "digit5"]>([
     ["dpadLeft"],
