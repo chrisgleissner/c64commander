@@ -267,10 +267,15 @@ test.describe("launch sequence", () => {
     const resolvedTimings = await readResolvedLaunchTimings(page);
 
     await waitForAnyLaunchPhase(page, ["hold", "fade-out"]);
+    // The app shell stays hidden (opacity 0) for every pre-app-ready phase —
+    // fade-in, hold AND fade-out (see index.css [data-launch-phase]). On a loaded
+    // runner the preamble above can take long enough that the sequence has already
+    // advanced to fade-out by the time we sample, so accept it too; excluding it
+    // made this assertion race the hold→fade-out transition and time out.
     await page.waitForFunction(
       () => {
         const phase = document.querySelector<HTMLElement>('[data-testid="startup-launch-sequence"]')?.dataset.phase;
-        return phase === "fade-in" || phase === "hold";
+        return phase === "fade-in" || phase === "hold" || phase === "fade-out";
       },
       { polling: 16 },
     );
