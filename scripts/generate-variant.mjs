@@ -28,6 +28,7 @@ export const DEFAULT_ANDROID_LAUNCHER_BACKGROUND_XML_PATH = path.join(
 );
 export const DEFAULT_IOS_VARIANT_XCCONFIG_PATH = path.join(REPO_ROOT, 'ios/App/App/Config/Variant.generated.xcconfig');
 export const ALLOWED_ENDPOINT_KEYS = ['device_host', 'hvsc_base_url', 'commoserve_base_url'];
+const ALLOWED_DEFAULT_DISPLAY_PROFILES = ['auto', 'compact', 'medium', 'expanded'];
 
 const VARIANT_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 
@@ -285,6 +286,19 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
         }
         requireNonEmptyString(runtimeEndpointsRaw[key], `variants.${variantId}.runtime.endpoints.${key}`);
     });
+    const defaultDisplayProfile = requireNonEmptyString(
+        runtime.default_display_profile ?? 'auto',
+        `variants.${variantId}.runtime.default_display_profile`,
+    );
+    if (!ALLOWED_DEFAULT_DISPLAY_PROFILES.includes(defaultDisplayProfile)) {
+        fail(
+            `variants.${variantId}.runtime.default_display_profile must be one of ${ALLOWED_DEFAULT_DISPLAY_PROFILES.join(', ')}`,
+        );
+    }
+    const defaultT9InputEnabled =
+        runtime.default_t9_input_enabled !== undefined
+            ? requireBoolean(runtime.default_t9_input_enabled, `variants.${variantId}.runtime.default_t9_input_enabled`)
+            : false;
 
     const platform = {
         android: {
@@ -364,6 +378,8 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
             },
         },
         runtime: {
+            defaultDisplayProfile,
+            defaultT9InputEnabled,
             endpoints: Object.fromEntries(endpointKeys.map((key) => [key, runtimeEndpointsRaw[key].trim()])),
         },
     };

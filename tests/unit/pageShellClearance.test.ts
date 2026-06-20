@@ -58,6 +58,14 @@ describe("page-shell bounded viewport contract", () => {
     );
   });
 
+  it("keeps the hardware-key selected-control ring visible over component focus utilities", () => {
+    const rule = css.match(/\[data-key-selected="true"\]\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+
+    expect(rule).toMatch(/outline:\s*2px solid hsl\(var\(--ring\)\)\s*!important\s*;/);
+    expect(rule).toMatch(/outline-offset:\s*2px\s*!important\s*;/);
+    expect(rule).toMatch(/box-shadow:[\s\S]*!important\s*;/);
+  });
+
   it("keeps the initial page handoff tighter than the general page rhythm", () => {
     expect(getDisplayProfileLayoutTokens("compact").pagePaddingTop).toBe("0.5rem");
     expect(getDisplayProfileLayoutTokens("medium").pagePaddingTop).toBe("0.75rem");

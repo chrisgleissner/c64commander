@@ -1,4 +1,9 @@
 export const DISPLAY_PROFILE_VIEWPORTS = {
+  small: {
+    viewport: { width: 480, height: 640 },
+    override: "compact",
+    expectedProfile: "compact",
+  },
   compact: {
     viewport: { width: 360, height: 640 },
     override: "compact",

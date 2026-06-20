@@ -11,6 +11,7 @@ import {
   getDisplayProfileLayoutTokens,
   resolveAutomaticDisplayProfile,
   resolveDisplayProfile,
+  resolveEffectiveDisplayProfile,
 } from "@/lib/displayProfiles";
 
 /**
@@ -48,6 +49,16 @@ describe("small-screen layout — compact 480x640 panel + narrow fallbacks", () 
     // Content keeps gutters rather than sitting flush to the edges.
     expect(compact.pagePaddingX).not.toBe("0");
     expect(compact.modalInset).not.toBe("0");
+  });
+
+  it("keeps the forced Small Display profile fluid and non-overflowing at 480px", () => {
+    expect(resolveEffectiveDisplayProfile(480, "compact")).toBe("compact");
+    const compact = getDisplayProfileLayoutTokens("compact");
+
+    expect(compact.pageMaxWidth).toBe("100%");
+    expect(compact.readingMaxWidth).toBe("100%");
+    expect(compact.actionGridMinWidth).toBe("0px");
+    expect(compact.modalMaxWidth).toBe("100dvw");
   });
 
   it("keeps every profile's dialog inset and page gutters defined", () => {

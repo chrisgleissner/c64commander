@@ -104,7 +104,7 @@ export const variantConfig = {
       },
       keypad_input_enabled: {
         developer_only: false,
-        enabled: false,
+        enabled: true,
         visible_to_user: true,
       },
       lighting_studio_enabled: {
@@ -137,6 +137,8 @@ export const variantConfig = {
     },
     publishToGooglePlay: true,
     runtime: {
+      defaultDisplayProfile: "auto",
+      defaultT9InputEnabled: false,
       endpoints: {
         commoserve_base_url: "http://commoserve.files.commodore.net",
         device_host: "c64u",

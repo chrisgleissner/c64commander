@@ -3,6 +3,7 @@ import type { Locator, Page, TestInfo } from "@playwright/test";
 
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { DISPLAY_PROFILE_VIEWPORT_SEQUENCE, DISPLAY_PROFILE_VIEWPORTS } from "./displayProfileViewports";
+import { applyDisplayProfileViewport } from "./displayProfileViewportUtils";
 import { seedUiMocks, uiFixtures } from "./uiMocks";
 import { assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 import { saveCoverageFromPage } from "./withCoverage";
@@ -14,22 +15,6 @@ type SeedDisk = {
   location: "local" | "ultimate";
   group?: string | null;
   importOrder?: number | null;
-};
-
-const applyDisplayProfileViewport = async (page: Page, profileId: keyof typeof DISPLAY_PROFILE_VIEWPORTS) => {
-  const profile = DISPLAY_PROFILE_VIEWPORTS[profileId];
-  await page.setViewportSize(profile.viewport);
-  await page.evaluate((override) => {
-    localStorage.setItem("c64u_display_profile_override", override);
-    window.dispatchEvent(
-      new CustomEvent("c64u-ui-preferences-changed", {
-        detail: { displayProfileOverride: override },
-      }),
-    );
-  }, profile.override);
-  await expect
-    .poll(() => page.evaluate(() => document.documentElement.dataset.displayProfile))
-    .toBe(profile.expectedProfile);
 };
 
 const applyListPreviewLimit = async (page: Page, limit: number) => {
