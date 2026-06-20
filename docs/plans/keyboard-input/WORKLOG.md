@@ -83,3 +83,40 @@ Files changed:
 }
 ```
 A T9 entry adds `t9State: { active, mode, pendingLength, candidateIndex, candidateCount, committedLength }` (counts only — never the host/field text).
+
+### Local gate results (exact)
+- `npx tsc --noEmit` → PASS.
+- `npm run format:check:ts` → PASS (3 files auto-formatted: keypadInput.spec.ts, useFocusNavigation.tsx, keyInputDiagnostics.ts).
+- `npm run lint` → PASS (eslint + display-profiles + bundle-budgets + stale-names + variant:check + feature-flags:check).
+- `npm test` → **612 files / 7051 tests PASS**.
+- `npm run test:coverage` → **EXIT=0, no hang** (HAZARD 3 ruled out; the "HVSC perf budgets FAILED" strings are perf-budget formatter test fixtures, not failures — all files pass).
+- `npm run build` → PASS.
+- `npm run test:e2e -- --grep keypadInput` → **8/8 PASS**.
+
+### Commit / branch / PR
+- Branch `feat/keyboard-input`, commit `c6396645`, pushed to origin.
+- PR: https://github.com/chrisgleissner/c64commander/pull/290 (base `main`). NOT merged.
+- `prompt.md` deliberately not committed (only PLAN.md + WORKLOG.md in the feature dir).
+
+### CI (PR #290, run 27855661317)
+First run: every check PASS or skipping EXCEPT `Web | E2E (sharded) (12, 12)` which FAILED on the
+pre-existing timing-flaky `launchSequence.spec.ts:255` ("shows the launch sequence … reaches
+app-ready") — failed all 3 attempts with VARIED modes (title-not-visible, then two
+`waitForFunction` 20s timeouts). Classified as flake, NOT a regression:
+- That test touches no keyboard/focus/slider/dropdown/diagnostics code (grep confirms).
+- The keypad feature is OFF by default in that test, so the provider's key/pointer listeners
+  are detached and add no startup cost.
+- `main` itself shows intermittent CI failures (timing-sensitive suite), and all 11 other E2E
+  shards + iOS Maestro + Android Maestro gating + Screenshots passed.
+Action: re-ran the failed shard. Re-run #1 failed again (same flaky test) — so I proved it
+LOCALLY: `playwright test launchSequence -g "reaches app-ready"` → **PASS in 8.2s** with my
+changes. Combined with main passing it and the test referencing no keypad code, this is a
+loaded-runner timing flake, not a regression. Re-run #2 of the shard → **PASS**, clearing it.
+Final state: 30 checks pass, 3 skipping (release/GHCR/merge-on-failure), 0 fail; PR
+`MERGEABLE`. The PR is NOT merged.
+
+Notable green checks confirming no regression from shared-component changes: `Android | Tests +
+Coverage`, all `Web | E2E (sharded)` 1–11, `Web | Screenshots`, `Web | Build + tests`
+(amd64+arm64), `Web | Unit tests (coverage)`, `iOS | Maestro`, `Android | Maestro gating`
+(my keypad Maestro flow is correctly NOT ci-critical). No automated review bot; only an
+informational `codecov` comment (nothing to resolve); no human reviews at evaluation time.
