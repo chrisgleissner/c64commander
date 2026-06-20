@@ -23,6 +23,7 @@ type HomeCpuSpeedSliderProps = {
   isActive: boolean;
   cpuSpeedOptions: string[];
   cpuSpeedValue: string;
+  keypadFocusParentId?: string;
   turboControlOptions: string[];
   turboControlValue: string;
 };
@@ -31,6 +32,7 @@ export function HomeCpuSpeedSlider({
   isActive,
   cpuSpeedOptions,
   cpuSpeedValue,
+  keypadFocusParentId,
   turboControlOptions,
   turboControlValue,
 }: HomeCpuSpeedSliderProps) {
@@ -196,6 +198,7 @@ export function HomeCpuSpeedSlider({
         keypadFocusId="home-cpu-speed-slider"
         keypadFocusGroup="home-controls"
         keypadFocusOrder={50}
+        keypadFocusParentId={keypadFocusParentId}
       />
     </div>
   );

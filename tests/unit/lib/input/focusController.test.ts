@@ -15,6 +15,7 @@ const item = (id: string, order: number, overrides: Partial<FocusItem> = {}): Fo
   activate: overrides.activate ?? vi.fn(),
   disabled: overrides.disabled,
   group: overrides.group,
+  parentId: overrides.parentId,
 });
 
 describe("FocusController", () => {
@@ -94,5 +95,88 @@ describe("FocusController", () => {
     expect(controller.current()).toBeNull();
     expect(controller.focusNext()).toBeNull();
     expect(controller.activateCurrent()).toBe(false);
+  });
+
+  it("descends into enabled children and climbs back to the parent scope", () => {
+    const controller = new FocusController();
+    controller.register(item("card-a", 0));
+    controller.register(item("card-b", 1));
+    controller.register(item("card-a-primary", 0, { parentId: "card-a" }));
+    controller.register(item("card-a-secondary", 1, { parentId: "card-a" }));
+    controller.register(item("card-b-primary", 0, { parentId: "card-b" }));
+
+    expect(controller.current()?.id).toBe("card-a");
+    expect(controller.currentHasEnabledChildren()).toBe(true);
+    expect(controller.focusFirstChild()?.id).toBe("card-a-primary");
+    expect(controller.currentScopeParentId()).toBe("card-a");
+    expect(controller.focusNext()?.id).toBe("card-a-secondary");
+    expect(controller.focusNext()?.id).toBe("card-a-primary");
+    expect(controller.focusParent()?.id).toBe("card-a");
+    expect(controller.currentScopeParentId()).toBeNull();
+    expect(controller.focusNext()?.id).toBe("card-b");
+  });
+
+  it("does not descend into a parent with only disabled children", () => {
+    const controller = new FocusController();
+    controller.register(item("card", 0));
+    controller.register(item("disabled-child", 0, { parentId: "card", disabled: true }));
+
+    expect(controller.current()?.id).toBe("card");
+    expect(controller.currentHasEnabledChildren()).toBe(false);
+    expect(controller.focusFirstChild()).toBeNull();
+    expect(controller.current()?.id).toBe("card");
+  });
+
+  it("does not auto-select a child item as the initial current", () => {
+    const controller = new FocusController();
+    controller.register(item("child", 0, { parentId: "card" }));
+    expect(controller.current()).toBeNull();
+
+    controller.register(item("card", 0));
+    expect(controller.current()?.id).toBe("card");
+  });
+
+  it("clear() removes all items and resets the active scope", () => {
+    const controller = new FocusController();
+    controller.register(item("card", 0));
+    controller.register(item("card-child", 0, { parentId: "card" }));
+    controller.focusFirstChild();
+    expect(controller.currentScopeParentId()).toBe("card");
+
+    controller.clear();
+
+    expect(controller.current()).toBeNull();
+    expect(controller.currentScopeParentId()).toBeNull();
+    expect(controller.focusFirstChild()).toBeNull();
+    expect(controller.focusNext()).toBeNull();
+  });
+
+  it("unregistering the active scope parent returns focus to the root ring", () => {
+    const controller = new FocusController();
+    controller.register(item("card-a", 0));
+    controller.register(item("card-b", 1));
+    controller.register(item("card-a-child", 0, { parentId: "card-a" }));
+    controller.focusFirstChild();
+    expect(controller.currentScopeParentId()).toBe("card-a");
+
+    controller.unregister("card-a");
+
+    expect(controller.currentScopeParentId()).toBeNull();
+    expect(controller.current()?.id).toBe("card-b");
+  });
+
+  it("focusParent falls back to the root ring when the scope parent is missing", () => {
+    const controller = new FocusController();
+    controller.register(item("root", 0));
+    controller.register(item("orphan", 1, { parentId: "ghost" }));
+
+    expect(controller.setCurrent("orphan")).toBe(true);
+    expect(controller.currentScopeParentId()).toBe("ghost");
+
+    const parent = controller.focusParent();
+
+    expect(parent?.id).toBe("root");
+    expect(controller.currentScopeParentId()).toBeNull();
+    expect(controller.current()?.id).toBe("root");
   });
 });

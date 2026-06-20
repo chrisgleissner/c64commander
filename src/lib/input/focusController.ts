@@ -28,6 +28,12 @@ export interface FocusItem {
   /** Lower sorts earlier. Ties broken by registration order. */
   readonly order: number;
   readonly group?: string;
+  /**
+   * Optional parent item id. Items with a parent are hidden from the top-level
+   * d-pad ring until navigation descends into that parent, giving nested cards
+   * and hierarchical CTA clusters a consistent tree-shaped traversal model.
+   */
+  readonly parentId?: string;
   readonly disabled?: boolean;
   readonly activate: () => void;
 }
@@ -42,6 +48,7 @@ export class FocusController {
   private items: InternalItem[] = [];
   private seqCounter = 0;
   private currentId: string | null = null;
+  private scopeParentId: string | null = null;
 
   /** Registers (or replaces) an item, keeping the registry ordered. */
   register(item: FocusItem): void {
@@ -50,7 +57,7 @@ export class FocusController {
     this.items = this.items.filter((entry) => entry.id !== item.id);
     this.items.push({ ...item, seq });
     this.sort();
-    if (this.currentId === null && isEnabled(item)) {
+    if (this.currentId === null && (item.parentId ?? null) === null && isEnabled(item)) {
       this.currentId = item.id;
     }
   }
@@ -59,7 +66,11 @@ export class FocusController {
   unregister(id: string): void {
     this.items = this.items.filter((entry) => entry.id !== id);
     if (this.currentId === id) {
-      this.currentId = this.firstEnabledId();
+      this.currentId = this.firstEnabledIdInScope(this.scopeParentId);
+    }
+    if (this.scopeParentId === id) {
+      this.scopeParentId = null;
+      this.currentId = this.firstEnabledIdInScope(null);
     }
   }
 
@@ -67,6 +78,7 @@ export class FocusController {
   clear(): void {
     this.items = [];
     this.currentId = null;
+    this.scopeParentId = null;
   }
 
   /** The ordered list of items (enabled and disabled), as plain FocusItems. */
@@ -78,9 +90,16 @@ export class FocusController {
     return this.items.find((entry) => entry.id === this.currentId) ?? null;
   }
 
+  /** The parent id of the currently active nested scope, or null at root level. */
+  currentScopeParentId(): string | null {
+    return this.scopeParentId;
+  }
+
   /** Selects a specific item by id; returns false if unknown. */
   setCurrent(id: string): boolean {
-    if (!this.items.some((entry) => entry.id === id)) return false;
+    const item = this.items.find((entry) => entry.id === id);
+    if (!item) return false;
+    this.scopeParentId = item.parentId ?? null;
     this.currentId = id;
     return true;
   }
@@ -95,6 +114,37 @@ export class FocusController {
     return this.step(-1);
   }
 
+  /** Descends into the current item's enabled children, if it has any. */
+  focusFirstChild(): FocusItem | null {
+    const current = this.current();
+    if (!current) return null;
+    const child = this.itemsInScope(current.id).find(isEnabled);
+    if (!child) return null;
+    this.scopeParentId = current.id;
+    this.currentId = child.id;
+    return this.toFocusItem(child);
+  }
+
+  /** Returns from a nested child scope to its parent item. */
+  focusParent(): FocusItem | null {
+    if (this.scopeParentId === null) return null;
+    const parent = this.items.find((entry) => entry.id === this.scopeParentId);
+    if (!parent) {
+      this.scopeParentId = null;
+      this.currentId = this.firstEnabledIdInScope(null);
+      return this.current();
+    }
+    this.scopeParentId = parent.parentId ?? null;
+    this.currentId = parent.id;
+    return this.toFocusItem(parent);
+  }
+
+  /** Whether the current item has at least one enabled child. */
+  currentHasEnabledChildren(): boolean {
+    const current = this.current();
+    return current ? this.itemsInScope(current.id).some(isEnabled) : false;
+  }
+
   /** Activates the current item if it is enabled; returns whether it fired. */
   activateCurrent(): boolean {
     const item = this.current();
@@ -104,20 +154,21 @@ export class FocusController {
   }
 
   private step(delta: number): FocusItem | null {
-    const count = this.items.length;
+    const scopedItems = this.itemsInScope(this.scopeParentId);
+    const count = scopedItems.length;
     if (count === 0) return null;
 
-    const enabledExists = this.items.some(isEnabled);
+    const enabledExists = scopedItems.some(isEnabled);
     if (!enabledExists) return null;
 
-    const startIndex = this.items.findIndex((entry) => entry.id === this.currentId);
+    const startIndex = scopedItems.findIndex((entry) => entry.id === this.currentId);
     // When nothing is selected, a forward step lands on the first enabled item
     // and a backward step on the last enabled item.
     let index = startIndex < 0 ? (delta > 0 ? -1 : 0) : startIndex;
 
     for (let i = 0; i < count; i++) {
       index = (index + delta + count) % count;
-      const candidate = this.items[index];
+      const candidate = scopedItems[index];
       if (isEnabled(candidate)) {
         this.currentId = candidate.id;
         return this.toFocusItem(candidate);
@@ -126,8 +177,12 @@ export class FocusController {
     return this.current();
   }
 
-  private firstEnabledId(): string | null {
-    return this.items.find(isEnabled)?.id ?? null;
+  private firstEnabledIdInScope(parentId: string | null): string | null {
+    return this.itemsInScope(parentId).find(isEnabled)?.id ?? null;
+  }
+
+  private itemsInScope(parentId: string | null): InternalItem[] {
+    return this.items.filter((entry) => (entry.parentId ?? null) === parentId);
   }
 
   private sort(): void {

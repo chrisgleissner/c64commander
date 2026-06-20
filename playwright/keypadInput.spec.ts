@@ -31,14 +31,29 @@ const snap = (page: Page, testInfo: TestInfo, label: string) => attachStepScreen
 // (e.g. storage denied) and is rethrown so a silently-unapplied flag cannot let
 // a test pass against a broken toggle.
 const setFlagInitScript = (page: Page, key: string) =>
-  page.addInitScript((flagKey) => {
-    try {
-      localStorage.setItem(flagKey, "1");
-    } catch (error) {
-      if (location.origin !== "null") throw error;
-    }
-  }, key);
+  page.addInitScript(
+    ({ flagKey, value }) => {
+      try {
+        localStorage.setItem(flagKey, value);
+      } catch (error) {
+        if (location.origin !== "null") throw error;
+      }
+    },
+    { flagKey: key, value: "1" },
+  );
+const setFlagOffInitScript = (page: Page, key: string) =>
+  page.addInitScript(
+    ({ flagKey, value }) => {
+      try {
+        localStorage.setItem(flagKey, value);
+      } catch (error) {
+        if (location.origin !== "null") throw error;
+      }
+    },
+    { flagKey: key, value: "0" },
+  );
 const enableKeypad = (page: Page) => setFlagInitScript(page, KEYPAD_FLAG_KEY);
+const disableKeypad = (page: Page) => setFlagOffInitScript(page, KEYPAD_FLAG_KEY);
 const enableDebugLogging = (page: Page) => setFlagInitScript(page, DEBUG_LOG_KEY);
 
 const selectedCount = (page: Page) => page.locator(`[${SELECTED}="true"]`).count();
@@ -84,6 +99,7 @@ test.describe("Keypad / T9 input", () => {
   });
 
   test("Prime Directive state 1: flag OFF → keys add no highlight or affordance", async ({ page }, testInfo) => {
+    await disableKeypad(page);
     await page.goto("/");
     await expect(page.getByTestId("tab-home")).toBeVisible();
     await page.keyboard.press("ArrowDown");
@@ -137,10 +153,11 @@ test.describe("Keypad / T9 input", () => {
     await expect(slider).toBeVisible();
     const thumb = slider.getByRole("slider");
 
-    const reached = await ringFocus(page, thumb);
-    // The thumb (role=slider) carries the highlight; fall back to focusing it if
-    // the ring did not land on it within the bound (still proves the key path).
-    if (!reached) await thumb.focus();
+    expect(await ringFocus(page, page.getByTestId("home-cpu-summary"))).toBe(true);
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByTestId("home-cpu-turbo-control")).toHaveAttribute(SELECTED, "true");
+    await page.keyboard.press("ArrowDown");
+    await expect(thumb).toHaveAttribute(SELECTED, "true");
     await snap(page, testInfo, "slider-focused");
 
     const before = await thumb.getAttribute("aria-valuenow");
@@ -208,7 +225,7 @@ test.describe("Keypad / T9 input", () => {
     await snap(page, testInfo, "dropdown-keypad-back-closed");
   });
 
-  test("T9: the host field accepts hostname-mode keypad input (digits + star separator)", async ({
+  test("Literal typing: focused host field accepts hardware letters and digits directly", async ({
     page,
   }, testInfo) => {
     await enableKeypad(page);
@@ -217,14 +234,36 @@ test.describe("Keypad / T9 input", () => {
     await expect(host).toBeVisible();
     await host.click();
     await host.fill("");
-    // Hostname mode: digits insert directly; star inserts the "." separator.
-    await page.keyboard.press("1");
-    await page.keyboard.press("9");
-    await page.keyboard.press("2");
-    await page.keyboard.press("*");
-    await page.keyboard.press("1");
-    await expect(host).toHaveValue("192.1");
-    await snap(page, testInfo, "t9-host-entered");
+    await page.keyboard.type("u64-192");
+    await expect(host).toHaveValue("u64-192");
+    await snap(page, testInfo, "literal-host-entered");
+  });
+
+  test("Field focus: Enter edits the highlighted host row and Escape returns to the ring", async ({
+    page,
+  }, testInfo) => {
+    await enableKeypad(page);
+    await page.goto("/settings");
+    const hostRow = page.getByTestId("settings-device-host-field");
+    const host = page.getByTestId("settings-device-host");
+    await expect(hostRow).toBeVisible();
+
+    const reached = await ringFocus(page, hostRow, 90);
+    expect(reached).toBe(true);
+    await expect(hostRow).toHaveAttribute(SELECTED, "true");
+    await expect.poll(() => host.evaluate((el) => document.activeElement === el)).toBe(false);
+    await snap(page, testInfo, "host-row-highlighted");
+
+    await page.keyboard.press("Enter");
+    await expect.poll(() => host.evaluate((el) => document.activeElement === el)).toBe(true);
+    await host.fill("");
+    await page.keyboard.type("c64u42");
+    await expect(host).toHaveValue("c64u42");
+
+    await page.keyboard.press("Escape");
+    await expect.poll(() => host.evaluate((el) => document.activeElement === el)).toBe(false);
+    await expect(hostRow).toHaveAttribute(SELECTED, "true");
+    await snap(page, testInfo, "host-row-after-escape");
   });
 
   test("Diagnostics: key-input logs gated by debug logging", async ({ page }) => {

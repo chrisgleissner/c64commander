@@ -44,6 +44,7 @@ import { SavedDeviceEditorFields } from "@/components/devices/SavedDeviceEditorF
 import { Input } from "@/components/ui/input";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import type { ActionSummary } from "@/lib/diagnostics/actionSummaries";
 import { getC64APIConfigSnapshot, updateC64APIConfig } from "@/lib/c64api";
@@ -909,7 +910,7 @@ const ConnectionSurface = ({
               hostError={hostError}
               portError={portError}
               idPrefix="connection-edit"
-              keypadInput={flags.keypad_input_enabled}
+              keypadInput={flags.keypad_input_enabled && isDefaultT9InputEnabled()}
             />
           )}
         </AppDialogBody>

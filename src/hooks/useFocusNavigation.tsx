@@ -238,11 +238,11 @@ export const FocusNavigationProvider = ({
     // Pointer/touch always wins: capture-phase so it flips modality (and clears
     // the highlight via the subscription) before any other handler runs.
     const handlePointer = () => setInputModality("pointer");
-    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("pointerdown", handlePointer, true);
     window.addEventListener("touchstart", handlePointer, true);
     return () => {
-      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("pointerdown", handlePointer, true);
       window.removeEventListener("touchstart", handlePointer, true);
     };
@@ -313,6 +313,8 @@ export interface UseFocusItemOptions {
   /** Lower sorts earlier in d-pad traversal; ties broken by registration order. */
   readonly order: number;
   readonly group?: string;
+  /** Optional parent focus item id for nested card / hierarchical CTA traversal. */
+  readonly parentId?: string;
   /** Disabled items are skipped during traversal and refuse activation. */
   readonly disabled?: boolean;
   /** Custom activation; defaults to clicking the registered element. */
@@ -326,7 +328,7 @@ export interface UseFocusItemOptions {
  * anywhere.
  */
 export function useFocusItem<T extends HTMLElement = HTMLElement>(options: UseFocusItemOptions): RefCallback<T> {
-  const { id, order, group, disabled = false, onActivate } = options;
+  const { id, order, group, parentId, disabled = false, onActivate } = options;
   const context = useContext(FocusNavigationContext);
   const elementRef = useRef<T | null>(null);
   const onActivateRef = useRef(onActivate);
@@ -339,6 +341,7 @@ export function useFocusItem<T extends HTMLElement = HTMLElement>(options: UseFo
         id,
         order,
         group,
+        parentId,
         disabled,
         activate: () => {
           const handler = onActivateRef.current;
@@ -352,7 +355,7 @@ export function useFocusItem<T extends HTMLElement = HTMLElement>(options: UseFo
       () => elementRef.current,
     );
     return () => context.unregister(id);
-  }, [context, id, order, group, disabled]);
+  }, [context, id, order, group, parentId, disabled]);
 
   return useCallback((element: T | null) => {
     elementRef.current = element;

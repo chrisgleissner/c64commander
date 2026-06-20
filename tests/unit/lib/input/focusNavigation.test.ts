@@ -16,6 +16,7 @@ const item = (id: string, order: number, overrides: Partial<FocusItem> = {}): Fo
   activate: overrides.activate ?? vi.fn(),
   disabled: overrides.disabled,
   group: overrides.group,
+  parentId: overrides.parentId,
 });
 
 const layer = (id: string, kind: DismissibleLayer["kind"], dismiss = vi.fn()): DismissibleLayer => ({
@@ -61,6 +62,29 @@ describe("NavigationController — focus traversal", () => {
     expect(nav.dispatch("dpadDown")).toEqual({ type: "ignored" });
     expect(nav.dispatch("previousField")).toEqual({ type: "ignored" });
     expect(onFocus).not.toHaveBeenCalled();
+  });
+
+  it("dpadRight descends into child CTAs and dpadLeft climbs back to the parent", () => {
+    const onFocus = vi.fn();
+    const nav = new NavigationController({ callbacks: { onFocus } });
+    nav.focus.register(item("card", 0));
+    nav.focus.register(item("after", 1));
+    nav.focus.register(item("primary", 0, { parentId: "card" }));
+    nav.focus.register(item("secondary", 1, { parentId: "card" }));
+
+    expect(nav.dispatch("dpadRight")).toEqual({ type: "focusMoved", item: expect.objectContaining({ id: "primary" }) });
+    expect(nav.dispatch("dpadDown")).toEqual({
+      type: "focusMoved",
+      item: expect.objectContaining({ id: "secondary" }),
+    });
+    expect(nav.dispatch("dpadLeft")).toEqual({ type: "focusMoved", item: expect.objectContaining({ id: "card" }) });
+    expect(nav.dispatch("dpadDown")).toEqual({ type: "focusMoved", item: expect.objectContaining({ id: "after" }) });
+    expect(onFocus.mock.calls.map((call) => (call[0] as FocusItem).id)).toEqual([
+      "primary",
+      "secondary",
+      "card",
+      "after",
+    ]);
   });
 
   it("reuses a provided FocusController instance", () => {
@@ -143,6 +167,21 @@ describe("NavigationController — deterministic back chain", () => {
     const onNavigateBack = vi.fn();
     const nav = withItems({ onNavigateBack });
     expect(nav.dispatch("back")).toEqual({ type: "navigatedBack" });
+    expect(onNavigateBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("back climbs out of a nested CTA scope before route navigation", () => {
+    const onFocus = vi.fn();
+    const onNavigateBack = vi.fn();
+    const nav = new NavigationController({ callbacks: { onFocus, onNavigateBack } });
+    nav.focus.register(item("card", 0));
+    nav.focus.register(item("child", 0, { parentId: "card" }));
+
+    expect(nav.dispatch("dpadRight")).toEqual({ type: "focusMoved", item: expect.objectContaining({ id: "child" }) });
+    expect(nav.dispatch("escape")).toEqual({ type: "focusMoved", item: expect.objectContaining({ id: "card" }) });
+    expect(onNavigateBack).not.toHaveBeenCalled();
+
+    expect(nav.dispatch("escape")).toEqual({ type: "navigatedBack" });
     expect(onNavigateBack).toHaveBeenCalledTimes(1);
   });
 

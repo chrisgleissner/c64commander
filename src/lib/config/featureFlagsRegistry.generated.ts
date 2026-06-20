@@ -170,12 +170,12 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
   },
   {
     id: "keypad_input_enabled",
-    enabled: false,
+    enabled: true,
     visible_to_user: true,
     developer_only: false,
     group: "experimental",
-    title: "Keypad / T9 input",
-    description: "Experimental. Drive the app with a physical keypad (D-pad navigation and activation) and enter text in fields via T9 multi-tap, for devices without a usable touchscreen. Leave off when using touch and the on-screen keyboard.",
+    title: "Keyboard and keypad navigation",
+    description: "Drive the app with a hardware keyboard, remote, or keypad. Arrow/D-pad navigation, activation, and literal hardware-keyboard typing are enabled by default; numeric keypad T9 text entry remains reserved for keypad-first variants.",
   },
 ] as const;
 

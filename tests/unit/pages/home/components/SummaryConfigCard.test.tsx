@@ -7,19 +7,24 @@
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
+import * as React from "react";
 import { describe, expect, it, vi } from "vitest";
+import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
 import { SummaryConfigCard, SummaryConfigControlRow } from "@/pages/home/components/SummaryConfigCard";
 
 vi.mock("@/components/ui/checkbox", () => ({
-  Checkbox: ({ checked, onCheckedChange, disabled, "aria-label": ariaLabel, "data-testid": testId }: any) => (
-    <input
-      type="checkbox"
-      checked={checked}
-      onChange={(e) => onCheckedChange(e.target.checked)}
-      disabled={disabled}
-      aria-label={ariaLabel}
-      data-testid={testId}
-    />
+  Checkbox: React.forwardRef(
+    ({ checked, onCheckedChange, disabled, "aria-label": ariaLabel, "data-testid": testId }: any, ref: any) => (
+      <input
+        ref={ref}
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onCheckedChange(e.target.checked)}
+        disabled={disabled}
+        aria-label={ariaLabel}
+        data-testid={testId}
+      />
+    ),
   ),
 }));
 
@@ -32,11 +37,11 @@ vi.mock("@/components/ui/select", () => ({
       {children}
     </div>
   ),
-  SelectTrigger: ({ children, "data-testid": testId, ...rest }: any) => (
-    <div data-testid={testId} {...rest}>
+  SelectTrigger: React.forwardRef(({ children, "data-testid": testId, ...rest }: any, ref: any) => (
+    <button ref={ref} type="button" data-testid={testId} {...rest}>
       {children}
-    </div>
-  ),
+    </button>
+  )),
   SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
   SelectContent: ({ children }: any) => <div>{children}</div>,
   SelectItem: ({ children, value }: any) => <div data-value={value}>{children}</div>,
@@ -61,6 +66,49 @@ describe("SummaryConfigCard", () => {
       </SummaryConfigCard>,
     );
     expect(screen.getByTestId("card")).toHaveAttribute("data-section-label", "section-x");
+  });
+
+  it("acts as a focus parent whose child controls are reached by descending into the card", () => {
+    render(
+      <FocusNavigationProvider>
+        <SummaryConfigCard title="CPU & RAM" testId="cpu-card" focusId="cpu-card" focusOrder={10}>
+          <SummaryConfigControlRow
+            controlType="select"
+            disabled={false}
+            focusId="turbo"
+            focusOrder={10}
+            focusParentId="cpu-card"
+            label="Turbo"
+            options={["Manual", "Turbo"]}
+            selectTriggerClassName="cls"
+            testId="turbo"
+            value="Manual"
+            onValueChange={vi.fn()}
+          />
+          <SummaryConfigControlRow
+            disabled={false}
+            focusId="badline"
+            focusOrder={20}
+            focusParentId="cpu-card"
+            label="Badline"
+            options={["Enabled", "Disabled"]}
+            selectTriggerClassName="cls"
+            testId="badline"
+            value="Enabled"
+            onValueChange={vi.fn()}
+          />
+        </SummaryConfigCard>
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ArrowRight" });
+    expect(screen.getByTestId("turbo")).toHaveAttribute("data-key-selected", "true");
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(screen.getByTestId("badline")).toHaveAttribute("data-key-selected", "true");
+
+    fireEvent.keyDown(document.body, { code: "ArrowLeft" });
+    expect(screen.getByTestId("cpu-card")).toHaveAttribute("data-key-selected", "true");
   });
 });
 

@@ -57,6 +57,7 @@ type SliderProps = React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root> &
   /** Lower sorts earlier in keypad d-pad traversal. Defaults to 0. */
   keypadFocusOrder?: number;
   keypadFocusGroup?: string;
+  keypadFocusParentId?: string;
   /** Force the ring to skip this slider (in addition to `disabled`). */
   keypadFocusDisabled?: boolean;
 };
@@ -104,6 +105,7 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
       keypadFocusId,
       keypadFocusOrder = 0,
       keypadFocusGroup,
+      keypadFocusParentId,
       keypadFocusDisabled,
       onPointerDown,
       onPointerUp,
@@ -137,6 +139,7 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
       id: keypadFocusId ?? "",
       order: keypadFocusOrder,
       group: keypadFocusGroup,
+      parentId: keypadFocusParentId,
       disabled: Boolean(props.disabled) || Boolean(keypadFocusDisabled),
     });
     // Key-driven horizontal stepping coalesces a burst into ONE commit (device

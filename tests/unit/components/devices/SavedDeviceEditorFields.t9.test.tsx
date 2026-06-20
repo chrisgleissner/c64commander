@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import { SavedDeviceEditorFields } from "@/components/devices/SavedDeviceEditorFields";
+import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
 import type { SavedDeviceEditorDraft } from "@/lib/savedDevices/deviceEditor";
 
 const INITIAL: SavedDeviceEditorDraft = {
@@ -79,5 +80,27 @@ describe("SavedDeviceEditorFields — physical T9 / keypad entry", () => {
     fireEvent.keyDown(host, { key: "#", code: "Backquote" });
     fireEvent.keyDown(host, { code: "Digit5", key: "5" });
     expect(screen.getByTestId("host-value").textContent).toBe("");
+  });
+
+  it("registers field rows so Enter focuses the input and Escape returns to the ring", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <Harness keypadInput={false} />
+      </FocusNavigationProvider>,
+    );
+
+    const hostRow = screen.getByTestId("t9-host-field");
+    const host = screen.getByTestId("t9-host");
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(hostRow).toHaveAttribute("data-key-selected", "true");
+    expect(document.activeElement).toBe(hostRow);
+
+    fireEvent.keyDown(document.body, { code: "Enter" });
+    expect(document.activeElement).toBe(host);
+
+    fireEvent.keyDown(host, { key: "Escape" });
+    expect(document.activeElement).toBe(hostRow);
+    expect(hostRow).toHaveAttribute("data-key-selected", "true");
   });
 });

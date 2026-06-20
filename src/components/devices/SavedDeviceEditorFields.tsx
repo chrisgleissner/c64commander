@@ -1,5 +1,8 @@
+import { useCallback, useRef, type KeyboardEvent } from "react";
+
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { useT9Input } from "@/hooks/useT9Input";
 import {
   MAX_SAVED_DEVICE_NAME_LENGTH,
@@ -21,11 +24,34 @@ type Props = {
   onHostBlur?: (value: string) => void;
   /**
    * Enables the physical T9 / keypad composer on the name and host fields.
-   * Off by default so digit keys insert literal digits (the soft-keyboard /
-   * hardware-keyboard path). Callers gate this on the `keypad_input_enabled`
-   * feature flag; keeping it a prop keeps this component decoupled and testable.
+   * Off by default so hardware keyboards insert literal letters and digits.
    */
   keypadInput?: boolean;
+};
+
+const useFieldFocusTarget = (id: string, order: number, group: string) => {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const focusRef = useFocusItem<HTMLDivElement>({
+    id,
+    order,
+    group,
+    onActivate: () => inputRef.current?.focus(),
+  });
+  const setFrameRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      frameRef.current = element;
+      focusRef(element);
+    },
+    [focusRef],
+  );
+  const blurToFrame = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    event.currentTarget.blur();
+    frameRef.current?.focus();
+  }, []);
+  return { inputRef, setFrameRef, blurToFrame };
 };
 
 export function SavedDeviceEditorFields({
@@ -57,9 +83,28 @@ export function SavedDeviceEditorFields({
     mode: "hostname",
     enabled: keypadInput,
   });
+  const focusGroup = `${idPrefix}-fields`;
+  const nameFocus = useFieldFocusTarget(`${idPrefix}-name-field`, 200, focusGroup);
+  const hostFocus = useFieldFocusTarget(`${idPrefix}-host-field`, 201, focusGroup);
+  const httpFocus = useFieldFocusTarget(`${idPrefix}-http-field`, 202, focusGroup);
+  const ftpFocus = useFieldFocusTarget(`${idPrefix}-ftp-field`, 203, focusGroup);
+  const telnetFocus = useFieldFocusTarget(`${idPrefix}-telnet-field`, 204, focusGroup);
+  const handleNameKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    nameT9.onKeyDown(event);
+    if (!event.defaultPrevented) nameFocus.blurToFrame(event);
+  };
+  const handleHostKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    hostT9.onKeyDown(event);
+    if (!event.defaultPrevented) hostFocus.blurToFrame(event);
+  };
   return (
     <div className="space-y-3">
-      <div className="space-y-2">
+      <div
+        ref={nameFocus.setFrameRef}
+        tabIndex={-1}
+        className="space-y-2 rounded-md outline-none"
+        data-testid={`${idPrefix}-name-field`}
+      >
         <div className="flex items-center gap-2">
           <Label htmlFor={`${idPrefix}-name`} className="text-sm">
             Device name
@@ -71,10 +116,11 @@ export function SavedDeviceEditorFields({
           ) : null}
         </div>
         <Input
+          ref={nameFocus.inputRef}
           id={`${idPrefix}-name`}
           value={draft.name}
           onChange={(event) => onChange(applySavedDeviceDraftNameInput(draft, event.target.value))}
-          onKeyDown={nameT9.onKeyDown}
+          onKeyDown={handleNameKeyDown}
           placeholder="Defaults to the current host"
           className="font-sans"
           maxLength={MAX_SAVED_DEVICE_NAME_LENGTH}
@@ -92,15 +138,21 @@ export function SavedDeviceEditorFields({
         )}
       </div>
 
-      <div className="space-y-2">
+      <div
+        ref={hostFocus.setFrameRef}
+        tabIndex={-1}
+        className="space-y-2 rounded-md outline-none"
+        data-testid={`${idPrefix}-host-field`}
+      >
         <Label htmlFor={`${idPrefix}-host`} className="text-sm">
           {hostLabel}
         </Label>
         <Input
+          ref={hostFocus.inputRef}
           id={`${idPrefix}-host`}
           value={draft.host}
           onChange={(event) => onChange(applySavedDeviceDraftHostInput(draft, event.target.value))}
-          onKeyDown={hostT9.onKeyDown}
+          onKeyDown={handleHostKeyDown}
           onBlur={(event) => onHostBlur?.(event.target.value)}
           className="font-sans"
           aria-describedby={hostError ? `${idPrefix}-host-error` : hostHint ? `${idPrefix}-host-help` : undefined}
@@ -118,41 +170,62 @@ export function SavedDeviceEditorFields({
         ) : null}
 
         <div className="grid grid-cols-3 gap-3">
-          <div className="space-y-1">
+          <div
+            ref={httpFocus.setFrameRef}
+            tabIndex={-1}
+            className="space-y-1 rounded-md outline-none"
+            data-testid={`${idPrefix}-http-field`}
+          >
             <Label htmlFor={`${idPrefix}-http`} className="text-xs text-muted-foreground">
               HTTP Port
             </Label>
             <Input
+              ref={httpFocus.inputRef}
               id={`${idPrefix}-http`}
               inputMode="numeric"
               value={draft.httpPort}
               onChange={(event) => onChange({ ...draft, httpPort: sanitizeSavedDevicePortInput(event.target.value) })}
+              onKeyDown={httpFocus.blurToFrame}
               className="font-sans"
               data-testid={`${idPrefix}-http`}
             />
           </div>
-          <div className="space-y-1">
+          <div
+            ref={ftpFocus.setFrameRef}
+            tabIndex={-1}
+            className="space-y-1 rounded-md outline-none"
+            data-testid={`${idPrefix}-ftp-field`}
+          >
             <Label htmlFor={`${idPrefix}-ftp`} className="text-xs text-muted-foreground">
               FTP Port
             </Label>
             <Input
+              ref={ftpFocus.inputRef}
               id={`${idPrefix}-ftp`}
               inputMode="numeric"
               value={draft.ftpPort}
               onChange={(event) => onChange({ ...draft, ftpPort: sanitizeSavedDevicePortInput(event.target.value) })}
+              onKeyDown={ftpFocus.blurToFrame}
               className="font-sans"
               data-testid={`${idPrefix}-ftp`}
             />
           </div>
-          <div className="space-y-1">
+          <div
+            ref={telnetFocus.setFrameRef}
+            tabIndex={-1}
+            className="space-y-1 rounded-md outline-none"
+            data-testid={`${idPrefix}-telnet-field`}
+          >
             <Label htmlFor={`${idPrefix}-telnet`} className="text-xs text-muted-foreground">
               Telnet Port
             </Label>
             <Input
+              ref={telnetFocus.inputRef}
               id={`${idPrefix}-telnet`}
               inputMode="numeric"
               value={draft.telnetPort}
               onChange={(event) => onChange({ ...draft, telnetPort: sanitizeSavedDevicePortInput(event.target.value) })}
+              onKeyDown={telnetFocus.blurToFrame}
               className="font-sans"
               data-testid={`${idPrefix}-telnet`}
             />

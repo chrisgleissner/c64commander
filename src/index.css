@@ -407,12 +407,12 @@ button:focus-visible,
  * touches the screen (modality flips back to pointer).
  */
 [data-key-selected="true"] {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: 2px;
+  outline: 2px solid hsl(var(--ring)) !important;
+  outline-offset: 2px !important;
   border-radius: 0.375rem;
   box-shadow:
     0 0 0 4px hsl(var(--ring) / 0.3),
-    0 0 16px -4px hsl(var(--ring) / 0.8);
+    0 0 16px -4px hsl(var(--ring) / 0.8) !important;
 }
 
 @layer base {

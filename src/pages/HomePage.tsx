@@ -1113,10 +1113,19 @@ function HomePageContent() {
             <SectionHeader title="Quick Config" />
             <ProfileSplitSection minColumnWidth="20rem" testId="home-quick-config-layout">
               <div className="space-y-3" data-testid="home-quick-config">
-                <SummaryConfigCard sectionLabel="CPU & RAM" title="CPU & RAM" testId="home-cpu-summary">
+                <SummaryConfigCard
+                  sectionLabel="CPU & RAM"
+                  title="CPU & RAM"
+                  testId="home-cpu-summary"
+                  focusId="home-cpu-summary"
+                  focusOrder={500}
+                >
                   <SummaryConfigControlRow
                     controlType="select"
                     disabled={!isActive || turboControlPending}
+                    focusId="home-cpu-turbo-control"
+                    focusOrder={10}
+                    focusParentId="home-cpu-summary"
                     label="Turbo Control"
                     options={displayedTurboControlOptions}
                     selectTriggerClassName={inlineSelectTriggerClass}
@@ -1136,11 +1145,15 @@ function HomePageContent() {
                     isActive={isActive}
                     cpuSpeedOptions={effectiveCpuSpeedOptions}
                     cpuSpeedValue={cpuSpeedValue}
+                    keypadFocusParentId="home-cpu-summary"
                     turboControlOptions={effectiveTurboControlOptions}
                     turboControlValue={turboControlValue}
                   />
                   <SummaryConfigControlRow
                     disabled={!isActive || badlineTimingPending}
+                    focusId="home-cpu-badline-timing"
+                    focusOrder={60}
+                    focusParentId="home-cpu-summary"
                     label="Badline Timing"
                     options={displayedBadlineTimingOptions}
                     selectTriggerClassName={inlineSelectTriggerClass}
@@ -1158,6 +1171,9 @@ function HomePageContent() {
                   />
                   <SummaryConfigControlRow
                     disabled={!isActive || superCpuDetectPending}
+                    focusId="home-cpu-supercpu-detect"
+                    focusOrder={70}
+                    focusParentId="home-cpu-summary"
                     label="SuperCPU Detect"
                     options={displayedSuperCpuDetectOptions}
                     selectTriggerClassName={inlineSelectTriggerClass}
@@ -1175,6 +1191,9 @@ function HomePageContent() {
                   />
                   <SummaryConfigControlRow
                     disabled={!isActive || ramExpansionPending}
+                    focusId="quickconfig-ram-expansion"
+                    focusOrder={80}
+                    focusParentId="home-cpu-summary"
                     label="RAM Expansion"
                     options={displayedRamExpansionOptions}
                     selectTriggerClassName={inlineSelectTriggerClass}
@@ -1193,6 +1212,9 @@ function HomePageContent() {
                   {reuSizeVisible && (
                     <SummaryConfigControlRow
                       disabled={!isActive || reuSizePending}
+                      focusId="quickconfig-ram-size"
+                      focusOrder={90}
+                      focusParentId="home-cpu-summary"
                       label="RAM Size (REU)"
                       options={displayedReuSizeOptions}
                       selectTriggerClassName={inlineSelectTriggerClass}
@@ -1211,10 +1233,19 @@ function HomePageContent() {
                   )}
                 </SummaryConfigCard>
 
-                <SummaryConfigCard sectionLabel="Ports" title="Ports" testId="home-ports-summary">
+                <SummaryConfigCard
+                  sectionLabel="Ports"
+                  title="Ports"
+                  testId="home-ports-summary"
+                  focusId="home-ports-summary"
+                  focusOrder={510}
+                >
                   <SummaryConfigControlRow
                     controlType="select"
                     disabled={!isActive || joystickSwapPending}
+                    focusId="home-joystick-swapper"
+                    focusOrder={10}
+                    focusParentId="home-ports-summary"
                     label="Joystick Input"
                     options={isActive ? effectiveJoystickSwapOptions : [unavailableLabel]}
                     selectTriggerClassName={inlineSelectTriggerClass}
@@ -1233,6 +1264,9 @@ function HomePageContent() {
                   <SummaryConfigControlRow
                     controlType="select"
                     disabled={!isActive || serialBusModePending}
+                    focusId="home-serial-bus-mode"
+                    focusOrder={20}
+                    focusParentId="home-ports-summary"
                     label="Serial Bus Mode"
                     options={displayedSerialBusModeOptions}
                     selectTriggerClassName={inlineSelectTriggerClass}
@@ -1251,6 +1285,9 @@ function HomePageContent() {
                   <SummaryConfigControlRow
                     controlType="select"
                     disabled={!isActive || cartridgePreferencePending}
+                    focusId="home-cartridge-preference"
+                    focusOrder={30}
+                    focusParentId="home-ports-summary"
                     label="Cartridge Preference"
                     options={displayedCartridgePreferenceOptions}
                     selectTriggerClassName={inlineSelectTriggerClass}
@@ -1269,6 +1306,9 @@ function HomePageContent() {
                   <SummaryConfigControlRow
                     controlType="checkbox"
                     disabled={!isActive || userPortPowerPending}
+                    focusId="home-user-port-power"
+                    focusOrder={40}
+                    focusParentId="home-ports-summary"
                     label="User Port Power"
                     options={displayedUserPortPowerOptions}
                     selectTriggerClassName={inlineSelectTriggerClass}
@@ -1286,10 +1326,19 @@ function HomePageContent() {
                   />
                 </SummaryConfigCard>
 
-                <SummaryConfigCard sectionLabel="Video" title="Video" testId="home-video-summary">
+                <SummaryConfigCard
+                  sectionLabel="Video"
+                  title="Video"
+                  testId="home-video-summary"
+                  focusId="home-video-summary"
+                  focusOrder={520}
+                >
                   <SummaryConfigControlRow
                     controlType="select"
                     disabled={!isActive || videoModePending}
+                    focusId="home-video-mode"
+                    focusOrder={10}
+                    focusParentId="home-video-summary"
                     label="Video Mode"
                     options={displayedVideoModeOptions}
                     selectTriggerClassName={inlineSelectTriggerClass}
@@ -1308,6 +1357,9 @@ function HomePageContent() {
                   <SummaryConfigControlRow
                     controlType="select"
                     disabled={!isActive || hdmiResolutionPending}
+                    focusId="home-video-hdmi-resolution"
+                    focusOrder={20}
+                    focusParentId="home-video-summary"
                     label="HDMI Resolution"
                     options={displayedHdmiResolutionOptions}
                     selectTriggerClassName={inlineSelectTriggerClass}
@@ -1326,6 +1378,9 @@ function HomePageContent() {
                   <SummaryConfigControlRow
                     controlType="checkbox"
                     disabled={!isActive || hdmiScanPending}
+                    focusId="home-video-scanlines"
+                    focusOrder={30}
+                    focusParentId="home-video-summary"
                     label="HDMI Scan Lines"
                     options={isActive ? effectiveHdmiScanOptions : [unavailableLabel]}
                     selectTriggerClassName={inlineSelectTriggerClass}
@@ -1344,6 +1399,9 @@ function HomePageContent() {
                   <SummaryConfigControlRow
                     controlType="select"
                     disabled={!isActive || analogVideoPending}
+                    focusId="home-video-analog"
+                    focusOrder={40}
+                    focusParentId="home-video-summary"
                     label="Analog"
                     options={displayedAnalogVideoOptions}
                     selectTriggerClassName={inlineSelectTriggerClass}
@@ -1362,6 +1420,9 @@ function HomePageContent() {
                   <SummaryConfigControlRow
                     controlType="select"
                     disabled={!isActive || digitalVideoPending}
+                    focusId="home-video-digital"
+                    focusOrder={50}
+                    focusParentId="home-video-summary"
                     label="Digital"
                     options={displayedDigitalVideoOptions}
                     selectTriggerClassName={inlineSelectTriggerClass}

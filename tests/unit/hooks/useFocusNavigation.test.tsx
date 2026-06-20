@@ -52,6 +52,29 @@ const Toolbar = ({ onA, onB }: ToolbarProps) => {
   );
 };
 
+const NestedToolbar = () => {
+  const cardRef = useFocusItem<HTMLButtonElement>({ id: "card", order: 10 });
+  const afterRef = useFocusItem<HTMLButtonElement>({ id: "after", order: 20 });
+  const primaryRef = useFocusItem<HTMLButtonElement>({ id: "card-primary", order: 10, parentId: "card" });
+  const secondaryRef = useFocusItem<HTMLButtonElement>({ id: "card-secondary", order: 20, parentId: "card" });
+  return (
+    <>
+      <button ref={cardRef} onClick={() => {}}>
+        Card
+      </button>
+      <button ref={primaryRef} onClick={() => {}}>
+        Primary
+      </button>
+      <button ref={secondaryRef} onClick={() => {}}>
+        Secondary
+      </button>
+      <button ref={afterRef} onClick={() => {}}>
+        After
+      </button>
+    </>
+  );
+};
+
 describe("FocusNavigationProvider + useFocusItem", () => {
   it("moves d-pad focus across enabled CTAs, skipping disabled ones and wrapping", () => {
     const { getByText } = render(
@@ -248,6 +271,35 @@ describe("FocusNavigationProvider + useFocusItem", () => {
     // With B gone the only enabled item is A, so forward navigation stays on A.
     fireEvent.keyDown(document.body, { code: "ArrowDown" });
     expect(document.activeElement).toBe(getByText("A"));
+  });
+
+  it("navigates nested CTA groups with right to descend and left or escape to climb", () => {
+    const { getByText } = render(
+      <FocusNavigationProvider>
+        <NestedToolbar />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ArrowRight" });
+    expect(document.activeElement).toBe(getByText("Primary"));
+    expect(getByText("Primary")).toHaveAttribute(SELECTED, "true");
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(document.activeElement).toBe(getByText("Secondary"));
+    expect(getByText("Secondary")).toHaveAttribute(SELECTED, "true");
+
+    fireEvent.keyDown(document.body, { code: "ArrowLeft" });
+    expect(document.activeElement).toBe(getByText("Card"));
+    expect(getByText("Card")).toHaveAttribute(SELECTED, "true");
+
+    fireEvent.keyDown(document.body, { code: "ArrowRight" });
+    expect(document.activeElement).toBe(getByText("Primary"));
+    fireEvent.keyDown(document.body, { code: "Escape" });
+    expect(document.activeElement).toBe(getByText("Card"));
+    expect(getByText("Card")).toHaveAttribute(SELECTED, "true");
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(document.activeElement).toBe(getByText("After"));
   });
 
   it("exposes the controller via useFocusNavigation (null outside a provider)", () => {

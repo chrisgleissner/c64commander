@@ -97,7 +97,7 @@ export const useT9Input = ({
   mode: initialMode = "multitap",
   profileId,
   config,
-  enabled = true,
+  enabled = false,
   now = defaultNow,
 }: UseT9InputOptions): UseT9Input => {
   const resolvedConfig = useMemo(() => resolveT9Config(config), [config]);

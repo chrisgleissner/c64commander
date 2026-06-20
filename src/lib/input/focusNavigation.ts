@@ -19,9 +19,10 @@
  * It stays DOM-free and timer-free so it can be unit-tested in isolation; a thin
  * React adapter feeds normalized key events in and wires the {@link NavigationOutcome}
  * out (e.g. `element.focus()` on a move, `router.back()` when the chain is
- * exhausted). Horizontal d-pad and soft keys are intentionally returned as
- * `ignored` here so the *focused widget* (slider/toggle/select, or a context
- * soft-key handler) can own them without the global controller stealing them.
+ * exhausted). Horizontal d-pad only moves the global ring when the current item
+ * has an explicit nested CTA scope (right descends, left climbs). Otherwise it
+ * is returned as `ignored`, so the focused widget (slider/toggle/select, or a
+ * context soft-key handler) can own it without the global controller stealing it.
  */
 
 import { FocusController, type FocusItem } from "./focusController";
@@ -69,6 +70,8 @@ export interface NavigationControllerOptions {
 
 const FOCUS_NEXT_ACTIONS: ReadonlySet<SemanticAction> = new Set<SemanticAction>(["dpadDown", "nextField"]);
 const FOCUS_PREVIOUS_ACTIONS: ReadonlySet<SemanticAction> = new Set<SemanticAction>(["dpadUp", "previousField"]);
+const FOCUS_CHILD_ACTIONS: ReadonlySet<SemanticAction> = new Set<SemanticAction>(["dpadRight"]);
+const FOCUS_PARENT_ACTIONS: ReadonlySet<SemanticAction> = new Set<SemanticAction>(["dpadLeft"]);
 const ACTIVATE_ACTIONS: ReadonlySet<SemanticAction> = new Set<SemanticAction>(["center", "enter", "activate"]);
 const BACK_ACTIONS: ReadonlySet<SemanticAction> = new Set<SemanticAction>(["back", "escape"]);
 
@@ -145,11 +148,18 @@ export class NavigationController {
     if (FOCUS_PREVIOUS_ACTIONS.has(action)) {
       return this.move(() => this.focus.focusPrevious());
     }
+    if (FOCUS_CHILD_ACTIONS.has(action)) {
+      return this.move(() => this.focus.focusFirstChild());
+    }
+    if (FOCUS_PARENT_ACTIONS.has(action)) {
+      return this.move(() => this.focus.focusParent());
+    }
     if (ACTIVATE_ACTIONS.has(action)) {
       return this.activate();
     }
-    // Horizontal d-pad, soft keys, digits, and openMenu are owned elsewhere
-    // (focused widget / T9 composer / context handlers), not by global nav.
+    // Soft keys, digits, openMenu, and horizontal d-pad with no hierarchy target
+    // are owned elsewhere (focused widget / T9 composer / context handlers), not
+    // by global nav.
     return { type: "ignored" };
   }
 
@@ -179,6 +189,11 @@ export class NavigationController {
       this.fieldEngaged = false;
       this.callbacks.onFieldDisengage?.();
       return { type: "fieldDisengaged" };
+    }
+    const parent = this.focus.focusParent();
+    if (parent) {
+      this.callbacks.onFocus?.(parent);
+      return { type: "focusMoved", item: parent };
     }
     this.callbacks.onNavigateBack?.();
     return { type: "navigatedBack" };

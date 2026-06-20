@@ -25,7 +25,12 @@ const makeEvent = (init: KeyInit) =>
  */
 const createDriver = (options: Omit<UseT9InputOptions, "value" | "setValue">) => {
   const state = { value: "" };
-  const props = (): UseT9InputOptions => ({ ...options, value: state.value, setValue: (next) => (state.value = next) });
+  const props = (): UseT9InputOptions => ({
+    enabled: true,
+    ...options,
+    value: state.value,
+    setValue: (next) => (state.value = next),
+  });
   const view = renderHook((p: UseT9InputOptions) => useT9Input(p), { initialProps: props() });
   const press = (init: KeyInit) => {
     act(() => view.result.current.onKeyDown(makeEvent(init)));
@@ -102,6 +107,17 @@ describe("useT9Input", () => {
   it("is inert when disabled", () => {
     const { state, press } = createDriver({ mode: "hostname", enabled: false, now: () => 1 });
     press({ code: "Digit5", key: "5" });
+    expect(state.value).toBe("");
+  });
+
+  it("defaults to literal native typing mode when T9 is not explicitly enabled", () => {
+    const state = { value: "" };
+    const view = renderHook((p: UseT9InputOptions) => useT9Input(p), {
+      initialProps: { value: state.value, setValue: (next) => (state.value = next), mode: "hostname", now: () => 1 },
+    });
+
+    act(() => view.result.current.onKeyDown(makeEvent({ code: "Digit5", key: "5" })));
+
     expect(state.value).toBe("");
   });
 });
