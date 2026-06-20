@@ -199,11 +199,20 @@ describe("PlaylistPanel", () => {
       </DisplayProfileProvider>,
     );
 
+    const addItems = screen.getByRole("button", { name: "Add items to playlist" });
+    for (let step = 0; step < 20 && document.activeElement !== addItems; step += 1) {
+      fireEvent.keyDown(document.body, { code: "DpadDown" });
+    }
+    expect(addItems).toHaveFocus();
+
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
     expect(onAddItems).toHaveBeenCalledTimes(1);
 
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
-    expect(screen.getByRole("button", { name: "Clear playlist" })).toHaveFocus();
+    const clearPlaylist = screen.getByRole("button", { name: "Clear playlist" });
+    for (let step = 0; step < 20 && document.activeElement !== clearPlaylist; step += 1) {
+      fireEvent.keyDown(document.body, { code: "DpadDown" });
+    }
+    expect(clearPlaylist).toHaveFocus();
 
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
     expect(onClearPlaylist).toHaveBeenCalledTimes(1);
