@@ -187,6 +187,31 @@ describe("FocusNavigationProvider + useFocusItem", () => {
     expect(onActivate).not.toHaveBeenCalled();
   });
 
+  it("defers Enter to a focused native button that is not the ring's current item", () => {
+    const onActivateRing = vi.fn();
+    const Layout = () => {
+      const ringRef = useFocusItem<HTMLButtonElement>({ id: "ring", order: 0, onActivate: onActivateRing });
+      return (
+        <>
+          <button ref={ringRef}>Ring</button>
+          <button data-testid="native">Native</button>
+        </>
+      );
+    };
+    const { getByTestId } = render(
+      <FocusNavigationProvider>
+        <Layout />
+      </FocusNavigationProvider>,
+    );
+
+    // Tab / programmatic focus put DOM focus on a button outside the ring; the
+    // browser owns its Enter activation, so the ring's current item must not fire.
+    const nativeButton = getByTestId("native");
+    nativeButton.focus();
+    fireEvent.keyDown(nativeButton, { code: "Enter" });
+    expect(onActivateRing).not.toHaveBeenCalled();
+  });
+
   it("does not steal keys from editable targets (input, textarea, contenteditable)", () => {
     const WithFields = () => {
       const aRef = useFocusItem<HTMLButtonElement>({ id: "a", order: 10 });

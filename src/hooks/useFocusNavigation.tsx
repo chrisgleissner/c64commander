@@ -100,6 +100,19 @@ const OPEN_OVERLAY_ANCESTOR_SELECTOR =
 const isWithinOpenOverlay = (target: EventTarget | null): boolean =>
   target instanceof Element && target.closest(OPEN_OVERLAY_ANCESTOR_SELECTOR) !== null;
 
+/**
+ * True for elements the browser activates natively on Enter/Space. When such an
+ * element holds DOM focus via Tab / programmatic focus / assistive tech (i.e. not
+ * through the ring, which would also `element.focus()` its current item), the
+ * browser owns activation — the global ring must not fire its own current item.
+ */
+const isNativelyActivatable = (element: Element): boolean => {
+  const tag = element.tagName;
+  if (tag === "BUTTON" || tag === "SUMMARY") return true;
+  if (tag === "A") return element.hasAttribute("href");
+  return false;
+};
+
 export interface FocusNavigationProviderProps {
   readonly children: ReactNode;
   /** Input profile id selecting the active keymap (e.g. "keypad"). */
@@ -230,6 +243,18 @@ export const FocusNavigationProvider = ({
       // the layer has already closed itself. Scoped to back/escape so a slider's
       // Up/Down `preventDefault` (dpad actions) still moves focus normally.
       if (event.defaultPrevented && (action === "back" || action === "escape")) {
+        return;
+      }
+      // If a real interactive element (button/link/summary) other than the ring's
+      // current item holds DOM focus — via Tab, programmatic focus, or assistive
+      // tech — the browser activates it on Enter/Space, so the ring must not fire
+      // its own (out-of-sync) current item and `preventDefault` that activation.
+      if (
+        (action === "enter" || action === "center" || action === "activate") &&
+        activeElement instanceof HTMLElement &&
+        isNativelyActivatable(activeElement) &&
+        activeElement !== (resolversRef.current.get(controller.focus.current()?.id ?? "")?.() ?? null)
+      ) {
         return;
       }
       const handled = controller.dispatch(action).type !== "ignored";
