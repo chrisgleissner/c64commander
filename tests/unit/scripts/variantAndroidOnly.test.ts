@@ -388,16 +388,24 @@ describe("real c64u-remote feature-flag overlay", () => {
     { featureIds: new Set(baseRegistry.features.map((f: any) => f.id)), variantId: "c64u-remote" },
   );
 
-  it("disables AND hides every feature flag for C64U Remote, except the keypad opt-in", () => {
+  it("disables AND hides every feature flag for C64U Remote, except the keypad opt-in and CommoServe", () => {
     const resolved = resolveVariantFeatureRegistry(baseRegistry, overlay);
     for (const feature of resolved.features) {
-      // Every feature ships off on C64U Remote (including keypad/T9, which stays
-      // experimental and default-off).
+      if (feature.id === "commoserve_enabled") {
+        // Deliberate exception: CommoServe is enabled (and user-visible) for
+        // C64U Remote — it is NOT in the disable overlay, so it inherits the
+        // base default (enabled + visible).
+        expect(feature.enabled, "commoserve_enabled.enabled").toBe(true);
+        expect(feature.visible_to_user, "commoserve_enabled.visible_to_user").toBe(true);
+        continue;
+      }
+      // Every other feature ships off on C64U Remote (including keypad/T9, which
+      // stays experimental and default-off).
       expect(feature.enabled, `${feature.id}.enabled`).toBe(false);
       if (feature.id === "keypad_input_enabled") {
-        // The one deliberate exception: keypad / T9 input stays user-visible so a
-        // keypad-only device can opt into it from Experimental Features. It is NOT
-        // added to the c64u-remote disable overlay for exactly this reason.
+        // The one deliberate disabled-but-visible exception: keypad / T9 input
+        // stays user-visible so a keypad-only device can opt into it from
+        // Experimental Features. It is NOT added to the disable overlay either.
         expect(feature.visible_to_user, "keypad_input_enabled.visible_to_user").toBe(true);
       } else {
         expect(feature.visible_to_user, `${feature.id}.visible_to_user`).toBe(false);
@@ -405,11 +413,12 @@ describe("real c64u-remote feature-flag overlay", () => {
     }
   });
 
-  it("disables HVSC and CommoServe specifically", () => {
+  it("disables HVSC but keeps CommoServe enabled", () => {
     const resolved = resolveVariantFeatureRegistry(baseRegistry, overlay) as any;
     const byId = Object.fromEntries(resolved.features.map((f: any) => [f.id, f]));
     expect(byId.hvsc_enabled.enabled).toBe(false);
-    expect(byId.commoserve_enabled.enabled).toBe(false);
+    expect(byId.commoserve_enabled.enabled).toBe(true);
+    expect(byId.commoserve_enabled.visible_to_user).toBe(true);
   });
 
   it("disables every experimental feature flag", () => {
