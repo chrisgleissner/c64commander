@@ -101,14 +101,14 @@ Counts are the number of discoverable interactive elements in the page scope
 (excludes the device system bars; includes the 6 persistent TabBar tabs and the
 persistent status badge that appear on every page).
 
-| Page     | Route       | CTAs | Notes                                                                                                 |
-| -------- | ----------- | ---: | ----------------------------------------------------------------------------------------------------- |
-| Home     | `/`         |  112 | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots. |
-| Settings | `/settings` |   76 | Connection, devices, display, feature flags, network/cache, notifications, dev-mode, build info.      |
-| Play     | `/play`     |   32 | Transport, volume, playback flags, playlist, type filters, HVSC.                                      |
-| Config   | `/config`   |   30 | Search + 22 config-category accordions (each expands to config-item rows).                            |
-| Disks    | `/disks`    |   28 | Drive A/B/Soft-IEC controls, disk library.                                                            |
-| Docs     | `/docs`     |   18 | 8 doc-section toggles + 3 external links.                                                             |
+| Page     | Route       |    CTAs | Notes                                                                                                                                    |
+| -------- | ----------- | ------: | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Home     | `/`         |     112 | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots.                                    |
+| Settings | `/settings` | 76 (+2) | Connection, devices, display (+2 native Android full-screen toggles), feature flags, network/cache, notifications, dev-mode, build info. |
+| Play     | `/play`     |      32 | Transport, volume, playback flags, playlist, type filters, HVSC.                                                                         |
+| Config   | `/config`   |      30 | Search + 22 config-category accordions (each expands to config-item rows).                                                               |
+| Disks    | `/disks`    |      28 | Drive A/B/Soft-IEC controls, disk library.                                                                                               |
+| Docs     | `/docs`     |      18 | 8 doc-section toggles + 3 external links.                                                                                                |
 
 **Persistent on every page (counted within each page above):**
 
@@ -246,6 +246,10 @@ Disk library: Add disks — button — R✅ I✅ ; Filter disks — text — `li
 - **Display**: Theme (Auto/Light/Dark) — segmented buttons — R✅ I✅ ; Display
   profile (Small/Standard/Large/Auto) — segmented — R✅ I✅ ; Orientation
   (Portrait/Landscape/Auto) — segmented — R✅ I✅
+- **Full screen** _(native Android only)_ — checkbox ×2 — Hide status bar
+  (`settings-hide-status-bar`) / Hide navigation bar
+  (`settings-hide-navigation-bar`) — R✅ I✅ ; default per build variant
+  (`variant.runtime.default_hide_*`; `c64u-remote` ships both on)
 - **Devices**: Add device — button — `settings-add-device` — R✅ I✅ ; Delete
   device — button — `settings-delete-device` — R✅ I✅ `[disabled: single device]`
   ; device row — button — `settings-device-row-*` — R✅ I✅ ; host — text —
