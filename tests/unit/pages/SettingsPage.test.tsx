@@ -439,6 +439,10 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveAutoRotationEnabled: vi.fn(),
   loadScreenOrientationMode: vi.fn(() => "portrait"),
   saveScreenOrientationMode: vi.fn(),
+  loadHideStatusBar: vi.fn(() => false),
+  saveHideStatusBar: vi.fn(),
+  loadHideNavigationBar: vi.fn(() => false),
+  saveHideNavigationBar: vi.fn(),
   APP_SETTINGS_KEYS: {
     DEBUG_LOGGING_KEY: "c64u_debug_logging_enabled",
     CONFIG_WRITE_INTERVAL_KEY: "c64u_config_write_min_interval_ms",
