@@ -140,6 +140,7 @@ At completion, summarize:
 - **Primary rules and conventions**: `.github/copilot-instructions.md`
 - **REST API docs**: `docs/c64/c64u-openapi.yaml`
 - **Telnet menu reference**: `docs/c64/c64u-telnet.yaml` (consult before Telnet-related code or test changes)
+- **CTA inventory & keypad map**: `docs/cta-inventory.md` (authoritative per-page list of every interactive control and its keypad/D-pad/T9 reachability; keep current — see "CTA inventory upkeep")
 - **App entry**: `src/main.tsx`, `src/App.tsx`
 - **UI**: `src/pages/`, `src/components/`, `src/components/ui/`
 - **App config state**: `src/hooks/useAppConfigState.ts`, `src/lib/config/`
@@ -196,6 +197,30 @@ Do not regenerate screenshots when the visible documented UI is unchanged, even 
 If a task changes only one page or one documented state, update only the corresponding screenshot files or folders under `docs/img/`.
 
 Never refresh the entire screenshot corpus unless explicitly required by the task.
+
+### CTA inventory upkeep (MANDATORY)
+
+`docs/cta-inventory.md` is the authoritative, hierarchical inventory of every CTA
+(interactive control) in the app and how each is reached/operated by keypad /
+D-pad / T9. It is part of the keypad accessibility contract — a CTA that is not
+in the inventory is treated as unverified.
+
+You **must** update `docs/cta-inventory.md` in the **same change** whenever a CTA
+or the CTA hierarchy changes, including when you:
+
+- add, remove, rename, or change the `data-testid` of an interactive control;
+- change a control's **type** (e.g. button → select, checkbox → slider);
+- change focus **grouping/order/nesting** (`useFocusItem`/`useFocusGroup`,
+  `data-section-label`, `data-focus-group`) or which scope a control lives in;
+- add/remove a route/page, dialog, sheet, or menu that exposes controls;
+- change a control's keypad reachability, activation, or default
+  enabled/disabled state.
+
+Keep the per-page counts in §3 and the per-page hierarchy in §4 consistent with
+the code. The fastest check: re-run the on-device/DOM scope enumeration described
+in §7 and reconcile any delta. A `UI_CHANGE` or `DOC_PLUS_CODE` task that touches
+controls but leaves this file unchanged is **incomplete**. When in doubt, update
+it — an over-listed control is cheaper than a missing one.
 
 ## Tests and fixtures
 

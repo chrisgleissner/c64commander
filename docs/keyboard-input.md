@@ -6,6 +6,10 @@ feature. It makes the app fully operable — and testable — without a touchscr
 for keypad-first devices (for example a flip phone / D-pad remote) and Bluetooth
 keyboards. It is additive: pointer/touch use keeps the normal touch UX.
 
+> The authoritative per-page list of **every CTA** and its keypad / D-pad / T9
+> reachability is `docs/cta-inventory.md`. Keep it current with any control
+> change (see `AGENTS.md` → "CTA inventory upkeep").
+
 ## 1. Enabling it
 
 Settings → Experimental → **Keyboard and keypad navigation**. It is on by
