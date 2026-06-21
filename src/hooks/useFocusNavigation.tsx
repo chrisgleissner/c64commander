@@ -127,7 +127,14 @@ const isNativelyActivatable = (element: Element): boolean => {
 
 const focusRingElement = (element: HTMLElement | null): void => {
   if (!element) return;
-  element.focus({ preventScroll: false });
+  // Keep the focused control fully visible: reserve space for the fixed header
+  // (top) and the guidance bar + tab bar (bottom) so `scrollIntoView` never parks
+  // the control beneath the app chrome. `preventScroll` on focus lets the
+  // margin-aware `scrollIntoView` own the scroll instead of the browser's default
+  // focus scroll (which ignores scroll-margin).
+  element.style.setProperty("scroll-margin-top", "var(--keypad-scroll-margin-top)");
+  element.style.setProperty("scroll-margin-bottom", "var(--keypad-scroll-margin-bottom)");
+  element.focus({ preventScroll: true });
   element.scrollIntoView({ block: "nearest", inline: "nearest" });
 };
 
