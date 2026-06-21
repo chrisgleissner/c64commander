@@ -33,6 +33,8 @@ import {
   saveDiscoveryProbeTimeoutMs,
   saveStartupDiscoveryWindowMs,
   saveScreenOrientationMode,
+  saveHideStatusBar,
+  saveHideNavigationBar,
   saveVolumeSliderPreviewIntervalMs,
   APP_SETTINGS_KEYS,
 } from "@/lib/config/appSettings";
@@ -350,6 +352,8 @@ vi.mock("@/lib/native/platform", () => ({
   getPlatform: () => "android",
   isNativePlatform: () => true,
 }));
+
+vi.mock("@/lib/native/fullScreen", () => ({ applyFullScreenFromSettings: vi.fn() }));
 
 vi.mock("@/lib/native/folderPicker", () => ({
   FolderPicker: {
@@ -1075,6 +1079,15 @@ describe("SettingsPage", () => {
 
     fireEvent.click(within(card).getByRole("button", { name: "Landscape" }));
     expect(saveScreenOrientationMode).toHaveBeenCalledWith("landscape");
+  });
+
+  it("toggles the full-screen system-bar settings (Android)", () => {
+    renderSettingsPage();
+    const section = screen.getByTestId("settings-full-screen");
+    fireEvent.click(within(section).getByTestId("settings-hide-status-bar"));
+    expect(saveHideStatusBar).toHaveBeenCalledWith(true);
+    fireEvent.click(within(section).getByTestId("settings-hide-navigation-bar"));
+    expect(saveHideNavigationBar).toHaveBeenCalledWith(true);
   });
 
   it("shows persisted SAF URIs after refresh", async () => {
