@@ -152,6 +152,10 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
       clearTimeout(keyCommitTimerRef.current);
       keyCommitTimerRef.current = null;
     }, []);
+    // Stable handle to `flushKeyCommit` (defined below) so the earlier
+    // `handlePointerDown` can flush a pending key-driven value without a forward
+    // reference. Assigned during render after `flushKeyCommit` exists.
+    const flushKeyCommitRef = React.useRef<() => void>(() => {});
 
     const normalizedMidpoint = React.useMemo(() => normalizeSliderMidpoint(midpoint, min, max), [max, midpoint, min]);
     const normalizedValue = React.useMemo(
@@ -256,15 +260,16 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
 
     const handlePointerDown = React.useCallback(
       (event: React.PointerEvent<HTMLDivElement>) => {
-        // A pointer drag supersedes any in-flight key-driven step; drop the
-        // pending key commit so the drag's own commit is authoritative. (The
+        // A pointer interaction supersedes any in-flight key-driven step. FLUSH the
+        // pending key commit first (so a value adjusted by Left/Right just before
+        // the touch is committed, not silently dropped — e.g. a thumb tap with no
+        // drag); the pointer's own change/commit then becomes authoritative. (The
         // global capture listener flips modality to pointer + clears the highlight.)
-        clearKeyCommitTimer();
-        keyDraftRef.current = null;
+        flushKeyCommitRef.current();
         registerPopupInteraction("interaction-start");
         onPointerDown?.(event);
       },
-      [clearKeyCommitTimer, onPointerDown, registerPopupInteraction],
+      [onPointerDown, registerPopupInteraction],
     );
 
     const handlePointerUp = React.useCallback(
@@ -373,6 +378,7 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
         handleValueCommit([pending]);
       }
     }, [clearKeyCommitTimer, handleValueCommit]);
+    flushKeyCommitRef.current = flushKeyCommit;
 
     const scheduleKeyCommit = React.useCallback(
       (nextValue: number) => {

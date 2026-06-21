@@ -60,6 +60,13 @@ describe("defaultKeyboard profile", () => {
     expect(resolve({ code: "Digit0", key: "0" })).toBe("digit0");
   });
 
+  it("maps digits by legacy keyCode when the Android WebView gives an empty code", () => {
+    // A keypad device / Android WebView delivers number keys as { code: "", keyCode: 48–57 }.
+    expect(resolve({ code: "", key: "5", keyCode: 53 })).toBe("digit5");
+    expect(resolve({ code: "", key: "0", keyCode: 48 })).toBe("digit0");
+    expect(resolve({ code: "", key: "9", keyCode: 57 })).toBe("digit9");
+  });
+
   it("maps Backspace/Enter/Escape/Space", () => {
     expect(resolve({ code: "Backspace" })).toBe("delete");
     expect(resolve({ code: "Enter" })).toBe("enter");

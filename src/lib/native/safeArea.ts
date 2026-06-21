@@ -17,8 +17,16 @@ export type SafeAreaInsets = {
   left: number;
 };
 
+export type SystemBarsVisibility = {
+  /** Whether the top status bar is visible (false = hidden / full-screen). */
+  statusBar: boolean;
+  /** Whether the bottom navigation bar is visible (false = hidden / full-screen). */
+  navigationBar: boolean;
+};
+
 type SafeAreaPlugin = {
   getInsets: () => Promise<SafeAreaInsets>;
+  setSystemBarsVisibility: (options: SystemBarsVisibility) => Promise<void>;
 };
 
 const SafeArea = registerPlugin<SafeAreaPlugin>("SafeArea", {
@@ -84,6 +92,21 @@ export const syncNativeSafeAreaInsets = async (): Promise<SafeAreaInsets | null>
     clearNativeSafeAreaInsets();
     return null;
   }
+};
+
+/**
+ * Show/hide the Android system bars (full-screen / immersive). No-op off native
+ * Android. After toggling, the safe-area insets are re-synced so content reclaims
+ * (or yields) the freed edge.
+ */
+export const setSystemBarsVisibility = async (options: SystemBarsVisibility): Promise<void> => {
+  if (!isNativePlatform() || getPlatform() !== "android") return;
+  try {
+    await SafeArea.setSystemBarsVisibility(options);
+  } catch (error) {
+    console.warn("Failed to set system bars visibility", { error });
+  }
+  await syncNativeSafeAreaInsets();
 };
 
 export const installNativeSafeAreaSync = () => {

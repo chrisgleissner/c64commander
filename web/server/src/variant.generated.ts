@@ -138,6 +138,8 @@ export const webServerVariantConfig = {
     publishToGooglePlay: true,
     runtime: {
       defaultDisplayProfile: "auto",
+      defaultHideNavigationBar: false,
+      defaultHideStatusBar: false,
       defaultT9InputEnabled: false,
       endpoints: {
         commoserve_base_url: "http://commoserve.files.commodore.net",

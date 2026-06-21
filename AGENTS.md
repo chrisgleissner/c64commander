@@ -6,23 +6,29 @@ This file is an orientation and execution guide.
 
 ## Rule precedence
 
-1. **Primary rules and conventions**: `.github/copilot-instructions.md`
-2. **This file**: `AGENTS.md`
-3. **Task-specific user prompt**
+1. **Quality bar (what every change must satisfy)**: `REVIEW.md` (repo root)
+2. **Entry index**: `.github/copilot-instructions.md`
+3. **Execution manual (this file)**: `AGENTS.md`
+4. **Task-specific user prompt**
 
-If instructions conflict, follow `.github/copilot-instructions.md` unless the task explicitly states a narrower requirement that does not violate it.
+`REVIEW.md` defines _what good looks like_ (review standards, severity, verification,
+repository-specific hazards); this file defines _how to execute and validate_. Read
+`REVIEW.md` before writing code — the best problem is the one prevented at the keyboard.
+If instructions conflict, the narrower, safer rule wins, and a task prompt may narrow
+scope only without violating `REVIEW.md`.
 
 ## Quick orientation
 
 1. Start with `README.md` for overview, local build steps, and Android notes.
-2. REST API details live in `docs/c64/c64u-openapi.yaml`.
-3. Consult `docs/c64/c64u-telnet.yaml` before any Telnet-related change; treat it as the Telnet menu/source-of-truth reference.
-4. Read the UX design in `docs/ux-guidelines.md` before any UX work.
-5. Read `docs/testing/maestro.md` before authoring or editing any Maestro flows.
-6. UI routes live in `src/pages/` and navigation in `src/components/TabBar.tsx`.
-7. Networking and data hooks are in `src/lib/c64api.ts` and `src/hooks/`.
-8. Song sources live in `src/lib/sources/` and the HVSC module lives in `src/lib/hvsc/`.
-9. Use `.github/copilot-instructions.md` for mandatory workflows. It overrides this file on conflicts.
+2. Read `REVIEW.md` for the quality bar every change is held to (hazards, severity, verification).
+3. REST API details live in `docs/c64/c64u-openapi.yaml`.
+4. Consult `docs/c64/c64u-telnet.yaml` before any Telnet-related change; treat it as the Telnet menu/source-of-truth reference.
+5. Read the UX design in `docs/ux-guidelines.md` before any UX work.
+6. Read `docs/testing/maestro.md` before authoring or editing any Maestro flows.
+7. UI routes live in `src/pages/` and navigation in `src/components/TabBar.tsx`.
+8. Networking and data hooks are in `src/lib/c64api.ts` and `src/hooks/`.
+9. Song sources live in `src/lib/sources/` and the HVSC module lives in `src/lib/hvsc/`.
+10. `.github/copilot-instructions.md` is the entry index; `REVIEW.md` is the quality bar and this file is the execution manual.
 
 ## Required execution model
 
@@ -42,19 +48,35 @@ Do not start making changes before you understand the touched subsystem and vali
 
 ### Phase 2 - Classify the change
 
-Before building, testing, or regenerating screenshots, classify the task using the rules from `.github/copilot-instructions.md`:
+Before building, testing, or regenerating screenshots, classify the task. This
+classification is mandatory because it controls whether a build is needed, which test
+suites run, whether screenshots must be regenerated, and which docs must be updated.
+Apply the **smallest validation set that honestly matches the change**.
 
-- `DOC_ONLY`
-- `CODE_CHANGE`
-- `UI_CHANGE`
-- `DOC_PLUS_CODE`
-
-This classification is mandatory because it controls:
-
-- whether a build is needed
-- which test suites are needed
-- whether screenshots must be regenerated
-- which docs must be updated
+- **`DOC_ONLY`** — only non-executable docs/prose change (`*.md`, doc comments,
+  README/doc updates, guidance files not executed by tooling).
+  - Required: verify docs are accurate and internally consistent, fix cross-references,
+    keep formatting clean.
+  - Do **not** run `npm run build`, `npm run test`, `npm run test:e2e`, `./build`,
+    Android build/sync, or screenshot regeneration unless the task explicitly requires it.
+- **`CODE_CHANGE`** — affects executable code, build scripts, config, tests, or runtime
+  assets (`src/`, `android/`, `agents/`, `package.json`, `vite.config.*`, Playwright /
+  Maestro / Vitest / Gradle / Python test code).
+  - Run the validation relevant to the touched layer(s); typical baseline:
+    ```bash
+    npm run lint
+    npm run test
+    npm run build
+    ```
+  - Add targeted suites when appropriate (`npm run test:agents`,
+    `cd android && ./gradlew test`). Do **not** regenerate screenshots for non-visible changes.
+- **`UI_CHANGE`** — affects visible rendered UI, navigation, labels, layout, controls,
+  icons, colors, or screenshots.
+  - Run the `CODE_CHANGE` baseline plus the smallest UI validation that proves the change
+    (`npm run test:e2e`, `npm run cap:build`), and regenerate **only** the screenshots for
+    surfaces whose visible output actually changed.
+- **`DOC_PLUS_CODE`** — both docs and executable code changed; treat as a code change and
+  also update the relevant docs.
 
 ### Phase 3 - Map impact before editing
 
@@ -137,9 +159,11 @@ At completion, summarize:
 
 ## Source of truth
 
-- **Primary rules and conventions**: `.github/copilot-instructions.md`
+- **Quality bar / review standards**: `REVIEW.md` (repo root)
+- **Entry index**: `.github/copilot-instructions.md`
 - **REST API docs**: `docs/c64/c64u-openapi.yaml`
 - **Telnet menu reference**: `docs/c64/c64u-telnet.yaml` (consult before Telnet-related code or test changes)
+- **CTA inventory & keypad map**: `docs/cta-inventory.md` (authoritative per-page list of every interactive control and its keypad/D-pad/T9 reachability; keep current — see "CTA inventory upkeep")
 - **App entry**: `src/main.tsx`, `src/App.tsx`
 - **UI**: `src/pages/`, `src/components/`, `src/components/ui/`
 - **App config state**: `src/hooks/useAppConfigState.ts`, `src/lib/config/`
@@ -197,6 +221,30 @@ If a task changes only one page or one documented state, update only the corresp
 
 Never refresh the entire screenshot corpus unless explicitly required by the task.
 
+### CTA inventory upkeep (MANDATORY)
+
+`docs/cta-inventory.md` is the authoritative, hierarchical inventory of every CTA
+(interactive control) in the app and how each is reached/operated by keypad /
+D-pad / T9. It is part of the keypad accessibility contract — a CTA that is not
+in the inventory is treated as unverified.
+
+You **must** update `docs/cta-inventory.md` in the **same change** whenever a CTA
+or the CTA hierarchy changes, including when you:
+
+- add, remove, rename, or change the `data-testid` of an interactive control;
+- change a control's **type** (e.g. button → select, checkbox → slider);
+- change focus **grouping/order/nesting** (`useFocusItem`/`useFocusGroup`,
+  `data-section-label`, `data-focus-group`) or which scope a control lives in;
+- add/remove a route/page, dialog, sheet, or menu that exposes controls;
+- change a control's keypad reachability, activation, or default
+  enabled/disabled state.
+
+Keep the per-page counts in §3 and the per-page hierarchy in §4 consistent with
+the code. The fastest check: re-run the on-device/DOM scope enumeration described
+in §7 and reconcile any delta. A `UI_CHANGE` or `DOC_PLUS_CODE` task that touches
+controls but leaves this file unchanged is **incomplete**. When in doubt, update
+it — an over-listed control is cheaper than a missing one.
+
 ## Tests and fixtures
 
 - **Unit**: `npm run test` (Vitest) with specs in `src/**` and `test/`
@@ -212,7 +260,8 @@ Never refresh the entire screenshot corpus unless explicitly required by the tas
 - CI builds a debug APK for all runs.
 - Android Play upload is already operational.
 - Tag builds still rely on signing secrets when a signed release artifact must be produced in CI.
-- GitHub Actions version tags are an intentional repository policy. Keep release tags aligned with `package.json`.
+- Release tags **drive the build version**: a tag may be created directly from the GitHub Releases UI (no `package.json` bump needed). `scripts/resolve-build-version.mjs` resolves the build identity from the tag (`GITHUB_REF_TYPE=tag`/`GITHUB_REF_NAME`), so the artifact is versioned as the tag regardless of `package.json`.
+- `package.json` is the in-tree dev baseline. It does **not** need to equal the latest tag; it only needs to stay internally consistent with `package-lock.json` (enforced by `tests/unit/scripts/releaseVersionMetadata.test.ts`). Do not re-add a test that requires `package.json` to equal the Git tag — that breaks UI-created tag builds.
 
 ## Mandatory formatting and style reminders
 

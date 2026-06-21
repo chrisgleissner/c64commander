@@ -9,7 +9,9 @@
 package uk.gleissner.c64commander
 
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
@@ -44,5 +46,39 @@ class SafeAreaPlugin : Plugin() {
       put("left", insets?.left ?: 0)
     }
     call.resolve(payload)
+  }
+
+  /**
+   * Show or hide the system status bar and/or navigation bar (full-screen /
+   * immersive). The activity is already edge-to-edge, so hiding a bar simply
+   * reclaims its space; the existing safe-area sync then reports zero inset for
+   * the hidden edge. Hidden bars reappear transiently on an edge swipe and
+   * re-hide, the standard immersive behaviour so system gestures stay reachable.
+   */
+  @PluginMethod
+  fun setSystemBarsVisibility(call: PluginCall) {
+    val statusBarVisible = call.getBoolean("statusBar", true) ?: true
+    val navigationBarVisible = call.getBoolean("navigationBar", true) ?: true
+
+    val activity = activity
+    if (activity == null) {
+      call.reject("Activity unavailable")
+      return
+    }
+    val window = activity.window
+    if (window == null) {
+      call.reject("Window unavailable")
+      return
+    }
+
+    activity.runOnUiThread {
+      val controller = WindowCompat.getInsetsController(window, window.decorView)
+      controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+      val statusBars = WindowInsetsCompat.Type.statusBars()
+      val navigationBars = WindowInsetsCompat.Type.navigationBars()
+      if (statusBarVisible) controller.show(statusBars) else controller.hide(statusBars)
+      if (navigationBarVisible) controller.show(navigationBars) else controller.hide(navigationBars)
+      call.resolve()
+    }
   }
 }

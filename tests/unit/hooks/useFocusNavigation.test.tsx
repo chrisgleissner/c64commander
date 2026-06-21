@@ -588,3 +588,58 @@ describe("FocusNavigationProvider — key-input diagnostics gating (GAP 4)", () 
     expect(details.some((d) => d.normalizedAction === null && d.ignoredReason === "no-binding")).toBe(true);
   });
 });
+
+describe("FocusNavigationProvider global shortcuts", () => {
+  it("fires tab-jump (1–6), Diagnostics (*), and Device Switcher (#) outside text fields", () => {
+    const jumpToTab = vi.fn();
+    const openDiagnostics = vi.fn();
+    const openDeviceSwitcher = vi.fn();
+    render(
+      <FocusNavigationProvider shortcuts={{ jumpToTab, openDiagnostics, openDeviceSwitcher }}>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "Digit3" });
+    expect(jumpToTab).toHaveBeenCalledWith(2); // 0-based tab index
+
+    fireEvent.keyDown(document.body, { key: "*" });
+    expect(openDiagnostics).toHaveBeenCalledTimes(1);
+
+    fireEvent.keyDown(document.body, { key: "#" });
+    expect(openDeviceSwitcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves digits/star/hash to T9 while editing a text field (no shortcut hijack)", () => {
+    const jumpToTab = vi.fn();
+    const openDiagnostics = vi.fn();
+    const openDeviceSwitcher = vi.fn();
+    render(
+      <FocusNavigationProvider shortcuts={{ jumpToTab, openDiagnostics, openDeviceSwitcher }}>
+        <input aria-label="host" />
+      </FocusNavigationProvider>,
+    );
+    const input = screen.getByLabelText("host");
+    input.focus();
+
+    fireEvent.keyDown(input, { code: "Digit3" });
+    fireEvent.keyDown(input, { key: "*" });
+    fireEvent.keyDown(input, { key: "#" });
+
+    expect(jumpToTab).not.toHaveBeenCalled();
+    expect(openDiagnostics).not.toHaveBeenCalled();
+    expect(openDeviceSwitcher).not.toHaveBeenCalled();
+  });
+
+  it("opens the quick menu from the Menu key when the focused item has no context menu", () => {
+    const openQuickMenu = vi.fn();
+    render(
+      <FocusNavigationProvider shortcuts={{ openQuickMenu }}>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ContextMenu" });
+    expect(openQuickMenu).toHaveBeenCalledTimes(1);
+  });
+});

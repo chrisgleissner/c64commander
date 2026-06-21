@@ -109,6 +109,10 @@ import {
   NOTIFICATION_DURATION_MIN_MS,
   NOTIFICATION_DURATION_MAX_MS,
   loadScreenOrientationMode,
+  loadHideStatusBar,
+  saveHideStatusBar,
+  loadHideNavigationBar,
+  saveHideNavigationBar,
   saveArchiveClientIdOverride,
   saveArchiveHostOverride,
   saveArchiveUserAgentOverride,
@@ -117,6 +121,7 @@ import {
   type NotificationVisibility,
   type ScreenOrientationMode,
 } from "@/lib/config/appSettings";
+import { applyFullScreenFromSettings } from "@/lib/native/fullScreen";
 import {
   getActiveAutoResolutionContext,
   loadDeviceSafetyConfig,
@@ -304,6 +309,8 @@ export default function SettingsPage() {
     useState<NotificationVisibility>(loadNotificationVisibility);
   const [notificationDurationMs, setNotificationDurationMs] = useState(loadNotificationDurationMs);
   const [screenOrientationMode, setScreenOrientationMode] = useState<ScreenOrientationMode>(loadScreenOrientationMode);
+  const [hideStatusBar, setHideStatusBar] = useState(loadHideStatusBar);
+  const [hideNavigationBar, setHideNavigationBar] = useState(loadHideNavigationBar);
   const [hvscBaseUrlInput, setHvscBaseUrlInput] = useState(() => getHvscBaseUrlOverride() ?? "");
   const [hvscBaseUrlPreview, setHvscBaseUrlPreview] = useState(() => getHvscBaseUrl());
   const [hvscUpdateCheckIntervalInput, setHvscUpdateCheckIntervalInput] = useState(() =>
@@ -757,6 +764,18 @@ export default function SettingsPage() {
     saveScreenOrientationMode(mode);
   };
 
+  const commitHideStatusBar = (enabled: boolean) => {
+    setHideStatusBar(enabled);
+    saveHideStatusBar(enabled);
+    applyFullScreenFromSettings();
+  };
+
+  const commitHideNavigationBar = (enabled: boolean) => {
+    setHideNavigationBar(enabled);
+    saveHideNavigationBar(enabled);
+    applyFullScreenFromSettings();
+  };
+
   const commitListPreviewLimit = () => {
     const parsed = Number(listPreviewInput);
     const clamped = clampListPreviewLimit(parsed);
@@ -975,6 +994,41 @@ export default function SettingsPage() {
                     lets the display profile track the rotated viewport.
                   </p>
                 </div>
+                {isAndroid ? (
+                  <div className="space-y-2 pt-2" data-testid="settings-full-screen">
+                    <Label className="text-sm font-medium">Full screen</Label>
+                    <div className="flex items-start justify-between gap-3 min-w-0">
+                      <div className="min-w-0">
+                        <Label htmlFor="full-screen-hide-status-bar" className="font-medium">
+                          Hide status bar
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Extend the app over the top status bar (clock, battery, signal).
+                        </p>
+                      </div>
+                      <Checkbox
+                        id="full-screen-hide-status-bar"
+                        data-testid="settings-hide-status-bar"
+                        checked={hideStatusBar}
+                        onCheckedChange={(checked) => commitHideStatusBar(checked === true)}
+                      />
+                    </div>
+                    <div className="flex items-start justify-between gap-3 min-w-0">
+                      <div className="min-w-0">
+                        <Label htmlFor="full-screen-hide-navigation-bar" className="font-medium">
+                          Hide navigation bar
+                        </Label>
+                        <p className="text-xs text-muted-foreground">Extend the app under the bottom navigation bar.</p>
+                      </div>
+                      <Checkbox
+                        id="full-screen-hide-navigation-bar"
+                        data-testid="settings-hide-navigation-bar"
+                        checked={hideNavigationBar}
+                        onCheckedChange={(checked) => commitHideNavigationBar(checked === true)}
+                      />
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </motion.div>
 

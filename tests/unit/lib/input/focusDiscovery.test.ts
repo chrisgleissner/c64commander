@@ -101,6 +101,40 @@ describe("FocusDiscoveryEngine", () => {
     engine.stop();
   });
 
+  it("promotes only the innermost labelled section when sections nest (no needless descend)", () => {
+    // Mirrors Home: an outer "Quick Config" wrapper around inner cards. The outer
+    // wrapper must NOT become a focus stop that swallows the whole section and
+    // forces an extra OK-descend; the inner cards are the top-level groups.
+    mount(`
+      <section id="quick-config" data-section-label="Quick Config">
+        <section id="cpu" data-section-label="CPU & RAM">
+          <button id="turbo">turbo</button>
+          <button id="speed">speed</button>
+        </section>
+        <section id="ports" data-section-label="Ports">
+          <button id="joystick">joystick</button>
+        </section>
+      </section>
+    `);
+    const { controller, engine } = makeEngine();
+    engine.start();
+
+    const topLevel = controller
+      .list()
+      .filter((item) => !item.parentId)
+      .map((item) => engine.elementForId(item.id)?.id);
+    expect(topLevel).toEqual(["cpu", "ports"]);
+    expect(controller.list().map((item) => engine.elementForId(item.id)?.id)).not.toContain("quick-config");
+
+    // Current starts on the first inner card; OK descends straight to its controls.
+    expect(engine.elementForId(controller.current()!.id)?.id).toBe("cpu");
+    expect(controller.current()?.group).toBe("CPU & RAM");
+    expect(
+      controller.enabledChildrenOf(controller.current()!.id).map((item) => engine.elementForId(item.id)?.id),
+    ).toEqual(["turbo", "speed"]);
+    engine.stop();
+  });
+
   it("treats app modal and sheet content roots as implicit focus groups", () => {
     mount(`
       <button id="behind">behind</button>

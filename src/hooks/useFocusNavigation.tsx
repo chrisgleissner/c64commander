@@ -49,6 +49,7 @@ import {
   CONTEXT_MENU_SELECTOR,
   FocusDiscoveryEngine,
   NavigationController,
+  digitForAction,
   getInputModality,
   isHorizontalKeyOwner,
   normalizeKeyEvent,
@@ -62,6 +63,7 @@ import {
 } from "@/lib/input";
 import { emitKeyInputDiagnostics } from "@/lib/diagnostics/keyInputDiagnostics";
 import { KeypadGuidanceBar } from "@/components/input/KeypadGuidanceBar";
+import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
 
 /** DOM attribute marking the current focus-ring item while in key-navigation modality. */
 const KEY_SELECTED_ATTR = "data-key-selected";
@@ -125,11 +127,45 @@ const isNativelyActivatable = (element: Element): boolean => {
   return false;
 };
 
+/** Carries the keypad scroll-margins; moved between focused elements (never inline). */
+const KEYPAD_SCROLL_ANCHOR_CLASS = "keypad-scroll-anchor";
+let keypadScrollAnchorEl: HTMLElement | null = null;
+
 const focusRingElement = (element: HTMLElement | null): void => {
   if (!element) return;
-  element.focus({ preventScroll: false });
+  // Keep the focused control fully visible: reserve space for the fixed header
+  // (top) and the guidance bar + tab bar (bottom) so `scrollIntoView` never parks
+  // the control beneath the app chrome. The scroll-margins live in a single CSS
+  // class moved from the previously-anchored element to this one — no per-element
+  // inline styles to leak or lock in. `preventScroll` on focus lets the
+  // margin-aware `scrollIntoView` own the scroll instead of the browser's default
+  // focus scroll (which ignores scroll-margin).
+  if (keypadScrollAnchorEl && keypadScrollAnchorEl !== element) {
+    keypadScrollAnchorEl.classList.remove(KEYPAD_SCROLL_ANCHOR_CLASS);
+  }
+  element.classList.add(KEYPAD_SCROLL_ANCHOR_CLASS);
+  keypadScrollAnchorEl = element;
+  element.focus({ preventScroll: true });
   element.scrollIntoView({ block: "nearest", inline: "nearest" });
 };
+
+/**
+ * Always-reachable global commands a keypad user can fire from anywhere (when not
+ * editing text and not inside an open overlay). Wired by the app shell so the
+ * provider stays router/UI-agnostic. Phone-keypad idiom: digits 1–N jump to a
+ * tab, ✱ opens Diagnostics, # opens the Device Switcher, and the Menu key (when
+ * the focused item has no context menu) opens the quick menu.
+ */
+export interface KeypadShortcutHandlers {
+  /** Jump to a primary tab by 0-based index (digits 1–6). */
+  readonly jumpToTab?: (index: number) => void;
+  /** Open Diagnostics (✱). */
+  readonly openDiagnostics?: () => void;
+  /** Open the Device Switcher (#) — keypad equivalent of long-pressing the status badge. */
+  readonly openDeviceSwitcher?: () => void;
+  /** Open the keypad quick menu (Menu-key fallback when the item has no context menu). */
+  readonly openQuickMenu?: () => void;
+}
 
 export interface FocusNavigationProviderProps {
   readonly children: ReactNode;
@@ -139,6 +175,8 @@ export interface FocusNavigationProviderProps {
   readonly onNavigateBack?: () => void;
   /** When false the engine + global listener are detached (byte-for-byte baseline). */
   readonly enabled?: boolean;
+  /** Always-reachable global commands (tab jump / diagnostics / device switcher / quick menu). */
+  readonly shortcuts?: KeypadShortcutHandlers;
 }
 
 export const FocusNavigationProvider = ({
@@ -146,12 +184,18 @@ export const FocusNavigationProvider = ({
   profileId,
   onNavigateBack,
   enabled = true,
+  shortcuts,
 }: FocusNavigationProviderProps) => {
   const descriptorsRef = useRef(
     new Map<string, { descriptor: FocusDescriptor; resolveElement: () => HTMLElement | null }>(),
   );
   const onNavigateBackRef = useRef(onNavigateBack);
   onNavigateBackRef.current = onNavigateBack;
+  const shortcutsRef = useRef<KeypadShortcutHandlers>(shortcuts ?? {});
+  // Only swap when the prop actually changes — avoids allocating a fresh {} every
+  // render when no shortcuts are passed (the common case in tests). Read sites use
+  // fields, not object identity, so this is safe.
+  if (shortcuts && shortcutsRef.current !== shortcuts) shortcutsRef.current = shortcuts;
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
   // The element currently carrying `data-key-selected`, tracked imperatively so
@@ -192,7 +236,10 @@ export const FocusNavigationProvider = ({
             focusRingElement(element);
           },
           onNavigateBack: () => onNavigateBackRef.current?.(),
-          onOpenMenu: (item) => openContextMenuFor(item ? (engineRef.current?.elementForId(item.id) ?? null) : null),
+          onOpenMenu: (item) => {
+            const opened = openContextMenuFor(item ? (engineRef.current?.elementForId(item.id) ?? null) : null);
+            if (!opened) shortcutsRef.current.openQuickMenu?.();
+          },
         },
       }),
     [openContextMenuFor],
@@ -340,6 +387,29 @@ export const FocusNavigationProvider = ({
           selectedControlId: controller.focus.current()?.id ?? null,
           activeElement,
         });
+        return;
+      }
+      // Always-reachable global shortcuts. Text fields and open overlays are
+      // already excluded above, so digits/✱/# here mean "command", not T9 entry.
+      // Digits 1–N jump to a tab; ✱ opens Diagnostics; # opens the Device Switcher.
+      const shortcuts = shortcutsRef.current;
+      const shortcutDigit = digitForAction(action);
+      if (shortcutDigit !== null && shortcutDigit >= 1 && shortcutDigit <= TAB_ROUTES.length && shortcuts.jumpToTab) {
+        shortcuts.jumpToTab(shortcutDigit - 1);
+        setInputModality("key-navigation");
+        event.preventDefault();
+        return;
+      }
+      if (action === "star" && shortcuts.openDiagnostics) {
+        shortcuts.openDiagnostics();
+        setInputModality("key-navigation");
+        event.preventDefault();
+        return;
+      }
+      if (action === "hash" && shortcuts.openDeviceSwitcher) {
+        shortcuts.openDeviceSwitcher();
+        setInputModality("key-navigation");
+        event.preventDefault();
         return;
       }
       // A deeper open layer (e.g. a Radix popup's document-level Escape handler)

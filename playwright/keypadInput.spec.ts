@@ -153,10 +153,12 @@ test.describe("Keypad / T9 input", () => {
     await expect(slider).toBeVisible();
     const thumb = slider.getByRole("slider");
 
-    const quickConfig = page.locator('[data-section-label="Quick Config"]').first();
-    expect(await ringFocus(page, quickConfig)).toBe(true);
-    await page.keyboard.press("Enter");
-    await expect(page.getByTestId("home-cpu-summary")).toHaveAttribute(SELECTED, "true");
+    // Grouping is innermost-wins: the CPU & RAM card is itself a top-level ring
+    // stop (the outer "Quick Config" wrapper is no longer a separate focus stop),
+    // so OK descends straight from the card into its first control.
+    const cpuCard = page.getByTestId("home-cpu-summary");
+    expect(await ringFocus(page, cpuCard)).toBe(true);
+    await expect(cpuCard).toHaveAttribute(SELECTED, "true");
     await page.keyboard.press("Enter");
     await expect(page.getByTestId("home-cpu-turbo-control")).toHaveAttribute(SELECTED, "true");
     await page.keyboard.press("ArrowDown");

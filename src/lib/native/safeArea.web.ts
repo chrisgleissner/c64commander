@@ -17,4 +17,8 @@ export class SafeAreaWeb {
       left: 0,
     };
   }
+
+  async setSystemBarsVisibility(): Promise<void> {
+    // The browser owns its own chrome; there are no app-controlled system bars.
+  }
 }

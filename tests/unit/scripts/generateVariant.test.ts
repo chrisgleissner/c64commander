@@ -70,6 +70,8 @@ type VariantYamlOverrides = {
   schema_version?: number;
   repo?: VariantRepoConfig;
   variants?: Record<string, VariantDefinition>;
+  /** Extra raw YAML lines appended under a variant's `runtime:` block (indented). */
+  runtimeExtras?: Record<string, string[]>;
 };
 
 type CompileVariantOptions = {
@@ -270,6 +272,7 @@ const buildVariantsYaml = (overrides: VariantYamlOverrides = {}) => {
       "    runtime:",
       "      endpoints:",
       ...Object.entries(variant.runtime.endpoints).map(([key, value]) => `        ${key}: ${value}`),
+      ...(overrides.runtimeExtras?.[variantId] ?? []).map((line) => `      ${line}`),
     ]),
     "",
   ].join("\n");
@@ -329,6 +332,25 @@ describe("generate-variant", () => {
     expect(config.repo.defaultVariant).toBe("c64commander");
     expect(config.repo.publishDefaults.release).toEqual(["c64commander"]);
     expect(config.variants["c64u-remote"].platform.web.loginHeading).toBe("C64U Remote");
+  });
+
+  it("normalizes per-variant full-screen system-bar defaults from runtime, defaulting to false", () => {
+    const repoRoot = createTempDir("variant-config-");
+    writeRepoFixtures(repoRoot);
+    const config = parseVariantSource(
+      buildVariantsYaml({
+        runtimeExtras: {
+          "c64u-remote": ["default_hide_status_bar: true", "default_hide_navigation_bar: true"],
+        },
+      }),
+      { repoRoot },
+    ) as any;
+    // A variant can opt into full-screen by default through runtime overrides...
+    expect(config.variants["c64u-remote"].runtime.defaultHideStatusBar).toBe(true);
+    expect(config.variants["c64u-remote"].runtime.defaultHideNavigationBar).toBe(true);
+    // ...while a variant that does not opt in stays full-screen OFF.
+    expect(config.variants["c64commander"].runtime.defaultHideStatusBar).toBe(false);
+    expect(config.variants["c64commander"].runtime.defaultHideNavigationBar).toBe(false);
   });
 
   it("fails when schema_version is absent", () => {

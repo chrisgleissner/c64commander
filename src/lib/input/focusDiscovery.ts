@@ -249,15 +249,31 @@ export class FocusDiscoveryEngine {
       // interactive group <div>) still joins the ring.
       if (!elements.includes(element)) elements.push(element);
     }
+    // Explicit `useFocusGroup` registrations captured above are always honoured.
+    const explicitGroupElements = new Set<Element>(groupElements);
     const implicitGroupCandidates = [
       ...(scopeEl instanceof HTMLElement && scopeEl.matches(GROUP_CONTAINER_SELECTOR) ? [scopeEl] : []),
       ...Array.from(scopeEl.querySelectorAll(GROUP_CONTAINER_SELECTOR)),
-    ];
+    ].filter(
+      (element): element is HTMLElement =>
+        element instanceof HTMLElement && isFocusVisible(element) && !isSkipped(element, scopeEl),
+    );
+    // A labelled container becomes a group only when it is the INNERMOST group
+    // container — it must not contain another group container (explicit or
+    // implicit). Otherwise an outer section wrapper (for example Home's
+    // "Quick Config", which wraps the CPU & RAM / Ports / Video cards) would
+    // swallow most of the page into a single focus stop and force an extra
+    // OK-descend before the real controls. Innermost-wins keeps progression
+    // shallow — page → card → control — instead of page → section → card →
+    // control. Explicit `useFocusGroup` nesting is left untouched (intentional).
+    const groupCandidatePool = new Set<Element>([...explicitGroupElements, ...implicitGroupCandidates]);
     for (const element of implicitGroupCandidates) {
-      if (element instanceof HTMLElement && isFocusVisible(element) && !isSkipped(element, scopeEl)) {
-        groupElements.add(element);
-        if (!elements.includes(element)) elements.push(element);
-      }
+      const containsAnotherGroupContainer = [...groupCandidatePool].some(
+        (other) => other !== element && element.contains(other),
+      );
+      if (containsAnotherGroupContainer) continue;
+      groupElements.add(element);
+      if (!elements.includes(element)) elements.push(element);
     }
 
     // The "field row" pattern: an explicit ITEM (not a group) that wraps

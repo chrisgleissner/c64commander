@@ -63,6 +63,12 @@ const navigationBindings: KeyBinding[] = [
 const digitBindings: KeyBinding[] = Array.from({ length: 10 }, (_unused, digit) => [
   { code: `Digit${digit}`, action: `digit${digit}` as KeyBinding["action"] },
   { code: `Numpad${digit}`, action: `digit${digit}` as KeyBinding["action"] },
+  // Legacy `keyCode` fallback (ASCII '0'–'9' = 48–57). Android WebViews — and the
+  // numeric keys of a keypad device — frequently deliver number keys with an
+  // EMPTY `KeyboardEvent.code` but a valid `keyCode`, so without this the digits
+  // (and therefore T9 + the digit tab-shortcuts) would not resolve on device.
+  // Declared last so the `*`/`#` symbol bindings still win for Shift+digit.
+  { keyCode: 48 + digit, action: `digit${digit}` as KeyBinding["action"] },
 ]).flat();
 
 export const defaultKeyboardProfile = defineKeymap({
