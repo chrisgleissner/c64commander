@@ -18,6 +18,7 @@ import { initializeRuntimeMotionMode } from "./lib/startup/runtimeMotionBudget";
 import { registerServiceWorker } from "./lib/startup/serviceWorkerRegistration";
 import { addErrorLog } from "./lib/logging";
 import { installNativeSafeAreaSync } from "./lib/native/safeArea";
+import { applyFullScreenFromSettings } from "./lib/native/fullScreen";
 import { loadRemoteFonts } from "./lib/startup/fontLoading";
 import "./index.css";
 
@@ -73,5 +74,6 @@ const startDeferredStartupBootstrap = () => {
 initializeRuntimeMotionMode();
 registerServiceWorker();
 installNativeSafeAreaSync();
+applyFullScreenFromSettings();
 createRoot(document.getElementById("root")!).render(<App />);
 scheduleAfterFirstPaint(startDeferredStartupBootstrap);

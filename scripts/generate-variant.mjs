@@ -299,6 +299,17 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
         runtime.default_t9_input_enabled !== undefined
             ? requireBoolean(runtime.default_t9_input_enabled, `variants.${variantId}.runtime.default_t9_input_enabled`)
             : false;
+    const defaultHideStatusBar =
+        runtime.default_hide_status_bar !== undefined
+            ? requireBoolean(runtime.default_hide_status_bar, `variants.${variantId}.runtime.default_hide_status_bar`)
+            : false;
+    const defaultHideNavigationBar =
+        runtime.default_hide_navigation_bar !== undefined
+            ? requireBoolean(
+                  runtime.default_hide_navigation_bar,
+                  `variants.${variantId}.runtime.default_hide_navigation_bar`,
+              )
+            : false;
 
     const platform = {
         android: {
@@ -380,6 +391,8 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
         runtime: {
             defaultDisplayProfile,
             defaultT9InputEnabled,
+            defaultHideStatusBar,
+            defaultHideNavigationBar,
             endpoints: Object.fromEntries(endpointKeys.map((key) => [key, runtimeEndpointsRaw[key].trim()])),
         },
     };

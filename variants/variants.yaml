@@ -81,3 +81,7 @@ variants:
         device_host: c64u
       default_display_profile: compact
       default_t9_input_enabled: true
+      # Keypad-first appliance UX: start full-screen (hide the Android status and
+      # navigation bars). The user can still override both in Settings -> Display.
+      default_hide_status_bar: true
+      default_hide_navigation_bar: true

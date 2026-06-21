@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { variant } from "@/generated/variant";
+
 const DEBUG_LOGGING_KEY = "c64u_debug_logging_enabled";
 const CONFIG_WRITE_INTERVAL_KEY = "c64u_config_write_min_interval_ms";
 const DEMO_MODE_ENABLED_KEY = "c64u_demo_mode_enabled";
@@ -23,6 +25,8 @@ const ENABLE_SWIPE_NAVIGATION_KEY = "c64u_enable_swipe_navigation";
 const ARCHIVE_HOST_OVERRIDE_KEY = "c64u_archive_host_override";
 const ARCHIVE_CLIENT_ID_OVERRIDE_KEY = "c64u_archive_client_id_override";
 const ARCHIVE_USER_AGENT_OVERRIDE_KEY = "c64u_archive_user_agent_override";
+const HIDE_STATUS_BAR_KEY = "c64u_full_screen_hide_status_bar";
+const HIDE_NAVIGATION_BAR_KEY = "c64u_full_screen_hide_navigation_bar";
 
 export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 200;
 export type NotificationVisibility = "errors-only" | "all";
@@ -108,6 +112,31 @@ export const saveDebugLoggingEnabled = (enabled: boolean) => {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(DEBUG_LOGGING_KEY, enabled ? "1" : "0");
   broadcast(DEBUG_LOGGING_KEY, enabled);
+};
+
+/**
+ * Full-screen (immersive) defaults come from the active build variant
+ * (`variant.runtime.defaultHide*`), so a keypad-first appliance variant can ship
+ * full-screen by default while the standard app does not. A user toggle in
+ * Settings persists and overrides the variant default.
+ */
+export const DEFAULT_HIDE_STATUS_BAR = variant.runtime.defaultHideStatusBar === true;
+export const DEFAULT_HIDE_NAVIGATION_BAR = variant.runtime.defaultHideNavigationBar === true;
+
+export const loadHideStatusBar = () => readBoolean(HIDE_STATUS_BAR_KEY, DEFAULT_HIDE_STATUS_BAR);
+
+export const saveHideStatusBar = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(HIDE_STATUS_BAR_KEY, enabled ? "1" : "0");
+  broadcast(HIDE_STATUS_BAR_KEY, enabled);
+};
+
+export const loadHideNavigationBar = () => readBoolean(HIDE_NAVIGATION_BAR_KEY, DEFAULT_HIDE_NAVIGATION_BAR);
+
+export const saveHideNavigationBar = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(HIDE_NAVIGATION_BAR_KEY, enabled ? "1" : "0");
+  broadcast(HIDE_NAVIGATION_BAR_KEY, enabled);
 };
 
 export const loadConfigWriteIntervalMs = () =>
@@ -307,4 +336,6 @@ export const APP_SETTINGS_KEYS = {
   ARCHIVE_HOST_OVERRIDE_KEY,
   ARCHIVE_CLIENT_ID_OVERRIDE_KEY,
   ARCHIVE_USER_AGENT_OVERRIDE_KEY,
+  HIDE_STATUS_BAR_KEY,
+  HIDE_NAVIGATION_BAR_KEY,
 };
