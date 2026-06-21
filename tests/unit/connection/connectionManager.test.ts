@@ -20,12 +20,6 @@ import { getPassword as loadStoredPassword } from "../../../src/lib/secureStorag
 
 import { CURRENT_DEVICE_HOST_KEY as DEVICE_HOST_KEY } from "../../../src/lib/c64api/hostConfig";
 
-const mdnsMocks = vi.hoisted(() => ({
-  isMdnsAvailable: vi.fn(() => false),
-  isBareHostname: vi.fn((host: string) => /^[a-z0-9-]+$/i.test(host)),
-  resolveMdnsHost: vi.fn(),
-}));
-
 vi.mock("../../../src/lib/config/appSettings", () => ({
   loadAutomaticDemoModeEnabled: vi.fn(() => false),
   loadDebugLoggingEnabled: vi.fn(() => false),
@@ -68,12 +62,6 @@ vi.mock("../../../src/lib/secureStorage", () => ({
   clearPassword: vi.fn(async () => undefined),
   hasStoredPasswordFlag: vi.fn(() => false),
   getCachedPassword: vi.fn(() => null),
-}));
-
-vi.mock("../../../src/lib/native/mdnsResolver", () => ({
-  isMdnsAvailable: (...args: unknown[]) => mdnsMocks.isMdnsAvailable(...args),
-  isBareHostname: (...args: [string]) => mdnsMocks.isBareHostname(...args),
-  resolveMdnsHost: (...args: unknown[]) => mdnsMocks.resolveMdnsHost(...args),
 }));
 
 vi.mock("../../../src/lib/uiErrors", async () => {
@@ -157,9 +145,6 @@ describe("connectionManager", () => {
     vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: false } } as never);
     vi.mocked(recordSmokeStatus).mockResolvedValue(undefined);
     vi.mocked(getSmokeConfig as any).mockReturnValue(null);
-    mdnsMocks.isMdnsAvailable.mockReturnValue(false);
-    mdnsMocks.isBareHostname.mockImplementation((host: string) => /^[a-z0-9-]+$/i.test(host));
-    mdnsMocks.resolveMdnsHost.mockReset();
     startMockServer.mockImplementation(async () => {
       throw new Error("Mock C64U server is only available on native platforms.");
     });
@@ -1453,43 +1438,6 @@ describe("connectionManager", () => {
     getInfoSpy.mockRestore();
   });
 
-  it("invalidates a cached mDNS address after repeated probe failures", async () => {
-    vi.stubEnv("VITEST", "false");
-    vi.stubEnv("NODE_ENV", "production");
-    localStorage.setItem("c64u_device_host", "mdns-negative");
-    localStorage.removeItem("c64u_has_password");
-    mdnsMocks.isMdnsAvailable.mockReturnValue(true);
-    mdnsMocks.resolveMdnsHost.mockResolvedValue({
-      ip: "192.168.1.13",
-      resolvedHost: "mdns-negative.local",
-      ttlMs: 60_000,
-    });
-    const addLogSpy = vi.spyOn(logging, "addLog");
-
-    const { C64API } = await import("../../../src/lib/c64api");
-    const getInfoSpy = vi.spyOn(C64API.prototype, "getInfo").mockRejectedValue(new Error("Host unreachable"));
-    const { probeOnce } = await import("../../../src/lib/connection/connectionManager");
-
-    await expect(probeOnce()).resolves.toBe(false);
-    await expect(probeOnce()).resolves.toBe(false);
-    expect(mdnsMocks.resolveMdnsHost).toHaveBeenCalledTimes(1);
-
-    await expect(probeOnce()).resolves.toBe(false);
-    expect(mdnsMocks.resolveMdnsHost).toHaveBeenCalledTimes(2);
-    expect(addLogSpy).toHaveBeenCalledWith(
-      "warn",
-      "Invalidated cached mDNS address after repeated probe failures",
-      expect.objectContaining({
-        host: "mdns-negative",
-        resolvedAddress: "192.168.1.13",
-        failureCount: 2,
-      }),
-    );
-
-    getInfoSpy.mockRestore();
-    addLogSpy.mockRestore();
-  });
-
   it("verifyCurrentConnectionTarget uses switch probe flags for explicit device targets", async () => {
     vi.stubEnv("VITEST", "false");
     vi.stubEnv("NODE_ENV", "production");
@@ -1508,13 +1456,11 @@ describe("connectionManager", () => {
     await initializeConnectionManager();
     const result = await verifyCurrentConnectionTarget({
       deviceHost: "u64",
-      preferResolvedAddress: "192.168.1.13",
     });
 
     expect(result).toEqual(
       expect.objectContaining({
         ok: true,
-        resolvedAddress: "192.168.1.13",
       }),
     );
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
@@ -1566,7 +1512,6 @@ describe("connectionManager", () => {
 
     const switchPromise = verifyCurrentConnectionTarget({
       deviceHost: "u64",
-      preferResolvedAddress: "192.168.1.13",
     });
 
     expect(getConnectionSnapshot()).toMatchObject({

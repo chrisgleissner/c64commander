@@ -44,7 +44,7 @@ export const normalizeTransportError = (error: unknown, context: { host?: string
   if (/(unknown host|enotfound|ename_not_found|getaddrinfo|dns lookup|cannot resolve)/i.test(lower)) {
     return {
       class: "dns",
-      userMessage: `Cannot resolve ${hostLabel}. On Android, prefer the device IP address.`,
+      userMessage: `Couldn't resolve ${hostLabel}. Check the device's hostname, or use its IP address.`,
       rawMessage: raw,
     };
   }

@@ -32,7 +32,6 @@ import {
 } from "@/lib/diagnostics/diagnosticsOverlayState";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import type { SavedDevice } from "@/lib/savedDevices/store";
-import { getSavedDeviceSwitchSummary } from "@/lib/savedDevices/store";
 import { buildSavedDevicePreferredRuntimeHost } from "@/lib/savedDevices/resolvedTarget";
 
 // F-DIAG-1 — saved-device probe cycle frequency.
@@ -348,7 +347,7 @@ export function useSavedDeviceHealthChecks(
 
             const result = await runHealthCheckForTarget(
               {
-                deviceHost: buildSavedDevicePreferredRuntimeHost(device, getSavedDeviceSwitchSummary(device.id)),
+                deviceHost: buildSavedDevicePreferredRuntimeHost(device),
                 ftpPort: device.ftpPort,
                 telnetPort: device.telnetPort,
                 password,
@@ -523,10 +522,7 @@ export function useSavedDeviceHealthChecks(
 
         const result = await runConnectivityProbeForTarget(
           {
-            deviceHost: buildSavedDevicePreferredRuntimeHost(
-              selectedDevice,
-              getSavedDeviceSwitchSummary(selectedDevice.id),
-            ),
+            deviceHost: buildSavedDevicePreferredRuntimeHost(selectedDevice),
             ftpPort: selectedDevice.ftpPort,
             telnetPort: selectedDevice.telnetPort,
             password,

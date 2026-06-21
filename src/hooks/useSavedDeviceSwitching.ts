@@ -29,12 +29,11 @@ import {
   completeSavedDeviceVerification,
   failSavedDeviceVerification,
   getSavedDeviceById,
-  getSavedDeviceSwitchSummary,
   getSavedDevicesSnapshot,
   selectSavedDevice,
   startSavedDeviceVerification,
 } from "@/lib/savedDevices/store";
-import { buildSavedDevicePreferredRuntimeHost, getSavedDeviceResolvedAddress } from "@/lib/savedDevices/resolvedTarget";
+import { buildSavedDevicePreferredRuntimeHost } from "@/lib/savedDevices/resolvedTarget";
 import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 import { clearToastsOnDeviceSwitch } from "@/lib/uiErrors";
 import { setHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
@@ -95,10 +94,8 @@ export function useSavedDeviceSwitching() {
         });
 
       const password = device.hasPassword ? await getPasswordForDevice(deviceId) : null;
-      const deviceSummary = getSavedDeviceSwitchSummary(deviceId);
       const nextDeviceHost = buildDeviceHostWithHttpPort(device.host, device.httpPort);
-      const preferredRuntimeHost = buildSavedDevicePreferredRuntimeHost(device, deviceSummary);
-      const preferredResolvedAddress = getSavedDeviceResolvedAddress(deviceSummary);
+      const preferredRuntimeHost = buildSavedDevicePreferredRuntimeHost(device);
       applyC64APIRuntimeConfig(
         buildBaseUrlFromDeviceHost(preferredRuntimeHost),
         password ?? undefined,
@@ -112,10 +109,9 @@ export function useSavedDeviceSwitching() {
         const verification = await verifyCurrentConnectionTarget({
           deviceHost: nextDeviceHost,
           password,
-          preferResolvedAddress: preferredResolvedAddress,
         });
         if (verification.ok && verification.deviceInfo) {
-          completeSavedDeviceVerification(deviceId, verification.deviceInfo, verification.resolvedAddress ?? null);
+          completeSavedDeviceVerification(deviceId, verification.deviceInfo);
           invalidateForSavedDeviceSwitch(queryClient, location.pathname);
           completeSavedDeviceSwitchAttempt(attemptId, {
             outcome: "success",

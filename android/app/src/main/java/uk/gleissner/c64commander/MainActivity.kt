@@ -104,7 +104,6 @@ open class MainActivity : BridgeActivity() {
     registerPlugin(FeatureFlagsPlugin::class.java)
     registerPlugin(FtpClientPlugin::class.java)
     registerPlugin(HvscIngestionPlugin::class.java)
-    registerPlugin(MdnsResolverPlugin::class.java)
     registerPlugin(SafeAreaPlugin::class.java)
     registerPlugin(SecureStoragePlugin::class.java)
     registerPlugin(TelnetSocketPlugin::class.java)

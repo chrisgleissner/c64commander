@@ -628,27 +628,36 @@ primitives and `refetchInterval` consumers:
 The slider primitive (`useDeviceBoundSlider`) acquires automatically. Any
 new slider or drag-driven interaction must opt in.
 
-### mDNS and IP fallback story (Android)
+### Reaching devices by hostname
 
-Stock Android's `InetAddress.getByName` does not perform mDNS lookup, and
-the C64 Ultimate firmware does not advertise a Bonjour service that
-`NsdManager` can resolve. As a result, saved-device entries that store a
-bare hostname (`u64`, `c64u`) fail DNS on Android even though the device
-is reachable.
+The app performs **no custom name resolution**. A device host (`c64u`,
+`u64`, `c64u.local`, an IP, optionally `:port`) is passed verbatim into the
+REST base URL and resolved by the platform's own resolver:
 
-The app does the following on Android (web and iOS keep current behaviour):
+- **Android / iOS**: the native HTTP client (`CapacitorHttp`) uses the OS
+  resolver — system/router DNS on both, plus native `.local` mDNS on iOS.
+- **Web**: the browser resolver, behind the dev/proxy path.
 
-1. Bare hostnames are first sent through `MdnsResolverPlugin.resolve()`,
-   which tries system DNS (which on some networks resolves `<name>.local`
-   via mDNSResponder) and then a short `NsdManager` discovery sweep.
-2. On success, the resolved IPv4 address is cached for 30 seconds and
-   used to build the REST base URL for the discovery probe.
-3. On failure, the discovery probe error path uses
-   `normalizeTransportError(...)` to surface a "Cannot resolve `<host>`.
-   On Android, prefer the device IP address." message into the OFFLINE
-   banner / diagnostics ring buffer instead of logging at debug level.
+How a bare hostname actually becomes reachable: the Ultimate firmware sends
+its hostname to the network via **DHCP option 12** (`LWIP_NETIF_HOSTNAME`),
+so DHCP-aware home routers register it in their LAN DNS. A device whose
+hostname is `c64u` is then reachable at `http://c64u/…` from any LAN client,
+including Android — no app-side resolution required.
 
-Until home networks reliably support mDNS for the C64 Ultimate, the
-recommended onboarding flow on Android is to enter the device's IP
-address. The "Add Device" dialog and the README "First Connection"
-section both note this.
+What does **not** work, and why we stopped trying:
+
+- The deployed Ultimate firmware (`C64 Ultimate` 1.1.0, `Ultimate-64` 3.14e)
+  **does not answer mDNS** in practice — neither multicast nor unicast `:5353`
+  queries for `<hostname>.local` — even though `LWIP_MDNS_RESPONDER` is set in
+  the firmware source. So a client-side mDNS resolver buys nothing on real
+  hardware. The former `MdnsResolverPlugin` + `NsdManager` path was removed
+  (it only added a multi-second `<name>.local` stall and a misleading
+  "prefer the IP" dead-end).
+- A name that is **not** a real network identity — e.g. an alias that only
+  exists in a developer's `/etc/hosts` — cannot resolve on the phone. To
+  reach such a device by name, set its hostname on the device itself (so the
+  router registers it) or enter its IP.
+
+On resolution failure, the probe error path uses `normalizeTransportError(...)`
+to surface "Couldn't resolve `<host>`. Check the device's hostname, or use its
+IP address." into the OFFLINE banner / diagnostics ring buffer.

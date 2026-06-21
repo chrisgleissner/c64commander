@@ -84,12 +84,6 @@ vi.mock("@/lib/deviceInteraction/deviceStateStore", () => ({
   updateDeviceConnectionState: vi.fn(),
 }));
 
-vi.mock("@/lib/native/mdnsResolver", () => ({
-  isBareHostname: (host: string) => /^[a-z][a-z0-9-]*$/i.test(host),
-  isMdnsAvailable: () => false,
-  resolveMdnsHost: vi.fn(),
-}));
-
 vi.mock("@/lib/c64api/transportErrors", () => ({
   normalizeTransportError: (error: unknown, ctx: { host?: string }) => {
     normalizeTransportErrorSpy(error, ctx);
@@ -97,7 +91,7 @@ vi.mock("@/lib/c64api/transportErrors", () => ({
     if (/(unknown host|enotfound|getaddrinfo|cannot resolve|unable to resolve)/i.test(raw)) {
       return {
         class: "dns",
-        userMessage: `Cannot resolve '${ctx.host}'. On Android, prefer the device IP address.`,
+        userMessage: `Couldn't resolve '${ctx.host}'. Check the device's hostname, or use its IP address.`,
         rawMessage: raw,
       };
     }
@@ -130,7 +124,7 @@ vi.mock("@/lib/logging", () => ({
 // Import after mocks are registered
 import { probeInfoOnce } from "@/lib/connection/connectionManager";
 
-describe("BUG-052 - probeInfoOnce contextualizes DNS-class transport errors before returning", () => {
+describe("probeInfoOnce contextualizes DNS-class transport errors before returning", () => {
   beforeEach(() => {
     getInfoMock.mockReset();
     addLogMock.mockReset();
@@ -141,10 +135,10 @@ describe("BUG-052 - probeInfoOnce contextualizes DNS-class transport errors befo
     vi.clearAllMocks();
   });
 
-  it("returns the user-friendly DNS message for the BUG-052 hostname-resolver failure path", async () => {
-    // Reproduce the BUG-052 repro: mDNS resolver rejects and the JS layer
-    // falls through to a direct fetch that fails with the raw DNS fetch
-    // error. Before the fix, probeInfoOnce returned the raw fetch text.
+  it("returns the user-friendly DNS message when a hostname probe fails to resolve", async () => {
+    // A device host that the OS resolver can't resolve fails the direct fetch
+    // with a raw DNS error; probeInfoOnce must surface the contextual guidance
+    // rather than the raw fetch text.
     getInfoMock.mockRejectedValueOnce(
       new TypeError('Unable to resolve host "u64": No address associated with hostname'),
     );
@@ -154,10 +148,9 @@ describe("BUG-052 - probeInfoOnce contextualizes DNS-class transport errors befo
     expect(result.ok).toBe(false);
     expect(result.deviceInfo).toBeNull();
     // The returned error must be the user-friendly DNS guidance, not the raw
-    // fetch / plugin error text. This is the core BUG-052 invariant.
-    expect(result.error).toBe("Cannot resolve 'u64'. On Android, prefer the device IP address.");
+    // fetch error text.
+    expect(result.error).toBe("Couldn't resolve 'u64'. Check the device's hostname, or use its IP address.");
     expect(result.error).not.toContain("Unable to resolve host");
-    expect(result.error).not.toContain("via mDNS");
     // The mapper must be invoked with the original error and the active host.
     expect(normalizeTransportErrorSpy).toHaveBeenCalledWith(
       expect.any(TypeError),

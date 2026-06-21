@@ -16,7 +16,7 @@ import {
   getDeviceHostFromBaseUrl,
   resolveDeviceHostFromStorage,
 } from "@/lib/c64api";
-import { buildDeviceHostWithHttpPort, getDeviceHostHttpPort, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
+import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import { getPassword as loadStoredPassword } from "@/lib/secureStorage";
 import { clearRuntimeFtpPortOverride, setRuntimeFtpPortOverride } from "@/lib/ftp/ftpConfig";
 import { getActiveMockBaseUrl, getActiveMockFtpPort, startMockServer, stopMockServer } from "@/lib/mock/mockServer";
@@ -32,8 +32,7 @@ import { addLog } from "@/lib/logging";
 import { getSmokeConfig, initializeSmokeMode, isSmokeModeEnabled, recordSmokeStatus } from "@/lib/smoke/smokeMode";
 import { resetInteractionState } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { updateDeviceConnectionState } from "@/lib/deviceInteraction/deviceStateStore";
-import { isBareHostname, isMdnsAvailable, resolveMdnsHost } from "@/lib/native/mdnsResolver";
-import { normalizeTransportError, type TransportFailure } from "@/lib/c64api/transportErrors";
+import { normalizeTransportError } from "@/lib/c64api/transportErrors";
 import { clearConnectivityErrorToastsForHost } from "@/lib/uiErrors";
 import { registerReachabilityListener, type ReachabilitySource } from "@/lib/connection/reachabilityEvents";
 import {
@@ -50,7 +49,6 @@ export type ProbeInfoResult = {
   ok: boolean;
   deviceInfo: DeviceInfo | null;
   error: string | null;
-  resolvedAddress?: string | null;
 };
 
 export type ConnectionSnapshot = Readonly<{
@@ -108,168 +106,37 @@ const isDemoModeAvailable = () => featureFlagManager.getSnapshot().flags.demo_mo
 
 const isDemoModeRequested = () => isDemoModeAvailable() && loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
 
-const mdnsResolutionCache = new Map<string, { ip: string; expiresAtMs: number }>();
-const mdnsNegativeCache = new Map<string, { expiresAtMs: number; failure: TransportFailure }>();
-const mdnsResolvedProbeFailures = new Map<string, { ip: string; count: number }>();
-const MDNS_RESOLVED_PROBE_FAILURE_THRESHOLD = 2;
-const MDNS_NEGATIVE_CACHE_TTL_MS = 60_000;
-
-type ResolveDeviceHostResult = { host: string; mdnsFailure: TransportFailure | null };
-
-const isMdnsNegativeCached = (deviceHost: string): TransportFailure | null => {
-  const entry = mdnsNegativeCache.get(deviceHost);
-  if (!entry) return null;
-  if (entry.expiresAtMs <= Date.now()) {
-    mdnsNegativeCache.delete(deviceHost);
-    return null;
-  }
-  return entry.failure;
-};
-
-const rememberMdnsNegative = (deviceHost: string, failure: TransportFailure) => {
-  mdnsNegativeCache.set(deviceHost, {
-    expiresAtMs: Date.now() + MDNS_NEGATIVE_CACHE_TTL_MS,
-    failure,
-  });
-};
-
-const clearMdnsNegative = (deviceHost: string) => {
-  mdnsNegativeCache.delete(deviceHost);
-};
-
-const buildMdnsProbeFailureKey = (deviceHost: string, resolvedAddress: string) => `${deviceHost}|${resolvedAddress}`;
-
-const clearMdnsResolvedProbeFailures = (deviceHost: string, resolvedAddress?: string | null) => {
-  if (!resolvedAddress) return;
-  mdnsResolvedProbeFailures.delete(buildMdnsProbeFailureKey(deviceHost, resolvedAddress));
-};
-
-const recordMdnsResolvedProbeFailure = (
-  deviceHost: string,
-  resolvedAddress: string | null | undefined,
-  reason: string,
-) => {
-  if (!resolvedAddress) return;
-  const key = buildMdnsProbeFailureKey(deviceHost, resolvedAddress);
-  const current = mdnsResolvedProbeFailures.get(key);
-  const nextCount = current?.ip === resolvedAddress ? current.count + 1 : 1;
-  mdnsResolvedProbeFailures.set(key, { ip: resolvedAddress, count: nextCount });
-  if (nextCount < MDNS_RESOLVED_PROBE_FAILURE_THRESHOLD) return;
-
-  const cached = mdnsResolutionCache.get(deviceHost);
-  if (cached?.ip === resolvedAddress) {
-    mdnsResolutionCache.delete(deviceHost);
-    addLog("warn", "Invalidated cached mDNS address after repeated probe failures", {
-      host: deviceHost,
-      resolvedAddress,
-      failureCount: nextCount,
-      reason,
-    });
-  }
-  mdnsResolvedProbeFailures.delete(key);
-};
-
-const resolveDeviceHostForProbe = async (deviceHost: string): Promise<ResolveDeviceHostResult> => {
-  if (!isMdnsAvailable()) return { host: deviceHost, mdnsFailure: null };
-  if (!isBareHostname(deviceHost)) return { host: deviceHost, mdnsFailure: null };
-
-  const cached = mdnsResolutionCache.get(deviceHost);
-  if (cached && cached.expiresAtMs > Date.now()) {
-    return { host: cached.ip, mdnsFailure: null };
-  }
-
-  const negativeCached = isMdnsNegativeCached(deviceHost);
-  if (negativeCached) {
-    return { host: deviceHost, mdnsFailure: negativeCached };
-  }
-
-  try {
-    const resolved = await resolveMdnsHost(deviceHost, { timeoutMs: 1500 });
-    mdnsResolutionCache.set(deviceHost, {
-      ip: resolved.ip,
-      expiresAtMs: Date.now() + Math.max(1000, resolved.ttlMs),
-    });
-    clearMdnsNegative(deviceHost);
-    clearMdnsResolvedProbeFailures(deviceHost, resolved.ip);
-    addLog("info", "Resolved bare hostname via mDNS", {
-      host: deviceHost,
-      resolvedHost: resolved.resolvedHost,
-      ip: resolved.ip,
-    });
-    return { host: resolved.ip, mdnsFailure: null };
-  } catch (error) {
-    const failure = normalizeTransportError(error, { host: deviceHost });
-    rememberMdnsNegative(deviceHost, failure);
-    addLog("warn", "mDNS resolution failed; falling back to system DNS", {
-      host: deviceHost,
-      class: failure.class,
-      message: failure.userMessage,
-      raw: failure.rawMessage,
-    });
-    return { host: deviceHost, mdnsFailure: failure };
-  }
-};
-
+// Device hostnames are passed through to the platform's HTTP client verbatim
+// and resolved by the OS resolver (system/router DNS on every platform, plus
+// native `.local` mDNS on iOS). The Ultimate firmware registers its hostname
+// via DHCP option 12, so DHCP-aware routers make `http://<hostname>/…`
+// reachable directly — the app performs no custom name resolution.
 const loadPersistedConnectionConfig = async () => {
   const password = await loadStoredPassword();
   const deviceHost = resolveDeviceHostFromStorage();
-  const resolved = await resolveDeviceHostForProbe(deviceHost);
-  const probeHost = resolved.host;
-  const baseUrl = buildBaseUrlFromDeviceHost(probeHost === deviceHost ? deviceHost : probeHost);
   return {
-    baseUrl,
+    baseUrl: buildBaseUrlFromDeviceHost(deviceHost),
     password: password ?? undefined,
     deviceHost,
-    resolvedAddress: probeHost !== deviceHost ? stripPortFromDeviceHost(probeHost) : null,
-    mdnsFailure: resolved.mdnsFailure,
   };
 };
 
-const loadSwitchConnectionConfig = async (options: {
-  deviceHost: string;
-  password?: string | null;
-  preferResolvedAddress?: string | null;
-}) => {
-  const password = options.password ?? undefined;
-  const rawDeviceHost = options.deviceHost;
-  const rawHost = stripPortFromDeviceHost(rawDeviceHost);
-  const httpPort = getDeviceHostHttpPort(rawDeviceHost);
-  const resolvedAddress = options.preferResolvedAddress?.trim() || null;
-  const resolved = resolvedAddress
-    ? { host: buildDeviceHostWithHttpPort(resolvedAddress, httpPort), mdnsFailure: null as TransportFailure | null }
-    : await resolveDeviceHostForProbe(rawHost);
-  const probeDeviceHost = buildDeviceHostWithHttpPort(stripPortFromDeviceHost(resolved.host), httpPort);
-
+const loadSwitchConnectionConfig = (options: { deviceHost: string; password?: string | null }) => {
+  const deviceHost = options.deviceHost;
   return {
-    baseUrl: buildBaseUrlFromDeviceHost(probeDeviceHost),
-    password,
-    deviceHost: rawDeviceHost,
-    probeDeviceHost,
-    resolvedAddress:
-      stripPortFromDeviceHost(probeDeviceHost) !== rawHost ? stripPortFromDeviceHost(probeDeviceHost) : null,
-    mdnsFailure: resolved.mdnsFailure,
+    baseUrl: buildBaseUrlFromDeviceHost(deviceHost),
+    password: options.password ?? undefined,
+    deviceHost,
+    probeDeviceHost: deviceHost,
   };
 };
 
 const probeInfoWithConnectionConfig = async (
-  config: Awaited<ReturnType<typeof loadSwitchConnectionConfig>>,
+  config: ReturnType<typeof loadSwitchConnectionConfig>,
   options: { signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<ProbeInfoResult> => {
   const timeoutMs = options.timeoutMs ?? loadDiscoveryProbeTimeoutMs();
   const outerSignal = options.signal;
-  if (config.mdnsFailure) {
-    addLog("info", "Skipping device probe because mDNS resolution previously failed", {
-      deviceHost: config.deviceHost,
-      class: config.mdnsFailure.class,
-      userMessage: config.mdnsFailure.userMessage,
-    });
-    return {
-      ok: false,
-      deviceInfo: null,
-      error: config.mdnsFailure.userMessage,
-      resolvedAddress: config.resolvedAddress,
-    };
-  }
   try {
     const api = new C64API(config.baseUrl, config.password, config.probeDeviceHost);
     const response = await api.getInfo({
@@ -281,35 +148,23 @@ const probeInfoWithConnectionConfig = async (
       __c64uBypassCache: true,
     });
     const healthy = isProbePayloadHealthy(response);
-    if (healthy) {
-      clearMdnsResolvedProbeFailures(config.deviceHost, config.resolvedAddress);
-    } else {
-      recordMdnsResolvedProbeFailure(
-        config.deviceHost,
-        config.resolvedAddress,
-        "Probe payload missing required identity",
-      );
-    }
     return {
       ok: healthy,
       deviceInfo: response,
       error: healthy ? null : "Probe payload missing required identity",
-      resolvedAddress: config.resolvedAddress,
     };
   } catch (error) {
     const message = (error as Error | undefined)?.message ?? "Unknown probe failure";
-    recordMdnsResolvedProbeFailure(config.deviceHost, config.resolvedAddress, message);
     if (/^HTTP\s+\d+/.test(message)) {
       return {
         ok: false,
         deviceInfo: null,
         error: message,
-        resolvedAddress: config.resolvedAddress,
       };
     }
-    // Contextualize raw transport failures (e.g. mDNS/DNS "Unable to resolve host")
+    // Contextualize raw transport failures (e.g. DNS "Unable to resolve host")
     // so the connection snapshot, UnifiedHealthBadge, and downstream diagnostics
-    // see a user-friendly message instead of the raw fetch / plugin error text.
+    // see a user-friendly message instead of the raw fetch error text.
     const failure = normalizeTransportError(error, { host: config.deviceHost });
     addLog(failure.class === "dns" ? "info" : "warn", "Probe request failed", {
       baseUrl: config.baseUrl,
@@ -322,7 +177,6 @@ const probeInfoWithConnectionConfig = async (
       ok: false,
       deviceInfo: null,
       error: failure.userMessage,
-      resolvedAddress: config.resolvedAddress,
     };
   }
 };
@@ -351,19 +205,9 @@ export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: num
       __c64uBypassCache: true,
     });
     const healthy = isProbePayloadHealthy(response);
-    if (healthy) {
-      clearMdnsResolvedProbeFailures(config.deviceHost, config.resolvedAddress);
-    } else {
-      recordMdnsResolvedProbeFailure(
-        config.deviceHost,
-        config.resolvedAddress,
-        "Probe payload missing required identity",
-      );
-    }
     return healthy;
   } catch (error) {
     const message = (error as Error | undefined)?.message ?? "Unknown probe failure";
-    recordMdnsResolvedProbeFailure(config.deviceHost, config.resolvedAddress, message);
     const normalizedMessage = message;
     if (!/^HTTP\s+\d+/.test(normalizedMessage)) {
       const host = (() => {
@@ -434,7 +278,6 @@ export async function probeInfoOnce(
 export async function verifyCurrentConnectionTarget(options?: {
   deviceHost?: string;
   password?: string | null;
-  preferResolvedAddress?: string | null;
 }): Promise<ProbeInfoResult> {
   clearPinnedDemoMode();
   const discoveryRun = beginDiscoveryRun("switch");
@@ -448,10 +291,9 @@ export async function verifyCurrentConnectionTarget(options?: {
   });
   const switchConfig =
     typeof options?.deviceHost === "string"
-      ? await loadSwitchConnectionConfig({
+      ? loadSwitchConnectionConfig({
           deviceHost: options.deviceHost,
           password: options.password,
-          preferResolvedAddress: options.preferResolvedAddress,
         })
       : null;
   const result = switchConfig
