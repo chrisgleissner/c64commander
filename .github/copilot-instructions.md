@@ -13,7 +13,7 @@ need and keep this file as the map.
    what reviewers flag, severity calibration, verification expectations, and the
    repository-specific hazards that have actually bitten (device-wedging writes,
    coverage-hang render loops, golden-trace and coverage gates, the keypad/CTA
-   contract, cross-platform parity). Read it *before and while* you write code — the
+   contract, cross-platform parity). Read it _before and while_ you write code — the
    best problem is the one prevented at the keyboard.
 2. **`AGENTS.md`** — the **execution manual**. Change classification
    (`DOC_ONLY` / `CODE_CHANGE` / `UI_CHANGE` / `DOC_PLUS_CODE`), the validation matrix,

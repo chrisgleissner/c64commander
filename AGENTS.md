@@ -11,8 +11,8 @@ This file is an orientation and execution guide.
 3. **Execution manual (this file)**: `AGENTS.md`
 4. **Task-specific user prompt**
 
-`REVIEW.md` defines *what good looks like* (review standards, severity, verification,
-repository-specific hazards); this file defines *how to execute and validate*. Read
+`REVIEW.md` defines _what good looks like_ (review standards, severity, verification,
+repository-specific hazards); this file defines _how to execute and validate_. Read
 `REVIEW.md` before writing code — the best problem is the one prevented at the keyboard.
 If instructions conflict, the narrower, safer rule wins, and a task prompt may narrow
 scope only without violating `REVIEW.md`.
@@ -48,19 +48,35 @@ Do not start making changes before you understand the touched subsystem and vali
 
 ### Phase 2 - Classify the change
 
-Before building, testing, or regenerating screenshots, classify the task using the rules from `.github/copilot-instructions.md`:
+Before building, testing, or regenerating screenshots, classify the task. This
+classification is mandatory because it controls whether a build is needed, which test
+suites run, whether screenshots must be regenerated, and which docs must be updated.
+Apply the **smallest validation set that honestly matches the change**.
 
-- `DOC_ONLY`
-- `CODE_CHANGE`
-- `UI_CHANGE`
-- `DOC_PLUS_CODE`
-
-This classification is mandatory because it controls:
-
-- whether a build is needed
-- which test suites are needed
-- whether screenshots must be regenerated
-- which docs must be updated
+- **`DOC_ONLY`** — only non-executable docs/prose change (`*.md`, doc comments,
+  README/doc updates, guidance files not executed by tooling).
+  - Required: verify docs are accurate and internally consistent, fix cross-references,
+    keep formatting clean.
+  - Do **not** run `npm run build`, `npm run test`, `npm run test:e2e`, `./build`,
+    Android build/sync, or screenshot regeneration unless the task explicitly requires it.
+- **`CODE_CHANGE`** — affects executable code, build scripts, config, tests, or runtime
+  assets (`src/`, `android/`, `agents/`, `package.json`, `vite.config.*`, Playwright /
+  Maestro / Vitest / Gradle / Python test code).
+  - Run the validation relevant to the touched layer(s); typical baseline:
+    ```bash
+    npm run lint
+    npm run test
+    npm run build
+    ```
+  - Add targeted suites when appropriate (`npm run test:agents`,
+    `cd android && ./gradlew test`). Do **not** regenerate screenshots for non-visible changes.
+- **`UI_CHANGE`** — affects visible rendered UI, navigation, labels, layout, controls,
+  icons, colors, or screenshots.
+  - Run the `CODE_CHANGE` baseline plus the smallest UI validation that proves the change
+    (`npm run test:e2e`, `npm run cap:build`), and regenerate **only** the screenshots for
+    surfaces whose visible output actually changed.
+- **`DOC_PLUS_CODE`** — both docs and executable code changed; treat as a code change and
+  also update the relevant docs.
 
 ### Phase 3 - Map impact before editing
 
