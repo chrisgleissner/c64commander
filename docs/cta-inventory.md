@@ -26,7 +26,7 @@ Last verified on real hardware: **Pixel 4 (Android 16)** against a real **c64u**
 
 ## 1. The keypad device model
 
-The assumed device has a D-pad + numeric-T9 remote. Its physical keys emit
+The device is assumed to have a D-pad + numeric-T9 remote. Its physical keys emit
 standard Android key codes; the app's `keypad` input profile
 (`src/lib/input/profiles/keypad.ts`, merged over `defaultKeyboard`) normalises
 them to **semantic actions** (`src/lib/input/keyEvent.ts`). The exact
@@ -312,7 +312,7 @@ details, item/disk pickers, Diagnostics dialog, Open Source Licenses page.
 
 - Real device: Pixel 4 `9B081FFAZ001WX`, app foreground, connected to c64u.
 - Keys injected as real OS key events via `adb shell input keyevent <code>`
-  (the same codes the Callback 8020 emits).
+  (the same codes the device is assumed to emit).
 - Per-page CTA enumeration via the WebView DevTools (CDP): the active focus
   scope is scanned for interactive elements (role/label/testid/disabled/
   key-selected). Re-run this enumeration after UI changes to refresh §3/§4.
