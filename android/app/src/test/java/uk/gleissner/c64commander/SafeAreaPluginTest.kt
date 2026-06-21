@@ -11,6 +11,9 @@ package uk.gleissner.c64commander
 import android.view.View
 import android.view.Window
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.getcapacitor.Bridge
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -22,6 +25,7 @@ import org.junit.Test
 import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.doReturn
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.mockStatic
 import org.mockito.Mockito.verify
 
 class SafeAreaPluginTest {
@@ -113,10 +117,11 @@ class SafeAreaPluginTest {
   }
 
   @Test
-  fun setSystemBarsVisibilityTogglesBarsOnTheUiThreadAndResolves() {
+  fun setSystemBarsVisibilityHidesStatusShowsNavigationAndResolves() {
     val activity = mock(AppCompatActivity::class.java)
     val window = mock(Window::class.java)
     val decorView = mock(View::class.java)
+    val controller = mock(WindowInsetsControllerCompat::class.java)
     doReturn(window).`when`(activity).window
     doReturn(decorView).`when`(window).decorView
     // Run the queued UI work synchronously so the show/hide + resolve body executes.
@@ -131,8 +136,17 @@ class SafeAreaPluginTest {
     doReturn(false).`when`(call).getBoolean("statusBar", true)
     doReturn(true).`when`(call).getBoolean("navigationBar", true)
 
-    plugin.setSystemBarsVisibility(call)
+    mockStatic(WindowCompat::class.java).use { staticMock ->
+      staticMock
+              .`when`<WindowInsetsControllerCompat> { WindowCompat.getInsetsController(window, decorView) }
+              .thenReturn(controller)
 
+      plugin.setSystemBarsVisibility(call)
+    }
+
+    // statusBar=false hides the status bars; navigationBar=true shows the nav bars.
+    verify(controller).hide(WindowInsetsCompat.Type.statusBars())
+    verify(controller).show(WindowInsetsCompat.Type.navigationBars())
     verify(call).resolve()
   }
 }

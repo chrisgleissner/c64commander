@@ -127,15 +127,24 @@ const isNativelyActivatable = (element: Element): boolean => {
   return false;
 };
 
+/** Carries the keypad scroll-margins; moved between focused elements (never inline). */
+const KEYPAD_SCROLL_ANCHOR_CLASS = "keypad-scroll-anchor";
+let keypadScrollAnchorEl: HTMLElement | null = null;
+
 const focusRingElement = (element: HTMLElement | null): void => {
   if (!element) return;
   // Keep the focused control fully visible: reserve space for the fixed header
   // (top) and the guidance bar + tab bar (bottom) so `scrollIntoView` never parks
-  // the control beneath the app chrome. `preventScroll` on focus lets the
+  // the control beneath the app chrome. The scroll-margins live in a single CSS
+  // class moved from the previously-anchored element to this one — no per-element
+  // inline styles to leak or lock in. `preventScroll` on focus lets the
   // margin-aware `scrollIntoView` own the scroll instead of the browser's default
   // focus scroll (which ignores scroll-margin).
-  element.style.setProperty("scroll-margin-top", "var(--keypad-scroll-margin-top)");
-  element.style.setProperty("scroll-margin-bottom", "var(--keypad-scroll-margin-bottom)");
+  if (keypadScrollAnchorEl && keypadScrollAnchorEl !== element) {
+    keypadScrollAnchorEl.classList.remove(KEYPAD_SCROLL_ANCHOR_CLASS);
+  }
+  element.classList.add(KEYPAD_SCROLL_ANCHOR_CLASS);
+  keypadScrollAnchorEl = element;
   element.focus({ preventScroll: true });
   element.scrollIntoView({ block: "nearest", inline: "nearest" });
 };
@@ -183,7 +192,10 @@ export const FocusNavigationProvider = ({
   const onNavigateBackRef = useRef(onNavigateBack);
   onNavigateBackRef.current = onNavigateBack;
   const shortcutsRef = useRef<KeypadShortcutHandlers>(shortcuts ?? {});
-  shortcutsRef.current = shortcuts ?? {};
+  // Only swap when the prop actually changes — avoids allocating a fresh {} every
+  // render when no shortcuts are passed (the common case in tests). Read sites use
+  // fields, not object identity, so this is safe.
+  if (shortcuts && shortcutsRef.current !== shortcuts) shortcutsRef.current = shortcuts;
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
   // The element currently carrying `data-key-selected`, tracked imperatively so
