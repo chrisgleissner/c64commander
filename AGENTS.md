@@ -6,23 +6,29 @@ This file is an orientation and execution guide.
 
 ## Rule precedence
 
-1. **Primary rules and conventions**: `.github/copilot-instructions.md`
-2. **This file**: `AGENTS.md`
-3. **Task-specific user prompt**
+1. **Quality bar (what every change must satisfy)**: `REVIEW.md` (repo root)
+2. **Entry index**: `.github/copilot-instructions.md`
+3. **Execution manual (this file)**: `AGENTS.md`
+4. **Task-specific user prompt**
 
-If instructions conflict, follow `.github/copilot-instructions.md` unless the task explicitly states a narrower requirement that does not violate it.
+`REVIEW.md` defines *what good looks like* (review standards, severity, verification,
+repository-specific hazards); this file defines *how to execute and validate*. Read
+`REVIEW.md` before writing code — the best problem is the one prevented at the keyboard.
+If instructions conflict, the narrower, safer rule wins, and a task prompt may narrow
+scope only without violating `REVIEW.md`.
 
 ## Quick orientation
 
 1. Start with `README.md` for overview, local build steps, and Android notes.
-2. REST API details live in `docs/c64/c64u-openapi.yaml`.
-3. Consult `docs/c64/c64u-telnet.yaml` before any Telnet-related change; treat it as the Telnet menu/source-of-truth reference.
-4. Read the UX design in `docs/ux-guidelines.md` before any UX work.
-5. Read `docs/testing/maestro.md` before authoring or editing any Maestro flows.
-6. UI routes live in `src/pages/` and navigation in `src/components/TabBar.tsx`.
-7. Networking and data hooks are in `src/lib/c64api.ts` and `src/hooks/`.
-8. Song sources live in `src/lib/sources/` and the HVSC module lives in `src/lib/hvsc/`.
-9. Use `.github/copilot-instructions.md` for mandatory workflows. It overrides this file on conflicts.
+2. Read `REVIEW.md` for the quality bar every change is held to (hazards, severity, verification).
+3. REST API details live in `docs/c64/c64u-openapi.yaml`.
+4. Consult `docs/c64/c64u-telnet.yaml` before any Telnet-related change; treat it as the Telnet menu/source-of-truth reference.
+5. Read the UX design in `docs/ux-guidelines.md` before any UX work.
+6. Read `docs/testing/maestro.md` before authoring or editing any Maestro flows.
+7. UI routes live in `src/pages/` and navigation in `src/components/TabBar.tsx`.
+8. Networking and data hooks are in `src/lib/c64api.ts` and `src/hooks/`.
+9. Song sources live in `src/lib/sources/` and the HVSC module lives in `src/lib/hvsc/`.
+10. `.github/copilot-instructions.md` is the entry index; `REVIEW.md` is the quality bar and this file is the execution manual.
 
 ## Required execution model
 
@@ -137,7 +143,8 @@ At completion, summarize:
 
 ## Source of truth
 
-- **Primary rules and conventions**: `.github/copilot-instructions.md`
+- **Quality bar / review standards**: `REVIEW.md` (repo root)
+- **Entry index**: `.github/copilot-instructions.md`
 - **REST API docs**: `docs/c64/c64u-openapi.yaml`
 - **Telnet menu reference**: `docs/c64/c64u-telnet.yaml` (consult before Telnet-related code or test changes)
 - **CTA inventory & keypad map**: `docs/cta-inventory.md` (authoritative per-page list of every interactive control and its keypad/D-pad/T9 reachability; keep current — see "CTA inventory upkeep")
