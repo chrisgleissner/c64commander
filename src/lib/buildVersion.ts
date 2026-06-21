@@ -8,6 +8,7 @@
 
 type BuildVersionInput = {
   env?: Record<string, string | undefined>;
+  generatedVersion?: string;
   packageVersion?: string;
 };
 
@@ -33,7 +34,11 @@ export const hasInjectedBuildVersion = (env: Record<string, string | undefined> 
   return Boolean(explicitVersion || resolveBuildTagName(env));
 };
 
-export const resolveBuildAppVersion = ({ env = {}, packageVersion = "" }: BuildVersionInput): string => {
+export const resolveBuildAppVersion = ({
+  env = {},
+  generatedVersion = "",
+  packageVersion = "",
+}: BuildVersionInput): string => {
   const explicitVersion = env.VITE_APP_VERSION?.trim() || env.VERSION_NAME?.trim() || env.APP_VERSION?.trim();
   if (explicitVersion) return normalizeReleaseVersion(explicitVersion);
 
@@ -41,6 +46,9 @@ export const resolveBuildAppVersion = ({ env = {}, packageVersion = "" }: BuildV
   if (tagRefName) {
     return normalizeReleaseVersion(tagRefName);
   }
+
+  const generated = generatedVersion.trim();
+  if (generated) return normalizeReleaseVersion(generated);
 
   return packageVersion.trim();
 };

@@ -124,15 +124,15 @@ describe("versionLabel", () => {
       ).toBe("0.6.5-rc1-903c8");
     });
 
-    it("ignores a generated label from an older release line when a newer fallback version is available", () => {
+    it("prefers the generated label even when the package baseline differs", () => {
       expect(
         resolveBuildVersionLabel({
-          generatedVersionLabel: "0.7.8-06a05",
-          gitDescribe: "0.7.8-1-g06a0592b",
+          generatedVersionLabel: "0.8.9-rc2-7011a",
+          gitDescribe: "0.8.9-rc2-0-g7011aed6",
           gitSha: "49836390db71e628e67b7c2baaabd49f4d43fe68",
-          fallbackVersion: "0.7.9-rc1",
+          fallbackVersion: "0.8.8",
         }),
-      ).toBe("0.7.9-rc1");
+      ).toBe("0.8.9-rc2-7011a");
     });
 
     it("keeps the fallback version for branch builds even when git describe finds an older tag", () => {

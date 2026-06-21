@@ -33,7 +33,7 @@ import { getSmokeConfig, initializeSmokeMode, isSmokeModeEnabled, recordSmokeSta
 import { resetInteractionState } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { updateDeviceConnectionState } from "@/lib/deviceInteraction/deviceStateStore";
 import { isBareHostname, isMdnsAvailable, resolveMdnsHost } from "@/lib/native/mdnsResolver";
-import { normalizeTransportError } from "@/lib/c64api/transportErrors";
+import { normalizeTransportError, type TransportFailure } from "@/lib/c64api/transportErrors";
 import { clearConnectivityErrorToastsForHost } from "@/lib/uiErrors";
 import { registerReachabilityListener, type ReachabilitySource } from "@/lib/connection/reachabilityEvents";
 import {
@@ -109,8 +109,33 @@ const isDemoModeAvailable = () => featureFlagManager.getSnapshot().flags.demo_mo
 const isDemoModeRequested = () => isDemoModeAvailable() && loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
 
 const mdnsResolutionCache = new Map<string, { ip: string; expiresAtMs: number }>();
+const mdnsNegativeCache = new Map<string, { expiresAtMs: number; failure: TransportFailure }>();
 const mdnsResolvedProbeFailures = new Map<string, { ip: string; count: number }>();
 const MDNS_RESOLVED_PROBE_FAILURE_THRESHOLD = 2;
+const MDNS_NEGATIVE_CACHE_TTL_MS = 60_000;
+
+type ResolveDeviceHostResult = { host: string; mdnsFailure: TransportFailure | null };
+
+const isMdnsNegativeCached = (deviceHost: string): TransportFailure | null => {
+  const entry = mdnsNegativeCache.get(deviceHost);
+  if (!entry) return null;
+  if (entry.expiresAtMs <= Date.now()) {
+    mdnsNegativeCache.delete(deviceHost);
+    return null;
+  }
+  return entry.failure;
+};
+
+const rememberMdnsNegative = (deviceHost: string, failure: TransportFailure) => {
+  mdnsNegativeCache.set(deviceHost, {
+    expiresAtMs: Date.now() + MDNS_NEGATIVE_CACHE_TTL_MS,
+    failure,
+  });
+};
+
+const clearMdnsNegative = (deviceHost: string) => {
+  mdnsNegativeCache.delete(deviceHost);
+};
 
 const buildMdnsProbeFailureKey = (deviceHost: string, resolvedAddress: string) => `${deviceHost}|${resolvedAddress}`;
 
@@ -144,13 +169,18 @@ const recordMdnsResolvedProbeFailure = (
   mdnsResolvedProbeFailures.delete(key);
 };
 
-const resolveDeviceHostForProbe = async (deviceHost: string): Promise<string> => {
-  if (!isMdnsAvailable()) return deviceHost;
-  if (!isBareHostname(deviceHost)) return deviceHost;
+const resolveDeviceHostForProbe = async (deviceHost: string): Promise<ResolveDeviceHostResult> => {
+  if (!isMdnsAvailable()) return { host: deviceHost, mdnsFailure: null };
+  if (!isBareHostname(deviceHost)) return { host: deviceHost, mdnsFailure: null };
 
   const cached = mdnsResolutionCache.get(deviceHost);
   if (cached && cached.expiresAtMs > Date.now()) {
-    return cached.ip;
+    return { host: cached.ip, mdnsFailure: null };
+  }
+
+  const negativeCached = isMdnsNegativeCached(deviceHost);
+  if (negativeCached) {
+    return { host: deviceHost, mdnsFailure: negativeCached };
   }
 
   try {
@@ -159,35 +189,39 @@ const resolveDeviceHostForProbe = async (deviceHost: string): Promise<string> =>
       ip: resolved.ip,
       expiresAtMs: Date.now() + Math.max(1000, resolved.ttlMs),
     });
+    clearMdnsNegative(deviceHost);
     clearMdnsResolvedProbeFailures(deviceHost, resolved.ip);
     addLog("info", "Resolved bare hostname via mDNS", {
       host: deviceHost,
       resolvedHost: resolved.resolvedHost,
       ip: resolved.ip,
     });
-    return resolved.ip;
+    return { host: resolved.ip, mdnsFailure: null };
   } catch (error) {
     const failure = normalizeTransportError(error, { host: deviceHost });
+    rememberMdnsNegative(deviceHost, failure);
     addLog("warn", "mDNS resolution failed; falling back to system DNS", {
       host: deviceHost,
       class: failure.class,
       message: failure.userMessage,
       raw: failure.rawMessage,
     });
-    return deviceHost;
+    return { host: deviceHost, mdnsFailure: failure };
   }
 };
 
 const loadPersistedConnectionConfig = async () => {
   const password = await loadStoredPassword();
   const deviceHost = resolveDeviceHostFromStorage();
-  const probeHost = await resolveDeviceHostForProbe(deviceHost);
+  const resolved = await resolveDeviceHostForProbe(deviceHost);
+  const probeHost = resolved.host;
   const baseUrl = buildBaseUrlFromDeviceHost(probeHost === deviceHost ? deviceHost : probeHost);
   return {
     baseUrl,
     password: password ?? undefined,
     deviceHost,
     resolvedAddress: probeHost !== deviceHost ? stripPortFromDeviceHost(probeHost) : null,
+    mdnsFailure: resolved.mdnsFailure,
   };
 };
 
@@ -201,11 +235,10 @@ const loadSwitchConnectionConfig = async (options: {
   const rawHost = stripPortFromDeviceHost(rawDeviceHost);
   const httpPort = getDeviceHostHttpPort(rawDeviceHost);
   const resolvedAddress = options.preferResolvedAddress?.trim() || null;
-  const probeDeviceHost = resolvedAddress
-    ? buildDeviceHostWithHttpPort(resolvedAddress, httpPort)
-    : await resolveDeviceHostForProbe(rawHost).then((resolvedHost) =>
-        buildDeviceHostWithHttpPort(stripPortFromDeviceHost(resolvedHost), httpPort),
-      );
+  const resolved = resolvedAddress
+    ? { host: buildDeviceHostWithHttpPort(resolvedAddress, httpPort), mdnsFailure: null as TransportFailure | null }
+    : await resolveDeviceHostForProbe(rawHost);
+  const probeDeviceHost = buildDeviceHostWithHttpPort(stripPortFromDeviceHost(resolved.host), httpPort);
 
   return {
     baseUrl: buildBaseUrlFromDeviceHost(probeDeviceHost),
@@ -214,6 +247,7 @@ const loadSwitchConnectionConfig = async (options: {
     probeDeviceHost,
     resolvedAddress:
       stripPortFromDeviceHost(probeDeviceHost) !== rawHost ? stripPortFromDeviceHost(probeDeviceHost) : null,
+    mdnsFailure: resolved.mdnsFailure,
   };
 };
 
@@ -223,6 +257,19 @@ const probeInfoWithConnectionConfig = async (
 ): Promise<ProbeInfoResult> => {
   const timeoutMs = options.timeoutMs ?? loadDiscoveryProbeTimeoutMs();
   const outerSignal = options.signal;
+  if (config.mdnsFailure) {
+    addLog("info", "Skipping device probe because mDNS resolution previously failed", {
+      deviceHost: config.deviceHost,
+      class: config.mdnsFailure.class,
+      userMessage: config.mdnsFailure.userMessage,
+    });
+    return {
+      ok: false,
+      deviceInfo: null,
+      error: config.mdnsFailure.userMessage,
+      resolvedAddress: config.resolvedAddress,
+    };
+  }
   try {
     const api = new C64API(config.baseUrl, config.password, config.probeDeviceHost);
     const response = await api.getInfo({

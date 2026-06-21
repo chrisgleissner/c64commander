@@ -518,3 +518,36 @@ See the brief's TERMINATION CRITERIA — tracked in the checklist below.
 - Next: a per-screen reachability audit under the discovery engine (verify pages reachable without
   per-CTA `useFocusItem`); then the deterministic `back` chain wired to real dialogs/menus; T9 input
   mode indicator (multitap vs hostname) + profile selector.
+
+## Ralph loop iteration #118 (2026-06-21, claude / feat/device-hardening)
+
+- Branch `feat/device-hardening`, HEAD `7011aed6` (#291 keyboard input), working tree was clean at start.
+- Source `0.8.9-rc2`; installed APK was stale `0.8.9-rc1-132f2` (= commit 132f2, includes #290 but PREDATES #291). Rebuilt `npm run cap:build && ./gradlew assembleDebug` → `c64commander-0.8.9-rc2-7011a-debug.apk`; installed with `adb install -r -d` (versionCode 2028<2062 downgrade, data kept); installed identity now `0.8.9-rc2-7011a` = source HEAD. Current-build HIL valid.
+- Peers: droidmind / c64scope / c64bridge all callable. Hardware: c64u 192.168.1.167 `/v1/info` HTTP 200 in 9ms fw 1.1.0 (PRIMARY, recovered since #117); u64 192.168.1.13 HTTP 200 22ms fw 3.14e.
+- Capacity (Ralph runtime ctx): claude usable, 5h 60% / weekly 49% → ≥40% tier: min 8 actions, target 12–20, ≥1 adversarial; build+deploy allowed.
+- Previous verdict (#117): DEFECT (BUG-052 hostname resolver) + continuation. BUG-052/053 still OPEN.
+- Probe family: **Keyboard/Keypad input (global app shell, #291)** on c64u. Shortcuts: digits 1–6→tabs (Home/Play/Disks/Config/Settings/Docs), `*`→Diagnostics, `#`→Device Switcher, Menu→Quick Menu; D-pad focus ring nav + guidance bar; literal hardware-keyboard typing. Real Android key events driven via droidmind press_key = true actuation of the global keydown handler (validates #291 Android-WebView empty-`code` digit gotcha fix).
+- Stop criteria: exhaust safe keypad CTAs (digit shortcuts ×6, star/hash/menu, D-pad nav, activate, back, literal typing) each ×multiple with CDP+screenshot+logcat actuation proof; ≥1 adversarial (digit-in-overlay deferral, rapid double-press, bg/fg); mandatory logcat + Diagnostics export sweep; restore state; batch WORKLOG + CTA ledger; refresh digest; continuation.
+- Primary TODO: prove #291 digit/star/hash/menu shortcuts + D-pad ring actuate on current build via real key events; catch any regression (no-op, wrong tab, overlay leak, stale guidance).
+## Ralph loop iteration #119 (2026-06-21, codex / feat/device-hardening)
+
+- Branch `feat/device-hardening`, HEAD `7011aed6` (#291 keyboard input). Startup working tree already dirty from prior/local state edits: `PLANS.md`, `WORKLOG.md`, `ios/App/Podfile`.
+- Source identity `0.8.9-rc2-7011a` from `./scripts/resolve-version.sh`; installed Pixel 4 APK identity `0.8.9-rc2-7011a` via droidmind `get_app_info`, so current-build HIL is valid and no rebuild is needed.
+- Peers discovered by actual tool surface: droidmind callable; c64scope callable; c64bridge callable. c64bridge was switched from default `vice` backend to `c64u`; `c64_config info` returned C64 Ultimate fw `1.1.0`, no errors.
+- Capacity (Ralph runtime ctx): codex usable, 5h 86% / weekly 40% → `>=40%` tier: min 8 production actions, target 12-20, at least one adversarial transition.
+- Previous verdict (#118): CLEAN PASS for global keyboard/keypad; BUG-052/BUG-053 still open, BUG-055/056 low follow-ups.
+- Probe family: **Config Audio Mixer read-only c64u retest for BUG-053**. Visible controls to enumerate on device: Config route/category list, search input, Audio Mixer accordion, per-category Refresh, diagnostics affordance/views/export, Android Back/background. Mutable mixer controls (`Reset`, sliders, Solo) are `BLOCKED_SAFE` in this read-only performance pack and will be left unchanged.
+- Stop criteria: exhaust safe visible controls with repeated droidmind actions and verified actuation; capture ~200 ms / ~1 s behavior; include at least one adversarial safe transition; run package-filtered logcat plus pulled/analyzed Diagnostics ZIP; update WORKLOG, CTA ledger, digest, and continuation prompt.
+- Completion: safe Config Audio Mixer c64u controls were exhausted and BUG-053's c64u-primary retest is clean/current-build. Mandatory Diagnostics export exposed BUG-057 (WebView diagnostics version fell back to package baseline); fixed, rebuilt/deployed, and Pixel-HIL validated final Home + ZIP identity `0.8.9-rc2-7011a`. Next highest-value family: BUG-052 resolver contextualization fix pack or a c64scope-backed Play/SID playback pack.
+
+## Ralph loop iteration #120 (2026-06-21, claude / feat/device-hardening)
+
+- Branch `feat/device-hardening`, HEAD `7011aed6` (#291). Startup working tree dirty: in-progress BUG-052 fix (`src/lib/connection/connectionManager.ts` mDNS negative cache + probe short-circuit) and new `tests/unit/lib/connection/bug052MdnsNegativeCache.test.ts`, plus #119/local doc+config edits (`PLANS.md`, `WORKLOG.md`, `ios/App/Podfile`, version files, `vite.config.ts`).
+- Source identity `0.8.9-rc2-7011a` (`./scripts/resolve-version.sh`). Installed Pixel APK was `0.8.9-rc2-7011a` (#119) but PREDATES the uncommitted BUG-052 fix → MUST rebuild+deploy for a current-build claim. Build kicked off (`npm run cap:build && ./gradlew assembleDebug`).
+- Peers discovered via actual tool surface: droidmind / c64scope / c64bridge / mobile-mcp all callable. Pixel 4 `9B081FFAZ001WX` Android 16 connected.
+- Capacity (Ralph runtime ctx): claude usable, 5h 22% / weekly 47% → 20–39% tier: min 5 actions, target 6–10, one focused fix + redeploy + narrow validation allowed, no broad discovery beyond family.
+- Previous verdict (#119): FIXED BUG-057 + CLEAN PASS Config Audio Mixer; BUG-052 still OPEN (digest #1 recommended family).
+- Probe family: **Settings connection / mDNS offline-guidance fix-pack (BUG-052)**. Validate the in-progress fix on real HIL: with a bare hostname that fails mDNS resolution, Save & Connect must surface contextual "prefer device IP" guidance (NOT raw `{"message":...}` plugin JSON), short-circuit the slow system-DNS fetch, and use the 60s negative cache so a 2nd attempt fast-fails. Then restore working c64u host and reconnect healthy.
+- Gate done: focused unit test `bug052MdnsNegativeCache.test.ts` 2/2 pass (allowed narrow regression, source changed this loop); config type coherence confirmed.
+- Stop criteria: rebuild+deploy fixed APK + confirm install; HIL exhaust safe Settings-connection controls (host edit, Save & Connect ×repeat, valid/invalid input, Android Back, bg/fg) each with verified actuation; ≥1 adversarial (invalid→valid restore / repeated Save&Connect neg-cache); mandatory package-filtered logcat + pulled/analyzed Diagnostics ZIP confirming no raw mDNS plugin JSON; restore c64u connection; batch WORKLOG + CTA ledger; refresh digest; continuation.
+- Primary TODO: prove BUG-052 contextualized-guidance + negative-cache short-circuit on current (fixed) build; confirm Diagnostics error logs contain contextual guidance only, no raw plugin-error object.
