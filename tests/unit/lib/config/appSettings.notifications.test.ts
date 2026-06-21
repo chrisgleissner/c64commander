@@ -10,17 +10,20 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { APP_SETTINGS_KEYS } from "@/lib/config/appSettings";
 import {
   DEFAULT_AUTO_ROTATION_ENABLED,
+  DEFAULT_SCREEN_ORIENTATION_MODE,
   clampNotificationDurationMs,
   DEFAULT_NOTIFICATION_DURATION_MS,
   DEFAULT_NOTIFICATION_VISIBILITY,
   loadAutoRotationEnabled,
   loadNotificationDurationMs,
   loadNotificationVisibility,
+  loadScreenOrientationMode,
   NOTIFICATION_DURATION_MAX_MS,
   NOTIFICATION_DURATION_MIN_MS,
   saveAutoRotationEnabled,
   saveNotificationDurationMs,
   saveNotificationVisibility,
+  saveScreenOrientationMode,
 } from "@/lib/config/appSettings";
 
 beforeEach(() => {
@@ -123,14 +126,27 @@ describe("saveNotificationDurationMs", () => {
 });
 
 describe("auto rotation", () => {
-  it("defaults to disabled and persists changes", () => {
+  it("defaults to disabled and persists changes through the orientation mode", () => {
     expect(loadAutoRotationEnabled()).toBe(DEFAULT_AUTO_ROTATION_ENABLED);
+    expect(loadScreenOrientationMode()).toBe(DEFAULT_SCREEN_ORIENTATION_MODE);
 
     saveAutoRotationEnabled(true);
     expect(loadAutoRotationEnabled()).toBe(true);
+    expect(loadScreenOrientationMode()).toBe("auto");
 
     saveAutoRotationEnabled(false);
     expect(loadAutoRotationEnabled()).toBe(false);
+    expect(loadScreenOrientationMode()).toBe("portrait");
+  });
+
+  it("persists explicit orientation modes", () => {
+    saveScreenOrientationMode("landscape");
+    expect(loadScreenOrientationMode()).toBe("landscape");
+    expect(loadAutoRotationEnabled()).toBe(false);
+
+    saveScreenOrientationMode("auto");
+    expect(loadScreenOrientationMode()).toBe("auto");
+    expect(loadAutoRotationEnabled()).toBe(true);
   });
 });
 
@@ -151,9 +167,11 @@ describe("notification settings without localStorage", () => {
     expect(loadNotificationVisibility()).toBe(DEFAULT_NOTIFICATION_VISIBILITY);
     expect(loadNotificationDurationMs()).toBe(DEFAULT_NOTIFICATION_DURATION_MS);
     expect(loadAutoRotationEnabled()).toBe(DEFAULT_AUTO_ROTATION_ENABLED);
+    expect(loadScreenOrientationMode()).toBe(DEFAULT_SCREEN_ORIENTATION_MODE);
 
     expect(() => saveNotificationVisibility("all")).not.toThrow();
     expect(() => saveNotificationDurationMs(5000)).not.toThrow();
     expect(() => saveAutoRotationEnabled(true)).not.toThrow();
+    expect(() => saveScreenOrientationMode("landscape")).not.toThrow();
   });
 });

@@ -22,7 +22,7 @@ import {
   getDisplayProfileOverride,
   setDisplayProfileOverride as persistDisplayProfileOverride,
 } from "@/lib/uiPreferences";
-import { APP_SETTINGS_KEYS, loadAutoRotationEnabled } from "@/lib/config/appSettings";
+import { APP_SETTINGS_KEYS, loadScreenOrientationMode } from "@/lib/config/appSettings";
 import { isNativePlatform } from "@/lib/native/platform";
 
 type DisplayProfileContextValue = {
@@ -152,7 +152,7 @@ const restoreRootState = (snapshot: RootSnapshot | null) => {
 export function DisplayProfileProvider({ children }: { children: React.ReactNode }) {
   const [override, setOverrideState] = React.useState<DisplayProfileOverride>(() => getDisplayProfileOverride());
   const [viewportWidth, setViewportWidth] = React.useState(() => readViewportWidth());
-  const [autoRotationEnabled, setAutoRotationEnabled] = React.useState(() => loadAutoRotationEnabled());
+  const [screenOrientationMode, setScreenOrientationMode] = React.useState(() => loadScreenOrientationMode());
 
   // Permanent effect: root state snapshot/restore, preferences, storage,
   // and settings events. Runs once on mount.
@@ -172,8 +172,10 @@ export function DisplayProfileProvider({ children }: { children: React.ReactNode
     };
     const handleSettingsUpdate = (e: Event) => {
       const detail = (e as CustomEvent<{ key: string; value: unknown }>).detail;
-      if (detail.key === APP_SETTINGS_KEYS.AUTO_ROTATION_ENABLED_KEY) {
-        setAutoRotationEnabled(Boolean(detail.value));
+      if (detail.key === APP_SETTINGS_KEYS.SCREEN_ORIENTATION_MODE_KEY) {
+        setScreenOrientationMode(loadScreenOrientationMode());
+      } else if (detail.key === APP_SETTINGS_KEYS.AUTO_ROTATION_ENABLED_KEY) {
+        setScreenOrientationMode(loadScreenOrientationMode());
       }
     };
 
@@ -193,7 +195,9 @@ export function DisplayProfileProvider({ children }: { children: React.ReactNode
     };
   }, []);
 
-  // Resize/orientation effect: only active when auto-rotation is enabled.
+  const autoRotationEnabled = screenOrientationMode === "auto";
+
+  // Resize/orientation effect: only active when screen orientation is Auto.
   // When disabled, viewport width is frozen at the initial mount value so
   // device rotation never changes the display profile.
   // orientationchange uses a short timeout so the browser has time to update

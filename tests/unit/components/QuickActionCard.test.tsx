@@ -145,7 +145,7 @@ describe("QuickActionCard", () => {
       expect(onReset).toHaveBeenCalledTimes(1);
     });
 
-    it("does not register a card without a focusId (inert in the ring)", () => {
+    it("auto-discovers a card even without an explicit focusId (reachable by construction)", () => {
       const onRegistered = vi.fn();
       const onUnregistered = vi.fn();
 
@@ -162,12 +162,16 @@ describe("QuickActionCard", () => {
         </FocusNavigationProvider>,
       );
 
-      // Only the card with a focusId is in the ring, so it is the only one a
-      // d-pad/center sequence can ever reach.
-      fireEvent.keyDown(document.body, { code: "DpadDown" });
+      // Scope-based auto-discovery puts EVERY interactive element in the ring
+      // (CONFIRMED DECISION 1) — a focusId is now only an optional refinement, not
+      // the gate for reachability. The first card is the initial selection; OK
+      // activates it, and the card without a focusId is still reachable by a step.
       fireEvent.keyDown(document.body, { code: "DpadCenter" });
       expect(onRegistered).toHaveBeenCalledTimes(1);
-      expect(onUnregistered).not.toHaveBeenCalled();
+
+      fireEvent.keyDown(document.body, { code: "DpadDown" });
+      fireEvent.keyDown(document.body, { code: "DpadCenter" });
+      expect(onUnregistered).toHaveBeenCalledTimes(1);
     });
   });
 });

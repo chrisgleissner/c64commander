@@ -103,6 +103,24 @@ const CONFIG_WRITE_REQUEST_OPTIONS = {
 const resolveDefaultRestRequestTimeoutMs = (intent: InteractionIntent) =>
   intent === "background" ? BACKGROUND_REQUEST_TIMEOUT_MS : INTERACTIVE_CONTROL_TIMEOUT_MS;
 
+/**
+ * Returns the lone {category,item,value} of a config-write payload that targets
+ * exactly one item in one category, or null if it spans multiple items/categories.
+ * Used to route single-item writes to the body-less `PUT` endpoint instead of the
+ * temp-file-buffering `POST /v1/configs` batch handler (see `updateConfigBatch`).
+ */
+const singleConfigEntry = (
+  payload: Record<string, Record<string, string | number>>,
+): { category: string; item: string; value: string | number } | null => {
+  const categories = Object.entries(payload);
+  if (categories.length !== 1) return null;
+  const [category, updates] = categories[0];
+  const items = Object.entries(updates);
+  if (items.length !== 1) return null;
+  const [item, value] = items[0];
+  return { category, item, value };
+};
+
 // E2E/test-probe builds drive a mock device that models realistic firmware
 // latencies (mount ~744 ms, stream start ~1015 ms) and run under coverage
 // instrumentation across parallel CI shards, all of which inflate wall-clock
@@ -1784,12 +1802,31 @@ export class C64API {
     const requestPayloads = [...(Object.keys(mergedPayload).length ? [mergedPayload] : []), ...sequentialPayloads];
     const errors: string[] = [];
     for (const requestPayload of requestPayloads) {
+      // Device-safety: the firmware's `POST /v1/configs` handler buffers the
+      // request body into a temp file before parsing it (TempfileWriter on the
+      // single-threaded embedded HTTP task). Under rapid interactive writes —
+      // e.g. dragging an LED brightness/colour slider — that filesystem churn
+      // stalls and then drops the device's whole network stack (verified on
+      // hardware: a single such POST takes c64u offline). The body-less
+      // `PUT /v1/configs/{cat}/{item}?value=` path has no temp file and survives
+      // sustained rapid writes. So whenever a payload is a single item (the slider
+      // case and most interactive writes), send it via PUT; only genuine
+      // multi-item batches keep the POST form.
+      const single = singleConfigEntry(requestPayload);
       const run = (): Promise<{ errors: string[] }> =>
-        this.request("/v1/configs", {
-          method: "POST",
-          ...CONFIG_WRITE_REQUEST_OPTIONS,
-          body: JSON.stringify(requestPayload),
-        });
+        single
+          ? this.request(
+              `/v1/configs/${encodeURIComponent(single.category)}/${encodeURIComponent(single.item)}?value=${encodeURIComponent(String(single.value))}`,
+              {
+                method: "PUT",
+                ...CONFIG_WRITE_REQUEST_OPTIONS,
+              },
+            )
+          : this.request("/v1/configs", {
+              method: "POST",
+              ...CONFIG_WRITE_REQUEST_OPTIONS,
+              body: JSON.stringify(requestPayload),
+            });
       const response = await scheduleConfigWrite(run);
       this.assertConfigWriteAccepted(response, { payload: requestPayload });
       Object.entries(requestPayload).forEach(([category, updates]) => {

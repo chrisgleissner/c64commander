@@ -27,12 +27,12 @@ export function SystemInfo() {
       animate={{ opacity: 1, y: 0 }}
       type="button"
       onClick={() => setExpanded((prev) => !prev)}
-      className="w-full text-left px-1 py-1"
+      className="w-full text-left px-2 py-2"
       aria-expanded={expanded}
       data-testid="home-system-info"
       data-section-label="System info"
     >
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
         <span className="text-muted-foreground">App</span>
         <span className="font-semibold text-foreground" data-testid="home-system-version">
           {buildInfo.versionLabel || "Not available"}
@@ -47,7 +47,7 @@ export function SystemInfo() {
         </span>
       </div>
       {expanded && (
-        <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
+        <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <div className="flex items-center gap-1">
             <span>Git</span>
             <span className="font-semibold text-foreground" data-testid="home-system-git">

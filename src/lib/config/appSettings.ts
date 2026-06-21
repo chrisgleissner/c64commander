@@ -18,6 +18,7 @@ const VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY = "c64u_volume_slider_preview_interv
 const NOTIFICATION_VISIBILITY_KEY = "c64u_notification_visibility";
 const NOTIFICATION_DURATION_MS_KEY = "c64u_notification_duration_ms";
 const AUTO_ROTATION_ENABLED_KEY = "c64u_auto_rotation_enabled";
+const SCREEN_ORIENTATION_MODE_KEY = "c64u_screen_orientation_mode";
 const ENABLE_SWIPE_NAVIGATION_KEY = "c64u_enable_swipe_navigation";
 const ARCHIVE_HOST_OVERRIDE_KEY = "c64u_archive_host_override";
 const ARCHIVE_CLIENT_ID_OVERRIDE_KEY = "c64u_archive_client_id_override";
@@ -226,13 +227,34 @@ export const saveNotificationDurationMs = (value: number) => {
 export const clampNotificationDurationMs = (value: number) => clampNotificationDurationMsInternal(value);
 
 export const DEFAULT_AUTO_ROTATION_ENABLED = false;
+export type ScreenOrientationMode = "portrait" | "landscape" | "auto";
+export const DEFAULT_SCREEN_ORIENTATION_MODE: ScreenOrientationMode = "portrait";
 export const DEFAULT_ENABLE_SWIPE_NAVIGATION = false;
-export const loadAutoRotationEnabled = () => readBoolean(AUTO_ROTATION_ENABLED_KEY, DEFAULT_AUTO_ROTATION_ENABLED);
+const normalizeScreenOrientationMode = (value: unknown): ScreenOrientationMode =>
+  value === "landscape" || value === "auto" ? value : DEFAULT_SCREEN_ORIENTATION_MODE;
+
+export const loadScreenOrientationMode = (): ScreenOrientationMode => {
+  if (typeof localStorage === "undefined") return DEFAULT_SCREEN_ORIENTATION_MODE;
+  const raw = localStorage.getItem(SCREEN_ORIENTATION_MODE_KEY);
+  if (raw !== null) return normalizeScreenOrientationMode(raw);
+  return readBoolean(AUTO_ROTATION_ENABLED_KEY, DEFAULT_AUTO_ROTATION_ENABLED)
+    ? "auto"
+    : DEFAULT_SCREEN_ORIENTATION_MODE;
+};
+
+export const saveScreenOrientationMode = (mode: ScreenOrientationMode) => {
+  if (typeof localStorage === "undefined") return;
+  const normalized = normalizeScreenOrientationMode(mode);
+  localStorage.setItem(SCREEN_ORIENTATION_MODE_KEY, normalized);
+  localStorage.setItem(AUTO_ROTATION_ENABLED_KEY, normalized === "auto" ? "1" : "0");
+  broadcast(SCREEN_ORIENTATION_MODE_KEY, normalized);
+  broadcast(AUTO_ROTATION_ENABLED_KEY, normalized === "auto");
+};
+
+export const loadAutoRotationEnabled = () => loadScreenOrientationMode() === "auto";
 
 export const saveAutoRotationEnabled = (enabled: boolean) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(AUTO_ROTATION_ENABLED_KEY, enabled ? "1" : "0");
-  broadcast(AUTO_ROTATION_ENABLED_KEY, enabled);
+  saveScreenOrientationMode(enabled ? "auto" : DEFAULT_SCREEN_ORIENTATION_MODE);
 };
 
 export const loadEnableSwipeNavigation = () =>
@@ -280,6 +302,7 @@ export const APP_SETTINGS_KEYS = {
   NOTIFICATION_VISIBILITY_KEY,
   NOTIFICATION_DURATION_MS_KEY,
   AUTO_ROTATION_ENABLED_KEY,
+  SCREEN_ORIENTATION_MODE_KEY,
   ENABLE_SWIPE_NAVIGATION_KEY,
   ARCHIVE_HOST_OVERRIDE_KEY,
   ARCHIVE_CLIENT_ID_OVERRIDE_KEY,

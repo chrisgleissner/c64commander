@@ -65,15 +65,15 @@ describe("featureFlags persistence and logging", () => {
     });
   });
 
-  it("ships keypad / T9 input as a user-visible, default-off experimental flag", () => {
+  it("ships keyboard and keypad navigation as a user-visible, default-on experimental flag", () => {
     const keypad = FEATURE_FLAG_DEFINITIONS.find((definition) => definition.id === "keypad_input_enabled");
     expect(keypad).toBeDefined();
-    expect(keypad?.enabled).toBe(false);
+    expect(keypad?.enabled).toBe(true);
     expect(keypad?.visible_to_user).toBe(true);
     expect(keypad?.developer_only).toBe(false);
     expect(keypad?.group).toBe("experimental");
     // Standard-user toggleable is derived as visible_to_user && !developer_only,
-    // so this row appears under Experimental Features for every variant.
+    // so this row remains available for users who need to disable keyboard navigation.
     expect(Boolean(keypad?.visible_to_user) && !keypad?.developer_only).toBe(true);
   });
 
@@ -140,7 +140,7 @@ describe("featureFlags persistence and logging", () => {
         home_telnet_printer_actions_enabled: false,
         home_telnet_power_cycle_enabled: false,
         home_telnet_clear_ram_reboot_enabled: false,
-        keypad_input_enabled: false,
+        keypad_input_enabled: true,
       }),
     ).toBe(false);
     expect(
@@ -157,7 +157,7 @@ describe("featureFlags persistence and logging", () => {
         home_telnet_printer_actions_enabled: false,
         home_telnet_power_cycle_enabled: false,
         home_telnet_clear_ram_reboot_enabled: false,
-        keypad_input_enabled: false,
+        keypad_input_enabled: true,
       }),
     ).toBe(true);
   });

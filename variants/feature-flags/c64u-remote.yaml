@@ -3,7 +3,7 @@
 # C64U Remote is a focused, stable, local remote-control app for compact,
 # keypad-first Android devices (small screen, no Google Play Services,
 # background-restricted host). It deliberately excludes:
-#   - internet-content integrations (HVSC, CommoServe),
+#   - HVSC internet-content integration (CommoServe IS enabled for this variant),
 #   - immature / experimental features (lighting studio, RAM/REU snapshots,
 #     the Telnet-dependent Home actions),
 #   - background execution (the target host restricts Android background services).
@@ -19,11 +19,9 @@
 # panels, dialogs, settings toggles, and any direct-route/deep-link surface,
 # since all of these are gated on the same feature flags.
 overrides:
-  # --- Stable group: internet-content + demo features excluded ---
+  # --- Stable group: HVSC + demo excluded; CommoServe stays enabled (inherits
+  # the base default: enabled + visible_to_user), so it is NOT overridden here. ---
   hvsc_enabled:
-    enabled: false
-    visible_to_user: false
-  commoserve_enabled:
     enabled: false
     visible_to_user: false
   demo_mode_enabled:

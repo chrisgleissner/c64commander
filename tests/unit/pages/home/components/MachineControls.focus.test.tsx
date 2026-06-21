@@ -10,7 +10,11 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MachineControls } from "@/pages/home/components/MachineControls";
-import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
+import {
+  FocusNavigationProvider,
+  useFocusNavigationContext,
+  type FocusNavigationContextValue,
+} from "@/hooks/useFocusNavigation";
 
 // The other MachineControls suite stubs QuickActionCard; here we deliberately use
 // the REAL card so the keypad focus ring (focusId/focusOrder) is exercised. Keep
@@ -51,9 +55,18 @@ const baseProps = {
   onAction: vi.fn().mockImplementation((fn: () => Promise<void>) => fn()),
 };
 
-const renderInRing = (overrides: Partial<typeof baseProps> = {}) =>
+const FocusContextCapture = ({ target }: { target: { current: FocusNavigationContextValue | null } }) => {
+  target.current = useFocusNavigationContext();
+  return null;
+};
+
+const renderInRing = (
+  overrides: Partial<typeof baseProps> = {},
+  focusContext?: { current: FocusNavigationContextValue | null },
+) =>
   render(
     <FocusNavigationProvider profileId="keypad">
+      {focusContext ? <FocusContextCapture target={focusContext} /> : null}
       <MachineControls {...baseProps} {...overrides} />
     </FocusNavigationProvider>,
   );
@@ -64,10 +77,18 @@ describe("MachineControls keypad focus ring (C64U Remote)", () => {
   });
 
   it("registers the canonical primary actions in top-to-bottom focusOrder and center-activates the focused one", () => {
-    renderInRing();
+    const focusContext = { current: null as FocusNavigationContextValue | null };
+    renderInRing({}, focusContext);
 
-    // Selection starts on the first registered card (Reset). Stepping down walks
-    // Reset(100) → Reboot(110) → Pause(120) → Menu(130) in focusOrder.
+    // Selection starts on the labelled Quick Actions group; OK descends to the
+    // first child, then stepping down walks Reset → Reboot → Pause → Menu.
+    expect(focusContext.current?.engine.sourceForId("home-machine-reset")).toBe("dom+explicit");
+    expect(focusContext.current?.engine.sourceForId("home-machine-reboot")).toBe("dom+explicit");
+    expect(focusContext.current?.engine.sourceForId("home-machine-pause-resume")).toBe("dom+explicit");
+    expect(focusContext.current?.engine.sourceForId("home-machine-menu")).toBe("dom+explicit");
+    expect(focusContext.current?.engine.sourceForId("home-machine-power-off")).toBe("dom+explicit");
+    fireEvent.keyDown(document.body, { code: "DpadCenter" });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Reset" }));
     fireEvent.keyDown(document.body, { code: "DpadDown" });
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Reboot" }));
     fireEvent.keyDown(document.body, { code: "DpadDown" });
@@ -86,8 +107,9 @@ describe("MachineControls keypad focus ring (C64U Remote)", () => {
   it("orders Power Off last in the section (reachable by stepping back from the top)", () => {
     renderInRing();
 
-    // From the top of the section, a backward step wraps to the highest order
+    // Descend into the section; from the top, a backward step wraps to the highest order
     // (Power Off at 190), proving it traverses after every other machine action.
+    fireEvent.keyDown(document.body, { code: "DpadCenter" });
     fireEvent.keyDown(document.body, { code: "DpadUp" });
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Power Off" }));
 
@@ -102,8 +124,10 @@ describe("MachineControls keypad focus ring (C64U Remote)", () => {
     expect(screen.queryByRole("button", { name: "Save RAM" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Power Cycle" })).not.toBeInTheDocument();
 
-    // Five DpadDown steps from the start wrap exactly back to the first card,
+    // Descend, then five DpadDown steps from the first child wrap exactly back to the first card,
     // confirming the ring holds only the five visible actions.
+    fireEvent.keyDown(document.body, { code: "DpadCenter" });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Reset" }));
     const order = ["Reboot", "Pause", "Menu", "Power Off", "Reset"];
     for (const name of order) {
       fireEvent.keyDown(document.body, { code: "DpadDown" });

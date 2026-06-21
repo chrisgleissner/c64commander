@@ -16,6 +16,7 @@ const item = (id: string, order: number, overrides: Partial<FocusItem> = {}): Fo
   activate: overrides.activate ?? vi.fn(),
   disabled: overrides.disabled,
   group: overrides.group,
+  parentId: overrides.parentId,
 });
 
 const layer = (id: string, kind: DismissibleLayer["kind"], dismiss = vi.fn()): DismissibleLayer => ({
@@ -63,6 +64,16 @@ describe("NavigationController — focus traversal", () => {
     expect(onFocus).not.toHaveBeenCalled();
   });
 
+  it("Left/Right fall back to previous/next sibling (no hierarchy on horizontal d-pad)", () => {
+    const onFocus = vi.fn();
+    const nav = withItems({ onFocus });
+    // current is "a"; Right = next sibling, Left = previous (wrap).
+    expect(nav.dispatch("dpadRight")).toEqual({ type: "focusMoved", item: expect.objectContaining({ id: "b" }) });
+    expect(nav.dispatch("dpadRight")).toEqual({ type: "focusMoved", item: expect.objectContaining({ id: "c" }) });
+    expect(nav.dispatch("dpadLeft")).toEqual({ type: "focusMoved", item: expect.objectContaining({ id: "b" }) });
+    expect(onFocus.mock.calls.map((call) => (call[0] as FocusItem).id)).toEqual(["b", "c", "b"]);
+  });
+
   it("reuses a provided FocusController instance", () => {
     const focus = new FocusController();
     focus.register(item("x", 0));
@@ -100,6 +111,78 @@ describe("NavigationController — activation", () => {
   it("returns `ignored` when nothing is registered", () => {
     const nav = new NavigationController();
     expect(nav.dispatch("activate")).toEqual({ type: "ignored" });
+  });
+
+  it("OK descends into a group (≥2 enabled children) instead of activating it", () => {
+    const cardActivate = vi.fn();
+    const onFocus = vi.fn();
+    const nav = new NavigationController({ callbacks: { onFocus } });
+    nav.focus.setItems([
+      item("card", 0, { activate: cardActivate }),
+      item("primary", 0, { parentId: "card" }),
+      item("secondary", 0, { parentId: "card" }),
+    ]);
+
+    expect(nav.dispatch("center")).toEqual({ type: "focusMoved", item: expect.objectContaining({ id: "primary" }) });
+    expect(cardActivate).not.toHaveBeenCalled();
+    expect(onFocus).toHaveBeenCalledWith(expect.objectContaining({ id: "primary" }));
+    // Down/Up move among the descended children; Back ascends to the card.
+    expect(nav.dispatch("dpadDown")).toEqual({
+      type: "focusMoved",
+      item: expect.objectContaining({ id: "secondary" }),
+    });
+    expect(nav.dispatch("back")).toEqual({ type: "focusMoved", item: expect.objectContaining({ id: "card" }) });
+  });
+
+  it("OK on a trivial single-leaf group activates that leaf directly (no pointless descend)", () => {
+    const leafActivate = vi.fn();
+    const onActivate = vi.fn();
+    const nav = new NavigationController({ callbacks: { onActivate } });
+    nav.focus.setItems([item("card", 0), item("only", 0, { parentId: "card", activate: leafActivate })]);
+
+    expect(nav.dispatch("center")).toEqual({ type: "activated", item: expect.objectContaining({ id: "only" }) });
+    expect(leafActivate).toHaveBeenCalledTimes(1);
+    expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({ id: "only" }));
+    // Selection/scope stay on the card — it did its one thing.
+    expect(nav.focus.current()?.id).toBe("card");
+  });
+
+  it("OK activates a leaf once descended into a group", () => {
+    const primaryActivate = vi.fn();
+    const nav = new NavigationController();
+    nav.focus.setItems([
+      item("card", 0),
+      item("primary", 0, { parentId: "card", activate: primaryActivate }),
+      item("secondary", 0, { parentId: "card" }),
+    ]);
+    expect(nav.dispatch("center").type).toBe("focusMoved"); // descend
+    expect(nav.dispatch("center")).toEqual({ type: "activated", item: expect.objectContaining({ id: "primary" }) });
+    expect(primaryActivate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("NavigationController — openMenu / softRight", () => {
+  it("asks the adapter to open a menu and reports `menuRequested` when one exists", () => {
+    const onOpenMenu = vi.fn().mockReturnValue(true);
+    const nav = new NavigationController({ callbacks: { onOpenMenu } });
+    nav.focus.setItems([item("a", 0)]);
+
+    expect(nav.dispatch("openMenu")).toEqual({ type: "menuRequested", item: expect.objectContaining({ id: "a" }) });
+    expect(nav.dispatch("softRight")).toEqual({ type: "menuRequested", item: expect.objectContaining({ id: "a" }) });
+    expect(onOpenMenu).toHaveBeenCalledTimes(2);
+    expect(onOpenMenu).toHaveBeenLastCalledWith(expect.objectContaining({ id: "a" }));
+  });
+
+  it("stays `ignored` when no menu is available (no key is stolen)", () => {
+    const onOpenMenu = vi.fn().mockReturnValue(false);
+    const nav = new NavigationController({ callbacks: { onOpenMenu } });
+    nav.focus.setItems([item("a", 0)]);
+    expect(nav.dispatch("openMenu")).toEqual({ type: "ignored" });
+
+    // No callback wired at all → also ignored.
+    const bare = new NavigationController();
+    bare.focus.setItems([item("a", 0)]);
+    expect(bare.dispatch("softRight")).toEqual({ type: "ignored" });
   });
 });
 
@@ -146,9 +229,56 @@ describe("NavigationController — deterministic back chain", () => {
     expect(onNavigateBack).toHaveBeenCalledTimes(1);
   });
 
+  it("escape climbs out of a nested CTA scope but never navigates the route", () => {
+    const onFocus = vi.fn();
+    const onNavigateBack = vi.fn();
+    const nav = new NavigationController({ callbacks: { onFocus, onNavigateBack } });
+    // Two enabled children so OK descends (a single-leaf group would flatten).
+    nav.focus.setItems([
+      item("card", 0),
+      item("child", 0, { parentId: "card" }),
+      item("child2", 0, { parentId: "card" }),
+    ]);
+
+    expect(nav.dispatch("center")).toEqual({ type: "focusMoved", item: expect.objectContaining({ id: "child" }) });
+    expect(nav.dispatch("escape")).toEqual({ type: "focusMoved", item: expect.objectContaining({ id: "card" }) });
+    expect(onNavigateBack).not.toHaveBeenCalled();
+
+    // Chain exhausted: keyboard escape resolves to `ignored` (Radix/browser owns
+    // it) and must NOT call navigate(-1); only the hardware back button does.
+    expect(nav.dispatch("escape")).toEqual({ type: "ignored" });
+    expect(onNavigateBack).not.toHaveBeenCalled();
+  });
+
+  it("the left soft key runs the back/ascend chain and navigates the route at the root", () => {
+    const onNavigateBack = vi.fn();
+    const nav = new NavigationController({ callbacks: { onNavigateBack } });
+    nav.focus.setItems([
+      item("card", 0),
+      item("child", 0, { parentId: "card" }),
+      item("child2", 0, { parentId: "card" }),
+    ]);
+    // softLeft ascends a nested scope first…
+    nav.dispatch("center");
+    expect(nav.dispatch("softLeft")).toEqual({ type: "focusMoved", item: expect.objectContaining({ id: "card" }) });
+    expect(onNavigateBack).not.toHaveBeenCalled();
+    // …and navigates the route once the in-app chain is exhausted (like hardware back).
+    expect(nav.dispatch("softLeft")).toEqual({ type: "navigatedBack" });
+    expect(onNavigateBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("hardware back navigates the route once the back chain is exhausted", () => {
+    const onNavigateBack = vi.fn();
+    const nav = new NavigationController({ callbacks: { onNavigateBack } });
+    nav.focus.register(item("card", 0));
+
+    expect(nav.dispatch("back")).toEqual({ type: "navigatedBack" });
+    expect(onNavigateBack).toHaveBeenCalledTimes(1);
+  });
+
   it("navigatedBack is a no-op-safe outcome when no callback is wired", () => {
     const nav = new NavigationController();
-    expect(nav.dispatch("escape")).toEqual({ type: "navigatedBack" });
+    expect(nav.dispatch("back")).toEqual({ type: "navigatedBack" });
   });
 
   it("pushLayer replaces an existing layer with the same id (no duplicate dismiss)", () => {
@@ -209,16 +339,50 @@ describe("NavigationController — closeMenu", () => {
   });
 });
 
+describe("NavigationController — open-layer guard (HAZARD 2)", () => {
+  it("ignores vertical nav and activation while a dismissible layer is open", () => {
+    const onFocus = vi.fn();
+    const onActivate = vi.fn();
+    const nav = withItems({ onFocus, onActivate });
+    nav.pushLayer(layer("dropdown", "popup"));
+
+    // The open layer (e.g. a Radix Select) owns Up/Down/Enter — the underlying
+    // ring must NOT move underneath it.
+    expect(nav.dispatch("dpadDown")).toEqual({ type: "ignored" });
+    expect(nav.dispatch("dpadUp")).toEqual({ type: "ignored" });
+    expect(nav.dispatch("nextField")).toEqual({ type: "ignored" });
+    expect(nav.dispatch("center")).toEqual({ type: "ignored" });
+    expect(nav.dispatch("enter")).toEqual({ type: "ignored" });
+    expect(nav.dispatch("activate")).toEqual({ type: "ignored" });
+    expect(onFocus).not.toHaveBeenCalled();
+    expect(onActivate).not.toHaveBeenCalled();
+  });
+
+  it("still runs the back chain so keypad back can close the open layer", () => {
+    const dismiss = vi.fn();
+    const onNavigateBack = vi.fn();
+    const nav = withItems({ onNavigateBack });
+    nav.pushLayer(layer("dropdown", "popup", dismiss));
+
+    expect(nav.dispatch("back").type).toBe("layerDismissed");
+    expect(dismiss).toHaveBeenCalledTimes(1);
+    expect(nav.layerDepth).toBe(0);
+    expect(onNavigateBack).not.toHaveBeenCalled();
+
+    // With the layer gone, vertical nav resumes normally.
+    expect(nav.dispatch("dpadDown")).toEqual({ type: "focusMoved", item: expect.objectContaining({ id: "b" }) });
+  });
+});
+
 describe("NavigationController — actions owned elsewhere", () => {
-  it.each<["dpadLeft" | "dpadRight" | "softLeft" | "softRight" | "openMenu" | "digit5"]>([
-    ["dpadLeft"],
-    ["dpadRight"],
-    ["softLeft"],
+  it.each<["softRight" | "openMenu" | "digit5" | "star" | "hash"]>([
     ["softRight"],
     ["openMenu"],
     ["digit5"],
-  ])("returns `ignored` for %s so the focused widget/handler can own it", (action) => {
-    const nav = withItems();
+    ["star"],
+    ["hash"],
+  ])("returns `ignored` for %s when no handler owns it (digit/T9 keys, menu-less item)", (action) => {
+    const nav = withItems(); // no onOpenMenu callback wired
     expect(nav.dispatch(action)).toEqual({ type: "ignored" });
   });
 });

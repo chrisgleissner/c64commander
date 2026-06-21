@@ -388,37 +388,41 @@ describe("real c64u-remote feature-flag overlay", () => {
     { featureIds: new Set(baseRegistry.features.map((f: any) => f.id)), variantId: "c64u-remote" },
   );
 
-  it("disables AND hides every feature flag for C64U Remote, except the keypad opt-in", () => {
+  it("disables AND hides every feature flag for C64U Remote, except keypad input and CommoServe", () => {
     const resolved = resolveVariantFeatureRegistry(baseRegistry, overlay);
     for (const feature of resolved.features) {
-      // Every feature ships off on C64U Remote (including keypad/T9, which stays
-      // experimental and default-off).
-      expect(feature.enabled, `${feature.id}.enabled`).toBe(false);
-      if (feature.id === "keypad_input_enabled") {
-        // The one deliberate exception: keypad / T9 input stays user-visible so a
-        // keypad-only device can opt into it from Experimental Features. It is NOT
-        // added to the c64u-remote disable overlay for exactly this reason.
-        expect(feature.visible_to_user, "keypad_input_enabled.visible_to_user").toBe(true);
-      } else {
-        expect(feature.visible_to_user, `${feature.id}.visible_to_user`).toBe(false);
+      if (feature.id === "commoserve_enabled" || feature.id === "keypad_input_enabled") {
+        // Deliberate exceptions: CommoServe and keypad/keyboard input are
+        // enabled (and user-visible) for C64U Remote by inherited base default.
+        expect(feature.enabled, `${feature.id}.enabled`).toBe(true);
+        expect(feature.visible_to_user, `${feature.id}.visible_to_user`).toBe(true);
+        continue;
       }
+      // Every other feature ships off on C64U Remote.
+      expect(feature.enabled, `${feature.id}.enabled`).toBe(false);
+      expect(feature.visible_to_user, `${feature.id}.visible_to_user`).toBe(false);
     }
   });
 
-  it("disables HVSC and CommoServe specifically", () => {
+  it("disables HVSC but keeps CommoServe enabled", () => {
     const resolved = resolveVariantFeatureRegistry(baseRegistry, overlay) as any;
     const byId = Object.fromEntries(resolved.features.map((f: any) => [f.id, f]));
     expect(byId.hvsc_enabled.enabled).toBe(false);
-    expect(byId.commoserve_enabled.enabled).toBe(false);
+    expect(byId.commoserve_enabled.enabled).toBe(true);
+    expect(byId.commoserve_enabled.visible_to_user).toBe(true);
   });
 
   it("disables every experimental feature flag", () => {
     const resolved = resolveVariantFeatureRegistry(baseRegistry, overlay) as any;
-    const experimental = resolved.features.filter((f: any) => f.group === "experimental");
+    const experimental = resolved.features.filter(
+      (f: any) => f.group === "experimental" && f.id !== "keypad_input_enabled",
+    );
     expect(experimental.length).toBeGreaterThan(0);
     for (const feature of experimental) {
       expect(feature.enabled, `${feature.id}.enabled`).toBe(false);
     }
+    const keypad = resolved.features.find((f: any) => f.id === "keypad_input_enabled");
+    expect(keypad.enabled, "keypad_input_enabled.enabled").toBe(true);
   });
 
   it("baking the variant selection exposes the disabled+hidden flags", () => {
@@ -439,5 +443,15 @@ describe("real c64u-remote feature-flag overlay", () => {
     });
     expect(selection.variant.featureFlags.background_execution_enabled.enabled).toBe(false);
     expect(selection.variant.featureFlags.background_execution_enabled.visible_to_user).toBe(false);
+  });
+
+  it("defaults C64U Remote to the Small Display profile and keypad T9 mode", () => {
+    const config = parseVariantSource(readFileSync(path.join(REAL_REPO_ROOT, "variants/variants.yaml"), "utf8"), {
+      repoRoot: REAL_REPO_ROOT,
+    });
+    const remote = config.variants["c64u-remote"] as any;
+
+    expect(remote.runtime.defaultDisplayProfile).toBe("compact");
+    expect(remote.runtime.defaultT9InputEnabled).toBe(true);
   });
 });

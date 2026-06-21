@@ -79,3 +79,5 @@ variants:
         # are intentionally omitted because those features are disabled for this
         # variant (see variants/feature-flags/c64u-remote.yaml).
         device_host: c64u
+      default_display_profile: compact
+      default_t9_input_enabled: true

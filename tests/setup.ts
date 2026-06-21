@@ -15,6 +15,7 @@ import {
   FEATURE_FLAG_IDS as REGISTERED_FEATURE_FLAG_IDS,
   type FeatureFlagId,
 } from "@/lib/config/featureFlagsRegistry.generated";
+import { resetInputModality } from "@/lib/input/inputModality";
 
 const FEATURE_FLAG_STORAGE_PREFIX = "c64u_feature_flag:";
 const DEVELOPER_MODE_KEY = "c64u_dev_mode_enabled";
@@ -234,6 +235,7 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   clearFeatureFlagTestState();
+  resetInputModality();
 });
 
 const packageVersion = JSON.parse(readFileSync(path.resolve(process.cwd(), "package.json"), "utf-8")).version as string;

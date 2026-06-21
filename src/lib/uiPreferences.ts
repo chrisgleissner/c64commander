@@ -7,6 +7,7 @@
  */
 
 import { type DisplayProfileOverride, isDisplayProfileOverride } from "@/lib/displayProfiles";
+import { variant } from "@/generated/variant";
 
 const LIST_PREVIEW_LIMIT_KEY = "c64u_list_preview_limit";
 const DISPLAY_PROFILE_OVERRIDE_KEY = "c64u_display_profile_override";
@@ -41,9 +42,12 @@ export const setListPreviewLimit = (value: number) => {
 export const clampListPreviewLimit = clampLimit;
 
 export const getDisplayProfileOverride = (): DisplayProfileOverride => {
-  if (typeof localStorage === "undefined") return "auto";
+  const defaultOverride = isDisplayProfileOverride(variant.runtime.defaultDisplayProfile)
+    ? variant.runtime.defaultDisplayProfile
+    : "auto";
+  if (typeof localStorage === "undefined") return defaultOverride;
   const raw = localStorage.getItem(DISPLAY_PROFILE_OVERRIDE_KEY);
-  return isDisplayProfileOverride(raw) ? raw : "auto";
+  return isDisplayProfileOverride(raw) ? raw : defaultOverride;
 };
 
 export const setDisplayProfileOverride = (value: DisplayProfileOverride) => {

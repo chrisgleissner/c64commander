@@ -102,7 +102,11 @@ export function TabBar() {
       style={{ zIndex: INTERSTITIAL_Z_INDEX.content }}
       data-interstitial-active={interstitialActive ? "true" : "false"}
     >
-      <nav className="tab-bar app-chrome-rail app-chrome-rail-bottom bg-background" data-app-chrome-family="primary">
+      <nav
+        className="tab-bar app-chrome-rail app-chrome-rail-bottom bg-background"
+        data-app-chrome-family="primary"
+        data-focus-scope="tabbar"
+      >
         {tabs.map((tab, index) => (
           <TabBarButton
             key={tab.path}

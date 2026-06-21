@@ -33,14 +33,18 @@ SemanticAction ──FocusController──────────▶ focus / ac
 
 ### Profiles
 
-| Profile                 | id                      | Purpose                                                        |
-| ----------------------- | ----------------------- | -------------------------------------------------------------- |
-| Default keyboard        | `defaultKeyboard`       | Desktop/dev — the whole UX is exercisable on a normal keyboard |
-| Commodore Callback 8020 | `commodoreCallback8020` | Physical keypad mapping (extends the desktop profile)          |
+| Profile                 | id                | Purpose                                                               |
+| ----------------------- | ----------------- | --------------------------------------------------------------------- |
+| Default keyboard        | `defaultKeyboard` | Desktop/dev — the whole UX is exercisable on a normal keyboard        |
+| Commodore Callback 8020 | `keypad`          | Physical D-pad + numeric keypad mapping (extends the desktop profile) |
+
+> The keypad profile's code id is **`keypad`** (see `src/lib/input/profiles/`).
+> `App.tsx` mounts it via `KEYPAD_FOCUS_PROFILE_ID = "keypad"`; it is the single
+> active non-default profile.
 
 `resolveInputProfile(id?)` returns the keymap for an id, falling back to
 `defaultKeyboard`. Auto-detection is unreliable inside AppSupport, so the
-profile is selectable via a settings/developer override.
+profile is selected explicitly (`App.tsx` uses `keypad`).
 
 #### Default keyboard mapping
 
@@ -125,11 +129,53 @@ no soft keyboard is required to enter a host or IP.
 | `c64u`              | multitap | `2·3` (c) `6·4` (6) `4·4` (4) `8·2` (u)                                 |
 | `c64u.local`        | multitap | `c64u` then `1·1` (.) `5·3` (l) `6·3` (o) `2·3` (c) `2·1` (a) `5·3` (l) |
 
-## Focus controller
+## Navigation model — "OK to go in, Back to go out"
 
-`FocusController` (`focusController.ts`) keeps an ordered registry of
-activatable items. `dpadDown`/`nextField` → `focusNext()`,
-`dpadUp`/`previousField` → `focusPrevious()` (both wrap and skip disabled
-items), and `center`/`enter`/`activate` → `activateCurrent()`. Disabled items
-are skipped during navigation and refuse activation, so a destructive CTA can
-never be reached or triggered by accident while disabled.
+Reachability is **complete by construction**: the provider scans the live DOM of
+the active scope (the topmost open overlay, else the routed page; the bottom tab
+bar is its own scope appended last) and builds the focus ring in reading order
+(`src/lib/input/discovery.ts` + `focusDiscovery.ts`). `useFocusItem` /
+`useFocusGroup` are optional refinements (stable id, explicit order, group
+membership, custom activation, opt-out) — not the gate for reachability.
+Existing labelled sections (`data-section-label`) and app dialog/sheet content
+roots are implicit groups, so dense cards and modals are navigated as **OK in /
+Back out** containers without per-CTA wiring.
+
+| Keys                                              | Meaning                                                                                  |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **Up / Down**, D-pad up/down, Tab / Shift+Tab     | Move between CTAs in the current scope (wrap; skip disabled)                             |
+| **Center / OK / Enter / Call**                    | **Go in:** descend into a group (a card/section with children), else **activate** a leaf |
+| **Back / Escape / Left soft key / hardware Back** | **Go out:** dismiss overlay → disengage field → ascend the group scope → navigate¹       |
+| **Left / Right**                                  | Owned by the focused control (slider value, tabs, segmented); else previous/next sibling |
+| **Right soft key / Menu**                         | Open the current item's / scope's context menu (`openMenu`), if any                      |
+
+¹ Only the **hardware Back** key (and the left soft key) navigate the route once
+the in-app chain is exhausted; keyboard **Escape never navigates** — it lets the
+open overlay's own dismiss handler run. A trivial group (exactly one enabled
+leaf) activates that leaf directly instead of forcing a pointless descend.
+
+`FocusController` (`focusController.ts`) keeps the ordered registry;
+`NavigationController` (`focusNavigation.ts`) maps semantic actions onto it and
+owns the dismissible-layer stack + the engaged-field flag. Disabled items are
+skipped during navigation and refuse activation, so a destructive CTA can never
+be reached or triggered by accident while disabled.
+
+## Selected-control highlight + context guidance bar
+
+While the keypad flag is on **and** input modality is `key-navigation`:
+
+- the current ring item carries `data-key-selected` (a persistent high-contrast
+  outline) and, when descended, the enclosing group carries `data-key-scope`;
+- a fixed **context guidance bar** (`src/components/input/KeypadGuidanceBar.tsx`)
+  shows the scope breadcrumb and labels the soft keys —
+  **Back/Exit/Close/Done** · **Open/Edit/Select/Toggle/Adjust/Activate** ·
+  **Menu** — derived from the pure `resolveGuidanceLabels` (`guidance.ts`).
+
+Both clear the instant a pointer/touch is used (modality flips to `pointer`), and
+neither exists at all when the flag is off — the app is byte-for-byte baseline.
+
+### T9 mode indicator
+
+When the numeric-keypad T9 composer is active on a focused field, a small,
+modality/flag-gated indicator shows the current mode (`multitap` ↔ `hostname`,
+toggled with `#`). Literal digit/letter typing is the default; T9 is keypad-only.

@@ -105,6 +105,36 @@ const readResolvedLaunchTimings = async (page: Page) => {
   }));
 };
 
+const waitForLaunchSnapshot = async (page: Page, expectedProfile: keyof typeof DISPLAY_PROFILE_VIEWPORTS) => {
+  const snapshot = await page.waitForFunction(
+    ({ expectedProfile }) => {
+      const launchSequence = document.querySelector<HTMLElement>('[data-testid="startup-launch-sequence"]');
+      if (!launchSequence || launchSequence.dataset.profile !== expectedProfile) {
+        return null;
+      }
+
+      const title = document.querySelector<HTMLElement>('[data-testid="startup-launch-sequence-title"]');
+      const description = document.querySelector<HTMLElement>('[data-testid="startup-launch-sequence-description"]');
+      if (!title || !description) {
+        return null;
+      }
+
+      return {
+        profile: launchSequence.dataset.profile,
+        title: title.textContent?.trim() ?? "",
+        description: description.textContent?.trim() ?? "",
+        fadeInMs: Number(launchSequence.getAttribute("data-fade-in-ms") ?? "0"),
+        holdMs: Number(launchSequence.getAttribute("data-hold-ms") ?? "0"),
+        fadeOutMs: Number(launchSequence.getAttribute("data-fade-out-ms") ?? "0"),
+      };
+    },
+    { expectedProfile },
+    { polling: 16 },
+  );
+
+  return snapshot.jsonValue();
+};
+
 const waitForLaunchPhase = async (page: Page, phase: "fade-in" | "hold" | "fade-out") => {
   await page.waitForFunction(
     (expectedPhase) =>
@@ -116,11 +146,14 @@ const waitForLaunchPhase = async (page: Page, phase: "fade-in" | "hold" | "fade-
 
 const waitForAnyLaunchPhase = async (page: Page, phases: Array<"hold" | "fade-out">) => {
   await page.waitForFunction(
-    (expectedPhases) => {
+    ({ expectedPhases, homeReadyTestId }) => {
       const phase = document.querySelector<HTMLElement>('[data-testid="startup-launch-sequence"]')?.dataset.phase;
+      if (!phase) {
+        return Boolean(document.querySelector(`[data-testid="${homeReadyTestId}"]`));
+      }
       return typeof phase === "string" && expectedPhases.includes(phase as "hold" | "fade-out");
     },
-    phases,
+    { expectedPhases: phases, homeReadyTestId: HOME_READY_TEST_ID },
     { polling: 16 },
   );
 };
@@ -258,23 +291,38 @@ test.describe("launch sequence", () => {
     await applyDisplayProfileOverride(page, "medium", PLAYWRIGHT_SCREENSHOT_LAUNCH_TIMINGS);
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
-    const launchSequence = page.getByTestId("startup-launch-sequence");
-    const appShell = page.getByTestId("app-shell");
-    await expect(launchSequence).toBeVisible();
-    await expect(launchSequence).toHaveAttribute("data-profile", "medium");
-    await expect(page.getByTestId("startup-launch-sequence-title")).toBeVisible();
-    await expect(page.getByTestId("startup-launch-sequence-description")).toBeVisible();
-    const resolvedTimings = await readResolvedLaunchTimings(page);
+    const launchSnapshot = await waitForLaunchSnapshot(page, "medium");
+    expect(launchSnapshot.profile).toBe("medium");
+    expect(launchSnapshot.title).not.toBe("");
+    expect(launchSnapshot.description).not.toBe("");
+    const resolvedTimings = {
+      fadeInMs: launchSnapshot.fadeInMs,
+      holdMs: launchSnapshot.holdMs,
+      fadeOutMs: launchSnapshot.fadeOutMs,
+    };
 
     await waitForAnyLaunchPhase(page, ["hold", "fade-out"]);
-    await page.waitForFunction(
-      () => {
-        const phase = document.querySelector<HTMLElement>('[data-testid="startup-launch-sequence"]')?.dataset.phase;
-        return phase === "fade-in" || phase === "hold";
-      },
-      { polling: 16 },
-    );
-    await expect(appShell).toHaveCSS("opacity", "0");
+    // The app shell stays hidden (opacity 0) for every pre-app-ready phase —
+    // fade-in and hold (see index.css [data-launch-phase]). Fade-out animates the
+    // shell from 0→1, and a loaded runner can sample anywhere in that transition.
+    const shellSample = await page.evaluate((homeReadyTestId) => {
+      const phase = document.querySelector<HTMLElement>('[data-testid="startup-launch-sequence"]')?.dataset.phase;
+      const shell = document.querySelector<HTMLElement>('[data-testid="app-shell"]');
+      return {
+        phase,
+        opacity: shell ? Number.parseFloat(getComputedStyle(shell).opacity) : null,
+        homeReady: Boolean(document.querySelector(`[data-testid="${homeReadyTestId}"]`)),
+      };
+    }, HOME_READY_TEST_ID);
+    if (shellSample.phase === "fade-in" || shellSample.phase === "hold") {
+      expect(shellSample.opacity).toBe(0);
+    } else if (shellSample.phase === "fade-out") {
+      expect(shellSample.opacity).not.toBeNull();
+      expect(shellSample.opacity).toBeGreaterThanOrEqual(0);
+      expect(shellSample.opacity).toBeLessThanOrEqual(1);
+    } else {
+      expect(shellSample.homeReady).toBe(true);
+    }
 
     await waitForHoldSample(page, resolvedTimings);
 

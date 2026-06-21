@@ -1268,9 +1268,12 @@ test.describe("Playback file browser (part 2)", () => {
     await thumb.focus();
     await thumb.press("ArrowRight");
 
-    const updatedState = server.getState()["Audio Mixer"];
     await expect.poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"]?.value).not.toBe(initialSocket1);
     await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"]?.value).not.toBe(initialUlti2);
+    // Read the settled state AFTER the polls: a key-driven step commits via the
+    // slider's coalescing debounce (one device write per burst), so the device
+    // converges asynchronously. Snapshotting before the polls raced a transient.
+    const updatedState = server.getState()["Audio Mixer"];
     const target = updatedState["Vol Socket 1"]?.value;
     expect(target).toBeDefined();
     expect(updatedState["Vol UltiSid 2"]?.value).toBe(target);
@@ -1414,15 +1417,14 @@ test.describe("Playback file browser (part 2)", () => {
       },
     });
 
-    const unmuteUpdateCount = server.requests.filter(
-      (req) => req.method === "POST" && req.url.startsWith("/v1/configs"),
-    ).length;
+    // With SID Socket 1 disabled, unmute restores only Vol UltiSid 2 — a SINGLE
+    // item, which the app sends via the device-safe `PUT /v1/configs/{cat}/{item}`
+    // endpoint rather than the `POST /v1/configs` batch. Count either method.
+    const isConfigWrite = (req: { method: string; url: string }) =>
+      (req.method === "POST" || req.method === "PUT") && req.url.startsWith("/v1/configs");
+    const unmuteUpdateCount = server.requests.filter(isConfigWrite).length;
     await muteButton.click();
-    await waitForRequests(
-      () =>
-        server.requests.filter((req) => req.method === "POST" && req.url.startsWith("/v1/configs")).length >
-        unmuteUpdateCount,
-    );
+    await waitForRequests(() => server.requests.filter(isConfigWrite).length > unmuteUpdateCount);
 
     await expect.poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"]?.value).toBe("-42 dB");
     await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"]?.value).toBe("+6 dB");

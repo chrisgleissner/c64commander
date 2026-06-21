@@ -31,15 +31,19 @@ import { useCallback, useMemo, useRef, useState, type KeyboardEvent as ReactKeyb
 import {
   applySemanticAction,
   createT9State,
+  getInputModality,
   normalizeKeyEvent,
+  pendingCandidateCount,
   resolveInputProfile,
   resolveT9Config,
+  setInputModality,
   setText,
   type SemanticAction,
   type T9Config,
   type T9Mode,
   type T9State,
 } from "@/lib/input";
+import { emitKeyInputDiagnostics } from "@/lib/diagnostics/keyInputDiagnostics";
 
 /**
  * Semantic actions a focused text field routes into the composer. Backspace,
@@ -93,7 +97,7 @@ export const useT9Input = ({
   mode: initialMode = "multitap",
   profileId,
   config,
-  enabled = true,
+  enabled = false,
   now = defaultNow,
 }: UseT9InputOptions): UseT9Input => {
   const resolvedConfig = useMemo(() => resolveT9Config(config), [config]);
@@ -127,6 +131,33 @@ export const useT9Input = ({
         lastEmittedRef.current = next.text;
         setValue(next.text);
       }
+
+      // A composer key was consumed in a field → key-navigation modality (Prime
+      // Directive). Diagnostics record only LENGTHS/indices for the T9 state and
+      // never the field value or any free text. `redactKeyIdentity` additionally
+      // withholds the key/char itself (and the normalized action) so the typed
+      // value cannot be reconstructed from a diagnostics export; only the
+      // hardware family (digit/star/…) is kept for calibration.
+      setInputModality("key-navigation");
+      emitKeyInputDiagnostics({
+        rawEvent: event,
+        normalizedAction: action,
+        redactKeyIdentity: true,
+        handled: true,
+        preventDefaultApplied: true,
+        keypadEnabled: enabled,
+        modality: getInputModality(),
+        selectedControlId: null,
+        activeElement: typeof document !== "undefined" ? document.activeElement : null,
+        t9State: {
+          active: true,
+          mode: next.mode,
+          pendingLength: next.pending ? 1 : 0,
+          candidateIndex: next.pending?.candidateIndex ?? -1,
+          candidateCount: pendingCandidateCount(next, resolvedConfig),
+          committedLength: next.text.length,
+        },
+      });
     },
     [enabled, keymap, mode, now, resolvedConfig, setValue, value],
   );

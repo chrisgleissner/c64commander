@@ -48,13 +48,26 @@ else
 fi
 
 step "3. Keypad-only operation (hardware keys, NO taps)"
-# Wake + dismiss keyguard, then drive d-pad + number keys only.
+# Wake + dismiss keyguard, then drive the FULL keypad surface with hardware keys
+# only — every key family the keypad/T9 input feature normalizes
+# (src/lib/input/profiles/keypad.ts). NOTE: this drives OS-level keyevents but
+# cannot easily flip the localStorage `keypad_input_enabled` flag, so the
+# selected-control highlight (data-key-selected) only renders when the flag is
+# already on; the uiautomator dump + screenshot below are the reviewable proof of
+# where focus/selection landed after navigation. Playwright (playwright/
+# keypadInput.spec.ts) is the CI-enforced functional proof.
 adb shell input keyevent 224 >/dev/null 2>&1 || true   # WAKEUP
-# DPAD: DOWN(20) DOWN(20) RIGHT(22) CENTER(23); number keys 1(8) 9(16) 2(10); STAR(17)
-for k in 20 20 22 23 8 16 10 17; do adb shell input keyevent "$k" >/dev/null 2>&1; sleep 0.4; done
+# D-pad: DOWN(20) UP(19) RIGHT(22) LEFT(21) CENTER(23) ENTER(66);
+# digits 1(8) 2(9) 3(10) 9(16); STAR(17) POUND(18); DEL(67).
+for k in 20 19 22 21 23 66 8 9 10 16 17 18 67; do adb shell input keyevent "$k" >/dev/null 2>&1; sleep 0.4; done
 adb shell uiautomator dump /sdcard/keypad-ui.xml >/dev/null 2>&1 || true
+adb pull /sdcard/keypad-ui.xml "$OUT_DIR/${PACKAGE//./_}-keypad-ui.xml" >/dev/null 2>&1 || true
 focused="$(adb shell cat /sdcard/keypad-ui.xml 2>/dev/null | grep -o 'focused="true"' | head -n1 || true)"
-if [[ -n "$focused" ]]; then echo "  OK: a focusable element is focused after d-pad navigation"; else echo "  WARN: no focused node reported (WebView a11y may be off); see screenshot"; fi
+if [[ -n "$focused" ]]; then
+  echo "  OK: a focusable element is focused after d-pad navigation (dump: $OUT_DIR/${PACKAGE//./_}-keypad-ui.xml)"
+else
+  echo "  WARN: no focused node reported (WebView a11y may be off, or the flag is off); see screenshot + dump"
+fi
 
 step "4. No GMS / fatal errors in logcat"
 errs="$(adb logcat -d 2>/dev/null | grep -iE 'GooglePlayServicesNotAvailable|SERVICE_MISSING|FATAL EXCEPTION' | grep -i "$PACKAGE" || true)"

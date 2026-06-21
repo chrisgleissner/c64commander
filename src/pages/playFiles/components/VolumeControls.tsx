@@ -92,6 +92,9 @@ export const VolumeControls = ({
             nativeInputAriaLabel="Playback volume"
             nativeInputTestId={useNativeRangeInput ? "volume-slider-native-input" : undefined}
             aria-label="Playback volume"
+            keypadFocusId="play-volume-slider"
+            keypadFocusGroup="play-controls"
+            keypadFocusOrder={60}
           />
           <span className="text-xs text-muted-foreground w-[52px] text-right" data-testid="volume-label">
             {volumeLabel}

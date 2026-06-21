@@ -21,6 +21,7 @@ import {
   loadDebugLoggingEnabled,
   loadDiscoveryProbeTimeoutMs,
   loadDiskAutostartMode,
+  loadScreenOrientationMode,
   loadStartupDiscoveryWindowMs,
   loadVolumeSliderPreviewIntervalMs,
   saveAutomaticDemoModeEnabled,
@@ -32,9 +33,11 @@ import {
   saveDebugLoggingEnabled,
   saveDiscoveryProbeTimeoutMs,
   saveDiskAutostartMode,
+  saveScreenOrientationMode,
   saveStartupDiscoveryWindowMs,
   saveVolumeSliderPreviewIntervalMs,
   type DiskAutostartMode,
+  type ScreenOrientationMode,
 } from "@/lib/config/appSettings";
 import {
   FEATURE_FLAG_IDS,
@@ -71,6 +74,7 @@ type SettingsAppSettingsPayload = {
   backgroundRediscoveryIntervalMs: number;
   discoveryProbeTimeoutMs: number;
   diskAutostartMode: DiskAutostartMode;
+  screenOrientationMode: ScreenOrientationMode;
   volumeSliderPreviewIntervalMs: number;
   archiveHostOverride: string;
   archiveClientIdOverride: string;
@@ -118,13 +122,14 @@ const REQUIRED_APP_SETTINGS_KEYS = [
   "backgroundRediscoveryIntervalMs",
   "discoveryProbeTimeoutMs",
   "diskAutostartMode",
+  "screenOrientationMode",
   "volumeSliderPreviewIntervalMs",
   "archiveHostOverride",
   "archiveClientIdOverride",
   "archiveUserAgentOverride",
 ] as const;
 
-const LEGACY_OPTIONAL_APP_SETTINGS_KEYS = ["commoserveEnabled"] as const;
+const LEGACY_OPTIONAL_APP_SETTINGS_KEYS = ["commoserveEnabled", "screenOrientationMode"] as const;
 
 const DEVICE_SAFETY_KEYS = [
   "mode",
@@ -157,6 +162,9 @@ const hasRequiredKeysAllowOptional = (
 
 const isDiskAutostartMode = (value: unknown): value is DiskAutostartMode => value === "kernal" || value === "dma";
 
+const isScreenOrientationMode = (value: unknown): value is ScreenOrientationMode =>
+  value === "portrait" || value === "landscape" || value === "auto";
+
 const isDeviceSafetyMode = (value: unknown): value is DeviceSafetyMode =>
   value === "AUTO" ||
   value === "RELAXED" ||
@@ -177,6 +185,7 @@ export const exportSettingsSnapshot = async (): Promise<SettingsExportPayload> =
       backgroundRediscoveryIntervalMs: loadBackgroundRediscoveryIntervalMs(),
       discoveryProbeTimeoutMs: loadDiscoveryProbeTimeoutMs(),
       diskAutostartMode: loadDiskAutostartMode(),
+      screenOrientationMode: loadScreenOrientationMode(),
       volumeSliderPreviewIntervalMs: loadVolumeSliderPreviewIntervalMs(),
       archiveHostOverride: loadArchiveHostOverride(),
       archiveClientIdOverride: loadArchiveClientIdOverride(),
@@ -207,7 +216,8 @@ export const exportSettingsJson = async () => JSON.stringify(await exportSetting
 const validateAppSettings = (value: unknown, optionalKeys: readonly string[] = []) => {
   if (!value || typeof value !== "object") return "appSettings must be an object.";
   const record = value as Record<string, unknown>;
-  if (!hasRequiredKeysAllowOptional(record, REQUIRED_APP_SETTINGS_KEYS, optionalKeys))
+  const requiredKeys = REQUIRED_APP_SETTINGS_KEYS.filter((key) => !optionalKeys.includes(key));
+  if (!hasRequiredKeysAllowOptional(record, requiredKeys, optionalKeys))
     return "appSettings contains unknown or missing keys.";
   if (typeof record.debugLoggingEnabled !== "boolean") return "debugLoggingEnabled must be boolean.";
   if (!Number.isFinite(record.configWriteIntervalMs)) return "configWriteIntervalMs must be a number.";
@@ -217,6 +227,8 @@ const validateAppSettings = (value: unknown, optionalKeys: readonly string[] = [
     return "backgroundRediscoveryIntervalMs must be a number.";
   if (!Number.isFinite(record.discoveryProbeTimeoutMs)) return "discoveryProbeTimeoutMs must be a number.";
   if (!isDiskAutostartMode(record.diskAutostartMode)) return "diskAutostartMode must be kernal or dma.";
+  if ("screenOrientationMode" in record && !isScreenOrientationMode(record.screenOrientationMode))
+    return "screenOrientationMode must be portrait, landscape, or auto.";
   if (!Number.isFinite(record.volumeSliderPreviewIntervalMs)) return "volumeSliderPreviewIntervalMs must be a number.";
   if (typeof record.archiveHostOverride !== "string") return "archiveHostOverride must be a string.";
   if (typeof record.archiveClientIdOverride !== "string") return "archiveClientIdOverride must be a string.";
@@ -308,6 +320,9 @@ export const importSettingsJson = async (raw: string): Promise<{ ok: true } | { 
   saveBackgroundRediscoveryIntervalMs(clampBackgroundRediscoveryIntervalMs(safeApp.backgroundRediscoveryIntervalMs));
   saveDiscoveryProbeTimeoutMs(clampDiscoveryProbeTimeoutMs(safeApp.discoveryProbeTimeoutMs));
   saveDiskAutostartMode(safeApp.diskAutostartMode);
+  saveScreenOrientationMode(
+    isScreenOrientationMode(safeApp.screenOrientationMode) ? safeApp.screenOrientationMode : "portrait",
+  );
   saveVolumeSliderPreviewIntervalMs(clampVolumeSliderPreviewIntervalMs(safeApp.volumeSliderPreviewIntervalMs));
   saveArchiveHostOverride(safeApp.archiveHostOverride);
   saveArchiveClientIdOverride(safeApp.archiveClientIdOverride);

@@ -1,6 +1,8 @@
 import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { useT9Input, type UseT9InputOptions } from "@/hooks/useT9Input";
+import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
+import { clearLogs, getLogs } from "@/lib/logging";
 
 type KeyInit = { code?: string; key?: string; shiftKey?: boolean };
 
@@ -23,7 +25,12 @@ const makeEvent = (init: KeyInit) =>
  */
 const createDriver = (options: Omit<UseT9InputOptions, "value" | "setValue">) => {
   const state = { value: "" };
-  const props = (): UseT9InputOptions => ({ ...options, value: state.value, setValue: (next) => (state.value = next) });
+  const props = (): UseT9InputOptions => ({
+    enabled: true,
+    ...options,
+    value: state.value,
+    setValue: (next) => (state.value = next),
+  });
   const view = renderHook((p: UseT9InputOptions) => useT9Input(p), { initialProps: props() });
   const press = (init: KeyInit) => {
     act(() => view.result.current.onKeyDown(makeEvent(init)));
@@ -101,5 +108,77 @@ describe("useT9Input", () => {
     const { state, press } = createDriver({ mode: "hostname", enabled: false, now: () => 1 });
     press({ code: "Digit5", key: "5" });
     expect(state.value).toBe("");
+  });
+
+  it("defaults to literal native typing mode when T9 is not explicitly enabled", () => {
+    const state = { value: "" };
+    const view = renderHook((p: UseT9InputOptions) => useT9Input(p), {
+      initialProps: { value: state.value, setValue: (next) => (state.value = next), mode: "hostname", now: () => 1 },
+    });
+
+    act(() => view.result.current.onKeyDown(makeEvent({ code: "Digit5", key: "5" })));
+
+    expect(state.value).toBe("");
+  });
+});
+
+describe("useT9Input — key-input diagnostics (GAP 4)", () => {
+  afterEach(() => {
+    saveDebugLoggingEnabled(false);
+    clearLogs();
+  });
+
+  const keyInputEntries = () => getLogs().filter((entry) => entry.message === "key-input");
+
+  it("does not emit when debug logging is off", () => {
+    saveDebugLoggingEnabled(false);
+    clearLogs();
+    const { press } = createDriver({ mode: "hostname", now: () => 1 });
+    press({ code: "Digit1", key: "1" });
+    expect(keyInputEntries()).toHaveLength(0);
+  });
+
+  it("emits ONLY for consumed composer keys, with lengths-only state and no field text", () => {
+    saveDebugLoggingEnabled(true);
+    clearLogs();
+    const { state, press } = createDriver({ mode: "hostname", now: () => 1 });
+    // Compose "192": each digit is a consumed composer key → one entry each.
+    press({ code: "Digit1", key: "1" });
+    press({ code: "Digit9", key: "9" });
+    press({ code: "Digit2", key: "2" });
+    // A passthrough (letter) is NOT consumed → no entry.
+    press({ code: "KeyC", key: "c" });
+    expect(state.value).toBe("192");
+
+    const entries = keyInputEntries();
+    expect(entries).toHaveLength(3);
+    entries.forEach((entry) => {
+      const details = entry.details as {
+        normalizedAction?: unknown;
+        keyFamily?: unknown;
+        rawEvent?: { key?: unknown; code?: unknown; keyCode?: unknown; which?: unknown };
+        t9State?: { committedLength?: unknown };
+      };
+      // Key identity is redacted on the composer path — the typed digit never
+      // reaches the log via the raw event or the normalized action.
+      expect(details.normalizedAction).toBeNull();
+      expect(details.rawEvent?.key).toBeNull();
+      expect(details.rawEvent?.code).toBeNull();
+      expect(details.rawEvent?.keyCode).toBeNull();
+      expect(details.rawEvent?.which).toBeNull();
+      // The hardware family is retained for calibration; T9 state is lengths-only.
+      expect(details.keyFamily).toBe("digit");
+      expect(typeof details.t9State?.committedLength).toBe("number");
+    });
+    // Never the accumulated host/field text — only counts. The volatile
+    // wall-clock timestamp is excluded because it can coincidentally contain a
+    // digit substring (e.g. "…192…") unrelated to anything the user typed.
+    const serialized = JSON.stringify(
+      entries.map((entry) => {
+        const { timestamp: _timestamp, ...rest } = entry.details as Record<string, unknown>;
+        return rest;
+      }),
+    );
+    expect(serialized).not.toContain("192");
   });
 });

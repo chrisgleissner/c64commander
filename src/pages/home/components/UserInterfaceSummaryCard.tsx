@@ -67,9 +67,18 @@ export function UserInterfaceSummaryCard({
   const colorSchemePending = Boolean(configWritePending[buildConfigKey(category, "Color Scheme")]);
 
   return (
-    <SummaryConfigCard sectionLabel="User Interface" title="User Interface" testId={`${testIdPrefix}-summary`}>
+    <SummaryConfigCard
+      sectionLabel="User Interface"
+      title="User Interface"
+      testId={`${testIdPrefix}-summary`}
+      focusId={`${testIdPrefix}-summary`}
+      focusOrder={530}
+    >
       <SummaryConfigControlRow
         disabled={!isActive || interfaceTypePending}
+        focusId={`${testIdPrefix}-overlay`}
+        focusOrder={10}
+        focusParentId={`${testIdPrefix}-summary`}
         label="Overlay"
         options={effectiveInterfaceTypeOptions}
         selectTriggerClassName={selectTriggerClassName}
@@ -85,6 +94,9 @@ export function UserInterfaceSummaryCard({
       />
       <SummaryConfigControlRow
         disabled={!isActive || navigationStylePending}
+        focusId={`${testIdPrefix}-wasd-cursors`}
+        focusOrder={20}
+        focusParentId={`${testIdPrefix}-summary`}
         label="WASD Cursors"
         options={effectiveNavigationStyleOptions}
         selectTriggerClassName={selectTriggerClassName}
@@ -106,6 +118,9 @@ export function UserInterfaceSummaryCard({
       />
       <SummaryConfigControlRow
         disabled={!isActive || colorSchemePending}
+        focusId={`${testIdPrefix}-color-scheme`}
+        focusOrder={30}
+        focusParentId={`${testIdPrefix}-summary`}
         label="Color Scheme"
         options={displayedColorSchemeOptions}
         selectTriggerClassName={selectTriggerClassName}

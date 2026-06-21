@@ -82,7 +82,11 @@ describe("PrinterManager keypad focus ring (C64U Remote)", () => {
   it("traverses Reset Printer → the ON/OFF toggle top-to-bottom in focusOrder", () => {
     renderInRing();
 
-    // Reset Printer (400) sorts first; one step down reaches the enable toggle (410).
+    // The labelled Printers section is selected first; OK descends to Reset.
+    fireEvent.keyDown(document.body, { code: "DpadCenter" });
+    expect(document.activeElement).toBe(screen.getByTestId("home-printer-reset"));
+
+    // One step down reaches the enable toggle.
     fireEvent.keyDown(document.body, { code: "DpadDown" });
     expect(document.activeElement).toBe(screen.getByTestId("home-printer-toggle"));
 
@@ -94,6 +98,7 @@ describe("PrinterManager keypad focus ring (C64U Remote)", () => {
   it("center-activates the focused Reset Printer without toggling the printer", () => {
     renderInRing();
 
+    fireEvent.keyDown(document.body, { code: "DpadCenter" }); // enter Printers group → reset
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
     expect(onResetPrinterSpy).toHaveBeenCalledTimes(1);
     expect(updateConfigValueSpy).not.toHaveBeenCalled();
@@ -102,6 +107,7 @@ describe("PrinterManager keypad focus ring (C64U Remote)", () => {
   it("center-activates the focused ON/OFF toggle without firing the section reset", () => {
     renderInRing();
 
+    fireEvent.keyDown(document.body, { code: "DpadCenter" }); // enter Printers group → reset
     fireEvent.keyDown(document.body, { code: "DpadDown" }); // → printer toggle
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
     expect(updateConfigValueSpy).toHaveBeenCalledWith(

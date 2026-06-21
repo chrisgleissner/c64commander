@@ -1,12 +1,9 @@
 # Callback 8020 / C64U Remote — post-MVP backlog
 
-Forward-looking work, deferred out of the C64U Remote MVP. The MVP ships the
-existing app reskinned, **Android-only, touch-first** (touchscreen + the system
-soft keyboard cover all text entry on the 480×640 panel). The keypad/T9 input
-subsystem is fully built and unit-tested but ships **behind the user-visible,
-default-off experimental feature flag `keypad_input_enabled`** (Settings ▸
-Experimental Features ▸ *Keypad / T9 input*). Everything below is picked up from
-there.
+Forward-looking work, deferred out of the C64U Remote MVP. C64U Remote is
+Android-only and now inherits the stable, default-on `keypad_input_enabled`
+keyboard/keypad navigation feature, with numeric-keypad T9 reserved for the
+keypad-first variant default.
 
 Legend: `[ ]` todo · `[~]` partial.
 
@@ -28,14 +25,23 @@ Legend: `[ ]` todo · `[~]` partial.
   `element.click()`. On real hardware the OK key emits `DPAD_CENTER` (no native
   button activation), but under keyboard-driven emulation `Enter` may fire both.
   Add a guard + test before relying on emulator runs. (review §4.3)
-- [ ] **Per-CTA focus-ring registration completeness.** Finish registering the
-  remaining surfaces (Play/Disks pages, HomePage quick-config selects/sliders,
-  Config per-category group actions, the rest of Settings) via `useFocusItem`,
-  then a full per-screen reachability audit. (review §4.3)
+- [~] **Per-CTA focus-ring registration completeness.** An in-flight increment on
+  `feat/keyboard-input` (uncommitted) supersedes per-CTA `useFocusItem` opt-in with
+  "complete by construction" DOM auto-discovery (`src/lib/input/discovery.ts` +
+  `focusDiscovery.ts`): the provider scans the active scope and builds the ring from
+  whatever interactive elements it finds, so `useFocusItem`/`useFocusGroup` become
+  optional refinement. Green at unit+tsc+lint level. STILL OPEN: a full per-screen
+  reachability audit under the discovery engine, and merging the branch. (review §4.3)
 - [ ] **T9 input mode UX.** Visible input-mode indicator (multitap vs hostname)
   and how to switch (`#`) on the small screen; a developer/settings control to
   pick the input profile (`defaultKeyboard` ↔ `commodoreCallback8020`) since
   AppSupport auto-detection is unreliable; audit all reachable text inputs.
+  In-flight (`feat/keyboard-input`, uncommitted): the keypad guidance bar
+  (`src/components/input/KeypadGuidanceBar.tsx`) gives a modality-gated soft-key +
+  breadcrumb strip (Back / OK / Menu) as the general discoverability affordance, now
+  covered by `tests/unit/components/input/KeypadGuidanceBar.test.tsx`. STILL OPEN:
+  the multitap-vs-hostname mode indicator itself, the `#` switch, and the profile
+  selector control.
 
 ## Schema / build consolidation
 

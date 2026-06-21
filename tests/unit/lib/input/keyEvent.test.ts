@@ -85,6 +85,11 @@ describe("defaultKeyboard profile", () => {
   it("falls back to legacy keyCode when code is unavailable", () => {
     expect(resolve({ code: "", keyCode: 8 })).toBe("delete");
     expect(resolve({ code: "", keyCode: 38 })).toBe("dpadUp");
+    expect(resolve({ code: "", key: "Enter", keyCode: 13 })).toBe("enter");
+    expect(resolve({ code: "", key: " ", keyCode: 32 })).toBe("center");
+    expect(resolve({ code: "", key: "Escape", keyCode: 27 })).toBe("escape");
+    expect(resolve({ code: "", key: "Tab", keyCode: 9, shiftKey: false })).toBe("nextField");
+    expect(resolve({ code: "", key: "Tab", keyCode: 9, shiftKey: true })).toBe("previousField");
   });
 
   it("returns null for unbound keys", () => {

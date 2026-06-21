@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { DisplayProfileProvider, useDisplayProfile, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
-import { APP_SETTINGS_KEYS, saveAutoRotationEnabled } from "@/lib/config/appSettings";
+import { APP_SETTINGS_KEYS, saveAutoRotationEnabled, saveScreenOrientationMode } from "@/lib/config/appSettings";
 
 const DISPLAY_PROFILE_OVERRIDE_KEY = "c64u_display_profile_override";
 const LIST_PREVIEW_LIMIT_KEY = "c64u_list_preview_limit";
@@ -342,6 +342,28 @@ describe("DisplayProfileProvider", () => {
     expect(screen.getByTestId("profile")).toHaveTextContent("compact");
   });
 
+  it("freezes the display profile on resize when orientation is locked to landscape", () => {
+    saveScreenOrientationMode("landscape");
+    setViewportWidth(320);
+    setViewportHeight(640);
+
+    render(
+      <DisplayProfileProvider>
+        <Consumer />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("profile")).toHaveTextContent("compact");
+
+    act(() => {
+      setViewportWidth(700);
+      window.dispatchEvent(new Event("resize"));
+    });
+
+    expect(screen.getByTestId("auto-profile")).toHaveTextContent("compact");
+    expect(screen.getByTestId("profile")).toHaveTextContent("compact");
+  });
+
   it("starts tracking viewport width immediately when auto-rotation is enabled at runtime", () => {
     setViewportWidth(320);
     setViewportHeight(640);
@@ -354,7 +376,7 @@ describe("DisplayProfileProvider", () => {
 
     expect(screen.getByTestId("profile")).toHaveTextContent("compact");
 
-    // Enable auto-rotation via settings event.
+    // Enable auto orientation via the legacy settings event.
     act(() => {
       saveAutoRotationEnabled(true);
       window.dispatchEvent(
@@ -365,6 +387,31 @@ describe("DisplayProfileProvider", () => {
     });
 
     // After enabling, simulate rotation to landscape.
+    act(() => {
+      setViewportWidth(700);
+      window.dispatchEvent(new Event("resize"));
+    });
+
+    expect(screen.getByTestId("auto-profile")).toHaveTextContent("expanded");
+    expect(screen.getByTestId("profile")).toHaveTextContent("expanded");
+  });
+
+  it("starts tracking viewport width immediately when screen orientation mode changes to auto", () => {
+    setViewportWidth(320);
+    setViewportHeight(640);
+
+    render(
+      <DisplayProfileProvider>
+        <Consumer />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("profile")).toHaveTextContent("compact");
+
+    act(() => {
+      saveScreenOrientationMode("auto");
+    });
+
     act(() => {
       setViewportWidth(700);
       window.dispatchEvent(new Event("resize"));

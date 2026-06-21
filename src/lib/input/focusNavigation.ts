@@ -19,9 +19,16 @@
  * It stays DOM-free and timer-free so it can be unit-tested in isolation; a thin
  * React adapter feeds normalized key events in and wires the {@link NavigationOutcome}
  * out (e.g. `element.focus()` on a move, `router.back()` when the chain is
- * exhausted). Horizontal d-pad and soft keys are intentionally returned as
- * `ignored` here so the *focused widget* (slider/toggle/select, or a context
- * soft-key handler) can own them without the global controller stealing them.
+ * exhausted).
+ *
+ * Navigation model — "OK to go in, Back to go out" (CONFIRMED DECISION 2):
+ *   - Up/Down (and Tab/Shift+Tab) move between siblings in the current scope; wrap.
+ *   - Center/Enter/Call descend into a group (an item with enabled children) or
+ *     activate a leaf; a trivial single-leaf group activates that leaf directly.
+ *   - Back/Escape/left-soft-key dismiss an overlay → disengage a field → ascend
+ *     the group scope → (hardware `back`/soft-left only) navigate the route.
+ *   - Left/Right belong to the focused value control; the adapter only forwards
+ *     them here when unconsumed, where they fall back to previous/next sibling.
  */
 
 import { FocusController, type FocusItem } from "./focusController";
@@ -45,6 +52,7 @@ export interface DismissibleLayer {
 export type NavigationOutcome =
   | { readonly type: "focusMoved"; readonly item: FocusItem }
   | { readonly type: "activated"; readonly item: FocusItem }
+  | { readonly type: "menuRequested"; readonly item: FocusItem }
   | { readonly type: "layerDismissed"; readonly layer: DismissibleLayer }
   | { readonly type: "fieldDisengaged" }
   | { readonly type: "navigatedBack" }
@@ -59,6 +67,14 @@ export interface NavigationCallbacks {
   readonly onFieldDisengage?: () => void;
   /** Called when the `back` chain is exhausted (adapter does `router.back()`). */
   readonly onNavigateBack?: () => void;
+  /**
+   * Called for `openMenu`/`softRight`: the adapter tries to open the current
+   * item's (or scope's) context/overflow menu and returns whether it found one.
+   * Returning false leaves the dispatch as `ignored` so no key is `preventDefault`ed
+   * when there is no menu to open. Kept DOM-free here — only the adapter knows the
+   * live menu triggers.
+   */
+  readonly onOpenMenu?: (item: FocusItem | null) => boolean;
 }
 
 export interface NavigationControllerOptions {
@@ -67,10 +83,24 @@ export interface NavigationControllerOptions {
   readonly callbacks?: NavigationCallbacks;
 }
 
-const FOCUS_NEXT_ACTIONS: ReadonlySet<SemanticAction> = new Set<SemanticAction>(["dpadDown", "nextField"]);
-const FOCUS_PREVIOUS_ACTIONS: ReadonlySet<SemanticAction> = new Set<SemanticAction>(["dpadUp", "previousField"]);
+// Up/Down (and Tab/Shift+Tab) move between siblings within the current scope.
+// Left/Right are SIBLING-FALLBACK only: the React adapter first lets a focused
+// value control (slider/tabs/segmented) own them; whatever it does not consume
+// reaches here and moves the ring like Up/Down (CONFIRMED DECISION 2). Hierarchy
+// is no longer on Left/Right — it is OK-to-enter / Back-to-exit.
+const FOCUS_NEXT_ACTIONS: ReadonlySet<SemanticAction> = new Set<SemanticAction>(["dpadDown", "nextField", "dpadRight"]);
+const FOCUS_PREVIOUS_ACTIONS: ReadonlySet<SemanticAction> = new Set<SemanticAction>([
+  "dpadUp",
+  "previousField",
+  "dpadLeft",
+]);
+// OK / Center / Enter / Call: descend into a group, or activate a leaf.
 const ACTIVATE_ACTIONS: ReadonlySet<SemanticAction> = new Set<SemanticAction>(["center", "enter", "activate"]);
-const BACK_ACTIONS: ReadonlySet<SemanticAction> = new Set<SemanticAction>(["back", "escape"]);
+// Escape and the left soft key both run the deterministic back/ascend chain;
+// only the hardware `back` (and the left soft key) navigate the route once it is
+// exhausted — keyboard `escape` stops at `ignored` (invariant 1).
+const BACK_ACTIONS: ReadonlySet<SemanticAction> = new Set<SemanticAction>(["back", "escape", "softLeft"]);
+const NAVIGATE_ON_EXHAUST_ACTIONS: ReadonlySet<SemanticAction> = new Set<SemanticAction>(["back", "softLeft"]);
 
 /**
  * Drives keyboard-only navigation over a {@link FocusController}, plus a stack of
@@ -121,6 +151,28 @@ export class NavigationController {
 
   /** Applies a semantic action and returns what it resolved to. */
   dispatch(action: SemanticAction): NavigationOutcome {
+    // The `back` chain stays global regardless of open overlays, so a keypad
+    // `back` (Android keyCode 4 — which Radix does not recognize) can always
+    // unwind the topmost dismissible layer / engaged field / nested scope. Only
+    // the hardware `back` button navigates the route once that chain is
+    // exhausted; keyboard `escape` stops there and resolves to `ignored` so it
+    // never steals a dismissal from a Radix dialog (whose DismissableLayer bails
+    // on `defaultPrevented`) nor calls `navigate(-1)` underneath an open overlay.
+    if (BACK_ACTIONS.has(action)) {
+      return this.back(NAVIGATE_ON_EXHAUST_ACTIONS.has(action));
+    }
+    if (action === "closeMenu") {
+      return this.closeTopMenu();
+    }
+    // While a dismissible layer is open (an open Radix Select/dialog/menu), the
+    // layer owns vertical option navigation, activation, and typeahead — the
+    // open widget already handles Up/Down/Enter natively. The global ring must
+    // NOT move underneath it (HAZARD 2), so vertical-nav/activate resolve to
+    // `ignored` here; the React adapter then leaves `preventDefault` unset and
+    // the native (Radix) handler runs.
+    if (this.layers.length > 0) {
+      return { type: "ignored" };
+    }
     if (FOCUS_NEXT_ACTIONS.has(action)) {
       return this.move(() => this.focus.focusNext());
     }
@@ -130,14 +182,11 @@ export class NavigationController {
     if (ACTIVATE_ACTIONS.has(action)) {
       return this.activate();
     }
-    if (BACK_ACTIONS.has(action)) {
-      return this.back();
+    if (action === "openMenu" || action === "softRight") {
+      return this.openMenu();
     }
-    if (action === "closeMenu") {
-      return this.closeTopMenu();
-    }
-    // Horizontal d-pad, soft keys, digits, and openMenu are owned elsewhere
-    // (focused widget / T9 composer / context handlers), not by global nav.
+    // Digits and other keys are owned elsewhere (focused widget / T9 composer),
+    // not by global nav.
     return { type: "ignored" };
   }
 
@@ -148,15 +197,54 @@ export class NavigationController {
     return { type: "focusMoved", item };
   }
 
+  /**
+   * "OK to go in." Center/Enter/Call on a GROUP (an item with ≥1 enabled child)
+   * descends into it; on a LEAF it activates it. A trivial group — exactly one
+   * enabled leaf child — activates that leaf directly so the user never has to
+   * "enter, then press again" on a card that does only one thing.
+   */
   private activate(): NavigationOutcome {
-    const item = this.focus.current();
-    if (!this.focus.activateCurrent() || item === null) return { type: "ignored" };
-    this.callbacks.onActivate?.(item);
-    return { type: "activated", item };
+    const current = this.focus.current();
+    if (current === null) return { type: "ignored" };
+
+    if (this.focus.hasEnabledChildren(current.id)) {
+      const children = this.focus.enabledChildrenOf(current.id);
+      if (children.length === 1 && !this.focus.hasEnabledChildren(children[0].id)) {
+        const leaf = children[0];
+        leaf.activate();
+        this.callbacks.onActivate?.(leaf);
+        return { type: "activated", item: leaf };
+      }
+      const child = this.focus.focusFirstChild();
+      if (child === null) return { type: "ignored" };
+      this.callbacks.onFocus?.(child);
+      return { type: "focusMoved", item: child };
+    }
+
+    if (!this.focus.activateCurrent()) return { type: "ignored" };
+    this.callbacks.onActivate?.(current);
+    return { type: "activated", item: current };
   }
 
-  /** The deterministic `back` chain: close popup → leave menu → leave field → navigate back. */
-  private back(): NavigationOutcome {
+  /**
+   * `openMenu`/`softRight`: ask the adapter to open the current item's (or the
+   * active scope's) context/overflow menu. The adapter owns the DOM lookup and
+   * reports whether a menu existed; with no menu we stay `ignored` so the key is
+   * not `preventDefault`ed.
+   */
+  private openMenu(): NavigationOutcome {
+    const item = this.focus.current();
+    const opened = this.callbacks.onOpenMenu?.(item) ?? false;
+    return opened ? { type: "menuRequested", item: item as FocusItem } : { type: "ignored" };
+  }
+
+  /**
+   * The deterministic `back` chain: dismiss layer → leave field → climb scope →
+   * (optionally) navigate the route. `navigateOnExhaust` is false for keyboard
+   * `escape`, which must not navigate or `preventDefault` once nothing in-app is
+   * left to unwind — the browser / Radix overlay owns the key from there.
+   */
+  private back(navigateOnExhaust: boolean): NavigationOutcome {
     const top = this.topLayer();
     if (top) {
       this.removeLayer(top.id);
@@ -167,6 +255,14 @@ export class NavigationController {
       this.fieldEngaged = false;
       this.callbacks.onFieldDisengage?.();
       return { type: "fieldDisengaged" };
+    }
+    const parent = this.focus.focusParent();
+    if (parent) {
+      this.callbacks.onFocus?.(parent);
+      return { type: "focusMoved", item: parent };
+    }
+    if (!navigateOnExhaust) {
+      return { type: "ignored" };
     }
     this.callbacks.onNavigateBack?.();
     return { type: "navigatedBack" };
