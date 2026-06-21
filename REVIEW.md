@@ -4,7 +4,7 @@
 
 This file is the **quality bar** for c64commander. It is the single source of truth
 for what a change must satisfy — applied by the author _while writing_ and by the
-reviewer (human or the Kilo Code Reviewer) _before merge_. It is deliberately
+reviewer _before merge_. It is deliberately
 specific to this codebase: a React + Vite + Capacitor app that drives **real C64
 Ultimate hardware** over REST/Telnet across web, Android, and iOS.
 
@@ -20,8 +20,8 @@ that is the execution manual. This file is the standard; AGENTS.md is the proced
 
 - **Authors:** treat each hazard below as a pre-write checklist for the subsystem you
   touch. The cheapest fix is the one made before the code exists.
-- **Reviewers / Kilo Code Reviewer:** evaluate the diff against the calibration and
-  verification expectations here. Kilo reads `REVIEW.md` from the **base branch** of a
+- **Reviewers:** evaluate the diff against the calibration and
+  verification expectations here. Read `REVIEW.md` from the **base branch** of a
   PR/MR — never the feature branch — so a change can never weaken the policy that
   reviews it. Land policy edits to `main` on their own merit first.
 - **Precedence:** this file is the quality bar; `AGENTS.md` owns execution/validation;
