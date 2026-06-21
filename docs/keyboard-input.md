@@ -96,7 +96,15 @@ Physical keys are normalized to **semantic actions**; the authoritative list is
   the TabBar shows the current breadcrumb plus Back/OK/Menu labels. It clears in
   the same frame as the highlight when the user touches/clicks.
 - **Soft keys/Menu:** left soft key follows the back chain; right soft key/Menu
-  opens the current item or scope's context menu when one exists.
+  opens the current item or scope's context menu when one exists, otherwise the
+  keypad **Quick Menu**.
+- **Always-reachable shortcuts (outside a text field):** digits **1–6** jump
+  straight to the six tabs (Home/Play/Disks/Config/Settings/Docs); **✱** opens
+  Diagnostics; **#** opens the Device Switcher (the keypad equivalent of
+  long-pressing the status badge); the **Menu** key opens the Quick Menu when the
+  focused item has no context menu. Inside a text field these keys belong to T9.
+  Wired by the app shell via `FocusNavigationProvider`'s `shortcuts` prop and the
+  `src/lib/input/keypadCommands.ts` event bus; see `docs/cta-inventory.md` §1.
 
 ## 5. Diagnostics
 

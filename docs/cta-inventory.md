@@ -43,12 +43,12 @@ fallback, and the legacy Android key code).
 | D-pad **OK / Center** | `DPAD_CENTER` 23     | `center`          | **"OK goes in":** descend into the focused group, or activate the focused leaf. On a Select: opens the dropdown.                         |
 | **Back / Clear**      | `BACK` 4             | `back`            | **"Back goes out":** dismiss overlay → leave field → ascend group → finally route back. (Capacitor may intercept hardware Back; see §6.) |
 | **Call / Send**       | `CALL` 5             | `activate`        | Primary activate of the focused leaf.                                                                                                    |
-| **Menu**              | `MENU` 82            | `openMenu`        | Right soft-key "Menu" (context menu where one exists).                                                                                   |
+| **Menu**              | `MENU` 82            | `openMenu`        | Right soft-key "Menu": focused item's context menu, else the **Quick Menu** (jump-to-page / Diagnostics / Switch Device).                |
 | **Left soft key**     | `SOFTLEFT` 1         | `softLeft`        | Follows the Back chain (Back/Exit/Close/Done).                                                                                           |
 | **Right soft key**    | `SOFTRIGHT` 2        | `softRight`       | Opens current item/scope menu.                                                                                                           |
-| **0–9**               | `KEYCODE_0..9` 7–16  | `digit0`–`digit9` | In a text field: T9 entry. Outside a field: reserved (see §5 / roadmap for tab shortcuts).                                               |
-| **✱ (star)**          | `STAR` 17            | `star`            | In a hostname field: cycle separators `. : - _ /`. Otherwise reserved.                                                                   |
-| **# (pound)**         | `POUND` 18           | `hash`            | In a text field: toggle T9 mode. Otherwise reserved.                                                                                     |
+| **0–9**               | `KEYCODE_0..9` 7–16  | `digit0`–`digit9` | In a text field: T9 entry. Outside a field: **jump to tab 1–6** (Home/Play/Disks/Config/Settings/Docs).                                  |
+| **✱ (star)**          | `STAR` 17            | `star`            | In a hostname field: cycle separators `. : - _ /`. Otherwise **open Diagnostics**.                                                       |
+| **# (pound)**         | `POUND` 18           | `hash`            | In a text field: toggle T9 mode. Otherwise **open the Device Switcher** (= badge long-press).                                            |
 | (desktop equiv.)      | `ESCAPE` 111 / `Esc` | `escape`          | Dismiss overlay / ascend — **never navigates the route** (only Back/soft-left do).                                                       |
 
 Desktop/Bluetooth-keyboard equivalents (`defaultKeyboard` profile): Arrows =
@@ -112,15 +112,15 @@ persistent status badge that appear on every page).
 
 **Persistent on every page (counted within each page above):**
 
-| CTA                   | Type         | testid                 | Reachable | Interactive        | Notes                                                                      |
-| --------------------- | ------------ | ---------------------- | --------- | ------------------ | -------------------------------------------------------------------------- |
-| Status / health badge | button       | `unified-health-badge` | ✅        | ✅ (tap = details) | **Long-press = Device Switcher has no keypad path yet** (see §6, roadmap). |
-| Tab: Home             | tab (button) | `tab-home`             | ✅        | ✅                 | Persistent bottom TabBar.                                                  |
-| Tab: Play             | tab (button) | `tab-play`             | ✅        | ✅                 |                                                                            |
-| Tab: Disks            | tab (button) | `tab-disks`            | ✅        | ✅                 |                                                                            |
-| Tab: Config           | tab (button) | `tab-config`           | ✅        | ✅                 |                                                                            |
-| Tab: Settings         | tab (button) | `tab-settings`         | ✅        | ✅                 |                                                                            |
-| Tab: Docs             | tab (button) | `tab-docs`             | ✅        | ✅                 | OK on a focused tab switches route (verified).                             |
+| CTA                   | Type         | testid                 | Reachable | Interactive        | Notes                                                                |
+| --------------------- | ------------ | ---------------------- | --------- | ------------------ | -------------------------------------------------------------------- |
+| Status / health badge | button       | `unified-health-badge` | ✅        | ✅ (tap = details) | Tap = details; long-press / keypad `#` / Menu → **Device Switcher**. |
+| Tab: Home             | tab (button) | `tab-home`             | ✅        | ✅                 | Persistent bottom TabBar.                                            |
+| Tab: Play             | tab (button) | `tab-play`             | ✅        | ✅                 |                                                                      |
+| Tab: Disks            | tab (button) | `tab-disks`            | ✅        | ✅                 |                                                                      |
+| Tab: Config           | tab (button) | `tab-config`           | ✅        | ✅                 |                                                                      |
+| Tab: Settings         | tab (button) | `tab-settings`         | ✅        | ✅                 |                                                                      |
+| Tab: Docs             | tab (button) | `tab-docs`             | ✅        | ✅                 | OK on a focused tab switches route (verified).                       |
 
 ---
 
@@ -280,28 +280,35 @@ closes). Examples: machine-action confirmations (Reset/Reboot/Power Off),
 config Save/Load/Manage, RAM snapshot manager, song selector, drive-status
 details, item/disk pickers, Diagnostics dialog, Open Source Licenses page.
 
+**Keypad Quick Menu** (`keypad-quick-menu`, opened by the Menu key when the
+focused item has no context menu): a keypad-navigable list of jump-to-page (×6),
+Diagnostics, and Switch Device (when >1 saved device). Per-entry testids
+`keypad-quick-menu-tab-<label>`, `keypad-quick-menu-diagnostics`,
+`keypad-quick-menu-switch-device`.
+
 ---
 
 ## 6. Known findings / limitations (as of last verification)
 
-1. **Coarse grouping / "needless descending" (Home).** Several whole-card
-   containers (`Quick Actions`, `Quick Config` → `CPU & RAM`, `Streams`,
-   `Config`) register as single focus stops that outline almost a full card and
-   require OK to descend (sometimes two levels) before reaching a control. Root
-   cause: `GROUP_CONTAINER_SELECTOR` auto-promotes every `[data-section-label]`
-   to a focus group, and Home nests labelled sections inside labelled cards.
-   Tracked for flattening.
-2. **Viewport follows focus, but `block:'nearest'`.** `focusRingElement` calls
-   `scrollIntoView({block:'nearest'})` on every move; near the fixed header /
-   guidance bar / TabBar the focused control can be partially obscured. Tracked
-   to ensure the focused CTA is always fully clear of fixed chrome.
-3. **Device Switcher has no keypad path.** The status badge opens the device
-   switcher only via **long-press / right-click** (`UnifiedHealthBadge`,
-   `openSwitchPicker`); no semantic action is wired, so a keypad user cannot
-   reach it. (It also requires ≥2 saved devices to be active.) Tracked.
-4. **Long-press census.** The app uses a long-press gesture in exactly two
-   places: the status badge (→ device switcher) and the Diagnostics device line
-   (long-press → connection _edit_; tap → _view_). Both need keypad equivalents.
+**Resolved on this branch:**
+
+1. **Coarse grouping / "needless descending" (Home) — FIXED.** A
+   `[data-section-label]` container is promoted to a focus group only when it is
+   the innermost one, so an outer wrapper (e.g. `Quick Config`) no longer
+   swallows a whole card; progression is page → card → control.
+2. **Viewport follows focus — FIXED.** `focusRingElement` reserves scroll-margin
+   for the fixed header (top) and the guidance bar + tab bar (bottom) so the
+   focused control is always fully revealed.
+3. **Device Switcher keypad path — ADDED.** Keypad `#` (and Menu → Quick Menu →
+   Switch Device) opens the device switcher, equivalent to long-pressing the
+   status badge. (Still requires ≥2 saved devices to do anything.)
+
+**Open:**
+
+4. **Long-press census.** Long-press is used in exactly two places: the status
+   badge (→ device switcher; now also keypad `#`) and the Diagnostics device line
+   (long-press → connection _edit_; tap → _view_). The Diagnostics-line _edit_
+   gesture still has no keypad equivalent.
 5. **Hardware Back** may be intercepted by Capacitor before reaching the WebView
    key handler; Esc (`escape`) reliably dismisses overlays / ascends without
    navigating.

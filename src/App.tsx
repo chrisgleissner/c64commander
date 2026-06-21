@@ -12,7 +12,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
-import React, { Suspense, lazy, useEffect } from "react";
+import React, { Suspense, lazy, useEffect, useMemo } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { TabBar } from "@/components/TabBar";
 import { ConnectionController } from "@/components/ConnectionController";
@@ -23,9 +23,12 @@ import { loadDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
 import { FeatureFlagsProvider, useFeatureFlags } from "@/hooks/useFeatureFlags";
-import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
+import { FocusNavigationProvider, type KeypadShortcutHandlers } from "@/hooks/useFocusNavigation";
 import { TraceContextBridge } from "@/components/TraceContextBridge";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
+import { KeypadQuickMenu } from "@/components/input/KeypadQuickMenu";
+import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
+import { requestDeviceSwitcherOpen, requestQuickMenuOpen } from "@/lib/input/keypadCommands";
 import { InterstitialStateProvider } from "@/components/ui/interstitial-state";
 import { createActionContext, getActiveAction } from "@/lib/tracing/actionTrace";
 import { recordActionEnd, recordActionStart, recordTraceError } from "@/lib/tracing/traceSession";
@@ -37,7 +40,7 @@ import {
   runPlaybackReconciler,
 } from "@/lib/diagnostics/diagnosticsReconciler";
 import { useNavigationGuardBlocker } from "@/lib/navigation/navigationGuards";
-import { tabIndexForPath } from "@/lib/navigation/tabRoutes";
+import { tabIndexForPath, TAB_ROUTES } from "@/lib/navigation/tabRoutes";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { t } from "@/lib/i18n";
 
@@ -210,11 +213,24 @@ const KEYPAD_FOCUS_PROFILE_ID = "keypad";
 const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
   const { flags } = useFeatureFlags();
+  const shortcuts = useMemo<KeypadShortcutHandlers>(
+    () => ({
+      jumpToTab: (index) => {
+        const route = TAB_ROUTES[index];
+        if (route) navigate(route.path);
+      },
+      openDiagnostics: () => requestDiagnosticsOpen("header"),
+      openDeviceSwitcher: () => requestDeviceSwitcherOpen(),
+      openQuickMenu: () => requestQuickMenuOpen(),
+    }),
+    [navigate],
+  );
   return (
     <FocusNavigationProvider
       enabled={flags.keypad_input_enabled}
       profileId={KEYPAD_FOCUS_PROFILE_ID}
       onNavigateBack={() => navigate(-1)}
+      shortcuts={shortcuts}
     >
       {children}
     </FocusNavigationProvider>
@@ -237,6 +253,7 @@ const AppRoutes = () => {
             <DiagnosticsRuntimeBridge />
             <TraceContextBridge />
             <GlobalDiagnosticsOverlay />
+            <KeypadQuickMenu />
             <ConnectionController />
             <DemoModeInterstitial />
             <LightingStudioDialog />

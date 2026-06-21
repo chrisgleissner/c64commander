@@ -25,6 +25,7 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useSavedDeviceHealthChecks } from "@/hooks/useSavedDeviceHealthChecks";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useSavedDeviceSwitching } from "@/hooks/useSavedDeviceSwitching";
+import { subscribeDeviceSwitcherOpen } from "@/lib/input/keypadCommands";
 import { HEALTH_CHECK_CONTEXTS, type HealthCheckRunResult } from "@/lib/diagnostics/healthCheckEngine";
 import {
   HEALTH_GLYPHS,
@@ -442,6 +443,10 @@ export function UnifiedHealthBadge({ className }: Props) {
     suppressClickRef.current = true;
     setPickerOpen(true);
   }, [canSwitchDevices]);
+
+  // Keypad equivalent of the long-press: a global `#` / quick-menu command opens
+  // the same Device Switcher (it self-gates on having more than one saved device).
+  useEffect(() => subscribeDeviceSwitcherOpen(openSwitchPicker), [openSwitchPicker]);
 
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
