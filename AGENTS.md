@@ -237,7 +237,8 @@ it — an over-listed control is cheaper than a missing one.
 - CI builds a debug APK for all runs.
 - Android Play upload is already operational.
 - Tag builds still rely on signing secrets when a signed release artifact must be produced in CI.
-- GitHub Actions version tags are an intentional repository policy. Keep release tags aligned with `package.json`.
+- Release tags **drive the build version**: a tag may be created directly from the GitHub Releases UI (no `package.json` bump needed). `scripts/resolve-build-version.mjs` resolves the build identity from the tag (`GITHUB_REF_TYPE=tag`/`GITHUB_REF_NAME`), so the artifact is versioned as the tag regardless of `package.json`.
+- `package.json` is the in-tree dev baseline. It does **not** need to equal the latest tag; it only needs to stay internally consistent with `package-lock.json` (enforced by `tests/unit/scripts/releaseVersionMetadata.test.ts`). Do not re-add a test that requires `package.json` to equal the Git tag — that breaks UI-created tag builds.
 
 ## Mandatory formatting and style reminders
 
