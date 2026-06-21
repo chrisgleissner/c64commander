@@ -89,4 +89,50 @@ class SafeAreaPluginTest {
     assertEquals(0, resolved?.getInteger("bottom"))
     assertEquals(0, resolved?.getInteger("left"))
   }
+
+  @Test
+  fun setSystemBarsVisibilityRejectsWhenActivityIsUnavailable() {
+    setPluginBridge(plugin, null)
+    val call = mock(PluginCall::class.java)
+
+    plugin.setSystemBarsVisibility(call)
+
+    verify(call).reject("Activity unavailable")
+  }
+
+  @Test
+  fun setSystemBarsVisibilityRejectsWhenWindowIsUnavailable() {
+    val activity = mock(AppCompatActivity::class.java)
+    doReturn(null as Window?).`when`(activity).window
+    setPluginBridge(plugin, activity)
+    val call = mock(PluginCall::class.java)
+
+    plugin.setSystemBarsVisibility(call)
+
+    verify(call).reject("Window unavailable")
+  }
+
+  @Test
+  fun setSystemBarsVisibilityTogglesBarsOnTheUiThreadAndResolves() {
+    val activity = mock(AppCompatActivity::class.java)
+    val window = mock(Window::class.java)
+    val decorView = mock(View::class.java)
+    doReturn(window).`when`(activity).window
+    doReturn(decorView).`when`(window).decorView
+    // Run the queued UI work synchronously so the show/hide + resolve body executes.
+    doAnswer { invocation ->
+              (invocation.getArgument(0) as Runnable).run()
+              null
+            }
+            .`when`(activity)
+            .runOnUiThread(org.mockito.Mockito.any())
+    setPluginBridge(plugin, activity)
+    val call = mock(PluginCall::class.java)
+    doReturn(false).`when`(call).getBoolean("statusBar", true)
+    doReturn(true).`when`(call).getBoolean("navigationBar", true)
+
+    plugin.setSystemBarsVisibility(call)
+
+    verify(call).resolve()
+  }
 }
