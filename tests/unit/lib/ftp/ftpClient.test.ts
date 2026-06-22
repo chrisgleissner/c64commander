@@ -248,7 +248,9 @@ describe("ftpClient", () => {
         expect.objectContaining({
           operation: "ping",
           path: "/",
-          intent: "health",
+          // A bare ping (no explicit __c64uIntent) falls back to the valid "system"
+          // probe intent; "health" is not a recognised InteractionIntent.
+          intent: "system",
           host: mockHost,
           port: 21,
         }),

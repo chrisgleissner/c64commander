@@ -194,7 +194,10 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   const volumeUpdateSeqRef = useRef(0);
   const volumeUiTargetRef = useRef<{ index: number; setAtMs: number } | null>(null);
   const restoreInFlightRef = useRef<Promise<void> | null>(null);
-  const audioMixerWriteInFlightRef = useRef<Promise<void> | null>(null);
+  // Holds the in-flight Audio Mixer write so concurrent writers can sequence/dedupe on it.
+  // Typed as Promise<unknown> because mutateAsync resolves a result object; the resolved
+  // value is never consumed (only awaited for ordering and compared by identity).
+  const audioMixerWriteInFlightRef = useRef<Promise<unknown> | null>(null);
   const playbackWriteInFlightRef = useRef<Promise<void> | null>(null);
   const pendingVolumeWriteRef = useRef<PlaybackSyncIntent | null>(null);
   const lastKnownDeviceVolumeRef = useRef<PlaybackSyncState | null>(null);

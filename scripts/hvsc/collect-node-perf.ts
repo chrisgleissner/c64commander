@@ -431,5 +431,10 @@ export const runNodePerfCli = async () => {
 };
 
 if (!process.env.VITEST && process.argv[1]?.includes("collect-node-perf.ts")) {
-  void runNodePerfCli();
+  // Match the other CLI entrypoints: a throw before the pass/fail process.exit must
+  // fail the process, otherwise the rejection floats and the run exits 0 → CI false-pass.
+  runNodePerfCli().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
 }

@@ -502,7 +502,17 @@ export const noteReachable = (host: string, source: ReachabilitySource, deviceIn
     previousState: snapshot.state,
     trigger,
   });
-  void transitionToRealConnected(trigger);
+  // transitionToRealConnected has no internal try/catch and mutates state to
+  // REAL_CONNECTED before its throwing awaits (stopDemoServer / config apply); the
+  // other call sites await it, so guard this fire-and-forget path against an
+  // unhandled rejection + a half-promoted connection going silent.
+  void transitionToRealConnected(trigger).catch((error) => {
+    addLog("warn", "Reachability-triggered connection promotion failed", {
+      host: normalizedHost,
+      source,
+      error: error instanceof Error ? error.message : String(error ?? "unknown error"),
+    });
+  });
 };
 
 registerReachabilityListener(noteReachable);
@@ -1067,7 +1077,13 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
       if (cancelled) return;
       windowExpired = true;
       await handleWindowExpiry();
-    })();
+    })().catch((error) => {
+      // The offline/demo fallback transition runs here outside any try/catch;
+      // guard it so a rejection can't become an unhandled rejection.
+      addLog("warn", "Discovery window-expiry transition failed", {
+        error: error instanceof Error ? error.message : String(error ?? "unknown error"),
+      });
+    });
   }, windowMs);
 
   const runProbe = async () => {

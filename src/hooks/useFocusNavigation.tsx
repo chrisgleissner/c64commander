@@ -238,7 +238,14 @@ export const FocusNavigationProvider = ({
           onNavigateBack: () => onNavigateBackRef.current?.(),
           onOpenMenu: (item) => {
             const opened = openContextMenuFor(item ? (engineRef.current?.elementForId(item.id) ?? null) : null);
-            if (!opened) shortcutsRef.current.openQuickMenu?.();
+            if (opened) return true;
+            // No context menu for this item: fall back to the global quick menu. Report
+            // whether we actually handled the key (a quick-menu handler exists) so the
+            // navigation controller consumes the open-menu key instead of letting it
+            // fall through as `ignored` (the callback contract returns boolean).
+            const quickMenu = shortcutsRef.current.openQuickMenu;
+            quickMenu?.();
+            return Boolean(quickMenu);
           },
         },
       }),

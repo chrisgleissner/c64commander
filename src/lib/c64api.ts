@@ -2566,9 +2566,18 @@ export function getC64API(): C64API {
       lastDeviceHost = apiInstance.getDeviceHost();
     }
     if (hasStoredPasswordFlag() && cachedPassword === null) {
-      void loadStoredPassword().then((password) => {
-        apiInstance?.setPassword(password ?? undefined);
-      });
+      void loadStoredPassword()
+        .then((password) => {
+          apiInstance?.setPassword(password ?? undefined);
+        })
+        .catch((error) => {
+          // The native keystore can reject if locked/unavailable; don't let it
+          // surface as an unhandled rejection — the password stays unset and a
+          // later auth challenge handles it.
+          addLog("warn", "Failed to hydrate stored device password", {
+            error: error instanceof Error ? error.message : String(error ?? "unknown error"),
+          });
+        });
     }
   }
   if (!apiProxy) {
