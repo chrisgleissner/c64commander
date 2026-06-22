@@ -173,17 +173,17 @@ export const queryPlaylistIndex = (
   const rows: PlaylistQueryRow[] = [];
   let totalMatchCount = 0;
 
-  const isSelectiveCandidateSet = candidateIds !== null && candidateIds.size < orderedIds.length;
-  const rankBySort = isSelectiveCandidateSet ? buildRank(orderedIds) : null;
-  const iterableIds = isSelectiveCandidateSet
-    ? [...candidateIds!].sort(
-      (left, right) =>
-        (rankBySort?.[left] ?? Number.MAX_SAFE_INTEGER) - (rankBySort?.[right] ?? Number.MAX_SAFE_INTEGER),
-    )
+  const selectiveCandidates = candidateIds !== null && candidateIds.size < orderedIds.length ? candidateIds : null;
+  const rankBySort = selectiveCandidates ? buildRank(orderedIds) : null;
+  const iterableIds = selectiveCandidates
+    ? [...selectiveCandidates].sort(
+        (left, right) =>
+          (rankBySort?.[left] ?? Number.MAX_SAFE_INTEGER) - (rankBySort?.[right] ?? Number.MAX_SAFE_INTEGER),
+      )
     : orderedIds;
 
   iterableIds.forEach((rowId) => {
-    if (isSelectiveCandidateSet) {
+    if (selectiveCandidates) {
       queryDiagnosticsForTests.candidateIdsInspected += 1;
     } else {
       queryDiagnosticsForTests.orderedIdsInspected += 1;

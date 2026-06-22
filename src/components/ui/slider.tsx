@@ -155,7 +155,7 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
     // Stable handle to `flushKeyCommit` (defined below) so the earlier
     // `handlePointerDown` can flush a pending key-driven value without a forward
     // reference. Assigned during render after `flushKeyCommit` exists.
-    const flushKeyCommitRef = React.useRef<() => void>(() => { });
+    const flushKeyCommitRef = React.useRef<() => void>(() => {});
 
     const normalizedMidpoint = React.useMemo(() => normalizeSliderMidpoint(midpoint, min, max), [max, midpoint, min]);
     const normalizedValue = React.useMemo(
