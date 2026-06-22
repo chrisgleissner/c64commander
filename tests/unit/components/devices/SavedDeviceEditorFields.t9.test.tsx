@@ -114,6 +114,36 @@ describe("SavedDeviceEditorFields — physical T9 / keypad entry", () => {
     expect(screen.getByTestId("host-value").textContent).toBe("");
   });
 
+  it("keeps the reachability use-suggested-address button in the focus ring (D-pad reachable)", () => {
+    // The button is a bare <button> nested inside the host field's explicit
+    // focus-item frame. Auto-discovery treats an explicit item as owning its
+    // subtree and drops discovered descendants, so without its own registration
+    // the button would be unreachable by keypad/D-pad. Registering it via
+    // useFocusItem keeps it a first-class ring stop.
+    render(
+      <FocusNavigationProvider enabled>
+        <SavedDeviceEditorFields
+          draft={{ ...INITIAL, host: "c64u" }}
+          onChange={() => {}}
+          idPrefix="t9"
+          reachabilitySuggestion={{ address: "192.168.1.50" }}
+          onUseSuggestedAddress={() => {}}
+        />
+      </FocusNavigationProvider>,
+    );
+
+    const button = screen.getByTestId("t9-use-suggested-address");
+
+    // Walk the ring (6 stops: name, host, suggestion, http, ftp, telnet); the
+    // button must become the selected ring item at some point.
+    let reached = false;
+    for (let i = 0; i < 8 && !reached; i += 1) {
+      fireEvent.keyDown(document.body, { code: "ArrowDown" });
+      reached = button.getAttribute("data-key-selected") === "true";
+    }
+    expect(reached).toBe(true);
+  });
+
   it("registers field rows so Enter focuses the input and Escape returns to the ring", () => {
     render(
       <FocusNavigationProvider enabled>

@@ -121,9 +121,18 @@ export function SavedDeviceEditorFields({
   const focusGroup = `${idPrefix}-fields`;
   const nameFocus = useFieldFocusTarget(`${idPrefix}-name-field`, 200, focusGroup);
   const hostFocus = useFieldFocusTarget(`${idPrefix}-host-field`, 201, focusGroup);
-  const httpFocus = useFieldFocusTarget(`${idPrefix}-http-field`, 202, focusGroup);
-  const ftpFocus = useFieldFocusTarget(`${idPrefix}-ftp-field`, 203, focusGroup);
-  const telnetFocus = useFieldFocusTarget(`${idPrefix}-telnet-field`, 204, focusGroup);
+  // The reachability suggestion is a bare <button> nested inside the host field's
+  // explicit focus-item frame, so auto-discovery would treat it as owned-by-subtree
+  // and drop it from the ring. Register it explicitly so it stays D-pad/keypad
+  // reachable (order 202 places it right after the host field, before the ports).
+  const suggestionFocusRef = useFocusItem<HTMLButtonElement>({
+    id: `${idPrefix}-use-suggested-address`,
+    order: 202,
+    group: focusGroup,
+  });
+  const httpFocus = useFieldFocusTarget(`${idPrefix}-http-field`, 203, focusGroup);
+  const ftpFocus = useFieldFocusTarget(`${idPrefix}-ftp-field`, 204, focusGroup);
+  const telnetFocus = useFieldFocusTarget(`${idPrefix}-telnet-field`, 205, focusGroup);
   const handleNameKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     nameT9.onKeyDown(event);
     if (!event.defaultPrevented) nameFocus.blurToFrame(event);
@@ -235,6 +244,7 @@ export function SavedDeviceEditorFields({
               <span className="font-medium text-foreground">{reachabilitySuggestion.address}</span>. Use that address?
             </p>
             <button
+              ref={suggestionFocusRef}
               type="button"
               onClick={() => onUseSuggestedAddress?.(reachabilitySuggestion.address)}
               className="inline-flex items-center rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

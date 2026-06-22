@@ -255,6 +255,12 @@ Disk library: Add disks — button — R✅ I✅ ; Filter disks — text — `li
   ; device row — button — `settings-device-row-*` — R✅ I✅ ; host — text —
   `settings-device-host` — R✅ I✅ (T9 hostname) ; HTTP/FTP/Telnet ports — text —
   `settings-device-http|ftp|telnet` — R✅ I✅ ; password — password — R✅ I✅ ;
+  device-editor reachability hint — status panel —
+  `settings-device-reachability-suggestion` — R✅ I✅
+  `[visible after save with an unreachable hostname that resolves on the LAN]` ;
+  device-editor use suggested address — button —
+  `settings-device-use-suggested-address` — R✅ I✅
+  `[visible with the reachability hint; registered in the host field focus group]` ;
   Save & Connect / Refresh connection / Discover devices
   (`settings-discover-devices`) — button — R✅ I✅ ; discovered device Use —
   button — `settings-use-discovered-device-*` — R✅ I✅ `[visible after scan]` ;

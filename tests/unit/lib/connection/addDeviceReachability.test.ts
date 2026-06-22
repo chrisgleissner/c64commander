@@ -7,6 +7,10 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
+
+const { addLog } = vi.hoisted(() => ({ addLog: vi.fn() }));
+vi.mock("@/lib/logging", () => ({ addLog }));
+
 import { evaluateNewDeviceReachability, isLikelyIpAddress } from "@/lib/connection/addDeviceReachability";
 
 const makeDeps = (
@@ -74,6 +78,7 @@ describe("evaluateNewDeviceReachability", () => {
   });
 
   it("falls back to a plain unreachable verdict when discovery throws", async () => {
+    addLog.mockClear();
     const deps = {
       probe: vi.fn(async () => ({ ok: false, error: "dns", deviceInfo: null }) as never),
       discover: vi.fn(async () => {
@@ -82,5 +87,12 @@ describe("evaluateNewDeviceReachability", () => {
     };
     const result = await evaluateNewDeviceReachability({ host: "c64u", deviceHost: "c64u:80" }, deps);
     expect(result).toEqual({ status: "unreachable", suggestedAddress: null, suggestedHostname: null });
+    // Per AGENTS.md the swallowed discovery error must surface at WARN with its stack,
+    // not vanish at debug level.
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Reachability IP-rescue discovery failed",
+      expect.objectContaining({ host: "c64u", error: "scan unsupported", stack: expect.any(String) }),
+    );
   });
 });

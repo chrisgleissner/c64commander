@@ -74,9 +74,11 @@ export const evaluateNewDeviceReachability = async (
     }
   } catch (error) {
     // Discovery is best-effort (a no-op on web); fall through to a plain unreachable verdict.
-    addLog("debug", "Reachability IP-rescue discovery failed", {
+    // Log at warn with the stack so a native-side scan regression is visible in production logs.
+    addLog("warn", "Reachability IP-rescue discovery failed", {
       host: input.host,
       error: error instanceof Error ? error.message : String(error ?? "unknown error"),
+      stack: error instanceof Error ? error.stack : undefined,
     });
   }
   return { status: "unreachable", suggestedAddress: null, suggestedHostname: null };
