@@ -5,14 +5,14 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.en.html)
 [![Platform](https://img.shields.io/badge/platforms-Android%20%7C%20iOS%20%7C%20Web-blue)](https://github.com/chrisgleissner/c64commander/releases)
 
-Control and manage a C64 Ultimate from Android, iOS, or a self-hosted web deployment on your local network.
+Control and manage a Commodore 64 Ultimate from Android, iOS, or a self-hosted web deployment on your local network.
 
 <img src="./docs/site/play-store/feature-graphic-1024x500.png" alt="C64 Commander" width="600"/>
 
 ## Features
 
 - **Cross-platform**: Native Android and iOS apps, plus a Docker-based web interface for macOS, Windows, or Linux.
-- **Cross-device**: Works with the Commodore 64 Ultimate, the Ultimate 64 (Elite I/II), and the Ultimate-II+(L) cartridge.
+- **Cross-device**: Works with the C64 Ultimate, the Ultimate 64 (Elite I/II), and the Ultimate-II+(L) cartridge.
 - **Dashboard**: Machine controls, Quick actions, drive and printer shortcuts, SID mixer, and streams on a single page.
 - **Playlists**: Build playlists from local files, C64U storage, the High Voltage SID Collection (HVSC), or CommoServe search results. Autoplay, shuffle, and subsong selection.
 - **Disk management**: Mount, unmount, and rotate multi-disk groups across drives.
