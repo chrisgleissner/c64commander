@@ -20,15 +20,21 @@ Control and manage a C64 Ultimate from Android, iOS, or a self-hosted web deploy
 - **Diagnostics**: Inspect activity logs, traces, latency, and connection health across App, REST, FTP, and Telnet activity.
 - **Device Switcher**: Switch between devices and run parallel health checks.
 
-## Quick Start
+## Getting Started
 
-### Android
+Setup takes three steps: install the app, enable the C64 Ultimate's network services, then connect the two over your local network.
+
+### Step 1 — Install C64 Commander
+
+Install the app on a phone, tablet, or host that is on the **same local network** as the C64 Ultimate.
+
+**Android**
 
 1. Download the latest APK from [Releases](https://github.com/chrisgleissner/c64commander/releases).
 2. Open the APK and allow installs from unknown sources if prompted.
 3. Tap **Install**.
 
-### iOS
+**iOS**
 
 1. Set up [SideStore](https://docs.sidestore.io/).
 2. Download the latest IPA from [Releases](https://github.com/chrisgleissner/c64commander/releases).
@@ -36,11 +42,9 @@ Control and manage a C64 Ultimate from Android, iOS, or a self-hosted web deploy
 
 SideStore refreshes the app signature automatically every 7 days.
 
-### Web (Docker)
+**Web (Docker)**
 
-The web version is self-hosted for LAN use. Requirements: Docker on Windows, macOS, or Linux. A Raspberry Pi Zero 2W or 4B with 512 MiB RAM or more is sufficient.
-
-Install Docker: [Docker Desktop](https://docs.docker.com/desktop/) (Windows/macOS) or [Docker Engine](https://docs.docker.com/engine/install/) (Linux). The image supports `linux/amd64` and `linux/arm64`.
+The web version is self-hosted for LAN use. It needs Docker on Windows, macOS, or Linux; a Raspberry Pi Zero 2W or 4B with 512 MiB RAM or more is enough. Install Docker with [Docker Desktop](https://docs.docker.com/desktop/) (Windows/macOS) or [Docker Engine](https://docs.docker.com/engine/install/) (Linux). The image supports `linux/amd64` and `linux/arm64`.
 
 ```bash
 mkdir -p ./c64commander-config && chmod 0777 ./c64commander-config
@@ -50,34 +54,35 @@ docker run -d --name c64commander -p 8064:8064 \
   ghcr.io/chrisgleissner/c64commander:<version>
 ```
 
-Open `http://<host-ip>:8064` in a browser.
+Open `http://<host-ip>:8064` in a browser to load the app. If you later set a password in **Settings > Device > Network password**, the web interface requires that password to log in.
 
-If a network password is configured in **Settings > Device > Network password**, the web interface requires login with the same password.
+### Step 2 — Enable Network Services on the C64 Ultimate
 
-### First Connection
-
-Ensure the C64 Ultimate is on your local network with required services enabled:
+C64 Commander controls the device through its built-in network services, so turn these on first.
 
 ![Network services & timezone menu](docs/img/setup/enable_services.png)
 
-On the C64 Ultimate:
+1. On the C64 Ultimate, press **C=** and **RESTORE** together to open the menu, then select **Network Services & Timezone**.
+2. Enable the services the app relies on:
+   - **Web Remote Control Service** — the REST API used for most control and status operations. **Required.**
+   - **FTP File Service** — needed to browse and transfer files for playlists and disk collections.
+   - **Telnet Remote Menu Service** — used for a few advanced operations not available over REST, such as power cycle.
+3. Make sure the C64 Ultimate is on the same network as the device running C64 Commander. Note its IP address under **Wired Network Setup** or **WI-FI Network Setup** in case you need to enter it manually.
 
-1. Open the menu by pressing **C=** and **RESTORE** simultaneously, then enter **Network Services & Timezone**.
-2. Enable:
-   - **Web Remote Control Service** - REST API used for most control and status operations
-   - **FTP File Service** - required for browsing and transferring files for playlists and disk collections
-   - **Telnet Remote Menu Service** - used for a small set of advanced operations not available via REST, such as power cycle
-3. Note the IP address from **Wired Network Setup** or **WI-FI Network Setup** in case manual entry is needed.
+### Step 3 — Connect to Your Device
 
-In C64 Commander:
+1. Start C64 Commander. When no reachable device is configured yet, it automatically scans the local network for C64 Ultimate devices.
+2. From the discovered devices, tap **Use** to connect now, or **Save** to keep one for later. If a device is password-protected, the app prompts for its network password before connecting.
 
-1. Start the app on the same local network. If no reachable device is configured, C64 Commander automatically scans for C64 Ultimate devices.
-2. When devices are found, choose **Use** to connect now or **Save** to keep a device for later. If the device requires a network password, the app asks for it before connecting or saving.
-3. You can also open **Settings > Device > Connection** and tap **Discover devices** to run the same scan again.
-4. If discovery does not find your device, enter the IP address or hostname manually in **Settings > Device > Connection**.
-5. A green health indicator at the top right confirms the successful connection:
+   <img src="docs/img/app/launch/discovery/startup-autodiscovery-interstitial.png" alt="C64 Ultimate devices found during a network scan" width="320"/>
+
+3. To scan again later, open **Settings > Device > Connection** and tap **Discover devices**.
+4. If discovery does not find your device, enter its IP address or hostname manually under **Settings > Device > Connection**.
+5. A green health indicator at the top right confirms a successful connection.
 
 ![Connected C64U badge](docs/img/app/home/02-connection-status-popover.png)
+
+On later launches, C64 Commander reconnects to your saved device automatically. If a device needs a network password — or a saved password stops working — the app prompts for it and reconnects as soon as the correct password is entered.
 
 ## Pages
 
