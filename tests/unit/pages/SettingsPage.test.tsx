@@ -811,6 +811,63 @@ describe("SettingsPage", () => {
     });
   });
 
+  it("explains when automatic discovery is unsupported on this platform", () => {
+    deviceDiscoveryStateRef.current = {
+      ...deviceDiscoveryStateRef.current,
+      phase: "complete",
+      candidates: [],
+      unsupported: true,
+    };
+
+    renderSettingsPage();
+
+    expect(screen.getByTestId("settings-device-discovery-empty")).toHaveTextContent(
+      /isn.t available on this platform/i,
+    );
+  });
+
+  it("locks the Use control while a discovered-device switch is in flight (no double-submit)", async () => {
+    const candidate = {
+      id: "id:busy",
+      address: "192.168.1.30",
+      host: null,
+      httpPort: 80,
+      source: ["lan-scan"],
+      product: "Ultimate 64 Elite",
+      firmwareVersion: null,
+      fpgaVersion: null,
+      coreVersion: null,
+      hostname: "u64",
+      uniqueId: "BUSY01",
+      requiresPassword: false,
+      alreadySavedDeviceId: null,
+      confidence: "verified",
+      lastSeenAt: "2026-06-21T00:00:00.000Z",
+    };
+    deviceDiscoveryStateRef.current = {
+      ...deviceDiscoveryStateRef.current,
+      phase: "complete",
+      candidates: [candidate],
+      scannedHosts: 1,
+      elapsedMs: 10,
+    };
+    let resolveSwitch: ((value: undefined) => void) | undefined;
+    mockSwitchSavedDevice.mockImplementationOnce(() => new Promise<undefined>((resolve) => (resolveSwitch = resolve)));
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "Use" }));
+
+    // While the switch is pending the control shows progress and is disabled, so a second
+    // tap cannot race a second persist+switch at the (overload-prone) device.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Connecting" })).toBeDisabled());
+    fireEvent.click(screen.getByRole("button", { name: "Connecting" }));
+    expect(mockSwitchSavedDevice).toHaveBeenCalledTimes(1);
+
+    resolveSwitch?.(undefined);
+    await waitFor(() => expect(mockPersistDiscoveredDevice).toHaveBeenCalledTimes(1));
+  });
+
   it("asks for a password before selecting a password-protected discovered device", async () => {
     const candidate = {
       id: "address:192.168.1.14",

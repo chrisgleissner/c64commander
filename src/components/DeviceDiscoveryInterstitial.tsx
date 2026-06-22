@@ -194,7 +194,7 @@ export function DeviceDiscoveryInterstitial() {
         if (!nextOpen) dismissCurrentDiscovery();
       }}
     >
-      <DialogContent closeTestId="startup-device-discovery-close" surface="medium">
+      <DialogContent closeTestId="startup-device-discovery-close" surface="list-browser">
         <DialogHeader>
           <DialogTitle>C64 Ultimate devices found</DialogTitle>
           <DialogDescription>
@@ -253,13 +253,20 @@ export function DeviceDiscoveryInterstitial() {
 
         {passwordIntent ? (
           <div className="border-t border-border/70 px-4 py-3 sm:px-6" data-testid="startup-device-password-panel">
-            <div className="space-y-2">
+            <form
+              className="space-y-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleConfirmPassword();
+              }}
+            >
               <Label htmlFor="startup-device-password" className="text-sm">
                 Network password
               </Label>
               <Input
                 id="startup-device-password"
                 type="password"
+                autoFocus
                 value={passwordInput}
                 onChange={(event) => {
                   setPasswordInput(event.target.value);
@@ -293,16 +300,11 @@ export function DeviceDiscoveryInterstitial() {
                 >
                   Cancel
                 </Button>
-                <Button
-                  type="button"
-                  onClick={() => void handleConfirmPassword()}
-                  disabled={Boolean(busyCandidateId)}
-                  data-testid="startup-device-password-confirm"
-                >
+                <Button type="submit" disabled={Boolean(busyCandidateId)} data-testid="startup-device-password-confirm">
                   {passwordIntent.action === "save" ? "Save Device" : "Use Device"}
                 </Button>
               </div>
-            </div>
+            </form>
           </div>
         ) : null}
 

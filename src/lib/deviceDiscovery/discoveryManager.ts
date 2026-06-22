@@ -182,11 +182,89 @@ const buildKnownHosts = () => {
   return Array.from(hosts);
 };
 
-export async function startDeviceDiscovery(options: {
+type DiscoveryScanOptions = {
   trigger: DeviceDiscoveryTrigger;
   includeLanScan?: boolean;
   timeoutMs?: number;
-}): Promise<DeviceDiscoveryResult> {
+};
+
+// Run the native scan and normalise/dedupe/rank its candidates WITHOUT touching the
+// shared discovery store. Both the public (state-publishing) and silent code paths go
+// through this so the two stay in lockstep.
+const scanAndResolveCandidates = async (
+  options: DiscoveryScanOptions,
+): Promise<{ resolved: DeviceDiscoveryResult; lastSeenAt: string }> => {
+  // Platform coverage for the native bridge:
+  // - Android: real bounded LAN scan + known-host probing (DeviceDiscoveryPlugin.kt).
+  // - iOS: native plugin resolves a graceful `unsupported` result (no LAN scan yet).
+  // - Web: the registered web facade resolves `unsupported`.
+  // So callers always get a well-formed result with `unsupported` set rather than a
+  // rejected promise; no JS-side platform gate is needed here.
+  const result = await DeviceDiscovery.discover({
+    knownHosts: buildKnownHosts(),
+    includeLanScan: options.includeLanScan ?? true,
+    timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    connectTimeoutMs: DEFAULT_CONNECT_TIMEOUT_MS,
+    maxConcurrency: DEFAULT_MAX_CONCURRENCY,
+  });
+  const lastSeenAt = new Date().toISOString();
+  const deduped = new Map<string, DeviceDiscoveryCandidate>();
+  for (const nativeCandidate of result.candidates ?? []) {
+    const normalized = normalizeCandidate(nativeCandidate, lastSeenAt);
+    if (!normalized) continue;
+    const existing = deduped.get(normalized.id);
+    if (existing) {
+      deduped.set(normalized.id, {
+        ...existing,
+        source: Array.from(new Set([...existing.source, ...normalized.source])),
+      });
+    } else {
+      deduped.set(normalized.id, normalized);
+    }
+  }
+  const candidates = rankDiscoveredCandidates(Array.from(deduped.values()));
+  return {
+    lastSeenAt,
+    resolved: {
+      candidates,
+      scannedHosts: result.scannedHosts ?? 0,
+      elapsedMs: result.elapsedMs ?? 0,
+      unsupported: Boolean(result.unsupported),
+    },
+  };
+};
+
+export async function startDeviceDiscovery(
+  options: DiscoveryScanOptions & {
+    /**
+     * Run the scan WITHOUT publishing to the shared discovery store or claiming the
+     * single-flight slot. Used by the save-time IP-rescue scan so pressing Save can
+     * never flip the Settings "Discover devices" UI into a scanning state the user
+     * never initiated, nor adopt/derail a discovery the user actually started.
+     */
+    silent?: boolean;
+  },
+): Promise<DeviceDiscoveryResult> {
+  if (options.silent) {
+    try {
+      const { resolved } = await scanAndResolveCandidates(options);
+      addLog("info", "Silent device discovery completed", {
+        trigger: options.trigger,
+        candidates: resolved.candidates.length,
+        scannedHosts: resolved.scannedHosts,
+        unsupported: resolved.unsupported,
+      });
+      return resolved;
+    } catch (error) {
+      addLog(
+        "warn",
+        "Silent device discovery failed",
+        buildErrorLogDetails(error as Error, { trigger: options.trigger }),
+      );
+      return { candidates: [], scannedHosts: 0, elapsedMs: 0, unsupported: false };
+    }
+  }
+
   if (activeDiscovery) return activeDiscovery;
 
   const startedAt = new Date().toISOString();
@@ -204,52 +282,18 @@ export async function startDeviceDiscovery(options: {
 
   activeDiscovery = (async () => {
     try {
-      // Platform coverage for the native bridge:
-      // - Android: real bounded LAN scan + known-host probing (DeviceDiscoveryPlugin.kt).
-      // - iOS: native plugin resolves a graceful `unsupported` result (no LAN scan yet).
-      // - Web: the registered web facade resolves `unsupported`.
-      // So callers always get a well-formed result with `unsupported` set rather than a
-      // rejected promise; no JS-side platform gate is needed here.
-      const result = await DeviceDiscovery.discover({
-        knownHosts: buildKnownHosts(),
-        includeLanScan: options.includeLanScan ?? true,
-        timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-        connectTimeoutMs: DEFAULT_CONNECT_TIMEOUT_MS,
-        maxConcurrency: DEFAULT_MAX_CONCURRENCY,
-      });
-      const lastSeenAt = new Date().toISOString();
-      const deduped = new Map<string, DeviceDiscoveryCandidate>();
-      for (const nativeCandidate of result.candidates ?? []) {
-        const normalized = normalizeCandidate(nativeCandidate, lastSeenAt);
-        if (!normalized) continue;
-        const existing = deduped.get(normalized.id);
-        if (existing) {
-          deduped.set(normalized.id, {
-            ...existing,
-            source: Array.from(new Set([...existing.source, ...normalized.source])),
-          });
-        } else {
-          deduped.set(normalized.id, normalized);
-        }
-      }
-      const candidates = rankDiscoveredCandidates(Array.from(deduped.values()));
-      const resolved: DeviceDiscoveryResult = {
-        candidates,
-        scannedHosts: result.scannedHosts ?? 0,
-        elapsedMs: result.elapsedMs ?? 0,
-        unsupported: Boolean(result.unsupported),
-      };
+      const { resolved, lastSeenAt } = await scanAndResolveCandidates(options);
       setState({
         phase: "complete",
         completedAt: lastSeenAt,
-        candidates,
+        candidates: resolved.candidates,
         scannedHosts: resolved.scannedHosts,
         elapsedMs: resolved.elapsedMs,
         unsupported: resolved.unsupported,
       });
       addLog("info", "Device discovery completed", {
         trigger: options.trigger,
-        candidates: candidates.length,
+        candidates: resolved.candidates.length,
         scannedHosts: resolved.scannedHosts,
         unsupported: resolved.unsupported,
       });

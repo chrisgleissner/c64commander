@@ -251,6 +251,10 @@ export default function SettingsPage() {
   // found on the LAN at this address (so we steer the user to it instead of failing).
   const [reachabilitySuggestion, setReachabilitySuggestion] = useState<{ address: string } | null>(null);
   const [discoveryPasswordCandidate, setDiscoveryPasswordCandidate] = useState<DeviceDiscoveryCandidate | null>(null);
+  // Id of the discovered device currently being persisted+switched, so the Use / confirm
+  // controls lock while a switch is in flight (no double-submit, no self-inflicted overload
+  // of the c64u which drops out when hammered).
+  const [discoverySwitchBusyId, setDiscoverySwitchBusyId] = useState<string | null>(null);
   const [discoveryPasswordInput, setDiscoveryPasswordInput] = useState("");
   const [discoveryPasswordError, setDiscoveryPasswordError] = useState<string | null>(null);
   const runtimeDeviceHost = stripPortFromDeviceHost(deviceHost);
@@ -799,6 +803,9 @@ export default function SettingsPage() {
       setDiscoveryPasswordError(null);
       return;
     }
+    // Guard against a double-submit racing two persist+switch attempts at the device.
+    if (discoverySwitchBusyId) return;
+    setDiscoverySwitchBusyId(candidate.id);
     try {
       const persisted = persistDiscoveredDevice(candidate, {
         select: true,
@@ -825,6 +832,8 @@ export default function SettingsPage() {
         error,
         deviceHost: candidate.address,
       });
+    } finally {
+      setDiscoverySwitchBusyId(null);
     }
   });
 
@@ -1379,7 +1388,9 @@ export default function SettingsPage() {
                 ) : null}
                 {deviceDiscovery.phase === "complete" && deviceDiscovery.candidates.length === 0 ? (
                   <p className="text-xs text-muted-foreground" data-testid="settings-device-discovery-empty">
-                    No devices found. You can still type an address above.
+                    {deviceDiscovery.unsupported
+                      ? "Automatic discovery isn’t available on this platform. Enter an address above."
+                      : "No devices found. You can still type an address above."}
                   </p>
                 ) : null}
                 {deviceDiscovery.candidates.length > 0 ? (
@@ -1406,19 +1417,27 @@ export default function SettingsPage() {
                               variant={candidate.alreadySavedDeviceId ? "secondary" : "outline"}
                               size="sm"
                               onClick={() => void handleUseDiscoveredDevice(candidate)}
+                              disabled={Boolean(discoverySwitchBusyId)}
                               data-testid={`settings-use-discovered-device-${candidate.id}`}
                             >
-                              Use
+                              {discoverySwitchBusyId === candidate.id ? "Connecting" : "Use"}
                             </Button>
                           </div>
                           {discoveryPasswordCandidate?.id === candidate.id ? (
-                            <div className="mt-3 space-y-2 border-t border-border/70 pt-3">
+                            <form
+                              className="mt-3 space-y-2 border-t border-border/70 pt-3"
+                              onSubmit={(event) => {
+                                event.preventDefault();
+                                void handleConfirmDiscoveryPassword();
+                              }}
+                            >
                               <Label htmlFor="settings-device-password" className="text-sm">
                                 Network password
                               </Label>
                               <Input
                                 id="settings-device-password"
                                 type="password"
+                                autoFocus
                                 value={discoveryPasswordInput}
                                 onChange={(event) => {
                                   setDiscoveryPasswordInput(event.target.value);
@@ -1456,20 +1475,21 @@ export default function SettingsPage() {
                                     setDiscoveryPasswordInput("");
                                     setDiscoveryPasswordError(null);
                                   }}
+                                  disabled={Boolean(discoverySwitchBusyId)}
                                   data-testid="settings-device-password-cancel"
                                 >
                                   Cancel
                                 </Button>
                                 <Button
-                                  type="button"
+                                  type="submit"
                                   size="sm"
-                                  onClick={() => void handleConfirmDiscoveryPassword()}
+                                  disabled={Boolean(discoverySwitchBusyId)}
                                   data-testid="settings-device-password-confirm"
                                 >
-                                  Use Device
+                                  {discoverySwitchBusyId === candidate.id ? "Connecting" : "Use Device"}
                                 </Button>
                               </div>
-                            </div>
+                            </form>
                           ) : null}
                         </div>
                       );

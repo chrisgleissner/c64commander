@@ -99,6 +99,35 @@ describe("device discovery manager", () => {
     });
   });
 
+  it("runs a silent scan without publishing to the shared discovery store", async () => {
+    discover.mockResolvedValueOnce({
+      candidates: [
+        {
+          address: "192.168.1.13",
+          httpPort: 80,
+          source: ["lan-scan"],
+          product: "Ultimate 64 Elite",
+          hostname: "u64",
+          uniqueId: "38C1BA",
+        },
+      ],
+      scannedHosts: 254,
+      elapsedMs: 120,
+      unsupported: false,
+    });
+
+    const { getDeviceDiscoveryState, startDeviceDiscovery } = await import("@/lib/deviceDiscovery/discoveryManager");
+
+    const result = await startDeviceDiscovery({ trigger: "settings", includeLanScan: true, silent: true });
+
+    // The candidates still come back to the caller (used by the save-time IP rescue)...
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]).toMatchObject({ address: "192.168.1.13", uniqueId: "38C1BA" });
+    // ...but the shared store is never touched, so a Save-triggered rescue can't flip the
+    // Settings "Discover devices" UI into a scanning/complete state the user never started.
+    expect(getDeviceDiscoveryState()).toMatchObject({ phase: "idle", candidates: [], trigger: null });
+  });
+
   it("persists a discovered device as a selected saved device with verified identity", async () => {
     const { getSavedDevicesSnapshot } = await import("@/lib/savedDevices/store");
     const { persistDiscoveredDevice } = await import("@/lib/deviceDiscovery/discoveryManager");

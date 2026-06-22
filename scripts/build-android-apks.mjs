@@ -220,11 +220,18 @@ export const findApk = (basename, { preferCollected = false } = {}) => {
   const dirs = apkSearchDirs(preferCollected);
   for (const dir of dirs) {
     if (!fs.existsSync(dir)) continue;
-    const match = fs
+    // COLLECT_DIR is never pruned, so across version/SHA bumps multiple APKs for the same
+    // variant can linger. readdirSync order is arbitrary, so pick the NEWEST by mtime —
+    // otherwise the --skip-build path could install a stale build while reporting success.
+    const newest = fs
       .readdirSync(dir)
       .filter((name) => name.startsWith(`${basename}-`) && name.endsWith(".apk"))
-      .map((name) => path.join(dir, name))[0];
-    if (match) return match;
+      .map((name) => {
+        const full = path.join(dir, name);
+        return { full, mtimeMs: fs.statSync(full).mtimeMs };
+      })
+      .sort((left, right) => right.mtimeMs - left.mtimeMs)[0];
+    if (newest) return newest.full;
   }
   return null;
 };
@@ -282,74 +289,101 @@ const main = () => {
   const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
   const gradlew = process.platform === "win32" ? "gradlew.bat" : "./gradlew";
   const built = [];
+  let buildError = null;
+  try {
+    for (const variantId of variantIds) {
+      const variant = config.variants[variantId];
+      const applicationId = variant.platform.android.applicationId;
+      console.log(`\n========== Variant: ${variantId} (${variant.displayName}) ==========`);
 
-  for (const variantId of variantIds) {
-    const variant = config.variants[variantId];
-    const applicationId = variant.platform.android.applicationId;
-    console.log(`\n========== Variant: ${variantId} (${variant.displayName}) ==========`);
+      let apkPath = null;
+      if (!args.skipBuild) {
+        // Regenerate variant outputs + web bundle + Capacitor sync for THIS variant.
+        run(npmCmd, ["run", "cap:build"], { APP_VARIANT: variantId });
+        // Build the debug APK.
+        execFileSync(gradlew, ["assembleDebug", "--warning-mode", "none"], {
+          cwd: path.join(REPO_ROOT, "android"),
+          stdio: "inherit",
+          env: { ...process.env, APP_VARIANT: variantId },
+        });
 
-    let apkPath = null;
-    if (!args.skipBuild) {
-      // Regenerate variant outputs + web bundle + Capacitor sync for THIS variant.
-      run(npmCmd, ["run", "cap:build"], { APP_VARIANT: variantId });
-      // Build the debug APK.
-      execFileSync(gradlew, ["assembleDebug", "--warning-mode", "none"], {
-        cwd: path.join(REPO_ROOT, "android"),
-        stdio: "inherit",
-        env: { ...process.env, APP_VARIANT: variantId },
-      });
-
-      const builtApkPath = findApk(variant.exportedFileBasename);
-      if (!builtApkPath) {
-        throw new Error(
-          `expected an APK starting with "${variant.exportedFileBasename}-" in ${APK_DEBUG_DIR} for variant ${variantId}, but found none`,
-        );
+        const builtApkPath = findApk(variant.exportedFileBasename);
+        if (!builtApkPath) {
+          throw new Error(
+            `expected an APK starting with "${variant.exportedFileBasename}-" in ${APK_DEBUG_DIR} for variant ${variantId}, but found none`,
+          );
+        }
+        // Persist the APK into the stable collection dir so it survives the next
+        // variant's Gradle run.
+        fs.mkdirSync(COLLECT_DIR, { recursive: true });
+        apkPath = path.join(COLLECT_DIR, path.basename(builtApkPath));
+        if (path.resolve(builtApkPath) !== path.resolve(apkPath)) {
+          fs.copyFileSync(builtApkPath, apkPath);
+        }
+      } else {
+        apkPath = findApk(variant.exportedFileBasename, { preferCollected: true });
       }
-      // Persist the APK into the stable collection dir so it survives the next
-      // variant's Gradle run.
-      fs.mkdirSync(COLLECT_DIR, { recursive: true });
-      apkPath = path.join(COLLECT_DIR, path.basename(builtApkPath));
-      if (path.resolve(builtApkPath) !== path.resolve(apkPath)) {
-        fs.copyFileSync(builtApkPath, apkPath);
-      }
-    } else {
-      apkPath = findApk(variant.exportedFileBasename, { preferCollected: true });
-    }
 
-    const record = {
-      variant: variantId,
-      displayName: variant.displayName,
-      applicationId,
-      apkPath,
-      sizeBytes: apkPath && fs.existsSync(apkPath) ? fs.statSync(apkPath).size : null,
-      deviceSerial: deploy ? deviceSerial : null,
-    };
-
-    if (args.verifyMetadata && apkPath) {
-      record.metadata = verifyApkMetadata(apkPath, {
-        expectApplicationId: applicationId,
-        expectLabel: variant.displayName,
-      });
-      record.gms = verifyApkNoGms(apkPath);
-    }
-
-    if (deploy) {
-      const steps = planVariantAdbSteps({
+      const record = {
+        variant: variantId,
+        displayName: variant.displayName,
         applicationId,
         apkPath,
-        deviceSerial,
-        uninstallFirst: args.uninstallFirst,
-        install: args.install,
-        resetConfig: args.resetConfig,
-      });
-      for (const step of steps) executeAdbStep(step);
-      record.deployed = true;
-    }
+        sizeBytes: apkPath && fs.existsSync(apkPath) ? fs.statSync(apkPath).size : null,
+        deviceSerial: deploy ? deviceSerial : null,
+      };
 
-    built.push(record);
-    const sizeLabel = record.sizeBytes != null ? `${(record.sizeBytes / 1024 / 1024).toFixed(2)} MiB` : "n/a";
-    console.log(`-> ${variantId}: ${apkPath ? path.relative(REPO_ROOT, apkPath) : "(no apk)"} (${sizeLabel})`);
+      if (args.verifyMetadata && apkPath) {
+        record.metadata = verifyApkMetadata(apkPath, {
+          expectApplicationId: applicationId,
+          expectLabel: variant.displayName,
+        });
+        record.gms = verifyApkNoGms(apkPath);
+      }
+
+      if (deploy) {
+        const steps = planVariantAdbSteps({
+          applicationId,
+          apkPath,
+          deviceSerial,
+          uninstallFirst: args.uninstallFirst,
+          install: args.install,
+          resetConfig: args.resetConfig,
+        });
+        for (const step of steps) executeAdbStep(step);
+        record.deployed = true;
+      }
+
+      built.push(record);
+      const sizeLabel = record.sizeBytes != null ? `${(record.sizeBytes / 1024 / 1024).toFixed(2)} MiB` : "n/a";
+      console.log(`-> ${variantId}: ${apkPath ? path.relative(REPO_ROOT, apkPath) : "(no apk)"} (${sizeLabel})`);
+    }
+  } catch (error) {
+    buildError = error;
+  } finally {
+    // Building each variant regenerates src/generated/variant.ts (+ the feature-flag
+    // registry) for THAT variant via APP_VARIANT, leaving the working tree's generated files
+    // on the last-built variant. That breaks `variant:check` and variant-dependent unit
+    // tests. Restore the default variant's generated outputs in a `finally` so a mid-loop
+    // FAILURE can't leave the working tree polluted. (--skip-build never rewrites them.)
+    if (!args.skipBuild) {
+      console.log("\nRestoring default-variant generated outputs...");
+      try {
+        run(npmCmd, ["run", "variant:generate"], { APP_VARIANT: "" });
+        run(npmCmd, ["run", "feature-flags:compile"], { APP_VARIANT: "" });
+      } catch (restoreError) {
+        // Never mask the root-cause build error if one is already propagating.
+        if (buildError) {
+          console.error(
+            `Additionally, restoring generated outputs failed: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}`,
+          );
+        } else {
+          throw restoreError;
+        }
+      }
+    }
   }
+  if (buildError) throw buildError;
 
   console.log("\n=== Android APK build/deploy summary ===");
   for (const record of built) {
@@ -363,13 +397,6 @@ const main = () => {
     console.log(
       `\n${built.filter((r) => r.apkPath).length} APK(s) collected in ${path.relative(REPO_ROOT, COLLECT_DIR)}/`,
     );
-    // Building each variant regenerates src/generated/variant.ts (+ feature-flag registry) for
-    // THAT variant via APP_VARIANT, leaving the working tree's generated files on the last-built
-    // variant. That breaks `variant:check` and variant-dependent unit tests. Restore the default
-    // variant's generated outputs so the tree returns to its canonical (committed) state.
-    console.log("\nRestoring default-variant generated outputs...");
-    run(npmCmd, ["run", "variant:generate"], { APP_VARIANT: "" });
-    run(npmCmd, ["run", "feature-flags:compile"], { APP_VARIANT: "" });
   }
 };
 

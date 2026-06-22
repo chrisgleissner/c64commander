@@ -62,7 +62,9 @@ export const evaluateNewDeviceReachability = async (
 
   const wantedHostname = input.host.trim().toLowerCase();
   try {
-    const result = await deps.discover({ trigger: "settings", includeLanScan: true });
+    // `silent` keeps this rescue scan off the shared discovery store, so saving a device
+    // never hijacks the Settings "Discover devices" panel or derails a user-started scan.
+    const result = await deps.discover({ trigger: "settings", includeLanScan: true, silent: true });
     const candidates = result.candidates ?? [];
     // Prefer an exact hostname match; otherwise, if the scan saw exactly one Ultimate,
     // it is almost certainly the device the user is trying to reach.

@@ -64,7 +64,7 @@ export function DeviceAuthChallengeDialog() {
         if (!nextOpen && !submitting) cancelAuthChallenge();
       }}
     >
-      <DialogContent closeTestId="device-auth-challenge-close" surface="medium">
+      <DialogContent closeTestId="device-auth-challenge-close" surface="confirmation">
         <DialogHeader>
           <DialogTitle>Network password required</DialogTitle>
           <DialogDescription>

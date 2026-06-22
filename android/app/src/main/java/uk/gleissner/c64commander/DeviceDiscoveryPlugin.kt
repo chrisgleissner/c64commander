@@ -65,7 +65,10 @@ class DeviceDiscoveryPlugin : Plugin() {
     val knownHosts = parseKnownHosts(call)
     val includeLanScan = call.getBoolean("includeLanScan") ?: true
     val timeoutMs = (call.getInt("timeoutMs") ?: 8_000).coerceIn(1_000, 30_000)
-    val connectTimeoutMs = (call.getInt("connectTimeoutMs") ?: 650).coerceIn(200, 5_000)
+    // A single probe must never be allowed to outlive the whole scan budget, otherwise
+    // one slow host can blow the entire deadline and starve every other candidate. Cap
+    // the per-probe connect/read timeout to the overall deadline after both are read.
+    val connectTimeoutMs = (call.getInt("connectTimeoutMs") ?: 650).coerceIn(200, 5_000).coerceAtMost(timeoutMs)
     val maxConcurrency = (call.getInt("maxConcurrency") ?: 24).coerceIn(1, 64)
 
     executor.execute {
@@ -169,7 +172,14 @@ class DeviceDiscoveryPlugin : Plugin() {
   ): List<DiscoveryCandidate> {
     if (targets.isEmpty()) return emptyList()
 
-    val probePool = Executors.newFixedThreadPool(maxConcurrency)
+    // Daemon workers: `HttpURLConnection.connect()` does not respond to the interrupt
+    // that `shutdownNow()` sends, so a worker probing a dead host keeps running until its
+    // own connect/read timeout elapses. Daemon threads can't keep the process alive or
+    // accumulate as non-daemon stragglers across repeated scans (startup + rediscovery).
+    val probePool =
+      Executors.newFixedThreadPool(maxConcurrency) { runnable ->
+        Thread(runnable, "device-discovery-probe").apply { isDaemon = true }
+      }
     val completionService = ExecutorCompletionService<ProbeOutcome>(probePool)
     val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs.toLong())
     var pending = 0

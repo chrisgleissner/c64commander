@@ -38,8 +38,6 @@ describe("AndroidManifest parity (full vs no-background)", () => {
 
   it("the full manifest declares the background-execution service and permissions", () => {
     expect(usesPermissions(full)).toEqual([
-      "android.permission.ACCESS_NETWORK_STATE",
-      "android.permission.ACCESS_WIFI_STATE",
       "android.permission.FOREGROUND_SERVICE",
       "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
       "android.permission.INTERNET",
@@ -48,12 +46,8 @@ describe("AndroidManifest parity (full vs no-background)", () => {
     expect(serviceNames(full)).toContain(".BackgroundExecutionService");
   });
 
-  it("the reduced manifest keeps network permissions and drops the foreground service", () => {
-    expect(usesPermissions(reduced)).toEqual([
-      "android.permission.ACCESS_NETWORK_STATE",
-      "android.permission.ACCESS_WIFI_STATE",
-      "android.permission.INTERNET",
-    ]);
+  it("the reduced manifest keeps only INTERNET and drops the foreground service", () => {
+    expect(usesPermissions(reduced)).toEqual(["android.permission.INTERNET"]);
     expect(serviceNames(reduced)).toEqual([]);
   });
 
