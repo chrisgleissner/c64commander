@@ -192,6 +192,7 @@ const DEVICE_PRODUCT_DISPLAY_LABELS = {
   U64: "U64",
   U64E: "U64 Elite",
   U64E2: "U64 Elite II",
+  U2: "Ultimate II",
 } as const;
 
 const toPresetLabel = (value: string | null | undefined) => {

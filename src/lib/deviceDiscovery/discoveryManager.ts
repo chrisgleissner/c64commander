@@ -204,6 +204,12 @@ export async function startDeviceDiscovery(options: {
 
   activeDiscovery = (async () => {
     try {
+      // Platform coverage for the native bridge:
+      // - Android: real bounded LAN scan + known-host probing (DeviceDiscoveryPlugin.kt).
+      // - iOS: native plugin resolves a graceful `unsupported` result (no LAN scan yet).
+      // - Web: the registered web facade resolves `unsupported`.
+      // So callers always get a well-formed result with `unsupported` set rather than a
+      // rejected promise; no JS-side platform gate is needed here.
       const result = await DeviceDiscovery.discover({
         knownHosts: buildKnownHosts(),
         includeLanScan: options.includeLanScan ?? true,

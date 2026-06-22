@@ -193,6 +193,19 @@ export const resolveAutoSafetyMode = (stored: DeviceSafetyMode, ctx: AutoResolut
     };
   }
 
+  // Ultimate II family (U2). No U2 hardware is available to characterise its network
+  // stack, so use the CONSERVATIVE preset as the safety-first default (gentler request
+  // rate). Documented assumption — see PLANS.md capability table.
+  if (ctx.activeProduct === "U2") {
+    return {
+      storedMode: stored,
+      effectiveMode: "CONSERVATIVE",
+      resolvedPreset: "CONSERVATIVE",
+      isProvisional: false,
+      reason: "auto-u2",
+    };
+  }
+
   if (ctx.activeProduct === "U64" || ctx.activeProduct === "U64E" || ctx.activeProduct === "U64E2") {
     return {
       storedMode: stored,

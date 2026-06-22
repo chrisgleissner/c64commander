@@ -19,6 +19,7 @@ import { registerServiceWorker } from "./lib/startup/serviceWorkerRegistration";
 import { addErrorLog } from "./lib/logging";
 import { installNativeSafeAreaSync } from "./lib/native/safeArea";
 import { applyFullScreenFromSettings } from "./lib/native/fullScreen";
+import { applyScreenOrientationFromSettings } from "./lib/native/screenOrientation";
 import { loadRemoteFonts } from "./lib/startup/fontLoading";
 import "./index.css";
 
@@ -75,5 +76,6 @@ initializeRuntimeMotionMode();
 registerServiceWorker();
 installNativeSafeAreaSync();
 applyFullScreenFromSettings();
+applyScreenOrientationFromSettings();
 createRoot(document.getElementById("root")!).render(<App />);
 scheduleAfterFirstPaint(startDeferredStartupBootstrap);

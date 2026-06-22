@@ -18,6 +18,7 @@ import { TabBar } from "@/components/TabBar";
 import { ConnectionController } from "@/components/ConnectionController";
 import { DemoModeInterstitial } from "@/components/DemoModeInterstitial";
 import { DeviceDiscoveryInterstitial } from "@/components/DeviceDiscoveryInterstitial";
+import { DeviceAuthChallengeDialog } from "@/components/DeviceAuthChallengeDialog";
 import { RefreshControlProvider } from "@/hooks/useRefreshControl";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { loadDebugLoggingEnabled } from "@/lib/config/appSettings";
@@ -258,6 +259,7 @@ const AppRoutes = () => {
             <ConnectionController />
             <DemoModeInterstitial />
             <DeviceDiscoveryInterstitial />
+            <DeviceAuthChallengeDialog />
             <LightingStudioDialog />
             {coverageProbeEnabled && TestHeartbeat ? (
               <Suspense fallback={null}>

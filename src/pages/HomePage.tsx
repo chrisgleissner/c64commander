@@ -100,7 +100,8 @@ import {
   type DeviceControlOperation,
   type DeviceControlResult,
 } from "@/lib/deviceControl/deviceControl";
-import { inferConnectedDeviceCode } from "@/lib/diagnostics/targetDisplayMapper";
+import { deriveDeviceCapabilities, detectStreamingFromConfig } from "@/lib/deviceCapabilities";
+import { STREAM_ITEMS } from "@/lib/config/homeStreams";
 
 export default function HomePage() {
   return (
@@ -145,6 +146,26 @@ function HomePageContent() {
     (isActive || status.isConnecting) && keyboardLightingRequested,
     HOME_SUMMARY_QUERY_OPTIONS,
   );
+  // Read-only Data Streams probe used to drive the streaming capability. Shares a
+  // react-query key with StreamStatus' own read, so this does not add a fetch.
+  const { data: dataStreamsCategory } = useC64ConfigItems(
+    "Data Streams",
+    [...STREAM_ITEMS],
+    isActive || status.isConnecting,
+    HOME_SUMMARY_QUERY_OPTIONS,
+  );
+
+  // Dynamic device capabilities. Feature gates below consume these predicates
+  // (supportsStreaming / supportsPowerCycle) rather than raw product-family literals.
+  // Streaming is REST-config-driven (Data Streams VIC/Audio items) with a documented
+  // family fallback; the Ultimate II family (U2) has no /v1/streams endpoint, so it is
+  // never granted streaming unless its config explicitly advertises it.
+  const deviceCapabilities = deriveDeviceCapabilities({
+    product: status.deviceInfo?.product,
+    firmwareVersion: status.deviceInfo?.firmware_version,
+    coreVersion: status.deviceInfo?.core_version,
+    streamEndpointsAdvertised: detectStreamingFromConfig(dataStreamsCategory as Record<string, unknown> | undefined),
+  });
 
   const {
     controls,
@@ -248,8 +269,7 @@ function HomePageContent() {
     }
     return support.target;
   };
-  const deviceCode = inferConnectedDeviceCode(status.deviceInfo?.product);
-  const powerCycleSupportedByProduct = deviceCode === "c64u" || deviceCode === "u64e2";
+  const powerCycleSupportedByProduct = deviceCapabilities.supportsPowerCycle;
   const powerCycleSupport = telnet.isAvailable ? getTelnetSupport("powerCycle") : null;
   const powerCycleVisible = homeTelnetPowerCycleEnabled && powerCycleSupportedByProduct && telnet.isAvailable;
   const powerCycleDisabledReason =
@@ -1608,7 +1628,7 @@ function HomePageContent() {
 
           <AudioMixer isConnected={isActive} machineTaskBusy={machineTaskBusy} runMachineTask={runMachineTask} />
 
-          <StreamStatus isConnected={isActive} />
+          {deviceCapabilities.supportsStreaming ? <StreamStatus isConnected={isActive} /> : null}
 
           {/* Config Actions */}
           {/*

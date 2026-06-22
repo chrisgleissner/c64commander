@@ -20,7 +20,7 @@ import { TELNET_DEFAULT_PORT as DEFAULT_TELNET_PORT } from "@/lib/telnet/telnetT
 import type { DiagnosticsDeviceAttribution } from "@/lib/diagnostics/deviceAttribution";
 import { addLog, buildErrorLogDetails } from "@/lib/logging";
 
-export type ProductFamilyCode = "C64U" | "U64" | "U64E" | "U64E2";
+export type ProductFamilyCode = "C64U" | "U64" | "U64E" | "U64E2" | "U2";
 
 export type SavedDeviceFieldSource = "INFERRED" | "USER";
 
@@ -566,6 +566,9 @@ const inferSavedDeviceProductFamily = (device: SavedDevice): ProductFamilyCode |
   const identifiers = [device.host, device.name].map((value) => compact(value).toLowerCase());
   if (identifiers.some((value) => value === "c64u" || value === "c64ultimate")) {
     return "C64U";
+  }
+  if (identifiers.some((value) => value === "u2" || value.startsWith("ultimateii"))) {
+    return "U2";
   }
   return null;
 };

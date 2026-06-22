@@ -16,8 +16,12 @@ import {
   getDeviceHostFromBaseUrl,
   resolveDeviceHostFromStorage,
 } from "@/lib/c64api";
-import { hasPersistedDeviceHostConfig, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
-import { getPassword as loadStoredPassword } from "@/lib/secureStorage";
+import {
+  buildDeviceHostWithHttpPort,
+  hasPersistedDeviceHostConfig,
+  stripPortFromDeviceHost,
+} from "@/lib/c64api/hostConfig";
+import { getPassword as loadStoredPassword, getPasswordForDevice } from "@/lib/secureStorage";
 import { clearRuntimeFtpPortOverride, setRuntimeFtpPortOverride } from "@/lib/ftp/ftpConfig";
 import { getActiveMockBaseUrl, getActiveMockFtpPort, startMockServer, stopMockServer } from "@/lib/mock/mockServer";
 import {
@@ -40,6 +44,7 @@ import {
   getSavedDevicesSnapshot,
   getSelectedSavedDevice,
   resolveCanonicalProductFamilyCode,
+  selectSavedDevice,
 } from "@/lib/savedDevices/store";
 import { startDeviceDiscovery } from "@/lib/deviceDiscovery/discoveryManager";
 import type { DeviceDiscoveryTrigger } from "@/lib/deviceDiscovery/types";
@@ -638,11 +643,79 @@ const transitionToRealConnected = async (
   }
 };
 
+// Bounded per-device timeout for the startup saved-device reachability sweep.
+const SAVED_DEVICE_SWEEP_TIMEOUT_MS = 1200;
+
+/**
+ * Startup/resume policy: when the selected device is unreachable, probe the OTHER
+ * configured (saved) devices' `/v1/info` in parallel (bounded, read-only). If any is
+ * reachable, switch to it and connect WITHOUT presenting an auto-discovery flow. This
+ * implements "if at least one configured device is reachable, do not start discovery
+ * merely because other configured devices are unreachable". A stale U2 entry is a valid
+ * input here and is simply skipped if it does not answer the probe.
+ */
+const tryReachableSavedDeviceFallback = async (
+  trigger: DiscoveryTrigger,
+  isCurrentRun: () => boolean,
+): Promise<boolean> => {
+  if (trigger !== "startup" && trigger !== "resume") return false;
+  const savedDevices = getSavedDevicesSnapshot();
+  const selectedId = savedDevices.selectedDeviceId;
+  const candidates = savedDevices.devices.filter((device) => device.id !== selectedId && device.host.trim());
+  if (candidates.length === 0) return false;
+
+  const probes = await Promise.all(
+    candidates.map(async (device) => {
+      if (!isCurrentRun()) return null;
+      const deviceHost = buildDeviceHostWithHttpPort(device.host, device.httpPort);
+      let password: string | null = null;
+      if (device.hasPassword) {
+        password = await getPasswordForDevice(device.id).catch(() => null);
+      }
+      const probe = await probeInfoWithConnectionConfig(loadSwitchConnectionConfig({ deviceHost, password }), {
+        timeoutMs: SAVED_DEVICE_SWEEP_TIMEOUT_MS,
+      });
+      return probe.ok ? { device, deviceHost, password } : null;
+    }),
+  );
+
+  if (!isCurrentRun()) return false;
+  const reachable = probes.find((entry): entry is NonNullable<typeof entry> => entry !== null);
+  if (!reachable) return false;
+
+  addLog("info", "Startup found a reachable configured device; connecting without discovery", {
+    trigger,
+    deviceId: reachable.device.id,
+  });
+  selectSavedDevice(reachable.device.id);
+  applyC64APIRuntimeConfig(
+    buildBaseUrlFromDeviceHost(reachable.deviceHost),
+    reachable.password ?? undefined,
+    reachable.deviceHost,
+    {
+      reason: "startup-reachable-saved-device",
+    },
+  );
+  const verification = await verifyCurrentConnectionTarget({
+    deviceHost: reachable.deviceHost,
+    password: reachable.password,
+  });
+  if (verification.ok && verification.deviceInfo) {
+    completeSavedDeviceVerification(reachable.device.id, verification.deviceInfo);
+    return true;
+  }
+  return false;
+};
+
 const tryAutomaticDeviceDiscoveryFallback = async (
   trigger: DiscoveryTrigger,
   isCurrentRun: () => boolean,
 ): Promise<boolean> => {
   if (!shouldAttemptAutomaticDeviceDiscovery(trigger)) return false;
+
+  // Prefer connecting to an already-configured reachable device over scanning the LAN.
+  if (await tryReachableSavedDeviceFallback(trigger, isCurrentRun)) return true;
+  if (!isCurrentRun()) return false;
 
   setSnapshot({
     lastProbeAtMs: Date.now(),

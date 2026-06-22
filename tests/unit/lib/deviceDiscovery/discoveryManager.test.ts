@@ -144,6 +144,53 @@ describe("device discovery manager", () => {
     });
   });
 
+  it("classifies and persists a discovered Ultimate II (U2) device as a first-class family", async () => {
+    discover.mockResolvedValueOnce({
+      candidates: [
+        {
+          address: "192.168.1.42",
+          host: null,
+          httpPort: 80,
+          source: ["lan-scan"],
+          product: "Ultimate II+",
+          firmwareVersion: "3.11",
+          fpgaVersion: "45",
+          hostname: "ultimate-ii",
+          uniqueId: "A1B2C3",
+        },
+      ],
+      scannedHosts: 254,
+      elapsedMs: 90,
+      unsupported: false,
+    });
+
+    const { getSavedDevicesSnapshot } = await import("@/lib/savedDevices/store");
+    const { persistDiscoveredDevice, startDeviceDiscovery } = await import("@/lib/deviceDiscovery/discoveryManager");
+
+    const result = await startDeviceDiscovery({ trigger: "settings", includeLanScan: true, timeoutMs: 9_000 });
+
+    // Survives discovery with its raw product string preserved for display.
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]).toMatchObject({
+      address: "192.168.1.42",
+      product: "Ultimate II+",
+      hostname: "ultimate-ii",
+      uniqueId: "A1B2C3",
+      confidence: "verified",
+    });
+
+    // Persists with the U2 family (root-cause fix: previously normalized to null).
+    const persisted = persistDiscoveredDevice(result.candidates[0], { select: true });
+    const saved = getSavedDevicesSnapshot().devices.find((device) => device.id === persisted.deviceId);
+    expect(saved).toMatchObject({
+      host: "192.168.1.42",
+      lastKnownProduct: "U2",
+      lastKnownHostname: "ultimate-ii",
+      lastKnownUniqueId: "A1B2C3",
+    });
+    expect(getSavedDevicesSnapshot().verifiedByDeviceId[persisted.deviceId]).toMatchObject({ product: "U2" });
+  });
+
   it("keeps password-required candidates and marks saved devices only when a password is present", async () => {
     discover.mockResolvedValueOnce({
       candidates: [

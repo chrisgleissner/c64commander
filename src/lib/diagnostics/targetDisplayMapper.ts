@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-const KNOWN_PRODUCT_TOKENS = new Set(["c64u", "u64", "u64e", "u64e2"] as const);
+const KNOWN_PRODUCT_TOKENS = new Set(["c64u", "u64", "u64e", "u64e2", "u2"] as const);
 
 const compact = (value: string): string => value.replace(/[^a-z0-9]+/g, "");
 
@@ -18,7 +18,7 @@ const resolveMockLabel = (value?: string | null): "demo" | "sandbox" | null => {
   return null;
 };
 
-const normalizeKnownProduct = (value?: string | null): "c64u" | "u64" | "u64e" | "u64e2" | null => {
+const normalizeKnownProduct = (value?: string | null): "c64u" | "u64" | "u64e" | "u64e2" | "u2" | null => {
   const raw = (value ?? "").trim().toLowerCase();
   const normalized = compact(raw);
   if (!raw) return null;
@@ -34,13 +34,20 @@ const normalizeKnownProduct = (value?: string | null): "c64u" | "u64" | "u64e" |
   }
   if (normalized === "u64e" || normalized.includes("u64e") || normalized.includes("ultimate64elite")) return "u64e";
   if (normalized === "u64" || normalized.includes("ultimate64")) return "u64";
+  // Ultimate II family (U2). Firmware `/v1/info` product strings: "Ultimate II",
+  // "Ultimate II+", "Ultimate II+L" → compact to "ultimateii" / "ultimateiil";
+  // hostname bases "Ultimate-IIp"/"Ultimate-IIpL" → "ultimateiip"/"ultimateiipl".
+  // Checked AFTER the u64 branches so "ultimate64ii" (→ u64e2) cannot fall through here.
+  if (normalized === "u2" || normalized === "ultimate2" || normalized.startsWith("ultimateii")) {
+    return "u2";
+  }
   return null;
 };
 
-export const inferConnectedDeviceCode = (product?: string | null): "c64u" | "u64" | "u64e" | "u64e2" | null =>
+export const inferConnectedDeviceCode = (product?: string | null): "c64u" | "u64" | "u64e" | "u64e2" | "u2" | null =>
   normalizeKnownProduct(product);
 
-export const inferConnectedDeviceLabel = (product?: string | null): "C64U" | "U64" | "U64E" | "U64E2" | null => {
+export const inferConnectedDeviceLabel = (product?: string | null): "C64U" | "U64" | "U64E" | "U64E2" | "U2" | null => {
   const code = normalizeKnownProduct(product);
   switch (code) {
     case "c64u":
@@ -51,6 +58,8 @@ export const inferConnectedDeviceLabel = (product?: string | null): "C64U" | "U6
       return "U64E";
     case "u64e2":
       return "U64E2";
+    case "u2":
+      return "U2";
     default:
       return null;
   }
@@ -68,7 +77,7 @@ export const mapTargetDisplayLabel = (targetType?: string | null, product?: stri
     return inferConnectedDeviceCode(product) ?? "device";
   }
 
-  if (KNOWN_PRODUCT_TOKENS.has(normalizedTargetType as "c64u" | "u64" | "u64e" | "u64e2")) {
+  if (KNOWN_PRODUCT_TOKENS.has(normalizedTargetType as "c64u" | "u64" | "u64e" | "u64e2" | "u2")) {
     return normalizedTargetType;
   }
 

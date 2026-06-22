@@ -2065,3 +2065,48 @@ describe("HomePage SID status", () => {
     );
   }, 30000);
 });
+
+describe("HomePage streaming capability gate", () => {
+  const connectDevice = (product: string) => {
+    statusPayloadRef.current.deviceInfo = {
+      product,
+      hostname: "device",
+      firmware_version: "1.0.0",
+      fpga_version: "1",
+      core_version: "1",
+      unique_id: "ID",
+    };
+  };
+
+  it("hides the Streams section for a U2 (Ultimate II) device — no /v1/streams in firmware", () => {
+    connectDevice("Ultimate II+");
+    renderHomePage();
+    expect(screen.queryByTestId("home-stream-status")).toBeNull();
+  });
+
+  it("shows the Streams section for a C64U device", () => {
+    connectDevice("C64 Ultimate");
+    renderHomePage();
+    expect(screen.getByTestId("home-stream-status")).toBeTruthy();
+  });
+
+  it("shows the Streams section for a U64 device", () => {
+    connectDevice("Ultimate 64 Elite");
+    renderHomePage();
+    expect(screen.getByTestId("home-stream-status")).toBeTruthy();
+  });
+
+  it("shows streaming on a U2 when its REST config advertises VIC/audio (capability-driven, not family-driven)", () => {
+    connectDevice("Ultimate II+");
+    streamPayloadRef.current = {
+      "Data Streams": {
+        items: {
+          "Stream VIC to": { selected: "239.0.1.64:11000" },
+          "Stream Audio to": { selected: "off" },
+        },
+      },
+    };
+    renderHomePage();
+    expect(screen.getByTestId("home-stream-status")).toBeTruthy();
+  });
+});

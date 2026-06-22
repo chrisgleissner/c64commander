@@ -321,6 +321,11 @@ export const resolveTelnetMenuKey = (product?: string | null): TelnetMenuKey | n
   const deviceCode = inferConnectedDeviceCode(product);
   if (deviceCode === "c64u") return "F1";
   if (deviceCode === "u64" || deviceCode === "u64e" || deviceCode === "u64e2") return "F5";
+  // Ultimate II family runs the same telnet menu service (1541ultimate firmware:
+  // socket_gui.cc linked on all targets). Cartridge-style sibling of the C64U → F1.
+  // Fixture-level assumption (no U2 hardware available); per-action availability is
+  // still refined at runtime by discoverTelnetCapabilities.
+  if (deviceCode === "u2") return "F1";
   return null;
 };
 

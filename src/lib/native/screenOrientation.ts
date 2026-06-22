@@ -7,7 +7,7 @@
  */
 
 import { ScreenOrientation } from "@capacitor/screen-orientation";
-import { type ScreenOrientationMode } from "@/lib/config/appSettings";
+import { loadScreenOrientationMode, type ScreenOrientationMode } from "@/lib/config/appSettings";
 import { buildErrorLogDetails, addLog } from "@/lib/logging";
 import { isNativePlatform } from "@/lib/native/platform";
 
@@ -29,4 +29,19 @@ export const applyScreenOrientationMode = async (mode: ScreenOrientationMode): P
     addLog("warn", "Failed to apply screen orientation mode", details);
     console.warn("Failed to apply screen orientation mode", details);
   }
+};
+
+/**
+ * Apply the persisted (or default) screen-orientation mode at app startup.
+ *
+ * The default is Portrait (`DEFAULT_SCREEN_ORIENTATION_MODE`). The Android
+ * MainActivity declares no `android:screenOrientation`, so without this startup
+ * lock the activity is sensor-driven and a fresh install rotates freely (i.e.
+ * behaves like "auto" even though the stored setting is Portrait). Calling this
+ * at launch locks a fresh install to Portrait and honours an explicit
+ * Auto/Landscape choice once the user has changed it. Fire-and-forget — the
+ * native lock is async and any failure is logged, never thrown.
+ */
+export const applyScreenOrientationFromSettings = (): void => {
+  void applyScreenOrientationMode(loadScreenOrientationMode());
 };
