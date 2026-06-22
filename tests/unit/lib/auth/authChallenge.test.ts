@@ -17,9 +17,18 @@ const defaultSnapshot = () => ({
 });
 
 let snapshot: ReturnType<typeof defaultSnapshot> = defaultSnapshot();
+let snapshotError: Error | null = null;
 
 vi.mock("@/lib/savedDevices/store", () => ({
-  getSavedDevicesSnapshot: () => snapshot,
+  getSavedDevicesSnapshot: () => {
+    if (snapshotError) throw snapshotError;
+    return snapshot;
+  },
+}));
+
+const addLog = vi.fn();
+vi.mock("@/lib/logging", () => ({
+  addLog: (...args: unknown[]) => addLog(...args),
 }));
 
 import {
@@ -31,12 +40,15 @@ import {
   resetAuthChallengeForTests,
   resolveAuthChallenge,
   setAuthChallengeError,
+  setAuthChallengeStatus,
   subscribeAuthChallenge,
 } from "@/lib/auth/authChallenge";
 
 describe("authChallenge store", () => {
   beforeEach(() => {
     snapshot = defaultSnapshot();
+    snapshotError = null;
+    addLog.mockClear();
     resetAuthChallengeForTests();
   });
 
@@ -146,5 +158,80 @@ describe("authChallenge store", () => {
     notifyAuthSatisfied("192.168.1.167");
     expect(listener).not.toHaveBeenCalled();
     expect(getAuthChallengeSnapshot()).toBeNull();
+  });
+
+  it("still opens the popup with a generic label when device-identity resolution throws", () => {
+    snapshotError = new Error("store boom");
+    notifyAuthRequired({ host: "192.168.1.167" });
+    const challenge = getAuthChallengeSnapshot();
+    expect(challenge).not.toBeNull();
+    // Host survives; label falls back to the host since the saved-device lookup failed.
+    expect(challenge?.host).toBe("192.168.1.167");
+    expect(challenge?.deviceLabel).toBe("192.168.1.167");
+    expect(addLog).toHaveBeenCalledWith(
+      "debug",
+      "Auth challenge identity resolution failed; using generic label",
+      expect.objectContaining({ error: "store boom" }),
+    );
+  });
+
+  it("falls back to a stringified message when identity resolution throws a non-Error", () => {
+    snapshotError = "not-an-error-object" as unknown as Error;
+    notifyAuthRequired();
+    expect(getAuthChallengeSnapshot()?.deviceLabel).toBe("this device");
+    expect(addLog).toHaveBeenCalledWith(
+      "debug",
+      "Auth challenge identity resolution failed; using generic label",
+      expect.objectContaining({ error: "not-an-error-object" }),
+    );
+  });
+
+  it("setAuthChallengeStatus updates the status of an open challenge", () => {
+    const listener = vi.fn();
+    notifyAuthRequired({ host: "192.168.1.167" });
+    subscribeAuthChallenge(listener);
+    setAuthChallengeStatus("submitting");
+    expect(getAuthChallengeSnapshot()?.status).toBe("submitting");
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("setAuthChallengeStatus is a no-op when no challenge is open", () => {
+    const listener = vi.fn();
+    subscribeAuthChallenge(listener);
+    setAuthChallengeStatus("submitting");
+    expect(listener).not.toHaveBeenCalled();
+    expect(getAuthChallengeSnapshot()).toBeNull();
+  });
+
+  it("setAuthChallengeError is a no-op when no challenge is open", () => {
+    const listener = vi.fn();
+    subscribeAuthChallenge(listener);
+    setAuthChallengeError("wrong password");
+    expect(listener).not.toHaveBeenCalled();
+    expect(getAuthChallengeSnapshot()).toBeNull();
+  });
+
+  it("resolveAuthChallenge is a no-op when nothing is open and no retry is pending", () => {
+    const listener = vi.fn();
+    subscribeAuthChallenge(listener);
+    resolveAuthChallenge();
+    expect(listener).not.toHaveBeenCalled();
+    expect(getAuthChallengeSnapshot()).toBeNull();
+  });
+
+  it("dismissAuthChallenge is a no-op when nothing is open and no retry is pending", () => {
+    const listener = vi.fn();
+    subscribeAuthChallenge(listener);
+    dismissAuthChallenge();
+    expect(listener).not.toHaveBeenCalled();
+    expect(getAuthChallengeSnapshot()).toBeNull();
+  });
+
+  it("unsubscribe stops a listener from receiving further notifications", () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeAuthChallenge(listener);
+    unsubscribe();
+    notifyAuthRequired({ host: "192.168.1.167" });
+    expect(listener).not.toHaveBeenCalled();
   });
 });

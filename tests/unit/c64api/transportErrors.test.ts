@@ -99,6 +99,21 @@ describe("auth-required detection (401/403)", () => {
     expect(isAuthRequiredError("HTTP 401: Unauthorized")).toBe(true);
   });
 
+  it("parses the embedded HTTP code from a plain object's string message", () => {
+    // A non-Error object whose only status signal is a string message: exercises
+    // the message-parsing branch for objects that aren't Error instances.
+    expect(getHttpStatusFromError({ message: "boom HTTP 401" })).toBe(401);
+    expect(isAuthRequiredError({ message: "denied HTTP 403" })).toBe(true);
+  });
+
+  it("returns null for an object error carrying no status fields or string message", () => {
+    // Reaches the terminal `return null` when none of the extraction branches
+    // match: object input, numeric/absent message, non-numeric status.
+    expect(getHttpStatusFromError({})).toBeNull();
+    expect(getHttpStatusFromError({ message: 500 })).toBeNull();
+    expect(getHttpStatusFromError({ c64api: {}, status: "nope" })).toBeNull();
+  });
+
   it("does not flag non-auth HTTP errors or transport failures", () => {
     expect(isAuthRequiredError(new Error("HTTP 404"))).toBe(false);
     expect(isAuthRequiredError(new Error("HTTP 500: Internal Server Error"))).toBe(false);

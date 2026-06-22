@@ -161,6 +161,60 @@ describe("submitAuthChallengePassword", () => {
     expect(getAuthChallengeSnapshot()?.errorMessage).toMatch(/couldn't apply the password/i);
   });
 
+  it("surfaces a generic failure (and stringifies a non-Error throw) when a recovery step rejects", async () => {
+    // A non-Error rejection from secure storage must hit the catch's String(...)
+    // fallback and the generic, non-auth failure message.
+    setPasswordForDevice.mockRejectedValueOnce("secure-storage exploded");
+    notifyAuthRequired({ host: "192.168.1.167" });
+
+    const recovered = await submitAuthChallengePassword(SECRET);
+
+    expect(recovered).toBe(false);
+    expect(getAuthChallengeSnapshot()?.errorMessage).toMatch(/couldn't apply the password/i);
+    const serialized = JSON.stringify(addLog.mock.calls);
+    expect(serialized).toContain("secure-storage exploded");
+    expect(serialized).not.toContain(SECRET);
+  });
+
+  it("stringifies a nullish recovery failure as 'unknown error' in the log", async () => {
+    // A nullish throw must hit the String(error ?? "unknown error") fallback.
+    applyC64APIConfigFromStorage.mockRejectedValueOnce(undefined);
+    notifyAuthRequired({ host: "192.168.1.167" });
+
+    const recovered = await submitAuthChallengePassword(SECRET);
+
+    expect(recovered).toBe(false);
+    expect(JSON.stringify(addLog.mock.calls)).toContain("unknown error");
+  });
+
+  it("reports a wrong password when a recovery step throws an auth (401/403) error", async () => {
+    // An auth error escaping a recovery step (not just the re-probe) must map to
+    // the wrong-password message, not the generic failure.
+    applyC64APIConfigFromStorage.mockRejectedValueOnce(auth403());
+    notifyAuthRequired({ host: "192.168.1.167" });
+
+    const recovered = await submitAuthChallengePassword("still-wrong");
+
+    expect(recovered).toBe(false);
+    expect(getAuthChallengeSnapshot()?.errorMessage).toMatch(/rejected that password/i);
+  });
+
+  it("treats a captured retry that throws a non-auth error as unreachable (not wrong password)", async () => {
+    const retry = vi.fn(async () => {
+      throw new Error("Device timed out");
+    });
+    notifyAuthRequired({ host: "192.168.1.167", retry });
+
+    const recovered = await submitAuthChallengePassword(SECRET);
+
+    expect(recovered).toBe(false);
+    expect(retry).toHaveBeenCalledTimes(1);
+    expect(verifyCurrentConnectionTarget).not.toHaveBeenCalled();
+    const message = getAuthChallengeSnapshot()?.errorMessage ?? "";
+    expect(message).not.toMatch(/rejected that password/i);
+    expect(message).toMatch(/didn't respond|busy/i);
+  });
+
   it("is a no-op when no challenge is open", async () => {
     const recovered = await submitAuthChallengePassword(SECRET);
     expect(recovered).toBe(false);
