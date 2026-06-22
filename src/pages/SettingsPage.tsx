@@ -24,6 +24,7 @@ import {
   Globe,
   Plus,
   Trash,
+  Search,
 } from "lucide-react";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
@@ -150,6 +151,7 @@ import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
 import { discoverConnection } from "@/lib/connection/connectionManager";
 import { useConnectionState } from "@/hooks/useConnectionState";
+import { useDeviceDiscovery } from "@/hooks/useDeviceDiscovery";
 import { useNavigate } from "react-router-dom";
 import { DISPLAY_PROFILE_OVERRIDE_LABELS, DISPLAY_PROFILE_OVERRIDE_SEQUENCE } from "@/lib/displayProfiles";
 import { useDisplayProfile, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
@@ -179,6 +181,9 @@ import { clearPasswordForDevice, getPasswordForDevice, setPasswordForDevice } fr
 import { FEATURE_FLAG_DEFINITIONS, FEATURE_FLAG_GROUPS } from "@/lib/config/featureFlags";
 import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
 import { applyScreenOrientationMode } from "@/lib/native/screenOrientation";
+import { persistDiscoveredDevice, startDeviceDiscovery } from "@/lib/deviceDiscovery/discoveryManager";
+import { formatDiscoveredDeviceSubtitle, formatDiscoveredDeviceTitle } from "@/lib/deviceDiscovery/display";
+import type { DeviceDiscoveryCandidate } from "@/lib/deviceDiscovery/types";
 
 type Theme = "light" | "dark" | "system";
 
@@ -209,6 +214,7 @@ export default function SettingsPage() {
   const savedDevices = useSavedDevices();
   const switchSavedDevice = useSavedDeviceSwitching();
   const connectionSnapshot = useConnectionState();
+  const deviceDiscovery = useDeviceDiscovery();
   const { theme, setTheme } = useThemeContext();
   const { isDeveloperModeEnabled, enableDeveloperMode } = useDeveloperMode();
   const { flags, resolved, setFlag } = useFeatureFlags();
@@ -239,6 +245,9 @@ export default function SettingsPage() {
   const [deviceNameError, setDeviceNameError] = useState<string | null>(null);
   const [hostnameError, setHostnameError] = useState<string | null>(null);
   const [connectionFieldError, setConnectionFieldError] = useState<string | null>(null);
+  const [discoveryPasswordCandidate, setDiscoveryPasswordCandidate] = useState<DeviceDiscoveryCandidate | null>(null);
+  const [discoveryPasswordInput, setDiscoveryPasswordInput] = useState("");
+  const [discoveryPasswordError, setDiscoveryPasswordError] = useState<string | null>(null);
   const runtimeDeviceHost = stripPortFromDeviceHost(deviceHost);
   const runtimeHttpPort = getDeviceHostHttpPort(deviceHost, runtimeBaseUrl);
   const isDemoActive = status.state === "DEMO_ACTIVE";
@@ -250,8 +259,8 @@ export default function SettingsPage() {
   const lastProbeFailedAtMs = connectionSnapshot.lastProbeFailedAtMs;
   const [isSaving, setIsSaving] = useState(false);
   const [connectionRefreshInFlight, setConnectionRefreshInFlight] = useState(false);
-  // Keypad focus ring (C64U Remote): register the Connection card's two primary
-  // CTAs so the touch-off device can save/connect and refresh with no taps. Inert
+  // Keypad focus ring (C64U Remote): register the Connection card's primary
+  // CTAs so the touch-off device can save/connect, refresh, and scan with no taps. Inert
   // in the default variant (no provider listener) and skipped while disabled, so
   // pointer behaviour is unchanged. Orders read top→bottom on the Settings page;
   // lower bands (100 Appearance, 200 saved-devices/host field) stay reserved for
@@ -267,6 +276,12 @@ export default function SettingsPage() {
     order: 310,
     group: "settings-connection",
     disabled: status.isConnecting || connectionRefreshInFlight,
+  });
+  const discoverDevicesFocusRef = useFocusItem<HTMLButtonElement>({
+    id: "settings-discover-devices",
+    order: 320,
+    group: "settings-connection",
+    disabled: deviceDiscovery.phase === "scanning",
   });
   const [deleteDependencySummary, setDeleteDependencySummary] = useState<SavedDeviceDependencySummary | null>(null);
   const [deleteWarningOpen, setDeleteWarningOpen] = useState(false);
@@ -720,6 +735,74 @@ export default function SettingsPage() {
     }
   });
 
+  const handleDiscoverDevices = trace(async function handleDiscoverDevices() {
+    try {
+      await startDeviceDiscovery({ trigger: "settings", includeLanScan: true, timeoutMs: 10_000 });
+    } catch (error) {
+      reportUserError({
+        operation: "DEVICE_DISCOVERY",
+        title: "Unable to discover devices",
+        description: (error as Error).message,
+        error,
+      });
+    }
+  });
+
+  const hasSavedPasswordForDiscoveredDevice = (candidate: DeviceDiscoveryCandidate) => {
+    const savedDeviceId = candidate.alreadySavedDeviceId;
+    if (!savedDeviceId) return false;
+    return Boolean(savedDevices.devices.find((device) => device.id === savedDeviceId)?.hasPassword);
+  };
+
+  const handleUseDiscoveredDevice = trace(async function handleUseDiscoveredDevice(
+    candidate: DeviceDiscoveryCandidate,
+    suppliedPassword?: string,
+  ) {
+    if (candidate.requiresPassword && !suppliedPassword && !hasSavedPasswordForDiscoveredDevice(candidate)) {
+      setDiscoveryPasswordCandidate(candidate);
+      setDiscoveryPasswordInput("");
+      setDiscoveryPasswordError(null);
+      return;
+    }
+    try {
+      const persisted = persistDiscoveredDevice(candidate, {
+        select: true,
+        passwordPresent: Boolean(suppliedPassword),
+      });
+      if (suppliedPassword) {
+        await setPasswordForDevice(persisted.deviceId, suppliedPassword);
+      }
+      const verification = await switchSavedDevice(persisted.deviceId);
+      if (isOfflineSwitchResult(verification)) {
+        throw new Error(
+          verification.error ??
+            `Unable to connect to ${persisted.host}. The device was discovered, but did not answer the follow-up connection check.`,
+        );
+      }
+      toast({ title: "Discovered device selected" });
+      setDiscoveryPasswordCandidate(null);
+      setDiscoveryPasswordInput("");
+    } catch (error) {
+      reportUserError({
+        operation: "DEVICE_DISCOVERY_SELECT",
+        title: "Unable to select discovered device",
+        description: (error as Error).message,
+        error,
+        deviceHost: candidate.address,
+      });
+    }
+  });
+
+  const handleConfirmDiscoveryPassword = trace(async function handleConfirmDiscoveryPassword() {
+    if (!discoveryPasswordCandidate) return;
+    const password = discoveryPasswordInput.trim();
+    if (!password) {
+      setDiscoveryPasswordError("Enter the network password for this device.");
+      return;
+    }
+    await handleUseDiscoveredDevice(discoveryPasswordCandidate, password);
+  });
+
   const handleDeveloperTap = () => {
     if (isDeveloperModeEnabled) return;
     const now = Date.now();
@@ -973,7 +1056,10 @@ export default function SettingsPage() {
                 </p>
                 <div className="space-y-2 pt-2">
                   <Label className="text-sm font-medium">Screen orientation</Label>
-                  <div className="grid grid-cols-3 gap-2" data-testid="settings-screen-orientation-mode">
+                  <div
+                    className="grid grid-cols-[repeat(auto-fit,minmax(5.75rem,1fr))] gap-2"
+                    data-testid="settings-screen-orientation-mode"
+                  >
                     {screenOrientationOptions.map((option) => {
                       const isActive = screenOrientationMode === option.value;
                       return (
@@ -981,7 +1067,7 @@ export default function SettingsPage() {
                           key={option.value}
                           type="button"
                           variant={isActive ? "default" : "outline"}
-                          className="h-auto justify-center whitespace-normal px-3 py-2 text-center"
+                          className="h-auto justify-center whitespace-nowrap px-3 py-2 text-center"
                           onClick={() => commitScreenOrientationMode(option.value)}
                         >
                           {option.label}
@@ -990,8 +1076,7 @@ export default function SettingsPage() {
                     })}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Portrait locks the app upright by default. Landscape locks wide controls. Auto unlocks rotation and
-                    lets the display profile track the rotated viewport.
+                    Choose how the app rotates. Portrait stays upright. Landscape stays wide. Auto follows the phone.
                   </p>
                 </div>
                 {isAndroid ? (
@@ -1132,7 +1217,7 @@ export default function SettingsPage() {
                     portError={connectionFieldError}
                     idPrefix="settings-device"
                     hostLabel="C64U Hostname / IP"
-                    hostHint="Hostname or IP from the C64 menu."
+                    hostHint="Name or IP shown on your device."
                     onHostBlur={(value) => setHostnameError(validateDeviceHost(value))}
                     keypadInput={flags.keypad_input_enabled && isDefaultT9InputEnabled()}
                   />
@@ -1169,7 +1254,7 @@ export default function SettingsPage() {
                     placeholder="Optional"
                     className="font-sans"
                   />
-                  <p className="text-xs text-muted-foreground">Network password from the C64 manual, if defined</p>
+                  <p className="text-xs text-muted-foreground">Only needed if your device uses one.</p>
                 </div>
               </div>
 
@@ -1218,6 +1303,142 @@ export default function SettingsPage() {
                     className={`h-4 w-4 ${status.isConnecting || connectionRefreshInFlight ? "animate-spin" : ""}`}
                   />
                 </Button>
+              </div>
+
+              <div className="space-y-3 border-t border-border/70 pt-4" data-testid="settings-device-discovery">
+                <div className="flex flex-col gap-3">
+                  <div className="min-w-0 space-y-1">
+                    <Label className="text-sm font-medium">Device discovery</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Find nearby C64 Ultimate devices. You can still type an address above.
+                    </p>
+                  </div>
+                  <Button
+                    ref={discoverDevicesFocusRef}
+                    type="button"
+                    variant="outline"
+                    onClick={() => void handleDiscoverDevices()}
+                    disabled={deviceDiscovery.phase === "scanning"}
+                    className="shrink-0"
+                    data-testid="settings-discover-devices"
+                  >
+                    {deviceDiscovery.phase === "scanning" ? (
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Search className="mr-2 h-4 w-4" />
+                    )}
+                    Discover devices
+                  </Button>
+                </div>
+                {deviceDiscovery.phase === "scanning" ? (
+                  <p className="text-xs text-muted-foreground" data-testid="settings-device-discovery-progress">
+                    Scanning. You can leave this page; the scan keeps running.
+                  </p>
+                ) : null}
+                {deviceDiscovery.phase === "error" ? (
+                  <p className="text-xs text-destructive" data-testid="settings-device-discovery-error">
+                    {deviceDiscovery.error ?? "Device discovery failed."}
+                  </p>
+                ) : null}
+                {deviceDiscovery.phase === "complete" && deviceDiscovery.candidates.length === 0 ? (
+                  <p className="text-xs text-muted-foreground" data-testid="settings-device-discovery-empty">
+                    No devices found. You can still type an address above.
+                  </p>
+                ) : null}
+                {deviceDiscovery.candidates.length > 0 ? (
+                  <div className="space-y-2" data-testid="settings-device-discovery-results">
+                    {deviceDiscovery.candidates.map((candidate) => {
+                      const secondary = formatDiscoveredDeviceSubtitle(candidate);
+                      return (
+                        <div key={candidate.id} className="rounded-lg border border-border/70 px-3 py-2">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-foreground">
+                                {formatDiscoveredDeviceTitle(candidate)}
+                              </p>
+                              <p className="truncate text-xs text-muted-foreground">{secondary}</p>
+                              {candidate.requiresPassword ? (
+                                <p className="text-xs text-muted-foreground">Password required</p>
+                              ) : null}
+                              {candidate.alreadySavedDeviceId ? (
+                                <p className="text-xs text-muted-foreground">Already saved</p>
+                              ) : null}
+                            </div>
+                            <Button
+                              type="button"
+                              variant={candidate.alreadySavedDeviceId ? "secondary" : "outline"}
+                              size="sm"
+                              onClick={() => void handleUseDiscoveredDevice(candidate)}
+                              data-testid={`settings-use-discovered-device-${candidate.id}`}
+                            >
+                              Use
+                            </Button>
+                          </div>
+                          {discoveryPasswordCandidate?.id === candidate.id ? (
+                            <div className="mt-3 space-y-2 border-t border-border/70 pt-3">
+                              <Label htmlFor="settings-device-password" className="text-sm">
+                                Network password
+                              </Label>
+                              <Input
+                                id="settings-device-password"
+                                type="password"
+                                value={discoveryPasswordInput}
+                                onChange={(event) => {
+                                  setDiscoveryPasswordInput(event.target.value);
+                                  setDiscoveryPasswordError(null);
+                                }}
+                                placeholder={formatDiscoveredDeviceTitle(candidate)}
+                                data-testid="settings-device-password-input"
+                                aria-invalid={discoveryPasswordError ? true : undefined}
+                                aria-describedby={
+                                  discoveryPasswordError
+                                    ? "settings-device-password-error"
+                                    : "settings-device-password-help"
+                                }
+                              />
+                              {discoveryPasswordError ? (
+                                <p
+                                  id="settings-device-password-error"
+                                  className="text-xs text-destructive"
+                                  role="alert"
+                                >
+                                  {discoveryPasswordError}
+                                </p>
+                              ) : (
+                                <p id="settings-device-password-help" className="text-xs text-muted-foreground">
+                                  This is the device network password configured on the C64 Ultimate.
+                                </p>
+                              )}
+                              <div className="flex flex-wrap justify-end gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setDiscoveryPasswordCandidate(null);
+                                    setDiscoveryPasswordInput("");
+                                    setDiscoveryPasswordError(null);
+                                  }}
+                                  data-testid="settings-device-password-cancel"
+                                >
+                                  Cancel
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={() => void handleConfirmDiscoveryPassword()}
+                                  data-testid="settings-device-password-confirm"
+                                >
+                                  Use Device
+                                </Button>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
 
               {/* Connection Status */}

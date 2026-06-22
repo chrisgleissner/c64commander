@@ -16,7 +16,7 @@ import {
   getDeviceHostFromBaseUrl,
   resolveDeviceHostFromStorage,
 } from "@/lib/c64api";
-import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
+import { hasPersistedDeviceHostConfig, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import { getPassword as loadStoredPassword } from "@/lib/secureStorage";
 import { clearRuntimeFtpPortOverride, setRuntimeFtpPortOverride } from "@/lib/ftp/ftpConfig";
 import { getActiveMockBaseUrl, getActiveMockFtpPort, startMockServer, stopMockServer } from "@/lib/mock/mockServer";
@@ -41,6 +41,8 @@ import {
   getSelectedSavedDevice,
   resolveCanonicalProductFamilyCode,
 } from "@/lib/savedDevices/store";
+import { startDeviceDiscovery } from "@/lib/deviceDiscovery/discoveryManager";
+import type { DeviceDiscoveryTrigger } from "@/lib/deviceDiscovery/types";
 
 export type ConnectionState = "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO";
 export type DiscoveryTrigger = "startup" | "manual" | "settings" | "background" | "switch" | "resume";
@@ -106,11 +108,19 @@ const isDemoModeAvailable = () => featureFlagManager.getSnapshot().flags.demo_mo
 
 const isDemoModeRequested = () => isDemoModeAvailable() && loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
 
-// Device hostnames are passed through to the platform's HTTP client verbatim
-// and resolved by the OS resolver (system/router DNS on every platform, plus
-// native `.local` mDNS on iOS). The Ultimate firmware registers its hostname
-// via DHCP option 12, so DHCP-aware routers make `http://<hostname>/…`
-// reachable directly — the app performs no custom name resolution.
+const toDeviceDiscoveryTrigger = (trigger: DiscoveryTrigger): DeviceDiscoveryTrigger => {
+  if (trigger === "settings") return "settings";
+  if (trigger === "resume") return "resume";
+  if (trigger === "manual") return "manual";
+  return "startup";
+};
+
+const shouldAttemptAutomaticDeviceDiscovery = (trigger: DiscoveryTrigger) =>
+  trigger === "startup" || trigger === "resume" || trigger === "settings";
+
+// Device hostnames are passed through to the platform's HTTP client verbatim.
+// The app performs no custom name resolution; DHCP-aware routers may make the
+// firmware hostname reachable through normal LAN DNS.
 const loadPersistedConnectionConfig = async () => {
   const password = await loadStoredPassword();
   const deviceHost = resolveDeviceHostFromStorage();
@@ -628,6 +638,50 @@ const transitionToRealConnected = async (
   }
 };
 
+const tryAutomaticDeviceDiscoveryFallback = async (
+  trigger: DiscoveryTrigger,
+  isCurrentRun: () => boolean,
+): Promise<boolean> => {
+  if (!shouldAttemptAutomaticDeviceDiscovery(trigger)) return false;
+
+  setSnapshot({
+    lastProbeAtMs: Date.now(),
+    lastProbeError: "Searching the local network for C64 Ultimate devices.",
+  });
+  addLog("info", "Automatic device discovery fallback started", { trigger });
+
+  const result = await startDeviceDiscovery({
+    trigger: toDeviceDiscoveryTrigger(trigger),
+    includeLanScan: true,
+    timeoutMs: trigger === "settings" ? 10_000 : 8_000,
+  });
+
+  if (!isCurrentRun()) return false;
+
+  if (result.candidates.length === 0) {
+    addLog("info", "Automatic device discovery fallback found no devices", {
+      trigger,
+      scannedHosts: result.scannedHosts,
+      unsupported: result.unsupported,
+    });
+    return false;
+  }
+
+  setSnapshot({
+    lastProbeSucceededAtMs: Date.now(),
+    lastProbeError: null,
+    deviceInfo: null,
+  });
+  addLog("info", "Automatic device discovery fallback found devices and is waiting for user selection", {
+    trigger,
+    candidates: result.candidates.length,
+    scannedHosts: result.scannedHosts,
+    unsupported: result.unsupported,
+  });
+  await transitionToOfflineNoDemo(trigger);
+  return true;
+};
+
 const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
   clearPinnedDemoMode();
   cancelActiveDiscovery();
@@ -887,6 +941,12 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
 
   transitionTo("DISCOVERING", trigger);
 
+  if (trigger === "startup" && !hasPersistedDeviceHostConfig()) {
+    const discovered = await tryAutomaticDeviceDiscoveryFallback(trigger, discoveryRun.isCurrent);
+    if (discovered) return;
+    if (!discoveryRun.isCurrent()) return;
+  }
+
   const abort = new AbortController();
   let cancelled = false;
   let probeInFlight = false;
@@ -897,6 +957,10 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
     cancelled = true;
     globalThis.clearInterval(probeTimer);
     cancelActiveDiscovery();
+    const discovered = await tryAutomaticDeviceDiscoveryFallback(trigger, discoveryRun.isCurrent);
+    if (discovered) return;
+    if (!discoveryRun.isCurrent()) return;
+    setSnapshot({ lastProbeFailedAtMs: Date.now() });
     if (isDemoModeRequested()) {
       await transitionToDemoActive(trigger);
     } else {

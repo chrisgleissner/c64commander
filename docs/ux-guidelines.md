@@ -635,7 +635,8 @@ The app performs **no custom name resolution**. A device host (`c64u`,
 REST base URL and resolved by the platform's own resolver:
 
 - **Android / iOS**: the native HTTP client (`CapacitorHttp`) uses the OS
-  resolver — system/router DNS on both, plus native `.local` mDNS on iOS.
+  resolver. Treat system/router DNS and direct IP as the supported paths; do
+  not depend on app-side mDNS discovery.
 - **Web**: the browser resolver, behind the dev/proxy path.
 
 How a bare hostname actually becomes reachable: the Ultimate firmware sends

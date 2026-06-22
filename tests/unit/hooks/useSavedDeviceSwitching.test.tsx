@@ -20,8 +20,6 @@ const {
   mockGetPasswordForDevice,
   mockResetInteractionState,
   mockAddLog,
-  mockIsMdnsAvailable,
-  mockIsBareHostname,
   mockClearToastsOnDeviceSwitch,
 } = vi.hoisted(() => ({
   mockVerifyCurrentConnectionTarget: vi.fn(),
@@ -31,8 +29,6 @@ const {
   mockGetPasswordForDevice: vi.fn(),
   mockResetInteractionState: vi.fn(),
   mockAddLog: vi.fn(),
-  mockIsMdnsAvailable: vi.fn(() => false),
-  mockIsBareHostname: vi.fn((host: string) => !host.includes(".") && !host.includes(":")),
   mockClearToastsOnDeviceSwitch: vi.fn(),
 }));
 
@@ -54,12 +50,6 @@ vi.mock("@/lib/deviceInteraction/deviceInteractionManager", () => ({
 
 vi.mock("@/lib/logging", () => ({
   addLog: mockAddLog,
-}));
-
-vi.mock("@/lib/native/mdnsResolver", () => ({
-  isMdnsAvailable: mockIsMdnsAvailable,
-  isBareHostname: mockIsBareHostname,
-  resolveMdnsHost: vi.fn(),
 }));
 
 vi.mock("@/lib/uiErrors", async () => {
@@ -126,7 +116,6 @@ describe("useSavedDeviceSwitching", () => {
     vi.resetModules();
     localStorage.clear();
     vi.clearAllMocks();
-    mockIsMdnsAvailable.mockReturnValue(false);
   });
 
   it("updates local selection immediately, then persists verified identity and route invalidation on success", async () => {
@@ -441,9 +430,7 @@ describe("useSavedDeviceSwitching", () => {
     );
   });
 
-  it("prefers a saved resolved address on Android before retrying the raw bare hostname", async () => {
-    mockIsMdnsAvailable.mockReturnValue(true);
-
+  it("verifies the raw bare hostname even when an earlier resolved address exists", async () => {
     const store = await import("@/lib/savedDevices/store");
     const c64api = await import("@/lib/c64api");
     const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
@@ -499,17 +486,14 @@ describe("useSavedDeviceSwitching", () => {
     expect(mockVerifyCurrentConnectionTarget).toHaveBeenCalledWith({
       deviceHost: "u64",
       password: null,
-      preferResolvedAddress: "192.168.1.13",
     });
     expect(c64api.getC64APIConfigSnapshot()).toMatchObject({
-      baseUrl: "http://192.168.1.13",
-      deviceHost: "192.168.1.13",
+      baseUrl: "http://u64",
+      deviceHost: "u64",
     });
   });
 
   it("falls back to the raw bare hostname when no resolved address has been verified yet", async () => {
-    mockIsMdnsAvailable.mockReturnValue(true);
-
     const store = await import("@/lib/savedDevices/store");
     const c64api = await import("@/lib/c64api");
     const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
@@ -548,7 +532,6 @@ describe("useSavedDeviceSwitching", () => {
     expect(mockVerifyCurrentConnectionTarget).toHaveBeenCalledWith({
       deviceHost: "u64",
       password: null,
-      preferResolvedAddress: null,
     });
     expect(c64api.getC64APIConfigSnapshot()).toMatchObject({
       baseUrl: "http://u64",
@@ -768,12 +751,10 @@ describe("useSavedDeviceSwitching", () => {
     expect(mockVerifyCurrentConnectionTarget).toHaveBeenNthCalledWith(1, {
       deviceHost: "192.168.1.167",
       password: null,
-      preferResolvedAddress: null,
     });
     expect(mockVerifyCurrentConnectionTarget).toHaveBeenNthCalledWith(2, {
       deviceHost: "10.0.0.12",
       password: null,
-      preferResolvedAddress: null,
     });
     expect(store.getSavedDevicesSnapshot().selectedDeviceId).toBe("device-c64u-backup");
 

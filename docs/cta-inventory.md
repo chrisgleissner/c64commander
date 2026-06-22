@@ -104,7 +104,7 @@ persistent status badge that appear on every page).
 | Page     | Route       |    CTAs | Notes                                                                                                                                    |
 | -------- | ----------- | ------: | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | Home     | `/`         |     112 | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots.                                    |
-| Settings | `/settings` | 76 (+2) | Connection, devices, display (+2 native Android full-screen toggles), feature flags, network/cache, notifications, dev-mode, build info. |
+| Settings | `/settings` | 77 (+2) | Connection, devices, display (+2 native Android full-screen toggles), feature flags, network/cache, notifications, dev-mode, build info. |
 | Play     | `/play`     |      32 | Transport, volume, playback flags, playlist, type filters, HVSC.                                                                         |
 | Config   | `/config`   |      30 | Search + 22 config-category accordions (each expands to config-item rows).                                                               |
 | Disks    | `/disks`    |      28 | Drive A/B/Soft-IEC controls, disk library.                                                                                               |
@@ -255,7 +255,11 @@ Disk library: Add disks — button — R✅ I✅ ; Filter disks — text — `li
   ; device row — button — `settings-device-row-*` — R✅ I✅ ; host — text —
   `settings-device-host` — R✅ I✅ (T9 hostname) ; HTTP/FTP/Telnet ports — text —
   `settings-device-http|ftp|telnet` — R✅ I✅ ; password — password — R✅ I✅ ;
-  Save & Connect / Refresh connection — button — R✅ I✅
+  Save & Connect / Refresh connection / Discover devices
+  (`settings-discover-devices`) — button — R✅ I✅ ; discovered device Use —
+  button — `settings-use-discovered-device-*` — R✅ I✅ `[visible after scan]` ;
+  discovered-device password — password/button — `settings-device-password-*` —
+  R✅ I✅ `[visible when a discovered device requires a network password]`
 - **Diagnostics** — button — `diagnostics-open-dialog` — R✅ I✅
 - **Feature flags** — checkbox — `feature-flag-*` (incl.
   `feature-flag-keypad_input_enabled`) — R✅ I✅
@@ -283,6 +287,15 @@ its controls are discovered the same way (Up/Down within, OK activates, Back/Esc
 closes). Examples: machine-action confirmations (Reset/Reboot/Power Off),
 config Save/Load/Manage, RAM snapshot manager, song selector, drive-status
 details, item/disk pickers, Diagnostics dialog, Open Source Licenses page.
+
+**Automatic device discovery dialog** (`startup-discovered-device-*`, shown after
+startup/resume discovery finds devices while no configured device is reachable):
+Use — button — `startup-use-discovered-device-*` — R✅ I✅ ; Save — button —
+`startup-save-discovered-device-*` — R✅ I✅ ; password entry — password/buttons
+— `startup-device-password-*` — R✅ I✅ `[only for password-protected devices]` ;
+Open Settings — button — `startup-device-discovery-open-settings` — R✅ I✅ ;
+Not now / Close — buttons — `startup-device-discovery-dismiss`,
+`startup-device-discovery-close` — R✅ I✅.
 
 **Keypad Quick Menu** (`keypad-quick-menu`, opened by the Menu key when the
 focused item has no context menu): a keypad-navigable list of jump-to-page (×6),

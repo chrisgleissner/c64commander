@@ -2678,4 +2678,10 @@ export const C64_DEFAULTS = {
   DEFAULT_HTTP_PORT,
 };
 
-export { buildBaseUrlFromDeviceHost, getDeviceHostFromBaseUrl, normalizeDeviceHost, resolveDeviceHostFromStorage };
+export {
+  buildBaseUrlFromDeviceHost,
+  getDeviceHostFromBaseUrl,
+  hasPersistedDeviceHostConfig,
+  normalizeDeviceHost,
+  resolveDeviceHostFromStorage,
+};

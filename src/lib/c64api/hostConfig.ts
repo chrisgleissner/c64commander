@@ -11,6 +11,9 @@ import { variant } from "@/generated/variant";
 
 const SAVED_DEVICES_STORAGE_KEY = "c64u_saved_devices:v1";
 const LEGACY_DEVICE_HOST_KEY = "c64u_device_host";
+const LEGACY_FTP_PORT_KEY = "c64u_ftp_port";
+const LEGACY_TELNET_PORT_KEY = "c64u_telnet_port";
+const LEGACY_HAS_PASSWORD_KEY = "c64u_has_password";
 export const CURRENT_DEVICE_HOST_KEY = `${variant.id}:device_host`;
 const CURRENT_BASE_URL_KEY = "c64u_base_url";
 
@@ -143,6 +146,71 @@ export const getDeviceHostFromBaseUrl = (baseUrl?: string) => {
 };
 
 export const buildBaseUrlFromDeviceHost = (deviceHost?: string) => `http://${normalizeDeviceHost(deviceHost)}`;
+
+const isSavedDevicesEnvelopeUserConfigured = (raw: string | null) => {
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw) as {
+      devices?: unknown;
+      summaries?: unknown;
+      hasEverHadMultipleDevices?: unknown;
+    };
+    const devices = Array.isArray(parsed.devices)
+      ? parsed.devices.filter((device): device is Record<string, unknown> =>
+          Boolean(device && typeof device === "object"),
+        )
+      : [];
+    if (devices.length === 0) return false;
+    if (devices.length > 1 || parsed.hasEverHadMultipleDevices === true) return true;
+
+    const device = devices[0]!;
+    const host = typeof device.host === "string" ? normalizeDeviceHost(device.host) : DEFAULT_DEVICE_HOST;
+    const httpPort = typeof device.httpPort === "number" ? device.httpPort : DEFAULT_HTTP_PORT;
+    const nameSource = typeof device.nameSource === "string" ? device.nameSource : "";
+    const typeSource = typeof device.typeSource === "string" ? device.typeSource : "";
+    const type = typeof device.type === "string" ? device.type.trim() : "";
+    const summaries =
+      parsed.summaries && typeof parsed.summaries === "object" ? Object.keys(parsed.summaries).length : 0;
+
+    return Boolean(
+      host !== DEFAULT_DEVICE_HOST ||
+      httpPort !== DEFAULT_HTTP_PORT ||
+      device.hasPassword === true ||
+      device.lastKnownProduct ||
+      device.lastKnownHostname ||
+      device.lastKnownUniqueId ||
+      device.lastSuccessfulConnectionAt ||
+      device.lastUsedAt ||
+      nameSource === "USER" ||
+      nameSource === "custom" ||
+      typeSource === "USER" ||
+      typeSource === "custom" ||
+      type ||
+      summaries > 0,
+    );
+  } catch (error) {
+    addLog("warn", "Failed to parse saved devices while checking configured device state", {
+      error: (error as Error).message,
+    });
+    return true;
+  }
+};
+
+export const hasPersistedDeviceHostConfig = () => {
+  if (typeof localStorage === "undefined") return true;
+  if (
+    localStorage.getItem(CURRENT_DEVICE_HOST_KEY) ||
+    localStorage.getItem(LEGACY_DEVICE_HOST_KEY) ||
+    localStorage.getItem(CURRENT_BASE_URL_KEY) ||
+    localStorage.getItem("c64u_base_url") ||
+    localStorage.getItem(LEGACY_FTP_PORT_KEY) ||
+    localStorage.getItem(LEGACY_TELNET_PORT_KEY) ||
+    localStorage.getItem(LEGACY_HAS_PASSWORD_KEY)
+  ) {
+    return true;
+  }
+  return isSavedDevicesEnvelopeUserConfigured(localStorage.getItem(SAVED_DEVICES_STORAGE_KEY));
+};
 
 export const resolvePlatformApiBaseUrl = (deviceHost: string, baseUrl?: string) => {
   if (import.meta.env.VITE_WEB_PLATFORM === "1" && typeof window !== "undefined") {

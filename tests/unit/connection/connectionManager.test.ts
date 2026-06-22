@@ -78,12 +78,24 @@ const startMockServer = vi.fn(async () => {
 const stopMockServer = vi.fn(async () => undefined);
 const getActiveMockBaseUrl = vi.fn(() => null);
 const getActiveMockFtpPort = vi.fn(() => null);
+const startDeviceDiscovery = vi.fn(async () => ({
+  candidates: [],
+  scannedHosts: 0,
+  elapsedMs: 0,
+  unsupported: false,
+}));
+const persistDiscoveredDevice = vi.fn();
 
 vi.mock("../../../src/lib/mock/mockServer", () => ({
   startMockServer,
   stopMockServer,
   getActiveMockBaseUrl,
   getActiveMockFtpPort,
+}));
+
+vi.mock("../../../src/lib/deviceDiscovery/discoveryManager", () => ({
+  startDeviceDiscovery,
+  persistDiscoveredDevice,
 }));
 
 const ensureStorage = () => {
@@ -152,6 +164,14 @@ describe("connectionManager", () => {
     stopMockServer.mockClear();
     getActiveMockBaseUrl.mockClear();
     getActiveMockFtpPort.mockClear();
+    startDeviceDiscovery.mockClear();
+    startDeviceDiscovery.mockResolvedValue({
+      candidates: [],
+      scannedHosts: 0,
+      elapsedMs: 0,
+      unsupported: false,
+    });
+    persistDiscoveredDevice.mockClear();
   });
 
   afterEach(() => {
@@ -173,7 +193,7 @@ describe("connectionManager", () => {
     expect(getConnectionSnapshot().state).toBe("UNKNOWN");
 
     void discoverConnection("startup");
-    await vi.advanceTimersByTimeAsync(800);
+    await vi.advanceTimersByTimeAsync(9000);
 
     expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
     expect(getConnectionSnapshot().demoInterstitialVisible).toBe(true);

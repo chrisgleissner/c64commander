@@ -13,7 +13,7 @@ describe("normalizeTransportError", () => {
   it("classifies DNS / unknown-host errors", () => {
     const result = normalizeTransportError(new Error("getaddrinfo ENOTFOUND u64"), { host: "u64" });
     expect(result.class).toBe("dns");
-    expect(result.userMessage).toMatch(/Cannot resolve 'u64'/);
+    expect(result.userMessage).toMatch(/Couldn't resolve 'u64'/);
     expect(result.userMessage).toMatch(/IP address/);
   });
 

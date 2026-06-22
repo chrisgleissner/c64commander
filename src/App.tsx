@@ -17,6 +17,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { TabBar } from "@/components/TabBar";
 import { ConnectionController } from "@/components/ConnectionController";
 import { DemoModeInterstitial } from "@/components/DemoModeInterstitial";
+import { DeviceDiscoveryInterstitial } from "@/components/DeviceDiscoveryInterstitial";
 import { RefreshControlProvider } from "@/hooks/useRefreshControl";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { loadDebugLoggingEnabled } from "@/lib/config/appSettings";
@@ -256,6 +257,7 @@ const AppRoutes = () => {
             <KeypadQuickMenu />
             <ConnectionController />
             <DemoModeInterstitial />
+            <DeviceDiscoveryInterstitial />
             <LightingStudioDialog />
             {coverageProbeEnabled && TestHeartbeat ? (
               <Suspense fallback={null}>

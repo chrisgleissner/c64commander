@@ -67,13 +67,15 @@ On the C64 Ultimate:
    - **Web Remote Control Service** - REST API used for most control and status operations
    - **FTP File Service** - required for browsing and transferring files for playlists and disk collections
    - **Telnet Remote Menu Service** - used for a small set of advanced operations not available via REST, such as power cycle
-3. Note the IP address from **Wired Network Setup** or **WI-FI Network Setup**.
+3. Note the IP address from **Wired Network Setup** or **WI-FI Network Setup** in case manual entry is needed.
 
 In C64 Commander:
 
-1. Open **Settings > Device > Connection**.
-2. Enter the C64 Ultimate IP address (recommended) or hostname.
-3. A green health indicator at the top right confirms the successful connection:
+1. Start the app on the same local network. If no reachable device is configured, C64 Commander automatically scans for C64 Ultimate devices.
+2. When devices are found, choose **Use** to connect now or **Save** to keep a device for later. If the device requires a network password, the app asks for it before connecting or saving.
+3. You can also open **Settings > Device > Connection** and tap **Discover devices** to run the same scan again.
+4. If discovery does not find your device, enter the IP address or hostname manually in **Settings > Device > Connection**.
+5. A green health indicator at the top right confirms the successful connection:
 
 ![Connected C64U badge](docs/img/app/home/02-connection-status-popover.png)
 
@@ -125,9 +127,8 @@ Choose an import source, browse its contents, then add files to your playlist or
 <table>
   <tr>
     <td><img src="docs/img/app/play/import/01-import-interstitial.png" alt="Import source chooser" width="360"/></td>
-    <td><img src="docs/img/app/play/import/03-local-file-picker.png" alt="Local file browser" width="360"/></td>
-    <td><img src="docs/img/app/play/import/02-c64u-file-picker.png" alt="C64U file browser" width="360"/></td>
-
+    <td><img src="docs/img/app/play/import/06-hvsc-preparing.png" alt="HVSC preparation" width="360"/></td>
+    <td><img src="docs/img/app/play/import/07-hvsc-ready.png" alt="HVSC ready" width="360"/></td>
   </tr>
   <tr>
     <td><img src="docs/img/app/play/import/08-hvsc-browser.png" alt="HVSC browser after preparation" width="360"/></td>
@@ -143,7 +144,7 @@ View drive state, mount and eject images, and manage disk collections with multi
 <table>
   <tr>
     <td><img src="docs/img/app/disks/01-overview.png" alt="Disks overview" width="360"/></td>
-    <td><img src="docs/img/app/disks/sections/02-disks.png" alt="Disks collection" width="360"/></td>
+    <td><img src="docs/img/app/disks/sections/02-disks.png" alt="Disks section" width="360"/></td>
     <td><img src="docs/img/app/disks/collection/01-view-all.png" alt="Disks collection" width="360"/></td>
   </tr>
 </table>
@@ -155,8 +156,8 @@ Browse and edit the full C64 Ultimate configuration: categories, items, sliders,
 <table>
   <tr>
     <td><img src="docs/img/app/config/01-categories.png" alt="Configuration categories" width="360"/></td>
+    <td><img src="docs/img/app/config/sections/01-audio-mixer.png" alt="Configuration audio mixer" width="360"/></td>
     <td><img src="docs/img/app/config/sections/05-u64-specific-settings.png" alt="Configuration U64 specific" width="360"/></td>
-    <td><img src="docs/img/app/config/sections/06-c64-and-cartridge-settings.png" alt="Configuration C64 and cartridge settings" width="360"/></td>
   </tr>
 </table>
 
@@ -167,13 +168,13 @@ Connection, appearance, diagnostics, playback defaults, HVSC integration, and de
 <table>
   <tr>
     <td><img src="docs/img/app/settings/sections/01-appearance.png" alt="Settings appearance" width="360"/></td>
-    <td><img src="docs/img/app/settings/sections/02-connection.png" alt="Settings connection" width="360"/></td>
     <td><img src="docs/img/app/settings/sections/03-diagnostics.png" alt="Settings diagnostics" width="360"/></td>
+    <td><img src="docs/img/app/settings/sections/04-play-and-disk.png" alt="Settings play and disk" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="docs/img/app/settings/sections/04-play-and-disk.png" alt="Settings play and disk" width="360"/></td>
     <td><img src="docs/img/app/settings/sections/05-config.png" alt="Settings configuration" width="360"/></td>
     <td><img src="docs/img/app/settings/sections/07-device-safety.png" alt="Settings device safety" width="360"/></td>
+    <td><img src="docs/img/app/settings/sections/09-hvsc.png" alt="Settings HVSC" width="360"/></td>
   </tr>
 </table>
 
@@ -197,7 +198,7 @@ Provides health checks, activity logs, trace inspection, filter editor, and late
 
 <table>
   <tr>
-    <td><img src="docs/img/app/diagnostics/tools/01-menu.png" alt="Diagnostics overview" width="360"/></td>
+    <td><img src="docs/img/app/diagnostics/01-overview.png" alt="Diagnostics overview" width="360"/></td>
     <td><img src="docs/img/app/diagnostics/activity/07-problems-only.png" alt="Diagnostics activity list" width="360"/></td>
     <td><img src="docs/img/app/diagnostics/filters/02-editor.png" alt="Diagnostics filter editor" width="360"/></td>
   </tr>
@@ -212,8 +213,8 @@ The switcher shows all configured devices with real-time health status, allowing
 <table>
   <tr>
     <td><img src="docs/img/app/diagnostics/switch-device/profiles/medium/01-picker.png" alt="Switcher (Connecting)" width="360"/></td>
-    <td><img src="docs/img/app/diagnostics/switch-device/profiles/medium/03-picker-all-healthy.png" alt="Switcher (All Healthy)" width="360"/></td>
-    <td><img src="docs/img/app/diagnostics/switch-device/profiles/medium/04-picker-one-unhealthy.png" alt="Switcher (One Unhealthy)" width="360"/></td>
+    <td><img src="docs/img/app/diagnostics/switch-device/profiles/medium/02-picker-expanded.png" alt="Switcher expanded details" width="360"/></td>
+    <td><img src="docs/img/app/diagnostics/switch-device/profiles/medium/06-picker-one-unhealthy-expanded.png" alt="Switcher expanded unhealthy device" width="360"/></td>
   </tr>
 </table>
 

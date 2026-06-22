@@ -367,6 +367,25 @@ public final class FeatureFlagsPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 }
 
+@objc(DeviceDiscoveryPlugin)
+public final class DeviceDiscoveryPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "DeviceDiscoveryPlugin"
+    public let jsName = "DeviceDiscovery"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "discover", returnType: CAPPluginReturnPromise),
+    ]
+
+    @objc public func discover(_ call: CAPPluginCall) {
+        IOSDiagnostics.log(.info, "Device discovery is not implemented on iOS", details: ["origin": "native"])
+        call.resolve([
+            "candidates": [],
+            "scannedHosts": 0,
+            "elapsedMs": 0,
+            "unsupported": true,
+        ])
+    }
+}
+
 @objc(BackgroundExecutionPlugin)
 public final class BackgroundExecutionPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "BackgroundExecutionPlugin"
@@ -566,6 +585,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         bridge.registerPluginInstance(FtpClientPlugin())
         bridge.registerPluginInstance(SecureStoragePlugin())
         bridge.registerPluginInstance(FeatureFlagsPlugin())
+        bridge.registerPluginInstance(DeviceDiscoveryPlugin())
         bridge.registerPluginInstance(BackgroundExecutionPlugin())
         bridge.registerPluginInstance(DiagnosticsBridgePlugin())
         bridge.registerPluginInstance(MockC64UPlugin())
