@@ -74,7 +74,7 @@ C64 Commander controls the device through its built-in network services, so turn
 1. Start C64 Commander. When no reachable device is configured yet, it automatically scans the local network for C64 Ultimate devices.
 2. From the discovered devices, tap **Use** to connect now, or **Save** to keep one for later. If a device is password-protected, the app prompts for its network password before connecting.
 
-   <img src="docs/img/app/launch/discovery/startup-autodiscovery-interstitial.png" alt="C64 Ultimate devices found during a network scan" width="320"/>
+   <img src="docs/img/app/launch/discovery/startup-autodiscovery-interstitial.png" alt="C64 systems found during a network scan" width="320"/>
 
 3. To scan again later, open **Settings > Device > Connection** and tap **Discover devices**.
 4. If discovery does not find your device, enter its IP address or hostname manually under **Settings > Device > Connection**.
