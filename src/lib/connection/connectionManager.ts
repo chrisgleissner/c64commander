@@ -142,7 +142,6 @@ const loadSwitchConnectionConfig = (options: { deviceHost: string; password?: st
     baseUrl: buildBaseUrlFromDeviceHost(deviceHost),
     password: options.password ?? undefined,
     deviceHost,
-    probeDeviceHost: deviceHost,
   };
 };
 
@@ -153,7 +152,7 @@ const probeInfoWithConnectionConfig = async (
   const timeoutMs = options.timeoutMs ?? loadDiscoveryProbeTimeoutMs();
   const outerSignal = options.signal;
   try {
-    const api = new C64API(config.baseUrl, config.password, config.probeDeviceHost);
+    const api = new C64API(config.baseUrl, config.password, config.deviceHost);
     const response = await api.getInfo({
       timeoutMs,
       signal: outerSignal,
@@ -326,7 +325,7 @@ export async function verifyCurrentConnectionTarget(options?: {
       switchConfig
         ? {
             baseUrl: switchConfig.baseUrl,
-            deviceHost: switchConfig.probeDeviceHost,
+            deviceHost: switchConfig.deviceHost,
             password: switchConfig.password,
           }
         : undefined,
@@ -670,7 +669,13 @@ const tryReachableSavedDeviceFallback = async (
       const deviceHost = buildDeviceHostWithHttpPort(device.host, device.httpPort);
       let password: string | null = null;
       if (device.hasPassword) {
-        password = await getPasswordForDevice(device.id).catch(() => null);
+        password = await getPasswordForDevice(device.id).catch((error) => {
+          addLog("warn", "Failed to read saved-device password during startup sweep; probing without auth", {
+            deviceId: device.id,
+            error: error instanceof Error ? error.message : String(error ?? "Unknown secure-storage failure"),
+          });
+          return null;
+        });
       }
       const probe = await probeInfoWithConnectionConfig(loadSwitchConnectionConfig({ deviceHost, password }), {
         timeoutMs: SAVED_DEVICE_SWEEP_TIMEOUT_MS,

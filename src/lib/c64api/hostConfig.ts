@@ -202,7 +202,6 @@ export const hasPersistedDeviceHostConfig = () => {
     localStorage.getItem(CURRENT_DEVICE_HOST_KEY) ||
     localStorage.getItem(LEGACY_DEVICE_HOST_KEY) ||
     localStorage.getItem(CURRENT_BASE_URL_KEY) ||
-    localStorage.getItem("c64u_base_url") ||
     localStorage.getItem(LEGACY_FTP_PORT_KEY) ||
     localStorage.getItem(LEGACY_TELNET_PORT_KEY) ||
     localStorage.getItem(LEGACY_HAS_PASSWORD_KEY)
@@ -263,7 +262,7 @@ export const resolveDeviceHostFromStorage = () => {
     localStorage.removeItem(CURRENT_BASE_URL_KEY);
     return normalizedStoredHost;
   }
-  const legacyBaseUrl = localStorage.getItem(CURRENT_BASE_URL_KEY) ?? localStorage.getItem("c64u_base_url");
+  const legacyBaseUrl = localStorage.getItem(CURRENT_BASE_URL_KEY);
   if (legacyBaseUrl) {
     const migratedHost = normalizeDeviceHost(getDeviceHostFromBaseUrl(legacyBaseUrl));
     persistDeviceHostToStorage(migratedHost);

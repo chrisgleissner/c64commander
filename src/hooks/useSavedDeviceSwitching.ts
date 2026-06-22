@@ -33,7 +33,6 @@ import {
   selectSavedDevice,
   startSavedDeviceVerification,
 } from "@/lib/savedDevices/store";
-import { buildSavedDevicePreferredRuntimeHost } from "@/lib/savedDevices/resolvedTarget";
 import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 import { clearToastsOnDeviceSwitch } from "@/lib/uiErrors";
 import { setHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
@@ -95,13 +94,9 @@ export function useSavedDeviceSwitching() {
 
       const password = device.hasPassword ? await getPasswordForDevice(deviceId) : null;
       const nextDeviceHost = buildDeviceHostWithHttpPort(device.host, device.httpPort);
-      const preferredRuntimeHost = buildSavedDevicePreferredRuntimeHost(device);
-      applyC64APIRuntimeConfig(
-        buildBaseUrlFromDeviceHost(preferredRuntimeHost),
-        password ?? undefined,
-        preferredRuntimeHost,
-        { reason: "saved-device-switch" },
-      );
+      applyC64APIRuntimeConfig(buildBaseUrlFromDeviceHost(nextDeviceHost), password ?? undefined, nextDeviceHost, {
+        reason: "saved-device-switch",
+      });
 
       markSavedDeviceSwitchVerificationStarted(attemptId);
 

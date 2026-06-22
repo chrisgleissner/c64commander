@@ -198,12 +198,9 @@ export function DeviceDiscoveryInterstitial() {
         <DialogHeader>
           <DialogTitle>C64 Ultimate devices found</DialogTitle>
           <DialogDescription>
-            Choose a device to use now, save one for later, or enter an address in Settings.
+            We found devices on your network. Choose one to use now, save one for later, or enter an address in
+            Settings.
           </DialogDescription>
-          <p className="text-sm text-muted-foreground">
-            We found devices on your network. Choose one to use now, or save one for later. You can still enter an
-            address in Settings.
-          </p>
         </DialogHeader>
 
         <div className="max-h-[min(26rem,60vh)] space-y-2 overflow-y-auto px-4 py-3 sm:px-6">

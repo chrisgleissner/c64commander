@@ -207,7 +207,6 @@ class DeviceDiscoveryPlugin : Plugin() {
 
   private fun probeTarget(target: DiscoveryTarget, connectTimeoutMs: Int): DiscoveryCandidate? {
     return try {
-      val address = InetAddress.getByName(target.host)
       val url = URL("http://${target.host}:${target.port}/v1/info")
       val connection = url.openConnection() as HttpURLConnection
       connection.connectTimeout = connectTimeoutMs
@@ -217,11 +216,18 @@ class DeviceDiscoveryPlugin : Plugin() {
       connection.useCaches = false
       connection.connect()
 
+      // Resolve the IP only after a successful connect. The host is reachable at
+      // this point and the platform resolver cache is warm, so we avoid the extra
+      // pre-connect InetAddress.getByName() lookup — a non-interruptible call that
+      // could otherwise block a probe worker thread on a slow/failing DNS resolver
+      // for a named host (e.g. u64/c64u) that never answers.
+      val resolvedAddress = resolveHostAddress(target.host)
+
       val responseCode = connection.responseCode
       if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
         connection.disconnect()
         return DiscoveryCandidate(
-          address = address.hostAddress ?: target.host,
+          address = resolvedAddress,
           host = target.host.takeUnless { isIpv4Literal(it) },
           httpPort = target.port,
           sources = setOf(target.source),
@@ -250,7 +256,7 @@ class DeviceDiscoveryPlugin : Plugin() {
       if (!isUltimateProduct(product)) return null
 
       DiscoveryCandidate(
-        address = address.hostAddress ?: target.host,
+        address = resolvedAddress,
         host = target.host.takeUnless { isIpv4Literal(it) },
         httpPort = target.port,
         sources = setOf(target.source),
@@ -267,6 +273,9 @@ class DeviceDiscoveryPlugin : Plugin() {
       null
     }
   }
+
+  private fun resolveHostAddress(host: String): String =
+    runCatching { InetAddress.getByName(host).hostAddress }.getOrNull()?.takeIf { it.isNotBlank() } ?: host
 
   private fun isUltimateProduct(product: String?): Boolean {
     val normalized = product?.trim()?.lowercase() ?: return false
