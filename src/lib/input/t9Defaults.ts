@@ -8,4 +8,4 @@
 
 import { variant } from "@/generated/variant";
 
-export const isDefaultT9InputEnabled = () => variant.runtime.defaultT9InputEnabled === true;
+export const isDefaultT9InputEnabled = () => Boolean(variant.runtime.defaultT9InputEnabled);

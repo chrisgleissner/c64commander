@@ -80,7 +80,7 @@ export function useSavedDeviceSwitching() {
       startSavedDeviceVerification(deviceId);
       resetInteractionState("saved-device-switch");
 
-      const savedDeviceSwitchPrefixes = new Set(getSavedDeviceSwitchPrefixes(location.pathname));
+      const savedDeviceSwitchPrefixes = new Set<string>(getSavedDeviceSwitchPrefixes(location.pathname));
       void queryClient
         .cancelQueries({
           predicate: (query) => savedDeviceSwitchPrefixes.has(String(query.queryKey[0] ?? "")),

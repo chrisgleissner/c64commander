@@ -303,7 +303,11 @@ export class FocusDiscoveryEngine {
         const isGroup = groupElements.has(element);
         const groupAttr = isGroup ? element.getAttribute(GROUP_ATTR) : null;
         const id = registration?.descriptor.id || (groupAttr ? groupAttr : autoIdFor(element));
-        const source = registration ? (discoveredSet.has(element) ? "dom+explicit" : "explicit") : "dom";
+        const source: FocusDiscoverySource = registration
+          ? discoveredSet.has(element)
+            ? "dom+explicit"
+            : "explicit"
+          : "dom";
         return { element, id, isGroup, source, registration };
       })
       .filter((node, _index, all) => {

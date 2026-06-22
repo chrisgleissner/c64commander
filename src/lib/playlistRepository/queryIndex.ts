@@ -176,10 +176,10 @@ export const queryPlaylistIndex = (
   const isSelectiveCandidateSet = candidateIds !== null && candidateIds.size < orderedIds.length;
   const rankBySort = isSelectiveCandidateSet ? buildRank(orderedIds) : null;
   const iterableIds = isSelectiveCandidateSet
-    ? [...candidateIds].sort(
-        (left, right) =>
-          (rankBySort?.[left] ?? Number.MAX_SAFE_INTEGER) - (rankBySort?.[right] ?? Number.MAX_SAFE_INTEGER),
-      )
+    ? [...candidateIds!].sort(
+      (left, right) =>
+        (rankBySort?.[left] ?? Number.MAX_SAFE_INTEGER) - (rankBySort?.[right] ?? Number.MAX_SAFE_INTEGER),
+    )
     : orderedIds;
 
   iterableIds.forEach((rowId) => {

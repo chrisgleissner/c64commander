@@ -199,6 +199,7 @@ export const HomeDiskManager = () => {
   const drivePowerOverrideSetAtRef = useRef<Record<string, number>>({});
   const [drivePowerPending, setDrivePowerPending] = useState<Record<string, boolean>>({});
   const [driveResetPending, setDriveResetPending] = useState<Record<string, boolean>>({});
+  const [driveMutationPending, setDriveMutationPending] = useState<Record<string, boolean>>({});
   const [browserOpen, setBrowserOpen] = useState(false);
   const [softIecDirectoryBrowserOpen, setSoftIecDirectoryBrowserOpen] = useState(false);
   const [addItemsProgress, setAddItemsProgress] = useState<AddItemsProgressState>({
@@ -505,6 +506,7 @@ export const HomeDiskManager = () => {
       ...mountCompletionGenerationRef.current,
       [drive]: mountGeneration,
     };
+    setDriveMutationPending((prev) => ({ ...prev, [drive]: true }));
     try {
       const runtimeFile = diskLibrary.runtimeFiles[disk.id];
       await mountDiskToDrive(api, drive, disk, runtimeFile);
@@ -567,10 +569,13 @@ export const HomeDiskManager = () => {
           demoMode: status.state === "DEMO_ACTIVE",
         },
       });
+    } finally {
+      setDriveMutationPending((prev) => ({ ...prev, [drive]: false }));
     }
   });
 
   const handleEject = trace(async (drive: DriveKey) => {
+    setDriveMutationPending((prev) => ({ ...prev, [drive]: true }));
     try {
       await api.unmountDrive(drive);
       mountedByDriveSetAtRef.current[drive] = Date.now();
@@ -593,6 +598,8 @@ export const HomeDiskManager = () => {
         error,
         context: { drive },
       });
+    } finally {
+      setDriveMutationPending((prev) => ({ ...prev, [drive]: false }));
     }
   });
 
@@ -1476,6 +1483,7 @@ export const HomeDiskManager = () => {
       powerPending,
       configPending: Boolean(driveConfigPending[key]),
       resetPending: Boolean(driveResetPending[key]),
+      mountPending: Boolean(driveMutationPending[key]),
       formattedStatus,
     };
   });
@@ -1529,6 +1537,7 @@ export const HomeDiskManager = () => {
                 powerPending,
                 configPending,
                 resetPending,
+                mountPending,
                 formattedStatus,
               }) => (
                 <div key={key} className="config-card space-y-2" data-testid={`drive-card-${key}`}>
@@ -1560,7 +1569,7 @@ export const HomeDiskManager = () => {
                             setActiveDrive(key);
                           }
                         }}
-                        disabled={!status.isConnected || configPending}
+                        disabled={!status.isConnected || configPending || mountPending}
                         data-testid={`drive-mount-toggle-${key}`}
                         aria-label={`${driveLabel} ${mounted ? "Eject disk" : "Mount disk"}`}
                       >
@@ -1678,7 +1687,7 @@ export const HomeDiskManager = () => {
                             size="sm"
                             className="h-7 w-7 p-0"
                             onClick={() => void handleRotate(key, -1)}
-                            disabled={!status.isConnected || configPending}
+                            disabled={!status.isConnected || configPending || mountPending}
                             aria-label={`${driveLabel} previous disk`}
                           >
                             <ArrowRightLeft className="h-3.5 w-3.5" />
@@ -1690,7 +1699,7 @@ export const HomeDiskManager = () => {
                             size="sm"
                             className="h-7 w-7 p-0"
                             onClick={() => void handleRotate(key, 1)}
-                            disabled={!status.isConnected || configPending}
+                            disabled={!status.isConnected || configPending || mountPending}
                             aria-label={`${driveLabel} next disk`}
                           >
                             <ArrowLeftRight className="h-3.5 w-3.5" />
@@ -2030,7 +2039,7 @@ export const HomeDiskManager = () => {
             <DialogDescription>Select the drive to mount this disk.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            {driveRows.map(({ key, busId, driveType, mounted, configPending }) => (
+            {driveRows.map(({ key, busId, driveType, mounted, configPending, mountPending }) => (
               <Button
                 key={key}
                 variant="outline"
@@ -2038,7 +2047,7 @@ export const HomeDiskManager = () => {
                   if (!activeDisk) return;
                   void handleMountDisk(key, activeDisk).finally(() => setActiveDisk(null));
                 }}
-                disabled={!status.isConnected || configPending}
+                disabled={!status.isConnected || configPending || mountPending}
               >
                 <HardDrive className="h-4 w-4 mr-2" />
                 {buildDriveLabel(key)} (#{busId}, {driveType}) {mounted ? "• mounted" : ""}

@@ -17,7 +17,7 @@ export const createHvscCancellationError = (message = "HVSC update cancelled"): 
   Object.assign(new Error(message), {
     code: HVSC_CANCELLATION_CODE,
     isCancellation: true as const,
-  });
+  }) as HvscCancellationError;
 
 export const isHvscCancellationError = (error: unknown) => {
   if (!error || typeof error !== "object") return false;
