@@ -196,10 +196,9 @@ export function DeviceDiscoveryInterstitial() {
     >
       <DialogContent closeTestId="startup-device-discovery-close" surface="list-browser">
         <DialogHeader>
-          <DialogTitle>C64 Ultimate devices found</DialogTitle>
+          <DialogTitle>C64 systems found</DialogTitle>
           <DialogDescription>
-            We found devices on your network. Choose one to use now, save one for later, or enter an address in
-            Settings.
+            Choose one to control now, save one for later, or enter an address manually in Settings.
           </DialogDescription>
         </DialogHeader>
 

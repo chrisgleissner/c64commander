@@ -3066,7 +3066,7 @@ test.describe("App screenshots", () => {
       await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.compact.viewport);
       await page.goto("/", { waitUntil: "domcontentloaded" });
 
-      const dialog = page.getByRole("dialog", { name: /C64 Ultimate devices found/i });
+      const dialog = page.getByRole("dialog", { name: /C64 systems found/i });
       await expect(dialog).toBeVisible({ timeout: 15000 });
       await expect(dialog.getByText("Ultimate 64 Elite · u64")).toBeVisible();
       // Crop to the interstitial itself, not the whole screen.
