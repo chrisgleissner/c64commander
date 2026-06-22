@@ -43,6 +43,7 @@ import {
   buildBaseUrlFromDeviceHost,
   getDeviceHostHttpPort,
   getDeviceHostFromBaseUrl,
+  hasPersistedDeviceHostConfig,
   isLocalProxy,
   normalizeDeviceHost,
   persistDeviceHostToStorage,

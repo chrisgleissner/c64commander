@@ -3000,6 +3000,83 @@ test.describe("App screenshots", () => {
   );
 
   test(
+    "capture device discovery interstitial screenshot",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      allowWarnings(testInfo, "Expected probe failures while the selected device is unreachable during discovery.");
+
+      // Injected so the web discovery facade returns candidates (a browser cannot
+      // LAN-scan). Mirrors the two real lab devices so the dialog reads naturally.
+      const discoveryCandidates = [
+        {
+          address: "192.168.1.13",
+          host: "u64",
+          httpPort: 80,
+          source: ["lan-scan"],
+          product: "Ultimate 64 Elite",
+          firmwareVersion: "3.14e",
+          hostname: "u64",
+          uniqueId: "38C1BA",
+        },
+        {
+          address: "192.168.1.167",
+          host: "c64u",
+          httpPort: 80,
+          source: ["lan-scan"],
+          product: "C64 Ultimate",
+          firmwareVersion: "1.1.0",
+          hostname: "c64u",
+          uniqueId: "5D4E12",
+        },
+      ];
+
+      await page.addInitScript(
+        ({ currentDeviceHostKey, candidates, override }) => {
+          // Compact (Small) profile + an unreachable selected device so startup
+          // discovery runs; no demo mode so the device-discovery interstitial wins.
+          localStorage.setItem("c64u_display_profile_override", override);
+          localStorage.setItem("c64u_startup_discovery_window_ms", "600");
+          localStorage.setItem("c64u_background_rediscovery_interval_ms", "5000");
+          localStorage.setItem("c64u_device_host", "127.0.0.1:1");
+          localStorage.setItem(currentDeviceHostKey, "127.0.0.1:1");
+          localStorage.removeItem("c64u_saved_devices:v1");
+          localStorage.removeItem("c64u_base_url");
+          localStorage.removeItem("c64u_password");
+          localStorage.removeItem("c64u_has_password");
+          localStorage.removeItem("c64u_automatic_demo_mode_enabled");
+          sessionStorage.removeItem("c64u_demo_interstitial_shown");
+          delete (window as Window & { __c64uExpectedBaseUrl?: unknown }).__c64uExpectedBaseUrl;
+          delete (window as Window & { __c64uMockServerBaseUrl?: unknown }).__c64uMockServerBaseUrl;
+          delete (window as Window & { __c64uAllowedBaseUrls?: unknown }).__c64uAllowedBaseUrls;
+          delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
+          (window as Window & { __c64uMockDeviceDiscovery?: unknown }).__c64uMockDeviceDiscovery = {
+            candidates,
+            scannedHosts: candidates.length,
+            elapsedMs: 120,
+            unsupported: false,
+          };
+        },
+        {
+          currentDeviceHostKey: CURRENT_DEVICE_HOST_KEY,
+          candidates: discoveryCandidates,
+          override: DISPLAY_PROFILE_VIEWPORTS.compact.override,
+        },
+      );
+
+      await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.compact.viewport);
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+
+      const dialog = page.getByRole("dialog", { name: /C64 Ultimate devices found/i });
+      await expect(dialog).toBeVisible({ timeout: 15000 });
+      await expect(dialog.getByText("Ultimate 64 Elite · u64")).toBeVisible();
+      // Crop to the interstitial itself, not the whole screen.
+      await captureScreenshot(page, testInfo, "launch/discovery/startup-autodiscovery-interstitial.png", {
+        locator: dialog,
+      });
+    },
+  );
+
+  test(
     "capture demo mode play screenshot",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
