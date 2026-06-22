@@ -915,3 +915,45 @@ saved-device sweep probes each device once (1200 ms), config reads are awaited s
 health check fires only a handful of probes per device. All are well under the ≥24 per-host overflow
 threshold proven above. The genuine recently-introduced defect (the popup loop) is fixed above.
 Operational note: test harnesses / scripts must not fire ≥24 concurrent probes at one device.
+
+## P? — Firmware-grounded capability audit + smart discovery/creation (2026-06-22)
+
+### Firmware capability research (see docs/research/device-discovery/firmware-capabilities.md)
+Spelunked the 1541ultimate firmware/docs. Timeline: Telnet+FTP services ~fw **3.0**; HTTP REST API
+fw **3.11**; network password (X-Password) fw **3.12**. Per-device: the only feature differences are
+the firmware-documented **U64-only** set — `machine:poweroff`, `machine:debugreg`, `/v1/streams` — and
+all correlate with **`/v1/info.core_version`** ("only for Ultimate 64 devices"). Verified live: U64
+`core 1.4B`, C64U `core 1.49`, both `/v1/version → 0.1`; U2 cartridges omit core_version.
+
+### Capability model → fully runtime-driven (no family literals as feature gates)
+`src/lib/deviceCapabilities/capabilityModel.ts`: removed `VIDEO_STREAM_FAMILIES` / `POWER_CYCLE_FAMILIES`.
+- `supportsPowerCycle` ⇐ `restReachable && core_version present` (was `{C64U,U64E2}` — also too narrow;
+  poweroff is all integrated computers). Cartridges (no core_version) correctly excluded.
+- `supportsStreaming` ⇐ Data Streams config signal (primary) else `core_version` presence (was family
+  set). A U2 advertising streaming in config still flips on; a U64 disabling it flips off.
+- `supportsMenuInput` unchanged (menu_button is universal; only a recognised-Ultimate heuristic remains,
+  documented as the one no-runtime-signal case alongside the telnet menu key).
+- `streamingSource` provenance: `rest-config | core-version | unknown`.
+- `src/pages/home/components/MachineControls.tsx` + HomePage now gate the REST **Power Off** quick action
+  on `supportsPowerCycle` (was always shown → would 404 on a cartridge). Tests updated to use realistic
+  per-device `core_version` (cartridges omit it). 19 capability tests + HomePage gate tests green.
+
+### Smart auto-discovery dedup by unique id
+`persistDiscoveredDevice` already matches an existing saved device by `unique_id` and UPDATES its host
+(no duplicate) when the device reappears at a new IP/hostname; `completeSavedDeviceVerification` records
+`lastKnownUniqueId` on every successful connect and flags same-unique_id duplicates. Locked with a new
+test: same unique id at a new address → existing entry reused + host updated, no duplicate.
+
+### Reachability-guided device creation (calm IP rescue)
+- NEW `src/lib/connection/probeDeviceReachability` (pure, no state mutation) + `addDeviceReachability.ts`
+  `evaluateNewDeviceReachability()`: probes the entered host; 2xx → reachable; 401/403 → reachable
+  (needs-password, allowed); else unreachable → if the user typed a hostname, runs a LAN scan and, on a
+  hostname match (or a single discovered Ultimate), returns the device's IP to suggest.
+- `SettingsPage.handleSaveConnection` now gates BEFORE committing: an unreachable device is never
+  persisted. When found by IP, a calm, non-technical inline panel in `SavedDeviceEditorFields`
+  ("We couldn’t reach 'c64u', but found your device at 192.168.1.167. Use that address?") offers a
+  one-tap fill; otherwise a calm hostname hint steers the user to enter the IP. Helper has 8 unit tests;
+  SettingsPage has 2 new gate tests (block+suggest, block+hint); all 77 SettingsPage tests green.
+
+### Gates
+`npx tsc --noEmit` 0; `npm run lint` 0; full `vitest run` green (capability run: 629 files / 7299 tests).

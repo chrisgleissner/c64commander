@@ -15,24 +15,37 @@
  * consume the predicates here (`supportsStreaming`, `supportsMenuInput`,
  * `supportsPowerCycle`) rather than raw `device.type === "C64U"`-style checks.
  *
- * Firmware grounding (1541ultimate source):
- * - Streaming (`/v1/streams`, route_streams.cc) is compiled into the U64 family
- *   only (Ultimate 64 / Elite / 64-II — the "C64 Ultimate" board is internally a
- *   U64-family device). The Ultimate II family (U2) exposes NO REST streams
- *   endpoint at all, so streaming is never assumed for U2.
- * - `/v1/machine:menu_button` is compiled on every family → menu input is a
- *   shared capability of any recognised, reachable Ultimate device.
- * - The Home power-cycle action matches the families that exposed it before this
- *   model existed ({C64U, U64E2}); U2 is excluded.
+ * Firmware grounding (1541ultimate; see docs/research/device-discovery/firmware-capabilities.md):
+ * The features that differ by device are exactly the firmware-documented "U64-only"
+ * set — `/v1/machine:poweroff`, `/v1/machine:debugreg`, and `/v1/streams` — and every
+ * one of them has a RUNTIME signal, so NO product-family literal is used as a feature
+ * gate:
+ * - `/v1/info.core_version` is returned "only for Ultimate 64 devices" (integrated
+ *   computers: Ultimate 64 / Elite / Elite-II and the "C64 Ultimate" board). Its
+ *   presence is therefore the runtime discriminator for the U64-only feature set, and
+ *   its absence marks an Ultimate-II cartridge (U2). Verified live: U64 `core 1.4B`,
+ *   C64U `core 1.49`; U2 cartridges return no `core_version`.
+ * - Streaming prefers the REST config signal (Data Streams `Stream VIC/Audio to`) and
+ *   falls back to `core_version` presence — never a family list. A U2 whose config
+ *   advertises streaming flips on; a U64 whose config disables it flips off.
+ * - `/v1/machine:menu_button` is compiled on every family → menu input is granted to
+ *   any recognised, reachable Ultimate (family classification only distinguishes a
+ *   recognised Ultimate from an unknown non-Ultimate host — there is no runtime field
+ *   for that, so it stays a heuristic).
  */
 
 import { resolveCanonicalProductFamilyCode } from "@/lib/savedDevices/store";
 import type { ProductFamilyCode } from "@/lib/savedDevices/store";
 
-export type DeviceFamily = ProductFamilyCode | "unknown";
+/**
+ * How a derived capability value was decided:
+ * - `rest-config`: a read-only `/v1/configs` signal decided it (most precise).
+ * - `core-version`: decided by `/v1/info.core_version` presence (the U64-family marker).
+ * - `unknown`: no runtime signal and/or the device was not reachable.
+ */
+export type CapabilitySource = "rest-config" | "core-version" | "unknown";
 
-/** How a derived capability value was decided. */
-export type CapabilitySource = "rest-config" | "family-default" | "unknown";
+export type DeviceFamily = ProductFamilyCode | "unknown";
 
 export type DeviceCapabilities = {
   /** Resolved product family, or "unknown" for an unrecognised product. */
@@ -71,12 +84,6 @@ export type DeviceCapabilityInput = {
   streamEndpointsAdvertised?: boolean | null;
 };
 
-// Families with C64 video/audio hardware → /v1/streams compiled in firmware.
-const VIDEO_STREAM_FAMILIES: ReadonlySet<DeviceFamily> = new Set<DeviceFamily>(["C64U", "U64", "U64E", "U64E2"]);
-
-// Families exposing the Home power-cycle action (matches the pre-capability gate).
-const POWER_CYCLE_FAMILIES: ReadonlySet<DeviceFamily> = new Set<DeviceFamily>(["C64U", "U64E2"]);
-
 const trimOrNull = (value?: string | null): string | null => {
   const trimmed = (value ?? "").trim();
   return trimmed.length ? trimmed : null;
@@ -84,7 +91,14 @@ const trimOrNull = (value?: string | null): string | null => {
 
 export const deriveDeviceCapabilities = (input: DeviceCapabilityInput = {}): DeviceCapabilities => {
   const productString = trimOrNull(input.product);
+  // `family` is for display/labels only — it is NEVER used as a feature gate.
   const family: DeviceFamily = resolveCanonicalProductFamilyCode(productString) ?? "unknown";
+  const coreVersion = trimOrNull(input.coreVersion);
+  // The firmware returns `core_version` only for integrated Ultimate 64-family
+  // computers (incl. the C64 Ultimate board), which are exactly the devices that
+  // expose the U64-only feature set (poweroff / debugreg / streams). Cartridges (U2)
+  // omit it. This is the runtime discriminator that replaces every family literal.
+  const isIntegratedComputer = coreVersion !== null;
   // A REST-discovered streaming signal (boolean) implies the device answered a
   // read-only config probe, i.e. it is reachable — even if no product string was
   // supplied alongside it.
@@ -94,17 +108,19 @@ export const deriveDeviceCapabilities = (input: DeviceCapabilityInput = {}): Dev
   let supportsStreaming: boolean;
   let streamingSource: CapabilitySource;
   if (hasStreamSignal) {
-    // Prefer the REST-discovered capability signal over the family default. This is
-    // what makes the gate capability-driven rather than family-driven.
+    // Most precise: the device's own config says whether stream targets exist. This
+    // is what makes the gate capability-driven rather than family-driven.
     supportsStreaming = input.streamEndpointsAdvertised as boolean;
     streamingSource = "rest-config";
-  } else if (family === "unknown") {
-    // Unknown devices are not granted advanced capabilities by default.
+  } else if (restReachable && isIntegratedComputer) {
+    // No config probed yet: streams are a U64-family feature, marked at runtime by
+    // `/v1/info.core_version` presence — not by a product-family literal.
+    supportsStreaming = true;
+    streamingSource = "core-version";
+  } else {
+    // No config signal and no `core_version` (cartridge / unknown / unreachable).
     supportsStreaming = false;
     streamingSource = "unknown";
-  } else {
-    supportsStreaming = restReachable && VIDEO_STREAM_FAMILIES.has(family);
-    streamingSource = "family-default";
   }
 
   return {
@@ -112,10 +128,16 @@ export const deriveDeviceCapabilities = (input: DeviceCapabilityInput = {}): Dev
     productString,
     restReachable,
     firmwareVersion: trimOrNull(input.firmwareVersion),
-    coreVersion: trimOrNull(input.coreVersion),
+    coreVersion,
     supportsStreaming,
+    // menu_button is compiled on every family; only require a recognised, reachable
+    // Ultimate (there is no runtime field distinguishing an unrecognised Ultimate from
+    // a non-Ultimate host, so this stays a heuristic).
     supportsMenuInput: restReachable && family !== "unknown",
-    supportsPowerCycle: restReachable && POWER_CYCLE_FAMILIES.has(family),
+    // poweroff / power-cycle are integrated-computer-only → gate on the runtime
+    // `core_version` signal, never a family list. Cartridges (no core_version) are
+    // correctly excluded; all U64-family computers (incl. plain U64/Elite) included.
+    supportsPowerCycle: restReachable && isIntegratedComputer,
     streamingSource,
   };
 };

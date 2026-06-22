@@ -249,6 +249,23 @@ export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: num
   }
 }
 
+/**
+ * Read-only reachability probe of an ARBITRARY host, without committing it as the
+ * active device or mutating connection state. Used to validate a device before it is
+ * saved (so we never persist an unreachable entry). A `/v1/info` answer — including a
+ * 401/403 (reachable but password-gated) — means the host is reachable.
+ */
+export async function probeDeviceReachability(options: {
+  deviceHost: string;
+  password?: string | null;
+  timeoutMs?: number;
+}): Promise<ProbeInfoResult> {
+  const config = loadSwitchConnectionConfig({ deviceHost: options.deviceHost, password: options.password ?? null });
+  return probeInfoWithConnectionConfig(config, {
+    timeoutMs: options.timeoutMs ?? Math.max(1000, loadDiscoveryProbeTimeoutMs()) + 1000,
+  });
+}
+
 export async function probeInfoOnce(
   options: { signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<ProbeInfoResult> {

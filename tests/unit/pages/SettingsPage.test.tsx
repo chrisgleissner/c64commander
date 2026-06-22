@@ -91,6 +91,7 @@ const {
   mockSetTheme,
   mockSetListPreviewLimit,
   mockSwitchSavedDevice,
+  mockEvaluateNewDeviceReachability,
   mockStartDeviceDiscovery,
   mockPersistDiscoveredDevice,
   connectionPayloadRef,
@@ -110,6 +111,7 @@ const {
   mockSetTheme: vi.fn(),
   mockSetListPreviewLimit: vi.fn(),
   mockSwitchSavedDevice: vi.fn(async () => undefined),
+  mockEvaluateNewDeviceReachability: vi.fn(async () => ({ status: "reachable" })),
   mockStartDeviceDiscovery: vi.fn(async () => ({
     candidates: [],
     scannedHosts: 0,
@@ -409,6 +411,10 @@ vi.mock("@/lib/connection/connectionManager", () => ({
   dismissDemoInterstitial: vi.fn(),
 }));
 
+vi.mock("@/lib/connection/addDeviceReachability", () => ({
+  evaluateNewDeviceReachability: (...args: unknown[]) => mockEvaluateNewDeviceReachability(...args),
+}));
+
 vi.mock("@/lib/diagnostics/diagnosticsOverlay", () => ({
   requestDiagnosticsOpen: mockRequestDiagnosticsOpen,
 }));
@@ -521,6 +527,8 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  mockEvaluateNewDeviceReachability.mockReset();
+  mockEvaluateNewDeviceReachability.mockResolvedValue({ status: "reachable" });
   savedDevicesRef.current = {
     selectedDeviceId: "saved-device-1",
     devices: [
@@ -643,6 +651,45 @@ describe("SettingsPage", () => {
       expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Connection settings saved" }));
     });
     expect(discoverConnection).not.toHaveBeenCalled();
+  }, 15000);
+
+  it("blocks the save and calmly suggests the IP when a hostname is unreachable but found on the LAN", async () => {
+    mockEvaluateNewDeviceReachability.mockResolvedValue({
+      status: "unreachable",
+      suggestedAddress: "192.168.1.167",
+      suggestedHostname: "c64u",
+    });
+
+    renderSettingsPage();
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-device-reachability-suggestion")).toBeInTheDocument();
+    });
+    // The unreachable device was NOT committed or connected.
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+    expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
+
+    // Tapping the calm suggestion fills the host field with the working IP.
+    fireEvent.click(screen.getByTestId("settings-device-use-suggested-address"));
+    expect((screen.getByTestId("settings-device-host") as HTMLInputElement).value).toBe("192.168.1.167");
+    expect(screen.queryByTestId("settings-device-reachability-suggestion")).toBeNull();
+  }, 15000);
+
+  it("blocks the save with a calm hostname error when the device can't be reached or found", async () => {
+    mockEvaluateNewDeviceReachability.mockResolvedValue({
+      status: "unreachable",
+      suggestedAddress: null,
+      suggestedHostname: null,
+    });
+
+    renderSettingsPage();
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/couldn’t reach.*enter its IP address/i)).toBeInTheDocument();
+    });
+    expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
   }, 15000);
 
   it("gates overlapping manual refresh clicks while discovery is in flight", async () => {

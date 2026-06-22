@@ -157,9 +157,11 @@ function HomePageContent() {
 
   // Dynamic device capabilities. Feature gates below consume these predicates
   // (supportsStreaming / supportsPowerCycle) rather than raw product-family literals.
-  // Streaming is REST-config-driven (Data Streams VIC/Audio items) with a documented
-  // family fallback; the Ultimate II family (U2) has no /v1/streams endpoint, so it is
-  // never granted streaming unless its config explicitly advertises it.
+  // Capabilities are runtime-derived: streaming from the Data Streams config (VIC/Audio
+  // items), else from /v1/info core_version presence (the U64-family marker); power-cycle
+  // and Power Off likewise from core_version. No product-family literal gates any feature —
+  // a U2 cartridge (no core_version, no /v1/streams) is correctly excluded unless its own
+  // config advertises streaming.
   const deviceCapabilities = deriveDeviceCapabilities({
     product: status.deviceInfo?.product,
     firmwareVersion: status.deviceInfo?.firmware_version,
@@ -1111,6 +1113,7 @@ function HomePageContent() {
             onPowerOff={handlePowerOff}
             onReboot={() => void handleReboot()}
             onToggleMenu={() => void handleMenuToggle()}
+            powerOffVisible={deviceCapabilities.supportsPowerCycle}
             powerCycleVisible={powerCycleVisible}
             onPowerCycle={powerCycleDisabledReason === null ? () => void handlePowerCycle() : undefined}
             powerCycleDisabledReason={powerCycleDisabledReason}

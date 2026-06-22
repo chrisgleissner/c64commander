@@ -16,49 +16,61 @@ import {
 } from "@/lib/deviceCapabilities";
 
 describe("deviceCapabilities — deriveDeviceCapabilities", () => {
-  it("derives C64U capabilities (streaming, menu input, power cycle)", () => {
+  it("derives C64U capabilities from core_version (streaming, menu input, power cycle)", () => {
     const caps = deriveDeviceCapabilities({ product: "C64 Ultimate", firmwareVersion: "1.1.0", coreVersion: "1.49" });
     expect(caps.family).toBe("C64U");
     expect(supportsStreaming(caps)).toBe(true);
     expect(supportsMenuInput(caps)).toBe(true);
     expect(supportsPowerCycle(caps)).toBe(true);
-    expect(caps.streamingSource).toBe("family-default");
+    expect(caps.streamingSource).toBe("core-version");
     expect(caps.firmwareVersion).toBe("1.1.0");
     expect(caps.coreVersion).toBe("1.49");
   });
 
-  it("derives U64 Elite capabilities (streaming yes, power cycle no)", () => {
+  it.each([
+    ["Ultimate 64", "U64", "1.4B"],
+    ["Ultimate 64 Elite", "U64E", "1.4B"],
+    ["Ultimate 64-II", "U64E2", "1.5"],
+  ])(
+    "grants every integrated computer (%s) streaming + power cycle when core_version is present",
+    (product, family, coreVersion) => {
+      const caps = deriveDeviceCapabilities({ product, coreVersion });
+      expect(caps.family).toBe(family);
+      expect(supportsStreaming(caps)).toBe(true);
+      expect(supportsPowerCycle(caps)).toBe(true);
+      expect(caps.streamingSource).toBe("core-version");
+    },
+  );
+
+  it("gates power cycle + streaming on core_version, NOT family: a U64 product without core_version gets neither", () => {
+    // Proves the gate is runtime-signal-driven. A real U64 always reports core_version;
+    // a partial/missing /v1/info conservatively yields no advanced capabilities.
     const caps = deriveDeviceCapabilities({ product: "Ultimate 64 Elite", firmwareVersion: "3.14e" });
     expect(caps.family).toBe("U64E");
-    expect(supportsStreaming(caps)).toBe(true);
-    expect(supportsMenuInput(caps)).toBe(true);
+    expect(caps.coreVersion).toBeNull();
     expect(supportsPowerCycle(caps)).toBe(false);
+    expect(supportsStreaming(caps)).toBe(false);
+    expect(supportsMenuInput(caps)).toBe(true);
   });
 
-  it("derives U64-II/Elite-II capabilities (streaming + power cycle)", () => {
-    const caps = deriveDeviceCapabilities({ product: "Ultimate 64-II" });
-    expect(caps.family).toBe("U64E2");
-    expect(supportsStreaming(caps)).toBe(true);
-    expect(supportsPowerCycle(caps)).toBe(true);
-  });
-
-  it("derives U2 (Ultimate II+) capabilities WITHOUT streaming (firmware: no /v1/streams)", () => {
+  it("derives U2 (Ultimate II+) capabilities WITHOUT streaming or power cycle (no core_version)", () => {
     const caps = deriveDeviceCapabilities({ product: "Ultimate II+", firmwareVersion: "3.11" });
     expect(caps.family).toBe("U2");
     // U2 supports the shared REST machine-menu surface...
     expect(supportsMenuInput(caps)).toBe(true);
-    // ...but never streaming by default, and no power cycle.
+    // ...but a cartridge has no core_version → no streaming and no power cycle.
     expect(supportsStreaming(caps)).toBe(false);
     expect(supportsPowerCycle(caps)).toBe(false);
-    expect(caps.streamingSource).toBe("family-default");
+    expect(caps.streamingSource).toBe("unknown");
   });
 
   it.each([["Ultimate II"], ["Ultimate II+"], ["Ultimate II+L"], ["Ultimate 2"]])(
-    "classifies %s as the U2 family with no streaming",
+    "classifies %s as the U2 family with no streaming/power cycle (no core_version)",
     (product) => {
       const caps = deriveDeviceCapabilities({ product });
       expect(caps.family).toBe("U2");
       expect(supportsStreaming(caps)).toBe(false);
+      expect(supportsPowerCycle(caps)).toBe(false);
     },
   );
 
@@ -69,11 +81,17 @@ describe("deviceCapabilities — deriveDeviceCapabilities", () => {
     expect(caps.streamingSource).toBe("rest-config");
   });
 
-  it("lets REST config disable streaming on a U64 family device (capability beats family)", () => {
-    const caps = deriveDeviceCapabilities({ product: "Ultimate 64", streamEndpointsAdvertised: false });
+  it("lets REST config disable streaming even on an integrated computer (config beats core_version)", () => {
+    const caps = deriveDeviceCapabilities({
+      product: "Ultimate 64",
+      coreVersion: "1.4B",
+      streamEndpointsAdvertised: false,
+    });
     expect(caps.family).toBe("U64");
     expect(supportsStreaming(caps)).toBe(false);
     expect(caps.streamingSource).toBe("rest-config");
+    // Power cycle still derives from core_version independently of the streaming config.
+    expect(supportsPowerCycle(caps)).toBe(true);
   });
 
   it("grants an unknown device only safe defaults (no advanced capabilities)", () => {
@@ -92,12 +110,13 @@ describe("deviceCapabilities — deriveDeviceCapabilities", () => {
     expect(supportsStreaming(caps)).toBe(false);
   });
 
-  it("respects an explicit restReachable=false even for a streaming family", () => {
-    const caps = deriveDeviceCapabilities({ product: "Ultimate 64", restReachable: false });
+  it("respects an explicit restReachable=false even with core_version present", () => {
+    const caps = deriveDeviceCapabilities({ product: "Ultimate 64", coreVersion: "1.4B", restReachable: false });
     expect(caps.family).toBe("U64");
     expect(caps.restReachable).toBe(false);
     expect(supportsStreaming(caps)).toBe(false);
     expect(supportsMenuInput(caps)).toBe(false);
+    expect(supportsPowerCycle(caps)).toBe(false);
   });
 });
 

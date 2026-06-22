@@ -150,6 +150,7 @@ import { FolderPicker, type SafPersistedUri } from "@/lib/native/folderPicker";
 import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
 import { discoverConnection } from "@/lib/connection/connectionManager";
+import { evaluateNewDeviceReachability } from "@/lib/connection/addDeviceReachability";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { useDeviceDiscovery } from "@/hooks/useDeviceDiscovery";
 import { useNavigate } from "react-router-dom";
@@ -246,6 +247,9 @@ export default function SettingsPage() {
   const [deviceNameError, setDeviceNameError] = useState<string | null>(null);
   const [hostnameError, setHostnameError] = useState<string | null>(null);
   const [connectionFieldError, setConnectionFieldError] = useState<string | null>(null);
+  // Calm IP-rescue hint: set when an entered hostname is unreachable but the device was
+  // found on the LAN at this address (so we steer the user to it instead of failing).
+  const [reachabilitySuggestion, setReachabilitySuggestion] = useState<{ address: string } | null>(null);
   const [discoveryPasswordCandidate, setDiscoveryPasswordCandidate] = useState<DeviceDiscoveryCandidate | null>(null);
   const [discoveryPasswordInput, setDiscoveryPasswordInput] = useState("");
   const [discoveryPasswordError, setDiscoveryPasswordError] = useState<string | null>(null);
@@ -427,6 +431,7 @@ export default function SettingsPage() {
     setDeviceNameError(null);
     setHostnameError(null);
     setConnectionFieldError(null);
+    setReachabilitySuggestion(null);
   }, [
     selectedSavedDevice?.id,
     selectedSavedDevice?.name,
@@ -456,6 +461,8 @@ export default function SettingsPage() {
   const handleDeviceDraftChange = useCallback(
     (nextDraft: SavedDeviceEditorDraft) => {
       setDeviceDraft(nextDraft);
+      // Any host edit makes a previous IP suggestion stale.
+      setReachabilitySuggestion(null);
       if (selectedSavedDevice && deviceNameError) {
         setDeviceNameError(
           validateSavedDeviceName(savedDevices.devices, selectedSavedDevice.id, nextDraft.name, nextDraft.host),
@@ -470,6 +477,12 @@ export default function SettingsPage() {
     },
     [connectionFieldError, deviceNameError, hostnameError, savedDevices.devices, selectedSavedDevice],
   );
+
+  const handleUseSuggestedAddress = useCallback((address: string) => {
+    setReachabilitySuggestion(null);
+    setHostnameError(null);
+    setDeviceDraft((current) => ({ ...current, host: address }));
+  }, []);
 
   useEffect(() => {
     setListPreviewInput(String(listPreviewLimit));
@@ -618,10 +631,31 @@ export default function SettingsPage() {
     if (hostError || portError || nextDeviceNameError) return;
     const nextHost = stripPortFromDeviceHost(deviceDraft.host.trim() || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
     const nextDeviceHost = buildDeviceHostWithHttpPort(nextHost, Number(deviceDraft.httpPort));
+    const trimmedPassword = passwordInputRef.current.trim();
+    const hasPassword = trimmedPassword.length > 0;
     setIsSaving(true);
     try {
-      const trimmedPassword = passwordInputRef.current.trim();
-      const hasPassword = trimmedPassword.length > 0;
+      // Pre-commit reachability gate: never persist an unreachable device. When an
+      // entered hostname can't be reached but the device is found on the LAN, calmly
+      // steer the user to its IP address instead of failing silently.
+      const reachability = await evaluateNewDeviceReachability({
+        host: nextHost,
+        deviceHost: nextDeviceHost,
+        password: hasPassword ? trimmedPassword : null,
+      });
+      if (reachability.status === "unreachable") {
+        if (reachability.suggestedAddress) {
+          setReachabilitySuggestion({ address: reachability.suggestedAddress });
+          setHostnameError(null);
+        } else {
+          setReachabilitySuggestion(null);
+          setHostnameError(
+            `We couldn’t reach “${nextHost}”. Make sure it’s powered on and on the same Wi‑Fi, or enter its IP address.`,
+          );
+        }
+        return;
+      }
+      setReachabilitySuggestion(null);
       setStoredFtpPort(Number(deviceDraft.ftpPort));
       setStoredTelnetPort(Number(deviceDraft.telnetPort));
       if (hasPassword) {
@@ -1220,6 +1254,8 @@ export default function SettingsPage() {
                     hostLabel="C64U Hostname / IP"
                     hostHint="Name or IP shown on your device."
                     onHostBlur={(value) => setHostnameError(validateDeviceHost(value))}
+                    reachabilitySuggestion={reachabilitySuggestion}
+                    onUseSuggestedAddress={handleUseSuggestedAddress}
                     keypadInput={flags.keypad_input_enabled && isDefaultT9InputEnabled()}
                   />
                   <p className="text-xs text-muted-foreground">

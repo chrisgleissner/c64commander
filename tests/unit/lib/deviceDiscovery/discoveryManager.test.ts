@@ -144,6 +144,55 @@ describe("device discovery manager", () => {
     });
   });
 
+  it("updates a known device's host by unique id instead of creating a duplicate when its IP changes", async () => {
+    const { addSavedDevice, getSavedDevicesSnapshot } = await import("@/lib/savedDevices/store");
+    const { persistDiscoveredDevice } = await import("@/lib/deviceDiscovery/discoveryManager");
+
+    // A previously-saved device last seen at an old IP, with its unique id recorded.
+    addSavedDevice({
+      id: "known-1",
+      name: "My C64U",
+      host: "192.168.1.50",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "C64U",
+      lastKnownHostname: "c64u",
+      lastKnownUniqueId: "5D4E12",
+      hasPassword: false,
+    });
+    const countBefore = getSavedDevicesSnapshot().devices.length;
+
+    // The SAME physical device (same unique id) reappears at a NEW address.
+    const persisted = persistDiscoveredDevice(
+      {
+        id: "id:5d4e12",
+        address: "192.168.1.167",
+        host: null,
+        httpPort: 80,
+        source: ["lan-scan"],
+        product: "C64 Ultimate",
+        firmwareVersion: "1.1.0",
+        fpgaVersion: "122",
+        coreVersion: "1.49",
+        hostname: "c64u-new",
+        uniqueId: "5D4E12",
+        requiresPassword: false,
+        alreadySavedDeviceId: null,
+        confidence: "verified",
+        lastSeenAt: "2026-06-22T00:00:00.000Z",
+      },
+      { select: false },
+    );
+
+    const snapshot = getSavedDevicesSnapshot();
+    // The existing entry is reused (matched by unique id) and its host updated — no duplicate.
+    expect(persisted.deviceId).toBe("known-1");
+    expect(snapshot.devices).toHaveLength(countBefore);
+    expect(snapshot.devices.find((device) => device.id === "known-1")?.host).toBe("192.168.1.167");
+    expect(snapshot.devices.find((device) => device.id === "known-1")?.lastKnownUniqueId).toBe("5D4E12");
+  });
+
   it("classifies and persists a discovered Ultimate II (U2) device as a first-class family", async () => {
     discover.mockResolvedValueOnce({
       candidates: [

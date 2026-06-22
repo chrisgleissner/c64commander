@@ -24,6 +24,12 @@ type Props = {
   hostHint?: string | null;
   onHostBlur?: (value: string) => void;
   /**
+   * Calm, non-invasive hint shown when the entered hostname could not be reached but
+   * the device was found on the LAN at this IP. Tapping the action fills in the IP.
+   */
+  reachabilitySuggestion?: { address: string } | null;
+  onUseSuggestedAddress?: (address: string) => void;
+  /**
    * Enables the physical T9 / keypad composer on the name and host fields.
    * Off by default so hardware keyboards insert literal letters and digits.
    */
@@ -90,6 +96,8 @@ export function SavedDeviceEditorFields({
   hostLabel = "Host",
   hostHint = null,
   onHostBlur,
+  reachabilitySuggestion = null,
+  onUseSuggestedAddress,
   keypadInput = false,
 }: Props) {
   const [activeT9Field, setActiveT9Field] = useState<"name" | "host" | null>(null);
@@ -214,6 +222,27 @@ export function SavedDeviceEditorFields({
           <p id={`${idPrefix}-host-help`} className="text-xs text-muted-foreground">
             {hostHint}
           </p>
+        ) : null}
+
+        {reachabilitySuggestion ? (
+          <div
+            className="space-y-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2.5"
+            data-testid={`${idPrefix}-reachability-suggestion`}
+            role="status"
+          >
+            <p className="text-xs text-muted-foreground">
+              We couldn’t reach “{draft.host.trim()}”, but we found your device on this network at{" "}
+              <span className="font-medium text-foreground">{reachabilitySuggestion.address}</span>. Use that address?
+            </p>
+            <button
+              type="button"
+              onClick={() => onUseSuggestedAddress?.(reachabilitySuggestion.address)}
+              className="inline-flex items-center rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              data-testid={`${idPrefix}-use-suggested-address`}
+            >
+              Use {reachabilitySuggestion.address}
+            </button>
+          </div>
         ) : null}
 
         <div className="grid grid-cols-3 gap-3">
