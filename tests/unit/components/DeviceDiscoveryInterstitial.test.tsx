@@ -189,4 +189,103 @@ describe("DeviceDiscoveryInterstitial", () => {
       expect(switchSavedDevice).toHaveBeenCalledWith("saved-device");
     });
   });
+
+  it("uses a password-protected device without prompting when a saved password exists", async () => {
+    discoveryState = {
+      ...discoveryState,
+      candidates: [{ ...candidate(true), alreadySavedDeviceId: "known" }],
+    };
+    savedDevices = { selectedDeviceId: "device-1", devices: [{ id: "known", hasPassword: true }] };
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("startup-use-discovered-device-address:192.168.1.14"));
+
+    await waitFor(() => {
+      expect(persistDiscoveredDevice).toHaveBeenCalledWith(discoveryState.candidates[0], {
+        select: true,
+        passwordPresent: false,
+      });
+    });
+    expect(screen.queryByTestId("startup-device-password-panel")).not.toBeInTheDocument();
+    expect(setPasswordForDevice).not.toHaveBeenCalled();
+  });
+
+  it("saves a password-protected device and stores the entered password", async () => {
+    discoveryState = { ...discoveryState, candidates: [candidate(true)] };
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("startup-save-discovered-device-address:192.168.1.14"));
+    expect(screen.getByTestId("startup-device-password-panel")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId("startup-device-password-input"), { target: { value: "hunter2" } });
+    fireEvent.click(screen.getByTestId("startup-device-password-confirm"));
+
+    await waitFor(() => {
+      expect(persistDiscoveredDevice).toHaveBeenCalledWith(discoveryState.candidates[0], {
+        select: false,
+        passwordPresent: true,
+      });
+      expect(setPasswordForDevice).toHaveBeenCalledWith("saved-device", "hunter2");
+    });
+    expect(switchSavedDevice).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("startup-device-password-panel")).not.toBeInTheDocument();
+  });
+
+  it("reports an error when saving a discovered device fails", async () => {
+    persistDiscoveredDevice.mockImplementationOnce(() => {
+      throw new Error("disk full");
+    });
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("startup-save-discovered-device-id:38c1ba"));
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({ operation: "DEVICE_DISCOVERY_SAVE", deviceHost: "192.168.1.13" }),
+      );
+    });
+    expect(screen.getByTestId("startup-save-discovered-device-id:38c1ba")).toHaveTextContent("Save");
+  });
+
+  it("reports an error when the follow-up connection check fails", async () => {
+    switchSavedDevice.mockResolvedValueOnce({ ok: false, error: "device did not answer" });
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("startup-use-discovered-device-id:38c1ba"));
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({ operation: "DEVICE_DISCOVERY_SELECT", deviceHost: "192.168.1.13" }),
+      );
+    });
+  });
+
+  it("cancels the password prompt without saving", () => {
+    discoveryState = { ...discoveryState, candidates: [candidate(true)] };
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("startup-use-discovered-device-address:192.168.1.14"));
+    expect(screen.getByTestId("startup-device-password-panel")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("startup-device-password-cancel"));
+    expect(screen.queryByTestId("startup-device-password-panel")).not.toBeInTheDocument();
+    expect(persistDiscoveredDevice).not.toHaveBeenCalled();
+  });
+
+  it("dismisses and routes to Settings from the footer action", () => {
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("startup-device-discovery-open-settings"));
+
+    expect(screen.queryByText("C64 Ultimate devices found")).not.toBeInTheDocument();
+  });
+
+  it("dismisses on dialog close (Escape)", () => {
+    renderDialog();
+    expect(screen.getByText("C64 Ultimate devices found")).toBeInTheDocument();
+
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+
+    expect(screen.queryByText("C64 Ultimate devices found")).not.toBeInTheDocument();
+  });
 });

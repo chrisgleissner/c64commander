@@ -7,6 +7,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { DeviceDiscoveryCandidate } from "@/lib/deviceDiscovery/types";
 
 const discover = vi.fn();
 
@@ -277,5 +278,85 @@ describe("device discovery manager", () => {
       hasPassword: true,
       lastKnownProduct: "C64U",
     });
+  });
+
+  it("notifies subscribers on state changes and stops after unsubscribe", async () => {
+    const { subscribeDeviceDiscovery, resetDeviceDiscoveryStateForTests } =
+      await import("@/lib/deviceDiscovery/discoveryManager");
+    const listener = vi.fn();
+    const unsubscribe = subscribeDeviceDiscovery(listener);
+    resetDeviceDiscoveryStateForTests();
+    expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe();
+    resetDeviceDiscoveryStateForTests();
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("resets discovery state back to idle", async () => {
+    discover.mockResolvedValueOnce({ candidates: [], scannedHosts: 5, elapsedMs: 10, unsupported: false });
+    const { getDeviceDiscoveryState, resetDeviceDiscoveryStateForTests, startDeviceDiscovery } =
+      await import("@/lib/deviceDiscovery/discoveryManager");
+    await startDeviceDiscovery({ trigger: "settings" });
+    expect(getDeviceDiscoveryState().phase).toBe("complete");
+    resetDeviceDiscoveryStateForTests();
+    expect(getDeviceDiscoveryState()).toMatchObject({ phase: "idle", scannedHosts: 0, candidates: [], error: null });
+  });
+
+  it("records an error state and returns an empty result when the native scan rejects", async () => {
+    discover.mockRejectedValueOnce(new Error("native bridge exploded"));
+    const { getDeviceDiscoveryState, startDeviceDiscovery } = await import("@/lib/deviceDiscovery/discoveryManager");
+    const result = await startDeviceDiscovery({ trigger: "startup" });
+    expect(result).toEqual({ candidates: [], scannedHosts: 0, elapsedMs: 0, unsupported: false });
+    expect(getDeviceDiscoveryState()).toMatchObject({ phase: "error", error: "native bridge exploded" });
+  });
+
+  it("ranks candidates by selected/saved affinity then identity signals then address", async () => {
+    const { addSavedDevice, selectSavedDevice } = await import("@/lib/savedDevices/store");
+    const { rankDiscoveredCandidates } = await import("@/lib/deviceDiscovery/discoveryManager");
+    addSavedDevice({
+      id: "sel",
+      name: "Selected",
+      host: "192.168.1.50",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      hasPassword: false,
+    });
+    selectSavedDevice("sel");
+
+    const make = (over: Partial<DeviceDiscoveryCandidate>): DeviceDiscoveryCandidate => ({
+      id: over.address ?? "x",
+      address: "0.0.0.0",
+      host: null,
+      httpPort: 80,
+      source: ["lan-scan"],
+      product: "C64 Ultimate",
+      firmwareVersion: null,
+      fpgaVersion: null,
+      coreVersion: null,
+      hostname: null,
+      uniqueId: null,
+      requiresPassword: false,
+      alreadySavedDeviceId: null,
+      confidence: "verified",
+      lastSeenAt: "2026-06-22T00:00:00.000Z",
+      ...over,
+    });
+
+    const ranked = rankDiscoveredCandidates([
+      make({ address: "192.168.1.9" }),
+      make({ address: "192.168.1.2", uniqueId: "ZZ", hostname: "h", source: ["hostname"] }),
+      make({ address: "192.168.1.3", alreadySavedDeviceId: "other" }),
+      make({ address: "192.168.1.4", alreadySavedDeviceId: "sel" }),
+      make({ address: "192.168.1.1" }),
+    ]);
+
+    expect(ranked.map((candidate) => candidate.address)).toEqual([
+      "192.168.1.4", // selected saved device (+1000 +500)
+      "192.168.1.3", // saved but not selected (+500)
+      "192.168.1.2", // unique id + hostname + hostname source
+      "192.168.1.1", // address tiebreak before .9
+      "192.168.1.9",
+    ]);
   });
 });

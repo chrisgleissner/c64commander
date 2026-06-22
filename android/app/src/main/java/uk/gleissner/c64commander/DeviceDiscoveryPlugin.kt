@@ -35,13 +35,13 @@ class DeviceDiscoveryPlugin : Plugin() {
   private val executor = Executors.newSingleThreadExecutor()
   private val logTag = "DeviceDiscoveryPlugin"
 
-  private data class DiscoveryTarget(
+  internal data class DiscoveryTarget(
     val host: String,
     val port: Int = 80,
     val source: String,
   )
 
-  private data class DiscoveryCandidate(
+  internal data class DiscoveryCandidate(
     val address: String,
     val host: String?,
     val httpPort: Int,
@@ -85,7 +85,7 @@ class DeviceDiscoveryPlugin : Plugin() {
     }
   }
 
-  private fun parseKnownHosts(call: PluginCall): List<String> {
+  internal fun parseKnownHosts(call: PluginCall): List<String> {
     val array = call.getArray("knownHosts") ?: return emptyList()
     val hosts = mutableListOf<String>()
     for (index in 0 until array.length()) {
@@ -105,7 +105,7 @@ class DeviceDiscoveryPlugin : Plugin() {
     return hosts
   }
 
-  private fun buildTargets(knownHosts: List<String>, includeLanScan: Boolean): List<DiscoveryTarget> {
+  internal fun buildTargets(knownHosts: List<String>, includeLanScan: Boolean): List<DiscoveryTarget> {
     val targets = linkedMapOf<String, DiscoveryTarget>()
     knownHosts.forEach { host ->
       val target = DiscoveryTarget(host = host, source = "hostname")
@@ -147,7 +147,7 @@ class DeviceDiscoveryPlugin : Plugin() {
     return hosts.toList()
   }
 
-  private fun enumerateIpv4Subnet(address: Inet4Address, prefixLength: Int): List<String> {
+  internal fun enumerateIpv4Subnet(address: Inet4Address, prefixLength: Int): List<String> {
     val effectivePrefix = prefixLength.coerceIn(24, 30)
     val local = ipv4ToInt(address.address)
     val mask = (-1 shl (32 - effectivePrefix))
@@ -161,7 +161,7 @@ class DeviceDiscoveryPlugin : Plugin() {
     return hosts
   }
 
-  private fun runProbes(
+  internal fun runProbes(
     targets: List<DiscoveryTarget>,
     timeoutMs: Int,
     connectTimeoutMs: Int,
@@ -205,7 +205,7 @@ class DeviceDiscoveryPlugin : Plugin() {
     return candidatesByKey.values.toList()
   }
 
-  private fun probeTarget(target: DiscoveryTarget, connectTimeoutMs: Int): DiscoveryCandidate? {
+  internal fun probeTarget(target: DiscoveryTarget, connectTimeoutMs: Int): DiscoveryCandidate? {
     return try {
       val url = URL("http://${target.host}:${target.port}/v1/info")
       val connection = url.openConnection() as HttpURLConnection
@@ -274,15 +274,15 @@ class DeviceDiscoveryPlugin : Plugin() {
     }
   }
 
-  private fun resolveHostAddress(host: String): String =
+  internal fun resolveHostAddress(host: String): String =
     runCatching { InetAddress.getByName(host).hostAddress }.getOrNull()?.takeIf { it.isNotBlank() } ?: host
 
-  private fun isUltimateProduct(product: String?): Boolean {
+  internal fun isUltimateProduct(product: String?): Boolean {
     val normalized = product?.trim()?.lowercase() ?: return false
     return normalized.contains("ultimate") || normalized == "c64u"
   }
 
-  private fun mergeCandidate(left: DiscoveryCandidate, right: DiscoveryCandidate): DiscoveryCandidate {
+  internal fun mergeCandidate(left: DiscoveryCandidate, right: DiscoveryCandidate): DiscoveryCandidate {
     return left.copy(
       address = left.address.ifBlank { right.address },
       host = left.host ?: right.host,
@@ -298,7 +298,7 @@ class DeviceDiscoveryPlugin : Plugin() {
     )
   }
 
-  private fun candidatesToJson(candidates: List<DiscoveryCandidate>): JSArray {
+  internal fun candidatesToJson(candidates: List<DiscoveryCandidate>): JSArray {
     val array = JSArray()
     candidates.forEach { candidate ->
       val sources = JSArray()
@@ -320,22 +320,22 @@ class DeviceDiscoveryPlugin : Plugin() {
     return array
   }
 
-  private fun targetKey(target: DiscoveryTarget): String {
+  internal fun targetKey(target: DiscoveryTarget): String {
     return "${target.host.trim().lowercase()}:${target.port}"
   }
 
-  private fun isIpv4Literal(value: String): Boolean {
+  internal fun isIpv4Literal(value: String): Boolean {
     return Regex("^\\d{1,3}(?:\\.\\d{1,3}){3}$").matches(value)
   }
 
-  private fun ipv4ToInt(bytes: ByteArray): Int {
+  internal fun ipv4ToInt(bytes: ByteArray): Int {
     return ((bytes[0].toInt() and 0xff) shl 24) or
       ((bytes[1].toInt() and 0xff) shl 16) or
       ((bytes[2].toInt() and 0xff) shl 8) or
       (bytes[3].toInt() and 0xff)
   }
 
-  private fun intToIpv4(value: Int): String {
+  internal fun intToIpv4(value: Int): String {
     return listOf(
       (value ushr 24) and 0xff,
       (value ushr 16) and 0xff,

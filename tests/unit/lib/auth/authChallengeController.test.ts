@@ -39,7 +39,7 @@ vi.mock("@/lib/logging", () => ({
   addLog: (...args: unknown[]) => addLog(...args),
 }));
 
-import { submitAuthChallengePassword } from "@/lib/auth/authChallengeController";
+import { cancelAuthChallenge, submitAuthChallengePassword } from "@/lib/auth/authChallengeController";
 import { getAuthChallengeSnapshot, notifyAuthRequired, resetAuthChallengeForTests } from "@/lib/auth/authChallenge";
 
 const SECRET = "hunter2-network-pass";
@@ -165,5 +165,27 @@ describe("submitAuthChallengePassword", () => {
     const recovered = await submitAuthChallengePassword(SECRET);
     expect(recovered).toBe(false);
     expect(setPasswordForDevice).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the device-agnostic password store when no device identity is resolved", async () => {
+    const previousSelected = snapshot.selectedDeviceId;
+    snapshot.selectedDeviceId = "no-such-device";
+    try {
+      // A host that matches no saved device and no resolvable selection → deviceId is null.
+      notifyAuthRequired({ host: "10.0.0.99" });
+      const recovered = await submitAuthChallengePassword(SECRET);
+      expect(recovered).toBe(true);
+      expect(setPassword).toHaveBeenCalledWith(SECRET);
+      expect(setPasswordForDevice).not.toHaveBeenCalled();
+    } finally {
+      snapshot.selectedDeviceId = previousSelected;
+    }
+  });
+
+  it("cancelAuthChallenge dismisses the open challenge", () => {
+    notifyAuthRequired({ host: "192.168.1.167" });
+    expect(getAuthChallengeSnapshot()).not.toBeNull();
+    cancelAuthChallenge();
+    expect(getAuthChallengeSnapshot()).toBeNull();
   });
 });
