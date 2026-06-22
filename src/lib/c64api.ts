@@ -15,6 +15,8 @@ import {
   setPassword as storePassword,
 } from "@/lib/secureStorage";
 import { getSelectedSavedDeviceProductFamilySync, updateSelectedSavedDeviceConnection } from "@/lib/savedDevices/store";
+import { notifyAuthRequired, notifyAuthSatisfied } from "@/lib/auth/authChallenge";
+import { isAuthRequiredHttpStatus } from "@/lib/c64api/transportErrors";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 import { getSmokeConfig, isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
@@ -41,6 +43,7 @@ import {
   buildBaseUrlFromDeviceHost,
   getDeviceHostHttpPort,
   getDeviceHostFromBaseUrl,
+  hasPersistedDeviceHostConfig,
   isLocalProxy,
   normalizeDeviceHost,
   persistDeviceHostToStorage,
@@ -538,6 +541,12 @@ type C64ReadRequestOptions = RequestInit & {
   __c64uExpectedFailure?: boolean;
   __c64uSkipItemEnrichment?: boolean;
   __c64uSkipSuccessBodyInspection?: boolean;
+  /**
+   * Suppress the global "network password required" popup for this call. Set on
+   * background connection/discovery probes (which have their own password UX);
+   * `intent: "system"` is also suppressed automatically.
+   */
+  __c64uSuppressAuthChallenge?: boolean;
 };
 
 const hasStructuredConfigMetadata = (config: unknown) => {
@@ -635,6 +644,26 @@ export class C64API {
 
   getDeviceHost() {
     return this.deviceHost;
+  }
+
+  /**
+   * Raise the global "network password required" popup when a device call
+   * returns Forbidden/Unauthorized. Single-flighted downstream, so a burst of
+   * Forbidden responses yields exactly one popup. Identity (saved-device id +
+   * label) is resolved from this client's host by the auth-challenge store.
+   */
+  private maybeRaiseAuthChallenge(status: number, suppress: boolean) {
+    if (suppress || !isAuthRequiredHttpStatus(status)) return;
+    notifyAuthRequired({ host: this.deviceHost });
+  }
+
+  /**
+   * A successful device response proves the active password works, so close any
+   * popup left open for this host (e.g. by a transient re-probe failure). No-op
+   * when no challenge is open.
+   */
+  private clearAuthChallengeOnSuccess() {
+    notifyAuthSatisfied(this.deviceHost);
   }
 
   private buildAuthHeaders(): Record<string, string> {
@@ -988,6 +1017,10 @@ export class C64API {
     const expectedMissing = Boolean(options.__c64uExpectedMissing);
     const expectedFailureOption = Boolean(options.__c64uExpectedFailure);
     const skipSuccessBodyInspection = Boolean(options.__c64uSkipSuccessBodyInspection);
+    // Background connection/discovery probes (intent "system") manage their own
+    // password UX, so they never raise the global Forbidden popup; every other
+    // call does, covering info/config/drives/runners/play/health-check uniformly.
+    const suppressAuthChallenge = Boolean(options.__c64uSuppressAuthChallenge) || intent === "system";
     const requestOptions = { ...options } as C64ReadRequestOptions;
     requestOptions.__c64uTraceSuppressed = true;
     delete (requestOptions as { __c64uIntent?: InteractionIntent }).__c64uIntent;
@@ -1000,6 +1033,7 @@ export class C64API {
     delete (requestOptions as { __c64uExpectedMissing?: boolean }).__c64uExpectedMissing;
     delete (requestOptions as { __c64uExpectedFailure?: boolean }).__c64uExpectedFailure;
     delete (requestOptions as { __c64uSkipSuccessBodyInspection?: boolean }).__c64uSkipSuccessBodyInspection;
+    delete (requestOptions as { __c64uSuppressAuthChallenge?: boolean }).__c64uSuppressAuthChallenge;
     delete (requestOptions as { timeoutMs?: number }).timeoutMs;
 
     const requestSignal = requestOptions.signal ?? undefined;
@@ -1166,11 +1200,13 @@ export class C64API {
                     recordTraceError(action, err, failure);
                   }
                   responseRecorded = true;
+                  this.maybeRaiseAuthChallenge(response.status, suppressAuthChallenge);
                   throw err;
                 }
 
                 if (skipSuccessBodyInspection) {
                   noteRestReachable(url, requestDeviceHost);
+                  this.clearAuthChallengeOnSuccess();
                   recordRestResponse(action, {
                     method,
                     path,
@@ -1192,6 +1228,7 @@ export class C64API {
                 const parsedBody = await this.parseResponseJson<T>(response, path);
                 throwIfSuperseded();
                 noteRestReachable(url, requestDeviceHost, path === "/v1/info" ? (parsedBody as DeviceInfo) : null);
+                this.clearAuthChallengeOnSuccess();
                 recordRestResponse(action, {
                   method,
                   path,
@@ -1916,6 +1953,10 @@ export class C64API {
       options.timeoutMs ?? CONTROL_REQUEST_TIMEOUT_MS,
     );
     if (!response.ok) {
+      this.maybeRaiseAuthChallenge(
+        response.status,
+        Boolean(options.__c64uSuppressAuthChallenge) || options.__c64uIntent === "system",
+      );
       throw new Error(`readMemory failed: HTTP ${response.status}`);
     }
     const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
@@ -2525,9 +2566,18 @@ export function getC64API(): C64API {
       lastDeviceHost = apiInstance.getDeviceHost();
     }
     if (hasStoredPasswordFlag() && cachedPassword === null) {
-      void loadStoredPassword().then((password) => {
-        apiInstance?.setPassword(password ?? undefined);
-      });
+      void loadStoredPassword()
+        .then((password) => {
+          apiInstance?.setPassword(password ?? undefined);
+        })
+        .catch((error) => {
+          // The native keystore can reject if locked/unavailable; don't let it
+          // surface as an unhandled rejection — the password stays unset and a
+          // later auth challenge handles it.
+          addLog("warn", "Failed to hydrate stored device password", {
+            error: error instanceof Error ? error.message : String(error ?? "unknown error"),
+          });
+        });
     }
   }
   if (!apiProxy) {
@@ -2678,4 +2728,10 @@ export const C64_DEFAULTS = {
   DEFAULT_HTTP_PORT,
 };
 
-export { buildBaseUrlFromDeviceHost, getDeviceHostFromBaseUrl, normalizeDeviceHost, resolveDeviceHostFromStorage };
+export {
+  buildBaseUrlFromDeviceHost,
+  getDeviceHostFromBaseUrl,
+  hasPersistedDeviceHostConfig,
+  normalizeDeviceHost,
+  resolveDeviceHostFromStorage,
+};

@@ -120,8 +120,8 @@ export const saveDebugLoggingEnabled = (enabled: boolean) => {
  * full-screen by default while the standard app does not. A user toggle in
  * Settings persists and overrides the variant default.
  */
-export const DEFAULT_HIDE_STATUS_BAR = variant.runtime.defaultHideStatusBar === true;
-export const DEFAULT_HIDE_NAVIGATION_BAR = variant.runtime.defaultHideNavigationBar === true;
+export const DEFAULT_HIDE_STATUS_BAR = Boolean(variant.runtime.defaultHideStatusBar);
+export const DEFAULT_HIDE_NAVIGATION_BAR = Boolean(variant.runtime.defaultHideNavigationBar);
 
 export const loadHideStatusBar = () => readBoolean(HIDE_STATUS_BAR_KEY, DEFAULT_HIDE_STATUS_BAR);
 

@@ -91,8 +91,12 @@ const {
   mockSetTheme,
   mockSetListPreviewLimit,
   mockSwitchSavedDevice,
+  mockEvaluateNewDeviceReachability,
+  mockStartDeviceDiscovery,
+  mockPersistDiscoveredDevice,
   connectionPayloadRef,
   connectionStateRef,
+  deviceDiscoveryStateRef,
   developerModeEnabledRef,
   featureFlagsRef,
   savedDevicesRef,
@@ -107,6 +111,19 @@ const {
   mockSetTheme: vi.fn(),
   mockSetListPreviewLimit: vi.fn(),
   mockSwitchSavedDevice: vi.fn(async () => undefined),
+  mockEvaluateNewDeviceReachability: vi.fn(async () => ({ status: "reachable" })),
+  mockStartDeviceDiscovery: vi.fn(async () => ({
+    candidates: [],
+    scannedHosts: 0,
+    elapsedMs: 0,
+    unsupported: false,
+  })),
+  mockPersistDiscoveredDevice: vi.fn((candidate: { address: string; httpPort: number }) => ({
+    deviceId: "discovered-device",
+    host: candidate.address,
+    httpPort: candidate.httpPort,
+    deviceHost: candidate.httpPort === 80 ? candidate.address : `${candidate.address}:${candidate.httpPort}`,
+  })),
   featureFlagsRef: {
     current: {
       hvsc_enabled: true,
@@ -169,6 +186,19 @@ const {
       lastProbeFailedAtMs: null as number | null,
     },
   },
+  deviceDiscoveryStateRef: {
+    current: {
+      phase: "idle",
+      trigger: null,
+      startedAt: null,
+      completedAt: null,
+      candidates: [],
+      scannedHosts: 0,
+      elapsedMs: null,
+      error: null,
+      unsupported: false,
+    },
+  },
   developerModeEnabledRef: { current: false },
 }));
 
@@ -204,6 +234,15 @@ vi.mock("@/lib/savedDevices/deviceDependencies", () => ({
 
 vi.mock("@/hooks/useConnectionState", () => ({
   useConnectionState: () => connectionStateRef.current,
+}));
+
+vi.mock("@/hooks/useDeviceDiscovery", () => ({
+  useDeviceDiscovery: () => deviceDiscoveryStateRef.current,
+}));
+
+vi.mock("@/lib/deviceDiscovery/discoveryManager", () => ({
+  startDeviceDiscovery: mockStartDeviceDiscovery,
+  persistDiscoveredDevice: mockPersistDiscoveredDevice,
 }));
 
 vi.mock("@/components/ThemeProvider", () => ({
@@ -372,6 +411,10 @@ vi.mock("@/lib/connection/connectionManager", () => ({
   dismissDemoInterstitial: vi.fn(),
 }));
 
+vi.mock("@/lib/connection/addDeviceReachability", () => ({
+  evaluateNewDeviceReachability: (...args: unknown[]) => mockEvaluateNewDeviceReachability(...args),
+}));
+
 vi.mock("@/lib/diagnostics/diagnosticsOverlay", () => ({
   requestDiagnosticsOpen: mockRequestDiagnosticsOpen,
 }));
@@ -484,6 +527,8 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  mockEvaluateNewDeviceReachability.mockReset();
+  mockEvaluateNewDeviceReachability.mockResolvedValue({ status: "reachable" });
   savedDevicesRef.current = {
     selectedDeviceId: "saved-device-1",
     devices: [
@@ -536,6 +581,17 @@ beforeEach(() => {
     lastProbeSucceededAtMs: null,
     lastProbeFailedAtMs: null,
   };
+  deviceDiscoveryStateRef.current = {
+    phase: "idle",
+    trigger: null,
+    startedAt: null,
+    completedAt: null,
+    candidates: [],
+    scannedHosts: 0,
+    elapsedMs: null,
+    error: null,
+    unsupported: false,
+  };
   developerModeEnabledRef.current = false;
   featureFlagsRef.current.hvsc_enabled = true;
   featureFlagsRef.current.demo_mode_enabled = false;
@@ -546,6 +602,20 @@ beforeEach(() => {
   featureFlagsRef.current.home_telnet_clear_ram_reboot_enabled = false;
   featureFlagsRef.current.keypad_input_enabled = true;
   mockSetFeatureFlag.mockReset();
+  mockStartDeviceDiscovery.mockReset();
+  mockStartDeviceDiscovery.mockResolvedValue({
+    candidates: [],
+    scannedHosts: 0,
+    elapsedMs: 0,
+    unsupported: false,
+  });
+  mockPersistDiscoveredDevice.mockReset();
+  mockPersistDiscoveredDevice.mockImplementation((candidate: { address: string; httpPort: number }) => ({
+    deviceId: "discovered-device",
+    host: candidate.address,
+    httpPort: candidate.httpPort,
+    deviceHost: candidate.httpPort === 80 ? candidate.address : `${candidate.address}:${candidate.httpPort}`,
+  }));
   vi.mocked(getLogs).mockReturnValue([]);
   vi.mocked(getErrorLogs).mockReturnValue([]);
   vi.mocked(requestDiagnosticsOpen).mockReset();
@@ -581,6 +651,45 @@ describe("SettingsPage", () => {
       expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Connection settings saved" }));
     });
     expect(discoverConnection).not.toHaveBeenCalled();
+  }, 15000);
+
+  it("blocks the save and calmly suggests the IP when a hostname is unreachable but found on the LAN", async () => {
+    mockEvaluateNewDeviceReachability.mockResolvedValue({
+      status: "unreachable",
+      suggestedAddress: "192.168.1.167",
+      suggestedHostname: "c64u",
+    });
+
+    renderSettingsPage();
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-device-reachability-suggestion")).toBeInTheDocument();
+    });
+    // The unreachable device was NOT committed or connected.
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+    expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
+
+    // Tapping the calm suggestion fills the host field with the working IP.
+    fireEvent.click(screen.getByTestId("settings-device-use-suggested-address"));
+    expect((screen.getByTestId("settings-device-host") as HTMLInputElement).value).toBe("192.168.1.167");
+    expect(screen.queryByTestId("settings-device-reachability-suggestion")).toBeNull();
+  }, 15000);
+
+  it("blocks the save with a calm hostname error when the device can't be reached or found", async () => {
+    mockEvaluateNewDeviceReachability.mockResolvedValue({
+      status: "unreachable",
+      suggestedAddress: null,
+      suggestedHostname: null,
+    });
+
+    renderSettingsPage();
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/couldn’t reach.*enter its IP address/i)).toBeInTheDocument();
+    });
+    expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
   }, 15000);
 
   it("gates overlapping manual refresh clicks while discovery is in flight", async () => {
@@ -628,6 +737,181 @@ describe("SettingsPage", () => {
       );
     });
     expect(refreshButton).not.toBeDisabled();
+  });
+
+  it("starts device discovery from Settings without blocking manual host entry", async () => {
+    renderSettingsPage();
+
+    const hostInput = screen.getByLabelText(/c64u hostname \/ ip/i);
+    const discoverButton = screen.getByRole("button", { name: /discover devices/i });
+
+    expect(hostInput).not.toBeDisabled();
+    fireEvent.click(discoverButton);
+
+    await waitFor(() => {
+      expect(mockStartDeviceDiscovery).toHaveBeenCalledWith({
+        trigger: "settings",
+        includeLanScan: true,
+        timeoutMs: 10000,
+      });
+    });
+    expect(hostInput).not.toBeDisabled();
+  });
+
+  it("communicates that a Settings discovery scan survives navigation", () => {
+    deviceDiscoveryStateRef.current = {
+      ...deviceDiscoveryStateRef.current,
+      phase: "scanning",
+      trigger: "settings",
+    };
+
+    renderSettingsPage();
+
+    expect(screen.getByTestId("settings-device-discovery-progress")).toHaveTextContent(
+      "You can leave this page; the scan keeps running.",
+    );
+    expect(screen.getByRole("button", { name: /discover devices/i })).toBeDisabled();
+    expect(screen.getByLabelText(/c64u hostname \/ ip/i)).not.toBeDisabled();
+  });
+
+  it("selects a discovered device through the saved-device switching path", async () => {
+    const candidate = {
+      id: "id:38c1ba",
+      address: "192.168.1.13",
+      host: null,
+      httpPort: 80,
+      source: ["lan-scan"],
+      product: "Ultimate 64 Elite",
+      firmwareVersion: "3.14e",
+      fpgaVersion: "122",
+      coreVersion: "1.4B",
+      hostname: "u64",
+      uniqueId: "38C1BA",
+      requiresPassword: false,
+      alreadySavedDeviceId: null,
+      confidence: "verified",
+      lastSeenAt: "2026-06-21T00:00:00.000Z",
+    };
+    deviceDiscoveryStateRef.current = {
+      ...deviceDiscoveryStateRef.current,
+      phase: "complete",
+      candidates: [candidate],
+      scannedHosts: 254,
+      elapsedMs: 500,
+    };
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "Use" }));
+
+    await waitFor(() => {
+      expect(mockPersistDiscoveredDevice).toHaveBeenCalledWith(candidate, { select: true, passwordPresent: false });
+      expect(mockSwitchSavedDevice).toHaveBeenCalledWith("discovered-device");
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Discovered device selected" }));
+    });
+  });
+
+  it("explains when automatic discovery is unsupported on this platform", () => {
+    deviceDiscoveryStateRef.current = {
+      ...deviceDiscoveryStateRef.current,
+      phase: "complete",
+      candidates: [],
+      unsupported: true,
+    };
+
+    renderSettingsPage();
+
+    expect(screen.getByTestId("settings-device-discovery-empty")).toHaveTextContent(
+      /isn.t available on this platform/i,
+    );
+  });
+
+  it("locks the Use control while a discovered-device switch is in flight (no double-submit)", async () => {
+    const candidate = {
+      id: "id:busy",
+      address: "192.168.1.30",
+      host: null,
+      httpPort: 80,
+      source: ["lan-scan"],
+      product: "Ultimate 64 Elite",
+      firmwareVersion: null,
+      fpgaVersion: null,
+      coreVersion: null,
+      hostname: "u64",
+      uniqueId: "BUSY01",
+      requiresPassword: false,
+      alreadySavedDeviceId: null,
+      confidence: "verified",
+      lastSeenAt: "2026-06-21T00:00:00.000Z",
+    };
+    deviceDiscoveryStateRef.current = {
+      ...deviceDiscoveryStateRef.current,
+      phase: "complete",
+      candidates: [candidate],
+      scannedHosts: 1,
+      elapsedMs: 10,
+    };
+    let resolveSwitch: ((value: undefined) => void) | undefined;
+    mockSwitchSavedDevice.mockImplementationOnce(() => new Promise<undefined>((resolve) => (resolveSwitch = resolve)));
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "Use" }));
+
+    // While the switch is pending the control shows progress and is disabled, so a second
+    // tap cannot race a second persist+switch at the (overload-prone) device.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Connecting" })).toBeDisabled());
+    fireEvent.click(screen.getByRole("button", { name: "Connecting" }));
+    expect(mockSwitchSavedDevice).toHaveBeenCalledTimes(1);
+
+    resolveSwitch?.(undefined);
+    await waitFor(() => expect(mockPersistDiscoveredDevice).toHaveBeenCalledTimes(1));
+  });
+
+  it("asks for a password before selecting a password-protected discovered device", async () => {
+    const candidate = {
+      id: "address:192.168.1.14",
+      address: "192.168.1.14",
+      host: null,
+      httpPort: 80,
+      source: ["lan-scan"],
+      product: "C64 Ultimate",
+      firmwareVersion: null,
+      fpgaVersion: null,
+      coreVersion: null,
+      hostname: null,
+      uniqueId: null,
+      requiresPassword: true,
+      alreadySavedDeviceId: null,
+      confidence: "verified",
+      lastSeenAt: "2026-06-21T00:00:00.000Z",
+    };
+    deviceDiscoveryStateRef.current = {
+      ...deviceDiscoveryStateRef.current,
+      phase: "complete",
+      candidates: [candidate],
+      scannedHosts: 254,
+      elapsedMs: 500,
+    };
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "Use" }));
+
+    expect(screen.getByTestId("settings-device-password-input")).toBeInTheDocument();
+    expect(mockPersistDiscoveredDevice).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("settings-device-password-confirm"));
+    expect(screen.getByRole("alert")).toHaveTextContent("Enter the network password");
+
+    fireEvent.change(screen.getByTestId("settings-device-password-input"), { target: { value: "secret" } });
+    fireEvent.click(screen.getByTestId("settings-device-password-confirm"));
+
+    await waitFor(() => {
+      expect(mockPersistDiscoveredDevice).toHaveBeenCalledWith(candidate, { select: true, passwordPresent: true });
+      expect(vi.mocked(setPasswordForDevice)).toHaveBeenCalledWith("discovered-device", "secret");
+      expect(mockSwitchSavedDevice).toHaveBeenCalledWith("discovered-device");
+    });
   });
 
   it("does not borrow the current product label for a non-selected saved device row", () => {

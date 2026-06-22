@@ -518,3 +518,192 @@ See the brief's TERMINATION CRITERIA — tracked in the checklist below.
 - Next: a per-screen reachability audit under the discovery engine (verify pages reachable without
   per-CTA `useFocusItem`); then the deterministic `back` chain wired to real dialogs/menus; T9 input
   mode indicator (multitap vs hostname) + profile selector.
+
+## Ralph loop iteration #118 (2026-06-21, claude / feat/device-hardening)
+
+- Branch `feat/device-hardening`, HEAD `7011aed6` (#291 keyboard input), working tree was clean at start.
+- Source `0.8.9-rc2`; installed APK was stale `0.8.9-rc1-132f2` (= commit 132f2, includes #290 but PREDATES #291). Rebuilt `npm run cap:build && ./gradlew assembleDebug` → `c64commander-0.8.9-rc2-7011a-debug.apk`; installed with `adb install -r -d` (versionCode 2028<2062 downgrade, data kept); installed identity now `0.8.9-rc2-7011a` = source HEAD. Current-build HIL valid.
+- Peers: droidmind / c64scope / c64bridge all callable. Hardware: c64u 192.168.1.167 `/v1/info` HTTP 200 in 9ms fw 1.1.0 (PRIMARY, recovered since #117); u64 192.168.1.13 HTTP 200 22ms fw 3.14e.
+- Capacity (Ralph runtime ctx): claude usable, 5h 60% / weekly 49% → ≥40% tier: min 8 actions, target 12–20, ≥1 adversarial; build+deploy allowed.
+- Previous verdict (#117): DEFECT (BUG-052 hostname resolver) + continuation. BUG-052/053 still OPEN.
+- Probe family: **Keyboard/Keypad input (global app shell, #291)** on c64u. Shortcuts: digits 1–6→tabs (Home/Play/Disks/Config/Settings/Docs), `*`→Diagnostics, `#`→Device Switcher, Menu→Quick Menu; D-pad focus ring nav + guidance bar; literal hardware-keyboard typing. Real Android key events driven via droidmind press_key = true actuation of the global keydown handler (validates #291 Android-WebView empty-`code` digit gotcha fix).
+- Stop criteria: exhaust safe keypad CTAs (digit shortcuts ×6, star/hash/menu, D-pad nav, activate, back, literal typing) each ×multiple with CDP+screenshot+logcat actuation proof; ≥1 adversarial (digit-in-overlay deferral, rapid double-press, bg/fg); mandatory logcat + Diagnostics export sweep; restore state; batch WORKLOG + CTA ledger; refresh digest; continuation.
+- Primary TODO: prove #291 digit/star/hash/menu shortcuts + D-pad ring actuate on current build via real key events; catch any regression (no-op, wrong tab, overlay leak, stale guidance).
+## Ralph loop iteration #119 (2026-06-21, codex / feat/device-hardening)
+
+- Branch `feat/device-hardening`, HEAD `7011aed6` (#291 keyboard input). Startup working tree already dirty from prior/local state edits: `PLANS.md`, `WORKLOG.md`, `ios/App/Podfile`.
+- Source identity `0.8.9-rc2-7011a` from `./scripts/resolve-version.sh`; installed Pixel 4 APK identity `0.8.9-rc2-7011a` via droidmind `get_app_info`, so current-build HIL is valid and no rebuild is needed.
+- Peers discovered by actual tool surface: droidmind callable; c64scope callable; c64bridge callable. c64bridge was switched from default `vice` backend to `c64u`; `c64_config info` returned C64 Ultimate fw `1.1.0`, no errors.
+- Capacity (Ralph runtime ctx): codex usable, 5h 86% / weekly 40% → `>=40%` tier: min 8 production actions, target 12-20, at least one adversarial transition.
+- Previous verdict (#118): CLEAN PASS for global keyboard/keypad; BUG-052/BUG-053 still open, BUG-055/056 low follow-ups.
+- Probe family: **Config Audio Mixer read-only c64u retest for BUG-053**. Visible controls to enumerate on device: Config route/category list, search input, Audio Mixer accordion, per-category Refresh, diagnostics affordance/views/export, Android Back/background. Mutable mixer controls (`Reset`, sliders, Solo) are `BLOCKED_SAFE` in this read-only performance pack and will be left unchanged.
+- Stop criteria: exhaust safe visible controls with repeated droidmind actions and verified actuation; capture ~200 ms / ~1 s behavior; include at least one adversarial safe transition; run package-filtered logcat plus pulled/analyzed Diagnostics ZIP; update WORKLOG, CTA ledger, digest, and continuation prompt.
+- Completion: safe Config Audio Mixer c64u controls were exhausted and BUG-053's c64u-primary retest is clean/current-build. Mandatory Diagnostics export exposed BUG-057 (WebView diagnostics version fell back to package baseline); fixed, rebuilt/deployed, and Pixel-HIL validated final Home + ZIP identity `0.8.9-rc2-7011a`. Next highest-value family: BUG-052 resolver contextualization fix pack or a c64scope-backed Play/SID playback pack.
+
+## Ralph loop iteration #120 (2026-06-21, claude / feat/device-hardening)
+
+- Branch `feat/device-hardening`, HEAD `7011aed6` (#291). Startup working tree dirty: in-progress BUG-052 fix (`src/lib/connection/connectionManager.ts` mDNS negative cache + probe short-circuit) and new `tests/unit/lib/connection/bug052MdnsNegativeCache.test.ts`, plus #119/local doc+config edits (`PLANS.md`, `WORKLOG.md`, `ios/App/Podfile`, version files, `vite.config.ts`).
+- Source identity `0.8.9-rc2-7011a` (`./scripts/resolve-version.sh`). Installed Pixel APK was `0.8.9-rc2-7011a` (#119) but PREDATES the uncommitted BUG-052 fix → MUST rebuild+deploy for a current-build claim. Build kicked off (`npm run cap:build && ./gradlew assembleDebug`).
+- Peers discovered via actual tool surface: droidmind / c64scope / c64bridge / mobile-mcp all callable. Pixel 4 `9B081FFAZ001WX` Android 16 connected.
+- Capacity (Ralph runtime ctx): claude usable, 5h 22% / weekly 47% → 20–39% tier: min 5 actions, target 6–10, one focused fix + redeploy + narrow validation allowed, no broad discovery beyond family.
+- Previous verdict (#119): FIXED BUG-057 + CLEAN PASS Config Audio Mixer; BUG-052 still OPEN (digest #1 recommended family).
+- Probe family: **Settings connection / mDNS offline-guidance fix-pack (BUG-052)**. Validate the in-progress fix on real HIL: with a bare hostname that fails mDNS resolution, Save & Connect must surface contextual "prefer device IP" guidance (NOT raw `{"message":...}` plugin JSON), short-circuit the slow system-DNS fetch, and use the 60s negative cache so a 2nd attempt fast-fails. Then restore working c64u host and reconnect healthy.
+- Gate done: focused unit test `bug052MdnsNegativeCache.test.ts` 2/2 pass (allowed narrow regression, source changed this loop); config type coherence confirmed.
+- Stop criteria: rebuild+deploy fixed APK + confirm install; HIL exhaust safe Settings-connection controls (host edit, Save & Connect ×repeat, valid/invalid input, Android Back, bg/fg) each with verified actuation; ≥1 adversarial (invalid→valid restore / repeated Save&Connect neg-cache); mandatory package-filtered logcat + pulled/analyzed Diagnostics ZIP confirming no raw mDNS plugin JSON; restore c64u connection; batch WORKLOG + CTA ledger; refresh digest; continuation.
+- Primary TODO: prove BUG-052 contextualized-guidance + negative-cache short-circuit on current (fixed) build; confirm Diagnostics error logs contain contextual guidance only, no raw plugin-error object.
+
+---
+
+# Discovery reliability + variant validation + U2 first-class support (2026-06-22)
+
+> Branch `feat/device-hardening` (continuation; not on `main`, so no new branch per the
+> brief's "continue on a feature branch" rule). This section is the **authoritative
+> execution plan** for the discovery-reliability / U2 / dynamic-capability task. Appended
+> below prior plans per the repo's "extend, don't overwrite" rule. Running evidence in
+> `WORKLOG.md`; final report at `doc/research/discovery-validation/report.md`.
+
+## Current understanding — feature + repo structure
+
+Device discovery is **already wired end-to-end** (uncommitted in-flight work on this branch):
+- Native Android `android/.../DeviceDiscoveryPlugin.kt` — bounded `/v1/info` LAN scan
+  (private `/24`..`/30` IPv4 only, bounded concurrency/timeouts) + known-host probing;
+  classifies any `product` containing "ultimate" (or `c64u`); 401 → password-required.
+- `src/lib/native/deviceDiscovery.ts` (Capacitor facade) + `.web.ts` (returns `unsupported`).
+- `src/lib/deviceDiscovery/discoveryManager.ts` — single-flight (`activeDiscovery`), candidate
+  normalization (keeps raw `product` string), dedupe by uniqueId→hostname/product→address,
+  ranking, persistence into the saved-device store.
+- `src/hooks/useDeviceDiscovery.ts` (`useSyncExternalStore`), `src/components/DeviceDiscoveryInterstitial.tsx`
+  (startup/resume offer; mounted at `App.tsx:260`).
+- Startup trigger: `ConnectionController` → `discoverConnection("startup")` →
+  `connectionManager.tryAutomaticDeviceDiscoveryFallback` → `startDeviceDiscovery`. Fallback runs
+  when (a) no device configured, or (b) the selected device stays unreachable for the discovery window.
+- Explicit Settings discovery: `SettingsPage.tsx` "Discover devices" button (`settings-discover-devices`)
+  → `startDeviceDiscovery({trigger:"settings"})`, inline results list + per-row Use + password prompt.
+
+## Current understanding — Ultimate device family modelling
+
+- Canonical family enum `ProductFamilyCode` (`src/lib/savedDevices/store.ts:23`): `C64U | U64 | U64E | U64E2`
+  — **U2 ABSENT**. Central classifier `normalizeKnownProduct`/`inferConnectedDeviceCode`/
+  `inferConnectedDeviceLabel` (`src/lib/diagnostics/targetDisplayMapper.ts`) has **no U2 branch**.
+- Root cause: a real U2 (`product:"Ultimate II+"`) **survives discovery** (`isUltimateProduct` matches
+  "ultimate") and shows in the picker with its raw product string, but normalizes to `null` at persistence
+  → saved with `lastKnownProduct:null`, no family, no safety preset, no telnet menu, mislabeled badge.
+- Firmware-grounded family facts (`1541ultimate/software/system/product.cc`, `api/`):
+  - Product strings: `Ultimate II`, `Ultimate II+`, `Ultimate II+L` (U2 family); `Ultimate 64`,
+    `Ultimate 64 Elite`, `Ultimate 64-II` (U64 family); real C64U reports `C64 Ultimate`.
+  - **Streaming (`/v1/streams`) is compiled into U64 family only** — U2 has NO streams endpoint
+    (verified REST + subsystem + DMA-socket layers). `core_version` and `/v1/machine:debugreg` are U64-only.
+  - **FTP, Telnet, and all other `/v1/*`** (info/version/help/machine/drives/files/runners/configs)
+    are identical on U2 and U64. U2 lacks the U64-only config categories (Audio Mixer, SID sockets,
+    UltiSID, SID Addressing, U64 Specific Settings, LED Strip) — these already self-hide via config presence.
+
+## Capability decisions for U2 (firmware-grounded; U2 is fixture-only — no hardware)
+
+| Capability | U2 value | Rationale / source |
+| --- | --- | --- |
+| `supportsStreaming` | **false** | `/v1/streams` not compiled on U2 (firmware). REST-config override allowed (Data Streams VIC/audio items) — proves gate is capability-, not family-driven. |
+| `supportsMenuInput` | true (when REST-reachable) | `/v1/machine:menu_button` compiled on all families. |
+| `supportsPowerCycle` | **false** | Matches existing gate ({C64U, U64E2}); U2 cartridge excluded. Expressed as a capability predicate (no raw family literal in UI). |
+| Telnet menu | enabled, key `F1` | Telnet service runs on U2 (firmware). `F1` = same as C64U sibling. **Assumption (fixture-level), needs HW confirmation.** |
+| Safety preset (AUTO) | **CONSERVATIVE** | Safety-first default for an untested device (gentler request rate). Documented assumption. |
+| CPU-speed write quirk | n/a | U2 has no "U64 Specific Settings"/CPU Speed; the `=== "C64U"` gate never fires for U2 — no change. |
+
+## Implementation tasks
+
+| # | Task | File(s) | Status |
+| --- | --- | --- | --- |
+| I1 | Add `U2` to family classifier (tokens, normalize, code, label) mapping Ultimate II / II+ / II+L / Ultimate 2 / U2 → `u2`/`U2`, without colliding with `ultimate64ii`(→u64e2) | `src/lib/diagnostics/targetDisplayMapper.ts` | pending |
+| I2 | Add `"U2"` to `ProductFamilyCode`; extend `inferSavedDeviceProductFamily` host fallback | `src/lib/savedDevices/store.ts` | pending |
+| I3 | Add `"U2"` to diagnostics attribution validation guard | `src/lib/diagnostics/deviceAttribution.ts` | pending |
+| I4 | Add `U2: "Ultimate II"` to `DEVICE_PRODUCT_DISPLAY_LABELS` (also satisfies exhaustive type key) | `src/pages/SettingsPage.tsx` | pending |
+| I5 | Telnet menu key for U2 (`F1`) so U2 is telnet-capable | `src/lib/telnet/telnetTypes.ts` | pending |
+| I6 | U2 AUTO safety preset → CONSERVATIVE | `src/lib/config/deviceSafetySettings.ts` | pending |
+| I7 | NEW capability model `deriveDeviceCapabilities()` (`family`, `restReachable`, `supportsStreaming`, `supportsMenuInput`, `supportsPowerCycle`, firmware/core version, REST-config streaming override, `unknown` handling) | `src/lib/deviceCapabilities/{types,capabilityModel,index}.ts` | pending |
+| I8 | Convert streaming UI gate to `supportsStreaming` predicate (hide Streams for U2/unknown) | `src/pages/HomePage.tsx`, `home/components/StreamStatus.tsx` | pending |
+| I9 | Convert power-cycle gate `deviceCode === "c64u" \|\| "u64e2"` → `supportsPowerCycle(caps)` | `src/pages/HomePage.tsx` | pending |
+| I10 | Startup multi-saved-device reachability sweep: before LAN-scan fallback (startup/resume only), probe other saved devices; if one reachable, switch+connect (no discovery) | `src/lib/connection/connectionManager.ts` | pending |
+| I11 | iOS/web discovery: graceful `unsupported` on iOS native (no Swift plugin; no iOS build env) instead of plugin-not-implemented error; document | `src/lib/deviceDiscovery/discoveryManager.ts` or facade | pending |
+| I12 | Build/deploy tool: `--variant commander\|remote\|all`, `--uninstall-first`, `--reset-config` (`pm clear`), `--device <serial>`; verify both installed; print pkg/apk/label/variant/serial | `scripts/build-android-apks.mjs` (+ help) | done |
+| I13 | Default screen orientation = **Portrait** for a newly installed app. Root cause: JS default is already `portrait` but `applyScreenOrientationMode` was only invoked from SettingsPage, never at startup, and MainActivity declares no `android:screenOrientation` → a fresh install was sensor-driven (behaved like Auto, rotated to landscape). Fix: apply the persisted/default orientation at app startup. | `src/lib/native/screenOrientation.ts` (`applyScreenOrientationFromSettings`), `src/main.tsx` (call at launch) | done |
+
+## U2 coverage audit tasks (from repo-wide grep audit)
+
+- [ ] A2.1 Source edit sites I1–I6 above (classifier, type union, attribution, display, telnet, safety).
+- [ ] A2.2 Confirm discovery keeps raw product + classifies U2 at persistence (auto via I1).
+- [ ] A2.3 Downstream consumers (health badge, trace bridge, drive manager, recent targets, action summary) auto-fixed by I1 — verify via tests, no edits.
+- [ ] A2.4 Python tooling parity (`scripts/dump_c64u_config.py` families + `infer_device_family`) — optional, note in report.
+- [ ] A2.5 Confirm no family-keyed variant/feature-flag config exists (audit says none) — verified.
+
+## Dynamic capability discovery tasks
+
+- [ ] C1 `deriveDeviceCapabilities` pure function + predicates `supportsStreaming/supportsMenuInput/supportsPowerCycle` (I7).
+- [ ] C2 REST-config streaming override (Data Streams VIC/audio items → boolean) so a U2 advertising streaming flips the gate (capability-, not family-driven).
+- [ ] C3 UI gates consume predicates (I8, I9). No raw `device.type === "C64U"` feature gates remain (display-only literals allowed).
+- [ ] C4 `unknown` family → no advanced capabilities by default.
+
+## Validation tasks
+
+- [ ] V1 `npx tsc --noEmit` clean; `npm run lint` clean.
+- [ ] V2 Unit: U2 classification/persistence/capability + streaming gate capability-driven + build-tool + existing suites green.
+- [ ] V3 Build both variants, uninstall-first, install, verify, reset-config — via extended tool.
+- [ ] V4 Pixel-4 HIL matrix (Scenarios A/B/C × {C64 Commander, C64U Remote}, 3 consecutive cold starts each).
+- [ ] V5 Explicit Settings discovery finds real C64U + U64 in each variant.
+- [ ] V6 iOS static review + `cap sync` (no macOS/iOS build env — documented); web graceful-unsupported verified.
+- [ ] V7 Final report at `doc/research/discovery-validation/report.md`.
+
+## Test matrix (automated)
+
+| Area | Cases | Status |
+| --- | --- | --- |
+| Family classification | C64U, U64, U64E, U64E2, **U2 (Ultimate II/II+/II+L)**, unknown-HTTP, generic "Ultimate" | pending |
+| Capability discovery | C64U/U64/U2/unknown fixtures; U2 no-streaming; **U2 + advertised streaming override**; menu/power-cycle predicates | pending |
+| Streaming feature gate | enabled only when `supportsStreaming`; U2 non-streaming REST features not blocked; no raw family literal | pending |
+| Persistence | U2 valid in `ProductFamilyCode`, saved/round-trips; stale U2 entry valid; reset clears | pending |
+| Startup policy | no-config→discover; configured+0 reachable→discover; ≥1 reachable→no blocking discovery; dup lifecycle no dup scan; **stale U2 entry valid input** | pending |
+| Settings discovery | manual starts; available while reachable; single-flight; dedupe; **U2 in results** | pending |
+| Build tool | variant selection; all-variant plan; pkg resolution; reset-config; uninstall-first; help includes new options | pending |
+| Web/platform-neutral | startup policy + U2 handling independent of native; graceful web/iOS unsupported | pending |
+
+## Status
+
+- **Code + automated tests complete; hardware validation pending.**
+- Implementation I1–I12 **done**:
+  - I1–I6 U2 first-class family: classifier (`targetDisplayMapper`), `ProductFamilyCode` union + host fallback
+    (`store`), attribution guard (`deviceAttribution`), display label (`SettingsPage`), telnet menu key F1
+    (`telnetTypes`), AUTO safety → CONSERVATIVE (`deviceSafetySettings`).
+  - I7 capability model `src/lib/deviceCapabilities/` (`deriveDeviceCapabilities`, `detectStreamingFromConfig`,
+    `supportsStreaming/MenuInput/PowerCycle`). I8 streaming UI gate (HomePage, REST-config-driven + family fallback;
+    U2 hidden). I9 power-cycle gate → `supportsPowerCycle`.
+  - I10 startup multi-saved-device reachability sweep (connect to a reachable configured device before discovery).
+  - I11 iOS-native discovery → graceful `unsupported` (documented gap; no Swift plugin / no iOS build env).
+  - I12 build/deploy tool: `--variant commander|remote|all`, `--install`, `--uninstall-first`, `--reset-config`,
+    `--device`, `--skip-build`, `--help` (extended `scripts/build-android-apks.mjs`). Verified `--reset-config
+    --skip-build` on the real Pixel 4 (both packages cleared + verified).
+- Automated tests **green** for: capability model (17), targetDisplayMapper U2 (incl. U2-vs-U64II), deviceSafetySettings
+  U2, telnet menu key U2, discoveryManager U2 persist, HomePage streaming gate (U2 hidden / C64U+U64 shown /
+  U2+advertised-config shown), connectionManager startup sweep, build tool (15). `tsc --noEmit` clean; `npm run lint`
+  clean. Full unit suite running for regression confirmation.
+- **Remaining:** full-suite confirmation (V2), build+deploy fresh APKs both variants (V3), Pixel-4 HIL matrix
+  Scenarios A/B/C × 2 variants (V4/V5), iOS/web review (V6), final report (V7).
+
+## Status (final, 2026-06-22)
+
+- **Complete (code + automated tests + on-device validation), with documented HIL-iteration and
+  U2-hardware limitations.**
+- V1 ✅ `tsc --noEmit` clean; `npm run lint` clean.
+- V2 ✅ Full unit suite **626 files / 7262 tests pass** (default variant). New U2/capability/build/
+  orientation tests all green.
+- V3 ✅ Both variants built + deployed to Pixel 4 via the extended tool (uninstall-first + install +
+  verify; reset-config verified). **Build-tool regression fixed mid-run**: `findApk` was resolving a
+  stale collected APK before the fresh Gradle output, so earlier deploys installed pre-change code;
+  fixed + regression-tested + the tool now restores the default variant after building.
+- V4/V5 ✅ (with limitation) On fresh build `0.8.9-rc2-7bb03`: explicit Settings discovery found BOTH
+  real C64U + U64 in **both** variants (deduped, distinct); startup auto-discovery (Scenario B, stale
+  config incl. a stale U2 entry) auto-surfaced both devices with no user action (<120 s);
+  discover→use→connect reached HEALTHY by discovered IP; Portrait orientation lock verified. The
+  3×-consecutive matrix was NOT exhaustively run — see report §7.
+- V6 ✅ Web facade + iOS native stub both return graceful `unsupported`; iOS LAN scan is a documented
+  gap (no Swift scan; no iOS build env). No iOS plist change required for the Android-only mechanism.
+- V7 ✅ Report at `doc/research/discovery-validation/report.md`; evidence in
+  `doc/research/discovery-validation/evidence/`.
+- U2 is **fixture-tested only** (no hardware). Not committed (no push/PR requested).

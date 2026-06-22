@@ -6,6 +6,7 @@ public enum NativePluginRegistration {
         "FtpClientPlugin",
         "SecureStoragePlugin",
         "FeatureFlagsPlugin",
+        "DeviceDiscoveryPlugin",
         "BackgroundExecutionPlugin",
         "DiagnosticsBridgePlugin",
         "MockC64UPlugin",

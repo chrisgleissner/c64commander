@@ -7,7 +7,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { applyScreenOrientationMode } from "@/lib/native/screenOrientation";
+import { applyScreenOrientationFromSettings, applyScreenOrientationMode } from "@/lib/native/screenOrientation";
 
 const { lockMock, unlockMock, isNativePlatformMock } = vi.hoisted(() => ({
   lockMock: vi.fn(async () => undefined),
@@ -85,5 +85,41 @@ describe("applyScreenOrientationMode", () => {
       expect.objectContaining({ mode: "auto" }),
     );
     warnSpy.mockRestore();
+  });
+});
+
+describe("applyScreenOrientationFromSettings (startup)", () => {
+  beforeEach(() => {
+    lockMock.mockClear();
+    unlockMock.mockClear();
+    isNativePlatformMock.mockReturnValue(true);
+    localStorage.clear();
+  });
+
+  it("locks Portrait on a fresh install (no stored setting → Portrait default)", async () => {
+    applyScreenOrientationFromSettings();
+    await Promise.resolve();
+
+    expect(lockMock).toHaveBeenCalledWith({ orientation: "portrait" });
+    expect(unlockMock).not.toHaveBeenCalled();
+  });
+
+  it("honours an explicit Auto setting (unlocks rotation)", async () => {
+    localStorage.setItem("c64u_screen_orientation_mode", "auto");
+
+    applyScreenOrientationFromSettings();
+    await Promise.resolve();
+
+    expect(unlockMock).toHaveBeenCalledTimes(1);
+    expect(lockMock).not.toHaveBeenCalled();
+  });
+
+  it("honours an explicit Landscape setting", async () => {
+    localStorage.setItem("c64u_screen_orientation_mode", "landscape");
+
+    applyScreenOrientationFromSettings();
+    await Promise.resolve();
+
+    expect(lockMock).toHaveBeenCalledWith({ orientation: "landscape" });
   });
 });

@@ -271,4 +271,14 @@ class TelnetSocketPlugin : Plugin() {
     outputStream = null
     socket = null
   }
+
+  override fun handleOnDestroy() {
+    // Release the worker thread + any open socket when the bridge/activity is torn down,
+    // so a WebView/activity recreation does not leak the non-daemon executor thread (and
+    // the socket/streams it may still hold). shutdownNow() first interrupts a blocked read;
+    // closeSocket() then frees the descriptors.
+    executor.shutdownNow()
+    closeSocket()
+    super.handleOnDestroy()
+  }
 }

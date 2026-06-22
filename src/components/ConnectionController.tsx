@@ -19,6 +19,7 @@ import { APP_SETTINGS_KEYS, loadBackgroundRediscoveryIntervalMs } from "@/lib/co
 import { getPassword as loadStoredPassword, hasStoredPasswordFlag } from "@/lib/secureStorage";
 import { invalidateForConnectionStateTransition } from "@/lib/query/c64QueryInvalidation";
 import { getBackgroundRediscoveryDelayMs, getNextBackgroundFailureCount } from "@/lib/query/c64PollingGovernance";
+import { getDeviceDiscoveryState } from "@/lib/deviceDiscovery/discoveryManager";
 
 const allowBackgroundRediscovery = () => {
   if (import.meta.env.VITE_ENABLE_TEST_PROBES !== "1") return true;
@@ -28,6 +29,15 @@ const allowBackgroundRediscovery = () => {
 
 const isAppVisibleForRediscovery = () =>
   typeof document === "undefined" || (!document.hidden && document.visibilityState !== "hidden");
+
+const hasAutomaticDiscoveryResultsAwaitingSelection = () => {
+  const discovery = getDeviceDiscoveryState();
+  return (
+    discovery.phase === "complete" &&
+    discovery.candidates.length > 0 &&
+    (discovery.trigger === "startup" || discovery.trigger === "resume")
+  );
+};
 
 export function ConnectionController() {
   const queryClient = useQueryClient();
@@ -80,6 +90,11 @@ export function ConnectionController() {
       return;
     }
 
+    if (hasAutomaticDiscoveryResultsAwaitingSelection()) {
+      clearTimer();
+      return;
+    }
+
     const intervalMs = loadBackgroundRediscoveryIntervalMs();
     const scheduleNextProbe = (failureCount: number) => {
       if (!isAppVisibleForRediscovery()) {
@@ -98,6 +113,10 @@ export function ConnectionController() {
           return;
         }
         if (!isAppVisibleForRediscovery()) {
+          clearTimer();
+          return;
+        }
+        if (hasAutomaticDiscoveryResultsAwaitingSelection()) {
           clearTimer();
           return;
         }

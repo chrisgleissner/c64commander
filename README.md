@@ -12,7 +12,7 @@ Control and manage a C64 Ultimate from Android, iOS, or a self-hosted web deploy
 ## Features
 
 - **Cross-platform**: Native Android and iOS apps, plus a Docker-based web interface for macOS, Windows, or Linux.
-- **Cross-device**: Supports Commodore 64 Ultimate (all editions), Ultimate 64, Ultimate 64 Elite, and Ultimate 64 Elite II.
+- **Cross-device**: Works with any network-capable Ultimate running firmware 3.11 or newer (which added the HTTP REST API): the Commodore 64 Ultimate, the Ultimate 64 family (Ultimate 64, Elite, Elite-II), and the Ultimate-II+ and Ultimate-II+L cartridges.
 - **Dashboard**: Machine controls, Quick actions, drive and printer shortcuts, SID mixer, and streams on a single page.
 - **Playlists**: Build playlists from local files, C64U storage, the High Voltage SID Collection (HVSC), or CommoServe search results. Autoplay, shuffle, and subsong selection.
 - **Disk management**: Mount, unmount, and rotate multi-disk groups across drives.
@@ -20,15 +20,21 @@ Control and manage a C64 Ultimate from Android, iOS, or a self-hosted web deploy
 - **Diagnostics**: Inspect activity logs, traces, latency, and connection health across App, REST, FTP, and Telnet activity.
 - **Device Switcher**: Switch between devices and run parallel health checks.
 
-## Quick Start
+## Getting Started
 
-### Android
+Setup takes three steps: install the app, enable the C64 Ultimate's network services, then connect the two over your local network.
+
+### Step 1 — Install C64 Commander
+
+Install the app on a phone, tablet, or host that is on the **same local network** as the C64 Ultimate.
+
+**Android**
 
 1. Download the latest APK from [Releases](https://github.com/chrisgleissner/c64commander/releases).
 2. Open the APK and allow installs from unknown sources if prompted.
 3. Tap **Install**.
 
-### iOS
+**iOS**
 
 1. Set up [SideStore](https://docs.sidestore.io/).
 2. Download the latest IPA from [Releases](https://github.com/chrisgleissner/c64commander/releases).
@@ -36,11 +42,9 @@ Control and manage a C64 Ultimate from Android, iOS, or a self-hosted web deploy
 
 SideStore refreshes the app signature automatically every 7 days.
 
-### Web (Docker)
+**Web (Docker)**
 
-The web version is self-hosted for LAN use. Requirements: Docker on Windows, macOS, or Linux. A Raspberry Pi Zero 2W or 4B with 512 MiB RAM or more is sufficient.
-
-Install Docker: [Docker Desktop](https://docs.docker.com/desktop/) (Windows/macOS) or [Docker Engine](https://docs.docker.com/engine/install/) (Linux). The image supports `linux/amd64` and `linux/arm64`.
+The web version is self-hosted for LAN use. It needs Docker on Windows, macOS, or Linux; a Raspberry Pi Zero 2W or 4B with 512 MiB RAM or more is enough. Install Docker with [Docker Desktop](https://docs.docker.com/desktop/) (Windows/macOS) or [Docker Engine](https://docs.docker.com/engine/install/) (Linux). The image supports `linux/amd64` and `linux/arm64`.
 
 ```bash
 mkdir -p ./c64commander-config && chmod 0777 ./c64commander-config
@@ -50,32 +54,35 @@ docker run -d --name c64commander -p 8064:8064 \
   ghcr.io/chrisgleissner/c64commander:<version>
 ```
 
-Open `http://<host-ip>:8064` in a browser.
+Open `http://<host-ip>:8064` in a browser to load the app. If you later set a password in **Settings > Device > Network password**, the web interface requires that password to log in.
 
-If a network password is configured in **Settings > Device > Network password**, the web interface requires login with the same password.
+### Step 2 — Enable Network Services on the C64 Ultimate
 
-### First Connection
-
-Ensure the C64 Ultimate is on your local network with required services enabled:
+C64 Commander controls the device through its built-in network services, so turn these on first.
 
 ![Network services & timezone menu](docs/img/setup/enable_services.png)
 
-On the C64 Ultimate:
+1. On the C64 Ultimate, press **C=** and **RESTORE** together to open the menu, then select **Network Services & Timezone**.
+2. Enable the services the app relies on:
+   - **Web Remote Control Service** — the REST API used for most control and status operations. **Required.**
+   - **FTP File Service** — needed to browse and transfer files for playlists and disk collections.
+   - **Telnet Remote Menu Service** — used for a few advanced operations not available over REST, such as power cycle.
+3. Make sure the C64 Ultimate is on the same network as the device running C64 Commander. Note its IP address under **Wired Network Setup** or **WI-FI Network Setup** in case you need to enter it manually.
 
-1. Open the menu by pressing **C=** and **RESTORE** simultaneously, then enter **Network Services & Timezone**.
-2. Enable:
-   - **Web Remote Control Service** - REST API used for most control and status operations
-   - **FTP File Service** - required for browsing and transferring files for playlists and disk collections
-   - **Telnet Remote Menu Service** - used for a small set of advanced operations not available via REST, such as power cycle
-3. Note the IP address from **Wired Network Setup** or **WI-FI Network Setup**.
+### Step 3 — Connect to Your Device
 
-In C64 Commander:
+1. Start C64 Commander. When no reachable device is configured yet, it automatically scans the local network for C64 Ultimate devices.
+2. From the discovered devices, tap **Use** to connect now, or **Save** to keep one for later. If a device is password-protected, the app prompts for its network password before connecting.
 
-1. Open **Settings > Device > Connection**.
-2. Enter the C64 Ultimate IP address (recommended) or hostname.
-3. A green health indicator at the top right confirms the successful connection:
+   <img src="docs/img/app/launch/discovery/startup-autodiscovery-interstitial.png" alt="C64 systems found during a network scan" width="320"/>
+
+3. To scan again later, open **Settings > Device > Connection** and tap **Discover devices**.
+4. If discovery does not find your device, enter its IP address or hostname manually under **Settings > Device > Connection**.
+5. A green health indicator at the top right confirms a successful connection.
 
 ![Connected C64U badge](docs/img/app/home/02-connection-status-popover.png)
+
+On later launches, C64 Commander reconnects to your saved device automatically. If a device needs a network password — or a saved password stops working — the app prompts for it and reconnects as soon as the correct password is entered.
 
 ## Pages
 
@@ -125,9 +132,8 @@ Choose an import source, browse its contents, then add files to your playlist or
 <table>
   <tr>
     <td><img src="docs/img/app/play/import/01-import-interstitial.png" alt="Import source chooser" width="360"/></td>
-    <td><img src="docs/img/app/play/import/03-local-file-picker.png" alt="Local file browser" width="360"/></td>
-    <td><img src="docs/img/app/play/import/02-c64u-file-picker.png" alt="C64U file browser" width="360"/></td>
-
+    <td><img src="docs/img/app/play/import/06-hvsc-preparing.png" alt="HVSC preparation" width="360"/></td>
+    <td><img src="docs/img/app/play/import/07-hvsc-ready.png" alt="HVSC ready" width="360"/></td>
   </tr>
   <tr>
     <td><img src="docs/img/app/play/import/08-hvsc-browser.png" alt="HVSC browser after preparation" width="360"/></td>
@@ -143,7 +149,7 @@ View drive state, mount and eject images, and manage disk collections with multi
 <table>
   <tr>
     <td><img src="docs/img/app/disks/01-overview.png" alt="Disks overview" width="360"/></td>
-    <td><img src="docs/img/app/disks/sections/02-disks.png" alt="Disks collection" width="360"/></td>
+    <td><img src="docs/img/app/disks/sections/02-disks.png" alt="Disks section" width="360"/></td>
     <td><img src="docs/img/app/disks/collection/01-view-all.png" alt="Disks collection" width="360"/></td>
   </tr>
 </table>
@@ -155,8 +161,8 @@ Browse and edit the full C64 Ultimate configuration: categories, items, sliders,
 <table>
   <tr>
     <td><img src="docs/img/app/config/01-categories.png" alt="Configuration categories" width="360"/></td>
+    <td><img src="docs/img/app/config/sections/01-audio-mixer.png" alt="Configuration audio mixer" width="360"/></td>
     <td><img src="docs/img/app/config/sections/05-u64-specific-settings.png" alt="Configuration U64 specific" width="360"/></td>
-    <td><img src="docs/img/app/config/sections/06-c64-and-cartridge-settings.png" alt="Configuration C64 and cartridge settings" width="360"/></td>
   </tr>
 </table>
 
@@ -167,13 +173,13 @@ Connection, appearance, diagnostics, playback defaults, HVSC integration, and de
 <table>
   <tr>
     <td><img src="docs/img/app/settings/sections/01-appearance.png" alt="Settings appearance" width="360"/></td>
-    <td><img src="docs/img/app/settings/sections/02-connection.png" alt="Settings connection" width="360"/></td>
     <td><img src="docs/img/app/settings/sections/03-diagnostics.png" alt="Settings diagnostics" width="360"/></td>
+    <td><img src="docs/img/app/settings/sections/04-play-and-disk.png" alt="Settings play and disk" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="docs/img/app/settings/sections/04-play-and-disk.png" alt="Settings play and disk" width="360"/></td>
     <td><img src="docs/img/app/settings/sections/05-config.png" alt="Settings configuration" width="360"/></td>
     <td><img src="docs/img/app/settings/sections/07-device-safety.png" alt="Settings device safety" width="360"/></td>
+    <td><img src="docs/img/app/settings/sections/09-hvsc.png" alt="Settings HVSC" width="360"/></td>
   </tr>
 </table>
 
@@ -197,7 +203,7 @@ Provides health checks, activity logs, trace inspection, filter editor, and late
 
 <table>
   <tr>
-    <td><img src="docs/img/app/diagnostics/tools/01-menu.png" alt="Diagnostics overview" width="360"/></td>
+    <td><img src="docs/img/app/diagnostics/01-overview.png" alt="Diagnostics overview" width="360"/></td>
     <td><img src="docs/img/app/diagnostics/activity/07-problems-only.png" alt="Diagnostics activity list" width="360"/></td>
     <td><img src="docs/img/app/diagnostics/filters/02-editor.png" alt="Diagnostics filter editor" width="360"/></td>
   </tr>
@@ -212,8 +218,8 @@ The switcher shows all configured devices with real-time health status, allowing
 <table>
   <tr>
     <td><img src="docs/img/app/diagnostics/switch-device/profiles/medium/01-picker.png" alt="Switcher (Connecting)" width="360"/></td>
-    <td><img src="docs/img/app/diagnostics/switch-device/profiles/medium/03-picker-all-healthy.png" alt="Switcher (All Healthy)" width="360"/></td>
-    <td><img src="docs/img/app/diagnostics/switch-device/profiles/medium/04-picker-one-unhealthy.png" alt="Switcher (One Unhealthy)" width="360"/></td>
+    <td><img src="docs/img/app/diagnostics/switch-device/profiles/medium/02-picker-expanded.png" alt="Switcher expanded details" width="360"/></td>
+    <td><img src="docs/img/app/diagnostics/switch-device/profiles/medium/06-picker-one-unhealthy-expanded.png" alt="Switcher expanded unhealthy device" width="360"/></td>
   </tr>
 </table>
 

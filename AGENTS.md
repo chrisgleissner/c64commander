@@ -290,6 +290,57 @@ All TypeScript, TSX, and JSON files must be formatted with Prettier before commi
 - **Minimal dependencies**: add third-party libraries only when clearly justified.
 - **Stable public surfaces**: keep public APIs minimal and intentional.
 
+### Comments
+
+A comment is a code smell. It signals the code failed to explain itself — a name
+is wrong, a function does too much, or an abstraction is missing. The fix for an
+unclear line is almost never a comment; it is clearer code. Before writing one,
+refactor: rename the variable or function, extract a well-named helper, introduce
+a type, or split the expression until the intent is self-evident. Reach for a
+comment only after that has genuinely failed.
+
+Delete (and never add) comments that:
+
+- **restate the code** — `// increment i`, `// loop over devices`, `// return null`;
+- **explain a name** that should have been clearer — fix the name instead;
+- **justify a cast or workaround** — refactor so the workaround disappears or the
+  cast becomes obviously sound, rather than defending it in prose;
+- **narrate verbosely** — a multi-line paragraph describing what the next lines do
+  is the strongest sign that block should become a named function;
+- **pin a specific implementation detail** the next refactor will silently
+  invalidate, leaving a comment that lies.
+
+Worked example — a comment defending a type cast that the code should make
+unnecessary:
+
+```ts
+// Bad: prose justifying the cast
+export const createHvscCancellationError = (message = 'HVSC update cancelled'): HvscCancellationError =>
+  // Object.assign widens `code` to `string`; the runtime value is the literal code, so the
+  // assertion to HvscCancellationError is sound.
+  Object.assign(new Error(message), { code: HVSC_CANCELLATION_CODE, isCancellation: true as const }) as HvscCancellationError;
+
+// Good: build the typed value directly — no cast to defend, so no comment
+export const createHvscCancellationError = (message = 'HVSC update cancelled'): HvscCancellationError => {
+  const error = new Error(message) as HvscCancellationError;
+  error.code = HVSC_CANCELLATION_CODE;
+  error.isCancellation = true;
+  return error;
+};
+```
+
+Narrow exceptions — keep these, but keep them tight:
+
+- the license header atop each source file (required; never strip it);
+- a genuine **why** that code cannot express: a non-obvious external constraint, a
+  protocol/hardware quirk, a deliberate deviation, or a link to the bug/spec it
+  satisfies. Push as much as possible into a named helper plus a regression test,
+  and let the comment carry only the residual code cannot;
+- doc comments on intentionally public API surfaces where the convention expects them.
+
+When you touch a file, leave it with fewer comments than you found. Do not add a
+comment to satisfy a reviewer — add the clarity the comment was standing in for.
+
 ## Mandatory exception handling (SHOWSTOPPER)
 
 It is forbidden to catch an exception silently.

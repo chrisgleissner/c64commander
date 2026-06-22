@@ -73,7 +73,8 @@ export const readDiagnosticsDeviceAttribution = (value: unknown): DiagnosticsDev
       value.verifiedProduct === "C64U" ||
       value.verifiedProduct === "U64" ||
       value.verifiedProduct === "U64E" ||
-      value.verifiedProduct === "U64E2"
+      value.verifiedProduct === "U64E2" ||
+      value.verifiedProduct === "U2"
         ? value.verifiedProduct
         : null,
   };

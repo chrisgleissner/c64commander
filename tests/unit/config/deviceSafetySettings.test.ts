@@ -108,6 +108,22 @@ describe("deviceSafetySettings AUTO mode", () => {
     });
   });
 
+  it("resolves AUTO to CONSERVATIVE for U2 (Ultimate II) devices (safety-first default)", async () => {
+    const { safety } = await loadModules();
+
+    expect(
+      safety.resolveAutoSafetyMode("AUTO", {
+        activeProduct: "U2",
+        activeDeviceId: "device-u2",
+      }),
+    ).toMatchObject({
+      effectiveMode: "CONSERVATIVE",
+      resolvedPreset: "CONSERVATIVE",
+      isProvisional: false,
+      reason: "auto-u2",
+    });
+  });
+
   it("resolves AUTO to BALANCED for U64-family devices", async () => {
     const { safety } = await loadModules();
 

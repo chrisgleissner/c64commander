@@ -170,6 +170,84 @@ lines is expected to be refactored unless there is a documented reason not to.
 - Coverage-padding tests added purely to lift a number; the bar is _meaningful_ tests.
 - Stylistic rewrites of code the task did not touch.
 
+## Review output format
+
+How a review is _written_ determines whether the author can act on it. A review here
+is a list of **file-and-line-anchored findings**, not an essay about the PR.
+
+### Findings are anchored to a file and line
+
+- Every finding names the exact location — `path/to/file.ts:line` (or a line range) —
+  and states the **concrete change required there**, not just the symptom. Where it
+  helps, name the fix: the helper to extract, the call site to add `.catch` to, the
+  test to add. A finding the author cannot act on without asking a follow-up question
+  is incomplete.
+- Tag each finding with its severity (Critical / Warning / Nit, per the calibration
+  above).
+- **Group findings under the file they belong to** so the author fixes one file at a
+  time. A short `### path/to/file.ts` heading per file, then its findings.
+- **Enumerate every site of a repeated problem.** If one root cause appears at several
+  call sites, list each `file:line` as its own finding — never write "this pattern
+  also exists elsewhere" without naming where.
+
+### The PR-level summary is an index, not a dumping ground
+
+A top-level (non-file-anchored) section is allowed **only** to do one or more of:
+
+1. state in a sentence or two what the PR as a whole does;
+2. give a file-by-file line of what changed in each file;
+3. roll up the inline findings — each with its `file:line` and severity — as a
+   checklist/overview.
+
+It must **not** introduce a cross-cutting problem that isn't pinned to a `file:line`
+somewhere. A genuinely cross-cutting concern is filed as a finding on each line it
+manifests on; the summary then _references_ those findings, never the reverse.
+
+### No ambiguous "carry-forward" status
+
+Every finding is in exactly one state, and the review must make which one obvious:
+
+- **Open** — action required. State it as a normal `file:line` finding with a
+  severity. An open finding is open regardless of which review first raised it — do
+  not demote it to a "still open from prior reviews" row.
+- **Resolved / won't-fix** — no action. Omit it, or list it under a clearly titled
+  "Resolved since last review" / "Acknowledged — no change" note with one line of
+  reasoning.
+
+Do **not** produce a table whose rows are labelled `carry`, `carry-forward`,
+`carry over`, or similar — that wording leaves the reader unsure whether anything is
+still required. If a prior-review finding is still open, **re-verify it against the
+current code** (lines move; code may have been refactored or deleted) and **re-state
+it as a live finding** at its current `file:line`. A prior finding that no longer
+reproduces is _resolved_, not "carried".
+
+#### Banned vs. required (real example from PR #292)
+
+Banned — an ambiguous status table; the `(carry SUGGESTION)` row hides three distinct
+call sites and never says whether action is needed:
+
+```text
+Carry-forward status (unchanged code from prior reviews)
+| File | Line | Severity | Issue |
+| src/lib/c64api.ts (and ConnectionController.tsx:197, useC64Connection.ts:220) | | (carry SUGGESTION) | void loadStoredPassword().then(...) fire-and-forget still exists at 2 more sites |
+```
+
+Required — each site is its own actionable finding with an unambiguous state:
+
+```text
+### src/lib/ConnectionController.tsx
+- ConnectionController.tsx:197 — Warning (open). `void loadStoredPassword().then(...)`
+  is fire-and-forget with no `.catch`; a rejected load is swallowed. Add a rejection
+  handler that logs at WARN (see §7).
+
+### src/lib/useC64Connection.ts
+- useC64Connection.ts:220 — Warning (open). Same fire-and-forget pattern; add the
+  `.catch` rejection handler.
+
+### src/lib/c64api.ts
+- c64api.ts:2569 — Resolved this round; `.catch` added. No action.
+```
+
 ## Verification expectations
 
 - **New behavior / business rule:** a test that asserts the observable result, not just

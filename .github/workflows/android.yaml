@@ -144,6 +144,13 @@ jobs:
           path: ${{ github.workspace }}/.cache/hvsc
           key: hvsc-update-84-${{ runner.os }}
 
+      - name: Typecheck (tsc --noEmit)
+        run: |
+          start=$(date +%s)
+          npm run typecheck
+          end=$(date +%s)
+          echo "- typecheck: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
       - name: Run unit tests with coverage
         run: |
           start=$(date +%s)

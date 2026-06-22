@@ -1,25 +1,13 @@
 import { buildDeviceHostWithHttpPort } from "@/lib/c64api/hostConfig";
-import { isBareHostname, isMdnsAvailable } from "@/lib/native/mdnsResolver";
-import type { DeviceSwitchSummary, SavedDevice } from "@/lib/savedDevices/store";
+import type { SavedDevice } from "@/lib/savedDevices/store";
 
-export const getSavedDeviceResolvedAddress = (summary?: Pick<DeviceSwitchSummary, "lastResolvedAddress"> | null) => {
-  const resolvedAddress = summary?.lastResolvedAddress?.trim() ?? "";
-  return resolvedAddress.length > 0 ? resolvedAddress : null;
-};
-
-export const buildSavedDevicePreferredRuntimeHost = (
-  device: Pick<SavedDevice, "host" | "httpPort">,
-  summary?: Pick<DeviceSwitchSummary, "lastResolvedAddress"> | null,
-) => {
-  const rawDeviceHost = buildDeviceHostWithHttpPort(device.host, device.httpPort);
-  if (!isMdnsAvailable() || !isBareHostname(device.host)) {
-    return rawDeviceHost;
-  }
-  const resolvedAddress = getSavedDeviceResolvedAddress(summary);
-  return resolvedAddress ? buildDeviceHostWithHttpPort(resolvedAddress, device.httpPort) : rawDeviceHost;
-};
-
-export const shouldWarnAboutAndroidHostnameResolution = (
-  device: Pick<SavedDevice, "host">,
-  summary?: Pick<DeviceSwitchSummary, "lastResolvedAddress"> | null,
-) => isMdnsAvailable() && isBareHostname(device.host) && !getSavedDeviceResolvedAddress(summary);
+/**
+ * Build the runtime device host (`host[:port]`) for a saved device.
+ *
+ * Hostnames are passed through verbatim and resolved by the platform's own
+ * resolver. The app does not perform any custom name resolution; DHCP-aware
+ * routers may make the Ultimate firmware hostname reachable through normal LAN
+ * DNS.
+ */
+export const buildSavedDevicePreferredRuntimeHost = (device: Pick<SavedDevice, "host" | "httpPort">) =>
+  buildDeviceHostWithHttpPort(device.host, device.httpPort);

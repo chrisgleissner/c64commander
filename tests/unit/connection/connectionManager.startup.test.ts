@@ -10,6 +10,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { loadAutomaticDemoModeEnabled, loadStartupDiscoveryWindowMs } from "../../../src/lib/config/appSettings";
 import { featureFlagManager } from "../../../src/lib/config/featureFlags";
 
+const startDeviceDiscovery = vi.fn(async () => ({
+  candidates: [],
+  scannedHosts: 0,
+  elapsedMs: 0,
+  unsupported: false,
+}));
+const persistDiscoveredDevice = vi.fn((candidate: { address: string; httpPort: number }) => ({
+  deviceId: "discovered-device",
+  host: candidate.address,
+  httpPort: candidate.httpPort,
+  deviceHost: candidate.httpPort === 80 ? candidate.address : `${candidate.address}:${candidate.httpPort}`,
+}));
+
+vi.mock("../../../src/lib/deviceDiscovery/discoveryManager", () => ({
+  startDeviceDiscovery,
+  persistDiscoveredDevice,
+}));
+
 vi.mock("../../../src/lib/config/appSettings", () => ({
   loadAutomaticDemoModeEnabled: vi.fn(() => false),
   loadDebugLoggingEnabled: vi.fn(() => false),
@@ -48,6 +66,7 @@ vi.mock("../../../src/lib/c64api", async () => {
 
 vi.mock("../../../src/lib/secureStorage", () => ({
   getPassword: vi.fn(async () => null),
+  getPasswordForDevice: vi.fn(async () => null),
   setPassword: vi.fn(async () => undefined),
   clearPassword: vi.fn(async () => undefined),
   hasStoredPasswordFlag: vi.fn(() => false),
@@ -101,6 +120,14 @@ describe("connectionManager startup coverage", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
     startMockServer.mockClear();
     stopMockServer.mockClear();
+    startDeviceDiscovery.mockClear();
+    startDeviceDiscovery.mockResolvedValue({
+      candidates: [],
+      scannedHosts: 0,
+      elapsedMs: 0,
+      unsupported: false,
+    });
+    persistDiscoveredDevice.mockClear();
   });
 
   it("falls back to offline mode when the startup discovery window expires and explicit demo mode is disabled", async () => {
@@ -116,6 +143,248 @@ describe("connectionManager startup coverage", () => {
     expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
     expect(getConnectionSnapshot().lastDiscoveryTrigger).toBe("startup");
     expect(startMockServer).not.toHaveBeenCalled();
+  });
+
+  it("runs automatic discovery before probing the default host when no device has been configured", async () => {
+    localStorage.setItem(
+      "c64u_saved_devices:v1",
+      JSON.stringify({
+        version: 1,
+        selectedDeviceId: "default-device",
+        devices: [
+          {
+            id: "default-device",
+            name: "c64u",
+            nameSource: "INFERRED",
+            host: "c64u",
+            type: "",
+            typeSource: "INFERRED",
+            httpPort: 80,
+            ftpPort: 21,
+            telnetPort: 23,
+            lastKnownProduct: null,
+            lastKnownHostname: null,
+            lastKnownUniqueId: null,
+            lastSuccessfulConnectionAt: null,
+            lastUsedAt: null,
+            hasPassword: false,
+          },
+        ],
+        summaries: {},
+        summaryLru: [],
+        hasEverHadMultipleDevices: false,
+      }),
+    );
+    startDeviceDiscovery.mockResolvedValueOnce({
+      candidates: [
+        {
+          id: "id:38c1ba",
+          address: "192.168.1.13",
+          host: null,
+          httpPort: 80,
+          source: ["lan-scan"],
+          product: "Ultimate 64 Elite",
+          firmwareVersion: "3.14e",
+          fpgaVersion: "122",
+          coreVersion: "1.4B",
+          hostname: "u64",
+          uniqueId: "38C1BA",
+          requiresPassword: false,
+          alreadySavedDeviceId: null,
+          confidence: "verified",
+          lastSeenAt: "2026-06-21T00:00:00.000Z",
+        },
+      ],
+      scannedHosts: 254,
+      elapsedMs: 421,
+      unsupported: false,
+    });
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ product: "C64 Ultimate", errors: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    await discoverConnection("startup");
+
+    expect(startDeviceDiscovery).toHaveBeenCalledWith({
+      trigger: "startup",
+      includeLanScan: true,
+      timeoutMs: 8000,
+    });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(persistDiscoveredDevice).not.toHaveBeenCalled();
+    expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+    expect(getConnectionSnapshot().deviceInfo).toBeNull();
+    expect(getConnectionSnapshot().lastProbeError).toBeNull();
+  });
+
+  it("falls through to the normal startup probe when clean-install discovery finds no devices", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ product: "C64 Ultimate", errors: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    void discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(startDeviceDiscovery).toHaveBeenCalledWith({
+      trigger: "startup",
+      includeLanScan: true,
+      timeoutMs: 8000,
+    });
+    expect(fetch).toHaveBeenCalled();
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(getConnectionSnapshot().lastDiscoveryTrigger).toBe("startup");
+  });
+
+  it("keeps a discovered startup device available for user selection without auto-selecting it", async () => {
+    startDeviceDiscovery.mockResolvedValueOnce({
+      candidates: [
+        {
+          id: "id:38c1ba",
+          address: "192.168.1.13",
+          host: null,
+          httpPort: 80,
+          source: ["lan-scan"],
+          product: "Ultimate 64 Elite",
+          firmwareVersion: "3.14e",
+          fpgaVersion: "122",
+          coreVersion: "1.4B",
+          hostname: "u64",
+          uniqueId: "38C1BA",
+          requiresPassword: false,
+          alreadySavedDeviceId: null,
+          confidence: "verified",
+          lastSeenAt: "2026-06-21T00:00:00.000Z",
+        },
+      ],
+      scannedHosts: 254,
+      elapsedMs: 421,
+      unsupported: false,
+    });
+
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    localStorage.setItem("c64u_device_host", "unreachable-device");
+
+    await initializeConnectionManager();
+    void discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(startDeviceDiscovery).toHaveBeenCalledWith({
+      trigger: "startup",
+      includeLanScan: true,
+      timeoutMs: 8000,
+    });
+    expect(persistDiscoveredDevice).not.toHaveBeenCalled();
+    expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+    expect(getConnectionSnapshot().deviceInfo).toBeNull();
+    expect(getConnectionSnapshot().lastProbeError).toBeNull();
+  });
+
+  it("connects to a reachable configured device instead of starting discovery when the selected one is unreachable", async () => {
+    // Stale selected device + a reachable second device + a stale U2 entry (a valid
+    // startup-policy input that is simply skipped because it does not answer).
+    localStorage.setItem(
+      "c64u_saved_devices:v1",
+      JSON.stringify({
+        version: 1,
+        selectedDeviceId: "stale-selected",
+        devices: [
+          {
+            id: "stale-selected",
+            name: "stale",
+            nameSource: "INFERRED",
+            host: "unreachable-device",
+            type: "",
+            typeSource: "INFERRED",
+            httpPort: 80,
+            ftpPort: 21,
+            telnetPort: 23,
+            lastKnownProduct: null,
+            lastKnownHostname: null,
+            lastKnownUniqueId: null,
+            lastSuccessfulConnectionAt: null,
+            lastUsedAt: null,
+            hasPassword: false,
+          },
+          {
+            id: "reachable-u64",
+            name: "Office U64",
+            nameSource: "USER",
+            host: "192.168.1.50",
+            type: "U64E",
+            typeSource: "INFERRED",
+            httpPort: 80,
+            ftpPort: 21,
+            telnetPort: 23,
+            lastKnownProduct: "U64E",
+            lastKnownHostname: "u64",
+            lastKnownUniqueId: "38C1BA",
+            lastSuccessfulConnectionAt: null,
+            lastUsedAt: null,
+            hasPassword: false,
+          },
+          {
+            id: "stale-u2",
+            name: "Cartridge U2",
+            nameSource: "USER",
+            host: "203.0.113.9",
+            type: "U2",
+            typeSource: "INFERRED",
+            httpPort: 80,
+            ftpPort: 21,
+            telnetPort: 23,
+            lastKnownProduct: "U2",
+            lastKnownHostname: "ultimate-ii",
+            lastKnownUniqueId: "A1B2C3",
+            lastSuccessfulConnectionAt: null,
+            lastUsedAt: null,
+            hasPassword: false,
+          },
+        ],
+        summaries: {},
+        summaryLru: [],
+        hasEverHadMultipleDevices: true,
+      }),
+    );
+
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("192.168.1.50")) {
+        return new Response(
+          JSON.stringify({ product: "Ultimate 64 Elite", hostname: "u64", unique_id: "38C1BA", errors: [] }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      throw new TypeError("Failed to fetch");
+    });
+
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+    const { getSavedDevicesSnapshot } = await import("../../../src/lib/savedDevices/store");
+
+    await initializeConnectionManager();
+    void discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(1500);
+
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    // The reachable configured device was selected and connected — no LAN scan.
+    expect(getSavedDevicesSnapshot().selectedDeviceId).toBe("reachable-u64");
+    expect(startDeviceDiscovery).not.toHaveBeenCalled();
   });
 
   it("returns to REAL_CONNECTED when a background probe succeeds after an offline startup timeout", async () => {

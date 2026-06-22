@@ -24,6 +24,12 @@ type Props = {
   hostHint?: string | null;
   onHostBlur?: (value: string) => void;
   /**
+   * Calm, non-invasive hint shown when the entered hostname could not be reached but
+   * the device was found on the LAN at this IP. Tapping the action fills in the IP.
+   */
+  reachabilitySuggestion?: { address: string } | null;
+  onUseSuggestedAddress?: (address: string) => void;
+  /**
    * Enables the physical T9 / keypad composer on the name and host fields.
    * Off by default so hardware keyboards insert literal letters and digits.
    */
@@ -90,6 +96,8 @@ export function SavedDeviceEditorFields({
   hostLabel = "Host",
   hostHint = null,
   onHostBlur,
+  reachabilitySuggestion = null,
+  onUseSuggestedAddress,
   keypadInput = false,
 }: Props) {
   const [activeT9Field, setActiveT9Field] = useState<"name" | "host" | null>(null);
@@ -113,9 +121,18 @@ export function SavedDeviceEditorFields({
   const focusGroup = `${idPrefix}-fields`;
   const nameFocus = useFieldFocusTarget(`${idPrefix}-name-field`, 200, focusGroup);
   const hostFocus = useFieldFocusTarget(`${idPrefix}-host-field`, 201, focusGroup);
-  const httpFocus = useFieldFocusTarget(`${idPrefix}-http-field`, 202, focusGroup);
-  const ftpFocus = useFieldFocusTarget(`${idPrefix}-ftp-field`, 203, focusGroup);
-  const telnetFocus = useFieldFocusTarget(`${idPrefix}-telnet-field`, 204, focusGroup);
+  // The reachability suggestion is a bare <button> nested inside the host field's
+  // explicit focus-item frame, so auto-discovery would treat it as owned-by-subtree
+  // and drop it from the ring. Register it explicitly so it stays D-pad/keypad
+  // reachable (order 202 places it right after the host field, before the ports).
+  const suggestionFocusRef = useFocusItem<HTMLButtonElement>({
+    id: `${idPrefix}-use-suggested-address`,
+    order: 202,
+    group: focusGroup,
+  });
+  const httpFocus = useFieldFocusTarget(`${idPrefix}-http-field`, 203, focusGroup);
+  const ftpFocus = useFieldFocusTarget(`${idPrefix}-ftp-field`, 204, focusGroup);
+  const telnetFocus = useFieldFocusTarget(`${idPrefix}-telnet-field`, 205, focusGroup);
   const handleNameKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     nameT9.onKeyDown(event);
     if (!event.defaultPrevented) nameFocus.blurToFrame(event);
@@ -214,6 +231,28 @@ export function SavedDeviceEditorFields({
           <p id={`${idPrefix}-host-help`} className="text-xs text-muted-foreground">
             {hostHint}
           </p>
+        ) : null}
+
+        {reachabilitySuggestion ? (
+          <div
+            className="space-y-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2.5"
+            data-testid={`${idPrefix}-reachability-suggestion`}
+            role="status"
+          >
+            <p className="text-xs text-muted-foreground">
+              We couldn’t reach “{draft.host.trim()}”, but we found your device on this network at{" "}
+              <span className="font-medium text-foreground">{reachabilitySuggestion.address}</span>. Use that address?
+            </p>
+            <button
+              ref={suggestionFocusRef}
+              type="button"
+              onClick={() => onUseSuggestedAddress?.(reachabilitySuggestion.address)}
+              className="inline-flex items-center rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              data-testid={`${idPrefix}-use-suggested-address`}
+            >
+              Use {reachabilitySuggestion.address}
+            </button>
+          </div>
         ) : null}
 
         <div className="grid grid-cols-3 gap-3">

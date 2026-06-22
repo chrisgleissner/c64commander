@@ -1148,6 +1148,67 @@ describe("usePlaybackPersistence", () => {
     });
   });
 
+  it("persists the LIVE absolute auto-advance due-at into the session snapshot while playing", async () => {
+    // Regression guard for the navigate-away / background / lock case: the session
+    // snapshot must carry the live absolute due-time (fed from PlayFilesPage) so a
+    // process that is killed mid-track resumes with the correct catch-up time. We
+    // seed the session with a STALE due-at and a distinct LIVE prop value, then prove
+    // the re-persist after restore overwrites the snapshot with the live value.
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    const durationMs = 60000;
+    const staleDueAtMs = Date.now() - 5_000;
+    const liveDueAtMs = Date.now() + 30_000;
+
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "hvsc",
+            path: "/MUSICIANS/Test/live.sid",
+            name: "live.sid",
+            sourceId: "hvsc-library",
+            addedAt: new Date().toISOString(),
+            durationMs,
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+
+    sessionStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({
+        playlistKey: playlistStorageKey,
+        currentItemId: "hvsc:hvsc-library:/MUSICIANS/Test/live.sid",
+        currentIndex: 0,
+        isPlaying: true,
+        isPaused: false,
+        elapsedMs: 10000,
+        playedMs: 10000,
+        durationMs,
+        autoAdvanceDueAtMs: staleDueAtMs,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+
+    renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+        initialAutoAdvanceDueAtMs: liveDueAtMs,
+      }),
+    );
+
+    await waitFor(() => {
+      const raw = sessionStorage.getItem(PLAYBACK_SESSION_KEY);
+      expect(raw).not.toBeNull();
+      const parsed = JSON.parse(raw as string) as { autoAdvanceDueAtMs?: number | null };
+      expect(parsed.autoAdvanceDueAtMs).toBe(liveDueAtMs);
+    });
+  });
+
   it("calls setAutoAdvanceDueAtMs with null on session restore without duration", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
 

@@ -56,6 +56,8 @@ export interface MachineControlsProps {
   onPowerOff: () => void;
   onReboot: () => void;
   onToggleMenu: () => void;
+  /** REST `machine:poweroff` is U64-family only (runtime-gated on `/v1/info.core_version`). */
+  powerOffVisible?: boolean;
   powerCycleVisible?: boolean;
   onPowerCycle?: () => void;
   powerCycleDisabledReason?: string | null;
@@ -83,6 +85,7 @@ export function MachineControls({
   onPowerOff,
   onReboot,
   onToggleMenu,
+  powerOffVisible = true,
   powerCycleVisible,
   onPowerCycle,
   powerCycleDisabledReason = null,
@@ -281,17 +284,19 @@ export function MachineControls({
                 />
               );
             })}
-            <QuickActionCard
-              icon={PowerOff}
-              label="Power Off"
-              variant="danger"
-              className="border-destructive/30 bg-destructive/[0.03] opacity-80"
-              focusId="home-machine-power-off"
-              focusOrder={190}
-              onClick={() => void onPowerOff()}
-              disabled={!status.isConnected || effectiveBusy}
-              loading={controls.powerOff.isPending}
-            />
+            {powerOffVisible ? (
+              <QuickActionCard
+                icon={PowerOff}
+                label="Power Off"
+                variant="danger"
+                className="border-destructive/30 bg-destructive/[0.03] opacity-80"
+                focusId="home-machine-power-off"
+                focusOrder={190}
+                onClick={() => void onPowerOff()}
+                disabled={!status.isConnected || effectiveBusy}
+                loading={controls.powerOff.isPending}
+              />
+            ) : null}
           </ProfileActionGrid>
           {disabledCapabilityNotes.length > 0 ? (
             <div className="space-y-1" data-testid="home-machine-capability-notes">

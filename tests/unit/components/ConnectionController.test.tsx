@@ -15,6 +15,11 @@ const discoverConnectionMock = vi.fn();
 const initializeConnectionManagerMock = vi.fn(async () => {});
 const hasStoredPasswordFlagMock = vi.fn(() => false);
 const getPasswordMock = vi.fn(async () => "");
+const deviceDiscoveryState = {
+  phase: "idle" as "idle" | "scanning" | "complete" | "error",
+  trigger: null as "startup" | "resume" | "settings" | "manual" | null,
+  candidates: [] as unknown[],
+};
 
 const setDocumentVisibility = (hidden: boolean) => {
   Object.defineProperty(document, "hidden", {
@@ -72,6 +77,10 @@ vi.mock("@/lib/secureStorage", () => ({
   hasStoredPasswordFlag: () => hasStoredPasswordFlagMock(),
 }));
 
+vi.mock("@/lib/deviceDiscovery/discoveryManager", () => ({
+  getDeviceDiscoveryState: () => deviceDiscoveryState,
+}));
+
 describe("ConnectionController", () => {
   beforeEach(() => {
     connectionState.value = "UNKNOWN";
@@ -86,6 +95,9 @@ describe("ConnectionController", () => {
     hasStoredPasswordFlagMock.mockReturnValue(false);
     getPasswordMock.mockReset();
     getPasswordMock.mockResolvedValue("");
+    deviceDiscoveryState.phase = "idle";
+    deviceDiscoveryState.trigger = null;
+    deviceDiscoveryState.candidates = [];
     setDocumentVisibility(false);
   });
 
@@ -155,6 +167,30 @@ describe("ConnectionController", () => {
       discoverConnectionMock.mockClear();
 
       await vi.advanceTimersByTimeAsync(180_000);
+
+      expect(discoverConnectionMock).not.toHaveBeenCalledWith("background");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not schedule background rediscovery while automatic discovery results await user selection", async () => {
+    vi.useFakeTimers();
+    try {
+      connectionState.value = "OFFLINE_NO_DEMO";
+      deviceDiscoveryState.phase = "complete";
+      deviceDiscoveryState.trigger = "startup";
+      deviceDiscoveryState.candidates = [{ id: "id:38c1ba" }];
+      const queryClient = new QueryClient();
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <ConnectionController />
+        </QueryClientProvider>,
+      );
+
+      discoverConnectionMock.mockClear();
+      await vi.advanceTimersByTimeAsync(120_000);
 
       expect(discoverConnectionMock).not.toHaveBeenCalledWith("background");
     } finally {

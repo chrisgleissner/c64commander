@@ -11,8 +11,6 @@ const {
   mockInvalidateForSavedDeviceSwitch,
   mockGetPasswordForDevice,
   mockResetInteractionState,
-  mockIsMdnsAvailable,
-  mockIsBareHostname,
 } = vi.hoisted(() => ({
   mockVerifyCurrentConnectionTarget: vi.fn(),
   mockSetStoredFtpPort: vi.fn(),
@@ -20,8 +18,6 @@ const {
   mockInvalidateForSavedDeviceSwitch: vi.fn(),
   mockGetPasswordForDevice: vi.fn(),
   mockResetInteractionState: vi.fn(),
-  mockIsMdnsAvailable: vi.fn(() => false),
-  mockIsBareHostname: vi.fn((host: string) => !host.includes(".") && !host.includes(":")),
 }));
 
 vi.mock("@/lib/connection/connectionManager", () => ({
@@ -42,12 +38,6 @@ vi.mock("@/lib/deviceInteraction/deviceInteractionManager", () => ({
 
 vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
-}));
-
-vi.mock("@/lib/native/mdnsResolver", () => ({
-  isMdnsAvailable: mockIsMdnsAvailable,
-  isBareHostname: mockIsBareHostname,
-  resolveMdnsHost: vi.fn(),
 }));
 
 vi.mock("@/lib/query/c64QueryInvalidation", async () => {
@@ -98,7 +88,6 @@ describe("useSavedDeviceSwitching import cancellation event", () => {
     vi.resetModules();
     localStorage.clear();
     vi.clearAllMocks();
-    mockIsMdnsAvailable.mockReturnValue(false);
   });
 
   it("publishes the saved-device switch connection-change event before verification resolves", async () => {
@@ -129,7 +118,6 @@ describe("useSavedDeviceSwitching import cancellation event", () => {
     const verification = createDeferred<{
       ok: boolean;
       deviceInfo: { product: string; hostname: string; unique_id: string };
-      resolvedAddress: string | null;
     }>();
     mockVerifyCurrentConnectionTarget.mockReturnValueOnce(verification.promise);
 
@@ -162,7 +150,6 @@ describe("useSavedDeviceSwitching import cancellation event", () => {
           hostname: "backup-lab",
           unique_id: "UID-BACKUP",
         },
-        resolvedAddress: null,
       });
 
       await act(async () => {

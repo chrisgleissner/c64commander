@@ -29,12 +29,10 @@ import {
   completeSavedDeviceVerification,
   failSavedDeviceVerification,
   getSavedDeviceById,
-  getSavedDeviceSwitchSummary,
   getSavedDevicesSnapshot,
   selectSavedDevice,
   startSavedDeviceVerification,
 } from "@/lib/savedDevices/store";
-import { buildSavedDevicePreferredRuntimeHost, getSavedDeviceResolvedAddress } from "@/lib/savedDevices/resolvedTarget";
 import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 import { clearToastsOnDeviceSwitch } from "@/lib/uiErrors";
 import { setHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
@@ -82,7 +80,7 @@ export function useSavedDeviceSwitching() {
       startSavedDeviceVerification(deviceId);
       resetInteractionState("saved-device-switch");
 
-      const savedDeviceSwitchPrefixes = new Set(getSavedDeviceSwitchPrefixes(location.pathname));
+      const savedDeviceSwitchPrefixes = new Set<string>(getSavedDeviceSwitchPrefixes(location.pathname));
       void queryClient
         .cancelQueries({
           predicate: (query) => savedDeviceSwitchPrefixes.has(String(query.queryKey[0] ?? "")),
@@ -95,16 +93,10 @@ export function useSavedDeviceSwitching() {
         });
 
       const password = device.hasPassword ? await getPasswordForDevice(deviceId) : null;
-      const deviceSummary = getSavedDeviceSwitchSummary(deviceId);
       const nextDeviceHost = buildDeviceHostWithHttpPort(device.host, device.httpPort);
-      const preferredRuntimeHost = buildSavedDevicePreferredRuntimeHost(device, deviceSummary);
-      const preferredResolvedAddress = getSavedDeviceResolvedAddress(deviceSummary);
-      applyC64APIRuntimeConfig(
-        buildBaseUrlFromDeviceHost(preferredRuntimeHost),
-        password ?? undefined,
-        preferredRuntimeHost,
-        { reason: "saved-device-switch" },
-      );
+      applyC64APIRuntimeConfig(buildBaseUrlFromDeviceHost(nextDeviceHost), password ?? undefined, nextDeviceHost, {
+        reason: "saved-device-switch",
+      });
 
       markSavedDeviceSwitchVerificationStarted(attemptId);
 
@@ -112,10 +104,9 @@ export function useSavedDeviceSwitching() {
         const verification = await verifyCurrentConnectionTarget({
           deviceHost: nextDeviceHost,
           password,
-          preferResolvedAddress: preferredResolvedAddress,
         });
         if (verification.ok && verification.deviceInfo) {
-          completeSavedDeviceVerification(deviceId, verification.deviceInfo, verification.resolvedAddress ?? null);
+          completeSavedDeviceVerification(deviceId, verification.deviceInfo);
           invalidateForSavedDeviceSwitch(queryClient, location.pathname);
           completeSavedDeviceSwitchAttempt(attemptId, {
             outcome: "success",

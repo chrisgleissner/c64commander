@@ -30,6 +30,7 @@ describe("mapTargetDisplayLabel", () => {
     expect(mapTargetDisplayLabel("real-device", "u64")).toBe("u64");
     expect(mapTargetDisplayLabel("real-device", "u64e")).toBe("u64e");
     expect(mapTargetDisplayLabel("real-device", "u64e2")).toBe("u64e2");
+    expect(mapTargetDisplayLabel("real-device", "u2")).toBe("u2");
   });
 
   it("maps real-device unknown or missing product to device", () => {
@@ -52,6 +53,19 @@ describe("mapTargetDisplayLabel", () => {
     expect(mapTargetDisplayLabel("real-device", "Ultimate 64 Elite")).toBe("u64e");
     expect(mapTargetDisplayLabel("real-device", "Ultimate 64-II")).toBe("u64e2");
     expect(mapTargetDisplayLabel("real-device", "U64E MK2")).toBe("u64e2");
+  });
+
+  it("classifies the Ultimate II (U2) family from firmware product strings", () => {
+    expect(mapTargetDisplayLabel("real-device", "Ultimate II")).toBe("u2");
+    expect(mapTargetDisplayLabel("real-device", "Ultimate II+")).toBe("u2");
+    expect(mapTargetDisplayLabel("real-device", "Ultimate II+L")).toBe("u2");
+    expect(mapTargetDisplayLabel("real-device", "Ultimate 2")).toBe("u2");
+  });
+
+  it("does not confuse Ultimate 64-II (U64E2) with Ultimate II (U2)", () => {
+    expect(inferConnectedDeviceLabel("Ultimate 64-II")).toBe("U64E2");
+    expect(inferConnectedDeviceLabel("Ultimate II")).toBe("U2");
+    expect(inferConnectedDeviceLabel("Ultimate II+")).toBe("U2");
   });
 
   it("never renders mock for legacy mock input", () => {
@@ -80,6 +94,7 @@ describe("inferConnectedDeviceLabel", () => {
     expect(inferConnectedDeviceLabel("u64")).toBe("U64");
     expect(inferConnectedDeviceLabel("u64e")).toBe("U64E");
     expect(inferConnectedDeviceLabel("u64e2")).toBe("U64E2");
+    expect(inferConnectedDeviceLabel("u2")).toBe("U2");
   });
 
   it("returns null for unknown or missing product", () => {

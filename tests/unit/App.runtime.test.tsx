@@ -149,6 +149,9 @@ vi.mock("@/components/ConnectionController", () => ({
 vi.mock("@/components/DemoModeInterstitial", () => ({
   DemoModeInterstitial: () => <div data-testid="demo-mode-interstitial" />,
 }));
+vi.mock("@/components/DeviceDiscoveryInterstitial", () => ({
+  DeviceDiscoveryInterstitial: () => <div data-testid="device-discovery-interstitial" />,
+}));
 vi.mock("@/components/TraceContextBridge", () => ({ TraceContextBridge: mocks.traceContextBridge }));
 vi.mock("@/components/diagnostics/GlobalDiagnosticsOverlay", () => ({
   GlobalDiagnosticsOverlay: () => <div data-testid="global-diagnostics-overlay" />,

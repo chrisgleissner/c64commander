@@ -339,7 +339,10 @@ export const pingFtp = async (
   options: FtpPingOptions & { __c64uIntent?: InteractionIntent },
 ): Promise<{ ok: boolean }> => {
   const { __c64uIntent, ...ftpOptions } = options;
-  const intent = __c64uIntent ?? "health";
+  // The sole production caller (health-check engine) always supplies a concrete intent;
+  // fall back to "system" (a probe-style intent) rather than an invalid value so the
+  // device-interaction scheduler classifies a bare ping correctly.
+  const intent: InteractionIntent = __c64uIntent ?? "system";
 
   return runWithImplicitAction("ftp.ping", async (action) => {
     incrementFtpInFlight();

@@ -464,6 +464,37 @@ describe("HomeDiskManager Extended", () => {
     });
   }, 15000);
 
+  it("guards against a double-submit eject while the unmount is in flight", async () => {
+    let resolveEject: (() => void) | undefined;
+    mockUnmountDrive.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveEject = () => resolve();
+        }),
+    );
+
+    renderComponent();
+
+    // Mount disk2 to Drive A so an Eject control is present.
+    const item = screen.getByTestId("disk-item-ultimate/disk2.d64");
+    fireEvent.click(within(item).getByText("Mount"));
+    const dialog = screen.getByTestId("dialog");
+    fireEvent.click(within(dialog).getByText(/Drive A/));
+
+    const ejectBtn = await screen.findByRole("button", { name: "Drive A Eject disk" });
+    fireEvent.click(ejectBtn);
+
+    // While the unmount is pending the control disables, so a second tap cannot race a
+    // duplicate unmount at the overload-prone device.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Drive A Eject disk" })).toBeDisabled());
+    fireEvent.click(screen.getByRole("button", { name: "Drive A Eject disk" }));
+    expect(mockUnmountDrive).toHaveBeenCalledTimes(1);
+
+    // Settle the in-flight unmount so the control re-enables (now showing Mount).
+    resolveEject?.();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Drive A Mount disk" })).toBeInTheDocument());
+  }, 15000);
+
   it("keeps a mounted disk in the collection when eject before remove fails", async () => {
     const { reportUserError } = await import("@/lib/uiErrors");
     mockUnmountDrive.mockRejectedValueOnce(new Error("Eject failed"));

@@ -30,9 +30,11 @@ export const computeCircularStepDistance = (beforeIndex: number, afterIndex: num
   return Math.min(Math.abs(forward), Math.abs(backward));
 };
 
-export const resolvePlaylistIndexFromState = (state: PlaybackSessionIndexState) => {
+const isInteger = (value: unknown): value is number => Number.isInteger(value);
+
+export const resolvePlaylistIndexFromState = (state: PlaybackSessionIndexState): number => {
   const currentIndex = state?.playbackSession?.currentIndex;
-  if (Number.isInteger(currentIndex)) return currentIndex;
+  if (isInteger(currentIndex)) return currentIndex;
 
   const currentItemId = state?.playbackSession?.currentItemId ?? null;
   const playlistItemIds = Array.isArray(state?.playlistItemIds) ? state.playlistItemIds : [];

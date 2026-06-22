@@ -1235,8 +1235,8 @@ export const useHvscLibrary = (): HvscLibraryState => {
       : hvscStage && HVSC_EXTRACTION_STAGES.has(hvscStage)
         ? hvscProgress
         : null;
-  const capActivePreparationProgress = (value: number | null | undefined) =>
-    typeof value === "number" ? Math.min(99, Math.max(0, value)) : value;
+  const capActivePreparationProgress = (value: number | null | undefined): number | null =>
+    typeof value === "number" ? Math.min(99, Math.max(0, value)) : (value ?? null);
   const hvscReadySongCount = hvscIngestionIngestedSongs || hvscIngestionTotalSongs;
   const hvscPreparationSnapshot: HvscPreparationSnapshot = useMemo(
     () =>

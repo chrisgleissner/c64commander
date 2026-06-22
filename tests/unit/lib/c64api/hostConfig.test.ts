@@ -14,6 +14,7 @@ import {
   buildBaseUrlFromDeviceHost,
   getDeviceHostHttpPort,
   getDeviceHostFromBaseUrl,
+  hasPersistedDeviceHostConfig,
   isLocalProxy,
   normalizeDeviceHost,
   resolveDeviceHostFromStorage,
@@ -21,6 +22,8 @@ import {
   resolvePreferredDeviceHost,
   stripPortFromDeviceHost,
 } from "@/lib/c64api/hostConfig";
+
+const SAVED_DEVICES_KEY = "c64u_saved_devices:v1";
 
 describe("hostConfig", () => {
   const originalLocalStorage = globalThis.localStorage;
@@ -174,5 +177,37 @@ describe("hostConfig", () => {
 
   it("returns 443 for HTTPS URLs without an explicit port", () => {
     expect(getDeviceHostHttpPort(undefined, "https://c64u")).toBe(443);
+  });
+
+  it("treats an absent saved-devices envelope as not user-configured", () => {
+    // No legacy keys and no saved-devices envelope: isSavedDevicesEnvelopeUserConfigured(null) -> false.
+    expect(hasPersistedDeviceHostConfig()).toBe(false);
+  });
+
+  it("treats an empty saved-devices list as not user-configured", () => {
+    localStorage.setItem(SAVED_DEVICES_KEY, JSON.stringify({ devices: [] }));
+    expect(hasPersistedDeviceHostConfig()).toBe(false);
+  });
+
+  it("ignores non-object entries in the saved-devices list", () => {
+    // Entries that are not objects are filtered out, leaving an empty effective list.
+    localStorage.setItem(SAVED_DEVICES_KEY, JSON.stringify({ devices: [null, "x", 42] }));
+    expect(hasPersistedDeviceHostConfig()).toBe(false);
+  });
+
+  it("treats a malformed saved-devices envelope as configured and logs the failure", () => {
+    localStorage.setItem(SAVED_DEVICES_KEY, "{not valid json");
+    expect(hasPersistedDeviceHostConfig()).toBe(true);
+    expect(addLogMock).toHaveBeenCalledWith(
+      "warn",
+      "Failed to parse saved devices while checking configured device state",
+      expect.objectContaining({ error: expect.any(String) }),
+    );
+  });
+
+  it("reports configured when localStorage is unavailable", () => {
+    // @ts-expect-error branch coverage: simulate environments without storage
+    delete globalThis.localStorage;
+    expect(hasPersistedDeviceHostConfig()).toBe(true);
   });
 });

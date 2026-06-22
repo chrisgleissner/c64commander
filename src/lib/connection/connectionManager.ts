@@ -16,8 +16,12 @@ import {
   getDeviceHostFromBaseUrl,
   resolveDeviceHostFromStorage,
 } from "@/lib/c64api";
-import { buildDeviceHostWithHttpPort, getDeviceHostHttpPort, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
-import { getPassword as loadStoredPassword } from "@/lib/secureStorage";
+import {
+  buildDeviceHostWithHttpPort,
+  hasPersistedDeviceHostConfig,
+  stripPortFromDeviceHost,
+} from "@/lib/c64api/hostConfig";
+import { getPassword as loadStoredPassword, getPasswordForDevice } from "@/lib/secureStorage";
 import { clearRuntimeFtpPortOverride, setRuntimeFtpPortOverride } from "@/lib/ftp/ftpConfig";
 import { getActiveMockBaseUrl, getActiveMockFtpPort, startMockServer, stopMockServer } from "@/lib/mock/mockServer";
 import {
@@ -32,7 +36,6 @@ import { addLog } from "@/lib/logging";
 import { getSmokeConfig, initializeSmokeMode, isSmokeModeEnabled, recordSmokeStatus } from "@/lib/smoke/smokeMode";
 import { resetInteractionState } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { updateDeviceConnectionState } from "@/lib/deviceInteraction/deviceStateStore";
-import { isBareHostname, isMdnsAvailable, resolveMdnsHost } from "@/lib/native/mdnsResolver";
 import { normalizeTransportError } from "@/lib/c64api/transportErrors";
 import { clearConnectivityErrorToastsForHost } from "@/lib/uiErrors";
 import { registerReachabilityListener, type ReachabilitySource } from "@/lib/connection/reachabilityEvents";
@@ -41,7 +44,10 @@ import {
   getSavedDevicesSnapshot,
   getSelectedSavedDevice,
   resolveCanonicalProductFamilyCode,
+  selectSavedDevice,
 } from "@/lib/savedDevices/store";
+import { startDeviceDiscovery } from "@/lib/deviceDiscovery/discoveryManager";
+import type { DeviceDiscoveryTrigger } from "@/lib/deviceDiscovery/types";
 
 export type ConnectionState = "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO";
 export type DiscoveryTrigger = "startup" | "manual" | "settings" | "background" | "switch" | "resume";
@@ -50,7 +56,6 @@ export type ProbeInfoResult = {
   ok: boolean;
   deviceInfo: DeviceInfo | null;
   error: string | null;
-  resolvedAddress?: string | null;
 };
 
 export type ConnectionSnapshot = Readonly<{
@@ -108,123 +113,46 @@ const isDemoModeAvailable = () => featureFlagManager.getSnapshot().flags.demo_mo
 
 const isDemoModeRequested = () => isDemoModeAvailable() && loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
 
-const mdnsResolutionCache = new Map<string, { ip: string; expiresAtMs: number }>();
-const mdnsResolvedProbeFailures = new Map<string, { ip: string; count: number }>();
-const MDNS_RESOLVED_PROBE_FAILURE_THRESHOLD = 2;
-
-const buildMdnsProbeFailureKey = (deviceHost: string, resolvedAddress: string) => `${deviceHost}|${resolvedAddress}`;
-
-const clearMdnsResolvedProbeFailures = (deviceHost: string, resolvedAddress?: string | null) => {
-  if (!resolvedAddress) return;
-  mdnsResolvedProbeFailures.delete(buildMdnsProbeFailureKey(deviceHost, resolvedAddress));
+const toDeviceDiscoveryTrigger = (trigger: DiscoveryTrigger): DeviceDiscoveryTrigger => {
+  if (trigger === "settings") return "settings";
+  if (trigger === "resume") return "resume";
+  if (trigger === "manual") return "manual";
+  return "startup";
 };
 
-const recordMdnsResolvedProbeFailure = (
-  deviceHost: string,
-  resolvedAddress: string | null | undefined,
-  reason: string,
-) => {
-  if (!resolvedAddress) return;
-  const key = buildMdnsProbeFailureKey(deviceHost, resolvedAddress);
-  const current = mdnsResolvedProbeFailures.get(key);
-  const nextCount = current?.ip === resolvedAddress ? current.count + 1 : 1;
-  mdnsResolvedProbeFailures.set(key, { ip: resolvedAddress, count: nextCount });
-  if (nextCount < MDNS_RESOLVED_PROBE_FAILURE_THRESHOLD) return;
+const shouldAttemptAutomaticDeviceDiscovery = (trigger: DiscoveryTrigger) =>
+  trigger === "startup" || trigger === "resume" || trigger === "settings";
 
-  const cached = mdnsResolutionCache.get(deviceHost);
-  if (cached?.ip === resolvedAddress) {
-    mdnsResolutionCache.delete(deviceHost);
-    addLog("warn", "Invalidated cached mDNS address after repeated probe failures", {
-      host: deviceHost,
-      resolvedAddress,
-      failureCount: nextCount,
-      reason,
-    });
-  }
-  mdnsResolvedProbeFailures.delete(key);
-};
-
-const resolveDeviceHostForProbe = async (deviceHost: string): Promise<string> => {
-  if (!isMdnsAvailable()) return deviceHost;
-  if (!isBareHostname(deviceHost)) return deviceHost;
-
-  const cached = mdnsResolutionCache.get(deviceHost);
-  if (cached && cached.expiresAtMs > Date.now()) {
-    return cached.ip;
-  }
-
-  try {
-    const resolved = await resolveMdnsHost(deviceHost, { timeoutMs: 1500 });
-    mdnsResolutionCache.set(deviceHost, {
-      ip: resolved.ip,
-      expiresAtMs: Date.now() + Math.max(1000, resolved.ttlMs),
-    });
-    clearMdnsResolvedProbeFailures(deviceHost, resolved.ip);
-    addLog("info", "Resolved bare hostname via mDNS", {
-      host: deviceHost,
-      resolvedHost: resolved.resolvedHost,
-      ip: resolved.ip,
-    });
-    return resolved.ip;
-  } catch (error) {
-    const failure = normalizeTransportError(error, { host: deviceHost });
-    addLog("warn", "mDNS resolution failed; falling back to system DNS", {
-      host: deviceHost,
-      class: failure.class,
-      message: failure.userMessage,
-      raw: failure.rawMessage,
-    });
-    return deviceHost;
-  }
-};
-
+// Device hostnames are passed through to the platform's HTTP client verbatim.
+// The app performs no custom name resolution; DHCP-aware routers may make the
+// firmware hostname reachable through normal LAN DNS.
 const loadPersistedConnectionConfig = async () => {
   const password = await loadStoredPassword();
   const deviceHost = resolveDeviceHostFromStorage();
-  const probeHost = await resolveDeviceHostForProbe(deviceHost);
-  const baseUrl = buildBaseUrlFromDeviceHost(probeHost === deviceHost ? deviceHost : probeHost);
   return {
-    baseUrl,
+    baseUrl: buildBaseUrlFromDeviceHost(deviceHost),
     password: password ?? undefined,
     deviceHost,
-    resolvedAddress: probeHost !== deviceHost ? stripPortFromDeviceHost(probeHost) : null,
   };
 };
 
-const loadSwitchConnectionConfig = async (options: {
-  deviceHost: string;
-  password?: string | null;
-  preferResolvedAddress?: string | null;
-}) => {
-  const password = options.password ?? undefined;
-  const rawDeviceHost = options.deviceHost;
-  const rawHost = stripPortFromDeviceHost(rawDeviceHost);
-  const httpPort = getDeviceHostHttpPort(rawDeviceHost);
-  const resolvedAddress = options.preferResolvedAddress?.trim() || null;
-  const probeDeviceHost = resolvedAddress
-    ? buildDeviceHostWithHttpPort(resolvedAddress, httpPort)
-    : await resolveDeviceHostForProbe(rawHost).then((resolvedHost) =>
-        buildDeviceHostWithHttpPort(stripPortFromDeviceHost(resolvedHost), httpPort),
-      );
-
+const loadSwitchConnectionConfig = (options: { deviceHost: string; password?: string | null }) => {
+  const deviceHost = options.deviceHost;
   return {
-    baseUrl: buildBaseUrlFromDeviceHost(probeDeviceHost),
-    password,
-    deviceHost: rawDeviceHost,
-    probeDeviceHost,
-    resolvedAddress:
-      stripPortFromDeviceHost(probeDeviceHost) !== rawHost ? stripPortFromDeviceHost(probeDeviceHost) : null,
+    baseUrl: buildBaseUrlFromDeviceHost(deviceHost),
+    password: options.password ?? undefined,
+    deviceHost,
   };
 };
 
 const probeInfoWithConnectionConfig = async (
-  config: Awaited<ReturnType<typeof loadSwitchConnectionConfig>>,
+  config: ReturnType<typeof loadSwitchConnectionConfig>,
   options: { signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<ProbeInfoResult> => {
   const timeoutMs = options.timeoutMs ?? loadDiscoveryProbeTimeoutMs();
   const outerSignal = options.signal;
   try {
-    const api = new C64API(config.baseUrl, config.password, config.probeDeviceHost);
+    const api = new C64API(config.baseUrl, config.password, config.deviceHost);
     const response = await api.getInfo({
       timeoutMs,
       signal: outerSignal,
@@ -234,35 +162,23 @@ const probeInfoWithConnectionConfig = async (
       __c64uBypassCache: true,
     });
     const healthy = isProbePayloadHealthy(response);
-    if (healthy) {
-      clearMdnsResolvedProbeFailures(config.deviceHost, config.resolvedAddress);
-    } else {
-      recordMdnsResolvedProbeFailure(
-        config.deviceHost,
-        config.resolvedAddress,
-        "Probe payload missing required identity",
-      );
-    }
     return {
       ok: healthy,
       deviceInfo: response,
       error: healthy ? null : "Probe payload missing required identity",
-      resolvedAddress: config.resolvedAddress,
     };
   } catch (error) {
     const message = (error as Error | undefined)?.message ?? "Unknown probe failure";
-    recordMdnsResolvedProbeFailure(config.deviceHost, config.resolvedAddress, message);
     if (/^HTTP\s+\d+/.test(message)) {
       return {
         ok: false,
         deviceInfo: null,
         error: message,
-        resolvedAddress: config.resolvedAddress,
       };
     }
-    // Contextualize raw transport failures (e.g. mDNS/DNS "Unable to resolve host")
+    // Contextualize raw transport failures (e.g. DNS "Unable to resolve host")
     // so the connection snapshot, UnifiedHealthBadge, and downstream diagnostics
-    // see a user-friendly message instead of the raw fetch / plugin error text.
+    // see a user-friendly message instead of the raw fetch error text.
     const failure = normalizeTransportError(error, { host: config.deviceHost });
     addLog(failure.class === "dns" ? "info" : "warn", "Probe request failed", {
       baseUrl: config.baseUrl,
@@ -275,7 +191,6 @@ const probeInfoWithConnectionConfig = async (
       ok: false,
       deviceInfo: null,
       error: failure.userMessage,
-      resolvedAddress: config.resolvedAddress,
     };
   }
 };
@@ -304,19 +219,9 @@ export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: num
       __c64uBypassCache: true,
     });
     const healthy = isProbePayloadHealthy(response);
-    if (healthy) {
-      clearMdnsResolvedProbeFailures(config.deviceHost, config.resolvedAddress);
-    } else {
-      recordMdnsResolvedProbeFailure(
-        config.deviceHost,
-        config.resolvedAddress,
-        "Probe payload missing required identity",
-      );
-    }
     return healthy;
   } catch (error) {
     const message = (error as Error | undefined)?.message ?? "Unknown probe failure";
-    recordMdnsResolvedProbeFailure(config.deviceHost, config.resolvedAddress, message);
     const normalizedMessage = message;
     if (!/^HTTP\s+\d+/.test(normalizedMessage)) {
       const host = (() => {
@@ -342,6 +247,23 @@ export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: num
     }
     return false;
   }
+}
+
+/**
+ * Read-only reachability probe of an ARBITRARY host, without committing it as the
+ * active device or mutating connection state. Used to validate a device before it is
+ * saved (so we never persist an unreachable entry). A `/v1/info` answer — including a
+ * 401/403 (reachable but password-gated) — means the host is reachable.
+ */
+export async function probeDeviceReachability(options: {
+  deviceHost: string;
+  password?: string | null;
+  timeoutMs?: number;
+}): Promise<ProbeInfoResult> {
+  const config = loadSwitchConnectionConfig({ deviceHost: options.deviceHost, password: options.password ?? null });
+  return probeInfoWithConnectionConfig(config, {
+    timeoutMs: options.timeoutMs ?? Math.max(1000, loadDiscoveryProbeTimeoutMs()) + 1000,
+  });
 }
 
 export async function probeInfoOnce(
@@ -387,7 +309,6 @@ export async function probeInfoOnce(
 export async function verifyCurrentConnectionTarget(options?: {
   deviceHost?: string;
   password?: string | null;
-  preferResolvedAddress?: string | null;
 }): Promise<ProbeInfoResult> {
   clearPinnedDemoMode();
   const discoveryRun = beginDiscoveryRun("switch");
@@ -401,10 +322,9 @@ export async function verifyCurrentConnectionTarget(options?: {
   });
   const switchConfig =
     typeof options?.deviceHost === "string"
-      ? await loadSwitchConnectionConfig({
+      ? loadSwitchConnectionConfig({
           deviceHost: options.deviceHost,
           password: options.password,
-          preferResolvedAddress: options.preferResolvedAddress,
         })
       : null;
   const result = switchConfig
@@ -422,7 +342,7 @@ export async function verifyCurrentConnectionTarget(options?: {
       switchConfig
         ? {
             baseUrl: switchConfig.baseUrl,
-            deviceHost: switchConfig.probeDeviceHost,
+            deviceHost: switchConfig.deviceHost,
             password: switchConfig.password,
           }
         : undefined,
@@ -582,7 +502,17 @@ export const noteReachable = (host: string, source: ReachabilitySource, deviceIn
     previousState: snapshot.state,
     trigger,
   });
-  void transitionToRealConnected(trigger);
+  // transitionToRealConnected has no internal try/catch and mutates state to
+  // REAL_CONNECTED before its throwing awaits (stopDemoServer / config apply); the
+  // other call sites await it, so guard this fire-and-forget path against an
+  // unhandled rejection + a half-promoted connection going silent.
+  void transitionToRealConnected(trigger).catch((error) => {
+    addLog("warn", "Reachability-triggered connection promotion failed", {
+      host: normalizedHost,
+      source,
+      error: error instanceof Error ? error.message : String(error ?? "unknown error"),
+    });
+  });
 };
 
 registerReachabilityListener(noteReachable);
@@ -737,6 +667,124 @@ const transitionToRealConnected = async (
   if (!snapshot.deviceInfo) {
     void ensureDeviceIdentityAfterConnect();
   }
+};
+
+// Bounded per-device timeout for the startup saved-device reachability sweep.
+const SAVED_DEVICE_SWEEP_TIMEOUT_MS = 1200;
+
+/**
+ * Startup/resume policy: when the selected device is unreachable, probe the OTHER
+ * configured (saved) devices' `/v1/info` in parallel (bounded, read-only). If any is
+ * reachable, switch to it and connect WITHOUT presenting an auto-discovery flow. This
+ * implements "if at least one configured device is reachable, do not start discovery
+ * merely because other configured devices are unreachable". A stale U2 entry is a valid
+ * input here and is simply skipped if it does not answer the probe.
+ */
+const tryReachableSavedDeviceFallback = async (
+  trigger: DiscoveryTrigger,
+  isCurrentRun: () => boolean,
+): Promise<boolean> => {
+  if (trigger !== "startup" && trigger !== "resume") return false;
+  const savedDevices = getSavedDevicesSnapshot();
+  const selectedId = savedDevices.selectedDeviceId;
+  const candidates = savedDevices.devices.filter((device) => device.id !== selectedId && device.host.trim());
+  if (candidates.length === 0) return false;
+
+  const probes = await Promise.all(
+    candidates.map(async (device) => {
+      if (!isCurrentRun()) return null;
+      const deviceHost = buildDeviceHostWithHttpPort(device.host, device.httpPort);
+      let password: string | null = null;
+      if (device.hasPassword) {
+        password = await getPasswordForDevice(device.id).catch((error) => {
+          addLog("warn", "Failed to read saved-device password during startup sweep; probing without auth", {
+            deviceId: device.id,
+            error: error instanceof Error ? error.message : String(error ?? "Unknown secure-storage failure"),
+          });
+          return null;
+        });
+      }
+      const probe = await probeInfoWithConnectionConfig(loadSwitchConnectionConfig({ deviceHost, password }), {
+        timeoutMs: SAVED_DEVICE_SWEEP_TIMEOUT_MS,
+      });
+      return probe.ok ? { device, deviceHost, password } : null;
+    }),
+  );
+
+  if (!isCurrentRun()) return false;
+  const reachable = probes.find((entry): entry is NonNullable<typeof entry> => entry !== null);
+  if (!reachable) return false;
+
+  addLog("info", "Startup found a reachable configured device; connecting without discovery", {
+    trigger,
+    deviceId: reachable.device.id,
+  });
+  selectSavedDevice(reachable.device.id);
+  applyC64APIRuntimeConfig(
+    buildBaseUrlFromDeviceHost(reachable.deviceHost),
+    reachable.password ?? undefined,
+    reachable.deviceHost,
+    {
+      reason: "startup-reachable-saved-device",
+    },
+  );
+  const verification = await verifyCurrentConnectionTarget({
+    deviceHost: reachable.deviceHost,
+    password: reachable.password,
+  });
+  if (verification.ok && verification.deviceInfo) {
+    completeSavedDeviceVerification(reachable.device.id, verification.deviceInfo);
+    return true;
+  }
+  return false;
+};
+
+const tryAutomaticDeviceDiscoveryFallback = async (
+  trigger: DiscoveryTrigger,
+  isCurrentRun: () => boolean,
+): Promise<boolean> => {
+  if (!shouldAttemptAutomaticDeviceDiscovery(trigger)) return false;
+
+  // Prefer connecting to an already-configured reachable device over scanning the LAN.
+  if (await tryReachableSavedDeviceFallback(trigger, isCurrentRun)) return true;
+  if (!isCurrentRun()) return false;
+
+  setSnapshot({
+    lastProbeAtMs: Date.now(),
+    lastProbeError: "Searching the local network for C64 Ultimate devices.",
+  });
+  addLog("info", "Automatic device discovery fallback started", { trigger });
+
+  const result = await startDeviceDiscovery({
+    trigger: toDeviceDiscoveryTrigger(trigger),
+    includeLanScan: true,
+    timeoutMs: trigger === "settings" ? 10_000 : 8_000,
+  });
+
+  if (!isCurrentRun()) return false;
+
+  if (result.candidates.length === 0) {
+    addLog("info", "Automatic device discovery fallback found no devices", {
+      trigger,
+      scannedHosts: result.scannedHosts,
+      unsupported: result.unsupported,
+    });
+    return false;
+  }
+
+  setSnapshot({
+    lastProbeSucceededAtMs: Date.now(),
+    lastProbeError: null,
+    deviceInfo: null,
+  });
+  addLog("info", "Automatic device discovery fallback found devices and is waiting for user selection", {
+    trigger,
+    candidates: result.candidates.length,
+    scannedHosts: result.scannedHosts,
+    unsupported: result.unsupported,
+  });
+  await transitionToOfflineNoDemo(trigger);
+  return true;
 };
 
 const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
@@ -998,6 +1046,12 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
 
   transitionTo("DISCOVERING", trigger);
 
+  if (trigger === "startup" && !hasPersistedDeviceHostConfig()) {
+    const discovered = await tryAutomaticDeviceDiscoveryFallback(trigger, discoveryRun.isCurrent);
+    if (discovered) return;
+    if (!discoveryRun.isCurrent()) return;
+  }
+
   const abort = new AbortController();
   let cancelled = false;
   let probeInFlight = false;
@@ -1008,6 +1062,10 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
     cancelled = true;
     globalThis.clearInterval(probeTimer);
     cancelActiveDiscovery();
+    const discovered = await tryAutomaticDeviceDiscoveryFallback(trigger, discoveryRun.isCurrent);
+    if (discovered) return;
+    if (!discoveryRun.isCurrent()) return;
+    setSnapshot({ lastProbeFailedAtMs: Date.now() });
     if (isDemoModeRequested()) {
       await transitionToDemoActive(trigger);
     } else {
@@ -1019,7 +1077,13 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
       if (cancelled) return;
       windowExpired = true;
       await handleWindowExpiry();
-    })();
+    })().catch((error) => {
+      // The offline/demo fallback transition runs here outside any try/catch;
+      // guard it so a rejection can't become an unhandled rejection.
+      addLog("warn", "Discovery window-expiry transition failed", {
+        error: error instanceof Error ? error.message : String(error ?? "unknown error"),
+      });
+    });
   }, windowMs);
 
   const runProbe = async () => {

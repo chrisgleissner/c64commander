@@ -47,6 +47,7 @@ const sanitizeBuildToken = (value: string) => value.replace(/[^a-zA-Z0-9._-]+/g,
 const resolveAppVersion = () =>
   resolveBuildAppVersion({
     env: process.env,
+    generatedVersion: readGeneratedVersionLabel(),
     packageVersion: pkg.version || "",
   });
 

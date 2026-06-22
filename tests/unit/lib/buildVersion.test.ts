@@ -67,6 +67,19 @@ describe("buildVersion", () => {
       ).toBe("0.6.4-rc4");
     });
 
+    it("prefers the generated source label over package.json for non-tag builds", () => {
+      expect(
+        resolveBuildAppVersion({
+          env: {
+            GITHUB_REF_TYPE: "branch",
+            GITHUB_REF_NAME: "main",
+          },
+          generatedVersion: "0.8.9-rc2-7011a",
+          packageVersion: "0.8.8",
+        }),
+      ).toBe("0.8.9-rc2-7011a");
+    });
+
     it("falls back to VERSION_NAME when VITE_APP_VERSION is absent", () => {
       expect(
         resolveBuildAppVersion({

@@ -362,7 +362,7 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
       handleValueCommit([displayValue]);
     }, [displayValue, dragValue, handleValueCommit]);
     const handleBlur = React.useCallback(
-      (event: React.FocusEvent<HTMLSpanElement>) => {
+      (event: React.FocusEvent<HTMLDivElement>) => {
         if (dragValue !== null) {
           handleValueCommit([displayValue]);
         }
@@ -393,7 +393,7 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
     );
 
     const handleKeypadKeyDown = React.useCallback(
-      (event: React.KeyboardEvent<HTMLSpanElement>) => {
+      (event: React.KeyboardEvent<HTMLDivElement>) => {
         onKeyDown?.(event);
         if (event.defaultPrevented) return;
         if (!keypadActive || !focusNav || props.disabled) return;

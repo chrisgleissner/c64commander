@@ -544,4 +544,12 @@ class FtpClientPlugin : Plugin() {
     val normalized = if (base.isBlank()) "/" else base
     return if (normalized.endsWith("/")) "$normalized$name" else "$normalized/$name"
   }
+
+  override fun handleOnDestroy() {
+    // Shut down the fixed thread pool so its non-daemon worker threads don't accumulate
+    // across bridge/activity recreations. Per-operation FTPClient resources are already
+    // closed in their own finally blocks.
+    executor.shutdownNow()
+    super.handleOnDestroy()
+  }
 }

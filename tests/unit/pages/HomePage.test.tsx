@@ -110,7 +110,8 @@ const {
         hostname: string;
         firmware_version: string;
         fpga_version: string;
-        core_version: string;
+        // Integrated computers (U64 family / C64U) report core_version; U2 cartridges omit it.
+        core_version?: string;
         unique_id: string;
       },
     },
@@ -1135,6 +1136,15 @@ describe("HomePage SID status", () => {
   });
 
   it("requires explicit confirmation before power off", async () => {
+    // Power Off (REST machine:poweroff) is U64-family only; gated on core_version presence.
+    statusPayloadRef.current.deviceInfo = {
+      product: "Ultimate 64 Elite",
+      hostname: "u64",
+      firmware_version: "3.14e",
+      fpga_version: "122",
+      core_version: "1.4B",
+      unique_id: "ID",
+    };
     renderHomePage();
 
     fireEvent.click(screen.getByRole("button", { name: /^power off$/i }));
@@ -1155,6 +1165,15 @@ describe("HomePage SID status", () => {
 
   it("renders exactly seven machine controls with one pause-resume control", async () => {
     featureFlagsRef.current.home_telnet_reu_snapshot_enabled = false;
+    // Integrated computer (core_version present) → Power Off is part of the quick actions.
+    statusPayloadRef.current.deviceInfo = {
+      product: "Ultimate 64 Elite",
+      hostname: "u64",
+      firmware_version: "3.14e",
+      fpga_version: "122",
+      core_version: "1.4B",
+      unique_id: "ID",
+    };
     renderHomePage();
 
     const machineControls = screen.getByTestId("home-machine-controls");
@@ -2064,4 +2083,50 @@ describe("HomePage SID status", () => {
       ),
     );
   }, 30000);
+});
+
+describe("HomePage streaming capability gate", () => {
+  // Integrated computers report core_version; a U2 cartridge does not (pass null).
+  const connectDevice = (product: string, coreVersion: string | null = "1") => {
+    statusPayloadRef.current.deviceInfo = {
+      product,
+      hostname: "device",
+      firmware_version: "1.0.0",
+      fpga_version: "1",
+      ...(coreVersion ? { core_version: coreVersion } : {}),
+      unique_id: "ID",
+    };
+  };
+
+  it("hides the Streams section for a U2 (Ultimate II) device — no core_version / no /v1/streams", () => {
+    connectDevice("Ultimate II+", null);
+    renderHomePage();
+    expect(screen.queryByTestId("home-stream-status")).toBeNull();
+  });
+
+  it("shows the Streams section for a C64U device", () => {
+    connectDevice("C64 Ultimate");
+    renderHomePage();
+    expect(screen.getByTestId("home-stream-status")).toBeTruthy();
+  });
+
+  it("shows the Streams section for a U64 device", () => {
+    connectDevice("Ultimate 64 Elite");
+    renderHomePage();
+    expect(screen.getByTestId("home-stream-status")).toBeTruthy();
+  });
+
+  it("shows streaming on a U2 when its REST config advertises VIC/audio (capability-driven, not family-driven)", () => {
+    connectDevice("Ultimate II+", null);
+    streamPayloadRef.current = {
+      "Data Streams": {
+        items: {
+          "Stream VIC to": { selected: "239.0.1.64:11000" },
+          "Stream Audio to": { selected: "off" },
+        },
+      },
+    };
+    renderHomePage();
+    expect(screen.getByTestId("home-stream-status")).toBeTruthy();
+  });
 });
