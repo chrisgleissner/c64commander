@@ -2366,8 +2366,7 @@ test.describe("App screenshots", () => {
       const badge = page.getByTestId("unified-health-badge");
       const scenarios = [
         { fileSuffix: "healthy", health: "Healthy" as const, problemCount: 0, expectedText: null },
-        { fileSuffix: "degraded-12", health: "Degraded" as const, problemCount: 12, expectedText: "12" },
-        { fileSuffix: "degraded-999plus", health: "Degraded" as const, problemCount: 1808, expectedText: "999+" },
+        { fileSuffix: "degraded-3", health: "Degraded" as const, problemCount: 3, expectedText: "3" },
         { fileSuffix: "unhealthy-12", health: "Unhealthy" as const, problemCount: 12, expectedText: "12" },
         {
           fileSuffix: "unhealthy-999plus",

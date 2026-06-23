@@ -237,10 +237,16 @@ const buildBadgeHealthTraceSeed = ({ health, problemCount }: BadgeHealthSeed): T
     }
   };
 
-  const pushErrorEvents = (count: number, healthLabel: "Degraded" | "Unhealthy", ageOffsetMs = 0) => {
+  // App-contributor health derives from the count of *recent* (<60 s) app errors,
+  // and that same recent count is what the badge renders. 1–4 recent errors →
+  // Degraded; ≥5 → Unhealthy (see deriveAppContributorHealth and
+  // APP_ERROR_UNHEALTHY_RECENT_THRESHOLD). We therefore seed exactly `problemCount`
+  // recent errors and let severity fall out of the count: a Degraded badge can only
+  // show a small count, while large counts are necessarily Unhealthy.
+  const pushRecentErrorEvents = (count: number, healthLabel: "Degraded" | "Unhealthy") => {
     for (let offset = 0; offset < count; offset += 1) {
       events.push(
-        createSeedTraceEvent(index, "error", baseTimestampMs - ageOffsetMs - index, {
+        createSeedTraceEvent(index, "error", baseTimestampMs - index, {
           message: `Seeded ${healthLabel.toLowerCase()} app error ${offset + 1}`,
           error: `Seeded ${healthLabel.toLowerCase()} app error ${offset + 1}`,
           isExpected: false,
@@ -255,20 +261,8 @@ const buildBadgeHealthTraceSeed = ({ health, problemCount }: BadgeHealthSeed): T
     return events;
   }
 
-  if (health === "Degraded") {
-    pushSuccessRestEvents(2);
-    const totalProblems = Math.max(problemCount, 1);
-    pushErrorEvents(1, "Degraded");
-    if (totalProblems > 1) {
-      // Keep only one error in the recent 60 s window so App health stays degraded
-      // while preserving the larger historical problem count for badge rendering.
-      pushErrorEvents(totalProblems - 1, "Degraded", 61_000);
-    }
-    return events;
-  }
-
-  pushSuccessRestEvents(1);
-  pushErrorEvents(Math.max(problemCount, 1), "Unhealthy");
+  pushSuccessRestEvents(2);
+  pushRecentErrorEvents(Math.max(problemCount, 1), health);
 
   return events;
 };
