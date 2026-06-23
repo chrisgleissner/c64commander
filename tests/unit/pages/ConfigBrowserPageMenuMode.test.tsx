@@ -121,9 +121,13 @@ describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
     expect(screen.getByTestId("config-menu-page-network-services-&-timezone")).toBeInTheDocument();
     // Audio setup group label appears above its child pages (e.g. Audio mixer page).
     expect(screen.getAllByText("Audio setup").length).toBeGreaterThan(0);
-    // Smart routing dissolves the junk drawer: every C64U leftover has a home, so the
-    // residual Advanced (REST-only) section is omitted entirely.
-    expect(screen.queryByTestId("config-advanced-fallback")).not.toBeInTheDocument();
+    // Evidence-less leftovers (C64U Model, SoftIEC, Tape, Data Streams) have no menu page,
+    // so the explicitly-labelled residual Advanced (REST-only) section is present (lossless).
+    expect(screen.getByTestId("config-advanced-fallback")).toBeInTheDocument();
+    // The Audio mixer menu page keeps the SPECIALIZED renderer (CategorySection: solo/reset),
+    // not the generic MenuPageSection — routed via soleRestCategory(page) === "Audio Mixer".
+    expect(screen.getByTestId("config-category-audio-mixer")).toBeInTheDocument();
+    expect(screen.queryByTestId("config-menu-page-audio-mixer")).not.toBeInTheDocument();
   });
 
   it("relabels items with the menu label while keeping REST identity for write-back", async () => {
@@ -170,34 +174,39 @@ describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
     });
   });
 
-  it("smart-routes advanced/REST-only items onto aligned pages (not a junk drawer), canonical write preserved", async () => {
+  it("keyword-routes topical leftovers onto aligned pages; evidence-less ones to the residual fallback", async () => {
     renderPage();
 
-    // U64 Specific "C64U Model" (no topical keyword) lands on the Video setup page's Advanced.
-    fireEvent.click(screen.getByTestId("config-menu-page-video-setup"));
-    const videoAdvanced = await screen.findByTestId("config-page-advanced-video-setup");
-    const modelRow = within(videoAdvanced).getByTestId("row-c64u-model");
-    fireEvent.click(within(modelRow).getByText("Update C64U Model"));
-    await waitFor(() => expect(mockSetConfig).toHaveBeenCalledTimes(1));
-    expect(mockSetConfig).toHaveBeenLastCalledWith({
-      category: "U64 Specific Settings",
-      item: "C64U Model",
-      value: "updated",
-    });
-
-    // No-owner categories find a home: Tape Settings + SoftIEC route to Built-in drive A.
+    // Serial-bus comms (U64 Specific) keyword-route to the Built-in drive A page's Advanced,
+    // keeping the canonical {category,item} identity on write.
     fireEvent.click(screen.getByTestId("config-menu-page-built-in-drive-a"));
     const driveAdvanced = await screen.findByTestId("config-page-advanced-built-in-drive-a");
-    expect(within(driveAdvanced).getByTestId("row-tape-playback-rate")).toBeInTheDocument();
-    expect(within(driveAdvanced).getByTestId("row-iec-drive")).toBeInTheDocument();
-    // Serial-bus comms (U64 Specific) route here too, keeping canonical identity on write.
     const serialRow = within(driveAdvanced).getByTestId("row-serial-bus-mode");
     fireEvent.click(within(serialRow).getByText("Update Serial Bus Mode"));
-    await waitFor(() => expect(mockSetConfig).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockSetConfig).toHaveBeenCalledTimes(1));
     expect(mockSetConfig).toHaveBeenLastCalledWith({
       category: "U64 Specific Settings",
       item: "Serial Bus Mode",
       value: "updated",
     });
+    // Tape / SoftIEC are NOT mis-homed on the disk-drive page (no whole-category default).
+    expect(within(driveAdvanced).queryByTestId("row-tape-playback-rate")).not.toBeInTheDocument();
+    expect(within(driveAdvanced).queryByTestId("row-iec-drive")).not.toBeInTheDocument();
+
+    // `C64U Model` (hardware edition, absent from the captured menu) renders in the residual
+    // Advanced (REST-only) section, with canonical write-back preserved.
+    fireEvent.click(screen.getByTestId("config-advanced-fallback-toggle"));
+    const fallback = await screen.findByTestId("config-advanced-fallback");
+    const modelRow = within(fallback).getByTestId("row-c64u-model");
+    fireEvent.click(within(modelRow).getByText("Update C64U Model"));
+    await waitFor(() => expect(mockSetConfig).toHaveBeenCalledTimes(2));
+    expect(mockSetConfig).toHaveBeenLastCalledWith({
+      category: "U64 Specific Settings",
+      item: "C64U Model",
+      value: "updated",
+    });
+    // Tape Playback Rate + SoftIEC IEC Drive also surface here (their categories have no page).
+    expect(within(fallback).getByTestId("row-tape-playback-rate")).toBeInTheDocument();
+    expect(within(fallback).getByTestId("row-iec-drive")).toBeInTheDocument();
   });
 });

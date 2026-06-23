@@ -57,28 +57,31 @@ src/lib/config/menuMapping/c64u-1.1.0.generated.ts  # COMMITTED: C64U_1_1_0_HIER
 `projectConfigToMenu` is the pure, node-tested spec. The page renders the same shape
 lazily: each menu page fetches its REST categories on expand.
 
-## Smart dissolution of the Advanced fallback (`advancedRouting.ts`)
+## Evidence-based routing of unclaimed items (`advancedRouting.ts`)
 
-A raw "everything `live − claimed`" Advanced section reads as a junk drawer. Instead,
-each unclaimed item is **smart-routed** to its most-aligned menu page (rendered there
-under an "Advanced" sub-header), via three tiers — most-specific first, deliberately
-small (not a rule engine):
+A raw "everything `live − claimed`" Advanced section reads as a junk drawer. Each
+unclaimed item is routed to its most-aligned menu page (rendered there under an
+"Advanced" sub-header) **only when there is positive evidence for that placement**, via
+two tiers — most-specific first, deliberately small (not a rule engine):
 
 1. **Keyword rules** (per family, category-scoped) — split the one multi-owner category
-   (`U64 Specific Settings`) by topic: HDMI/scan/colour → Video setup, user-port →
+   (`U64 Specific Settings`) by clear topic: HDMI/scan/colour → Video setup, user-port →
    Joystick & controllers, serial/parallel/burst → Built-in drive A.
 2. **Sole-owner derivation** (data-driven from the hierarchy) — a category claimed by
-   exactly one menu page sends its leftovers to that page. Covers 16 of 17 C64U
-   categories with zero hand-authoring and stays correct as the menu evolves.
-3. **Category defaults** (per family) — a home for categories no page claims
-   (`SoftIEC Drive Settings`, `Tape Settings` → Built-in drive A; `Data Streams` →
-   Network services & timezone).
+   exactly one menu page sends its leftovers to that page. Needs zero hand-authoring and
+   stays correct as the menu evolves.
 
-Anything still homeless (`routeAdvancedItem` → `null`: an unknown/future category with no
-owner, keyword, or default) falls to the **residual Advanced section**, which
-`ConfigBrowserPage` **omits entirely when empty** (computed cheaply from the live category
-list via `unroutedCategories` — no per-item fetch). On C64U 1.1.0/3.14 every leftover has
-a home, so the junk drawer disappears; an unknown category still surfaces (lossless).
+There is **no whole-category "default" tier**. Placing an entire REST category on a page
+with no captured-menu evidence (the prior `C64U Model → Video setup`,
+`Tape Settings → Built-in drive A`, `SoftIEC/Data Streams → …`) is misleading and silently
+mis-homes future items. Items with no keyword/sole-owner evidence (`routeAdvancedItem` →
+`null`) fall to the **residual "Advanced (REST-only) settings" section** — explicitly
+labelled, lossless, and `ConfigBrowserPage` **omits it entirely when empty** (computed
+cheaply from the live category list via `unroutedCategories` — no per-item fetch). On C64U
+1.1.0/3.14 that residual section holds `C64U Model`, SoftIEC, Tape, and Data Streams — the
+device menu does not place these on a page either, so this is the faithful representation.
+Unknown/future categories surface there too (lossless). `categoryDefaults` remains as an
+empty, documented extension point: add an entry only with captured-menu/firmware evidence.
 
 ## Key files
 

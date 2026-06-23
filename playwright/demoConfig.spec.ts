@@ -38,7 +38,7 @@ test.describe("Demo config from YAML", () => {
     }
   });
 
-  test("config page shows the C64U menu hierarchy with the junk drawer dissolved", async ({
+  test("config page shows the C64U menu hierarchy plus the residual Advanced (REST-only) section", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/config");
@@ -51,9 +51,13 @@ test.describe("Demo config from YAML", () => {
     await expect(page.getByTestId("config-menu-page-network-services-&-timezone")).toBeVisible();
     // The Audio Mixer page keeps its specialized renderer (header "Audio mixer").
     await expect(page.getByRole("button", { name: "Audio mixer" })).toBeVisible();
-    // Smart routing places every REST-only leftover on an aligned page, so the residual
-    // Advanced (REST-only) junk drawer is dissolved entirely.
-    await expect(page.getByTestId("config-advanced-fallback")).toHaveCount(0);
+    // Items with no evidence-backed menu home (C64U Model, SoftIEC, Tape, Data Streams)
+    // surface in the explicitly-labelled residual Advanced (REST-only) section — the
+    // device menu does not place them on a page either (lossless, not a junk drawer).
+    await expect(page.getByTestId("config-advanced-fallback")).toBeVisible();
+    await page.getByTestId("config-advanced-fallback-toggle").click();
+    await expect(page.getByTestId("config-fallback-category-tape-settings")).toBeVisible();
+    await expect(page.getByText("Tape Playback Rate")).toBeVisible();
     await snap(page, testInfo, "menu-hierarchy-visible");
   });
 });

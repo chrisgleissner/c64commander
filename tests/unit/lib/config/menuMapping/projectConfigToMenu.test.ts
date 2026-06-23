@@ -154,6 +154,32 @@ describe("projectConfigToMenu — Layer B menu hierarchy (C64U 1.1.0)", () => {
     expect(keys).toHaveLength(1);
   });
 
+  it("keeps Disk swap delay / Loop delay RAW (no invented unit conversion); firmware format passed through", () => {
+    // Units VERIFIED from the REST schema `format` field (printf-style):
+    //   Disk swap delay  min:1 max:10 format:"%d00 ms"  → display value*100 ms (1 → "100 ms")
+    //   Loop Delay       min:1 max:20 format:"%d0 ms"   → display value*10 ms  (2 → "20 ms")
+    // The shared ConfigItemRow does not yet honour `details.format` (it is dead app-wide,
+    // ~108 items), so a generic conversion is out of this feature's scope. The menu layer
+    // therefore must NOT invent a multiplier: it attaches NO formatter, surfaces the RAW
+    // value, and passes the firmware `format` string through untouched for a future generic
+    // renderer. This test fails if anyone hardcodes a ×100/×10 multiplier into the overlay.
+    const diskSwap = find("Drive A Settings", "Disk swap delay");
+    expect(diskSwap).toHaveLength(1);
+    expect(diskSwap[0].pageTitle).toBe("Built-in drive A");
+    expect(diskSwap[0].leaf.label).toBe("Disk swap delay");
+    expect(diskSwap[0].leaf.formatterId).toBeUndefined();
+    expect(String(diskSwap[0].leaf.value)).toBe("1"); // raw, not "100 ms"
+    expect(diskSwap[0].leaf.details?.format).toBe("%d00 ms"); // verified unit, passed through
+
+    const loopDelay = find("Modem Settings", "Loop Delay");
+    expect(loopDelay).toHaveLength(1);
+    expect(loopDelay[0].pageTitle).toBe("Modems");
+    expect(loopDelay[0].leaf.label).toBe("Loop delay");
+    expect(loopDelay[0].leaf.formatterId).toBeUndefined();
+    expect(String(loopDelay[0].leaf.value)).toBe("2"); // raw, not "20 ms"
+    expect(loopDelay[0].leaf.details?.format).toBe("%d0 ms"); // verified unit, passed through
+  });
+
   it("renders menu-only actions/status as non-persistent nodes with no REST identity", () => {
     const sidAddressing = result.pages.find((page) => page.title === "SID addressing")!;
     const menuOnly = sidAddressing.children.filter((node) => node.type === "menuOnly");
@@ -162,36 +188,44 @@ describe("projectConfigToMenu — Layer B menu hierarchy (C64U 1.1.0)", () => {
     expect(result.renderedRest.some((p) => p.item === "Visual SID address editor")).toBe(false);
   });
 
-  it("smart-routing DISSOLVES the Advanced fallback — every C64U leftover lands on an aligned page", () => {
-    // Nothing is homeless on C64U 1.1.0, so the residual fallback is empty (no junk drawer).
-    expect(result.fallback).toEqual([]);
-
+  it("routes evidence-backed leftovers onto aligned pages; evidence-less ones to the residual fallback", () => {
     // Sole-owner routing: C64 & Cartridge advanced → Memory & ROMs; LedStrip → LED lighting.
     expect(advancedPageOf(result, "C64 and Cartridge Settings", "Fast Reset")).toBe("Memory & ROMs");
     expect(advancedPageOf(result, "C64 and Cartridge Settings", "REU Preload")).toBe("Memory & ROMs");
     expect(advancedPageOf(result, "LED Strip Settings", "LedStrip SID Select")).toBe("LED lighting");
 
-    // Keyword routing splits U64 Specific leftovers by topic.
+    // Keyword routing splits the multi-owner U64 Specific leftovers by topic.
     expect(advancedPageOf(result, "U64 Specific Settings", "HDMI Tx Swing")).toBe("Video setup");
     expect(advancedPageOf(result, "U64 Specific Settings", "Adjust Color Clock")).toBe("Video setup");
     expect(advancedPageOf(result, "U64 Specific Settings", "UserPort Power Enable")).toBe("Joystick & controllers");
     expect(advancedPageOf(result, "U64 Specific Settings", "Serial Bus Mode")).toBe("Built-in drive A");
     expect(advancedPageOf(result, "U64 Specific Settings", "SpeedDOS Parallel Cable")).toBe("Built-in drive A");
-    // Keyword-less leftover falls to the category default page.
-    expect(advancedPageOf(result, "U64 Specific Settings", "C64U Model")).toBe("Video setup");
 
-    // Category defaults home the no-owner categories.
-    expect(advancedPageOf(result, "SoftIEC Drive Settings", "IEC Drive")).toBe("Built-in drive A");
-    expect(advancedPageOf(result, "Tape Settings", "Tape Playback Rate")).toBe("Built-in drive A");
-    expect(advancedPageOf(result, "Data Streams", "Stream VIC to")).toBe("Network services & timezone");
+    // Evidence-less leftovers go to the residual fallback (NOT a guessed page).
+    // `C64U Model` is a hardware edition absent from the captured menu — it must not be
+    // mis-homed on Video setup.
+    expect(advancedPageOf(result, "U64 Specific Settings", "C64U Model")).toBeUndefined();
+    expect(fallbackLeaf(result, "U64 Specific Settings", "C64U Model")).toBeDefined();
+    // Categories with no menu page at all surface in the residual fallback.
+    expect(fallbackLeaf(result, "SoftIEC Drive Settings", "IEC Drive")).toBeDefined();
+    expect(fallbackLeaf(result, "Tape Settings", "Tape Playback Rate")).toBeDefined();
+    expect(fallbackLeaf(result, "Data Streams", "Stream VIC to")).toBeDefined();
+    // ...and NOT on the speculative pages the old category-default tier used.
+    expect(advancedPageOf(result, "Tape Settings", "Tape Playback Rate")).toBeUndefined();
+    expect(advancedPageOf(result, "SoftIEC Drive Settings", "IEC Drive")).toBeUndefined();
+    expect(advancedPageOf(result, "Data Streams", "Stream VIC to")).toBeUndefined();
 
-    // A routed advanced leaf keeps canonical {category,item} for write-back + Layer A/humanized label.
+    // A routed advanced leaf keeps canonical {category,item} for write-back + its label.
     const routed = result.pages
       .find((page) => page.title === "Video setup")!
       .advanced.flatMap((group) => group.leaves)
       .find((leaf) => leaf.rest.item === "HDMI Tx Swing")!;
     expect(routed.rest).toEqual({ category: "U64 Specific Settings", item: "HDMI Tx Swing" });
     expect(routed.label).toBe("HDMI Tx Swing");
+
+    // A residual leaf likewise keeps canonical identity (write-back is unaffected by placement).
+    const residual = fallbackLeaf(result, "Tape Settings", "Tape Playback Rate")!;
+    expect(residual.rest).toEqual({ category: "Tape Settings", item: "Tape Playback Rate" });
   });
 });
 

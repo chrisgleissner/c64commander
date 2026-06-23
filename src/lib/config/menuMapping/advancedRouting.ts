@@ -7,25 +7,29 @@
  */
 
 /**
- * Smart routing for items the menu hierarchy does not claim, so the "Advanced
- * (REST-only)" page dissolves into the most-aligned menu pages instead of being a
- * junk drawer.
+ * Routing for items the menu hierarchy does not claim, so each unclaimed item lands on
+ * its most-aligned menu page's "Advanced" sub-section ONLY when there is positive
+ * evidence for that placement. Items with no such evidence fall through to the residual
+ * "Advanced (REST-only)" section — which is honest, lossless, labelled, and hidden when
+ * empty (invariant #7). Items are never lost.
  *
- * Three tiers, most-specific first — deliberately small and resilient, not a rule
- * engine:
+ * Two evidence-based tiers, most-specific first — deliberately small and resilient, not
+ * a rule engine:
  *  1. **Keyword rules** (per family, category-scoped) — for the one multi-owner
- *     category (`U64 Specific Settings`) whose items split by topic (HDMI → Video
+ *     category (`U64 Specific Settings`) whose items split by clear topic (HDMI → Video
  *     setup, user-port → Joystick, drive comms → Built-in drive A).
  *  2. **Sole-owner derivation** (data-driven from the hierarchy) — a category claimed
- *     by exactly one menu page sends its leftover items to that page. Covers 16 of 17
- *     C64U categories with zero hand-authoring and stays correct as the menu evolves.
- *  3. **Category defaults** (per family) — a home for categories no page claims
- *     (`SoftIEC Drive Settings`, `Tape Settings`, `Data Streams`).
+ *     by exactly one menu page sends its leftover items to that page. Stays correct as
+ *     the menu evolves and needs zero hand-authoring.
  *
- * Anything that still resolves to `null` (an unknown/future category with no owner,
- * keyword, or default) falls through to the residual Advanced section — which is
- * hidden entirely when empty. This keeps the page lossless while making the junk
- * drawer disappear on every device we have a menu for.
+ * There is deliberately NO whole-category "default" tier: placing an entire REST
+ * category on a page with no captured-menu evidence (the prior `C64U Model → Video
+ * setup`, `Tape Settings → Built-in drive A`, …) is misleading and silently mis-homes
+ * future items. Such categories (e.g. `C64U Model`, SoftIEC, Tape, Data Streams) surface
+ * in the residual Advanced section instead — the device menu does not place them on a
+ * page either, so this is the faithful representation. `categoryDefaults` is kept as an
+ * empty, documented extension point: add an entry ONLY when a captured menu (or firmware
+ * doc) shows the category genuinely lives on that page.
  */
 
 import type { MenuHierarchy, MenuNode } from "./types";
@@ -39,7 +43,11 @@ interface KeywordRule {
 interface FamilyRouting {
   /** Ordered, category-scoped keyword rules (checked first). */
   keywords: KeywordRule[];
-  /** Home page for a whole category's leftovers (checked after sole-owner). */
+  /**
+   * Home page for a WHOLE category's leftovers (checked after sole-owner). Intentionally
+   * empty: a whole-category default is speculative unless a captured menu places the
+   * category on that page. Add an entry only with such evidence (see the module doc).
+   */
   categoryDefaults: Record<string, string>;
 }
 
@@ -61,14 +69,10 @@ const FAMILY_ROUTING: Record<string, FamilyRouting> = {
         page: "Built-in drive A",
       },
     ],
-    categoryDefaults: {
-      // Leftover U64 Specific items (e.g. "C64U Model") with no topical keyword.
-      "U64 Specific Settings": "Video setup",
-      // No menu page claims these categories — give each a sensible storage/network home.
-      "SoftIEC Drive Settings": "Built-in drive A",
-      "Tape Settings": "Built-in drive A",
-      "Data Streams": "Network services & timezone",
-    },
+    // No whole-category defaults: `C64U Model`, SoftIEC, Tape, and Data Streams are absent
+    // from the captured menu, so they surface in the residual Advanced section rather than
+    // being mis-homed on an unrelated page.
+    categoryDefaults: {},
   },
 };
 
