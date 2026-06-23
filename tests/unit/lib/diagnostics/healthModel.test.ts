@@ -304,7 +304,7 @@ describe("deriveAppContributorHealth", () => {
   it("returns Idle when the only error is outside the recent 60 s window", () => {
     // 4 m 30 s ago — within the 5-min window but not within the recency window.
     const events = [makeEvent("error", 4 * 60_000 + 30_000)];
-    expect(deriveAppContributorHealth(events)).toMatchObject({ state: "Idle" });
+    expect(deriveAppContributorHealth(events)).toMatchObject({ state: "Idle", problemCount: 0 });
   });
 
   it("does not count expected errors as app health failures", () => {
@@ -715,6 +715,11 @@ describe("derivePrimaryProblem", () => {
     const events = [makeEvent("error", 10_000, { message: 42 })];
     const result = derivePrimaryProblem(events, allIdle());
     expect(result?.title).toBe("Application error");
+  });
+
+  it("does not surface stale App errors as a primary problem after the recent window", () => {
+    const events = [makeEvent("error", 4 * 60_000 + 30_000, { message: "Host unreachable" })];
+    expect(derivePrimaryProblem(events, allIdle())).toBeNull();
   });
 
   it("selects highest-impact problem first (Unhealthy > Degraded)", () => {

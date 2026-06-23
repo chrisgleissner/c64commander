@@ -718,7 +718,7 @@ export default function SettingsPage() {
   });
 
   const performDeleteSelectedDevice = trace(async function performDeleteSelectedDevice() {
-    if (!selectedSavedDevice || savedDevices.devices.length <= 1) return;
+    if (!selectedSavedDevice) return;
     removeSavedDevice(selectedSavedDevice.id);
     await clearPasswordForDevice(selectedSavedDevice.id);
     const nextSelected = getSavedDevicesSnapshot().selectedDeviceId;
@@ -728,7 +728,7 @@ export default function SettingsPage() {
   });
 
   const handleDeleteSelectedDevice = trace(async function handleDeleteSelectedDevice() {
-    if (!selectedSavedDevice || savedDevices.devices.length <= 1 || deleteDependencyBusy) return;
+    if (!selectedSavedDevice || deleteDependencyBusy) return;
 
     setDeleteDependencyBusy(true);
     try {
@@ -1202,7 +1202,7 @@ export default function SettingsPage() {
                         size="icon"
                         className="h-8 w-8"
                         onClick={handleDeleteSelectedDevice}
-                        disabled={savedDevices.devices.length <= 1 || !selectedSavedDevice || deleteDependencyBusy}
+                        disabled={!selectedSavedDevice || deleteDependencyBusy}
                         aria-label="Delete device"
                         title="Delete device"
                         data-testid="settings-delete-device"

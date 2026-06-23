@@ -481,7 +481,7 @@ describe("c64api branches", () => {
   });
 
   // #3: scheduled retry path after a timeout/network failure
-  it("retries background GET requests after a scheduled timeout", async () => {
+  it("marks retried scheduled timeouts as expected and does not raise diagnostics errors", async () => {
     vi.useFakeTimers();
     try {
       const fetchMock = getFetchMock();
@@ -502,6 +502,15 @@ describe("c64api branches", () => {
       await vi.advanceTimersByTimeAsync(3000);
       await expect(pending).resolves.toEqual(expect.objectContaining({ errors: [] }));
       expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(recordRestResponseMock).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          expectedFailure: true,
+          error: expect.objectContaining({ name: "AbortError" }),
+        }),
+      );
+      expect(recordTraceErrorMock).not.toHaveBeenCalled();
+      expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
     } finally {
       vi.useRealTimers();
     }
@@ -1773,5 +1782,184 @@ describe("c64api branches", () => {
     await expect(pending).rejects.toThrow("Host unreachable");
     // Clean up the hanging promise to prevent memory leaks
     resolveHang?.();
+  });
+
+  // BUG-064: the Ultimate firmware lists CPU Speed choices as space-padded
+  // single-digit tokens (" 1".." 8") and rejects the unpadded form with
+  // "Value '8' is not a valid choice for item CPU Speed". The Home summary read
+  // returns CPU Speed as a bare value with no choices array, so the write path
+  // must re-pad single digits (string or number) before the PUT.
+  describe("BUG-064 CPU Speed write padding", () => {
+    const lastPutUrl = (mock: ReturnType<typeof getFetchMock>) => {
+      const putCall = [...mock.mock.calls]
+        .reverse()
+        .find((call) => ((call[1] as RequestInit | undefined)?.method ?? "GET").toString().toUpperCase() === "PUT");
+      return putCall?.[0] as string | undefined;
+    };
+
+    const stubBareCategory = (categoryItems: Record<string, unknown>) => {
+      const fetchMock = getFetchMock();
+      fetchMock.mockImplementation((_url: string, init?: RequestInit) => {
+        const method = (init?.method ?? "GET").toString().toUpperCase();
+        if (method === "PUT") {
+          return Promise.resolve(okJsonResponse({ errors: [] }));
+        }
+        // Mimic the firmware summary read: bare current values, no choices array.
+        return Promise.resolve(okJsonResponse({ "U64 Specific Settings": categoryItems, errors: [] }));
+      });
+      return fetchMock;
+    };
+
+    it("pads a string single-digit CPU Speed value to the firmware token", async () => {
+      const fetchMock = stubBareCategory({ "CPU Speed": " 1" });
+      const api = new C64API("http://c64u");
+      await api.setConfigValue("U64 Specific Settings", "CPU Speed", "8");
+      expect(lastPutUrl(fetchMock)).toContain("/CPU%20Speed?value=%208");
+    });
+
+    it("pads a numeric single-digit CPU Speed value to the firmware token", async () => {
+      const fetchMock = stubBareCategory({ "CPU Speed": " 1" });
+      const api = new C64API("http://c64u");
+      await api.setConfigValue("U64 Specific Settings", "CPU Speed", 8);
+      expect(lastPutUrl(fetchMock)).toContain("/CPU%20Speed?value=%208");
+    });
+
+    it("does not pad a multi-digit CPU Speed value", async () => {
+      const fetchMock = stubBareCategory({ "CPU Speed": " 1" });
+      const api = new C64API("http://c64u");
+      await api.setConfigValue("U64 Specific Settings", "CPU Speed", "16");
+      const url = lastPutUrl(fetchMock);
+      expect(url).toContain("/CPU%20Speed?value=16");
+      expect(url).not.toContain("%2016");
+    });
+
+    it("leaves non-CPU-Speed config values unchanged", async () => {
+      const fetchMock = stubBareCategory({ "Badline Timing": "Enabled" });
+      const api = new C64API("http://c64u");
+      await api.setConfigValue("U64 Specific Settings", "Badline Timing", "Enabled");
+      expect(lastPutUrl(fetchMock)).toContain("/Badline%20Timing?value=Enabled");
+    });
+  });
+
+  // BUG-069: when Home config reads are in flight and the user backgrounds the
+  // app, CapacitorHttp raises "Failed to fetch" instead of an AbortError. The
+  // corresponding rest-response is correctly marked `expectedFailure:true,
+  // lifecycleState:"background"`, but the catch block also emits a separate
+  // `error` trace event with `isExpected:false`, `message:"Host unreachable"`,
+  // which escapes derivePrimaryProblem and degrades the App contributor. Fix:
+  // classify generic network/timeout failures that happen while the app is in
+  // the background as expected so the foreground UI stays Healthy when the
+  // user returns to a reachable device.
+  describe("BUG-069 expected background network failure", () => {
+    const stubBackgroundDocument = () => {
+      const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, "document");
+      Object.defineProperty(globalThis, "document", {
+        configurable: true,
+        value: { hidden: true, visibilityState: "hidden", hasFocus: () => false },
+      });
+      return () => {
+        if (originalDescriptor) {
+          Object.defineProperty(globalThis, "document", originalDescriptor);
+        } else {
+          Reflect.deleteProperty(globalThis, "document");
+        }
+      };
+    };
+
+    it("classifies Failed-to-fetch as expectedFailure when app is in background", async () => {
+      const restoreDocument = stubBackgroundDocument();
+      try {
+        const fetchMock = getFetchMock();
+        fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+        const api = new C64API("http://c64u");
+        await expect(api.getInfo()).rejects.toThrow();
+
+        expect(recordRestResponseMock).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({ expectedFailure: true }),
+        );
+        expect(recordTraceErrorMock).not.toHaveBeenCalled();
+        expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
+      } finally {
+        restoreDocument();
+      }
+    });
+
+    it("does NOT classify Failed-to-fetch as expectedFailure when app is foreground", async () => {
+      const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, "document");
+      Object.defineProperty(globalThis, "document", {
+        configurable: true,
+        value: { hidden: false, visibilityState: "visible", hasFocus: () => true },
+      });
+      try {
+        const fetchMock = getFetchMock();
+        fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+        const api = new C64API("http://c64u");
+        await expect(api.getInfo()).rejects.toThrow();
+
+        expect(recordRestResponseMock).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({ expectedFailure: false }),
+        );
+        expect(recordTraceErrorMock).toHaveBeenCalled();
+        expect(addErrorLogMock).toHaveBeenCalledWith("C64 API request failed", expect.anything());
+      } finally {
+        if (originalDescriptor) {
+          Object.defineProperty(globalThis, "document", originalDescriptor);
+        } else {
+          Reflect.deleteProperty(globalThis, "document");
+        }
+      }
+    });
+
+    it("does NOT classify HTTP-error responses as expectedFailure even in background", async () => {
+      const restoreDocument = stubBackgroundDocument();
+      try {
+        const fetchMock = getFetchMock();
+        fetchMock.mockResolvedValue({
+          ok: false,
+          status: 500,
+          statusText: "Internal Server Error",
+          text: () => Promise.resolve('{"errors":["boom"]}'),
+          headers: new Headers(),
+        });
+        const api = new C64API("http://c64u");
+        await expect(api.getInfo()).rejects.toThrow();
+
+        expect(recordRestResponseMock).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({ expectedFailure: false }),
+        );
+        expect(recordTraceErrorMock).toHaveBeenCalled();
+      } finally {
+        restoreDocument();
+      }
+    });
+  });
+
+  describe("BUG-074 scheduled timeout classification", () => {
+    it("does not emit an App error trace for scheduled timeout aborts after retries are exhausted", async () => {
+      const fetchMock = getFetchMock();
+      fetchMock.mockImplementation(
+        (_url: string, opts: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            opts.signal?.addEventListener("abort", () => {
+              const err = new Error("The operation was aborted");
+              err.name = "AbortError";
+              reject(err);
+            });
+          }),
+      );
+
+      const api = new C64API("http://c64u");
+      await expect(api.getInfo({ __c64uIntent: "background", timeoutMs: 1 } as any)).rejects.toThrow(
+        "Host unreachable",
+      );
+
+      expect(recordRestResponseMock).toHaveBeenCalledTimes(3);
+      expect(recordRestResponseMock.mock.calls.every(([, response]) => response.expectedFailure === true)).toBe(true);
+      expect(recordTraceErrorMock).not.toHaveBeenCalled();
+      expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
+    });
   });
 });

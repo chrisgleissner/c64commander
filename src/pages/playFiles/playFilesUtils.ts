@@ -86,6 +86,14 @@ export const parseDurationInput = (value: string) => {
   return Math.max(0, seconds * 1000);
 };
 
+export const normalizeDurationInputDraft = (value: string) => {
+  const [minutesRaw, ...secondsParts] = value.trim().split(":");
+  const minutes = (minutesRaw ?? "").replace(/\D/g, "").slice(0, 2);
+  if (secondsParts.length === 0) return minutes;
+  const seconds = secondsParts.join("").replace(/\D/g, "").slice(0, 2);
+  return `${minutes}:${seconds}`;
+};
+
 export const clampDurationSeconds = (value: number) =>
   Math.min(DURATION_MAX_SECONDS, Math.max(DURATION_MIN_SECONDS, value));
 

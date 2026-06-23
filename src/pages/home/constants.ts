@@ -51,7 +51,7 @@ const HOME_CONFIG_OPTION_DOMAINS = new Map<string, string[]>([
   ["U64 Specific Settings::HDMI Scan lines", ["Disabled", "Enabled"]],
   [
     "U64 Specific Settings::Serial Bus Mode",
-    ["All Connected", "C64U <-> Internal", "Ext. <-> Int.", "C64U <-> External"],
+    ["All Connected", "C64 <-> Internal", "Ext. <-> Int.", "C64 <-> External"],
   ],
   ["U64 Specific Settings::Joystick Swapper", ["Normal", "Swapped", "WASD Port 2", "WASD Port 1"]],
   ["U64 Specific Settings::Turbo Control", ["Off", "Manual", "C64U Turbo Registers", "TurboEnable Bit"]],

@@ -110,11 +110,11 @@ describe("authChallenge store", () => {
     expect(getAuthChallengeRetry()).toBeNull();
   });
 
-  it("falls back to the selected device for an unmatched host (live client host always matches in practice)", () => {
+  it("labels by host without claiming an unrelated selected device when host does not match a saved device", () => {
     notifyAuthRequired({ host: "10.0.0.99" });
     const challenge = getAuthChallengeSnapshot();
-    expect(challenge?.deviceId).toBe("dev-c64u");
-    expect(challenge?.deviceLabel).toBe("Living Room C64U");
+    expect(challenge?.deviceId).toBeNull();
+    expect(challenge?.deviceLabel).toBe("10.0.0.99");
     expect(challenge?.host).toBe("10.0.0.99");
   });
 
@@ -142,6 +142,15 @@ describe("authChallenge store", () => {
     notifyAuthRequired({ host: "192.168.1.167" });
     notifyAuthSatisfied("192.168.1.13");
     expect(getAuthChallengeSnapshot()).not.toBeNull();
+  });
+
+  it("attributes a c64u challenge to the c64u saved device even when U64 is selected", () => {
+    snapshot = { selectedDeviceId: "dev-u64", devices: defaultSnapshot().devices };
+    notifyAuthRequired({ host: "192.168.1.167" });
+    const challenge = getAuthChallengeSnapshot();
+    expect(challenge?.deviceId).toBe("dev-c64u");
+    expect(challenge?.deviceLabel).toBe("Living Room C64U");
+    expect(challenge?.host).toBe("192.168.1.167");
   });
 
   it("auto-closes even after a transient failure left the popup in an error state", () => {

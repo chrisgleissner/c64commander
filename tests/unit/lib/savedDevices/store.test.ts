@@ -839,4 +839,20 @@ describe("savedDevices store", () => {
     const reloadedStore = await loadStore();
     expect(reloadedStore.getSavedDevicesSnapshot().hasEverHadMultipleDevices).toBe(true);
   });
+
+  it("resets to a fresh default device when the last saved device is deleted", async () => {
+    const store = await loadStore();
+    const original = store.getSavedDevicesSnapshot();
+    expect(original.devices).toHaveLength(1);
+    const originalId = original.selectedDeviceId;
+
+    // Deleting the only (and currently connected) device must not throw...
+    expect(() => store.removeSavedDevice(originalId)).not.toThrow();
+
+    const next = store.getSavedDevicesSnapshot();
+    // ...and must leave a usable, selected default device rather than an empty list.
+    expect(next.devices).toHaveLength(1);
+    expect(next.devices[0]!.id).not.toBe(originalId);
+    expect(next.selectedDeviceId).toBe(next.devices[0]!.id);
+  });
 });

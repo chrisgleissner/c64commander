@@ -680,9 +680,23 @@ describe("useC64Connection", () => {
     renderHook(() => useC64Drives({ intent: "user", refetchOnMount: "always" }), { wrapper });
 
     await waitFor(() => {
-      expect(mockApi.getCategory).toHaveBeenCalledWith("Audio", { __c64uIntent: "user" });
+      expect(mockApi.getCategory).toHaveBeenCalledWith("Audio", { __c64uIntent: "user", timeoutMs: undefined });
       expect(mockApi.getDrives).toHaveBeenCalledWith({ __c64uIntent: "user" });
     });
+  });
+
+  it("keys category loads by routing epoch so cancelled cold loads retry after connection changes", async () => {
+    const { wrapper } = createWrapper();
+    const { rerender } = renderHook(() => useC64Categories(), { wrapper });
+
+    await waitFor(() => expect(mockApi.getCategories).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("c64u-connection-change", { detail: { baseUrl: "http://u64" } }));
+    });
+    rerender();
+
+    await waitFor(() => expect(mockApi.getCategories).toHaveBeenCalledTimes(2));
   });
 
   it("invalidates and flags config loads and resets", async () => {

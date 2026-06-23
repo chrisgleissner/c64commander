@@ -129,6 +129,94 @@ describe("networkSnapshot", () => {
     expect(resOnly?.timestamp).toBe("2026-03-02T10:00:00.900Z");
   });
 
+  it("does not count response-only traces with null status and no error as failures", () => {
+    vi.mocked(getTraceEvents).mockReturnValue([
+      {
+        id: "1",
+        timestamp: "2026-06-22T22:00:00.000Z",
+        relativeMs: 1,
+        type: "rest-request",
+        origin: "system",
+        correlationId: "superseded-1",
+        data: { ...ctx, url: "http://192.168.1.13/v1/info", method: "GET" },
+      },
+      {
+        id: "2",
+        timestamp: "2026-06-22T22:00:00.050Z",
+        relativeMs: 2,
+        type: "rest-response",
+        origin: "system",
+        correlationId: "superseded-1",
+        data: { ...ctx, durationMs: 50 },
+      },
+      {
+        id: "3",
+        timestamp: "2026-06-22T22:00:01.000Z",
+        relativeMs: 3,
+        type: "rest-request",
+        origin: "user",
+        correlationId: "ok-1",
+        data: { ...ctx, url: "http://192.168.1.13/v1/version", method: "GET" },
+      },
+      {
+        id: "4",
+        timestamp: "2026-06-22T22:00:01.020Z",
+        relativeMs: 4,
+        type: "rest-response",
+        origin: "user",
+        correlationId: "ok-1",
+        data: { ...ctx, status: 200, durationMs: 20 },
+      },
+    ] as any);
+
+    const snapshot = buildNetworkSnapshot();
+    expect(snapshot.successCount).toBe(1);
+    expect(snapshot.failureCount).toBe(0);
+    expect(snapshot.requests).toHaveLength(2);
+    const superseded = snapshot.requests.find((entry) => entry.url.endsWith("/v1/info"));
+    expect(superseded?.httpStatus).toBeNull();
+    expect(superseded?.errorMessage).toBeNull();
+  });
+
+  it("does not count expected abort responses with string errors as network failures", () => {
+    vi.mocked(getTraceEvents).mockReturnValue([
+      {
+        id: "1",
+        timestamp: "2026-06-22T23:26:43.811Z",
+        relativeMs: 1,
+        type: "rest-request",
+        origin: "system",
+        correlationId: "expected-abort",
+        data: { ...ctx, url: "http://192.168.1.13/v1/configs/LED%20Strip%20Settings", method: "GET" },
+      },
+      {
+        id: "2",
+        timestamp: "2026-06-22T23:26:43.837Z",
+        relativeMs: 2,
+        type: "rest-response",
+        origin: "system",
+        correlationId: "expected-abort",
+        data: {
+          ...ctx,
+          durationMs: 26,
+          error: "The operation was aborted",
+          expectedFailure: true,
+        },
+      },
+    ] as any);
+
+    const snapshot = buildNetworkSnapshot();
+    expect(snapshot.successCount).toBe(0);
+    expect(snapshot.failureCount).toBe(0);
+    expect(snapshot.requests).toHaveLength(1);
+    expect(snapshot.requests[0]).toMatchObject({
+      httpStatus: null,
+      errorDomain: null,
+      errorCode: null,
+      errorMessage: "The operation was aborted",
+    });
+  });
+
   it("returns empty string timestamp when both request and response have no timestamp (BRDA:102)", () => {
     vi.mocked(getTraceEvents).mockReturnValue([
       {

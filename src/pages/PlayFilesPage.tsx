@@ -141,6 +141,7 @@ import {
   formatDurationSeconds,
   formatTime,
   isSongCategory,
+  normalizeDurationInputDraft,
   parseDurationInput,
   sliderToDurationSeconds,
   shuffleArray,
@@ -1571,8 +1572,9 @@ export default function PlayFilesPage() {
 
   const handleDurationInputChange = useCallback(
     (value: string) => {
-      setDurationInput(value);
-      const parsed = parseDurationInput(value);
+      const normalizedValue = normalizeDurationInputDraft(value);
+      setDurationInput(normalizedValue);
+      const parsed = parseDurationInput(normalizedValue);
       if (parsed === undefined) return;
       const nextSeconds = clampDurationSeconds(Math.round(parsed / 1000));
       const nextDurationMs = nextSeconds * 1000;

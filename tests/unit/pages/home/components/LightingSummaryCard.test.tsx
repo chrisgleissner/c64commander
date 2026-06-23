@@ -49,7 +49,13 @@ vi.mock("@/lib/config/ledColors", () => ({
 vi.mock("@/components/ui/select", () => ({
   Select: ({ children, value, onValueChange, disabled }: any) => (
     <div data-value={value} data-disabled={String(disabled)}>
-      <button onClick={() => onValueChange && onValueChange("opt1")} data-testid={`select-change-${value}`}>
+      <button
+        disabled={disabled}
+        onClick={() => {
+          if (!disabled) onValueChange?.("opt1");
+        }}
+        data-testid={`select-change-${value}`}
+      >
         Change
       </button>
       {children}
@@ -88,9 +94,19 @@ const defaultProps = {
   category: "LED Strip",
   config: {
     items: {
+      "LedStrip Mode": "Fixed Color",
       "LedStrip Auto SID Mode": {
         selected: "Enabled",
         options: ["Disabled", "Enabled"],
+      },
+      "LedStrip Pattern": "SingleColor",
+      "Fixed Color": "Red",
+      "LedStrip SID Select": "SID 1",
+      "Color tint": "Pure",
+      "Strip Intensity": {
+        selected: 8,
+        min: 0,
+        max: 15,
       },
     },
   },
@@ -166,7 +182,7 @@ describe("LightingSummaryCard", () => {
       "LedStrip Auto SID Mode",
       "Enabled",
       "HOME_LED_STRIP_AUTO_SID_MODE",
-      "LED strip Auto SID updated",
+      "LED strip Music Detect updated",
       undefined,
     );
   });
@@ -219,6 +235,36 @@ describe("LightingSummaryCard", () => {
     fireEvent.click(screen.getByTestId("led-strip-color-slider-drag"));
     expect(interactiveWriteSpy).toHaveBeenCalledTimes(1);
     expect(interactiveWriteSpy).toHaveBeenCalledWith({ "Fixed Color": expect.any(String) });
+  });
+
+  it("switches Mode to Fixed Color when the color slider is moved (separate single-item write)", () => {
+    // Default resolveConfigValue returns the fallback, so Mode resolves to "Off" here.
+    render(<LightingSummaryCard {...defaultProps} />);
+    fireEvent.click(screen.getByTestId("led-strip-color-slider-drag"));
+    // The colour goes through the interactive (PUT) lane...
+    expect(interactiveWriteSpy).toHaveBeenCalledWith({ "Fixed Color": expect.any(String) });
+    // ...and Mode is forced to Fixed Color as a SEPARATE single-item write (never batched
+    // with the colour — a two-item batch would route through the crashing POST /v1/configs).
+    expect(updateConfigValueSpy).toHaveBeenCalledWith(
+      "LED Strip",
+      "LedStrip Mode",
+      "Fixed Color",
+      "HOME_LED_STRIP_MODE",
+      "LED strip mode updated",
+      { suppressToast: true },
+    );
+  });
+
+  it("does not rewrite Mode when the color slider is moved while already in Fixed Color mode", () => {
+    resolveConfigValueSpy.mockImplementation((_p: unknown, _c: string, itemName: string, fallback: string | number) => {
+      if (itemName === "LedStrip Mode") return "Fixed Color";
+      if (itemName === "Fixed Color") return "Red";
+      return fallback;
+    });
+    render(<LightingSummaryCard {...defaultProps} />);
+    fireEvent.click(screen.getByTestId("led-strip-color-slider-drag"));
+    expect(interactiveWriteSpy).toHaveBeenCalledWith({ "Fixed Color": expect.any(String) });
+    expect(updateConfigValueSpy).not.toHaveBeenCalled();
   });
 
   it("restores the resolved color index after an interactive write failure", async () => {
@@ -281,7 +327,21 @@ describe("LightingSummaryCard", () => {
       return fallback;
     });
 
-    render(<LightingSummaryCard {...defaultProps} config={{ items: { "LedStrip Mode": "Fixed Color" } }} />);
+    render(
+      <LightingSummaryCard
+        {...defaultProps}
+        config={{
+          items: {
+            "LedStrip Mode": "Fixed Color",
+            "LedStrip Pattern": "SingleColor",
+            "Fixed Color": "Red",
+            "LedStrip SID Select": "SID 1",
+            "Color tint": "Pure",
+            "Strip Intensity": "12",
+          },
+        }}
+      />,
+    );
 
     expect(screen.getByText("Rainbow")).toBeInTheDocument();
     expect(screen.getByText("Circular")).toBeInTheDocument();
@@ -303,5 +363,57 @@ describe("LightingSummaryCard", () => {
   it("hides auto SID mode when the config item is unavailable", () => {
     render(<LightingSummaryCard {...defaultProps} config={undefined} />);
     expect(screen.queryByTestId("led-strip-auto-sid")).toBeNull();
+  });
+
+  it("enables the intensity slider when Strip Intensity is present in the live spec", () => {
+    render(<LightingSummaryCard {...defaultProps} />);
+    expect(screen.getByTestId("led-strip-intensity-slider")).toHaveAttribute("data-disabled", "false");
+    expect(screen.getByTestId("led-strip-intensity-value")).toHaveTextContent("0");
+  });
+
+  it("disables the intensity slider and shows Not available when Strip Intensity is missing from the live spec (BUG-067)", () => {
+    render(
+      <LightingSummaryCard
+        {...defaultProps}
+        config={{
+          items: {
+            "LedStrip Auto SID Mode": { selected: "Enabled", options: ["Disabled", "Enabled"] },
+          },
+        }}
+      />,
+    );
+    expect(screen.getByTestId("led-strip-intensity-slider")).toHaveAttribute("data-disabled", "true");
+    expect(screen.getByTestId("led-strip-intensity-value")).toHaveTextContent("Not available");
+  });
+
+  it("disables select controls for items missing from the live spec (BUG-067)", () => {
+    render(
+      <LightingSummaryCard
+        {...defaultProps}
+        config={{
+          items: {
+            "LedStrip Auto SID Mode": { selected: "Enabled", options: ["Disabled", "Enabled"] },
+          },
+        }}
+      />,
+    );
+
+    const selectTestIds = [
+      "led-strip-mode",
+      "led-strip-pattern",
+      "led-strip-color",
+      "led-strip-tint",
+      "led-strip-sid-select",
+    ];
+
+    for (const testId of selectTestIds) {
+      const select = screen.getByTestId(testId).closest("[data-value]");
+      expect(select).toHaveAttribute("data-disabled", "true");
+      const change = select?.querySelector("button") as HTMLButtonElement;
+      fireEvent.click(change);
+    }
+
+    expect(updateConfigValueSpy).not.toHaveBeenCalled();
+    expect(interactiveWriteSpy).not.toHaveBeenCalled();
   });
 });

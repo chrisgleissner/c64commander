@@ -154,6 +154,7 @@ const renderConfigBrowserPageInFocusRing = (focusContext?: { current: FocusNavig
   );
 
 vi.mock("@/lib/c64api", () => ({
+  BACKGROUND_REQUEST_TIMEOUT_MS: 3000,
   getC64API: vi.fn(),
 }));
 

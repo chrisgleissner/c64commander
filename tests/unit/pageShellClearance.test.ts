@@ -15,7 +15,7 @@ describe("page-shell bounded viewport contract", () => {
   const css = readFileSync(resolve(__dirname, "../../src/index.css"), "utf-8");
   const swipeNavSource = readFileSync(resolve(__dirname, "../../src/components/SwipeNavigationLayer.tsx"), "utf-8");
 
-  it("separates the swipe viewport from the fixed tab bar instead of relying on page padding hacks", () => {
+  it("makes the swipe viewport — never the page-shell scroll box — clear the fixed tab bar", () => {
     const start = css.indexOf(".page-shell {");
     let depth = 0;
     let blockEnd = start;
@@ -44,8 +44,17 @@ describe("page-shell bounded viewport contract", () => {
     expect(css).toMatch(/\.tab-bar\s*\{[^}]*pointer-events:\s*auto/s);
     expect(block).toMatch(/overflow-y:\s*auto/);
     expect(block).toMatch(/min-height:\s*0/);
+    // Regression guard for the BUG-066 -> BUG-072 recurrence. The swipe viewport that
+    // hosts .page-shell is sized `calc(100dvh - var(--app-tab-bar-reserved-height))`, so it
+    // already ends at the fixed tab bar's top. The .page-shell scroll box must NEVER
+    // reserve the tab-bar height a second time — not as padding-bottom (BUG-066), not as
+    // margin-bottom (BUG-072), not via any property — or a dead gap one tab-bar tall opens
+    // below the content and above the tab bar. Two Ralph loops re-introduced this from a
+    // false "content sits under the fixed tab bar" premise; this assertion locks out the
+    // whole class. (The .page-shell comment must not mention the literal variable name.)
+    expect(block).not.toMatch(/--app-tab-bar-reserved-height/);
     expect(block).toMatch(/padding-bottom:\s*var\(--display-profile-page-padding-y\)\s*;/);
-    expect(block).not.toMatch(/padding-bottom:[^;]*var\(--app-tab-bar-reserved-height\)/);
+    // The tab-bar reservation lives in the swipe viewport — the one correct place.
     expect(swipeNavSource).toContain('height: "calc(100dvh - var(--app-tab-bar-reserved-height))"');
   });
 

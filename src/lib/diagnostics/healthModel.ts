@@ -504,7 +504,6 @@ export const deriveAppContributorHealth = (events: TraceEvent[], scope?: DeviceS
       !isExpectedCancellationFailure(e) &&
       !isPreConnectionGatingError(e),
   );
-  const total = windowEvents.length;
   const recent = windowEvents.filter(isInRecentAppErrorWindow).length;
   let state: HealthState;
   if (recent >= APP_ERROR_UNHEALTHY_RECENT_THRESHOLD) {
@@ -514,7 +513,7 @@ export const deriveAppContributorHealth = (events: TraceEvent[], scope?: DeviceS
   } else {
     state = "Idle";
   }
-  return { state, problemCount: total, totalOperations: total, failedOperations: total };
+  return { state, problemCount: recent, totalOperations: recent, failedOperations: recent };
 };
 
 // §7.4 — Overall health roll-up (worst-contributor-wins)
@@ -641,6 +640,7 @@ export const derivePrimaryProblem = (
       }
     } else if (e.type === "error") {
       if (isPreConnectionGatingError(e) || e.data.isExpected === true || isExpectedCancellationFailure(e)) continue;
+      if (!isInRecentAppErrorWindow(e)) continue;
       const message = typeof e.data.message === "string" ? e.data.message : "Application error";
       problems.push({
         id: e.id,

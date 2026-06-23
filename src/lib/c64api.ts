@@ -14,7 +14,7 @@ import {
   hasStoredPasswordFlag,
   setPassword as storePassword,
 } from "@/lib/secureStorage";
-import { getSelectedSavedDeviceProductFamilySync, updateSelectedSavedDeviceConnection } from "@/lib/savedDevices/store";
+import { updateSelectedSavedDeviceConnection } from "@/lib/savedDevices/store";
 import { notifyAuthRequired, notifyAuthSatisfied } from "@/lib/auth/authChallenge";
 import { isAuthRequiredHttpStatus } from "@/lib/c64api/transportErrors";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
@@ -75,6 +75,28 @@ import { buildBinaryFingerprint } from "@/lib/binaryFingerprint";
 import { TransmissionGuard, type SupportedC64FileType, type TransmissionValidationContext } from "@/lib/fileValidation";
 import { collectTraceHeaders } from "@/lib/tracing/payloadPreview";
 import { notifyReachable } from "@/lib/connection/reachabilityEvents";
+import { getLifecycleState } from "@/lib/appLifecycle";
+
+// A request that fails with a generic network/timeout class while the app is
+// in the background is almost always the WebView/Capacitor pausing the request
+// when the user backgrounds the app, not a real device problem. The matching
+// rest-response already carries `expectedFailure:true, lifecycleState:"background"`
+// (see recordRestResponse below), but a separate `error` trace event would still
+// surface to derivePrimaryProblem and degrade the App contributor. Treat such
+// failures as expected so the foreground UI stays Healthy when the user returns
+// to a reachable device. (BUG-069)
+const isExpectedBackgroundNetworkFailure = (
+  error: Error | null | undefined,
+  isAbort: boolean,
+  isNetworkFailure: boolean,
+  isTimeout: boolean,
+): boolean => {
+  if (isAbort) return false;
+  if (!isNetworkFailure && !isTimeout) return false;
+  if (getLifecycleState() !== "background") return false;
+  const message = error instanceof Error ? error.message : "";
+  return !/auth|unauthor|forbidden|401|403|404|500|http \d/i.test(message);
+};
 // Two timeout budgets for non-upload, non-playback requests:
 // - INTERACTIVE: user-tappable controls and config writes the user is
 //   staring at. Tighter than the firmware p99 (~600 ms) so a stuck
@@ -243,21 +265,25 @@ const resolveDeclaredConfigWriteValue = (
   return matches.length === 1 ? matches[0] : value;
 };
 
-const resolveLegacyC64uConfigWriteValue = (category: string, item: string, value: string | number) => {
-  if (
-    getSelectedSavedDeviceProductFamilySync() !== "C64U" ||
-    category !== "U64 Specific Settings" ||
-    item !== "CPU Speed" ||
-    typeof value !== "string"
-  ) {
+// The Ultimate firmware lists "CPU Speed" choices as space-padded single-digit
+// tokens (" 1".." 8") and rejects the unpadded form with
+// "Value '8' is not a valid choice for item CPU Speed" (verified on u64 3.14e).
+// The Home summary read returns CPU Speed as a bare value with no choices array,
+// so the slider falls back to unpadded option constants and the write path has
+// no declared options to map against. Re-pad single-digit CPU Speed writes for
+// every Ultimate family (the item lives under "U64 Specific Settings", which
+// applies to both u64 and C64U) and for numeric as well as string input, so the
+// drag does not silently fail and snap back. (BUG-064)
+const resolveU64CpuSpeedConfigWriteValue = (category: string, item: string, value: string | number) => {
+  if (category !== "U64 Specific Settings" || item !== "CPU Speed") {
     return value;
   }
-  const trimmedValue = value.trim();
+  const trimmedValue = typeof value === "string" ? value.trim() : String(value);
   return /^[1-9]$/.test(trimmedValue) ? ` ${trimmedValue}` : value;
 };
 
 const resolveConfigWriteValue = (category: string, item: string, value: string | number, categoryPayload: unknown) =>
-  resolveLegacyC64uConfigWriteValue(
+  resolveU64CpuSpeedConfigWriteValue(
     category,
     item,
     resolveDeclaredConfigWriteValue(category, item, value, categoryPayload),
@@ -1265,9 +1291,28 @@ export class C64API {
                   0,
                   Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
                 );
+                const elapsedSinceFirstAttemptMs = Date.now() - firstAttemptStartedAt;
+                const scheduledTimeoutFailure =
+                  scheduledRequest &&
+                  !callerAborted &&
+                  !superseded &&
+                  isAbort &&
+                  elapsedSinceFirstAttemptMs <= SCHEDULED_REQUEST_RETRY_GUARD_MS;
+                const retryingScheduledTimeout = scheduledTimeoutFailure && attempt < maxAttempts;
                 if (!responseRecorded) {
                   const expectedFailure =
-                    callerAborted || superseded || cancelledAbort || expectedFailureOption || failure.isExpected;
+                    callerAborted ||
+                    superseded ||
+                    cancelledAbort ||
+                    scheduledTimeoutFailure ||
+                    expectedFailureOption ||
+                    failure.isExpected ||
+                    isExpectedBackgroundNetworkFailure(
+                      error as Error,
+                      isAbort,
+                      isNetworkFailure,
+                      timedSignal.didTimeout() || /timed out/i.test(rawMessage),
+                    );
                   recordRestResponse(action, {
                     method,
                     path,
@@ -1301,8 +1346,15 @@ export class C64API {
                   intent !== "system" &&
                   !callerAborted &&
                   !cancelledAbort &&
+                  !scheduledTimeoutFailure &&
                   !expectedFailureOption &&
-                  !failure.isExpected
+                  !failure.isExpected &&
+                  !isExpectedBackgroundNetworkFailure(
+                    error as Error,
+                    isAbort,
+                    isNetworkFailure,
+                    timedSignal.didTimeout() || /timed out/i.test(rawMessage),
+                  )
                 ) {
                   const isTransientFailure =
                     isAbort ||
@@ -1348,15 +1400,7 @@ export class C64API {
                   );
                 }
 
-                const elapsedSinceFirstAttemptMs = Date.now() - firstAttemptStartedAt;
-                const shouldRetry =
-                  scheduledRequest &&
-                  !callerAborted &&
-                  !superseded &&
-                  attempt < maxAttempts &&
-                  isAbort &&
-                  elapsedSinceFirstAttemptMs <= SCHEDULED_REQUEST_RETRY_GUARD_MS;
-                if (shouldRetry) {
+                if (retryingScheduledTimeout) {
                   const retryDelayMs = 0;
                   addLog("warn", "C64 API retry scheduled after scheduled timeout", {
                     requestId,
@@ -1541,7 +1585,15 @@ export class C64API {
             );
             const failure = classifyError(error);
             const callerAborted = options.signal?.aborted === true;
-            const expectedFailure = callerAborted || failure.isExpected;
+            const expectedFailure =
+              callerAborted ||
+              failure.isExpected ||
+              isExpectedBackgroundNetworkFailure(
+                error as Error,
+                isAbort,
+                isNetworkFailure,
+                timedSignal.didTimeout() || /timed out/i.test(rawMessage),
+              );
             recordRestResponse(action, {
               method,
               path: normalizeUrlPath(url),

@@ -15,6 +15,7 @@ import {
   isSongCategory,
   normalizeLocalPath,
   getLocalFilePath,
+  normalizeDurationInputDraft,
   parseDurationInput,
   tryAcquireSingleFlight,
   releaseSingleFlight,
@@ -123,6 +124,21 @@ describe("playFilesUtils", () => {
     it("returns undefined for empty or whitespace input (BRDA:73 TRUE)", () => {
       expect(parseDurationInput("")).toBeUndefined();
       expect(parseDurationInput("   ")).toBeUndefined();
+    });
+  });
+
+  describe("normalizeDurationInputDraft", () => {
+    it("keeps duration drafts constrained to digits and one colon", () => {
+      expect(normalizeDurationInputDraft("abc5:30xyz")).toBe("5:30");
+      expect(normalizeDurationInputDraft("1::05")).toBe("1:05");
+      expect(normalizeDurationInputDraft("12:345")).toBe("12:34");
+      expect(normalizeDurationInputDraft("123")).toBe("12");
+    });
+
+    it("preserves incomplete mm:ss drafts without accepting unrelated text", () => {
+      expect(normalizeDurationInputDraft("1:")).toBe("1:");
+      expect(normalizeDurationInputDraft("x:y")).toBe(":");
+      expect(normalizeDurationInputDraft(" 0a:5b ")).toBe("0:5");
     });
   });
 

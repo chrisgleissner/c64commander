@@ -224,7 +224,7 @@ const HDMI_RESOLUTION_OPTIONS = [
 ];
 
 const JOYSTICK_SWAPPER_OPTIONS = ["Normal", "Swapped", "WASD Port 2", "WASD Port 1"];
-const SERIAL_BUS_MODE_OPTIONS = ["All Connected", "C64U <-> Internal", "Ext. <-> Int.", "C64U <-> External"];
+const SERIAL_BUS_MODE_OPTIONS = ["All Connected", "C64 <-> Internal", "Ext. <-> Int.", "C64 <-> External"];
 const CARTRIDGE_PREFERENCE_OPTIONS = ["Auto", "Internal", "External", "Manual"];
 const RAM_EXPANSION_OPTIONS = ["Disabled", "Enabled", "GeoRAM Mode"];
 const REU_SIZE_OPTIONS = ["128 KB", "256 KB", "512 KB", "1 MB", "2 MB", "4 MB", "8 MB", "16 MB"];
@@ -453,7 +453,7 @@ const expectLightingControls = (prefix: string, title: string) => {
   expect(screen.getByTestId(`${prefix}-tint`)).toBeTruthy();
 
   const labels = Array.from(section.querySelectorAll(".text-muted-foreground")).map((node) => node.textContent);
-  expect(labels).toEqual(["Mode", "Auto SID", "Pattern", "Color", "Brightness", "Tint", "SID Select"]);
+  expect(labels).toEqual(["Mode", "Music Detect", "Pattern", "Color", "Brightness", "Tint", "SID Select"]);
 };
 
 const expectUserInterfaceControls = (prefix: string) => {
@@ -1806,7 +1806,7 @@ describe("HomePage SID status", () => {
     fireEvent.click(await screen.findByRole("option", { name: /WASD Port 2/i }));
 
     fireEvent.click(screen.getByTestId("home-serial-bus-mode"));
-    fireEvent.click(await screen.findByRole("option", { name: /C64U <-> External/i }));
+    fireEvent.click(await screen.findByRole("option", { name: /C64 <-> External/i }));
 
     fireEvent.click(screen.getByTestId("home-cartridge-preference"));
     fireEvent.click(await screen.findByRole("option", { name: /^Manual$/i }));
@@ -1928,7 +1928,7 @@ describe("HomePage SID status", () => {
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
         "U64 Specific Settings",
         "Serial Bus Mode",
-        "C64U <-> External",
+        "C64 <-> External",
       );
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
         "C64 and Cartridge Settings",

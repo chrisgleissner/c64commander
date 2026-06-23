@@ -202,6 +202,44 @@ class DeviceDiscoveryPluginTest {
   }
 
   @Test
+  fun probeTargetTreats403WithUltimateErrorBodyAsNeedingPassword() {
+    // Password-protected Ultimate firmware answers an unauthenticated /v1/info with
+    // 403 Forbidden and a JSON error envelope (see 1541ultimate/software/api/routes.h).
+    val port = startInfoServer(403, """{"errors":["Forbidden."]}""")
+    val candidate = plugin.probeTarget(target("127.0.0.1", port), 1_000)
+
+    assertNotNull(candidate)
+    assertTrue(candidate!!.requiresPassword)
+    assertEquals("C64 Ultimate", candidate.product)
+    assertEquals("127.0.0.1", candidate.address)
+  }
+
+  @Test
+  fun probeTarget403KeepsNamedHost() {
+    val port = startInfoServer(403, """{"errors":["Forbidden."]}""")
+    val candidate = plugin.probeTarget(target("localhost", port), 1_000)
+    assertNotNull(candidate)
+    assertTrue(candidate!!.requiresPassword)
+    assertEquals("localhost", candidate.host)
+    assertEquals("localhost", candidate.hostname)
+  }
+
+  @Test
+  fun probeTargetRejects403WithoutUltimateErrorBody() {
+    // A generic 403 (e.g. a router admin page or proxy) must not appear as a device.
+    val port = startInfoServer(403, "<html><body>Forbidden</body></html>")
+    assertNull(plugin.probeTarget(target("127.0.0.1", port), 1_000))
+  }
+
+  @Test
+  fun looksLikeUltimateErrorBodyRecognisesJsonEnvelope() {
+    assertTrue(plugin.looksLikeUltimateErrorBody("""{"errors":["Forbidden."]}"""))
+    assertFalse(plugin.looksLikeUltimateErrorBody("<html>Forbidden</html>"))
+    assertFalse(plugin.looksLikeUltimateErrorBody(""))
+    assertFalse(plugin.looksLikeUltimateErrorBody("   "))
+  }
+
+  @Test
   fun probeTargetRejectsServerError() {
     val port = startInfoServer(500, "boom")
     assertNull(plugin.probeTarget(target("127.0.0.1", port), 1_000))
