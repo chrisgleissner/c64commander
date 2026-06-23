@@ -84,8 +84,9 @@ P0–P6, P8 complete. Code + tests changed for P2 + P3. P9 (full gates) and P7/P
 
 ## 7. Open risks
 
-- HIL on real C64U/U64 hardware may be blocked (no device / password) → recorded as an
-  external dependency, not a pass.
+- HIL: RESOLVED — validated on real U64E (REST-grouped path) AND real C64U (menu mode +
+  residual Advanced section), incl. the live-only ARMSID unknown-category proof. The c64u
+  exhibits intermittent overload drop-outs (documented; recovered via Retry), not a regression.
 - Moving `C64U Model` / `Tape` / `SoftIEC` / `Data Streams` into the residual Advanced
   section is a deliberate UX change from the prior "dissolve the drawer" goal; it is the
   evidence-based, lossless, honest placement (invariant #7). Trivially reversible per
@@ -95,9 +96,15 @@ P0–P6, P8 complete. Code + tests changed for P2 + P3. P9 (full gates) and P7/P
 
 ## 8. Final disposition of every known gap
 
-- **C64U on-device validation** — Disposition: attempted; recorded as the path + result
-  in WORKLOG (external dependency if hardware/credentials unavailable). Not claimed as a
-  pass unless a real probe ran.
+- **C64U on-device validation** — Disposition: **PASSED** on real hardware. Hardening APK
+  (`0.8.9-6f367`) built+installed to Pixel `9B081FFAZ001WX`, connected to the real C64U
+  (firmware 1.1.0, password supplied by the user and handled without leaking it). Config
+  renders the menu hierarchy + the residual **Advanced (REST-only)** section containing
+  C64U Model (Starlight Edition), SoftIEC, Tape Playback Rate (0.98 MHz PAL), Data Streams,
+  AND the live-only **ARMSID in Socket 1/2** categories (absent from every fixture) —
+  proving the unknown-category invariant on real hardware. The c64u flaked once on handover
+  (documented overload drop-out); a Retry recovered to HEALTHY. Evidence PNGs in the session
+  scratchpad. See WORKLOG P7.
 - **`C64U Model` routing** — Was: `categoryDefaults["U64 Specific Settings"]="Video setup"`
   (only this item reached it; misleading — it is a hardware edition, not a video setting).
   Evidence: absent from `c64u-menu.yaml`; REST options BASIC Beige/Starlight/Founders.

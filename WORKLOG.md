@@ -155,15 +155,37 @@ HIL (real hardware on the local network, 2026-06-23):
   This is the null-hierarchy path; my C64U-only routing change does not affect it. The
   lossless REST-grouped rendering of this exact category shape (incl. Clock Settings,
   editable) is unit-proven over the matching `u64e-3.14e` fixture.
-- **C64U — REACHABLE but 403 (password-protected).** `http://c64u/v1/version` → 403. No C64U
-  credential is present in the environment, and I did not attempt to bypass it. The
-  C64U-specific change (the residual Advanced section) can therefore only be visually
-  validated on a real C64U → **BLOCKED by an external dependency (credentials)**, recorded
-  as such, NOT a pass. Its rendering is validated by the unit suite + the updated
-  `demoConfig` E2E over the real `c64u-config.yaml` fixture (the fixture-fallback path).
-- Pixel `9B081FFAZ001WX` has the app (`uk.gleissner.c64commander`) installed; a full
-  build+install+screenshot in demo mode was not run (the demo-mode rendering is covered by
-  the E2E demo spec over the same fixture).
+- **C64U — VALIDATED ON-DEVICE (PASSED).** Credential later supplied by the user; handled
+  via a gitignored scratchpad file (referenced through `$(cat)`, shredded afterwards) and
+  the app's own stored password — never printed to logs/screenshots/commits. Built+installed
+  the hardening APK (`0.8.9-6f367`, commit `6f367873`) to Pixel `9B081FFAZ001WX` via
+  `./build --skip-tests --install-apk`, switched the active device to **c64u** (product
+  "C64 Ultimate", firmware **1.1.0** — exact hierarchy match → menu mode), opened Config and
+  expanded **Advanced (REST-only) settings**. Confirmed on real hardware:
+  - The full menu hierarchy renders (Memory & ROMs, Turbo boost, Video setup, Audio setup
+    group, … Built-in drive A/B) with friendly labels + group headers.
+  - The residual **Advanced (REST-only) settings** section is present and contains exactly
+    the items my change routes there: **U64 SPECIFIC SETTINGS → C64U Model = "Starlight
+    Edition"** (NOT mis-homed on Video setup), **SOFTIEC DRIVE SETTINGS** (IEC Drive, Soft
+    Drive Bus ID 11, Default Path /USB0/), **TAPE SETTINGS → Tape Playback Rate = "0.98 MHz
+    (PAL)"** (NOT mis-homed on Built-in drive A), **DATA STREAMS** (Stream VIC/Audio to …).
+  - **Unknown-category invariant proven on real hardware:** the live C64U exposes 22
+    categories incl. **"ARMSID in Socket 1" / "ARMSID in Socket 2"** — categories present in
+    NO fixture/association (the fixture has "ARMSID" only as a SID-socket *option value*).
+    Both surface automatically in the Advanced section, fully rendered + editable (Fundamental
+    Mode / 6581 Filter Strength / 8580 Filt Freq sliders + selects) with humanized labels.
+    This also disproves the prior "junk drawer fully dissolved" claim: even a fixture-matching
+    1.1.0 device shows a residual section (ARMSID).
+  - Device health flaked once during the connection handover ("Host unreachable", badge
+    "DEGRADED") — the documented c64u overload/handover drop-out, not a regression (read-only
+    curl confirmed the device healthy throughout: 200 OK ~10ms). A single in-app **Retry**
+    recovered to **C64U ● HEALTHY** and the page rendered.
+  - Write-back NOT exercised on the live device (to avoid mutating the user's hardware,
+    especially given the intermittent drop-outs). It is unchanged by this routing work and is
+    covered by unit (`ConfigBrowserPageMenuMode`: System Mode / alias writes assert canonical
+    `{category,item}`) + E2E (`configEditingBehavior`: PUT commit-on-blur).
+  - Evidence PNGs: `hil_advanced_c64umodel_armsid.png`,
+    `hil_advanced_softiec_tape_datastreams.png` (session scratchpad `hil-c64u/`).
 
 Screenshots: the C64U/demo config surface gains a residual Advanced (REST-only) section, so
 the committed docs section PNGs for the config surface are candidates for recapture (P5).
