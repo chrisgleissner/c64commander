@@ -1,0 +1,672 @@
+config:
+  general:
+    schema_version: '0.3'
+    device_type: C64 Ultimate
+    menu_title: Commodore 64 Ultimate
+    extraction_status: complete_for_supplied_menu_pages
+    yaml_shape: Aligned with the REST YAML convention of config.general plus 
+      config.categories; config.menu_tree captures menu hierarchy.
+    notes:
+    - This file mirrors the user-visible menu labels and visible selected 
+      values.
+    - It is a menu extraction, not yet a completed REST-to-menu mapping.
+    - Selected values are preserved as visible values rather than converted to 
+      natural English case.
+    - System information is present in the root menu, but no detail page is 
+      included here.
+  menu_tree:
+    label: Commodore 64 Ultimate
+    items:
+    - label: Disk file browser
+      category: Disk file browser
+    - label: CommoServe file search
+      category: CommoServe file search
+    - label: Memory & ROMs
+      category: Memory & ROMs
+    - label: Turbo boost
+      category: Turbo boost
+    - label: Video setup
+      category: Video setup
+    - label: Audio setup
+      children:
+      - label: Audio mixer
+        category: Audio mixer
+      - label: Speaker mixer
+        category: Speaker mixer
+      - label: SID sockets configuration
+        category: SID sockets configuration
+      - label: UltiSID configuration
+        category: UltiSID configuration
+      - label: SID addressing
+        category: SID addressing
+      - label: SID player behavior
+        category: SID player behavior
+    - label: Joystick & controllers
+      category: Joystick & controllers
+    - label: LED lighting
+      category: LED lighting
+    - label: Network services & timezone
+      category: Network services & timezone
+    - label: Wired network setup
+      category: Wired network setup
+    - label: Wi-Fi network setup
+      category: Wi-Fi network setup
+    - label: Modems
+      category: Modems
+    - label: Printers
+      category: Printers
+    - label: User interface
+      category: User interface
+    - label: Built-in drive A
+      category: Built-in drive A
+    - label: Built-in drive B
+      category: Built-in drive B
+    - label: System information
+      category: System information
+  categories:
+    Disk file browser:
+      menu_path:
+      - Disk file browser
+      kind: browser
+      items:
+        SD:
+          name: SD card
+          selected: no media
+        Flash:
+          name: Internal memory
+          selected: Ready
+        Temp:
+          name: RAM disk
+          selected: Ready
+        USB2:
+          name: Verbatim STORE N GO
+          selected: Ready
+    CommoServe file search:
+      menu_path:
+      - CommoServe file search
+      kind: form
+      title: CommoServe file search
+      items:
+        Name:
+          selected: ''
+        Group:
+          selected: ''
+        Handle:
+          selected: ''
+        Event:
+          selected: ''
+        Category:
+          selected: ''
+        Date:
+          selected: ''
+        Type:
+          selected: ''
+        Sort:
+          selected: ''
+        Order:
+          selected: ''
+      actions:
+      - << Submit >>
+      notice: You agree you have a necessary license or rights to download any 
+        software.
+    Memory & ROMs:
+      menu_path:
+      - Memory & ROMs
+      kind: settings
+      items:
+        Kernal ROM:
+          selected: ''
+          kind: file_picker
+        BASIC ROM:
+          selected: ''
+          kind: file_picker
+        Character ROM:
+          selected: ''
+          kind: file_picker
+        Cartridge:
+          selected: ''
+          kind: file_picker
+        RAM expansion unit:
+          selected: Enabled
+        Size:
+          selected: 16 MB
+        Command interface:
+          selected: Enabled
+        Ultimate audio:
+          selected: Enabled
+        Drive A:
+          kind: section
+          items:
+            ROM for 1541 mode:
+              selected: 1541.rom
+            ROM for 1571 mode:
+              selected: 1571.rom
+            ROM for 1581 mode:
+              selected: 1581.rom
+        Drive B:
+          kind: section
+          items:
+            ROM for 1541 mode:
+              selected: 1541.rom
+            ROM for 1571 mode:
+              selected: 1571.rom
+            ROM for 1581 mode:
+              selected: 1581.rom
+    Turbo boost:
+      menu_path:
+      - Turbo boost
+      kind: settings
+      items:
+        Turbo control:
+          selected: Manual
+        CPU speed:
+          selected: 1 MHz
+        Badline timing:
+          selected: Enabled
+        SuperCPU detect (D0BC):
+          selected: Disabled
+    Video setup:
+      menu_path:
+      - Video setup
+      kind: settings
+      items:
+        System mode:
+          selected: PAL
+        HDMI scan resolution:
+          selected: PC 1024 x 768
+        HDMI scan lines:
+          selected: Enabled
+        Palette definition:
+          selected: ''
+          kind: action
+        Analog video mode:
+          selected: CVBS + SVideo
+        Digital video mode:
+          selected: Auto
+    Audio mixer:
+      menu_path:
+      - Audio setup
+      - Audio mixer
+      kind: settings
+      items:
+        Vol UltiSID 1:
+          selected: 0 dB
+        Vol UltiSID 2:
+          selected: 0 dB
+        Vol socket 1:
+          selected: 0 dB
+        Vol socket 2:
+          selected: 0 dB
+        Vol sampler L:
+          selected: 0 dB
+        Vol sampler R:
+          selected: 0 dB
+        Vol drive 1:
+          selected: OFF
+        Vol drive 2:
+          selected: OFF
+        Vol tape read:
+          selected: OFF
+        Vol tape write:
+          selected: OFF
+        Pan UltiSID 1:
+          selected: Center
+        Pan UltiSID 2:
+          selected: Center
+        Pan socket 1:
+          selected: Left 3
+        Pan socket 2:
+          selected: Right 3
+        Pan sampler L:
+          selected: Left 3
+        Pan sampler R:
+          selected: Right 3
+        Pan drive 1:
+          selected: Left 2
+        Pan drive 2:
+          selected: Right 2
+        Pan tape read:
+          selected: Center
+        Pan tape write:
+          selected: Center
+    Speaker mixer:
+      menu_path:
+      - Audio setup
+      - Speaker mixer
+      kind: settings
+      items:
+        Speaker enable:
+          selected: Enabled
+        Vol UltiSID 1:
+          selected: OFF
+        Vol UltiSID 2:
+          selected: OFF
+        Vol socket 1:
+          selected: OFF
+        Vol socket 2:
+          selected: OFF
+        Vol sampler L:
+          selected: OFF
+        Vol sampler R:
+          selected: OFF
+        Vol drive 1:
+          selected: -15 dB
+        Vol drive 2:
+          selected: -15 dB
+        Vol tape read:
+          selected: -36 dB
+        Vol tape write:
+          selected: -36 dB
+    SID sockets configuration:
+      menu_path:
+      - Audio setup
+      - SID sockets configuration
+      kind: settings
+      items:
+        SID socket 1:
+          selected: Enabled
+        SID socket 2:
+          selected: Enabled
+        SID detected socket 1:
+          selected: ARMSID
+        SID detected socket 2:
+          selected: ARMSID
+        SID socket 1 1K ohm resistor:
+          selected: Off
+        SID socket 2 1K ohm resistor:
+          selected: Off
+        SID socket 1 capacitors:
+          selected: 470 pF
+        SID socket 2 capacitors:
+          selected: 470 pF
+    UltiSID configuration:
+      menu_path:
+      - Audio setup
+      - UltiSID configuration
+      kind: settings
+      items:
+        UltiSID 1 filter curve:
+          selected: 8580 Lo
+        UltiSID 2 filter curve:
+          selected: 8580 Lo
+        UltiSID 1 filter resonance:
+          selected: Low
+        UltiSID 2 filter resonance:
+          selected: Low
+        UltiSID 1 combined waveforms:
+          selected: '6581'
+        UltiSID 2 combined waveforms:
+          selected: '6581'
+        UltiSID 1 digis level:
+          selected: Medium
+        UltiSID 2 digis level:
+          selected: Medium
+    SID addressing:
+      menu_path:
+      - Audio setup
+      - SID addressing
+      kind: settings
+      items:
+        SID socket 1 address:
+          selected: $D700
+        SID socket 2 address:
+          selected: $D700
+        Ext DualSID range split:
+          selected: Off
+        UltiSID 1 address:
+          selected: $D400
+        UltiSID 2 address:
+          selected: $D400
+        UltiSID range split:
+          selected: Off
+        Paddle override:
+          selected: Enabled
+        Auto addr mirroring:
+          selected: Enabled
+        Visual SID address editor:
+          selected: -->
+          kind: action
+    SID player behavior:
+      menu_path:
+      - Audio setup
+      - SID player behavior
+      kind: settings
+      items:
+        SID player autoconfig:
+          selected: Enabled
+        Allow autoconfig uses UltiSID:
+          selected: Yes
+    Joystick & controllers:
+      menu_path:
+      - Joystick & controllers
+      kind: settings
+      items:
+        Joystick input:
+          selected: Normal
+        Paddle override:
+          selected: Enabled
+      note: When WASD joystick emulation is enabled, hold [CTRL] to type the W, 
+        A, S, D and RETURN characters.
+    LED lighting:
+      menu_path:
+      - LED lighting
+      kind: settings
+      items:
+        Power LED (if installed):
+          kind: section
+          items:
+            Output 1:
+              selected: On
+            Output 2:
+              selected: Drive A Act
+        Case lights:
+          kind: section
+          items:
+            Mode:
+              selected: Fixed Color
+            Music detect:
+              selected: Enabled
+            Pattern:
+              selected: SingleColor
+            Brightness:
+              selected: '21'
+            Color:
+              selected: Red
+            Tint:
+              selected: Pure
+        Keyboard lights:
+          kind: section
+          items:
+            Mode:
+              selected: Default
+            Music detect:
+              selected: Enabled
+            Pattern:
+              selected: Single Color
+            Brightness:
+              selected: '0'
+            Color:
+              selected: Azure
+            Tint:
+              selected: Pure
+    Network services & timezone:
+      menu_path:
+      - Network services & timezone
+      kind: settings
+      items:
+        Host name:
+          selected: c64u
+        Unique ID:
+          selected: Default
+        Network password:
+          selected: '********'
+          kind: password
+        Services:
+          kind: section
+          items:
+            Ultimate ident service:
+              selected: Enabled
+            Ultimate DMA service:
+              selected: Enabled
+            Telnet remote menu service:
+              selected: Enabled
+            FTP file service:
+              selected: Enabled
+            Web remote control service:
+              selected: Enabled
+            Log to Syslog server:
+              selected: 192.168.1.185
+        Time synchronization:
+          kind: section
+          items:
+            SNTP enable:
+              selected: Enabled
+            Timezone:
+              selected: Western Europe
+            Time server 1:
+              selected: time.windows.com
+            Time server 2:
+              selected: time.google.com
+            Time server 3:
+              selected: pool.ntp.org
+    Wired network setup:
+      menu_path:
+      - Wired network setup
+      kind: settings
+      items:
+        Use DHCP:
+          selected: Enabled
+        Static IP:
+          selected: 192.168.2.64
+        Static netmask:
+          selected: 255.255.255.0
+        Static gateway:
+          selected: 192.168.2.1
+        Static DNS:
+          selected: 8.8.8.8
+        Status:
+          kind: section
+          items:
+            Status:
+              selected: Link Up
+            Active IP address:
+              selected: 192.168.1.167
+            Interface MAC:
+              selected: 02:15:41:3B:0F:35
+    Wi-Fi network setup:
+      menu_path:
+      - Wi-Fi network setup
+      kind: settings
+      items:
+        Enable:
+          selected: ''
+          kind: action
+        Disable:
+          selected: ''
+          kind: action
+        Disconnect:
+          selected: ''
+          kind: action
+        Connect to last AP:
+          selected: ''
+          kind: action
+        Select AP from list:
+          selected: ''
+          kind: action
+        Enter AP manually:
+          selected: ''
+          kind: action
+        Forget APs:
+          selected: ''
+          kind: action
+        Use DHCP:
+          selected: Enabled
+        Static IP:
+          selected: 192.168.2.64
+        Static netmask:
+          selected: 255.255.255.0
+        Static gateway:
+          selected: 192.168.2.1
+        Static DNS:
+          selected: 8.8.8.8
+        Status:
+          kind: section
+          items:
+            Status:
+              selected: Link Down
+            Connected to:
+              selected: '-'
+            Active IP address:
+              selected: 0.0.0.0
+            Interface MAC:
+              selected: 3C:DC:75:EF:DC:20
+    Modems:
+      menu_path:
+      - Modems
+      kind: settings
+      items:
+        Modem interface:
+          selected: ACIA / Swiftlink
+        ACIA (6551) mapping:
+          selected: DE00/NMI
+        Hardware mode:
+          selected: Swiftlink
+        Listening port:
+          selected: '3000'
+        Handshaking:
+          kind: section
+          items:
+            Do RING sequence (incoming):
+              selected: Enabled
+            Drop connection on DTR low:
+              selected: Enabled
+            RTS handshake (Rx):
+              selected: Enabled
+            CTS behavior:
+              selected: Active (Low)
+            DCD behavior:
+              selected: Active (Low)
+            DSR behavior:
+              selected: Active when connected
+            Automatic Rx pushback:
+              selected: Disabled
+        Automated responses:
+          kind: section
+          items:
+            Modem offline text:
+              selected: /flash/offline.txt
+            Modem connect text:
+              selected: /flash/welcome.txt
+            Modem busy text:
+              selected: /flash/busy.txt
+        Tweaks:
+          kind: section
+          items:
+            Set socket opt TCP_NODELAY:
+              selected: Disabled
+            Loop delay:
+              selected: 20 ms
+    Printers:
+      menu_path:
+      - Printers
+      kind: settings
+      items:
+        IEC printer:
+          selected: Disabled
+        Bus ID:
+          selected: '4'
+        Output file:
+          selected: /Usb0/Printer
+        Output type:
+          selected: PNG B&W
+        Ink density:
+          selected: Medium
+        Page top margin (default is 5):
+          selected: '5'
+        Page height (default is 60):
+          selected: '60'
+        Emulation:
+          selected: Commodore MPS
+        Commodore charset:
+          selected: USA/UK
+        Epson charset:
+          selected: Basic
+        IBM table 2:
+          selected: International 1
+    User interface:
+      menu_path:
+      - User interface
+      kind: settings
+      items:
+        Interface type:
+          selected: Freeze
+        Navigation style:
+          selected: WASD Cursors
+        Color scheme:
+          selected: Commodore Blue
+        Auto save config:
+          selected: Yes
+        Ulticopy uses disk name:
+          selected: Enabled
+        Filename overflow squeeze:
+          selected: None
+    Built-in drive A:
+      menu_path:
+      - Built-in drive A
+      kind: settings
+      items:
+        Drive:
+          selected: Enabled
+        Drive type:
+          selected: '1541'
+        Drive bus ID:
+          selected: '8'
+        ROMs:
+          kind: section
+          items:
+            ROM for 1541 mode:
+              selected: 1541.rom
+            ROM for 1571 mode:
+              selected: 1571.rom
+            ROM for 1581 mode:
+              selected: 1581.rom
+        Advanced:
+          kind: section
+          items:
+            Extra RAM:
+              selected: Disabled
+            Disk swap delay:
+              selected: 100 ms
+            Resets when C64 resets:
+              selected: Yes
+            Freezes in menu:
+              selected: Yes
+            GCR save align tracks:
+              selected: Yes
+            Leave menu on mount:
+              selected: Yes
+            D64 GEOS copy protection:
+              selected: none
+    Built-in drive B:
+      menu_path:
+      - Built-in drive B
+      kind: settings
+      items:
+        Drive:
+          selected: Disabled
+        Drive type:
+          selected: '1541'
+        Drive bus ID:
+          selected: '9'
+        ROMs:
+          kind: section
+          items:
+            ROM for 1541 mode:
+              selected: 1541.rom
+            ROM for 1571 mode:
+              selected: 1571.rom
+            ROM for 1581 mode:
+              selected: 1581.rom
+        Advanced:
+          kind: section
+          items:
+            Extra RAM:
+              selected: Disabled
+            Disk swap delay:
+              selected: 100 ms
+            Resets when C64 resets:
+              selected: Yes
+            Freezes in menu:
+              selected: Yes
+            GCR save align tracks:
+              selected: Yes
+            Leave menu on mount:
+              selected: Yes
+            D64 GEOS copy protection:
+              selected: none
+    System information:
+      menu_path:
+      - System information
+      kind: info
+      extraction_status: root_item_only_no_detail_page_supplied
+      items: {}

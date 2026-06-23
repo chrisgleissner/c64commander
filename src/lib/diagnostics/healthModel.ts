@@ -504,6 +504,7 @@ export const deriveAppContributorHealth = (events: TraceEvent[], scope?: DeviceS
       !isExpectedCancellationFailure(e) &&
       !isPreConnectionGatingError(e),
   );
+  const total = windowEvents.length;
   const recent = windowEvents.filter(isInRecentAppErrorWindow).length;
   let state: HealthState;
   if (recent >= APP_ERROR_UNHEALTHY_RECENT_THRESHOLD) {
@@ -513,7 +514,14 @@ export const deriveAppContributorHealth = (events: TraceEvent[], scope?: DeviceS
   } else {
     state = "Idle";
   }
-  return { state, problemCount: recent, totalOperations: recent, failedOperations: recent };
+  // Severity (state) is driven by RECENT errors (last 60 s) so a stale burst does not
+  // keep the badge escalated. The COUNT, however, reflects the full in-window magnitude
+  // so the badge surfaces how many problems actually occurred while degraded/unhealthy
+  // (e.g. "999+") rather than understating a burst that has only just begun to ease.
+  // When nothing is recent the contributor is Idle and reports no current problems —
+  // stale errors are history, not an active problem.
+  const problemCount = state === "Idle" ? 0 : total;
+  return { state, problemCount, totalOperations: problemCount, failedOperations: problemCount };
 };
 
 // §7.4 — Overall health roll-up (worst-contributor-wins)

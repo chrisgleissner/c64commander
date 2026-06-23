@@ -2366,7 +2366,8 @@ test.describe("App screenshots", () => {
       const badge = page.getByTestId("unified-health-badge");
       const scenarios = [
         { fileSuffix: "healthy", health: "Healthy" as const, problemCount: 0, expectedText: null },
-        { fileSuffix: "degraded-3", health: "Degraded" as const, problemCount: 3, expectedText: "3" },
+        { fileSuffix: "degraded-12", health: "Degraded" as const, problemCount: 12, expectedText: "12" },
+        { fileSuffix: "degraded-999plus", health: "Degraded" as const, problemCount: 1808, expectedText: "999+" },
         { fileSuffix: "unhealthy-12", health: "Unhealthy" as const, problemCount: 12, expectedText: "12" },
         {
           fileSuffix: "unhealthy-999plus",
@@ -2393,7 +2394,11 @@ test.describe("App screenshots", () => {
           await expect(badge).toHaveAttribute("data-health-state", scenario.health);
 
           if (scenario.expectedText) {
-            await expect(badge).toContainText(scenario.expectedText);
+            // Match the problem count as a standalone token so it cannot accidentally
+            // match digits inside the connected-device host (e.g. "12" within
+            // "127.0.0.1"), which previously let this assertion pass without rendering.
+            const escaped = scenario.expectedText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            await expect(badge).toContainText(new RegExp(`(?<![\\d.])${escaped}(?!\\d)`));
           }
 
           await captureScreenshot(page, testInfo, `settings/header/badge-${profileId}-${scenario.fileSuffix}.png`, {
