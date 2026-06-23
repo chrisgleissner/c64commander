@@ -440,6 +440,7 @@ export function useC64ConfigItems(category: string, items: string[], enabled = t
       return api.getConfigItems(category, items, {
         __c64uIntent: intent,
         __c64uSkipItemEnrichment: options.skipEnrichment,
+        timeoutMs: options.timeoutMs,
       });
     },
     enabled: queryActive && enabled && !!category && items.length > 0 && connectionActive,
@@ -461,12 +462,12 @@ export function useC64AllConfig(options: C64QueryOptions = {}) {
     queryKey: ["c64-all-config"],
     queryFn: async () => {
       const api = getC64API();
-      const cats = await api.getCategories({ __c64uIntent: intent });
+      const cats = await api.getCategories({ __c64uIntent: intent, timeoutMs: options.timeoutMs });
       const configs: Record<string, ConfigResponse> = {};
 
       for (const cat of cats.categories) {
         try {
-          configs[cat] = await api.getCategory(cat, { __c64uIntent: intent });
+          configs[cat] = await api.getCategory(cat, { __c64uIntent: intent, timeoutMs: options.timeoutMs });
         } catch (catError) {
           // Per-category failures are tolerated; callers can render partial config safely.
           addLog("debug", "Config category fetch failed; partial config in use", {
@@ -538,19 +539,24 @@ export function useC64UpdateConfigBatch() {
 }
 
 export function useC64ConfigItem(category?: string, item?: string, enabled = true, options: C64QueryOptions = {}) {
+  const routingEpoch = useConnectionRoutingEpoch();
   const intent = options.intent ?? "background";
   const screenActive = useScreenActivity();
   const appVisible = useAppVisibilityState();
   const connectionActive = useConnectionActive();
   const queryActive = (options.active ?? true) && (screenActive || !appVisible);
   return useQuery({
-    queryKey: ["c64-config-item", category, item],
+    // routingEpoch is appended (not prepended) so prefix-based invalidation —
+    // ["c64-config-item"] and ["c64-config-item", category] — still matches, while a
+    // connection handoff re-resolves the value instead of reviving the cancelled read
+    // (matches useC64Categories/useC64Category/useC64ConfigItems).
+    queryKey: ["c64-config-item", category, item, routingEpoch],
     queryFn: async () => {
       const api = getC64API();
       if (!category || !item) {
         return null;
       }
-      return api.getConfigItem(category, item, { __c64uIntent: intent });
+      return api.getConfigItem(category, item, { __c64uIntent: intent, timeoutMs: options.timeoutMs });
     },
     enabled: queryActive && enabled && !!category && !!item && connectionActive,
     staleTime: 30000,
@@ -576,7 +582,7 @@ export function useC64Drives(options: C64QueryOptions = {}) {
     queryKey: ["c64-drives"],
     queryFn: async () => {
       const api = getC64API();
-      return api.getDrives({ __c64uIntent: intent });
+      return api.getDrives({ __c64uIntent: intent, timeoutMs: options.timeoutMs });
     },
     enabled: queryActive,
     staleTime: options.staleTime ?? 10000,

@@ -403,6 +403,33 @@ describe("useC64Connection", () => {
     );
   });
 
+  it("forwards the configured request timeout to the config item query", async () => {
+    const { wrapper } = createWrapper();
+    renderHook(() => useC64ConfigItem("Audio", "Volume", true, { timeoutMs: 1234 }), { wrapper });
+
+    await waitFor(() =>
+      expect(mockApi.getConfigItem).toHaveBeenCalledWith(
+        "Audio",
+        "Volume",
+        expect.objectContaining({ timeoutMs: 1234 }),
+      ),
+    );
+  });
+
+  it("keys config item loads by routing epoch so cancelled cold loads retry after connection changes", async () => {
+    const { wrapper } = createWrapper();
+    const { rerender } = renderHook(() => useC64ConfigItem("Audio", "Volume"), { wrapper });
+
+    await waitFor(() => expect(mockApi.getConfigItem).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("c64u-connection-change", { detail: { baseUrl: "http://u64" } }));
+    });
+    rerender();
+
+    await waitFor(() => expect(mockApi.getConfigItem).toHaveBeenCalledTimes(2));
+  });
+
   it("fetches drives", async () => {
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useC64Drives(), { wrapper });
