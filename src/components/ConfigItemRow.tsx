@@ -18,6 +18,7 @@ import { createLatestIntentWriteLane } from "@/lib/deviceInteraction/latestInten
 import type { LatestIntentWriteLane } from "@/lib/deviceInteraction/latestIntentWriteLane";
 import { emitUiTraceMarker } from "@/lib/tracing/userTrace";
 import { useC64ConfigItem, VISIBLE_C64_QUERY_OPTIONS } from "@/hooks/useC64Connection";
+import { getC64API } from "@/lib/c64api";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { getCheckboxMapping, inferControlKind } from "@/lib/config/controlType";
 import { cn } from "@/lib/utils";
@@ -152,10 +153,23 @@ export function ConfigItemRow({
 
   const isConfigSurfaceActive =
     typeof window !== "undefined" && /\/(config|settings)(\/|$)/.test(window.location.pathname || "");
-  const needsDetailFetch =
+  const wantsDetail =
     (import.meta.env.MODE === "test" || isConfigSurfaceActive) &&
     (!options || options.length === 0) &&
     !details?.presets;
+  // PERF: the per-item option set is firmware-static and already lives in the persistent,
+  // firmware-namespaced enrichment cache (populated by earlier reads). Serve it synchronously
+  // here so expanding a config section does NOT fire an HTTP request per item on every session
+  // — only the device-fresh value (from the category read / `value` prop) is still needed. On a
+  // cache miss we fall back to the network fetch exactly as before (which repopulates the cache).
+  const cachedItemConfig = useMemo(() => {
+    if (!wantsDetail || !category || !name) return undefined;
+    // Optional-chained so a not-yet-initialised / test-stubbed API client simply misses the
+    // cache (falls back to the network fetch) instead of throwing in render. `getCachedConfigItem`
+    // is itself side-effect-free (in-memory map + guarded localStorage).
+    return getC64API()?.getCachedConfigItem?.(category, name);
+  }, [wantsDetail, category, name]);
+  const needsDetailFetch = wantsDetail && !cachedItemConfig;
   const { data: itemData, isLoading: isItemLoading } = useC64ConfigItem(
     category,
     name,
@@ -163,7 +177,10 @@ export function ConfigItemRow({
     VISIBLE_C64_QUERY_OPTIONS,
   );
 
-  const fetchedConfig = useMemo(() => extractConfigFromResponse(itemData), [itemData]);
+  const fetchedConfig = useMemo(
+    () => extractConfigFromResponse(itemData) ?? (cachedItemConfig as Record<string, any> | undefined),
+    [itemData, cachedItemConfig],
+  );
 
   const fetchedOptions = useMemo(() => {
     if (!fetchedConfig) return [] as string[];
