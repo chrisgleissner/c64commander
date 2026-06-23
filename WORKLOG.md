@@ -192,4 +192,43 @@ the committed docs section PNGs for the config surface are candidates for recapt
 The prior `advanced-rest-only` screenshot was removed under the old "dissolved" design; it is
 legitimately reintroduced by this change.
 
+## P11 — performance: config section expansion
+
+Measured (real C64U, Pixel 4, via a WebView CDP DOM-settle probe — Capacitor uses native
+HTTP so CDP Network/resource-timing can't see the requests):
+
+- Diagnosis: live `GET /v1/configs/<category>` returns **scalars only** (no options/details);
+  every `ConfigItemRow` then hits `needsDetailFetch` and fires its OWN `GET /v1/configs/<cat>/<item>`
+  → an **N+1 request storm per expansion** (e.g. ~17 for the 16-row Modems page). There is no
+  bulk-metadata endpoint (confirmed by probing the device). The device itself is fast
+  (~52 ms/req, handles concurrency: 8 serial 0.42 s, 8 parallel 0.26 s), but the c64u
+  intermittently chokes on the unbounded burst → severe outliers.
+- Key finding: a **persistent, firmware-namespaced enrichment cache** already exists
+  (`configEnrichmentCache.ts`, localStorage) and the batched `getConfigItems` path uses it to
+  skip per-item fetches — but the per-row `useC64ConfigItem`/`getConfigItem` path **never reads
+  it**, so every session re-fetches all (firmware-static) options.
+
+Baseline (cold, before fix):
+- Modems 7988 ms (worst), ~0.8 s typical · Printers 821 ms (one run timed out at 20 s / failed
+  to render) · User interface 880 ms · warm re-expand (React-Query cache) 492 ms.
+
+Fix (no hack, no benchmark-gaming): make the per-row read **cache-aware** — `ConfigItemRow`
+now serves the firmware-static option set synchronously from the existing persistent cache
+(`getC64API().getCachedConfigItem`, added) and only falls back to the network fetch on a cache
+miss (which repopulates it). The device-fresh value still comes from the category read. This
+eliminates the per-item HTTP storm on every session after the options are first cached.
+
+After fix (fresh app launch = empty React-Query cache; options from persistent cache):
+- **Modems 223 ms · Printers 277 ms · User interface 348 ms** — all rows + interactive
+  controls rendered, 0 loading (impossible without the cache: there is no time for 16 HTTP
+  round-trips). ~3–4× faster typical and the multi-second / timeout outliers are gone (no
+  per-item burst to overload the device). First-ever expand (cold persistent cache) is
+  unchanged (one N+1 pass that populates the cache).
+
+Validation: typecheck ✓; eslint/prettier ✓; `catchGuardrail` ✓ (no silent-catch — used
+optional chaining, not try/catch); new deterministic regression test
+`ConfigItemRow.cachedOptions.test.tsx` proves a remount serves options from cache with **no
+second per-item GET**; full unit suite re-run. Files: `src/lib/c64api.ts`
+(`getCachedConfigItem`), `src/components/ConfigItemRow.tsx` (cache short-circuit).
+
 ## P9 / P10 — appended as they run

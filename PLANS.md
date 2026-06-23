@@ -50,6 +50,13 @@ Out of scope (explicit):
 - P8 Cleanup + regression hardening. — DONE
 - P9 Final validation loop. — IN PROGRESS
 - P10 GitHub completion (commit / push / PR). — PENDING
+- P11 Performance: measure config-section expansion latency (collapse→all-items-rendered)
+  and remove the bottleneck without hacks or benchmark-gaming. — DONE. Diagnosed the per-row
+  N+1 option-fetch storm (device returns scalars; no bulk endpoint) and that the per-row read
+  ignored the existing persistent firmware-namespaced enrichment cache. Fix: made `ConfigItemRow`
+  serve firmware-static options synchronously from that cache, falling back to the network only
+  on a miss. On-device (real C64U): Modems 7988→223 ms, Printers 821→277 ms, User interface
+  880→348 ms; outliers/timeouts eliminated. Regression test added; gates green.
 
 ## 4. Task checklist
 
