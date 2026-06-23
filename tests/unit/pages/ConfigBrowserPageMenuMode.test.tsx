@@ -69,30 +69,47 @@ vi.mock("@/components/ConfigItemRow", () => ({
   ),
 }));
 
-vi.mock("@/hooks/useC64Connection", () => ({
-  VISIBLE_C64_QUERY_OPTIONS: { intent: "user", refetchOnMount: "always" },
-  useC64Connection: () => ({
-    status: { isConnected: true, deviceInfo: { product: "C64 Ultimate", firmware_version: "1.1.0", errors: [] } },
-    runtimeBaseUrl: "http://c64u",
-  }),
-  useC64Categories: () => ({
-    data: { categories: ALL_CATEGORIES },
-    isLoading: false,
-    isError: false,
-    error: null,
-    refetch: vi.fn(),
-  }),
-  useC64Category: (category: string, enabled = true) => ({
-    data:
-      enabled && FIXTURE_CATEGORIES[category]
-        ? { [category]: { items: FIXTURE_CATEGORIES[category].items } }
-        : undefined,
-    isLoading: false,
-    refetch: vi.fn(),
-  }),
-  useC64SetConfig: () => ({ mutateAsync: mockSetConfig, isPending: false }),
-  useC64UpdateConfigBatch: () => ({ mutateAsync: vi.fn(), isPending: false }),
-}));
+vi.mock("@/hooks/useC64Connection", () => {
+  // The real React-Query hooks return a referentially-stable object between renders,
+  // so the mock must too. A fresh `{ data, isLoading, refetch }` (or a fresh `data`
+  // literal) every call would mask a referential-stability bug — the test would pass
+  // while `test:coverage` pegs a core and hangs in a setState-in-effect re-render loop
+  // (BUG-033 failure mode). `memo` caches each hook's result by key; builders run lazily
+  // (the factory is hoisted, so module consts like ALL_CATEGORIES are read on first call).
+  const cache = new Map<string, unknown>();
+  const memo = <T,>(key: string, build: () => T): T => {
+    if (!cache.has(key)) cache.set(key, build());
+    return cache.get(key) as T;
+  };
+  return {
+    VISIBLE_C64_QUERY_OPTIONS: { intent: "user", refetchOnMount: "always" },
+    useC64Connection: () =>
+      memo("connection", () => ({
+        status: { isConnected: true, deviceInfo: { product: "C64 Ultimate", firmware_version: "1.1.0", errors: [] } },
+        runtimeBaseUrl: "http://c64u",
+      })),
+    useConnectionRoutingEpoch: () => 0,
+    useC64Categories: () =>
+      memo("categories", () => ({
+        data: { categories: ALL_CATEGORIES },
+        isLoading: false,
+        isError: false,
+        error: null,
+        refetch: vi.fn(),
+      })),
+    useC64Category: (category: string, enabled = true) =>
+      memo(`category:${category}:${enabled}`, () => ({
+        data:
+          enabled && FIXTURE_CATEGORIES[category]
+            ? { [category]: { items: FIXTURE_CATEGORIES[category].items } }
+            : undefined,
+        isLoading: false,
+        refetch: vi.fn(),
+      })),
+    useC64SetConfig: () => memo("setConfig", () => ({ mutateAsync: mockSetConfig, isPending: false })),
+    useC64UpdateConfigBatch: () => memo("updateBatch", () => ({ mutateAsync: vi.fn(), isPending: false })),
+  };
+});
 
 const renderPage = () => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });

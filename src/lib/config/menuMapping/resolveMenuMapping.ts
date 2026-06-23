@@ -53,7 +53,31 @@ const parseVersion = (version: string): { parts: number[]; suffix: string } => {
   return { parts, suffix };
 };
 
-/** Semver-ish comparison tolerant of suffixes like "3.14e". */
+/**
+ * Compare two version suffixes once the numeric parts are equal. Two conventions
+ * coexist in C64 Ultimate firmware tags and we honor both:
+ *   - A leading `-` marks a SemVer pre-release (`1.1.0-beta`), which sorts BELOW the
+ *     bare release (`1.1.0-beta` < `1.1.0`) per SemVer §11.
+ *   - Any other suffix is a revision letter in the device's own scheme (`3.14e`), which
+ *     sorts ABOVE the bare version (`3.14` < `3.14e`) and alphabetically among siblings.
+ * SemVer build metadata (`+…`) does not affect precedence, so it is stripped first.
+ * Within the same class the dot-separated identifiers are compared lexically — a
+ * pragmatic subset of SemVer pre-release ordering, sufficient for these tags.
+ */
+const compareSuffix = (a: string, b: string): number => {
+  const normalize = (s: string) => s.split("+")[0];
+  const na = normalize(a);
+  const nb = normalize(b);
+  if (na === nb) return 0;
+  // Class rank: pre-release (-1) < bare release (0) < revision letter (1).
+  const rank = (s: string): number => (s === "" ? 0 : s.startsWith("-") ? -1 : 1);
+  const ra = rank(na);
+  const rb = rank(nb);
+  if (ra !== rb) return ra < rb ? -1 : 1;
+  return na < nb ? -1 : 1;
+};
+
+/** SemVer-ish comparison tolerant of suffixes like "3.14e" and pre-release tags. */
 export const compareFirmwareVersions = (a: string, b: string): number => {
   const va = parseVersion(a);
   const vb = parseVersion(b);
@@ -62,8 +86,7 @@ export const compareFirmwareVersions = (a: string, b: string): number => {
     const diff = (va.parts[i] ?? 0) - (vb.parts[i] ?? 0);
     if (diff !== 0) return diff < 0 ? -1 : 1;
   }
-  if (va.suffix === vb.suffix) return 0;
-  return va.suffix < vb.suffix ? -1 : 1;
+  return compareSuffix(va.suffix, vb.suffix);
 };
 
 export interface ResolveMenuMappingInput {

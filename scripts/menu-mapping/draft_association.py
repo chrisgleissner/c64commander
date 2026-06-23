@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from pathlib import Path
 
 try:
     import yaml
@@ -39,7 +40,9 @@ except ImportError:  # pragma: no cover - operator guidance
     sys.exit("PyYAML required: pip install pyyaml")
 
 # ===================== RULES (edit for a new family/firmware) =====================
-REPO = "/home/chris/dev/c64/c64commander"
+# Repo root derived from this script's own location (scripts/menu-mapping/<file>),
+# so the authoring aid works from any checkout and in CI — never a developer-specific path.
+REPO = str(Path(__file__).resolve().parents[2])
 MENU = f"{REPO}/docs/c64/devices/c64u/1.1.0/c64u-menu.yaml"
 CFG = f"{REPO}/docs/c64/devices/c64u/1.1.0/c64u-config.yaml"
 OUT = f"{REPO}/src/lib/config/menuMapping/c64u-1.1.0.association.yaml"

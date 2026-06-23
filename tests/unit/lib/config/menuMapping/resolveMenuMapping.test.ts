@@ -53,4 +53,21 @@ describe("compareFirmwareVersions", () => {
     expect(compareFirmwareVersions("3.14a", "3.14e")).toBe(-1);
     expect(compareFirmwareVersions("3.14", "3.14")).toBe(0);
   });
+
+  it("sorts a revision-letter suffix ABOVE the bare version (device scheme)", () => {
+    expect(compareFirmwareVersions("3.14", "3.14e")).toBe(-1);
+    expect(compareFirmwareVersions("3.14e", "3.14")).toBe(1);
+    expect(compareFirmwareVersions("3.14e", "3.14f")).toBe(-1);
+  });
+
+  it("sorts a SemVer pre-release suffix BELOW the bare release (§11)", () => {
+    expect(compareFirmwareVersions("1.1.0-beta", "1.1.0")).toBe(-1);
+    expect(compareFirmwareVersions("1.1.0", "1.1.0-beta")).toBe(1);
+    expect(compareFirmwareVersions("1.1.0-alpha", "1.1.0-beta")).toBe(-1);
+  });
+
+  it("ignores SemVer build metadata for precedence", () => {
+    expect(compareFirmwareVersions("1.1.0+build1", "1.1.0+build2")).toBe(0);
+    expect(compareFirmwareVersions("1.1.0+build", "1.1.0")).toBe(0);
+  });
 });

@@ -69,6 +69,7 @@ vi.mock("@/hooks/useC64Connection", () => ({
     refetchOnMount: "always",
   },
   useC64Connection: () => mockUseC64Connection(),
+  useConnectionRoutingEpoch: () => 0,
   useC64Categories: () => mockUseC64Categories(),
   useC64Category: (...args: [string, boolean]) => mockUseC64Category(...args),
   useC64SetConfig: () => mockUseC64SetConfig(),

@@ -15,6 +15,7 @@ import {
   useC64Category,
   useC64SetConfig,
   useC64Connection,
+  useConnectionRoutingEpoch,
   VISIBLE_C64_QUERY_OPTIONS,
 } from "@/hooks/useC64Connection";
 import { ConfigItemRow } from "@/components/ConfigItemRow";
@@ -896,6 +897,19 @@ export default function ConfigBrowserPage() {
   // Page-shared optimistic/echo store keyed by canonical `category::item`, so aliases
   // share one pending cell and multi-category menu pages never collide (see Hazards).
   const authoritativeValues = useAuthoritativeConfigValueState();
+
+  // The store now outlives any single CategorySection/MenuPageSection (it is page-scoped,
+  // not per-section), so it no longer unmounts on a device switch. Drop every pin whenever
+  // the connection generation changes — a device switch or reconnect bumps `routingEpoch`
+  // and re-keys every config query against the new device. A pin from the previous device
+  // would otherwise stay latched (its pinned value will never echo back from a different
+  // device) and `resolveValue` would keep painting the stale value over the new device's
+  // data (BUG-033). `clearAll` is a no-op when empty, so the initial mount is harmless.
+  const routingEpoch = useConnectionRoutingEpoch();
+  const clearAllAuthoritative = authoritativeValues.clearAll;
+  useEffect(() => {
+    clearAllAuthoritative();
+  }, [routingEpoch, clearAllAuthoritative]);
 
   // Layer B: select the captured menu hierarchy for this device (or null → REST-grouped).
   // `family` is a display/labels selector only; it never gates WHICH items render — that

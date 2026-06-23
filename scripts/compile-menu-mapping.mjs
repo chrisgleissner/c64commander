@@ -52,6 +52,9 @@ const readYaml = (relPath) => {
   return { abs, data: yaml.load(readFileSync(abs, "utf8")) };
 };
 const pathKey = (segments) => JSON.stringify(segments);
+// Collision-proof, tooling-safe key for a REST `{category, item}` pair. JSON.stringify
+// escapes any embedded separator so distinct pairs never alias (mirrors `pathKey`).
+const restKey = (category, item) => JSON.stringify([category, item]);
 
 /** REST `{category: {item: rawItem}}` index from a *-config.yaml sample. */
 const indexConfig = (configRoot) => {
@@ -236,7 +239,7 @@ const compileTarget = (target) => {
   const primaryLabelByRest = new Map();
   for (const node of ctx.itemNodes) {
     if (node.alias) continue;
-    const k = `${node.rest.category} ${node.rest.item}`;
+    const k = restKey(node.rest.category, node.rest.item);
     const existing = primaryLabelByRest.get(k);
     if (existing && existing !== node.label) {
       throw new CompileError(
@@ -251,7 +254,7 @@ const compileTarget = (target) => {
   }
   for (const node of ctx.itemNodes) {
     if (!node.alias) continue;
-    const k = `${node.rest.category} ${node.rest.item}`;
+    const k = restKey(node.rest.category, node.rest.item);
     if (!primaryLabelByRest.has(k)) {
       throw new CompileError(
         `${associationRel}: alias ${pathKey(node.path)} → ${node.rest.category} / ${node.rest.item} ` +
@@ -270,8 +273,8 @@ const compileTarget = (target) => {
 
   // Drift checker (authoring completeness for THIS family only): every config-sample
   // item must be mapped OR declared intentionallyUnmapped. Never asserts a closed set.
-  const intentionalSet = new Set(intentionallyUnmapped.map((e) => `${e.category} ${e.item}`));
-  const mappedSet = new Set(ctx.itemNodes.map((n) => `${n.rest.category} ${n.rest.item}`));
+  const intentionalSet = new Set(intentionallyUnmapped.map((e) => restKey(e.category, e.item)));
+  const mappedSet = new Set(ctx.itemNodes.map((n) => restKey(n.rest.category, n.rest.item)));
   for (const e of intentionallyUnmapped) {
     const items = configIndex[e.category];
     if (!items || !items.has(e.item)) {
@@ -279,7 +282,7 @@ const compileTarget = (target) => {
         `${associationRel}: intentionallyUnmapped ${e.category} / ${e.item} absent from ${configRel}.`,
       );
     }
-    if (mappedSet.has(`${e.category} ${e.item}`)) {
+    if (mappedSet.has(restKey(e.category, e.item))) {
       throw new CompileError(`${associationRel}: ${e.category} / ${e.item} is both mapped and intentionallyUnmapped.`);
     }
   }
@@ -287,7 +290,7 @@ const compileTarget = (target) => {
   for (const [category, items] of Object.entries(configIndex)) {
     if (nonConfigPages.has(category)) continue;
     for (const item of items) {
-      const k = `${category} ${item}`;
+      const k = restKey(category, item);
       if (!mappedSet.has(k) && !intentionalSet.has(k)) unaccounted.push(`${category} / ${item}`);
     }
   }

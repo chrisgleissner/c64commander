@@ -74,11 +74,33 @@ export function MenuPageSection({
     order: focusOrder,
     group: "config-categories",
   });
+  // The Refresh CTA only exists while the page is open, so (like the legacy
+  // CategorySection) register it under the actions group only then — an empty id
+  // opts out when collapsed. Keeps keypad/D-pad/T9 users able to reach Refresh.
+  const refreshFocusRef = useFocusItem<HTMLButtonElement>({
+    id: isOpen ? `config-refresh-${slug}` : "",
+    order: focusOrder + 2,
+    group: "config-group-actions",
+  });
   const sectionId = `config-menu-section-${slug}`;
 
+  // Every REST category whose values are rendered on this page: the block categories
+  // plus the advanced categories whose unclaimed items smart-route onto this page.
+  const renderedCategories = useMemo(
+    () => Array.from(new Set([...restCategories, ...advancedCategories])),
+    [restCategories, advancedCategories],
+  );
+
   const handleRefresh = () => {
-    for (const category of restCategories) {
+    for (const category of renderedCategories) {
       void queryClient.invalidateQueries({ queryKey: ["c64-category", category] });
+      // Refresh is an explicit "re-sync from device truth": drop the page-shared
+      // optimistic pins for this category so a value changed out-of-band reconciles
+      // to the device value instead of staying latched (a pin would never echo its
+      // pinned value back through a Refresh, which fetches the device's value). The
+      // store is page-scoped (canonical `category::item` keys), so clear per category
+      // — `restCategories` is plural because one menu page reads several (BUG-033).
+      authoritativeValues.clearMatching(`${category}::`);
     }
   };
 
@@ -129,7 +151,7 @@ export function MenuPageSection({
           >
             <div className="border-t border-border px-4 pt-2 pb-3">
               <div className="flex items-center justify-end py-2" data-testid="config-group-actions">
-                <Button variant="ghost" size="sm" onClick={handleRefresh} className="text-xs">
+                <Button ref={refreshFocusRef} variant="ghost" size="sm" onClick={handleRefresh} className="text-xs">
                   <RefreshCw className="h-3 w-3 mr-1" />
                   Refresh
                 </Button>
