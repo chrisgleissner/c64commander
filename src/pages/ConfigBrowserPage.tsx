@@ -15,6 +15,7 @@ import {
   useC64Category,
   useC64SetConfig,
   useC64Connection,
+  useConnectionRoutingEpoch,
   VISIBLE_C64_QUERY_OPTIONS,
 } from "@/hooks/useC64Connection";
 import { ConfigItemRow } from "@/components/ConfigItemRow";
@@ -38,7 +39,24 @@ import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { updateHasChanges } from "@/lib/config/appConfigStore";
 import { PageContainer, PageStack } from "@/components/layout/PageContainer";
-import { useAuthoritativeConfigValueState } from "@/hooks/useAuthoritativeConfigValueState";
+import {
+  canonicalConfigKey,
+  useAuthoritativeConfigValueState,
+  type AuthoritativeConfigValueState,
+} from "@/hooks/useAuthoritativeConfigValueState";
+import { resolveCanonicalProductFamilyCode } from "@/lib/savedDevices/store";
+import {
+  getMenuValueFormatter,
+  lookupOverlay,
+  resolveMenuMapping,
+  TERMINOLOGY_OVERLAY,
+  unroutedCategories,
+  type MenuHierarchy,
+  type MenuNode,
+  type TerminologyOverlay,
+} from "@/lib/config/menuMapping";
+import { MenuPageSection } from "@/pages/config/MenuPageSection";
+import { AdvancedFallbackSection } from "@/pages/config/AdvancedFallbackSection";
 
 type ConfigListItem = {
   name: string;
@@ -132,11 +150,23 @@ const resolveClockSyncValue = (item: ConfigListItem, numericValue: number): stri
 
 function CategorySection({
   categoryName,
+  displayTitle,
+  groupLabel,
+  overlay,
+  authoritativeValues,
   onOpenChange,
   markChanged,
   focusOrder,
 }: {
   categoryName: string;
+  /** Header label override (e.g. menu page name "Audio mixer"); defaults to categoryName. */
+  displayTitle?: string;
+  /** Parent menu group shown above the title (hierarchy mode), e.g. "Audio setup". */
+  groupLabel?: string | null;
+  /** Layer A terminology overlay — relabels item rows + formats values. */
+  overlay?: TerminologyOverlay;
+  /** Page-shared optimistic/echo store, keyed by canonical `category::item`. */
+  authoritativeValues: AuthoritativeConfigValueState;
   onOpenChange: (isOpen: boolean) => void;
   markChanged: () => void;
   focusOrder: number;
@@ -163,7 +193,6 @@ function CategorySection({
   const hasCategoryGroupAction = isAudioMixer || isClockSettings;
   const categorySlug = categoryName.toLowerCase().replace(/\s+/g, "-");
   const [soloState, dispatchSolo] = useReducer(soloReducer, { soloItem: null });
-  const authoritativeValues = useAuthoritativeConfigValueState();
   const [audioConfiguredItems, setAudioConfiguredItems] = useState<ConfigListItem[]>([]);
   const audioConfiguredRef = useRef<ConfigListItem[]>([]);
   const soloSnapshotRef = useRef<ConfigListItem[]>([]);
@@ -430,8 +459,9 @@ function CategorySection({
   }, [isAudioMixer, restoreSoloRouting]);
 
   const handleValueChange = async (itemName: string, value: string | number) => {
-    const previousEntry = authoritativeValues.entriesRef.current[itemName];
-    authoritativeValues.replaceEntry(itemName, value);
+    const key = canonicalConfigKey(categoryName, itemName);
+    const previousEntry = authoritativeValues.entriesRef.current[key];
+    authoritativeValues.replaceEntry(key, value);
     try {
       await setConfig.mutateAsync({
         category: categoryName,
@@ -451,7 +481,7 @@ function CategorySection({
           item: itemName,
         },
       });
-      authoritativeValues.restoreEntry(itemName, previousEntry);
+      authoritativeValues.restoreEntry(key, previousEntry);
       return false;
     }
   };
@@ -601,7 +631,7 @@ function CategorySection({
       // optimistic override left by an earlier user edit. Those overrides will
       // never echo their pinned value back, so drop them and let the freshly
       // refetched device values show through (BUG-033).
-      authoritativeValues.clearAll();
+      authoritativeValues.clearMatching(`${categoryName}::`);
       // Re-sync the Audio Mixer snapshot straight from the refetch result. The
       // snapshot effect may have re-captured stale pre-refetch values during the
       // await window; this authoritative write reconciles the rendered values
@@ -644,7 +674,7 @@ function CategorySection({
       // optimistic overrides so a value changed out-of-band (e.g. a stale pin
       // that will never echo its pinned value) reconciles to the device value
       // instead of staying latched until unmount (BUG-033).
-      authoritativeValues.clearAll();
+      authoritativeValues.clearMatching(`${categoryName}::`);
       // Re-sync the Audio Mixer snapshot from the fresh refetch result so the
       // rendered values (and the solo snapshot) reconcile to device truth even
       // if the snapshot effect re-captured stale values mid-refetch (BUG-033).
@@ -664,9 +694,9 @@ function CategorySection({
     () =>
       (isAudioMixer && audioConfiguredItems.length ? audioConfiguredItems : items).map((item) => ({
         ...item,
-        value: authoritativeValues.resolveValue(item.name, item.value, item.value),
+        value: authoritativeValues.resolveValue(canonicalConfigKey(categoryName, item.name), item.value, item.value),
       })),
-    [audioConfiguredItems, authoritativeValues, isAudioMixer, items],
+    [audioConfiguredItems, authoritativeValues, categoryName, isAudioMixer, items],
   );
   const sectionId = `config-section-${categoryName.toLowerCase().replace(/\s+/g, "-")}`;
 
@@ -694,7 +724,12 @@ function CategorySection({
           <div className="p-2 rounded-lg bg-muted">
             <FolderOpen className="h-4 w-4 text-muted-foreground" />
           </div>
-          <span className="font-medium text-sm">{categoryName}</span>
+          <div className="flex flex-col">
+            {groupLabel ? (
+              <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{groupLabel}</span>
+            ) : null}
+            <span className="font-medium text-sm">{displayTitle ?? categoryName}</span>
+          </div>
         </div>
         <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
           <ChevronDown className="h-5 w-5 text-muted-foreground" />
@@ -761,6 +796,7 @@ function CategorySection({
                       DHCP_STATIC_FIELDS.has(item.name);
                     const isReadOnly = isDhcpEnabled && isDhcpStaticField;
                     const testIdBase = item.name.toLowerCase().replace(/\s+/g, "-");
+                    const overlayEntry = overlay ? lookupOverlay(overlay, categoryName, item.name) : undefined;
                     const rowClassName = cn(
                       isSidVolume && "rounded-md px-3",
                       isSoloed && "bg-primary/10",
@@ -791,13 +827,18 @@ function CategorySection({
                         key={item.name}
                         category={categoryName}
                         name={item.name}
+                        label={overlayEntry?.label}
+                        formatOptionLabel={getMenuValueFormatter(overlayEntry?.formatterId)}
                         value={item.value}
                         options={item.options}
                         details={item.details}
                         onValueChange={(v) =>
                           isSidVolume ? handleAudioValueChange(item.name, v) : handleValueChange(item.name, v)
                         }
-                        isLoading={setConfig.isPending || Boolean(authoritativeValues.pending[item.name])}
+                        isLoading={
+                          setConfig.isPending ||
+                          Boolean(authoritativeValues.pending[canonicalConfigKey(categoryName, item.name)])
+                        }
                         readOnly={isReadOnly}
                         className={rowClassName}
                         rightAccessory={rightAccessory}
@@ -816,6 +857,34 @@ function CategorySection({
   );
 }
 
+// A flattened menu page entry for hierarchy-mode rendering: a settings page plus the
+// parent menu group it belongs to (e.g. "Audio setup" › "Audio mixer").
+type MenuPageEntry = { page: MenuNode; groupLabel: string | null };
+
+const flattenMenuPages = (hierarchy: MenuHierarchy): MenuPageEntry[] => {
+  const entries: MenuPageEntry[] = [];
+  for (const node of hierarchy.nodes) {
+    if (node.kind === "group") {
+      for (const child of node.children ?? []) entries.push({ page: child, groupLabel: node.label });
+    } else {
+      entries.push({ page: node, groupLabel: null });
+    }
+  }
+  return entries;
+};
+
+// The single REST category a page reads from when it is a flat, single-category page
+// (used to delegate the Audio Mixer page to the specialized CategorySection).
+const soleRestCategory = (page: MenuNode): string | null => {
+  const categories = new Set<string>();
+  const walk = (node: MenuNode) => {
+    if (node.kind === "item" && node.rest) categories.add(node.rest.category);
+    for (const child of node.children ?? []) walk(child);
+  };
+  walk(page);
+  return categories.size === 1 ? [...categories][0] : null;
+};
+
 export default function ConfigBrowserPage() {
   const { status, runtimeBaseUrl } = useC64Connection();
   const { data: categoriesData, isLoading, isError, error, refetch } = useC64Categories(CONFIG_BROWSER_QUERY_OPTIONS);
@@ -825,12 +894,53 @@ export default function ConfigBrowserPage() {
     updateHasChanges(runtimeBaseUrl, true);
   }, [runtimeBaseUrl]);
 
-  const filteredCategories = useMemo(() => {
-    if (!categoriesData?.categories) return [];
-    if (!searchQuery) return categoriesData.categories;
+  // Page-shared optimistic/echo store keyed by canonical `category::item`, so aliases
+  // share one pending cell and multi-category menu pages never collide (see Hazards).
+  const authoritativeValues = useAuthoritativeConfigValueState();
 
-    return categoriesData.categories.filter((cat) => cat.toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [categoriesData?.categories, searchQuery]);
+  // The store now outlives any single CategorySection/MenuPageSection (it is page-scoped,
+  // not per-section), so it no longer unmounts on a device switch. Drop every pin whenever
+  // the connection generation changes — a device switch or reconnect bumps `routingEpoch`
+  // and re-keys every config query against the new device. A pin from the previous device
+  // would otherwise stay latched (its pinned value will never echo back from a different
+  // device) and `resolveValue` would keep painting the stale value over the new device's
+  // data (BUG-033). `clearAll` is a no-op when empty, so the initial mount is harmless.
+  const routingEpoch = useConnectionRoutingEpoch();
+  const clearAllAuthoritative = authoritativeValues.clearAll;
+  useEffect(() => {
+    clearAllAuthoritative();
+  }, [routingEpoch, clearAllAuthoritative]);
+
+  // Layer B: select the captured menu hierarchy for this device (or null → REST-grouped).
+  // `family` is a display/labels selector only; it never gates WHICH items render — that
+  // follows live `GET /v1/configs` (the fallback section catches everything unclaimed).
+  const deviceInfo = status.deviceInfo;
+  const family = resolveCanonicalProductFamilyCode(deviceInfo?.product ?? null) ?? "unknown";
+  const firmwareVersion = deviceInfo?.firmware_version ?? null;
+  const hierarchy = useMemo(() => resolveMenuMapping({ family, firmwareVersion }), [family, firmwareVersion]);
+
+  const menuPages = useMemo(() => (hierarchy ? flattenMenuPages(hierarchy) : []), [hierarchy]);
+  const filteredMenuPages = useMemo(() => {
+    if (!searchQuery) return menuPages;
+    const query = searchQuery.toLowerCase();
+    return menuPages.filter(
+      (entry) =>
+        entry.page.label.toLowerCase().includes(query) || (entry.groupLabel ?? "").toLowerCase().includes(query),
+    );
+  }, [menuPages, searchQuery]);
+
+  const liveCategories = categoriesData?.categories ?? [];
+  // Categories whose unclaimed items smart-routing cannot place on any menu page (an
+  // unknown/future category with no owner, keyword, or default). The residual Advanced
+  // section renders ONLY these; when there are none it is omitted entirely (no junk drawer).
+  const residualCategories = useMemo(
+    () => (hierarchy ? unroutedCategories(hierarchy, family, liveCategories) : []),
+    [hierarchy, family, liveCategories],
+  );
+  const filteredCategories = useMemo(() => {
+    if (!searchQuery) return liveCategories;
+    return liveCategories.filter((cat) => cat.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [liveCategories, searchQuery]);
   const pageShellClassName = usePrimaryPageShellClassName();
 
   return (
@@ -866,6 +976,64 @@ export default function ConfigBrowserPage() {
                 Retry
               </Button>
             </div>
+          ) : hierarchy ? (
+            filteredMenuPages.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">No settings match your search</div>
+            ) : (
+              <>
+                {filteredMenuPages.map((entry, index) => {
+                  const focusOrder = CONFIG_CATEGORY_FOCUS_ORDER_BASE + index * CONFIG_CATEGORY_FOCUS_ORDER_STEP;
+                  // The Audio Mixer page keeps the specialized renderer (solo/reset).
+                  const audioMixerPage = soleRestCategory(entry.page) === "Audio Mixer";
+                  return (
+                    <motion.div
+                      key={entry.page.label}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: Math.min(index, 8) * 0.03 }}
+                    >
+                      {audioMixerPage ? (
+                        <CategorySection
+                          categoryName="Audio Mixer"
+                          displayTitle={entry.page.label}
+                          groupLabel={entry.groupLabel}
+                          overlay={TERMINOLOGY_OVERLAY}
+                          authoritativeValues={authoritativeValues}
+                          onOpenChange={(isOpen) => setConfigExpanded(entry.page.label, isOpen)}
+                          markChanged={markChanged}
+                          focusOrder={focusOrder}
+                        />
+                      ) : (
+                        <MenuPageSection
+                          page={entry.page}
+                          groupLabel={entry.groupLabel}
+                          hierarchy={hierarchy}
+                          family={family}
+                          authoritativeValues={authoritativeValues}
+                          markChanged={markChanged}
+                          focusOrder={focusOrder}
+                        />
+                      )}
+                    </motion.div>
+                  );
+                })}
+                {residualCategories.length > 0 ? (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                    <AdvancedFallbackSection
+                      categories={residualCategories}
+                      hierarchy={hierarchy}
+                      family={family}
+                      authoritativeValues={authoritativeValues}
+                      markChanged={markChanged}
+                      focusOrder={
+                        CONFIG_CATEGORY_FOCUS_ORDER_BASE +
+                        (filteredMenuPages.length + 1) * CONFIG_CATEGORY_FOCUS_ORDER_STEP
+                      }
+                    />
+                  </motion.div>
+                ) : null}
+              </>
+            )
           ) : filteredCategories.length === 0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
               {searchQuery ? "No categories match your search" : "No categories available"}
@@ -880,6 +1048,8 @@ export default function ConfigBrowserPage() {
               >
                 <CategorySection
                   categoryName={category}
+                  overlay={TERMINOLOGY_OVERLAY}
+                  authoritativeValues={authoritativeValues}
                   onOpenChange={(isOpen) => setConfigExpanded(category, isOpen)}
                   markChanged={markChanged}
                   focusOrder={CONFIG_CATEGORY_FOCUS_ORDER_BASE + index * CONFIG_CATEGORY_FOCUS_ORDER_STEP}

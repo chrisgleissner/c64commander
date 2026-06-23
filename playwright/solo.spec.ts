@@ -8,7 +8,7 @@
 
 import { test, expect } from "@playwright/test";
 import { saveCoverageFromPage } from "./withCoverage";
-import type { Page, TestInfo } from "@playwright/test";
+import type { Locator, Page, TestInfo } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks, uiFixtures } from "./uiMocks";
 import {
@@ -50,11 +50,7 @@ test.describe("Config page SID solo routing", () => {
     await attachStepScreenshot(page, testInfo, label);
   };
 
-  const assertLabelsHorizontal = async (page: Page, groupName: string, viewportWidth: number) => {
-    const groupButton = page.getByRole("button", {
-      name: groupName,
-      exact: true,
-    });
+  const assertLabelsHorizontal = async (groupButton: Locator, viewportWidth: number) => {
     await groupButton.scrollIntoViewIfNeeded();
     const groupCard = groupButton.locator("..");
     const labels = groupCard.getByTestId("config-item-label");
@@ -153,11 +149,15 @@ test.describe("Config page SID solo routing", () => {
     await page.setViewportSize({ width: 360, height: 780 });
     await page.goto("/config");
 
-    await page.getByRole("button", { name: "Audio Mixer", exact: true }).click();
-    await assertLabelsHorizontal(page, "Audio Mixer", 360);
+    // C64U menu hierarchy: the Audio Mixer page keeps its config-category testid; drive
+    // settings live on the "Built-in drive A" menu page.
+    const audioMixer = page.getByTestId("config-category-audio-mixer");
+    await audioMixer.click();
+    await assertLabelsHorizontal(audioMixer, 360);
 
-    await page.getByRole("button", { name: "Drive A Settings", exact: true }).click();
-    await assertLabelsHorizontal(page, "Drive A Settings", 360);
+    const driveA = page.getByTestId("config-menu-page-built-in-drive-a");
+    await driveA.click();
+    await assertLabelsHorizontal(driveA, 360);
 
     await snap(page, testInfo, "config-labels-horizontal");
   });

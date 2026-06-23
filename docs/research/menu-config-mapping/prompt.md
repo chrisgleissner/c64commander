@@ -1,4 +1,4 @@
-# Implementation prompt — Menu-aligned configuration projection (C64 Ultimate)
+# Implementation prompt — Menu-aligned configuration projection (multi-device)
 
 > This prompt was rewritten after researching the code it touches, so the
 > resulting implementation is **modular, consistent, deduplicated, and able to
@@ -7,6 +7,13 @@
 > so you do not re-derive it. Treat that map as the ground truth for *where*
 > things live; re-read the cited files before changing them, because line numbers
 > drift.
+>
+> **Read "Multi-device strategy" before anything else.** The single biggest
+> correctness constraint is that the only device menu we have captured is the
+> **C64U**; U64/U2 expose the *same REST config model with subtle differences* but
+> a *different menu*. The design must apply familiar C64U terminology wherever a
+> device shares the same REST item, **without ever** making a REST-exposed item
+> unreachable on a device whose menu we have not captured.
 
 ---
 
@@ -19,9 +26,25 @@ families, and the difference between **internal REST-exposed configuration
 names** and **user-visible device-menu terminology**.
 
 Your task: implement a **minimally invasive, modular, maintainable mapping
-layer** that presents C64 Ultimate configuration using the device's own menu
-hierarchy and labels, while preserving the current REST-backed configuration
-model as the internal source of truth.
+layer** that presents configuration using familiar device-menu **terminology**
+(and, where captured, the device-menu **hierarchy**), while preserving the current
+REST-backed configuration model as the internal source of truth **and guaranteeing
+that every REST-exposed item on every device — including categories/items we have
+never seen — stays visible and editable on the Config page.**
+
+Two non-negotiable invariants frame everything below:
+
+- **Dynamic discovery, no allow-list gating.** The set of categories/items a device
+  exposes is whatever `GET /v1/configs` returns at runtime — the firmware builds it
+  dynamically from the subsystems compiled into that device (it iterates its live
+  `ConfigStore` registrations; there is no static master list). The app must mirror
+  this: render *everything* live REST returns. The mapping may **relabel and regroup**
+  items, but it must **never** be able to *hide* or *omit* an item. No hard-coded
+  category/item list may ever constrain what is displayed.
+- **C64U terminology is a source, not a gate.** The C64U menu is our richest source of
+  human-friendly names. Apply those names wherever another device exposes the *same*
+  REST item, but never require an item to be "known to the C64U menu" in order to show
+  it.
 
 ---
 
@@ -31,22 +54,148 @@ Today the configuration page is a near one-to-one projection of the REST API
 configuration categories/items. That is accurate but user-hostile: the device's
 own menu uses a different hierarchy and slightly different terminology.
 
-Add a **display/projection layer** so that, especially on the configuration page,
-the user sees the device-menu structure:
+Add a **display/projection layer** with two independently-applied parts (see
+"Multi-device strategy"):
 
-```
-Disk file browser · CommoServe file search · Memory & ROMs · Turbo boost ·
-Video setup · Audio setup (Audio mixer / Speaker mixer / SID sockets
-configuration / UltiSID configuration / SID addressing / SID player behavior) ·
-Joystick & controllers · LED lighting · Network services & timezone ·
-Wired network setup · Wi-Fi network setup · Modems · Printers · User interface ·
-Built-in drive A · Built-in drive B · System information
-```
+1. A **terminology overlay** (friendly labels + value formatters), applied on
+   **every** device wherever it exposes a REST item we have a friendlier name for.
+2. A **menu hierarchy** (grouping into menu pages/sections), applied where we have
+   captured that device family's menu. For **C64U** the captured hierarchy is:
+
+   ```
+   Disk file browser · CommoServe file search · Memory & ROMs · Turbo boost ·
+   Video setup · Audio setup (Audio mixer / Speaker mixer / SID sockets
+   configuration / UltiSID configuration / SID addressing / SID player behavior) ·
+   Joystick & controllers · LED lighting · Network services & timezone ·
+   Wired network setup · Wi-Fi network setup · Modems · Printers · User interface ·
+   Built-in drive A · Built-in drive B · System information
+   ```
+
+   On a device whose menu we have **not** captured (U64, U2, or any future family),
+   the page keeps the **current REST-category grouping** but still applies part 1.
 
 **The REST API stays the internal source of truth.** Do not rename internal REST
 category or item keys in the transport, persistence, API client, or write-back
 logic. The mapping is a *projection above* the REST model, computed *over live
-REST data*.
+REST data* — it relabels and regroups, it never adds, removes, or hides items.
+
+---
+
+## Multi-device strategy (READ FIRST — this is the crux)
+
+### The reality of what we have captured
+
+- **Exactly one device menu has been captured:** the **C64U** menu
+  (`docs/c64/devices/c64u/1.1.0/c64u-menu.yaml`). There is **no** U64 menu YAML, **no**
+  U2 menu YAML, and no U2 device data at all in the repo. Even C64U firmware 3.14 has
+  only a *config* YAML, not a menu YAML.
+- We **do** have REST *config* samples for several devices/firmwares (use them as
+  fixtures): `docs/c64/devices/c64u/{1.1.0,3.14}/c64u-config.yaml`,
+  `docs/c64/devices/u64e/{3.12a,3.14a,3.14d,3.14e}/u64e-config.yaml`, and the top-level
+  `docs/c64/c64u-config.yaml` (used by the mock loader).
+- **All families share roughly the same REST config model, with subtle differences.**
+  Items are keyed by their REST name directly, and the *same* REST `{category,item}`
+  identity recurs across families — which is exactly why C64U-derived friendly names
+  are reusable elsewhere. Confirmed differences across the sampled devices:
+  - **C64U-only categories:** `Speaker Mixer`, `Keyboard Lighting` (full-keyboard
+    machine with onboard speaker).
+  - **U64e-only category:** `Clock Settings` (manual RTC: Year/Month/Day/…). This is a
+    *different feature* from C64U network time-sync, which the C64U menu folds under
+    `Network services & timezone` › `Time synchronization` (REST items `SNTP Enable`,
+    `TimeZone`, `Time Server 1/2/3` living inside `Network Settings`). The C64U menu has
+    **no label for `Clock Settings`** — so on U64e those items have no menu home and no
+    C64U-equivalent friendly name. They must still render (humanized) and stay editable.
+
+### Firmware-grounded device differences (from `/home/chris/dev/c64/1541ultimate`)
+
+The firmware defines categories per-subsystem and compiles them per build target, so the
+category set is **structurally different across hardware** (file:line refs in the firmware
+source; granularity is "enough to design against", not exhaustive):
+
+- **Build gating:** `C64 Ultimate` and `U64 Elite` build the **same** firmware
+  (`-DU64=1`) ⇒ they expose the **same** category set and (being the same on-device menu
+  code) the C64U *hierarchy* is the closest fit for a U64 Elite too. `U64 Elite-II`
+  (`-DU64=2`) and the `Ultimate-II` **cartridge** (`-DU2`, no U64 code) differ.
+- **Shared base (all targets):** `C64 and Cartridge Settings`, `Printer Settings`,
+  `Tape Settings`, `SoftIEC Drive Settings`, `Modem Settings`, `Ethernet Settings`,
+  `Network Settings`, `User Interface Settings`, `Drive A/B Settings`, `Data Streams`.
+- **U64 family only (U64==1 and ==2):** `Audio Mixer`, `UltiSID Configuration`,
+  `SID Addressing`, `LED Strip Settings`, and — **FPGA-capability-gated at runtime** —
+  `SID Sockets Configuration` and `U64 Specific Settings`. None of these exist on a **U2
+  cartridge**, which instead exposes **`Audio Output Settings`** (a different category for
+  different hardware) and keeps `Clock Settings`.
+- **U64ii adds:** `Speaker Mixer` (`#if U64==2`) and `WiFi settings` (ESP32). U64ii
+  notably **drops `Clock Settings`** (uses a dummy RTC).
+- **Runtime (not just compile-time) gating:** `SID Sockets Configuration` and `U64
+  Specific Settings` depend on a live FPGA capability check — so even two devices on the
+  same firmware can present different categories.
+
+**Why this matters for the design (do not skip):** the *captured samples already disagree
+with the current firmware source* — e.g. `Speaker Mixer`/`Keyboard Lighting`/`WiFi
+settings` appear in sampled C64U/U64e configs where the present firmware gates them to
+other variants. That drift is **expected and permanent**: firmware versions, board
+variants, and runtime FPGA capabilities all shift the set. **No static source — a captured
+sample, a grep of firmware HEAD, or a `ProductFamilyCode` literal — can reliably predict a
+given device's categories.** The only authority is that device's live `GET /v1/configs`.
+This is the concrete justification for the no-hard-coding invariant: build the projection
+so it is *indifferent* to which categories exist, mapping the ones it recognizes and
+passing everything else straight through to the user.
+
+### Why discovery MUST stay dynamic (firmware grounding)
+
+`/v1/configs` is **not** a fixed schema. The firmware
+(`/home/chris/dev/c64/1541ultimate`) builds the category list at runtime by iterating
+its registered `ConfigStore` objects (`route_configs.cc` walks `cfg->getStores()`); each
+hardware subsystem registers its own store, and a category exists **iff** that subsystem
+is compiled/instantiated on that device. There is **no static master list** of categories
+in the firmware. (This is also why `docs/research/device-discovery/firmware-capabilities.md`
+states config categories "differ by device … observable from `GET /v1/configs` at runtime".)
+
+**Consequence — the hard rule:** the app must display **everything** `GET /v1/configs`
+returns, on every device, with **no allow-list, denylist, or per-family category roster**
+deciding what is shown. The mapping layer may move an item to a friendlier place and give
+it a friendlier name; it must be *structurally incapable* of dropping one. A category or
+item the codebase has never seen (a future firmware, a U2 cartridge, a family we have no
+sample for) MUST appear on the Config page automatically.
+
+### The two layers (apply independently)
+
+Separate the two concerns the original single artifact conflated. This is what makes the
+work both **low-risk** and **cross-device**:
+
+| Layer | Keyed by | Source | Applies on | Risk |
+|---|---|---|---|---|
+| **A. Terminology overlay** — friendly label + `formatterId` per item | REST `{category,item}` | C64U menu YAML (richest name source) | **Every** device that exposes that REST item | Low — purely additive relabel via existing `ConfigItemRow` props; cannot affect fetch/grouping/write-back |
+| **B. Menu hierarchy** — which menu page/section an item lives under, multi-category grouping, aliases | `family + firmwareVersion` | A captured device menu YAML (only C64U 1.1.0 today) | Only when a menu for that family/firmware resolves; else current REST-category grouping | Higher — gated to where we have ground truth |
+
+- **Layer A always runs.** Build it as a reverse index `{category,item} → {label, formatterId}`
+  derived from the (C64U) menu YAML. On any device, for any live REST item: if the index
+  has a friendly label, show it; otherwise fall back to the acronym-preserving humanizer
+  (see "Label casing rules"). This delivers "familiar terminology where possible" on
+  U64/U2 *without* a per-device menu.
+  - Guard: an overlay entry is a cosmetic case/spacing/acronym fix or a clearly safe
+    rename of a *shared* item. If a specific C64U label would be **misleading** on another
+    family, scope that one entry to C64U; default is shared.
+- **Layer B runs only when `resolveMenuMapping(family, firmwareVersion)` returns a
+  hierarchy.** When it returns `null` (U64, U2, unmapped firmware), the page renders the
+  **current REST-category-grouped layout** — but Layer A still relabels within it. The
+  result: C64U gets the full menu tree; everyone else gets today's layout with friendlier
+  names; nobody loses access to anything.
+
+### Degradation ladder (must hold for every device)
+
+1. C64U on a firmware whose menu resolves → full menu hierarchy (Layer B) + friendly
+   labels (Layer A) + REST-only fallback section for anything the hierarchy didn't claim.
+2. C64U on a firmware with no exact menu → nearest-version C64U menu (resolver fallback
+   chain), Layer A labels, and **new/unknown items from that firmware auto-route to the
+   REST-only fallback section** (never dropped).
+3. U64 / U2 / unknown family → no Layer B; current REST-category grouping; Layer A labels
+   where the item is shared; everything reachable by definition (it *is* the live REST
+   layout, only relabeled).
+
+At **every** rung, the invariant holds: **the page is a complete, lossless view of live
+`GET /v1/configs`.** A regression test must assert this against each sampled device fixture
+(C64U 1.1.0/3.14, U64e 3.12a/3.14e) plus a synthetic unknown-category config.
 
 ---
 
@@ -66,15 +215,28 @@ REST data*.
 
 ### Authoritative input files (note the **lowercase** paths)
 
-- Menu extraction (hierarchy + menu labels + node kinds):
-  `docs/c64/devices/c64u/1.1.0/c64u-menu.yaml`
+- **Menu extraction — C64U ONLY** (hierarchy + menu labels + node kinds):
+  `docs/c64/devices/c64u/1.1.0/c64u-menu.yaml`. This is the *only* captured menu in the
+  repo. There is no U64/U2 menu YAML. It is the source for Layer A (terminology) and the
+  one family that gets Layer B (hierarchy).
 - REST config schema sample (canonical category/item names + options):
   `docs/c64/devices/c64u/1.1.0/c64u-config.yaml`
+- **Cross-device REST config fixtures (use these to prove device-universal reachability):**
+  `docs/c64/devices/c64u/3.14/c64u-config.yaml` (newer C64U firmware; slightly different
+  item set — exercises the intra-family version fallback + unknown-item routing) and
+  `docs/c64/devices/u64e/{3.12a,3.14a,3.14d,3.14e}/u64e-config.yaml` (U64 family — has
+  `Clock Settings`, lacks `Speaker Mixer`/`Keyboard Lighting`; exercises the no-Layer-B
+  path with Layer A still applied).
 - Supporting reference: `docs/c64/devices/c64u/1.1.0/c64u-telnet.yaml`,
   `docs/c64/devices/c64u/1.1.0/c64u-config.cfg`
 - The mock/demo loader uses the **top-level** `docs/c64/c64u-config.yaml` (see
   `src/lib/mock/mockConfig.ts`), so your projection must also work against that
   fixture in demo/test mode.
+- **Firmware ground truth** for *why* the category set is dynamic and device-specific:
+  `/home/chris/dev/c64/1541ultimate` (per-subsystem `ConfigStore` registrations;
+  `software/api/route_configs.cc` enumerates them live) and the summary in
+  `docs/research/device-discovery/firmware-capabilities.md`. Consult these — do **not**
+  re-encode the firmware's category set as a static list in the app.
 
 **The menu YAML is already structured** as `config.menu_tree` (the hierarchy) +
 `config.categories.<MenuCategory>.items.<MenuLabel>` with `kind: section |
@@ -167,6 +329,13 @@ Treat both YAMLs as **reference**, not runtime defaults:
   Reconciliation for this task: the mapping is a **display overlay projected over
   whatever `GET /v1/configs` actually returns**. It never asserts an item exists;
   it relabels/regroups live items and routes everything unmatched to a fallback.
+  - The capability model itself states `family` is **"for display/labels only — it
+    is NEVER used as a feature gate."** `resolveMenuMapping` uses `family +
+    firmwareVersion` strictly to *select which captured menu hierarchy (Layer B) to
+    paint* — a pure display/labels concern, squarely within that allowance. It must
+    **never** decide *whether* an item renders: that is governed only by live
+    `GET /v1/configs`. Layer A (terminology) does not consult family at all — it is
+    keyed by REST `{category,item}`.
   - Corollary you'll hit: a **C64U is internally U64-family**, which is *why* its
     REST exposes the `U64 Specific Settings` category. Expect it; do not "fix" it.
 - Connected identity (family + `firmware_version` + `core_version`) is on
@@ -230,90 +399,126 @@ it exactly:
 
 ## Required architecture
 
-Build a **data-driven projection** from REST config → menu-facing view model.
-It must support: one REST item in exactly one primary menu location; the same
-REST item shown in multiple locations as **aliases over shared state**; one menu
-section composed of REST items from **different** REST categories; REST-only
-items absent from the menu; menu-only actions/status entries that are not
-persistent REST config; **device/firmware evolution without touching React
-components**; and **fallback to the current REST-shaped layout** when no mapping
-exists for a device/firmware.
+Build a **data-driven projection** from REST config → menu-facing view model,
+structured as the **two independent layers** from "Multi-device strategy". It must
+support: one REST item in exactly one primary menu location; the same REST item shown
+in multiple locations as **aliases over shared state**; one menu section composed of
+REST items from **different** REST categories; REST-only items absent from the menu;
+menu-only actions/status entries that are not persistent REST config; **device/firmware
+evolution without touching React components**; graceful **fallback to the current
+REST-grouped layout** when no menu hierarchy exists for a device/firmware; and — above
+all — **lossless rendering of every live REST item on every device**.
 
 Implement these pieces (names are suggestions; match local conventions):
 
-1. **Versioned mapping artifact (single source per family+firmware).**
+1. **Mapping artifact (one captured menu YAML → two derived structures).**
    *Recommended (matches the feature-flags convention):* author a REST-association
    source that carries **only what the menu YAML lacks** — for each menu leaf
    (identified by its menu path) a `restPointer {category,item}`, optional
    `aliasOf`, `formatterId`, and `restOnly`/`menuOnly` (`action`/`status`) flags —
    then a `scripts/compile-menu-mapping.mjs` reads `c64u-menu.yaml` (labels +
    hierarchy + kinds) **+** that association **+** validates against
-   `c64u-config.yaml`, and emits a committed
-   `src/lib/config/menuMapping/c64u-1.1.0.generated.ts` (a typed menu tree:
-   `displayLabel` from the YAML, `restPointer`(s) from the association, node
-   `kind`). This keeps **labels in exactly one place (the YAML)** and REST
-   identity in exactly one place (the association), cross-checked at build time.
-   *Acceptable alternative* if compile tooling is judged overkill: a hand-written
-   typed `MenuMapping` TS module per version, with the drift checker (below)
-   loading the committed YAMLs to validate it at lint/test time. Either way:
-   **typed, versioned, centralized, test-covered; no labels duplicated across
-   React components.**
+   `c64u-config.yaml`, and emits a committed `src/lib/config/menuMapping/c64u-1.1.0.generated.ts`.
+   From that one source, expose **both** derived structures:
+   - **(1a) Terminology overlay (Layer A) — device-agnostic.** A flat reverse index
+     `restKey({category,item}) → {label, formatterId}` covering every leaf that has a
+     `restPointer`. This is consumed on **all** devices and carries **no hierarchy**.
+   - **(1b) Menu hierarchy (Layer B) — C64U 1.1.0.** The typed menu tree
+     (`displayLabel` from the YAML, `restPointer`(s) from the association, node `kind`).
+   This keeps **labels in exactly one place (the YAML)** and REST identity in exactly
+   one place (the association), cross-checked at build time. *Acceptable alternative* if
+   compile tooling is judged overkill: a hand-written typed module per version + the
+   drift checker loading the committed YAMLs to validate it. Either way: **typed,
+   versioned, centralized, test-covered; no labels duplicated across React components.**
 
-2. **Versioned resolver** — mirror `deriveDeviceCapabilities`. Put it beside the
-   capability model or under `src/lib/config/menuMapping/`:
-   `resolveMenuMapping({family, firmwareVersion}) → mapping | null`. Fallback
-   chain: exact `family+version` → nearest lower version within family → latest
-   within family → `null`. `null` ⇒ the page renders the **current REST-shaped
-   layout** unchanged.
+2. **Hierarchy resolver (Layer B only)** — mirror `deriveDeviceCapabilities`. Put it
+   beside the capability model or under `src/lib/config/menuMapping/`:
+   `resolveMenuMapping({family, firmwareVersion}) → hierarchy | null`. Fallback chain:
+   exact `family+version` → nearest lower version **within the same family** → latest
+   within family → `null`. `null` ⇒ no Layer B for this device ⇒ the page renders the
+   **current REST-category-grouped layout**. **Never** cross families (a U64 must not
+   borrow the C64U *hierarchy* — only the shared Layer A labels travel across families).
+   The terminology overlay (1a) needs **no** resolver; it always applies.
 
 3. **Projection function (pure, node-testable)** —
-   `projectConfigToMenu(liveRestConfig, mapping) → { tree, drift }`. For each
-   mapping node, resolve its `restPointer` against **live** REST data and emit a
-   view-model node carrying `displayLabel`, `menuPath`, `restPointer`, current
-   value, options, editability, `formatterId`, and alias metadata. Then:
-   - **Unmapped-live detection:** any live REST `{category,item}` not claimed by
-     the mapping → route into the **fallback section** (this is also what makes
-     unknown *future* REST items reachable). Record in `drift.unmappedRestItems`.
-   - **Stale-mapping detection:** any `restPointer` with no matching live item →
-     omit from the tree (never error at runtime) and record in
-     `drift.staleMappingRefs`.
-   - **Menu-only nodes** (`kind: action|status`, or leaves with no `restPointer`)
-     are rendered as non-persistent UI per "UI requirements" — never fabricated as
-     config items.
+   `projectConfigToMenu(liveRestConfig, { hierarchy, overlay }) → { tree, drift }`.
+   - **If `hierarchy` is present:** for each hierarchy node, resolve its `restPointer`
+     against **live** REST data and emit a view-model node carrying `displayLabel`,
+     `menuPath`, `restPointer`, current value, options, editability, `formatterId`, and
+     alias metadata.
+   - **If `hierarchy` is null:** emit the REST-category-grouped tree directly from live
+     data (today's layout), applying `overlay` labels/formatters per item.
+   - **In BOTH branches, apply the overlay** to every emitted leaf (overlay label wins
+     over the raw REST name; otherwise humanize), and then:
+     - **Unmapped-live detection:** any live REST `{category,item}` not claimed by the
+       hierarchy → route into the **fallback section**. This is the mechanism that keeps
+       unknown *future* REST items, U2-only categories, and device-specific categories
+       (e.g. U64e `Clock Settings`) reachable. Record in `drift.unmappedRestItems`.
+       **This routing is unconditional and data-driven — it must not consult any
+       allow-list to decide whether to render** (see #5).
+     - **Stale-mapping detection:** any `restPointer` with no matching live item → omit
+       from the tree (never error at runtime) and record in `drift.staleMappingRefs`.
+       (This is normal cross-firmware/device behavior, e.g. `Speaker Mixer` on a U64.)
+     - **Menu-only nodes** (`kind: action|status`, or leaves with no `restPointer`) are
+       rendered as non-persistent UI per "UI requirements" — never fabricated as config.
+   - **Lossless guarantee:** `projectConfigToMenu` must emit a node for **every** live
+     REST `{category,item}` exactly once (mapped *or* in fallback). Add an assertion/test
+     that the set of REST identities in the output tree equals the set in the input.
 
 4. **UI rendering** — `ConfigBrowserPage` renders the projected tree; keep the
    existing write-back pipeline and all safeguards. No per-item string hacks in
    JSX — labels/formatters come from the view model.
 
-5. **Drift checker** — `scripts/compile-menu-mapping.mjs --check` (or a dedicated
-   `scripts/check-menu-mapping-drift.mjs`) wired into `npm run lint`, plus
-   `tests/unit/scripts/*.test.ts`, modeled on
-   `check-stale-variant-names.mjs`/`configDrift.test.ts`. It must fail on:
-   unmapped REST items not in the explicit fallback allowlist, stale mapping
-   pointers, label drift between mapping and `c64u-menu.yaml`, and any menu leaf
-   lacking both a `restPointer` and a `menuOnly` flag.
+5. **Drift checker (a C64U authoring aid — NOT a runtime gate).** `scripts/compile-menu-mapping.mjs
+   --check` (or a dedicated `scripts/check-menu-mapping-drift.mjs`) wired into
+   `npm run lint`, plus `tests/unit/scripts/*.test.ts`, modeled on
+   `check-stale-variant-names.mjs`/`configDrift.test.ts`. It validates the **C64U**
+   hierarchy against the **C64U** config sample only (`c64u-config.yaml` — never another
+   device's config), and fails on: C64U-known REST items neither mapped nor in an
+   explicit "intentionally-unmapped (advanced)" list, stale mapping pointers, label drift
+   between mapping and `c64u-menu.yaml`, and any menu leaf lacking both a `restPointer`
+   and a `menuOnly` flag. **Crucial:** that "intentionally-unmapped" list is a *dev-time
+   completeness nudge for C64U authoring only*. It MUST NOT exist in, or be consulted by,
+   the runtime projection — at runtime, anything unmapped renders in the fallback section
+   unconditionally, on every device. The checker must never assert "these are all the
+   categories that exist" — there is no such closed set.
 
-6. **Fallback area** — a clearly distinguished section (e.g. **"Advanced
-   (REST-only) settings"**) that renders everything the mapping does not claim,
-   so no configuration item is ever unreachable.
+6. **Fallback area (the device-universal safety net)** — a clearly distinguished section
+   (e.g. **"Advanced (REST-only) settings"**) that renders **everything the active
+   hierarchy does not claim**, so no configuration item is ever unreachable — on C64U
+   (advanced/unmapped items), on U64/U2 (when there is no Layer B, this *is* effectively
+   the whole page, REST-grouped + relabeled), and for any unknown future category.
 
 Hard rules: do **not** scatter string replacements through React components; do
-**not** mutate REST responses into menu shapes before write-back; keep canonical
-REST identity intact end-to-end.
+**not** mutate REST responses into menu shapes before write-back; do **not** gate
+rendering on any static category/item list; keep canonical REST identity intact
+end-to-end.
 
 ---
 
 ## The mapping data (initial baseline for C64U 1.1.0)
 
-Use the tables below as the **REST → menu-path association** (the data for piece
-#1). **Display labels come from `c64u-menu.yaml`** at the target path; the
-"Menu label" columns must match it (the drift checker enforces this). Map **all**
-items a category exposes by walking live REST ∪ menu YAML — the lists below are
-the non-obvious cases, not an exhaustive enumeration (e.g. `Printer Settings`
-also has `Emulation`; map it too).
+This is the **C64U 1.1.0** association — it feeds **both** Layer A (the device-agnostic
+terminology overlay, via each row's REST↔label pair) **and** Layer B (the C64U menu
+hierarchy). Use the tables below as the **REST → menu-path association** (the data for
+piece #1). **Display labels come from `c64u-menu.yaml`** at the target path; the "Menu
+label" columns must match it (the drift checker enforces this). Map **all** items a
+category exposes by walking live REST ∪ menu YAML — the lists below are the non-obvious
+cases, not an exhaustive enumeration (e.g. `Printer Settings` also has `Emulation`; map
+it too).
 
 Verify every REST name below against `c64u-config.yaml` before encoding
 (researched and confirmed present as of fw 1.1.0).
+
+**Cross-device handling of categories absent from these tables** (e.g. U2 cartridge
+`Audio Output Settings`, U64e `Clock Settings`, anything from a future firmware): they
+are **not** errors and **not** to be added speculatively to the C64U hierarchy. On a C64U
+they simply won't appear in live REST (stale-mapping detection ignores their absence); on
+another device they arrive via live REST and flow to the **fallback section**, relabeled
+by Layer A where a shared friendly name exists and humanized otherwise. A category mapped
+here but missing on a given device (e.g. `Speaker Mixer`/`Keyboard Lighting` on a plain
+U64, which the firmware gates to other variants) is likewise just omitted at runtime — no
+fabrication, no error.
 
 ### Category-level placement
 
@@ -504,8 +709,10 @@ exactly: `C64`, `C64U`, `U64`, `U2`, `SID`, `UltiSID`, `ROM`, `RAM`, `REU`, `IEC
 ## UI requirements
 
 **Configuration page:**
-- Render the menu-facing hierarchy as the primary structure (fallback to current
-  REST-shaped layout when `resolveMenuMapping` returns `null`).
+- Render the menu-facing hierarchy (Layer B) as the primary structure **when it resolves**;
+  otherwise render the current REST-category-grouped layout. **Either way, apply the Layer A
+  terminology overlay** so a U64/U2/unknown device still gets familiar item labels. The page
+  is always a complete, lossless view of live `GET /v1/configs`.
 - Preserve all edit capabilities, validation, and write-back behavior.
 - Preserve every device-fragility safeguard: PUT-for-single-writes, throttle/
   backoff, interactive-write coalescing, routing-epoch read keying, pending-write
@@ -553,10 +760,12 @@ exactly: `C64`, `C64U`, `U64`, `U2`, `SID`, `UltiSID`, `ROM`, `RAM`, `REU`, `IEC
    the **set of REST categories** a node references (reuse `useC64Category` per
    category, or `useC64AllConfig`), preserving routing-epoch keying and lazy
    loading so device load/backoff behavior is unchanged.
-3. **Project over live data, never over the YAML.** The generated mapping is
-   static structure only; values/options/editability always come from the live
-   REST fetch. Unknown future REST items must surface in the fallback section
-   automatically.
+3. **Project over live data, never over the YAML, and never gate on a static list.**
+   The generated mapping is static structure only; values/options/editability always
+   come from the live REST fetch. Unknown future REST items, device-specific categories,
+   and entire unmapped families must surface automatically (in the fallback section or the
+   REST-grouped layout). No code path may consult a fixed category/item roster to decide
+   whether to render — only to decide where/how to label.
 4. **Coverage/parallel-E2E stability.** Be aware of the known flake classes when
    adding effects/hooks: [[react-effect-setstate-coverage-hang]],
    [[configbrowser-focusring-oom]], [[config-reads-aborted-on-connect]]. Bail on
@@ -572,12 +781,14 @@ exactly: `C64`, `C64U`, `U64`, `U2`, `SID`, `UltiSID`, `ROM`, `RAM`, `REU`, `IEC
    tests, termination criteria). Keep it updated.
 3. Build the mapping artifact (#1) + compile/check tooling, wired into
    `npm run lint`.
-4. Implement `resolveMenuMapping` (#2) and `projectConfigToMenu` (#3) as pure,
-   node-tested modules.
+4. Implement `resolveMenuMapping` (#2, hierarchy-or-null) and `projectConfigToMenu`
+   (#3) as pure, node-tested modules — including the **null-hierarchy branch** that emits
+   the REST-grouped layout with the Layer A overlay applied, and the lossless assertion.
 5. Render the projection in `ConfigBrowserPage` (#4); reuse `ConfigItemRow`
    `label`/`formatOptionLabel`/`readOnly`; keep REST identity for control-type +
    write-back; implement the multi-category fetch and alias state-sharing; add the
-   REST-only fallback section.
+   REST-only fallback section. Verify on a U64e fixture that labels still apply with no
+   hierarchy and nothing is dropped.
 6. Add the drift checker (#5) + tests.
 7. Reconcile Home/Play/Disks terminology minimally (audit per "UI requirements").
 8. Add tests (next section). Update docs.
@@ -604,9 +815,25 @@ the 91%/91% gate green.
 - **Regression:** write-back still sends canonical REST `{category,item}` (assert
   the mutation/`setConfigValue` args under both a primary and an alias edit).
 - Passwords masked and never logged.
-- **Unknown future REST category/item remains reachable** (feed the mock a
-  category not in the mapping → it appears in fallback).
-- `resolveMenuMapping` fallback chain (exact / nearest-lower / latest / null).
+- `resolveMenuMapping` fallback chain (exact / nearest-lower / latest / null), and
+  that it **never** returns a cross-family hierarchy.
+- **Lossless projection (the headline guarantee), driven from the real fixtures.** For
+  **each** of `c64u-config.yaml` (1.1.0 + 3.14) and `u64e-config.yaml` (3.12a + 3.14e):
+  the set of REST `{category,item}` identities the page renders equals the set in the
+  fixture — nothing dropped, nothing duplicated. Assert it as a set-equality, not a count.
+- **No-Layer-B path (U64/U2):** with `resolveMenuMapping → null` (feed a U64e fixture),
+  the page renders the REST-category-grouped layout **and** Layer A relabels shared items
+  (e.g. `Static Netmask` → `Static netmask`), while device-specific categories
+  (`Clock Settings`) render fully and editable.
+- **Terminology overlay is device-agnostic:** a shared REST item carries the same friendly
+  label whether the active mapping is the C64U hierarchy or the null/REST-grouped layout.
+- **Unknown future / cross-device category remains reachable AND editable:** feed the mock
+  a synthetic category never seen anywhere (mimicking a U2 `Audio Output Settings` or a
+  future firmware) → it appears in the fallback section, renders its items, and a write
+  to one still issues the correct `{category,item}` PUT. (This is the U2 stand-in, since
+  no U2 fixture exists — do not fabricate a U2 menu.)
+- **No static category list anywhere:** a guard/test (or code-review checklist item)
+  ensuring no module enumerates "all categories" as a gate on rendering.
 
 ---
 
@@ -627,10 +854,14 @@ the 91%/91% gate green.
 
 Add a concise developer note (e.g.
 `docs/research/menu-config-mapping/README.md` or under `docs/c64/`): why the
-mapping layer exists; how to add a mapping for a new firmware/family (drop YAMLs
-under `docs/c64/devices/<family>/<version>/`, author the association, run the
-compile/check, register in the resolver); how the REST-only fallback works; and
-the invariant that **REST `{category,item}` stays canonical for write-back**.
+mapping layer exists; the **Layer A (terminology overlay, device-agnostic) vs Layer B
+(menu hierarchy, family+firmware) split**; how to add a hierarchy for a new
+firmware/family (capture its menu YAML under `docs/c64/devices/<family>/<version>/`,
+author the association, run the compile/check, register in the resolver) — noting that
+**shared items already get Layer A labels with zero new work**, so adding a family is
+purely additive; how the REST-only fallback keeps everything reachable; and the two
+invariants — **REST `{category,item}` stays canonical for write-back**, and **the page
+always renders the full live `GET /v1/configs` with no static gating**.
 
 ---
 
@@ -649,12 +880,16 @@ new section instead of replacing existing content, and flag it.
 
 ## Acceptance criteria
 
-- Config page is primarily **menu-aligned** for C64U 1.1.0 (REST-shaped fallback
-  when no mapping resolves).
+- **Lossless on every device (the headline criterion):** the Config page renders
+  **every** item from live `GET /v1/configs`, on C64U, U64, U2, and any unknown/future
+  family — proven by set-equality tests over the C64U **and** U64e fixtures plus a
+  synthetic unknown-category config. No allow-list, denylist, family literal, or static
+  category roster anywhere gates what is shown.
+- Config page is **menu-aligned (Layer B hierarchy)** for C64U 1.1.0; on other families it
+  is the REST-category-grouped layout. The **Layer A terminology overlay applies on all
+  families** wherever an item is shared.
 - Write-back still uses canonical REST `{category, item}` names — proven by tests,
-  including via alias edits.
-- **All** REST items remain reachable (mapped or in the REST-only/advanced
-  fallback), including unknown future ones.
+  including via alias edits and via a write to an item in the fallback section.
 - Menu-only actions/status are never represented as persistent REST config.
 - The mapping is centralized, typed, versionable, and test-covered; labels live in
   one place (the menu YAML); no scattered REST→menu string hacks in components.
@@ -676,14 +911,24 @@ directly blocks this; do not redesign the app; do not remove advanced settings;
 do not infer unsupported Wi-Fi actions; do not hide streaming settings; do not
 turn YAML sample `selected:` values into defaults; do not push/PR/release unless
 asked; do not rename REST keys, feature-flag keys, telnet `menuPath`s, analytics
-keys, or test selectors.
+keys, or test selectors. **Do not fabricate a U64 or U2 menu hierarchy** — none has
+been captured; those families render the REST-grouped layout (+ Layer A) until a real
+menu YAML is added. **Do not gate Config-page rendering on any static category/item
+list, `ProductFamilyCode` literal, or capability flag** — rendering follows live
+`GET /v1/configs` only (capability gating remains for actions like power/streaming,
+never for which config items display).
 
 ---
 
 ## Final report (when finished)
 
-Report: files changed; mapping architecture summary; how REST write-back identity
-is preserved (incl. alias proof); how unmapped/REST-only settings are handled; how
-multi-category nodes and alias shared-state were solved; tests + builds run with
-exact commands and results; and remaining risks/known gaps (especially menu-only
-actions lacking real endpoints, and the ms-multiplier verification outcome).
+Report: files changed; mapping architecture summary (the Layer A overlay vs Layer B
+hierarchy split, and where each is consumed); **proof the page is lossless on every
+sampled device** (set-equality results for C64U 1.1.0/3.14 + U64e 3.12a/3.14e + the
+synthetic unknown-category config); how REST write-back identity is preserved (incl.
+alias proof and a fallback-item write); how unmapped/REST-only and device-specific
+categories (`Clock Settings`, U2 `Audio Output Settings`) are handled; how multi-category
+nodes and alias shared-state were solved; **a one-paragraph "how to add a U64/U2 (or future
+firmware) menu" recipe**; tests + builds run with exact commands and results; and remaining
+risks/known gaps (especially menu-only actions lacking real endpoints, the ms-multiplier
+verification outcome, and any place a static list could creep back in to gate rendering).

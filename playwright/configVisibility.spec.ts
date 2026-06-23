@@ -167,8 +167,10 @@ test.describe("Config visibility across modes", () => {
     await expect(indicator).toHaveAttribute("aria-label", /(Connected to .*|Demo mode)/);
 
     await expect(page.getByText("Not connected", { exact: true })).toBeHidden();
+    // C64U device → menu-aligned hierarchy. The Audio Mixer page keeps its specialized
+    // renderer (config-category-* testid); other settings live under menu pages.
     await expect(page.getByRole("button", { name: "Audio Mixer" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "U64 Specific Settings" })).toBeVisible();
+    await expect(page.getByTestId("config-menu-page-video-setup")).toBeVisible();
     await expect(page.locator('[data-testid^="config-category-"]').first()).toBeVisible();
 
     await clearTraces(page);
@@ -204,9 +206,11 @@ test.describe("Config visibility across modes", () => {
 
     await page.goto("/config", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("button", { name: "Audio Mixer" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "U64 Specific Settings" })).toBeVisible();
+    await expect(page.getByTestId("config-menu-page-video-setup")).toBeVisible();
 
-    await page.getByRole("button", { name: "U64 Specific Settings" }).click();
+    // System Mode is relabelled "System mode" and lives on the Video setup page; the
+    // write still targets the canonical REST {U64 Specific Settings, System Mode}.
+    await page.getByTestId("config-menu-page-video-setup").click();
     await clearTraces(page);
 
     const selectTrigger = page.getByLabel("System Mode select");

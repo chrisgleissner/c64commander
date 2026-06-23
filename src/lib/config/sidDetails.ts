@@ -90,7 +90,7 @@ const formatTextValue = (value: unknown) => {
   return trimmed || "—";
 };
 
-const formatAddressValue = (value: unknown) => {
+export const formatAddressValue = (value: unknown) => {
   const raw = String(value ?? "").trim();
   if (!raw) return "Unmapped";
   if (/^unmapped$/i.test(raw)) return "Unmapped";

@@ -95,6 +95,20 @@ export function useAuthoritativeConfigValueState(options: { equals?: Authoritati
     setEntries((previous) => (Object.keys(previous).length === 0 ? previous : {}));
   }, []);
 
+  // Drop only the optimistic overrides whose key starts with `prefix`. Used when the
+  // store is shared across the whole Config page (canonical `category::item` keys) so a
+  // per-category Refresh/Reset clears ONLY that category's pins, never a pending write in
+  // another expanded section (the scoped sibling of `clearAll`, same BUG-033 rationale).
+  const clearMatching = useCallback((prefix: string) => {
+    setEntries((previous) => {
+      const keys = Object.keys(previous).filter((key) => key.startsWith(prefix));
+      if (keys.length === 0) return previous;
+      const next = { ...previous };
+      for (const key of keys) delete next[key];
+      return next;
+    });
+  }, []);
+
   const scheduleClearEntry = useCallback(
     (key: string) => {
       if (queuedClearsRef.current.has(key)) return;
@@ -144,6 +158,19 @@ export function useAuthoritativeConfigValueState(options: { equals?: Authoritati
     restoreEntry,
     clearEntry,
     clearAll,
+    clearMatching,
     resolveValue,
   };
 }
+
+/**
+ * Canonical optimistic/pending key for the (page-shared) authoritative value store.
+ * Keyed by REST `{category, item}` so the SAME item shown in two menu locations
+ * (aliases) shares one pending cell, and same-named items from different REST
+ * categories on one menu page (e.g. LED Strip Settings vs Keyboard Lighting both
+ * exposing "LedStrip Mode") never collide.
+ */
+export const canonicalConfigKey = (category: string, item: string): string => `${category}::${item}`;
+
+/** The shape returned by {@link useAuthoritativeConfigValueState} (for prop threading). */
+export type AuthoritativeConfigValueState = ReturnType<typeof useAuthoritativeConfigValueState>;

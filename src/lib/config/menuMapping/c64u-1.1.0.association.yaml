@@ -1,0 +1,246 @@
+# C64U 1.1.0 REST <-> menu association — AUTHORITATIVE SOURCE (hand-reviewed).
+#
+# Drafted by scripts/menu-mapping/draft_association.py then reviewed. Carries ONLY
+# what the menu YAML lacks (REST pointers + formatter/alias flags). Labels live in
+# the menu YAML; `path` arrays are validated join keys. Consumed by
+# scripts/compile-menu-mapping.mjs -> *.generated.ts.
+
+family: C64U
+firmwareVersion: "1.1.0"
+sources:
+  menu: docs/c64/devices/c64u/1.1.0/c64u-menu.yaml
+  config: docs/c64/devices/c64u/1.1.0/c64u-config.yaml
+
+nonConfigPages:
+  - Disk file browser
+  - CommoServe file search
+  - System information
+
+mappings:
+  - { path: ["Memory & ROMs", Kernal ROM], category: C64 and Cartridge Settings, item: Kernal ROM }
+  - { path: ["Memory & ROMs", BASIC ROM], category: C64 and Cartridge Settings, item: Basic ROM }
+  - { path: ["Memory & ROMs", Character ROM], category: C64 and Cartridge Settings, item: Char ROM }
+  - { path: ["Memory & ROMs", Cartridge], category: C64 and Cartridge Settings, item: Cartridge }
+  - { path: ["Memory & ROMs", RAM expansion unit], category: C64 and Cartridge Settings, item: RAM Expansion Unit }
+  - { path: ["Memory & ROMs", Size], category: C64 and Cartridge Settings, item: REU Size }
+  - { path: ["Memory & ROMs", Command interface], category: C64 and Cartridge Settings, item: Command Interface }
+  - { path: ["Memory & ROMs", Ultimate audio], category: C64 and Cartridge Settings, item: Map Ultimate Audio $DF20-DFFF }
+  - { path: ["Memory & ROMs", Drive A, ROM for 1541 mode], category: Drive A Settings, item: ROM for 1541 mode, alias: true }
+  - { path: ["Memory & ROMs", Drive A, ROM for 1571 mode], category: Drive A Settings, item: ROM for 1571 mode, alias: true }
+  - { path: ["Memory & ROMs", Drive A, ROM for 1581 mode], category: Drive A Settings, item: ROM for 1581 mode, alias: true }
+  - { path: ["Memory & ROMs", Drive B, ROM for 1541 mode], category: Drive B Settings, item: ROM for 1541 mode, alias: true }
+  - { path: ["Memory & ROMs", Drive B, ROM for 1571 mode], category: Drive B Settings, item: ROM for 1571 mode, alias: true }
+  - { path: ["Memory & ROMs", Drive B, ROM for 1581 mode], category: Drive B Settings, item: ROM for 1581 mode, alias: true }
+  - { path: [Turbo boost, Turbo control], category: U64 Specific Settings, item: Turbo Control }
+  - { path: [Turbo boost, CPU speed], category: U64 Specific Settings, item: CPU Speed, formatter: cpuSpeedMhz }
+  - { path: [Turbo boost, Badline timing], category: U64 Specific Settings, item: Badline Timing }
+  - { path: [Turbo boost, SuperCPU detect (D0BC)], category: U64 Specific Settings, item: SuperCPU Detect (D0BC) }
+  - { path: [Video setup, System mode], category: U64 Specific Settings, item: System Mode }
+  - { path: [Video setup, HDMI scan resolution], category: U64 Specific Settings, item: HDMI Scan Resolution }
+  - { path: [Video setup, HDMI scan lines], category: U64 Specific Settings, item: HDMI Scan lines }
+  - { path: [Video setup, Palette definition], category: U64 Specific Settings, item: Palette Definition }
+  - { path: [Video setup, Analog video mode], category: U64 Specific Settings, item: Analog Video Mode }
+  - { path: [Video setup, Digital video mode], category: U64 Specific Settings, item: Digital Video Mode }
+  - { path: [Audio setup, Audio mixer, Vol UltiSID 1], category: Audio Mixer, item: Vol UltiSid 1, formatter: db }
+  - { path: [Audio setup, Audio mixer, Vol UltiSID 2], category: Audio Mixer, item: Vol UltiSid 2, formatter: db }
+  - { path: [Audio setup, Audio mixer, Vol socket 1], category: Audio Mixer, item: Vol Socket 1, formatter: db }
+  - { path: [Audio setup, Audio mixer, Vol socket 2], category: Audio Mixer, item: Vol Socket 2, formatter: db }
+  - { path: [Audio setup, Audio mixer, Vol sampler L], category: Audio Mixer, item: Vol Sampler L, formatter: db }
+  - { path: [Audio setup, Audio mixer, Vol sampler R], category: Audio Mixer, item: Vol Sampler R, formatter: db }
+  - { path: [Audio setup, Audio mixer, Vol drive 1], category: Audio Mixer, item: Vol Drive 1, formatter: db }
+  - { path: [Audio setup, Audio mixer, Vol drive 2], category: Audio Mixer, item: Vol Drive 2, formatter: db }
+  - { path: [Audio setup, Audio mixer, Vol tape read], category: Audio Mixer, item: Vol Tape Read, formatter: db }
+  - { path: [Audio setup, Audio mixer, Vol tape write], category: Audio Mixer, item: Vol Tape Write, formatter: db }
+  - { path: [Audio setup, Audio mixer, Pan UltiSID 1], category: Audio Mixer, item: Pan UltiSID 1, formatter: pan }
+  - { path: [Audio setup, Audio mixer, Pan UltiSID 2], category: Audio Mixer, item: Pan UltiSID 2, formatter: pan }
+  - { path: [Audio setup, Audio mixer, Pan socket 1], category: Audio Mixer, item: Pan Socket 1, formatter: pan }
+  - { path: [Audio setup, Audio mixer, Pan socket 2], category: Audio Mixer, item: Pan Socket 2, formatter: pan }
+  - { path: [Audio setup, Audio mixer, Pan sampler L], category: Audio Mixer, item: Pan Sampler L, formatter: pan }
+  - { path: [Audio setup, Audio mixer, Pan sampler R], category: Audio Mixer, item: Pan Sampler R, formatter: pan }
+  - { path: [Audio setup, Audio mixer, Pan drive 1], category: Audio Mixer, item: Pan Drive 1, formatter: pan }
+  - { path: [Audio setup, Audio mixer, Pan drive 2], category: Audio Mixer, item: Pan Drive 2, formatter: pan }
+  - { path: [Audio setup, Audio mixer, Pan tape read], category: Audio Mixer, item: Pan Tape Read, formatter: pan }
+  - { path: [Audio setup, Audio mixer, Pan tape write], category: Audio Mixer, item: Pan Tape Write, formatter: pan }
+  - { path: [Audio setup, Speaker mixer, Speaker enable], category: Speaker Mixer, item: Speaker Enable }
+  - { path: [Audio setup, Speaker mixer, Vol UltiSID 1], category: Speaker Mixer, item: Vol UltiSid 1, formatter: db }
+  - { path: [Audio setup, Speaker mixer, Vol UltiSID 2], category: Speaker Mixer, item: Vol UltiSid 2, formatter: db }
+  - { path: [Audio setup, Speaker mixer, Vol socket 1], category: Speaker Mixer, item: Vol Socket 1, formatter: db }
+  - { path: [Audio setup, Speaker mixer, Vol socket 2], category: Speaker Mixer, item: Vol Socket 2, formatter: db }
+  - { path: [Audio setup, Speaker mixer, Vol sampler L], category: Speaker Mixer, item: Vol Sampler L, formatter: db }
+  - { path: [Audio setup, Speaker mixer, Vol sampler R], category: Speaker Mixer, item: Vol Sampler R, formatter: db }
+  - { path: [Audio setup, Speaker mixer, Vol drive 1], category: Speaker Mixer, item: Vol Drive 1, formatter: db }
+  - { path: [Audio setup, Speaker mixer, Vol drive 2], category: Speaker Mixer, item: Vol Drive 2, formatter: db }
+  - { path: [Audio setup, Speaker mixer, Vol tape read], category: Speaker Mixer, item: Vol Tape Read, formatter: db }
+  - { path: [Audio setup, Speaker mixer, Vol tape write], category: Speaker Mixer, item: Vol Tape Write, formatter: db }
+  - { path: [Audio setup, SID sockets configuration, SID socket 1], category: SID Sockets Configuration, item: SID Socket 1 }
+  - { path: [Audio setup, SID sockets configuration, SID socket 2], category: SID Sockets Configuration, item: SID Socket 2 }
+  - { path: [Audio setup, SID sockets configuration, SID detected socket 1], category: SID Sockets Configuration, item: SID Detected Socket 1 }
+  - { path: [Audio setup, SID sockets configuration, SID detected socket 2], category: SID Sockets Configuration, item: SID Detected Socket 2 }
+  - { path: [Audio setup, SID sockets configuration, SID socket 1 1K ohm resistor], category: SID Sockets Configuration, item: SID Socket 1 1K Ohm Resistor }
+  - { path: [Audio setup, SID sockets configuration, SID socket 2 1K ohm resistor], category: SID Sockets Configuration, item: SID Socket 2 1K Ohm Resistor }
+  - { path: [Audio setup, SID sockets configuration, SID socket 1 capacitors], category: SID Sockets Configuration, item: SID Socket 1 Capacitors }
+  - { path: [Audio setup, SID sockets configuration, SID socket 2 capacitors], category: SID Sockets Configuration, item: SID Socket 2 Capacitors }
+  - { path: [Audio setup, UltiSID configuration, UltiSID 1 filter curve], category: UltiSID Configuration, item: UltiSID 1 Filter Curve }
+  - { path: [Audio setup, UltiSID configuration, UltiSID 2 filter curve], category: UltiSID Configuration, item: UltiSID 2 Filter Curve }
+  - { path: [Audio setup, UltiSID configuration, UltiSID 1 filter resonance], category: UltiSID Configuration, item: UltiSID 1 Filter Resonance }
+  - { path: [Audio setup, UltiSID configuration, UltiSID 2 filter resonance], category: UltiSID Configuration, item: UltiSID 2 Filter Resonance }
+  - { path: [Audio setup, UltiSID configuration, UltiSID 1 combined waveforms], category: UltiSID Configuration, item: UltiSID 1 Combined Waveforms }
+  - { path: [Audio setup, UltiSID configuration, UltiSID 2 combined waveforms], category: UltiSID Configuration, item: UltiSID 2 Combined Waveforms }
+  - { path: [Audio setup, UltiSID configuration, UltiSID 1 digis level], category: UltiSID Configuration, item: UltiSID 1 Digis Level }
+  - { path: [Audio setup, UltiSID configuration, UltiSID 2 digis level], category: UltiSID Configuration, item: UltiSID 2 Digis Level }
+  - { path: [Audio setup, SID addressing, SID socket 1 address], category: SID Addressing, item: SID Socket 1 Address, formatter: address }
+  - { path: [Audio setup, SID addressing, SID socket 2 address], category: SID Addressing, item: SID Socket 2 Address, formatter: address }
+  - { path: [Audio setup, SID addressing, Ext DualSID range split], category: SID Addressing, item: Ext DualSID Range Split }
+  - { path: [Audio setup, SID addressing, UltiSID 1 address], category: SID Addressing, item: UltiSID 1 Address, formatter: address }
+  - { path: [Audio setup, SID addressing, UltiSID 2 address], category: SID Addressing, item: UltiSID 2 Address, formatter: address }
+  - { path: [Audio setup, SID addressing, UltiSID range split], category: SID Addressing, item: UltiSID Range Split }
+  - { path: [Audio setup, SID addressing, Paddle override], category: SID Addressing, item: Paddle Override }
+  - { path: [Audio setup, SID addressing, Auto addr mirroring], category: SID Addressing, item: Auto Address Mirroring }
+  - { path: [Audio setup, SID player behavior, SID player autoconfig], category: U64 Specific Settings, item: SID Player Autoconfig }
+  - { path: [Audio setup, SID player behavior, Allow autoconfig uses UltiSID], category: U64 Specific Settings, item: Allow Autoconfig uses UltiSid }
+  - { path: ["Joystick & controllers", Joystick input], category: U64 Specific Settings, item: Joystick Swapper }
+  - { path: [LED lighting, Power LED (if installed), Output 1], category: U64 Specific Settings, item: LED Select Top }
+  - { path: [LED lighting, Power LED (if installed), Output 2], category: U64 Specific Settings, item: LED Select Bot }
+  - { path: [LED lighting, Case lights, Mode], category: LED Strip Settings, item: LedStrip Mode }
+  - { path: [LED lighting, Case lights, Music detect], category: LED Strip Settings, item: LedStrip Auto SID Mode }
+  - { path: [LED lighting, Case lights, Pattern], category: LED Strip Settings, item: LedStrip Pattern }
+  - { path: [LED lighting, Case lights, Brightness], category: LED Strip Settings, item: Strip Intensity }
+  - { path: [LED lighting, Case lights, Color], category: LED Strip Settings, item: Fixed Color }
+  - { path: [LED lighting, Case lights, Tint], category: LED Strip Settings, item: Color tint }
+  - { path: [LED lighting, Keyboard lights, Mode], category: Keyboard Lighting, item: LedStrip Mode }
+  - { path: [LED lighting, Keyboard lights, Music detect], category: Keyboard Lighting, item: LedStrip Auto SID Mode }
+  - { path: [LED lighting, Keyboard lights, Pattern], category: Keyboard Lighting, item: LedStrip Pattern }
+  - { path: [LED lighting, Keyboard lights, Brightness], category: Keyboard Lighting, item: Strip Intensity }
+  - { path: [LED lighting, Keyboard lights, Color], category: Keyboard Lighting, item: Fixed Color }
+  - { path: [LED lighting, Keyboard lights, Tint], category: Keyboard Lighting, item: Color tint }
+  - { path: ["Network services & timezone", Host name], category: Network Settings, item: Host Name }
+  - { path: ["Network services & timezone", Unique ID], category: Network Settings, item: Unique ID }
+  - { path: ["Network services & timezone", Network password], category: Network Settings, item: Network Password }
+  - { path: ["Network services & timezone", Services, Ultimate ident service], category: Network Settings, item: Ultimate Ident Service }
+  - { path: ["Network services & timezone", Services, Ultimate DMA service], category: Network Settings, item: Ultimate DMA Service }
+  - { path: ["Network services & timezone", Services, Telnet remote menu service], category: Network Settings, item: Telnet Remote Menu Service }
+  - { path: ["Network services & timezone", Services, FTP file service], category: Network Settings, item: FTP File Service }
+  - { path: ["Network services & timezone", Services, Web remote control service], category: Network Settings, item: Web Remote Control Service }
+  - { path: ["Network services & timezone", Services, Log to Syslog server], category: Network Settings, item: Log to Syslog Server }
+  - { path: ["Network services & timezone", Time synchronization, SNTP enable], category: Network Settings, item: SNTP Enable }
+  - { path: ["Network services & timezone", Time synchronization, Timezone], category: Network Settings, item: TimeZone }
+  - { path: ["Network services & timezone", Time synchronization, Time server 1], category: Network Settings, item: Time Server 1 }
+  - { path: ["Network services & timezone", Time synchronization, Time server 2], category: Network Settings, item: Time Server 2 }
+  - { path: ["Network services & timezone", Time synchronization, Time server 3], category: Network Settings, item: Time Server 3 }
+  - { path: [Wired network setup, Use DHCP], category: Ethernet Settings, item: Use DHCP }
+  - { path: [Wired network setup, Static IP], category: Ethernet Settings, item: Static IP }
+  - { path: [Wired network setup, Static netmask], category: Ethernet Settings, item: Static Netmask }
+  - { path: [Wired network setup, Static gateway], category: Ethernet Settings, item: Static Gateway }
+  - { path: [Wired network setup, Static DNS], category: Ethernet Settings, item: Static DNS }
+  - { path: [Wi-Fi network setup, Use DHCP], category: WiFi settings, item: Use DHCP }
+  - { path: [Wi-Fi network setup, Static IP], category: WiFi settings, item: Static IP }
+  - { path: [Wi-Fi network setup, Static netmask], category: WiFi settings, item: Static Netmask }
+  - { path: [Wi-Fi network setup, Static gateway], category: WiFi settings, item: Static Gateway }
+  - { path: [Wi-Fi network setup, Static DNS], category: WiFi settings, item: Static DNS }
+  - { path: [Modems, Modem interface], category: Modem Settings, item: Modem Interface }
+  - { path: [Modems, ACIA (6551) mapping], category: Modem Settings, item: ACIA (6551) Mapping }
+  - { path: [Modems, Hardware mode], category: Modem Settings, item: Hardware Mode }
+  - { path: [Modems, Listening port], category: Modem Settings, item: Listening Port }
+  - { path: [Modems, Handshaking, Do RING sequence (incoming)], category: Modem Settings, item: Do RING sequence (incoming) }
+  - { path: [Modems, Handshaking, Drop connection on DTR low], category: Modem Settings, item: Drop connection on DTR low }
+  - { path: [Modems, Handshaking, RTS handshake (Rx)], category: Modem Settings, item: RTS Handshake (Rx) }
+  - { path: [Modems, Handshaking, CTS behavior], category: Modem Settings, item: CTS Behavior }
+  - { path: [Modems, Handshaking, DCD behavior], category: Modem Settings, item: DCD Behavior }
+  - { path: [Modems, Handshaking, DSR behavior], category: Modem Settings, item: DSR Behavior }
+  - { path: [Modems, Handshaking, Automatic Rx pushback], category: Modem Settings, item: Automatic Rx Pushback }
+  - { path: [Modems, Automated responses, Modem offline text], category: Modem Settings, item: Modem Offline Text }
+  - { path: [Modems, Automated responses, Modem connect text], category: Modem Settings, item: Modem Connect Text }
+  - { path: [Modems, Automated responses, Modem busy text], category: Modem Settings, item: Modem Busy Text }
+  - { path: [Modems, Tweaks, Set socket opt TCP_NODELAY], category: Modem Settings, item: Set Socket Opt TCP_NODELAY }
+  - { path: [Modems, Tweaks, Loop delay], category: Modem Settings, item: Loop Delay }
+  - { path: [Printers, IEC printer], category: Printer Settings, item: IEC printer }
+  - { path: [Printers, Bus ID], category: Printer Settings, item: Bus ID }
+  - { path: [Printers, Output file], category: Printer Settings, item: Output file }
+  - { path: [Printers, Output type], category: Printer Settings, item: Output type }
+  - { path: [Printers, Ink density], category: Printer Settings, item: Ink density }
+  - { path: [Printers, Page top margin (default is 5)], category: Printer Settings, item: Page top margin (default is 5) }
+  - { path: [Printers, Page height (default is 60)], category: Printer Settings, item: Page height (default is 60) }
+  - { path: [Printers, Emulation], category: Printer Settings, item: Emulation }
+  - { path: [Printers, Commodore charset], category: Printer Settings, item: Commodore charset }
+  - { path: [Printers, Epson charset], category: Printer Settings, item: Epson charset }
+  - { path: [Printers, IBM table 2], category: Printer Settings, item: IBM table 2 }
+  - { path: [User interface, Interface type], category: User Interface Settings, item: Interface Type }
+  - { path: [User interface, Navigation style], category: User Interface Settings, item: Navigation Style }
+  - { path: [User interface, Color scheme], category: User Interface Settings, item: Color Scheme }
+  - { path: [User interface, Auto save config], category: User Interface Settings, item: Auto Save Config }
+  - { path: [User interface, Ulticopy uses disk name], category: User Interface Settings, item: Ulticopy Uses disk name }
+  - { path: [User interface, Filename overflow squeeze], category: User Interface Settings, item: Filename overflow squeeze }
+  - { path: [Built-in drive A, Drive], category: Drive A Settings, item: Drive }
+  - { path: [Built-in drive A, Drive type], category: Drive A Settings, item: Drive Type }
+  - { path: [Built-in drive A, Drive bus ID], category: Drive A Settings, item: Drive Bus ID }
+  - { path: [Built-in drive A, ROMs, ROM for 1541 mode], category: Drive A Settings, item: ROM for 1541 mode }
+  - { path: [Built-in drive A, ROMs, ROM for 1571 mode], category: Drive A Settings, item: ROM for 1571 mode }
+  - { path: [Built-in drive A, ROMs, ROM for 1581 mode], category: Drive A Settings, item: ROM for 1581 mode }
+  - { path: [Built-in drive A, Advanced, Extra RAM], category: Drive A Settings, item: Extra RAM }
+  - { path: [Built-in drive A, Advanced, Disk swap delay], category: Drive A Settings, item: Disk swap delay }
+  - { path: [Built-in drive A, Advanced, Resets when C64 resets], category: Drive A Settings, item: Resets when C64 resets }
+  - { path: [Built-in drive A, Advanced, Freezes in menu], category: Drive A Settings, item: Freezes in menu }
+  - { path: [Built-in drive A, Advanced, GCR save align tracks], category: Drive A Settings, item: GCR Save Align Tracks }
+  - { path: [Built-in drive A, Advanced, Leave menu on mount], category: Drive A Settings, item: Leave Menu on Mount }
+  - { path: [Built-in drive A, Advanced, D64 GEOS copy protection], category: Drive A Settings, item: D64 Geos Copy Protection }
+  - { path: [Built-in drive B, Drive], category: Drive B Settings, item: Drive }
+  - { path: [Built-in drive B, Drive type], category: Drive B Settings, item: Drive Type }
+  - { path: [Built-in drive B, Drive bus ID], category: Drive B Settings, item: Drive Bus ID }
+  - { path: [Built-in drive B, ROMs, ROM for 1541 mode], category: Drive B Settings, item: ROM for 1541 mode }
+  - { path: [Built-in drive B, ROMs, ROM for 1571 mode], category: Drive B Settings, item: ROM for 1571 mode }
+  - { path: [Built-in drive B, ROMs, ROM for 1581 mode], category: Drive B Settings, item: ROM for 1581 mode }
+  - { path: [Built-in drive B, Advanced, Extra RAM], category: Drive B Settings, item: Extra RAM }
+  - { path: [Built-in drive B, Advanced, Disk swap delay], category: Drive B Settings, item: Disk swap delay }
+  - { path: [Built-in drive B, Advanced, Resets when C64 resets], category: Drive B Settings, item: Resets when C64 resets }
+  - { path: [Built-in drive B, Advanced, Freezes in menu], category: Drive B Settings, item: Freezes in menu }
+  - { path: [Built-in drive B, Advanced, GCR save align tracks], category: Drive B Settings, item: GCR Save Align Tracks }
+  - { path: [Built-in drive B, Advanced, Leave menu on mount], category: Drive B Settings, item: Leave Menu on Mount }
+  - { path: [Built-in drive B, Advanced, D64 GEOS copy protection], category: Drive B Settings, item: D64 Geos Copy Protection }
+
+menuOnly:
+  - [Audio setup, SID addressing, Visual SID address editor]
+  - ["Joystick & controllers", Paddle override]
+  - [Wired network setup, Status, Status]
+  - [Wired network setup, Status, Active IP address]
+  - [Wired network setup, Status, Interface MAC]
+  - [Wi-Fi network setup, Enable]
+  - [Wi-Fi network setup, Disable]
+  - [Wi-Fi network setup, Disconnect]
+  - [Wi-Fi network setup, Connect to last AP]
+  - [Wi-Fi network setup, Select AP from list]
+  - [Wi-Fi network setup, Enter AP manually]
+  - [Wi-Fi network setup, Forget APs]
+  - [Wi-Fi network setup, Status, Status]
+  - [Wi-Fi network setup, Status, Connected to]
+  - [Wi-Fi network setup, Status, Active IP address]
+  - [Wi-Fi network setup, Status, Interface MAC]
+
+intentionallyUnmapped:
+  - { category: U64 Specific Settings, item: C64U Model }
+  - { category: U64 Specific Settings, item: HDMI Tx Swing }
+  - { category: U64 Specific Settings, item: UserPort Power Enable }
+  - { category: U64 Specific Settings, item: Adjust Color Clock }
+  - { category: U64 Specific Settings, item: Serial Bus Mode }
+  - { category: U64 Specific Settings, item: SpeedDOS Parallel Cable }
+  - { category: U64 Specific Settings, item: Burst Mode Patch }
+  - { category: C64 and Cartridge Settings, item: Cartridge Preference }
+  - { category: C64 and Cartridge Settings, item: Bus Operation Mode }
+  - { category: C64 and Cartridge Settings, item: Bus Sharing - ROMs }
+  - { category: C64 and Cartridge Settings, item: Bus Sharing - I/O1 }
+  - { category: C64 and Cartridge Settings, item: Bus Sharing - I/O2 }
+  - { category: C64 and Cartridge Settings, item: Bus Sharing - Interrupts }
+  - { category: C64 and Cartridge Settings, item: Fast Reset }
+  - { category: C64 and Cartridge Settings, item: REU Preload }
+  - { category: C64 and Cartridge Settings, item: REU Preload Image }
+  - { category: C64 and Cartridge Settings, item: REU Preload Offset }
+  - { category: C64 and Cartridge Settings, item: "DMA Load Mimics ID:" }
+  - { category: SoftIEC Drive Settings, item: IEC Drive }
+  - { category: SoftIEC Drive Settings, item: Soft Drive Bus ID }
+  - { category: SoftIEC Drive Settings, item: Default Path }
+  - { category: Tape Settings, item: Tape Playback Rate }
+  - { category: LED Strip Settings, item: LedStrip SID Select }
+  - { category: Keyboard Lighting, item: LedStrip SID Select }
+  - { category: Data Streams, item: Stream VIC to }
+  - { category: Data Streams, item: Stream Audio to }
+  - { category: Data Streams, item: Stream Debug to }
+  - { category: Data Streams, item: Debug Stream Mode }

@@ -8,6 +8,7 @@ docs/research/**/screenshots/**
 docs/research/**/baseline/**
 coverage/**
 src/lib/config/featureFlagsRegistry.generated.ts
+src/lib/config/menuMapping/c64u-1.1.0.generated.ts
 .cov-*/**
 dist/**
 ios/**/App/**

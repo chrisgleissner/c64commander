@@ -191,7 +191,8 @@ test.describe("Keypad / T9 input", () => {
     await expect(page.getByTestId("tab-home")).toBeVisible();
     await page.getByTestId("tab-config").click();
     await expect(page).toHaveURL(/\/config/);
-    await page.getByRole("button", { name: "U64 Specific Settings", exact: true }).click();
+    // The Video setup menu page exposes a select (System mode) for the dropdown HAZARD.
+    await page.getByTestId("config-menu-page-video-setup").click();
     await snap(page, testInfo, "config-category-open");
 
     const trigger = page.locator('[data-testid^="config-select-trigger:"]').first();

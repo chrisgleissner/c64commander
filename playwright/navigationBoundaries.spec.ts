@@ -293,7 +293,9 @@ test.describe("Navigation boundaries and edge cases", () => {
     await page.goto("/config");
     await snap(page, testInfo, "config-open");
 
-    await page.getByRole("button", { name: "U64 Specific Settings" }).click();
+    // C64U menu hierarchy: System Mode lives on the Video setup page (REST identity
+    // {U64 Specific Settings, System Mode} preserved for write-back).
+    await page.getByTestId("config-menu-page-video-setup").click();
     await snap(page, testInfo, "category-expanded");
 
     const selectTrigger = page.getByLabel("System Mode select");

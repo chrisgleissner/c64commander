@@ -38,13 +38,26 @@ test.describe("Demo config from YAML", () => {
     }
   });
 
-  test("config page shows YAML-derived categories", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("config page shows the C64U menu hierarchy plus the residual Advanced (REST-only) section", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/config");
     await snap(page, testInfo, "config-open");
 
-    await expect(page.getByRole("button", { name: "Audio Mixer" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Network Settings" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "U64 Specific Settings" })).toBeVisible();
-    await snap(page, testInfo, "yaml-categories-visible");
+    // The C64U device (mock /v1/info reports "C64 Ultimate") renders the menu-aligned
+    // hierarchy: settings live under friendly menu pages, not raw REST categories.
+    await expect(page.getByTestId("config-menu-page-video-setup")).toBeVisible();
+    await expect(page.getByTestId("config-menu-page-turbo-boost")).toBeVisible();
+    await expect(page.getByTestId("config-menu-page-network-services-&-timezone")).toBeVisible();
+    // The Audio Mixer page keeps its specialized renderer (header "Audio mixer").
+    await expect(page.getByRole("button", { name: "Audio mixer" })).toBeVisible();
+    // Items with no evidence-backed menu home (C64U Model, SoftIEC, Tape, Data Streams)
+    // surface in the explicitly-labelled residual Advanced (REST-only) section — the
+    // device menu does not place them on a page either (lossless, not a junk drawer).
+    await expect(page.getByTestId("config-advanced-fallback")).toBeVisible();
+    await page.getByTestId("config-advanced-fallback-toggle").click();
+    await expect(page.getByTestId("config-fallback-category-tape-settings")).toBeVisible();
+    await expect(page.getByText("Tape Playback Rate")).toBeVisible();
+    await snap(page, testInfo, "menu-hierarchy-visible");
   });
 });

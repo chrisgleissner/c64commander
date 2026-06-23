@@ -919,6 +919,22 @@ export class C64API {
     } as ConfigResponse;
   }
 
+  /**
+   * Synchronous read of a single item's CACHED config metadata (options/values + details),
+   * served from the firmware-namespaced persistent enrichment cache (in-memory → localStorage).
+   * Returns `undefined` on a miss or when only a bare scalar is cached (no options metadata),
+   * so callers know whether they can render the control without a per-item network fetch. The
+   * device-fresh VALUE is supplied separately by the category read; this only avoids re-fetching
+   * the static option set on every session (the per-item read path otherwise ignores this cache).
+   */
+  getCachedConfigItem(category: string, item: string): Record<string, unknown> | undefined {
+    if (!category || !item) return undefined;
+    const cachedItems = this.getCachedConfigCategoryItems(category);
+    const cached = cachedItems?.[item];
+    if (!hasStructuredConfigMetadata(cached)) return undefined;
+    return cloneBudgetValue(cached) as Record<string, unknown>;
+  }
+
   private async ensureConfigCategoryItems(category: string, itemNames: string[]) {
     const cachedItems = this.getCachedConfigCategoryItems(category) ?? {};
     const missingItems = itemNames.filter((item) => cachedItems[item] === undefined);

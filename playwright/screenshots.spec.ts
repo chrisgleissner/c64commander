@@ -1190,21 +1190,34 @@ const captureDocsSections = async (page: Page, testInfo: TestInfo) => {
   }
 };
 
+// Derive a stable section slug from a config toggle's data-testid. On a C64U the page
+// renders the menu hierarchy: menu pages (`config-menu-page-*`), the specialized Audio
+// Mixer page (`config-category-*`), and the Advanced (REST-only) fallback. On a device
+// with no captured menu it is the REST-category toggles (`config-category-*`).
+const configToggleSlug = (testId: string): string =>
+  sanitizeSegment(
+    testId
+      .replace(/^config-menu-page-/, "")
+      .replace(/^config-category-/, "")
+      .replace(/^config-advanced-fallback-toggle$/, "advanced-rest-only"),
+  );
+
 const captureConfigSections = async (page: Page, testInfo: TestInfo) => {
-  const toggles = getActiveMain(page).locator('[data-testid^="config-category-"]');
+  const toggles = getActiveMain(page).locator(
+    '[data-testid^="config-menu-page-"], [data-testid^="config-category-"], [data-testid="config-advanced-fallback-toggle"]',
+  );
   const count = await toggles.count();
   if (count === 0) return;
   const labels: string[] = [];
   for (let index = 0; index < count; index += 1) {
-    const label = (await toggles.nth(index).innerText()).split("\n")[0]?.trim() ?? "";
-    if (label) labels.push(sanitizeSegment(label));
+    const slug = configToggleSlug((await toggles.nth(index).getAttribute("data-testid")) ?? "");
+    if (slug) labels.push(slug);
   }
   const orderMap = await registerScreenshotSections("config", labels);
   for (let index = 0; index < count; index += 1) {
     const toggle = toggles.nth(index);
-    const label = (await toggle.innerText()).split("\n")[0]?.trim() ?? "";
-    if (!label) continue;
-    const slug = sanitizeSegment(label);
+    const slug = configToggleSlug((await toggle.getAttribute("data-testid")) ?? "");
+    if (!slug) continue;
     const order = orderMap.get(slug) ?? index + 1;
     await scrollHeadingIntoView(page, toggle);
     await toggle.click();
@@ -2078,7 +2091,9 @@ test.describe("App screenshots", () => {
       await page.goto("/config");
       await waitForConnected(page);
       await expect(page.getByRole("heading", { name: "Config" })).toBeVisible();
-      await expect.poll(async () => page.locator('[data-testid^="config-category-"]').count()).toBeGreaterThan(0);
+      await expect
+        .poll(async () => page.locator('[data-testid^="config-menu-page-"], [data-testid^="config-category-"]').count())
+        .toBeGreaterThan(0);
 
       await page.evaluate(() => window.scrollTo(0, 0));
       await captureScreenshot(page, testInfo, "config/01-categories.png");
