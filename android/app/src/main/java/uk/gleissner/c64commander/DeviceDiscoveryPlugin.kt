@@ -16,6 +16,7 @@ import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import java.io.BufferedReader
+import java.io.IOException
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.Inet4Address
@@ -283,17 +284,38 @@ class DeviceDiscoveryPlugin : Plugin() {
         requiresPassword = false,
       )
     } catch (error: Exception) {
-      // An ordinary LAN scan probes hundreds of IPs/hostnames that never answer —
-      // refused connections and timeouts are EXPECTED misses, not actionable
-      // warnings. Logging each one with a full stack trace floods package logcat
-      // (and hides real issues). Demote the common cases to a one-line debug note.
-      Log.d(
-        logTag,
-        "Device discovery probe miss for ${target.host}:${target.port}: ${error::class.java.simpleName}",
-      )
+      if (isExpectedProbeMiss(error)) {
+        // An ordinary LAN scan probes hundreds of IPs/hostnames that never answer —
+        // refused connections, timeouts, and DNS failures are EXPECTED misses, not
+        // actionable warnings. Logging each one with a full stack trace floods package
+        // logcat (and hides real issues). Demote the common cases to a one-line debug note.
+        Log.d(
+          logTag,
+          "Device discovery probe miss for ${target.host}:${target.port}: ${error::class.java.simpleName}",
+        )
+      } else {
+        // A non-network failure (e.g. malformed JSON from a host that DID answer
+        // /v1/info with a 2xx) is unexpected and could mask a real discovery bug,
+        // so keep the message and stack trace at warning level.
+        Log.w(
+          logTag,
+          "Unexpected device discovery probe failure for ${target.host}:${target.port}",
+          error,
+        )
+      }
       null
     }
   }
+
+  /**
+   * Network-level failures (refused/timeout/DNS/reset) are the expected outcome of
+   * probing the many LAN addresses that never host an Ultimate, so they are demoted to
+   * debug. Anything else — most notably [org.json.JSONException] from a reachable host —
+   * is unexpected and stays at warning level. [IOException] covers the socket and
+   * connection failures thrown by [HttpURLConnection]; JSONException does not extend it,
+   * so malformed payloads correctly fall through to the unexpected branch.
+   */
+  internal fun isExpectedProbeMiss(error: Throwable): Boolean = error is IOException
 
   private fun passwordProtectedCandidate(target: DiscoveryTarget, resolvedAddress: String): DiscoveryCandidate {
     val namedHost = target.host.takeUnless { isIpv4Literal(it) }

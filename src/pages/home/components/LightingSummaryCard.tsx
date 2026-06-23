@@ -232,9 +232,19 @@ export function LightingSummaryCard({
   const ensureFixedColorMode = () => {
     if (!modeSupported || fixedColorModeActive || forceFixedColorModeRef.current) return;
     forceFixedColorModeRef.current = true;
+    // If the mode write fails, clear the guard so a later slider move retries it.
+    // Otherwise a single failed write would pin forceFixedColorModeRef true and the
+    // strip would never re-assert Fixed Color until the user manually changes mode.
+    const releaseGuardOnFailure = () => {
+      forceFixedColorModeRef.current = false;
+    };
     void updateLightingConfig("LedStrip Mode", "Fixed Color", "MODE", `${successLabel} mode updated`, {
       suppressToast: true,
-    });
+    })
+      .then((succeeded) => {
+        if (!succeeded) releaseGuardOnFailure();
+      })
+      .catch(releaseGuardOnFailure);
   };
 
   const writeFixedColorWithMode = (nextColor: string | number) => {

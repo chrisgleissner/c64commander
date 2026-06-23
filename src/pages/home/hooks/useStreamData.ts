@@ -35,7 +35,7 @@ export function useStreamData(
     actionId: string,
     toastMessage: string,
     options?: { suppressToast?: boolean; refreshDrives?: boolean; clearPendingOnSuccess?: boolean },
-  ) => Promise<void>,
+  ) => Promise<boolean>,
 ) {
   const api = getC64API();
   const trace = useActionTrace("useStreamData");

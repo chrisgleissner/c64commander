@@ -16,10 +16,15 @@ import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import java.io.BufferedReader
+import java.io.IOException
 import java.io.InputStreamReader
+import java.net.ConnectException
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.ServerSocket
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import org.json.JSONException
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -254,6 +259,22 @@ class DeviceDiscoveryPluginTest {
   @Test
   fun probeTargetReturnsNullOnConnectionRefused() {
     assertNull(plugin.probeTarget(target("127.0.0.1", closedPort()), 300))
+  }
+
+  @Test
+  fun isExpectedProbeMissTreatsNetworkFailuresAsExpected() {
+    // The common LAN-scan misses are demoted to debug so they do not flood logcat.
+    assertTrue(plugin.isExpectedProbeMiss(ConnectException("refused")))
+    assertTrue(plugin.isExpectedProbeMiss(SocketTimeoutException("timeout")))
+    assertTrue(plugin.isExpectedProbeMiss(UnknownHostException("no dns")))
+    assertTrue(plugin.isExpectedProbeMiss(IOException("reset")))
+  }
+
+  @Test
+  fun isExpectedProbeMissTreatsUnexpectedFailuresAsActionable() {
+    // Malformed JSON from a reachable host (or any non-IO error) must stay surfaced.
+    assertFalse(plugin.isExpectedProbeMiss(JSONException("bad json")))
+    assertFalse(plugin.isExpectedProbeMiss(IllegalStateException("boom")))
   }
 
   // ---- runProbes -----------------------------------------------------------

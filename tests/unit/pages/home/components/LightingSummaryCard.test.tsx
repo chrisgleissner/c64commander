@@ -16,7 +16,7 @@ const { addLogSpy, buildErrorLogDetailsSpy, updateConfigValueSpy, resolveConfigV
     ...details,
     error: error.message,
   })),
-  updateConfigValueSpy: vi.fn().mockResolvedValue(undefined),
+  updateConfigValueSpy: vi.fn().mockResolvedValue(true),
   resolveConfigValueSpy: vi.fn(
     (_payload: unknown, _category: string, _itemName: string, fallback: string | number) => fallback,
   ),
@@ -265,6 +265,40 @@ describe("LightingSummaryCard", () => {
     fireEvent.click(screen.getByTestId("led-strip-color-slider-drag"));
     expect(interactiveWriteSpy).toHaveBeenCalledWith({ "Fixed Color": expect.any(String) });
     expect(updateConfigValueSpy).not.toHaveBeenCalled();
+  });
+
+  it("re-asserts Fixed Color mode on a later slider move after the mode write fails", async () => {
+    // Mode never resolves to Fixed Color (default fallback), so the optimistic
+    // re-render that normally clears the guard cannot happen here — only the
+    // failure handler can release it.
+    updateConfigValueSpy.mockResolvedValue(false);
+    render(<LightingSummaryCard {...defaultProps} />);
+
+    // First move fires the (failing) mode write...
+    fireEvent.click(screen.getByTestId("led-strip-color-slider-drag"));
+    expect(updateConfigValueSpy).toHaveBeenCalledTimes(1);
+    // ...let the rejection handler clear forceFixedColorModeRef.
+    await waitFor(() => expect(interactiveWriteSpy).toHaveBeenCalledTimes(1));
+
+    // A subsequent move (throttled) must retry the mode write instead of staying
+    // stuck behind a pinned guard.
+    fireEvent.click(screen.getByTestId("led-strip-color-slider-drag"));
+    await waitFor(() => expect(updateConfigValueSpy).toHaveBeenCalledTimes(2), { timeout: 2000 });
+  });
+
+  it("does not re-fire the Fixed Color mode write while a successful write keeps the guard", async () => {
+    updateConfigValueSpy.mockResolvedValue(true);
+    render(<LightingSummaryCard {...defaultProps} />);
+
+    fireEvent.click(screen.getByTestId("led-strip-color-slider-drag"));
+    expect(updateConfigValueSpy).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(interactiveWriteSpy).toHaveBeenCalledTimes(1));
+
+    // The second move still flushes its colour write (interactiveWrite twice), but
+    // the guard held by the successful mode write suppresses a repeat mode write.
+    fireEvent.click(screen.getByTestId("led-strip-color-slider-drag"));
+    await waitFor(() => expect(interactiveWriteSpy).toHaveBeenCalledTimes(2), { timeout: 2000 });
+    expect(updateConfigValueSpy).toHaveBeenCalledTimes(1);
   });
 
   it("restores the resolved color index after an interactive write failure", async () => {
