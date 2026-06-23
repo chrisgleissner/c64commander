@@ -707,6 +707,17 @@ button:focus-visible,
     width: 100%;
     max-width: var(--display-profile-page-max-width);
     margin-inline: auto;
+    /*
+     * Do NOT reserve the tab-bar height on this scroll box (no margin-bottom or
+     * padding-bottom tied to the tab-bar reserved-height variable). The container that
+     * hosts .page-shell — the SwipeNavigationLayer viewport — is already sized to
+     * `100dvh` minus the tab-bar reserved height, so it ends exactly at the fixed tab
+     * bar's top. Reserving that height a second time here double-counts it and leaves a
+     * dead gap one tab-bar tall below the content and above the tab bar (BUG-066 added it
+     * as padding-bottom, BUG-072 as margin-bottom — both wrong; reverted twice). The
+     * padding-bottom below is just the normal page rhythm. Locked by
+     * tests/unit/pageShellClearance.test.ts.
+     */
     padding-top: var(--display-profile-page-padding-top);
     padding-bottom: var(--display-profile-page-padding-y);
     padding-left: calc(var(--display-profile-page-padding-x) + var(--safe-area-inset-left));

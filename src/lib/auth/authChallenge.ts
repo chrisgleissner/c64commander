@@ -70,15 +70,23 @@ const resolveIdentity = (
 
   try {
     const snapshot = getSavedDevicesSnapshot();
-    // Attribute to the device the call actually hit (host match) and fall back
-    // to the selected device so a bare notify still names the active device.
-    const byHost = host ? snapshot.devices.find((device) => normalizeHost(device.host) === host) : undefined;
     const selected = snapshot.devices.find((device) => device.id === snapshot.selectedDeviceId);
-    const device = byHost ?? selected;
-    if (device) {
-      deviceId = deviceId ?? device.id;
-      if (!deviceLabel) deviceLabel = device.name?.trim() || device.host;
-      host = host ?? normalizeHost(device.host);
+    if (host) {
+      // Attribute to the device the call actually hit (host match). Never fall back
+      // to the selected device: a probe for an inactive saved device (e.g. a
+      // background reconnect to a saved c64u while U64 is the active target) must
+      // not silently relabel as the active device.
+      const byHost = snapshot.devices.find((device) => normalizeHost(device.host) === host);
+      if (byHost) {
+        deviceId = deviceId ?? byHost.id;
+        if (!deviceLabel) deviceLabel = byHost.name?.trim() || byHost.host;
+      } else if (!deviceLabel) {
+        deviceLabel = host;
+      }
+    } else if (selected) {
+      deviceId = deviceId ?? selected.id;
+      if (!deviceLabel) deviceLabel = selected.name?.trim() || selected.host;
+      host = normalizeHost(selected.host);
     }
   } catch (error) {
     // Identity is best-effort; the popup still works with a generic label.

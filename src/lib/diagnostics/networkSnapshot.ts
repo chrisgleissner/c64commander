@@ -76,13 +76,21 @@ export const buildNetworkSnapshot = (): NetworkSnapshot => {
     const { hostname, port, protocol } = parseUrl(url);
 
     const httpStatus = (resData?.status as number) ?? null;
-    const error = resData?.error as Record<string, unknown> | undefined;
+    const error = resData?.error;
     const durationMs = (resData?.durationMs as number) ?? null;
+    const expectedFailure = resData?.expectedFailure === true;
+    const errorObject = error && typeof error === "object" ? (error as Record<string, unknown>) : null;
+    const errorMessage = typeof error === "string" ? error : ((errorObject?.message as string | undefined) ?? null);
 
     const isSuccess = httpStatus !== null && httpStatus >= 200 && httpStatus < 400;
+    const hasError = Boolean(errorMessage) || errorObject !== null;
+    const isFailure =
+      response !== undefined &&
+      !expectedFailure &&
+      (hasError || (httpStatus !== null && (httpStatus < 200 || httpStatus >= 400)));
     if (isSuccess) {
       successCount++;
-    } else if (response) {
+    } else if (isFailure) {
       failureCount++;
     }
 
@@ -93,9 +101,9 @@ export const buildNetworkSnapshot = (): NetworkSnapshot => {
       protocol,
       durationMs,
       httpStatus,
-      errorDomain: error ? ((error.name as string) ?? null) : null,
-      errorCode: error ? ((error.code as string) ?? null) : null,
-      errorMessage: error ? ((error.message as string) ?? null) : null,
+      errorDomain: errorObject ? ((errorObject.name as string) ?? null) : null,
+      errorCode: errorObject ? ((errorObject.code as string) ?? null) : null,
+      errorMessage,
       retryCount: 0,
       url,
       method,

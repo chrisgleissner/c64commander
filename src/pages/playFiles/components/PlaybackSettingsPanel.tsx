@@ -89,6 +89,7 @@ export const PlaybackSettingsPanel = ({
             onChange={(event) => onDurationInputChange(event.target.value)}
             onBlur={onDurationInputBlur}
             inputMode="numeric"
+            maxLength={5}
             placeholder="mm:ss"
             className="w-[84px] text-right"
             data-testid="duration-input"

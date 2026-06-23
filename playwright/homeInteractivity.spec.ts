@@ -631,7 +631,7 @@ test.describe("Home interactions", () => {
 
     const caseLight = page.getByTestId("home-led-summary");
     const caseLightLabels = await caseLight.locator(".text-muted-foreground").allTextContents();
-    expect(caseLightLabels).toEqual(["Mode", "Auto SID", "Pattern", "Color", "Brightness", "Tint", "SID Select"]);
+    expect(caseLightLabels).toEqual(["Mode", "Music Detect", "Pattern", "Color", "Brightness", "Tint", "SID Select"]);
 
     await expect(page.getByTestId("home-keyboard-lighting-summary")).toBeVisible();
     await expect(page.getByTestId("home-keyboard-lighting-deferred")).toHaveCount(0);

@@ -43,6 +43,7 @@ export type C64QueryOptions = {
   refetchOnMount?: boolean | "always";
   staleTime?: number;
   skipEnrichment?: boolean;
+  timeoutMs?: number;
 };
 
 export const VISIBLE_C64_QUERY_OPTIONS: C64QueryOptions = {
@@ -77,6 +78,19 @@ const hasDisplayableDeviceInfo = (value: DeviceInfo | null | undefined) =>
       value.core_version?.trim() ||
       value.unique_id?.trim()),
   );
+
+// Reads against a real device must wait until the connection has reached a settled
+// state (REAL_CONNECTED or DEMO_ACTIVE). During first-run DISCOVERING the default
+// target's host has not been chosen by the user yet, so firing Home/config/drives
+// queries against the default `c64u` (or any unchosen host) contaminates
+// diagnostics, inflates networkSnapshot.failureCount, and can transiently mark the
+// eventual selected device DEGRADED (BUG-061). The c64-info query inside
+// useC64Connection already gates on the connection state — extend the same gate to
+// every other device-touching query.
+const useConnectionActive = () => {
+  const connection = useConnectionState();
+  return connection.state === "REAL_CONNECTED" || connection.state === "DEMO_ACTIVE";
+};
 
 const usePollingPauseState = () => {
   const [pollingPaused, setPollingPaused] = useState(() => pollingPauseRegistry.isPollingPaused());
@@ -322,17 +336,19 @@ export function useC64Connection() {
 }
 
 export function useC64Categories(options: C64QueryOptions = {}) {
+  const routingEpoch = useConnectionRoutingEpoch();
   const intent = options.intent ?? "background";
   const screenActive = useScreenActivity();
   const appVisible = useAppVisibilityState();
+  const connectionActive = useConnectionActive();
   const queryActive = (options.active ?? true) && (screenActive || !appVisible);
   return useQuery({
-    queryKey: ["c64-categories"],
+    queryKey: ["c64-categories", routingEpoch],
     queryFn: async () => {
       const api = getC64API();
-      return api.getCategories({ __c64uIntent: intent });
+      return api.getCategories({ __c64uIntent: intent, timeoutMs: options.timeoutMs });
     },
-    enabled: queryActive,
+    enabled: queryActive && connectionActive,
     staleTime: 60000,
     refetchOnMount: options.refetchOnMount,
     placeholderData: (previousData) => previousData,
@@ -340,17 +356,19 @@ export function useC64Categories(options: C64QueryOptions = {}) {
 }
 
 export function useC64Category(category: string, enabled = true, options: C64QueryOptions = {}) {
+  const routingEpoch = useConnectionRoutingEpoch();
   const intent = options.intent ?? "background";
   const screenActive = useScreenActivity();
   const appVisible = useAppVisibilityState();
+  const connectionActive = useConnectionActive();
   const queryActive = (options.active ?? true) && (screenActive || !appVisible);
   return useQuery({
-    queryKey: ["c64-category", category],
+    queryKey: ["c64-category", category, routingEpoch],
     queryFn: async () => {
       const api = getC64API();
-      return api.getCategory(category, { __c64uIntent: intent });
+      return api.getCategory(category, { __c64uIntent: intent, timeoutMs: options.timeoutMs });
     },
-    enabled: queryActive && enabled && !!category,
+    enabled: queryActive && enabled && !!category && connectionActive,
     staleTime: options.staleTime ?? 30000,
     refetchOnMount: options.refetchOnMount,
     placeholderData: (previousData) => previousData,
@@ -390,6 +408,7 @@ export function useC64ConfigItems(category: string, items: string[], enabled = t
   const intent = options.intent ?? "background";
   const screenActive = useScreenActivity();
   const appVisible = useAppVisibilityState();
+  const connectionActive = useConnectionActive();
   const queryActive = (options.active ?? true) && (screenActive || !appVisible);
   const snapshot = loadInitialSnapshot(getC64APIConfigSnapshot().baseUrl);
   const placeholderData = (() => {
@@ -421,9 +440,10 @@ export function useC64ConfigItems(category: string, items: string[], enabled = t
       return api.getConfigItems(category, items, {
         __c64uIntent: intent,
         __c64uSkipItemEnrichment: options.skipEnrichment,
+        timeoutMs: options.timeoutMs,
       });
     },
-    enabled: queryActive && enabled && !!category && items.length > 0,
+    enabled: queryActive && enabled && !!category && items.length > 0 && connectionActive,
     placeholderData: (previousData) => previousData ?? placeholderData,
     staleTime: options.staleTime ?? 30000,
     refetchOnMount: options.refetchOnMount,
@@ -434,6 +454,7 @@ export function useC64AllConfig(options: C64QueryOptions = {}) {
   const intent = options.intent ?? "background";
   const screenActive = useScreenActivity();
   const appVisible = useAppVisibilityState();
+  const connectionActive = useConnectionActive();
   const queryActive = (options.active ?? true) && (screenActive || !appVisible);
   const { data: categories } = useC64Categories(options);
 
@@ -441,12 +462,12 @@ export function useC64AllConfig(options: C64QueryOptions = {}) {
     queryKey: ["c64-all-config"],
     queryFn: async () => {
       const api = getC64API();
-      const cats = await api.getCategories({ __c64uIntent: intent });
+      const cats = await api.getCategories({ __c64uIntent: intent, timeoutMs: options.timeoutMs });
       const configs: Record<string, ConfigResponse> = {};
 
       for (const cat of cats.categories) {
         try {
-          configs[cat] = await api.getCategory(cat, { __c64uIntent: intent });
+          configs[cat] = await api.getCategory(cat, { __c64uIntent: intent, timeoutMs: options.timeoutMs });
         } catch (catError) {
           // Per-category failures are tolerated; callers can render partial config safely.
           addLog("debug", "Config category fetch failed; partial config in use", {
@@ -462,7 +483,7 @@ export function useC64AllConfig(options: C64QueryOptions = {}) {
 
       return configs;
     },
-    enabled: queryActive && !!categories,
+    enabled: queryActive && !!categories && connectionActive,
     staleTime: 30000,
     refetchOnMount: options.refetchOnMount,
     placeholderData: (previousData) => previousData,
@@ -518,20 +539,26 @@ export function useC64UpdateConfigBatch() {
 }
 
 export function useC64ConfigItem(category?: string, item?: string, enabled = true, options: C64QueryOptions = {}) {
+  const routingEpoch = useConnectionRoutingEpoch();
   const intent = options.intent ?? "background";
   const screenActive = useScreenActivity();
   const appVisible = useAppVisibilityState();
+  const connectionActive = useConnectionActive();
   const queryActive = (options.active ?? true) && (screenActive || !appVisible);
   return useQuery({
-    queryKey: ["c64-config-item", category, item],
+    // routingEpoch is appended (not prepended) so prefix-based invalidation —
+    // ["c64-config-item"] and ["c64-config-item", category] — still matches, while a
+    // connection handoff re-resolves the value instead of reviving the cancelled read
+    // (matches useC64Categories/useC64Category/useC64ConfigItems).
+    queryKey: ["c64-config-item", category, item, routingEpoch],
     queryFn: async () => {
       const api = getC64API();
       if (!category || !item) {
         return null;
       }
-      return api.getConfigItem(category, item, { __c64uIntent: intent });
+      return api.getConfigItem(category, item, { __c64uIntent: intent, timeoutMs: options.timeoutMs });
     },
-    enabled: queryActive && enabled && !!category && !!item,
+    enabled: queryActive && enabled && !!category && !!item && connectionActive,
     staleTime: 30000,
     refetchOnMount: options.refetchOnMount,
   });
@@ -543,7 +570,8 @@ export function useC64Drives(options: C64QueryOptions = {}) {
   const screenActive = useScreenActivity();
   const pollingPaused = usePollingPauseState();
   const queryClient = useQueryClient();
-  const queryActive = (options.active ?? true) && screenActive;
+  const connectionActive = useConnectionActive();
+  const queryActive = (options.active ?? true) && screenActive && connectionActive;
 
   useEffect(() => {
     if (!pollingPaused) return;
@@ -554,7 +582,7 @@ export function useC64Drives(options: C64QueryOptions = {}) {
     queryKey: ["c64-drives"],
     queryFn: async () => {
       const api = getC64API();
-      return api.getDrives({ __c64uIntent: intent });
+      return api.getDrives({ __c64uIntent: intent, timeoutMs: options.timeoutMs });
     },
     enabled: queryActive,
     staleTime: options.staleTime ?? 10000,

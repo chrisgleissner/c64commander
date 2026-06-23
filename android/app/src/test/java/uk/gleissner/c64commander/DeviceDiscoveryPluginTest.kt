@@ -16,10 +16,15 @@ import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import java.io.BufferedReader
+import java.io.IOException
 import java.io.InputStreamReader
+import java.net.ConnectException
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.ServerSocket
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import org.json.JSONException
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -202,6 +207,44 @@ class DeviceDiscoveryPluginTest {
   }
 
   @Test
+  fun probeTargetTreats403WithUltimateErrorBodyAsNeedingPassword() {
+    // Password-protected Ultimate firmware answers an unauthenticated /v1/info with
+    // 403 Forbidden and a JSON error envelope (see 1541ultimate/software/api/routes.h).
+    val port = startInfoServer(403, """{"errors":["Forbidden."]}""")
+    val candidate = plugin.probeTarget(target("127.0.0.1", port), 1_000)
+
+    assertNotNull(candidate)
+    assertTrue(candidate!!.requiresPassword)
+    assertEquals("C64 Ultimate", candidate.product)
+    assertEquals("127.0.0.1", candidate.address)
+  }
+
+  @Test
+  fun probeTarget403KeepsNamedHost() {
+    val port = startInfoServer(403, """{"errors":["Forbidden."]}""")
+    val candidate = plugin.probeTarget(target("localhost", port), 1_000)
+    assertNotNull(candidate)
+    assertTrue(candidate!!.requiresPassword)
+    assertEquals("localhost", candidate.host)
+    assertEquals("localhost", candidate.hostname)
+  }
+
+  @Test
+  fun probeTargetRejects403WithoutUltimateErrorBody() {
+    // A generic 403 (e.g. a router admin page or proxy) must not appear as a device.
+    val port = startInfoServer(403, "<html><body>Forbidden</body></html>")
+    assertNull(plugin.probeTarget(target("127.0.0.1", port), 1_000))
+  }
+
+  @Test
+  fun looksLikeUltimateErrorBodyRecognisesJsonEnvelope() {
+    assertTrue(plugin.looksLikeUltimateErrorBody("""{"errors":["Forbidden."]}"""))
+    assertFalse(plugin.looksLikeUltimateErrorBody("<html>Forbidden</html>"))
+    assertFalse(plugin.looksLikeUltimateErrorBody(""))
+    assertFalse(plugin.looksLikeUltimateErrorBody("   "))
+  }
+
+  @Test
   fun probeTargetRejectsServerError() {
     val port = startInfoServer(500, "boom")
     assertNull(plugin.probeTarget(target("127.0.0.1", port), 1_000))
@@ -216,6 +259,22 @@ class DeviceDiscoveryPluginTest {
   @Test
   fun probeTargetReturnsNullOnConnectionRefused() {
     assertNull(plugin.probeTarget(target("127.0.0.1", closedPort()), 300))
+  }
+
+  @Test
+  fun isExpectedProbeMissTreatsNetworkFailuresAsExpected() {
+    // The common LAN-scan misses are demoted to debug so they do not flood logcat.
+    assertTrue(plugin.isExpectedProbeMiss(ConnectException("refused")))
+    assertTrue(plugin.isExpectedProbeMiss(SocketTimeoutException("timeout")))
+    assertTrue(plugin.isExpectedProbeMiss(UnknownHostException("no dns")))
+    assertTrue(plugin.isExpectedProbeMiss(IOException("reset")))
+  }
+
+  @Test
+  fun isExpectedProbeMissTreatsUnexpectedFailuresAsActionable() {
+    // Malformed JSON from a reachable host (or any non-IO error) must stay surfaced.
+    assertFalse(plugin.isExpectedProbeMiss(JSONException("bad json")))
+    assertFalse(plugin.isExpectedProbeMiss(IllegalStateException("boom")))
   }
 
   // ---- runProbes -----------------------------------------------------------

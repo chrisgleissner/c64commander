@@ -14,6 +14,24 @@ import { createMockC64Server, type MockC64Server } from "../../mocks/mockC64Serv
 import { createOpenApiGeneratedClient } from "../../helpers/openapiGeneratedClient";
 import { updateC64APIConfig } from "@/lib/c64api";
 
+// Device-touching config queries (useC64ConfigItem) are gated on an active
+// connection, so the lazy "fetch item details and upgrade the control" path only
+// runs once the app is connected. Pin the connection to REAL_CONNECTED so these
+// component-in-isolation tests exercise that path against the mock server.
+vi.mock("@/hooks/useConnectionState", () => ({
+  useConnectionState: () => ({
+    state: "REAL_CONNECTED" as const,
+    lastDiscoveryTrigger: null,
+    lastTransitionAtMs: 0,
+    lastProbeAtMs: null,
+    lastProbeSucceededAtMs: null,
+    lastProbeFailedAtMs: null,
+    lastProbeError: null,
+    deviceInfo: null,
+    demoInterstitialVisible: false,
+  }),
+}));
+
 function renderWithQuery(ui: React.ReactElement) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },

@@ -87,6 +87,7 @@ NON-NEGOTIABLE CONSTRAINTS (DO NOT WEAKEN)
 13. Direct REST/FTP/Telnet or c64bridge-only mutation must not replace app-driven user action.
 14. Unsafe c64u reset/destructive actions must remain guarded or blocked; do not force an unsafe path unless the objective is a dedicated safety proof whose expected result is guard-blocked.
 15. A final CLEAN/CLOSED verdict (or any wording implying no work remains) is invalid when `droidmind_cta_action_count=0`, unless an allowed pre-action blocker is proven and named with concrete evidence.
+16. Never re-open or "fix" a defect listed under PROTECTED LAYOUT INVARIANTS — KNOWN-FALSE DEFECTS. Those hypotheses are settled correct behaviour; rediscovering one is a false positive. In particular, never add a tab-bar-height reserve to `.page-shell`, and never edit `tests/unit/pageShellClearance.test.ts` to permit one.
 
 CURRENT EXPECTED CONTEXT
 
@@ -109,6 +110,16 @@ Verify all of this from current files and current evidence. Treat historical not
 - c64u non-disk (e.g. SID) Stop may be safety-guarded because the old stop path maps to machine reset; use Pause, never force the guarded Stop unless the objective is dedicated safety proof.
 - The Mute control maps to c64u UltiSID volume in persistent `/v1/configs` (≈ -42 dB muted / 0 dB unmuted); always restore UltiSID to 0 dB on cleanup.
 - Coverage is not progress.
+
+PROTECTED LAYOUT INVARIANTS — KNOWN-FALSE DEFECTS (DO NOT "FIX")
+
+Some defect hypotheses have already been investigated, "fixed", and proven wrong. Do NOT re-open or re-fix them. Treat them as settled, correct behaviour; a probe that rediscovers one is a FALSE POSITIVE, not a defect.
+
+1. ".page-shell sits under the fixed tab bar" is FALSE. The scroll viewport that hosts `.page-shell` is the `SwipeNavigationLayer` container, sized `height: calc(100dvh - var(--app-tab-bar-reserved-height))`; it already ends exactly at the fixed tab bar's top. The `.page-shell` box must NEVER reserve the tab-bar height itself — not as `padding-bottom` (this was BUG-066), not as `margin-bottom` (this was BUG-072), not via any other property. Such a reserve double-counts the tab bar and leaves a visible dead gap one tab-bar tall below the page content and above the tab bar. This exact regression has been introduced and reverted TWICE under this prompt; do not make it a third.
+   - If a bottom control appears to misroute taps to a tab, the cause is NOT page-shell clearance. The page scrolls (a failed swipe is not "no scroll"); re-measure the real UI tree, compare the actual element bounds against the tab-bar bounds, and capture the exact droidmind tap coordinates before concluding anything. Do not touch `.page-shell` bottom spacing or the `SwipeNavigationLayer` height to "fix" it.
+   - `tests/unit/pageShellClearance.test.ts` fails if any `--app-tab-bar-reserved-height` reserve reappears inside `.page-shell`. Never edit that test to permit the reserve.
+
+Before ANY edit to `src/index.css` `.page-shell`, the `SwipeNavigationLayer` viewport height, or tab-bar / safe-area layout, run `npx vitest run tests/unit/pageShellClearance.test.ts` and keep it green. This narrow regression test is the cheapest useful check for a layout change and is explicitly allowed (and required) here under HIGH-LEVEL TESTS ONLY item (5).
 
 AUTHORITY ORDER
 

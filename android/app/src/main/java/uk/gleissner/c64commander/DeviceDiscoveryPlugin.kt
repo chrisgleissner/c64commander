@@ -16,6 +16,7 @@ import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import java.io.BufferedReader
+import java.io.IOException
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.Inet4Address
@@ -234,21 +235,25 @@ class DeviceDiscoveryPlugin : Plugin() {
       val resolvedAddress = resolveHostAddress(target.host)
 
       val responseCode = connection.responseCode
-      if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+      // A password-protected Ultimate gates every /v1/* route behind the `X-Password`
+      // header, so an unauthenticated discovery probe is answered with 401 Unauthorized
+      // OR 403 Forbidden — current firmware returns 403 with a `{"errors":["Forbidden."]}`
+      // body (see 1541ultimate/software/api/routes.h). Either way the device is present
+      // and reachable; surface it as a candidate that needs a password so the app can
+      // prompt for one instead of silently dropping the device from discovery.
+      if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED ||
+        responseCode == HttpURLConnection.HTTP_FORBIDDEN
+      ) {
+        val errorBody = readErrorBody(connection)
         connection.disconnect()
-        return DiscoveryCandidate(
-          address = resolvedAddress,
-          host = target.host.takeUnless { isIpv4Literal(it) },
-          httpPort = target.port,
-          sources = setOf(target.source),
-          product = "C64 Ultimate",
-          firmwareVersion = null,
-          fpgaVersion = null,
-          coreVersion = null,
-          hostname = target.host.takeUnless { isIpv4Literal(it) },
-          uniqueId = null,
-          requiresPassword = true,
-        )
+        // 401 on /v1/info is Ultimate-specific enough to accept on its own. 403 is far
+        // more common from generic web servers/proxies, so only accept it when the body
+        // carries the Ultimate's JSON error envelope — otherwise discovery would pollute
+        // the list with unrelated devices.
+        if (responseCode == HttpURLConnection.HTTP_FORBIDDEN && !looksLikeUltimateErrorBody(errorBody)) {
+          return null
+        }
+        return passwordProtectedCandidate(target, resolvedAddress)
       }
       if (responseCode !in 200..299) {
         connection.disconnect()
@@ -279,9 +284,79 @@ class DeviceDiscoveryPlugin : Plugin() {
         requiresPassword = false,
       )
     } catch (error: Exception) {
-      Log.w(logTag, "Device discovery probe failed for ${target.host}:${target.port}: ${error.message}", error)
+      if (isExpectedProbeMiss(error)) {
+        // An ordinary LAN scan probes hundreds of IPs/hostnames that never answer —
+        // refused connections, timeouts, and DNS failures are EXPECTED misses, not
+        // actionable warnings. Logging each one with a full stack trace floods package
+        // logcat (and hides real issues). Demote the common cases to a one-line debug note.
+        Log.d(
+          logTag,
+          "Device discovery probe miss for ${target.host}:${target.port}: ${error::class.java.simpleName}",
+        )
+      } else {
+        // A non-network failure (e.g. malformed JSON from a host that DID answer
+        // /v1/info with a 2xx) is unexpected and could mask a real discovery bug,
+        // so keep the message and stack trace at warning level.
+        Log.w(
+          logTag,
+          "Unexpected device discovery probe failure for ${target.host}:${target.port}",
+          error,
+        )
+      }
       null
     }
+  }
+
+  /**
+   * Network-level failures (refused/timeout/DNS/reset) are the expected outcome of
+   * probing the many LAN addresses that never host an Ultimate, so they are demoted to
+   * debug. Anything else — most notably [org.json.JSONException] from a reachable host —
+   * is unexpected and stays at warning level. [IOException] covers the socket and
+   * connection failures thrown by [HttpURLConnection]; JSONException does not extend it,
+   * so malformed payloads correctly fall through to the unexpected branch.
+   */
+  internal fun isExpectedProbeMiss(error: Throwable): Boolean = error is IOException
+
+  private fun passwordProtectedCandidate(target: DiscoveryTarget, resolvedAddress: String): DiscoveryCandidate {
+    val namedHost = target.host.takeUnless { isIpv4Literal(it) }
+    return DiscoveryCandidate(
+      address = resolvedAddress,
+      host = namedHost,
+      httpPort = target.port,
+      sources = setOf(target.source),
+      product = "C64 Ultimate",
+      firmwareVersion = null,
+      fpgaVersion = null,
+      coreVersion = null,
+      hostname = namedHost,
+      uniqueId = null,
+      requiresPassword = true,
+    )
+  }
+
+  internal fun readErrorBody(connection: HttpURLConnection): String =
+    runCatching {
+      val stream = connection.errorStream ?: return ""
+      BufferedReader(InputStreamReader(stream, StandardCharsets.UTF_8)).use { reader ->
+        // Auth errors are tiny JSON envelopes; cap the read so a misbehaving host cannot
+        // stream an unbounded body into a discovery probe worker.
+        val builder = StringBuilder()
+        val buffer = CharArray(512)
+        while (builder.length < 2048) {
+          val read = reader.read(buffer)
+          if (read < 0) break
+          builder.append(buffer, 0, read)
+        }
+        builder.toString()
+      }
+    }.getOrDefault("")
+
+  internal fun looksLikeUltimateErrorBody(body: String): Boolean {
+    val trimmed = body.trim()
+    if (trimmed.isEmpty()) return false
+    // The Ultimate REST API replies with a JSON envelope `{"errors":[...]}` even for auth
+    // failures; a generic 403 page (HTML, proxy text) will not parse to that shape.
+    return runCatching { JSONObject(trimmed).has("errors") }.getOrDefault(false)
   }
 
   internal fun resolveHostAddress(host: String): String =

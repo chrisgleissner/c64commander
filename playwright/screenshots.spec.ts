@@ -2394,7 +2394,11 @@ test.describe("App screenshots", () => {
           await expect(badge).toHaveAttribute("data-health-state", scenario.health);
 
           if (scenario.expectedText) {
-            await expect(badge).toContainText(scenario.expectedText);
+            // Match the problem count as a standalone token so it cannot accidentally
+            // match digits inside the connected-device host (e.g. "12" within
+            // "127.0.0.1"), which previously let this assertion pass without rendering.
+            const escaped = scenario.expectedText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            await expect(badge).toContainText(new RegExp(`(?<![\\d.])${escaped}(?!\\d)`));
           }
 
           await captureScreenshot(page, testInfo, `settings/header/badge-${profileId}-${scenario.fileSuffix}.png`, {

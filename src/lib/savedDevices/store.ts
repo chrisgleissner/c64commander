@@ -900,18 +900,34 @@ export const selectSavedDevice = (deviceId: string) => {
 export const removeSavedDevice = (deviceId: string) => {
   return updateSnapshot((envelope) => {
     const remaining = envelope.devices.filter((device) => device.id !== deviceId);
-    if (!remaining.length) {
-      throw new Error("At least one saved device is required.");
-    }
-    const nextSelectedDeviceId = envelope.selectedDeviceId === deviceId ? remaining[0].id : envelope.selectedDeviceId;
     const nextSummaries = { ...envelope.summaries };
     delete nextSummaries[deviceId];
+    const nextSummaryLru = envelope.summaryLru.filter((entry) => entry !== deviceId);
+
+    // Deleting the very last saved device is allowed — including the one currently
+    // connected. The rest of the app assumes a selected device always exists (the
+    // snapshot's `selectedDeviceId` is non-nullable and consumers never guard for an
+    // empty list), so instead of leaving zero devices we reset to a fresh default
+    // device: the same bootstrap used on first launch. The user's device (and its
+    // password/summaries) is gone; a clean default takes its place.
+    if (!remaining.length) {
+      const replacement = createLegacyDevice();
+      return {
+        ...envelope,
+        selectedDeviceId: replacement.id,
+        devices: [replacement],
+        summaries: {},
+        summaryLru: [],
+      };
+    }
+
+    const nextSelectedDeviceId = envelope.selectedDeviceId === deviceId ? remaining[0].id : envelope.selectedDeviceId;
     return {
       ...envelope,
       selectedDeviceId: nextSelectedDeviceId,
       devices: remaining,
       summaries: nextSummaries,
-      summaryLru: envelope.summaryLru.filter((entry) => entry !== deviceId),
+      summaryLru: nextSummaryLru,
     };
   });
 };

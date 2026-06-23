@@ -30,7 +30,7 @@ import { addErrorLog } from "@/lib/logging";
 import { resolveAudioMixerResetValue } from "@/lib/config/audioMixer";
 import { useRefreshControl } from "@/hooks/useRefreshControl";
 import { isAudioMixerValueEqual } from "@/lib/config/audioMixer";
-import { getC64API, type ConfigCategory, type ConfigResponse } from "@/lib/c64api";
+import { BACKGROUND_REQUEST_TIMEOUT_MS, getC64API, type ConfigCategory, type ConfigResponse } from "@/lib/c64api";
 import { cn } from "@/lib/utils";
 import { buildSoloRoutingUpdates, isSidVolumeName, soloReducer } from "@/lib/config/audioMixerSolo";
 import { normalizeConfigItem, type NormalizedConfigItem } from "@/lib/config/normalizeConfigItem";
@@ -88,6 +88,10 @@ function configListItemsEqual(a: ConfigListItem[], b: ConfigListItem[]): boolean
 // default variant (no FocusNavigationProvider listener).
 const CONFIG_CATEGORY_FOCUS_ORDER_BASE = 100;
 const CONFIG_CATEGORY_FOCUS_ORDER_STEP = 10;
+const CONFIG_BROWSER_QUERY_OPTIONS = {
+  ...VISIBLE_C64_QUERY_OPTIONS,
+  timeoutMs: BACKGROUND_REQUEST_TIMEOUT_MS,
+};
 
 const DHCP_STATIC_FIELDS = new Set(["Static IP", "Static Netmask", "Static Gateway", "Static DNS"]);
 const CLOCK_MONTH_OPTIONS = [
@@ -148,7 +152,7 @@ function CategorySection({
     group: "config-categories",
   });
   const [isResetting, setIsResetting] = useState(false);
-  const { data: categoryData, isLoading, refetch } = useC64Category(categoryName, isOpen, VISIBLE_C64_QUERY_OPTIONS);
+  const { data: categoryData, isLoading, refetch } = useC64Category(categoryName, isOpen, CONFIG_BROWSER_QUERY_OPTIONS);
   const setConfig = useC64SetConfig();
   const updateConfigBatch = useC64UpdateConfigBatch();
   const isAudioMixer = categoryName === "Audio Mixer";
@@ -814,7 +818,7 @@ function CategorySection({
 
 export default function ConfigBrowserPage() {
   const { status, runtimeBaseUrl } = useC64Connection();
-  const { data: categoriesData, isLoading, isError, error, refetch } = useC64Categories(VISIBLE_C64_QUERY_OPTIONS);
+  const { data: categoriesData, isLoading, isError, error, refetch } = useC64Categories(CONFIG_BROWSER_QUERY_OPTIONS);
   const [searchQuery, setSearchQuery] = useState("");
   const { setConfigExpanded } = useRefreshControl();
   const markChanged = useCallback(() => {

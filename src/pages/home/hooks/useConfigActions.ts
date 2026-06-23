@@ -56,6 +56,7 @@ export function useConfigActions() {
       if (options.clearPendingOnSuccess) {
         authoritativeValues.clearEntry(key);
       }
+      return true;
     } catch (error) {
       authoritativeValues.restoreEntry(key, previousEntry);
       reportUserError({
@@ -68,6 +69,7 @@ export function useConfigActions() {
           ? undefined
           : () => void updateConfigValue(category, itemName, value, operation, successTitle, options),
       });
+      return false;
     }
   });
 

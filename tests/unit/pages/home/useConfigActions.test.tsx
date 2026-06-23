@@ -75,6 +75,23 @@ describe("useConfigActions", () => {
     expect(result.current.configWritePending).toEqual({ "Audio:Volume": true });
   });
 
+  it("resolves true on a successful write and false on a failed write", async () => {
+    const { result } = renderHook(() => useConfigActions());
+
+    let okResult: boolean | undefined;
+    await act(async () => {
+      okResult = await result.current.updateConfigValue("Audio", "Volume", 7, "HOME_CONFIG_UPDATE", "Updated");
+    });
+    expect(okResult).toBe(true);
+
+    setConfigValueMock.mockRejectedValueOnce(new Error("write failed"));
+    let failResult: boolean | undefined;
+    await act(async () => {
+      failResult = await result.current.updateConfigValue("Audio", "Volume", 9, "HOME_CONFIG_UPDATE", "Updated");
+    });
+    expect(failResult).toBe(false);
+  });
+
   it("suppresses success toast when requested", async () => {
     const { result } = renderHook(() => useConfigActions());
 

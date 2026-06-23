@@ -169,8 +169,8 @@ not-connected / empty / single-device).
   - WASD/Cursors — select — `home-user-interface-wasd-cursors` — R✅ I✅
   - Color Scheme — select — `home-user-interface-color-scheme` — R✅ I✅
 - **LED — Case Light / Keyboard Light** _(flag `lighting_studio_enabled`)_
-  - Mode / Auto SID / Pattern / Color / Tint / SID select — select/checkbox — `home-led-*`, `home-keyboard-lighting-*` — R✅ I✅
-  - Color slider, Intensity slider — slider ×2 each — R✅ I✅
+  - Mode / Music Detect / Pattern / Color / Tint / SID select — select/checkbox — `home-led-*`, `home-keyboard-lighting-*` — R✅ I✅ when the live config item exists; unsupported live-spec items render disabled as "Not available".
+  - Color slider, Intensity slider — slider ×2 each — R✅ I✅ when the live config item exists; unsupported live-spec items render disabled as "Not available".
 - **Drives** (`data-section-label="Drives"`) — per drive A / B / Soft-IEC:
   - Reset — button — `home-drives-reset` — R✅ I✅
   - Power toggle (ON/OFF) — button — `home-drive-toggle-*` — R✅ I✅
