@@ -38,13 +38,22 @@ test.describe("Demo config from YAML", () => {
     }
   });
 
-  test("config page shows YAML-derived categories", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("config page shows the C64U menu hierarchy with the junk drawer dissolved", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/config");
     await snap(page, testInfo, "config-open");
 
-    await expect(page.getByRole("button", { name: "Audio Mixer" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Network Settings" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "U64 Specific Settings" })).toBeVisible();
-    await snap(page, testInfo, "yaml-categories-visible");
+    // The C64U device (mock /v1/info reports "C64 Ultimate") renders the menu-aligned
+    // hierarchy: settings live under friendly menu pages, not raw REST categories.
+    await expect(page.getByTestId("config-menu-page-video-setup")).toBeVisible();
+    await expect(page.getByTestId("config-menu-page-turbo-boost")).toBeVisible();
+    await expect(page.getByTestId("config-menu-page-network-services-&-timezone")).toBeVisible();
+    // The Audio Mixer page keeps its specialized renderer (header "Audio mixer").
+    await expect(page.getByRole("button", { name: "Audio mixer" })).toBeVisible();
+    // Smart routing places every REST-only leftover on an aligned page, so the residual
+    // Advanced (REST-only) junk drawer is dissolved entirely.
+    await expect(page.getByTestId("config-advanced-fallback")).toHaveCount(0);
+    await snap(page, testInfo, "menu-hierarchy-visible");
   });
 });

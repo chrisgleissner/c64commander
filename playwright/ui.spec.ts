@@ -136,8 +136,9 @@ test.describe("UI coverage", () => {
     }
     await page.goto("/config", { waitUntil: "domcontentloaded" });
     await snap(page, testInfo, "config-open");
-    await expect(page.getByRole("button", { name: "U64 Specific Settings" })).toBeVisible();
-    await page.getByRole("button", { name: "U64 Specific Settings" }).click();
+    // C64U menu hierarchy: System Mode (relabelled "System mode") lives on Video setup.
+    await expect(page.getByTestId("config-menu-page-video-setup")).toBeVisible();
+    await page.getByTestId("config-menu-page-video-setup").click();
 
     const selectTrigger = page.getByLabel("System Mode select");
     await selectTrigger.click();
@@ -167,7 +168,7 @@ test.describe("UI coverage", () => {
 
     const systemModeSelect = page.getByLabel("System Mode select");
     if ((await systemModeSelect.count()) === 0) {
-      await page.getByRole("button", { name: "U64 Specific Settings" }).click();
+      await page.getByTestId("config-menu-page-video-setup").click();
     }
     await expect(systemModeSelect).toBeVisible();
     await expect(systemModeSelect).toContainText("NTSC");
@@ -260,9 +261,9 @@ test.describe("UI coverage", () => {
   test("config page renders and toggles a section", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/config", { waitUntil: "domcontentloaded" });
     await snap(page, testInfo, "config-open");
-    const section = page.getByRole("button", { name: "U64 Specific Settings" });
+    const section = page.getByTestId("config-menu-page-video-setup");
     await section.click();
-    await expect(page.getByText("System Mode")).toBeVisible();
+    await expect(page.getByText("System mode")).toBeVisible();
     await snap(page, testInfo, "section-expanded");
   });
 

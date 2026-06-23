@@ -160,9 +160,9 @@ Browse and edit the full C64 Ultimate configuration: categories, items, sliders,
 
 <table>
   <tr>
-    <td><img src="docs/img/app/config/01-categories.png" alt="Configuration categories" width="360"/></td>
-    <td><img src="docs/img/app/config/sections/01-audio-mixer.png" alt="Configuration audio mixer" width="360"/></td>
-    <td><img src="docs/img/app/config/sections/05-u64-specific-settings.png" alt="Configuration U64 specific" width="360"/></td>
+    <td><img src="docs/img/app/config/01-categories.png" alt="Configuration menu pages" width="360"/></td>
+    <td><img src="docs/img/app/config/sections/03-video-setup.png" alt="Configuration video setup" width="360"/></td>
+    <td><img src="docs/img/app/config/sections/04-audio-mixer.png" alt="Configuration audio mixer" width="360"/></td>
   </tr>
 </table>
 

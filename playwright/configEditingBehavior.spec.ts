@@ -155,7 +155,11 @@ test.describe("Config editing regressions", () => {
       await seedConnection(page, server.baseUrl, buildSnapshot(server.getState()));
       await page.goto("/config", { waitUntil: "domcontentloaded" });
 
-      await page.getByRole("button", { name: "Clock Settings" }).click();
+      // The mock /v1/info reports a C64U, whose menu hierarchy has no Clock Settings page
+      // (it is U64e-only), so Clock Settings renders in the Advanced (REST-only) fallback.
+      // The text-edit commit-on-blur contract is identical; only the navigation differs.
+      const advancedToggle = page.getByTestId("config-advanced-fallback-toggle");
+      await advancedToggle.click();
       const input = page.getByLabel("Clock Year text input");
       await input.click();
       await input.fill("");
@@ -168,7 +172,8 @@ test.describe("Config editing regressions", () => {
       );
       expect(requestsBeforeBlur.length).toBe(0);
 
-      await page.getByRole("button", { name: "Clock Settings" }).click();
+      // Collapsing the fallback blurs the input, committing exactly once.
+      await advancedToggle.click();
 
       await expect
         .poll(() => {
