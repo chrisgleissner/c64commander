@@ -7,12 +7,7 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import {
-  FULL_RAM_SIZE_BYTES,
-  clearRamAndReboot,
-  dumpFullRamImage,
-  loadFullRamImage,
-} from "@/lib/machine/ramOperations";
+import { FULL_RAM_SIZE_BYTES, clearRamAndReboot, dumpFullRamImage } from "@/lib/machine/ramOperations";
 
 const { livenessMock, traceSessionMock, loggingMock } = vi.hoisted(() => ({
   livenessMock: {

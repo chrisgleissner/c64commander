@@ -61,16 +61,18 @@ describe("createSnapshot – program", () => {
     expect(result.displayTimestamp).toMatch(/\d{4}-\d{2}-\d{2}/);
   });
 
-  it("calls saveSnapshotToStore with program type and excludes volatile CIA2 state", async () => {
+  it("calls saveSnapshotToStore with program type covering all RAM and I/O except the stack", async () => {
     await createSnapshot(mockApi, { type: "program" });
     expect(saveSnapshotToStoreMock).toHaveBeenCalledOnce();
     const saved = saveSnapshotToStoreMock.mock.calls[0][0];
     expect(saved.snapshotType).toBe("program");
-    expect(saved.metadata.display_ranges).toEqual(["$0000-$00FF", "$0200-$DCFF", "$DE00-$FFFF"]);
+    // Includes the full I/O region (CIA2 $DD00 carries the VIC bank); only the
+    // stack page $0100-$01FF is excluded. The restore path skips the CIA timer
+    // registers so capturing them here is harmless.
+    expect(saved.metadata.display_ranges).toEqual(["$0000-$00FF", "$0200-$FFFF"]);
     expect(decodeSnapshot(saved.bytes).ranges).toEqual([
       { start: 0x0000, length: 0x0100 },
-      { start: 0x0200, length: 0xdb00 },
-      { start: 0xde00, length: 0x2200 },
+      { start: 0x0200, length: 0xfe00 },
     ]);
   });
 
