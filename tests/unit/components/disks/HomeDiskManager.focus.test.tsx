@@ -40,6 +40,17 @@ vi.mock("@/hooks/useActionTrace", () => ({ useActionTrace: () => (fn: unknown) =
 vi.mock("@/hooks/useLocalSources", () => ({
   useLocalSources: () => ({ sources: [], addSourceFromPicker: vi.fn() }),
 }));
+vi.mock("@/pages/playFiles/hooks/useArchiveClientSettings", () => ({
+  useArchiveClientSettings: () => ({
+    commoserveEnabled: false,
+    archiveConfig: {
+      id: "archive-commoserve",
+      name: "CommoServe",
+      baseUrl: "http://commoserve.files.commodore.net",
+      enabled: false,
+    },
+  }),
+}));
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({
     invalidateQueries: vi.fn(),

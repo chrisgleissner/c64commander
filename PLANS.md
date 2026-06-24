@@ -1,201 +1,69 @@
-# CTA Coverage Certification — Execution Plan
+# Pixel 4 Exhaustive CTA Certification Plan
 
-## Current Gate
+## Current Identity
 
-**PROGRAM COMPLETE — CERTIFY** (2026-06-24)
+- Branch: `test/full-cta-coverage`
+- Git SHA: `414ec2a965d64651881c658cc5df772dd4ed934b`
+- Working tree at continuation start: dirty; existing changes are preserved.
+- Current APK build identity: `android/app/build/outputs/apk/debug/c64commander-0.8.9-414ec-debug.apk`, SHA-256 `b404778e5c617c203009a7b608dbca2149555a45dfdb9c1c21342c2af6225256`, built by `./build --skip-tests --install-apk --device-id 9B081FFAZ001WX`.
+- Current installed package identity: `uk.gleissner.c64commander` versionName `0.8.9-414ec`, versionCode `2037`, firstInstallTime/lastUpdateTime `2026-06-24 22:52:18`, path `/data/app/~~AIeSfoxigZHXtD-Mo6Ky-g==/uk.gleissner.c64commander-ITET5_YkUO8PpJhMlS5JLA==/base.apk`.
+- Pixel 4 target: `9B081FFAZ001WX`.
+- Primary C64U target: `c64u`, password `pwd`, HTTP `80`, FTP `21`, Telnet `23`.
+- Artifact root for this continuation: pending after fresh build/install timestamp, expected shape `c64scope/artifacts/cta-<UTC>Z-pixel4-c64u-414ec2a965d6/`.
 
-All gates 0-7 + 6.5 PROVEN. Code modularization complete. See `docs/testing/agentic-tests/full-cta-coverage/final-report.md` and `cleanup-report.md`.
+## Active Phase
 
-## Proven State (Final)
+Interruption fixes before resuming Phase C/D: the Pixel 4 showed an empty Drive A/B `Mount disk` sheet after clean install, and the Disks `Add items` source picker exposed only Local and C64U while Play exposed CommoServe. These are now active Disks product defects under fix.
 
-- Branch: `test/full-cta-coverage` @ `41b0d368ca06d80f9ffc0e40f10a46e1b11fe380`
-- Pixel 4: serial `9B081FFAZ001WX`, Android 16, SDK 36 — DroidMind-controllable
-- C64U: host=c64u, HTTP=80, FTP=21, Telnet=23, pwd — Connected, live readback confirmed 2026-06-24T16:40Z
-- Gates PROVEN: 0, 1, 2, 3, 4, 5, 6, 6.5, 7
-- `npm run scope:check`: 51 files, 349 tests, all PASS (last: 2026-06-24T18:13Z)
-- **CERTIFICATION STATUS: CERTIFY**
+## Active Surface
 
-## Nothing Remaining
+- Route/page/overlay/flow/CTA group: Disks route, Drive A/B `Mount disk` sheet, disk library import flow, C64U `/USB2/test-data` disk corpus, CommoServe archive source.
+- Product action path: existing `c64scope` runners using `DroidmindClient`; product key input must use `DroidmindClient.pressKey()`.
+- Raw ADB scope: infrastructure identity, APK install, log capture, and package metadata only.
 
-## Commands To Run
+## Exhaustive Inventory Counts
 
-```bash
-# Build and check
-npm run scope:check
+- Runtime CTAs discovered on current APK: `199` discovery rows across `/current`, `/play`, `/disks`, `/config`, `/settings`, and `/docs`; discovery only.
+- Runtime CTAs executed on current APK: current gate slices only; no exhaustive CTA execution ledger yet.
+- Main flows proven on current APK: `1` (`C64U Save-and-Connect`).
+- Unaccounted runtime CTAs: `199` until execution statuses are written; must finish at `0`.
+- Untested main flows: Home, Play, Disks, Config, Settings, Docs, Diagnostics, Device Switcher, Licenses, native pickers, negative paths, lifecycle, performance, reliability, soak, cleanup.
 
-# Gate 3 HIL execution
-npm run scope:cta:gate3 -- --serial 9B081FFAZ001WX --target c64u \
-  --case CTA-GATE3-C64U-SAVE-CONNECT --settle-ms 1800 --start-app
-```
+## Remaining Untested CTAs
 
-## Expected Artifacts
+Unknown until all-route current-APK discovery completes. No discovered CTA may remain without a final row in `exhaustive-cta-ledger-3.md`.
 
-Under `c64scope/artifacts/cta-<UTC>Z-pixel4-c64u-<sha>/`:
-- `environment.json`
-- `mcp-capabilities.json`
-- `gate3-result.json` — PROVEN or BLOCKED + connection status
-- `gate3-summary.md` — human-readable summary
-- `replays/CTA-GATE3-C64U-SAVE-CONNECT.json`
-- `screenshots/pre-action.png`
-- `screenshots/settings-initial.png`
-- `screenshots/settings-host-before.png`
-- `screenshots/settings-host-after.png`
-- `screenshots/pre-save-connect.png`
-- `screenshots/post-save-connect.png`
-- `hierarchies/settings-initial.xml`
-- `hierarchies/settings-host-before.xml`
-- `hierarchies/settings-host-after.xml`
-- `hierarchies/post-save-connect.xml`
+## Remaining Untested Flows
 
-## Safety And Cleanup
+- All-route clean-state discovery.
+- All-route CTA execution, touch pass, keypad-first pass.
+- Gate 3, Gate 4, Gate 5, Gate 6, Gate 6.5, Gate 7 re-run or superseded with deeper evidence.
+- Home, Play, Disks, Config, Settings, Docs/Licenses, Diagnostics, Device Switcher, native picker deep dives.
+- Negative-path matrix, lifecycle matrix, performance timings, reliability repetitions, background playback, soak.
+- Cleanup and final state diff.
 
-- No C64-bound mutation in Gate 3: host change is saved in app only.
-- If BLOCKED: preserve failure screenshots and hierarchy, record blocker in ledger.
-- Restore: if Gate 3 fails mid-way and the host was partially changed, navigate to
-  Settings and restore host to `192.168.1.167`.
+## Current Blockers
 
-## Open Blockers
+- The stricter prompt's named `final-report-2.md`, `cleanup-report-2.md`, `callback-8020-residual-risk.md`, and `cta-runner.md` are absent in the checkout; this is recorded as inherited artifact drift.
+- Generic `scope:cta` still marks discovery rows `CALIBRATION_ONLY`; current certification cannot stop at that runner slice.
+- First current-APK Gate 3 attempt reported `Offline, device not reachable`; Pixel-side HTTP health with `X-Password` succeeded and a redacted Gate 3 rerun proved app-driven recovery.
+- Product defect under fix: Drive A/B `Mount disk` sheet was empty after clean install because it only listed the persisted disk library and exposed no in-sheet way to add disks. Fix in progress adds an in-sheet `Add disks` CTA and will be proven by importing C64U `/USB2/test-data` disk images and mounting at least one disk on Pixel 4.
+- Product defect under fix: Disks `Add items` picker omitted CommoServe. Fix in progress shares Play's CommoServe archive source wiring with Disks and imports selected archive disk images into the disk library as runtime mountable local files.
+- Gate 6.5 Config block was reclassified: direct clean Config navigation discovered 28 controls and showed connected `c64u`; the earlier block was caused by the stale empty Mount disk sheet swallowing `KEY_4`.
 
-1. Gate 3 target resolution pending HIL execution.
-2. C64Bridge points at VICE (not needed for Gate 3).
-3. Capture infrastructure unknown (not needed for Gate 3).
+## Concrete Next Command Or DroidMind Action
 
-## Completion Criteria
+1. Run targeted regression tests for the empty mount sheet Add disks CTA and Disks CommoServe source/import path.
+2. Build and install the patched APK on Pixel 4.
+3. Use DroidMind to verify the Disks Add items popup shows Local, C64U, and CommoServe.
+4. Use DroidMind to import C64U `/USB2/test-data` disk images through the visible Add disks picker and mount a representative disk.
+5. Resume all-route CTA execution and Disks deep dive from the corrected state.
 
-Gate 3 is complete when ONE of:
-A) `gate3-result.json` shows `status: "PROVEN"` with screenshots showing host=c64u
-   and app-visible connection status confirming C64U target identity.
-B) `gate3-result.json` shows `status: "BLOCKED"` with failure screenshots, exact
-   failure point, and fallback decision (U64 or continue).
+## Cleanup Requirements
 
----
-
-# Prior Plan: Menu ⇄ REST config mapping — adversarial hardening (2026-06-23)
-
-Branch: `feat/align-ux-with-device-menu`. Prior task content.
-Evidence trail at `WORKLOG.md`. Last commit at `6bfb766a`.
-
-## 1. Scope boundaries
-
-In scope:
-- Adversarial review + cleanup of the menu⇄REST mapping: `src/lib/config/menuMapping/*`,
-  `src/pages/config/*`, `src/pages/ConfigBrowserPage.tsx`, the compiler
-  (`scripts/compile-menu-mapping.mjs`), association YAML, authoring helper
-  (`scripts/menu-mapping/draft_association.py`), `.github/skills/menu-mapping-authoring/SKILL.md`,
-  and the feature's unit/E2E tests + screenshots.
-- Closing the named gaps (routing of `C64U Model` / `Tape Playback Rate`; `Disk swap delay`
-  / `Loop delay` units; residual Advanced fallback; on-device validation disposition).
-- Deterministic regression tests for every behavior change.
-
-Out of scope (explicit):
-- Broad UI redesign outside the config browser; firmware/REST contract changes;
-  replacing the config edit pipeline; large dep upgrades; cosmetic churn outside
-  touched areas; weakening tests to go green.
-- Generic `details.format` rendering in the shared `ConfigItemRow` (see Phase 3 — it
-  affects ~108 items across devices and is a separate, app-wide change).
-
-## 2. Assumptions
-
-- REST `GET /v1/configs` is the source of truth; menu hierarchy + terminology are
-  presentation layers (confirmed in code: `projectConfigToMenu`, `resolveMenuMapping`).
-- The captured `c64u-menu.yaml` is the label/structure authority for C64U 1.1.0; it is
-  an extraction and may be incomplete (its own header says so). Items absent from it
-  have no evidence-backed menu home.
-- Only C64U has a captured hierarchy; U64/U64E/U2/unknown → REST-grouped layout.
-- HIL hardware may be unavailable / C64U password-protected; that is an external
-  blocker to record, not a pass.
-
-## 3. Ordered phases
-
-- P0 Baseline + evidence inventory (architecture map, baseline gates). — DONE
-- P1 Verification matrix (lossless + write-back proofs across device/firmware/alias). — DONE
-- P2 Advanced-routing adversarial review (resolve `C64U Model`, `Tape Playback Rate`,
-  audit every keyword/default/sole-owner rule). — DONE
-- P3 Unit/multiplier verification (`Disk swap delay`, `Loop delay`). — DONE
-- P4 Overlay/label cleanup. — DONE (verified already-correct; minimal change)
-- P5 Source pipeline + authoring cleanup (compiler/association/SKILL/draft helper). — DONE
-- P6 UI integration review (hierarchy vs REST-grouped, aliases, hooks, residual). — DONE
-- P7 E2E / screenshots / HIL. — IN PROGRESS (E2E run; HIL disposition recorded)
-- P8 Cleanup + regression hardening. — DONE
-- P9 Final validation loop. — IN PROGRESS
-- P10 GitHub completion (commit / push / PR). — PENDING
-- P11 Performance: measure config-section expansion latency (collapse→all-items-rendered)
-  and remove the bottleneck without hacks or benchmark-gaming. — DONE. Diagnosed the per-row
-  N+1 option-fetch storm (device returns scalars; no bulk endpoint) and that the per-row read
-  ignored the existing persistent firmware-namespaced enrichment cache. Fix: made `ConfigItemRow`
-  serve firmware-static options synchronously from that cache, falling back to the network only
-  on a miss. On-device (real C64U): Modems 7988→223 ms, Printers 821→277 ms, User interface
-  880→348 ms; outliers/timeouts eliminated. Regression test added; gates green.
-
-## 4. Task checklist
-
-- [x] Map real architecture; record in WORKLOG.
-- [x] Baseline: `menu-mapping:check` + targeted unit tests green.
-- [x] P2: remove evidence-less `categoryDefaults`; keep keyword + sole-owner tiers;
-      route unplaceable leftovers to the labelled residual Advanced section.
-- [x] P2: update `advancedRouting.test.ts`, `projectConfigToMenu.test.ts`,
-      `ConfigBrowserPageMenuMode.test.tsx` to encode evidence-based routing.
-- [x] P3: document verified units; add raw display+write-back regression test.
-- [x] P1: confirm/extend matrix tests (later-firmware fallback, U64E null, U2 synthetic,
-      never-seen category, alias, primary edit, Audio Mixer).
-- [x] P4/P5: README + SKILL doc accuracy; `restKey` collision robustness; dead-code finding.
-- [ ] P9: full unit suite + lint/typecheck/build + relevant E2E config specs.
-- [ ] P7: screenshots if UI changed; HIL attempt or documented blocker.
-- [ ] P10: commit, push, PR, converge.
-
-## 5. Acceptance gates
-
-- `menu-mapping:compile` succeeds; `menu-mapping:check` reports no drift.
-- Targeted mapping + config-browser tests pass; full unit suite passes.
-- `lint` (format + eslint + typecheck + drift checks) passes; `build` succeeds.
-- Lossless invariant holds on every fixture: `renderedRestKeySet == liveRestKeySet`.
-- Every edit writes the canonical REST `{category,item}` (PUT), aliases share one cell.
-- Residual Advanced fallback is lossless, explicitly labelled, and tested.
-- No known gap without a final disposition here + in WORKLOG.
-
-## 6. Current status
-
-P0–P6, P8 complete. Code + tests changed for P2 + P3. P9 (full gates) and P7/P10
-(E2E/screenshots/HIL/PR) in progress. See WORKLOG for the evidence trail.
-
-## 7. Open risks
-
-- HIL: RESOLVED — validated on real U64E (REST-grouped path) AND real C64U (menu mode +
-  residual Advanced section), incl. the live-only ARMSID unknown-category proof. The c64u
-  exhibits intermittent overload drop-outs (documented; recovered via Retry), not a regression.
-- Moving `C64U Model` / `Tape` / `SoftIEC` / `Data Streams` into the residual Advanced
-  section is a deliberate UX change from the prior "dissolve the drawer" goal; it is the
-  evidence-based, lossless, honest placement (invariant #7). Trivially reversible per
-  category if device-menu evidence later places one.
-- Screenshots for the C64U config surface change (a residual Advanced section now exists);
-  recapture is P5-priority.
-
-## 8. Final disposition of every known gap
-
-- **C64U on-device validation** — Disposition: **PASSED** on real hardware. Hardening APK
-  (`0.8.9-6f367`) built+installed to Pixel `9B081FFAZ001WX`, connected to the real C64U
-  (firmware 1.1.0, password supplied by the user and handled without leaking it). Config
-  renders the menu hierarchy + the residual **Advanced (REST-only)** section containing
-  C64U Model (Starlight Edition), SoftIEC, Tape Playback Rate (0.98 MHz PAL), Data Streams,
-  AND the live-only **ARMSID in Socket 1/2** categories (absent from every fixture) —
-  proving the unknown-category invariant on real hardware. The c64u flaked once on handover
-  (documented overload drop-out); a Retry recovered to HEALTHY. Evidence PNGs in the session
-  scratchpad. See WORKLOG P7.
-- **`C64U Model` routing** — Was: `categoryDefaults["U64 Specific Settings"]="Video setup"`
-  (only this item reached it; misleading — it is a hardware edition, not a video setting).
-  Evidence: absent from `c64u-menu.yaml`; REST options BASIC Beige/Starlight/Founders.
-  Disposition: removed the default → renders in the labelled residual **Advanced (REST-only)**
-  section (lossless, canonical write-back, tested).
-- **`Tape Playback Rate` routing** — Was: `categoryDefaults["Tape Settings"]="Built-in drive A"`
-  (topically wrong — a cassette setting on the disk-drive page). Evidence: no Tape page in
-  `c64u-menu.yaml`. Disposition: removed the default → residual Advanced section.
-- **`Disk swap delay` units** — VERIFIED from REST schema `format: "%d00 ms"` (value×100 ms;
-  min 1 max 10 → 100..1000 ms). The shared control ignores `details.format` app-wide (dead
-  `mergedDetails` in `ConfigItemRow`), affecting ~108 items — a generic fix is out of scope.
-  Disposition: value kept RAW; verified unit documented; regression test pins raw display +
-  raw write-back. No invented multiplier in the menu layer.
-- **`Loop delay` units** — VERIFIED from REST schema `format: "%d0 ms"` (value×10 ms; min 1
-  max 20 → 10..200 ms). Same disposition as Disk swap delay.
-- **Residual Advanced fallback** — Confirmed lossless + explicitly labelled
-  ("Advanced (REST-only) settings"), self-hiding when empty. Now legitimately non-empty on
-  C64U (holds `C64U Model`, SoftIEC, Tape, Data Streams). Tested.
+- Restore saved device to `c64u`.
+- Restore host/password/HTTP/FTP/Telnet fields to `c64u`/`pwd`/`80`/`21`/`23`.
+- Stop playback and clear temporary playlists.
+- Eject test disks and restore drive state where safe.
+- Restore theme, display profile, orientation, fullscreen options, and every app-local or C64 config setting changed during the run.
+- Export final diagnostics, capture final screenshot/hierarchy, confirm app-visible connected state, and write `cleanup-report-3.md`.

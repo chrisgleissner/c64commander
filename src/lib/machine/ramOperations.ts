@@ -20,8 +20,21 @@ const READ_CHUNK_SIZE_BYTES = 0x1000;
 const WRITE_CHUNK_SIZE_BYTES = 0x1000;
 const WAIT_BETWEEN_RETRIES_MS = 120;
 const DEFAULT_RETRY_ATTEMPTS = 2;
+// Volatile CIA timer / TOD / serial / interrupt / control registers (and their
+// 16-byte register mirrors up to the end of each CIA page). Restoring these
+// from a snapshot reprograms the jiffy IRQ timer (CIA1 Timer A latch at
+// $DC04/$DC05): the firmware's readmem returns the live down-counter, and
+// writing it back as the latch shortens the IRQ period. That manifests as the
+// cursor blinking faster on every consecutive restore. Port A/B ($xx00/$xx01)
+// are intentionally writable so screen snapshots can restore the VIC bank.
+const CIA1_VOLATILE_START = 0xdc02;
+const CIA1_VOLATILE_END_EXCLUSIVE = 0xdd00;
 const CIA2_VOLATILE_START = 0xdd02;
 const CIA2_VOLATILE_END_EXCLUSIVE = 0xde00;
+
+const isVolatileIoAddress = (address: number) =>
+  (address >= CIA1_VOLATILE_START && address < CIA1_VOLATILE_END_EXCLUSIVE) ||
+  (address >= CIA2_VOLATILE_START && address < CIA2_VOLATILE_END_EXCLUSIVE);
 
 type RamRange = {
   start: number;
@@ -386,8 +399,59 @@ export const clearRamAndReboot = async (api: C64API) => {
 };
 
 /**
+ * Writes a single snapshot range to C64 memory, splitting it around the
+ * volatile CIA register windows so those are never overwritten. Each writable
+ * sub-range is written directly in chunks.
+ */
+const writeSnapshotRange = async (
+  api: C64API,
+  start: number,
+  bytes: Uint8Array,
+  onRetry: (error: Error, attempt: number, maxAttempts: number) => Promise<void>,
+) => {
+  let offset = 0;
+  while (offset < bytes.length) {
+    if (isVolatileIoAddress(start + offset)) {
+      offset += 1;
+      continue;
+    }
+    let end = offset;
+    while (end < bytes.length && !isVolatileIoAddress(start + end)) {
+      end += 1;
+    }
+    for (let chunkStart = offset; chunkStart < end; chunkStart += WRITE_CHUNK_SIZE_BYTES) {
+      const chunkEnd = Math.min(end, chunkStart + WRITE_CHUNK_SIZE_BYTES);
+      const address = toHexAddress(start + chunkStart);
+      const chunk = bytes.subarray(chunkStart, chunkEnd);
+      recordRamTrace({ operation: "ram-write", status: "start", address, expectedLength: chunk.length });
+      await withRetry(
+        `Write RAM snapshot chunk at $${address}`,
+        () => api.writeMemoryBlock(address, chunk),
+        DEFAULT_RETRY_ATTEMPTS,
+        onRetry,
+      );
+      recordRamTrace({
+        operation: "ram-write",
+        status: "success",
+        address,
+        expectedLength: chunk.length,
+        actualLength: chunk.length,
+      });
+    }
+    offset = end;
+  }
+};
+
+/**
  * Writes a set of (address, bytes) pairs to C64 memory.
  * Used for restoring typed RAM snapshots from the snapshot store.
+ *
+ * Only the snapshot's own bytes are written; memory outside the snapshot keeps
+ * its live value by simply not being touched. Crucially we do NOT read and
+ * write back the full $0000-$FFFF image: that round-tripped the live I/O region
+ * and corrupted the CIA1 jiffy timer, making the cursor blink faster on every
+ * consecutive restore. Volatile CIA timer/interrupt registers are skipped even
+ * when a snapshot range happens to cover them.
  */
 export const loadMemoryRanges = async (api: C64API, ranges: Array<{ start: number; bytes: Uint8Array }>) => {
   if (ranges.length === 0) {
@@ -404,21 +468,8 @@ export const loadMemoryRanges = async (api: C64API, ranges: Array<{ start: numbe
   await ensureLiveness(api, "Load RAM Snapshot");
   const onRetry = async () => recoverFromLivenessFailure(api, "Load RAM Snapshot");
   await runPaused(api, "Load RAM Snapshot", async () => {
-    const image = await readRanges(api, FULL_RAM_RANGE, onRetry);
     for (const { start, bytes } of ranges) {
-      let sourceOffset = 0;
-      while (sourceOffset < bytes.length) {
-        const absoluteStart = start + sourceOffset;
-        if (absoluteStart >= CIA2_VOLATILE_START && absoluteStart < CIA2_VOLATILE_END_EXCLUSIVE) {
-          sourceOffset = Math.min(bytes.length, CIA2_VOLATILE_END_EXCLUSIVE - start);
-          continue;
-        }
-        const nextVolatileStart =
-          absoluteStart < CIA2_VOLATILE_START ? Math.min(bytes.length, CIA2_VOLATILE_START - start) : bytes.length;
-        image.set(bytes.subarray(sourceOffset, nextVolatileStart), absoluteStart);
-        sourceOffset = nextVolatileStart;
-      }
+      await writeSnapshotRange(api, start, bytes, onRetry);
     }
-    await writeFullImage(api, image, onRetry);
   });
 };

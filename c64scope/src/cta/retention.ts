@@ -24,6 +24,9 @@ async function isSuccessfulRun(runDir: string): Promise<boolean> {
     };
     return (results.coverageSummary?.byStatus?.["FAIL"] ?? 0) === 0;
   } catch (error: unknown) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return false;
+    }
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Unable to inspect CTA run results for retention at ${runDir}: ${message}`);
   }

@@ -114,6 +114,7 @@
     "scope:check": "cd c64scope && npm run check",
     "scope:cta": "cd c64scope && npm run build && npm run cta --",
     "scope:cta:discover": "cd c64scope && npm run build && npm run cta:discover --",
+    "scope:cta:discover-routes": "cd c64scope && npm run build && npm run cta:discover-routes --",
     "scope:cta:gate3": "cd c64scope && npm run build && npm run cta:gate3 --",
     "scope:cta:gate4": "cd c64scope && npm run build && npm run cta:gate4 --",
     "scope:cta:gate5": "cd c64scope && npm run build && npm run cta:gate5 --",

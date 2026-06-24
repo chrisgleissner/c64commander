@@ -116,6 +116,17 @@ vi.mock("@/hooks/useLocalSources", () => ({
     addSourceFromFiles: mockAddSourceFromFiles,
   }),
 }));
+vi.mock("@/pages/playFiles/hooks/useArchiveClientSettings", () => ({
+  useArchiveClientSettings: () => ({
+    commoserveEnabled: false,
+    archiveConfig: {
+      id: "archive-commoserve",
+      name: "CommoServe",
+      baseUrl: "http://commoserve.files.commodore.net",
+      enabled: false,
+    },
+  }),
+}));
 
 vi.mock("@/hooks/useListPreviewLimit", () => ({
   useListPreviewLimit: () => ({ limit: 100 }),

@@ -145,8 +145,20 @@ describe("screen snapshot roundtrip", () => {
     expect(Array.from(await api.readMemory("0400", 16))).toEqual(Array.from(baseline));
     expect(api.pauseCount).toBe(2);
     expect(api.resumeCount).toBe(2);
-    const restoreWrite = api.writeCalls.at(-1);
-    expect(restoreWrite?.address).toBe("0000");
-    expect(restoreWrite?.data.length).toBe(0x10000);
+
+    // The restore writes the snapshot's own ranges directly instead of
+    // round-tripping the whole $0000-$FFFF image (which corrupted CIA1 timing
+    // and sped up the cursor blink). No write covers the full image, the
+    // colour RAM is still restored, and no write lands inside a volatile CIA
+    // timer/interrupt window.
+    const restoreWrites = api.writeCalls.slice(1); // calls[0] is the $0400 mutation above
+    expect(restoreWrites.every((c) => c.data.length < 0x10000)).toBe(true);
+    expect(restoreWrites.some((c) => c.address === "D800")).toBe(true);
+    const intersects = (a: number, len: number, s: number, e: number) => a < e && a + len > s;
+    for (const c of restoreWrites) {
+      const a = parseInt(c.address, 16);
+      expect(intersects(a, c.data.length, 0xdc02, 0xdd00)).toBe(false);
+      expect(intersects(a, c.data.length, 0xdd02, 0xde00)).toBe(false);
+    }
   });
 });

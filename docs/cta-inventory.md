@@ -230,6 +230,8 @@ Per drive (A / B / Soft-IEC):
 
 Disk library: Add disks — button — R✅ I✅ ; Filter disks — text — `list-filter-input` — R✅ I✅ ; Select all — button — `disk-list-toggle-select-all` — R✅ I✅ `[disabled: empty]`.
 
+Mount disk sheet: Available disks list — filter text — `list-filter-input` — R✅ I✅ ; Mount disk row action — button — R✅ I✅ ; Add disks — button — `mount-sheet-add-disks` — R✅ I✅ `[visible when library empty]`; Add disks source picker Local / C64U / CommoServe — buttons — `import-option-*` — R✅ I✅.
+
 ### 4.4 Config (`/config`)
 
 - Search categories — search/text — R✅ I✅

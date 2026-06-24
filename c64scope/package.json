@@ -17,6 +17,7 @@
     "check": "npm run build && npm run test",
     "cta": "node dist/cta/runner.js",
     "cta:discover": "node dist/cta/discover.js",
+    "cta:discover-routes": "node dist/cta/discoverRoutes.js",
     "cta:gate3": "node dist/cta/gate3.js",
     "cta:gate4": "node dist/cta/gate4.js",
     "cta:gate5": "node dist/cta/gate5.js",

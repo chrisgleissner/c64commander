@@ -11,6 +11,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { buildReplaySpec, replayCommand, type RecordedAction } from "./replay.js";
 import { recordedAction } from "./replay.js";
+import { redactSecretLiterals } from "./redaction.js";
 import { resolveAdbSerial, resolvePreferredPhysicalTestDeviceSerial } from "../deviceRegistry.js";
 import { resolveWorkspaceRoot, timestampId } from "../fullAppCoverageExecutor.js";
 import { DroidmindClient } from "../validation/droidmindClient.js";
@@ -25,7 +26,14 @@ import {
   findVisibleBoundsByResourceId,
   findVisibleBoundsByText,
 } from "./uiHelpers.js";
-import { APP_PACKAGE, captureState, gitSha, readFlagValue, scrollUntilVisible } from "./runnerCommon.js";
+import {
+  APP_PACKAGE,
+  captureState,
+  gitSha,
+  readFlagValue,
+  redactUiHierarchySecrets,
+  scrollUntilVisible,
+} from "./runnerCommon.js";
 
 // Android key codes used in this runner
 const KEYCODES = {
@@ -40,6 +48,12 @@ const START_APP_SETTLE_MS = 2500;
 const CONNECT_WAIT_MS = 10000;
 const MAX_SCROLL_ATTEMPTS = 8;
 const CHAR_DELETE_MS = 80;
+const TEST_PASSWORD = "pwd";
+const REDACTED = "[REDACTED]";
+
+export function redactGate3SecretText(value: string): string {
+  return redactSecretLiterals(value, [TEST_PASSWORD]);
+}
 
 interface Gate3Args {
   serial?: string;
@@ -86,7 +100,7 @@ export async function main(): Promise<void> {
   const recordedActions: RecordedAction[] = [];
 
   function addStep(msg: string): void {
-    steps.push(`[${new Date().toISOString()}] ${msg}`);
+    steps.push(`[${new Date().toISOString()}] ${redactGate3SecretText(msg)}`);
   }
 
   function recordStep(stepId: string, actionType: string, result: "PASS" | "FAIL" | "INCONCLUSIVE"): void {
@@ -168,7 +182,7 @@ export async function main(): Promise<void> {
 
     // Pre-action state capture
     addStep("pre-action capture");
-    const preXml = await captureState(client, serial, artifactDir, "pre-action");
+    const preXml = await captureState(client, serial, artifactDir, "pre-action", [TEST_PASSWORD]);
     recordStep("pre-action", "screenshot", "PASS");
     const preStatus = findContentDescContaining(preXml, "Connected");
     addStep(`Pre-action status badge: ${preStatus ?? "not found"}`);
@@ -177,7 +191,7 @@ export async function main(): Promise<void> {
     addStep("navigate to Settings (KEY_5)");
     await client.pressKey(serial, KEYCODES.KEY_5);
     await delay(args.settleMs);
-    const settingsInitXml = await captureState(client, serial, artifactDir, "settings-initial");
+    const settingsInitXml = await captureState(client, serial, artifactDir, "settings-initial", [TEST_PASSWORD]);
     recordStep("settings-initial", "key:KEY_5", "PASS");
     addStep("Settings page captured");
 
@@ -203,6 +217,8 @@ export async function main(): Promise<void> {
       "scroll-to-host",
       args.settleMs,
       (xml) => findVisibleBoundsByResourceId(xml, "settings-device-host"),
+      MAX_SCROLL_ATTEMPTS,
+      [TEST_PASSWORD],
     );
 
     if (!hostResult) {
@@ -226,12 +242,11 @@ export async function main(): Promise<void> {
     await client.tap(serial, hx, hy);
     await delay(500);
 
-    // Move cursor to end of field, then delete existing content
     addStep("clearing host field (MOVE_END + DEL × 15)");
-    await client.shell(serial, "input keyevent 123"); // KEYCODE_MOVE_END
+    await client.pressKey(serial, KEYCODES.MOVE_END);
     await delay(200);
     for (let i = 0; i < 15; i++) {
-      await client.shell(serial, "input keyevent 67"); // KEYCODE_DEL (backspace)
+      await client.pressKey(serial, KEYCODES.DEL);
       await delay(CHAR_DELETE_MS);
     }
     await delay(300);
@@ -242,13 +257,11 @@ export async function main(): Promise<void> {
     await delay(500);
 
     // Capture host field after change
-    const hostAfterXml = await captureState(client, serial, artifactDir, "settings-host-after");
+    const hostAfterXml = await captureState(client, serial, artifactDir, "settings-host-after", [TEST_PASSWORD]);
     recordStep("settings-host-after", "input_text:c64u", "PASS");
     hostAfter = findTextByResourceId(hostAfterXml, "settings-device-host");
     addStep(`Host field value after edit: ${hostAfter}`);
 
-    // Edit password field if not already "pwd". The password field may show "" via
-    // UIAutomator when it differs from "pwd" (or when the previous device had none).
     const pwdBounds = findVisibleBoundsByResourceId(hostAfterXml, "password");
     passwordObserved = findTextByResourceId(hostAfterXml, "password");
     addStep(`Password field value before edit: ${passwordObserved ?? "(not found)"}`);
@@ -258,15 +271,15 @@ export async function main(): Promise<void> {
       await client.tap(serial, centerX(pwdBounds), centerY(pwdBounds));
       await delay(400);
       addStep("clearing password field (MOVE_END + DEL × 10)");
-      await client.shell(serial, "input keyevent 123");
+      await client.pressKey(serial, KEYCODES.MOVE_END);
       await delay(150);
       for (let i = 0; i < 10; i++) {
-        await client.shell(serial, "input keyevent 67");
+        await client.pressKey(serial, KEYCODES.DEL);
         await delay(CHAR_DELETE_MS);
       }
       await delay(200);
-      addStep("typing password: pwd");
-      await client.inputText(serial, "pwd");
+      addStep(`typing password: ${REDACTED}`);
+      await client.inputText(serial, TEST_PASSWORD);
       await delay(400);
       // Re-read password to confirm (UIAutomator may still show "" for masked fields)
       const pwdAfterXml = await client.captureUiHierarchy(serial);
@@ -293,6 +306,8 @@ export async function main(): Promise<void> {
       (xml) =>
         findVisibleBoundsByText(xml, "Save & Connect") ??
         findVisibleBoundsByText(xml, "Save &amp; Connect"),
+      MAX_SCROLL_ATTEMPTS,
+      [TEST_PASSWORD],
     );
 
     if (!saveResult) {
@@ -317,7 +332,7 @@ export async function main(): Promise<void> {
       );
       await client.scrollDown(serial);
       await delay(args.settleMs);
-      saveXml = await client.captureUiHierarchy(serial);
+      saveXml = redactUiHierarchySecrets(await client.captureUiHierarchy(serial), [TEST_PASSWORD]);
       await writeFile(path.join(artifactDir, "hierarchies", "pre-save-scroll.xml"), saveXml, "utf-8");
       const adjustedBounds =
         findVisibleBoundsByText(saveXml, "Save & Connect") ??
@@ -353,7 +368,7 @@ export async function main(): Promise<void> {
     await delay(CONNECT_WAIT_MS);
 
     // Capture post-connect state at current scroll position.
-    const postXml = await captureState(client, serial, artifactDir, "post-save-connect");
+    const postXml = await captureState(client, serial, artifactDir, "post-save-connect", [TEST_PASSWORD]);
     recordStep("post-save-connect", "tap:save-connect", "PASS");
 
     // Capture any immediately-visible status info (may be scrolled to button area).
@@ -372,7 +387,7 @@ export async function main(): Promise<void> {
       await delay(400);
     }
     await delay(800);
-    const topXml = await captureState(client, serial, artifactDir, "post-save-connect-top");
+    const topXml = await captureState(client, serial, artifactDir, "post-save-connect-top", [TEST_PASSWORD]);
     const topStatus =
       findContentDescContaining(topXml, "Connected") ??
       findContentDescContaining(topXml, "Offline") ??
@@ -449,7 +464,7 @@ export async function main(): Promise<void> {
     evidence: {
       hostBefore: "see hierarchies/settings-host-before.xml",
       hostAfter,
-      passwordObserved,
+      passwordObserved: passwordObserved === null ? null : REDACTED,
       connectionStatus,
       currentlyUsing,
     },
@@ -472,7 +487,7 @@ export async function main(): Promise<void> {
     "## Evidence",
     `- Host field before: see \`hierarchies/settings-host-before.xml\``,
     `- Host field after change: \`${hostAfter ?? "unknown"}\``,
-    `- Password observed: \`${passwordObserved ?? "unknown"}\``,
+    `- Password observed: \`${passwordObserved === null ? "unknown" : REDACTED}\``,
     `- Connection status: \`${connectionStatus ?? "unknown"}\``,
     `- Currently using: \`${currentlyUsing ?? "unknown"}\``,
     "",

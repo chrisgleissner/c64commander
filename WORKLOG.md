@@ -1,3 +1,140 @@
+# WORKLOG — Full CTA Coverage Hardening Pass
+
+All times 2026-06-24 unless noted.
+
+## Continuation for exhaustive Pixel 4 certification — 2026-06-24T21:48:02Z
+
+- Role/prompt accepted: autonomous continuation for deep Pixel 4 CTA and flow certification on serial `9B081FFAZ001WX`, package `uk.gleissner.c64commander`, target `c64u` with password restored/redacted as required.
+- Read current repo guidance and previous-state files: `README.md`, `REVIEW.md`, `.github/copilot-instructions.md`, `PLANS.md`, `WORKLOG.md`, `docs/testing/agentic-tests/full-cta-coverage/runs/progress-ledger.md`, `docs/testing/agentic-tests/full-cta-coverage/runs/infrastructure-audit.md`, and `docs/testing/agentic-tests/full-cta-coverage/handover4.md`.
+- Required previous hardening artifacts requested by the prompt but missing from the checkout: `final-report-2.md`, `cleanup-report-2.md`, `callback-8020-residual-risk.md`, and `cta-runner.md`.
+- Current branch/SHA confirmed again: `test/full-cta-coverage`, `414ec2a965d64651881c658cc5df772dd4ed934b`.
+- Existing dirty worktree preserved. Notable existing changes include `PLANS.md`, `WORKLOG.md`, `c64scope/src/cta/gate3.ts`, `c64scope/src/cta/retention.ts`, `c64scope/tests/ctaRetention.test.ts`, generated variant/branding files, and untracked CTA audit files.
+- Classification: HIL/device certification with existing executable CTA infrastructure changes. Per AGENTS exception for Pixel 4 HIL loops, current priority is build/install/device proof; coverage is not run before HIL deliverables.
+- Updated `PLANS.md` for the stricter continuation. Active blocker is stale installed APK versus current source state.
+- Next material commands: `npm run scope:check`, then current APK build/install to Pixel 4, package identity capture, launch, baseline screenshot/hierarchy/logcat, and app-driven Gate 3 Save-and-Connect.
+- Ran `npm run scope:check`; passed 52 files / 351 tests. Logs:
+  - `c64scope/artifacts/cta-20260624T214802Z-pixel4-c64u-414ec2a965d6/logs/commands/npm-run-scope-check.stdout.log`
+  - `c64scope/artifacts/cta-20260624T214802Z-pixel4-c64u-414ec2a965d6/logs/commands/npm-run-scope-check.stderr.log`
+- Ran `./build --skip-tests --install-apk --device-id 9B081FFAZ001WX`; Android build succeeded, install initially failed with `INSTALL_FAILED_VERSION_DOWNGRADE` because installed versionCode `2038` was newer than current-source versionCode `2037`.
+- Per repo deploy rule, uninstalled `uk.gleissner.c64commander` from Pixel 4 and installed `android/app/build/outputs/apk/debug/c64commander-0.8.9-414ec-debug.apk`.
+- Fresh APK identity:
+  - APK: `android/app/build/outputs/apk/debug/c64commander-0.8.9-414ec-debug.apk`
+  - SHA-256: `b404778e5c617c203009a7b608dbca2149555a45dfdb9c1c21342c2af6225256`
+  - Installed versionName `0.8.9-414ec`, versionCode `2037`
+  - firstInstallTime/lastUpdateTime `2026-06-24 22:52:18`
+  - package path `/data/app/~~AIeSfoxigZHXtD-Mo6Ky-g==/uk.gleissner.c64commander-ITET5_YkUO8PpJhMlS5JLA==/base.apk`
+- Launched the app through `DroidmindClient`, captured baseline screenshot/hierarchy/logcat:
+  - `c64scope/artifacts/cta-20260624T214802Z-pixel4-c64u-414ec2a965d6/screenshots/baseline-launch.png`
+  - `c64scope/artifacts/cta-20260624T214802Z-pixel4-c64u-414ec2a965d6/hierarchies/baseline-launch.xml`
+  - `c64scope/artifacts/cta-20260624T214802Z-pixel4-c64u-414ec2a965d6/logs/logcat/baseline-launch.log`
+- Baseline after clean reinstall auto-selected/probed `u64` (`192.168.1.13`) before C64U restoration.
+- Ran current Gate 3 Save-and-Connect. First run `cta-20260624T215352Z-pixel4-c64u-414ec2a965d6` was `BLOCKED`: app-visible `Offline, device not reachable` while Settings showed active target `192.168.1.167 · HTTP 80 · FTP 21 · Telnet 23`.
+- Investigated the app-visible offline state:
+  - Pixel 4 ping to `192.168.1.167` and `c64u` succeeded with 0% loss.
+  - Host curl to `http://c64u/v1/info` returned 403 without password and 200 with `X-Password`.
+  - Pixel-side `adb shell curl` to `http://192.168.1.167/v1/info` returned 200 with `X-Password`.
+  - Conclusion: C64U/network/password were healthy; initial Gate 3 offline state was transient/app retry state, not target unreachability.
+- Found a C64Scope evidence redaction defect: Gate 3 result/summary and hierarchy XML exposed the test password. Immediately redacted existing current-run artifacts and patched the runner.
+- Implemented redaction fixes:
+  - `c64scope/src/cta/gate3.ts` now redacts Gate 3 password text in steps, JSON evidence, and Markdown summary.
+  - `c64scope/src/cta/runnerCommon.ts` now supports secret-aware UI hierarchy writes.
+  - Added `c64scope/tests/ctaGate3Redaction.test.ts`.
+  - Added `c64scope/tests/ctaRunnerCommonRedaction.test.ts`.
+- Validation after redaction fixes:
+  - `npm run scope:check` passed 53 files / 352 tests after Gate 3 summary/result redaction.
+  - `npm run scope:check` passed 54 files / 353 tests after hierarchy redaction.
+- Re-ran Gate 3 with fully redacted runner. Canonical current-APK artifact:
+  - `c64scope/artifacts/cta-20260624T220402Z-pixel4-c64u-414ec2a965d6/`
+  - Status `PROVEN`
+  - Connection status `Connected to c64u, system healthy`
+  - Currently using `c64u · HTTP 80 · FTP 21 · Telnet 23`
+  - Redaction scan for `pwd` in the canonical artifact and current command logs returned no matches.
+- Added current-SHA all-route discovery runner and executed it on Pixel 4:
+  - Command: `npm run scope:cta:discover-routes -- --serial 9B081FFAZ001WX --target c64u --start-app --settle-ms 2200 --max-scrolls 12`
+  - Artifact: `c64scope/artifacts/cta-20260624T221006Z-pixel4-c64u-414ec2a965d6/`
+  - Discovery counts: `/current` 43, `/play` 27, `/disks` 26, `/config` 9, `/settings` 76, `/docs` 18, total 199.
+  - Result status remains discovery-only (`CALIBRATION_ONLY` rows), not CTA coverage proof.
+- Ran current-SHA keypad canary:
+  - Command: `npm run scope:cta:keypad -- --serial 9B081FFAZ001WX --target c64u --start-app`
+  - Artifact: `c64scope/artifacts/cta-20260624T221253Z-pixel4-c64u-414ec2a965d6/`
+  - Result: 9/9 passed for digit tabs, Star diagnostics, Pound device switcher, and one touch docs activation.
+- Re-ran Gate 4, Gate 5, Gate 6, and Gate 6.5 on the current APK:
+  - Gate 4 artifact `c64scope/artifacts/cta-20260624T221410Z-pixel4-c64u-414ec2a965d6/`, `PROVEN` Theme Auto -> Dark -> Auto restored.
+  - Gate 5 artifact `c64scope/artifacts/cta-20260624T221549Z-pixel4-c64u-414ec2a965d6/`, 12/12 PASS.
+  - Gate 6 artifact `c64scope/artifacts/cta-20260624T221859Z-pixel4-c64u-414ec2a965d6/`, 16/17 PASS with `/home` `home-ports-tab` blocked because the PORTS control was behind the tab bar.
+  - Gate 6.5 artifact `c64scope/artifacts/cta-20260624T222244Z-pixel4-c64u-414ec2a965d6/`, 11/12 PASS with `/config` initially blocked.
+- Investigated the Gate 6.5 Config block:
+  - Evidence in `gate65` hierarchies showed the `Mount disk to Drive A` sheet was still open, so `KEY_4` was consumed by the overlay.
+  - Direct clean Config navigation via `DroidmindClient.pressKey("KEYCODE_4")` discovered 28 Config controls and showed connected `c64u`.
+  - Evidence: `c64scope/artifacts/cta-20260624T214802Z-pixel4-c64u-414ec2a965d6/screenshots/config-direct-clean.png`, `hierarchies/config-direct-clean.xml`, `diagnostics/config-direct-clean-census.json`.
+  - Decision: reclassify Gate 6.5 Config as overlay contamination from Disks, not a proven Config route outage.
+- User interruption at `2026-06-24T22:28:37Z`: app-visible `Mount disk` dialog was completely empty; user requested a fix and noted disk fixtures under `/home/chris/dev/c64/test-data` and `/USB2/test-data` on `c64u`.
+- Diagnosed the empty dialog root cause in `src/components/disks/HomeDiskManager.tsx`:
+  - Drive A/B `Mount disk` sheet lists only `diskLibrary.disks`.
+  - Clean reinstall left `c64u_disk_library:shared` empty.
+  - Existing Disks page has an Add disks flow, but the mount sheet exposed no Add disks CTA, so it was a dead end.
+- Implemented the product fix:
+  - Added an empty-state `Add disks` CTA inside the Drive A/B mount sheet using the existing `ItemSelectionDialog` and C64U/local source flow.
+  - Added regression test coverage in `tests/unit/components/disks/HomeDiskManager.dialogs.test.tsx`.
+  - Updated `docs/cta-inventory.md` for the new `mount-sheet-add-disks` CTA.
+- Ran focused regression command `npm run test -- tests/unit/components/disks/HomeDiskManager.dialogs.test.tsx`; passed 9/9 tests.
+- Ran `npm run scope:check`; passed 55 files / 356 tests after the mount-sheet fix.
+- Built and installed patched APK on Pixel 4:
+  - APK SHA-256 `664a07f36576b83a22d794cff15ee3c8dbf6a19ca0ab33efc5e4093e6c411385`.
+  - Installed versionName `0.8.9-414ec`, versionCode `2037`, lastUpdateTime `2026-06-24 23:31:57`, package path `/data/app/~~9Gb8mrWG5vFjCQtgoZ59Iw==/uk.gleissner.c64commander-TYAfeYOawuwio8xAH1eIIA==/base.apk`.
+- DroidMind proof attempt `DISKS-MOUNT-EMPTY-FIX-PIXEL4` initially failed its own assertion after tapping Add disks because the Add items dialog was already open over the mount sheet. The screenshots nevertheless prove the new empty-state `Add disks` CTA was visible and opened the Add items source dialog.
+- Follow-up import/mount runner was interrupted after the user identified a second Disks source-picker defect: the Disks Add items popup showed Local and C64U but omitted CommoServe.
+- Diagnosed the CommoServe source omission:
+  - `PlayFilesPage` includes `createArchiveSourceLocation(archiveConfig)` when `commoserve_enabled` is true and passes `archiveConfigs` to `ItemSelectionDialog`.
+  - `HomeDiskManager` only built Local and C64U `sourceGroups`; it did not import the archive source adapter or archive settings.
+- Implemented the CommoServe Disks fix:
+  - `HomeDiskManager` now uses `useArchiveClientSettings`, appends CommoServe to Disks source groups when enabled, and passes `archiveConfigs` to `ItemSelectionDialog`.
+  - Disks archive selections now resolve archive entries, find disk images, download the selected disk image, and add it to the normal disk library with a runtime `File` so it can be mounted through the existing local upload path.
+  - Updated `DocsPage` and `docs/cta-inventory.md` to include CommoServe for Disks Add items.
+  - Added regression coverage that verifies CommoServe appears in the Disks Add items picker and archive disk images are imported as runtime mountable disk entries.
+- Ran targeted disk component suites:
+  - Command: `npm run test -- tests/unit/components/disks/HomeDiskManager.dialogs.test.tsx tests/unit/components/disks/HomeDiskManager.test.tsx tests/unit/components/disks/HomeDiskManager.extended.test.tsx tests/unit/components/disks/HomeDiskManager.branches.test.tsx tests/unit/components/disks/HomeDiskManager.focus.test.tsx tests/unit/components/disks/HomeDiskManager.ui.test.tsx`
+  - Result: 6 files passed, 98 tests passed.
+
+## Phase 0 — infrastructure conformance audit started
+
+- Branch at start: `test/full-cta-coverage`.
+- Git SHA at start: `414ec2a965d64651881c658cc5df772dd4ed934b`.
+- Starting worktree: untracked `docs/testing/agentic-tests/full-cta-coverage/hardening1/`.
+- Read required current-run inputs: full-CTA prompt, handovers 1-4, progress ledger, previous final report, previous cleanup report, `AGENTS.md`, `REVIEW.md`, `.github/copilot-instructions.md`, canonical agentic contracts, and full-app coverage reference docs.
+- Previous final report is historical baseline only: it certifies SHA `41b0d368ca06d80f9ffc0e40f10a46e1b11fe380`, while this pass is auditing SHA `414ec2a965d64651881c658cc5df772dd4ed934b`.
+- Infra identity checks:
+  - Pixel 4 attached as `9B081FFAZ001WX`; Android `16`, SDK `36`.
+  - Installed package `uk.gleissner.c64commander`: versionCode `2038`, versionName `0.8.9-c102a`.
+  - Latest local APK: `android/app/build/outputs/apk/debug/c64commander-0.8.9-c102a-debug.apk`.
+  - U64 fallback reachable by infra probe: Ultimate 64 Elite firmware `3.14e`, unique ID `38C1BA`.
+  - C64U unauthenticated infra probe returns HTTP 403, so app-driven authenticated status remains to be revalidated.
+- Audit findings so far:
+  - CTA implementation is inside `c64scope/src/cta`; no parallel package found.
+  - Root and `c64scope` scripts expose `scope:cta`, `scope:cta:discover`, `scope:cta:resume`, `scope:cta:replay`, keypad, and gate-specific runners.
+  - `docs/testing/agentic-tests/full-cta-coverage/cta-runner.md` is absent and must be added.
+  - Gate 3 uses `DroidmindClient.shell("input keyevent ...")` for product text-field editing; hardening pass treats that as a control-path gap and will replace it with `pressKey()`.
+- Implemented Phase 0 fixes:
+  - Replaced Gate 3 shell keyevent use with `DroidmindClient.pressKey()` for MOVE_END and DEL.
+  - Added `c64scope/tests/ctaControlPathPolicy.test.ts` to prevent shell keyevents in CTA product runners.
+  - Added `docs/testing/agentic-tests/full-cta-coverage/cta-runner.md`.
+  - Fixed retention so incomplete legacy CTA artifact directories without `results.json` do not abort current runs.
+  - Added retention regression coverage for incomplete legacy directories.
+- Validation:
+  - `npm run scope:check` passed: 52 test files, 351 tests.
+  - First `npm run scope:cta -- --device 9B081FFAZ001WX --target c64u --discover-only --routes /current --case CTA-HARDENING-SMOKE --retain-success 999` failed before the retention fix because old artifact `cta-20260624T112157Z-pixel4-c64u-41b0d368ca06` lacked `results.json`.
+  - Same command passed after the retention fix and emitted `c64scope/artifacts/cta-20260624T212754Z-pixel4-c64u-414ec2a965d6/`; MCP capability check satisfied all requirements.
+  - `npm run scope:cta:discover -- --serial 9B081FFAZ001WX --route /current --start-app` passed and emitted `c64scope/artifacts/cta-discover/cta-discover-20260624T212806Z/cta-discover.json` with 2 discovered controls.
+  - `npm run scope:cta:replay -- --run-id cta-20260624T212754Z-pixel4-c64u-414ec2a965d6 --case CTA-HARDENING-SMOKE` passed and emitted `replays/CTA-HARDENING-SMOKE-replay-summary.json`.
+- Representative previous artifacts parsed successfully with current JSON expectations:
+  - Gate 5 coverage: 12/12 PASS.
+  - Gate 6 coverage: 14/16 PASS.
+  - Gate 6.5 coverage: 11/12 PASS.
+  - Gate 7 result: 3/3 PASS.
+  These remain stale because they target SHA `41b0d368ca06`.
+
+---
+
 # WORKLOG — menu ⇄ REST config mapping hardening
 
 All times 2026-06-23 (local). Prior task content for this file is in git history.

@@ -63,6 +63,17 @@ vi.mock("@/lib/disks/diskMount", () => ({
 vi.mock("@/hooks/useActionTrace", () => ({
   useActionTrace: () => (fn: any) => fn,
 }));
+vi.mock("@/pages/playFiles/hooks/useArchiveClientSettings", () => ({
+  useArchiveClientSettings: () => ({
+    commoserveEnabled: false,
+    archiveConfig: {
+      id: "archive-commoserve",
+      name: "CommoServe",
+      baseUrl: "http://commoserve.files.commodore.net",
+      enabled: false,
+    },
+  }),
+}));
 
 // Mock child components that are complex
 vi.mock("@/components/itemSelection/ItemSelectionDialog", () => ({

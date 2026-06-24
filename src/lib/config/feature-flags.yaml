@@ -71,10 +71,10 @@ features:
     description: Enable Lighting Studio entry points and dialog access.
 
   - id: ram_snapshots_enabled
-    enabled: false
+    enabled: true
     visible_to_user: true
     developer_only: false
-    group: experimental
+    group: stable
     title: RAM snapshots
     description: Show Save RAM and Load RAM actions on Home.
 

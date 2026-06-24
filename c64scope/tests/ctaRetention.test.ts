@@ -43,4 +43,27 @@ describe("CTA artifact retention", () => {
       await rm(tempDir, { recursive: true, force: true });
     }
   });
+
+  it("does not fail when older CTA artifact directories have no runner results", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "cta-retention-"));
+    const incompleteRun = path.join(tempDir, "cta-20260624T100000Z-pixel4-c64u-123456789abc");
+    const successfulRun = path.join(tempDir, "cta-20260624T110000Z-pixel4-c64u-123456789abc");
+
+    try {
+      await mkdir(incompleteRun, { recursive: true });
+      await writeFile(path.join(incompleteRun, "gate3-result.json"), "{}", "utf-8");
+      await writeResults(successfulRun, 0);
+
+      await expect(listRetentionCandidates(tempDir)).resolves.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: successfulRun, successful: true }),
+          expect.objectContaining({ path: incompleteRun, successful: false }),
+        ]),
+      );
+      await expect(pruneSuccessfulRuns(tempDir, 0)).resolves.toEqual([successfulRun]);
+      expect((await stat(incompleteRun)).isDirectory()).toBe(true);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
 });

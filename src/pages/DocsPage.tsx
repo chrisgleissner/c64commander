@@ -149,7 +149,8 @@ const docSections: DocSection[] = [
         <p className="font-medium">Add disks to the collection:</p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
           <li>
-            Tap <strong>Add disks</strong> and pick a source ({SOURCE_LABELS.local} or {SOURCE_LABELS.c64u}).
+            Tap <strong>Add disks</strong> and pick a source ({SOURCE_LABELS.local}, {SOURCE_LABELS.c64u}, or{" "}
+            {SOURCE_LABELS.commoserve}).
           </li>
           <li>
             Use <strong>View all</strong> to search and manage large collections.

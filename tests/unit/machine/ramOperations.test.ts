@@ -169,60 +169,61 @@ describe("ramOperations", () => {
   });
 
   describe("loadMemoryRanges", () => {
-    it("reads the live image, overlays snapshot ranges, then restores in one full write", async () => {
-      const originalImage = new Uint8Array(FULL_RAM_SIZE_BYTES);
-      for (let i = 0; i < originalImage.length; i += 1) {
-        originalImage[i] = i % 251;
-      }
-      api.readMemory.mockImplementation(async (addr: string, length: number) => {
-        const start = parseInt(addr, 16);
-        return originalImage.slice(start, start + length);
-      });
-
+    it("writes only the snapshot ranges directly, without round-tripping the full image", async () => {
+      // Regression: the old implementation read the whole $0000-$FFFF image and
+      // wrote it back, which round-tripped the live I/O region and corrupted the
+      // CIA1 jiffy timer (the cursor blinked faster on every restore).
       const screenBytes = new Uint8Array([0x54, 0x45, 0x53, 0x54]);
       await loadMemoryRanges(api as any, [{ start: 0x0400, bytes: screenBytes }]);
 
       expect(api.machinePause).toHaveBeenCalledTimes(1);
       expect(api.machineResume).toHaveBeenCalledTimes(1);
-      expect(api.readMemory).toHaveBeenCalledTimes(FULL_RAM_SIZE_BYTES / 0x1000);
+      // No background image read, and no full $0000 image write.
+      expect(api.readMemory).not.toHaveBeenCalled();
       expect(api.writeMemoryBlock).toHaveBeenCalledTimes(1);
-      expect(api.writeMemoryBlock).toHaveBeenCalledWith(
-        "0000",
-        expect.objectContaining({
-          length: FULL_RAM_SIZE_BYTES,
-        }),
-      );
-
-      const writtenImage = api.writeMemoryBlock.mock.calls[0][1] as Uint8Array;
-      expect(Array.from(writtenImage.slice(0x0400, 0x0404))).toEqual(Array.from(screenBytes));
-      expect(writtenImage[0x0200]).toBe(originalImage[0x0200]);
-      expect(writtenImage[0xd800]).toBe(originalImage[0xd800]);
+      expect(api.writeMemoryBlock.mock.calls[0][0]).toBe("0400");
+      expect(Array.from(api.writeMemoryBlock.mock.calls[0][1] as Uint8Array)).toEqual(Array.from(screenBytes));
     });
 
-    it("preserves volatile CIA2 timer and interrupt registers from the live image", async () => {
-      const originalImage = new Uint8Array(FULL_RAM_SIZE_BYTES);
-      for (let i = 0; i < originalImage.length; i += 1) {
-        originalImage[i] = i % 251;
+    it("writes a large RAM range in chunks at its own addresses", async () => {
+      const bytes = new Uint8Array(0x2000);
+      for (let i = 0; i < bytes.length; i += 1) bytes[i] = i % 251;
+      await loadMemoryRanges(api as any, [{ start: 0x0801, bytes }]);
+
+      const addresses = api.writeMemoryBlock.mock.calls.map((c) => c[0]);
+      expect(addresses).toEqual(["0801", "1801"]);
+      const reassembled = new Uint8Array(0x2000);
+      let off = 0;
+      for (const call of api.writeMemoryBlock.mock.calls) {
+        const chunk = call[1] as Uint8Array;
+        reassembled.set(chunk, off);
+        off += chunk.length;
       }
-      originalImage[0xdd00] = 0x3f;
-      originalImage[0xdd01] = 0xff;
-      originalImage[0xdd02] = 0x12;
-      originalImage[0xdd0f] = 0x34;
-      api.readMemory.mockImplementation(async (addr: string, length: number) => {
-        const start = parseInt(addr, 16);
-        return originalImage.slice(start, start + length);
-      });
+      expect(Array.from(reassembled)).toEqual(Array.from(bytes));
+    });
 
-      const legacyCia2Range = new Uint8Array(0x100);
-      legacyCia2Range.fill(0xaa);
-      await loadMemoryRanges(api as any, [{ start: 0xdd00, bytes: legacyCia2Range }]);
+    it("skips volatile CIA1/CIA2 timer registers but still writes port A/B", async () => {
+      // A snapshot range covering a full CIA page must restore the VIC-bank port
+      // bytes ($xx00/$xx01) but never the timer/interrupt registers ($xx02+).
+      const cia2 = new Uint8Array(0x100).fill(0xaa);
+      await loadMemoryRanges(api as any, [{ start: 0xdd00, bytes: cia2 }]);
+      expect(api.writeMemoryBlock).toHaveBeenCalledTimes(1);
+      expect(api.writeMemoryBlock.mock.calls[0][0]).toBe("DD00");
+      expect(Array.from(api.writeMemoryBlock.mock.calls[0][1] as Uint8Array)).toEqual([0xaa, 0xaa]);
 
-      const writtenImage = api.writeMemoryBlock.mock.calls[0][1] as Uint8Array;
-      expect(writtenImage[0xdd00]).toBe(0xaa);
-      expect(writtenImage[0xdd01]).toBe(0xaa);
-      expect(writtenImage[0xdd02]).toBe(0x12);
-      expect(writtenImage[0xdd0f]).toBe(0x34);
-      expect(writtenImage[0xddff]).toBe(originalImage[0xddff]);
+      vi.clearAllMocks();
+      vi.mocked(checkC64Liveness).mockResolvedValue({ decision: "healthy" } as any);
+      const cia1 = new Uint8Array(0x10).fill(0xbb);
+      await loadMemoryRanges(api as any, [{ start: 0xdc00, bytes: cia1 }]);
+      expect(api.writeMemoryBlock).toHaveBeenCalledTimes(1);
+      expect(api.writeMemoryBlock.mock.calls[0][0]).toBe("DC00");
+      expect(Array.from(api.writeMemoryBlock.mock.calls[0][1] as Uint8Array)).toEqual([0xbb, 0xbb]);
+
+      // No write must ever target an address inside a volatile CIA window.
+      for (const [addr] of api.writeMemoryBlock.mock.calls) {
+        const a = parseInt(addr as string, 16);
+        expect((a >= 0xdc02 && a < 0xdd00) || (a >= 0xdd02 && a < 0xde00)).toBe(false);
+      }
     });
 
     it("rejects empty snapshot ranges", async () => {

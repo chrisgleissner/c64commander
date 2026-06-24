@@ -144,6 +144,17 @@ vi.mock("@/hooks/useC64Connection", () => ({
 vi.mock("@/hooks/useLocalSources", () => ({
   useLocalSources: () => localSourcesMock,
 }));
+vi.mock("@/pages/playFiles/hooks/useArchiveClientSettings", () => ({
+  useArchiveClientSettings: () => ({
+    commoserveEnabled: false,
+    archiveConfig: {
+      id: "archive-commoserve",
+      name: "CommoServe",
+      baseUrl: "http://commoserve.files.commodore.net",
+      enabled: false,
+    },
+  }),
+}));
 vi.mock("@/hooks/useListPreviewLimit", () => ({
   useListPreviewLimit: () => ({ limit: 100 }),
 }));

@@ -12,6 +12,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { DroidmindClient } from "../validation/droidmindClient.js";
+import { redactSecretLiterals } from "./redaction.js";
 import { type Bounds, centerY, delay, isVisible } from "./uiHelpers.js";
 
 const execFileAsync = promisify(execFile);
@@ -41,11 +42,17 @@ export async function captureState(
   serial: string,
   artifactDir: string,
   stepId: string,
+  secrets: readonly string[] = [],
 ): Promise<string> {
   const xml = await client.captureUiHierarchy(serial);
-  await writeFile(path.join(artifactDir, "hierarchies", `${stepId}.xml`), xml, "utf-8");
+  const redactedXml = redactUiHierarchySecrets(xml, secrets);
+  await writeFile(path.join(artifactDir, "hierarchies", `${stepId}.xml`), redactedXml, "utf-8");
   await client.screenshotToFile(serial, path.join(artifactDir, "screenshots", `${stepId}.png`));
-  return xml;
+  return redactedXml;
+}
+
+export function redactUiHierarchySecrets(xml: string, secrets: readonly string[] = []): string {
+  return redactSecretLiterals(xml, secrets);
 }
 
 // Scroll to top: swipe finger DOWN (content moves up) several times to reach the top.
@@ -67,12 +74,14 @@ export async function scrollUntilVisible(
   settleMs: number,
   finder: (xml: string) => Bounds | null,
   maxScrollAttempts = 8,
+  secrets: readonly string[] = [],
 ): Promise<{ xml: string; bounds: Bounds } | null> {
   for (let i = 0; i < maxScrollAttempts; i++) {
     const xml = await client.captureUiHierarchy(serial);
-    await writeFile(path.join(artifactDir, "hierarchies", `${stepPrefix}-scroll-${i}.xml`), xml, "utf-8");
-    const bounds = finder(xml);
-    if (bounds) return { xml, bounds };
+    const redactedXml = redactUiHierarchySecrets(xml, secrets);
+    await writeFile(path.join(artifactDir, "hierarchies", `${stepPrefix}-scroll-${i}.xml`), redactedXml, "utf-8");
+    const bounds = finder(redactedXml);
+    if (bounds) return { xml: redactedXml, bounds };
     await client.scrollDown(serial);
     await delay(settleMs / 2);
   }
@@ -90,12 +99,14 @@ export async function scrollUntilInSafeZone(
   safeTapMaxY: number,
   finder: (xml: string) => Bounds | null,
   maxScrollAttempts = 14,
+  secrets: readonly string[] = [],
 ): Promise<{ xml: string; bounds: Bounds } | null> {
   for (let i = 0; i < maxScrollAttempts; i++) {
     const xml = await client.captureUiHierarchy(serial);
-    await writeFile(path.join(artifactDir, "hierarchies", `${stepPrefix}-scroll-${i}.xml`), xml, "utf-8");
-    const bounds = finder(xml);
-    if (bounds && isVisible(bounds) && centerY(bounds) <= safeTapMaxY) return { xml, bounds };
+    const redactedXml = redactUiHierarchySecrets(xml, secrets);
+    await writeFile(path.join(artifactDir, "hierarchies", `${stepPrefix}-scroll-${i}.xml`), redactedXml, "utf-8");
+    const bounds = finder(redactedXml);
+    if (bounds && isVisible(bounds) && centerY(bounds) <= safeTapMaxY) return { xml: redactedXml, bounds };
     await client.scrollDown(serial);
     await delay(settleMs / 2);
   }

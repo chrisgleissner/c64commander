@@ -46,6 +46,9 @@ import { useC64ConfigItems, useC64Connection, useC64Drives } from "@/hooks/useC6
 import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
 import { useLocalSources } from "@/hooks/useLocalSources";
 import { useActionTrace } from "@/hooks/useActionTrace";
+import { useArchiveClientSettings } from "@/pages/playFiles/hooks/useArchiveClientSettings";
+import { createArchiveClient } from "@/lib/archive/client";
+import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { getC64API } from "@/lib/c64api";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { reportUserError } from "@/lib/uiErrors";
@@ -64,6 +67,7 @@ import { assignDiskGroupsByPrefix } from "@/lib/disks/diskGrouping";
 import { pickDiskGroupColor } from "@/lib/disks/diskGroupColors";
 import { useDiskLibrary } from "@/hooks/useDiskLibrary";
 import { SHARED_DISK_LIBRARY_ID } from "@/lib/disks/diskStore";
+import { createArchiveSourceLocation } from "@/lib/sourceNavigation/archiveSourceAdapter";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { createLocalSourceLocation, resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
@@ -147,6 +151,15 @@ const waitAtLeast = async (startedAt: number, durationMs: number) => {
   }
 };
 
+const parseArchiveSelectionPath = (selectionPath: string) => {
+  const [resultId, rawCategory] = selectionPath.split("/");
+  const category = Number(rawCategory);
+  if (!resultId || Number.isNaN(category)) {
+    throw new Error(`Invalid archive selection: ${selectionPath}`);
+  }
+  return { resultId, category };
+};
+
 type FocusableDiskButtonProps = ComponentProps<typeof Button> & {
   focusId: string;
   focusOrder: number;
@@ -155,6 +168,7 @@ type FocusableDiskButtonProps = ComponentProps<typeof Button> & {
 
 const DISKS_LIBRARY_FOCUS_ORDER = {
   addDisks: 600,
+  mountSheetAddDisks: 610,
 } as const;
 
 const driveFocusOrder = (driveIndex: number, offset: number) => 100 + driveIndex * 100 + offset;
@@ -230,6 +244,7 @@ export const HomeDiskManager = () => {
   const [selectedDiskIds, setSelectedDiskIds] = useState<Set<string>>(new Set());
   const localSourceInputRef = useRef<HTMLInputElement | null>(null);
   const { sources: localSources, addSourceFromPicker } = useLocalSources();
+  const { archiveConfig, commoserveEnabled } = useArchiveClientSettings();
   const { limit: listPreviewLimit } = useListPreviewLimit();
   const isAndroid = getPlatform() === "android" && isNativePlatform();
 
@@ -271,11 +286,22 @@ export const HomeDiskManager = () => {
   const sourceGroups: SourceGroup[] = useMemo(() => {
     const ultimateSource = createUltimateSourceLocation();
     const localGroupSources = localSources.map((source) => createLocalSourceLocation(source));
-    return [
+    const groups: SourceGroup[] = [
       { label: SOURCE_LABELS.local, sources: localGroupSources },
       { label: SOURCE_LABELS.c64u, sources: [ultimateSource] },
     ];
-  }, [localSources]);
+    if (commoserveEnabled) {
+      groups.push({
+        label: SOURCE_LABELS.commoserve,
+        sources: [createArchiveSourceLocation(archiveConfig)],
+      });
+    }
+    return groups;
+  }, [archiveConfig, commoserveEnabled, localSources]);
+  const archiveConfigs = useMemo((): Record<string, ArchiveClientConfigInput> => {
+    if (!commoserveEnabled) return {};
+    return { [archiveConfig.id]: archiveConfig };
+  }, [archiveConfig, commoserveEnabled]);
   const softIecDirectorySourceGroups: SourceGroup[] = useMemo(() => {
     const ultimateSource = createUltimateSourceLocation();
     return [{ label: SOURCE_LABELS.c64u, sources: [ultimateSource] }];
@@ -1001,6 +1027,82 @@ export const HomeDiskManager = () => {
           }));
         };
 
+        if (source.type === "commoserve") {
+          const config = archiveConfigs[source.id];
+          if (!config) {
+            throw new Error(`Archive source configuration unavailable for ${source.name}.`);
+          }
+          const archiveClient = createArchiveClient(config);
+          const runtimeFiles: Record<string, File> = {};
+          const disks: DiskEntry[] = [];
+
+          for (const [index, selection] of selections.entries()) {
+            throwIfAborted();
+            const { resultId, category } = parseArchiveSelectionPath(selection.path);
+            const entries = await archiveClient.getEntries(resultId, category, { signal: abortSignal });
+            const diskEntry = entries.find((entry) => isDiskImagePath(entry.path));
+            if (!diskEntry) {
+              addLog("warn", "Archive result skipped because it has no disk image", {
+                sourceId: source.id,
+                sourceName: source.name,
+                resultId,
+                category,
+                selectionName: selection.name,
+              });
+              updateProgress(1);
+              continue;
+            }
+            const binary = await archiveClient.downloadBinary(
+              resultId,
+              category,
+              diskEntry.id,
+              diskEntry.path,
+              { signal: abortSignal },
+            );
+            throwIfAborted();
+            const normalized = normalizeDiskPath(binary.fileName || diskEntry.path);
+            const entry = createDiskEntry({
+              path: normalized,
+              location: "local",
+              sourceId: source.id,
+              name: binary.fileName || selection.name,
+              group: source.name,
+              sizeBytes: binary.bytes.byteLength,
+              modifiedAt: diskEntry.date ? new Date(diskEntry.date).toISOString() : null,
+              importOrder: index,
+            });
+            runtimeFiles[entry.id] = new File([binary.bytes], entry.name, {
+              type: binary.contentType ?? "application/octet-stream",
+            });
+            disks.push(entry);
+            updateProgress(1);
+          }
+
+          if (!disks.length) {
+            setAddItemsProgress((prev) => ({
+              ...prev,
+              status: "error",
+              message: "No disk images found in selected archive results.",
+            }));
+            showNoDiskWarning();
+            return false;
+          }
+
+          diskLibrary.addDisks(disks, runtimeFiles, {
+            expectedSelectedDeviceId: selectedDeviceIdAtStart,
+          });
+          setAddItemsProgress((prev) => ({
+            ...prev,
+            status: "done",
+            message: "Added to library",
+          }));
+          toast({
+            title: "Items added",
+            description: `${disks.length} disk(s) added to library.`,
+          });
+          return true;
+        }
+
         let files: Array<{
           path: string;
           name: string;
@@ -1272,6 +1374,7 @@ export const HomeDiskManager = () => {
     }),
     [
       addItemsSurface,
+      archiveConfigs,
       browserOpen,
       diskLibrary,
       isAddingItems,
@@ -2027,6 +2130,21 @@ export const HomeDiskManager = () => {
               viewAllTitle="All disks"
               viewAllMode="non-empty"
               showSelectionControls={false}
+              headerActions={
+                sortedDisks.length === 0 ? (
+                  <FocusableDiskButton
+                    focusId="disks-mount-sheet-add-disks"
+                    focusOrder={DISKS_LIBRARY_FOCUS_ORDER.mountSheetAddDisks}
+                    focusGroup="disks-mount-sheet"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBrowserOpen(true)}
+                    data-testid="mount-sheet-add-disks"
+                  >
+                    Add disks
+                  </FocusableDiskButton>
+                ) : null
+              }
             />
           </AppSheetBody>
         </AppSheetContent>
@@ -2063,6 +2181,7 @@ export const HomeDiskManager = () => {
         title="Add items"
         confirmLabel="Add to library"
         sourceGroups={sourceGroups}
+        archiveConfigs={archiveConfigs}
         onAddLocalSource={handleAddLocalSourceFromPicker}
         onConfirm={handleAddDiskSelections}
         filterEntry={(entry) => entry.type === "dir" || isDiskImagePath(entry.path)}
