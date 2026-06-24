@@ -10,6 +10,7 @@ export interface UiNode {
   text: string;
   resourceId: string;
   className: string;
+  packageName?: string;
   contentDesc: string;
   clickable: boolean;
   enabled: boolean;
@@ -63,6 +64,7 @@ export function parseUiNodes(xml: string): UiNode[] {
       text: attr(raw, "text"),
       resourceId: attr(raw, "resource-id"),
       className: attr(raw, "class"),
+      packageName: attr(raw, "package") || undefined,
       contentDesc: attr(raw, "content-desc"),
       clickable: attr(raw, "clickable") === "true",
       enabled: attr(raw, "enabled") !== "false",

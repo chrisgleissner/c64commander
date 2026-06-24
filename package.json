@@ -112,6 +112,7 @@
     "scope:test": "cd c64scope && npm run test",
     "scope:test:coverage": "cd c64scope && npm run test:coverage",
     "scope:check": "cd c64scope && npm run check",
+    "scope:cta:discover": "cd c64scope && npm run build && npm run cta:discover --",
     "scope:full-coverage": "cd c64scope && npm run full-coverage:execute",
     "scope:hil:playback-volume-latency": "cd c64scope && npm run build && npm run hil:playback-volume-latency --",
     "scope:mcp": "cd c64scope && npm run mcp",

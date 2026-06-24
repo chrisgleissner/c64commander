@@ -9,10 +9,6 @@
 import type { ExplorationSafety } from "./exploration.js";
 import type { FailureClass, RunOutcome } from "./types.js";
 
-// ---------------------------------------------------------------------------
-// Oracle classes (ORC-001)
-// ---------------------------------------------------------------------------
-
 export type OracleClass =
   | "UI"
   | "REST-visible state"
@@ -31,10 +27,6 @@ export const oracleClasses: readonly OracleClass[] = [
   "State refs",
   "A/V signal",
 ];
-
-// ---------------------------------------------------------------------------
-// Weak-oracle patterns (ORC-001) — from agentic-oracle-catalog.md
-// ---------------------------------------------------------------------------
 
 export interface WeakOraclePattern {
   id: string;
@@ -102,24 +94,10 @@ export const weakOraclePatterns: readonly WeakOraclePattern[] = [
   },
 ];
 
-/**
- * Detect weak oracle patterns in an assertion set. Returns matched weak
- * patterns. If any are matched, the result should not be classified as pass
- * without additional corroboration.
- */
 export function detectWeakPatterns(assertions: AssertionRecord[]): WeakOraclePattern[] {
   return weakOraclePatterns.filter((p) => p.detect(assertions));
 }
 
-// ---------------------------------------------------------------------------
-// Pairwise oracle enforcement (ORC-003)
-// ---------------------------------------------------------------------------
-
-/**
- * For guarded-mutation and destructive actions, at least two independent
- * oracle classes must provide positive evidence. Returns whether the
- * corroboration requirement is satisfied.
- */
 export function checkCorroboration(
   safety: ExplorationSafety,
   assertions: AssertionRecord[],
@@ -140,10 +118,6 @@ export function checkCorroboration(
   return { satisfied: true, reason: "Corroboration satisfied." };
 }
 
-// ---------------------------------------------------------------------------
-// Deterministic classification (ORC-004)
-// ---------------------------------------------------------------------------
-
 export interface ClassificationInput {
   assertions: AssertionRecord[];
   safety: ExplorationSafety;
@@ -163,10 +137,6 @@ const INFRA_ORACLE_CLASSES: ReadonlySet<string> = new Set([
   "Diagnostics and logs",
 ]);
 
-/**
- * Classify a run into pass/fail/inconclusive with full justification.
- * Enforces weak-oracle rejection and pairwise corroboration.
- */
 export function classifyRun(input: ClassificationInput): ClassificationResult {
   const { assertions, safety } = input;
 
@@ -186,7 +156,6 @@ export function classifyRun(input: ClassificationInput): ClassificationResult {
   const allPassed = assertions.every((a) => a.passed);
   const anyFailed = assertions.some((a) => !a.passed);
 
-  // Weak pattern rejection — even if assertions passed, weak evidence is inconclusive
   if (allPassed && weakMatches.length > 0) {
     return {
       outcome: "inconclusive",
@@ -197,7 +166,6 @@ export function classifyRun(input: ClassificationInput): ClassificationResult {
     };
   }
 
-  // Corroboration enforcement for non-read-only
   if (allPassed && !corroboration.satisfied) {
     return {
       outcome: "inconclusive",
@@ -211,7 +179,7 @@ export function classifyRun(input: ClassificationInput): ClassificationResult {
   if (allPassed) {
     return {
       outcome: "pass",
-      failureClass: "product_failure",
+      failureClass: "inconclusive",
       weakPatterns: [],
       corroborationSatisfied: true,
       reason: "All assertions passed with sufficient evidence.",

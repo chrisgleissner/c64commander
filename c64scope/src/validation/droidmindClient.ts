@@ -15,6 +15,12 @@ const DEFAULT_DROIDMIND_COMMAND = process.env["DROIDMIND_COMMAND"] ?? "uvx";
 const DEFAULT_DROIDMIND_ARGS = process.env["DROIDMIND_ARGS"]?.trim()
   ? process.env["DROIDMIND_ARGS"]!.split(/\s+/)
   : ["--from", "git+https://github.com/hyperb1iss/droidmind", "droidmind", "--transport", "stdio"];
+const UI_DUMP_DEVICE_PATH = "/sdcard/Download/c64scope-droidmind-ui.xml";
+const UI_HIERARCHY_CAPTURE_ATTEMPTS = 3;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 type ClientCallToolResult = Awaited<ReturnType<Client["callTool"]>>;
 
@@ -136,6 +142,11 @@ export class DroidmindClient {
     assertToolSuccess("android-ui/swipe", result);
   }
 
+  async scrollDown(serial: string): Promise<{ atEnd: boolean }> {
+    await this.swipe(serial, 540, 1700, 540, 650, 300);
+    return { atEnd: false };
+  }
+
   async pressKey(serial: string, keycode: number): Promise<void> {
     const result = await this.callTool("android-ui", {
       serial,
@@ -163,6 +174,24 @@ export class DroidmindClient {
     });
     assertToolSuccess("android-shell", result);
     return unwrapCommandText(firstTextContent(result));
+  }
+
+  async captureUiHierarchy(serial: string): Promise<string> {
+    let lastOutput = "";
+    for (let attempt = 1; attempt <= UI_HIERARCHY_CAPTURE_ATTEMPTS; attempt += 1) {
+      await this.shell(serial, `uiautomator dump ${UI_DUMP_DEVICE_PATH}`);
+      const xml = await this.shell(serial, `cat ${UI_DUMP_DEVICE_PATH}`);
+      if (xml.includes("<hierarchy")) {
+        return xml;
+      }
+      lastOutput = xml;
+      if (attempt < UI_HIERARCHY_CAPTURE_ATTEMPTS) {
+        await delay(500);
+      }
+    }
+    throw new Error(
+      `DroidMind UI hierarchy capture did not produce XML hierarchy content (bytes=${lastOutput.length}, excerpt=${JSON.stringify(lastOutput.slice(0, 160))}).`,
+    );
   }
 
   async screenshotToFile(serial: string, localPath: string): Promise<void> {

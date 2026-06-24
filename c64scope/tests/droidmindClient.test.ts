@@ -121,6 +121,62 @@ describe("droidmind client", () => {
     expect(connectMock).toHaveBeenCalledTimes(1);
   });
 
+  it("captures UI hierarchy through DroidMind shell and exposes a scroll primitive", async () => {
+    callToolMock
+      .mockResolvedValueOnce({
+        isError: false,
+        content: [{ type: "text", text: "UI hierchary dumped to: /sdcard/Download/c64scope-droidmind-ui.xml" }],
+      })
+      .mockResolvedValueOnce({
+        isError: false,
+        content: [{ type: "text", text: "<hierarchy><node /></hierarchy>" }],
+      })
+      .mockResolvedValueOnce({ isError: false })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "dumped" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "not xml 1" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "dumped" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "not xml 2" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "dumped" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "not xml 3" }] });
+
+    const { DroidmindClient } = await import("../src/validation/droidmindClient.js");
+    const client = new DroidmindClient();
+
+    await expect(client.captureUiHierarchy("serial-3")).resolves.toContain("<hierarchy");
+    await expect(client.scrollDown("serial-3")).resolves.toEqual({ atEnd: false });
+    await expect(client.captureUiHierarchy("serial-3")).rejects.toThrow(/did not produce XML hierarchy/);
+
+    expect(callToolMock).toHaveBeenNthCalledWith(
+      1,
+      {
+        name: "android-shell",
+        arguments: {
+          serial: "serial-3",
+          command: "uiautomator dump /sdcard/Download/c64scope-droidmind-ui.xml",
+          max_lines: undefined,
+          max_size: undefined,
+        },
+      },
+      {},
+    );
+    expect(callToolMock).toHaveBeenNthCalledWith(
+      3,
+      {
+        name: "android-ui",
+        arguments: {
+          serial: "serial-3",
+          action: "swipe",
+          start_x: 540,
+          start_y: 1700,
+          end_x: 540,
+          end_y: 650,
+          duration_ms: 300,
+        },
+      },
+      {},
+    );
+  });
+
   it("honors custom droidmind args and treats close before connect as a no-op", async () => {
     process.env.DROIDMIND_ARGS = "droidmind --transport stdio --debug";
 

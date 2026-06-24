@@ -203,6 +203,7 @@ describe("classification (ORC-004)", () => {
       safety: "read-only",
     });
     expect(result.outcome).toBe("pass");
+    expect(result.failureClass).toBe("inconclusive");
     expect(result.corroborationSatisfied).toBe(true);
   });
 
@@ -254,6 +255,7 @@ describe("classification (ORC-004)", () => {
       safety: "guarded-mutation",
     });
     expect(result.outcome).toBe("pass");
+    expect(result.failureClass).toBe("inconclusive");
     expect(result.corroborationSatisfied).toBe(true);
   });
 
@@ -369,6 +371,7 @@ describe("classification (ORC-004)", () => {
       safety: "destructive",
     });
     expect(result.outcome).toBe("pass");
+    expect(result.failureClass).toBe("inconclusive");
     expect(result.corroborationSatisfied).toBe(true);
   });
 });
