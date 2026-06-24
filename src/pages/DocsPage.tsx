@@ -12,6 +12,7 @@ import { ChevronDown, ExternalLink, Wifi, Settings, Play, Home, Disc, Sliders, A
 import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { PageContainer } from "@/components/layout/PageContainer";
+import { getDocsExternalResourceLinks } from "@/lib/docs/externalResources";
 import { SOURCE_EXPLANATIONS, SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import { variant } from "@/generated/variant";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
@@ -338,6 +339,7 @@ function DocSectionCard({ section }: { section: DocSection }) {
 
 export default function DocsPage() {
   const pageShellClassName = usePrimaryPageShellClassName();
+  const externalResourceLinks = getDocsExternalResourceLinks();
   return (
     <div className={pageShellClassName}>
       <AppBar title="Docs" />
@@ -367,36 +369,19 @@ export default function DocsPage() {
             These links point to the upstream device manuals and API references used throughout {variant.displayName}.
           </p>
           <div className="space-y-2">
-            <a
-              href="https://1541u-documentation.readthedocs.io/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 text-sm text-primary hover:underline"
-              data-testid="docs-external-resource-docs"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Ultimate Documentation
-            </a>
-            <a
-              href="https://1541u-documentation.readthedocs.io/en/latest/api/api_calls.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 text-sm text-primary hover:underline"
-              data-testid="docs-external-resource-api"
-            >
-              <ExternalLink className="h-4 w-4" />
-              REST API Reference
-            </a>
-            <a
-              href="https://ultimate64.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 text-sm text-primary hover:underline"
-              data-testid="docs-external-resource-site"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Ultimate 64 Official Site
-            </a>
+            {externalResourceLinks.map((link) => (
+              <a
+                key={link.id}
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm text-primary hover:underline"
+                data-testid={link.testId}
+              >
+                <ExternalLink className="h-4 w-4" />
+                {link.label}
+              </a>
+            ))}
           </div>
         </motion.div>
       </PageContainer>

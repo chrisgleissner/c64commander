@@ -27,12 +27,13 @@ vi.mock("@/lib/tracing/traceSession", () => ({
 }));
 
 import { checkC64Liveness } from "@/lib/machine/c64Liveness";
-import {
-  FULL_RAM_SIZE_BYTES,
-  dumpFullRamImage,
-  clearRamAndReboot,
-  loadMemoryRanges,
-} from "@/lib/machine/ramOperations";
+import { FULL_RAM_SIZE_BYTES, dumpRamRanges, clearRamAndReboot, loadMemoryRanges } from "@/lib/machine/ramOperations";
+
+// dumpRamRanges over the whole address space — exercises the same paused
+// read / liveness / recovery infra the removed dumpFullRamImage used, and lets
+// the existing assertions keep treating the result as a single 64 KiB image.
+const dumpFull = (api: unknown, options?: { recoveryMode?: boolean }) =>
+  dumpRamRanges(api as any, [{ start: 0, length: FULL_RAM_SIZE_BYTES }], options).then((r) => r.blocks[0]);
 
 type MockApi = {
   readMemory: ReturnType<typeof vi.fn>;
@@ -69,9 +70,9 @@ describe("ramOperations", () => {
     } as any);
   });
 
-  describe("dumpFullRamImage", () => {
+  describe("dumpRamRanges (full image)", () => {
     it("pauses, reads all chunks, then resumes", async () => {
-      const image = await dumpFullRamImage(api as any);
+      const image = await dumpFull(api as any);
 
       expect(image).toBeInstanceOf(Uint8Array);
       expect(image.length).toBe(FULL_RAM_SIZE_BYTES);
@@ -83,7 +84,7 @@ describe("ramOperations", () => {
     it("resumes on read failure and rethrows", async () => {
       api.readMemory.mockRejectedValue(new Error("read failed"));
 
-      await expect(dumpFullRamImage(api as any)).rejects.toThrow("read failed");
+      await expect(dumpFull(api as any)).rejects.toThrow("read failed");
       expect(api.machineResume).toHaveBeenCalled();
     });
 
@@ -94,13 +95,13 @@ describe("ramOperations", () => {
         rasterChanged: false,
       } as any);
 
-      await expect(dumpFullRamImage(api as any)).rejects.toThrow("wedged");
+      await expect(dumpFull(api as any)).rejects.toThrow("wedged");
     });
 
     it("throws when read returns unexpected chunk size", async () => {
       api.readMemory.mockResolvedValue(new Uint8Array(100));
 
-      await expect(dumpFullRamImage(api as any)).rejects.toThrow("Unexpected RAM chunk length");
+      await expect(dumpFull(api as any)).rejects.toThrow("Unexpected RAM chunk length");
     });
   });
 
@@ -232,7 +233,7 @@ describe("ramOperations", () => {
       // withRetry calls asError when the thrown value is not an Error
       api.readMemory.mockRejectedValue("read-failed-as-string");
 
-      await expect(dumpFullRamImage(api as any)).rejects.toThrow("failed after");
+      await expect(dumpFull(api as any)).rejects.toThrow("failed after");
     });
 
     it("handles non-Error write failure in loadMemoryRanges", async () => {
@@ -262,7 +263,7 @@ describe("ramOperations", () => {
       } as any);
 
       // Must opt-in to recoveryMode to exercise recoverFromLivenessFailure on retry
-      const image = await dumpFullRamImage(api as any, { recoveryMode: true });
+      const image = await dumpFull(api as any, { recoveryMode: true });
       expect(image).toBeInstanceOf(Uint8Array);
     });
 
@@ -286,7 +287,7 @@ describe("ramOperations", () => {
       });
 
       // Must opt-in to recoveryMode to exercise recoverFromLivenessFailure on retry
-      await expect(dumpFullRamImage(api as any, { recoveryMode: true })).rejects.toThrow("liveness check crashed");
+      await expect(dumpFull(api as any, { recoveryMode: true })).rejects.toThrow("liveness check crashed");
     });
 
     it("recovery follows reboot path when machine stays wedged after soft reset (line 131 FALSE)", async () => {
@@ -313,7 +314,7 @@ describe("ramOperations", () => {
         }
         return { decision: "healthy", jiffyAdvanced: true, rasterChanged: true } as any;
       });
-      const image = await dumpFullRamImage(api as any, { recoveryMode: true });
+      const image = await dumpFull(api as any, { recoveryMode: true });
       expect(image).toBeInstanceOf(Uint8Array);
       expect(api.machineReset).toHaveBeenCalled();
       expect(api.machineReboot).toHaveBeenCalled();
@@ -322,7 +323,7 @@ describe("ramOperations", () => {
     it("runPaused throws combined error when read fails and resume also fails (lines 303, 314)", async () => {
       api.readMemory.mockRejectedValue(new Error("read failed"));
       api.machineResume.mockRejectedValue(new Error("resume failed"));
-      await expect(dumpFullRamImage(api as any)).rejects.toThrow(/failed.*resume failed|resume failed/);
+      await expect(dumpFull(api as any)).rejects.toThrow(/failed.*resume failed|resume failed/);
     });
   });
 

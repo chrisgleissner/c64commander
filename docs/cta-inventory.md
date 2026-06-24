@@ -277,7 +277,10 @@ Mount disk sheet: Available disks list — filter text — `list-filter-input` �
   `open-online-archive` — R✅ I✅ ; many device-safety number inputs — number — R✅ I✅
 - **Disk autostart** — select — R✅ I✅
 - **Notifications**: visibility — select — R✅ I✅ ; duration — slider — R✅ I✅
-- **Build/info**: REST API docs — link — R✅ I✅ ; Open Source Licenses — button — R✅ I✅ (sub-route `/settings/open-source-licenses`)
+- **Build/info**: REST API docs — link — `settings-about-rest-api-docs` — R✅ I✅
+  (`c64u-remote`: C64U User Guide — link — `settings-about-c64u-user-guide`
+  — R✅ I✅) ; Open Source Licenses — button — R✅ I✅ (sub-route
+  `/settings/open-source-licenses`)
 
 ### 4.6 Docs (`/docs`)
 
@@ -285,6 +288,8 @@ Mount disk sheet: Available disks list — filter text — `list-filter-input` �
   Disks, Config, Settings, Diagnostics — button — `docs-toggle-*` — R✅ I✅
 - External links: Ultimate Documentation, REST API Reference, Ultimate 64
   Official Site — link — `docs-external-resource-*` — R✅ I✅
+  (`c64u-remote`: single C64U User Guide link —
+  `docs-external-resource-c64u-user-guide` — R✅ I✅)
 
 ---
 

@@ -7,7 +7,12 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { FULL_RAM_SIZE_BYTES, clearRamAndReboot, dumpFullRamImage } from "@/lib/machine/ramOperations";
+import { FULL_RAM_SIZE_BYTES, clearRamAndReboot, dumpRamRanges } from "@/lib/machine/ramOperations";
+
+// dumpRamRanges over the whole address space, returned as a single 64 KiB image
+// (the old dumpFullRamImage shape) so these infra tests need no other changes.
+const dumpFullRamImage = (api: unknown, options?: { recoveryMode?: boolean }) =>
+  dumpRamRanges(api as any, [{ start: 0, length: FULL_RAM_SIZE_BYTES }], options).then((r) => r.blocks[0]);
 
 const { livenessMock, traceSessionMock, loggingMock } = vi.hoisted(() => ({
   livenessMock: {

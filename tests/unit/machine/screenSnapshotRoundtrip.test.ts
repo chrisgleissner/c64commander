@@ -55,6 +55,7 @@ class MemoryBackedApi {
   readonly memory = new Uint8Array(0x10000);
   pauseCount = 0;
   resumeCount = 0;
+  bytesRead = 0;
   writeCalls: Array<{ address: string; data: Uint8Array }> = [];
 
   constructor() {
@@ -66,6 +67,7 @@ class MemoryBackedApi {
 
   async readMemory(address: string, length: number) {
     const start = parseInt(address, 16);
+    this.bytesRead += length;
     return this.memory.slice(start, start + length);
   }
 
@@ -120,11 +122,18 @@ describe("screen snapshot roundtrip", () => {
     const api = new MemoryBackedApi();
     const baseline = await api.readMemory("0400", 16);
 
+    const readBefore = api.bytesRead;
     await createSnapshot(api as never, {
       type: "screen",
       label: "screen-roundtrip",
       contentName: "screen-roundtrip",
     });
+    // Efficiency: the screen snapshot must read only its own ranges (16 KiB VIC
+    // bank + VIC regs + colour RAM + CIA2 port ≈ 17.5 KiB, plus the 1-byte $DD00
+    // VIC-bank probe), never a full 64 KiB dump.
+    const bytesReadByCreate = api.bytesRead - readBefore;
+    expect(bytesReadByCreate).toBe(0x4000 + (0xd02e - 0xd000 + 1) + (0xdbff - 0xd800 + 1) + 2 + 1);
+    expect(bytesReadByCreate).toBeLessThan(0x10000);
 
     const [entry] = loadSnapshotStore();
     expect(entry).toBeDefined();

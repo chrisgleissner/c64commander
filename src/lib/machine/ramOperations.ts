@@ -43,8 +43,6 @@ type RamRange = {
   endExclusive: number;
 };
 
-const FULL_RAM_RANGE: RamRange[] = [{ start: 0x0000, endExclusive: FULL_RAM_SIZE_BYTES }];
-
 const CLEAR_RAM_RANGES: RamRange[] = [
   { start: 0x0000, endExclusive: IO_REGION_START },
   { start: IO_REGION_END, endExclusive: FULL_RAM_SIZE_BYTES },
@@ -170,59 +168,31 @@ const recoverFromLivenessFailure = async (api: C64API, operation: string) => {
   });
 };
 
-const readRanges = async (
+const readRangeBlock = async (
   api: C64API,
-  ranges: RamRange[],
+  start: number,
+  length: number,
   onRetry?: (error: Error, attempt: number, maxAttempts: number) => Promise<void>,
-) => {
-  const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
-  addLog("info", "RAM read: starting full image read", {
-    ranges: ranges.map((r) => ({ start: toHexAddress(r.start), endExclusive: toHexAddress(r.endExclusive) })),
-  });
-  for (const range of ranges) {
-    for (let address = range.start; address < range.endExclusive; address += READ_CHUNK_SIZE_BYTES) {
-      const chunkSize = Math.min(READ_CHUNK_SIZE_BYTES, range.endExclusive - address);
-      recordRamTrace({
-        operation: "ram-read",
-        status: "start",
-        address: toHexAddress(address),
-        expectedLength: chunkSize,
-      });
-      const chunk = await withRetry(
-        `Read RAM chunk at $${toHexAddress(address)}`,
-        () => api.readMemory(toHexAddress(address), chunkSize),
-        DEFAULT_RETRY_ATTEMPTS,
-        onRetry,
-      );
-      if (chunk.length !== chunkSize) {
-        recordRamTrace({
-          operation: "ram-read",
-          status: "error",
-          address: toHexAddress(address),
-          expectedLength: chunkSize,
-          actualLength: chunk.length,
-        });
-        throw new Error(
-          `Unexpected RAM chunk length at $${toHexAddress(address)}: expected ${chunkSize}, got ${chunk.length}`,
-        );
-      }
-      recordRamTrace({
-        operation: "ram-read",
-        status: "success",
-        address: toHexAddress(address),
-        expectedLength: chunkSize,
-        actualLength: chunk.length,
-      });
-      image.set(chunk, address);
+): Promise<Uint8Array> => {
+  const block = new Uint8Array(length);
+  for (let offset = 0; offset < length; offset += READ_CHUNK_SIZE_BYTES) {
+    const chunkSize = Math.min(READ_CHUNK_SIZE_BYTES, length - offset);
+    const address = toHexAddress(start + offset);
+    recordRamTrace({ operation: "ram-read", status: "start", address, expectedLength: chunkSize });
+    const chunk = await withRetry(
+      `Read RAM chunk at $${address}`,
+      () => api.readMemory(address, chunkSize),
+      DEFAULT_RETRY_ATTEMPTS,
+      onRetry,
+    );
+    if (chunk.length !== chunkSize) {
+      recordRamTrace({ operation: "ram-read", status: "error", address, expectedLength: chunkSize, actualLength: chunk.length });
+      throw new Error(`Unexpected RAM chunk length at $${address}: expected ${chunkSize}, got ${chunk.length}`);
     }
+    recordRamTrace({ operation: "ram-read", status: "success", address, expectedLength: chunkSize, actualLength: chunk.length });
+    block.set(chunk, offset);
   }
-  addLog("info", "RAM read: full image read completed", {
-    imageLength: image.length,
-    screenBytes: Array.from(image.slice(1024, 1028))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join(" "),
-  });
-  return image;
+  return block;
 };
 
 const writeRanges = async (
@@ -298,10 +268,45 @@ const runPaused = async <T>(api: C64API, operation: string, run: () => Promise<T
   return result as T;
 };
 
-export const dumpFullRamImage = async (api: C64API, options?: { recoveryMode?: boolean }): Promise<Uint8Array> => {
+export type MemoryRangeSpec = { start: number; length: number };
+
+/**
+ * Reads a specific set of memory ranges from the machine (paused) and returns
+ * the bytes for each. Only the requested bytes are transferred, so a snapshot
+ * that needs a handful of ranges no longer pays for a full 64 KiB dump.
+ *
+ * `resolve` may itself read from the machine before deciding which ranges to
+ * capture (e.g. a screen snapshot inspects the live CIA2 VIC-bank register); it
+ * runs inside the same paused session so the resolved ranges and their contents
+ * stay consistent.
+ */
+export const dumpRamRanges = async (
+  api: C64API,
+  resolve:
+    | MemoryRangeSpec[]
+    | ((read: (address: number, length: number) => Promise<Uint8Array>) => Promise<MemoryRangeSpec[]>),
+  options?: { recoveryMode?: boolean },
+): Promise<{ ranges: MemoryRangeSpec[]; blocks: Uint8Array[] }> => {
   await ensureLiveness(api, "Save RAM");
   const onRetry = options?.recoveryMode ? async () => recoverFromLivenessFailure(api, "Save RAM") : undefined;
-  return runPaused(api, "Save RAM", async () => readRanges(api, FULL_RAM_RANGE, onRetry));
+  return runPaused(api, "Save RAM", async () => {
+    const read = (address: number, length: number) =>
+      withRetry(
+        `Read RAM at $${toHexAddress(address)}`,
+        () => api.readMemory(toHexAddress(address), length),
+        DEFAULT_RETRY_ATTEMPTS,
+        onRetry,
+      );
+    const ranges = typeof resolve === "function" ? await resolve(read) : resolve;
+    const blocks: Uint8Array[] = [];
+    for (const range of ranges) {
+      if (range.start < 0 || range.length < 0 || range.start + range.length > FULL_RAM_SIZE_BYTES) {
+        throw new Error(`dumpRamRanges: range out of bounds: start=${range.start}, length=${range.length}`);
+      }
+      blocks.push(await readRangeBlock(api, range.start, range.length, onRetry));
+    }
+    return { ranges, blocks };
+  });
 };
 
 export const clearRamAndReboot = async (api: C64API) => {

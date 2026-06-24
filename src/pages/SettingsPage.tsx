@@ -61,6 +61,7 @@ import { DialogContent } from "@/components/ui/dialog";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import { primeDiagnosticsOverlaySuppression } from "@/lib/diagnostics/diagnosticsOverlayState";
+import { getSettingsDocumentationLink } from "@/lib/docs/externalResources";
 import { useDeveloperMode } from "@/hooks/useDeveloperMode";
 import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
@@ -229,6 +230,7 @@ export default function SettingsPage() {
   const trace = useActionTrace("SettingsPage");
   const buildInfo = getBuildInfo();
   const buildInfoRows = getBuildInfoRows(buildInfo);
+  const settingsDocumentationLink = getSettingsDocumentationLink();
   const passwordInputRef = useRef(password);
 
   const [passwordInput, setPasswordInput] = useState(password);
@@ -2594,13 +2596,14 @@ export default function SettingsPage() {
             </div>
 
             <a
-              href="https://1541u-documentation.readthedocs.io/en/latest/api/api_calls.html"
+              href={settingsDocumentationLink.href}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 text-sm text-primary hover:underline"
+              data-testid={settingsDocumentationLink.testId}
             >
               <ExternalLink className="h-4 w-4" />
-              Ultimate REST API Documentation
+              {settingsDocumentationLink.label}
             </a>
 
             <button

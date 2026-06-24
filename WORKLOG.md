@@ -369,3 +369,44 @@ second per-item GET**; full unit suite re-run. Files: `src/lib/c64api.ts`
 (`getCachedConfigItem`), `src/components/ConfigItemRow.tsx` (cache short-circuit).
 
 ## P9 / P10 — appended as they run
+
+## Pixel 4 CTA continuation — Disks mount/import fixes
+
+Recorded UTC: 2026-06-24T23:09:00Z.
+
+Commands and material actions:
+
+- `git status --short`: worktree dirty with unrelated snapshot/RAM test files preserved.
+- `git rev-parse --abbrev-ref HEAD && git rev-parse HEAD`: branch `test/full-cta-coverage`, SHA `1ce6ab76f04d284225fb5fec3ef940c8c3760ccb`.
+- `npm run test -- tests/unit/components/disks/HomeDiskManager.dialogs.test.tsx`: passed 10 tests; locks the empty mount-sheet Add disks path, Disks CommoServe picker/import path, and no nested `All disks` view-all control inside the drive-specific mount sheet.
+- `npm run scope:check`: passed 55 files / 356 tests.
+- `./build --skip-tests --install-apk`: built and installed `android/app/build/outputs/apk/debug/c64commander-0.8.9-1ce6a-debug.apk` on Pixel 4 `9B081FFAZ001WX`.
+- `sha256sum android/app/build/outputs/apk/debug/c64commander-0.8.9-1ce6a-debug.apk`: `9d020f42d609614c6ea83cf05d9512987b2d96c5d4b66e1f9806c5597208826f`.
+- `adb -s 9B081FFAZ001WX shell dumpsys package uk.gleissner.c64commander`: installed identity `versionName=0.8.9-1ce6a`, `versionCode=2039`, first install `2026-06-24 22:52:18`, last update `2026-06-25 00:07:16`, signature short `d39d81d2`.
+- DroidMind targeted Save-and-Connect was used to restore the app-visible connected state after the user reported the app was `Offline`; evidence `screenshots/save-connect-targeted-after.png`, `hierarchies/save-connect-targeted-after.xml`, `logs/commands/droidmind-targeted-save-connect.stdout.log`.
+- DroidMind Disks Add items source proof showed `Local`, `C64U`, and `CommoServe`; evidence `screenshots/commoserve-library-source-01-source-picker.png`, `hierarchies/commoserve-library-source-01-source-picker.xml`, `results-disks-commoserve-library-source.json`.
+- DroidMind C64U import from broad `/USB2/test-data` stalled at `Scanning... 0 items` for at least 1m52s and was cancelled through the visible Cancel control; evidence `screenshots/disks-import-stuck-scan-before-cancel.png`, `screenshots/disks-import-stuck-scan-after-semantic-cancel.png`, `hierarchies/disks-import-stuck-scan-before-cancel.xml`, `logs/commands/droidmind-disks-import-add-to-library.stdout.log`, `logs/commands/droidmind-disks-import-semantic-cancel-scan.stdout.log`.
+- DroidMind C64U import from `/USB2/test-data/d64` succeeded by selecting `interface-harness.d64`, `Frogger.d64`, and `Boulder Dash 2.d64`; evidence `screenshots/disks-import-specific-after-add.png`, `hierarchies/disks-import-specific-after-add.xml`, `logs/commands/droidmind-disks-import-specific-d64.stdout.log`.
+- DroidMind mount/eject proof mounted `interface-harness.d64` and then ejected Drive A; evidence `screenshots/mount-proof-drive-a-after-mount.png`, `screenshots/mount-proof-drive-a-after-eject.png`, `hierarchies/mount-proof-drive-a-after-mount.xml`, `hierarchies/mount-proof-drive-a-after-eject.xml`, `logs/commands/droidmind-mount-dialog-populated-mount-eject.stdout.log`.
+- DroidMind exact-sheet proof initially exposed a product bug: tapping the semantically identified `Drive A Mount disk` control opened the generic `All disks` sheet instead of `Mount disk to Drive A`; evidence `screenshots/drive-a-mount-sheet-exact-open.png`, `hierarchies/drive-a-mount-sheet-exact-open.xml`, `logs/commands/droidmind-drive-a-mount-sheet-exact.stdout.log`.
+- After the drive-sheet fix and reinstall, DroidMind proof passed: `Drive A Mount disk` opened `Mount disk to Drive A`, showed `Available disks`, listed all three C64U D64 fixtures, did not show the empty state, did not show generic `All disks`, and dismissed cleanly with `DroidmindClient.pressKey(Back)`; evidence `screenshots/drive-a-mount-sheet-fixed-open.png`, `hierarchies/drive-a-mount-sheet-fixed-open.xml`, `logs/commands/droidmind-drive-a-mount-sheet-fixed.stdout.log`.
+
+Decisions and evidence:
+
+- The empty Mount disk report was not treated as a hardware absence issue. It was fixed as product UX: an empty mount sheet now offers `Add disks`, and the drive-specific sheet no longer opens a nested generic `All disks` surface when disks exist.
+- The Disks Add items source picker now includes CommoServe. Archive disk import is wired through the existing archive client path and stores the downloaded disk as a runtime `File` for the disk library.
+- The broad-folder C64U recursive scan stall remains open as a product issue. It does not block mounting because specific D64 selection from `/USB2/test-data/d64` succeeds, but it must be tracked in the Disks deep dive and performance results.
+- Cleanup status at this point: Drive A was ejected and the app-visible target is connected to `c64u`; three temporary disk-library entries remain intentionally retained for continuing Disks CTA coverage and must be removed during final cleanup.
+
+Artifact root:
+
+- `c64scope/artifacts/cta-20260624T230900Z-pixel4-c64u-1ce6ab76f04d/` (current-SHA copy with `environment.json`)
+- Source evidence was first captured under `c64scope/artifacts/cta-20260624T222959Z-pixel4-c64u-414ec2a965d6/` before the APK was rebuilt as `0.8.9-1ce6a`.
+
+Current-HEAD correction after concurrent branch advance:
+
+- `git rev-parse HEAD`: branch advanced to `10c4b5e98510b3a4cd0afa824ca4ac34dcc71db9` (`Improve RAM snapshot tests`).
+- Rebuilt and installed current APK with `./build --skip-tests --install-apk`; APK `android/app/build/outputs/apk/debug/c64commander-0.8.9-10c4b-debug.apk`, SHA-256 `38d17f562159101f340d729f4e93ba5c21e7885dd3ccf40b868c792432e71e6e`.
+- Installed package identity after reinstall: versionName `0.8.9-10c4b`, versionCode `2040`, lastUpdateTime `2026-06-25 00:17:22`, package path `/data/app/~~U83Do-y3NWKqtU49tTBMPw==/uk.gleissner.c64commander-xwJ3ACWEBnM_ee8FAXUMiw==/base.apk`.
+- Re-ran current-HEAD all-route discovery with absolute artifact path. Results: total `295` discovery rows; Home `109`, Play `24`, Disks `40`, Config `28`, Settings `76`, Docs `18`.
+- Active current artifact root is now `c64scope/artifacts/cta-20260624T231700Z-pixel4-c64u-10c4b5e98510/`.

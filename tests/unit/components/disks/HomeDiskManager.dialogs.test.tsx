@@ -67,11 +67,7 @@ vi.mock("@/components/itemSelection/ItemSelectionDialog", () => ({
         ))}
         <span data-testid="archive-config-ids">{Object.keys(archiveConfigs ?? {}).join(",")}</span>
         {archiveSource ? (
-          <button
-            onClick={() =>
-              onConfirm(archiveSource, [{ type: "file", name: "Archive Game", path: "123/42" }])
-            }
-          >
+          <button onClick={() => onConfirm(archiveSource, [{ type: "file", name: "Archive Game", path: "123/42" }])}>
             Import Archive Disk
           </button>
         ) : null}

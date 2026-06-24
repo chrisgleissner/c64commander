@@ -1052,13 +1052,9 @@ export const HomeDiskManager = () => {
               updateProgress(1);
               continue;
             }
-            const binary = await archiveClient.downloadBinary(
-              resultId,
-              category,
-              diskEntry.id,
-              diskEntry.path,
-              { signal: abortSignal },
-            );
+            const binary = await archiveClient.downloadBinary(resultId, category, diskEntry.id, diskEntry.path, {
+              signal: abortSignal,
+            });
             throwIfAborted();
             const normalized = normalizeDiskPath(binary.fileName || diskEntry.path);
             const entry = createDiskEntry({
@@ -1071,7 +1067,9 @@ export const HomeDiskManager = () => {
               modifiedAt: diskEntry.date ? new Date(diskEntry.date).toISOString() : null,
               importOrder: index,
             });
-            runtimeFiles[entry.id] = new File([binary.bytes], entry.name, {
+            const fileBytes = new ArrayBuffer(binary.bytes.byteLength);
+            new Uint8Array(fileBytes).set(binary.bytes);
+            runtimeFiles[entry.id] = new File([fileBytes], entry.name, {
               type: binary.contentType ?? "application/octet-stream",
             });
             disks.push(entry);

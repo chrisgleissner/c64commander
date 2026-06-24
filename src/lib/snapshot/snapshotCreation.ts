@@ -8,7 +8,7 @@
 
 import type { C64API } from "@/lib/c64api";
 import { getBuildInfo } from "@/lib/buildInfo";
-import { dumpFullRamImage } from "@/lib/machine/ramOperations";
+import { dumpRamRanges } from "@/lib/machine/ramOperations";
 import { encodeSnapshot } from "./snapshotFormat";
 import { buildSnapshotFileName, formatDisplayTimestamp } from "./snapshotFilename";
 import { saveSnapshotToStore } from "./snapshotStore";
@@ -55,23 +55,21 @@ const COLOR_END_INCLUSIVE = 0xdbff;
 const toHex = (n: number) => "$" + n.toString(16).toUpperCase().padStart(4, "0");
 
 /**
- * Computes the CPU start address of the active VIC bank from the underlying
- * DRAM image. Best-effort: valid when the DRAM value at $DD00 reflects the
- * active CIA2 register state (reliable for KERNAL/BASIC sessions).
+ * Computes the CPU start address of the active VIC bank from the live CIA2
+ * Port A register ($DD00).
  *
  * VIC bank = (~CIA2_PA) & 0x03 → bank base = bank × $4000
  *
  * Exported for unit-testing in isolation.
  */
-export const computeVicBankStart = (fullImage: Uint8Array): number => {
-  const cia2Pa = fullImage[CIA2_PA_ADDR];
+export const computeVicBankStart = (cia2Pa: number): number => {
   const vicBank = ~cia2Pa & 0x03;
   return vicBank * 0x4000;
 };
 
-/** Derives screen snapshot ranges from the full RAM image. */
-const screenRanges = (fullImage: Uint8Array): { ranges: MemoryRange[]; displayRanges: string[] } => {
-  const bankStart = computeVicBankStart(fullImage);
+/** Derives screen snapshot ranges from the live CIA2 Port A ($DD00) value. */
+const screenRanges = (cia2Pa: number): { ranges: MemoryRange[]; displayRanges: string[] } => {
+  const bankStart = computeVicBankStart(cia2Pa);
   const ranges: MemoryRange[] = [
     { start: bankStart, length: VIC_BANK_SIZE },
     { start: VIC_REG_START, length: VIC_REG_END_INCLUSIVE - VIC_REG_START + 1 },
@@ -155,31 +153,31 @@ export const createSnapshot = async (
 ): Promise<{ displayTimestamp: string }> => {
   const { type, customRanges, label, contentName } = options;
 
-  const fullImage = await dumpFullRamImage(api);
-  const now = new Date();
-
-  let ranges: MemoryRange[];
-  let displayRanges: string[];
-
-  if (type === "program") {
-    ({ ranges, displayRanges } = programRanges());
-  } else if (type === "basic") {
-    ({ ranges, displayRanges } = basicRanges());
-  } else if (type === "screen") {
-    ({ ranges, displayRanges } = screenRanges(fullImage));
-  } else {
-    // custom
-    if (!customRanges || customRanges.length === 0) {
-      throw new Error("Custom snapshot requires at least one memory range.");
-    }
-    ranges = customRanges;
-    displayRanges = customRanges.map((r) => `${toHex(r.start)}-${toHex(r.start + r.length - 1)}`);
+  if (type === "custom" && (!customRanges || customRanges.length === 0)) {
+    throw new Error("Custom snapshot requires at least one memory range.");
   }
 
-  // Extract the byte blocks for each range from the full RAM image
-  const blocks = ranges.map((r) => {
-    const end = Math.min(r.start + r.length, fullImage.length);
-    return fullImage.slice(r.start, end);
+  const now = new Date();
+
+  // Read only the ranges this snapshot type actually needs — no full 64 KiB
+  // dump. A screen snapshot reads the live CIA2 VIC-bank register ($DD00) first,
+  // inside the same paused session, to decide which 16 KiB bank to capture.
+  let displayRanges: string[] = [];
+  const { ranges, blocks } = await dumpRamRanges(api, async (read) => {
+    let resolved: { ranges: MemoryRange[]; displayRanges: string[] };
+    if (type === "program") {
+      resolved = programRanges();
+    } else if (type === "basic") {
+      resolved = basicRanges();
+    } else if (type === "screen") {
+      const cia2Pa = (await read(CIA2_PA_ADDR, 1))[0];
+      resolved = screenRanges(cia2Pa);
+    } else {
+      const ranges = customRanges as MemoryRange[];
+      resolved = { ranges, displayRanges: ranges.map((r) => `${toHex(r.start)}-${toHex(r.start + r.length - 1)}`) };
+    }
+    displayRanges = resolved.displayRanges;
+    return resolved.ranges;
   });
 
   const displayTimestamp = formatDisplayTimestamp(now);
