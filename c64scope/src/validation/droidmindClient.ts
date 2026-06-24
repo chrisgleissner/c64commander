@@ -10,6 +10,7 @@ import { writeFile } from "node:fs/promises";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
+import { checkCapabilities, type CapabilityCheckResult, type McpToolCapability } from "../cta/capabilities.js";
 
 const DEFAULT_DROIDMIND_COMMAND = process.env["DROIDMIND_COMMAND"] ?? "uvx";
 const DEFAULT_DROIDMIND_ARGS = process.env["DROIDMIND_ARGS"]?.trim()
@@ -91,6 +92,21 @@ export class DroidmindClient {
       action: "list_devices",
     });
     return firstTextContent(result);
+  }
+
+  async listTools(): Promise<McpToolCapability[]> {
+    await this.connect();
+    const result = await this.client.listTools();
+    return result.tools.map((tool) => ({
+      name: tool.name,
+      inputSchema: {
+        properties: tool.inputSchema.properties,
+      },
+    }));
+  }
+
+  async checkCapabilities(): Promise<CapabilityCheckResult> {
+    return checkCapabilities(await this.listTools());
   }
 
   async startApp(serial: string, appPackage: string, activity: string = ".MainActivity"): Promise<void> {

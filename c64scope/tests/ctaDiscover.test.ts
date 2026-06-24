@@ -7,7 +7,7 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-import { parseDiscoverArgs } from "../src/ctaDiscover.js";
+import { parseDiscoverArgs } from "../src/cta/discover.js";
 
 describe("CTA discover CLI", () => {
   afterEach(() => {

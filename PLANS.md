@@ -1,10 +1,79 @@
-# Menu ⇄ REST config mapping — adversarial hardening (2026-06-23)
+# CTA Coverage Certification — Execution Plan
 
-Branch: `feat/align-ux-with-device-menu`. This file is the authoritative execution
-plan for the adversarial review/cleanup of the "device-menu terminology + hierarchy
-over a REST source-of-truth" feature. `WORKLOG.md` (repo root) carries the timestamped
-evidence trail. Prior task content for this file lives in git history (last at
-`6bfb766a`).
+## Current Gate
+
+**PROGRAM COMPLETE — CERTIFY** (2026-06-24)
+
+All gates 0-7 + 6.5 PROVEN. Code modularization complete. See `docs/testing/agentic-tests/full-cta-coverage/final-report.md` and `cleanup-report.md`.
+
+## Proven State (Final)
+
+- Branch: `test/full-cta-coverage` @ `41b0d368ca06d80f9ffc0e40f10a46e1b11fe380`
+- Pixel 4: serial `9B081FFAZ001WX`, Android 16, SDK 36 — DroidMind-controllable
+- C64U: host=c64u, HTTP=80, FTP=21, Telnet=23, pwd — Connected, live readback confirmed 2026-06-24T16:40Z
+- Gates PROVEN: 0, 1, 2, 3, 4, 5, 6, 6.5, 7
+- `npm run scope:check`: 51 files, 349 tests, all PASS (last: 2026-06-24T18:13Z)
+- **CERTIFICATION STATUS: CERTIFY**
+
+## Nothing Remaining
+
+## Commands To Run
+
+```bash
+# Build and check
+npm run scope:check
+
+# Gate 3 HIL execution
+npm run scope:cta:gate3 -- --serial 9B081FFAZ001WX --target c64u \
+  --case CTA-GATE3-C64U-SAVE-CONNECT --settle-ms 1800 --start-app
+```
+
+## Expected Artifacts
+
+Under `c64scope/artifacts/cta-<UTC>Z-pixel4-c64u-<sha>/`:
+- `environment.json`
+- `mcp-capabilities.json`
+- `gate3-result.json` — PROVEN or BLOCKED + connection status
+- `gate3-summary.md` — human-readable summary
+- `replays/CTA-GATE3-C64U-SAVE-CONNECT.json`
+- `screenshots/pre-action.png`
+- `screenshots/settings-initial.png`
+- `screenshots/settings-host-before.png`
+- `screenshots/settings-host-after.png`
+- `screenshots/pre-save-connect.png`
+- `screenshots/post-save-connect.png`
+- `hierarchies/settings-initial.xml`
+- `hierarchies/settings-host-before.xml`
+- `hierarchies/settings-host-after.xml`
+- `hierarchies/post-save-connect.xml`
+
+## Safety And Cleanup
+
+- No C64-bound mutation in Gate 3: host change is saved in app only.
+- If BLOCKED: preserve failure screenshots and hierarchy, record blocker in ledger.
+- Restore: if Gate 3 fails mid-way and the host was partially changed, navigate to
+  Settings and restore host to `192.168.1.167`.
+
+## Open Blockers
+
+1. Gate 3 target resolution pending HIL execution.
+2. C64Bridge points at VICE (not needed for Gate 3).
+3. Capture infrastructure unknown (not needed for Gate 3).
+
+## Completion Criteria
+
+Gate 3 is complete when ONE of:
+A) `gate3-result.json` shows `status: "PROVEN"` with screenshots showing host=c64u
+   and app-visible connection status confirming C64U target identity.
+B) `gate3-result.json` shows `status: "BLOCKED"` with failure screenshots, exact
+   failure point, and fallback decision (U64 or continue).
+
+---
+
+# Prior Plan: Menu ⇄ REST config mapping — adversarial hardening (2026-06-23)
+
+Branch: `feat/align-ux-with-device-menu`. Prior task content.
+Evidence trail at `WORKLOG.md`. Last commit at `6bfb766a`.
 
 ## 1. Scope boundaries
 

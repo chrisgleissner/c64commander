@@ -14,11 +14,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const connectMock = vi.fn();
 const closeMock = vi.fn();
 const callToolMock = vi.fn();
+const listToolsMock = vi.fn();
 const clientCtorMock = vi.fn().mockImplementation(function ClientMock() {
   return {
     connect: connectMock,
     close: closeMock,
     callTool: callToolMock,
+    listTools: listToolsMock,
   };
 });
 const transportCtorMock = vi.fn().mockImplementation(function StdioClientTransportMock() {
@@ -43,6 +45,7 @@ describe("droidmind client", () => {
     connectMock.mockReset();
     closeMock.mockReset();
     callToolMock.mockReset();
+    listToolsMock.mockReset();
     delete process.env.DROIDMIND_ARGS;
   });
 
@@ -175,6 +178,33 @@ describe("droidmind client", () => {
       },
       {},
     );
+  });
+
+  it("discovers DroidMind tool capabilities", async () => {
+    listToolsMock.mockResolvedValueOnce({
+      tools: [
+        { name: "android-device", inputSchema: { type: "object", properties: { action: { enum: ["list_devices"] } } } },
+        {
+          name: "android-app",
+          inputSchema: { type: "object", properties: { action: { enum: ["start_app", "stop_app"] } } },
+        },
+        {
+          name: "android-ui",
+          inputSchema: {
+            type: "object",
+            properties: { action: { enum: ["tap", "swipe", "press_key", "input_text"] } },
+          },
+        },
+        { name: "android-shell", inputSchema: { type: "object", properties: {} } },
+        { name: "android-screenshot", inputSchema: { type: "object", properties: {} } },
+      ],
+    });
+
+    const { DroidmindClient } = await import("../src/validation/droidmindClient.js");
+    const client = new DroidmindClient();
+
+    await expect(client.checkCapabilities()).resolves.toEqual({ satisfied: true, missing: [] });
+    expect(listToolsMock).toHaveBeenCalledTimes(1);
   });
 
   it("honors custom droidmind args and treats close before connect as a no-op", async () => {

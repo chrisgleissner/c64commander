@@ -9,10 +9,10 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { resolvePreferredPhysicalTestDeviceSerial } from "./deviceRegistry.js";
-import { runCtaCensus } from "./cta/ctaCensus.js";
-import { DroidmindClient } from "./validation/droidmindClient.js";
-import { resolveWorkspaceRoot, timestampId } from "./fullAppCoverageExecutor.js";
+import { resolvePreferredPhysicalTestDeviceSerial } from "../deviceRegistry.js";
+import { runCtaCensus } from "./ctaCensus.js";
+import { DroidmindClient } from "../validation/droidmindClient.js";
+import { resolveWorkspaceRoot, timestampId } from "../fullAppCoverageExecutor.js";
 
 const APP_PACKAGE = "uk.gleissner.c64commander";
 const START_APP_SETTLE_MS = 2500;

@@ -57,7 +57,12 @@ describe("runtime fingerprints", () => {
   it("excludes nodes owned by another package when a target package is configured", () => {
     const fingerprints = fingerprintsFromUiNodes(
       [
-        node({ packageName: "com.android.systemui", className: "android.widget.Button", clickable: true, text: "System" }),
+        node({
+          packageName: "com.android.systemui",
+          className: "android.widget.Button",
+          clickable: true,
+          text: "System",
+        }),
         node({
           packageName: "uk.gleissner.c64commander",
           className: "android.widget.Button",
