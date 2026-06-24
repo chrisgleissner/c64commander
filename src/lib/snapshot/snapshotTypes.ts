@@ -83,7 +83,7 @@ export const SNAPSHOT_TYPE_LIST: SnapshotTypeConfig[] = [
   {
     type: "program",
     label: "Program Snapshot",
-    rangeDisplay: "$0000–$00FF, $0200–$DCFF, $DE00–$FFFF",
+    rangeDisplay: "$0000–$00FF, $0200–$FFFF",
     filePrefix: "program",
   },
   {

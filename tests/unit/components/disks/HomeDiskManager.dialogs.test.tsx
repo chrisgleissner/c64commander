@@ -18,9 +18,11 @@ const mockArchiveClient = vi.hoisted(() => ({
 // --- MOCKS ---
 
 vi.mock("@/components/lists/SelectableActionList", () => ({
-  SelectableActionList: ({ items, headerActions, onRemoveSelected, selectedCount }: any) => (
+  SelectableActionList: ({ title, items, headerActions, onRemoveSelected, selectedCount, viewAllTitle }: any) => (
     <div data-testid="mock-action-list">
+      <span data-testid="mock-action-list-title">{title}</span>
       <div data-testid="header-actions">{headerActions}</div>
+      {viewAllTitle ? <button>{viewAllTitle}</button> : null}
       {selectedCount > 0 && <button onClick={onRemoveSelected}>Delete Selected</button>}
 
       {items.map((item: any) => (
@@ -206,6 +208,8 @@ describe("HomeDiskManager Dialogs", () => {
 
     // The second list should be the dialog one (rendered last/in portal)
     const dialogList = lists[1];
+    expect(within(dialogList).getByTestId("mock-action-list-title")).toHaveTextContent("Available disks");
+    expect(within(dialogList).queryByRole("button", { name: "All disks" })).not.toBeInTheDocument();
     const mountBtn = within(dialogList).getAllByText("Mount")[0]; // Pick first disk
 
     fireEvent.click(mountBtn);

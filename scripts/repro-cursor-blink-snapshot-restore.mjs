@@ -76,8 +76,11 @@ const WINDOW_MS = Number(argVal("--window-ms", "2000"));
 // --- memory map constants (mirror ramOperations.ts) -----------------------
 const FULL_RAM_SIZE = 0x10000;
 const CHUNK = 0x1000;
-const CIA1_VOLATILE_START = 0xdc02;
-const CIA1_VOLATILE_END = 0xdd00;
+// Only the CIA timer registers ($xx04-$xx07 and their 16-byte mirrors) are
+// unsafe to write back; everything else (ports, DDR, TOD, ICR, control) is fine.
+const CIA_PAGES_START = 0xdc00;
+const CIA_PAGES_END = 0xde00;
+// Old pre-fix prod only skipped the CIA2 page below; kept for restoreCurrent().
 const CIA2_VOLATILE_START = 0xdd02;
 const CIA2_VOLATILE_END = 0xde00;
 const BLINK_RELOAD_JIFFIES = 20;
@@ -86,23 +89,41 @@ const hex = (n) => n.toString(16).toUpperCase().padStart(4, "0");
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 const authHeaders = () => (PASSWORD ? { "X-Password": PASSWORD } : {});
 
+// Transient-blip retry: the device REST stack hiccups under load (undici "fetch
+// failed"). Retry a few times so a network blip doesn't abort verification.
+async function withRetry(label, run, attempts = 4) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await run();
+    } catch (error) {
+      if (attempt >= attempts) throw new Error(`${label} failed after ${attempts} attempts: ${error.message}`);
+      await delay(250 * attempt);
+    }
+  }
+}
+
 // --- REST helpers (mirror C64API.readMemory / writeMemoryBlock / machine:*) --
 async function readMemory(addr, length) {
-  const r = await fetch(`${BASE}/v1/machine:readmem?address=${addr}&length=${length}`, { headers: authHeaders() });
-  if (!r.ok) throw new Error(`readmem ${addr} HTTP ${r.status}`);
-  return new Uint8Array(await r.arrayBuffer());
+  return withRetry(`readmem ${addr}`, async () => {
+    const r = await fetch(`${BASE}/v1/machine:readmem?address=${addr}&length=${length}`, { headers: authHeaders() });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return new Uint8Array(await r.arrayBuffer());
+  });
 }
 async function writeMemoryBlock(addr, bytes) {
-  const r = await fetch(`${BASE}/v1/machine:writemem?address=${addr}`, {
-    method: "POST",
-    headers: { ...authHeaders(), "Content-Type": "application/octet-stream" },
-    body: bytes,
+  return withRetry(`writemem ${addr}`, async () => {
+    const r = await fetch(`${BASE}/v1/machine:writemem?address=${addr}`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/octet-stream" },
+      body: bytes,
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
   });
-  if (!r.ok) throw new Error(`writemem ${addr} HTTP ${r.status}`);
 }
 const machine = (verb) =>
-  fetch(`${BASE}/v1/machine:${verb}`, { method: "PUT", headers: authHeaders() }).then((r) => {
-    if (!r.ok) throw new Error(`machine:${verb} HTTP ${r.status}`);
+  withRetry(`machine:${verb}`, async () => {
+    const r = await fetch(`${BASE}/v1/machine:${verb}`, { method: "PUT", headers: authHeaders() });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
   });
 
 // --- jiffy / blink measurement --------------------------------------------
@@ -120,17 +141,24 @@ async function measureJiffyRate(windowMs) {
 const fmtRate = (rate) =>
   `${rate.toFixed(1).padStart(7)} jiffies/s (toggle every ${((BLINK_RELOAD_JIFFIES / rate) * 1000).toFixed(0).padStart(4)} ms)`;
 
-const inVolatile = (addr) =>
-  (addr >= CIA1_VOLATILE_START && addr < CIA1_VOLATILE_END) ||
-  (addr >= CIA2_VOLATILE_START && addr < CIA2_VOLATILE_END);
+const isCiaTimerRegister = (addr) => {
+  if (addr < CIA_PAGES_START || addr >= CIA_PAGES_END) return false;
+  const reg = addr & 0x0f;
+  return reg >= 0x04 && reg <= 0x07;
+};
 
 // --- default snapshot range-sets (mirror snapshotCreation.ts) -------------
 async function buildRanges(type) {
   switch (type) {
     case "basic":
-      return { ranges: [r(0x002b, 0x0038), r(0x0801, 0x9fff)], canary: 0x0801 };
+      return { ranges: [r(0x002b, 0x0038), r(0x0801, 0x9fff)], canaries: [{ addr: 0x0801 }] };
     case "program":
-      return { ranges: [r(0x0000, 0x00ff), r(0x0200, 0xdcff), r(0xde00, 0xffff)], canary: 0x0400 };
+      // Now includes the full I/O region incl. CIA2 ($DD00 = VIC bank). Verify
+      // both a RAM byte and the VIC-bank select bits ($DD00 low 2 bits) restore.
+      return {
+        ranges: [r(0x0000, 0x00ff), r(0x0200, 0xffff)],
+        canaries: [{ addr: 0x0400 }, { addr: 0xdd00, mask: 0x03 }],
+      };
     case "screen": {
       const cia2pa = (await readMemory("DD00", 1))[0];
       const bankStart = (~cia2pa & 0x03) * 0x4000;
@@ -141,11 +169,11 @@ async function buildRanges(type) {
           r(0xd800, 0xdbff),
           r(0xdd00, 0xdd01),
         ],
-        canary: bankStart + 0x0400, // screen RAM inside the active VIC bank
+        canaries: [{ addr: bankStart + 0x0400 }], // screen RAM inside the active VIC bank
       };
     }
     case "custom-ram": // the $0801-$7FFF RAM snapshot from the bug report
-      return { ranges: [r(0x0801, 0x7fff)], canary: 0x0801 };
+      return { ranges: [r(0x0801, 0x7fff)], canaries: [{ addr: 0x0801 }] };
     default:
       throw new Error(`unknown --type ${type}`);
   }
@@ -190,12 +218,12 @@ async function restoreFixed(ranges) {
     for (const { start, bytes } of ranges) {
       let i = 0;
       while (i < bytes.length) {
-        if (inVolatile(start + i)) {
+        if (isCiaTimerRegister(start + i)) {
           i += 1;
           continue;
         }
         let j = i;
-        while (j < bytes.length && !inVolatile(start + j)) j += 1;
+        while (j < bytes.length && !isCiaTimerRegister(start + j)) j += 1;
         for (let k = i; k < j; k += CHUNK) {
           const end = Math.min(j, k + CHUNK);
           await writeMemoryBlock(hex(start + k), bytes.subarray(k, end));
@@ -217,22 +245,32 @@ async function runType(type, restore) {
   const baseline = await measureJiffyRate(WINDOW_MS);
   console.log(`baseline      : ${fmtRate(baseline)}`);
 
-  const { ranges, canary } = await buildRanges(type);
+  const { ranges, canaries } = await buildRanges(type);
   const captured = [];
   for (const range of ranges) captured.push({ start: range.start, bytes: await captureRange(range.start, range.length) });
   const spans = ranges.map((x) => `$${hex(x.start)}-$${hex(x.start + x.length - 1)}`).join(", ");
   const totalBytes = captured.reduce((n, c) => n + c.bytes.length, 0);
   console.log(`captured ${spans}  (${totalBytes} bytes)`);
 
-  // Data-roundtrip canary: corrupt an in-range RAM byte, then let the restore fix it.
-  const canaryOriginal = (await readMemory(hex(canary), 1))[0];
-  await writeMemoryBlock(hex(canary), new Uint8Array([canaryOriginal ^ 0xff]));
+  // Data-roundtrip canaries: corrupt each in-range byte, then let the restore fix it.
+  // mask isolates meaningful bits (e.g. $DD00 low 2 bits = VIC bank select).
+  for (const c of canaries) {
+    c.mask ??= 0xff;
+    c.original = (await readMemory(hex(c.addr), 1))[0];
+    await writeMemoryBlock(hex(c.addr), new Uint8Array([c.original ^ c.mask]));
+  }
 
   const rates = [];
-  let canaryRestored = false;
+  const restoredFlags = canaries.map(() => false);
   for (let n = 1; n <= RESTORES; n += 1) {
     await restore(captured);
-    if (n === 1) canaryRestored = (await readMemory(hex(canary), 1))[0] === canaryOriginal;
+    if (n === 1) {
+      for (let ci = 0; ci < canaries.length; ci += 1) {
+        const c = canaries[ci];
+        const now = (await readMemory(hex(c.addr), 1))[0];
+        restoredFlags[ci] = (now & c.mask) === (c.original & c.mask);
+      }
+    }
     const rate = await measureJiffyRate(WINDOW_MS);
     rates.push(rate);
     console.log(`after restore ${n}: ${fmtRate(rate)}  (${(rate / baseline).toFixed(2)}x)`);
@@ -240,10 +278,14 @@ async function runType(type, restore) {
 
   const worst = rates.reduce((m, x) => Math.max(m, Math.abs(x - baseline) / baseline), 0);
   const blinkStable = worst <= 0.25;
+  const canaryRestored = restoredFlags.every(Boolean);
   const pass = blinkStable && canaryRestored;
+  const canarySummary = canaries
+    .map((c, ci) => `$${hex(c.addr)}${c.mask !== 0xff ? `&${c.mask.toString(16)}` : ""}=${restoredFlags[ci] ? "ok" : "BAD"}`)
+    .join(" ");
   console.log(
     `${pass ? "PASS" : "FAIL"}  blink ${blinkStable ? "stable" : "UNSTABLE"} (worst drift ${(worst * 100).toFixed(1)}%), ` +
-      `canary @ $${hex(canary)} ${canaryRestored ? "restored" : "NOT restored"}`,
+      `canaries ${canarySummary}`,
   );
   return pass;
 }

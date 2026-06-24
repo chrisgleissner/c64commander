@@ -20,21 +20,23 @@ const READ_CHUNK_SIZE_BYTES = 0x1000;
 const WRITE_CHUNK_SIZE_BYTES = 0x1000;
 const WAIT_BETWEEN_RETRIES_MS = 120;
 const DEFAULT_RETRY_ATTEMPTS = 2;
-// Volatile CIA timer / TOD / serial / interrupt / control registers (and their
-// 16-byte register mirrors up to the end of each CIA page). Restoring these
-// from a snapshot reprograms the jiffy IRQ timer (CIA1 Timer A latch at
-// $DC04/$DC05): the firmware's readmem returns the live down-counter, and
-// writing it back as the latch shortens the IRQ period. That manifests as the
-// cursor blinking faster on every consecutive restore. Port A/B ($xx00/$xx01)
-// are intentionally writable so screen snapshots can restore the VIC bank.
-const CIA1_VOLATILE_START = 0xdc02;
-const CIA1_VOLATILE_END_EXCLUSIVE = 0xdd00;
-const CIA2_VOLATILE_START = 0xdd02;
-const CIA2_VOLATILE_END_EXCLUSIVE = 0xde00;
+// The CIA timer registers ($xx04-$xx07: Timer A/B lo/hi) are the only registers
+// a snapshot restore must NOT write. The firmware's readmem returns the live
+// timer *down-counter* there, while writemem sets the timer *latch* — so writing
+// a captured counter back as the latch reprograms the CIA1 Timer A jiffy IRQ and
+// the cursor blinks faster on every consecutive restore. Every other CIA
+// register is safe and worth restoring: ports ($xx00/$xx01, including the CIA2
+// VIC-bank select), DDR, TOD, serial, ICR and control. CIA registers mirror
+// every 16 bytes through each page, so the timer registers also appear at
+// $xx14-$xx17, $xx24-$xx27, ... — match on the low nibble to cover the mirrors.
+const CIA_PAGES_START = 0xdc00; // CIA1 $DC00-$DCFF and CIA2 $DD00-$DDFF are contiguous
+const CIA_PAGES_END_EXCLUSIVE = 0xde00;
 
-const isVolatileIoAddress = (address: number) =>
-  (address >= CIA1_VOLATILE_START && address < CIA1_VOLATILE_END_EXCLUSIVE) ||
-  (address >= CIA2_VOLATILE_START && address < CIA2_VOLATILE_END_EXCLUSIVE);
+const isCiaTimerRegister = (address: number) => {
+  if (address < CIA_PAGES_START || address >= CIA_PAGES_END_EXCLUSIVE) return false;
+  const register = address & 0x0f;
+  return register >= 0x04 && register <= 0x07;
+};
 
 type RamRange = {
   start: number;
@@ -223,48 +225,6 @@ const readRanges = async (
   return image;
 };
 
-const writeFullImage = async (
-  api: C64API,
-  image: Uint8Array,
-  onRetry?: (error: Error, attempt: number, maxAttempts: number) => Promise<void>,
-) => {
-  const addressHex = toHexAddress(0);
-  addLog("info", "RAM write: starting full image write", {
-    address: addressHex,
-    imageLength: image.length,
-    firstBytes: Array.from(image.slice(0, 16))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join(" "),
-    screenBytes: Array.from(image.slice(1024, 1028))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join(" "),
-  });
-  recordRamTrace({
-    operation: "ram-write",
-    status: "start",
-    address: addressHex,
-    expectedLength: image.length,
-    chunkSizeBytes: image.length,
-  });
-  await withRetry(
-    `Write RAM image at $${addressHex}`,
-    () => api.writeMemoryBlock(addressHex, image),
-    DEFAULT_RETRY_ATTEMPTS,
-    onRetry ?? (async () => recoverFromLivenessFailure(api, "Load RAM")),
-  );
-  addLog("info", "RAM write: full image write completed", {
-    address: addressHex,
-    imageLength: image.length,
-  });
-  recordRamTrace({
-    operation: "ram-write",
-    status: "success",
-    address: addressHex,
-    expectedLength: image.length,
-    actualLength: image.length,
-  });
-};
-
 const writeRanges = async (
   api: C64API,
   image: Uint8Array,
@@ -344,17 +304,6 @@ export const dumpFullRamImage = async (api: C64API, options?: { recoveryMode?: b
   return runPaused(api, "Save RAM", async () => readRanges(api, FULL_RAM_RANGE, onRetry));
 };
 
-export const loadFullRamImage = async (api: C64API, image: Uint8Array, options?: { recoveryMode?: boolean }) => {
-  if (image.length !== FULL_RAM_SIZE_BYTES) {
-    throw new Error(`Invalid RAM image size: expected ${FULL_RAM_SIZE_BYTES} bytes, got ${image.length} bytes`);
-  }
-  await ensureLiveness(api, "Load RAM");
-  const onRetry = options?.recoveryMode ? async () => recoverFromLivenessFailure(api, "Load RAM") : undefined;
-  await runPaused(api, "Load RAM", async () => {
-    await writeFullImage(api, image, onRetry);
-  });
-};
-
 export const clearRamAndReboot = async (api: C64API) => {
   let paused = false;
   let rebooted = false;
@@ -399,9 +348,9 @@ export const clearRamAndReboot = async (api: C64API) => {
 };
 
 /**
- * Writes a single snapshot range to C64 memory, splitting it around the
- * volatile CIA register windows so those are never overwritten. Each writable
- * sub-range is written directly in chunks.
+ * Writes a single snapshot range to C64 memory, splitting it around the CIA
+ * timer registers so those are never overwritten. Each writable sub-range is
+ * written directly in chunks.
  */
 const writeSnapshotRange = async (
   api: C64API,
@@ -411,12 +360,12 @@ const writeSnapshotRange = async (
 ) => {
   let offset = 0;
   while (offset < bytes.length) {
-    if (isVolatileIoAddress(start + offset)) {
+    if (isCiaTimerRegister(start + offset)) {
       offset += 1;
       continue;
     }
     let end = offset;
-    while (end < bytes.length && !isVolatileIoAddress(start + end)) {
+    while (end < bytes.length && !isCiaTimerRegister(start + end)) {
       end += 1;
     }
     for (let chunkStart = offset; chunkStart < end; chunkStart += WRITE_CHUNK_SIZE_BYTES) {

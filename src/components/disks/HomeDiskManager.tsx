@@ -2126,9 +2126,7 @@ export const HomeDiskManager = () => {
               selectedCount={0}
               allSelected={false}
               onToggleSelectAll={() => undefined}
-              maxVisible={listPreviewLimit}
-              viewAllTitle="All disks"
-              viewAllMode="non-empty"
+              maxVisible={Math.max(sortedDisks.length, listPreviewLimit)}
               showSelectionControls={false}
               headerActions={
                 sortedDisks.length === 0 ? (

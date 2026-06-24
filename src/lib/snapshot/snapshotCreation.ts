@@ -106,14 +106,20 @@ const basicRanges = (): { ranges: MemoryRange[]; displayRanges: string[] } => {
   };
 };
 
-/** Derives ranges for the program snapshot, excluding stack and volatile CIA registers. */
+/**
+ * Derives ranges for the program snapshot: everything except the stack page
+ * ($0100-$01FF). This includes the full I/O region so the VIC-II registers,
+ * SID, colour RAM and both CIA chips (notably CIA2 $DD00, which selects the VIC
+ * bank) are captured. The restore path skips only the CIA timer registers
+ * ($xx04-$xx07) so they cannot reprogram the jiffy IRQ; everything else,
+ * including the VIC-bank mapping, is restored faithfully.
+ */
 const programRanges = (): { ranges: MemoryRange[]; displayRanges: string[] } => ({
   ranges: [
     { start: 0x0000, length: STACK_START },
-    { start: STACK_END_INCLUSIVE + 1, length: 0xdd00 - (STACK_END_INCLUSIVE + 1) },
-    { start: 0xde00, length: 0x10000 - 0xde00 },
+    { start: STACK_END_INCLUSIVE + 1, length: 0x10000 - (STACK_END_INCLUSIVE + 1) },
   ],
-  displayRanges: ["$0000-$00FF", "$0200-$DCFF", "$DE00-$FFFF"],
+  displayRanges: ["$0000-$00FF", "$0200-$FFFF"],
 });
 
 /** Builds a unique snapshot ID from the current time. */

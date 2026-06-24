@@ -80,19 +80,6 @@ describe("ramOperations", () => {
     expect(api.readMemory).toHaveBeenLastCalledWith("F000", 4096);
   });
 
-  it("loads full RAM while paused and resumes afterwards", async () => {
-    const api = buildApi();
-    const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
-    image.fill(0x11);
-
-    await loadFullRamImage(api as any, image);
-
-    expect(api.machinePause).toHaveBeenCalledTimes(1);
-    expect(api.machineResume).toHaveBeenCalledTimes(1);
-    expect(api.writeMemoryBlock).toHaveBeenCalledTimes(1);
-    expect(api.writeMemoryBlock).toHaveBeenCalledWith("0000", image);
-  });
-
   it("reads RAM in monotonic 4KB chunks", async () => {
     const api = buildApi();
 
@@ -109,23 +96,6 @@ describe("ramOperations", () => {
     addresses.forEach((value, index) => {
       expect(value).toBe(index * 0x1000);
     });
-  });
-
-  it("writes RAM in one full-image request at $0000", async () => {
-    const api = buildApi();
-    const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
-
-    await loadFullRamImage(api as any, image);
-
-    const chunkWrites = api.writeMemoryBlock.mock.calls.map(([address]: [string]) => address);
-
-    expect(chunkWrites.length).toBe(1);
-    expect(chunkWrites[0]).toBe("0000");
-  });
-
-  it("rejects RAM images with invalid size", async () => {
-    const api = buildApi();
-    await expect(loadFullRamImage(api as any, new Uint8Array(1234))).rejects.toThrow("Invalid RAM image size");
   });
 
   it("clears RAM excluding IO range and reboots", async () => {

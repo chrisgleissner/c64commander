@@ -30,7 +30,6 @@ import { checkC64Liveness } from "@/lib/machine/c64Liveness";
 import {
   FULL_RAM_SIZE_BYTES,
   dumpFullRamImage,
-  loadFullRamImage,
   clearRamAndReboot,
   loadMemoryRanges,
 } from "@/lib/machine/ramOperations";
@@ -105,69 +104,6 @@ describe("ramOperations", () => {
     });
   });
 
-  describe("loadFullRamImage", () => {
-    it("pauses, writes the full image in one request, then resumes", async () => {
-      const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
-      await loadFullRamImage(api as any, image);
-
-      expect(api.machinePause).toHaveBeenCalledTimes(1);
-      expect(api.writeMemoryBlock).toHaveBeenCalledTimes(1);
-      expect(api.writeMemoryBlock).toHaveBeenCalledWith("0000", image);
-      expect(api.machineResume).toHaveBeenCalledTimes(1);
-    });
-
-    it("matches the script protocol with pause, one full write, and resume", async () => {
-      const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
-      await loadFullRamImage(api as any, image);
-
-      expect(api.machinePause.mock.invocationCallOrder[0]).toBeLessThan(
-        api.writeMemoryBlock.mock.invocationCallOrder[0],
-      );
-      expect(api.writeMemoryBlock.mock.invocationCallOrder[0]).toBeLessThan(
-        api.machineResume.mock.invocationCallOrder[0],
-      );
-    });
-
-    it("rejects invalid image size", async () => {
-      const image = new Uint8Array(100);
-      await expect(loadFullRamImage(api as any, image)).rejects.toThrow("Invalid RAM image size");
-    });
-
-    it("resumes on write failure", async () => {
-      api.writeMemoryBlock.mockRejectedValue(new Error("write failed"));
-      const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
-
-      await expect(loadFullRamImage(api as any, image)).rejects.toThrow("write failed");
-      expect(api.machineResume).toHaveBeenCalled();
-    });
-
-    it("retries the single full-image write and resumes after all retries exhausted", async () => {
-      api.writeMemoryBlock.mockRejectedValue(new Error("chunk write failed"));
-      const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
-
-      await expect(loadFullRamImage(api as any, image)).rejects.toThrow("chunk write failed");
-      expect(api.machineResume).toHaveBeenCalled();
-      expect(api.writeMemoryBlock).toHaveBeenCalledTimes(2);
-    });
-
-    it("writes the exact full-image payload", async () => {
-      const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
-      for (let i = 0; i < image.length; i++) image[i] = i % 251;
-
-      let capturedWrite: { addr: string; data: Uint8Array } | null = null;
-      api.writeMemoryBlock.mockImplementation(async (addr: string, data: Uint8Array) => {
-        capturedWrite = { addr, data: data.slice() };
-      });
-
-      await loadFullRamImage(api as any, image);
-
-      expect(capturedWrite).toEqual({
-        addr: "0000",
-        data: image,
-      });
-    });
-  });
-
   describe("loadMemoryRanges", () => {
     it("writes only the snapshot ranges directly, without round-tripping the full image", async () => {
       // Regression: the old implementation read the whole $0000-$FFFF image and
@@ -202,28 +138,40 @@ describe("ramOperations", () => {
       expect(Array.from(reassembled)).toEqual(Array.from(bytes));
     });
 
-    it("skips volatile CIA1/CIA2 timer registers but still writes port A/B", async () => {
-      // A snapshot range covering a full CIA page must restore the VIC-bank port
-      // bytes ($xx00/$xx01) but never the timer/interrupt registers ($xx02+).
-      const cia2 = new Uint8Array(0x100).fill(0xaa);
-      await loadMemoryRanges(api as any, [{ start: 0xdd00, bytes: cia2 }]);
-      expect(api.writeMemoryBlock).toHaveBeenCalledTimes(1);
-      expect(api.writeMemoryBlock.mock.calls[0][0]).toBe("DD00");
-      expect(Array.from(api.writeMemoryBlock.mock.calls[0][1] as Uint8Array)).toEqual([0xaa, 0xaa]);
-
-      vi.clearAllMocks();
-      vi.mocked(checkC64Liveness).mockResolvedValue({ decision: "healthy" } as any);
-      const cia1 = new Uint8Array(0x10).fill(0xbb);
+    it("skips only the CIA timer registers ($xx04-$xx07), writing everything else", async () => {
+      // A snapshot range covering a full CIA page must restore ports, DDR, TOD,
+      // serial, ICR and control (incl. the VIC-bank select at $DD00) but never
+      // the timer latches at $xx04-$xx07 (and their 16-byte mirrors), because the
+      // firmware returns the live counter there and writing it back corrupts the
+      // jiffy IRQ -> faster cursor blink.
+      const cia1 = new Uint8Array(0x10);
+      for (let i = 0; i < cia1.length; i += 1) cia1[i] = 0xb0 + i;
       await loadMemoryRanges(api as any, [{ start: 0xdc00, bytes: cia1 }]);
-      expect(api.writeMemoryBlock).toHaveBeenCalledTimes(1);
-      expect(api.writeMemoryBlock.mock.calls[0][0]).toBe("DC00");
-      expect(Array.from(api.writeMemoryBlock.mock.calls[0][1] as Uint8Array)).toEqual([0xbb, 0xbb]);
 
-      // No write must ever target an address inside a volatile CIA window.
-      for (const [addr] of api.writeMemoryBlock.mock.calls) {
-        const a = parseInt(addr as string, 16);
-        expect((a >= 0xdc02 && a < 0xdd00) || (a >= 0xdd02 && a < 0xde00)).toBe(false);
+      // Expect three sub-range writes: $DC00-$DC03, $DC08-$DC0F (timers skipped).
+      const calls = api.writeMemoryBlock.mock.calls;
+      expect(calls.map((c) => c[0])).toEqual(["DC00", "DC08"]);
+      expect(Array.from(calls[0][1] as Uint8Array)).toEqual([0xb0, 0xb1, 0xb2, 0xb3]); // ports + DDR
+      expect(Array.from(calls[1][1] as Uint8Array)).toEqual([0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf]); // TOD..control
+
+      // No write may overlap a timer register $xx04-$xx07 in either CIA page.
+      for (const [addr, data] of calls) {
+        const start = parseInt(addr as string, 16);
+        for (let i = 0; i < (data as Uint8Array).length; i += 1) {
+          const a = start + i;
+          const isTimer = a >= 0xdc00 && a < 0xde00 && (a & 0x0f) >= 0x04 && (a & 0x0f) <= 0x07;
+          expect(isTimer).toBe(false);
+        }
       }
+    });
+
+    it("writes the CIA2 VIC-bank port ($DD00/$DD01) but skips its timer latches", async () => {
+      const cia2 = new Uint8Array(0x10).fill(0xaa);
+      await loadMemoryRanges(api as any, [{ start: 0xdd00, bytes: cia2 }]);
+      const addresses = api.writeMemoryBlock.mock.calls.map((c) => c[0]);
+      expect(addresses).toEqual(["DD00", "DD08"]);
+      // $DD00-$DD03 (PRA/PRB/DDRA/DDRB) written; $DD04-$DD07 skipped.
+      expect((api.writeMemoryBlock.mock.calls[0][1] as Uint8Array).length).toBe(4);
     });
 
     it("rejects empty snapshot ranges", async () => {
@@ -287,11 +235,12 @@ describe("ramOperations", () => {
       await expect(dumpFullRamImage(api as any)).rejects.toThrow("failed after");
     });
 
-    it("handles non-Error write failure in loadFullRamImage", async () => {
+    it("handles non-Error write failure in loadMemoryRanges", async () => {
       api.writeMemoryBlock.mockRejectedValue(42); // throws a number
-      const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
 
-      await expect(loadFullRamImage(api as any, image)).rejects.toThrow("failed after");
+      await expect(
+        loadMemoryRanges(api as any, [{ start: 0x0801, bytes: new Uint8Array([1, 2, 3]) }]),
+      ).rejects.toThrow("failed after");
     });
   });
 
@@ -377,11 +326,4 @@ describe("ramOperations", () => {
     });
   });
 
-  describe("loadFullRamImage recovery mode", () => {
-    it("loadFullRamImage with recoveryMode covers ternary TRUE branch (line 337)", async () => {
-      const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
-      await loadFullRamImage(api as any, image, { recoveryMode: true });
-      expect(api.writeMemoryBlock).toHaveBeenCalled();
-    });
-  });
 });
