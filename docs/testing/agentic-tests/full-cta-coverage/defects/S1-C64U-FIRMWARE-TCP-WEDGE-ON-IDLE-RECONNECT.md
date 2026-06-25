@@ -46,6 +46,25 @@ The clean-host trials not wedging in 1–2 attempts is consistent with a **low-p
 2. Minimize request-after-idle events and overall connection count: keep the device connection warm while the app is foreground/visible (it survived ~1.5 h of steady 60s polling; the wedge came only after a multi-minute polling pause), coalesce/dedupe polls, and never open concurrent connections to the single-threaded server.
 3. Keep the existing graceful degradation (the app already flips to "degraded/offline" with accurate errors and no crash when the device wedges).
 
+## Firmware research + workaround (2026-06-25)
+
+The 3.14x Ultimate firmware (which u64 runs, unaffected) already fixed this class; c64u 1.1.0
+lacks it. Confirmed from `GideonZ/1541ultimate` commits: `57c7c8a6a` (server socket `SO_RCVTIMEO`
+mis-set — comment **"bug in lwip; this is just used directly as a tick value"**), `ddd28dd17` /
+`fdb521a5b` (add send-timeouts + only-close-valid-socket so stuck sends/connections are reclaimed —
+matches #700 "Send-Q grows, connection stuck"), `802d6143b` (split Rx/Tx buffers to avoid Tx
+starvation), `40d3901e1` + LwIP 2.x migration. Field issues: #700 (idle socket unresponsive), #364
+(repeated telnet/FTP cycles fail until power-cycle), #585 (REST POST temp-file leak). Full report:
+`docs/c64/c64u-firmware-tcp-wedge-report.md`.
+
+**Workaround implemented:** the app now (a) **reuses one warm connection** rather than churning a
+fresh one per request (the `http.keepAlive=false` change that did the opposite was reverted), and
+(b) **serializes native direct-device REST requests** through a single-connection lane
+(`serializeNativeDeviceRequest` in `src/lib/c64api.ts`) so it never opens concurrent connections to
+the firmware's single Rx/Tx buffer / single-threaded network task (avoids Tx starvation + peak-socket
+pressure). Regression tests in `tests/unit/c64api.branches.test.ts`. This **reduces** the trigger
+surface; it does not cure the firmware defect.
+
 ## Honest limitation
 
 Because any request after idle can trigger the low-probability firmware fault, and the app must reconnect when the user returns to it, the app **cannot guarantee** the c64u never wedges. The mitigations reduce frequency; the cure is a firmware fix.

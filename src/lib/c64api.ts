@@ -398,6 +398,30 @@ const buildRequestId = () => {
   return `c64req-${Date.now().toString(36)}-${requestSequence.toString(36)}`;
 };
 
+// Serialize native direct-device REST requests: at most one connection to the
+// device is in flight at a time. The C64 Ultimate / C64U firmware (esp. c64u
+// 1.1.0, which lacks the lwIP socket-timeout/polling and Tx-starvation fixes the
+// 3.14x line shipped — GideonZ/1541ultimate 57c7c8a6a / 802d6143b / ddd28dd17 /
+// fdb521a5b) runs a single-threaded network task on a single shared Rx/Tx WiFi
+// buffer and does not time out stuck sockets. Concurrent connections starve its
+// Tx path and pile up sockets it never reclaims, which can drive the embedded TCP
+// stack into a permanent wedge (all TCP services dead, ICMP alive, recover only on
+// a power-cycle). Serializing our requests keeps us to one connection at a time so
+// we never trigger that on the unfixed firmware. (The cure is a c64u firmware
+// update; see docs/c64/c64u-firmware-tcp-wedge-report.md.)
+let nativeDeviceRequestLane: Promise<unknown> = Promise.resolve();
+// Exported for unit testing of the single-connection lane behaviour.
+export const serializeNativeDeviceRequest = <T>(run: () => Promise<T>): Promise<T> => {
+  const result = nativeDeviceRequestLane.then(run, run);
+  // Keep the lane chained whether this request resolves or rejects, and swallow
+  // the tail so a failed request never leaves an unhandled rejection on the lane.
+  nativeDeviceRequestLane = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+};
+
 const createTimedRequestSignal = (outerSignal: AbortSignal | undefined, timeoutMs?: number) => {
   const effectiveTimeoutMs = resolveEffectiveRequestTimeoutMs(timeoutMs);
   let timedOut = false;
@@ -1131,7 +1155,7 @@ export class C64API {
       }
     }
 
-    const executeRequest = () =>
+    const runRequest = () =>
       runWithImplicitAction(`rest.${method.toLowerCase()} ${path}`, async (action) =>
         withRestInteraction(
           {
@@ -1497,6 +1521,13 @@ export class C64API {
           },
         ),
       );
+
+    // Route native direct-device requests through the single-connection lane so we
+    // never open concurrent connections to the firmware's single-threaded,
+    // Tx-starvation-prone network stack (see serializeNativeDeviceRequest). Web/proxy
+    // transports have no such constraint and run unserialized.
+    const serializeOnDevice = isNativePlatform() && !baseUrl.includes(WEB_PROXY_PATH) && !isLocalProxy(baseUrl);
+    const executeRequest = serializeOnDevice ? () => serializeNativeDeviceRequest(runRequest) : runRequest;
 
     if (!allowInFlightDedupe || !readRequestKey) {
       return executeRequest();

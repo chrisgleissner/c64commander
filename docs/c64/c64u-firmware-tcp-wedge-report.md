@@ -49,16 +49,54 @@ confirmed the trigger is not a client misbehavior:
   and authenticated `200`) did **not** wedge it in controlled trials — consistent with a
   **low-probability** fault that a busy controller hits over many idle→reconnect cycles.
 
-## Hypothesised firmware cause
+## Confirmed firmware cause (from 1541ultimate fix commits the 3.14x line already has)
 
-The embedded TCP stack appears to leak or fail to recycle a bounded resource across idle periods
-(or deadlocks its single connection-accept path), so that after idle the next connection cannot be
-serviced and the stack stops accepting all TCP connections until reset. Suggested areas to audit:
+The Ultimate-64 (3.14x, e.g. u64 `3.14e`) firmware **already fixed this class**; the C64 Ultimate
+`c64u` 1.1.0 build does **not** have these fixes. Same controller app → u64 (patched) is unaffected,
+c64u (1.1.0) wedges. The relevant `GideonZ/1541ultimate` commits and what they reveal:
 
-- TCP PCB lifecycle (TIME_WAIT / FIN_WAIT / half-open PCBs not freed; `MEMP_NUM_TCP_PCB` exhaustion).
-- Memory pool (pbuf / `MEMP_NUM_*`) exhaustion after idle.
-- The HTTP server's accept loop blocking/deadlocking on a stale or half-closed connection.
-- Any idle/power-save path that disables or corrupts the network task and is not cleanly resumed.
+1. **`57c7c8a6a` "Delays in socket polling set correctly for LWIP 2.1"** — the server sockets set
+   `SO_RCVTIMEO` to `tv_sec = 20 / 23` with the comment **"bug in lwip; this is just used directly
+   as a tick value"**. So the receive timeout intended as *seconds* was being applied as ~20–23
+   *ticks* (≈ ms) — i.e. the socket poll/timeout was grossly mis-set. Fixed to explicit short values
+   (`network_target` 40 ms, `ftpd` 100 ms, `socket_gui` 200 ms). On the unfixed build the server's
+   socket servicing is wrong, so idle/slow sockets stall.
+2. **`ddd28dd17` / `fdb521a5b` "socket timeout settings for FTP/DMA + control socket timeouts"** —
+   adds `SO_SNDTIMEO` (5 s) and only closes valid sockets. Before this, a **stuck send never times
+   out** (matches #700: the connection stays ESTABLISHED, Send-Q grows, no response) and stuck
+   connections are never cleaned up → they accumulate.
+3. **`802d6143b` "Split Rx and Tx buffers to WiFi module to avoid Tx starvation"** — the WiFi link
+   used a single shared buffer, so **concurrent traffic starves the transmit path**.
+4. **`40d3901e1` "LwIP configuration and RMII bug fixed => no more disconnects"** + the broader
+   **migration to LwIP 2.x** — config-level networking fixes that eliminate disconnects.
+
+Net: on `c64u` 1.1.0 the embedded stack mis-services sockets, never times out stuck sends, starves
+Tx under concurrency, and never reclaims stuck connections — so connection **stress** (concurrency
+→ Tx starvation; churn/cycling → exhaustion, cf. #364 "repeated telnet/FTP cycles fail until
+power-cycle"; an idle/slow socket → stuck, cf. #700) drives the single-threaded network task into a
+state where the whole TCP stack stops accepting connections until a power-cycle. This is consistent
+with the on-device evidence (idle → first request → all TCP dead, ICMP alive).
+
+## Requested fix (device)
+
+Port the 3.14x networking fixes (the four commits above + LwIP 2.x) to the **C64 Ultimate (1.x)**
+firmware so `c64u` gets correct socket timeouts/polling, send-timeouts, split Tx/Rx buffers, and
+stuck-connection cleanup.
+
+## App-side workaround (this controller) — reduce connection stress on the unfixed firmware
+
+The app cannot cure the firmware, but it can stop *triggering* it by minimising connection stress —
+directly mirroring what the firmware fixes address:
+
+1. **Reuse one warm connection; do not churn** (a fresh TCP connection per request cycles the
+   firmware's connection handling — cf. #364). The earlier `http.keepAlive=false` change did the
+   *opposite* (max churn) and was reverted.
+2. **Never open concurrent connections to the device** — serialize device REST requests so at most
+   one connection is in flight, avoiding Tx starvation (`802d6143b`) and peak-socket pressure on the
+   single-threaded stack.
+3. **Refresh (don't reuse) a connection after a failure or long idle** — a reset/timed-out or
+   long-idle socket may be stuck on the device (no firmware send-timeout to reclaim it).
+4. **Keep requests short and bounded** so a stuck request doesn't hold a device connection open.
 
 ## Requested fix
 
