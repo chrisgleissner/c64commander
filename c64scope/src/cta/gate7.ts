@@ -222,8 +222,12 @@ async function runConnectionScenario(
   addStep(`${scenario.id}: mutated state captured; offline=${mutatedOffline}; onSettings=${mutatedOnSettings}`);
 
   // ---- RESTORE ----
-  await scrollToTop(client, serial, 2);
-  const restoreFieldResult = await scrollUntilInSafeZone(
+  // Save & Connect leaves the form scrolled to an unpredictable position, so the
+  // field can be off-screen for the restore. Reset to the top and search; if the
+  // field is still not found, reset harder and retry once before giving up
+  // (INFRA-005: the http-port field was not re-found for restore).
+  await scrollToTop(client, serial, 4);
+  let restoreFieldResult = await scrollUntilInSafeZone(
     client,
     serial,
     artifactDir,
@@ -232,6 +236,19 @@ async function runConnectionScenario(
     SAFE_TAP_Y,
     (xml) => findVisibleBoundsByResourceId(xml, scenario.fieldResourceId),
   );
+  if (!restoreFieldResult) {
+    addStep(`${scenario.id}: field "${scenario.fieldResourceId}" not found for restore; retrying after harder scroll-to-top`);
+    await scrollToTop(client, serial, 6);
+    restoreFieldResult = await scrollUntilInSafeZone(
+      client,
+      serial,
+      artifactDir,
+      `${prefix}-find-field-restore-retry`,
+      settleMs,
+      SAFE_TAP_Y,
+      (xml) => findVisibleBoundsByResourceId(xml, scenario.fieldResourceId),
+    );
+  }
   if (!restoreFieldResult) {
     addStep(`BLOCKED: ${scenario.id}: field "${scenario.fieldResourceId}" not found for restore`);
     await writeFile(

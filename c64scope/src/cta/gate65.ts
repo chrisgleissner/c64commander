@@ -350,6 +350,22 @@ export async function main(): Promise<void> {
       }
     }
 
+    // Ensure any leftover Drive mount sheet is fully dismissed before navigating
+    // to Config. The mount tap above can leave the "Mount disk to Drive A" sheet
+    // open while the background still shows Disks text (so the stillOnDisks check
+    // passes without closing it); the sheet then stays over Config and blocks the
+    // Config page check (INFRA-004).
+    for (let dismiss = 0; dismiss < 3; dismiss += 1) {
+      const overlayXml = await client.captureUiHierarchy(serial);
+      const hasMountSheet =
+        findTextContaining(overlayXml, "Mount disk to") !== null ||
+        findVisibleBoundsByText(overlayXml, "Mount disk to Drive A") !== null;
+      if (!hasMountSheet) break;
+      addStep(`dismissing leftover mount sheet before Config navigation (attempt ${dismiss + 1})`);
+      await client.pressKey(serial, KEY.BACK);
+      await delay(args.settleMs / 2);
+    }
+
     // ===== WAVE 6.7: CONFIG PAGE =====
     addStep("=== WAVE 6.7: Config page ===");
     await client.pressKey(serial, KEY.TAB_CONFIG);

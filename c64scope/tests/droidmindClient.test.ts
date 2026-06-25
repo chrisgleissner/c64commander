@@ -115,11 +115,13 @@ describe("droidmind client", () => {
       1,
       { name: "android-app", arguments: { serial: "serial-2", action: "stop_app", package: "pkg" } },
       {},
+      { timeout: 30000 },
     );
     expect(callToolMock).toHaveBeenNthCalledWith(
       2,
       { name: "android-ui", arguments: { serial: "serial-2", action: "tap", x: 10, y: 20 } },
       {},
+      { timeout: 30000 },
     );
     expect(connectMock).toHaveBeenCalledTimes(1);
   });
@@ -155,6 +157,7 @@ describe("droidmind client", () => {
         },
       },
       {},
+      { timeout: 30000 },
     );
     expect(callToolMock).toHaveBeenNthCalledWith(
       2,
@@ -168,6 +171,7 @@ describe("droidmind client", () => {
         },
       },
       {},
+      { timeout: 30000 },
     );
     expect(callToolMock).toHaveBeenNthCalledWith(
       3,
@@ -182,6 +186,7 @@ describe("droidmind client", () => {
         },
       },
       {},
+      { timeout: 30000 },
     );
   });
 
@@ -224,6 +229,7 @@ describe("droidmind client", () => {
         },
       },
       {},
+      { timeout: 30000 },
     );
   });
 

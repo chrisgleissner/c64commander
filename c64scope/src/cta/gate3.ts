@@ -316,6 +316,24 @@ export async function main(): Promise<void> {
     }
 
     let { xml: saveXml, bounds: saveBounds } = saveResult;
+
+    // Guard against the scroll sequence having sent the app to the background
+    // (a swipe that lands outside the WebView can surface the Android launcher;
+    // later hierarchies then show launcher nodes instead of Settings). Verify a
+    // Settings-page marker is present before trusting the matched bounds and
+    // tapping, so we fail with a clear reason instead of tapping the launcher
+    // (INFRA-002).
+    const stillOnSettings =
+      findTextContaining(saveXml, "SETTINGS") !== null ||
+      findTextContaining(saveXml, "Appearance") !== null ||
+      findTextContaining(saveXml, "Connection") !== null ||
+      findTextContaining(saveXml, "Saved devices") !== null;
+    if (!stillOnSettings) {
+      blockerReason = "App left the Settings page during scroll to Save & Connect (no Settings marker found)";
+      addStep(`BLOCKED: ${blockerReason}`);
+      throw new Error(blockerReason);
+    }
+
     addStep(`Save & Connect button at [${saveBounds.x1},${saveBounds.y1}][${saveBounds.x2},${saveBounds.y2}]`);
 
     // The app's bottom tab bar sits at ~y=1993 on the 2280px Pixel 4 screen. If the button

@@ -20,6 +20,11 @@ const DEFAULT_DROIDMIND_ARGS = process.env["DROIDMIND_ARGS"]?.trim()
 const UI_DUMP_DEVICE_PATH = "/sdcard/Download/c64scope-droidmind-ui.xml";
 const UI_HIERARCHY_CAPTURE_ATTEMPTS = 3;
 const UI_HIERARCHY_SETTLE_TIMEOUT_MS = 1500;
+// Hard deadline for any single DroidMind MCP call. Generous (real calls finish
+// in well under a second) so it never trips a slow-but-working call, but bounds
+// a genuine hang — e.g. a wedged `uiautomator dump` that otherwise blocked the
+// Gate 6 runner for >5 min (INFRA-003).
+const MCP_CALL_TIMEOUT_MS = 30_000;
 const UI_HIERARCHY_SETTLE_POLL_MS = 100;
 
 function delay(ms: number): Promise<void> {
@@ -224,18 +229,33 @@ export class DroidmindClient {
 
   async captureUiHierarchy(serial: string): Promise<string> {
     let lastOutput = "";
+    let lastError: unknown = null;
     for (let attempt = 1; attempt <= UI_HIERARCHY_CAPTURE_ATTEMPTS; attempt += 1) {
-      await this.shell(serial, `rm -f ${UI_DUMP_DEVICE_PATH}`);
-      await this.shell(serial, `uiautomator dump ${UI_DUMP_DEVICE_PATH}`);
-      await this.waitForUiDumpToSettle(serial);
-      const xml = await this.shell(serial, `cat ${UI_DUMP_DEVICE_PATH}`);
-      if (xml.includes("<hierarchy")) {
-        return xml;
+      try {
+        await this.shell(serial, `rm -f ${UI_DUMP_DEVICE_PATH}`);
+        await this.shell(serial, `uiautomator dump ${UI_DUMP_DEVICE_PATH}`);
+        await this.waitForUiDumpToSettle(serial);
+        const xml = await this.shell(serial, `cat ${UI_DUMP_DEVICE_PATH}`);
+        if (xml.includes("<hierarchy")) {
+          return xml;
+        }
+        lastOutput = xml;
+      } catch (error) {
+        // A single shell call (e.g. a wedged `uiautomator dump`) now fails fast
+        // via the MCP call timeout instead of hanging forever (INFRA-003); retry
+        // the whole capture rather than aborting on a transient device stall.
+        lastError = error;
       }
-      lastOutput = xml;
       if (attempt < UI_HIERARCHY_CAPTURE_ATTEMPTS) {
         await delay(500);
       }
+    }
+    if (lastError) {
+      throw new Error(
+        `DroidMind UI hierarchy capture failed after ${UI_HIERARCHY_CAPTURE_ATTEMPTS} attempts: ${
+          lastError instanceof Error ? lastError.message : String(lastError)
+        }`,
+      );
     }
     throw new Error(
       `DroidMind UI hierarchy capture did not produce XML hierarchy content (bytes=${lastOutput.length}, excerpt=${JSON.stringify(lastOutput.slice(0, 160))}).`,
@@ -283,12 +303,17 @@ export class DroidmindClient {
 
   private async callTool(name: string, args: Record<string, unknown>): Promise<ClientCallToolResult> {
     await this.connect();
+    // Hard per-call deadline: a hung DroidMind call (observed: `uiautomator dump`
+    // blocking forever) must not hang the whole gate runner indefinitely
+    // (INFRA-003). The SDK rejects the request when the deadline elapses, which
+    // lets retry/recovery logic (e.g. captureUiHierarchy's loop) take over.
     return this.client.callTool(
       {
         name,
         arguments: args,
       },
       CallToolResultSchema,
+      { timeout: MCP_CALL_TIMEOUT_MS },
     );
   }
 }
