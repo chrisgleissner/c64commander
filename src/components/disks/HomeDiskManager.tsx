@@ -1187,8 +1187,18 @@ export const HomeDiskManager = () => {
         for (const selection of selections) {
           throwIfAborted();
           if (selection.type === "dir") {
+            // Report progress incrementally during the recursive walk so a slow
+            // broad-folder scan (e.g. a deep C64U FTP tree) shows a climbing
+            // count instead of a stuck "Scanning… 0 items"
+            // (S2-DISKS-FTP-RECURSIVE-SCAN-STALL). Adapters without incremental
+            // reporting backfill the remainder once the walk returns.
+            let reportedDuringScan = 0;
             const nested = await source.listFilesRecursive(selection.path, {
               signal: abortSignal,
+              onProgress: (delta) => {
+                reportedDuringScan += delta;
+                updateProgress(delta);
+              },
             });
             if (nested.partialFailures?.length) {
               partialScanFailures.push(...nested.partialFailures);
@@ -1200,7 +1210,9 @@ export const HomeDiskManager = () => {
               });
             }
             throwIfAborted();
-            updateProgress(nested.length);
+            if (nested.length > reportedDuringScan) {
+              updateProgress(nested.length - reportedDuringScan);
+            }
             nested.forEach((entry) => {
               if (entry.type !== "file") return;
               files.push({

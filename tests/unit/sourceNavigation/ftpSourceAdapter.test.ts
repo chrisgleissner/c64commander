@@ -124,6 +124,37 @@ describe("ftpSourceAdapter", () => {
     expect(results.map((entry) => entry.path).sort()).toEqual(["/music/song.sid", "/root.sid"]);
   });
 
+  it("reports incremental onProgress as files are discovered during the recursive walk", async () => {
+    // Regression for S2-DISKS-FTP-RECURSIVE-SCAN-STALL: a broad-folder scan must
+    // report progress as it goes, not only once at the end (which showed a stuck
+    // "Scanning… 0 items").
+    listFtpDirectoryMock.mockImplementation(async ({ path }) => {
+      if (path === "/") {
+        return {
+          entries: [
+            { type: "dir", name: "music", path: "/music" },
+            { type: "file", name: "root.sid", path: "/root.sid", size: 5, modifiedAt: "now" },
+          ],
+        };
+      }
+      if (path === "/music") {
+        return {
+          entries: [{ type: "file", name: "song.sid", path: "/music/song.sid", size: 10, modifiedAt: "now" }],
+        };
+      }
+      return { entries: [] };
+    });
+
+    const source = createUltimateSourceLocation();
+    const deltas: number[] = [];
+    const results = await source.listFilesRecursive("/", { onProgress: (delta) => deltas.push(delta) });
+
+    // Two files discovered across two directory listings → at least one progress
+    // callback before completion, summing to the total file count (not 0).
+    expect(deltas.length).toBeGreaterThan(0);
+    expect(deltas.reduce((a, b) => a + b, 0)).toBe(results.length);
+  });
+
   it("returns partial recursive results when one directory listing fails", async () => {
     listFtpDirectoryMock.mockImplementation(async ({ path }) => {
       if (path === "/") {

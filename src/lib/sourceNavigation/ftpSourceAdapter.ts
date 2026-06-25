@@ -126,7 +126,10 @@ const attachPartialFailures = (entries: SourceEntry[], failures: SourceRecursive
   return entries as SourceRecursiveResult;
 };
 
-const listFilesRecursive = async (path: string, options?: { signal?: AbortSignal }): Promise<SourceRecursiveResult> => {
+const listFilesRecursive = async (
+  path: string,
+  options?: { signal?: AbortSignal; onProgress?: (delta: number) => void },
+): Promise<SourceRecursiveResult> => {
   const queue = [path || "/"];
   const visited = new Set<string>();
   const results: SourceEntry[] = [];
@@ -134,6 +137,7 @@ const listFilesRecursive = async (path: string, options?: { signal?: AbortSignal
   const maxConcurrent = 3;
   const pending = new Set<Promise<void>>();
   const signal = options?.signal;
+  const onProgress = options?.onProgress;
   const abortError = new DOMException("Aborted", "AbortError");
 
   const assertNotAborted = () => {
@@ -169,13 +173,20 @@ const listFilesRecursive = async (path: string, options?: { signal?: AbortSignal
       return;
     }
     assertNotAborted();
+    let filesFound = 0;
     entries.forEach((entry) => {
       if (entry.type === "dir") {
         queue.push(entry.path);
       } else {
         results.push(entry);
+        filesFound += 1;
       }
     });
+    // Report incremental progress so a slow broad-folder scan shows a climbing
+    // count instead of a stuck "Scanning… 0 items" (S2-DISKS-FTP-RECURSIVE-SCAN-STALL).
+    if (filesFound > 0) {
+      onProgress?.(filesFound);
+    }
   };
 
   try {
