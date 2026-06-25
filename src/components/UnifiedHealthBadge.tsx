@@ -463,23 +463,26 @@ export function UnifiedHealthBadge({ className }: Props) {
     [canSwitchDevices, clearLongPress, openSwitchPicker],
   );
 
-  const handleClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
-    if (suppressClickRef.current || longPressHandledRef.current) {
-      event.preventDefault();
-      suppressClickRef.current = false;
-      longPressHandledRef.current = false;
-      return;
-    }
-    handlePointerButtonClick(event);
-    // When the device is offline, a tap actively kicks off a reconnect in
-    // addition to opening Diagnostics. The passive background re-probe can be
-    // slow to recover when the device was unreachable at app launch, so this
-    // gives the user an immediate, obvious recovery affordance.
-    if (connectivity === "Offline") {
-      void discoverConnection("manual");
-    }
-    requestDiagnosticsOpen("header");
-  }, [connectivity]);
+  const handleClick = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      if (suppressClickRef.current || longPressHandledRef.current) {
+        event.preventDefault();
+        suppressClickRef.current = false;
+        longPressHandledRef.current = false;
+        return;
+      }
+      handlePointerButtonClick(event);
+      // When the device is offline, a tap actively kicks off a reconnect in
+      // addition to opening Diagnostics. The passive background re-probe can be
+      // slow to recover when the device was unreachable at app launch, so this
+      // gives the user an immediate, obvious recovery affordance.
+      if (connectivity === "Offline") {
+        void discoverConnection("manual");
+      }
+      requestDiagnosticsOpen("header");
+    },
+    [connectivity],
+  );
 
   const handlePickerOpenChange = useCallback(
     (open: boolean) => {
