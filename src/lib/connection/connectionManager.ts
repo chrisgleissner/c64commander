@@ -74,7 +74,8 @@ const STARTUP_PROBE_INTERVAL_MS = 700;
 const PROBE_REQUEST_TIMEOUT_MS = 2500;
 
 const isTestProbeEnabled = () => {
-  if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") return true;
+  const env = import.meta.env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
+  if (env?.VITE_ENABLE_TEST_PROBES === "1") return true;
   if (typeof window !== "undefined") {
     const win = window as Window & { __c64uTestProbeEnabled?: boolean };
     if (win.__c64uTestProbeEnabled) return true;

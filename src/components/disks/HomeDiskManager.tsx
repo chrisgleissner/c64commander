@@ -90,6 +90,7 @@ import { formatDiskDosStatus } from "@/lib/disks/dosStatusFormatter";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useScreenActivity } from "@/hooks/useScreenActivity";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
+import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import { ProfileSplitSection } from "@/components/layout/PageContainer";
 import { HOME_SUMMARY_QUERY_OPTIONS } from "@/pages/home/constants";
 import {
@@ -140,6 +141,7 @@ const ACTIVE_ADD_ITEMS_PROGRESS_STATES = new Set<AddItemsProgressState["status"]
   "ingesting",
   "committing",
 ]);
+const DRIVE_MUTATION_SETTLE_MS = isTestEnvironment ? 1 : 1500;
 
 /** Yields control back to the renderer for one event loop tick. */
 const yieldToRenderer = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -150,6 +152,8 @@ const waitAtLeast = async (startedAt: number, durationMs: number) => {
     await new Promise((resolve) => setTimeout(resolve, durationMs - elapsed));
   }
 };
+
+const waitForDriveMutationSettle = () => new Promise<void>((resolve) => setTimeout(resolve, DRIVE_MUTATION_SETTLE_MS));
 
 const parseArchiveSelectionPath = (selectionPath: string) => {
   const [resultId, rawCategory] = selectionPath.split("/");
@@ -259,6 +263,21 @@ export const HomeDiskManager = () => {
       staleTime: 0,
     });
   }, [api, queryClient]);
+  const runDriveMutationWithSettledPolling = useCallback(
+    async <T,>(operation: () => Promise<T>) => {
+      const pollingPause = pollingPauseRegistry.acquirePause();
+      try {
+        await queryClient.cancelQueries({ queryKey: ["c64-drives"], type: "active" });
+        const result = await operation();
+        await queryClient.invalidateQueries({ queryKey: ["c64-drives"], refetchType: "none" });
+        await waitForDriveMutationSettle();
+        return result;
+      } finally {
+        pollingPause.release();
+      }
+    },
+    [queryClient],
+  );
   const { data: driveAConfig } = useC64ConfigItems(
     DRIVE_CONFIG_CATEGORY.a,
     [DRIVE_BUS_ID_ITEM, DRIVE_TYPE_ITEM],
@@ -535,7 +554,9 @@ export const HomeDiskManager = () => {
     setDriveMutationPending((prev) => ({ ...prev, [drive]: true }));
     try {
       const runtimeFile = diskLibrary.runtimeFiles[disk.id];
-      await mountDiskToDrive(api, drive, disk, runtimeFile);
+      await runDriveMutationWithSettledPolling(() =>
+        mountDiskToDrive(api, drive, disk, runtimeFile, { mode: "readonly" }),
+      );
       if (mountCompletionGenerationRef.current[drive] !== mountGeneration) {
         addLog("debug", "Ignoring stale disk mount completion", {
           drive,
@@ -553,7 +574,6 @@ export const HomeDiskManager = () => {
         title: "Disk mounted",
         description: `${disk.name} mounted in ${buildDriveLabel(drive)}`,
       });
-      queryClient.invalidateQueries({ queryKey: ["c64-drives"] });
     } catch (error) {
       if (mountCompletionGenerationRef.current[drive] !== mountGeneration) {
         addLog("debug", "Ignoring stale disk mount failure", {
@@ -603,7 +623,7 @@ export const HomeDiskManager = () => {
   const handleEject = trace(async (drive: DriveKey) => {
     setDriveMutationPending((prev) => ({ ...prev, [drive]: true }));
     try {
-      await api.unmountDrive(drive);
+      await runDriveMutationWithSettledPolling(() => api.unmountDrive(drive));
       mountedByDriveSetAtRef.current[drive] = Date.now();
       setMountedByDrive((prev) => ({ ...prev, [drive]: "" }));
       setDriveErrors((prev) => ({ ...prev, [drive]: "" }));
@@ -611,7 +631,6 @@ export const HomeDiskManager = () => {
         title: "Disk ejected",
         description: `${buildDriveLabel(drive)} cleared`,
       });
-      queryClient.invalidateQueries({ queryKey: ["c64-drives"] });
     } catch (error) {
       setDriveErrors((prev) => ({
         ...prev,

@@ -2,6 +2,64 @@
 
 All times 2026-06-24 unless noted.
 
+## Continuation for exhaustive Pixel 4 certification — 2026-06-24T23:55:38Z
+
+- Role/prompt accepted: autonomous continuation for deep Pixel 4 CTA and flow certification on serial `9B081FFAZ001WX`, package `uk.gleissner.c64commander`, target `c64u` with password redacted in artifacts.
+- Read current repo guidance and previous-state files: `README.md`, `REVIEW.md`, `.github/copilot-instructions.md`, `docs/ux-guidelines.md`, `PLANS.md`, `WORKLOG.md`, `docs/testing/agentic-tests/full-cta-coverage/runs/progress-ledger.md`, and `docs/testing/agentic-tests/full-cta-coverage/runs/infrastructure-audit.md`.
+- Attempted to read stricter-prompt previous artifacts; these are absent in the checkout: `docs/testing/agentic-tests/full-cta-coverage/final-report-2.md`, `cleanup-report-2.md`, `callback-8020-residual-risk.md`, and `cta-runner.md`.
+- Current branch/SHA: `test/full-cta-coverage`, `515e2818ed1992dd6e3579470e1355488111278f`.
+- Starting worktree is dirty; preserving unrelated-looking local changes in `scripts/repro-cursor-blink-snapshot-restore.mjs`, `src/lib/machine/ramOperations.ts`, `tests/unit/machine/ramOperations.test.ts`, and untracked `scripts/prove-snapshot-all-types.ts`.
+- Latest APK on disk before this continuation is stale: `android/app/build/outputs/apk/debug/c64u-remote-0.8.9-10c4b-debug.apk`.
+- Installed Pixel 4 package before this continuation is stale: versionName `0.8.9-10c4b`, versionCode `2040`, lastUpdateTime `2026-06-25 00:17:22`, package path `/data/app/~~U83Do-y3NWKqtU49tTBMPw==/uk.gleissner.c64commander-xwJ3ACWEBnM_ee8FAXUMiw==/base.apk`, signature short `d39d81d2`.
+- Classification: HIL/device certification. Per the repository HIL exception, current priority is current-SHA APK build/install and Pixel 4 evidence; coverage is a finalization gate, not the first action.
+- Updated `PLANS.md`. Artifact root for this continuation: `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-515e2818ed19/`.
+- Next command: create artifact log directories, run `npm run scope:check`, then build/install the current APK to Pixel 4.
+- Created the artifact directory tree under `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-515e2818ed19/`.
+- Ran `npm run scope:check`; passed 55 files / 356 tests. Logs:
+  - `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-515e2818ed19/logs/commands/npm-run-scope-check.stdout.log`
+  - `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-515e2818ed19/logs/commands/npm-run-scope-check.stderr.log`
+- Ran `./build --skip-tests --install-apk --device-id 9B081FFAZ001WX`; build/install succeeded and launched the app. Logs:
+  - `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-515e2818ed19/logs/commands/build-skip-tests-install-apk.stdout.log`
+  - `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-515e2818ed19/logs/commands/build-skip-tests-install-apk.stderr.log`
+- Current APK: `android/app/build/outputs/apk/debug/c64commander-0.8.9-515e2-debug.apk`, SHA-256 `2f9b1569575eb6539509dc828ead4a220ac79ad516aa100fc4971635a0adea45`.
+- Installed package after build: versionName `0.8.9-515e2`, versionCode `2041`, lastUpdateTime `2026-06-25 00:59:13`, package path `/data/app/~~RNFTH4jdudOH7uFn_NTnlA==/uk.gleissner.c64commander-Epu5KWMBWr_2w8EVExzTXA==/base.apk`, signature short `d39d81d2`.
+- Captured baseline current-SHA screenshot/hierarchy/logcat:
+  - `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-515e2818ed19/screenshots/baseline-current-sha-launch.png`
+  - `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-515e2818ed19/hierarchies/baseline-current-sha-launch.xml`
+  - `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-515e2818ed19/logs/logcat/baseline-after-install-launch.log`
+- MCP capability check passed with `satisfied: true`, `missing: []`; artifact `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-515e2818ed19/mcp-capabilities.json`.
+- Target health probes recorded as infrastructure-only evidence: `c64u` unauthenticated 403, `c64u` authenticated 200 from host and Pixel-side curl, `u64` unauthenticated 200.
+- Ran generic Gate 3 current-SHA Save-and-Connect command; artifact `c64scope/artifacts/cta-20260625T000108Z-pixel4-c64u-515e2818ed19/` returned `BLOCKED` because the runner did not find `Save & Connect` after editing the host field and later hierarchies show Android launcher. Command logs were redacted after the wrapper echoed the password argument.
+- Ran targeted app-driven Save-and-Connect proof through `DroidmindClient` without localStorage/DOM edits. Result `PROVEN`; evidence root `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-515e2818ed19/targeted-save-connect/`. Pre/post app-visible status was `Connected to c64u, system healthy`; post-action Settings text was `Currently using: c64u · HTTP 80 · FTP 21 · Telnet 23`.
+- Ran current-SHA all-route discovery:
+  - Command: `npm run scope:cta:discover-routes -- --serial 9B081FFAZ001WX --target c64u --start-app --settle-ms 2200 --max-scrolls 12 --artifact-dir ../c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-515e2818ed19`
+  - Route counts: Home 106, Play 24, Disks 40, Config 28, Settings 74, Docs 18; total 290 discovery-only CTA rows.
+  - Settings stopped at `max-scrolls`; treat as inventory completeness risk for Settings deep dive, not as coverage.
+- Re-ran current-SHA keypad canary with D-pad: artifact `c64scope/artifacts/cta-20260625T000854Z-pixel4-c64u-515e2818ed19/`; 11/11 PASS.
+- Re-ran Gate 4: artifact `c64scope/artifacts/cta-20260625T000959Z-pixel4-c64u-515e2818ed19/`; `PROVEN`, Theme Auto -> Dark -> Auto restored.
+- Re-ran Gate 5: artifact `c64scope/artifacts/cta-20260625T001042Z-pixel4-c64u-515e2818ed19/`; 12/12 PASS.
+- Gate 6 current-SHA runner hung for over five minutes while the app was stationary at Settings top and the process was inside DroidMind hierarchy capture. Stopped it with Ctrl-C; no `gate6.js` child remained. Partial artifact root `c64scope/artifacts/cta-20260625T001329Z-pixel4-c64u-515e2818ed19/`; live screenshot was captured through the MCP DroidMind screenshot tool.
+- Re-ran Gate 6.5: artifact `c64scope/artifacts/cta-20260625T001827Z-pixel4-c64u-515e2818ed19/`; 11/12 PASS. The only blocked row was Config page load; screenshot proves the Drive A mount sheet remained open over Disks, so this is overlay contamination, not a Config outage.
+- Dismissed the Drive A mount sheet via DroidMind Back.
+- Re-ran Gate 7: artifact `c64scope/artifacts/cta-20260625T002012Z-pixel4-c64u-515e2818ed19/`; 2/3 PASS. Host and password negative mutations restored successfully. HTTP port scenario blocked while trying to restore, but follow-up cleanup proved the field was already `80`.
+- Ran focused HTTP-port cleanup after Gate 7: evidence `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-515e2818ed19/restore-http-port-after-gate7/result.json`; status `PROVEN`, app-visible `Currently using: c64u · HTTP 80 · FTP 21 · Telnet 23`.
+- Redaction scan for `pwd` and `wrongpwd` across active current-SHA artifacts returned no matches after redacting targeted Save-and-Connect and Gate 7 generated files.
+- Ran Config deep dive from clean app state:
+  - Evidence root `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-515e2818ed19/config-deep-dive/`
+  - Status `PROVEN`
+  - Five Config load entries detected `CONFIG`, app-visible `Connected to c64u, system healthy`, no loading/error/retry text.
+  - Config census found 28 controls, 4 scroll attempts, fixed-point stop.
+  - Refresh CTA was not visible in the initial viewport and remains for full CTA ledger execution.
+- Ran guarded Disks Drive A mount/eject repetition against imported `/USB2/test-data/d64/Boulder Dash 2.d64`:
+  - Evidence root `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-515e2818ed19/disks-mount-eject-loop/`
+  - Iteration 1: mounted and ejected; after-eject text `No disk mounted`.
+  - Iteration 2: mounted and ejected; after-eject text `No disk mounted`.
+  - Iteration 3: tapped Drive A Mount disk and `Boulder Dash 2.d64`; after-mount screenshot shows `No disk mounted`, red C64U badge with two issues, and Drive A `Connection reset`; Eject control not found.
+- Per device-safety rule, ran one infrastructure health probe after app-visible reset; authenticated `http://c64u/v1/info` failed with `curl: (56) Recv failure: Connection reset by peer`, HTTP code `000`.
+- Stopped further `c64u` traffic, captured live screenshot/hierarchy, and stopped the app through `DroidmindClient.stopApp`.
+- Captured logcat to `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-515e2818ed19/logs/logcat/disks-loop-connection-reset.log`.
+- Added S1 defect `docs/testing/agentic-tests/full-cta-coverage/defects/S1-DISKS-MOUNT-EJECT-RESETS-C64U.md`.
+
 ## Continuation for exhaustive Pixel 4 certification — 2026-06-24T21:48:02Z
 
 - Role/prompt accepted: autonomous continuation for deep Pixel 4 CTA and flow certification on serial `9B081FFAZ001WX`, package `uk.gleissner.c64commander`, target `c64u` with password restored/redacted as required.
@@ -410,3 +468,75 @@ Current-HEAD correction after concurrent branch advance:
 - Installed package identity after reinstall: versionName `0.8.9-10c4b`, versionCode `2040`, lastUpdateTime `2026-06-25 00:17:22`, package path `/data/app/~~U83Do-y3NWKqtU49tTBMPw==/uk.gleissner.c64commander-xwJ3ACWEBnM_ee8FAXUMiw==/base.apk`.
 - Re-ran current-HEAD all-route discovery with absolute artifact path. Results: total `295` discovery rows; Home `109`, Play `24`, Disks `40`, Config `28`, Settings `76`, Docs `18`.
 - Active current artifact root is now `c64scope/artifacts/cta-20260624T231700Z-pixel4-c64u-10c4b5e98510/`.
+
+## Pixel 4 exhaustive CTA continuation — current-SHA blocked handover
+
+Recorded UTC: 2026-06-25T01:44:00Z.
+
+Commands and material actions:
+
+- `git status --short`: worktree remains dirty. Certification files touched in this continuation are `PLANS.md`, `WORKLOG.md`, `docs/testing/agentic-tests/full-cta-coverage/runs/progress-ledger.md`, and new defect files. Additional modified/untracked files in `src/lib/c64api.ts`, `src/lib/c64api/hostConfig.ts`, `src/lib/connection/connectionManager.ts`, RAM/snapshot files, docs, and scripts were already present or concurrent and were preserved.
+- Read-only source inspection after the S1 device-safety stop:
+  - `sed -n '1,260p' src/lib/disks/diskMount.ts`
+  - `sed -n '900,1120p' src/lib/c64api.ts`
+  - `rg -n "getDrivesPollIntervalMs|drives|pollingPaused|pause|cooldown|invalidateQueries" src/hooks src/lib src/components/disks`
+  - `sed -n '300,380p' src/lib/disks/diskMount.ts && sed -n '2100,2235p' src/lib/c64api.ts && sed -n '560,610p' src/hooks/useC64Connection.ts`
+- Observed source pattern for the S1 defect: Drive A mount calls `PUT /v1/drives/a:mount?...mode=readwrite`; eject calls `PUT /v1/drives/a:remove`; `HomeDiskManager` invalidates `["c64-drives"]` after mount/eject; `useC64Drives` also polls `GET /v1/drives` while connection/screen are active; device-interaction safety has cooldown support for `/v1/drives`, but no product fix or retest was attempted after the target reset.
+- No further `c64u` app, REST, FTP, or Telnet traffic was sent after the S1 stop. The app had already been stopped through `DroidmindClient.stopApp`.
+- Created continuation handover: `docs/testing/agentic-tests/full-cta-coverage/handover5.md`.
+
+Current blocker:
+
+- `S1-DISKS-MOUNT-EJECT-RESETS-C64U`: current-SHA repeated Drive A mount/eject loop completed two cycles, then on the third mount the app showed `Connection reset`; authenticated `/v1/info` returned connection reset. The live app hierarchy before stop showed Drive A and Drive B as `No disk mounted`, so disk media cleanup appears likely, but final connected cleanup is not proven.
+
+Decision:
+
+- Do not write `docs/testing/agentic-tests/full-cta-coverage/final-report-3.md`.
+- Continue only with local/source analysis or non-C64U UI work that proves no target traffic, until the S1 request pattern is fixed or a deliberate safe test window is available.
+
+## Pixel 4 CTA continuation — Drive A readonly mount mitigation and current-HEAD correction
+
+Recorded UTC: 2026-06-25T07:10:00Z.
+
+Commands and material actions:
+
+- Investigated `S1-DISKS-MOUNT-EJECT-RESETS-C64U` locally in `src/components/disks/HomeDiskManager.tsx`, `src/lib/disks/diskMount.ts`, `src/lib/c64api.ts`, `src/hooks/useC64Connection.ts`, and `src/lib/deviceInteraction/deviceInteractionManager.ts`.
+- Implemented a Disks safety mitigation:
+  - Drive mount/eject handlers pause drive polling, cancel active `["c64-drives"]` queries, invalidate without immediate refetch, settle, then release polling.
+  - Manual Disks mounts now call `mountDiskToDrive(..., { mode: "readonly" })`; default `mountDiskToDrive` behavior remains `readwrite` for playback/autostart callers.
+- Added/updated regression coverage:
+  - `tests/unit/components/disks/HomeDiskManager.extended.test.tsx`
+  - `tests/unit/components/disks/HomeDiskManager.test.tsx`
+  - `tests/unit/components/disks/HomeDiskManager.ui.test.tsx`
+  - `tests/unit/components/disks/HomeDiskManager.dialogs.test.tsx`
+  - `tests/unit/lib/disks/diskMount.test.ts`
+- Validation on the first local source state:
+  - `npm run test -- tests/unit/lib/disks/diskMount.test.ts tests/unit/diskMount.test.ts tests/unit/components/disks/HomeDiskManager.dialogs.test.tsx tests/unit/components/disks/HomeDiskManager.extended.test.tsx tests/unit/components/disks/HomeDiskManager.ui.test.tsx tests/unit/components/disks/HomeDiskManager.test.tsx`: passed 6 files / 94 tests.
+  - `npm run lint`: passed with existing c64scope coverage-helper warnings only.
+  - `npm run scope:check`: passed 55 files / 360 tests.
+  - `npm run test`: passed 643 files / 7457 tests.
+  - `npm run build`: passed.
+- Current-HEAD correction:
+  - During the continuation, branch HEAD advanced from `515e2818ed1992dd6e3579470e1355488111278f` to `af2d795b2361cc78e52f3013cf3502c0e72c0375`.
+  - Rebuilt and installed current APK with `./build --skip-tests --install-apk --device-id 9B081FFAZ001WX`.
+  - Current APK: `android/app/build/outputs/apk/debug/c64commander-0.8.9-af2d7-debug.apk`, SHA-256 `e0f00bc9a9d595566df01b2eb1cfe63992dfc1611d4acce0fe4a21fa56af7891`.
+  - Installed identity: versionName `0.8.9-af2d7`, versionCode `2042`, lastUpdateTime `2026-06-25 07:52:21`, signature short `d39d81d2`.
+  - Re-ran `npm run scope:check`: passed 55 files / 360 tests.
+  - Re-ran focused Disks tests on `af2d7`: passed 6 files / 94 tests.
+  - Re-ran `npm run lint`: passed with existing c64scope coverage-helper warnings only.
+- Target restoration and cleanup actions:
+  - App-visible target had drifted to `u64`; used `DroidmindClient.pressKey(KEYCODE_POUND)` to open Switch Device, selected `c64u`, and captured `manual-restore-c64u/home-after-c64u-switch-back.png`.
+  - A residual Drive A `Boulder Dash 2.d64` mount from a failed replay was ejected through the semantically identified Drive A eject control; evidence `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/cleanup-drive-a-residual/result.json`, screenshots `before-coordinate-eject.png` and `after-coordinate-eject.png`.
+  - Final app-visible target restored again after repetition harness drifted target to `u64`; evidence `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/restore-c64u-final-state/home-after-c64u-final.png`.
+- Current-build Disks evidence:
+  - Single clean readonly Drive A mount/eject pass from no-disk state: `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/clean-readonly-mount-eject-2/result.json`.
+  - Result: `PROVEN`; after mount `bad=[]`, Eject visible, mounted text `/USB2/test-data/.../Boulder Dash 2.d64`; after eject `bad=[]`, `No disk mounted`, target `Connected to c64u, system healthy`.
+  - Supporting direct unauthenticated `c64u` probes returned expected `403` in ~8 ms before and after the clean pass.
+  - Repetition runner attempt under `readonly-mount-eject-repetitions/` is `FAILED` as automation evidence only: stale coordinate fallback did not exercise the intended mount/eject path and left the mount sheet open. Do not count it as product reliability failure; replay with corrected semantic targeting.
+
+Decisions and evidence:
+
+- The original readwrite repeated mount/eject S1 remains open until a corrected five-cycle current-build reliability run passes.
+- The current code mitigation has one valid Pixel 4 proof and did not reproduce target reset during the guarded clean pass.
+- The app was stopped after final target restoration; final visible target screenshot shows `C64U`, device `c64u`, firmware `1.1.0`, app `0.8.9-af2d7`.
+- Do not write `final-report-3.md`; exhaustive CTA execution and cleanup remain incomplete.

@@ -53,7 +53,10 @@ export function createBaselineState(input: Partial<BaselineState> = {}): Baselin
   };
 }
 
-export function appendMutation(ledger: StateLedger, entry: Omit<MutationLedgerEntry, "recordedAt"> & { recordedAt?: string }): StateLedger {
+export function appendMutation(
+  ledger: StateLedger,
+  entry: Omit<MutationLedgerEntry, "recordedAt"> & { recordedAt?: string },
+): StateLedger {
   return {
     baseline: ledger.baseline,
     mutations: [

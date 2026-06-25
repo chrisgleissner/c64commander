@@ -12,14 +12,7 @@ import { pathToFileURL } from "node:url";
 import { resolveAdbSerial, resolvePreferredPhysicalTestDeviceSerial } from "../deviceRegistry.js";
 import { resolveWorkspaceRoot, timestampId } from "../fullAppCoverageExecutor.js";
 import { DroidmindClient } from "../validation/droidmindClient.js";
-import {
-  type Bounds,
-  centerX,
-  centerY,
-  delay,
-  findTextContaining,
-  findVisibleBoundsByText,
-} from "./uiHelpers.js";
+import { type Bounds, centerX, centerY, delay, findTextContaining, findVisibleBoundsByText } from "./uiHelpers.js";
 import { APP_PACKAGE, captureState, gitSha, readFlagValue, scrollUntilVisible } from "./runnerCommon.js";
 
 const KEYCODES = {
@@ -58,9 +51,7 @@ export function parseGate4Args(args: readonly string[]): Gate4Args {
 export async function main(): Promise<void> {
   const args = parseGate4Args(process.argv.slice(2));
   const workspaceRoot = resolveWorkspaceRoot();
-  const serial = args.serial
-    ? await resolveAdbSerial(args.serial)
-    : await resolvePreferredPhysicalTestDeviceSerial();
+  const serial = args.serial ? await resolveAdbSerial(args.serial) : await resolvePreferredPhysicalTestDeviceSerial();
   const sha = await gitSha(workspaceRoot);
   const runId = `cta-${timestampId()}-pixel4-${args.target}-${sha}`;
   const artifactDir = args.artifactDir ?? path.join(workspaceRoot, "c64scope", "artifacts", runId);
@@ -101,8 +92,7 @@ export async function main(): Promise<void> {
     // Capture and verify Settings page.
     const settingsXml = await captureState(client, serial, artifactDir, "settings-initial");
     const isSettingsPage =
-      findTextContaining(settingsXml, "SETTINGS") !== null ||
-      findTextContaining(settingsXml, "Appearance") !== null;
+      findTextContaining(settingsXml, "SETTINGS") !== null || findTextContaining(settingsXml, "Appearance") !== null;
     if (!isSettingsPage) {
       blockerReason = "Settings page not detected after KEY_5 navigation";
       addStep(`BLOCKED: ${blockerReason}`);
@@ -168,11 +158,7 @@ export async function main(): Promise<void> {
       status: "IN_PROGRESS",
       steps,
     };
-    await writeFile(
-      path.join(artifactDir, "state-ledger.json"),
-      JSON.stringify(stateLedger, null, 2),
-      "utf-8",
-    );
+    await writeFile(path.join(artifactDir, "state-ledger.json"), JSON.stringify(stateLedger, null, 2), "utf-8");
 
     // --- MUTATION ---
     addStep(`tapping Dark theme button at (${centerX(darkBounds)}, ${centerY(darkBounds)})`);
@@ -185,8 +171,7 @@ export async function main(): Promise<void> {
 
     // Verify: Appearance section still present, Settings page still functional.
     const mutatedSettingsOk =
-      findTextContaining(mutatedXml, "SETTINGS") !== null ||
-      findTextContaining(mutatedXml, "Appearance") !== null;
+      findTextContaining(mutatedXml, "SETTINGS") !== null || findTextContaining(mutatedXml, "Appearance") !== null;
     if (!mutatedSettingsOk) {
       blockerReason = "Settings page not detected after mutation — app may have navigated away";
       addStep(`BLOCKED: ${blockerReason}`);
@@ -222,8 +207,7 @@ export async function main(): Promise<void> {
 
     // Verify: Settings page still present after restore.
     const restoredSettingsOk =
-      findTextContaining(restoredXml, "SETTINGS") !== null ||
-      findTextContaining(restoredXml, "Appearance") !== null;
+      findTextContaining(restoredXml, "SETTINGS") !== null || findTextContaining(restoredXml, "Appearance") !== null;
     if (!restoredSettingsOk) {
       blockerReason = "Settings page not detected after restoration";
       addStep(`BLOCKED: ${blockerReason}`);
@@ -265,11 +249,7 @@ export async function main(): Promise<void> {
     status: gate4Status,
     steps,
   };
-  await writeFile(
-    path.join(artifactDir, "state-ledger.json"),
-    JSON.stringify(finalStateLedger, null, 2),
-    "utf-8",
-  );
+  await writeFile(path.join(artifactDir, "state-ledger.json"), JSON.stringify(finalStateLedger, null, 2), "utf-8");
 
   const gate4Result = {
     runId,

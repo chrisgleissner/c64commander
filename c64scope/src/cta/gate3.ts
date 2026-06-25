@@ -37,10 +37,10 @@ import {
 
 // Android key codes used in this runner
 const KEYCODES = {
-  KEY_5: 12,         // Tab 5 → Settings
-  MOVE_END: 123,     // KEYCODE_MOVE_END — move cursor to end of field
-  DEL: 67,           // KEYCODE_DEL — backspace one character
-  BACK: 4,           // KEYCODE_BACK
+  KEY_5: 12, // Tab 5 → Settings
+  MOVE_END: 123, // KEYCODE_MOVE_END — move cursor to end of field
+  DEL: 67, // KEYCODE_DEL — backspace one character
+  BACK: 4, // KEYCODE_BACK
 } as const;
 
 const SETTLE_MS_DEFAULT = 1800;
@@ -84,9 +84,7 @@ export function parseGate3Args(args: readonly string[]): Gate3Args {
 export async function main(): Promise<void> {
   const args = parseGate3Args(process.argv.slice(2));
   const workspaceRoot = resolveWorkspaceRoot();
-  const serial = args.serial
-    ? await resolveAdbSerial(args.serial)
-    : await resolvePreferredPhysicalTestDeviceSerial();
+  const serial = args.serial ? await resolveAdbSerial(args.serial) : await resolvePreferredPhysicalTestDeviceSerial();
   const sha = await gitSha(workspaceRoot);
   const runId = `cta-${timestampId()}-pixel4-${args.target}-${sha}`;
   const artifactDir = args.artifactDir ?? path.join(workspaceRoot, "c64scope", "artifacts", runId);
@@ -203,7 +201,8 @@ export async function main(): Promise<void> {
       findTextContaining(settingsInitXml, "Connection") !== null ||
       findTextContaining(settingsInitXml, "Saved devices") !== null;
     if (!isSettingsPage) {
-      blockerReason = "Settings page not detected after KEY_5 navigation (checked SETTINGS/Appearance/Connection/Saved devices)";
+      blockerReason =
+        "Settings page not detected after KEY_5 navigation (checked SETTINGS/Appearance/Connection/Saved devices)";
       addStep(`BLOCKED: ${blockerReason}`);
       throw new Error(blockerReason);
     }
@@ -229,7 +228,9 @@ export async function main(): Promise<void> {
 
     const { xml: hostXml, bounds: hostBounds } = hostResult;
     const hostBefore = findTextByResourceId(hostXml, "settings-device-host");
-    addStep(`Host field visible at bounds [${hostBounds.x1},${hostBounds.y1}][${hostBounds.x2},${hostBounds.y2}], current value: ${hostBefore}`);
+    addStep(
+      `Host field visible at bounds [${hostBounds.x1},${hostBounds.y1}][${hostBounds.x2},${hostBounds.y2}], current value: ${hostBefore}`,
+    );
 
     await writeFile(path.join(artifactDir, "hierarchies", "settings-host-before.xml"), hostXml, "utf-8");
     await client.screenshotToFile(serial, path.join(artifactDir, "screenshots", "settings-host-before.png"));
@@ -303,9 +304,7 @@ export async function main(): Promise<void> {
       artifactDir,
       "scroll-to-save",
       args.settleMs,
-      (xml) =>
-        findVisibleBoundsByText(xml, "Save & Connect") ??
-        findVisibleBoundsByText(xml, "Save &amp; Connect"),
+      (xml) => findVisibleBoundsByText(xml, "Save & Connect") ?? findVisibleBoundsByText(xml, "Save &amp; Connect"),
       MAX_SCROLL_ATTEMPTS,
       [TEST_PASSWORD],
     );
@@ -317,9 +316,7 @@ export async function main(): Promise<void> {
     }
 
     let { xml: saveXml, bounds: saveBounds } = saveResult;
-    addStep(
-      `Save & Connect button at [${saveBounds.x1},${saveBounds.y1}][${saveBounds.x2},${saveBounds.y2}]`,
-    );
+    addStep(`Save & Connect button at [${saveBounds.x1},${saveBounds.y1}][${saveBounds.x2},${saveBounds.y2}]`);
 
     // The app's bottom tab bar sits at ~y=1993 on the 2280px Pixel 4 screen. If the button
     // center is behind the tab bar, do one more scrollDown (swipe finger UP: endY < startY)
@@ -335,13 +332,10 @@ export async function main(): Promise<void> {
       saveXml = redactUiHierarchySecrets(await client.captureUiHierarchy(serial), [TEST_PASSWORD]);
       await writeFile(path.join(artifactDir, "hierarchies", "pre-save-scroll.xml"), saveXml, "utf-8");
       const adjustedBounds =
-        findVisibleBoundsByText(saveXml, "Save & Connect") ??
-        findVisibleBoundsByText(saveXml, "Save &amp; Connect");
+        findVisibleBoundsByText(saveXml, "Save & Connect") ?? findVisibleBoundsByText(saveXml, "Save &amp; Connect");
       if (adjustedBounds) {
         saveBounds = adjustedBounds;
-        addStep(
-          `Save & Connect after scroll: [${saveBounds.x1},${saveBounds.y1}][${saveBounds.x2},${saveBounds.y2}]`,
-        );
+        addStep(`Save & Connect after scroll: [${saveBounds.x1},${saveBounds.y1}][${saveBounds.x2},${saveBounds.y2}]`);
       } else {
         blockerReason = "Save & Connect not found after scroll adjustment";
         addStep(`BLOCKED: ${blockerReason}`);
@@ -372,7 +366,8 @@ export async function main(): Promise<void> {
     recordStep("post-save-connect", "tap:save-connect", "PASS");
 
     // Capture any immediately-visible status info (may be scrolled to button area).
-    connectionStatus = findContentDescContaining(postXml, "Connected") ??
+    connectionStatus =
+      findContentDescContaining(postXml, "Connected") ??
       findContentDescContaining(postXml, "Offline") ??
       findContentDescContaining(postXml, "Connecting");
     currentlyUsing = findTextContaining(postXml, "Currently using:");
@@ -441,9 +436,7 @@ export async function main(): Promise<void> {
       "settings-device-host field shows 'c64u' after Save & Connect",
       "App connection status confirms C64U target identity",
     ],
-    cleanup: [
-      "Navigate to Settings and restore host field if partially changed.",
-    ],
+    cleanup: ["Navigate to Settings and restore host field if partially changed."],
   });
   await writeFile(
     path.join(artifactDir, "replays", `${args.caseId}.json`),

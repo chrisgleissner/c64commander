@@ -239,9 +239,9 @@ describe("ramOperations", () => {
     it("handles non-Error write failure in loadMemoryRanges", async () => {
       api.writeMemoryBlock.mockRejectedValue(42); // throws a number
 
-      await expect(
-        loadMemoryRanges(api as any, [{ start: 0x0801, bytes: new Uint8Array([1, 2, 3]) }]),
-      ).rejects.toThrow("failed after");
+      await expect(loadMemoryRanges(api as any, [{ start: 0x0801, bytes: new Uint8Array([1, 2, 3]) }])).rejects.toThrow(
+        "failed after",
+      );
     });
   });
 
@@ -326,5 +326,4 @@ describe("ramOperations", () => {
       await expect(dumpFull(api as any)).rejects.toThrow(/failed.*resume failed|resume failed/);
     });
   });
-
 });

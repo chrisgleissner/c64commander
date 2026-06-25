@@ -13,25 +13,18 @@ import { summarizeCoverage, toCoverageCsv, toCoverageJson, type CtaCoverageRecor
 import { resolveAdbSerial, resolvePreferredPhysicalTestDeviceSerial } from "../deviceRegistry.js";
 import { resolveWorkspaceRoot, timestampId } from "../fullAppCoverageExecutor.js";
 import { DroidmindClient } from "../validation/droidmindClient.js";
-import {
-  type Bounds,
-  centerX,
-  centerY,
-  delay,
-  findTextContaining,
-  findVisibleBoundsByText,
-} from "./uiHelpers.js";
+import { type Bounds, centerX, centerY, delay, findTextContaining, findVisibleBoundsByText } from "./uiHelpers.js";
 import { APP_PACKAGE, captureState, gitSha, readFlagValue, scrollUntilVisible } from "./runnerCommon.js";
 
 // Android key codes
 const KEY = {
-  HOME_KEY: 3,  // KEYCODE_HOME (Android home button)
-  1: 8,         // tab-home
-  2: 9,         // tab-play
-  3: 10,        // tab-disks
-  4: 11,        // tab-config
-  5: 12,        // tab-settings
-  6: 13,        // tab-docs
+  HOME_KEY: 3, // KEYCODE_HOME (Android home button)
+  1: 8, // tab-home
+  2: 9, // tab-play
+  3: 10, // tab-disks
+  4: 11, // tab-config
+  5: 12, // tab-settings
+  6: 13, // tab-docs
 } as const;
 
 const SETTLE_MS = 1800;
@@ -82,9 +75,7 @@ async function tapAppearanceButton(
 export async function main(): Promise<void> {
   const args = parseGate5Args(process.argv.slice(2));
   const workspaceRoot = resolveWorkspaceRoot();
-  const serial = args.serial
-    ? await resolveAdbSerial(args.serial)
-    : await resolvePreferredPhysicalTestDeviceSerial();
+  const serial = args.serial ? await resolveAdbSerial(args.serial) : await resolvePreferredPhysicalTestDeviceSerial();
   const sha = await gitSha(workspaceRoot);
   const runId = `cta-${timestampId()}-pixel4-${args.target}-${sha}`;
   const artifactDir = args.artifactDir ?? path.join(workspaceRoot, "c64scope", "artifacts", runId);
@@ -163,12 +154,12 @@ export async function main(): Promise<void> {
       label: string;
       expectedText: string;
     }> = [
-      { keyNum: 1, route: "/home",     featureId: "F003", label: "tab-home",     expectedText: "HOME" },
-      { keyNum: 2, route: "/play",     featureId: "F010", label: "tab-play",     expectedText: "PLAY" },
-      { keyNum: 3, route: "/disks",    featureId: "F007", label: "tab-disks",    expectedText: "DISKS" },
-      { keyNum: 4, route: "/config",   featureId: "F018", label: "tab-config",   expectedText: "CONFIG" },
+      { keyNum: 1, route: "/home", featureId: "F003", label: "tab-home", expectedText: "HOME" },
+      { keyNum: 2, route: "/play", featureId: "F010", label: "tab-play", expectedText: "PLAY" },
+      { keyNum: 3, route: "/disks", featureId: "F007", label: "tab-disks", expectedText: "DISKS" },
+      { keyNum: 4, route: "/config", featureId: "F018", label: "tab-config", expectedText: "CONFIG" },
       { keyNum: 5, route: "/settings", featureId: "F020", label: "tab-settings", expectedText: "SETTINGS" },
-      { keyNum: 6, route: "/docs",     featureId: "F022", label: "tab-docs",     expectedText: "DOCS" },
+      { keyNum: 6, route: "/docs", featureId: "F022", label: "tab-docs", expectedText: "DOCS" },
     ];
 
     for (const tab of tabSpec) {
@@ -179,14 +170,31 @@ export async function main(): Promise<void> {
       const xml = await captureState(client, serial, artifactDir, `tab-${tab.keyNum}-${tab.label.replace("tab-", "")}`);
       const found = findTextContaining(xml, tab.expectedText);
       if (found !== null) {
-        recordPass(tab.featureId, tab.route, tab.label, "keypad", `KEY_${tab.keyNum} navigated to ${tab.label}; text="${tab.expectedText}" detected`);
+        recordPass(
+          tab.featureId,
+          tab.route,
+          tab.label,
+          "keypad",
+          `KEY_${tab.keyNum} navigated to ${tab.label}; text="${tab.expectedText}" detected`,
+        );
       } else {
         // Some tabs may show text in different case or structure — still count if a recognizable title is visible
         const anyTitle = findTextContaining(xml, tab.expectedText.charAt(0) + tab.expectedText.slice(1).toLowerCase());
         if (anyTitle) {
-          recordPass(tab.featureId, tab.route, tab.label, "keypad", `KEY_${tab.keyNum} navigated to ${tab.label}; text case-variant detected`);
+          recordPass(
+            tab.featureId,
+            tab.route,
+            tab.label,
+            "keypad",
+            `KEY_${tab.keyNum} navigated to ${tab.label}; text case-variant detected`,
+          );
         } else {
-          recordBlocked(tab.featureId, tab.route, tab.label, `Expected text "${tab.expectedText}" not found after KEY_${tab.keyNum}`);
+          recordBlocked(
+            tab.featureId,
+            tab.route,
+            tab.label,
+            `Expected text "${tab.expectedText}" not found after KEY_${tab.keyNum}`,
+          );
         }
       }
     }
@@ -198,8 +206,8 @@ export async function main(): Promise<void> {
     await client.pressKey(serial, KEY[5]);
     await delay(args.settleMs);
     let settingsXml = await captureState(client, serial, artifactDir, "settings-for-appearance");
-    const onSettings = findTextContaining(settingsXml, "SETTINGS") !== null ||
-      findTextContaining(settingsXml, "Appearance") !== null;
+    const onSettings =
+      findTextContaining(settingsXml, "SETTINGS") !== null || findTextContaining(settingsXml, "Appearance") !== null;
     if (!onSettings) {
       addStep("WARNING: Settings page not detected for Appearance section — skipping");
     } else {
@@ -218,7 +226,11 @@ export async function main(): Promise<void> {
       const seenTheme = new Set<string>();
       for (const theme of themeButtons) {
         const result = await scrollUntilVisible(
-          client, serial, artifactDir, `scroll-theme-${theme.toLowerCase()}`, args.settleMs,
+          client,
+          serial,
+          artifactDir,
+          `scroll-theme-${theme.toLowerCase()}`,
+          args.settleMs,
           (xml) => {
             const b = findVisibleBoundsByText(xml, theme);
             // Guard: only match if y position is in the Appearance theme row (y < 700)
@@ -232,14 +244,23 @@ export async function main(): Promise<void> {
           await client.tap(serial, centerX(result.bounds), centerY(result.bounds));
           await delay(args.settleMs);
           const afterXml = await client.captureUiHierarchy(serial);
-          const stillOnSettings = findTextContaining(afterXml, "SETTINGS") !== null ||
-            findTextContaining(afterXml, "Appearance") !== null;
+          const stillOnSettings =
+            findTextContaining(afterXml, "SETTINGS") !== null || findTextContaining(afterXml, "Appearance") !== null;
           if (stillOnSettings) {
-            recordPass("F020", "/settings", `appearance-theme-${theme.toLowerCase()}`, "touch",
-              `Theme button "${theme}" tapped; Settings page still active`);
+            recordPass(
+              "F020",
+              "/settings",
+              `appearance-theme-${theme.toLowerCase()}`,
+              "touch",
+              `Theme button "${theme}" tapped; Settings page still active`,
+            );
           } else {
-            recordBlocked("F020", "/settings", `appearance-theme-${theme.toLowerCase()}`,
-              `Settings page not detected after tapping theme "${theme}"`);
+            recordBlocked(
+              "F020",
+              "/settings",
+              `appearance-theme-${theme.toLowerCase()}`,
+              `Settings page not detected after tapping theme "${theme}"`,
+            );
           }
           // Restore to top for next button search
           for (let i = 0; i < 3; i++) {
@@ -249,15 +270,23 @@ export async function main(): Promise<void> {
           await delay(500);
           settingsXml = await client.captureUiHierarchy(serial);
         } else {
-          recordBlocked("F020", "/settings", `appearance-theme-${theme.toLowerCase()}`,
-            `Theme button "${theme}" not found in Settings Appearance section`);
+          recordBlocked(
+            "F020",
+            "/settings",
+            `appearance-theme-${theme.toLowerCase()}`,
+            `Theme button "${theme}" not found in Settings Appearance section`,
+          );
         }
       }
 
       // Restore theme to Auto at the end.
       addStep("Restoring theme to Auto");
       const autoThemeResult = await scrollUntilVisible(
-        client, serial, artifactDir, "scroll-restore-auto-theme", args.settleMs,
+        client,
+        serial,
+        artifactDir,
+        "scroll-restore-auto-theme",
+        args.settleMs,
         (xml) => {
           const b = findVisibleBoundsByText(xml, "Auto");
           if (b && b.y1 < 700) return b;
@@ -282,26 +311,45 @@ export async function main(): Promise<void> {
         settingsXml = await client.captureUiHierarchy(serial);
 
         const profileResult = await scrollUntilVisible(
-          client, serial, artifactDir, `scroll-profile-${profile.toLowerCase().replace(/ /g, "-")}`, args.settleMs,
+          client,
+          serial,
+          artifactDir,
+          `scroll-profile-${profile.toLowerCase().replace(/ /g, "-")}`,
+          args.settleMs,
           (xml) => findVisibleBoundsByText(xml, profile),
         );
         if (profileResult) {
-          addStep(`Tapping display profile "${profile}" at (${centerX(profileResult.bounds)}, ${centerY(profileResult.bounds)})`);
+          addStep(
+            `Tapping display profile "${profile}" at (${centerX(profileResult.bounds)}, ${centerY(profileResult.bounds)})`,
+          );
           await client.tap(serial, centerX(profileResult.bounds), centerY(profileResult.bounds));
           await delay(args.settleMs);
           const afterXml = await client.captureUiHierarchy(serial);
-          const stillOnSettings = findTextContaining(afterXml, "SETTINGS") !== null ||
-            findTextContaining(afterXml, "Appearance") !== null;
+          const stillOnSettings =
+            findTextContaining(afterXml, "SETTINGS") !== null || findTextContaining(afterXml, "Appearance") !== null;
           if (stillOnSettings) {
-            recordPass("F020", "/settings", `appearance-display-${profile.toLowerCase().replace(/ /g, "-")}`, "touch",
-              `Display profile "${profile}" tapped; Settings page still active`);
+            recordPass(
+              "F020",
+              "/settings",
+              `appearance-display-${profile.toLowerCase().replace(/ /g, "-")}`,
+              "touch",
+              `Display profile "${profile}" tapped; Settings page still active`,
+            );
           } else {
-            recordBlocked("F020", "/settings", `appearance-display-${profile.toLowerCase().replace(/ /g, "-")}`,
-              `Settings page not detected after tapping profile "${profile}"`);
+            recordBlocked(
+              "F020",
+              "/settings",
+              `appearance-display-${profile.toLowerCase().replace(/ /g, "-")}`,
+              `Settings page not detected after tapping profile "${profile}"`,
+            );
           }
         } else {
-          recordBlocked("F020", "/settings", `appearance-display-${profile.toLowerCase().replace(/ /g, "-")}`,
-            `Display profile button "${profile}" not found`);
+          recordBlocked(
+            "F020",
+            "/settings",
+            `appearance-display-${profile.toLowerCase().replace(/ /g, "-")}`,
+            `Display profile button "${profile}" not found`,
+          );
         }
       }
 
@@ -314,7 +362,11 @@ export async function main(): Promise<void> {
       await delay(500);
       settingsXml = await client.captureUiHierarchy(serial);
       const autoProfileResult = await scrollUntilVisible(
-        client, serial, artifactDir, "scroll-restore-auto-profile", args.settleMs,
+        client,
+        serial,
+        artifactDir,
+        "scroll-restore-auto-profile",
+        args.settleMs,
         (xml) => {
           const b = findVisibleBoundsByText(xml, "Auto");
           // Display profile Auto is at y > 700 (below the theme row at y < 700)
@@ -329,7 +381,9 @@ export async function main(): Promise<void> {
       }
     }
 
-    addStep(`Gate 5 complete: ${coverageRecords.filter((r) => r.status === "PASS").length} PASS / ${coverageRecords.length} total CTAs`);
+    addStep(
+      `Gate 5 complete: ${coverageRecords.filter((r) => r.status === "PASS").length} PASS / ${coverageRecords.length} total CTAs`,
+    );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     addStep(`Error: ${message}`);

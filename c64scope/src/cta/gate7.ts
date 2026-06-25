@@ -23,7 +23,14 @@ import {
   findVisibleBoundsByResourceId,
   findVisibleBoundsByText,
 } from "./uiHelpers.js";
-import { APP_PACKAGE, captureState, gitSha, readFlagValue, scrollToTop, scrollUntilInSafeZone } from "./runnerCommon.js";
+import {
+  APP_PACKAGE,
+  captureState,
+  gitSha,
+  readFlagValue,
+  scrollToTop,
+  scrollUntilInSafeZone,
+} from "./runnerCommon.js";
 
 const KEY = {
   HOME_KEY: 3,
@@ -74,7 +81,10 @@ export function parseGate7Args(args: readonly string[]): Gate7Args {
 // Clear a focused EditText and type a new value.
 // Taps the field to focus, moves to end, backspaces 30 chars, then types the new value.
 async function clearAndType(
-  client: DroidmindClient, serial: string, fieldBounds: Bounds, newValue: string,
+  client: DroidmindClient,
+  serial: string,
+  fieldBounds: Bounds,
+  newValue: string,
 ): Promise<void> {
   await client.tap(serial, centerX(fieldBounds), centerY(fieldBounds));
   await delay(300);
@@ -102,10 +112,7 @@ function isOffline(xml: string): boolean {
 
 // Detect whether the app has an active connection.
 function isConnected(xml: string): boolean {
-  return (
-    findContentDescContaining(xml, "Connected") !== null ||
-    findContentDescContaining(xml, "connected") !== null
-  );
+  return findContentDescContaining(xml, "Connected") !== null || findContentDescContaining(xml, "connected") !== null;
 }
 
 // Run one R2 connection mutation scenario: navigate→baseline→mutate→verify error→restore→verify reconnect.
@@ -129,14 +136,21 @@ async function runConnectionScenario(
 
   // Scroll to find the target field in safe zone
   const fieldResult = await scrollUntilInSafeZone(
-    client, serial, artifactDir, `${prefix}-find-field`, settleMs, SAFE_TAP_Y,
+    client,
+    serial,
+    artifactDir,
+    `${prefix}-find-field`,
+    settleMs,
+    SAFE_TAP_Y,
     (xml) => findVisibleBoundsByResourceId(xml, scenario.fieldResourceId),
   );
   if (!fieldResult) {
     addStep(`BLOCKED: ${scenario.id}: field "${scenario.fieldResourceId}" not found in safe zone`);
     return "BLOCKED";
   }
-  addStep(`${scenario.id}: field "${scenario.fieldResourceId}" at (${centerX(fieldResult.bounds)}, ${centerY(fieldResult.bounds)})`);
+  addStep(
+    `${scenario.id}: field "${scenario.fieldResourceId}" at (${centerX(fieldResult.bounds)}, ${centerY(fieldResult.bounds)})`,
+  );
 
   // Capture baseline
   const baselineXml = await captureState(client, serial, artifactDir, `${prefix}-baseline`);
@@ -166,12 +180,21 @@ async function runConnectionScenario(
 
   // Scroll down to find Save & Connect in safe zone
   const saveResult = await scrollUntilInSafeZone(
-    client, serial, artifactDir, `${prefix}-find-save-mutate`, settleMs, SAFE_TAP_Y,
+    client,
+    serial,
+    artifactDir,
+    `${prefix}-find-save-mutate`,
+    settleMs,
+    SAFE_TAP_Y,
     (xml) => findVisibleBoundsByText(xml, "Save & Connect"),
   );
   if (!saveResult) {
     addStep(`BLOCKED: ${scenario.id}: "Save & Connect" not found after mutation`);
-    await writeFile(ledgerPath, JSON.stringify({ ...ledger, status: "BLOCKED", blockedAt: "save-mutate" }, null, 2), "utf-8");
+    await writeFile(
+      ledgerPath,
+      JSON.stringify({ ...ledger, status: "BLOCKED", blockedAt: "save-mutate" }, null, 2),
+      "utf-8",
+    );
     return "BLOCKED";
   }
   addStep(`${scenario.id}: tapping "Save & Connect" at (${centerX(saveResult.bounds)}, ${centerY(saveResult.bounds)})`);
@@ -189,7 +212,11 @@ async function runConnectionScenario(
 
   if (!mutatedOnSettings) {
     addStep(`BLOCKED: ${scenario.id}: Settings page not detected after mutation`);
-    await writeFile(ledgerPath, JSON.stringify({ ...ledger, status: "BLOCKED", blockedAt: "mutated-settings" }, null, 2), "utf-8");
+    await writeFile(
+      ledgerPath,
+      JSON.stringify({ ...ledger, status: "BLOCKED", blockedAt: "mutated-settings" }, null, 2),
+      "utf-8",
+    );
     return "BLOCKED";
   }
   addStep(`${scenario.id}: mutated state captured; offline=${mutatedOffline}; onSettings=${mutatedOnSettings}`);
@@ -197,27 +224,47 @@ async function runConnectionScenario(
   // ---- RESTORE ----
   await scrollToTop(client, serial, 2);
   const restoreFieldResult = await scrollUntilInSafeZone(
-    client, serial, artifactDir, `${prefix}-find-field-restore`, settleMs, SAFE_TAP_Y,
+    client,
+    serial,
+    artifactDir,
+    `${prefix}-find-field-restore`,
+    settleMs,
+    SAFE_TAP_Y,
     (xml) => findVisibleBoundsByResourceId(xml, scenario.fieldResourceId),
   );
   if (!restoreFieldResult) {
     addStep(`BLOCKED: ${scenario.id}: field "${scenario.fieldResourceId}" not found for restore`);
-    await writeFile(ledgerPath, JSON.stringify({ ...ledger, status: "BLOCKED", blockedAt: "restore-field" }, null, 2), "utf-8");
+    await writeFile(
+      ledgerPath,
+      JSON.stringify({ ...ledger, status: "BLOCKED", blockedAt: "restore-field" }, null, 2),
+      "utf-8",
+    );
     return "BLOCKED";
   }
   await clearAndType(client, serial, restoreFieldResult.bounds, scenario.correctValue);
   addStep(`${scenario.id}: typed correct value "${scenario.correctValue}"`);
 
   const restoreSaveResult = await scrollUntilInSafeZone(
-    client, serial, artifactDir, `${prefix}-find-save-restore`, settleMs, SAFE_TAP_Y,
+    client,
+    serial,
+    artifactDir,
+    `${prefix}-find-save-restore`,
+    settleMs,
+    SAFE_TAP_Y,
     (xml) => findVisibleBoundsByText(xml, "Save & Connect"),
   );
   if (!restoreSaveResult) {
     addStep(`BLOCKED: ${scenario.id}: "Save & Connect" not found for restore`);
-    await writeFile(ledgerPath, JSON.stringify({ ...ledger, status: "BLOCKED", blockedAt: "restore-save" }, null, 2), "utf-8");
+    await writeFile(
+      ledgerPath,
+      JSON.stringify({ ...ledger, status: "BLOCKED", blockedAt: "restore-save" }, null, 2),
+      "utf-8",
+    );
     return "BLOCKED";
   }
-  addStep(`${scenario.id}: tapping "Save & Connect" (restore) at (${centerX(restoreSaveResult.bounds)}, ${centerY(restoreSaveResult.bounds)})`);
+  addStep(
+    `${scenario.id}: tapping "Save & Connect" (restore) at (${centerX(restoreSaveResult.bounds)}, ${centerY(restoreSaveResult.bounds)})`,
+  );
   await client.tap(serial, centerX(restoreSaveResult.bounds), centerY(restoreSaveResult.bounds));
   await delay(settleMs * 3); // generous wait for real reconnection
 
@@ -230,7 +277,11 @@ async function runConnectionScenario(
 
   if (!restoredOnSettings) {
     addStep(`BLOCKED: ${scenario.id}: Settings page not detected after restore`);
-    await writeFile(ledgerPath, JSON.stringify({ ...ledger, status: "BLOCKED", blockedAt: "restored-settings" }, null, 2), "utf-8");
+    await writeFile(
+      ledgerPath,
+      JSON.stringify({ ...ledger, status: "BLOCKED", blockedAt: "restored-settings" }, null, 2),
+      "utf-8",
+    );
     return "BLOCKED";
   }
   const restoredConnected = isConnected(restoredXml);
@@ -239,13 +290,17 @@ async function runConnectionScenario(
   // PASS: mutated state was reached AND restored state is back on Settings
   await writeFile(
     ledgerPath,
-    JSON.stringify({
-      ...ledger,
-      status: "PASS",
-      mutatedOffline,
-      restoredConnected,
-      baselineConnected,
-    }, null, 2),
+    JSON.stringify(
+      {
+        ...ledger,
+        status: "PASS",
+        mutatedOffline,
+        restoredConnected,
+        baselineConnected,
+      },
+      null,
+      2,
+    ),
     "utf-8",
   );
   addStep(`${scenario.id}: PASS`);
@@ -255,9 +310,7 @@ async function runConnectionScenario(
 export async function main(): Promise<void> {
   const args = parseGate7Args(process.argv.slice(2));
   const workspaceRoot = resolveWorkspaceRoot();
-  const serial = args.serial
-    ? await resolveAdbSerial(args.serial)
-    : await resolvePreferredPhysicalTestDeviceSerial();
+  const serial = args.serial ? await resolveAdbSerial(args.serial) : await resolvePreferredPhysicalTestDeviceSerial();
   const sha = await gitSha(workspaceRoot);
   const runId = `cta-${timestampId()}-pixel4-${args.target}-${sha}`;
   const artifactDir = args.artifactDir ?? path.join(workspaceRoot, "c64scope", "artifacts", runId);
@@ -355,7 +408,9 @@ export async function main(): Promise<void> {
       }
     }
 
-    addStep(`Gate 7 complete: ${coverageRecords.filter((r) => r.status === "PASS").length} PASS / ${coverageRecords.length} total`);
+    addStep(
+      `Gate 7 complete: ${coverageRecords.filter((r) => r.status === "PASS").length} PASS / ${coverageRecords.length} total`,
+    );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     addStep(`Error: ${message}`);
@@ -385,7 +440,13 @@ export async function main(): Promise<void> {
   await writeFile(path.join(artifactDir, "gate7-result.json"), JSON.stringify(gate7Result, null, 2), "utf-8");
 
   console.log(`Gate 7 artifacts written: ${artifactDir}`);
-  console.log(JSON.stringify({ runId, passed: coverageSummary.passed, total: coverageSummary.total, byStatus: coverageSummary.byStatus }, null, 2));
+  console.log(
+    JSON.stringify(
+      { runId, passed: coverageSummary.passed, total: coverageSummary.total, byStatus: coverageSummary.byStatus },
+      null,
+      2,
+    ),
+  );
 
   if (coverageSummary.passed === 0) process.exitCode = 1;
 }

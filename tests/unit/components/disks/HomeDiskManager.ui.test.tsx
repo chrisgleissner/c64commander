@@ -54,6 +54,7 @@ vi.mock("@/lib/uiErrors");
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({
     invalidateQueries: vi.fn(),
+    cancelQueries: vi.fn(),
     fetchQuery: vi.fn().mockResolvedValue(undefined),
   }),
 }));
@@ -277,7 +278,7 @@ describe("HomeDiskManager UI & Interactions", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
 
     await waitFor(() => {
-      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined);
+      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined, { mode: "readonly" });
     });
 
     fireEvent.click(screen.getByTestId("drive-reset-a"));
@@ -568,7 +569,7 @@ describe("HomeDiskManager UI & Interactions", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
 
     await waitFor(() => {
-      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined);
+      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined, { mode: "readonly" });
     });
 
     view.unmount();
@@ -612,7 +613,7 @@ describe("HomeDiskManager UI & Interactions", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
 
     await waitFor(() => {
-      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined);
+      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined, { mode: "readonly" });
     });
 
     view.rerender(

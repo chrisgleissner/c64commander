@@ -26,7 +26,14 @@ import {
   getScreenSize,
   isVisible,
 } from "./uiHelpers.js";
-import { APP_PACKAGE, captureState, gitSha, readFlagValue, scrollToTop, scrollUntilInSafeZone } from "./runnerCommon.js";
+import {
+  APP_PACKAGE,
+  captureState,
+  gitSha,
+  readFlagValue,
+  scrollToTop,
+  scrollUntilInSafeZone,
+} from "./runnerCommon.js";
 
 const KEY = {
   HOME_KEY: 3,
@@ -71,9 +78,7 @@ export function parseGate6Args(args: readonly string[]): Gate6Args {
 // stored orientation preference. Uses screen-height-proportional swipe coordinates so it
 // works regardless of current orientation (portrait or landscape).
 // Must be called while the app is running (any tab).
-async function restorePortraitViaAppSettings(
-  client: DroidmindClient, serial: string, settleMs: number
-): Promise<void> {
+async function restorePortraitViaAppSettings(client: DroidmindClient, serial: string, settleMs: number): Promise<void> {
   await client.pressKey(serial, KEY.TAB_SETTINGS);
   await delay(settleMs);
 
@@ -82,10 +87,10 @@ async function restorePortraitViaAppSettings(
   // 30%/75% of screen height stays inside the scrollable container for BOTH orientations:
   // landscape scrollable is [0,225][2280,885] → 30%×1080=324, 75%×1080=810, both in 225–885 ✓
   // portrait scrollable is roughly [0,100][1080,2100] → 30%×2280=684, 75%×2280=1710, both in ✓
-  const toTopFromY = Math.floor(screenH * 0.30);
-  const toTopToY   = Math.floor(screenH * 0.75);
-  const downFromY  = Math.floor(screenH * 0.75);
-  const downToY    = Math.floor(screenH * 0.30);
+  const toTopFromY = Math.floor(screenH * 0.3);
+  const toTopToY = Math.floor(screenH * 0.75);
+  const downFromY = Math.floor(screenH * 0.75);
+  const downToY = Math.floor(screenH * 0.3);
 
   // Scroll to top (3 passes)
   for (let i = 0; i < 3; i++) {
@@ -126,9 +131,7 @@ async function launchFresh(client: DroidmindClient, serial: string, settleMs: nu
 export async function main(): Promise<void> {
   const args = parseGate6Args(process.argv.slice(2));
   const workspaceRoot = resolveWorkspaceRoot();
-  const serial = args.serial
-    ? await resolveAdbSerial(args.serial)
-    : await resolvePreferredPhysicalTestDeviceSerial();
+  const serial = args.serial ? await resolveAdbSerial(args.serial) : await resolvePreferredPhysicalTestDeviceSerial();
   const sha = await gitSha(workspaceRoot);
   const runId = `cta-${timestampId()}-pixel4-${args.target}-${sha}`;
   const artifactDir = args.artifactDir ?? path.join(workspaceRoot, "c64scope", "artifacts", runId);
@@ -150,13 +153,37 @@ export async function main(): Promise<void> {
     return `${featureId}.G6C${String(idSeq).padStart(3, "0")}`;
   }
 
-  function recordPass(featureId: string, route: string, label: string, inputMethod: "keypad" | "touch", notes: string): void {
-    coverageRecords.push({ ctaId: nextId(featureId), featureId, route, label, status: "PASS", inputMethod, runId, notes });
+  function recordPass(
+    featureId: string,
+    route: string,
+    label: string,
+    inputMethod: "keypad" | "touch",
+    notes: string,
+  ): void {
+    coverageRecords.push({
+      ctaId: nextId(featureId),
+      featureId,
+      route,
+      label,
+      status: "PASS",
+      inputMethod,
+      runId,
+      notes,
+    });
     addStep(`PASS: ${featureId} ${label} (${inputMethod})`);
   }
 
   function recordBlocked(featureId: string, route: string, label: string, reason: string): void {
-    coverageRecords.push({ ctaId: nextId(featureId), featureId, route, label, status: "BLOCKED", inputMethod: "none", runId, notes: reason });
+    coverageRecords.push({
+      ctaId: nextId(featureId),
+      featureId,
+      route,
+      label,
+      status: "BLOCKED",
+      inputMethod: "none",
+      runId,
+      notes: reason,
+    });
     addStep(`BLOCKED: ${featureId} ${label}: ${reason}`);
   }
 
@@ -186,29 +213,40 @@ export async function main(): Promise<void> {
       // Swapping Disks, Config, Settings, Diagnostics (all clickable android.widget.Button).
       const docsItems = [
         { label: "docs-getting-started", text: "Getting Started" },
-        { label: "docs-home",            text: "Home" },
-        { label: "docs-play-files",      text: "Play Files" },
-        { label: "docs-disks-drives",    text: "Disks & Drives" },
-        { label: "docs-swapping-disks",  text: "Swapping Disks" },
-        { label: "docs-config",          text: "Config" },
-        { label: "docs-settings",        text: "Settings" },
+        { label: "docs-home", text: "Home" },
+        { label: "docs-play-files", text: "Play Files" },
+        { label: "docs-disks-drives", text: "Disks & Drives" },
+        { label: "docs-swapping-disks", text: "Swapping Disks" },
+        { label: "docs-config", text: "Config" },
+        { label: "docs-settings", text: "Settings" },
         { label: "docs-diagnostics-nav", text: "Diagnostics" },
       ];
 
       for (const item of docsItems) {
         const result = await scrollUntilInSafeZone(
-          client, serial, artifactDir, `scroll-${item.label}`, args.settleMs, SAFE_TAP_MAX_Y,
+          client,
+          serial,
+          artifactDir,
+          `scroll-${item.label}`,
+          args.settleMs,
+          SAFE_TAP_MAX_Y,
           (xml) => findVisibleBoundsByText(xml, item.text),
         );
         if (!result) {
-          recordBlocked("F022", "/docs", item.label, `"${item.text}" not found in safe zone after ${MAX_SCROLL_ATTEMPTS} scrolls`);
+          recordBlocked(
+            "F022",
+            "/docs",
+            item.label,
+            `"${item.text}" not found in safe zone after ${MAX_SCROLL_ATTEMPTS} scrolls`,
+          );
           continue;
         }
         addStep(`tapping Docs item "${item.text}" at (${centerX(result.bounds)}, ${centerY(result.bounds)})`);
         await client.tap(serial, centerX(result.bounds), centerY(result.bounds));
         await delay(args.settleMs);
         const afterXml = await captureState(client, serial, artifactDir, `docs-after-${item.label}`);
-        const stillAlive = findTextContaining(afterXml, "C64 Commander") !== null ||
+        const stillAlive =
+          findTextContaining(afterXml, "C64 Commander") !== null ||
           findTextContaining(afterXml, "DOCS") !== null ||
           findTextContaining(afterXml, item.text) !== null ||
           findContentDescContaining(afterXml, "Connected") !== null ||
@@ -229,7 +267,8 @@ export async function main(): Promise<void> {
     await client.pressKey(serial, KEY.STAR);
     await delay(args.settleMs);
     const diagXml = await captureState(client, serial, artifactDir, "diagnostics-overlay");
-    const onDiag = findTextContaining(diagXml, "Diagnostics") !== null ||
+    const onDiag =
+      findTextContaining(diagXml, "Diagnostics") !== null ||
       findTextContaining(diagXml, "DIAGNOSTICS") !== null ||
       findContentDescContaining(diagXml, "Diagnostics") !== null;
     if (onDiag) {
@@ -246,13 +285,20 @@ export async function main(): Promise<void> {
     await client.pressKey(serial, KEY.TAB_HOME);
     await delay(args.settleMs);
     const homeXml = await captureState(client, serial, artifactDir, "home-initial");
-    const onHome = findTextContaining(homeXml, "HOME") !== null ||
+    const onHome =
+      findTextContaining(homeXml, "HOME") !== null ||
       findTextContaining(homeXml, "PORTS") !== null ||
       findTextContaining(homeXml, "VIDEO") !== null;
     if (!onHome) {
       recordBlocked("F003", "/home", "home-page-load", "HOME text not found after KEY_1");
     } else {
-      recordPass("F003", "/home", "home-page-load", "keypad", "KEY_1 navigated to HOME; HOME/PORTS/VIDEO text detected");
+      recordPass(
+        "F003",
+        "/home",
+        "home-page-load",
+        "keypad",
+        "KEY_1 navigated to HOME; HOME/PORTS/VIDEO text detected",
+      );
 
       const homeTabButtons = [
         { label: "home-ports-tab", text: "PORTS", featureId: "F003" },
@@ -265,9 +311,16 @@ export async function main(): Promise<void> {
           await client.tap(serial, centerX(bounds), centerY(bounds));
           await delay(args.settleMs / 2);
           const afterXml = await captureState(client, serial, artifactDir, `home-after-${btn.label}`);
-          const stillOnHome = findTextContaining(afterXml, "HOME") !== null || findTextContaining(afterXml, "PORTS") !== null;
+          const stillOnHome =
+            findTextContaining(afterXml, "HOME") !== null || findTextContaining(afterXml, "PORTS") !== null;
           if (stillOnHome) {
-            recordPass(btn.featureId, "/home", btn.label, "touch", `Home button "${btn.text}" tapped; Home page still active`);
+            recordPass(
+              btn.featureId,
+              "/home",
+              btn.label,
+              "touch",
+              `Home button "${btn.text}" tapped; Home page still active`,
+            );
           } else {
             recordBlocked(btn.featureId, "/home", btn.label, `Home page not detected after tapping "${btn.text}"`);
           }
@@ -289,7 +342,12 @@ export async function main(): Promise<void> {
 
     for (const orient of ["Portrait", "Auto"] as const) {
       const result = await scrollUntilInSafeZone(
-        client, serial, artifactDir, `scroll-orient-${orient.toLowerCase()}`, args.settleMs, SAFE_TAP_MAX_Y,
+        client,
+        serial,
+        artifactDir,
+        `scroll-orient-${orient.toLowerCase()}`,
+        args.settleMs,
+        SAFE_TAP_MAX_Y,
         (xml) => {
           if (orient === "Auto") {
             // Settings has three "Auto" buttons (Theme, Display Profile, Screen Orientation).
@@ -308,11 +366,23 @@ export async function main(): Promise<void> {
       await client.tap(serial, centerX(result.bounds), centerY(result.bounds));
       await delay(args.settleMs);
       const afterXml = await client.captureUiHierarchy(serial);
-      const stillOnSettings = findTextContaining(afterXml, "SETTINGS") !== null || findTextContaining(afterXml, "Appearance") !== null;
+      const stillOnSettings =
+        findTextContaining(afterXml, "SETTINGS") !== null || findTextContaining(afterXml, "Appearance") !== null;
       if (stillOnSettings) {
-        recordPass("F020", "/settings", `orientation-${orient.toLowerCase()}`, "touch", `Orientation "${orient}" tapped; Settings still active`);
+        recordPass(
+          "F020",
+          "/settings",
+          `orientation-${orient.toLowerCase()}`,
+          "touch",
+          `Orientation "${orient}" tapped; Settings still active`,
+        );
       } else {
-        recordBlocked("F020", "/settings", `orientation-${orient.toLowerCase()}`, `Settings not detected after tapping "${orient}"`);
+        recordBlocked(
+          "F020",
+          "/settings",
+          `orientation-${orient.toLowerCase()}`,
+          `Settings not detected after tapping "${orient}"`,
+        );
       }
     }
 
@@ -326,12 +396,17 @@ export async function main(): Promise<void> {
     await scrollToTop(client, serial, 4);
 
     const checkboxDefs = [
-      { label: "fullscreen-hide-statusbar", rid: "full-screen-hide-status-bar",     display: "Hide status bar" },
-      { label: "fullscreen-hide-navbar",    rid: "full-screen-hide-navigation-bar", display: "Hide navigation bar" },
+      { label: "fullscreen-hide-statusbar", rid: "full-screen-hide-status-bar", display: "Hide status bar" },
+      { label: "fullscreen-hide-navbar", rid: "full-screen-hide-navigation-bar", display: "Hide navigation bar" },
     ];
     for (const cb of checkboxDefs) {
       const result = await scrollUntilInSafeZone(
-        client, serial, artifactDir, `scroll-${cb.label}`, args.settleMs, SAFE_TAP_MAX_Y,
+        client,
+        serial,
+        artifactDir,
+        `scroll-${cb.label}`,
+        args.settleMs,
+        SAFE_TAP_MAX_Y,
         (xml) => findVisibleBoundsByResourceId(xml, cb.rid),
       );
       if (!result) {
@@ -359,7 +434,12 @@ export async function main(): Promise<void> {
       }
       // Toggle OFF (restore)
       const restoreResult = await scrollUntilInSafeZone(
-        client, serial, artifactDir, `scroll-${cb.label}-restore`, args.settleMs, SAFE_TAP_MAX_Y,
+        client,
+        serial,
+        artifactDir,
+        `scroll-${cb.label}-restore`,
+        args.settleMs,
+        SAFE_TAP_MAX_Y,
         (xml) => findVisibleBoundsByResourceId(xml, cb.rid),
       );
       if (restoreResult) {
@@ -369,7 +449,9 @@ export async function main(): Promise<void> {
       }
     }
 
-    addStep(`Gate 6 complete: ${coverageRecords.filter((r) => r.status === "PASS").length} PASS / ${coverageRecords.length} total`);
+    addStep(
+      `Gate 6 complete: ${coverageRecords.filter((r) => r.status === "PASS").length} PASS / ${coverageRecords.length} total`,
+    );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     addStep(`Error: ${message}`);
@@ -378,7 +460,11 @@ export async function main(): Promise<void> {
   }
 
   const coverageSummary = summarizeCoverage(coverageRecords);
-  await writeFile(path.join(artifactDir, "coverage.json"), JSON.stringify(toCoverageJson(coverageRecords, coverageSummary), null, 2), "utf-8");
+  await writeFile(
+    path.join(artifactDir, "coverage.json"),
+    JSON.stringify(toCoverageJson(coverageRecords, coverageSummary), null, 2),
+    "utf-8",
+  );
   await writeFile(path.join(artifactDir, "coverage.csv"), toCoverageCsv(coverageRecords), "utf-8");
 
   const gate6Result = {
@@ -395,7 +481,13 @@ export async function main(): Promise<void> {
   await writeFile(path.join(artifactDir, "gate6-result.json"), JSON.stringify(gate6Result, null, 2), "utf-8");
 
   console.log(`Gate 6 artifacts written: ${artifactDir}`);
-  console.log(JSON.stringify({ runId, passed: coverageSummary.passed, total: coverageSummary.total, byStatus: coverageSummary.byStatus }, null, 2));
+  console.log(
+    JSON.stringify(
+      { runId, passed: coverageSummary.passed, total: coverageSummary.total, byStatus: coverageSummary.byStatus },
+      null,
+      2,
+    ),
+  );
 
   if (coverageSummary.passed === 0) process.exitCode = 1;
 }

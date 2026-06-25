@@ -9,6 +9,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 import { HomeDiskManager } from "@/components/disks/HomeDiskManager";
+import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 
 // Mock child components
 vi.mock("@/components/lists/SelectableActionList", () => ({
@@ -249,9 +250,11 @@ vi.mock("@/components/itemSelection/AddItemsProgressOverlay", () => ({
 
 // Mock hooks
 const mockInvalidateQueries = vi.fn();
+const mockCancelQueries = vi.fn();
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({
     invalidateQueries: mockInvalidateQueries,
+    cancelQueries: mockCancelQueries,
     setQueryData: vi.fn(),
     fetchQuery: vi.fn().mockResolvedValue(undefined),
   }),
@@ -434,6 +437,7 @@ vi.mock("@/lib/native/safUtils", () => ({
 describe("HomeDiskManager Extended", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    pollingPauseRegistry.__resetForTest();
     useC64ConnectionMock.status = {
       isConnected: true,
       deviceInfo: { unique_id: "test-device" },
@@ -504,6 +508,50 @@ describe("HomeDiskManager Extended", () => {
     // Settle the in-flight unmount so the control re-enables (now showing Mount).
     resolveEject?.();
     await waitFor(() => expect(screen.getByRole("button", { name: "Drive A Mount disk" })).toBeInTheDocument());
+  }, 15000);
+
+  it("pauses drive polling and avoids immediate refetch during mount and eject writes", async () => {
+    let resolveMount: (() => void) | undefined;
+    let resolveEject: (() => void) | undefined;
+    mockMountDisk.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveMount = () => resolve();
+        }),
+    );
+    mockUnmountDrive.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveEject = () => resolve();
+        }),
+    );
+
+    renderComponent();
+
+    const item = screen.getByTestId("disk-item-ultimate/disk2.d64");
+    fireEvent.click(within(item).getByText("Mount"));
+    fireEvent.click(within(screen.getByTestId("dialog")).getByText(/Drive A/));
+
+    await waitFor(() => expect(pollingPauseRegistry.isPollingPaused()).toBe(true));
+    expect(mockCancelQueries).toHaveBeenCalledWith({ queryKey: ["c64-drives"], type: "active" });
+
+    resolveMount?.();
+
+    const ejectBtn = await screen.findByRole("button", { name: "Drive A Eject disk" });
+    await waitFor(() =>
+      expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ["c64-drives"], refetchType: "none" }),
+    );
+    await waitFor(() => expect(pollingPauseRegistry.isPollingPaused()).toBe(false));
+
+    fireEvent.click(ejectBtn);
+
+    await waitFor(() => expect(pollingPauseRegistry.isPollingPaused()).toBe(true));
+    resolveEject?.();
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Drive A Mount disk" })).toBeInTheDocument());
+    expect(mockCancelQueries).toHaveBeenCalledTimes(2);
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ["c64-drives"], refetchType: "none" });
+    await waitFor(() => expect(pollingPauseRegistry.isPollingPaused()).toBe(false));
   }, 15000);
 
   it("keeps a mounted disk in the collection when eject before remove fails", async () => {
@@ -593,7 +641,7 @@ describe("HomeDiskManager Extended", () => {
 
     await waitFor(
       () => {
-        expect(mockMountDisk).toHaveBeenCalledWith("a", "/disk2.d64", "d64", "readwrite");
+        expect(mockMountDisk).toHaveBeenCalledWith("a", "/disk2.d64", "d64", "readonly");
       },
       { timeout: 15000 },
     );

@@ -173,4 +173,43 @@ describe("screen snapshot roundtrip", () => {
       expect(writesCiaTimer(parseInt(c.address, 16), c.data.length)).toBe(false);
     }
   });
+
+  it("saves and restores non-contiguous custom ranges, leaving the gaps untouched", async () => {
+    const api = new MemoryBackedApi();
+    const ranges = [
+      { start: 0x0801, length: 4 },
+      { start: 0x2000, length: 4 },
+      { start: 0x5000, length: 4 },
+    ];
+    ranges.forEach((r, i) => api.memory.fill(0xa0 + i, r.start, r.start + r.length));
+    const gaps = [0x1000, 0x3000, 0x4fff, 0x5004];
+    gaps.forEach((g) => (api.memory[g] = 0x11));
+
+    await createSnapshot(api as never, { type: "custom", customRanges: ranges, label: "noncontig" });
+
+    const decoded = decodeSnapshot(snapshotEntryToBytes(loadSnapshotStore()[0]!));
+    expect(decoded.ranges).toEqual(ranges);
+    decoded.blocks.forEach((block, i) => {
+      expect(Array.from(block)).toEqual([0xa0 + i, 0xa0 + i, 0xa0 + i, 0xa0 + i]);
+    });
+
+    ranges.forEach((r) => api.memory.fill(0xff, r.start, r.start + r.length));
+    gaps.forEach((g) => (api.memory[g] = 0xff));
+    await loadMemoryRanges(
+      api as never,
+      decoded.ranges.map((r, i) => ({ start: r.start, bytes: decoded.blocks[i] })),
+    );
+
+    ranges.forEach((r, i) => {
+      expect(Array.from(api.memory.slice(r.start, r.start + r.length))).toEqual([
+        0xa0 + i,
+        0xa0 + i,
+        0xa0 + i,
+        0xa0 + i,
+      ]);
+    });
+    gaps.forEach((g) => expect(api.memory[g]).toBe(0xff));
+    const writeAddrs = api.writeCalls.map((c) => parseInt(c.address, 16));
+    for (const g of gaps) expect(writeAddrs).not.toContain(g);
+  });
 });

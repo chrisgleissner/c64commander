@@ -61,6 +61,7 @@ vi.mock("@/components/itemSelection/AddItemsProgressOverlay", () => ({
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({
     invalidateQueries: vi.fn(),
+    cancelQueries: vi.fn(),
     setQueryData: vi.fn(),
     fetchQuery: vi.fn().mockResolvedValue(undefined),
   }),
@@ -331,7 +332,7 @@ describe("HomeDiskManager", () => {
     fireEvent.click(driveABtn);
 
     await waitFor(() => {
-      expect(mockMountDisk).toHaveBeenCalledWith("a", "/disk2.d64", "d64", "readwrite");
+      expect(mockMountDisk).toHaveBeenCalledWith("a", "/disk2.d64", "d64", "readonly");
     });
   });
 

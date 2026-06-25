@@ -158,9 +158,17 @@ const TEST_PROBE_REQUEST_TIMEOUT_FLOOR_MS = 8000;
 // loaded by the Playwright runner in Node (e.g. `playwright test --list`), so
 // touching it at module scope would throw there and break test collection.
 const isTestProbeTimeoutFloorEnabled = () => {
-  const env = (import.meta as ImportMeta).env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
+  const env = import.meta.env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
   return env?.VITE_ENABLE_TEST_PROBES === "1";
 };
+
+const readViteEnv = () =>
+  import.meta.env as
+    | {
+        VITE_ENABLE_TEST_PROBES?: string;
+        VITE_WEB_PLATFORM?: string;
+      }
+    | undefined;
 
 const resolveEffectiveRequestTimeoutMs = (timeoutMs?: number) =>
   timeoutMs !== undefined && isTestProbeTimeoutFloorEnabled() && TEST_PROBE_REQUEST_TIMEOUT_FLOOR_MS > timeoutMs
@@ -630,14 +638,14 @@ export class C64API {
   constructor(baseUrl: string = DEFAULT_BASE_URL, password?: string, deviceHost: string = DEFAULT_DEVICE_HOST) {
     this.deviceHost = normalizeDeviceHost(deviceHost || getDeviceHostFromBaseUrl(baseUrl));
     const initialBaseUrl =
-      import.meta.env.VITE_WEB_PLATFORM === "1" ? baseUrl : buildBaseUrlFromDeviceHost(this.deviceHost);
+      readViteEnv()?.VITE_WEB_PLATFORM === "1" ? baseUrl : buildBaseUrlFromDeviceHost(this.deviceHost);
     this.apiBaseUrl = resolvePlatformApiBaseUrl(this.deviceHost, initialBaseUrl);
     this.password = password;
     this.activeConfigEnrichmentNamespaceKey = loadConfigEnrichmentNamespaceForHost(this.deviceHost);
   }
 
   setBaseUrl(url: string) {
-    if (import.meta.env.VITE_WEB_PLATFORM !== "1") {
+    if (readViteEnv()?.VITE_WEB_PLATFORM !== "1") {
       this.deviceHost = normalizeDeviceHost(getDeviceHostFromBaseUrl(url));
     }
     this.apiBaseUrl = resolvePlatformApiBaseUrl(this.deviceHost, url);
@@ -2592,7 +2600,7 @@ const createApiProxy = (api: C64API): C64API =>
   });
 
 const isTestProbeEnabled = () => {
-  if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") return true;
+  if (readViteEnv()?.VITE_ENABLE_TEST_PROBES === "1") return true;
   if (typeof window !== "undefined") {
     const win = window as Window & { __c64uTestProbeEnabled?: boolean };
     return win.__c64uTestProbeEnabled === true;

@@ -64,9 +64,7 @@ export function parseGate65Args(args: readonly string[]): Gate65Args {
 export async function main(): Promise<void> {
   const args = parseGate65Args(process.argv.slice(2));
   const workspaceRoot = resolveWorkspaceRoot();
-  const serial = args.serial
-    ? await resolveAdbSerial(args.serial)
-    : await resolvePreferredPhysicalTestDeviceSerial();
+  const serial = args.serial ? await resolveAdbSerial(args.serial) : await resolvePreferredPhysicalTestDeviceSerial();
   const sha = await gitSha(workspaceRoot);
   const runId = `cta-${timestampId()}-pixel4-${args.target}-${sha}`;
   const artifactDir = args.artifactDir ?? path.join(workspaceRoot, "c64scope", "artifacts", runId);
@@ -88,13 +86,37 @@ export async function main(): Promise<void> {
     return `${featureId}.G65C${String(idSeq).padStart(3, "0")}`;
   }
 
-  function recordPass(featureId: string, route: string, label: string, inputMethod: "keypad" | "touch", notes: string): void {
-    coverageRecords.push({ ctaId: nextId(featureId), featureId, route, label, status: "PASS", inputMethod, runId, notes });
+  function recordPass(
+    featureId: string,
+    route: string,
+    label: string,
+    inputMethod: "keypad" | "touch",
+    notes: string,
+  ): void {
+    coverageRecords.push({
+      ctaId: nextId(featureId),
+      featureId,
+      route,
+      label,
+      status: "PASS",
+      inputMethod,
+      runId,
+      notes,
+    });
     addStep(`PASS: ${featureId} ${label}`);
   }
 
   function recordBlocked(featureId: string, route: string, label: string, reason: string): void {
-    coverageRecords.push({ ctaId: nextId(featureId), featureId, route, label, status: "BLOCKED", inputMethod: "none", runId, notes: reason });
+    coverageRecords.push({
+      ctaId: nextId(featureId),
+      featureId,
+      route,
+      label,
+      status: "BLOCKED",
+      inputMethod: "none",
+      runId,
+      notes: reason,
+    });
     addStep(`BLOCKED: ${featureId} ${label}: ${reason}`);
   }
 
@@ -114,7 +136,8 @@ export async function main(): Promise<void> {
     await client.pressKey(serial, KEY.TAB_PLAY);
     await delay(args.settleMs);
     const playXml = await captureState(client, serial, artifactDir, "play-initial");
-    const onPlay = findTextContaining(playXml, "PLAY") !== null ||
+    const onPlay =
+      findTextContaining(playXml, "PLAY") !== null ||
       findTextContaining(playXml, "playlist") !== null ||
       findTextContaining(playXml, "Select a playlist") !== null;
 
@@ -127,10 +150,10 @@ export async function main(): Promise<void> {
       // These are safe to tap with no active playlist (app shows "Select a playlist item to start").
       const playControls: Array<{ cd: string; label: string }> = [
         { cd: "Previous", label: "play-previous" },
-        { cd: "Play",     label: "play-play"     },
-        { cd: "Pause",    label: "play-pause"    },
-        { cd: "Next",     label: "play-next"     },
-        { cd: "Mute",     label: "play-mute"     },
+        { cd: "Play", label: "play-play" },
+        { cd: "Pause", label: "play-pause" },
+        { cd: "Next", label: "play-next" },
+        { cd: "Mute", label: "play-mute" },
       ];
 
       // All controls are typically visible at once on the Play page — no scrolling needed.
@@ -145,7 +168,8 @@ export async function main(): Promise<void> {
         await client.tap(serial, centerX(bounds), centerY(bounds));
         await delay(args.settleMs / 2);
         const afterXml = await client.captureUiHierarchy(serial);
-        const stillOnPlay = findTextContaining(afterXml, "PLAY") !== null ||
+        const stillOnPlay =
+          findTextContaining(afterXml, "PLAY") !== null ||
           findTextContaining(afterXml, "playlist") !== null ||
           findContentDescContaining(afterXml, "Play") !== null ||
           findContentDescContaining(afterXml, "Pause") !== null;
@@ -158,7 +182,12 @@ export async function main(): Promise<void> {
 
       // Recurse checkbox — safe to toggle ON then OFF
       const recurseResult = await scrollUntilInSafeZone(
-        client, serial, artifactDir, "scroll-play-recurse", args.settleMs, SAFE_TAP_MAX_Y,
+        client,
+        serial,
+        artifactDir,
+        "scroll-play-recurse",
+        args.settleMs,
+        SAFE_TAP_MAX_Y,
         (xml) => findVisibleBoundsByContentDesc(xml, "Recurse"),
       );
       if (recurseResult) {
@@ -166,10 +195,16 @@ export async function main(): Promise<void> {
         await client.tap(serial, centerX(recurseResult.bounds), centerY(recurseResult.bounds));
         await delay(args.settleMs / 2);
         const afterXml = await client.captureUiHierarchy(serial);
-        const stillOnPlay = findTextContaining(afterXml, "PLAY") !== null ||
-          findContentDescContaining(afterXml, "Recurse") !== null;
+        const stillOnPlay =
+          findTextContaining(afterXml, "PLAY") !== null || findContentDescContaining(afterXml, "Recurse") !== null;
         if (stillOnPlay) {
-          recordPass("F010", "/play", "play-recurse-toggle", "touch", "Recurse checkbox tapped; Play page still active");
+          recordPass(
+            "F010",
+            "/play",
+            "play-recurse-toggle",
+            "touch",
+            "Recurse checkbox tapped; Play page still active",
+          );
           // Restore: tap again to toggle back OFF
           const restoreB = findVisibleBoundsByContentDesc(afterXml, "Recurse");
           if (restoreB) {
@@ -190,7 +225,8 @@ export async function main(): Promise<void> {
     await client.pressKey(serial, KEY.TAB_DISKS);
     await delay(args.settleMs);
     const disksXml = await captureState(client, serial, artifactDir, "disks-initial");
-    const onDisks = findTextContaining(disksXml, "DISKS") !== null ||
+    const onDisks =
+      findTextContaining(disksXml, "DISKS") !== null ||
       findTextContaining(disksXml, "DRIVES") !== null ||
       findTextContaining(disksXml, "Drive A") !== null;
 
@@ -208,11 +244,18 @@ export async function main(): Promise<void> {
         await delay(args.settleMs / 2);
         const afterXml = await client.captureUiHierarchy(serial);
         // Spinner expanded: look for dropdown items or the same text still visible
-        const spinnerExpanded = findTextContaining(afterXml, "#8") !== null ||
+        const spinnerExpanded =
+          findTextContaining(afterXml, "#8") !== null ||
           findTextContaining(afterXml, "#9") !== null ||
           findTextContaining(afterXml, "#10") !== null;
         if (spinnerExpanded) {
-          recordPass("F007", "/disks", "disks-drive-a-bus-spinner", "touch", "Drive A Bus ID spinner tapped; dropdown visible");
+          recordPass(
+            "F007",
+            "/disks",
+            "disks-drive-a-bus-spinner",
+            "touch",
+            "Drive A Bus ID spinner tapped; dropdown visible",
+          );
           // Dismiss dropdown with BACK
           await client.pressKey(serial, KEY.BACK);
           await delay(args.settleMs / 3);
@@ -220,8 +263,12 @@ export async function main(): Promise<void> {
           recordBlocked("F007", "/disks", "disks-drive-a-bus-spinner", "Spinner did not expand after tap");
         }
       } else {
-        recordBlocked("F007", "/disks", "disks-drive-a-bus-spinner",
-          `Drive A Bus ID spinner not found in safe zone (bounds=${busIdBounds ? `y=${centerY(busIdBounds)}` : "null"})`);
+        recordBlocked(
+          "F007",
+          "/disks",
+          "disks-drive-a-bus-spinner",
+          `Drive A Bus ID spinner not found in safe zone (bounds=${busIdBounds ? `y=${centerY(busIdBounds)}` : "null"})`,
+        );
       }
 
       // Drive A Drive Type spinner (1541)
@@ -232,19 +279,30 @@ export async function main(): Promise<void> {
         await client.tap(serial, centerX(driveTypeBounds), centerY(driveTypeBounds));
         await delay(args.settleMs / 2);
         const afterXml = await client.captureUiHierarchy(serial);
-        const typeExpanded = findTextContaining(afterXml, "1541") !== null ||
+        const typeExpanded =
+          findTextContaining(afterXml, "1541") !== null ||
           findTextContaining(afterXml, "1571") !== null ||
           findTextContaining(afterXml, "1581") !== null;
         if (typeExpanded) {
-          recordPass("F007", "/disks", "disks-drive-a-type-spinner", "touch", "Drive A Drive Type spinner tapped; dropdown visible");
+          recordPass(
+            "F007",
+            "/disks",
+            "disks-drive-a-type-spinner",
+            "touch",
+            "Drive A Drive Type spinner tapped; dropdown visible",
+          );
           await client.pressKey(serial, KEY.BACK);
           await delay(args.settleMs / 3);
         } else {
           recordBlocked("F007", "/disks", "disks-drive-a-type-spinner", "Drive Type spinner did not expand");
         }
       } else {
-        recordBlocked("F007", "/disks", "disks-drive-a-type-spinner",
-          `Drive Type spinner not found in safe zone (bounds=${driveTypeBounds ? `y=${centerY(driveTypeBounds)}` : "null"})`);
+        recordBlocked(
+          "F007",
+          "/disks",
+          "disks-drive-a-type-spinner",
+          `Drive Type spinner not found in safe zone (bounds=${driveTypeBounds ? `y=${centerY(driveTypeBounds)}` : "null"})`,
+        );
       }
 
       // Drive A Mount disk button (content-desc)
@@ -256,20 +314,33 @@ export async function main(): Promise<void> {
         await delay(args.settleMs);
         const afterXml = await client.captureUiHierarchy(serial);
         // May open a file picker or stay on disks. Either way, navigate back to disks.
-        const stillOnDisks = findTextContaining(afterXml, "DISKS") !== null ||
+        const stillOnDisks =
+          findTextContaining(afterXml, "DISKS") !== null ||
           findTextContaining(afterXml, "Drive A") !== null ||
           findTextContaining(afterXml, "DRIVES") !== null;
         if (stillOnDisks) {
-          recordPass("F007", "/disks", "disks-drive-a-mount", "touch", "Drive A Mount disk tapped; Disks page still active");
+          recordPass(
+            "F007",
+            "/disks",
+            "disks-drive-a-mount",
+            "touch",
+            "Drive A Mount disk tapped; Disks page still active",
+          );
         } else {
           // App may have navigated to file picker — go back to Disks
           await client.pressKey(serial, KEY.BACK);
           await delay(args.settleMs / 2);
           const recoveredXml = await client.captureUiHierarchy(serial);
-          const recovered = findTextContaining(recoveredXml, "DISKS") !== null ||
-            findTextContaining(recoveredXml, "Drive A") !== null;
+          const recovered =
+            findTextContaining(recoveredXml, "DISKS") !== null || findTextContaining(recoveredXml, "Drive A") !== null;
           if (recovered) {
-            recordPass("F007", "/disks", "disks-drive-a-mount", "touch", "Drive A Mount disk opened picker; BACK returned to Disks");
+            recordPass(
+              "F007",
+              "/disks",
+              "disks-drive-a-mount",
+              "touch",
+              "Drive A Mount disk opened picker; BACK returned to Disks",
+            );
           } else {
             recordBlocked("F007", "/disks", "disks-drive-a-mount", "Disks page not detected after Mount + BACK");
           }
@@ -294,7 +365,8 @@ export async function main(): Promise<void> {
       // Config may show "Config categories could not be loaded." with a Retry button (circuit open),
       // OR show actual config categories if the device is healthy. Handle both cases.
       const hasRetry = findVisibleBoundsByText(configXml, "Retry") !== null;
-      const hasCategories = findTextContaining(configXml, "Memory") !== null ||
+      const hasCategories =
+        findTextContaining(configXml, "Memory") !== null ||
         findTextContaining(configXml, "Audio") !== null ||
         findTextContaining(configXml, "Video") !== null ||
         findTextContaining(configXml, "memory") !== null;
@@ -309,7 +381,13 @@ export async function main(): Promise<void> {
           const afterXml = await client.captureUiHierarchy(serial);
           const stillOnConfig = findTextContaining(afterXml, "CONFIG") !== null;
           if (stillOnConfig) {
-            recordPass("F018", "/config", "config-retry-btn", "touch", "Config Retry button tapped; Config page still active");
+            recordPass(
+              "F018",
+              "/config",
+              "config-retry-btn",
+              "touch",
+              "Config Retry button tapped; Config page still active",
+            );
           } else {
             recordBlocked("F018", "/config", "config-retry-btn", "Config page not detected after Retry");
           }
@@ -327,12 +405,23 @@ export async function main(): Promise<void> {
             await client.tap(serial, centerX(catBounds), centerY(catBounds));
             await delay(args.settleMs);
             const afterXml = await client.captureUiHierarchy(serial);
-            const stillOnConfig = findTextContaining(afterXml, "CONFIG") !== null ||
-              findTextContaining(afterXml, cat) !== null;
+            const stillOnConfig =
+              findTextContaining(afterXml, "CONFIG") !== null || findTextContaining(afterXml, cat) !== null;
             if (stillOnConfig) {
-              recordPass("F018", "/config", "config-category-tap", "touch", `Config category "${cat}" tapped; Config page still active`);
+              recordPass(
+                "F018",
+                "/config",
+                "config-category-tap",
+                "touch",
+                `Config category "${cat}" tapped; Config page still active`,
+              );
             } else {
-              recordBlocked("F018", "/config", "config-category-tap", `Config page not detected after tapping "${cat}"`);
+              recordBlocked(
+                "F018",
+                "/config",
+                "config-category-tap",
+                `Config page not detected after tapping "${cat}"`,
+              );
             }
             catTapped = true;
             break;
@@ -341,7 +430,12 @@ export async function main(): Promise<void> {
         if (!catTapped) {
           addStep("No visible config categories found in safe zone — scrolling for first category");
           const catResult = await scrollUntilInSafeZone(
-            client, serial, artifactDir, "scroll-config-category", args.settleMs, SAFE_TAP_MAX_Y,
+            client,
+            serial,
+            artifactDir,
+            "scroll-config-category",
+            args.settleMs,
+            SAFE_TAP_MAX_Y,
             (xml) => {
               for (const name of categoryNames) {
                 const b = findVisibleBoundsByText(xml, name);
@@ -355,7 +449,13 @@ export async function main(): Promise<void> {
             await delay(args.settleMs);
             const afterXml = await client.captureUiHierarchy(serial);
             if (findTextContaining(afterXml, "CONFIG") !== null) {
-              recordPass("F018", "/config", "config-category-tap", "touch", "Config category tapped after scroll; Config page still active");
+              recordPass(
+                "F018",
+                "/config",
+                "config-category-tap",
+                "touch",
+                "Config category tapped after scroll; Config page still active",
+              );
             } else {
               recordBlocked("F018", "/config", "config-category-tap", "Config page not detected after category tap");
             }
@@ -369,7 +469,9 @@ export async function main(): Promise<void> {
       }
     }
 
-    addStep(`Gate 6.5 complete: ${coverageRecords.filter((r) => r.status === "PASS").length} PASS / ${coverageRecords.length} total`);
+    addStep(
+      `Gate 6.5 complete: ${coverageRecords.filter((r) => r.status === "PASS").length} PASS / ${coverageRecords.length} total`,
+    );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     addStep(`Error: ${message}`);
@@ -399,7 +501,13 @@ export async function main(): Promise<void> {
   await writeFile(path.join(artifactDir, "gate65-result.json"), JSON.stringify(gate65Result, null, 2), "utf-8");
 
   console.log(`Gate 6.5 artifacts written: ${artifactDir}`);
-  console.log(JSON.stringify({ runId, passed: coverageSummary.passed, total: coverageSummary.total, byStatus: coverageSummary.byStatus }, null, 2));
+  console.log(
+    JSON.stringify(
+      { runId, passed: coverageSummary.passed, total: coverageSummary.total, byStatus: coverageSummary.byStatus },
+      null,
+      2,
+    ),
+  );
 
   if (coverageSummary.passed === 0) process.exitCode = 1;
 }

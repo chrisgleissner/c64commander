@@ -186,10 +186,22 @@ const readRangeBlock = async (
       onRetry,
     );
     if (chunk.length !== chunkSize) {
-      recordRamTrace({ operation: "ram-read", status: "error", address, expectedLength: chunkSize, actualLength: chunk.length });
+      recordRamTrace({
+        operation: "ram-read",
+        status: "error",
+        address,
+        expectedLength: chunkSize,
+        actualLength: chunk.length,
+      });
       throw new Error(`Unexpected RAM chunk length at $${address}: expected ${chunkSize}, got ${chunk.length}`);
     }
-    recordRamTrace({ operation: "ram-read", status: "success", address, expectedLength: chunkSize, actualLength: chunk.length });
+    recordRamTrace({
+      operation: "ram-read",
+      status: "success",
+      address,
+      expectedLength: chunkSize,
+      actualLength: chunk.length,
+    });
     block.set(chunk, offset);
   }
   return block;

@@ -55,8 +55,7 @@ export function parseDiscoverRoutesArgs(args: readonly string[]): DiscoverRoutes
     throw new Error(`Invalid --target '${target}'. Expected c64u or u64.`);
   }
   const maxScrollsRaw = readFlagValue(args, "max-scrolls");
-  const maxScrolls =
-    maxScrollsRaw === undefined ? undefined : parsePositiveInteger(maxScrollsRaw, 20, "max-scrolls");
+  const maxScrolls = maxScrollsRaw === undefined ? undefined : parsePositiveInteger(maxScrollsRaw, 20, "max-scrolls");
   return {
     serial: readFlagValue(args, "serial") ?? readFlagValue(args, "device") ?? process.env["ANDROID_SERIAL"],
     target,
@@ -96,9 +95,7 @@ async function delay(ms: number): Promise<void> {
 export async function main(): Promise<void> {
   const args = parseDiscoverRoutesArgs(process.argv.slice(2));
   const workspaceRoot = resolveWorkspaceRoot();
-  const serial = args.serial
-    ? await resolveAdbSerial(args.serial)
-    : await resolvePreferredPhysicalTestDeviceSerial();
+  const serial = args.serial ? await resolveAdbSerial(args.serial) : await resolvePreferredPhysicalTestDeviceSerial();
   const sha = await gitSha(workspaceRoot);
   const runId = `cta-${timestampId()}-pixel4-${args.target}-${sha}`;
   const artifactDir = args.artifactDir ?? path.join(workspaceRoot, "c64scope", "artifacts", runId);
@@ -204,14 +201,22 @@ export async function main(): Promise<void> {
       JSON.stringify({ runId, serial, target: args.target, sha, caseId: args.caseId }, null, 2),
       "utf-8",
     );
-    await writeFile(path.join(artifactDir, "inventory", "runtime.json"), JSON.stringify(runtimeInventory, null, 2), "utf-8");
+    await writeFile(
+      path.join(artifactDir, "inventory", "runtime.json"),
+      JSON.stringify(runtimeInventory, null, 2),
+      "utf-8",
+    );
     await writeFile(path.join(artifactDir, "coverage.csv"), toCoverageCsv(coverageRecords), "utf-8");
     await writeFile(
       path.join(artifactDir, "coverage.json"),
       JSON.stringify(toCoverageJson(coverageRecords, coverageSummary), null, 2),
       "utf-8",
     );
-    await writeFile(path.join(artifactDir, "actions.jsonl"), `${actions.map((action) => JSON.stringify(action)).join("\n")}\n`, "utf-8");
+    await writeFile(
+      path.join(artifactDir, "actions.jsonl"),
+      `${actions.map((action) => JSON.stringify(action)).join("\n")}\n`,
+      "utf-8",
+    );
     await writeFile(
       path.join(artifactDir, "checkpoint.jsonl"),
       `${routeResults
@@ -228,9 +233,21 @@ export async function main(): Promise<void> {
         .join("\n")}\n`,
       "utf-8",
     );
-    await writeFile(path.join(artifactDir, "issue-groups.json"), JSON.stringify({ generatedAt: new Date().toISOString(), groups: [] }, null, 2), "utf-8");
-    await writeFile(path.join(artifactDir, "results.json"), JSON.stringify({ runId, caseId: args.caseId, routeResults, coverageSummary }, null, 2), "utf-8");
-    await writeFile(path.join(artifactDir, "replays", `${args.caseId}.json`), JSON.stringify(replaySpec, null, 2), "utf-8");
+    await writeFile(
+      path.join(artifactDir, "issue-groups.json"),
+      JSON.stringify({ generatedAt: new Date().toISOString(), groups: [] }, null, 2),
+      "utf-8",
+    );
+    await writeFile(
+      path.join(artifactDir, "results.json"),
+      JSON.stringify({ runId, caseId: args.caseId, routeResults, coverageSummary }, null, 2),
+      "utf-8",
+    );
+    await writeFile(
+      path.join(artifactDir, "replays", `${args.caseId}.json`),
+      JSON.stringify(replaySpec, null, 2),
+      "utf-8",
+    );
     await writeFile(
       path.join(artifactDir, "runner-summary.md"),
       [

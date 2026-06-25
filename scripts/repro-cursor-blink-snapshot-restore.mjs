@@ -25,9 +25,9 @@
  *                         IRQ period -> the cursor blinks faster every restore.
  *
  *   --strategy fixed    : the corrected algorithm -- write ONLY the snapshot's
- *                         own ranges, skipping the volatile CIA timer/IRQ
- *                         registers ($DC02-$DCFF and $DD02-$DDFF); never read or
- *                         write the background I/O region. Untouched memory
+ *                         own ranges, skipping the CIA timer registers
+ *                         ($xx04-$xx07 and mirrors); never read or write the
+ *                         background I/O region. Untouched memory
  *                         keeps its live value by simply not being written.
  *
  *   --type program|basic|screen|custom-ram|all
@@ -46,20 +46,21 @@
  * Usage: node scripts/repro-cursor-blink-snapshot-restore.mjs [--strategy current|fixed] [--type all] [--restores N]
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 // --- env ------------------------------------------------------------------
-try {
-  for (const line of readFileSync(resolve(process.cwd(), ".env"), "utf8").split("\n")) {
-    const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-    if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2];
+{
+  const envPath = resolve(process.cwd(), ".env");
+  if (existsSync(envPath)) {
+    for (const line of readFileSync(envPath, "utf8").split("\n")) {
+      const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
+      if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2];
+    }
   }
-} catch {
-  /* rely on real env */
 }
 
-const HOST = process.env.C64U_HOST ?? "c64u";
+const HOST = process.env.C64U_HOST ?? "u64";
 const PASSWORD = process.env.C64U_PASSWORD ?? "";
 const BASE = process.env.C64U_BASE_URL ?? `http://${HOST}`;
 
@@ -163,12 +164,7 @@ async function buildRanges(type) {
       const cia2pa = (await readMemory("DD00", 1))[0];
       const bankStart = (~cia2pa & 0x03) * 0x4000;
       return {
-        ranges: [
-          r(bankStart, bankStart + 0x3fff),
-          r(0xd000, 0xd02e),
-          r(0xd800, 0xdbff),
-          r(0xdd00, 0xdd01),
-        ],
+        ranges: [r(bankStart, bankStart + 0x3fff), r(0xd000, 0xd02e), r(0xd800, 0xdbff), r(0xdd00, 0xdd01)],
         canaries: [{ addr: bankStart + 0x0400 }], // screen RAM inside the active VIC bank
       };
     }
@@ -247,7 +243,8 @@ async function runType(type, restore) {
 
   const { ranges, canaries } = await buildRanges(type);
   const captured = [];
-  for (const range of ranges) captured.push({ start: range.start, bytes: await captureRange(range.start, range.length) });
+  for (const range of ranges)
+    captured.push({ start: range.start, bytes: await captureRange(range.start, range.length) });
   const spans = ranges.map((x) => `$${hex(x.start)}-$${hex(x.start + x.length - 1)}`).join(", ");
   const totalBytes = captured.reduce((n, c) => n + c.bytes.length, 0);
   console.log(`captured ${spans}  (${totalBytes} bytes)`);
@@ -281,7 +278,10 @@ async function runType(type, restore) {
   const canaryRestored = restoredFlags.every(Boolean);
   const pass = blinkStable && canaryRestored;
   const canarySummary = canaries
-    .map((c, ci) => `$${hex(c.addr)}${c.mask !== 0xff ? `&${c.mask.toString(16)}` : ""}=${restoredFlags[ci] ? "ok" : "BAD"}`)
+    .map(
+      (c, ci) =>
+        `$${hex(c.addr)}${c.mask !== 0xff ? `&${c.mask.toString(16)}` : ""}=${restoredFlags[ci] ? "ok" : "BAD"}`,
+    )
     .join(" ");
   console.log(
     `${pass ? "PASS" : "FAIL"}  blink ${blinkStable ? "stable" : "UNSTABLE"} (worst drift ${(worst * 100).toFixed(1)}%), ` +
@@ -294,7 +294,9 @@ async function runType(type, restore) {
 async function main() {
   const restore = STRATEGY === "current" ? restoreCurrent : restoreFixed;
   const types = TYPE === "all" ? ["basic", "program", "screen", "custom-ram"] : [TYPE];
-  console.log(`# Snapshot restore blink-safety  strategy=${STRATEGY} types=[${types}] restores=${RESTORES} device=${HOST}`);
+  console.log(
+    `# Snapshot restore blink-safety  strategy=${STRATEGY} types=[${types}] restores=${RESTORES} device=${HOST}`,
+  );
 
   const results = [];
   for (const t of types) results.push([t, await runType(t, restore)]);
