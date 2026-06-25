@@ -1,5 +1,16 @@
 # Bug-Hunt Report — C64 Commander on Pixel 4 (session bughunt-20260625T164637Z)
 
+> ## ⚠️ CORRECTION (2026-06-25, later in session) — the S1 "fix" below was WRONG
+> The keep-alive root cause + fix claimed below (§1, §31, §37) **did not hold**: the c64u
+> **wedged again on the keep-alive-disabled build** (a single background `GET /v1/info` after a
+> ~4-min idle gap), and `/proc/net/tcp` confirmed the app was **not** reusing pooled connections.
+> The wedge is **independent of connection reuse**. The `http.keepAlive=false` change was
+> **reverted as ineffective**. The corrected, evidence-backed conclusion: this is a **C64U
+> firmware defect** (embedded TCP stack permanently wedges on a request after idle; all TCP
+> services dead, ICMP alive; cure = firmware update). Authoritative write-ups:
+> `defects/S1-C64U-FIRMWARE-TCP-WEDGE-ON-IDLE-RECONNECT.md` and `docs/c64/c64u-firmware-tcp-wedge-report.md`.
+> The S1 sections below are retained for history but their keep-alive conclusion is superseded.
+
 **Recommendation: `BUGHUNT-COMPLETE-CRITICAL-BUGS-FOUND` — and the critical bug is FIXED + verified on-device this session.**
 
 This session's headline outcome: the **months-long S1 catastrophic bug** — *a C64 Commander action drives the c64u into a full network/REST degradation that does not recover until a manual power-cycle* — was **reproduced, root-caused, fixed, and verified on-device** (A/B). User directed the fix mid-session.
