@@ -124,33 +124,40 @@ describe("droidmind client", () => {
     expect(connectMock).toHaveBeenCalledTimes(1);
   });
 
-  it("captures UI hierarchy through DroidMind shell and exposes a scroll primitive", async () => {
+  it("captures UI hierarchy after removing stale dumps and waiting for stable file size", async () => {
     callToolMock
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "" }] })
       .mockResolvedValueOnce({
         isError: false,
         content: [{ type: "text", text: "UI hierchary dumped to: /sdcard/Download/c64scope-droidmind-ui.xml" }],
       })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "1024" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "1024" }] })
       .mockResolvedValueOnce({
         isError: false,
         content: [{ type: "text", text: "<hierarchy><node /></hierarchy>" }],
-      })
-      .mockResolvedValueOnce({ isError: false })
-      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "dumped" }] })
-      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "not xml 1" }] })
-      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "dumped" }] })
-      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "not xml 2" }] })
-      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "dumped" }] })
-      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "not xml 3" }] });
+      });
 
     const { DroidmindClient } = await import("../src/validation/droidmindClient.js");
     const client = new DroidmindClient();
 
     await expect(client.captureUiHierarchy("serial-3")).resolves.toContain("<hierarchy");
-    await expect(client.scrollDown("serial-3")).resolves.toEqual({ atEnd: false });
-    await expect(client.captureUiHierarchy("serial-3")).rejects.toThrow(/did not produce XML hierarchy/);
 
     expect(callToolMock).toHaveBeenNthCalledWith(
       1,
+      {
+        name: "android-shell",
+        arguments: {
+          serial: "serial-3",
+          command: "rm -f /sdcard/Download/c64scope-droidmind-ui.xml",
+          max_lines: undefined,
+          max_size: undefined,
+        },
+      },
+      {},
+    );
+    expect(callToolMock).toHaveBeenNthCalledWith(
+      2,
       {
         name: "android-shell",
         arguments: {
@@ -165,19 +172,83 @@ describe("droidmind client", () => {
     expect(callToolMock).toHaveBeenNthCalledWith(
       3,
       {
+        name: "android-shell",
+        arguments: {
+          serial: "serial-3",
+          command:
+            "sh -c 'if [ -f /sdcard/Download/c64scope-droidmind-ui.xml ]; then wc -c < /sdcard/Download/c64scope-droidmind-ui.xml; else echo 0; fi'",
+          max_lines: undefined,
+          max_size: undefined,
+        },
+      },
+      {},
+    );
+  });
+
+  it("scrolls with hierarchy-derived coordinates and reports atEnd from unchanged hierarchy keys", async () => {
+    const xml = `
+      <hierarchy bounds="[0,0][1440,3200]">
+        <node text="Settings" class="android.widget.TextView" bounds="[0,0][1440,120]" resource-id="title" />
+      </hierarchy>
+    `;
+
+    callToolMock
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "dumped" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "2048" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "2048" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: xml }] })
+      .mockResolvedValueOnce({ isError: false })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "dumped" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "2048" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "2048" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: xml }] });
+
+    const { DroidmindClient } = await import("../src/validation/droidmindClient.js");
+    const client = new DroidmindClient();
+
+    await expect(client.scrollDown("serial-3")).resolves.toEqual({ atEnd: true });
+
+    expect(callToolMock).toHaveBeenCalledWith(
+      {
         name: "android-ui",
         arguments: {
           serial: "serial-3",
           action: "swipe",
-          start_x: 540,
-          start_y: 1700,
-          end_x: 540,
-          end_y: 650,
+          start_x: 720,
+          start_y: 2400,
+          end_x: 720,
+          end_y: 912,
           duration_ms: 300,
         },
       },
       {},
     );
+  });
+
+  it("throws when repeated hierarchy captures never produce XML", async () => {
+    callToolMock
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "dumped" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "16" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "16" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "not xml 1" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "dumped" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "16" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "16" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "not xml 2" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "dumped" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "16" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "16" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "not xml 3" }] });
+
+    const { DroidmindClient } = await import("../src/validation/droidmindClient.js");
+    const client = new DroidmindClient();
+
+    await expect(client.captureUiHierarchy("serial-3")).rejects.toThrow(/did not produce XML hierarchy/);
   });
 
   it("discovers DroidMind tool capabilities", async () => {

@@ -8,6 +8,7 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { coverageFromFingerprints, parseCtaRunnerArgs } from "../src/cta/runner.js";
+import { getScreenSize } from "../src/cta/uiHelpers.js";
 
 describe("CTA runner CLI", () => {
   afterEach(() => {
@@ -76,5 +77,11 @@ describe("CTA runner coverage records", () => {
         notes: "Runtime discovery fingerprint: lbl|/docs||button|getting started",
       },
     ]);
+  });
+});
+
+describe("CTA hierarchy utilities", () => {
+  it("throws instead of guessing when root bounds are unavailable", () => {
+    expect(() => getScreenSize("<hierarchy><node /></hierarchy>")).toThrow(/screen size/);
   });
 });

@@ -13,7 +13,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { DroidmindClient } from "../validation/droidmindClient.js";
 import { redactSecretLiterals } from "./redaction.js";
-import { type Bounds, centerY, delay, isVisible } from "./uiHelpers.js";
+import { type Bounds, centerY, delay, getScreenSize, isVisible } from "./uiHelpers.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -58,7 +58,9 @@ export function redactUiHierarchySecrets(xml: string, secrets: readonly string[]
 // Scroll to top: swipe finger DOWN (content moves up) several times to reach the top.
 export async function scrollToTop(client: DroidmindClient, serial: string, count = 4): Promise<void> {
   for (let i = 0; i < count; i++) {
-    await client.swipe(serial, 540, 650, 540, 1700, 250);
+    const { width, height } = getScreenSize(await client.captureUiHierarchy(serial));
+    const x = Math.round(width / 2);
+    await client.swipe(serial, x, Math.round(height * 0.285), x, Math.round(height * 0.75), 250);
     await delay(250);
   }
   await delay(500);

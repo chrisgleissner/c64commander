@@ -49,7 +49,10 @@ export function findVisibleBoundsByText(xml: string, text: string): Bounds | nul
   for (const frag of nodeFragments(xml)) {
     if (frag.includes(`text="${text}"`) || frag.includes(`text="${encodedText}"`)) {
       const m = frag.match(/bounds="(\[[^\]]*\]\[[^\]]*\])"/);
-      if (m) { const b = parseBounds(m[1]!); if (b && isVisible(b)) return b; }
+      if (m) {
+        const b = parseBounds(m[1]!);
+        if (b && isVisible(b)) return b;
+      }
     }
   }
   return null;
@@ -63,7 +66,10 @@ export function findLastVisibleBoundsByText(xml: string, text: string): Bounds |
   for (const frag of nodeFragments(xml)) {
     if (frag.includes(`text="${text}"`) || frag.includes(`text="${encodedText}"`)) {
       const m = frag.match(/bounds="(\[[^\]]*\]\[[^\]]*\])"/);
-      if (m) { const b = parseBounds(m[1]!); if (b && isVisible(b) && (!last || b.y1 > last.y1)) last = b; }
+      if (m) {
+        const b = parseBounds(m[1]!);
+        if (b && isVisible(b) && (!last || b.y1 > last.y1)) last = b;
+      }
     }
   }
   return last;
@@ -73,7 +79,10 @@ export function findVisibleBoundsByResourceId(xml: string, resourceId: string): 
   for (const frag of nodeFragments(xml)) {
     if (frag.includes(`resource-id="${resourceId}"`)) {
       const m = frag.match(/bounds="(\[[^\]]*\]\[[^\]]*\])"/);
-      if (m) { const b = parseBounds(m[1]!); if (b && isVisible(b)) return b; }
+      if (m) {
+        const b = parseBounds(m[1]!);
+        if (b && isVisible(b)) return b;
+      }
     }
   }
   return null;
@@ -83,7 +92,10 @@ export function findVisibleBoundsByContentDesc(xml: string, contentDesc: string)
   for (const frag of nodeFragments(xml)) {
     if (frag.includes(`content-desc="${contentDesc}"`)) {
       const m = frag.match(/bounds="(\[[^\]]*\]\[[^\]]*\])"/);
-      if (m) { const b = parseBounds(m[1]!); if (b && isVisible(b)) return b; }
+      if (m) {
+        const b = parseBounds(m[1]!);
+        if (b && isVisible(b)) return b;
+      }
     }
   }
   return null;
@@ -118,5 +130,8 @@ export function findTextByResourceId(xml: string, resourceId: string): string | 
 // Returns screen {width, height} from the root node bounds in a hierarchy XML.
 export function getScreenSize(xml: string): { width: number; height: number } {
   const m = xml.match(/bounds="\[0,0\]\[(\d+),(\d+)\]"/);
-  return m ? { width: +m[1]!, height: +m[2]! } : { width: 1080, height: 2280 };
+  if (!m) {
+    throw new Error("Unable to determine screen size from UI hierarchy root bounds.");
+  }
+  return { width: +m[1]!, height: +m[2]! };
 }

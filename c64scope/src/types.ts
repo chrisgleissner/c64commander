@@ -21,7 +21,7 @@ export type ErrorCode =
 
 export type RunOutcome = "pass" | "fail" | "inconclusive";
 
-export type FailureClass = "product_failure" | "infrastructure_failure" | "inconclusive";
+export type FailureClass = "product_failure" | "infrastructure_failure" | "inconclusive" | null;
 
 export interface ScopeError {
   code: ErrorCode;

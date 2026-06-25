@@ -179,7 +179,7 @@ export function classifyRun(input: ClassificationInput): ClassificationResult {
   if (allPassed) {
     return {
       outcome: "pass",
-      failureClass: "inconclusive",
+      failureClass: null,
       weakPatterns: [],
       corroborationSatisfied: true,
       reason: "All assertions passed with sufficient evidence.",

@@ -4,20 +4,8 @@
 # keypad-first Android devices (small screen, no Google Play Services,
 # background-restricted host).
 #
-# Stable features:
-#   - CommoServe: enabled (inherits base default).
-#   - HVSC: disabled by default, user-visible (opt-in).
-#   - Demo Mode: disabled and hidden (not useful for a hardware-attached remote).
-#
-# Experimental features exposed as user opt-in (off by default):
-#   - RAM snapshots, all Telnet-dependent Home actions (drive, printer, config,
-#     power cycle, clear-RAM reboot).
-#
-# Fully hidden (developer-only or immature):
-#   - Background execution: enabled (required for locked-screen playlist
-#     auto-advance via wake lock + foreground service), but hidden/developer-only.
-#   - Lighting Studio (developer-only, immature).
-#   - REU Snapshots (developer-only).
+# CommoServe and keypad input remain enabled for this variant. Every other flag
+# is disabled and hidden so the remote-control surface stays compact and stable.
 #
 # Each excluded feature is BOTH disabled (enabled: false) AND hidden from the
 # normal-user Settings (visible_to_user: false). With visible_to_user: false a
@@ -30,24 +18,18 @@
 # panels, dialogs, settings toggles, and any direct-route/deep-link surface,
 # since all of these are gated on the same feature flags.
 overrides:
-  # --- Stable group: HVSC is user-visible but off by default (opt-in); demo is
-  # hidden entirely. CommoServe stays enabled (inherits the base default). ---
   hvsc_enabled:
     enabled: false
-    visible_to_user: true
+    visible_to_user: false
   demo_mode_enabled:
     enabled: false
     visible_to_user: false
+  ram_snapshots_enabled:
+    enabled: false
+    visible_to_user: false
 
-  # --- Experimental group ---
-  # Developer-only / immature: kept fully hidden.
-  # background_execution_enabled is intentionally NOT overridden here so it
-  # inherits the base default (enabled: true). The flag gates the build-time
-  # manifest selection (wake lock + foreground service), which is required for
-  # playlist auto-advance to work when the screen is locked. Disabling it strips
-  # those permissions from the APK entirely and breaks locked-screen playback.
   background_execution_enabled:
-    enabled: true
+    enabled: false
     visible_to_user: false
   lighting_studio_enabled:
     enabled: false
@@ -57,16 +39,16 @@ overrides:
     visible_to_user: false
   home_telnet_config_actions_enabled:
     enabled: false
-    visible_to_user: true
+    visible_to_user: false
   home_telnet_drive_actions_enabled:
     enabled: false
-    visible_to_user: true
+    visible_to_user: false
   home_telnet_printer_actions_enabled:
     enabled: false
-    visible_to_user: true
+    visible_to_user: false
   home_telnet_power_cycle_enabled:
     enabled: false
-    visible_to_user: true
+    visible_to_user: false
   home_telnet_clear_ram_reboot_enabled:
     enabled: false
-    visible_to_user: true
+    visible_to_user: false

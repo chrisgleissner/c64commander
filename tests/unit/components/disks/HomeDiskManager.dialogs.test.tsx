@@ -81,9 +81,11 @@ vi.mock("@/components/itemSelection/AddItemsProgressOverlay", () => ({
 vi.mock("@/components/FileOriginIcon", () => ({ FileOriginIcon: () => null }));
 
 const mockInvalidateQueries = vi.fn();
+const mockCancelQueries = vi.fn();
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({
     invalidateQueries: mockInvalidateQueries,
+    cancelQueries: mockCancelQueries,
     fetchQuery: vi.fn().mockResolvedValue(undefined),
   }),
 }));
@@ -216,6 +218,7 @@ describe("HomeDiskManager Dialogs", () => {
         "a",
         expect.objectContaining({ id: "1" }),
         undefined, // runtimeFile
+        { mode: "readonly" },
       );
     });
   }, 10_000);
@@ -312,6 +315,7 @@ describe("HomeDiskManager Dialogs", () => {
         "b",
         expect.objectContaining({ id: "1" }),
         undefined,
+        { mode: "readonly" },
       );
     });
   });

@@ -11,6 +11,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { checkCapabilities, type CapabilityCheckResult, type McpToolCapability } from "../cta/capabilities.js";
+import { getScreenSize, nodeFragments } from "../cta/uiHelpers.js";
 
 const DEFAULT_DROIDMIND_COMMAND = process.env["DROIDMIND_COMMAND"] ?? "uvx";
 const DEFAULT_DROIDMIND_ARGS = process.env["DROIDMIND_ARGS"]?.trim()
@@ -18,6 +19,8 @@ const DEFAULT_DROIDMIND_ARGS = process.env["DROIDMIND_ARGS"]?.trim()
   : ["--from", "git+https://github.com/hyperb1iss/droidmind", "droidmind", "--transport", "stdio"];
 const UI_DUMP_DEVICE_PATH = "/sdcard/Download/c64scope-droidmind-ui.xml";
 const UI_HIERARCHY_CAPTURE_ATTEMPTS = 3;
+const UI_HIERARCHY_SETTLE_TIMEOUT_MS = 1500;
+const UI_HIERARCHY_SETTLE_POLL_MS = 100;
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -46,6 +49,26 @@ function unwrapCommandText(markdown: string): string {
     return markdown.trim();
   }
   return match[1]!.trim();
+}
+
+function hierarchyKeys(xml: string): string[] {
+  return nodeFragments(xml)
+    .filter((fragment) => fragment.includes("bounds="))
+    .map((fragment) => {
+      const resourceId = fragment.match(/resource-id="([^"]*)"/)?.[1] ?? "";
+      const text = fragment.match(/text="([^"]*)"/)?.[1] ?? "";
+      const contentDesc = fragment.match(/content-desc="([^"]*)"/)?.[1] ?? "";
+      const className = fragment.match(/class="([^"]*)"/)?.[1] ?? "";
+      const bounds = fragment.match(/bounds="([^"]*)"/)?.[1] ?? "";
+      return `${resourceId}|${text}|${contentDesc}|${className}|${bounds}`;
+    })
+    .sort();
+}
+
+function sameHierarchyKeys(before: string, after: string): boolean {
+  const beforeKeys = hierarchyKeys(before);
+  const afterKeys = hierarchyKeys(after);
+  return beforeKeys.length === afterKeys.length && beforeKeys.every((key, index) => key === afterKeys[index]);
 }
 
 function assertToolSuccess(toolName: string, result: ClientCallToolResult): void {
@@ -159,8 +182,15 @@ export class DroidmindClient {
   }
 
   async scrollDown(serial: string): Promise<{ atEnd: boolean }> {
-    await this.swipe(serial, 540, 1700, 540, 650, 300);
-    return { atEnd: false };
+    const before = await this.captureUiHierarchy(serial);
+    const { width, height } = getScreenSize(before);
+    const x = Math.round(width / 2);
+    const startY = Math.round(height * 0.75);
+    const endY = Math.round(height * 0.285);
+    await this.swipe(serial, x, startY, x, endY, 300);
+    await delay(250);
+    const after = await this.captureUiHierarchy(serial);
+    return { atEnd: sameHierarchyKeys(before, after) };
   }
 
   async pressKey(serial: string, keycode: number): Promise<void> {
@@ -195,7 +225,9 @@ export class DroidmindClient {
   async captureUiHierarchy(serial: string): Promise<string> {
     let lastOutput = "";
     for (let attempt = 1; attempt <= UI_HIERARCHY_CAPTURE_ATTEMPTS; attempt += 1) {
+      await this.shell(serial, `rm -f ${UI_DUMP_DEVICE_PATH}`);
       await this.shell(serial, `uiautomator dump ${UI_DUMP_DEVICE_PATH}`);
+      await this.waitForUiDumpToSettle(serial);
       const xml = await this.shell(serial, `cat ${UI_DUMP_DEVICE_PATH}`);
       if (xml.includes("<hierarchy")) {
         return xml;
@@ -208,6 +240,26 @@ export class DroidmindClient {
     throw new Error(
       `DroidMind UI hierarchy capture did not produce XML hierarchy content (bytes=${lastOutput.length}, excerpt=${JSON.stringify(lastOutput.slice(0, 160))}).`,
     );
+  }
+
+  private async waitForUiDumpToSettle(serial: string): Promise<void> {
+    const deadline = Date.now() + UI_HIERARCHY_SETTLE_TIMEOUT_MS;
+    let previousSize: number | null = null;
+
+    while (Date.now() < deadline) {
+      const output = await this.shell(
+        serial,
+        `sh -c 'if [ -f ${UI_DUMP_DEVICE_PATH} ]; then wc -c < ${UI_DUMP_DEVICE_PATH}; else echo 0; fi'`,
+      );
+      const size = Number.parseInt(output.trim(), 10);
+      if (Number.isFinite(size) && size > 0 && previousSize === size) {
+        return;
+      }
+      previousSize = Number.isFinite(size) ? size : null;
+      await delay(UI_HIERARCHY_SETTLE_POLL_MS);
+    }
+
+    throw new Error(`Timed out waiting for stable UI hierarchy dump at ${UI_DUMP_DEVICE_PATH}.`);
   }
 
   async screenshotToFile(serial: string, localPath: string): Promise<void> {

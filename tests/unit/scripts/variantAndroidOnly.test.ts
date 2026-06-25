@@ -404,10 +404,11 @@ describe("real c64u-remote feature-flag overlay", () => {
     }
   });
 
-  it("disables HVSC but keeps CommoServe enabled", () => {
+  it("disables and hides HVSC but keeps CommoServe enabled", () => {
     const resolved = resolveVariantFeatureRegistry(baseRegistry, overlay) as any;
     const byId = Object.fromEntries(resolved.features.map((f: any) => [f.id, f]));
     expect(byId.hvsc_enabled.enabled).toBe(false);
+    expect(byId.hvsc_enabled.visible_to_user).toBe(false);
     expect(byId.commoserve_enabled.enabled).toBe(true);
     expect(byId.commoserve_enabled.visible_to_user).toBe(true);
   });
