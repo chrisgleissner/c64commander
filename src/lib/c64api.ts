@@ -112,6 +112,13 @@ const SCHEDULED_REQUEST_MAX_ATTEMPTS = 3;
 const SCHEDULED_REQUEST_RETRY_GUARD_MS = 6000;
 const UPLOAD_REQUEST_TIMEOUT_MS = 5000;
 const PLAYBACK_REQUEST_TIMEOUT_MS = 5000;
+// Drive mount/eject are heavier firmware ops than a tappable control: real
+// c64u-resident mounts were measured at ~0.8-1.8 s and can be slower under
+// load. The default INTERACTIVE budget (1500 ms) aborts a slow-but-successful
+// mount and mislabels it "Host unreachable" (the abort failure message), which
+// then sticks in the per-drive status. Give mount/eject an intentional, larger
+// budget so a normal mount is never falsely timed out.
+const MOUNT_REQUEST_TIMEOUT_MS = 8000;
 const RAM_BLOCK_WRITE_TIMEOUT_MS = 15_000;
 const IDLE_RECOVERY_THRESHOLD_MS = 10_000;
 const NETWORK_RETRY_DELAY_MS = 180;
@@ -712,6 +719,14 @@ export class C64API {
     return headers;
   }
 
+  private buildTransportHeaders(): Record<string, string> {
+    const baseUrl = this.getBaseUrl();
+    if (!isNativePlatform() || baseUrl.includes(WEB_PROXY_PATH) || isLocalProxy(baseUrl)) {
+      return {};
+    }
+    return { Connection: "close" };
+  }
+
   private validateUploadBytes(body: ArrayBuffer, context: TransmissionValidationContext) {
     TransmissionGuard.validateOrThrow(new Uint8Array(body), context);
   }
@@ -1047,6 +1062,7 @@ export class C64API {
   private async request<T>(path: string, options: C64ReadRequestOptions = {}): Promise<T> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
+      ...this.buildTransportHeaders(),
       ...this.buildAuthHeaders(),
       ...((options.headers as Record<string, string>) || {}),
     };
@@ -2132,7 +2148,7 @@ export class C64API {
     let path = `/v1/drives/${drive}:mount?image=${encodeURIComponent(image)}`;
     if (type) path += `&type=${encodeURIComponent(type)}`;
     if (mode) path += `&mode=${encodeURIComponent(mode)}`;
-    return this.request(path, { method: "PUT" });
+    return this.request(path, { method: "PUT", timeoutMs: MOUNT_REQUEST_TIMEOUT_MS });
   }
 
   async mountDriveUpload(
@@ -2213,7 +2229,7 @@ export class C64API {
   }
 
   async unmountDrive(drive: "a" | "b"): Promise<{ errors: string[] }> {
-    return this.request(`/v1/drives/${drive}:remove`, { method: "PUT" });
+    return this.request(`/v1/drives/${drive}:remove`, { method: "PUT", timeoutMs: MOUNT_REQUEST_TIMEOUT_MS });
   }
 
   async resetDrive(drive: string): Promise<{ errors: string[] }> {

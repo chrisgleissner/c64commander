@@ -65,7 +65,7 @@
 
 ## Fix Verification
 
-Current status: `IN_PROGRESS`, not closed.
+Current status: `BLOCKED_WITH_EVIDENCE`, not closed. The underlying S1 failure remains open.
 
 Mitigation implemented on current source/build `af2d795b2361cc78e52f3013cf3502c0e72c0375` / `0.8.9-af2d7`:
 
@@ -81,25 +81,124 @@ Validation:
 - `npm run lint`: passed with existing c64scope coverage-helper warnings only.
 - Prior full `npm run test`: passed 643 files / 7457 tests before the branch advanced to `af2d7`; focused current-HEAD tests above cover the touched Disks paths.
 
-Pixel 4 current-build proof:
+Pixel 4 current-build retest:
 
-- Single clean Drive A readonly mount/eject cycle from `No disk mounted`: `PROVEN`.
-- Evidence root: `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/clean-readonly-mount-eject-2/`.
-- Result file: `clean-readonly-mount-eject-2/result.json`.
-- Key evidence:
-  - `screenshots/disks-before-clean-mount.png`
-  - `screenshots/after-clean-readonly-mount.png`
-  - `screenshots/after-clean-readonly-eject.png`
-  - `logs/logcat/successful-single-cycle.raw.log`
-- Observed result: after mount `bad=[]`, Eject visible, mounted text `/USB2/test-data/.../Boulder Dash 2.d64`; after eject `bad=[]`, `No disk mounted`, target `Connected to c64u, system healthy`.
-- Direct unauthenticated `http://c64u/v1/info` probes before and after the clean pass returned expected HTTP `403` in about 8 ms, proving the target remained responsive without exposing credentials.
+- Current status: `INCONCLUSIVE_NEEDS_REPLAY`.
+- The apparent single-cycle proof under `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/clean-readonly-mount-eject-2/` must not be counted as a valid clean mount proof. Later screenshot review showed `screenshots/disks-before-clean-mount.png` already had Drive A mounted with `/USB2/test-data/.../Boulder Dash 2.d64`, so the run did not start from `No disk mounted`.
+- The repetition attempt under `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/readonly-mount-eject-repetitions/` is also `INCONCLUSIVE_NEEDS_REPLAY`; stale coordinate fallback opened or stayed in the wrong surface and did not exercise the intended product mount/eject sequence.
+- A corrected single-cycle attempt under `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/corrected-readonly-cycle-1/` showed that Drive A was OFF and the disk action did not open the mount sheet. It ended with `No disk mounted`, but did not prove mount.
+- Drive A power was restored to ON under `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/restore-drive-a-power/`; the app then showed a C64U warning badge (`C64U ▲ 4`). Direct unauthenticated `http://c64u/v1/info` still returned expected HTTP `403` in about 8 ms, so the target was responsive but not app-clean.
+- App-visible target was restored to `C64U` / `c64u` before warning diagnosis; evidence `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/restore-c64u-final-state/home-after-c64u-final.png`.
 
 Remaining verification gap:
 
-- Five-cycle reliability is not yet proven. The attempted repetition run under `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/readonly-mount-eject-repetitions/` is `INCONCLUSIVE_NEEDS_REPLAY` because the harness used a stale coordinate fallback and did not exercise the intended mount/eject sequence. It must not be counted as product pass/fail.
-- Final app-visible target was restored to `C64U` / `c64u` after the repetition harness drifted target selection; evidence `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/restore-c64u-final-state/home-after-c64u-final.png`.
+- Diagnose or clear the app-visible C64U warning badge after Drive A power restore.
+- Re-run Drive A readonly mount/eject from a verified clean state: `c64u` selected, healthy badge, Drive A ON, Drive A `No disk mounted`, and mount sheet opened through a semantic control.
+- Do not count stale coordinate fallback runs as product coverage.
 
 Closure requirement:
 
 - Re-run five Drive A readonly mount/eject cycles with corrected semantic targeting or screenshot-verified active-surface coordinates.
 - Keep this defect open until all five cycles restore `No disk mounted`, keep app-visible `Connected to c64u, system healthy`, and leave direct target health responsive.
+
+## Current Replay Failure And Additional Hardening
+
+Recorded UTC: `2026-06-25T08:04:19Z`.
+
+Cycle 1 on `0.8.9-af2d7`:
+
+- Status: `PROVEN` for one readonly key-driven Drive A mount/eject cycle.
+- Mount evidence: `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/readonly-cycle-key-1/`
+- Eject evidence: `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/readonly-cycle-key-1-eject/`
+- Logcat showed `PUT http://c64u/v1/drives/a:mount?...mode=readonly` and `PUT http://c64u/v1/drives/a:remove`.
+- Post-eject screenshot showed Drive A ON with `No disk mounted`; direct unauthenticated health returned expected HTTP `403`.
+
+Cycle 2 on `0.8.9-af2d7`:
+
+- Status: `FAILED`.
+- Mount evidence: `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/readonly-cycle-key-2/`
+- Eject failure evidence: `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/readonly-cycle-key-2-eject/`
+- Before-eject screenshot `readonly-cycle-key-2-eject/screenshots/focus-up-from-b/09-LEFT.png` proves focus on `Drive A Eject disk`.
+- `DroidmindClient.pressKey(DPAD_CENTER)` activated the focused eject CTA.
+- Logcat `readonly-cycle-key-2-eject/logs/logcat/cycle-2-eject.log` shows `PUT http://c64u/v1/drives/a:remove` failed in 37 ms with `Connection reset`; the failure details included `idleMs=197050` and `wasIdle=true`.
+- Post-action screenshot `readonly-cycle-key-2-eject/screenshots/03-after-eject-polling.png` showed the app on Home, `C64U` not connected, app `0.8.9-8a785` visible in the WebView, and device/firmware `Not connected`.
+- The installed package identity at that moment was still `versionName=0.8.9-af2d7`, versionCode `2042`, so the visible `0.8.9-8a785` string is a separate build-identity anomaly to investigate during recovery.
+- App was stopped through `DroidmindClient.stopApp`.
+- Direct app-stopped probes continued failing with `curl: (56) Recv failure: Connection reset by peer`:
+  - `readonly-cycle-key-2-eject/logs/commands/c64u-health-after-cycle-2.stdout.log`
+  - `readonly-cycle-key-2-eject/logs/commands/c64u-health-recovery-1.stdout.log`
+  - `readonly-cycle-key-2-eject/logs/commands/c64u-health-recovery-2.stdout.log`
+  - `readonly-cycle-key-2-eject/logs/commands/c64u-health-recovery-3.stdout.log`
+  - `readonly-cycle-key-2-eject/logs/commands/c64u-health-after-current-apk-install.stdout.log`
+
+Additional source hardening now implemented but not device-validated:
+
+- `src/lib/c64api.ts` adds `Connection: close` to native direct-device REST requests while leaving web/proxy requests unchanged. This targets stale native HTTP connection reuse after idle periods.
+- Regression coverage: `tests/unit/c64api.branches.test.ts` test `closes native direct-device REST connections without changing web or proxy requests`.
+- Validation:
+  - `npm run test -- tests/unit/c64api.branches.test.ts`: passed 94 tests.
+  - `npm run lint`: passed.
+  - `npm run cap:build && npm run android:apk`: passed.
+- Current installed APK: `android/app/build/outputs/apk/debug/c64commander-0.8.9-cf84d-debug.apk`, SHA-256 `462bfa1578c219d1f753311695688863c68bdda27480a449823ce60b36d49a07`, versionName `0.8.9-cf84d`, versionCode `2044`, lastUpdateTime `2026-06-25 09:01:54`, package stopped=true.
+
+Recovery gate:
+
+- Do not launch the app or continue C64U product validation while app-stopped direct health probes return connection reset.
+- After target recovery, launch the stopped `0.8.9-cf84d` APK through DroidMind, prove the app-visible baseline, then retry five readonly Drive A mount/eject cycles from Drive A ON / `No disk mounted` / healthy `c64u`.
+
+## Handover 7 Resume Block
+
+Recorded UTC: `2026-06-25T12:23:41Z`.
+
+Target health before app launch:
+
+- Direct unauthenticated `http://c64u/v1/info` returned expected HTTP `403` in `0.008523s`.
+- Evidence: `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/s1-five-cycle-cf84d-resume/logs/commands/c64u-info.stdout.log`.
+
+App launch and baseline:
+
+- Launched installed `0.8.9-cf84d` with `DroidmindClient.startApp()`.
+- The app opened a discovery interstitial showing `Ultimate 64 Elite · u64`; `u64` was not selected.
+- After dismissing the interstitial through DroidMind, Home showed `App 0.8.9-cf84d Device Not connected Firmware Not connected` and `Unable to connect to C64U`.
+- Drive readback visible in the same app state showed Drive A ON / `No disk mounted` and Drive B OFF / `No disk mounted`.
+- A 12 second reconnect wait did not clear the app-visible `Not connected` state.
+
+Target health after app-visible degradation:
+
+- Direct unauthenticated `http://c64u/v1/info` still returned expected HTTP `403` in `0.009939s`.
+- Evidence: `s1-five-cycle-cf84d-resume/logs/commands/c64u-info-after-app-not-connected.stdout.log`.
+
+Safety decision:
+
+- The required app-visible healthy `c64u` baseline was not present, so the five-cycle Drive A mount/eject replay was not attempted.
+- The app was stopped with `DroidmindClient.stopApp()`.
+- Package state after stop: versionName `0.8.9-cf84d`, versionCode `2044`, `stopped=true`.
+- Result artifact: `s1-five-cycle-cf84d-resume/baseline-block-result.json`.
+
+## Bug-Hunt Session Five-Cycle Replay — 2026-06-25T13:18–13:25Z
+
+Run: `c64scope/artifacts/bughunt-20260625T125855Z-pixel4-c64u-cf84d8e565cb/`. Build `0.8.9-cf84d` (SHA-256 462bfa…, includes uncommitted `Connection: close`). c64u recovered by user (HTTP 403/7-8 ms before start). App-visible baseline proven healthy: badge `C64U ●` green, device `c64u`, firmware `1.1.0`, Drive A ON / No disk mounted, Drive B OFF / No disk mounted.
+
+Five readonly Drive A mount/eject cycles (Boulder Dash 2.d64), each with before/after screenshots + hierarchies + per-step c64u health probe + device readback:
+
+| Cycle | Mount ms | Mount result | Eject ms | c64u health each step | Drive A status after mount |
+|---|---|---|---|---|---|
+| 1 | 1774 | device mounted OK (readback image_file set) | 199 | 403 / 7-8 ms | **STUCK "Host unreachable"** (Drive B = OK) |
+| 2 | 1269 | mounted OK | 150 | 403 / 7-8 ms | OK |
+| 3 | 819 | mounted OK | 205 | 403 / 7-8 ms | OK |
+| 4 | 990 | mounted OK | 259 | 403 / 7-8 ms | OK |
+| 5 | 10032 then **UnknownHostException** (phone DNS blip) | mount FAILED, not mounted | n/a (mount failed) | 403 / 7-8 ms | **STUCK "Host unreachable"** (Drive B = OK) |
+
+### Catastrophic aspect (this defect): NOT REPRODUCED
+- Across 5 mounts + 4 ejects, **c64u never reset/dropped**; direct `GET /v1/info` returned HTTP 403 in 7–8 ms at every step; `GET /v1/drives` always served `errors: []`.
+- No `Connection reset` in logcat (contrast the original repro). The `Connection: close` native-REST hardening in `src/lib/c64api.ts` (present in this APK) appears effective for the catastrophic connection-reset/device-down failure.
+- Status: catastrophic reset **could not be reproduced** in rapid cycles. Caveat: the original failure was **idle-triggered** (`idleMs=197050, wasIdle=true`) on a post-idle eject; this session ran rapid cycles and did **not** specifically replay the ~200 s-idle-then-eject path. Recommend one dedicated idle-replay (mount → ~200 s idle with polling paused → eject) before formal closure.
+
+### New residual defect found → see [[S2-DISKS-DRIVE-A-STATUS-STUCK-HOST-UNREACHABLE]]
+- Intermittent (2/5): after a slow (cycle 1, 1774 ms successful) or failed (cycle 5, DNS) mount, `drive-status-a` sticks on "Host unreachable" while `drive-status-b` shows "OK" on the same page and the device is healthy. Cleared only by navigating away/back. This is an app-side per-drive status non-recovery bug, distinct from the catastrophic reset.
+
+### Environmental observation
+- Pixel 4 ↔ c64u link is flaky over WiFi: logcat shows WiFi scan/supplicant churn; one transient `UnknownHostException` for host `c64u` (cycle 5). Phone ping to c64u otherwise 0% loss, ~11 ms. This flakiness is the trigger for the S2 stuck-status; it is not a c64u or app fault per se, but the app's 10 s hang on the failed mount (no visible timeout/feedback) is a minor UX gap.
+
+### Cleanup
+Drive A left No disk mounted, status OK, badge green; device readback `image_file=''`.

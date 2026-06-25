@@ -369,6 +369,33 @@ describe("c64api branches", () => {
       headers: { "content-type": "application/json" },
     });
 
+  it("closes native direct-device REST connections without changing web or proxy requests", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(okJsonResponse());
+    const api = new C64API("http://c64u");
+
+    await api.getInfo({ __c64uBypassCache: true });
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.headers).not.toMatchObject({
+      Connection: "close",
+    });
+
+    (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue(okJsonResponse());
+    await api.getInfo({ __c64uBypassCache: true });
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.headers).toMatchObject({
+      Connection: "close",
+    });
+
+    api.setBaseUrl("http://127.0.0.1:8787/api/rest");
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue(okJsonResponse());
+    await api.getInfo({ __c64uBypassCache: true });
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.headers).not.toMatchObject({
+      Connection: "close",
+    });
+  });
+
   // #1: normalizeUrlPath catch block (invalid URL)
   it("normalizeUrlPath logs warning and returns raw url for invalid urls", async () => {
     const fetchMock = getFetchMock();

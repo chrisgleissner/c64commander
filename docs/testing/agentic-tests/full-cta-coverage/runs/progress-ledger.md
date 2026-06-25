@@ -4,32 +4,32 @@ Allowed statuses in this ledger: `NOT_STARTED`, `IN_PROGRESS`, `PROVEN`, `FAILED
 
 ## Current Position
 
-- Recorded at: `2026-06-25T07:10:00Z`
+- Recorded at: `2026-06-25T12:26:42Z`
 - Active branch: `test/full-cta-coverage`
-- Git SHA: `af2d795b2361cc78e52f3013cf3502c0e72c0375`
+- Git SHA: `cf84d8e565cbc1511bfe9758887af7c9ae07fba8`
 - Pixel 4 serial: `9B081FFAZ001WX`
 - Package: `uk.gleissner.c64commander`
-- Current APK build identity: `PROVEN`; `android/app/build/outputs/apk/debug/c64commander-0.8.9-af2d7-debug.apk`, SHA-256 `e0f00bc9a9d595566df01b2eb1cfe63992dfc1611d4acce0fe4a21fa56af7891`.
-- Installed package identity: `PROVEN`; versionName `0.8.9-af2d7`, versionCode `2042`, lastUpdateTime `2026-06-25 07:52:21`, signature short `d39d81d2`.
-- Primary target: `c64u`; app-visible final target restored and proven in `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/restore-c64u-final-state/home-after-c64u-final.png`.
+- Current APK build identity: `PROVEN`; `android/app/build/outputs/apk/debug/c64commander-0.8.9-cf84d-debug.apk`, SHA-256 `462bfa1578c219d1f753311695688863c68bdda27480a449823ce60b36d49a07`, built from current local source with native direct-device `Connection: close` hardening.
+- Installed package identity: `PROVEN`; versionName `0.8.9-cf84d`, versionCode `2044`, lastUpdateTime `2026-06-25 09:01:54`, signature short `d39d81d2`, package stopped=true.
+- Primary target: `c64u`; recovered after user restart and still responds to direct unauthenticated probes with expected HTTP `403`. Prior app-visible target restore is proven in `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/restore-c64u-final-state/home-after-c64u-final.png`; restart evidence is under `restart-health/`. Handover 7 resume evidence under `s1-five-cycle-cf84d-resume/` shows direct `c64u` health stayed good, but the app-visible launch baseline degraded to `Device Not connected` / `Unable to connect to C64U` after dismissing a discovery overlay for `u64`.
 - Fallback target: `u64`; inherited infra probe reported Ultimate 64 Elite firmware `3.14e`, unique ID `38C1BA`; fallback only.
 - Current artifact roots: `IN_PROGRESS`; active current-build root `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/`; inherited `515e2` evidence remains under `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-515e2818ed19/`.
-- Current active blockers under fix: S1 `S1-DISKS-MOUNT-EJECT-RESETS-C64U` remains open until corrected five-cycle reliability passes. Current mitigation has one clean readonly pass and one inconclusive/invalid repetition harness run. Open S2 broad `/USB2/test-data` recursive scan stall remains.
+- Current active blockers under fix: S1 `S1-DISKS-MOUNT-EJECT-RESETS-C64U` remains open and blocks C64U product traffic. Corrected readonly Cycle 1 passed, corrected Cycle 2 failed on key-driven Drive A eject with `Connection reset`, and the later `cf84d` five-cycle replay was blocked before Cycle 1 because the app-visible baseline was `Not connected` despite direct `c64u` HTTP `403`. Open S2 broad `/USB2/test-data` recursive scan stall remains.
 - Missing inherited prompt artifacts: `final-report-2.md`, `cleanup-report-2.md`, `callback-8020-residual-risk.md`, and `cta-runner.md`.
-- Continuation handover: `docs/testing/agentic-tests/full-cta-coverage/handover5.md`. `final-report-3.md` is not written because exhaustive CTA execution and cleanup are incomplete.
+- Continuation handover: `docs/testing/agentic-tests/full-cta-coverage/handover8.md`. `final-report-3.md` is written as `PIXEL4-NO-GO`, not a certification pass.
 
 ## Phase A — Current Build And Device Baseline
 
 | Item | Status | Evidence | Next action |
 | --- | --- | --- | --- |
-| Git branch and SHA captured | PROVEN | `WORKLOG.md`; current SHA corrected to `af2d795b2361cc78e52f3013cf3502c0e72c0375` after branch advance | Keep exact SHA in final report |
+| Git branch and SHA captured | PROVEN | `WORKLOG.md`; current SHA corrected to `cf84d8e565cbc1511bfe9758887af7c9ae07fba8` after branch advance | Keep exact SHA and dirty source status in final report |
 | Worktree status captured | PROVEN | `WORKLOG.md`; `git status --short` output | Preserve unrelated dirty files |
 | Package and build scripts inspected | PROVEN | `package.json`, `build`, `android/app/build.gradle` reads | Use repo-supported build path |
-| `npm run scope:check` after current infrastructure edits | PROVEN | `WORKLOG.md`; current `af2d7` run passed 55 files / 360 tests | Re-run after further code changes |
-| Current APK built from source state | PROVEN | `WORKLOG.md`; APK `c64commander-0.8.9-af2d7-debug.apk`, SHA-256 `e0f00bc9a9d595566df01b2eb1cfe63992dfc1611d4acce0fe4a21fa56af7891` | Use current APK only |
-| Current APK installed on Pixel 4 | PROVEN | Build/install log; streamed install succeeded | None |
-| Installed package identity captured after install | PROVEN | `WORKLOG.md`; versionName `0.8.9-af2d7`, versionCode `2042`, lastUpdateTime `2026-06-25 07:52:21` | Include in final report |
-| App launched through DroidMind path | PROVEN | Build helper launch plus `DroidmindClient.startApp` in baseline capture | Continue product actions through `DroidmindClient` |
+| `npm run scope:check` after current infrastructure edits | PROVEN | `WORKLOG.md`; `cf84d` run passed 55 files / 360 tests before transport hardening; no c64scope code changed after | Re-run after c64scope changes |
+| Current APK built from source state | PROVEN | `WORKLOG.md`; APK `c64commander-0.8.9-cf84d-debug.apk`, SHA-256 `462bfa1578c219d1f753311695688863c68bdda27480a449823ce60b36d49a07` | Use current APK only |
+| Current APK installed on Pixel 4 | PROVEN | Raw `adb install -r` succeeded; app later launched for restart health and Handover 7 baseline block, then stopped | Launch only to prove app-visible healthy `c64u`; do not run Disks replay while baseline is `Not connected` |
+| Installed package identity captured after install | PROVEN | `WORKLOG.md`; versionName `0.8.9-cf84d`, versionCode `2044`, lastUpdateTime `2026-06-25 09:01:54`, stopped=true | Include in final report |
+| App launched through DroidMind path | BLOCKED_WITH_EVIDENCE | Current hardened APK launched after target restart in `restart-health/`; later Handover 7 resume launched to discovery overlay and then `Device Not connected` in `s1-five-cycle-cf84d-resume/screenshots/05-after-reconnect-wait.png` | Restore/prove app-visible healthy `c64u` before any S1 replay |
 | Baseline screenshot and hierarchy | PROVEN | `screenshots/baseline-current-sha-launch.png`; `hierarchies/baseline-current-sha-launch.xml` | Use as current-SHA baseline |
 | Launch logcat captured | PROVEN | `logs/logcat/baseline-after-install-launch.log` | Continue per-case log capture |
 | `c64u` and `u64` health probes recorded as infrastructure evidence | PROVEN | `target-health-probes*.stdout.log`; c64u authenticated 200 from host and Pixel-side curl; u64 unauthenticated 200 | Raw probes support only; product proof is targeted Save-and-Connect |
@@ -78,8 +78,8 @@ Allowed statuses in this ledger: `NOT_STARTED`, `IN_PROGRESS`, `PROVEN`, `FAILED
 | Drive A mount sheet population | PROVEN | `screenshots/drive-a-mount-sheet-fixed-open.png`, `hierarchies/drive-a-mount-sheet-fixed-open.xml`, `logs/commands/droidmind-drive-a-mount-sheet-fixed.stdout.log` | Continue mount/eject repetitions |
 | Broad C64U folder import `/USB2/test-data` | FAILED | `screenshots/disks-import-stuck-scan-before-cancel.png`, `logs/commands/droidmind-disks-import-add-to-library.stdout.log` | Track defect and avoid broad-folder import during cleanup |
 | Drive A mount/eject original repetitions | FAILED | `disks-mount-eject-loop/result.json`; two successful cycles, third produced app-visible `Connection reset`; S1 defect filed | Superseded only by current-build corrected reliability when complete |
-| Drive A readonly mount/eject clean single cycle | PROVEN | `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/clean-readonly-mount-eject-2/result.json`; final eject state `No disk mounted`, `Connected to c64u, system healthy` | Run corrected five-cycle reliability loop |
-| Drive A readonly mount/eject repetitions | INCONCLUSIVE_NEEDS_REPLAY | `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/readonly-mount-eject-repetitions/result.json`; stale coordinate fallback did not exercise the intended product path | Replay with corrected semantic targeting |
+| Drive A readonly mount/eject clean single cycle | PROVEN | `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/readonly-cycle-key-1/` and `readonly-cycle-key-1-eject/`; key-driven mount used `mode=readonly`, eject restored Drive A ON/No disk and direct health returned expected 403 | Still need five-cycle reliability after target recovery |
+| Drive A readonly mount/eject repetitions | BLOCKED_WITH_EVIDENCE | `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/readonly-cycle-key-2/` and `readonly-cycle-key-2-eject/` failed on Cycle 2 eject with `Connection reset`; later `s1-five-cycle-cf84d-resume/baseline-block-result.json` blocked before Cycle 1 because app-visible baseline was `Not connected` while direct `c64u` probes returned HTTP `403` | Keep S1 open; retry only after app-visible healthy `c64u` is proven on launch |
 | Keypad canary | PROVEN | `c64scope/artifacts/cta-20260625T000854Z-pixel4-c64u-515e2818ed19/`; 11/11 passed with D-pad included | Full keypad-first matrix still required |
 | Touch parity | NOT_STARTED | None current APK | Execute route passes |
 | Keypad-first matrix | NOT_STARTED | None current APK | Execute after canary |
@@ -89,8 +89,8 @@ Allowed statuses in this ledger: `NOT_STARTED`, `IN_PROGRESS`, `PROVEN`, `FAILED
 | Reliability repetitions | NOT_STARTED | None current APK | Repeat critical flows |
 | Background playback | NOT_STARTED | None current APK | Execute if supported/fixtures available |
 | Soak | NOT_STARTED | None current APK | Run longest safe session duration |
-| Cleanup and final diff | NOT_STARTED | None current APK | Execute before final report |
-| Handover after S1 safety stop | BLOCKED_WITH_EVIDENCE | `docs/testing/agentic-tests/full-cta-coverage/handover5.md` | Resume with local source/log triage only; do not send `c64u` traffic before a fix or explicit safe test window |
+| Cleanup and final diff | BLOCKED_WITH_EVIDENCE | Post-restart readback proves immediate disk cleanup: Drive A ON/No disk, Drive B OFF/No disk, c64u connected, app stopped. Handover 7 resume stopped the app again after baseline degradation; package state `stopped=true`. Full exhaustive cleanup still incomplete | Complete full cleanup only after exhaustive replay/coverage |
+| Handover after S1 safety stop | PROVEN | `docs/testing/agentic-tests/full-cta-coverage/handover8.md` | Resume by proving app-visible healthy `c64u`; do not replay S1 while app baseline is `Not connected` |
 
 ## Defects
 
@@ -104,4 +104,4 @@ Allowed statuses in this ledger: `NOT_STARTED`, `IN_PROGRESS`, `PROVEN`, `FAILED
 | `S2-DISKS-MOUNT-EMPTY` | PROVEN | Fixed-sheet proof `screenshots/drive-a-mount-sheet-fixed-open.png`; formal defect file `docs/testing/agentic-tests/full-cta-coverage/defects/S2-DISKS-MOUNT-EMPTY.md` | Keep fix evidence; continue broader Disks pass |
 | `S2-DISKS-COMMOSERVE-MISSING` | PROVEN | Source picker proof `screenshots/commoserve-library-source-01-source-picker.png`; formal defect file `docs/testing/agentic-tests/full-cta-coverage/defects/S2-DISKS-COMMOSERVE-MISSING.md` | Keep fix evidence; continue broader Disks pass |
 | `S2-DISKS-FTP-RECURSIVE-SCAN-STALL` | FAILED | Broad folder import stalled at `Scanning... 0 items` for at least 1m52s; formal defect file `docs/testing/agentic-tests/full-cta-coverage/defects/S2-DISKS-FTP-RECURSIVE-SCAN-STALL.md` | Reproduce in Disks performance/reliability pass or keep as open S2 |
-| `S1-DISKS-MOUNT-EJECT-RESETS-C64U` | IN_PROGRESS | Original loop failed with `Connection reset`; current mitigation has one clean readonly proof and one invalid repetition harness run | Keep open until corrected five-cycle current-build reliability passes |
+| `S1-DISKS-MOUNT-EJECT-RESETS-C64U` | BLOCKED_WITH_EVIDENCE | Original loop failed with `Connection reset`; after readonly/polling mitigation, Cycle 1 passed but Cycle 2 eject reproduced `Connection reset`; current local source adds native `Connection: close` hardening, but Handover 7 resume blocked before replay due app-visible `Not connected` baseline | Keep open until app-visible healthy `c64u` is proven and five corrected cycles pass on the hardened APK |

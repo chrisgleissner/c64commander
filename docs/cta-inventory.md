@@ -270,7 +270,10 @@ Mount disk sheet: Available disks list — filter text — `list-filter-input` �
   R✅ I✅ `[visible when a discovered device requires a network password]`
 - **Diagnostics** — button — `diagnostics-open-dialog` — R✅ I✅
 - **Feature flags** — checkbox — `feature-flag-*` (incl.
-  `feature-flag-keypad_input_enabled`) — R✅ I✅
+  `feature-flag-keypad_input_enabled`) — R✅ I✅ (`c64u-remote`: RAM snapshots
+  and keypad ship on; background execution, HVSC, and Home Telnet
+  config/drive/printer/power actions are visible toggles; developer-only flags
+  remain hidden)
 - **Network/cache**: HVSC base URL / update interval, archive host/client/agent
   overrides — text/number — `hvsc-base-url`, `hvsc-update-check-interval`,
   `archive-*-override` — R✅ I✅ ; Open archive browser — button —

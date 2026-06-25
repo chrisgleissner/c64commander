@@ -47,9 +47,9 @@ test.describe("Fuzz structured recovery", () => {
       /(REAL_CONNECTED|DEMO_ACTIVE)/,
     );
     await page.getByTestId("home-config-save-app").click();
-    await expect(page.getByRole("dialog")).toBeVisible();
+    const dialog = page.getByRole("dialog", { name: /Save to App/i });
+    await expect(dialog).toBeVisible();
 
-    const dialog = page.getByRole("dialog");
     let closed = false;
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       const result = await attemptStructuredRecovery(page, {

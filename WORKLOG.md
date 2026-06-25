@@ -2,6 +2,21 @@
 
 All times 2026-06-24 unless noted.
 
+## Handover 7 continuation — 2026-06-25T12:23:41Z
+
+- Resumed from `handover7.md` with `final-report-3.md` still treated as `PIXEL4-NO-GO`.
+- Classification: HIL/device certification continuation. No rebuild: source was unchanged and the installed Pixel 4 package remained `0.8.9-cf84d`, versionCode `2044`.
+- Created continuation artifact folder `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/s1-five-cycle-cf84d-resume/`.
+- Direct pre-launch `c64u` unauthenticated probe passed as expected: HTTP `403` in `0.008523s`; evidence `s1-five-cycle-cf84d-resume/logs/commands/c64u-info.stdout.log`.
+- Launched the installed app with `DroidmindClient.startApp()`. The app opened the discovery interstitial showing `Ultimate 64 Elite · u64`; `u64` was not selected.
+- Dismissed the discovery interstitial through DroidMind. The app then showed Home with `App 0.8.9-cf84d Device Not connected Firmware Not connected`, Drive A ON / `No disk mounted`, Drive B OFF / `No disk mounted`, and `Unable to connect to C64U`.
+- Waited 12 seconds for reconnect; app-visible state stayed `Not connected`.
+- Direct post-app `c64u` unauthenticated probe still passed: HTTP `403` in `0.009939s`; evidence `s1-five-cycle-cf84d-resume/logs/commands/c64u-info-after-app-not-connected.stdout.log`.
+- Per S1 safety rules, did not attempt any Drive A mount/eject cycle from this degraded app-visible baseline. Stopped the app with `DroidmindClient.stopApp()`.
+- Package state after stop: `stopped=true`, versionName `0.8.9-cf84d`, versionCode `2044`, lastUpdateTime `2026-06-25 09:01:54`.
+- Result artifact: `s1-five-cycle-cf84d-resume/baseline-block-result.json`, status `BLOCKED_WITH_EVIDENCE`.
+- S1 remains open; `PIXEL4-NO-GO` remains the only valid recommendation.
+
 ## Continuation for exhaustive Pixel 4 certification — 2026-06-24T23:55:38Z
 
 - Role/prompt accepted: autonomous continuation for deep Pixel 4 CTA and flow certification on serial `9B081FFAZ001WX`, package `uk.gleissner.c64commander`, target `c64u` with password redacted in artifacts.
@@ -528,15 +543,170 @@ Commands and material actions:
   - App-visible target had drifted to `u64`; used `DroidmindClient.pressKey(KEYCODE_POUND)` to open Switch Device, selected `c64u`, and captured `manual-restore-c64u/home-after-c64u-switch-back.png`.
   - A residual Drive A `Boulder Dash 2.d64` mount from a failed replay was ejected through the semantically identified Drive A eject control; evidence `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/cleanup-drive-a-residual/result.json`, screenshots `before-coordinate-eject.png` and `after-coordinate-eject.png`.
   - Final app-visible target restored again after repetition harness drifted target to `u64`; evidence `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/restore-c64u-final-state/home-after-c64u-final.png`.
-- Current-build Disks evidence:
-  - Single clean readonly Drive A mount/eject pass from no-disk state: `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/clean-readonly-mount-eject-2/result.json`.
-  - Result: `PROVEN`; after mount `bad=[]`, Eject visible, mounted text `/USB2/test-data/.../Boulder Dash 2.d64`; after eject `bad=[]`, `No disk mounted`, target `Connected to c64u, system healthy`.
-  - Supporting direct unauthenticated `c64u` probes returned expected `403` in ~8 ms before and after the clean pass.
-  - Repetition runner attempt under `readonly-mount-eject-repetitions/` is `FAILED` as automation evidence only: stale coordinate fallback did not exercise the intended mount/eject path and left the mount sheet open. Do not count it as product reliability failure; replay with corrected semantic targeting.
+- Current-build Disks evidence correction:
+  - `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/clean-readonly-mount-eject-2/result.json` is `INCONCLUSIVE_NEEDS_REPLAY`, not `PROVEN`; later screenshot review showed `screenshots/disks-before-clean-mount.png` already had Drive A mounted with Boulder Dash before the claimed mount action.
+  - Supporting direct unauthenticated `c64u` probes returned expected `403` in ~8 ms around the invalid cycle, proving target availability only, not app-driven mount/eject coverage.
+  - Repetition runner attempt under `readonly-mount-eject-repetitions/` is invalid automation evidence: stale coordinate fallback did not exercise the intended mount/eject path and left the mount sheet open. Do not count it as product reliability failure; replay with corrected semantic targeting.
+  - Corrected attempt under `corrected-readonly-cycle-1/` showed Drive A OFF with no disk mounted, but the Drive A mount affordance did not open the mount sheet, so it also remains `INCONCLUSIVE_NEEDS_REPLAY`.
 
 Decisions and evidence:
 
 - The original readwrite repeated mount/eject S1 remains open until a corrected five-cycle current-build reliability run passes.
-- The current code mitigation has one valid Pixel 4 proof and did not reproduce target reset during the guarded clean pass.
-- The app was stopped after final target restoration; final visible target screenshot shows `C64U`, device `c64u`, firmware `1.1.0`, app `0.8.9-af2d7`.
+- The current code mitigation has local regression coverage and current-APK install proof, but no valid Pixel 4 Drive A mount/eject reliability pass yet.
+- The app was later restored to Drive A ON with no disk, but the app-visible header showed `C64U ▲ 4`; direct unauthenticated `http://c64u/v1/info` returned expected `403` in ~8 ms. Diagnose the four app-visible warnings before retrying Drive A mount/eject.
 - Do not write `final-report-3.md`; exhaustive CTA execution and cleanup remain incomplete.
+
+## Pixel 4 CTA continuation — corrected readonly Cycle 2 failure and native REST hardening
+
+Recorded UTC: 2026-06-25T08:04:19Z.
+
+Commands and material actions:
+
+- `git status --short`, `git branch --show-current`, `git rev-parse HEAD`: branch `test/full-cta-coverage`, SHA `cf84d8e565cbc1511bfe9758887af7c9ae07fba8`, dirty worktree preserved.
+- Captured live Disks state under `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/readonly-cycle-key-2-eject/`; hierarchy capture hung and was interrupted, but screenshot `screenshots/00-current-before-eject-nav.png` showed Drive A ON with `/.../Frogger.d64` mounted.
+- Used `DroidmindClient.pressKey()` only for product navigation. Focus-map screenshots were captured under:
+  - `readonly-cycle-key-2-eject/screenshots/focus-map/`
+  - `readonly-cycle-key-2-eject/screenshots/focus-up-from-b/`
+- Verified focus on `Drive A Eject disk` in `readonly-cycle-key-2-eject/screenshots/focus-up-from-b/09-LEFT.png`.
+- Activated the focused eject CTA with `DroidmindClient.pressKey(DPAD_CENTER)`; evidence:
+  - `readonly-cycle-key-2-eject/screenshots/01-before-eject-center.png`
+  - `readonly-cycle-key-2-eject/screenshots/02-after-eject-immediate.png`
+  - `readonly-cycle-key-2-eject/screenshots/03-after-eject-polling.png`
+  - `readonly-cycle-key-2-eject/logs/logcat/cycle-2-eject.log`
+  - `readonly-cycle-key-2-eject/eject-result.json`
+- Logcat showed the key-driven product request `PUT http://c64u/v1/drives/a:remove` failed in 37 ms with `Connection reset`; the emitted failure context included `idleMs=197050` and `wasIdle=true`.
+- Stopped the app through `DroidmindClient.stopApp`; evidence `readonly-cycle-key-2-eject/logs/droidmind/stop-after-cycle-2-reset.jsonl`.
+- Direct app-stopped `http://c64u/v1/info` recovery probes returned `curl: (56) Recv failure: Connection reset by peer`:
+  - `readonly-cycle-key-2-eject/logs/commands/c64u-health-after-cycle-2.stdout.log`
+  - `readonly-cycle-key-2-eject/logs/commands/c64u-health-recovery-1.stdout.log`
+  - `readonly-cycle-key-2-eject/logs/commands/c64u-health-recovery-2.stdout.log`
+  - `readonly-cycle-key-2-eject/logs/commands/c64u-health-recovery-3.stdout.log`
+- Built current `cf84d` APK without launching via `npm run cap:build && npm run android:apk`; first build SHA-256 `1fca357d8b17d7e3ba839d3047dc50175824725160ca15fb7ebd68bc8a7497fe`.
+- Installed first `cf84d` APK with raw `adb -s 9B081FFAZ001WX install -r`; installed identity versionName `0.8.9-cf84d`, versionCode `2044`, lastUpdateTime `2026-06-25 08:58:29`, stopped=true.
+- Direct app-stopped health after current APK install still returned connection reset; evidence `readonly-cycle-key-2-eject/logs/commands/c64u-health-after-current-apk-install.stdout.log`.
+- Implemented focused source hardening in `src/lib/c64api.ts`: native direct-device REST requests now add `Connection: close`; web/proxy requests are unchanged.
+- Added regression coverage in `tests/unit/c64api.branches.test.ts`: `closes native direct-device REST connections without changing web or proxy requests`.
+- Validation:
+  - `npm run scope:check`: passed 55 files / 360 tests before the transport hardening; c64scope was not changed afterward.
+  - `npm run test -- tests/unit/c64api.branches.test.ts`: passed 94 tests.
+  - `npm run cap:build && npm run android:apk`: passed after hardening; final APK SHA-256 `462bfa1578c219d1f753311695688863c68bdda27480a449823ce60b36d49a07`.
+  - Raw `adb -s 9B081FFAZ001WX install -r android/app/build/outputs/apk/debug/c64commander-0.8.9-cf84d-debug.apk`: passed, no launch.
+  - Installed identity after final install: versionName `0.8.9-cf84d`, versionCode `2044`, lastUpdateTime `2026-06-25 09:01:54`, signature short `d39d81d2`, stopped=true.
+  - `npm run lint`: passed.
+- Secret scan `rg -n 'pwd|"x-password":"(?!\\[REDACTED\\])' c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361 docs/testing/agentic-tests/full-cta-coverage --pcre2` found only existing historical prompt/handover/report references, not new command/artifact leaks.
+- Final app-stopped health check at `2026-06-25T08:07:31Z` still returned `curl: (56) Recv failure: Connection reset by peer`; evidence `readonly-cycle-key-2-eject/logs/commands/c64u-health-final-check.stdout.log` and `.stderr.log`.
+
+Decisions and evidence:
+
+- Corrected readonly Cycle 1 is a valid one-cycle pass, but Cycle 2 is a valid failure and keeps `S1-DISKS-MOUNT-EJECT-RESETS-C64U` open.
+- The app-visible `0.8.9-8a785` string in the post-failure Home screenshot does not match the installed package `0.8.9-af2d7`; record as a build-identity anomaly to investigate after recovery.
+- Do not launch the final installed `0.8.9-cf84d` APK or send product traffic while app-stopped direct `c64u` probes return connection reset.
+- Cleanup is not proven: Drive A may still have `/USB2/test-data/d64/Frogger.d64` mounted because the eject request failed before target recovery could be confirmed.
+- Do not write `docs/testing/agentic-tests/full-cta-coverage/final-report-3.md`; exhaustive CTA execution, cleanup, and Pixel 4 recommendation remain blocked.
+
+## Pixel 4 CTA continuation — restart readback and Final Report 3 NO-GO
+
+Recorded UTC: 2026-06-25T08:17:18Z.
+
+Commands and material actions:
+
+- User reported that `c64u` and `u64` were restarted and requested final reporting plus a handover prompt.
+- `git status --short && git rev-parse HEAD`: branch still dirty at `cf84d8e565cbc1511bfe9758887af7c9ae07fba8`.
+- Direct infrastructure health probes after restart:
+  - `c64u`: expected unauthenticated HTTP `403` in `0.008440s`; evidence `restart-health/logs/commands/c64u-info.stdout.log`.
+  - `u64`: still returned `curl: (56) Recv failure: Connection reset by peer`; evidence `restart-health/logs/commands/u64-info.stdout.log` and `.stderr.log`.
+- Installed package identity remained current: versionName `0.8.9-cf84d`, versionCode `2044`, lastUpdateTime `2026-06-25 09:01:54`, stopped=true before launch.
+- Launched current APK through `DroidmindClient.startApp()` and captured post-restart Home evidence:
+  - `restart-health/screenshots/current-cf84d-after-restart-launch.png`
+  - `restart-health/hierarchies/current-cf84d-after-restart-launch.xml`
+  - `restart-health/logs/logcat/current-cf84d-after-restart-launch.log`
+- App-visible Home state after restart: app `0.8.9-cf84d`, green `C64U`, device `c64u`, firmware `1.1.0`.
+- Used `DroidmindClient.pressKey()` to navigate to Disks and captured cleanup readback:
+  - `restart-health/screenshots/current-cf84d-disks-after-restart.png`
+  - `restart-health/hierarchies/current-cf84d-disks-after-restart.xml`
+  - `restart-health/logs/logcat/current-cf84d-disks-after-restart.log`
+- App-visible Disks state after restart: Drive A ON with `No disk mounted`; Drive B OFF with `No disk mounted`.
+- Stopped the app through `DroidmindClient.stopApp()` after cleanup capture; evidence `restart-health/logs/droidmind/stop-after-restart-cleanup.jsonl`.
+- Wrote:
+  - `docs/testing/agentic-tests/full-cta-coverage/final-report-3.md`
+  - `docs/testing/agentic-tests/full-cta-coverage/cleanup-report-3.md`
+  - `docs/testing/agentic-tests/full-cta-coverage/handover7.md`
+
+Decision:
+
+- Final recommendation is `PIXEL4-NO-GO`, not a certification pass.
+- Reason: S1 Drive A mount/eject connection-reset defect remains open, five-cycle replay has not passed on `0.8.9-cf84d`, exhaustive CTA accounting is incomplete, and final unaccounted CTA count is not zero.
+
+---
+
+# Session: Bug Hunt — 2026-06-25T12:58Z (bughunt-20260625T125855Z)
+
+Role: Principal Android QA Engineer — exhaustive bug hunt. Artifact root:
+`c64scope/artifacts/bughunt-20260625T125855Z-pixel4-c64u-cf84d8e565cb/`
+
+## Start-of-session facts (all verified, not assumed)
+
+- `git status --short`: dirty (product delta `src/lib/c64api.ts`; QA docs/test files). Branch `test/full-cta-coverage`, HEAD `cf84d8e565cbc1511bfe9758887af7c9ae07fba8`.
+- `adb devices -l`: Pixel 4 `9B081FFAZ001WX` online. Props: Pixel 4, Android 16, SDK 36, 1080x2280 @ 440dpi.
+- c64u (192.168.1.167): ARP REACHABLE but `curl http://c64u/` = **HTTP 000** (web stack DOWN, NOT the expected 403). DNS `c64u -> 192.168.1.167` confirmed. C64U-dependent flows BLOCKED.
+- u64 (192.168.1.13): HTTP 200 (healthy) — FORBIDDEN for closure.
+- Installed APK SHA-256 `462bfa1578...d49a07` = handover-recorded value = committed HEAD. Not rebuilt (dirty c64api.ts delta is c64-only, untestable while c64u down).
+- App UI = single `android.webkit.WebView` (uiautomator opaque). CDP reachable: Chrome/148, page "C64 Commander" @ http://localhost/. CDP used for observation only; product input via DroidMind.
+- `npm run scope:check`: PASS (exit 0). Harness build + tests green. Evidence: `logs/commands/scope-check.{stdout,stderr}.log`.
+
+## Actions
+
+- Launched app via DroidMind `start_app`. Baseline capture `baseline-01-launch`: Home, App `0.8.9-cf84d`, Device **Not connected**, Firmware **Not connected**, target chip "C64U". 6-tab nav present. Consistent with c64u HTTP down.
+- Wrote identity artifacts: environment.json, apk-identity.json, installed-package-identity.json.
+- Mapped c64scope CTA harness operations (offline gates: discoverRoutes/keypad/gate4/gate5/gate6/gate65; c64u-dependent: gate3/gate7).
+
+## Decision
+
+- c64u offline is NOT a stop condition. Proceeding with full independent (disconnected/app-local) surface per prompt anti-shortcut rules. C64U-dependent flows marked BLOCKED_WITH_EVIDENCE.
+
+## 2026-06-25T13:00–13:25Z — c64u recovered + S1 five-cycle replay
+
+- User restarted c64u. Re-probe: `http://c64u/` HTTP 200; `/v1/info` HTTP 403 in 7-8 ms (healthy). u64 200.
+- App had NOT auto-reconnected after outage (stayed OFFLINE). Drove app-driven reconnect: Settings → scroll → tap "Save & Connect" (host=c64u, http=80, ftp=21, telnet=23, pwd). Badge → "C64U ●". CDP showed `/v1/info` polling via Capacitor interceptor.
+- Home connected baseline proven: badge green C64U ●, device c64u, firmware 1.1.0, Drive A ON/No disk mounted, Drive B OFF/No disk mounted. ("Power Off" button + Turbo "Manual" appear only when connected — disconnected hides them / shows "Not available".)
+- S1 five-cycle Drive A readonly mount/eject (Boulder Dash 2.d64), full before/after evidence (s1-c1..c5-*), per-step c64u health + device readback:
+  - **Catastrophic S1 (connection reset / device down): NOT reproduced.** c64u 403/7-8 ms at every step; no `Connection reset` in logcat. `Connection: close` fix appears effective. Caveat: idle-triggered path (~200s idle) not re-tested.
+  - **New residual S2 found (2/5):** `drive-status-a` sticks on "Host unreachable" after a slow/failed mount while `drive-status-b`="OK" and device healthy; clears only on page re-mount. Triggers: cycle 1 concurrent-poll failure during 1774ms successful mount; cycle 5 phone DNS `UnknownHostException` (10032ms mount fail, 1 occurrence all session).
+  - Mount durations 819–1774 ms (success), 10032 ms (DNS fail). Eject 150–259 ms (all clean).
+  - Wrote defects/S2-DISKS-DRIVE-A-STATUS-STUCK-HOST-UNREACHABLE.md; updated S1 defect with session replay section.
+- Cleanup: Drive A No disk mounted, status OK, badge green, device readback image_file=''.
+
+## 2026-06-25T13:25–13:42Z — Broad connected coverage + reports
+
+- Config: device exposes 22 categories; app = curated ~19-page menu + config-advanced-fallback (REST-only) for unmapped. Opened "Video setup" sub-page → renders live device values (PAL, HDMI 1024x768, CVBS+SVideo, etc.). config-02-video-setup.
+- Diagnostics: `*` keypad shortcut opened diagnostics-sheet (172 evidence entries, health ● Healthy c64u). **Redaction PASS** — no pwd/x-password in summary or expanded request detail. Back closes. diag-01/02.
+- Keypad: digit 2→Play, 5→Settings, 6→Docs, 1→Home; `#`→Device Switcher (closed via Back, no device switched, c64u preserved); `*`→Diagnostics. All work.
+- Play: PLAY FILES renders; Prev/Play/Pause/Next disabled (empty playlist); volume/Recurse/Shuffle present. play-01.
+- Device Switcher: switch-device-sheet via `#`; both devices health-verified; no accidental select. switcher-01.
+- Docs: accordion cards (Getting Started, Home, Play, Disks, Swapping Disks, Config, Settings…) render + expand with content. docs-01/02.
+- Negative path (invalid/empty host): INCONCLUSIVE — soft-keyboard layout shift broke blind-coordinate Save&Connect taps; invalid value typed but never applied (discarded on nav; persisted host stayed c64u; no corruption/crash). neg-01/02. Recommend keyboard-aware re-test.
+- No crashes/ANRs/uncaught exceptions all session; 1 caught console.error (cycle-5 DNS blip).
+- Cleanup verified: c64u connected/healthy, Drive A No disk mounted/OK (device readback image_file=''), no setting drift (theme=system, orientation=auto, ports/pwd/saved-devices unchanged).
+- Wrote: bug-hunt-report.md (BUGHUNT-COMPLETE-MAJOR-BUGS-FOUND, focused-deep), cleanup-report-bughunt.md, runs/bug-hunt-ledger.md; updated S1 defect + S2 defect; PLANS.md final state.
+- Stopped background CDP listener + continuous logcat.
+
+## 2026-06-25T15:30–16:15Z — FIX + on-device verification (all identified issues)
+
+User authorized product-code fixes + on-device verification. Root-caused via 2 agents, then implemented:
+- `src/lib/c64api.ts`: MOUNT_REQUEST_TIMEOUT_MS=8000 for mountDrive/unmountDrive (was 1500ms interactive default → false "Host unreachable" on slow-but-OK mounts). [S2 Fix A + C3]
+- `src/components/disks/HomeDiskManager.tsx`: driveErrorsSetAtRef + stamping effect + poll-reconciliation clear block (stale per-drive error clears on next successful poll); gated Disks drive status on status.isConnected. [S2 Fix B + C1]
+- `src/pages/home/components/DriveManager.tsx`: gated Home drive status on isConnected → "Not available" when disconnected. [C1]
+- `src/components/UnifiedHealthBadge.tsx`: OFFLINE badge tap also fires discoverConnection("manual") (additive; Diagnostics still opens). [C2]
+
+Gates: typecheck PASS; full unit suite 643 files / 7458 tests PASS; `npm run lint` PASS (format+eslint+variant/feature-flag/menu-mapping).
+Build: APK SHA-256 5c6625f7c42f4c8b73e6be8d13b563ec602be24df7a8e84a346c94eba168aca7 (vs old 462bfa15…), installed on Pixel 4.
+
+On-device verification (Pixel 4 → c64u; u64 fallback during a c64u dropout):
+- S2 Fix A: mount/eject cycles clean, no false "Host unreachable" (old build 2/5).
+- S2 Fix B: deterministic — wifi-drop during mount set drive-status-a="Unable to resolve host" while drive-status-b="OK"; on wifi restore, drive-status-a self-cleared to "OK" on next poll WITHOUT navigation. (verify-wifidrop-failed/verify-fixB-recovered)
+- C1: OFFLINE launch → Home home-drive-status-a="Not available"; Disks drive-status-message-a/b="Not available". (verify-c1-disks-offline)
+- C2: OFFLINE badge tap → reconnect Offline→Online in ~1s (vs passive ~10-50s). (verify-c2-*)
+- C3: mount timeout now intentional 8000ms; native CapacitorHttp can't honor AbortSignal (structural, documented).
+- c64u flakiness: repeated wifi toggles (used to simulate outages) destabilized the shared AP and dropped c64u (user restarted twice); a single deliberate toggle survived (403). Updated memory c64u-flakiness with avoidance guidance.
+
+Wrote fix-report.md; updated S2 defect (FIXED+VERIFIED), bug-hunt-ledger. App left connected/clean.

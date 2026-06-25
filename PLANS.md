@@ -1,75 +1,80 @@
-# Pixel 4 Exhaustive CTA Certification Plan
+# PLANS.md — C64 Commander Exhaustive Bug Hunt (Pixel 4)
 
-## Current Identity
+## Identity (verified this session 2026-06-25T12:58Z)
 
 - Branch: `test/full-cta-coverage`
-- Git SHA: `af2d795b2361cc78e52f3013cf3502c0e72c0375`
-- Working tree: dirty before this continuation with unrelated-looking local changes in `scripts/repro-cursor-blink-snapshot-restore.mjs`, `src/lib/machine/ramOperations.ts`, `tests/unit/machine/ramOperations.test.ts`, and untracked `scripts/prove-snapshot-all-types.ts`; preserve them.
-- Current APK build identity: `android/app/build/outputs/apk/debug/c64commander-0.8.9-af2d7-debug.apk`, SHA-256 `e0f00bc9a9d595566df01b2eb1cfe63992dfc1611d4acce0fe4a21fa56af7891`, built and installed by `./build --skip-tests --install-apk --device-id 9B081FFAZ001WX`.
-- Current installed package identity: `uk.gleissner.c64commander` versionName `0.8.9-af2d7`, versionCode `2042`, lastUpdateTime `2026-06-25 07:52:21`, signature short `d39d81d2`.
-- Pixel 4 target: `9B081FFAZ001WX`.
-- Primary C64U target: `c64u`, password redacted in artifacts, HTTP `80`, FTP `21`, Telnet `23`.
-- Artifact roots for this continuation:
-  - Original `515e2` evidence: `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-515e2818ed19/`
-  - Current `af2d7` evidence: `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/`
+- Git SHA: `cf84d8e565cbc1511bfe9758887af7c9ae07fba8`
+- Working tree: DIRTY. Product-code delta: `src/lib/c64api.ts` (Connection: close, c64-only). QA docs/test files dirty (expected).
+- Installed APK: `0.8.9-cf84d`, versionCode `2044`, SHA-256 `462bfa1578c219d1f753311695688863c68bdda27480a449823ce60b36d49a07` = committed HEAD (not rebuilt; delta is c64-only, untestable while c64u down).
+- Installed app: **FULL C64 Commander** (package `uk.gleissner.c64commander`), NOT the stripped C64U Remote variant.
+- Pixel 4: `9B081FFAZ001WX`, Pixel 4, Android 16 / SDK 36, 1080x2280 @ 440dpi.
+- C64 target `c64u` (192.168.1.167): L2 REACHABLE, **HTTP 000 (web stack DOWN)** — C64U-dependent flows BLOCKED.
+- `u64` (192.168.1.13): HTTP 200 — FORBIDDEN for closure.
+- UI: WebView app. DOM visible only via **CDP** (Chrome/148 @ http://localhost/). Product input via **DroidMind**.
 
-## Active Phase
+## Artifact root
 
-In progress on C64U device-safety recovery after Disks mount/eject loop. A readonly manual Disks mount mitigation plus polling-pause guard has one clean Pixel 4 proof on current build `0.8.9-af2d7`; the broader five-cycle repetition is still inconclusive because the repetition harness used a stale coordinate and reopened the mount sheet. The app is stopped after restoring app-visible `C64U` / `c64u`.
+`c64scope/artifacts/bughunt-20260625T125855Z-pixel4-c64u-cf84d8e565cb/`
 
-## Active Surface
+## Prior discovery baseline (515e2 run): 290 CTAs
 
-- Route/page/overlay/flow/CTA group: Disks Drive A readonly mount/eject reliability verification and cleanup.
-- Product action path: existing `c64scope` runners using `DroidmindClient`; product key input must use `DroidmindClient.pressKey()`.
-- Raw ADB scope: infrastructure identity, APK install, log capture, package metadata, and bootstrap checks only.
+Home 106, Play 24, Disks 40, Config 28, Settings 74, Docs 18.
 
-## Exhaustive Inventory Counts
+## Active phase
 
-- Runtime CTAs discovered on `515e2818ed19`: `290` discovery-only rows. Route counts: Home `106`, Play `24`, Disks `40`, Config `28`, Settings `74`, Docs `18`.
-- Runtime CTAs executed on current `af2d795b2361`: targeted Disks mount/eject proof only; no exhaustive final CTA ledger yet.
-- Main flows proven on current `af2d795b2361`: readonly Drive A mount/eject single-cycle proof from no-disk state; app-visible target restore to `c64u`.
-- Unaccounted runtime CTAs: `290` until final execution statuses are written; must finish at `0`.
-- Untested main flows: Save-and-Connect, Home, Play, Disks, Config, Settings, Docs, Diagnostics, Device Switcher, Licenses, native pickers, touch parity, keypad-first, negative paths, lifecycle, performance, reliability, soak, cleanup.
+FIXES COMPLETE + VERIFIED ON DEVICE (2026-06-25). All identified issues (S2, C1, C2, C3) fixed in product code and verified on Pixel 4 → c64u (u64 fallback). Fixed build APK SHA-256 `5c6625f7c42f4c8b73e6be8d13b563ec602be24df7a8e84a346c94eba168aca7`. Gates: typecheck + 7458 unit tests + lint all PASS. See `fix-report.md`. App left connected/clean. No commit made (not requested).
 
-## Remaining Untested CTAs
+Earlier: `bug-hunt-report.md` (focused-deep bug hunt) found S2 + validated S1.
 
-Unknown until all-route current-APK discovery completes. No discovered CTA may remain without a final row in `docs/testing/agentic-tests/full-cta-coverage/exhaustive-cta-ledger-3.md`.
+### Key outcomes
+- **S2-DISKS-DRIVE-A-STATUS-STUCK-HOST-UNREACHABLE** PROVEN (2/5): Drive A status sticks on "Host unreachable" after slow/failed mount; Drive B unaffected; clears only on page re-mount.
+- **S1** catastrophic connection-reset NOT reproduced in 5 rapid cycles (c64u 403/7-8ms throughout); `Connection: close` fix appears effective; idle-path replay still recommended.
+- Diagnostics password redaction PASS; keypad shortcuts work; no crashes/exceptions.
 
-## Remaining Untested Flows
+### Remaining for a true exhaustive run
+per-CTA accounting of ~290 controls; all Config sub-pages/rows; Play file browser/playlist/playback; keyboard-aware negative-path form validation; lifecycle (lock/rotate/relaunch/bg); reliability 20× reps; native picker/share; full touch-vs-keypad parity; S1 idle-path replay; C64U Remote *variant* build.
 
-- Current-SHA APK build/install/launch baseline.
-- C64U app-driven Save-and-Connect.
-- All-route clean-state discovery.
-- All-route CTA execution, touch pass, keypad-first pass.
-- Gate 3, Gate 4, Gate 5, Gate 6, Gate 6.5, Gate 7, and keypad canary re-run or superseded with deeper evidence.
-- Home, Play, Disks, Config, Settings, Docs/Licenses, Diagnostics, Device Switcher, native picker deep dives.
-- Negative-path matrix, lifecycle matrix, performance timings, reliability repetitions, background playback, soak.
-- Cleanup and final state diff.
+## Blocker list
 
-## Current Blockers
+1. **c64u HTTP stack DOWN (HTTP 000)** — blocks ALL C64U-dependent flows: Home device/firmware status, Play C64U/HVSC/CommoServe, Disks mount/eject (incl. S1 replay), Config device reads, Save-and-Connect success, gate3, gate7. NOT a stop condition. Re-probe periodically; may need user power-cycle (S1 is this failure mode).
+2. C64U Remote variant not installed (full app installed) — variant-specific scope deferred / SPEC noted.
 
-- Generic `scope:cta` historically emitted discovery-only `CALIBRATION_ONLY` rows; use gate runners plus targeted DroidMind flows and augment runner support only when needed to keep every CTA accounted.
-- Generic Gate 3 current-SHA run is blocked by runner navigation/scroll behavior after host-field editing; targeted app-driven Save-and-Connect supersedes it for product proof, and the runner gap must be documented.
-- Gate 6 current-SHA runner hung during DroidMind hierarchy capture with the app stationary at Settings top; supersede with targeted route evidence and document as an infrastructure defect.
-- Gate 6.5 Config block is overlay contamination from the Drive A mount sheet, not a Config outage.
-- Gate 7 HTTP-port restore row blocked, but follow-up cleanup proved HTTP port was already `80` and app reconnected to `c64u`.
-- Inherited missing prompt artifacts remain absent from the checkout: `final-report-2.md`, `cleanup-report-2.md`, `callback-8020-residual-risk.md`, and `cta-runner.md`.
-- Open product defect from the prior continuation: broad C64U folder import `/USB2/test-data` stalled at `Scanning... 0 items`; keep as an S2 unless revalidated differently.
-- S1 product/hardware-impact defect remains open but partially mitigated: original repeated Drive A readwrite mount/eject loop caused app-visible `Connection reset`; current code now pauses drive polling around mount/eject and manual Disks mounts request `readonly`. One clean current-build Pixel 4 cycle passed without target degradation. Five-cycle reliability remains `INCONCLUSIVE_NEEDS_REPLAY` because the repetition harness tapped a stale coordinate and did not exercise product mount/eject correctly.
+## Execution strategy
 
-## Concrete Next Command Or DroidMind Action
+- **Engine 1 — c64scope offline gates**: discoverRoutes → keypad → gate4 → gate5 → gate6 → gate65. gate3/gate7 → expect BLOCKED. Pass `--device=9B081FFAZ001WX --target=c64u --start-app`.
+- **Engine 2 — CDP observation**: enumerate real CTA DOM per route; capture console errors/exceptions/network across all routes & interactions (richest bug source in a WebView app).
+- **Engine 3 — manual DroidMind**: negative-path form validation (invalid/empty host, bad ports — app-local), disconnected-state UI quality, Diagnostics redaction, Docs accordions, Device Switcher, lifecycle, performance.
 
-1. Capture final logcat for the successful clean readonly cycle and repetition harness failure if not already captured.
-2. Update `S1-DISKS-MOUNT-EJECT-RESETS-C64U.md` with current-build fix verification: one clean pass, repetition inconclusive, no target reset observed, final target restored to `c64u`.
-3. Re-run a corrected reliability loop only after replacing stale coordinate fallbacks with hierarchy-visible controls or screenshot-verified coordinates for the active surface; abort on first bad state.
-4. If corrected Disks reliability passes, continue remaining exhaustive surfaces. If it fails, keep S1 open and do not issue a final Pixel 4 recommendation.
+## Task ledger (high-level)
 
-## Cleanup Requirements
+| # | Area | Status | Engine |
+|---|------|--------|--------|
+| 1 | Infra: state files, identity, artifact root | DONE | - |
+| 2 | scope:check validation | DONE (exit 0) | - |
+| 3 | Baseline launch capture | DONE (Home, Not connected) | - |
+| 4 | discoverRoutes (CTA inventory all 6 tabs) | IN_PROGRESS | 1 |
+| 5 | keypad canary matrix | NOT_STARTED | 1 |
+| 6 | gate4/5/6/65 (mutation, contracts, page waves) | NOT_STARTED | 1 |
+| 7 | gate3/gate7 (expect BLOCKED, record) | NOT_STARTED | 1 |
+| 8 | CDP per-route DOM + console error sweep | NOT_STARTED | 2 |
+| 9 | Settings negative-path validation | NOT_STARTED | 3 |
+| 10 | Disconnected-state UI quality (Home/Play/Disks/Config) | NOT_STARTED | 3 |
+| 11 | Diagnostics (open all routes, tabs, export, redaction) | NOT_STARTED | 3 |
+| 12 | Docs/Licenses accordions | NOT_STARTED | 3 |
+| 13 | Device Switcher | NOT_STARTED | 3 |
+| 14 | Lifecycle (cold/warm/home/lock/rotate/relaunch/bg) | NOT_STARTED | 3 |
+| 15 | Performance + reliability repetitions | NOT_STARTED | 1/3 |
+| 16 | S1 Drive A mount/eject replay | SAFETY_BLOCKED (c64u down) | 3 |
+| 17 | Cleanup + final state restore | NOT_STARTED | 3 |
+| 18 | Final bug-hunt report | NOT_STARTED | - |
 
-- Restore saved device to `c64u` (currently app-visible `C64U` / `c64u` in `restore-c64u-final-state/home-after-c64u-final.png`).
-- Restore host/password/HTTP/FTP/Telnet fields to `c64u`/redacted password/`80`/`21`/`23`.
-- Stop playback and clear temporary playlists.
-- Eject test disks and restore drive state where safe.
-- Restore theme, display profile, orientation, fullscreen options, and every app-local or C64 config setting changed during the run.
-- Restore every C64 config value changed during the run.
-- Export final diagnostics, capture final screenshot/hierarchy, confirm app-visible connected state, and write `cleanup-report-3.md`.
+## Remaining counts (live estimate)
+
+- Routes: 6 main + overlays (Diagnostics, Device Switcher, mount sheet, source chooser, native picker).
+- CTA: ~290 prior; awaiting fresh discoverRoutes inventory.
+- Negative paths: ~12 app-local executable now; ~10 C64U-dependent blocked.
+- Lifecycle: ~12 cases. Cleanup: full app-local restore list.
+
+## Exact next action
+
+Launch offline gate sequence in background (discoverRoutes first) with `--device=9B081FFAZ001WX --target=c64u --start-app`, capturing stdout/stderr to artifact logs/commands.

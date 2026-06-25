@@ -210,6 +210,13 @@ export const HomeDiskManager = () => {
   const [activeDrive, setActiveDrive] = useState<DriveKey | null>(null);
   const [activeDisk, setActiveDisk] = useState<DiskEntry | null>(null);
   const [driveErrors, setDriveErrors] = useState<Record<string, string>>({});
+  // Timestamp each per-drive operation error so the drive poll can clear a stale
+  // error once a later successful /v1/drives poll supersedes it (mirrors the
+  // mountedByDrive / drivePowerOverride reconciliation below). Without this a
+  // transient mount/eject failure (e.g. a slow mount aborted as "Host
+  // unreachable") sticks on the drive status until the page is re-mounted, even
+  // though subsequent polls succeed and the sibling drive shows OK.
+  const driveErrorsSetAtRef = useRef<Record<string, number>>({});
   const [mountedByDrive, setMountedByDrive] = useState<Record<string, string>>({});
   const mountedByDriveSetAtRef = useRef<Record<string, number>>({});
   const mountCompletionGenerationRef = useRef<Record<DriveKey, number>>({ a: 0, b: 0 });
@@ -420,7 +427,35 @@ export const HomeDiskManager = () => {
       });
       return changed ? next : prev;
     });
+    // Clear a stale per-drive operation error once a later successful poll
+    // supersedes it. A missing/newer timestamp is left untouched so an error
+    // raised after this poll's data is not cleared prematurely.
+    setDriveErrors((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      Object.keys(next).forEach((key) => {
+        const setAt = driveErrorsSetAtRef.current[key];
+        if (typeof setAt !== "number" || drivesDataUpdatedAt < setAt) return;
+        delete next[key];
+        delete driveErrorsSetAtRef.current[key];
+        changed = true;
+      });
+      return changed ? next : prev;
+    });
   }, [drivesData?.drives, drivesDataUpdatedAt]);
+
+  // Stamp each per-drive error with the time it was (re)set so the poll
+  // reconciliation above can tell which errors a later successful poll
+  // supersedes. Re-stamping on every change keeps repeated failures accurate.
+  useEffect(() => {
+    const now = Date.now();
+    Object.keys(driveErrors).forEach((key) => {
+      driveErrorsSetAtRef.current[key] = now;
+    });
+    Object.keys(driveErrorsSetAtRef.current).forEach((key) => {
+      if (!(key in driveErrors)) delete driveErrorsSetAtRef.current[key];
+    });
+  }, [driveErrors]);
 
   useEffect(() => {
     prepareDirectoryInput(localSourceInputRef.current);
@@ -1877,8 +1912,11 @@ export const HomeDiskManager = () => {
                     </div>
                   ) : (
                     <div className="space-y-0.5" data-testid={`drive-status-${key}`}>
-                      <p className="text-xs text-success" data-testid={`drive-status-message-${key}`}>
-                        OK
+                      <p
+                        className={cn("text-xs", status.isConnected ? "text-success" : "text-muted-foreground")}
+                        data-testid={`drive-status-message-${key}`}
+                      >
+                        {status.isConnected ? "OK" : "Not available"}
                       </p>
                     </div>
                   )}

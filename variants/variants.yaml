@@ -75,10 +75,9 @@ variants:
           format: png
     runtime:
       endpoints:
-        # Local device host only. Internet-content endpoints (HVSC, CommoServe)
-        # are intentionally omitted because those features are disabled for this
-        # variant (see variants/feature-flags/c64u-remote.yaml).
         device_host: c64u
+        hvsc_base_url: https://hvsc.brona.dk/HVSC/
+        commoserve_base_url: http://commoserve.files.commodore.net
       default_display_profile: compact
       default_t9_input_enabled: true
       # Keypad-first appliance UX: start full-screen (hide the Android status and

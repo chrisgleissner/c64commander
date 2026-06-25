@@ -99,6 +99,11 @@ test.describe("Audio Mixer volumes", () => {
     expect(updated[0]).not.toBe(baseline[0]);
     expect(updated.slice(1)).toEqual(baseline.slice(1));
 
+    await expect
+      .poll(
+        () => requests.filter((req) => req.method === "PUT" && req.url.includes("/v1/configs/Audio%20Mixer")).length,
+      )
+      .toBeGreaterThan(0);
     const batchUpdates = requests.filter((req) => req.method === "POST" && req.url.includes("/v1/configs"));
     expect(batchUpdates.length).toBe(0);
     const itemUpdates = requests.filter((req) => req.method === "PUT" && req.url.includes("/v1/configs/Audio%20Mixer"));

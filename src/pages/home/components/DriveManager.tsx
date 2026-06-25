@@ -328,15 +328,27 @@ export function DriveManager({
             : false;
           const statusRaw = resolveDriveStatusRaw(device?.lastError);
           const formattedStatus = statusRaw ? formatDiskDosStatus(statusRaw) : null;
-          const statusSummary = formattedStatus ? toStatusSummary(formattedStatus) : "OK";
-          const statusSeverity = formattedStatus?.severity ?? "INFO";
-          const statusDetails = formattedStatus ?? {
-            code: null,
-            severity: "INFO" as const,
-            message: "OK",
-            details: "Drive status not yet retrieved.",
-            raw: "",
-          };
+          // Drive health is unknown while disconnected; never assert "OK" against
+          // stale cached drive data (the value is read from the persisted query
+          // cache, which is not cleared on disconnect).
+          const statusSummary = !isConnected ? "Not available" : formattedStatus ? toStatusSummary(formattedStatus) : "OK";
+          const statusSeverity = !isConnected ? "INFO" : (formattedStatus?.severity ?? "INFO");
+          const statusDetails =
+            !isConnected
+              ? {
+                  code: null,
+                  severity: "INFO" as const,
+                  message: "Not available",
+                  details: "Drive status is unavailable while disconnected.",
+                  raw: "",
+                }
+              : (formattedStatus ?? {
+                  code: null,
+                  severity: "INFO" as const,
+                  message: "OK",
+                  details: "Drive status not yet retrieved.",
+                  raw: "",
+                });
 
           const testIdSuffix = spec.testIdSuffix;
 

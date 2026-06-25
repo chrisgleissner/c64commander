@@ -565,6 +565,7 @@ describe("generate-variant", () => {
 
     expect(first.changed).toBe(true);
     expect(first.selection.variant.featureFlags.hvsc_enabled.enabled).toBe(false);
+    expect(first.selection.variant.featureFlags.hvsc_enabled.visible_to_user).toBe(true);
     expect(first.selection.variant.featureFlags.commoserve_enabled.enabled).toBe(true);
     expect(first.selection.repo.selectedPublishVariants).toEqual(["c64commander", "c64u-remote"]);
     expect(readFileSync(runtimeJsonPath, "utf8")).toContain('"selectedVariantId": "c64u-remote"');
