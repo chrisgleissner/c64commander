@@ -20,15 +20,28 @@ const READ_CHUNK_SIZE_BYTES = 0x1000;
 const WRITE_CHUNK_SIZE_BYTES = 0x1000;
 const WAIT_BETWEEN_RETRIES_MS = 120;
 const DEFAULT_RETRY_ATTEMPTS = 2;
-const CIA2_VOLATILE_START = 0xdd02;
-const CIA2_VOLATILE_END_EXCLUSIVE = 0xde00;
+// The CIA timer registers ($xx04-$xx07: Timer A/B lo/hi) are the only registers
+// a snapshot restore must NOT write. The firmware's readmem returns the live
+// timer *down-counter* there, while writemem sets the timer *latch* — so writing
+// a captured counter back as the latch reprograms the CIA1 Timer A jiffy IRQ and
+// the cursor blinks faster on every consecutive restore. Every other CIA
+// register is safe and worth restoring: ports ($xx00/$xx01, including the CIA2
+// VIC-bank select), DDR, TOD, serial, ICR and control. CIA registers mirror
+// every 16 bytes through each page, so the timer registers also appear at
+// $xx14-$xx17, $xx24-$xx27, ... — match on the low nibble to cover the mirrors.
+const CIA_PAGES_START = 0xdc00; // CIA1 $DC00-$DCFF and CIA2 $DD00-$DDFF are contiguous
+const CIA_PAGES_END_EXCLUSIVE = 0xde00;
+
+const isCiaTimerRegister = (address: number) => {
+  if (address < CIA_PAGES_START || address >= CIA_PAGES_END_EXCLUSIVE) return false;
+  const register = address & 0x0f;
+  return register >= 0x04 && register <= 0x07;
+};
 
 type RamRange = {
   start: number;
   endExclusive: number;
 };
-
-const FULL_RAM_RANGE: RamRange[] = [{ start: 0x0000, endExclusive: FULL_RAM_SIZE_BYTES }];
 
 const CLEAR_RAM_RANGES: RamRange[] = [
   { start: 0x0000, endExclusive: IO_REGION_START },
@@ -155,101 +168,43 @@ const recoverFromLivenessFailure = async (api: C64API, operation: string) => {
   });
 };
 
-const readRanges = async (
+const readRangeBlock = async (
   api: C64API,
-  ranges: RamRange[],
+  start: number,
+  length: number,
   onRetry?: (error: Error, attempt: number, maxAttempts: number) => Promise<void>,
-) => {
-  const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
-  addLog("info", "RAM read: starting full image read", {
-    ranges: ranges.map((r) => ({ start: toHexAddress(r.start), endExclusive: toHexAddress(r.endExclusive) })),
-  });
-  for (const range of ranges) {
-    for (let address = range.start; address < range.endExclusive; address += READ_CHUNK_SIZE_BYTES) {
-      const chunkSize = Math.min(READ_CHUNK_SIZE_BYTES, range.endExclusive - address);
+): Promise<Uint8Array> => {
+  const block = new Uint8Array(length);
+  for (let offset = 0; offset < length; offset += READ_CHUNK_SIZE_BYTES) {
+    const chunkSize = Math.min(READ_CHUNK_SIZE_BYTES, length - offset);
+    const address = toHexAddress(start + offset);
+    recordRamTrace({ operation: "ram-read", status: "start", address, expectedLength: chunkSize });
+    const chunk = await withRetry(
+      `Read RAM chunk at $${address}`,
+      () => api.readMemory(address, chunkSize),
+      DEFAULT_RETRY_ATTEMPTS,
+      onRetry,
+    );
+    if (chunk.length !== chunkSize) {
       recordRamTrace({
         operation: "ram-read",
-        status: "start",
-        address: toHexAddress(address),
-        expectedLength: chunkSize,
-      });
-      const chunk = await withRetry(
-        `Read RAM chunk at $${toHexAddress(address)}`,
-        () => api.readMemory(toHexAddress(address), chunkSize),
-        DEFAULT_RETRY_ATTEMPTS,
-        onRetry,
-      );
-      if (chunk.length !== chunkSize) {
-        recordRamTrace({
-          operation: "ram-read",
-          status: "error",
-          address: toHexAddress(address),
-          expectedLength: chunkSize,
-          actualLength: chunk.length,
-        });
-        throw new Error(
-          `Unexpected RAM chunk length at $${toHexAddress(address)}: expected ${chunkSize}, got ${chunk.length}`,
-        );
-      }
-      recordRamTrace({
-        operation: "ram-read",
-        status: "success",
-        address: toHexAddress(address),
+        status: "error",
+        address,
         expectedLength: chunkSize,
         actualLength: chunk.length,
       });
-      image.set(chunk, address);
+      throw new Error(`Unexpected RAM chunk length at $${address}: expected ${chunkSize}, got ${chunk.length}`);
     }
+    recordRamTrace({
+      operation: "ram-read",
+      status: "success",
+      address,
+      expectedLength: chunkSize,
+      actualLength: chunk.length,
+    });
+    block.set(chunk, offset);
   }
-  addLog("info", "RAM read: full image read completed", {
-    imageLength: image.length,
-    screenBytes: Array.from(image.slice(1024, 1028))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join(" "),
-  });
-  return image;
-};
-
-const writeFullImage = async (
-  api: C64API,
-  image: Uint8Array,
-  onRetry?: (error: Error, attempt: number, maxAttempts: number) => Promise<void>,
-) => {
-  const addressHex = toHexAddress(0);
-  addLog("info", "RAM write: starting full image write", {
-    address: addressHex,
-    imageLength: image.length,
-    firstBytes: Array.from(image.slice(0, 16))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join(" "),
-    screenBytes: Array.from(image.slice(1024, 1028))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join(" "),
-  });
-  recordRamTrace({
-    operation: "ram-write",
-    status: "start",
-    address: addressHex,
-    expectedLength: image.length,
-    chunkSizeBytes: image.length,
-  });
-  await withRetry(
-    `Write RAM image at $${addressHex}`,
-    () => api.writeMemoryBlock(addressHex, image),
-    DEFAULT_RETRY_ATTEMPTS,
-    onRetry ?? (async () => recoverFromLivenessFailure(api, "Load RAM")),
-  );
-  addLog("info", "RAM write: full image write completed", {
-    address: addressHex,
-    imageLength: image.length,
-  });
-  recordRamTrace({
-    operation: "ram-write",
-    status: "success",
-    address: addressHex,
-    expectedLength: image.length,
-    actualLength: image.length,
-  });
+  return block;
 };
 
 const writeRanges = async (
@@ -325,20 +280,44 @@ const runPaused = async <T>(api: C64API, operation: string, run: () => Promise<T
   return result as T;
 };
 
-export const dumpFullRamImage = async (api: C64API, options?: { recoveryMode?: boolean }): Promise<Uint8Array> => {
+export type MemoryRangeSpec = { start: number; length: number };
+
+/**
+ * Reads a specific set of memory ranges from the machine (paused) and returns
+ * the bytes for each. Only the requested bytes are transferred, so a snapshot
+ * that needs a handful of ranges no longer pays for a full 64 KiB dump.
+ *
+ * `resolve` may itself read from the machine before deciding which ranges to
+ * capture (e.g. a screen snapshot inspects the live CIA2 VIC-bank register); it
+ * runs inside the same paused session so the resolved ranges and their contents
+ * stay consistent.
+ */
+export const dumpRamRanges = async (
+  api: C64API,
+  resolve:
+    | MemoryRangeSpec[]
+    | ((read: (address: number, length: number) => Promise<Uint8Array>) => Promise<MemoryRangeSpec[]>),
+  options?: { recoveryMode?: boolean },
+): Promise<{ ranges: MemoryRangeSpec[]; blocks: Uint8Array[] }> => {
   await ensureLiveness(api, "Save RAM");
   const onRetry = options?.recoveryMode ? async () => recoverFromLivenessFailure(api, "Save RAM") : undefined;
-  return runPaused(api, "Save RAM", async () => readRanges(api, FULL_RAM_RANGE, onRetry));
-};
-
-export const loadFullRamImage = async (api: C64API, image: Uint8Array, options?: { recoveryMode?: boolean }) => {
-  if (image.length !== FULL_RAM_SIZE_BYTES) {
-    throw new Error(`Invalid RAM image size: expected ${FULL_RAM_SIZE_BYTES} bytes, got ${image.length} bytes`);
-  }
-  await ensureLiveness(api, "Load RAM");
-  const onRetry = options?.recoveryMode ? async () => recoverFromLivenessFailure(api, "Load RAM") : undefined;
-  await runPaused(api, "Load RAM", async () => {
-    await writeFullImage(api, image, onRetry);
+  return runPaused(api, "Save RAM", async () => {
+    const read = (address: number, length: number) =>
+      withRetry(
+        `Read RAM at $${toHexAddress(address)}`,
+        () => api.readMemory(toHexAddress(address), length),
+        DEFAULT_RETRY_ATTEMPTS,
+        onRetry,
+      );
+    const ranges = typeof resolve === "function" ? await resolve(read) : resolve;
+    const blocks: Uint8Array[] = [];
+    for (const range of ranges) {
+      if (range.start < 0 || range.length < 0 || range.start + range.length > FULL_RAM_SIZE_BYTES) {
+        throw new Error(`dumpRamRanges: range out of bounds: start=${range.start}, length=${range.length}`);
+      }
+      blocks.push(await readRangeBlock(api, range.start, range.length, onRetry));
+    }
+    return { ranges, blocks };
   });
 };
 
@@ -386,8 +365,59 @@ export const clearRamAndReboot = async (api: C64API) => {
 };
 
 /**
+ * Writes a single snapshot range to C64 memory, splitting it around the CIA
+ * timer registers so those are never overwritten. Each writable sub-range is
+ * written directly in chunks.
+ */
+const writeSnapshotRange = async (
+  api: C64API,
+  start: number,
+  bytes: Uint8Array,
+  onRetry: (error: Error, attempt: number, maxAttempts: number) => Promise<void>,
+) => {
+  let offset = 0;
+  while (offset < bytes.length) {
+    if (isCiaTimerRegister(start + offset)) {
+      offset += 1;
+      continue;
+    }
+    let end = offset;
+    while (end < bytes.length && !isCiaTimerRegister(start + end)) {
+      end += 1;
+    }
+    for (let chunkStart = offset; chunkStart < end; chunkStart += WRITE_CHUNK_SIZE_BYTES) {
+      const chunkEnd = Math.min(end, chunkStart + WRITE_CHUNK_SIZE_BYTES);
+      const address = toHexAddress(start + chunkStart);
+      const chunk = bytes.subarray(chunkStart, chunkEnd);
+      recordRamTrace({ operation: "ram-write", status: "start", address, expectedLength: chunk.length });
+      await withRetry(
+        `Write RAM snapshot chunk at $${address}`,
+        () => api.writeMemoryBlock(address, chunk),
+        DEFAULT_RETRY_ATTEMPTS,
+        onRetry,
+      );
+      recordRamTrace({
+        operation: "ram-write",
+        status: "success",
+        address,
+        expectedLength: chunk.length,
+        actualLength: chunk.length,
+      });
+    }
+    offset = end;
+  }
+};
+
+/**
  * Writes a set of (address, bytes) pairs to C64 memory.
  * Used for restoring typed RAM snapshots from the snapshot store.
+ *
+ * Only the snapshot's own bytes are written; memory outside the snapshot keeps
+ * its live value by simply not being touched. Crucially we do NOT read and
+ * write back the full $0000-$FFFF image: that round-tripped the live I/O region
+ * and corrupted the CIA1 jiffy timer, making the cursor blink faster on every
+ * consecutive restore. Volatile CIA timer/interrupt registers are skipped even
+ * when a snapshot range happens to cover them.
  */
 export const loadMemoryRanges = async (api: C64API, ranges: Array<{ start: number; bytes: Uint8Array }>) => {
   if (ranges.length === 0) {
@@ -404,21 +434,8 @@ export const loadMemoryRanges = async (api: C64API, ranges: Array<{ start: numbe
   await ensureLiveness(api, "Load RAM Snapshot");
   const onRetry = async () => recoverFromLivenessFailure(api, "Load RAM Snapshot");
   await runPaused(api, "Load RAM Snapshot", async () => {
-    const image = await readRanges(api, FULL_RAM_RANGE, onRetry);
     for (const { start, bytes } of ranges) {
-      let sourceOffset = 0;
-      while (sourceOffset < bytes.length) {
-        const absoluteStart = start + sourceOffset;
-        if (absoluteStart >= CIA2_VOLATILE_START && absoluteStart < CIA2_VOLATILE_END_EXCLUSIVE) {
-          sourceOffset = Math.min(bytes.length, CIA2_VOLATILE_END_EXCLUSIVE - start);
-          continue;
-        }
-        const nextVolatileStart =
-          absoluteStart < CIA2_VOLATILE_START ? Math.min(bytes.length, CIA2_VOLATILE_START - start) : bytes.length;
-        image.set(bytes.subarray(sourceOffset, nextVolatileStart), absoluteStart);
-        sourceOffset = nextVolatileStart;
-      }
+      await writeSnapshotRange(api, start, bytes, onRetry);
     }
-    await writeFullImage(api, image, onRetry);
   });
 };

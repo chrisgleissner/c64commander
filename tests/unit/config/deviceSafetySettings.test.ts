@@ -15,6 +15,7 @@ type SafetyModules = {
 
 const BALANCED_EXPECTATIONS = {
   ftpMaxConcurrency: 2,
+  restMaxConcurrency: 2,
   infoCacheMs: 600,
   configsCacheMs: 1000,
   configsCooldownMs: 500,
@@ -31,6 +32,7 @@ const BALANCED_EXPECTATIONS = {
 
 const CONSERVATIVE_EXPECTATIONS = {
   ftpMaxConcurrency: 1,
+  restMaxConcurrency: 1,
   infoCacheMs: 1200,
   configsCacheMs: 2000,
   configsCooldownMs: 1200,
@@ -63,6 +65,7 @@ const addSwitchableDevices = async () => {
     name: "Office U64",
     host: "u64",
     lastKnownProduct: "U64",
+    lastKnownFirmware: "3.14e",
     lastKnownHostname: "u64",
     lastKnownUniqueId: "UID-U64",
   });
@@ -74,6 +77,7 @@ const addSwitchableDevices = async () => {
     ftpPort: 21,
     telnetPort: 23,
     lastKnownProduct: "C64U",
+    lastKnownFirmware: "1.1.0",
     lastKnownHostname: "c64u",
     lastKnownUniqueId: "UID-C64U",
     hasPassword: false,
@@ -92,7 +96,33 @@ describe("deviceSafetySettings AUTO mode", () => {
     vi.resetModules();
   });
 
-  it("resolves AUTO to CONSERVATIVE for C64U devices", async () => {
+  it("resolves AUTO to CONSERVATIVE for C64U on firmware up to 1.1.0 and the first 3.14e build", async () => {
+    const { safety } = await loadModules();
+
+    for (const firmware of ["1.1.0", "1.0.5", "3.14e"]) {
+      expect(
+        safety.resolveAutoSafetyMode("AUTO", {
+          activeProduct: "C64U",
+          activeDeviceId: "device-c64u",
+          activeFirmware: firmware,
+        }),
+      ).toMatchObject({ effectiveMode: "CONSERVATIVE", resolvedPreset: "CONSERVATIVE", isProvisional: false });
+    }
+  });
+
+  it("resolves AUTO to BALANCED for C64U on firmware after 1.1.0", async () => {
+    const { safety } = await loadModules();
+
+    expect(
+      safety.resolveAutoSafetyMode("AUTO", {
+        activeProduct: "C64U",
+        activeDeviceId: "device-c64u",
+        activeFirmware: "1.2.0",
+      }),
+    ).toMatchObject({ effectiveMode: "BALANCED", resolvedPreset: "BALANCED", reason: "auto-c64u-firmware-fixed" });
+  });
+
+  it("stays CONSERVATIVE (provisional) for a C64U whose firmware is not yet known", async () => {
     const { safety } = await loadModules();
 
     expect(
@@ -100,12 +130,7 @@ describe("deviceSafetySettings AUTO mode", () => {
         activeProduct: "C64U",
         activeDeviceId: "device-c64u",
       }),
-    ).toMatchObject({
-      effectiveMode: "CONSERVATIVE",
-      resolvedPreset: "CONSERVATIVE",
-      isProvisional: false,
-      reason: "auto-c64u",
-    });
+    ).toMatchObject({ effectiveMode: "CONSERVATIVE", isProvisional: true, reason: "auto-c64u-firmware-unknown" });
   });
 
   it("resolves AUTO to CONSERVATIVE for U2 (Ultimate II) devices (safety-first default)", async () => {
@@ -124,20 +149,41 @@ describe("deviceSafetySettings AUTO mode", () => {
     });
   });
 
-  it("resolves AUTO to BALANCED for U64-family devices", async () => {
+  it("resolves AUTO to BALANCED for U64-family devices on firmware >= 3.14d", async () => {
+    const { safety } = await loadModules();
+
+    for (const [product, firmware] of [
+      ["U64", "3.14e"],
+      ["U64E", "3.14d"],
+      ["U64E2", "3.15a"],
+    ] as const) {
+      expect(
+        safety.resolveAutoSafetyMode("AUTO", {
+          activeProduct: product,
+          activeDeviceId: "device-u64",
+          activeFirmware: firmware,
+        }),
+      ).toMatchObject({ effectiveMode: "BALANCED", resolvedPreset: "BALANCED", reason: "auto-u64-firmware-fixed" });
+    }
+  });
+
+  it("resolves AUTO to CONSERVATIVE for U64-family devices on firmware older than 3.14d or unknown", async () => {
     const { safety } = await loadModules();
 
     expect(
       safety.resolveAutoSafetyMode("AUTO", {
         activeProduct: "U64",
         activeDeviceId: "device-u64",
+        activeFirmware: "3.14c",
       }),
-    ).toMatchObject({
-      effectiveMode: "BALANCED",
-      resolvedPreset: "BALANCED",
-      isProvisional: false,
-      reason: "auto-u64-family",
-    });
+    ).toMatchObject({ effectiveMode: "CONSERVATIVE", reason: "auto-u64-firmware-old" });
+
+    expect(
+      safety.resolveAutoSafetyMode("AUTO", {
+        activeProduct: "U64E2",
+        activeDeviceId: "device-u64",
+      }),
+    ).toMatchObject({ effectiveMode: "CONSERVATIVE", isProvisional: true, reason: "auto-u64-firmware-unknown" });
   });
 
   it("marks AUTO as provisional when no verified product is available", async () => {
@@ -179,6 +225,7 @@ describe("deviceSafetySettings AUTO mode", () => {
       name: "Legacy C64U",
       host: "c64u",
       lastKnownProduct: "C64U",
+      lastKnownFirmware: "1.1.0",
       lastKnownHostname: "c64u",
       lastKnownUniqueId: "UID-C64U-PRIMARY",
     });
@@ -244,9 +291,11 @@ describe("deviceSafetySettings AUTO mode", () => {
     expect(safety.loadDeviceSafetyConfig()).toMatchObject({
       mode: "AUTO",
       resolution: expect.objectContaining({
+        // Fresh install: product resolves to C64U but firmware is not yet known,
+        // so we hold the safety-first CONSERVATIVE preset (provisional until /v1/info).
         effectiveMode: "CONSERVATIVE",
         resolvedPreset: "CONSERVATIVE",
-        isProvisional: false,
+        isProvisional: true,
       }),
       ...CONSERVATIVE_EXPECTATIONS,
     });
@@ -262,7 +311,7 @@ describe("deviceSafetySettings AUTO mode", () => {
       resolution: expect.objectContaining({
         effectiveMode: "CONSERVATIVE",
         resolvedPreset: "CONSERVATIVE",
-        isProvisional: false,
+        isProvisional: true,
       }),
       ...CONSERVATIVE_EXPECTATIONS,
     });

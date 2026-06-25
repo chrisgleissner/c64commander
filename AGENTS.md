@@ -4,6 +4,26 @@ This repository is **C64 Commander**, a React + Vite + Capacitor app for managin
 
 This file is an orientation and execution guide.
 
+## ⚠️ CRUCIAL — the c64u "network dies until power-cycle" wedge is a DEVICE FIRMWARE defect
+
+Long-standing symptom: a C64 Commander interaction drives the Ultimate (esp. `c64u`) into a
+state where **all TCP services die** (HTTP `:80`, FTP `:21`, Telnet `:23` → refused/000) while
+**ICMP ping stays fine**, and it **only recovers on a manual power-cycle**.
+
+Root cause (confirmed 2026-06-25, `docs/testing/agentic-tests/full-cta-coverage/defects/S1-C64U-FIRMWARE-TCP-WEDGE-ON-IDLE-RECONNECT.md`):
+**a c64u firmware defect** — its embedded (lwIP) TCP stack intermittently and permanently wedges
+when handling a connection after the network has been idle for minutes (e.g. the first poll when
+the app returns from background). A client cannot permanently kill a healthy server's TCP stack
+with normal HTTP GETs, so this is server-side. It is **low-probability per event**, idle-correlated,
+and **independent of the app's connection-reuse policy** (it recurred with HTTP keep-alive both on
+and off — so do NOT "fix" it by toggling keep-alive; that earlier attempt was reverted as
+ineffective). The app can only reduce trigger frequency (fewer connections, fewer request-after-idle
+events) and degrade gracefully — **it cannot cure it. The real fix is a c64u firmware update**
+(report upstream: see the defect doc + `docs/c64/c64u-firmware-tcp-wedge-report.md`).
+
+A separate, also-firmware issue (NOT this one): a CPU-Speed config write drops the network while
+the firmware applies the clock change — mitigated only by single-item sequential writes.
+
 ## Rule precedence
 
 1. **Quality bar (what every change must satisfy)**: `REVIEW.md` (repo root)

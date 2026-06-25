@@ -14,11 +14,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const connectMock = vi.fn();
 const closeMock = vi.fn();
 const callToolMock = vi.fn();
+const listToolsMock = vi.fn();
 const clientCtorMock = vi.fn().mockImplementation(function ClientMock() {
   return {
     connect: connectMock,
     close: closeMock,
     callTool: callToolMock,
+    listTools: listToolsMock,
   };
 });
 const transportCtorMock = vi.fn().mockImplementation(function StdioClientTransportMock() {
@@ -43,6 +45,7 @@ describe("droidmind client", () => {
     connectMock.mockReset();
     closeMock.mockReset();
     callToolMock.mockReset();
+    listToolsMock.mockReset();
     delete process.env.DROIDMIND_ARGS;
   });
 
@@ -112,13 +115,173 @@ describe("droidmind client", () => {
       1,
       { name: "android-app", arguments: { serial: "serial-2", action: "stop_app", package: "pkg" } },
       {},
+      { timeout: 30000 },
     );
     expect(callToolMock).toHaveBeenNthCalledWith(
       2,
       { name: "android-ui", arguments: { serial: "serial-2", action: "tap", x: 10, y: 20 } },
       {},
+      { timeout: 30000 },
     );
     expect(connectMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("captures UI hierarchy after removing stale dumps and waiting for stable file size", async () => {
+    callToolMock
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "" }] })
+      .mockResolvedValueOnce({
+        isError: false,
+        content: [{ type: "text", text: "UI hierchary dumped to: /sdcard/Download/c64scope-droidmind-ui.xml" }],
+      })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "1024" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "1024" }] })
+      .mockResolvedValueOnce({
+        isError: false,
+        content: [{ type: "text", text: "<hierarchy><node /></hierarchy>" }],
+      });
+
+    const { DroidmindClient } = await import("../src/validation/droidmindClient.js");
+    const client = new DroidmindClient();
+
+    await expect(client.captureUiHierarchy("serial-3")).resolves.toContain("<hierarchy");
+
+    expect(callToolMock).toHaveBeenNthCalledWith(
+      1,
+      {
+        name: "android-shell",
+        arguments: {
+          serial: "serial-3",
+          command: "rm -f /sdcard/Download/c64scope-droidmind-ui.xml",
+          max_lines: undefined,
+          max_size: undefined,
+        },
+      },
+      {},
+      { timeout: 30000 },
+    );
+    expect(callToolMock).toHaveBeenNthCalledWith(
+      2,
+      {
+        name: "android-shell",
+        arguments: {
+          serial: "serial-3",
+          command: "uiautomator dump /sdcard/Download/c64scope-droidmind-ui.xml",
+          max_lines: undefined,
+          max_size: undefined,
+        },
+      },
+      {},
+      { timeout: 30000 },
+    );
+    expect(callToolMock).toHaveBeenNthCalledWith(
+      3,
+      {
+        name: "android-shell",
+        arguments: {
+          serial: "serial-3",
+          command:
+            "sh -c 'if [ -f /sdcard/Download/c64scope-droidmind-ui.xml ]; then wc -c < /sdcard/Download/c64scope-droidmind-ui.xml; else echo 0; fi'",
+          max_lines: undefined,
+          max_size: undefined,
+        },
+      },
+      {},
+      { timeout: 30000 },
+    );
+  });
+
+  it("scrolls with hierarchy-derived coordinates and reports atEnd from unchanged hierarchy keys", async () => {
+    const xml = `
+      <hierarchy bounds="[0,0][1440,3200]">
+        <node text="Settings" class="android.widget.TextView" bounds="[0,0][1440,120]" resource-id="title" />
+      </hierarchy>
+    `;
+
+    callToolMock
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "dumped" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "2048" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "2048" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: xml }] })
+      .mockResolvedValueOnce({ isError: false })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "dumped" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "2048" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "2048" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: xml }] });
+
+    const { DroidmindClient } = await import("../src/validation/droidmindClient.js");
+    const client = new DroidmindClient();
+
+    await expect(client.scrollDown("serial-3")).resolves.toEqual({ atEnd: true });
+
+    expect(callToolMock).toHaveBeenCalledWith(
+      {
+        name: "android-ui",
+        arguments: {
+          serial: "serial-3",
+          action: "swipe",
+          start_x: 720,
+          start_y: 2400,
+          end_x: 720,
+          end_y: 912,
+          duration_ms: 300,
+        },
+      },
+      {},
+      { timeout: 30000 },
+    );
+  });
+
+  it("throws when repeated hierarchy captures never produce XML", async () => {
+    callToolMock
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "dumped" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "16" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "16" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "not xml 1" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "dumped" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "16" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "16" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "not xml 2" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "dumped" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "16" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "16" }] })
+      .mockResolvedValueOnce({ isError: false, content: [{ type: "text", text: "not xml 3" }] });
+
+    const { DroidmindClient } = await import("../src/validation/droidmindClient.js");
+    const client = new DroidmindClient();
+
+    await expect(client.captureUiHierarchy("serial-3")).rejects.toThrow(/did not produce XML hierarchy/);
+  });
+
+  it("discovers DroidMind tool capabilities", async () => {
+    listToolsMock.mockResolvedValueOnce({
+      tools: [
+        { name: "android-device", inputSchema: { type: "object", properties: { action: { enum: ["list_devices"] } } } },
+        {
+          name: "android-app",
+          inputSchema: { type: "object", properties: { action: { enum: ["start_app", "stop_app"] } } },
+        },
+        {
+          name: "android-ui",
+          inputSchema: {
+            type: "object",
+            properties: { action: { enum: ["tap", "swipe", "press_key", "input_text"] } },
+          },
+        },
+        { name: "android-shell", inputSchema: { type: "object", properties: {} } },
+        { name: "android-screenshot", inputSchema: { type: "object", properties: {} } },
+      ],
+    });
+
+    const { DroidmindClient } = await import("../src/validation/droidmindClient.js");
+    const client = new DroidmindClient();
+
+    await expect(client.checkCapabilities()).resolves.toEqual({ satisfied: true, missing: [] });
+    expect(listToolsMock).toHaveBeenCalledTimes(1);
   });
 
   it("honors custom droidmind args and treats close before connect as a no-op", async () => {

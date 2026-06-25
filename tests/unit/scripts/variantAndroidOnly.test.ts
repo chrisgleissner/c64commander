@@ -364,9 +364,13 @@ describe("real variants.yaml — c64u-remote migration", () => {
     expect(remote.theme).toEqual({ themeColor: "#2F6B8B", backgroundColor: "#2F6B8B" });
   });
 
-  it("does not declare internet-content endpoints for c64u-remote", () => {
+  it("declares opt-in content endpoints for c64u-remote", () => {
     const remote = config.variants["c64u-remote"];
-    expect(remote.runtime.endpoints).toEqual({ device_host: "c64u" });
+    expect(remote.runtime.endpoints).toEqual({
+      device_host: "c64u",
+      hvsc_base_url: "https://hvsc.brona.dk/HVSC/",
+      commoserve_base_url: "http://commoserve.files.commodore.net",
+    });
   });
 
   it("publishes both c64commander and c64u-remote on release and ci", () => {
@@ -388,44 +392,60 @@ describe("real c64u-remote feature-flag overlay", () => {
     { featureIds: new Set(baseRegistry.features.map((f: any) => f.id)), variantId: "c64u-remote" },
   );
 
-  it("disables AND hides every feature flag for C64U Remote, except keypad input and CommoServe", () => {
+  it("ships high-value C64U Remote features with the requested defaults", () => {
     const resolved = resolveVariantFeatureRegistry(baseRegistry, overlay);
-    for (const feature of resolved.features) {
-      if (feature.id === "commoserve_enabled" || feature.id === "keypad_input_enabled") {
-        // Deliberate exceptions: CommoServe and keypad/keyboard input are
-        // enabled (and user-visible) for C64U Remote by inherited base default.
-        expect(feature.enabled, `${feature.id}.enabled`).toBe(true);
-        expect(feature.visible_to_user, `${feature.id}.visible_to_user`).toBe(true);
-        continue;
-      }
-      // Every other feature ships off on C64U Remote.
-      expect(feature.enabled, `${feature.id}.enabled`).toBe(false);
-      expect(feature.visible_to_user, `${feature.id}.visible_to_user`).toBe(false);
-    }
-  });
+    const byId = Object.fromEntries(resolved.features.map((feature: any) => [feature.id, feature]));
 
-  it("disables HVSC but keeps CommoServe enabled", () => {
-    const resolved = resolveVariantFeatureRegistry(baseRegistry, overlay) as any;
-    const byId = Object.fromEntries(resolved.features.map((f: any) => [f.id, f]));
+    expect(byId.ram_snapshots_enabled.enabled).toBe(true);
+    expect(byId.ram_snapshots_enabled.visible_to_user).toBe(true);
+
     expect(byId.hvsc_enabled.enabled).toBe(false);
+    expect(byId.hvsc_enabled.visible_to_user).toBe(true);
+
     expect(byId.commoserve_enabled.enabled).toBe(true);
     expect(byId.commoserve_enabled.visible_to_user).toBe(true);
+    expect(byId.keypad_input_enabled.enabled).toBe(true);
+    expect(byId.keypad_input_enabled.visible_to_user).toBe(true);
+    expect(byId.background_execution_enabled.enabled).toBe(true);
+    expect(byId.background_execution_enabled.visible_to_user).toBe(true);
+    expect(byId.background_execution_enabled.developer_only).toBe(false);
   });
 
-  it("disables every experimental feature flag", () => {
+  it("keeps non-remote-focus features hidden", () => {
     const resolved = resolveVariantFeatureRegistry(baseRegistry, overlay) as any;
-    const experimental = resolved.features.filter(
-      (f: any) => f.group === "experimental" && f.id !== "keypad_input_enabled",
-    );
-    expect(experimental.length).toBeGreaterThan(0);
-    for (const feature of experimental) {
-      expect(feature.enabled, `${feature.id}.enabled`).toBe(false);
-    }
-    const keypad = resolved.features.find((f: any) => f.id === "keypad_input_enabled");
-    expect(keypad.enabled, "keypad_input_enabled.enabled").toBe(true);
+    const byId = Object.fromEntries(resolved.features.map((f: any) => [f.id, f]));
+    expect(byId.demo_mode_enabled.enabled).toBe(false);
+    expect(byId.demo_mode_enabled.visible_to_user).toBe(false);
+    expect(byId.lighting_studio_enabled.enabled).toBe(false);
+    expect(byId.lighting_studio_enabled.visible_to_user).toBe(false);
+    expect(byId.home_telnet_reu_snapshot_enabled.enabled).toBe(false);
+    expect(byId.home_telnet_reu_snapshot_enabled.visible_to_user).toBe(false);
   });
 
-  it("baking the variant selection exposes the disabled+hidden flags", () => {
+  it("exposes important Telnet-backed Home actions as off-by-default experimental user toggles", () => {
+    const resolved = resolveVariantFeatureRegistry(baseRegistry, overlay) as any;
+    const telnetFeatureIds = [
+      "home_telnet_config_actions_enabled",
+      "home_telnet_drive_actions_enabled",
+      "home_telnet_printer_actions_enabled",
+      "home_telnet_power_cycle_enabled",
+      "home_telnet_clear_ram_reboot_enabled",
+    ];
+
+    for (const feature of resolved.features.filter((f: any) => telnetFeatureIds.includes(f.id))) {
+      expect(feature.group, `${feature.id}.group`).toBe("experimental");
+      expect(feature.visible_to_user, `${feature.id}.visible_to_user`).toBe(true);
+      expect(feature.developer_only, `${feature.id}.developer_only`).toBe(false);
+    }
+    const byId = Object.fromEntries(resolved.features.map((f: any) => [f.id, f]));
+    expect(byId.home_telnet_config_actions_enabled.enabled).toBe(false);
+    expect(byId.home_telnet_drive_actions_enabled.enabled).toBe(false);
+    expect(byId.home_telnet_printer_actions_enabled.enabled).toBe(false);
+    expect(byId.home_telnet_power_cycle_enabled.enabled).toBe(true);
+    expect(byId.home_telnet_clear_ram_reboot_enabled.enabled).toBe(true);
+  });
+
+  it("baking the variant selection exposes the remote feature policy", () => {
     const config = parseVariantSource(readFileSync(path.join(REAL_REPO_ROOT, "variants/variants.yaml"), "utf8"), {
       repoRoot: REAL_REPO_ROOT,
     });
@@ -438,11 +458,20 @@ describe("real c64u-remote feature-flag overlay", () => {
     }) as any;
     expect(selection.variant.featureFlags.hvsc_enabled).toEqual({
       enabled: false,
-      visible_to_user: false,
+      visible_to_user: true,
       developer_only: false,
     });
-    expect(selection.variant.featureFlags.background_execution_enabled.enabled).toBe(false);
-    expect(selection.variant.featureFlags.background_execution_enabled.visible_to_user).toBe(false);
+    expect(selection.variant.featureFlags.ram_snapshots_enabled.enabled).toBe(true);
+    expect(selection.variant.featureFlags.background_execution_enabled).toEqual({
+      enabled: true,
+      visible_to_user: true,
+      developer_only: false,
+    });
+    expect(selection.variant.featureFlags.home_telnet_power_cycle_enabled).toEqual({
+      enabled: true,
+      visible_to_user: true,
+      developer_only: false,
+    });
   });
 
   it("defaults C64U Remote to the Small Display profile and keypad T9 mode", () => {

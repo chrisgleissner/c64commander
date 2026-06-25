@@ -22,6 +22,7 @@ import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 import { getSmokeConfig, isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from "@/lib/fuzz/fuzzMode";
 import { scheduleConfigWrite } from "@/lib/config/configWriteThrottle";
+import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import { FirmwareConfigWriteError } from "@/lib/config/configWriteErrors";
 import { extractConfigValue } from "@/lib/config/configValueExtractor";
 import {
@@ -112,6 +113,13 @@ const SCHEDULED_REQUEST_MAX_ATTEMPTS = 3;
 const SCHEDULED_REQUEST_RETRY_GUARD_MS = 6000;
 const UPLOAD_REQUEST_TIMEOUT_MS = 5000;
 const PLAYBACK_REQUEST_TIMEOUT_MS = 5000;
+// Drive mount/eject are heavier firmware ops than a tappable control: real
+// c64u-resident mounts were measured at ~0.8-1.8 s and can be slower under
+// load. The default INTERACTIVE budget (1500 ms) aborts a slow-but-successful
+// mount and mislabels it "Host unreachable" (the abort failure message), which
+// then sticks in the per-drive status. Give mount/eject an intentional, larger
+// budget so a normal mount is never falsely timed out.
+const MOUNT_REQUEST_TIMEOUT_MS = 8000;
 const RAM_BLOCK_WRITE_TIMEOUT_MS = 15_000;
 const IDLE_RECOVERY_THRESHOLD_MS = 10_000;
 const NETWORK_RETRY_DELAY_MS = 180;
@@ -158,9 +166,17 @@ const TEST_PROBE_REQUEST_TIMEOUT_FLOOR_MS = 8000;
 // loaded by the Playwright runner in Node (e.g. `playwright test --list`), so
 // touching it at module scope would throw there and break test collection.
 const isTestProbeTimeoutFloorEnabled = () => {
-  const env = (import.meta as ImportMeta).env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
+  const env = import.meta.env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
   return env?.VITE_ENABLE_TEST_PROBES === "1";
 };
+
+const readViteEnv = () =>
+  import.meta.env as
+    | {
+        VITE_ENABLE_TEST_PROBES?: string;
+        VITE_WEB_PLATFORM?: string;
+      }
+    | undefined;
 
 const resolveEffectiveRequestTimeoutMs = (timeoutMs?: number) =>
   timeoutMs !== undefined && isTestProbeTimeoutFloorEnabled() && TEST_PROBE_REQUEST_TIMEOUT_FLOOR_MS > timeoutMs
@@ -381,6 +397,50 @@ let requestSequence = 0;
 const buildRequestId = () => {
   requestSequence = (requestSequence + 1) % 1_000_000;
   return `c64req-${Date.now().toString(36)}-${requestSequence.toString(36)}`;
+};
+
+// Serialize native direct-device REST requests: at most one connection to the
+// device is in flight at a time. The C64 Ultimate / C64U firmware (esp. c64u
+// 1.1.0, which lacks the lwIP socket-timeout/polling and Tx-starvation fixes the
+// 3.14x line shipped — GideonZ/1541ultimate 57c7c8a6a / 802d6143b / ddd28dd17 /
+// fdb521a5b) runs a single-threaded network task on a single shared Rx/Tx WiFi
+// buffer and does not time out stuck sockets. Concurrent connections starve its
+// Tx path and pile up sockets it never reclaims, which can drive the embedded TCP
+// stack into a permanent wedge (all TCP services dead, ICMP alive, recover only on
+// a power-cycle). Serializing our requests keeps us to one connection at a time so
+// we never trigger that on the unfixed firmware. (The cure is a c64u firmware
+// update; see docs/c64/c64u-firmware-tcp-wedge-report.md.)
+let activeNativeDeviceRequests = 0;
+const nativeDeviceRequestQueue: Array<{ limit: number; resolve: () => void }> = [];
+const pumpNativeDeviceRequestQueue = () => {
+  while (
+    nativeDeviceRequestQueue.length > 0 &&
+    activeNativeDeviceRequests < (nativeDeviceRequestQueue[0]?.limit ?? 1)
+  ) {
+    const next = nativeDeviceRequestQueue.shift();
+    if (!next) break;
+    activeNativeDeviceRequests += 1;
+    next.resolve();
+  }
+};
+// Run `run` once a device connection slot is free, allowing at most
+// `maxConcurrent` native device requests in flight at a time (1 = fully
+// serialized — one connection). The limit comes from the resolved device-safety
+// profile (restMaxConcurrency): CONSERVATIVE = 1 for the unfixed-firmware c64u,
+// higher for firmware that shipped the Ultimate network-stack fixes. Exported for
+// unit testing. See docs/c64/c64u-firmware-tcp-wedge-report.md.
+export const serializeNativeDeviceRequest = async <T>(run: () => Promise<T>, maxConcurrent = 1): Promise<T> => {
+  const limit = Number.isFinite(maxConcurrent) ? Math.max(1, Math.floor(maxConcurrent)) : 1;
+  await new Promise<void>((resolve) => {
+    nativeDeviceRequestQueue.push({ limit, resolve });
+    pumpNativeDeviceRequestQueue();
+  });
+  try {
+    return await run();
+  } finally {
+    activeNativeDeviceRequests = Math.max(0, activeNativeDeviceRequests - 1);
+    pumpNativeDeviceRequestQueue();
+  }
 };
 
 const createTimedRequestSignal = (outerSignal: AbortSignal | undefined, timeoutMs?: number) => {
@@ -630,14 +690,14 @@ export class C64API {
   constructor(baseUrl: string = DEFAULT_BASE_URL, password?: string, deviceHost: string = DEFAULT_DEVICE_HOST) {
     this.deviceHost = normalizeDeviceHost(deviceHost || getDeviceHostFromBaseUrl(baseUrl));
     const initialBaseUrl =
-      import.meta.env.VITE_WEB_PLATFORM === "1" ? baseUrl : buildBaseUrlFromDeviceHost(this.deviceHost);
+      readViteEnv()?.VITE_WEB_PLATFORM === "1" ? baseUrl : buildBaseUrlFromDeviceHost(this.deviceHost);
     this.apiBaseUrl = resolvePlatformApiBaseUrl(this.deviceHost, initialBaseUrl);
     this.password = password;
     this.activeConfigEnrichmentNamespaceKey = loadConfigEnrichmentNamespaceForHost(this.deviceHost);
   }
 
   setBaseUrl(url: string) {
-    if (import.meta.env.VITE_WEB_PLATFORM !== "1") {
+    if (readViteEnv()?.VITE_WEB_PLATFORM !== "1") {
       this.deviceHost = normalizeDeviceHost(getDeviceHostFromBaseUrl(url));
     }
     this.apiBaseUrl = resolvePlatformApiBaseUrl(this.deviceHost, url);
@@ -702,6 +762,14 @@ export class C64API {
       headers["X-C64U-Host"] = this.deviceHost;
     }
     return headers;
+  }
+
+  private buildTransportHeaders(): Record<string, string> {
+    const baseUrl = this.getBaseUrl();
+    if (!isNativePlatform() || baseUrl.includes(WEB_PROXY_PATH) || isLocalProxy(baseUrl)) {
+      return {};
+    }
+    return { Connection: "close" };
   }
 
   private validateUploadBytes(body: ArrayBuffer, context: TransmissionValidationContext) {
@@ -1039,6 +1107,7 @@ export class C64API {
   private async request<T>(path: string, options: C64ReadRequestOptions = {}): Promise<T> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
+      ...this.buildTransportHeaders(),
       ...this.buildAuthHeaders(),
       ...((options.headers as Record<string, string>) || {}),
     };
@@ -1107,7 +1176,7 @@ export class C64API {
       }
     }
 
-    const executeRequest = () =>
+    const runRequest = () =>
       runWithImplicitAction(`rest.${method.toLowerCase()} ${path}`, async (action) =>
         withRestInteraction(
           {
@@ -1473,6 +1542,15 @@ export class C64API {
           },
         ),
       );
+
+    // Route native direct-device requests through the single-connection lane so we
+    // never open concurrent connections to the firmware's single-threaded,
+    // Tx-starvation-prone network stack (see serializeNativeDeviceRequest). Web/proxy
+    // transports have no such constraint and run unserialized.
+    const serializeOnDevice = isNativePlatform() && !baseUrl.includes(WEB_PROXY_PATH) && !isLocalProxy(baseUrl);
+    const executeRequest = serializeOnDevice
+      ? () => serializeNativeDeviceRequest(runRequest, loadDeviceSafetyConfig().restMaxConcurrency)
+      : runRequest;
 
     if (!allowInFlightDedupe || !readRequestKey) {
       return executeRequest();
@@ -2124,7 +2202,7 @@ export class C64API {
     let path = `/v1/drives/${drive}:mount?image=${encodeURIComponent(image)}`;
     if (type) path += `&type=${encodeURIComponent(type)}`;
     if (mode) path += `&mode=${encodeURIComponent(mode)}`;
-    return this.request(path, { method: "PUT" });
+    return this.request(path, { method: "PUT", timeoutMs: MOUNT_REQUEST_TIMEOUT_MS });
   }
 
   async mountDriveUpload(
@@ -2205,7 +2283,7 @@ export class C64API {
   }
 
   async unmountDrive(drive: "a" | "b"): Promise<{ errors: string[] }> {
-    return this.request(`/v1/drives/${drive}:remove`, { method: "PUT" });
+    return this.request(`/v1/drives/${drive}:remove`, { method: "PUT", timeoutMs: MOUNT_REQUEST_TIMEOUT_MS });
   }
 
   async resetDrive(drive: string): Promise<{ errors: string[] }> {
@@ -2592,7 +2670,7 @@ const createApiProxy = (api: C64API): C64API =>
   });
 
 const isTestProbeEnabled = () => {
-  if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") return true;
+  if (readViteEnv()?.VITE_ENABLE_TEST_PROBES === "1") return true;
   if (typeof window !== "undefined") {
     const win = window as Window & { __c64uTestProbeEnabled?: boolean };
     return win.__c64uTestProbeEnabled === true;

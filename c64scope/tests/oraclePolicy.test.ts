@@ -191,7 +191,7 @@ describe("classification (ORC-004)", () => {
     expect(result.reason).toContain("No assertions");
   });
 
-  it("classifies read-only pass with single strong UI signal", () => {
+  it("classifies read-only pass with single strong UI signal and no failure class", () => {
     const result = classifyRun({
       assertions: [
         {
@@ -203,6 +203,7 @@ describe("classification (ORC-004)", () => {
       safety: "read-only",
     });
     expect(result.outcome).toBe("pass");
+    expect(result.failureClass).toBeNull();
     expect(result.corroborationSatisfied).toBe(true);
   });
 
@@ -237,7 +238,7 @@ describe("classification (ORC-004)", () => {
     expect(result.reason).toContain("2 independent oracle classes");
   });
 
-  it("passes guarded-mutation with two oracle classes", () => {
+  it("passes guarded-mutation with two oracle classes and no failure class", () => {
     const result = classifyRun({
       assertions: [
         {
@@ -254,6 +255,7 @@ describe("classification (ORC-004)", () => {
       safety: "guarded-mutation",
     });
     expect(result.outcome).toBe("pass");
+    expect(result.failureClass).toBeNull();
     expect(result.corroborationSatisfied).toBe(true);
   });
 
@@ -369,6 +371,7 @@ describe("classification (ORC-004)", () => {
       safety: "destructive",
     });
     expect(result.outcome).toBe("pass");
+    expect(result.failureClass).toBeNull();
     expect(result.corroborationSatisfied).toBe(true);
   });
 });

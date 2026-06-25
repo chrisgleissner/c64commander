@@ -34,6 +34,10 @@ type ResolveLocalDiskBlobOptions = {
   signal?: AbortSignal;
 };
 
+type MountDiskToDriveOptions = {
+  mode?: "readwrite" | "readonly" | "unlinked";
+};
+
 const createAbortError = (context: string) => {
   if (typeof DOMException !== "undefined") {
     return new DOMException(`${context} cancelled`, "AbortError");
@@ -296,7 +300,14 @@ export const resolveLocalDiskBlob = async (
   throw new Error("Local disk access is missing. Re-add the folder or file to refresh permissions.");
 };
 
-export const mountDiskToDrive = async (api: C64API, drive: "a" | "b", disk: DiskEntry, runtimeFile?: File) => {
+export const mountDiskToDrive = async (
+  api: C64API,
+  drive: "a" | "b",
+  disk: DiskEntry,
+  runtimeFile?: File,
+  options: MountDiskToDriveOptions = {},
+) => {
+  const mode = options.mode ?? "readwrite";
   try {
     const mountType = buildDiskMountType(disk.path);
     if (!mountType) {
@@ -312,12 +323,12 @@ export const mountDiskToDrive = async (api: C64API, drive: "a" | "b", disk: Disk
     });
     if (disk.location === "ultimate") {
       if (isOriginOnSelectedDevice(disk.origin)) {
-        await api.mountDrive(drive, disk.path, mountType, "readwrite");
+        await api.mountDrive(drive, disk.path, mountType, mode);
       } else if (disk.origin) {
         const blob = await fetchUltimateOriginBlob(disk.origin);
-        await api.mountDriveUpload(drive, blob, mountType, "readwrite", { filename: disk.origin.originPath });
+        await api.mountDriveUpload(drive, blob, mountType, mode, { filename: disk.origin.originPath });
       } else {
-        await api.mountDrive(drive, disk.path, mountType, "readwrite");
+        await api.mountDrive(drive, disk.path, mountType, mode);
       }
       return;
     }
@@ -330,7 +341,7 @@ export const mountDiskToDrive = async (api: C64API, drive: "a" | "b", disk: Disk
       sourceId: disk.sourceId ?? null,
       sizeBytes: blob.size,
     });
-    await api.mountDriveUpload(drive, blob, mountType, "readwrite", { filename: disk.path });
+    await api.mountDriveUpload(drive, blob, mountType, mode, { filename: disk.path });
   } catch (error) {
     addErrorLog("Disk mount failed", {
       drive,

@@ -52,7 +52,7 @@ const attachEvidenceSchema = z.object({
 const finalizeSessionSchema = z.object({
   runId: z.string().min(1),
   outcome: z.enum(["pass", "fail", "inconclusive"]),
-  failureClass: z.enum(["product_failure", "infrastructure_failure", "inconclusive"]),
+  failureClass: z.enum(["product_failure", "infrastructure_failure", "inconclusive"]).nullable(),
   summary: z.string().min(1),
 });
 
@@ -145,8 +145,10 @@ export const sessionModule = defineToolModule({
           runId: { type: "string" },
           outcome: { type: "string", enum: ["pass", "fail", "inconclusive"] },
           failureClass: {
-            type: "string",
-            enum: ["product_failure", "infrastructure_failure", "inconclusive"],
+            anyOf: [
+              { type: "string", enum: ["product_failure", "infrastructure_failure", "inconclusive"] },
+              { type: "null" },
+            ],
           },
           summary: { type: "string" },
         },

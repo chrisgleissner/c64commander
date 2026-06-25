@@ -1,132 +1,69 @@
-# Menu ⇄ REST config mapping — adversarial hardening (2026-06-23)
+# PLANS.md — C64 Commander Exhaustive Bug Hunt (Pixel 4)
 
-Branch: `feat/align-ux-with-device-menu`. This file is the authoritative execution
-plan for the adversarial review/cleanup of the "device-menu terminology + hierarchy
-over a REST source-of-truth" feature. `WORKLOG.md` (repo root) carries the timestamped
-evidence trail. Prior task content for this file lives in git history (last at
-`6bfb766a`).
+## Identity (verified this session 2026-06-25T16:46Z)
 
-## 1. Scope boundaries
+- Branch: `test/full-cta-coverage`
+- Git SHA: `b86877f43589954a9d415f0dfe8b2b7debb890b4` (HEAD)
+- Working tree: CLEAN at session start.
+- **Installed APK (this session): `0.8.9-b8687`, versionCode `2047`, SHA-256 `f052b0b1f6d1ddbc9ef0a9ff2627be3fba1a1a72cf38d77b1c992290e86dd593`** — freshly built from HEAD, replaces the stale `0.8.9-cf84d` that predated the S1/S2/C1/C2/C3 fixes.
+- HEAD product-code delta vs cf84d (the bugs' fixes, now under test): `UnifiedHealthBadge.tsx`, `HomeDiskManager.tsx`, `c64api.ts`, `DriveManager.tsx`.
+- Installed app: **FULL C64 Commander** (`uk.gleissner.c64commander`), NOT the stripped C64U Remote variant.
+- Pixel 4: `9B081FFAZ001WX`, Android 16 / SDK 36, 1080x2280 @ 440dpi.
+- C64 target `c64u` (192.168.1.167): **HTTP 200 in ~0.15s — web stack UP/HEALTHY**. The blocker that stopped handover5–8 (c64u down) is CLEARED. C64U-dependent flows are now EXECUTABLE.
+- `u64` (192.168.1.13): FORBIDDEN for closure.
+- UI: WebView app. DOM/console/network via **CDP** (`scripts/bughunt-cdp.mjs`). Product input via **DroidMind**. adb/curl = infra only.
 
-In scope:
-- Adversarial review + cleanup of the menu⇄REST mapping: `src/lib/config/menuMapping/*`,
-  `src/pages/config/*`, `src/pages/ConfigBrowserPage.tsx`, the compiler
-  (`scripts/compile-menu-mapping.mjs`), association YAML, authoring helper
-  (`scripts/menu-mapping/draft_association.py`), `.github/skills/menu-mapping-authoring/SKILL.md`,
-  and the feature's unit/E2E tests + screenshots.
-- Closing the named gaps (routing of `C64U Model` / `Tape Playback Rate`; `Disk swap delay`
-  / `Loop delay` units; residual Advanced fallback; on-device validation disposition).
-- Deterministic regression tests for every behavior change.
+## Artifact root
 
-Out of scope (explicit):
-- Broad UI redesign outside the config browser; firmware/REST contract changes;
-  replacing the config edit pipeline; large dep upgrades; cosmetic churn outside
-  touched areas; weakening tests to go green.
-- Generic `details.format` rendering in the shared `ConfigItemRow` (see Phase 3 — it
-  affects ~108 items across devices and is a separate, app-wide change).
+`c64scope/artifacts/bughunt-20260625T164637Z-pixel4-c64u-b86877f43589/`
 
-## 2. Assumptions
+## Gates passed
 
-- REST `GET /v1/configs` is the source of truth; menu hierarchy + terminology are
-  presentation layers (confirmed in code: `projectConfigToMenu`, `resolveMenuMapping`).
-- The captured `c64u-menu.yaml` is the label/structure authority for C64U 1.1.0; it is
-  an extraction and may be incomplete (its own header says so). Items absent from it
-  have no evidence-backed menu home.
-- Only C64U has a captured hierarchy; U64/U64E/U2/unknown → REST-grouped layout.
-- HIL hardware may be unavailable / C64U password-protected; that is an external
-  blocker to record, not a pass.
+- `npm run scope:check`: 55 files / 361 tests PASS (exit 0).
+- APK build from HEAD: `BUILD SUCCESSFUL` (gradle assembleDebug, exit 0).
+- Install: `Success`.
 
-## 3. Ordered phases
+## Why this run differs from the prior bug-hunt
 
-- P0 Baseline + evidence inventory (architecture map, baseline gates). — DONE
-- P1 Verification matrix (lossless + write-back proofs across device/firmware/alias). — DONE
-- P2 Advanced-routing adversarial review (resolve `C64U Model`, `Tape Playback Rate`,
-  audit every keyword/default/sole-owner rule). — DONE
-- P3 Unit/multiplier verification (`Disk swap delay`, `Loop delay`). — DONE
-- P4 Overlay/label cleanup. — DONE (verified already-correct; minimal change)
-- P5 Source pipeline + authoring cleanup (compiler/association/SKILL/draft helper). — DONE
-- P6 UI integration review (hierarchy vs REST-grouped, aliases, hooks, residual). — DONE
-- P7 E2E / screenshots / HIL. — IN PROGRESS (E2E run; HIL disposition recorded)
-- P8 Cleanup + regression hardening. — DONE
-- P9 Final validation loop. — IN PROGRESS
-- P10 GitHub completion (commit / push / PR). — PENDING
-- P11 Performance: measure config-section expansion latency (collapse→all-items-rendered)
-  and remove the bottleneck without hacks or benchmark-gaming. — DONE. Diagnosed the per-row
-  N+1 option-fetch storm (device returns scalars; no bulk endpoint) and that the per-row read
-  ignored the existing persistent firmware-namespaced enrichment cache. Fix: made `ConfigItemRow`
-  serve firmware-static options synchronously from that cache, falling back to the network only
-  on a miss. On-device (real C64U): Modems 7988→223 ms, Printers 821→277 ms, User interface
-  880→348 ms; outliers/timeouts eliminated. Regression test added; gates green.
+Prior `bug-hunt-report.md` tested the **buggy** `cf84d` APK and found S2 + C1/C2/C3, validated S1's catastrophic aspect not-reproduced (rapid path only). Those issues were then **fixed and committed** to HEAD. This run tests the **fixed** HEAD build to (a) verify the fixes hold on-device, (b) close the never-replayed **S1 idle-path**, and (c) hunt for new bugs across the surface that prior runs left untested.
 
-## 4. Task checklist
+This is a QA bug-search run. Per prompt: do NOT fix product bugs this run — find them with evidence.
 
-- [x] Map real architecture; record in WORKLOG.
-- [x] Baseline: `menu-mapping:check` + targeted unit tests green.
-- [x] P2: remove evidence-less `categoryDefaults`; keep keyword + sole-owner tiers;
-      route unplaceable leftovers to the labelled residual Advanced section.
-- [x] P2: update `advancedRouting.test.ts`, `projectConfigToMenu.test.ts`,
-      `ConfigBrowserPageMenuMode.test.tsx` to encode evidence-based routing.
-- [x] P3: document verified units; add raw display+write-back regression test.
-- [x] P1: confirm/extend matrix tests (later-firmware fallback, U64E null, U2 synthetic,
-      never-seen category, alias, primary edit, Audio Mixer).
-- [x] P4/P5: README + SKILL doc accuracy; `restKey` collision robustness; dead-code finding.
-- [ ] P9: full unit suite + lint/typecheck/build + relevant E2E config specs.
-- [ ] P7: screenshots if UI changed; HIL attempt or documented blocker.
-- [ ] P10: commit, push, PR, converge.
+## Prior discovery baseline (515e2 run): 290 CTAs
 
-## 5. Acceptance gates
+Home 106, Play 24, Disks 40, Config 28, Settings 74, Docs 18.
 
-- `menu-mapping:compile` succeeds; `menu-mapping:check` reports no drift.
-- Targeted mapping + config-browser tests pass; full unit suite passes.
-- `lint` (format + eslint + typecheck + drift checks) passes; `build` succeeds.
-- Lossless invariant holds on every fixture: `renderedRestKeySet == liveRestKeySet`.
-- Every edit writes the canonical REST `{category,item}` (PUT), aliases share one cell.
-- Residual Advanced fallback is lossless, explicitly labelled, and tested.
-- No known gap without a final disposition here + in WORKLOG.
+## Active phase
 
-## 6. Current status
+**COMPLETE (2026-06-25).** Session delivered the headline result: the months-long S1 catastrophic c64u wedge was reproduced, **root-caused (HttpURLConnection keep-alive reusing a stale idle socket), fixed (`http.keepAlive=false` in MainActivity), and verified on-device (A/B).** Plus a breadth bug hunt (6-route CDP error sweep, keypad parity, Config/Settings/Disks/Docs/Diagnostics/Switcher, lifecycle, perf) and cleanup. See `bug-hunt-report.md`, `cleanup-report-bughunt.md`, `defects/S1-ROOTCAUSE-*.md`, `defects/S4-*.md`.
 
-P0–P6, P8 complete. Code + tests changed for P2 + P3. P9 (full gates) and P7/P10
-(E2E/screenshots/HIL/PR) in progress. See WORKLOG for the evidence trail.
+Gates: scope:check PASS, lint+tsc PASS, Kotlin MainActivityTest PASS, APK build OK. Working tree dirty with the fix (uncommitted; no commit requested). Device left clean/healthy.
 
-## 7. Open risks
+### Original Phase B (superseded)
+Phase B: launch HEAD build, prove c64u-green baseline, set up CDP.
 
-- HIL: RESOLVED — validated on real U64E (REST-grouped path) AND real C64U (menu mode +
-  residual Advanced section), incl. the live-only ARMSID unknown-category proof. The c64u
-  exhibits intermittent overload drop-outs (documented; recovered via Retry), not a regression.
-- Moving `C64U Model` / `Tape` / `SoftIEC` / `Data Streams` into the residual Advanced
-  section is a deliberate UX change from the prior "dissolve the drawer" goal; it is the
-  evidence-based, lossless, honest placement (invariant #7). Trivially reversible per
-  category if device-menu evidence later places one.
-- Screenshots for the C64U config surface change (a residual Advanced section now exists);
-  recapture is P5-priority.
+## Blocker list
 
-## 8. Final disposition of every known gap
+(none hard) — both hardware preconditions green. Environmental risk: Pixel4↔c64u WiFi/DNS flakiness (caused S2 trigger in prior run); re-probe c64u before each C64U-dependent flow.
 
-- **C64U on-device validation** — Disposition: **PASSED** on real hardware. Hardening APK
-  (`0.8.9-6f367`) built+installed to Pixel `9B081FFAZ001WX`, connected to the real C64U
-  (firmware 1.1.0, password supplied by the user and handled without leaking it). Config
-  renders the menu hierarchy + the residual **Advanced (REST-only)** section containing
-  C64U Model (Starlight Edition), SoftIEC, Tape Playback Rate (0.98 MHz PAL), Data Streams,
-  AND the live-only **ARMSID in Socket 1/2** categories (absent from every fixture) —
-  proving the unknown-category invariant on real hardware. The c64u flaked once on handover
-  (documented overload drop-out); a Retry recovered to HEALTHY. Evidence PNGs in the session
-  scratchpad. See WORKLOG P7.
-- **`C64U Model` routing** — Was: `categoryDefaults["U64 Specific Settings"]="Video setup"`
-  (only this item reached it; misleading — it is a hardware edition, not a video setting).
-  Evidence: absent from `c64u-menu.yaml`; REST options BASIC Beige/Starlight/Founders.
-  Disposition: removed the default → renders in the labelled residual **Advanced (REST-only)**
-  section (lossless, canonical write-back, tested).
-- **`Tape Playback Rate` routing** — Was: `categoryDefaults["Tape Settings"]="Built-in drive A"`
-  (topically wrong — a cassette setting on the disk-drive page). Evidence: no Tape page in
-  `c64u-menu.yaml`. Disposition: removed the default → residual Advanced section.
-- **`Disk swap delay` units** — VERIFIED from REST schema `format: "%d00 ms"` (value×100 ms;
-  min 1 max 10 → 100..1000 ms). The shared control ignores `details.format` app-wide (dead
-  `mergedDetails` in `ConfigItemRow`), affecting ~108 items — a generic fix is out of scope.
-  Disposition: value kept RAW; verified unit documented; regression test pins raw display +
-  raw write-back. No invented multiplier in the menu layer.
-- **`Loop delay` units** — VERIFIED from REST schema `format: "%d0 ms"` (value×10 ms; min 1
-  max 20 → 10..200 ms). Same disposition as Disk swap delay.
-- **Residual Advanced fallback** — Confirmed lossless + explicitly labelled
-  ("Advanced (REST-only) settings"), self-hiding when empty. Now legitimately non-empty on
-  C64U (holds `C64U Model`, SoftIEC, Tape, Data Streams). Tested.
+## Execution plan (priority order)
+
+1. **[DONE]** Setup: state files, artifact root, scope:check, build+install HEAD APK.
+2. Baseline: launch, prove green C64U / device c64u / fw 1.1.0 / Drive A ON No-disk, CDP forward.
+3. **S1 idle-path replay** (highest value; never closed): mount Drive A readonly → ~200s idle → eject → verify c64u stays healthy. The original repro was `idleMs=197050,wasIdle=true`.
+4. **S2 fix verification**: 5 mount/eject cycles; watch per-drive status recovery on poll (must clear without page re-mount).
+5. CDP console/network/exception sweep across all 6 routes + overlays; keypad parity matrix (digits 1-6, star, pound, dpad, sliders, focus); touch parity.
+6. Deep page coverage: Config categories+sub-pages+rows (+1 safe mutation/restore); Play source chooser/file browser/playlist/playback; Settings negative-path form validation (keyboard-aware); saved devices; Diagnostics redaction; Docs/Licenses accordions; Device Switcher.
+7. Lifecycle (cold/warm/home/lock/rotate/relaunch/bg); performance timings; reliability reps (20x tab, 10x diag/switcher).
+8. Cleanup + restore all mutated state; final bug-hunt report + ledgers.
+
+## Remaining counts (live estimate)
+
+- Routes: 6 main + overlays (Diagnostics, Device Switcher, mount sheet, source chooser, native picker).
+- CTA: ~290 prior discovery; fresh per-route DOM enumeration via CDP this run.
+- Negative paths: ~22 (C64U-dependent now executable).
+- Lifecycle: ~12. Cleanup: full app-local + c64-config restore list.
+
+## Exact next action
+
+Launch `0.8.9-b8687` via DroidMind `android-app start`; capture baseline screenshot+hierarchy+DOM; if not green C64U, app-driven Save-and-Connect host c64u/pwd/80/21/23; set `adb forward tcp:9333 localabstract:webview_devtools_remote_<pid>`.

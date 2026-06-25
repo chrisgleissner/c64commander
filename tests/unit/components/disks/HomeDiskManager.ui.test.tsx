@@ -54,6 +54,7 @@ vi.mock("@/lib/uiErrors");
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({
     invalidateQueries: vi.fn(),
+    cancelQueries: vi.fn(),
     fetchQuery: vi.fn().mockResolvedValue(undefined),
   }),
 }));
@@ -62,6 +63,17 @@ vi.mock("@/lib/disks/diskMount", () => ({
 }));
 vi.mock("@/hooks/useActionTrace", () => ({
   useActionTrace: () => (fn: any) => fn,
+}));
+vi.mock("@/pages/playFiles/hooks/useArchiveClientSettings", () => ({
+  useArchiveClientSettings: () => ({
+    commoserveEnabled: false,
+    archiveConfig: {
+      id: "archive-commoserve",
+      name: "CommoServe",
+      baseUrl: "http://commoserve.files.commodore.net",
+      enabled: false,
+    },
+  }),
 }));
 
 // Mock child components that are complex
@@ -266,7 +278,7 @@ describe("HomeDiskManager UI & Interactions", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
 
     await waitFor(() => {
-      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined);
+      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined, { mode: "readonly" });
     });
 
     fireEvent.click(screen.getByTestId("drive-reset-a"));
@@ -557,7 +569,7 @@ describe("HomeDiskManager UI & Interactions", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
 
     await waitFor(() => {
-      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined);
+      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined, { mode: "readonly" });
     });
 
     view.unmount();
@@ -601,7 +613,7 @@ describe("HomeDiskManager UI & Interactions", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
 
     await waitFor(() => {
-      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined);
+      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined, { mode: "readonly" });
     });
 
     view.rerender(

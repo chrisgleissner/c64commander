@@ -61,6 +61,7 @@ vi.mock("@/components/itemSelection/AddItemsProgressOverlay", () => ({
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({
     invalidateQueries: vi.fn(),
+    cancelQueries: vi.fn(),
     setQueryData: vi.fn(),
     fetchQuery: vi.fn().mockResolvedValue(undefined),
   }),
@@ -114,6 +115,17 @@ vi.mock("@/hooks/useLocalSources", () => ({
     sources: [],
     addSourceFromPicker: mockAddSourceFromPicker,
     addSourceFromFiles: mockAddSourceFromFiles,
+  }),
+}));
+vi.mock("@/pages/playFiles/hooks/useArchiveClientSettings", () => ({
+  useArchiveClientSettings: () => ({
+    commoserveEnabled: false,
+    archiveConfig: {
+      id: "archive-commoserve",
+      name: "CommoServe",
+      baseUrl: "http://commoserve.files.commodore.net",
+      enabled: false,
+    },
   }),
 }));
 
@@ -320,7 +332,7 @@ describe("HomeDiskManager", () => {
     fireEvent.click(driveABtn);
 
     await waitFor(() => {
-      expect(mockMountDisk).toHaveBeenCalledWith("a", "/disk2.d64", "d64", "readwrite");
+      expect(mockMountDisk).toHaveBeenCalledWith("a", "/disk2.d64", "d64", "readonly");
     });
   });
 

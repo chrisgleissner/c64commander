@@ -55,6 +55,7 @@ class MemoryBackedApi {
   readonly memory = new Uint8Array(0x10000);
   pauseCount = 0;
   resumeCount = 0;
+  bytesRead = 0;
   writeCalls: Array<{ address: string; data: Uint8Array }> = [];
 
   constructor() {
@@ -66,6 +67,7 @@ class MemoryBackedApi {
 
   async readMemory(address: string, length: number) {
     const start = parseInt(address, 16);
+    this.bytesRead += length;
     return this.memory.slice(start, start + length);
   }
 
@@ -120,11 +122,18 @@ describe("screen snapshot roundtrip", () => {
     const api = new MemoryBackedApi();
     const baseline = await api.readMemory("0400", 16);
 
+    const readBefore = api.bytesRead;
     await createSnapshot(api as never, {
       type: "screen",
       label: "screen-roundtrip",
       contentName: "screen-roundtrip",
     });
+    // Efficiency: the screen snapshot must read only its own ranges (16 KiB VIC
+    // bank + VIC regs + colour RAM + CIA2 port ≈ 17.5 KiB, plus the 1-byte $DD00
+    // VIC-bank probe), never a full 64 KiB dump.
+    const bytesReadByCreate = api.bytesRead - readBefore;
+    expect(bytesReadByCreate).toBe(0x4000 + (0xd02e - 0xd000 + 1) + (0xdbff - 0xd800 + 1) + 2 + 1);
+    expect(bytesReadByCreate).toBeLessThan(0x10000);
 
     const [entry] = loadSnapshotStore();
     expect(entry).toBeDefined();
@@ -145,8 +154,62 @@ describe("screen snapshot roundtrip", () => {
     expect(Array.from(await api.readMemory("0400", 16))).toEqual(Array.from(baseline));
     expect(api.pauseCount).toBe(2);
     expect(api.resumeCount).toBe(2);
-    const restoreWrite = api.writeCalls.at(-1);
-    expect(restoreWrite?.address).toBe("0000");
-    expect(restoreWrite?.data.length).toBe(0x10000);
+
+    // The restore writes the snapshot's own ranges directly instead of
+    // round-tripping the whole $0000-$FFFF image (which corrupted CIA1 timing
+    // and sped up the cursor blink). No write covers the full image, the
+    // colour RAM is still restored, and no write touches a CIA timer register.
+    const restoreWrites = api.writeCalls.slice(1); // calls[0] is the $0400 mutation above
+    expect(restoreWrites.every((c) => c.data.length < 0x10000)).toBe(true);
+    expect(restoreWrites.some((c) => c.address === "D800")).toBe(true);
+    const writesCiaTimer = (a: number, len: number) => {
+      for (let i = 0; i < len; i += 1) {
+        const x = a + i;
+        if (x >= 0xdc00 && x < 0xde00 && (x & 0x0f) >= 0x04 && (x & 0x0f) <= 0x07) return true;
+      }
+      return false;
+    };
+    for (const c of restoreWrites) {
+      expect(writesCiaTimer(parseInt(c.address, 16), c.data.length)).toBe(false);
+    }
+  });
+
+  it("saves and restores non-contiguous custom ranges, leaving the gaps untouched", async () => {
+    const api = new MemoryBackedApi();
+    const ranges = [
+      { start: 0x0801, length: 4 },
+      { start: 0x2000, length: 4 },
+      { start: 0x5000, length: 4 },
+    ];
+    ranges.forEach((r, i) => api.memory.fill(0xa0 + i, r.start, r.start + r.length));
+    const gaps = [0x1000, 0x3000, 0x4fff, 0x5004];
+    gaps.forEach((g) => (api.memory[g] = 0x11));
+
+    await createSnapshot(api as never, { type: "custom", customRanges: ranges, label: "noncontig" });
+
+    const decoded = decodeSnapshot(snapshotEntryToBytes(loadSnapshotStore()[0]!));
+    expect(decoded.ranges).toEqual(ranges);
+    decoded.blocks.forEach((block, i) => {
+      expect(Array.from(block)).toEqual([0xa0 + i, 0xa0 + i, 0xa0 + i, 0xa0 + i]);
+    });
+
+    ranges.forEach((r) => api.memory.fill(0xff, r.start, r.start + r.length));
+    gaps.forEach((g) => (api.memory[g] = 0xff));
+    await loadMemoryRanges(
+      api as never,
+      decoded.ranges.map((r, i) => ({ start: r.start, bytes: decoded.blocks[i] })),
+    );
+
+    ranges.forEach((r, i) => {
+      expect(Array.from(api.memory.slice(r.start, r.start + r.length))).toEqual([
+        0xa0 + i,
+        0xa0 + i,
+        0xa0 + i,
+        0xa0 + i,
+      ]);
+    });
+    gaps.forEach((g) => expect(api.memory[g]).toBe(0xff));
+    const writeAddrs = api.writeCalls.map((c) => parseInt(c.address, 16));
+    for (const g of gaps) expect(writeAddrs).not.toContain(g);
   });
 });

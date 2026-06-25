@@ -212,7 +212,8 @@ export const hasPersistedDeviceHostConfig = () => {
 };
 
 export const resolvePlatformApiBaseUrl = (deviceHost: string, baseUrl?: string) => {
-  if (import.meta.env.VITE_WEB_PLATFORM === "1" && typeof window !== "undefined") {
+  const env = import.meta.env as { VITE_WEB_PLATFORM?: string } | undefined;
+  if (env?.VITE_WEB_PLATFORM === "1" && typeof window !== "undefined") {
     return `${window.location.origin.replace(/\/$/, "")}${WEB_PROXY_PATH}`;
   }
   if (baseUrl) {

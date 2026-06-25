@@ -107,10 +107,10 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
   },
   {
     id: "ram_snapshots_enabled",
-    enabled: false,
+    enabled: true,
     visible_to_user: true,
     developer_only: false,
-    group: "experimental",
+    group: "stable",
     title: "RAM snapshots",
     description: "Show Save RAM and Load RAM actions on Home.",
   },

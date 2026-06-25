@@ -114,7 +114,7 @@ export const variantConfig = {
       },
       ram_snapshots_enabled: {
         developer_only: false,
-        enabled: false,
+        enabled: true,
         visible_to_user: true,
       },
     },

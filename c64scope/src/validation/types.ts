@@ -8,6 +8,7 @@
 
 import type { AssertionRecord } from "../oraclePolicy.js";
 import type { ScopeSessionStore } from "../sessionStore.js";
+import type { FailureClass } from "../types.js";
 
 export interface ValidationCase {
   id: string;
@@ -51,7 +52,7 @@ export interface RunResult {
   validationTrack: "product" | "calibration";
   runId: string;
   outcome: string;
-  failureClass: string;
+  failureClass: FailureClass;
   oracleClasses: string[];
   artifactDir: string;
   artifacts: string[];

@@ -46,6 +46,9 @@ import { useC64ConfigItems, useC64Connection, useC64Drives } from "@/hooks/useC6
 import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
 import { useLocalSources } from "@/hooks/useLocalSources";
 import { useActionTrace } from "@/hooks/useActionTrace";
+import { useArchiveClientSettings } from "@/pages/playFiles/hooks/useArchiveClientSettings";
+import { createArchiveClient } from "@/lib/archive/client";
+import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { getC64API } from "@/lib/c64api";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { reportUserError } from "@/lib/uiErrors";
@@ -64,6 +67,7 @@ import { assignDiskGroupsByPrefix } from "@/lib/disks/diskGrouping";
 import { pickDiskGroupColor } from "@/lib/disks/diskGroupColors";
 import { useDiskLibrary } from "@/hooks/useDiskLibrary";
 import { SHARED_DISK_LIBRARY_ID } from "@/lib/disks/diskStore";
+import { createArchiveSourceLocation } from "@/lib/sourceNavigation/archiveSourceAdapter";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { createLocalSourceLocation, resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
@@ -86,6 +90,7 @@ import { formatDiskDosStatus } from "@/lib/disks/dosStatusFormatter";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useScreenActivity } from "@/hooks/useScreenActivity";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
+import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import { ProfileSplitSection } from "@/components/layout/PageContainer";
 import { HOME_SUMMARY_QUERY_OPTIONS } from "@/pages/home/constants";
 import {
@@ -136,6 +141,7 @@ const ACTIVE_ADD_ITEMS_PROGRESS_STATES = new Set<AddItemsProgressState["status"]
   "ingesting",
   "committing",
 ]);
+const DRIVE_MUTATION_SETTLE_MS = isTestEnvironment ? 1 : 1500;
 
 /** Yields control back to the renderer for one event loop tick. */
 const yieldToRenderer = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -147,6 +153,17 @@ const waitAtLeast = async (startedAt: number, durationMs: number) => {
   }
 };
 
+const waitForDriveMutationSettle = () => new Promise<void>((resolve) => setTimeout(resolve, DRIVE_MUTATION_SETTLE_MS));
+
+const parseArchiveSelectionPath = (selectionPath: string) => {
+  const [resultId, rawCategory] = selectionPath.split("/");
+  const category = Number(rawCategory);
+  if (!resultId || Number.isNaN(category)) {
+    throw new Error(`Invalid archive selection: ${selectionPath}`);
+  }
+  return { resultId, category };
+};
+
 type FocusableDiskButtonProps = ComponentProps<typeof Button> & {
   focusId: string;
   focusOrder: number;
@@ -155,6 +172,7 @@ type FocusableDiskButtonProps = ComponentProps<typeof Button> & {
 
 const DISKS_LIBRARY_FOCUS_ORDER = {
   addDisks: 600,
+  mountSheetAddDisks: 610,
 } as const;
 
 const driveFocusOrder = (driveIndex: number, offset: number) => 100 + driveIndex * 100 + offset;
@@ -192,6 +210,13 @@ export const HomeDiskManager = () => {
   const [activeDrive, setActiveDrive] = useState<DriveKey | null>(null);
   const [activeDisk, setActiveDisk] = useState<DiskEntry | null>(null);
   const [driveErrors, setDriveErrors] = useState<Record<string, string>>({});
+  // Timestamp each per-drive operation error so the drive poll can clear a stale
+  // error once a later successful /v1/drives poll supersedes it (mirrors the
+  // mountedByDrive / drivePowerOverride reconciliation below). Without this a
+  // transient mount/eject failure (e.g. a slow mount aborted as "Host
+  // unreachable") sticks on the drive status until the page is re-mounted, even
+  // though subsequent polls succeed and the sibling drive shows OK.
+  const driveErrorsSetAtRef = useRef<Record<string, number>>({});
   const [mountedByDrive, setMountedByDrive] = useState<Record<string, string>>({});
   const mountedByDriveSetAtRef = useRef<Record<string, number>>({});
   const mountCompletionGenerationRef = useRef<Record<DriveKey, number>>({ a: 0, b: 0 });
@@ -230,6 +255,7 @@ export const HomeDiskManager = () => {
   const [selectedDiskIds, setSelectedDiskIds] = useState<Set<string>>(new Set());
   const localSourceInputRef = useRef<HTMLInputElement | null>(null);
   const { sources: localSources, addSourceFromPicker } = useLocalSources();
+  const { archiveConfig, commoserveEnabled } = useArchiveClientSettings();
   const { limit: listPreviewLimit } = useListPreviewLimit();
   const isAndroid = getPlatform() === "android" && isNativePlatform();
 
@@ -244,6 +270,21 @@ export const HomeDiskManager = () => {
       staleTime: 0,
     });
   }, [api, queryClient]);
+  const runDriveMutationWithSettledPolling = useCallback(
+    async <T,>(operation: () => Promise<T>) => {
+      const pollingPause = pollingPauseRegistry.acquirePause();
+      try {
+        await queryClient.cancelQueries({ queryKey: ["c64-drives"], type: "active" });
+        const result = await operation();
+        await queryClient.invalidateQueries({ queryKey: ["c64-drives"], refetchType: "none" });
+        await waitForDriveMutationSettle();
+        return result;
+      } finally {
+        pollingPause.release();
+      }
+    },
+    [queryClient],
+  );
   const { data: driveAConfig } = useC64ConfigItems(
     DRIVE_CONFIG_CATEGORY.a,
     [DRIVE_BUS_ID_ITEM, DRIVE_TYPE_ITEM],
@@ -271,11 +312,22 @@ export const HomeDiskManager = () => {
   const sourceGroups: SourceGroup[] = useMemo(() => {
     const ultimateSource = createUltimateSourceLocation();
     const localGroupSources = localSources.map((source) => createLocalSourceLocation(source));
-    return [
+    const groups: SourceGroup[] = [
       { label: SOURCE_LABELS.local, sources: localGroupSources },
       { label: SOURCE_LABELS.c64u, sources: [ultimateSource] },
     ];
-  }, [localSources]);
+    if (commoserveEnabled) {
+      groups.push({
+        label: SOURCE_LABELS.commoserve,
+        sources: [createArchiveSourceLocation(archiveConfig)],
+      });
+    }
+    return groups;
+  }, [archiveConfig, commoserveEnabled, localSources]);
+  const archiveConfigs = useMemo((): Record<string, ArchiveClientConfigInput> => {
+    if (!commoserveEnabled) return {};
+    return { [archiveConfig.id]: archiveConfig };
+  }, [archiveConfig, commoserveEnabled]);
   const softIecDirectorySourceGroups: SourceGroup[] = useMemo(() => {
     const ultimateSource = createUltimateSourceLocation();
     return [{ label: SOURCE_LABELS.c64u, sources: [ultimateSource] }];
@@ -375,7 +427,35 @@ export const HomeDiskManager = () => {
       });
       return changed ? next : prev;
     });
+    // Clear a stale per-drive operation error once a later successful poll
+    // supersedes it. A missing/newer timestamp is left untouched so an error
+    // raised after this poll's data is not cleared prematurely.
+    setDriveErrors((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      Object.keys(next).forEach((key) => {
+        const setAt = driveErrorsSetAtRef.current[key];
+        if (typeof setAt !== "number" || drivesDataUpdatedAt < setAt) return;
+        delete next[key];
+        delete driveErrorsSetAtRef.current[key];
+        changed = true;
+      });
+      return changed ? next : prev;
+    });
   }, [drivesData?.drives, drivesDataUpdatedAt]);
+
+  // Stamp each per-drive error with the time it was (re)set so the poll
+  // reconciliation above can tell which errors a later successful poll
+  // supersedes. Re-stamping on every change keeps repeated failures accurate.
+  useEffect(() => {
+    const now = Date.now();
+    Object.keys(driveErrors).forEach((key) => {
+      driveErrorsSetAtRef.current[key] = now;
+    });
+    Object.keys(driveErrorsSetAtRef.current).forEach((key) => {
+      if (!(key in driveErrors)) delete driveErrorsSetAtRef.current[key];
+    });
+  }, [driveErrors]);
 
   useEffect(() => {
     prepareDirectoryInput(localSourceInputRef.current);
@@ -509,7 +589,9 @@ export const HomeDiskManager = () => {
     setDriveMutationPending((prev) => ({ ...prev, [drive]: true }));
     try {
       const runtimeFile = diskLibrary.runtimeFiles[disk.id];
-      await mountDiskToDrive(api, drive, disk, runtimeFile);
+      await runDriveMutationWithSettledPolling(() =>
+        mountDiskToDrive(api, drive, disk, runtimeFile, { mode: "readonly" }),
+      );
       if (mountCompletionGenerationRef.current[drive] !== mountGeneration) {
         addLog("debug", "Ignoring stale disk mount completion", {
           drive,
@@ -527,7 +609,6 @@ export const HomeDiskManager = () => {
         title: "Disk mounted",
         description: `${disk.name} mounted in ${buildDriveLabel(drive)}`,
       });
-      queryClient.invalidateQueries({ queryKey: ["c64-drives"] });
     } catch (error) {
       if (mountCompletionGenerationRef.current[drive] !== mountGeneration) {
         addLog("debug", "Ignoring stale disk mount failure", {
@@ -577,7 +658,7 @@ export const HomeDiskManager = () => {
   const handleEject = trace(async (drive: DriveKey) => {
     setDriveMutationPending((prev) => ({ ...prev, [drive]: true }));
     try {
-      await api.unmountDrive(drive);
+      await runDriveMutationWithSettledPolling(() => api.unmountDrive(drive));
       mountedByDriveSetAtRef.current[drive] = Date.now();
       setMountedByDrive((prev) => ({ ...prev, [drive]: "" }));
       setDriveErrors((prev) => ({ ...prev, [drive]: "" }));
@@ -585,7 +666,6 @@ export const HomeDiskManager = () => {
         title: "Disk ejected",
         description: `${buildDriveLabel(drive)} cleared`,
       });
-      queryClient.invalidateQueries({ queryKey: ["c64-drives"] });
     } catch (error) {
       setDriveErrors((prev) => ({
         ...prev,
@@ -1001,6 +1081,80 @@ export const HomeDiskManager = () => {
           }));
         };
 
+        if (source.type === "commoserve") {
+          const config = archiveConfigs[source.id];
+          if (!config) {
+            throw new Error(`Archive source configuration unavailable for ${source.name}.`);
+          }
+          const archiveClient = createArchiveClient(config);
+          const runtimeFiles: Record<string, File> = {};
+          const disks: DiskEntry[] = [];
+
+          for (const [index, selection] of selections.entries()) {
+            throwIfAborted();
+            const { resultId, category } = parseArchiveSelectionPath(selection.path);
+            const entries = await archiveClient.getEntries(resultId, category, { signal: abortSignal });
+            const diskEntry = entries.find((entry) => isDiskImagePath(entry.path));
+            if (!diskEntry) {
+              addLog("warn", "Archive result skipped because it has no disk image", {
+                sourceId: source.id,
+                sourceName: source.name,
+                resultId,
+                category,
+                selectionName: selection.name,
+              });
+              updateProgress(1);
+              continue;
+            }
+            const binary = await archiveClient.downloadBinary(resultId, category, diskEntry.id, diskEntry.path, {
+              signal: abortSignal,
+            });
+            throwIfAborted();
+            const normalized = normalizeDiskPath(binary.fileName || diskEntry.path);
+            const entry = createDiskEntry({
+              path: normalized,
+              location: "local",
+              sourceId: source.id,
+              name: binary.fileName || selection.name,
+              group: source.name,
+              sizeBytes: binary.bytes.byteLength,
+              modifiedAt: diskEntry.date ? new Date(diskEntry.date).toISOString() : null,
+              importOrder: index,
+            });
+            const fileBytes = new ArrayBuffer(binary.bytes.byteLength);
+            new Uint8Array(fileBytes).set(binary.bytes);
+            runtimeFiles[entry.id] = new File([fileBytes], entry.name, {
+              type: binary.contentType ?? "application/octet-stream",
+            });
+            disks.push(entry);
+            updateProgress(1);
+          }
+
+          if (!disks.length) {
+            setAddItemsProgress((prev) => ({
+              ...prev,
+              status: "error",
+              message: "No disk images found in selected archive results.",
+            }));
+            showNoDiskWarning();
+            return false;
+          }
+
+          diskLibrary.addDisks(disks, runtimeFiles, {
+            expectedSelectedDeviceId: selectedDeviceIdAtStart,
+          });
+          setAddItemsProgress((prev) => ({
+            ...prev,
+            status: "done",
+            message: "Added to library",
+          }));
+          toast({
+            title: "Items added",
+            description: `${disks.length} disk(s) added to library.`,
+          });
+          return true;
+        }
+
         let files: Array<{
           path: string;
           name: string;
@@ -1033,8 +1187,18 @@ export const HomeDiskManager = () => {
         for (const selection of selections) {
           throwIfAborted();
           if (selection.type === "dir") {
+            // Report progress incrementally during the recursive walk so a slow
+            // broad-folder scan (e.g. a deep C64U FTP tree) shows a climbing
+            // count instead of a stuck "Scanning… 0 items"
+            // (S2-DISKS-FTP-RECURSIVE-SCAN-STALL). Adapters without incremental
+            // reporting backfill the remainder once the walk returns.
+            let reportedDuringScan = 0;
             const nested = await source.listFilesRecursive(selection.path, {
               signal: abortSignal,
+              onProgress: (delta) => {
+                reportedDuringScan += delta;
+                updateProgress(delta);
+              },
             });
             if (nested.partialFailures?.length) {
               partialScanFailures.push(...nested.partialFailures);
@@ -1046,7 +1210,9 @@ export const HomeDiskManager = () => {
               });
             }
             throwIfAborted();
-            updateProgress(nested.length);
+            if (nested.length > reportedDuringScan) {
+              updateProgress(nested.length - reportedDuringScan);
+            }
             nested.forEach((entry) => {
               if (entry.type !== "file") return;
               files.push({
@@ -1272,6 +1438,7 @@ export const HomeDiskManager = () => {
     }),
     [
       addItemsSurface,
+      archiveConfigs,
       browserOpen,
       diskLibrary,
       isAddingItems,
@@ -1757,8 +1924,11 @@ export const HomeDiskManager = () => {
                     </div>
                   ) : (
                     <div className="space-y-0.5" data-testid={`drive-status-${key}`}>
-                      <p className="text-xs text-success" data-testid={`drive-status-message-${key}`}>
-                        OK
+                      <p
+                        className={cn("text-xs", status.isConnected ? "text-success" : "text-muted-foreground")}
+                        data-testid={`drive-status-message-${key}`}
+                      >
+                        {status.isConnected ? "OK" : "Not available"}
                       </p>
                     </div>
                   )}
@@ -2023,10 +2193,23 @@ export const HomeDiskManager = () => {
               selectedCount={0}
               allSelected={false}
               onToggleSelectAll={() => undefined}
-              maxVisible={listPreviewLimit}
-              viewAllTitle="All disks"
-              viewAllMode="non-empty"
+              maxVisible={Math.max(sortedDisks.length, listPreviewLimit)}
               showSelectionControls={false}
+              headerActions={
+                sortedDisks.length === 0 ? (
+                  <FocusableDiskButton
+                    focusId="disks-mount-sheet-add-disks"
+                    focusOrder={DISKS_LIBRARY_FOCUS_ORDER.mountSheetAddDisks}
+                    focusGroup="disks-mount-sheet"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBrowserOpen(true)}
+                    data-testid="mount-sheet-add-disks"
+                  >
+                    Add disks
+                  </FocusableDiskButton>
+                ) : null
+              }
             />
           </AppSheetBody>
         </AppSheetContent>
@@ -2063,6 +2246,7 @@ export const HomeDiskManager = () => {
         title="Add items"
         confirmLabel="Add to library"
         sourceGroups={sourceGroups}
+        archiveConfigs={archiveConfigs}
         onAddLocalSource={handleAddLocalSourceFromPicker}
         onConfirm={handleAddDiskSelections}
         filterEntry={(entry) => entry.type === "dir" || isDiskImagePath(entry.path)}

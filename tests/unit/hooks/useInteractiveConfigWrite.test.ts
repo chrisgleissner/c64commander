@@ -36,6 +36,7 @@ vi.mock("@/lib/config/deviceSafetySettings", () => ({
 const selectedProductFamilyRef = vi.hoisted(() => ({ current: null as string | null }));
 vi.mock("@/lib/savedDevices/store", () => ({
   getSelectedSavedDeviceProductFamilySync: () => selectedProductFamilyRef.current,
+  getSelectedSavedDeviceFirmwareSync: () => null,
 }));
 
 const mockReportUserError = vi.fn();

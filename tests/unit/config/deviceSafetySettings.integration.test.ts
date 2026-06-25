@@ -55,6 +55,7 @@ describe("deviceSafetySettings integration", () => {
       product: "C64U",
       hostname: "c64u",
       unique_id: "UID-C64U",
+      firmware_version: "1.1.0",
     });
 
     const configUpdateLog = addLog.mock.calls.find(

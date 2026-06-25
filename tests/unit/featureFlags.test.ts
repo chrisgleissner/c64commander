@@ -55,7 +55,7 @@ describe("featureFlags persistence and logging", () => {
       lighting_studio_enabled: "experimental",
       background_execution_enabled: "experimental",
       home_telnet_reu_snapshot_enabled: "experimental",
-      ram_snapshots_enabled: "experimental",
+      ram_snapshots_enabled: "stable",
       home_telnet_config_actions_enabled: "experimental",
       home_telnet_drive_actions_enabled: "experimental",
       home_telnet_printer_actions_enabled: "experimental",

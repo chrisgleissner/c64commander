@@ -230,6 +230,8 @@ Per drive (A / B / Soft-IEC):
 
 Disk library: Add disks — button — R✅ I✅ ; Filter disks — text — `list-filter-input` — R✅ I✅ ; Select all — button — `disk-list-toggle-select-all` — R✅ I✅ `[disabled: empty]`.
 
+Mount disk sheet: Available disks list — filter text — `list-filter-input` — R✅ I✅ ; Mount disk row action — button — R✅ I✅ ; Add disks — button — `mount-sheet-add-disks` — R✅ I✅ `[visible when library empty]`; Add disks source picker Local / C64U / CommoServe — buttons — `import-option-*` — R✅ I✅.
+
 ### 4.4 Config (`/config`)
 
 - Search categories — search/text — R✅ I✅
@@ -268,14 +270,20 @@ Disk library: Add disks — button — R✅ I✅ ; Filter disks — text — `li
   R✅ I✅ `[visible when a discovered device requires a network password]`
 - **Diagnostics** — button — `diagnostics-open-dialog` — R✅ I✅
 - **Feature flags** — checkbox — `feature-flag-*` (incl.
-  `feature-flag-keypad_input_enabled`) — R✅ I✅
+  `feature-flag-keypad_input_enabled`) — R✅ I✅ (`c64u-remote`: RAM snapshots
+  and keypad ship on; background execution, HVSC, and Home Telnet
+  config/drive/printer/power actions are visible toggles; developer-only flags
+  remain hidden)
 - **Network/cache**: HVSC base URL / update interval, archive host/client/agent
   overrides — text/number — `hvsc-base-url`, `hvsc-update-check-interval`,
   `archive-*-override` — R✅ I✅ ; Open archive browser — button —
   `open-online-archive` — R✅ I✅ ; many device-safety number inputs — number — R✅ I✅
 - **Disk autostart** — select — R✅ I✅
 - **Notifications**: visibility — select — R✅ I✅ ; duration — slider — R✅ I✅
-- **Build/info**: REST API docs — link — R✅ I✅ ; Open Source Licenses — button — R✅ I✅ (sub-route `/settings/open-source-licenses`)
+- **Build/info**: REST API docs — link — `settings-about-rest-api-docs` — R✅ I✅
+  (`c64u-remote`: C64U User Guide — link — `settings-about-c64u-user-guide`
+  — R✅ I✅) ; Open Source Licenses — button — R✅ I✅ (sub-route
+  `/settings/open-source-licenses`)
 
 ### 4.6 Docs (`/docs`)
 
@@ -283,6 +291,8 @@ Disk library: Add disks — button — R✅ I✅ ; Filter disks — text — `li
   Disks, Config, Settings, Diagnostics — button — `docs-toggle-*` — R✅ I✅
 - External links: Ultimate Documentation, REST API Reference, Ultimate 64
   Official Site — link — `docs-external-resource-*` — R✅ I✅
+  (`c64u-remote`: single C64U User Guide link —
+  `docs-external-resource-c64u-user-guide` — R✅ I✅)
 
 ---
 

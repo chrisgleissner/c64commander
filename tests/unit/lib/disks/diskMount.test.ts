@@ -459,6 +459,20 @@ describe("diskMount", () => {
       expect(mockApi.mountDrive).toHaveBeenCalledWith("a", "/disk.d64", "d64", "readwrite");
     });
 
+    it("passes the requested mount mode for safer manual disk mounts", async () => {
+      await mountDiskToDrive(
+        mockApi as any,
+        "a",
+        {
+          path: "/disk.d64",
+          location: "ultimate",
+        } as any,
+        undefined,
+        { mode: "readonly" },
+      );
+      expect(mockApi.mountDrive).toHaveBeenCalledWith("a", "/disk.d64", "d64", "readonly");
+    });
+
     it("uploads bytes when an ultimate disk belongs to a different saved device", async () => {
       mockIsOriginOnSelectedDevice.mockReturnValue(false);
       await mountDiskToDrive(mockApi as any, "a", {

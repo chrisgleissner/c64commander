@@ -61,6 +61,14 @@ export type SourceLocation = {
     offset?: number;
     limit?: number;
   }) => Promise<SourceEntryPage>;
-  listFilesRecursive: (path: string, options?: { signal?: AbortSignal }) => Promise<SourceRecursiveResult>;
+  listFilesRecursive: (
+    path: string,
+    // `onProgress(delta)` reports newly-discovered file entries as the recursive
+    // walk proceeds (delta = files found since the previous call), so a slow
+    // broad-folder scan shows climbing progress instead of a stuck "0 items"
+    // (S2-DISKS-FTP-RECURSIVE-SCAN-STALL). Adapters without incremental reporting
+    // may omit it; callers backfill the remainder when the walk returns.
+    options?: { signal?: AbortSignal; onProgress?: (delta: number) => void },
+  ) => Promise<SourceRecursiveResult>;
   clearCacheForPath?: (path: string) => void;
 };

@@ -481,7 +481,7 @@ test.describe("Disk management", () => {
   test("mount failure surfaces error and does not mark drive mounted @layout", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
-    allowWarnings(testInfo, "Expected mount failure warnings for auth errors.");
+    allowWarnings(testInfo, "Expected mount failure warnings.");
     await seedUltimateTurricanDisks(page);
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
 
@@ -489,14 +489,19 @@ test.describe("Disk management", () => {
     const mountDialog = page.getByRole("dialog", {
       name: /Mount Disk 1\.d64/i,
     });
-    server.setFaultMode("auth");
+    await page.route("**/v1/drives/a:mount**", (route) =>
+      route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ errors: ["Mount rejected"] }),
+      }),
+    );
     await mountDialog.getByRole("button", { name: /Drive A/i }).click();
 
     await expect(page.getByText("Mount failed", { exact: true })).toBeVisible();
     const driveCard = getDriveCard(page, "Drive A");
     await expect(driveCard).not.toContainText("Disk 1.d64");
     await snap(page, testInfo, "mount-failed");
-    server.setFaultMode("none");
   });
 
   test("mount failure when device unreachable shows error @layout", async ({

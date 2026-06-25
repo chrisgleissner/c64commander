@@ -16,6 +16,7 @@ import {
   getDeviceHostFromBaseUrl,
   normalizeDeviceHost,
   resolveDeviceHostFromStorage,
+  serializeNativeDeviceRequest,
   C64_DEFAULTS,
 } from "@/lib/c64api";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
@@ -368,6 +369,112 @@ describe("c64api branches", () => {
       status: 200,
       headers: { "content-type": "application/json" },
     });
+
+  it("closes native direct-device REST connections without changing web or proxy requests", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(okJsonResponse());
+    const api = new C64API("http://c64u");
+
+    await api.getInfo({ __c64uBypassCache: true });
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.headers).not.toMatchObject({
+      Connection: "close",
+    });
+
+    (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue(okJsonResponse());
+    await api.getInfo({ __c64uBypassCache: true });
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.headers).toMatchObject({
+      Connection: "close",
+    });
+
+    api.setBaseUrl("http://127.0.0.1:8787/api/rest");
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue(okJsonResponse());
+    await api.getInfo({ __c64uBypassCache: true });
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.headers).not.toMatchObject({
+      Connection: "close",
+    });
+  });
+
+  // Regression for S1-C64U-FIRMWARE-TCP-WEDGE-ON-IDLE-RECONNECT: native device
+  // requests must run one connection at a time so we never starve the c64u
+  // firmware's single Rx/Tx WiFi buffer / single-threaded network task.
+  it("serializeNativeDeviceRequest runs tasks one at a time (no overlap)", async () => {
+    let active = 0;
+    let maxConcurrent = 0;
+    const started: number[] = [];
+    let release1!: () => void;
+    let release2!: () => void;
+    const gate1 = new Promise<void>((resolve) => (release1 = resolve));
+    const gate2 = new Promise<void>((resolve) => (release2 = resolve));
+    const task = (id: number, gate: Promise<void>) => async () => {
+      active += 1;
+      maxConcurrent = Math.max(maxConcurrent, active);
+      started.push(id);
+      await gate;
+      active -= 1;
+      return id;
+    };
+
+    const p1 = serializeNativeDeviceRequest(task(1, gate1));
+    const p2 = serializeNativeDeviceRequest(task(2, gate2));
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(started).toEqual([1]); // only the first task has started
+
+    release1();
+    await p1;
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(started).toEqual([1, 2]); // the second starts only after the first finishes
+
+    release2();
+    await expect(p2).resolves.toBe(2);
+    expect(maxConcurrent).toBe(1);
+  });
+
+  it("serializeNativeDeviceRequest keeps the lane alive after a rejected task", async () => {
+    await expect(serializeNativeDeviceRequest(() => Promise.reject(new Error("boom")))).rejects.toThrow("boom");
+    // A failed request must not break the lane for the next request.
+    await expect(serializeNativeDeviceRequest(() => Promise.resolve("ok"))).resolves.toBe("ok");
+  });
+
+  it("serializeNativeDeviceRequest allows up to the configured concurrency limit", async () => {
+    // BALANCED firmware profiles allow >1 concurrent connection; CONSERVATIVE = 1.
+    let active = 0;
+    let maxConcurrent = 0;
+    let started = 0;
+    const releases: Array<() => void> = [];
+    const makeTask = () => async () => {
+      active += 1;
+      started += 1;
+      maxConcurrent = Math.max(maxConcurrent, active);
+      await new Promise<void>((resolve) => releases.push(resolve));
+      active -= 1;
+      return started;
+    };
+
+    const p1 = serializeNativeDeviceRequest(makeTask(), 2);
+    const p2 = serializeNativeDeviceRequest(makeTask(), 2);
+    const p3 = serializeNativeDeviceRequest(makeTask(), 2);
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(started).toBe(2); // limit 2: two run concurrently, the third queues
+
+    releases[0]?.();
+    await p1;
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(started).toBe(3); // the third starts only once a slot frees
+
+    releases[1]?.();
+    releases[2]?.();
+    await Promise.all([p2, p3]);
+    expect(maxConcurrent).toBe(2);
+  });
 
   // #1: normalizeUrlPath catch block (invalid URL)
   it("normalizeUrlPath logs warning and returns raw url for invalid urls", async () => {

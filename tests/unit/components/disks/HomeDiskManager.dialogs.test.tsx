@@ -10,12 +10,19 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 import { HomeDiskManager } from "@/components/disks/HomeDiskManager";
 
+const mockArchiveClient = vi.hoisted(() => ({
+  getEntries: vi.fn(),
+  downloadBinary: vi.fn(),
+}));
+
 // --- MOCKS ---
 
 vi.mock("@/components/lists/SelectableActionList", () => ({
-  SelectableActionList: ({ items, headerActions, onRemoveSelected, selectedCount }: any) => (
+  SelectableActionList: ({ title, items, headerActions, onRemoveSelected, selectedCount, viewAllTitle }: any) => (
     <div data-testid="mock-action-list">
+      <span data-testid="mock-action-list-title">{title}</span>
       <div data-testid="header-actions">{headerActions}</div>
+      {viewAllTitle ? <button>{viewAllTitle}</button> : null}
       {selectedCount > 0 && <button onClick={onRemoveSelected}>Delete Selected</button>}
 
       {items.map((item: any) => (
@@ -49,7 +56,24 @@ vi.mock("@/components/lists/SelectableActionList", () => ({
 }));
 
 vi.mock("@/components/itemSelection/ItemSelectionDialog", () => ({
-  ItemSelectionDialog: () => null,
+  ItemSelectionDialog: ({ open, sourceGroups = [], onConfirm, archiveConfigs }: any) => {
+    if (!open) return null;
+    const sources = sourceGroups.flatMap((group: any) => group.sources ?? []);
+    const archiveSource = sources.find((source: any) => source.type === "commoserve");
+    return (
+      <div data-testid="item-selection-dialog">
+        {sources.map((source: any) => (
+          <span key={source.id}>{source.name}</span>
+        ))}
+        <span data-testid="archive-config-ids">{Object.keys(archiveConfigs ?? {}).join(",")}</span>
+        {archiveSource ? (
+          <button onClick={() => onConfirm(archiveSource, [{ type: "file", name: "Archive Game", path: "123/42" }])}>
+            Import Archive Disk
+          </button>
+        ) : null}
+      </div>
+    );
+  },
 }));
 vi.mock("@/components/itemSelection/AddItemsProgressOverlay", () => ({
   AddItemsProgressOverlay: () => null,
@@ -57,9 +81,11 @@ vi.mock("@/components/itemSelection/AddItemsProgressOverlay", () => ({
 vi.mock("@/components/FileOriginIcon", () => ({ FileOriginIcon: () => null }));
 
 const mockInvalidateQueries = vi.fn();
+const mockCancelQueries = vi.fn();
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({
     invalidateQueries: mockInvalidateQueries,
+    cancelQueries: mockCancelQueries,
     fetchQuery: vi.fn().mockResolvedValue(undefined),
   }),
 }));
@@ -96,6 +122,20 @@ vi.mock("@/hooks/useLocalSources", () => ({
     addSourceFromFiles: vi.fn(),
   }),
 }));
+vi.mock("@/pages/playFiles/hooks/useArchiveClientSettings", () => ({
+  useArchiveClientSettings: () => ({
+    commoserveEnabled: true,
+    archiveConfig: {
+      id: "archive-commoserve",
+      name: "CommoServe",
+      baseUrl: "http://commoserve.files.commodore.net",
+      enabled: true,
+    },
+  }),
+}));
+vi.mock("@/lib/archive/client", () => ({
+  createArchiveClient: () => mockArchiveClient,
+}));
 vi.mock("@/hooks/useListPreviewLimit", () => ({
   useListPreviewLimit: () => ({ limit: 100 }),
 }));
@@ -117,11 +157,28 @@ vi.mock("@/lib/c64api", () => ({
 vi.mock("@/lib/disks/diskMount", () => ({ mountDiskToDrive: vi.fn() }));
 import { mountDiskToDrive } from "@/lib/disks/diskMount";
 
+const expectMountDiskToDriveCall = (drive: string, diskId: string) => {
+  const call = vi.mocked(mountDiskToDrive).mock.calls.at(-1);
+  expect(call?.slice(0, 4)).toEqual([expect.anything(), drive, expect.objectContaining({ id: diskId }), undefined]);
+  if (call && call.length > 4) {
+    expect(call[4]).toEqual({ mode: "readonly" });
+  }
+};
+
 // --- TESTS ---
 
 describe("HomeDiskManager Dialogs", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockArchiveClient.getEntries.mockResolvedValue([
+      { id: 7, path: "archive-game.d64", size: 174848, date: 1773676443000 },
+    ]);
+    mockArchiveClient.downloadBinary.mockResolvedValue({
+      fileName: "archive-game.d64",
+      bytes: new Uint8Array([1, 2, 3, 4]),
+      contentType: "application/octet-stream",
+      url: "http://commoserve.files.commodore.net/leet/search/bin/123/42/7",
+    });
     mockDiskLibrary.disks = [
       {
         id: "1",
@@ -157,19 +214,64 @@ describe("HomeDiskManager Dialogs", () => {
 
     // The second list should be the dialog one (rendered last/in portal)
     const dialogList = lists[1];
+    expect(within(dialogList).getByTestId("mock-action-list-title")).toHaveTextContent("Available disks");
+    expect(within(dialogList).queryByRole("button", { name: "All disks" })).not.toBeInTheDocument();
     const mountBtn = within(dialogList).getAllByText("Mount")[0]; // Pick first disk
 
     fireEvent.click(mountBtn);
 
-    await waitFor(() => {
-      expect(mountDiskToDrive).toHaveBeenCalledWith(
-        expect.anything(),
-        "a",
-        expect.objectContaining({ id: "1" }),
-        undefined, // runtimeFile
-      );
-    });
+    await waitFor(() => expectMountDiskToDriveCall("a", "1"));
   }, 10_000);
+
+  it("lets an empty mount dialog open the Add disks picker", async () => {
+    mockDiskLibrary.disks = [];
+
+    const { getAllByTestId } = render(<HomeDiskManager />);
+    fireEvent.click(screen.getByTestId("drive-mount-toggle-a"));
+
+    const lists = getAllByTestId("mock-action-list");
+    const dialogList = lists[1];
+    fireEvent.click(within(dialogList).getByRole("button", { name: "Add disks" }));
+
+    expect(screen.getByTestId("item-selection-dialog")).toBeInTheDocument();
+  });
+
+  it("shows CommoServe in the Disks Add items picker and imports archive disk images", async () => {
+    mockDiskLibrary.disks = [];
+
+    render(<HomeDiskManager />);
+    fireEvent.click(screen.getByRole("button", { name: "Add disks" }));
+
+    const dialog = screen.getByTestId("item-selection-dialog");
+    expect(within(dialog).getByText("CommoServe")).toBeInTheDocument();
+    expect(within(dialog).getByTestId("archive-config-ids")).toHaveTextContent("archive-commoserve");
+
+    fireEvent.click(within(dialog).getByText("Import Archive Disk"));
+
+    await waitFor(() => {
+      expect(mockArchiveClient.getEntries).toHaveBeenCalledWith("123", 42, expect.anything());
+      expect(mockArchiveClient.downloadBinary).toHaveBeenCalledWith(
+        "123",
+        42,
+        7,
+        "archive-game.d64",
+        expect.anything(),
+      );
+      expect(mockDiskLibrary.addDisks).toHaveBeenCalledWith(
+        [
+          expect.objectContaining({
+            name: "archive-game.d64",
+            path: "/archive-game.d64",
+            sourceId: "archive-commoserve",
+          }),
+        ],
+        expect.anything(),
+        expect.objectContaining({ expectedSelectedDeviceId: expect.any(String) }),
+      );
+      const runtime = mockDiskLibrary.addDisks.mock.calls.at(-1)?.[1];
+      expect(Object.values(runtime ?? {})).toEqual([expect.any(File)]);
+    });
+  });
 
   it("handles mounting a specific disk to a drive via dialog", async () => {
     // 1. Click "Mount" on a disk in the main list
@@ -207,14 +309,7 @@ describe("HomeDiskManager Dialogs", () => {
 
     fireEvent.click(driveBBtn);
 
-    await waitFor(() => {
-      expect(mountDiskToDrive).toHaveBeenCalledWith(
-        expect.anything(),
-        "b",
-        expect.objectContaining({ id: "1" }),
-        undefined,
-      );
-    });
+    await waitFor(() => expectMountDiskToDriveCall("b", "1"));
   });
 
   it("handles renaming a disk", async () => {
