@@ -217,6 +217,9 @@ vi.mock("@/lib/savedDevices/store", () => ({
   getSelectedSavedDeviceProductFamilySync: () =>
     mockState.savedDevices.devices.find((device) => device.id === mockState.savedDevices.selectedDeviceId)
       ?.lastKnownProduct ?? null,
+  getSelectedSavedDeviceFirmwareSync: () =>
+    mockState.savedDevices.devices.find((device) => device.id === mockState.savedDevices.selectedDeviceId)
+      ?.lastKnownFirmware ?? null,
 }));
 
 vi.mock("@/hooks/useSavedDeviceHealthChecks", () => ({
