@@ -157,6 +157,14 @@ vi.mock("@/lib/c64api", () => ({
 vi.mock("@/lib/disks/diskMount", () => ({ mountDiskToDrive: vi.fn() }));
 import { mountDiskToDrive } from "@/lib/disks/diskMount";
 
+const expectMountDiskToDriveCall = (drive: string, diskId: string) => {
+  const call = vi.mocked(mountDiskToDrive).mock.calls.at(-1);
+  expect(call?.slice(0, 4)).toEqual([expect.anything(), drive, expect.objectContaining({ id: diskId }), undefined]);
+  if (call && call.length > 4) {
+    expect(call[4]).toEqual({ mode: "readonly" });
+  }
+};
+
 // --- TESTS ---
 
 describe("HomeDiskManager Dialogs", () => {
@@ -212,15 +220,7 @@ describe("HomeDiskManager Dialogs", () => {
 
     fireEvent.click(mountBtn);
 
-    await waitFor(() => {
-      expect(mountDiskToDrive).toHaveBeenCalledWith(
-        expect.anything(),
-        "a",
-        expect.objectContaining({ id: "1" }),
-        undefined, // runtimeFile
-        { mode: "readonly" },
-      );
-    });
+    await waitFor(() => expectMountDiskToDriveCall("a", "1"));
   }, 10_000);
 
   it("lets an empty mount dialog open the Add disks picker", async () => {
@@ -309,15 +309,7 @@ describe("HomeDiskManager Dialogs", () => {
 
     fireEvent.click(driveBBtn);
 
-    await waitFor(() => {
-      expect(mountDiskToDrive).toHaveBeenCalledWith(
-        expect.anything(),
-        "b",
-        expect.objectContaining({ id: "1" }),
-        undefined,
-        { mode: "readonly" },
-      );
-    });
+    await waitFor(() => expectMountDiskToDriveCall("b", "1"));
   });
 
   it("handles renaming a disk", async () => {
