@@ -37,6 +37,11 @@ export type SavedDevice = {
   ftpPort: number;
   telnetPort: number;
   lastKnownProduct: ProductFamilyCode | null;
+  // Last firmware_version reported by /v1/info for this device. Used (with the
+  // product) to resolve the device-safety profile, which gates how hard the app
+  // is allowed to drive the device's network stack. Optional so existing
+  // persisted devices and constructors don't need to set it.
+  lastKnownFirmware?: string | null;
   lastKnownHostname: string | null;
   lastKnownUniqueId: string | null;
   lastSuccessfulConnectionAt: string | null;
@@ -59,6 +64,7 @@ export type DeviceSwitchSummary = {
   lastProbeSucceededAt: string | null;
   lastProbeFailedAt: string | null;
   lastVerifiedProduct: ProductFamilyCode | null;
+  lastVerifiedFirmware?: string | null;
   lastVerifiedHostname: string | null;
   lastVerifiedUniqueId: string | null;
   lastResolvedAddress: string | null;
@@ -716,6 +722,15 @@ export const getSelectedSavedDeviceProductFamilySync = (): ProductFamilyCode | n
   );
 };
 
+/** Last firmware_version reported by the selected device's /v1/info, or null if not yet known. */
+export const getSelectedSavedDeviceFirmwareSync = (): string | null => {
+  const current = getSavedDevicesSnapshot();
+  const selectedDevice =
+    current.devices.find((device) => device.id === current.selectedDeviceId) ?? current.devices[0] ?? null;
+  if (!selectedDevice) return null;
+  return selectedDevice.lastKnownFirmware ?? current.summaries[selectedDevice.id]?.lastVerifiedFirmware ?? null;
+};
+
 export const getSavedDeviceById = (deviceId: string) => {
   const current = getSavedDevicesSnapshot();
   return current.devices.find((device) => device.id === deviceId) ?? null;
@@ -969,10 +984,16 @@ export const startSavedDeviceVerification = (deviceId: string) => {
 
 export const completeSavedDeviceVerification = (
   deviceId: string,
-  verified: { product?: string | null; hostname?: string | null; unique_id?: string | null },
+  verified: {
+    product?: string | null;
+    hostname?: string | null;
+    unique_id?: string | null;
+    firmware_version?: string | null;
+  },
   resolvedAddress?: string | null,
 ) => {
   const product = resolveCanonicalProductFamilyCode(verified.product ?? null);
+  const firmware = verified.firmware_version?.trim() || null;
   const verifiedIdentity: VerifiedSavedDeviceIdentity = {
     product,
     hostname: verified.hostname?.trim() || null,
@@ -992,6 +1013,7 @@ export const completeSavedDeviceVerification = (
         device.typeSource,
       ),
       lastKnownProduct: product,
+      lastKnownFirmware: firmware ?? device.lastKnownFirmware ?? null,
       lastKnownHostname: verifiedIdentity.hostname,
       lastKnownUniqueId: verifiedIdentity.uniqueId,
       lastSuccessfulConnectionAt: nowIso,
@@ -1009,6 +1031,7 @@ export const completeSavedDeviceVerification = (
           lastProbeSucceededAt: nowIso,
           lastProbeFailedAt: envelope.summaries[deviceId]?.lastProbeFailedAt ?? null,
           lastVerifiedProduct: product,
+          lastVerifiedFirmware: firmware ?? envelope.summaries[deviceId]?.lastVerifiedFirmware ?? null,
           lastVerifiedHostname: verifiedIdentity.hostname,
           lastVerifiedUniqueId: verifiedIdentity.uniqueId,
           lastResolvedAddress: resolvedAddress?.trim() || envelope.summaries[deviceId]?.lastResolvedAddress || null,

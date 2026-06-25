@@ -441,6 +441,41 @@ describe("c64api branches", () => {
     await expect(serializeNativeDeviceRequest(() => Promise.resolve("ok"))).resolves.toBe("ok");
   });
 
+  it("serializeNativeDeviceRequest allows up to the configured concurrency limit", async () => {
+    // BALANCED firmware profiles allow >1 concurrent connection; CONSERVATIVE = 1.
+    let active = 0;
+    let maxConcurrent = 0;
+    let started = 0;
+    const releases: Array<() => void> = [];
+    const makeTask = () => async () => {
+      active += 1;
+      started += 1;
+      maxConcurrent = Math.max(maxConcurrent, active);
+      await new Promise<void>((resolve) => releases.push(resolve));
+      active -= 1;
+      return started;
+    };
+
+    const p1 = serializeNativeDeviceRequest(makeTask(), 2);
+    const p2 = serializeNativeDeviceRequest(makeTask(), 2);
+    const p3 = serializeNativeDeviceRequest(makeTask(), 2);
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(started).toBe(2); // limit 2: two run concurrently, the third queues
+
+    releases[0]?.();
+    await p1;
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(started).toBe(3); // the third starts only once a slot frees
+
+    releases[1]?.();
+    releases[2]?.();
+    await Promise.all([p2, p3]);
+    expect(maxConcurrent).toBe(2);
+  });
+
   // #1: normalizeUrlPath catch block (invalid URL)
   it("normalizeUrlPath logs warning and returns raw url for invalid urls", async () => {
     const fetchMock = getFetchMock();

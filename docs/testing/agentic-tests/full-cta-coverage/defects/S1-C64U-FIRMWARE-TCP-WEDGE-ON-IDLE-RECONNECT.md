@@ -59,10 +59,21 @@ starvation), `40d3901e1` + LwIP 2.x migration. Field issues: #700 (idle socket u
 
 **Workaround implemented:** the app now (a) **reuses one warm connection** rather than churning a
 fresh one per request (the `http.keepAlive=false` change that did the opposite was reverted), and
-(b) **serializes native direct-device REST requests** through a single-connection lane
-(`serializeNativeDeviceRequest` in `src/lib/c64api.ts`) so it never opens concurrent connections to
-the firmware's single Rx/Tx buffer / single-threaded network task (avoids Tx starvation + peak-socket
-pressure). Regression tests in `tests/unit/c64api.branches.test.ts`. This **reduces** the trigger
+(b) **limits concurrent native device connections** via the device-safety profile's
+`restMaxConcurrency` (a bounded semaphore in `src/lib/c64api.ts`), so it never starves the firmware's
+single Rx/Tx buffer / single-threaded network task.
+
+**Profile-driven + firmware-aware (configurable):** `restMaxConcurrency` is part of the
+device-safety profile (`src/lib/config/deviceSafetySettings.ts`), resolved by **product + firmware**:
+- **C64U** fw `3.14e` (any 3.14x) or ≤ `1.1.0` → **CONSERVATIVE** (restMaxConcurrency = 1, fully
+  serialized); fw > `1.1.0` → **BALANCED** (= 2).
+- **U64 / U64E / U64E2** fw ≥ `3.14d` → **BALANCED** (= 2); older/unknown → CONSERVATIVE (safety-first).
+- Firmware comes from `/v1/info` and is cached on the saved device (`lastKnownFirmware`).
+- The user can override the profile (Settings → device-safety mode AUTO/RELAXED/BALANCED/CONSERVATIVE/
+  TROUBLESHOOTING) and the concurrency directly ("Device request concurrency" in Settings).
+
+Regression tests in `tests/unit/c64api.branches.test.ts` (semaphore) and
+`tests/unit/config/deviceSafetySettings.test.ts` (firmware resolution). This **reduces** the trigger
 surface; it does not cure the firmware defect.
 
 ## Honest limitation

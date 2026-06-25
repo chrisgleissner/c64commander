@@ -417,6 +417,7 @@ const rememberSelectedSavedDeviceIdentity = (deviceInfo: DeviceInfo | null | und
     product: deviceInfo?.product ?? product,
     hostname,
     unique_id: uniqueId,
+    firmware_version: deviceInfo?.firmware_version ?? null,
   });
 };
 

@@ -22,6 +22,7 @@ import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 import { getSmokeConfig, isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from "@/lib/fuzz/fuzzMode";
 import { scheduleConfigWrite } from "@/lib/config/configWriteThrottle";
+import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import { FirmwareConfigWriteError } from "@/lib/config/configWriteErrors";
 import { extractConfigValue } from "@/lib/config/configValueExtractor";
 import {
@@ -409,17 +410,37 @@ const buildRequestId = () => {
 // a power-cycle). Serializing our requests keeps us to one connection at a time so
 // we never trigger that on the unfixed firmware. (The cure is a c64u firmware
 // update; see docs/c64/c64u-firmware-tcp-wedge-report.md.)
-let nativeDeviceRequestLane: Promise<unknown> = Promise.resolve();
-// Exported for unit testing of the single-connection lane behaviour.
-export const serializeNativeDeviceRequest = <T>(run: () => Promise<T>): Promise<T> => {
-  const result = nativeDeviceRequestLane.then(run, run);
-  // Keep the lane chained whether this request resolves or rejects, and swallow
-  // the tail so a failed request never leaves an unhandled rejection on the lane.
-  nativeDeviceRequestLane = result.then(
-    () => undefined,
-    () => undefined,
-  );
-  return result;
+let activeNativeDeviceRequests = 0;
+const nativeDeviceRequestQueue: Array<{ limit: number; resolve: () => void }> = [];
+const pumpNativeDeviceRequestQueue = () => {
+  while (
+    nativeDeviceRequestQueue.length > 0 &&
+    activeNativeDeviceRequests < (nativeDeviceRequestQueue[0]?.limit ?? 1)
+  ) {
+    const next = nativeDeviceRequestQueue.shift();
+    if (!next) break;
+    activeNativeDeviceRequests += 1;
+    next.resolve();
+  }
+};
+// Run `run` once a device connection slot is free, allowing at most
+// `maxConcurrent` native device requests in flight at a time (1 = fully
+// serialized — one connection). The limit comes from the resolved device-safety
+// profile (restMaxConcurrency): CONSERVATIVE = 1 for the unfixed-firmware c64u,
+// higher for firmware that shipped the Ultimate network-stack fixes. Exported for
+// unit testing. See docs/c64/c64u-firmware-tcp-wedge-report.md.
+export const serializeNativeDeviceRequest = async <T>(run: () => Promise<T>, maxConcurrent = 1): Promise<T> => {
+  const limit = Number.isFinite(maxConcurrent) ? Math.max(1, Math.floor(maxConcurrent)) : 1;
+  await new Promise<void>((resolve) => {
+    nativeDeviceRequestQueue.push({ limit, resolve });
+    pumpNativeDeviceRequestQueue();
+  });
+  try {
+    return await run();
+  } finally {
+    activeNativeDeviceRequests = Math.max(0, activeNativeDeviceRequests - 1);
+    pumpNativeDeviceRequestQueue();
+  }
 };
 
 const createTimedRequestSignal = (outerSignal: AbortSignal | undefined, timeoutMs?: number) => {
@@ -1527,7 +1548,9 @@ export class C64API {
     // Tx-starvation-prone network stack (see serializeNativeDeviceRequest). Web/proxy
     // transports have no such constraint and run unserialized.
     const serializeOnDevice = isNativePlatform() && !baseUrl.includes(WEB_PROXY_PATH) && !isLocalProxy(baseUrl);
-    const executeRequest = serializeOnDevice ? () => serializeNativeDeviceRequest(runRequest) : runRequest;
+    const executeRequest = serializeOnDevice
+      ? () => serializeNativeDeviceRequest(runRequest, loadDeviceSafetyConfig().restMaxConcurrency)
+      : runRequest;
 
     if (!allowInFlightDedupe || !readRequestKey) {
       return executeRequest();

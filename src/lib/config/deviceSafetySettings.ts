@@ -8,6 +8,7 @@
 
 import {
   getSelectedSavedDevice,
+  getSelectedSavedDeviceFirmwareSync,
   getSelectedSavedDeviceProductFamilySync,
   type ProductFamilyCode,
 } from "@/lib/savedDevices/store";
@@ -20,6 +21,12 @@ export type ResolvedSafetyPreset = "BALANCED" | "CONSERVATIVE";
 export type AutoResolutionContext = {
   activeProduct: ProductFamilyCode | null;
   activeDeviceId: string | null;
+  // firmware_version last reported by the active device (e.g. "1.1.0", "3.14e"),
+  // or null/undefined if not yet known. Used to pick a higher profile only on
+  // firmware versions that ship the Ultimate network-stack fixes. Optional so
+  // callers that only need product context don't have to supply it (treated as
+  // "unknown" → safety-first).
+  activeFirmware?: string | null;
 };
 
 export type AutoResolution = {
@@ -33,6 +40,12 @@ export type AutoResolution = {
 export type DeviceSafetyConfig = {
   mode: DeviceSafetyMode;
   ftpMaxConcurrency: number;
+  // Max concurrent native REST connections the app may open to the device at
+  // once. The Ultimate firmware runs a single-threaded network task on a single
+  // shared Rx/Tx WiFi buffer; on builds without the 3.14x lwIP fixes (e.g. c64u
+  // 1.1.0) concurrent connections starve Tx and can wedge the TCP stack until a
+  // power-cycle. CONSERVATIVE = 1 (fully serialized); higher profiles allow more.
+  restMaxConcurrency: number;
   infoCacheMs: number;
   configsCacheMs: number;
   configsCooldownMs: number;
@@ -50,6 +63,7 @@ export type DeviceSafetyConfig = {
 
 const DEVICE_SAFETY_MODE_KEY = "c64u_device_safety_mode";
 const FTP_MAX_CONCURRENCY_KEY = "c64u_device_safety_ftp_max_concurrency";
+const REST_MAX_CONCURRENCY_KEY = "c64u_device_safety_rest_max_concurrency";
 const INFO_CACHE_MS_KEY = "c64u_device_safety_info_cache_ms";
 const CONFIGS_CACHE_MS_KEY = "c64u_device_safety_configs_cache_ms";
 const CONFIGS_COOLDOWN_MS_KEY = "c64u_device_safety_configs_cooldown_ms";
@@ -69,6 +83,7 @@ export const DEFAULT_DEVICE_SAFETY_MODE: DeviceSafetyMode = "AUTO";
 const MODE_DEFAULTS: Record<ConcreteDeviceSafetyMode, Omit<DeviceSafetyConfig, "mode" | "resolution">> = {
   RELAXED: {
     ftpMaxConcurrency: 3,
+    restMaxConcurrency: 3,
     infoCacheMs: 200,
     configsCacheMs: 400,
     configsCooldownMs: 200,
@@ -84,6 +99,7 @@ const MODE_DEFAULTS: Record<ConcreteDeviceSafetyMode, Omit<DeviceSafetyConfig, "
   },
   BALANCED: {
     ftpMaxConcurrency: 2,
+    restMaxConcurrency: 2,
     infoCacheMs: 600,
     configsCacheMs: 1000,
     configsCooldownMs: 500,
@@ -99,6 +115,7 @@ const MODE_DEFAULTS: Record<ConcreteDeviceSafetyMode, Omit<DeviceSafetyConfig, "
   },
   CONSERVATIVE: {
     ftpMaxConcurrency: 1,
+    restMaxConcurrency: 1,
     infoCacheMs: 1200,
     configsCacheMs: 2000,
     configsCooldownMs: 1200,
@@ -114,6 +131,7 @@ const MODE_DEFAULTS: Record<ConcreteDeviceSafetyMode, Omit<DeviceSafetyConfig, "
   },
   TROUBLESHOOTING: {
     ftpMaxConcurrency: 1,
+    restMaxConcurrency: 1,
     infoCacheMs: 300,
     configsCacheMs: 600,
     configsCooldownMs: 300,
@@ -172,7 +190,53 @@ const normalizeMode = (mode?: string | null): DeviceSafetyMode => {
   return "BALANCED";
 };
 
+// Firmware at/above which the Ultimate network stack ships the lwIP socket-timeout,
+// socket-polling, and Tx-starvation fixes (GideonZ/1541ultimate 57c7c8a6a /
+// ddd28dd17 / fdb521a5b / 802d6143b, 3.14d/3.14e line). U64-family builds at or
+// above this tolerate BALANCED. (>= 3.14d also covers 3.14e.)
+const U64_NETWORK_FIXED_MIN_FIRMWARE = "3.14d";
+// C64U uses a 1.x firmware scheme; builds after 1.1.0 ship the fixes. C64U builds
+// up to and including 1.1.0 — and any 3.14x C64U build, including the first one
+// (3.14e) — do NOT have them and need CONSERVATIVE.
+const C64U_NETWORK_FIXED_MIN_FIRMWARE = "1.1.0";
+
+type ParsedFirmware = { nums: number[]; suffix: string };
+const parseFirmware = (value: string | null | undefined): ParsedFirmware | null => {
+  if (!value) return null;
+  const match = /^\s*v?(\d+(?:\.\d+)*)\s*([a-z])?/i.exec(value.trim());
+  if (!match) return null;
+  const nums = match[1].split(".").map((part) => Number.parseInt(part, 10));
+  if (nums.some((n) => !Number.isFinite(n))) return null;
+  return { nums, suffix: (match[2] ?? "").toLowerCase() };
+};
+
+// Comparator (negative / 0 / positive), or null if either side is unparseable.
+// Compares numeric dotted parts first, then a trailing letter ("3.14d" < "3.14e").
+const compareFirmware = (a: string | null | undefined, b: string): number | null => {
+  const pa = parseFirmware(a);
+  const pb = parseFirmware(b);
+  if (!pa || !pb) return null;
+  const len = Math.max(pa.nums.length, pb.nums.length);
+  for (let i = 0; i < len; i += 1) {
+    const diff = (pa.nums[i] ?? 0) - (pb.nums[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  if (pa.suffix === pb.suffix) return 0;
+  return pa.suffix < pb.suffix ? -1 : 1;
+};
+
 export const resolveAutoSafetyMode = (stored: DeviceSafetyMode, ctx: AutoResolutionContext): AutoResolution => {
+  const resolved = (
+    effectiveMode: ConcreteDeviceSafetyMode,
+    reason: string,
+    isProvisional = false,
+  ): AutoResolution => ({
+    storedMode: stored,
+    effectiveMode,
+    resolvedPreset: effectiveMode === "BALANCED" || effectiveMode === "CONSERVATIVE" ? effectiveMode : null,
+    isProvisional,
+    reason,
+  });
   if (stored !== "AUTO") {
     return {
       storedMode: stored,
@@ -183,51 +247,47 @@ export const resolveAutoSafetyMode = (stored: DeviceSafetyMode, ctx: AutoResolut
     };
   }
 
+  const fw = ctx.activeFirmware;
+
+  // C64U: any 3.14x build (incl. the first firmware, 3.14e) and any 1.x build up
+  // to and including 1.1.0 lack the network fixes → CONSERVATIVE. Firmware after
+  // 1.1.0 ships them → BALANCED. Until the firmware is known, stay CONSERVATIVE
+  // (safety-first) and mark provisional so it re-resolves once /v1/info arrives.
   if (ctx.activeProduct === "C64U") {
-    return {
-      storedMode: stored,
-      effectiveMode: "CONSERVATIVE",
-      resolvedPreset: "CONSERVATIVE",
-      isProvisional: false,
-      reason: "auto-c64u",
-    };
+    const parsed = parseFirmware(fw);
+    if (!parsed) return resolved("CONSERVATIVE", "auto-c64u-firmware-unknown", true);
+    if (parsed.nums[0] === 3) return resolved("CONSERVATIVE", "auto-c64u-3.14x");
+    const cmp = compareFirmware(fw, C64U_NETWORK_FIXED_MIN_FIRMWARE);
+    return cmp !== null && cmp > 0
+      ? resolved("BALANCED", "auto-c64u-firmware-fixed")
+      : resolved("CONSERVATIVE", "auto-c64u-firmware-unfixed");
   }
 
   // Ultimate II family (U2). No U2 hardware is available to characterise its network
   // stack, so use the CONSERVATIVE preset as the safety-first default (gentler request
   // rate). Documented assumption — see PLANS.md capability table.
   if (ctx.activeProduct === "U2") {
-    return {
-      storedMode: stored,
-      effectiveMode: "CONSERVATIVE",
-      resolvedPreset: "CONSERVATIVE",
-      isProvisional: false,
-      reason: "auto-u2",
-    };
+    return resolved("CONSERVATIVE", "auto-u2");
   }
 
+  // U64 / U64 Elite / U64 Elite II: BALANCED once the firmware is at/above the
+  // network-fixed line, else CONSERVATIVE. Unknown firmware stays CONSERVATIVE
+  // (safety-first, provisional) until /v1/info confirms it.
   if (ctx.activeProduct === "U64" || ctx.activeProduct === "U64E" || ctx.activeProduct === "U64E2") {
-    return {
-      storedMode: stored,
-      effectiveMode: "BALANCED",
-      resolvedPreset: "BALANCED",
-      isProvisional: false,
-      reason: "auto-u64-family",
-    };
+    const cmp = compareFirmware(fw, U64_NETWORK_FIXED_MIN_FIRMWARE);
+    if (cmp === null) return resolved("CONSERVATIVE", "auto-u64-firmware-unknown", true);
+    return cmp >= 0
+      ? resolved("BALANCED", "auto-u64-firmware-fixed")
+      : resolved("CONSERVATIVE", "auto-u64-firmware-old");
   }
 
-  return {
-    storedMode: stored,
-    effectiveMode: "BALANCED",
-    resolvedPreset: "BALANCED",
-    isProvisional: true,
-    reason: "auto-no-verified-product",
-  };
+  return resolved("BALANCED", "auto-no-verified-product", true);
 };
 
 export const getActiveAutoResolutionContext = (): AutoResolutionContext => ({
   activeProduct: getSelectedSavedDeviceProductFamilySync(),
   activeDeviceId: getSelectedSavedDevice()?.id ?? null,
+  activeFirmware: getSelectedSavedDeviceFirmwareSync(),
 });
 
 const broadcast = (key: string, value: unknown) => {
@@ -257,6 +317,7 @@ export const resetDeviceSafetyOverrides = () => {
   if (typeof localStorage === "undefined") return;
   [
     FTP_MAX_CONCURRENCY_KEY,
+    REST_MAX_CONCURRENCY_KEY,
     INFO_CACHE_MS_KEY,
     CONFIGS_CACHE_MS_KEY,
     CONFIGS_COOLDOWN_MS_KEY,
@@ -296,6 +357,7 @@ export const loadDeviceSafetyConfig = (): DeviceSafetyConfig => {
   return {
     mode,
     ftpMaxConcurrency: clampNumber(resolveOverride(FTP_MAX_CONCURRENCY_KEY, defaults.ftpMaxConcurrency), 1, 4, 1),
+    restMaxConcurrency: clampNumber(resolveOverride(REST_MAX_CONCURRENCY_KEY, defaults.restMaxConcurrency), 1, 4, 1),
     infoCacheMs: clampNumber(resolveOverride(INFO_CACHE_MS_KEY, defaults.infoCacheMs), 0, 5000, 50),
     configsCacheMs: clampNumber(resolveOverride(CONFIGS_CACHE_MS_KEY, defaults.configsCacheMs), 0, 10000, 50),
     configsCooldownMs: clampNumber(resolveOverride(CONFIGS_COOLDOWN_MS_KEY, defaults.configsCooldownMs), 0, 10000, 50),
@@ -344,6 +406,9 @@ const saveBooleanOverride = (key: string, value: boolean) => {
 
 export const saveFtpMaxConcurrency = (value: number) =>
   saveNumberOverride(FTP_MAX_CONCURRENCY_KEY, clampNumber(value, 1, 4, 1));
+
+export const saveRestMaxConcurrency = (value: number) =>
+  saveNumberOverride(REST_MAX_CONCURRENCY_KEY, clampNumber(value, 1, 4, 1));
 
 export const saveInfoCacheMs = (value: number) =>
   saveNumberOverride(INFO_CACHE_MS_KEY, clampNumber(value, 0, 5000, 50));

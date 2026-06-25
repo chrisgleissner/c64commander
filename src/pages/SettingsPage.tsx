@@ -129,6 +129,7 @@ import {
   loadDeviceSafetyConfig,
   saveDeviceSafetyMode,
   saveFtpMaxConcurrency,
+  saveRestMaxConcurrency,
   saveInfoCacheMs,
   saveConfigsCacheMs,
   saveConfigsCooldownMs,
@@ -317,6 +318,7 @@ export default function SettingsPage() {
   const [pendingSafetyMode, setPendingSafetyMode] = useState<DeviceSafetyMode | null>(null);
   const [relaxedWarningOpen, setRelaxedWarningOpen] = useState(false);
   const [ftpConcurrencyInput, setFtpConcurrencyInput] = useState(String(deviceSafetyConfig.ftpMaxConcurrency));
+  const [restConcurrencyInput, setRestConcurrencyInput] = useState(String(deviceSafetyConfig.restMaxConcurrency));
   const [infoCacheInput, setInfoCacheInput] = useState(String(deviceSafetyConfig.infoCacheMs));
   const [configsCacheInput, setConfigsCacheInput] = useState(String(deviceSafetyConfig.configsCacheMs));
   const [configsCooldownInput, setConfigsCooldownInput] = useState(String(deviceSafetyConfig.configsCooldownMs));
@@ -552,6 +554,7 @@ export default function SettingsPage() {
     setDeviceSafetyConfig(next);
     setDeviceSafetyMode(next.mode);
     setFtpConcurrencyInput(String(next.ftpMaxConcurrency));
+    setRestConcurrencyInput(String(next.restMaxConcurrency));
     setInfoCacheInput(String(next.infoCacheMs));
     setConfigsCacheInput(String(next.configsCacheMs));
     setConfigsCooldownInput(String(next.configsCooldownMs));
@@ -2227,6 +2230,32 @@ export default function SettingsPage() {
                       )
                     }
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="rest-concurrency" className="text-sm">
+                    Device request concurrency
+                  </Label>
+                  <Input
+                    id="rest-concurrency"
+                    type="number"
+                    min={1}
+                    max={4}
+                    step={1}
+                    value={restConcurrencyInput}
+                    onChange={(event) => setRestConcurrencyInput(event.target.value)}
+                    onBlur={() =>
+                      commitDeviceSafetyNumber(
+                        restConcurrencyInput,
+                        saveRestMaxConcurrency,
+                        deviceSafetyConfig.restMaxConcurrency,
+                      )
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Max simultaneous REST connections to the device. 1 fully serializes requests — safest for firmware
+                    without the Ultimate network-stack fixes (e.g. C64U 1.1.0).
+                  </p>
                 </div>
 
                 <div className="space-y-2">
