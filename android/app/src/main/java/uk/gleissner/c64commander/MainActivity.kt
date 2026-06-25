@@ -94,7 +94,44 @@ open class MainActivity : BridgeActivity() {
     )
   }
 
+  /**
+   * Disable HttpURLConnection keep-alive / connection pooling for the whole
+   * process before any device REST call is made.
+   *
+   * Why: every CapacitorHttp call to the C64U goes through Android's
+   * okhttp-backed `HttpURLConnection`, which by default pools idle TCP sockets
+   * for reuse. The C64U's embedded web server (lwIP-based, tiny) silently drops
+   * its side of an idle socket; when the app then reuses that pooled socket for
+   * the first request after an idle gap, the send raises
+   * `sun.net.ConnectionResetException` and — critically — can wedge the device's
+   * REST/network stack so hard it only recovers on a manual power-cycle. This is
+   * the long-standing "C64 Commander activity drops the c64u" pattern recorded
+   * across months in docs/agentic/C64U_INCIDENTS.md (idle -> first mount/config
+   * PUT -> Connection reset -> full dropout; reproduced again 2026-06-25 with
+   * idleMs=42103 on a Drive A mount that 404'd then took the web stack down).
+   *
+   * The intended `Connection: close` request header CANNOT be set from the
+   * WebView: `Connection` is a Fetch-spec forbidden header name, so the
+   * WebView/Capacitor `Headers` normalization strips it before CapacitorHttp's
+   * native client ever sees it (verified: the header is absent from the plugin's
+   * received methodData). Disabling keep-alive at the JVM layer is the only
+   * reliable lever — Android's okhttp `ConnectionPool` reads `http.keepAlive`
+   * once when it first initializes, so this must run before the first request.
+   * onCreate is comfortably early: the WebView only issues device REST calls
+   * after the bundle loads and connects.
+   *
+   * Trade-off: one extra TCP handshake per request. On a LAN to the device
+   * (~0.5 ms RTT) this is negligible, and the device tolerates fresh
+   * connections fine — it is stale-socket *reuse* that kills it.
+   */
+  internal fun disableHttpConnectionReuse(
+    setProperty: (String, String) -> Unit = { key, value -> System.setProperty(key, value) },
+  ) {
+    setProperty("http.keepAlive", "false")
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
+    disableHttpConnectionReuse()
     ensureCapacitorPluginAssetPath()
     prewarmMimeMap()
     registerPlugin(BackgroundExecutionPlugin::class.java)

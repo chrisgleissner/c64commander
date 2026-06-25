@@ -4,6 +4,16 @@ This repository is **C64 Commander**, a React + Vite + Capacitor app for managin
 
 This file is an orientation and execution guide.
 
+## ⚠️ CRUCIAL — never reuse an idle HTTP connection to the Ultimate (do not regress)
+
+The months-long, hard-to-pin bug where **a C64 Commander action drives the Ultimate (esp. c64u) into a full network degradation that does NOT recover until a manual power-cycle** is **root-caused and fixed (2026-06-25)**:
+
+- **Cause:** every device REST call goes through CapacitorHttp → Android okhttp-backed `HttpURLConnection`, which pools idle TCP sockets. The Ultimate's tiny embedded web server drops its side of an idle socket; reusing that stale pooled socket for the **first request after a connection-idle gap** raises `Connection reset` (or a bogus HTTP 404) and **hard-hangs the device's REST/network stack** (HTTP 000, ICMP still up) until power-cycle. The signal is always `wasIdle:true`, not request content.
+- **Why the old `Connection: close` "fix" did nothing:** `Connection` is a Fetch-spec **forbidden header name** — the WebView strips it before CapacitorHttp's native client sees it (it never reaches the device).
+- **The fix (keep it):** `MainActivity.disableHttpConnectionReuse()` sets `System.setProperty("http.keepAlive","false")` first in `onCreate()`, so `HttpURLConnection` never pools/reuses a socket. **Do not remove this, and do not rely on a JS `Connection` header for device connection lifecycle.**
+- On-device A/B proof + full analysis: `docs/testing/agentic-tests/full-cta-coverage/defects/S1-ROOTCAUSE-HTTP-KEEPALIVE-STALE-SOCKET-WEDGES-C64U.md` and the top of `docs/agentic/C64U_INCIDENTS.md`.
+- Separate, still-open firmware issue (NOT this): a CPU-Speed write drops the network while the firmware applies the clock change — mitigated by single-item sequential writes only.
+
 ## Rule precedence
 
 1. **Quality bar (what every change must satisfy)**: `REVIEW.md` (repo root)
