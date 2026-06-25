@@ -237,7 +237,9 @@ async function runConnectionScenario(
     (xml) => findVisibleBoundsByResourceId(xml, scenario.fieldResourceId),
   );
   if (!restoreFieldResult) {
-    addStep(`${scenario.id}: field "${scenario.fieldResourceId}" not found for restore; retrying after harder scroll-to-top`);
+    addStep(
+      `${scenario.id}: field "${scenario.fieldResourceId}" not found for restore; retrying after harder scroll-to-top`,
+    );
     await scrollToTop(client, serial, 6);
     restoreFieldResult = await scrollUntilInSafeZone(
       client,
