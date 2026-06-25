@@ -32,6 +32,18 @@ describe("c64scope server skeleton", () => {
     expect(runtime.promptRegistry.list()).toHaveLength(1);
   });
 
+  it("describes nullable finalize_session failureClass without enum-blocking null", () => {
+    const runtime = createScopeServerRuntime();
+    const finalizeSession = runtime.toolRegistry.list().find((tool) => tool.name === "scope_session.finalize_session");
+
+    expect(finalizeSession?.inputSchema?.properties?.failureClass).toEqual({
+      anyOf: [
+        { type: "string", enum: ["product_failure", "infrastructure_failure", "inconclusive"] },
+        { type: "null" },
+      ],
+    });
+  });
+
   it("persists a session lifecycle and summary artifacts", async () => {
     const artifactRoot = await mkdtemp(path.join(os.tmpdir(), "c64scope-"));
     const runtime = createScopeServerRuntime({ artifactRoot });

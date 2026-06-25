@@ -145,8 +145,10 @@ export const sessionModule = defineToolModule({
           runId: { type: "string" },
           outcome: { type: "string", enum: ["pass", "fail", "inconclusive"] },
           failureClass: {
-            type: ["string", "null"],
-            enum: ["product_failure", "infrastructure_failure", "inconclusive"],
+            anyOf: [
+              { type: "string", enum: ["product_failure", "infrastructure_failure", "inconclusive"] },
+              { type: "null" },
+            ],
           },
           summary: { type: "string" },
         },

@@ -17,7 +17,8 @@ export type JsonSchema = {
   readonly description?: string;
   readonly properties?: Record<string, JsonSchema>;
   readonly required?: readonly string[];
-  readonly enum?: readonly (string | number | boolean)[];
+  readonly enum?: readonly (string | number | boolean | null)[];
+  readonly anyOf?: readonly JsonSchema[];
   readonly items?: JsonSchema | readonly JsonSchema[];
   readonly additionalProperties?: boolean | JsonSchema;
 };
