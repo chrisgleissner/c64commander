@@ -44,4 +44,14 @@
 
 ## Fix Verification
 
-No runner fix yet. Continue by superseding Gate 6 with targeted route/deep-dive evidence.
+**FIXED (2026-06-25).** Root cause: a hung `adb shell uiautomator dump` made
+`DroidmindClient.callTool()` (the MCP request) never resolve, with no deadline — so the
+whole Gate 6 runner blocked indefinitely; `captureUiHierarchy`'s retry loop could never
+fire because the first `shell()` call never returned. Two fixes in
+`c64scope/src/validation/droidmindClient.ts`:
+1. `callTool()` now passes `{ timeout: MCP_CALL_TIMEOUT_MS }` (30 s) to `client.callTool`, so
+   any hung DroidMind MCP call (incl. `uiautomator dump`) rejects fast instead of hanging forever.
+2. `captureUiHierarchy()` now wraps each attempt in try/catch, so a timed-out dump/cat
+   retries (up to 3×) and then throws a clear error rather than aborting capture.
+
+Verified: `npm run scope:check` (build + unit tests, incl. `droidmindClient.test.ts`) PASS.

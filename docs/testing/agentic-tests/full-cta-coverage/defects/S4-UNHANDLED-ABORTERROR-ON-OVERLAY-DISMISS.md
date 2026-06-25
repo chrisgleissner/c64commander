@@ -1,7 +1,33 @@
 # S4-UNHANDLED-ABORTERROR-ON-OVERLAY-DISMISS — AbortError escapes as an unhandledrejection when an overlay is dismissed mid-fetch
 
+## ✅ RESOLUTION: NOT A BUG — already handled by design (no code change needed)
+
+On re-investigation this is a **measurement artifact**, not a defect. The app installs a global
+`unhandledrejection` handler (`src/App.tsx:373-380`) that detects abort-like rejections via
+`isAbortLikeError` (`src/lib/c64api/requestRuntime.ts:50` — matches `name === "AbortError"`,
+which the observed `AbortError: signal is aborted without reason` satisfies) and calls
+`event.preventDefault()`, suppressing the browser's "Uncaught (in promise)" surfacing and
+logging only a `debug` entry ("Ignored abort-like unhandled rejection"). So these rejections
+**never surface to the user, error tracking, or the diagnostics error log**.
+
+My CDP QA collector (`window.__qaErrors`) counted them because it registered its **own**
+`unhandledrejection` listener, and `preventDefault()` does not stop other listeners on the same
+target from firing — so the collector saw the raw event while the app's handler correctly
+suppressed it. Verified: `isAbortLikeError("AbortError: …")` → true; the app's handler runs and
+preventDefaults. Aborting in-flight requests on overlay dismiss/route change is intentional
+(the request layer classifies caller-cancelled aborts as expected), and the global net is the
+deliberate safety mechanism. **No fix required; closing as WORKING AS INTENDED.**
+
+(Optional cosmetic nicety, not done: a local `.catch(isAbortLikeError)` at the Diagnostics /
+Device-Switcher fetch sites would avoid even reaching the global net — but functional behavior
+is already correct.)
+
+---
+
+## Original report (superseded by the resolution above)
+
 - ID: `S4-UNHANDLED-ABORTERROR-ON-OVERLAY-DISMISS`
-- Severity: **S4** (minor / code-quality) · Priority: P3
+- Severity: **S4** (minor / code-quality) → **CLOSED: not-a-bug** · Priority: P3
 - Product area: global request lifecycle (AbortController on overlay close / route change)
 - Build: `0.8.9-b8687` (fixed, SHA `2ffb1645…`) · Git base `b86877f43589` · Pixel 4 `9B081FFAZ001WX` · target c64u
 - First observed UTC: 2026-06-25T~17:2xZ

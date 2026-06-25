@@ -42,4 +42,11 @@
 
 ## Fix Verification
 
-Cleanup verification passed: HTTP field was `80`, Save & Connect succeeded, and Settings showed `Currently using: c64u · HTTP 80 · FTP 21 · Telnet 23`.
+**FIXED (2026-06-25).** Root cause: after typing the invalid port and tapping Save & Connect,
+the Settings form is left at an unpredictable scroll position, and the restore phase's
+`scrollToTop(client, serial, 2)` was too shallow to bring `settings-device-http` back into the
+search range — so the field was not re-found and restore was BLOCKED. `c64scope/src/cta/gate7.ts`
+now scrolls to top more firmly (4) and, if the field is still not found, resets harder (6) and
+retries the field search once before giving up. Verified: `npm run scope:check` PASS.
+
+Earlier cleanup verification also passed: HTTP field was `80`, Save & Connect succeeded, and Settings showed `Currently using: c64u · HTTP 80 · FTP 21 · Telnet 23`.

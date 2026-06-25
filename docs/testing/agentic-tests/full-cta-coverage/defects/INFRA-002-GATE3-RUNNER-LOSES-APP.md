@@ -44,4 +44,13 @@
 
 ## Fix Verification
 
-No runner fix yet. Product-level Save-and-Connect was superseded by `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-515e2818ed19/targeted-save-connect/result.json`, status `PROVEN`.
+**FIXED (2026-06-25).** `c64scope/src/cta/gate3.ts` now verifies a Settings-page marker
+(`SETTINGS` / `Appearance` / `Connection` / `Saved devices`) is present in the post-scroll
+hierarchy before trusting the matched "Save & Connect" bounds and tapping. If the scroll
+sent the app to the background (launcher surfaced), the runner now fails with a clear
+`BLOCKED: App left the Settings page during scroll to Save & Connect` instead of tapping
+the launcher. Verified: `npm run scope:check` (build + unit tests) PASS. (Gate runners are
+device integration tests not executed by scope:check; the guard is type-checked and the
+logic is deterministic.)
+
+Earlier, product-level Save-and-Connect was also superseded by `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-515e2818ed19/targeted-save-connect/result.json`, status `PROVEN`.

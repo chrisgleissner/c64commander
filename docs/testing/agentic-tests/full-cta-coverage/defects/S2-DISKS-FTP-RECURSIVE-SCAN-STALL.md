@@ -1,5 +1,32 @@
 # S2-DISKS-FTP-RECURSIVE-SCAN-STALL
 
+## ✅ FIXED (2026-06-25, commit on test/full-cta-coverage)
+
+Root cause: the Disks import reported scan progress **only once, after the entire
+recursive walk returned** — `HomeDiskManager` called `updateProgress(nested.length)`
+*after* `await source.listFilesRecursive(...)` completed. For a broad C64U folder
+(deep FTP tree) the walk takes minutes, so the overlay sat at "Scanning… 0 items"
+the whole time and looked hung (it was not — just no incremental feedback).
+
+Fix: thread an incremental `onProgress(delta)` callback through `listFilesRecursive`:
+- `src/lib/sourceNavigation/types.ts` — `listFilesRecursive` options gain `onProgress?: (delta) => void`.
+- `src/lib/sourceNavigation/ftpSourceAdapter.ts` — reports files as they are discovered during the BFS walk (per directory listed).
+- `src/components/disks/HomeDiskManager.tsx` — passes `onProgress: (delta) => updateProgress(delta)` and backfills only the remainder for adapters without incremental reporting (no double-count).
+
+Now a broad-folder scan shows a **climbing item count** instead of a stuck "0 items",
+and remains cancelable via the existing Cancel control + abort signal. The scan is
+intentionally not hard-bounded (a user's library may legitimately be large); the defect
+was the missing progress accounting, which is resolved.
+
+Verification: regression test `tests/unit/sourceNavigation/ftpSourceAdapter.test.ts` →
+"reports incremental onProgress as files are discovered during the recursive walk"
+(asserts onProgress fires before completion and sums to the total). Focused suite PASS
+(ftpSourceAdapter + HomeDiskManager.dialogs = 38 tests). Lint + typecheck PASS.
+
+---
+
+## Original report
+
 - ID: `S2-DISKS-FTP-RECURSIVE-SCAN-STALL`
 - Title: C64U broad folder import stalls scanning `/USB2/test-data` at zero items
 - Severity: `S2`

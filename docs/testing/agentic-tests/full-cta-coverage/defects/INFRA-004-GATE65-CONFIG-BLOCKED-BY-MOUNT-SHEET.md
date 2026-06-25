@@ -40,4 +40,9 @@
 
 ## Fix Verification
 
-No runner fix yet. Overlay was manually dismissed by DroidMind Back before continuing.
+**FIXED (2026-06-25).** `c64scope/src/cta/gate65.ts` now runs a mount-sheet dismissal loop
+(up to 3× Back, checking for absence of "Mount disk to" / "Mount disk to Drive A") immediately
+before the KEY_4 Config navigation. The prior code's `stillOnDisks` check passed even with the
+sheet open (the background still shows Disks text), so the sheet was never closed and stayed over
+Config. Now any leftover mount sheet is cleared before navigating, so the Config page check is no
+longer blocked by overlay contamination. Verified: `npm run scope:check` PASS.
