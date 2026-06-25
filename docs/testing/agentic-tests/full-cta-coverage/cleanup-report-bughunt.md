@@ -1,43 +1,39 @@
-# Cleanup Report — Bug Hunt 2026-06-25 (bughunt-20260625T125855Z)
+# Cleanup Report — bughunt-20260625T164637Z (HEAD b86877f4 + keep-alive fix)
 
-Artifact root: `c64scope/artifacts/bughunt-20260625T125855Z-pixel4-c64u-cf84d8e565cb/`
-Build: `0.8.9-cf84d` (2044, SHA-256 462bfa…). Pixel 4 `9B081FFAZ001WX`. Target `c64u`.
+Final state captured 2026-06-25 after the S1 root-cause/fix session.
 
-## Final app/device state (verified `final-01-cleanup-home`)
+## App + device final state (verified)
 
-| Item | Baseline (session start) | Final | Restored? |
-|------|--------------------------|-------|-----------|
-| c64u connection | OFFLINE (c64u HTTP down; user restarted mid-session) | **C64U ● green, c64u, fw 1.1.0** | Improved (connected) |
-| Drive A | ON / No disk mounted / OK | ON / No disk mounted / OK | ✓ |
-| Drive B | OFF / No disk mounted | OFF / No disk mounted | ✓ |
-| Device-side Drive A image_file | "" | "" (readback) | ✓ |
-| c64u health | n/a (down) | HTTP 403 in 8 ms | ✓ healthy |
-| Theme | system (Auto) | system (Auto) | ✓ unchanged |
-| Screen orientation | auto | auto | ✓ unchanged |
-| Display profile | compact (pre-existing) | compact | unchanged (not touched by run) |
-| Saved devices | c64u (selected), u64 | c64u (selected), u64 | ✓ unchanged |
-| HTTP/FTP/Telnet ports | 80 / 21 / 23 | 80 / 21 / 23 | ✓ unchanged |
-| Password | pwd | pwd | ✓ unchanged |
+- App: **Connected to c64u, system healthy** (badge green).
+- Installed APK: `0.8.9-b8687`, versionCode 2047 (**fixed build**, SHA-256 `2ffb16450416dd08ff8994f39040e0dee7fd1b5600167206b12cf66c6c33072f`).
+- Drive A: **ON / No disk mounted / status OK**; Drive B: OK. Device `/v1/drives`: Drive A `enabled:true, image_file:'', errors:[]`.
+- Device `/v1/info`: `c64u`, `C64 Ultimate`, fw `1.1.0`, `errors:[]`.
+- Selected device: `c64u` (no accidental switch from the Device Switcher test). Connection settings untouched (host c64u / HTTP 80 / FTP 21 / Telnet 23).
 
-## Mutations performed during the run (all reverted/benign)
+## Mutations made this session and their restoration
 
-1. **Reconnected c64u** via app-driven Settings → Save & Connect (host=c64u, ports/pwd unchanged). This restored the intended connected baseline; not a setting change.
-2. **5× Drive A readonly mount/eject** (Boulder Dash 2.d64). Ended with Drive A `No disk mounted` (verified app + device readback). Clean.
-3. Opened (read-only) Diagnostics sheet, Device Switcher (closed via Back, no device switched), Config sub-page, Docs accordion (transient UI state, resets on nav).
+| Mutation | Restored? | Note |
+|---|---|---|
+| Drive A mount Boulder Dash 2.d64 (readonly) → eject | ✅ ejected, `image_file:''` | S1 fix verification. Drive left clean. |
+| Display profile (found on **"Small display"**) → set to **Auto** | ✅ Auto | Pre-existing drift (not set by me); restored to documented baseline. |
+| Installed APK cf84d → b8687(fixed) | n/a | Intentional: the fixed build is the correct end state. |
+| Reformatted 2 pre-existing prettier-dirty files (UnifiedHealthBadge.tsx, DriveManager.tsx) | n/a | Whitespace-only; unblocked the lint gate (see report finding). |
 
-No persistent app-local setting (theme, orientation, display profile, full-screen, ports, password, saved devices, feature flags, hvsc/commoserve URLs) was modified.
+## Residual differences (explained)
 
-## Residual differences vs baseline
+1. **"Hide status bar" = checked** (Settings → Full screen). **Pre-existing** (not changed this session). Left as-is to avoid flipping an untouched user preference; flagged for owner confirmation (cleanup baseline lists fullscreen unchecked).
+2. **Working tree dirty** (the fix + QA artefacts + the prettier cleanup) — see report §working-tree. No commit made (not requested).
+3. **JS error collector** (`window.__qaErrors`, CDP-injected for the route sweep) was in-memory only; gone after relaunch. No residual app instrumentation.
+4. c64u was **power-cycled twice by the user** during the session to recover from the unfixed-build wedge. After the fix, no further wedges; device healthy at session end.
 
-- **c64u is now CONNECTED** (was OFFLINE at start only because the device's HTTP stack was down). This is the correct/expected baseline; the user power-cycled c64u mid-session.
-- No other residual differences.
+## Quality gates (final)
 
-## Background capture processes
+- `npm run scope:check`: PASS (55 files / 361 tests)
+- Kotlin `MainActivityTest`: PASS (incl. 2 new keep-alive regression tests)
+- `npm run lint` (format + eslint + typecheck + display-profiles + bundle-budgets + stale-names + variant/feature-flags/menu-mapping checks): **PASS**
+- `tsc --noEmit`: PASS
+- APK build (`assembleDebug`): BUILD SUCCESSFUL
 
-CDP console/network listener and continuous logcat were stopped after the device work (188 CDP events, 29 logcat snapshots captured). adb tcp:9333 forward may remain; harmless.
+## Cleanup status: COMPLETE
 
-## QA tooling added (not product code)
-
-- `scripts/bughunt-capture.sh`, `scripts/bughunt-snap.sh`, `scripts/bughunt-cdp.mjs` — observation/evidence helpers (screenshot/hierarchy/logcat + CDP DOM/console/network). No product code modified.
-
-Cleanup status: **COMPLETE.** App left connected/healthy, drives clean, no settings drift.
+All session-induced device mutations restored (drive ejected, display profile → Auto, c64u connected/healthy). One pre-existing residual (Hide status bar) documented. No destructive C64U config writes performed.

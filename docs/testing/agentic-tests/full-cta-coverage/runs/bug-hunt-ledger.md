@@ -1,4 +1,27 @@
-# Bug-Hunt Ledger — bughunt-20260625T125855Z-pixel4-c64u-cf84d8e565cb
+# Bug-Hunt Ledger
+
+> ## ⭐ Session bughunt-20260625T164637Z (HEAD b86877f4) — S1 ROOT-CAUSED + FIXED + VERIFIED
+> Artifact root: `c64scope/artifacts/bughunt-20260625T164637Z-pixel4-c64u-b86877f43589/`. Build `0.8.9-b8687` (unfixed SHA f052b0b1 → fixed SHA 2ffb1645). Target c64u **HEALTHY** (web stack up, 403/8ms).
+>
+> | Area | Test | Status | Evidence | Defect |
+> |---|---|---|---|---|
+> | Disks/transport | idle→mount→idle→eject (S1 catastrophic path) | **PROVEN_BUG → FIXED + VERIFIED** | reproduced HTTP404+HTTP000 wedge on unfixed; HTTP200+healthy on fixed | S1-ROOTCAUSE-HTTP-KEEPALIVE-STALE-SOCKET-WEDGES-C64U |
+> | Disks | per-drive status recovery | NO_BUG (S2 fix holds) | status HTTP404→OK on poll, no page re-mount | S2 (prior) |
+> | Shell | keypad digits 1–6 → tabs; `*`→Diag; `#`→Switcher; Back dismiss | NO_BUG_FOUND | sweep-* screenshots | - |
+> | All routes | CDP console/exception sweep | NO_BUG_FOUND | window.__qaErrors=[] across 6 routes | - |
+> | Overlays | AbortError on Diagnostics/Switcher dismiss | **PROVEN_BUG (S4)** | unhandledrejection x2 | S4-UNHANDLED-ABORTERROR-ON-OVERLAY-DISMISS |
+> | Config | menu + Video sub-page live render | NO_BUG_FOUND | sweep-config, config-video-setup | - |
+> | Settings | appearance; display profile Small→Auto restore | NO_BUG (drift restored) | settings-display-restored-auto | - |
+> | Diagnostics | password redaction | NO_BUG (PASS) | no `pwd` in body | - |
+> | Lifecycle | relaunch; background/foreground reconnect | NO_BUG_FOUND | lifecycle-relaunch | - |
+> | Repo health | prettier drift in 2 committed files | FIXED (whitespace-only) | lint now PASS | - |
+> | Config write / Play browser / negative-host / orientation / 20× reps | DEFERRED_WITH_REASON | see bug-hunt-report §coverage | - |
+>
+> Final recommendation: `BUGHUNT-COMPLETE-CRITICAL-BUGS-FOUND` (critical bug fixed + verified). Full report: `../bug-hunt-report.md`.
+
+---
+
+# Bug-Hunt Ledger — bughunt-20260625T125855Z-pixel4-c64u-cf84d8e565cb (prior session)
 
 Run: 2026-06-25. Pixel 4 `9B081FFAZ001WX`. App `0.8.9-cf84d`. Target c64u **OFFLINE (HTTP 000)**.
 Artifact root: `c64scope/artifacts/bughunt-20260625T125855Z-pixel4-c64u-cf84d8e565cb/`

@@ -1,5 +1,16 @@
 # S1-DISKS-MOUNT-EJECT-RESETS-C64U — Repeated Drive A mount/eject flow leaves C64U connection resetting
 
+> ## ✅ ROOT-CAUSED + FIXED (2026-06-25) — see [[S1-ROOTCAUSE-HTTP-KEEPALIVE-STALE-SOCKET-WEDGES-C64U]]
+> This defect's catastrophic mechanism is now understood and fixed. It is **not** specific to
+> repeated mount/eject — it is the **first request after a connection-idle gap reusing a stale
+> pooled HTTP socket** (Android `HttpURLConnection` keep-alive) that the c64u's embedded server
+> dropped, which hard-hangs the device until power-cycle. The mount/eject "repetition" merely
+> created the idle gaps between actions. Reproduced again 2026-06-25 (idle 42s → mount → HTTP 404
+> → c64u HTTP 000, user power-cycled). **Fix:** `http.keepAlive=false` in
+> `MainActivity.disableHttpConnectionReuse()`. **Verified on-device:** the full idle→mount→idle→eject
+> flow now runs clean with c64u healthy throughout. The prior `Connection: close` mitigation was a
+> no-op (Fetch forbidden header, stripped before the native client). Full analysis in the linked file.
+
 - ID: S1-DISKS-MOUNT-EJECT-RESETS-C64U
 - Title: Repeated Drive A mount/eject flow leaves C64U connection resetting
 - Severity: S1

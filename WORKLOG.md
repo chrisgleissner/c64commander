@@ -2,6 +2,45 @@
 
 All times 2026-06-24 unless noted.
 
+## Session bughunt-20260625T164637Z (HEAD b86877f4) — FRESH RUN ON FIXED BUILD
+
+### Setup (16:46–17:48Z)
+- `git status`: clean. branch test/full-cta-coverage. HEAD b86877f43589.
+- Read handover8, bug-hunt-ledger, bug-hunt-report, PLANS, S1 defect.
+- **Hardware probe**: Pixel 4 `9B081FFAZ001WX` connected. c64u `http://c64u/` = **HTTP 200 in 0.147s (UP/HEALTHY)** — the handover8 blocker (c64u down) is CLEARED.
+- Installed APK at start = `0.8.9-cf84d` (vc 2044), predates HEAD fixes. `git diff cf84d8e5..HEAD -- src/` = 4 product files (UnifiedHealthBadge, HomeDiskManager, c64api, DriveManager = S1/S2/C1/C2/C3 fixes). Per prompt step 9 → rebuild required.
+- Created artifact root `bughunt-20260625T164637Z-pixel4-c64u-b86877f43589/` + environment.json + apk-identity.json + installed-package-identity.json.
+- `scope:check` (bg): 55 files/361 tests PASS (exit 0).
+- `cap:build && android:apk` (bg): BUILD SUCCESSFUL (exit 0) → `c64commander-0.8.9-b8687-debug.apk`, SHA-256 f052b0b1…
+- force-stop old app; `adb install -r` → Success. Installed `0.8.9-b8687`, vc 2047, sig d39d81d2.
+- Launched HEAD build, proved c64u-green baseline (device c64u, fw 1.1.0, Drive A ON/no-disk/OK), CDP forward (pid-scoped tcp:9333).
+
+### S1 ROOT CAUSE + FIX (17:5x–18:2xZ) — USER-DIRECTED ("find out why and fix it / prevent it")
+- **Reproduced the catastrophic c64u wedge** on unfixed b8687: idle 42s → Drive A mount (Boulder Dash 2.d64, readonly) → device returned HTTP 404 (file EXISTS per FTP) → within ~90s c64u web stack went HTTP 000 (ping 0% loss). **User confirmed it did NOT self-heal — they power-cycled it.**
+- User context: long-standing (months), some C64 Commander activity drops c64u into network degradation needing manual restart. NOT a recent regression.
+- **Root cause** (evidence + code + docs/agentic/C64U_INCIDENTS.md #64-cont/#84/original-S1): Android okhttp-backed `HttpURLConnection` reuses a pooled idle TCP socket the c64u embedded server dropped → first post-idle request → `Connection reset`/bogus 404 → device REST stack hard-hangs. Signal = `wasIdle:true` (42k/47k/197k ms), not request content. `git diff cf84d..HEAD c64api.ts` = mount request byte-identical (only timeout + the ineffective JS Connection:close).
+- **Why prior fix failed:** `Connection` is a Fetch forbidden header — stripped by WebView before CapacitorHttp native client (proof: methodData logs only content-type+x-password, no Connection).
+- **FIX:** `MainActivity.disableHttpConnectionReuse()` → `System.setProperty("http.keepAlive","false")` in onCreate (disables HttpURLConnection pooling). + honest comment in c64api.ts buildTransportHeaders. + 2 Kotlin regression tests (PASS).
+- Built fixed APK (SHA 2ffb1645, ≠ unfixed f052b0b1), installed, MainActivityTest PASS.
+- **VERIFIED ON-DEVICE (A/B, same Wi-Fi/action):** fixed build — idle 50s → mount → HTTP 200/780ms, disk mounted, c64u 403/8ms healthy x15 probes; idle ~6min → eject → HTTP 200/147ms, ejected, c64u healthy x15 probes. Zero Connection reset. Transient Wi-Fi SYN-loss now self-heals ("degraded"→"healthy" <40s) vs prior wedge.
+- Preserved finding prominently: auto-memory (MEMORY.md top + c64u-keepalive-wedge-rootcause.md), AGENTS.md ⚠️ callout, C64U_INCIDENTS.md ⭐ banner, c64u-flakiness memory cross-ref, defect S1-ROOTCAUSE-*.md.
+- Drive A left clean (No disk mounted / OK / healthy).
+
+### Breadth bug hunt + cleanup (18:2x–18:3xZ, fixed build)
+- CDP error collector injected into SPA; **6-route keypad sweep (digits 1–6) → 0 JS errors/exceptions** (Home 164/Play 63/Disks 80/Config 42/Settings 109/Docs 40 interactive els).
+- Keypad: `*`→Diagnostics (Back dismiss), `#`→Device Switcher (u64+c64u ONLINE, Back, no accidental switch). Diagnostics password redaction PASS (no `pwd` in body).
+- **S4 found:** AbortError → unhandledrejection on Diagnostics/Switcher dismiss (2×). Defect filed.
+- Config: menu renders full category list; "Video setup" sub-page renders live values (PAL/HDMI 1024×768/scan lines). Read/render/nav OK; live config-write deferred (Radix blind-coord hazard + device-risk; write-path covered by transport fix).
+- Settings: appearance enumerated; **display profile found on "Small display" → restored to Auto** (pre-existing drift). Theme/orientation Auto. "Hide status bar" checked (pre-existing, documented residual).
+- Lifecycle: cold relaunch → clean reconnect; background→foreground → clean reconnect, c64u healthy (resume-after-idle path now safe). Orientation rotate skipped (landscape trap).
+- Perf: mount 780ms, eject 147ms, nav <1.5s, relaunch ~4s.
+- **Lint gate:** found pre-existing prettier drift in 2 committed files (UnifiedHealthBadge.tsx, DriveManager.tsx) — my c64api.ts passes. Reformatted (whitespace-only); full `npm run lint` + `tsc` now PASS.
+- Cleanup: Drive A clean, display Auto, c64u connected/healthy, c64u readback image_file='' errors:[]. Reports written: bug-hunt-report.md, cleanup-report-bughunt.md, defects/S1-ROOTCAUSE-*.md, defects/S4-*.md; ledger + PLANS updated.
+- No commit made (commit only on request). Working tree dirty with the fix + QA docs.
+
+---
+
+
 ## Handover 7 continuation — 2026-06-25T12:23:41Z
 
 - Resumed from `handover7.md` with `final-report-3.md` still treated as `PIXEL4-NO-GO`.
