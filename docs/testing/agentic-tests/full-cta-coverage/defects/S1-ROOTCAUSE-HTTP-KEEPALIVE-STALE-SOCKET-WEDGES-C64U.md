@@ -1,5 +1,15 @@
 # S1-ROOTCAUSE — HTTP keep-alive stale-socket reuse wedges the C64U web/network stack (idle → first request → reset → hard hang)
 
+> ## ❌ SUPERSEDED + REVERTED (2026-06-25) — this theory was WRONG; the keep-alive fix was reverted
+> The wedge **recurred on the keep-alive-disabled build** (a single background `GET /v1/info`
+> after a ~4-min idle gap), and live `/proc/net/tcp` inspection confirmed the app was **not**
+> reusing pooled connections — so **connection reuse is NOT the cause**. The `http.keepAlive=false`
+> change was confirmed active but **ineffective**, and was **reverted** (commit revert of the
+> keep-alive fix). The real, evidence-backed root cause is a **C64U firmware defect**: see
+> **[[S1-C64U-FIRMWARE-TCP-WEDGE-ON-IDLE-RECONNECT]]** and `docs/c64/c64u-firmware-tcp-wedge-report.md`.
+> The analysis below is retained for history but its conclusion (stale connection reuse) is incorrect.
+
+
 - ID: `S1-ROOTCAUSE-HTTP-KEEPALIVE-STALE-SOCKET-WEDGES-C64U`
 - Parent: [[S1-DISKS-MOUNT-EJECT-RESETS-C64U]] (this is the long-sought root cause + fix)
 - Severity: **S1** (catastrophic for the device: requires manual power-cycle to recover)

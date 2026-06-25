@@ -37,31 +37,6 @@ class MainActivityTest {
   }
 
   @Test
-  fun disableHttpConnectionReuseSetsKeepAliveFalseViaInjectedSetter() {
-    val activity = MainActivity()
-    val captured = mutableMapOf<String, String>()
-
-    activity.disableHttpConnectionReuse { key, value -> captured[key] = value }
-
-    // The C64U embedded web server wedges (until power-cycle) when the app
-    // reuses a pooled TCP socket it dropped during idle; disabling keep-alive
-    // forces a fresh connection per request. See C64U_INCIDENTS idle-reset.
-    assertEquals("false", captured["http.keepAlive"])
-  }
-
-  @Test
-  fun disableHttpConnectionReuseDefaultSetsSystemProperty() {
-    val previous = System.getProperty("http.keepAlive")
-    try {
-      System.clearProperty("http.keepAlive")
-      MainActivity().disableHttpConnectionReuse()
-      assertEquals("false", System.getProperty("http.keepAlive"))
-    } finally {
-      if (previous == null) System.clearProperty("http.keepAlive") else System.setProperty("http.keepAlive", previous)
-    }
-  }
-
-  @Test
   fun prewarmMimeMapRunsLookupViaProvidedLauncher() {
     val activity = MainActivity()
     var launched = false

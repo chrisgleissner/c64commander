@@ -4,15 +4,25 @@ This repository is **C64 Commander**, a React + Vite + Capacitor app for managin
 
 This file is an orientation and execution guide.
 
-## ⚠️ CRUCIAL — never reuse an idle HTTP connection to the Ultimate (do not regress)
+## ⚠️ CRUCIAL — the c64u "network dies until power-cycle" wedge is a DEVICE FIRMWARE defect
 
-The months-long, hard-to-pin bug where **a C64 Commander action drives the Ultimate (esp. c64u) into a full network degradation that does NOT recover until a manual power-cycle** is **root-caused and fixed (2026-06-25)**:
+Long-standing symptom: a C64 Commander interaction drives the Ultimate (esp. `c64u`) into a
+state where **all TCP services die** (HTTP `:80`, FTP `:21`, Telnet `:23` → refused/000) while
+**ICMP ping stays fine**, and it **only recovers on a manual power-cycle**.
 
-- **Cause:** every device REST call goes through CapacitorHttp → Android okhttp-backed `HttpURLConnection`, which pools idle TCP sockets. The Ultimate's tiny embedded web server drops its side of an idle socket; reusing that stale pooled socket for the **first request after a connection-idle gap** raises `Connection reset` (or a bogus HTTP 404) and **hard-hangs the device's REST/network stack** (HTTP 000, ICMP still up) until power-cycle. The signal is always `wasIdle:true`, not request content.
-- **Why the old `Connection: close` "fix" did nothing:** `Connection` is a Fetch-spec **forbidden header name** — the WebView strips it before CapacitorHttp's native client sees it (it never reaches the device).
-- **The fix (keep it):** `MainActivity.disableHttpConnectionReuse()` sets `System.setProperty("http.keepAlive","false")` first in `onCreate()`, so `HttpURLConnection` never pools/reuses a socket. **Do not remove this, and do not rely on a JS `Connection` header for device connection lifecycle.**
-- On-device A/B proof + full analysis: `docs/testing/agentic-tests/full-cta-coverage/defects/S1-ROOTCAUSE-HTTP-KEEPALIVE-STALE-SOCKET-WEDGES-C64U.md` and the top of `docs/agentic/C64U_INCIDENTS.md`.
-- Separate, still-open firmware issue (NOT this): a CPU-Speed write drops the network while the firmware applies the clock change — mitigated by single-item sequential writes only.
+Root cause (confirmed 2026-06-25, `docs/testing/agentic-tests/full-cta-coverage/defects/S1-C64U-FIRMWARE-TCP-WEDGE-ON-IDLE-RECONNECT.md`):
+**a c64u firmware defect** — its embedded (lwIP) TCP stack intermittently and permanently wedges
+when handling a connection after the network has been idle for minutes (e.g. the first poll when
+the app returns from background). A client cannot permanently kill a healthy server's TCP stack
+with normal HTTP GETs, so this is server-side. It is **low-probability per event**, idle-correlated,
+and **independent of the app's connection-reuse policy** (it recurred with HTTP keep-alive both on
+and off — so do NOT "fix" it by toggling keep-alive; that earlier attempt was reverted as
+ineffective). The app can only reduce trigger frequency (fewer connections, fewer request-after-idle
+events) and degrade gracefully — **it cannot cure it. The real fix is a c64u firmware update**
+(report upstream: see the defect doc + `docs/c64/c64u-firmware-tcp-wedge-report.md`).
+
+A separate, also-firmware issue (NOT this one): a CPU-Speed config write drops the network while
+the firmware applies the clock change — mitigated only by single-item sequential writes.
 
 ## Rule precedence
 

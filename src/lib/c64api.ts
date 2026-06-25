@@ -719,16 +719,6 @@ export class C64API {
     return headers;
   }
 
-  // NOTE: on native this returns `Connection: close`, but the WebView/Capacitor
-  // `Headers` normalization STRIPS the `Connection` header before CapacitorHttp's
-  // native client receives it (`Connection` is a Fetch-spec forbidden header
-  // name), so this header never reaches the device and is effectively a no-op on
-  // native. The connection-reuse hazard it was meant to address — reusing a TCP
-  // socket the C64U dropped during idle, which wedges the device's REST stack
-  // until a power-cycle — is instead handled at the JVM layer by disabling
-  // HttpURLConnection keep-alive (`http.keepAlive=false`) in
-  // MainActivity.disableHttpConnectionReuse(). Kept here as harmless defence in
-  // depth for any web/proxy transport that does forward the header.
   private buildTransportHeaders(): Record<string, string> {
     const baseUrl = this.getBaseUrl();
     if (!isNativePlatform() || baseUrl.includes(WEB_PROXY_PATH) || isLocalProxy(baseUrl)) {
