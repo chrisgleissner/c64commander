@@ -182,6 +182,7 @@ function HomePageContent() {
     handleAction,
     handlePauseResume,
     handleSaveRam,
+    handleSaveCpuSnapshot,
     handleRestoreSnapshot,
     handleDeleteSnapshot,
     handleUpdateSnapshotLabel,
@@ -1848,7 +1849,11 @@ function HomePageContent() {
           void handleSaveRam(type, customRanges);
         }}
         onSaveReu={reuSnapshotEnabled ? handleSaveReu : undefined}
-        isSaving={machineTaskId === "save-ram" || reuTaskPending}
+        onSaveCpu={() => {
+          setSaveRamDialogOpen(false);
+          void handleSaveCpuSnapshot();
+        }}
+        isSaving={machineTaskId === "save-ram" || machineTaskId === "save-cpu" || reuTaskPending}
         telnetAvailable={telnet.isAvailable}
         telnetBusy={telnet.isBusy}
         telnetSaveReuDisabledReason={saveReuDisabledReason}

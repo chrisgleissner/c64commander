@@ -13,6 +13,9 @@ import { encodeSnapshot } from "./snapshotFormat";
 import { buildSnapshotFileName, formatDisplayTimestamp } from "./snapshotFilename";
 import { saveSnapshotToStore } from "./snapshotStore";
 import type { MemoryRange, SnapshotMetadata, SnapshotType } from "./snapshotTypes";
+import { detectSnapshotCapability, getCartridgeConfig } from "./cpu/capability";
+import { buildCpuSnapshotMetadata, captureCpuSnapshotData } from "./cpu/cpuSnapshot";
+import type { CpuState } from "./cpu/cpuState";
 
 // ---------------------------------------------------------------------------
 // Address constants
@@ -205,4 +208,62 @@ export const createSnapshot = async (
   });
 
   return { displayTimestamp };
+};
+
+/** Thrown when the connected device cannot support CPU-state snapshots. */
+export class CpuSnapshotUnsupportedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CpuSnapshotUnsupportedError";
+  }
+}
+
+/**
+ * Captures a CPU+RAM snapshot: rides the live interrupt to capture the 6510
+ * registers (freezing the program), DMA-reads the full 64 KiB image, restores
+ * the bytes the capture clobbered, writes an honest v2 `.c64snap`, then resumes
+ * the program transparently. Throws {@link CpuSnapshotUnsupportedError} when the
+ * firmware can't support it (the caller should offer a RAM-only snapshot).
+ */
+export const createCpuSnapshot = async (
+  api: C64API,
+  options: { label?: string; contentName?: string } = {},
+): Promise<{ displayTimestamp: string; cpu: CpuState; captureMethod: "rli" | "isn" }> => {
+  const capability = await detectSnapshotCapability(api);
+  if (!capability.cpuSnapshotSupported) {
+    throw new CpuSnapshotUnsupportedError(capability.reason ?? "this device does not support CPU snapshots");
+  }
+  const cartridge = await getCartridgeConfig(api);
+
+  // Full 64 KiB read, executed (paused) inside captureCpuSnapshotData after the
+  // capture has frozen the program.
+  const dumpFullRam = async () => {
+    const { blocks } = await dumpRamRanges(api, [{ start: 0x0000, length: 0x10000 }]);
+    return blocks[0]!;
+  };
+
+  const data = await captureCpuSnapshotData(api, dumpFullRam);
+
+  const now = new Date();
+  const displayTimestamp = formatDisplayTimestamp(now);
+  const metadata = buildCpuSnapshotMetadata(data, {
+    createdAt: displayTimestamp,
+    appVersion: getBuildInfo().versionLabel,
+    label: options.label,
+    contentName: options.contentName,
+    firmware: capability.firmware,
+    cartridge,
+  });
+
+  const bytes = encodeSnapshot("program", now, data.ranges, data.blocks, metadata);
+  saveSnapshotToStore({
+    id: generateId(),
+    filename: buildSnapshotFileName("program", now),
+    bytes,
+    createdAt: now.toISOString(),
+    snapshotType: "program",
+    metadata,
+  });
+
+  return { displayTimestamp, cpu: data.cpu, captureMethod: data.captureMethod };
 };

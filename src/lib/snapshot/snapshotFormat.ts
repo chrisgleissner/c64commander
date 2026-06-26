@@ -213,5 +213,9 @@ export const decodeSnapshot = (bytes: Uint8Array): DecodedSnapshot => {
     }
   }
 
-  return { version, snapshotType, timestamp, ranges, blocks, metadata };
+  // The JSON metadata `cpu` block is authoritative for CPU-state presence; the
+  // header flag bit is a hint that must agree with it.
+  const hasCpuState = Boolean(metadata?.cpu);
+
+  return { version, snapshotType, timestamp, ranges, blocks, metadata, flags, hasCpuState };
 };
