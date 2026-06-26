@@ -98,3 +98,33 @@ FTP cascade cut. Reports: final-bugfree-report.md (NOT BUGFREE-PROVEN), cleanup-
 Launch `0.9.0-rc1` via DroidMind `android-app start`; capture baseline screenshot + hierarchy;
 run direct c64u HTTP health probe (infra); if not green C64U, app-driven Save-and-Connect
 host c64u / pwd / 80 / 21 / 23; set CDP forward for console/network observability.
+
+---
+
+## Archive — prior sessions (append-only history)
+
+Per the repo convention (`docs/agentic/LESSONS.md`), root `PLANS.md` is repurposed
+**append-only** across runs: the live working state stays at the top of this file and
+superseded sessions are preserved below rather than overwritten. The active session's
+state is the section above; earlier sessions follow newest-first.
+
+### Session 2026-06-25 — Exhaustive Bug Hunt (Pixel 4)
+
+- Branch: `test/full-cta-coverage`
+- Git SHA: `b86877f43589954a9d415f0dfe8b2b7debb890b4` (HEAD)
+- Working tree: CLEAN at session start.
+- **Installed APK (this session): `0.8.9-b8687`, versionCode `2047`, SHA-256 `f052b0b1f6d1ddbc9ef0a9ff2627be3fba1a1a72cf38d77b1c992290e86dd593`** — freshly built from HEAD, replaces the stale `0.8.9-cf84d` that predated the S1/S2/C1/C2/C3 fixes.
+- HEAD product-code delta vs cf84d (the bugs' fixes, now under test): `UnifiedHealthBadge.tsx`, `HomeDiskManager.tsx`, `c64api.ts`, `DriveManager.tsx`.
+- Installed app: **FULL C64 Commander** (`uk.gleissner.c64commander`), NOT the stripped C64U Remote variant.
+- Pixel 4: `9B081FFAZ001WX`, Android 16 / SDK 36, 1080x2280 @ 440dpi.
+- C64 target `c64u` (192.168.1.167): **HTTP 200 in ~0.15s — web stack UP/HEALTHY**. The blocker that stopped handover5–8 (c64u down) is CLEARED. C64U-dependent flows are now EXECUTABLE.
+- `u64` (192.168.1.13): FORBIDDEN for closure.
+- UI: WebView app. DOM/console/network via **CDP** (`scripts/bughunt-cdp.mjs`). Product input via **DroidMind**. adb/curl = infra only.
+- Artifact root: `c64scope/artifacts/bughunt-20260625T164637Z-pixel4-c64u-b86877f43589/`
+- Gates: `npm run scope:check` 55 files / 361 tests PASS; APK build `BUILD SUCCESSFUL`; install `Success`.
+
+**Active phase — COMPLETE (2026-06-25).** Session delivered the headline result: the months-long S1 catastrophic c64u wedge was reproduced, **root-caused (HttpURLConnection keep-alive reusing a stale idle socket), fixed (`http.keepAlive=false` in MainActivity), and verified on-device (A/B).** Plus a breadth bug hunt (6-route CDP error sweep, keypad parity, Config/Settings/Disks/Docs/Diagnostics/Switcher, lifecycle, perf) and cleanup. See `bug-hunt-report.md`, `cleanup-report-bughunt.md`, `defects/S1-ROOTCAUSE-*.md`, `defects/S4-*.md`. _(Note: the `http.keepAlive=false` change was later REVERTED — the wedge is a c64u firmware defect, not client connection reuse; see the live session above.)_
+
+Gates: scope:check PASS, lint+tsc PASS, Kotlin MainActivityTest PASS, APK build OK. Working tree dirty with the fix (uncommitted; no commit requested). Device left clean/healthy.
+
+Prior discovery baseline (515e2 run): 290 CTAs — Home 106, Play 24, Disks 40, Config 28, Settings 74, Docs 18.
