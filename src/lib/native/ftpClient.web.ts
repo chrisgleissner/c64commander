@@ -10,6 +10,7 @@ import type { PluginListenerHandle } from "@capacitor/core";
 import type {
   FtpClientPlugin,
   FtpListOptions,
+  FtpRecursiveListOptions,
   FtpEntry,
   FtpReadOptions,
   FtpReadProgressEvent,
@@ -114,6 +115,13 @@ export class FtpClientWeb implements FtpClientPlugin {
     }
 
     return { entries: payload.entries };
+  }
+
+  async listDirectoryRecursive(_options: FtpRecursiveListOptions): Promise<{
+    entries: FtpEntry[];
+    partialFailures?: { path: string; message: string }[];
+  }> {
+    throw new Error("FTP bridge recursive listing is unavailable on web.");
   }
 
   async readFile(options: FtpReadOptions): Promise<{ data: string; sizeBytes?: number }> {

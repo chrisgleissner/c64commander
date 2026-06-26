@@ -19,6 +19,7 @@ const createConfig = (): DeviceSafetyConfig => ({
   configsCooldownMs: 0,
   drivesCooldownMs: 0,
   ftpListCooldownMs: 150,
+  telnetConnectCooldownMs: 150,
   backoffBaseMs: 100,
   backoffMaxMs: 400,
   backoffFactor: 2,

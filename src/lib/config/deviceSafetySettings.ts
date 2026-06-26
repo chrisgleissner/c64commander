@@ -51,6 +51,7 @@ export type DeviceSafetyConfig = {
   configsCooldownMs: number;
   drivesCooldownMs: number;
   ftpListCooldownMs: number;
+  telnetConnectCooldownMs: number;
   backoffBaseMs: number;
   backoffMaxMs: number;
   backoffFactor: number;
@@ -69,6 +70,7 @@ const CONFIGS_CACHE_MS_KEY = "c64u_device_safety_configs_cache_ms";
 const CONFIGS_COOLDOWN_MS_KEY = "c64u_device_safety_configs_cooldown_ms";
 const DRIVES_COOLDOWN_MS_KEY = "c64u_device_safety_drives_cooldown_ms";
 const FTP_LIST_COOLDOWN_MS_KEY = "c64u_device_safety_ftp_list_cooldown_ms";
+const TELNET_CONNECT_COOLDOWN_MS_KEY = "c64u_device_safety_telnet_connect_cooldown_ms";
 const BACKOFF_BASE_MS_KEY = "c64u_device_safety_backoff_base_ms";
 const BACKOFF_MAX_MS_KEY = "c64u_device_safety_backoff_max_ms";
 const BACKOFF_FACTOR_KEY = "c64u_device_safety_backoff_factor";
@@ -89,6 +91,7 @@ const MODE_DEFAULTS: Record<ConcreteDeviceSafetyMode, Omit<DeviceSafetyConfig, "
     configsCooldownMs: 200,
     drivesCooldownMs: 200,
     ftpListCooldownMs: 100,
+    telnetConnectCooldownMs: 100,
     backoffBaseMs: 100,
     backoffMaxMs: 1500,
     backoffFactor: 1.5,
@@ -105,6 +108,7 @@ const MODE_DEFAULTS: Record<ConcreteDeviceSafetyMode, Omit<DeviceSafetyConfig, "
     configsCooldownMs: 500,
     drivesCooldownMs: 500,
     ftpListCooldownMs: 300,
+    telnetConnectCooldownMs: 300,
     backoffBaseMs: 200,
     backoffMaxMs: 3000,
     backoffFactor: 1.8,
@@ -121,6 +125,7 @@ const MODE_DEFAULTS: Record<ConcreteDeviceSafetyMode, Omit<DeviceSafetyConfig, "
     configsCooldownMs: 1200,
     drivesCooldownMs: 1000,
     ftpListCooldownMs: 800,
+    telnetConnectCooldownMs: 800,
     backoffBaseMs: 300,
     backoffMaxMs: 6000,
     backoffFactor: 2,
@@ -137,6 +142,7 @@ const MODE_DEFAULTS: Record<ConcreteDeviceSafetyMode, Omit<DeviceSafetyConfig, "
     configsCooldownMs: 300,
     drivesCooldownMs: 300,
     ftpListCooldownMs: 200,
+    telnetConnectCooldownMs: 200,
     backoffBaseMs: 200,
     backoffMaxMs: 1200,
     backoffFactor: 1.4,
@@ -323,6 +329,7 @@ export const resetDeviceSafetyOverrides = () => {
     CONFIGS_COOLDOWN_MS_KEY,
     DRIVES_COOLDOWN_MS_KEY,
     FTP_LIST_COOLDOWN_MS_KEY,
+    TELNET_CONNECT_COOLDOWN_MS_KEY,
     BACKOFF_BASE_MS_KEY,
     BACKOFF_MAX_MS_KEY,
     BACKOFF_FACTOR_KEY,
@@ -363,6 +370,12 @@ export const loadDeviceSafetyConfig = (): DeviceSafetyConfig => {
     configsCooldownMs: clampNumber(resolveOverride(CONFIGS_COOLDOWN_MS_KEY, defaults.configsCooldownMs), 0, 10000, 50),
     drivesCooldownMs: clampNumber(resolveOverride(DRIVES_COOLDOWN_MS_KEY, defaults.drivesCooldownMs), 0, 10000, 50),
     ftpListCooldownMs: clampNumber(resolveOverride(FTP_LIST_COOLDOWN_MS_KEY, defaults.ftpListCooldownMs), 0, 10000, 50),
+    telnetConnectCooldownMs: clampNumber(
+      resolveOverride(TELNET_CONNECT_COOLDOWN_MS_KEY, defaults.telnetConnectCooldownMs),
+      0,
+      10000,
+      50,
+    ),
     backoffBaseMs: clampNumber(resolveOverride(BACKOFF_BASE_MS_KEY, defaults.backoffBaseMs), 0, 10000, 50),
     backoffMaxMs: clampNumber(resolveOverride(BACKOFF_MAX_MS_KEY, defaults.backoffMaxMs), 0, 20000, 50),
     backoffFactor: clampNumber(resolveOverride(BACKOFF_FACTOR_KEY, defaults.backoffFactor), 1, 3, 0.1),
@@ -425,6 +438,9 @@ export const saveDrivesCooldownMs = (value: number) =>
 export const saveFtpListCooldownMs = (value: number) =>
   saveNumberOverride(FTP_LIST_COOLDOWN_MS_KEY, clampNumber(value, 0, 10000, 50));
 
+export const saveTelnetConnectCooldownMs = (value: number) =>
+  saveNumberOverride(TELNET_CONNECT_COOLDOWN_MS_KEY, clampNumber(value, 0, 10000, 50));
+
 export const saveBackoffBaseMs = (value: number) =>
   saveNumberOverride(BACKOFF_BASE_MS_KEY, clampNumber(value, 0, 10000, 50));
 
@@ -454,6 +470,7 @@ export const DEVICE_SAFETY_SETTING_KEYS = {
   CONFIGS_COOLDOWN_MS_KEY,
   DRIVES_COOLDOWN_MS_KEY,
   FTP_LIST_COOLDOWN_MS_KEY,
+  TELNET_CONNECT_COOLDOWN_MS_KEY,
   BACKOFF_BASE_MS_KEY,
   BACKOFF_MAX_MS_KEY,
   BACKOFF_FACTOR_KEY,

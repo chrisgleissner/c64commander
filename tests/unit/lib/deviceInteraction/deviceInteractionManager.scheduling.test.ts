@@ -13,7 +13,11 @@ import {
   resetDeviceActivityGate,
 } from "@/lib/deviceInteraction/deviceActivityGate";
 import { updateDeviceConnectionState } from "@/lib/deviceInteraction/deviceStateStore";
-import { resetInteractionState, withRestInteraction } from "@/lib/deviceInteraction/deviceInteractionManager";
+import {
+  resetInteractionState,
+  withRestInteraction,
+  withTelnetInteraction,
+} from "@/lib/deviceInteraction/deviceInteractionManager";
 import { saveDeviceSafetyMode } from "@/lib/config/deviceSafetySettings";
 
 const action = {} as any;
@@ -369,6 +373,56 @@ describe("withRestInteraction", () => {
 
       expect(events.map((event) => event.label)).toEqual(["first", "second"]);
       expect(events[1].at - events[0].at).toBeGreaterThanOrEqual(250);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("applies Device Safety Telnet connect cooldown between sessions for the same host", async () => {
+    vi.useFakeTimers();
+    const events: Array<{ label: string; at: number }> = [];
+
+    try {
+      const first = withTelnetInteraction(
+        {
+          action,
+          actionId: "first-telnet",
+          intent: "system",
+          host: "c64u",
+          port: 23,
+        },
+        async () => {
+          events.push({ label: "first", at: Date.now() });
+          return "first";
+        },
+      );
+
+      await vi.runOnlyPendingTimersAsync();
+      await first;
+      await vi.advanceTimersByTimeAsync(0);
+
+      const second = withTelnetInteraction(
+        {
+          action,
+          actionId: "second-telnet",
+          intent: "system",
+          host: "c64u",
+          port: 23,
+        },
+        async () => {
+          events.push({ label: "second", at: Date.now() });
+          return "second";
+        },
+      );
+
+      await vi.advanceTimersByTimeAsync(299);
+      expect(events.map((event) => event.label)).toEqual(["first"]);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await second;
+
+      expect(events.map((event) => event.label)).toEqual(["first", "second"]);
+      expect(events[1].at - events[0].at).toBeGreaterThanOrEqual(300);
     } finally {
       vi.useRealTimers();
     }

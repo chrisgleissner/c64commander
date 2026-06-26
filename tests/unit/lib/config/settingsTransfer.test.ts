@@ -72,6 +72,7 @@ vi.mock("@/lib/config/deviceSafetySettings", () => ({
   saveConfigsCooldownMs: vi.fn(),
   saveDrivesCooldownMs: vi.fn(),
   saveFtpListCooldownMs: vi.fn(),
+  saveTelnetConnectCooldownMs: vi.fn(),
   saveBackoffBaseMs: vi.fn(),
   saveBackoffMaxMs: vi.fn(),
   saveBackoffFactor: vi.fn(),
@@ -87,6 +88,7 @@ describe("settingsTransfer", () => {
     featureFlagManagerMocks.load.mockResolvedValue(undefined);
     featureFlagManagerMocks.getExplicitOverrides.mockReturnValue({ commoserve_enabled: true });
     featureFlagManagerMocks.replaceOverrides.mockResolvedValue(undefined);
+    vi.mocked(deviceSafetySettings.loadDeviceSafetyConfig).mockReturnValue({ telnetConnectCooldownMs: 300 } as any);
     isKnownFeatureFlagIdMock.mockImplementation((value: string) =>
       ["hvsc_enabled", "commoserve_enabled", "lighting_studio_enabled"].includes(value),
     );

@@ -177,15 +177,16 @@ export const applyConfigFileReference = async ({
     password: password ?? "",
   };
   const menuKey = resolveTelnetMenuKey(deviceProduct) ?? "F5";
+  const telnetPort = getStoredTelnetPort();
   const runTelnetWorkflow = async (
     actionId: string,
     callback: (session: ReturnType<typeof createTelnetSession>) => Promise<void>,
   ) =>
     runWithImplicitAction(`config-reference.${actionId}`, (action) =>
-      withTelnetInteraction({ action, actionId, intent: "user" }, async () => {
+      withTelnetInteraction({ action, actionId, intent: "user", host, port: telnetPort }, async () => {
         const transport = createTelnetClient();
         const session = createTelnetSession(transport);
-        await session.connect(host, getStoredTelnetPort(), password ?? undefined);
+        await session.connect(host, telnetPort, password ?? undefined);
         try {
           await callback(session);
         } finally {

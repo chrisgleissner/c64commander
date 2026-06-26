@@ -6,11 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { listFtpDirectory } from "@/lib/ftp/ftpClient";
+import { listFtpDirectory, listFtpDirectoryRecursive } from "@/lib/ftp/ftpClient";
 import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { getC64APIConfigSnapshot } from "@/lib/c64api";
 import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import { addLog } from "@/lib/logging";
+import { isNativePlatform } from "@/lib/native/platform";
 import type { SourceEntry, SourceLocation, SourceRecursiveFailure, SourceRecursiveResult } from "./types";
 import { SOURCE_LABELS } from "./sourceTerms";
 
@@ -27,6 +28,8 @@ type FtpCacheState = {
 const CACHE_KEY = "c64u_ftp_cache:v1";
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 200;
+const FTP_RECURSIVE_MAX_DEPTH = 8;
+const FTP_RECURSIVE_MAX_ENTRIES = 5000;
 
 const loadCache = (): FtpCacheState => {
   if (typeof localStorage === "undefined") return { entries: {}, order: [] };
@@ -130,21 +133,48 @@ const listFilesRecursive = async (
   path: string,
   options?: { signal?: AbortSignal; onProgress?: (delta: number) => void },
 ): Promise<SourceRecursiveResult> => {
+  const signal = options?.signal;
+  const onProgress = options?.onProgress;
+  const abortError = new DOMException("Aborted", "AbortError");
+  const assertNotAborted = () => {
+    if (signal?.aborted) {
+      throw abortError;
+    }
+  };
+
+  assertNotAborted();
+  if (isNativePlatform()) {
+    const { deviceHost: rawHost, password = "" } = getC64APIConfigSnapshot();
+    const host = normalizeFtpHost(rawHost);
+    const normalizedPath = path && path !== "" ? path : "/";
+    const result = await listFtpDirectoryRecursive({
+      host,
+      port: getStoredFtpPort(),
+      password,
+      path: normalizedPath,
+      maxDepth: FTP_RECURSIVE_MAX_DEPTH,
+      maxEntries: FTP_RECURSIVE_MAX_ENTRIES,
+    });
+    assertNotAborted();
+    const entries = (result.entries || []).map((entry) => ({
+      type: entry.type,
+      name: entry.name,
+      path: entry.path,
+      sizeBytes: entry.size ?? null,
+      modifiedAt: entry.modifiedAt ?? null,
+    }));
+    if (entries.length > 0) {
+      onProgress?.(entries.length);
+    }
+    return attachPartialFailures(entries, result.partialFailures ?? []);
+  }
+
   const queue = [path || "/"];
   const visited = new Set<string>();
   const results: SourceEntry[] = [];
   const partialFailures: SourceRecursiveFailure[] = [];
   const maxConcurrent = 3;
   const pending = new Set<Promise<void>>();
-  const signal = options?.signal;
-  const onProgress = options?.onProgress;
-  const abortError = new DOMException("Aborted", "AbortError");
-
-  const assertNotAborted = () => {
-    if (signal?.aborted) {
-      throw abortError;
-    }
-  };
 
   const processPath = async (current: string) => {
     assertNotAborted();

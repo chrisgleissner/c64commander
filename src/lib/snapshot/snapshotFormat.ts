@@ -14,9 +14,21 @@ import { SNAPSHOT_TYPE_CODES, SNAPSHOT_TYPE_FROM_CODE } from "./snapshotTypes";
 // ---------------------------------------------------------------------------
 
 const MAGIC = "C64SNAP\0";
-const VERSION = 1;
+/** RAM-only snapshots (no CPU state). The historical default. */
+const FORMAT_VERSION_V1 = 1;
+/** CPU+RAM snapshots — adds CPU state / full stack page / capability blocks (carried in JSON metadata). */
+const FORMAT_VERSION_V2 = 2;
+/** Versions this decoder understands. v1 files keep loading unchanged. */
+const SUPPORTED_VERSIONS: ReadonlySet<number> = new Set([FORMAT_VERSION_V1, FORMAT_VERSION_V2]);
 const HEADER_SIZE = 28;
 const RANGE_DESCRIPTOR_SIZE = 4; // uint16 start + uint16 length
+
+/**
+ * Header `flags` bit: the snapshot carries captured 6510 CPU state (in the JSON
+ * metadata `cpu` block). A fast, binary-level presence hint; the authoritative
+ * source remains the JSON metadata.
+ */
+export const FLAG_HAS_CPU_STATE = 0x0001;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -68,6 +80,13 @@ export const encodeSnapshot = (
 
   const metadataOffset = metadataJson.length > 0 ? HEADER_SIZE + descriptorsSize + totalDataBytes : 0;
 
+  // A CPU+RAM snapshot bumps the format version and sets the CPU-state flag bit.
+  // RAM-only snapshots stay v1 with flags=0 — identical bytes to before, so old
+  // readers and the existing RAM-only path are completely unaffected.
+  const hasCpuState = Boolean(metadata?.cpu);
+  const version = hasCpuState ? FORMAT_VERSION_V2 : FORMAT_VERSION_V1;
+  const flags = hasCpuState ? FLAG_HAS_CPU_STATE : 0;
+
   const totalSize = HEADER_SIZE + descriptorsSize + totalDataBytes + metadataJson.length;
   const out = new Uint8Array(totalSize);
   const view = new DataView(out.buffer);
@@ -77,11 +96,11 @@ export const encodeSnapshot = (
   out.set(magic, 0);
 
   // Header fields
-  writeUint16LE(view, 8, VERSION);
+  writeUint16LE(view, 8, version);
   writeUint16LE(view, 10, SNAPSHOT_TYPE_CODES[snapshotType]);
   writeUint32LE(view, 12, Math.floor(timestamp.getTime() / 1000));
   writeUint16LE(view, 16, ranges.length);
-  writeUint16LE(view, 18, 0); // flags = 0
+  writeUint16LE(view, 18, flags);
   writeUint32LE(view, 20, metadataOffset);
   writeUint32LE(view, 24, metadataJson.length);
 
@@ -120,6 +139,10 @@ export type DecodedSnapshot = {
   /** One block per range, in matching order. */
   blocks: Uint8Array[];
   metadata: SnapshotMetadata | null;
+  /** Raw header flags (u16). */
+  flags: number;
+  /** True iff the snapshot carries captured CPU state (per the JSON metadata). */
+  hasCpuState: boolean;
 };
 
 /**
@@ -139,7 +162,7 @@ export const decodeSnapshot = (bytes: Uint8Array): DecodedSnapshot => {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
   const version = readUint16LE(view, 8);
-  if (version !== VERSION) {
+  if (!SUPPORTED_VERSIONS.has(version)) {
     throw new Error(`Unsupported .c64snap version: ${version}`);
   }
 
@@ -150,6 +173,7 @@ export const decodeSnapshot = (bytes: Uint8Array): DecodedSnapshot => {
   const timestamp = new Date(timestampSeconds * 1000);
 
   const rangeCount = readUint16LE(view, 16);
+  const flags = readUint16LE(view, 18);
   const metadataOffset = readUint32LE(view, 20);
   const metadataSize = readUint32LE(view, 24);
 

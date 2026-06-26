@@ -236,6 +236,8 @@ export function useTelnetActions(): TelnetActionsState {
           action: traceAction,
           actionId: "capability-discovery",
           intent: "system",
+          host,
+          port,
         },
         async () =>
           await discoverTelnetCapabilities({
@@ -402,6 +404,8 @@ export function useTelnetActions(): TelnetActionsState {
                 action: traceAction,
                 actionId,
                 intent: "user",
+                host,
+                port,
               },
               async () => {
                 const password = await getPassword();

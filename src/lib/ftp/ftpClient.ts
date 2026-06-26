@@ -15,6 +15,8 @@ import {
   type FtpListOptions,
   type FtpPingOptions,
   type FtpReadOptions,
+  type FtpRecursiveFailure,
+  type FtpRecursiveListOptions,
   type FtpWriteOptions,
 } from "@/lib/native/ftpClient";
 import { resolveNativeTraceContext } from "@/lib/native/nativeTraceContext";
@@ -27,6 +29,10 @@ import { buildPayloadPreviewFromBase64, buildPayloadPreviewFromJson } from "@/li
 export type FtpListResult = {
   path: string;
   entries: FtpEntry[];
+};
+
+export type FtpRecursiveListResult = FtpListResult & {
+  partialFailures: FtpRecursiveFailure[];
 };
 
 export const FTP_CONNECT_TIMEOUT_MS = 1_500;
@@ -154,6 +160,118 @@ export const listFtpDirectory = async (
   });
 };
 
+const executeFtpRecursiveList = async (
+  action: TraceActionContext,
+  ftpOptions: FtpRecursiveListOptions,
+  normalizedPath: string,
+  intent: InteractionIntent,
+): Promise<FtpRecursiveListResult> => {
+  incrementFtpInFlight();
+  const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+  const requestPayload = {
+    ...ftpOptions,
+    path: normalizedPath,
+  };
+  try {
+    const response = await withFtpInteraction(
+      {
+        action,
+        operation: "list-recursive",
+        path: normalizedPath,
+        intent,
+        host: ftpOptions.host,
+        port: ftpOptions.port,
+      },
+      async () =>
+        await FtpClient.listDirectoryRecursive(
+          withDefaultConnectTimeout({
+            ...ftpOptions,
+            path: normalizedPath,
+          }),
+        ),
+    );
+    const responsePayload = {
+      entries: response.entries,
+      partialFailures: response.partialFailures ?? [],
+    };
+    recordFtpOperation(action, {
+      operation: "list",
+      command: "LIST-RECURSIVE",
+      hostname: ftpOptions.host,
+      port: ftpOptions.port,
+      path: normalizedPath,
+      durationMs: Math.max(
+        0,
+        Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+      ),
+      result: "success",
+      requestPayload,
+      requestPayloadPreview: buildPayloadPreviewFromJson(requestPayload),
+      responsePayload,
+      responsePayloadPreview: buildPayloadPreviewFromJson(responsePayload),
+      error: null,
+    });
+    return {
+      path: normalizedPath,
+      entries: response.entries,
+      partialFailures: response.partialFailures ?? [],
+    };
+  } catch (error) {
+    const err = error as Error;
+    addErrorLog(
+      "FTP recursive listing failed",
+      buildErrorLogDetails(err, {
+        host: ftpOptions.host,
+        path: normalizedPath,
+      }),
+    );
+    recordFtpOperation(action, {
+      operation: "list",
+      command: "LIST-RECURSIVE",
+      hostname: ftpOptions.host,
+      port: ftpOptions.port,
+      path: normalizedPath,
+      durationMs: Math.max(
+        0,
+        Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+      ),
+      result: "failure",
+      requestPayload,
+      requestPayloadPreview: buildPayloadPreviewFromJson(requestPayload),
+      error: err,
+    });
+    recordTraceError(action, err);
+    throw error;
+  } finally {
+    decrementFtpInFlight();
+  }
+};
+
+export const listFtpDirectoryRecursive = async (
+  options: FtpRecursiveListOptions & { __c64uIntent?: InteractionIntent },
+): Promise<FtpRecursiveListResult> => {
+  const { __c64uIntent, ...ftpOptions } = options;
+  const normalizedPath = options.path && options.path !== "" ? options.path : "/";
+  const intent = __c64uIntent ?? "user";
+
+  const activeAction = getActiveAction();
+  if (activeAction) {
+    const optionsWithTrace = {
+      ...ftpOptions,
+      traceContext: resolveNativeTraceContext(activeAction),
+    };
+    return executeFtpRecursiveList(activeAction, optionsWithTrace, normalizedPath, intent);
+  }
+
+  return runWithImplicitAction("ftp.list-recursive", async (action) => {
+    const optionsWithTrace = {
+      ...ftpOptions,
+      traceContext: resolveNativeTraceContext(action),
+    };
+    return executeFtpRecursiveList(action, optionsWithTrace, normalizedPath, intent);
+  });
+};
+
 const executeFtpRead = async (
   action: TraceActionContext,
   ftpOptions: FtpReadInteractionOptions,
@@ -164,8 +282,7 @@ const executeFtpRead = async (
   // or land in the (serialized) trace payload.
   const { onProgress, signal, ...nativeReadOptions } = ftpOptions;
   const requestId =
-    nativeReadOptions.requestId ??
-    (onProgress || signal ? `ftp-read-${(ftpReadRequestCounter += 1)}` : undefined);
+    nativeReadOptions.requestId ?? (onProgress || signal ? `ftp-read-${(ftpReadRequestCounter += 1)}` : undefined);
 
   incrementFtpInFlight();
   const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -202,8 +319,7 @@ const executeFtpRead = async (
         host: ftpOptions.host,
         port: ftpOptions.port,
       },
-      async () =>
-        await FtpClient.readFile(withDefaultConnectTimeout({ ...nativeReadOptions, path, requestId })),
+      async () => await FtpClient.readFile(withDefaultConnectTimeout({ ...nativeReadOptions, path, requestId })),
     );
     const responsePayload = {
       data: response.data,
@@ -260,8 +376,14 @@ const executeFtpRead = async (
     if (progressListener) {
       try {
         await progressListener.remove();
-      } catch {
-        /* listener teardown is best-effort */
+      } catch (error) {
+        addErrorLog(
+          "FTP progress listener cleanup failed",
+          buildErrorLogDetails(error as Error, {
+            host: ftpOptions.host,
+            path,
+          }),
+        );
       }
     }
     decrementFtpInFlight();

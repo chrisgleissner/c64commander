@@ -199,9 +199,7 @@ export function useC64Connection() {
     // condition — that permanently tears the interval down. Time-based coalescing
     // lives in the queryFn above.
     refetchInterval:
-      !screenActive || diagnosticsSuppressionActive
-        ? false
-        : () => (pollingPaused ? false : HEALTH_CHECK_INTERVAL_MS),
+      !screenActive || diagnosticsSuppressionActive ? false : () => (pollingPaused ? false : HEALTH_CHECK_INTERVAL_MS),
   });
 
   const rateLimitedInfoRefetch = useCallback(() => {

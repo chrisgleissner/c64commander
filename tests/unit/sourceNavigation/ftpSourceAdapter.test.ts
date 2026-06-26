@@ -9,6 +9,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 vi.mock("@/lib/ftp/ftpClient", () => ({
   listFtpDirectory: vi.fn(),
+  listFtpDirectoryRecursive: vi.fn(),
 }));
 
 vi.mock("@/lib/ftp/ftpConfig", () => ({
@@ -19,6 +20,14 @@ vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
 }));
 
+vi.mock("@/lib/native/platform", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/native/platform")>();
+  return {
+    ...actual,
+    isNativePlatform: vi.fn(() => false),
+  };
+});
+
 vi.mock("@/lib/secureStorage", () => ({
   getPassword: vi.fn(async () => "secret"),
   setPassword: vi.fn(async () => undefined),
@@ -27,11 +36,14 @@ vi.mock("@/lib/secureStorage", () => ({
   getCachedPassword: vi.fn(() => "secret"),
 }));
 
-import { listFtpDirectory } from "@/lib/ftp/ftpClient";
+import { listFtpDirectory, listFtpDirectoryRecursive } from "@/lib/ftp/ftpClient";
 import { addLog } from "@/lib/logging";
+import { isNativePlatform } from "@/lib/native/platform";
 import { createUltimateSourceLocation, normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 
 const listFtpDirectoryMock = vi.mocked(listFtpDirectory);
+const listFtpDirectoryRecursiveMock = vi.mocked(listFtpDirectoryRecursive);
+const isNativePlatformMock = vi.mocked(isNativePlatform);
 import { CURRENT_DEVICE_HOST_KEY as DEVICE_HOST_KEY } from "@/lib/c64api/hostConfig";
 const HAS_PASSWORD_KEY = "c64u_has_password";
 const FTP_CACHE_KEY = "c64u_ftp_cache:v1";
@@ -39,6 +51,8 @@ const FTP_CACHE_KEY = "c64u_ftp_cache:v1";
 describe("ftpSourceAdapter", () => {
   beforeEach(() => {
     listFtpDirectoryMock.mockReset();
+    listFtpDirectoryRecursiveMock.mockReset();
+    isNativePlatformMock.mockReturnValue(false);
     localStorage.clear();
     localStorage.setItem(DEVICE_HOST_KEY, "c64u");
     localStorage.setItem(HAS_PASSWORD_KEY, "1");
@@ -122,6 +136,37 @@ describe("ftpSourceAdapter", () => {
     const results = await source.listFilesRecursive("/");
 
     expect(results.map((entry) => entry.path).sort()).toEqual(["/music/song.sid", "/root.sid"]);
+  });
+
+  it("uses the native recursive listing bridge on native platforms", async () => {
+    isNativePlatformMock.mockReturnValue(true);
+    listFtpDirectoryRecursiveMock.mockResolvedValue({
+      path: "/",
+      entries: [
+        { type: "file", name: "root.sid", path: "/root.sid", size: 5, modifiedAt: "now" },
+        { type: "file", name: "song.sid", path: "/music/song.sid", size: 10, modifiedAt: "now" },
+      ],
+      partialFailures: [{ path: "/bad", message: "listing failed" }],
+    });
+
+    const source = createUltimateSourceLocation();
+    const deltas: number[] = [];
+    const results = await source.listFilesRecursive("/", { onProgress: (delta) => deltas.push(delta) });
+
+    expect(listFtpDirectoryRecursiveMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: "c64u",
+        port: 21,
+        password: "secret",
+        path: "/",
+        maxDepth: 8,
+        maxEntries: 5000,
+      }),
+    );
+    expect(listFtpDirectoryMock).not.toHaveBeenCalled();
+    expect(results.map((entry) => entry.path).sort()).toEqual(["/music/song.sid", "/root.sid"]);
+    expect(results.partialFailures).toEqual([{ path: "/bad", message: "listing failed" }]);
+    expect(deltas).toEqual([2]);
   });
 
   it("reports incremental onProgress as files are discovered during the recursive walk", async () => {

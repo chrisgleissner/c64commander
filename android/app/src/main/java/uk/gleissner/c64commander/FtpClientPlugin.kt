@@ -34,6 +34,9 @@ class FtpClientPlugin : Plugin() {
   private val readChunkSize = 64 * 1024
   private val readProgressIntervalBytes = 128L * 1024L
   private val readAbortedMessage = "FTP read aborted"
+  private val defaultRecursiveMaxDepth = 8
+  private val defaultRecursiveMaxEntries = 5_000
+  private val maxNlstMetadataProbes = 64
 
   // requestIds the JS layer has asked to cancel mid-read, and the live input
   // streams keyed by requestId. cancelRead() closes the stream so a blocked
@@ -134,6 +137,30 @@ class FtpClientPlugin : Plugin() {
     }
   }
 
+  private fun ftpFileToEntry(path: String, file: FTPFile): JSObject? {
+    val name = file.name ?: return null
+    if (name == "." || name == "..") return null
+    return JSObject().apply {
+      put("name", name)
+      put("path", buildPath(path, name))
+      put("type", if (file.isDirectory) "dir" else "file")
+      if (file.size >= 0) put("size", file.size)
+      val modified =
+              file.timestamp?.time?.let { date ->
+                val formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+                formatter.timeZone = TimeZone.getTimeZone("UTC")
+                formatter.format(date)
+              }
+      if (!modified.isNullOrBlank()) put("modifiedAt", modified)
+    }
+  }
+
+  private fun recursiveFailure(path: String, message: String): JSObject =
+          JSObject().apply {
+            put("path", path)
+            put("message", message)
+          }
+
   @PluginMethod
   fun listDirectory(call: PluginCall) {
     val host = call.getString("host")
@@ -166,20 +193,7 @@ class FtpClientPlugin : Plugin() {
                 val entries = JSArray()
                 val files = resolveListing(client, path)
                 files.forEach { file ->
-                  val name = file.name ?: return@forEach
-                  if (name == "." || name == "..") return@forEach
-                  val entry = JSObject()
-                  entry.put("name", name)
-                  entry.put("path", buildPath(path, name))
-                  entry.put("type", if (file.isDirectory) "dir" else "file")
-                  if (file.size >= 0) entry.put("size", file.size)
-                  val modified =
-                          file.timestamp?.time?.let { date ->
-                            val formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
-                            formatter.timeZone = TimeZone.getTimeZone("UTC")
-                            formatter.format(date)
-                          }
-                  if (!modified.isNullOrBlank()) entry.put("modifiedAt", modified)
+                  val entry = ftpFileToEntry(path, file) ?: return@forEach
                   entries.put(entry)
                 }
 
@@ -205,6 +219,126 @@ class FtpClientPlugin : Plugin() {
                           pluginContextOrNull(),
                           logTag,
                           "Failed to disconnect FTP client",
+                          "FtpClientPlugin",
+                          error
+                  )
+                }
+              }
+            }
+    )
+  }
+
+  @PluginMethod
+  fun listDirectoryRecursive(call: PluginCall) {
+    val host = call.getString("host")
+    if (host.isNullOrBlank()) {
+      call.reject("host is required")
+      return
+    }
+    val port = call.getInt("port") ?: 21
+    val username = call.getString("username") ?: "user"
+    val password = call.getString("password") ?: ""
+    val path = call.getString("path") ?: "/"
+    val timeoutMs = resolveTransferTimeoutMs(call)
+    val connectTimeoutMs = resolveConnectTimeoutMs(call)
+    val maxDepth = (call.getInt("maxDepth") ?: defaultRecursiveMaxDepth).coerceIn(0, 32)
+    val maxEntries = (call.getInt("maxEntries") ?: defaultRecursiveMaxEntries).coerceIn(1, 50_000)
+
+    runTask(
+            Runnable {
+              val client = ftpClientFactory()
+              try {
+                applyPreConnectTimeouts(client, connectTimeoutMs)
+                client.connect(host, port)
+                applyConnectedTimeouts(client, timeoutMs)
+                val loggedIn = client.login(username, password)
+                if (!loggedIn) {
+                  call.reject("FTP login failed")
+                  return@Runnable
+                }
+                client.enterLocalPassiveMode()
+                client.setFileType(FTP.BINARY_FILE_TYPE)
+
+                val entries = JSArray()
+                val failures = JSArray()
+                val queue = ArrayDeque<Pair<String, Int>>()
+                val visited = linkedSetOf<String>()
+                queue.add(path to 0)
+                var examinedEntries = 0
+                var capped = false
+
+                while (queue.isNotEmpty() && !capped) {
+                  val (currentPath, depth) = queue.removeFirst()
+                  if (!visited.add(currentPath)) continue
+                  val files =
+                          try {
+                            resolveListing(client, currentPath)
+                          } catch (error: Exception) {
+                            failures.put(recursiveFailure(currentPath, error.message ?: "FTP listing failed"))
+                            AppLogger.warn(
+                                    pluginContextOrNull(),
+                                    logTag,
+                                    "FTP recursive listing skipped folder",
+                                    "FtpClientPlugin",
+                                    error,
+                            )
+                            continue
+                          }
+
+                  for (file in files) {
+                    val entry = ftpFileToEntry(currentPath, file) ?: continue
+                    examinedEntries += 1
+                    if (examinedEntries > maxEntries) {
+                      failures.put(
+                              recursiveFailure(
+                                      currentPath,
+                                      "FTP recursive listing stopped after $maxEntries entries",
+                              )
+                      )
+                      capped = true
+                      break
+                    }
+                    if (file.isDirectory) {
+                      val entryPath = buildPath(currentPath, file.name)
+                      if (depth < maxDepth) {
+                        queue.add(entryPath to depth + 1)
+                      } else {
+                        failures.put(
+                                recursiveFailure(
+                                        entryPath,
+                                        "FTP recursive listing max depth $maxDepth reached",
+                                )
+                        )
+                      }
+                    } else {
+                      entries.put(entry)
+                    }
+                  }
+                }
+
+                val result = JSObject()
+                result.put("entries", entries)
+                result.put("partialFailures", failures)
+                call.resolve(result)
+              } catch (error: Exception) {
+                val message = buildFailureMessage("listDirectoryRecursive", error, connectTimeoutMs, timeoutMs)
+                AppLogger.error(
+                        pluginContextOrNull(),
+                        logTag,
+                        "FTP listDirectoryRecursive failed",
+                        "FtpClientPlugin",
+                        error,
+                        traceFields(call),
+                )
+                call.reject(message, error)
+              } finally {
+                try {
+                  if (client.isConnected) client.disconnect()
+                } catch (error: Exception) {
+                  AppLogger.warn(
+                          pluginContextOrNull(),
+                          logTag,
+                          "Failed to disconnect recursive FTP client",
                           "FtpClientPlugin",
                           error
                   )
@@ -336,7 +470,15 @@ class FtpClientPlugin : Plugin() {
                 }
                 try {
                   stream?.close()
-                } catch (_: Exception) {}
+                } catch (error: Exception) {
+                  AppLogger.warn(
+                          pluginContextOrNull(),
+                          logTag,
+                          "Failed to close FTP read stream",
+                          "FtpClientPlugin",
+                          error,
+                  )
+                }
                 try {
                   if (client.isConnected) client.disconnect()
                 } catch (error: Exception) {
@@ -597,13 +739,23 @@ class FtpClientPlugin : Plugin() {
       return emptyArray()
     }
 
-    return names.mapNotNull { rawName ->
+    if (names.size > maxNlstMetadataProbes) {
+      AppLogger.warn(
+              pluginContextOrNull(),
+              logTag,
+              "FTP NLST fallback metadata probe cap reached",
+              "FtpClientPlugin",
+              IllegalStateException("NLST returned ${names.size} names; probing first $maxNlstMetadataProbes"),
+      )
+    }
+
+    return names.take(maxNlstMetadataProbes).mapNotNull { rawName ->
       val name = rawName.substringAfterLast('/').trim()
       if (name.isBlank() || name == "." || name == "..") {
         return@mapNotNull null
       }
       val fullPath = buildPath(path, name)
-      resolveFileFromMetadata(client, fullPath, name) ?: synthesizeFileFromDirectoryProbe(client, fullPath, name)
+      resolveFileFromMetadata(client, fullPath, name) ?: synthesizeFileFromName(name)
     }.toTypedArray()
   }
 
@@ -626,55 +778,10 @@ class FtpClientPlugin : Plugin() {
     }
   }
 
-  private fun synthesizeFileFromDirectoryProbe(client: FTPClient, fullPath: String, name: String): FTPFile {
-    val workingDirectory =
-            try {
-              client.printWorkingDirectory()
-            } catch (error: Exception) {
-              AppLogger.warn(
-                      pluginContextOrNull(),
-                      logTag,
-                      "FTP PWD probe failed during NLST fallback",
-                      "FtpClientPlugin",
-                      error,
-              )
-              null
-            }
-    val isDirectory =
-            try {
-              client.changeWorkingDirectory(fullPath)
-            } catch (error: Exception) {
-              AppLogger.warn(
-                      pluginContextOrNull(),
-                      logTag,
-                      "FTP CWD probe failed during NLST fallback",
-                      "FtpClientPlugin",
-                      error,
-              )
-              false
-            }
-
-    if (isDirectory) {
-      try {
-        if (!workingDirectory.isNullOrBlank()) {
-          client.changeWorkingDirectory(workingDirectory)
-        } else {
-          client.changeToParentDirectory()
-        }
-      } catch (error: Exception) {
-        AppLogger.warn(
-                pluginContextOrNull(),
-                logTag,
-                "Failed to restore FTP working directory after NLST fallback probe",
-                "FtpClientPlugin",
-                error,
-        )
-      }
-    }
-
+  private fun synthesizeFileFromName(name: String): FTPFile {
     return FTPFile().apply {
       this.name = name
-      type = if (isDirectory) FTPFile.DIRECTORY_TYPE else FTPFile.FILE_TYPE
+      type = FTPFile.FILE_TYPE
     }
   }
 

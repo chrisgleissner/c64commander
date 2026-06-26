@@ -95,7 +95,12 @@ const createOverlaySubmenuScreen = (rootLabels: string[], rootIndex: number, row
 };
 
 const createRunner = (sessionScreens: TelnetScreen[][]): TelnetSessionRunner => {
-  const queue = [...sessionScreens];
+  const virtualSessionScreens = sessionScreens.flatMap((screens, index) => {
+    if (index === 0) return screens;
+    const restoredRoot = screens.find((screen) => screen.menus.length > 0) ?? screens[0];
+    return [...screens.slice(1), restoredRoot].filter((screen): screen is TelnetScreen => !!screen);
+  });
+  const queue = [virtualSessionScreens];
   return {
     withSession: async <T>(callback: (session: TelnetSessionApi) => Promise<T>) => {
       const screens = queue.shift();
@@ -354,7 +359,6 @@ describe("discoverTelnetCapabilities", () => {
     const blankScreen = createScreen({ menus: [] });
     const sendKeySpy = vi.fn();
     const sessionScreens = [
-      [blankScreen, blankScreen, blankScreen, blankScreen, blankScreen, blankScreen, createRootScreen(rootLabels)],
       [
         blankScreen,
         blankScreen,
@@ -364,6 +368,7 @@ describe("discoverTelnetCapabilities", () => {
         blankScreen,
         createRootScreen(rootLabels),
         createSubmenuScreen(rootLabels, 0, ["Reset C64", "Power Cycle"]),
+        createRootScreen(rootLabels),
       ],
     ];
     const runner: TelnetSessionRunner = {

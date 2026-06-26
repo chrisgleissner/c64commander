@@ -1025,6 +1025,8 @@ const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
         actionId: "health-check",
         intent: runtime.intent,
         action: traceAction,
+        host: runtime.host,
+        port: runtime.telnetPort,
       },
       async () => {
         try {

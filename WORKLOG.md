@@ -749,3 +749,58 @@ On-device verification (Pixel 4 → c64u; u64 fallback during a c64u dropout):
 - c64u flakiness: repeated wifi toggles (used to simulate outages) destabilized the shared AP and dropped c64u (user restarted twice); a single deliberate toggle survived (403). Updated memory c64u-flakiness with avoidance guidance.
 
 Wrote fix-report.md; updated S2 defect (FIXED+VERIFIED), bug-hunt-ledger. App left connected/clean.
+
+## Session final-bugfree-20260626T062957Z (HEAD fe212a59, branch test/full-cta-coverage-2) — FINAL BUG-FREE PROOF
+
+All times 2026-06-26 UTC.
+
+### Setup + baseline (06:28–06:36Z)
+- git: branch test/full-cta-coverage-2, HEAD fe212a59 (PR #295: RAM snapshot restore fix + full CTA coverage tests). Working tree: only prompt4.md untracked.
+- Confirmed `http.keepAlive=false` REVERTED — no keepAlive override in android/app/src/main/. S1 = firmware defect (see PLANS.md framing).
+- Hardware probe: Pixel 4 `9B081FFAZ001WX` connected (USB). c64u 192.168.1.167 ICMP 1.1ms; u64 192.168.1.13 ICMP 0.5ms.
+- `npm run scope:check`: 55 files / 361 tests PASS (exit 0).
+- `cap:build && android:apk`: exit 0 → c64commander-0.9.0-rc1-debug.apk, SHA-256 bc3b825622c74baa23aaee4547ae9f050ded01b33001423c5ee9b4630fbd9cc3.
+- Installed APK at start = stale WIP `0.8.9-b8687` vc2047 (off-history). New build vc2036 < 2047 → `adb uninstall` then `adb install`. Installed `0.9.0-rc1` vc2036, sig d39d81d2, first/last install 2026-06-26 07:29:37.
+- Artifact root: c64scope/artifacts/final-bugfree-20260626T062957Z-pixel4-c64u-fe212a59/. Wrote environment.json, apk-identity.json, installed-package-identity.json.
+- Direct c64u health (infra): unauth HTTP 403 in 0.009s; authed HTTP 200 in 0.013s — firmware 1.1.0, fpga 122, core 1.49, unique_id 5D4E12.
+- Launch via DroidMind start_app → PID 29970; CDP forward tcp:9333 → page "C64 Commander" http://localhost/.
+- Launch opened auto-discovery interstitial (PR #292): found c64u (Already saved, Password required) + u64 (fw 3.14e ID 38C1BA). App OFFLINE/Not connected.
+- App-driven connect: tap "Use" on c64u → inline Network password field. NOTE on automation: WebView viewport does NOT reflow for the soft keyboard (innerHeight stays 829); a pre-keyboard button coord landed on a keyboard key and appended a stray char to the password (pwdk). Corrected: cleared field (4xDEL), retyped "pwd" (CDP-verified len=3), BACK to dismiss keyboard, tapped "Use Device".
+- **Baseline PROVEN**: Home shows badge "192.168.1.167 ● HEALTHY", App 0.9.0-rc1, Device c64u, Firmware 1.1.0. screenshots/04-connected-home.png.
+- Baseline logcat (logs/logcat/baseline-launch-connect.log, 4524 lines): no AndroidRuntime FATAL, no app chromium ERROR. Clean.
+- Started continuous CDP console/network listener → logs/cdp-console-stream.jsonl.
+- OBSERVATION (verify later, not yet a bug): c64u shown "Already saved" immediately after a CLEAN install (uninstall wiped data). Either the app seeds a default c64u device or discovery mislabels. To verify in Settings → saved devices.
+
+### Play flow + SID-add finding (06:36–07:00Z)
+- Play page loaded clean (badge HEALTHY). Add items → source chooser shows 4 sources: Local, C64U, HVSC, CommoServe (+Cancel).
+- C64U source browse: root (Flash/SD/Temp/USB2) → /USB2 → /USB2/test-data → /USB2/test-data/SID. All directory listings rendered, badge HEALTHY. (Used FTP infra readback to locate fixtures: /USB2/test-data/{SID,prg,d64,mod,crt} — small files incl 10_Orbyte.sid 1584B.)
+- Selected 3 SIDs (10_Orbyte, 12th_Sector_Music, 1982) via selection circles (row-center tap does NOT select; circle at x~95 does). "3 selected" → Add to playlist.
+- **FINDING S2-PLAY-SID-ADD-AUTO-SONGLENGTHS-FTP-WEDGE** (defect filed): add triggered 60s+ "Scanning… 3 items", a burst of ~13 /v1/configs SID-setup reads, and an auto-selected Songlengths.md5 read over FTP that timed out ("FTP readFile timed out after connect 1500ms / transfer 8000ms"). Health → UNHEALTHY(5). 3 SIDs still added (Total 9:00, default 3:00). c64u FTP PASV now firmware-wedged (control ch OK 220/230/257/250, PASV times out 10-12s); HTTP stays 200/healthy. App did NOT auto-repoll /v1/info for ~13 min (06:40→06:53); badge recovered to HEALTHY immediately on Home nav (forced re-poll). Root: firmware FTP defect (external); app behaviors flagged (auto-songlengths-FTP-read on add; long no-repoll window).
+- **Transport (HTTP, prompt §C) on the 3-SID playlist**: Play 10_Orbyte ✓ (timer advanced 0:07→2:32, Remaining counted down); Pause ✓ (froze 1:58, button→Resume); Resume ✓ (advanced again); Stop ✓ (timer→0:00). Each c64u op triggers config-read bursts → health badge twitchy/UNHEALTHY on the already-degraded device (not false-OK — it reports real failures; recovers on successful poll).
+- DECISION POINT: c64u FTP is firmware-wedged + device degraded. Clean high-value-flow proof (disk mount/eject reliability S1, locked-screen auto-advance, source browse/import, filtering) needs a FRESH healthy c64u (physical power-cycle). Pivoting to app-local testing; asking user re power-cycle.
+
+### USER REDIRECT (07:1x–07:3xZ) — songlengths fix reshaped + app fixes
+- User power-cycled c64u (FTP restored: listing 226 in 0.57s, HTTP 200). Directive: "learn from this outage and avoid it in future; don't make a habit of power-cycles."
+- Subagent code analysis confirmed TWO fixable app defects (distinct from firmware FTP wedge):
+  - FIX(b) health-poll self-halt: useC64Connection.ts refetchInterval returns `false` on a *time-based* (non-reactive) condition → React Query tears the interval down permanently → badge stuck UNHEALTHY ~13min until navigation. **FIXED**: moved time-based coalescing into queryFn (return cached when recent success), refetchInterval now only returns false on *reactive* state (screenActive/diagnosticsSuppression/pollingPaused). typecheck clean; related tests green.
+  - FIX(a) songlengths-on-SID-add: blocking/unbounded/uncancellable FTP read of a multi-MB songlengths.md5 that times out (8s idle soTimeout) and wedges the firmware FTP. v1 = 1MiB size-gate (committed in WT).
+- **USER FEEDBACK reshapes FIX(a)**: songlengths.md5 is ~5MiB (→6MiB in 10y); a 1MiB cap makes C64U songlengths discovery infeasible — NOT acceptable. Required instead: (1) **6 MiB cap**, (2) **no timeouts** (let the read complete), (3) **much clearer progress reports** during the read, (4) **user abort**. The 8s idle-timeout truncating the transfer is likely what wedged the FTP data channel; letting it complete (or aborting cleanly) avoids that.
+- Plan: native FtpClientPlugin.kt chunked streaming read with byte-progress events + cancellation + generous/disabled idle timeout; thread requestId/onProgress/signal/timeoutMs through src/lib/native/ftpClient.ts + src/lib/ftp/ftpClient.ts; addFileSelections buildUltimateSonglengthsFile uses them with 6MiB cap; surface progress + abort in the Play scan status. Kotlin + JS tests. Then build/install/HIL-read the real 5MiB songlengths on the fresh c64u (abort-ready).
+
+### Fix verification + WEDGE 2 diagnosis + cascade-cut (07:3x–08:5xZ)
+- Built+installed 0.9.0-rc1-fe212 (fix-a v2 + fix-b). tsc clean; 140 JS tests + Kotlin FtpClientPluginTest green.
+- Re-ran SID-add HIL (3 SIDs /USB2/test-data/SID) to verify fix-a: read started with timeoutMs:0/totalBytes:5151881 (logcat); badge stayed HEALTHY ~76s (vs prior 8s error); one real duration resolved (12th_Sector=03:11 → read path works). BUT device then fully wedged (HTTP+FTP 000, ICMP alive) → user power-cycled (#2).
+- **WEDGE 2 ROOT CAUSE (logcat wedge2-evidence/full-logcat.log):** wedge onset was in the songlengths DISCOVERY directory-listing scan, BEFORE the read — 9× SocketTimeoutException on listings 08:46:11→08:47:08, each cycling LIST→MLSD→NLST (3 PASV connections/folder, internal cascade unpaced by the 800ms inter-call cooldown). Folders are small (16/98/1 entries) so NOT size; it's rapid FTP connect/PASV churn (issue #364). The no-timeout READ was not the trigger.
+- **FIX 3 (cascade cut):** FtpClientPlugin.kt resolveListing now rethrows on SocketTimeoutException instead of cascading to MLSD/NLST (3→1 PASV cycles per struggling listing). Kotlin test listDirectoryDoesNotCascadeToMlsdOrNlstOnTimeout green; APK rebuilt (SHA 56ec881f) + installed.
+- HONEST LIMIT: c64u-no-wedge NOT guaranteed on fw-1.1.0 (firmware-limited); cascade cut reduces churn but not proven to fully prevent (deliberately NOT re-tested on c64u to avoid power-cycle #3). Real cure = firmware (u64 3.14x). Functional songlengths verification recommended on u64.
+- Fix-b on-device: reconnected c64u HEALTHY; health polling continues (3 drives + info polls, no nav) → self-halt fixed.
+- Device left: app connected to c64u, HEALTHY, Home, empty playlist (fresh install), Drive A no-disk.
+
+### Safe-CTA error sweep (09:1x–09:3xZ) — exercise CTAs + capture errors per user mandate
+- CDP error listener (cta-sweep-errors.jsonl), clean baseline. Exercised interactive CTAs on safe surfaces (no FTP bursts, no destructive Power Off/Reboot):
+  - Play: Mute/Recurse/Shuffle/Repeat toggles (states flip correctly), Reshuffle, volume slider (0→-42dB applies), default-duration slider, type-filter chips. No Radix slider double-handling bug.
+  - Config: category nav (Turbo boost); Turbo control dropdown opens with options (no blank-Select bug); config WRITE via PUT (Manual→Off→Manual) applied + device stayed HEALTHY (LED-crash class fixed) + restored.
+  - Diagnostics (Star key): password-redaction PASS. Keypad: digits→tabs. Lifecycle: bg→fg no crash. Docs: accordion expand works.
+- **Result: 0 console errors, 0 logcat app errors across the entire sweep.** App is clean for the exercised safe interactive CTA surface.
+- NOT covered (continuing program / risky): full ~1000-CTA exhaustive matrix; FTP-heavy CTAs (Add items/Add disks/C64U browse — wedge risk); complex stateful flows (mount/eject reliability, locked-screen auto-advance, disk swap, filtering edge cases); negative-path connect; every config row; variant (C64U Remote) checks. See handover9.md.
+- Honest status: 3 real bugs fixed + verified this session; broad safe-CTA surface clean; firmware FTP wedge = external/unfixable-in-app (trigger reduced). NOT a BUGFREE-PROVEN certification (exhaustive matrix incomplete).

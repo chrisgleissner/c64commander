@@ -308,13 +308,14 @@ function HomePageContent() {
       throw new Error("Telnet is unavailable for REU actions on this device.");
     }
     const host = stripPortFromDeviceHost(resolveDeviceHostFromStorage());
+    const port = getStoredTelnetPort();
     const password = await getPassword();
     const transport = createTelnetClient();
     const session = createTelnetSession(transport);
     const menuKey = resolveTelnetMenuKey(status.deviceInfo?.product) ?? "F5";
 
     const runSession = async () => {
-      await session.connect(host, getStoredTelnetPort(), password ?? undefined);
+      await session.connect(host, port, password ?? undefined);
       try {
         return await callback(session, menuKey);
       } finally {
@@ -323,10 +324,13 @@ function HomePageContent() {
     };
     const activeAction = getActiveAction();
     if (activeAction) {
-      return withTelnetInteraction({ action: activeAction, actionId: "home-reu-workflow", intent: "user" }, runSession);
+      return withTelnetInteraction(
+        { action: activeAction, actionId: "home-reu-workflow", intent: "user", host, port },
+        runSession,
+      );
     }
     return runWithImplicitAction("home.reu.telnet", (action) =>
-      withTelnetInteraction({ action, actionId: "home-reu-workflow", intent: "user" }, runSession),
+      withTelnetInteraction({ action, actionId: "home-reu-workflow", intent: "user", host, port }, runSession),
     );
   };
 
@@ -380,13 +384,14 @@ function HomePageContent() {
       throw new Error("Telnet is unavailable for config file actions on this device.");
     }
     const host = stripPortFromDeviceHost(resolveDeviceHostFromStorage());
+    const port = getStoredTelnetPort();
     const password = await getPassword();
     const transport = createTelnetClient();
     const session = createTelnetSession(transport);
     const menuKey = resolveTelnetMenuKey(status.deviceInfo?.product) ?? "F5";
 
     const runSession = async () => {
-      await session.connect(host, getStoredTelnetPort(), password ?? undefined);
+      await session.connect(host, port, password ?? undefined);
       try {
         return await callback(session, menuKey);
       } finally {
@@ -396,12 +401,12 @@ function HomePageContent() {
     const activeAction = getActiveAction();
     if (activeAction) {
       return withTelnetInteraction(
-        { action: activeAction, actionId: "home-config-file-workflow", intent: "user" },
+        { action: activeAction, actionId: "home-config-file-workflow", intent: "user", host, port },
         runSession,
       );
     }
     return runWithImplicitAction("home.config-file.telnet", (action) =>
-      withTelnetInteraction({ action, actionId: "home-config-file-workflow", intent: "user" }, runSession),
+      withTelnetInteraction({ action, actionId: "home-config-file-workflow", intent: "user", host, port }, runSession),
     );
   };
 

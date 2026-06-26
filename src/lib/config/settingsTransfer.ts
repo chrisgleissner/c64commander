@@ -61,6 +61,7 @@ import {
   saveFtpListCooldownMs,
   saveFtpMaxConcurrency,
   saveInfoCacheMs,
+  saveTelnetConnectCooldownMs,
   type DeviceSafetyMode,
 } from "@/lib/config/deviceSafetySettings";
 
@@ -97,6 +98,7 @@ export type SettingsExportPayload = {
     configsCooldownMs: number;
     drivesCooldownMs: number;
     ftpListCooldownMs: number;
+    telnetConnectCooldownMs: number;
     backoffBaseMs: number;
     backoffMaxMs: number;
     backoffFactor: number;
@@ -139,6 +141,7 @@ const DEVICE_SAFETY_KEYS = [
   "configsCooldownMs",
   "drivesCooldownMs",
   "ftpListCooldownMs",
+  "telnetConnectCooldownMs",
   "backoffBaseMs",
   "backoffMaxMs",
   "backoffFactor",
@@ -148,7 +151,7 @@ const DEVICE_SAFETY_KEYS = [
   "allowUserOverrideCircuit",
 ] as const;
 
-const LEGACY_DEVICE_SAFETY_OPTIONAL_KEYS = ["restMaxConcurrency"] as const;
+const DEVICE_SAFETY_OPTIONAL_IMPORT_KEYS = ["restMaxConcurrency", "telnetConnectCooldownMs"] as const;
 
 const hasRequiredKeysAllowOptional = (
   value: Record<string, unknown>,
@@ -200,6 +203,7 @@ export const exportSettingsSnapshot = async (): Promise<SettingsExportPayload> =
       configsCooldownMs: safety.configsCooldownMs,
       drivesCooldownMs: safety.drivesCooldownMs,
       ftpListCooldownMs: safety.ftpListCooldownMs,
+      telnetConnectCooldownMs: safety.telnetConnectCooldownMs,
       backoffBaseMs: safety.backoffBaseMs,
       backoffMaxMs: safety.backoffMaxMs,
       backoffFactor: safety.backoffFactor,
@@ -259,13 +263,15 @@ const sanitizeFeatureFlags = (value: unknown): Partial<Record<FeatureFlagId, boo
 const validateDeviceSafety = (value: unknown) => {
   if (!value || typeof value !== "object") return "deviceSafety must be an object.";
   const record = value as Record<string, unknown>;
-  const allowedKeys = [...DEVICE_SAFETY_KEYS, ...LEGACY_DEVICE_SAFETY_OPTIONAL_KEYS];
+  const allowedKeys = [...DEVICE_SAFETY_KEYS, ...DEVICE_SAFETY_OPTIONAL_IMPORT_KEYS];
   const keysAreAllowed = Object.keys(record).every((key) => allowedKeys.includes(key as (typeof allowedKeys)[number]));
-  const requiredKeysPresent = DEVICE_SAFETY_KEYS.every((key) => key in record);
+  const requiredKeysPresent = DEVICE_SAFETY_KEYS.filter((key) => key !== "telnetConnectCooldownMs").every(
+    (key) => key in record,
+  );
   if (!keysAreAllowed || !requiredKeysPresent) return "deviceSafety contains unknown or missing keys.";
   if (!isDeviceSafetyMode(record.mode)) return "deviceSafety.mode is invalid.";
   const numericKeys = DEVICE_SAFETY_KEYS.filter((key) => key !== "mode" && key !== "allowUserOverrideCircuit");
-  if (numericKeys.some((key) => !Number.isFinite(record[key] as number))) {
+  if (numericKeys.some((key) => key in record && !Number.isFinite(record[key] as number))) {
     return "deviceSafety numeric values must be numbers.";
   }
   if (typeof record.allowUserOverrideCircuit !== "boolean") return "allowUserOverrideCircuit must be boolean.";
@@ -329,12 +335,14 @@ export const importSettingsJson = async (raw: string): Promise<{ ok: true } | { 
   saveArchiveUserAgentOverride(safeApp.archiveUserAgentOverride);
 
   saveDeviceSafetyMode(safeSafety.mode);
+  const safetyDefaults = loadDeviceSafetyConfig();
   saveFtpMaxConcurrency(safeSafety.ftpMaxConcurrency);
   saveInfoCacheMs(safeSafety.infoCacheMs);
   saveConfigsCacheMs(safeSafety.configsCacheMs);
   saveConfigsCooldownMs(safeSafety.configsCooldownMs);
   saveDrivesCooldownMs(safeSafety.drivesCooldownMs);
   saveFtpListCooldownMs(safeSafety.ftpListCooldownMs);
+  saveTelnetConnectCooldownMs(safeSafety.telnetConnectCooldownMs ?? safetyDefaults.telnetConnectCooldownMs);
   saveBackoffBaseMs(safeSafety.backoffBaseMs);
   saveBackoffMaxMs(safeSafety.backoffMaxMs);
   saveBackoffFactor(safeSafety.backoffFactor);

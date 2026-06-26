@@ -28,6 +28,16 @@ export type FtpListOptions = {
   traceContext?: NativeTraceContext;
 };
 
+export type FtpRecursiveListOptions = FtpListOptions & {
+  maxDepth?: number;
+  maxEntries?: number;
+};
+
+export type FtpRecursiveFailure = {
+  path: string;
+  message: string;
+};
+
 export type FtpReadOptions = {
   host: string;
   port?: number;
@@ -73,6 +83,9 @@ export type FtpPingOptions = {
 
 export type FtpClientPlugin = {
   listDirectory: (options: FtpListOptions) => Promise<{ entries: FtpEntry[] }>;
+  listDirectoryRecursive: (
+    options: FtpRecursiveListOptions,
+  ) => Promise<{ entries: FtpEntry[]; partialFailures?: FtpRecursiveFailure[] }>;
   readFile: (options: FtpReadOptions) => Promise<{ data: string; sizeBytes?: number }>;
   writeFile: (options: FtpWriteOptions) => Promise<{ sizeBytes: number }>;
   pingFtp: (options: FtpPingOptions) => Promise<{ ok: boolean }>;
