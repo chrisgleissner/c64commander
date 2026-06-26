@@ -260,9 +260,7 @@ describe("SaveRamDialog – Save REU", () => {
 
 describe("SaveRamDialog — CPU+RAM option & limitation note", () => {
   it("shows the CPU+RAM option with a clear, short resume-limitation note", () => {
-    render(
-      <SaveRamDialog open={true} onOpenChange={vi.fn()} onSave={vi.fn()} onSaveCpu={vi.fn()} isSaving={false} />,
-    );
+    render(<SaveRamDialog open={true} onOpenChange={vi.fn()} onSave={vi.fn()} onSaveCpu={vi.fn()} isSaving={false} />);
     const cpuBtn = screen.getByTestId("save-ram-type-cpu");
     expect(cpuBtn).toHaveTextContent("CPU + RAM Snapshot");
     expect(cpuBtn).toHaveTextContent(/Resumes a program where it left off/i);

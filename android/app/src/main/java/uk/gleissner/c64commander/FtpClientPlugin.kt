@@ -266,24 +266,33 @@ class FtpClientPlugin : Plugin() {
                 queue.add(path to 0)
                 var examinedEntries = 0
                 var capped = false
+                var timedOut = false
 
-                while (queue.isNotEmpty() && !capped) {
+                while (queue.isNotEmpty() && !capped && !timedOut) {
                   val (currentPath, depth) = queue.removeFirst()
                   if (!visited.add(currentPath)) continue
                   val files =
                           try {
                             resolveListing(client, currentPath)
                           } catch (error: Exception) {
-                            failures.put(recursiveFailure(currentPath, error.message ?: "FTP listing failed"))
-                            AppLogger.warn(
-                                    pluginContextOrNull(),
-                                    logTag,
-                                    "FTP recursive listing skipped folder",
-                                    "FtpClientPlugin",
-                                    error,
-                            )
-                            continue
+                          failures.put(recursiveFailure(currentPath, error.message ?: "FTP listing failed"))
+                          AppLogger.warn(
+                                  pluginContextOrNull(),
+                                  logTag,
+                                  "FTP recursive listing skipped folder",
+                                  "FtpClientPlugin",
+                                  error,
+                          )
+                          // A data-channel timeout means the firmware's single-threaded
+                          // FTP is already wedging on PASV cycles; continuing would pile
+                          // on more data channels against known-flaky firmware. Bail the
+                          // whole walk (surfacing this one failure) instead of churning.
+                          if (error is java.net.SocketTimeoutException) {
+                            timedOut = true
+                            break
                           }
+                          continue
+                        }
 
                   for (file in files) {
                     val entry = ftpFileToEntry(currentPath, file) ?: continue
@@ -319,6 +328,7 @@ class FtpClientPlugin : Plugin() {
                 val result = JSObject()
                 result.put("entries", entries)
                 result.put("partialFailures", failures)
+                result.put("timed_out", timedOut)
                 call.resolve(result)
               } catch (error: Exception) {
                 val message = buildFailureMessage("listDirectoryRecursive", error, connectTimeoutMs, timeoutMs)
@@ -372,8 +382,15 @@ class FtpClientPlugin : Plugin() {
             Runnable {
               val client = ftpClientFactory()
               var stream: java.io.InputStream? = null
-              if (requestId != null) cancelledReads.remove(requestId)
               try {
+                // Honor a cancellation requested before this read started (e.g. an
+                // already-aborted AbortSignal fired cancelRead first) instead of
+                // erasing it. The previous `cancelledReads.remove(requestId)` here
+                // could discard a legitimate pre-abort and let the transfer run.
+                if (requestId != null && cancelledReads.contains(requestId)) {
+                  call.reject(readAbortedMessage)
+                  return@Runnable
+                }
                 applyPreConnectTimeouts(client, connectTimeoutMs)
                 client.connect(host, port)
                 applyConnectedTimeouts(client, timeoutMs)

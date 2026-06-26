@@ -168,11 +168,15 @@ export function useC64Connection() {
       // happen here in the queryFn rather than by returning `false` from
       // refetchInterval based on elapsed time. React Query treats a `false`
       // interval as "stop polling entirely" and only re-arms on a remount /
-      // invalidation / reactive option change — a time-based `false` is never
+      // invalidation / reactive option change — a timebased `false` is never
       // re-evaluated, so the health heartbeat silently halts and the badge stays
       // stale (UNHEALTHY) long after the device recovers, until the user
       // navigates. Keeping the interval alive and skipping the network here
       // preserves the coalescing intent without disabling self-healing polling.
+      // Because the guard lives in queryFn it also applies to mount/user
+      // refetches, but that is intentional and safe: the cached info is at most
+      // HEALTH_CHECK_INTERVAL_MS old, so a sub-second-stale snapshot is preferred
+      // to a redundant connection that can churn the fragile firmware.
       if (!shouldRunScheduledHealthCheck()) {
         const cached = queryClient.getQueryData<DeviceInfo>(["c64-info", baseUrl]);
         if (cached) {

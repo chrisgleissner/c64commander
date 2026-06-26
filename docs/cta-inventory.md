@@ -143,6 +143,14 @@ not-connected / empty / single-device).
   - Pause / Resume — button (toggles) — R✅ I✅
   - Menu — button — R✅ I✅
   - Save RAM — button — `home-save-ram` — R✅ I✅ _(flag `ram_snapshots_enabled`)_
+  - **Save RAM dialog** (`save-ram-dialog`, opened by `home-save-ram`)
+    - CPU + RAM Snapshot — button — `save-ram-type-cpu` — R✅ I✅ _(conditional on CPU-snapshot capability; `save-ram-type-list` scope)_
+    - Program / BASIC / Screen / REU region presets — buttons — `save-ram-type-{program,basic,screen,reu}` — R✅ I✅
+    - Custom ranges toggle — button — `save-ram-type-custom` — R✅ I✅ _(reveals `save-ram-custom-form` scope)_
+    - Custom range start/end — text/number — `save-ram-custom-{start,end}-{i}` — R✅ I✅
+    - Delete range — button — `save-ram-custom-delete-range-{i}` — R✅ I✅
+    - Add range — button — `save-ram-custom-add-range` — R✅ I✅
+    - Save custom — button — `save-ram-custom-confirm` — R✅ I✅
   - Load RAM — button — `home-load-ram` — R✅ I✅ _(flag)_
   - Power Off — button (danger) — R✅ I✅ (confirm dialog)
   - RAM dump folder — button (`...`) — `ram-dump-folder-trigger` — R✅ I✅

@@ -13,10 +13,6 @@ import type { SnapshotStorageEntry } from "@/lib/snapshot/snapshotTypes";
 import type { ReuSnapshotStorageEntry } from "@/lib/reu/reuSnapshotTypes";
 import type { RestorableSnapshotEntry } from "@/pages/home/types/restorableSnapshots";
 
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
-
 const SNAPSHOT_WITH_LABEL: SnapshotStorageEntry = {
   id: "snap-1",
   filename: "c64-program-20260110-090000.c64snap",
@@ -83,10 +79,6 @@ const REU_SNAPSHOT_WITHOUT_CONTENT_NAME: ReuSnapshotStorageEntry = {
   },
 };
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 const renderDialog = (snapshot: RestorableSnapshotEntry | null, isPending = false) => {
   const onConfirm = vi.fn();
   const onOpenChange = vi.fn();
@@ -106,14 +98,9 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe("RestoreSnapshotDialog – null snapshot", () => {
   it("renders nothing when snapshot is null", () => {
     const { container } = renderDialog(null);
-    // Dialog renders null; only an empty container expected
     expect(container.firstChild).toBeNull();
   });
 });
@@ -143,7 +130,6 @@ describe("RestoreSnapshotDialog – snapshot with label", () => {
 describe("RestoreSnapshotDialog – snapshot without label", () => {
   it("does not show any label text", () => {
     renderDialog(SNAPSHOT_NO_LABEL);
-    // Label should be absent
     expect(screen.queryByText("JupiterLander.crt")).not.toBeInTheDocument();
   });
 
@@ -155,9 +141,7 @@ describe("RestoreSnapshotDialog – snapshot without label", () => {
 
 describe("RestoreSnapshotDialog – unknown type", () => {
   it("falls back to snapshotType string when typeConfig not found", () => {
-    // 'custom' is a valid type but let's verify typeLabel fallback path
     renderDialog(SNAPSHOT_UNKNOWN_TYPE);
-    // 'Custom' should be shown (typeConfig found for custom type)
     expect(screen.getByTestId("restore-snapshot-dialog")).toBeInTheDocument();
   });
 });
@@ -227,7 +211,15 @@ describe("RestoreSnapshotDialog — CPU snapshot resume note", () => {
       display_ranges: ["$0000-$FFFF"],
       created_at: "2026-01-10 09:00:00",
       cpu_state_captured: true,
-      cpu: { pc: 0xc000, a: 0, x: 0, y: 0, sp: 0xf8, p: 0x20, flags: { n: false, v: false, b: false, d: false, i: false, z: false, c: false } },
+      cpu: {
+        pc: 0xc000,
+        a: 0,
+        x: 0,
+        y: 0,
+        sp: 0xf8,
+        p: 0x20,
+        flags: { n: false, v: false, b: false, d: false, i: false, z: false, c: false },
+      },
     },
   };
 

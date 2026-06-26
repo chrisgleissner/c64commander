@@ -107,7 +107,10 @@ describe("getCartridgeConfig", () => {
   it("extracts the selected cartridge from an object-shaped config item", async () => {
     const response: ConfigResponse = {
       [CARTRIDGE_CATEGORY]: {
-        [CARTRIDGE_ITEM]: { selected: "Final_Cartridge_3_1988-13.crt", options: ["None", "Final_Cartridge_3_1988-13.crt"] },
+        [CARTRIDGE_ITEM]: {
+          selected: "Final_Cartridge_3_1988-13.crt",
+          options: ["None", "Final_Cartridge_3_1988-13.crt"],
+        },
       },
       errors: [],
     } as unknown as ConfigResponse;

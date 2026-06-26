@@ -12,8 +12,10 @@ import {
   buildCaptureHandler,
   buildRawCaptureHandler,
   DEFAULT_SAFE_REGION,
+  type CaptureHandler,
   type CaptureLayout,
 } from "./six502/capturePayload";
+import { addErrorLog } from "@/lib/logging";
 
 /**
  * RLI (Ride the Live Interrupt) capture orchestration.
@@ -34,7 +36,11 @@ export type CaptureCpuApi = {
   machinePause: () => Promise<{ errors: string[] }>;
   machineResume: () => Promise<{ errors: string[] }>;
   readMemory: (address: string, length?: number, options?: Record<string, unknown>) => Promise<Uint8Array>;
-  writeMemoryBlock: (address: string, data: Uint8Array, options?: Record<string, unknown>) => Promise<{ errors: string[] }>;
+  writeMemoryBlock: (
+    address: string,
+    data: Uint8Array,
+    options?: Record<string, unknown>,
+  ) => Promise<{ errors: string[] }>;
 };
 
 /** The KERNAL IRQ indirect vector (used while KERNAL is mapped — the common case). */
@@ -89,6 +95,30 @@ const readScratch = async (api: CaptureCpuApi, layout: CaptureLayout): Promise<C
   return { pc: (pch! << 8) | pcl!, a: a!, x: x!, y: y!, sp: sp!, p: p! };
 };
 
+type PendingPatch = { vectorAddr: number; irqVector: Uint8Array; savedRegion: Uint8Array; base: number };
+
+/**
+ * Best-effort restoration of a live capture patch: pause, put the original IRQ
+ * vector and safe-region bytes back, and resume. Used during error recovery so a
+ * transport failure mid-capture does not leave the C64 frozen with the IRQ vector
+ * repointed at the (now-stale) handler. Restore failures are logged, never
+ * rethrown — the originating capture error must still propagate to the caller.
+ */
+const restorePatch = async (api: CaptureCpuApi, patch: PendingPatch, cause: string): Promise<void> => {
+  try {
+    await api.machinePause();
+    await api.writeMemoryBlock(toHexAddress(patch.vectorAddr), patch.irqVector);
+    await api.writeMemoryBlock(toHexAddress(patch.base), patch.savedRegion);
+    await api.machineResume();
+  } catch (error) {
+    addErrorLog("Failed to restore machine state after CPU snapshot capture", {
+      cause,
+      error: (error as Error).message,
+      vectorAddr: patch.vectorAddr,
+    });
+  }
+};
+
 /**
  * Captures the live CPU state by riding the running program's IRQ. On success
  * the machine is left frozen in the handler's spin loop; call
@@ -113,6 +143,10 @@ export const captureCpuState = async (api: CaptureCpuApi, options: CaptureOption
   ];
 
   await api.machinePause(); // each attempt starts from a paused machine
+  // Tracks the most recent live patch so the catch can undo it on a transport
+  // failure mid-capture (machineResume/readMemory/writeMemoryBlock errors after
+  // the handler + vector were installed). Cleared by the clean timeout rollback.
+  let rollback: PendingPatch | null = null;
   try {
     for (const { vectorAddr, build } of candidates) {
       const { bytes: handler, layout } = build();
@@ -130,6 +164,7 @@ export const captureCpuState = async (api: CaptureCpuApi, options: CaptureOption
       // Atomically repoint the live interrupt vector at our handler (one DMA write).
       await api.writeMemoryBlock(toHexAddress(vectorAddr), new Uint8Array([base & 0xff, (base >> 8) & 0xff]));
       await api.machineResume();
+      rollback = { vectorAddr, irqVector, savedRegion, base };
 
       const deadline = now() + timeout;
       let captured = false;
@@ -155,6 +190,9 @@ export const captureCpuState = async (api: CaptureCpuApi, options: CaptureOption
       const cpu = await readScratch(api, layout);
       const verify = await readScratch(api, layout);
       if (JSON.stringify(cpu) !== JSON.stringify(verify)) {
+        // Capture fired but the registers were not stable; release the program
+        // before surfacing the failure so the machine is not left frozen.
+        await restorePatch(api, rollback, "register block was not stable across reads");
         throw new CpuCaptureFailedError("captured register block was not stable across reads");
       }
       assertValidCpuState(cpu);
@@ -173,7 +211,12 @@ export const captureCpuState = async (api: CaptureCpuApi, options: CaptureOption
       "no interrupt entered the capture handler (program runs with interrupts disabled or protects its vectors)",
     );
   } catch (error) {
-    if (error instanceof CpuCaptureFailedError) throw error;
+    // CpuCaptureFailedError paths (timeout / no interrupt / unstable read) have
+    // already restored the machine; only recover from mid-patch transport errors
+    // that leave the IRQ vector repointed and the safe region overwritten.
+    if (!(error instanceof CpuCaptureFailedError) && rollback) {
+      await restorePatch(api, rollback, (error as Error).message);
+    }
     throw error;
   }
 };

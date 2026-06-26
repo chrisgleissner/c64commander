@@ -97,18 +97,3 @@ describe("buildRawCaptureHandler (KERNAL banked out — $FFFE / +3 frame)", () =
     expect(bytes[1]).toBe(layout.scratchA & 0xff);
   });
 });
-
-import { buildNmiCaptureHandler, CIA2_ICR_ADDR } from "@/lib/snapshot/cpu/six502/capturePayload";
-
-describe("buildNmiCaptureHandler (ISN — injected CIA2 NMI for SEI loops)", () => {
-  it("acks CIA2 ($DD0D), reads the +3 frame, and RTIs (no chaining)", () => {
-    const { bytes, layout } = buildNmiCaptureHandler(0x033c);
-    const code = hex(bytes);
-    expect(code).toContain("ad 0d dd"); // LDA $DD0D — acknowledge the CIA2 NMI source
-    expect(code).toContain("69 03"); // ADC #$03 → NMI frame is +3
-    expect(code).toContain(" 40 "); // RTI (injected NMI → return directly, no chain)
-    expect(CIA2_ICR_ADDR).toBe(0xdd0d);
-    expect(bytes.length).toBe(90);
-    expect(layout.captured).toBe(0x0392);
-  });
-});

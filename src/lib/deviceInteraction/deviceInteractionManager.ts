@@ -1057,7 +1057,7 @@ export const withTelnetInteraction = async <T>(meta: TelnetRequestMeta, handler:
       untilMs: telnetCircuitUntilMs,
     });
   }
-  const hostScope = `${meta.host ?? "any"}:${meta.port ?? 23}`;
+  const hostScope = `${(meta.host ?? "any").toLowerCase()}:${meta.port ?? 23}`;
 
   const scheduleTask = async () => {
     if (telnetBackoffUntilMs > Date.now()) {

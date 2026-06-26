@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { addErrorLog } from "@/lib/logging";
 import type { ConfigResponse, DeviceInfo, VersionInfo } from "@/lib/c64api";
 import type { CartridgeMeta, FirmwareCapability } from "../snapshotTypes";
 
@@ -76,8 +77,10 @@ export const detectSnapshotCapability = async (api: CapabilityApi): Promise<Snap
     if (!hasErrors(version?.errors)) {
       apiVersion = version?.version;
     }
-  } catch {
-    // API version is metadata only; its absence does not gate the feature.
+  } catch (error) {
+    addErrorLog("Failed to read /v1/version for snapshot capability", {
+      error: (error as Error).message,
+    });
   }
 
   const firmware: FirmwareCapability = {
@@ -127,8 +130,10 @@ export const getCartridgeConfig = async (api: CapabilityApi): Promise<CartridgeM
   try {
     const response = await api.getConfigItem(CARTRIDGE_CATEGORY, CARTRIDGE_ITEM);
     configuredName = extractConfigItemValue(response, CARTRIDGE_CATEGORY, CARTRIDGE_ITEM);
-  } catch {
-    // If we cannot read the cartridge config, fall through to "unknown" (no name).
+  } catch (error) {
+    addErrorLog("Failed to read cartridge config for snapshot metadata", {
+      error: (error as Error).message,
+    });
   }
 
   const meaningful = isMeaningfulCartridge(configuredName);

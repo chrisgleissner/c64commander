@@ -163,7 +163,11 @@ describe("restoreCpuSnapshotFromDecoded", () => {
   it("refuses to restore a snapshot without captured CPU state", async () => {
     const { api } = makeRestoreMock();
     await expect(
-      restoreCpuSnapshotFromDecoded(api, { metadata: { snapshot_type: "program", display_ranges: [], created_at: "" }, ranges: [], blocks: [] }),
+      restoreCpuSnapshotFromDecoded(api, {
+        metadata: { snapshot_type: "program", display_ranges: [], created_at: "" },
+        ranges: [],
+        blocks: [],
+      }),
     ).rejects.toThrow(/no captured CPU state/);
   });
 });

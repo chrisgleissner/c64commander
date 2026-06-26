@@ -10,6 +10,7 @@ import type { CpuState } from "./cpuState";
 import { toCpuStateMeta } from "./cpuState";
 import { captureCpuState, resumeAfterCapture, type CaptureCpuApi, type CaptureOverlay } from "./captureEngine";
 import { restoreCpuSnapshot, type CpuRestoreRange, type RestoreCpuApi } from "./restoreCart";
+import { addErrorLog } from "@/lib/logging";
 import type { CartridgeMeta, FirmwareCapability, MemoryRange, SnapshotMetadata } from "../snapshotTypes";
 
 /**
@@ -59,10 +60,7 @@ const sliceImage = (image: Uint8Array): { ranges: MemoryRange[]; blocks: Uint8Ar
  * first (freezing the program), substitutes the clobbered capture bytes back
  * into the image so it reflects the program's true RAM, and resumes the program.
  */
-export const captureCpuSnapshotData = async (
-  api: CaptureCpuApi,
-  dumpFullRam: RamDumper,
-): Promise<CpuSnapshotData> => {
+export const captureCpuSnapshotData = async (api: CaptureCpuApi, dumpFullRam: RamDumper): Promise<CpuSnapshotData> => {
   const capture = await captureCpuState(api);
   try {
     const image = await dumpFullRam();
@@ -81,7 +79,16 @@ export const captureCpuSnapshotData = async (
     };
   } finally {
     // Always try to resume the program transparently, even if the dump failed.
-    await resumeAfterCapture(api, capture).catch(() => undefined);
+    // A failure here can leave the C64 frozen with the IRQ vector repointed at
+    // our handler, so it must be surfaced (not swallowed) so the UI can offer a
+    // manual recovery path (Restore / power-cycle).
+    await resumeAfterCapture(api, capture).catch((error) => {
+      addErrorLog("Failed to resume program after CPU snapshot capture", {
+        error: (error as Error).message,
+        method: capture.method,
+        vectorAddr: capture.vectorAddr,
+      });
+    });
   }
 };
 

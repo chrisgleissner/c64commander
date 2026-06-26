@@ -299,8 +299,15 @@ const executeFtpRead = async (
     }
     if (requestId && signal) {
       const requestCancel = () => {
-        void FtpClient.cancelRead({ requestId }).catch(() => {
-          /* best-effort cancellation */
+        void FtpClient.cancelRead({ requestId }).catch((error) => {
+          addErrorLog(
+            "FTP cancelRead failed",
+            buildErrorLogDetails(error as Error, {
+              host: ftpOptions.host,
+              path,
+              requestId,
+            }),
+          );
         });
       };
       if (signal.aborted) {

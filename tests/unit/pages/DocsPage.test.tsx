@@ -1,7 +1,28 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import DocsPage from "@/pages/DocsPage";
+import type { FeatureFlags } from "@/lib/config/featureFlags";
+
+const defaultFlags: FeatureFlags = {
+  background_execution_enabled: true,
+  commoserve_enabled: true,
+  demo_mode_enabled: false,
+  home_telnet_clear_ram_reboot_enabled: false,
+  home_telnet_config_actions_enabled: false,
+  home_telnet_drive_actions_enabled: false,
+  home_telnet_power_cycle_enabled: false,
+  home_telnet_printer_actions_enabled: false,
+  home_telnet_reu_snapshot_enabled: false,
+  hvsc_enabled: true,
+  keypad_input_enabled: true,
+  lighting_studio_enabled: false,
+  ram_snapshots_enabled: true,
+};
+
+const featureFlagsRef = vi.hoisted(() => ({
+  flags: {} as FeatureFlags,
+}));
 
 vi.mock("framer-motion", () => ({
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -22,11 +43,19 @@ vi.mock("@/components/layout/PageContainer", () => ({
   PageContainer: ({ children }: { children: React.ReactNode }) => <main>{children}</main>,
 }));
 
+vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlags: () => ({ flags: featureFlagsRef.flags }),
+}));
+
 vi.mock("@/lib/tracing/userTrace", () => ({
   wrapUserEvent: (handler: () => void) => handler,
 }));
 
 describe("DocsPage", () => {
+  beforeEach(() => {
+    featureFlagsRef.flags = { ...defaultFlags };
+  });
+
   it("renders the docs shell and expands help sections on demand", () => {
     render(<DocsPage />);
 
@@ -54,5 +83,43 @@ describe("DocsPage", () => {
       "https://1541u-documentation.readthedocs.io/en/latest/api/api_calls.html",
     );
     expect(screen.getByTestId("docs-external-resource-site")).toHaveAttribute("href", "https://ultimate64.com/");
+  });
+
+  it("describes enabled feature-flagged surfaces", () => {
+    render(<DocsPage />);
+
+    fireEvent.click(screen.getByTestId("docs-toggle-play"));
+    fireEvent.click(screen.getByTestId("docs-toggle-home"));
+    fireEvent.click(screen.getByTestId("docs-toggle-settings"));
+
+    expect(screen.getByText(/Choose a source:/)).toHaveTextContent("Local, C64U, HVSC or CommoServe");
+    expect(screen.getByText(/Save RAM/)).toBeInTheDocument();
+    expect(screen.getByTestId("docs-card-settings")).toHaveTextContent("HVSC sets the mirror URL");
+    expect(screen.getByTestId("docs-card-settings")).toHaveTextContent("Online Archive");
+    expect(screen.queryByText(/Power Cycle/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Lighting Studio/)).not.toBeInTheDocument();
+  });
+
+  it("omits documentation for disabled feature-flagged surfaces", () => {
+    featureFlagsRef.flags = {
+      ...defaultFlags,
+      commoserve_enabled: false,
+      hvsc_enabled: false,
+      ram_snapshots_enabled: false,
+    };
+
+    render(<DocsPage />);
+
+    fireEvent.click(screen.getByTestId("docs-toggle-play"));
+    fireEvent.click(screen.getByTestId("docs-toggle-home"));
+    fireEvent.click(screen.getByTestId("docs-toggle-disks"));
+    fireEvent.click(screen.getByTestId("docs-toggle-settings"));
+
+    expect(screen.getByText(/Choose a source:/)).toHaveTextContent("Local or C64U");
+    expect(screen.getByTestId("docs-card-disks")).toHaveTextContent("Local or C64U");
+    expect(screen.queryByText(/Save RAM/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/HVSC/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/CommoServe/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Online Archive/)).not.toBeInTheDocument();
   });
 });

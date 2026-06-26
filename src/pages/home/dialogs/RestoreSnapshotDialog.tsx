@@ -69,10 +69,7 @@ export function RestoreSnapshotDialog({
             <div className="text-muted-foreground text-xs">{createdAt}</div>
           </div>
           {isCpuSnapshot && (
-            <div
-              className="mt-3 text-xs text-amber-600 dark:text-amber-500"
-              data-testid="restore-cpu-snapshot-note"
-            >
+            <div className="mt-3 text-xs text-amber-600 dark:text-amber-500" data-testid="restore-cpu-snapshot-note">
               Resumes the program where it left off. Fast-action games may not resume correctly.
             </div>
           )}

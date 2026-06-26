@@ -125,17 +125,17 @@ describe("restoreCpuSnapshot — refuses unsupported snapshots", () => {
   it("refuses when the snapshot omits $01 (banking)", async () => {
     const fw = new MockFirmware();
     const noByte01: CpuRestoreRange = { start: 0x0200, bytes: new Uint8Array(0x10) };
-    await expect(
-      restoreCpuSnapshot(fw.api, { cpu: CPU, ramRanges: [noByte01] }, clock()),
-    ).rejects.toBeInstanceOf(CpuRestoreUnsupportedError);
+    await expect(restoreCpuSnapshot(fw.api, { cpu: CPU, ramRanges: [noByte01] }, clock())).rejects.toBeInstanceOf(
+      CpuRestoreUnsupportedError,
+    );
   });
 
   it("throws (not Unsupported) when the cart never signals READY", async () => {
     const fw = new MockFirmware();
     fw.api.readMemory = async () => new Uint8Array([0x00]); // never READY
-    await expect(
-      restoreCpuSnapshot(fw.api, { cpu: CPU, ramRanges: [fullRamRange()] }, clock()),
-    ).rejects.toThrow(/did not reach its handshake/);
+    await expect(restoreCpuSnapshot(fw.api, { cpu: CPU, ramRanges: [fullRamRange()] }, clock())).rejects.toThrow(
+      /did not reach its handshake/,
+    );
   });
 });
 

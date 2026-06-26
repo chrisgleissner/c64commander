@@ -123,9 +123,7 @@ describe("six502 assembler — .org, .db and validation", () => {
 
   it("rejects an unsupported mnemonic/mode pair lacking an opcode", () => {
     // cmp has no absy form in this assembler; calling it as a raw op would 404.
-    expect(() => assemble([{ t: "op", mnemonic: "CMP", mode: "absy", operand: 0x1000 }], 0x8000)).toThrow(
-      /no opcode/,
-    );
+    expect(() => assemble([{ t: "op", mnemonic: "CMP", mode: "absy", operand: 0x1000 }], 0x8000)).toThrow(/no opcode/);
   });
 
   it("rejects a backwards .org", () => {
@@ -137,15 +135,7 @@ describe("six502 assembler — a representative spin/finalize sketch", () => {
   it("assembles a spin-then-RTI loop deterministically", () => {
     const RELEASE = 0xcfff;
     const { bytes } = assemble(
-      [
-        sei(),
-        label("wait"),
-        lda.abs(RELEASE),
-        beq("wait"),
-        ldx.imm(0xfb),
-        txs(),
-        rti(),
-      ],
+      [sei(), label("wait"), lda.abs(RELEASE), beq("wait"), ldx.imm(0xfb), txs(), rti()],
       0x8000,
     );
     // 78 | ad ff cf | f0 fb | a2 fb | 9a | 40

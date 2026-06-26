@@ -397,9 +397,7 @@ export const assemble = (program: Stmt[], origin: number): AssembleResult => {
       const next = pc + 2; // address of the instruction after the branch
       const delta = target - next;
       if (delta < -128 || delta > 127) {
-        throw new Error(
-          `assemble: branch out of range (${delta}) from $${pc.toString(16)} to $${target.toString(16)}`,
-        );
+        throw new Error(`assemble: branch out of range (${delta}) from $${pc.toString(16)} to $${target.toString(16)}`);
       }
       out.push(delta & 0xff);
       pc += 2;

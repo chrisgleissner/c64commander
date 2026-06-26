@@ -39,7 +39,11 @@ export type RestoreCpuApi = {
     options?: Record<string, unknown>,
   ) => Promise<{ errors: string[] }>;
   readMemory: (address: string, length?: number, options?: Record<string, unknown>) => Promise<Uint8Array>;
-  writeMemoryBlock: (address: string, data: Uint8Array, options?: Record<string, unknown>) => Promise<{ errors: string[] }>;
+  writeMemoryBlock: (
+    address: string,
+    data: Uint8Array,
+    options?: Record<string, unknown>,
+  ) => Promise<{ errors: string[] }>;
 };
 
 export type CpuRestoreRange = {
@@ -203,7 +207,7 @@ export const restoreCpuSnapshot = async (
   const filename = options.filename ?? "c64c-cpu-restore.crt";
 
   // 1) Boot our cartridge (resets the C64 and autostarts via the CBM80 vector).
-  const blob = new Blob([crt], { type: "application/octet-stream" });
+  const blob = new Blob([crt as BlobPart], { type: "application/octet-stream" });
   await api.runCartridgeUpload(blob, { filename });
 
   // 2) Wait for the cold-start to reach its spin loop ($02 == READY).

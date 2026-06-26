@@ -337,14 +337,27 @@ const discoverInitialMenu = async (
     const defaultItem = rootMenu.items[rootMenu.selectedIndex]?.label ?? rootMenu.items[0]?.label ?? null;
     const nodes: Record<string, TelnetDiscoveredNode> = {};
 
-    const readRootMenuAfterEscape = async () => {
-      await session.sendKey("ESCAPE");
+    const matchesRootLabels = (menu: ParsedMenu | null) =>
+      Boolean(menu) && labels.every((label, index) => matchLabel(menu!.items[index]?.label ?? "", label));
+
+    // After RIGHT opens a category's submenu, return to the root action menu.
+    // LEFT backs out one menu level on both the Ultimate firmware and the mock
+    // (ESCAPE/RESTORE dismisses the whole menu, so it cannot step back to the
+    // root). If the probe dismissed the root menu entirely (e.g. a direct-entry
+    // screen), re-open it before continuing to the next category.
+    const returnToRootMenu = async (): Promise<{ screen: TelnetScreen; menu: ParsedMenu }> => {
+      await session.sendKey("LEFT");
       for (let attempt = 0; attempt < MAX_OPEN_MENU_READS; attempt += 1) {
         const screen = await session.readScreen(STEP_TIMEOUT_MS);
         const menu = findTopMenu(screen);
-        if (menu && labels.every((label, index) => matchLabel(menu.items[index]?.label ?? "", label))) {
-          return { screen, menu };
+        if (matchesRootLabels(menu)) {
+          return { screen, menu: menu! };
         }
+      }
+      const reopened = await openActionMenu(session, menuKey);
+      const menu = findTopMenu(reopened);
+      if (matchesRootLabels(menu)) {
+        return { screen: reopened, menu: menu! };
       }
       throw new TelnetError("Top-level action menu did not return after discovery probe", "DESYNC");
     };
@@ -360,7 +373,7 @@ const discoverInitialMenu = async (
       if (node) {
         nodes[label] = node;
       }
-      const restored = await readRootMenuAfterEscape();
+      const restored = await returnToRootMenu();
       currentScreen = restored.screen;
       rootMenu = restored.menu;
     }

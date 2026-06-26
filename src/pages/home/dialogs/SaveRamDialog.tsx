@@ -168,9 +168,7 @@ export function SaveRamDialog({
                   disabled={isSaving}
                 >
                   <div className="font-semibold text-sm">CPU + RAM Snapshot</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    Resumes a program where it left off.
-                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">Resumes a program where it left off.</div>
                   <div className="text-xs text-amber-600 dark:text-amber-500 mt-1">
                     Best for BASIC &amp; simple programs. Fast-action games may not resume.
                   </div>
