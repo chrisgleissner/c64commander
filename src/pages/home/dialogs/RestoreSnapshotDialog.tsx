@@ -45,6 +45,8 @@ export function RestoreSnapshotDialog({
   const createdAt = snapshot.metadata.created_at;
   const contentName = snapshot.metadata.content_name ?? snapshot.filename;
   const isReuSnapshot = isReuSnapshotEntry(snapshot);
+  const isCpuSnapshot =
+    !isReuSnapshot && Boolean((snapshot.metadata as { cpu_state_captured?: boolean }).cpu_state_captured);
 
   return (
     <AppDialog open={open} onOpenChange={onOpenChange}>
@@ -66,6 +68,14 @@ export function RestoreSnapshotDialog({
             {label && <div className="text-foreground">{label}</div>}
             <div className="text-muted-foreground text-xs">{createdAt}</div>
           </div>
+          {isCpuSnapshot && (
+            <div
+              className="mt-3 text-xs text-amber-600 dark:text-amber-500"
+              data-testid="restore-cpu-snapshot-note"
+            >
+              Resumes the program where it left off. Fast-action games may not resume correctly.
+            </div>
+          )}
         </AppDialogBody>
 
         <AppDialogFooter>

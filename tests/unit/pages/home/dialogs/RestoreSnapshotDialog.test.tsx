@@ -214,3 +214,46 @@ describe("RestoreSnapshotDialog – actions", () => {
     expect(screen.getByTestId("restore-reu-preload")).toHaveTextContent("Applying…");
   });
 });
+
+describe("RestoreSnapshotDialog — CPU snapshot resume note", () => {
+  const CPU_SNAPSHOT: SnapshotStorageEntry = {
+    id: "snap-cpu",
+    filename: "c64-program-cpu.c64snap",
+    bytesBase64: "",
+    createdAt: "2026-01-10T09:00:00.000Z",
+    snapshotType: "program",
+    metadata: {
+      snapshot_type: "program",
+      display_ranges: ["$0000-$FFFF"],
+      created_at: "2026-01-10 09:00:00",
+      cpu_state_captured: true,
+      cpu: { pc: 0xc000, a: 0, x: 0, y: 0, sp: 0xf8, p: 0x20, flags: { n: false, v: false, b: false, d: false, i: false, z: false, c: false } },
+    },
+  };
+
+  it("shows a short resume-limitation note for a CPU+RAM snapshot", () => {
+    render(
+      <RestoreSnapshotDialog
+        open={true}
+        onOpenChange={vi.fn()}
+        snapshot={CPU_SNAPSHOT as RestorableSnapshotEntry}
+        onConfirm={vi.fn()}
+        isPending={false}
+      />,
+    );
+    expect(screen.getByTestId("restore-cpu-snapshot-note")).toHaveTextContent(/Fast-action games may not resume/i);
+  });
+
+  it("hides the note for a plain RAM snapshot", () => {
+    render(
+      <RestoreSnapshotDialog
+        open={true}
+        onOpenChange={vi.fn()}
+        snapshot={SNAPSHOT_NO_LABEL as RestorableSnapshotEntry}
+        onConfirm={vi.fn()}
+        isPending={false}
+      />,
+    );
+    expect(screen.queryByTestId("restore-cpu-snapshot-note")).toBeNull();
+  });
+});
