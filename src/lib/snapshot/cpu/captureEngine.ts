@@ -10,6 +10,7 @@ import type { CpuState } from "./cpuState";
 import { assertValidCpuState } from "./cpuState";
 import {
   buildCaptureHandler,
+  buildRawCaptureHandler,
   DEFAULT_SAFE_REGION,
   type CaptureLayout,
 } from "./six502/capturePayload";
@@ -38,6 +39,8 @@ export type CaptureCpuApi = {
 
 /** The KERNAL IRQ indirect vector (used while KERNAL is mapped — the common case). */
 export const IRQ_VECTOR_0314 = 0x0314;
+/** The CPU hardware IRQ/BRK vector in RAM (used when KERNAL is banked out). */
+export const IRQ_VECTOR_FFFE = 0xfffe;
 
 /** A clobbered region whose original bytes must be substituted into the stored snapshot and restored live. */
 export type CaptureOverlay = { start: number; bytes: Uint8Array };
@@ -45,9 +48,11 @@ export type CaptureOverlay = { start: number; bytes: Uint8Array };
 export type CaptureResult = {
   cpu: CpuState;
   method: "rli" | "isn";
-  /** Original bytes of every region we overwrote (safe region + IRQ vector). */
+  /** Original bytes of every region we overwrote (safe region + interrupt vector). */
   overlays: CaptureOverlay[];
   layout: CaptureLayout;
+  /** The interrupt vector address that was hooked ($0314 or $FFFE). */
+  vectorAddr: number;
   /** Snapshot of `$01` at capture time. */
   bank01: number;
 };
@@ -97,67 +102,78 @@ export const captureCpuState = async (api: CaptureCpuApi, options: CaptureOption
   const timeout = options.captureTimeoutMs ?? DEFAULT_CAPTURE_TIMEOUT_MS;
   const pollInterval = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
 
-  const { bytes: handler, layout } = buildCaptureHandler(base);
+  // The 6510 port ($01) cannot be read reliably over DMA, so we don't guess the
+  // banking. Instead we try the interrupt vector the program is most likely using
+  // and fall back: $0314 (KERNAL mapped — the common case, A/X/Y pushed by $FF48,
+  // +6 frame) then the raw RAM vector $FFFE (KERNAL banked out — A/X/Y live, +3
+  // frame). Whichever handler fires has the correct frame arithmetic baked in.
+  const candidates: Array<{ vectorAddr: number; build: () => CaptureHandler }> = [
+    { vectorAddr: IRQ_VECTOR_0314, build: () => buildCaptureHandler(base) },
+    { vectorAddr: IRQ_VECTOR_FFFE, build: () => buildRawCaptureHandler(base) },
+  ];
 
-  await api.machinePause();
+  await api.machinePause(); // each attempt starts from a paused machine
   try {
-    // Probe banking and the live IRQ vector + the safe region we are about to use.
-    const bank01 = (await api.readMemory(toHexAddress(0x01), 1))[0]!;
-    const irqVector = await api.readMemory(toHexAddress(IRQ_VECTOR_0314), 2); // [lo, hi]
-    const savedRegion = await api.readMemory(toHexAddress(base), handler.length);
+    for (const { vectorAddr, build } of candidates) {
+      const { bytes: handler, layout } = build();
+      const irqVector = await api.readMemory(toHexAddress(vectorAddr), 2); // [lo, hi]
+      const savedRegion = await api.readMemory(toHexAddress(base), handler.length);
 
-    // Patch the handler: bake the original IRQ vector into origVec, and arm it.
-    const patched = new Uint8Array(handler);
-    patched[layout.origVec - base] = irqVector[0]!;
-    patched[layout.origVec - base + 1] = irqVector[1]!;
-    patched[layout.armed - base] = 0x01;
-    patched[layout.captured - base] = 0x00;
-    patched[layout.release - base] = 0x00;
+      const patched = new Uint8Array(handler);
+      patched[layout.origVec - base] = irqVector[0]!;
+      patched[layout.origVec - base + 1] = irqVector[1]!;
+      patched[layout.armed - base] = 0x01;
+      patched[layout.captured - base] = 0x00;
+      patched[layout.release - base] = 0x00;
 
-    await api.writeMemoryBlock(toHexAddress(base), patched);
-    // Atomically repoint the live IRQ vector at our handler (a single DMA write).
-    await api.writeMemoryBlock(toHexAddress(IRQ_VECTOR_0314), new Uint8Array([base & 0xff, (base >> 8) & 0xff]));
-
-    const overlays: CaptureOverlay[] = [
-      { start: base, bytes: savedRegion },
-      { start: IRQ_VECTOR_0314, bytes: irqVector },
-    ];
-
-    await api.machineResume();
-
-    // Wait for the natural interrupt to enter the handler and capture.
-    const deadline = now() + timeout;
-    let captured = false;
-    for (;;) {
-      if ((await api.readMemory(toHexAddress(layout.captured), 1))[0] === 0x01) {
-        captured = true;
-        break;
-      }
-      if (now() >= deadline) break;
-      await sleep(pollInterval);
-    }
-    if (!captured) {
-      // No interrupt fired (likely an SEI tight loop). Roll back our hook and report;
-      // the caller can fall back to ISN (CIA2 NMI) or a RAM-only snapshot.
-      await api.machinePause();
-      await api.writeMemoryBlock(toHexAddress(IRQ_VECTOR_0314), irqVector);
-      await api.writeMemoryBlock(toHexAddress(base), savedRegion);
+      await api.writeMemoryBlock(toHexAddress(base), patched);
+      // Atomically repoint the live interrupt vector at our handler (one DMA write).
+      await api.writeMemoryBlock(toHexAddress(vectorAddr), new Uint8Array([base & 0xff, (base >> 8) & 0xff]));
       await api.machineResume();
-      throw new CpuCaptureFailedError("no interrupt entered the capture handler (program may be in an SEI loop)");
+
+      const deadline = now() + timeout;
+      let captured = false;
+      for (;;) {
+        if ((await api.readMemory(toHexAddress(layout.captured), 1))[0] === 0x01) {
+          captured = true;
+          break;
+        }
+        if (now() >= deadline) break;
+        await sleep(pollInterval);
+      }
+
+      if (!captured) {
+        // This vector's interrupt never fired. Roll back and stay paused so the
+        // next candidate can install cleanly.
+        await api.machinePause();
+        await api.writeMemoryBlock(toHexAddress(vectorAddr), irqVector);
+        await api.writeMemoryBlock(toHexAddress(base), savedRegion);
+        continue;
+      }
+
+      // Captured. Read the scratch twice and require it stable before trusting it.
+      const cpu = await readScratch(api, layout);
+      const verify = await readScratch(api, layout);
+      if (JSON.stringify(cpu) !== JSON.stringify(verify)) {
+        throw new CpuCaptureFailedError("captured register block was not stable across reads");
+      }
+      assertValidCpuState(cpu);
+
+      const overlays: CaptureOverlay[] = [
+        { start: base, bytes: savedRegion },
+        { start: vectorAddr, bytes: irqVector },
+      ];
+      // $01 isn't reliably readable; the snapshot's banking comes from the RAM dump.
+      return { cpu, method: "rli", overlays, layout, vectorAddr, bank01: 0 };
     }
 
-    // Read the captured state twice and require it to be stable before trusting it.
-    const cpu = await readScratch(api, layout);
-    const verify = await readScratch(api, layout);
-    if (JSON.stringify(cpu) !== JSON.stringify(verify)) {
-      throw new CpuCaptureFailedError("captured register block was not stable across reads");
-    }
-    assertValidCpuState(cpu);
-
-    return { cpu, method: "rli", overlays, layout, bank01 };
+    // Neither vector's interrupt fired (SEI tight loop / vector-protected program).
+    await api.machineResume();
+    throw new CpuCaptureFailedError(
+      "no interrupt entered the capture handler (program runs with interrupts disabled or protects its vectors)",
+    );
   } catch (error) {
     if (error instanceof CpuCaptureFailedError) throw error;
-    // Best-effort: leave the caller a clear error; the machine may be frozen.
     throw error;
   }
 };
@@ -168,12 +184,12 @@ export const captureCpuState = async (api: CaptureCpuApi, options: CaptureOption
  * then restore the safe region. Returns once the writes are issued.
  */
 export const resumeAfterCapture = async (api: CaptureCpuApi, result: CaptureResult): Promise<void> => {
-  const { layout, overlays } = result;
-  const irqOverlay = overlays.find((o) => o.start === IRQ_VECTOR_0314);
+  const { layout, overlays, vectorAddr } = result;
+  const irqOverlay = overlays.find((o) => o.start === vectorAddr);
   const regionOverlay = overlays.find((o) => o.start === layout.base);
 
   // 1) Point the vector back at the original handler so $033C is never re-entered.
-  if (irqOverlay) await api.writeMemoryBlock(toHexAddress(IRQ_VECTOR_0314), irqOverlay.bytes);
+  if (irqOverlay) await api.writeMemoryBlock(toHexAddress(vectorAddr), irqOverlay.bytes);
   // 2) Release the spin loop → the handler chains to the original handler and the program resumes.
   await api.writeMemoryBlock(toHexAddress(layout.release), new Uint8Array([0x01]));
   // 3) Restore the safe region (the live handler is no longer referenced).

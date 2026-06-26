@@ -17,7 +17,12 @@ import {
   jmp,
   label,
   lda,
+  ldx,
+  ldy,
+  rti,
   sta,
+  stx,
+  sty,
   tsx,
   txa,
 } from "./assembler";
@@ -167,5 +172,200 @@ export const buildCaptureHandler = (base = DEFAULT_SAFE_REGION): CaptureHandler 
     length: bytes.length,
   };
 
+  return { bytes, layout };
+};
+
+/** Number of bytes the IRQ/NMI frame occupies when KERNAL is banked out (CPU pushes P/PCL/PCH only). */
+export const RAW_IRQ_FRAME_BYTES = 3;
+
+/**
+ * Builds a *raw* capture handler for when KERNAL is banked out (`$01` HIRAM clear)
+ * and the program's interrupt vectors live in RAM (`$FFFE` for IRQ/BRK, `$FFFA`
+ * for NMI). The CPU pushes only P/PCL/PCH (3 bytes) and jumps straight to the
+ * program's handler — so A/X/Y are *live registers*, not on the stack, and this
+ * handler saves them directly. The captured SP is the entry SP + 3.
+ *
+ * On release it restores A/X/Y and chains to the program's original handler
+ * (`origVec`), so the program's own interrupt servicing (ACK etc.) still runs.
+ */
+export const buildRawCaptureHandler = (base = DEFAULT_SAFE_REGION): CaptureHandler => {
+  const { bytes, symbols } = assemble(
+    [
+      label("entry"),
+      sta.abs("scrA"), // A is live → save it before anything clobbers it
+      lda.abs("armed"),
+      bne("doCapture"),
+      lda.abs("scrA"), // not armed → restore A and chain cleanly
+      jmp.ind("origVec"),
+
+      label("doCapture"),
+      lda.imm(0x00),
+      sta.abs("armed"),
+      stx.abs("scrX"), // X live → save
+      sty.abs("scrY"), // Y live → save
+      tsx(),
+      lda.absx(0x0101),
+      sta.abs("scrP"),
+      lda.absx(0x0102),
+      sta.abs("scrPcl"),
+      lda.absx(0x0103),
+      sta.abs("scrPch"),
+      txa(),
+      clc(),
+      adc.imm(RAW_IRQ_FRAME_BYTES), // SP at interrupt = entry SP + 3
+      sta.abs("scrSp"),
+      lda.imm(0x01),
+      sta.abs("captured"),
+
+      label("freeze"),
+      lda.abs("release"),
+      beq("freeze"),
+      // transparent resume: restore A/X/Y, chain to the program's own handler
+      ldy.abs("scrY"),
+      ldx.abs("scrX"),
+      lda.abs("scrA"),
+      jmp.ind("origVec"),
+
+      label("scrPcl"),
+      db(0),
+      label("scrPch"),
+      db(0),
+      label("scrA"),
+      db(0),
+      label("scrX"),
+      db(0),
+      label("scrY"),
+      db(0),
+      label("scrSp"),
+      db(0),
+      label("scrP"),
+      db(0),
+      label("armed"),
+      db(0),
+      label("captured"),
+      db(0),
+      label("release"),
+      db(0),
+      label("origVec"),
+      dw(0),
+    ],
+    base,
+  );
+
+  const layout: CaptureLayout = {
+    base,
+    entry: symbols.entry!,
+    scratchPcl: symbols.scrPcl!,
+    scratchPch: symbols.scrPch!,
+    scratchA: symbols.scrA!,
+    scratchX: symbols.scrX!,
+    scratchY: symbols.scrY!,
+    scratchSp: symbols.scrSp!,
+    scratchP: symbols.scrP!,
+    armed: symbols.armed!,
+    captured: symbols.captured!,
+    release: symbols.release!,
+    origVec: symbols.origVec!,
+    length: bytes.length,
+  };
+
+  return { bytes, layout };
+};
+
+/** CIA2 ICR — reading it acknowledges the CIA2 (NMI) interrupt source. */
+export const CIA2_ICR_ADDR = 0xdd0d;
+
+/**
+ * Builds the ISN (Injected-Source NMI) capture handler. When the running program
+ * disables IRQs (`SEI` tight loop) so neither `$0314` nor `$FFFE` ever fires, the
+ * app programs **CIA2 Timer A** to assert the NMI line (non-maskable — fires under
+ * `SEI`) and points the NMI vector at this handler.
+ *
+ * Like the raw IRQ handler the NMI frame is +3 (A/X/Y live), but this handler
+ * **acknowledges CIA2** (reads `$DD0D`) and **`RTI`s directly** rather than
+ * chaining — the NMI was injected by us, not the program, so there is nothing to
+ * chain to. The app restores CIA2 + the NMI vector after the capture.
+ */
+export const buildNmiCaptureHandler = (base = DEFAULT_SAFE_REGION): CaptureHandler => {
+  const { bytes, symbols } = assemble(
+    [
+      label("entry"),
+      sta.abs("scrA"),
+      lda.abs("armed"),
+      bne("doCapture"),
+      lda.abs("scrA"),
+      lda.abs(CIA2_ICR_ADDR), // ack CIA2 even on the (defensive) not-armed path
+      lda.abs("scrA"),
+      rti(),
+
+      label("doCapture"),
+      lda.imm(0x00),
+      sta.abs("armed"),
+      stx.abs("scrX"),
+      sty.abs("scrY"),
+      tsx(),
+      lda.absx(0x0101),
+      sta.abs("scrP"),
+      lda.absx(0x0102),
+      sta.abs("scrPcl"),
+      lda.absx(0x0103),
+      sta.abs("scrPch"),
+      txa(),
+      clc(),
+      adc.imm(RAW_IRQ_FRAME_BYTES), // NMI frame is +3 (CPU pushes P/PCL/PCH)
+      sta.abs("scrSp"),
+      lda.abs(CIA2_ICR_ADDR), // ACK CIA2 → clears the injected NMI source
+      lda.imm(0x01),
+      sta.abs("captured"),
+
+      label("freeze"),
+      lda.abs("release"),
+      beq("freeze"),
+      ldy.abs("scrY"),
+      ldx.abs("scrX"),
+      lda.abs("scrA"),
+      rti(), // resume: RTI to interrupted PC (CIA2 + vector restored by the app)
+
+      label("scrPcl"),
+      db(0),
+      label("scrPch"),
+      db(0),
+      label("scrA"),
+      db(0),
+      label("scrX"),
+      db(0),
+      label("scrY"),
+      db(0),
+      label("scrSp"),
+      db(0),
+      label("scrP"),
+      db(0),
+      label("armed"),
+      db(0),
+      label("captured"),
+      db(0),
+      label("release"),
+      db(0),
+      label("origVec"),
+      dw(0),
+    ],
+    base,
+  );
+  const layout: CaptureLayout = {
+    base,
+    entry: symbols.entry!,
+    scratchPcl: symbols.scrPcl!,
+    scratchPch: symbols.scrPch!,
+    scratchA: symbols.scrA!,
+    scratchX: symbols.scrX!,
+    scratchY: symbols.scrY!,
+    scratchSp: symbols.scrSp!,
+    scratchP: symbols.scrP!,
+    armed: symbols.armed!,
+    captured: symbols.captured!,
+    release: symbols.release!,
+    origVec: symbols.origVec!,
+    length: bytes.length,
+  };
   return { bytes, layout };
 };

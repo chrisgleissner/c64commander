@@ -17,8 +17,9 @@ import { clearRamAndReboot, loadMemoryRanges } from "@/lib/machine/ramOperations
 import { selectRamDumpFolder } from "@/lib/machine/ramDumpStorage";
 import { loadRamDumpFolderConfig, type RamDumpFolderConfig } from "@/lib/config/ramDumpFolderStore";
 import { resetDiskDevices, resetPrinterDevice } from "@/lib/disks/resetDrives";
-import { createCpuSnapshot, createSnapshot } from "@/lib/snapshot/snapshotCreation";
+import { createCpuSnapshot, createSnapshot, CpuSnapshotUnsupportedError } from "@/lib/snapshot/snapshotCreation";
 import { restoreCpuSnapshotFromDecoded } from "@/lib/snapshot/cpu/cpuSnapshot";
+import { CpuCaptureFailedError } from "@/lib/snapshot/cpu/captureEngine";
 import { deleteSnapshotFromStore, snapshotEntryToBytes, updateSnapshotLabel } from "@/lib/snapshot/snapshotStore";
 import { decodeSnapshot } from "@/lib/snapshot/snapshotFormat";
 import { getCurrentPlaybackSnapshotLabel } from "@/lib/snapshot/currentPlaybackSnapshotLabel";
@@ -198,10 +199,24 @@ export function useHomeActions() {
       "save-cpu",
       async () => {
         const currentPlaybackLabel = getCurrentPlaybackSnapshotLabel();
-        const result = await createCpuSnapshot(api, {
-          label: currentPlaybackLabel,
-          contentName: currentPlaybackLabel,
-        });
+        let result;
+        try {
+          result = await createCpuSnapshot(api, {
+            label: currentPlaybackLabel,
+            contentName: currentPlaybackLabel,
+          });
+        } catch (error) {
+          // CPU capture can't serve every program — SEI tight loops and
+          // vector-protected demos have no rideable interrupt. Degrade with a
+          // clear, actionable message; a plain RAM snapshot always works.
+          if (error instanceof CpuCaptureFailedError || error instanceof CpuSnapshotUnsupportedError) {
+            throw new Error(
+              "Couldn't capture CPU state for this program (it disables or protects its interrupts). " +
+                "Use a Program or Basic RAM snapshot instead.",
+            );
+          }
+          throw error;
+        }
         toast({
           title: "CPU + RAM snapshot saved",
           description: `${result.displayTimestamp} — PC $${result.cpu.pc.toString(16).toUpperCase().padStart(4, "0")}`,

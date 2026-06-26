@@ -96,7 +96,7 @@ describe("captureCpuState (RLI)", () => {
 
     expect(result.method).toBe("rli");
     expect(result.cpu).toEqual({ pc: 0xc000, a: 0x11, x: 0x22, y: 0x33, sp: 0xf6, p: 0x30 });
-    expect(result.bank01).toBe(0x37);
+    expect(result.bank01).toBe(0); // $01 not read (unreliable over DMA)
 
     // The IRQ vector was repointed at the handler base $033C…
     expect(fw.mem.get(0x0314)).toBe(0x3c);
@@ -149,5 +149,39 @@ describe("resumeAfterCapture", () => {
     const regionIdx = fw.writeLog.findIndex((w) => w.addr === L.base && w.bytes.length === 82);
     expect(releaseIdx).toBeGreaterThanOrEqual(0);
     expect(regionIdx).toBeGreaterThan(releaseIdx);
+  });
+});
+
+import { IRQ_VECTOR_FFFE } from "@/lib/snapshot/cpu/captureEngine";
+
+describe("captureCpuState — KERNAL banked out hooks $FFFE", () => {
+  it("uses the raw handler + $FFFE vector when $01 HIRAM is clear", async () => {
+    const fw = new CaptureMock();
+    fw.mem.set(0x01, 0x35); // banked out (KERNAL off, I/O on)
+    fw.mem.set(0xfffe, 0x00);
+    fw.mem.set(0xffff, 0x80); // pretend program IRQ vector $8000
+    // The raw handler's scratch layout differs from the standard one; populate it.
+    fw.fireIrq = () => {
+      fw.mem.set(0x0385, 0x00); // pcl
+      fw.mem.set(0x0386, 0xc0); // pch
+      fw.mem.set(0x0387, 0x11); // a
+      fw.mem.set(0x0388, 0x22); // x
+      fw.mem.set(0x0389, 0x33); // y
+      fw.mem.set(0x038a, 0xf6); // sp
+      fw.mem.set(0x038b, 0x30); // p
+      fw.mem.set(0x038d, 0x01); // captured
+    };
+    const result = await captureCpuState(fw.api, clock());
+    expect(result.cpu).toEqual({ pc: 0xc000, a: 0x11, x: 0x22, y: 0x33, sp: 0xf6, p: 0x30 });
+    expect(result.vectorAddr).toBe(IRQ_VECTOR_FFFE);
+    expect(result.bank01).toBe(0);
+    // $FFFE/$FFFF repointed at the handler base $033C
+    expect(fw.mem.get(0xfffe)).toBe(0x3c);
+    expect(fw.mem.get(0xffff)).toBe(0x03);
+    // raw handler first byte = STA scrA ($8D)
+    expect(fw.mem.get(0x033c)).toBe(0x8d);
+    // overlay carries the original $FFFE vector
+    const ov = result.overlays.find((o) => o.start === IRQ_VECTOR_FFFE);
+    expect(Array.from(ov.bytes)).toEqual([0x00, 0x80]);
   });
 });

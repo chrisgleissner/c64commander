@@ -366,6 +366,10 @@ describe("hvscIngestionRuntime", () => {
     expect(resetLibraryRoot).not.toHaveBeenCalled();
     expect(deleteLibraryFile).toHaveBeenCalledWith("/demo.sid");
     expect(resetSonglengthsCache).toHaveBeenCalled();
+    // Baseline install commits installedVersion only after this reload, so discovery must
+    // be forced past the install-state gate — otherwise the just-written Songlengths.md5 is
+    // never loaded and every HVSC song falls back to the default playlist duration.
+    expect(reloadHvscSonglengthsOnConfigChange).toHaveBeenCalledWith({ force: true });
     const transitions = vi
       .mocked(addLog)
       .mock.calls.filter((call) => call[1] === "HVSC pipeline transition")

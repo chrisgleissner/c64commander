@@ -543,7 +543,10 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
   });
   let songlengthsPerfError: Error | null = null;
   try {
-    await reloadHvscSonglengthsOnConfigChange();
+    // force: the library (incl. Songlengths.md5) is on disk now, but installedVersion
+    // is committed only in applyIngestionSuccess() below — so discovery must not gate
+    // on the install state here, or the just-installed songlengths are never loaded.
+    await reloadHvscSonglengthsOnConfigChange({ force: true });
   } catch (error) {
     songlengthsPerfError = error as Error;
     const failure = classifyError(error);
@@ -736,7 +739,9 @@ const ingestArchivePathNative = async (options: {
     });
     let nativeSonglengthsPerfError: Error | null = null;
     try {
-      await reloadHvscSonglengthsOnConfigChange();
+      // force: see ingestArchiveBuffer — installedVersion is set in applyIngestionSuccess()
+      // below, after this reload, so discovery must bypass the install-state gate.
+      await reloadHvscSonglengthsOnConfigChange({ force: true });
     } catch (error) {
       nativeSonglengthsPerfError = error as Error;
       throw error;

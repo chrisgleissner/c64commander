@@ -88,6 +88,45 @@ const toHexAddress = (value: number) => value.toString(16).toUpperCase().padStar
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+/** Chunk writes/poll-reads are retried: the fragile C64U firmware drops requests under burst load. */
+const RETRY_ATTEMPTS = 4;
+
+type Sleep = (ms: number) => Promise<void>;
+
+/**
+ * Writes a memory block, retrying on a thrown error or a returned error array.
+ * A dropped writemem (the C64U returns 404/closes the socket under load) would
+ * otherwise silently corrupt the restored RAM and resume a hung program.
+ */
+const writeWithRetry = async (api: RestoreCpuApi, addr: string, data: Uint8Array, sleep: Sleep): Promise<void> => {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < RETRY_ATTEMPTS; attempt++) {
+    try {
+      const result = await api.writeMemoryBlock(addr, data);
+      if (!result || !Array.isArray(result.errors) || result.errors.length === 0) return;
+      lastError = new Error(`writemem $${addr}: ${result.errors.join(", ")}`);
+    } catch (error) {
+      lastError = error;
+    }
+    await sleep(120 * (attempt + 1));
+  }
+  throw lastError ?? new Error(`writemem $${addr} failed after ${RETRY_ATTEMPTS} attempts`);
+};
+
+/** Reads memory, retrying on a thrown error (transient 404s under load). */
+const readWithRetry = async (api: RestoreCpuApi, addr: string, len: number, sleep: Sleep): Promise<Uint8Array> => {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < RETRY_ATTEMPTS; attempt++) {
+    try {
+      return await api.readMemory(addr, len);
+    } catch (error) {
+      lastError = error;
+      await sleep(120 * (attempt + 1));
+    }
+  }
+  throw lastError ?? new Error(`readmem $${addr} failed after ${RETRY_ATTEMPTS} attempts`);
+};
+
 /** Reads a single snapshot byte at `addr` from the supplied ranges, if covered. */
 export const readByteFromRanges = (ranges: CpuRestoreRange[], addr: number): number | undefined => {
   for (const { start, bytes } of ranges) {
@@ -106,7 +145,12 @@ const isSkippedAddress = (addr: number): boolean => addr === RESTORE_FLAG_ADDR |
  * registers + the `$02` handshake byte) and chunking large spans. Never pauses
  * the machine — the cart must keep spinning so it sees the eventual release.
  */
-const writeRangeWithSkips = async (api: RestoreCpuApi, start: number, bytes: Uint8Array): Promise<void> => {
+const writeRangeWithSkips = async (
+  api: RestoreCpuApi,
+  start: number,
+  bytes: Uint8Array,
+  sleep: Sleep,
+): Promise<void> => {
   let offset = 0;
   while (offset < bytes.length) {
     if (isSkippedAddress(start + offset)) {
@@ -117,7 +161,7 @@ const writeRangeWithSkips = async (api: RestoreCpuApi, start: number, bytes: Uin
     while (end < bytes.length && !isSkippedAddress(start + end)) end += 1;
     for (let chunkStart = offset; chunkStart < end; chunkStart += WRITE_CHUNK_SIZE) {
       const chunkEnd = Math.min(end, chunkStart + WRITE_CHUNK_SIZE);
-      await api.writeMemoryBlock(toHexAddress(start + chunkStart), bytes.subarray(chunkStart, chunkEnd));
+      await writeWithRetry(api, toHexAddress(start + chunkStart), bytes.subarray(chunkStart, chunkEnd), sleep);
     }
     offset = end;
   }
@@ -166,7 +210,7 @@ export const restoreCpuSnapshot = async (
   const deadline = now() + readyTimeout;
   let ready = false;
   for (;;) {
-    const value = (await api.readMemory(toHexAddress(RESTORE_FLAG_ADDR), 1))[0];
+    const value = (await readWithRetry(api, toHexAddress(RESTORE_FLAG_ADDR), 1, sleep))[0];
     if (value === RESTORE_FLAG_READY) {
       ready = true;
       break;
@@ -180,15 +224,20 @@ export const restoreCpuSnapshot = async (
 
   // 3) DMA the snapshot RAM (skipping $02 and the CIA timer registers).
   for (const { start, bytes } of ramRanges) {
-    await writeRangeWithSkips(api, start, bytes);
+    await writeRangeWithSkips(api, start, bytes, sleep);
   }
 
   // 4) Plant the RTI frame (P, PCL, PCH) in the free stack just below the saved SP.
   const rtiFrameAddress = RESTORE_STUB_ADDR + cpu.sp - 2;
-  await api.writeMemoryBlock(toHexAddress(rtiFrameAddress), new Uint8Array([cpu.p & 0xff, cpu.pc & 0xff, (cpu.pc >> 8) & 0xff]));
+  await writeWithRetry(
+    api,
+    toHexAddress(rtiFrameAddress),
+    new Uint8Array([cpu.p & 0xff, cpu.pc & 0xff, (cpu.pc >> 8) & 0xff]),
+    sleep,
+  );
 
   // 5) Release: the cart copies the finalize stub to the free stack and resumes.
-  await api.writeMemoryBlock(toHexAddress(RESTORE_FLAG_ADDR), new Uint8Array([RESTORE_FLAG_GO]));
+  await writeWithRetry(api, toHexAddress(RESTORE_FLAG_ADDR), new Uint8Array([RESTORE_FLAG_GO]), sleep);
 
   return { ok: true, rtiFrameAddress };
 };

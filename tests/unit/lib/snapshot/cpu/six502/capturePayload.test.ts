@@ -72,3 +72,43 @@ describe("buildCaptureHandler", () => {
     expect(bytes[2]).toBe((layout.armed >> 8) & 0xff);
   });
 });
+
+import { buildRawCaptureHandler, RAW_IRQ_FRAME_BYTES } from "@/lib/snapshot/cpu/six502/capturePayload";
+
+describe("buildRawCaptureHandler (KERNAL banked out — $FFFE / +3 frame)", () => {
+  it("saves live A/X/Y and reads the 3-byte CPU frame", () => {
+    const { bytes, layout } = buildRawCaptureHandler(0x033c);
+    const code = hex(bytes.subarray(0, 73));
+    // STA scrA first (A is live), then armed check, save X/Y, read P/PCL/PCH at SP+1..3, SP=entry+3.
+    expect(code.startsWith("8d 87 03 ad 8c 03 d0 06")).toBe(true);
+    expect(code).toContain("8e 88 03"); // STX scrX (live X)
+    expect(code).toContain("8c 89 03"); // STY scrY (live Y)
+    for (const off of ["01 01", "02 01", "03 01"]) expect(code).toContain(`bd ${off}`); // P,PCL,PCH at SP+1..3
+    expect(code).toContain("69 03"); // ADC #$03 → SP = entry + 3
+    expect(RAW_IRQ_FRAME_BYTES).toBe(3);
+    expect(bytes.length).toBe(85);
+    expect(layout.captured).toBe(0x038d);
+  });
+
+  it("relocates cleanly to a different base", () => {
+    const { layout, bytes } = buildRawCaptureHandler(0xc000);
+    expect(layout.entry).toBe(0xc000);
+    expect(bytes[0]).toBe(0x8d); // STA scrA
+    expect(bytes[1]).toBe(layout.scratchA & 0xff);
+  });
+});
+
+import { buildNmiCaptureHandler, CIA2_ICR_ADDR } from "@/lib/snapshot/cpu/six502/capturePayload";
+
+describe("buildNmiCaptureHandler (ISN — injected CIA2 NMI for SEI loops)", () => {
+  it("acks CIA2 ($DD0D), reads the +3 frame, and RTIs (no chaining)", () => {
+    const { bytes, layout } = buildNmiCaptureHandler(0x033c);
+    const code = hex(bytes);
+    expect(code).toContain("ad 0d dd"); // LDA $DD0D — acknowledge the CIA2 NMI source
+    expect(code).toContain("69 03"); // ADC #$03 → NMI frame is +3
+    expect(code).toContain(" 40 "); // RTI (injected NMI → return directly, no chain)
+    expect(CIA2_ICR_ADDR).toBe(0xdd0d);
+    expect(bytes.length).toBe(90);
+    expect(layout.captured).toBe(0x0392);
+  });
+});

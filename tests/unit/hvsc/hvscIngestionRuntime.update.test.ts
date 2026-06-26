@@ -171,6 +171,9 @@ describe("hvscIngestionRuntime update archive ingestion", () => {
     expect(mocks.writeLibraryFile).toHaveBeenCalledWith("/DOCUMENTS/Songlengths.txt", expect.anything());
     expect(mocks.resetSonglengthsCache).toHaveBeenCalledTimes(1);
     expect(mocks.reloadHvscSonglengthsOnConfigChange).toHaveBeenCalledTimes(1);
+    // Must force discovery: installedVersion is committed only after this reload, so the
+    // install-state gate in discoverSonglengthFiles would otherwise skip the just-written file.
+    expect(mocks.reloadHvscSonglengthsOnConfigChange).toHaveBeenCalledWith({ force: true });
   });
 
   it("applies an update on top of the baseline without resetting untouched songs", async () => {
