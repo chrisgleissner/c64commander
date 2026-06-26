@@ -21,6 +21,8 @@ vi.mock("@/lib/native/ftpClient", () => ({
     readFile: vi.fn(),
     writeFile: vi.fn(),
     pingFtp: vi.fn(),
+    cancelRead: vi.fn(async () => {}),
+    addListener: vi.fn(async () => ({ remove: async () => {} })),
   },
 }));
 vi.mock("@/lib/deviceInteraction/deviceInteractionManager", () => ({
@@ -185,6 +187,73 @@ describe("ftpClient", () => {
 
       expect(runWithImplicitAction).not.toHaveBeenCalled();
       expect(recordFtpOperation).toHaveBeenCalledWith(mockAction, expect.anything());
+    });
+  });
+
+  describe("readFtpFile progress + cancellation", () => {
+    const mockReadOptions = { ...mockListOptions, path: "/Songlengths.md5", totalBytes: 100 };
+
+    it("forwards byte progress from ftpReadProgress events and tears the listener down", async () => {
+      let progressCb: ((event: { requestId: string; bytesRead: number; totalBytes: number }) => void) | undefined;
+      const remove = vi.fn(async () => {});
+      vi.mocked(FtpClient.addListener).mockImplementation(async (_event: any, cb: any) => {
+        progressCb = cb;
+        return { remove } as any;
+      });
+      let resolveRead: (value: { data: string; sizeBytes: number }) => void = () => {};
+      vi.mocked(FtpClient.readFile).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveRead = resolve;
+          }),
+      );
+
+      const onProgress = vi.fn();
+      const promise = readFtpFile({ ...mockReadOptions, onProgress } as any);
+      await vi.waitFor(() => expect(FtpClient.readFile).toHaveBeenCalled());
+
+      const readArgs = vi.mocked(FtpClient.readFile).mock.calls[0]?.[0] as any;
+      expect(typeof readArgs.requestId).toBe("string");
+      expect(readArgs.totalBytes).toBe(100);
+
+      // matching requestId is forwarded; mismatched events are ignored
+      progressCb?.({ requestId: readArgs.requestId, bytesRead: 50, totalBytes: 100 });
+      progressCb?.({ requestId: "someone-else", bytesRead: 999, totalBytes: 100 });
+      expect(onProgress).toHaveBeenCalledTimes(1);
+      expect(onProgress).toHaveBeenCalledWith({ bytesRead: 50, totalBytes: 100 });
+
+      resolveRead({ data: "QQ==", sizeBytes: 1 });
+      await promise;
+      expect(remove).toHaveBeenCalled();
+    });
+
+    it("cancels the in-flight native read when the abort signal fires", async () => {
+      let resolveRead: (value: { data: string; sizeBytes: number }) => void = () => {};
+      vi.mocked(FtpClient.readFile).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveRead = resolve;
+          }),
+      );
+      const controller = new AbortController();
+
+      const promise = readFtpFile({ ...mockReadOptions, onProgress: vi.fn(), signal: controller.signal } as any);
+      await vi.waitFor(() => expect(FtpClient.readFile).toHaveBeenCalled());
+      const readArgs = vi.mocked(FtpClient.readFile).mock.calls[0]?.[0] as any;
+
+      controller.abort();
+      expect(FtpClient.cancelRead).toHaveBeenCalledWith({ requestId: readArgs.requestId });
+
+      resolveRead({ data: "QQ==", sizeBytes: 1 });
+      await promise;
+    });
+
+    it("never registers a progress listener for a plain read (no onProgress/signal)", async () => {
+      vi.mocked(FtpClient.readFile).mockResolvedValue({ data: "QQ==", sizeBytes: 1 });
+      await readFtpFile(mockReadOptions);
+      expect(FtpClient.addListener).not.toHaveBeenCalled();
+      const readArgs = vi.mocked(FtpClient.readFile).mock.calls[0]?.[0] as any;
+      expect(readArgs.requestId).toBeUndefined();
     });
   });
 

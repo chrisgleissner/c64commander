@@ -162,6 +162,23 @@ export function useC64Connection() {
           return cached;
         }
       }
+      // Coalesce the scheduled health poll with other recent device traffic: if
+      // a request already succeeded within the health-check interval, reuse the
+      // cached info instead of firing a redundant poll. This coalescing MUST
+      // happen here in the queryFn rather than by returning `false` from
+      // refetchInterval based on elapsed time. React Query treats a `false`
+      // interval as "stop polling entirely" and only re-arms on a remount /
+      // invalidation / reactive option change — a time-based `false` is never
+      // re-evaluated, so the health heartbeat silently halts and the badge stays
+      // stale (UNHEALTHY) long after the device recovers, until the user
+      // navigates. Keeping the interval alive and skipping the network here
+      // preserves the coalescing intent without disabling self-healing polling.
+      if (!shouldRunScheduledHealthCheck()) {
+        const cached = queryClient.getQueryData<DeviceInfo>(["c64-info", baseUrl]);
+        if (cached) {
+          return cached;
+        }
+      }
       const api = getC64API();
       return api.getInfo({
         timeoutMs: 3000,
@@ -176,13 +193,15 @@ export function useC64Connection() {
     retry: false,
     staleTime: HEALTH_CHECK_INTERVAL_MS,
     refetchOnMount: "always",
+    // Only ever gate the interval on *reactive* state (screenActive,
+    // diagnosticsSuppressionActive, pollingPaused) so React Query re-arms it when
+    // that state flips back. Never return `false` from a non-reactive (time-based)
+    // condition — that permanently tears the interval down. Time-based coalescing
+    // lives in the queryFn above.
     refetchInterval:
       !screenActive || diagnosticsSuppressionActive
         ? false
-        : () => {
-            if (pollingPaused) return false;
-            return shouldRunScheduledHealthCheck() ? HEALTH_CHECK_INTERVAL_MS : false;
-          },
+        : () => (pollingPaused ? false : HEALTH_CHECK_INTERVAL_MS),
   });
 
   const rateLimitedInfoRefetch = useCallback(() => {

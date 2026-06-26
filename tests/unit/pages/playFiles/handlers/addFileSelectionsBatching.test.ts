@@ -596,6 +596,68 @@ describe("addFileSelections batching", () => {
     );
   });
 
+  it("skips an oversized ultimate songlengths file instead of FTP-reading it", async () => {
+    const deps = createDeps();
+    deps.collectSonglengthsCandidates.mockReturnValue(["/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5"]);
+    const source = createUltimateSource(async (path: string) => {
+      if (path === "/USB2/test-data/SID") {
+        return [{ type: "file" as const, name: "10_Orbyte.sid", path: "/USB2/test-data/SID/10_Orbyte.sid" }];
+      }
+      if (path.replace(/\/$/, "") === "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS") {
+        return [
+          {
+            type: "file" as const,
+            name: "Songlengths.md5",
+            path: "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5",
+            // Above the 6 MiB auto-read cap: skip rather than pull an unreasonably
+            // large file over the c64u's fragile FTP.
+            sizeBytes: 7_000_000,
+          },
+        ];
+      }
+      return [];
+    });
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const result = await handler(source, [{ type: "dir", name: "SID", path: "/USB2/test-data/SID" }]);
+
+    expect(result).toBe(true);
+    // The oversized songlengths file must be skipped: nothing discovered/merged,
+    // so no FTP read is ever attempted for it.
+    expect(deps.mergeSonglengthsFiles).not.toHaveBeenCalled();
+  });
+
+  it("still auto-reads an ultimate songlengths file at the size limit boundary", async () => {
+    const deps = createDeps();
+    deps.collectSonglengthsCandidates.mockReturnValue(["/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5"]);
+    const source = createUltimateSource(async (path: string) => {
+      if (path === "/USB2/test-data/SID") {
+        return [{ type: "file" as const, name: "10_Orbyte.sid", path: "/USB2/test-data/SID/10_Orbyte.sid" }];
+      }
+      if (path.replace(/\/$/, "") === "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS") {
+        return [
+          {
+            type: "file" as const,
+            name: "Songlengths.md5",
+            path: "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5",
+            sizeBytes: 6_291_456, // exactly at the 6 MiB limit — still allowed (real HVSC DB is ~5 MiB)
+          },
+        ];
+      }
+      return [];
+    });
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const result = await handler(source, [{ type: "dir", name: "SID", path: "/USB2/test-data/SID" }]);
+
+    expect(result).toBe(true);
+    expect(deps.mergeSonglengthsFiles).toHaveBeenCalledWith([
+      expect.objectContaining({
+        path: "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5",
+      }),
+    ]);
+  });
+
   it("flushes 5k hvsc files in a single bulk batch", async () => {
     const deps = createDeps();
     const filesPerFolder = 500;

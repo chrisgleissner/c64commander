@@ -6,11 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import type { PluginListenerHandle } from "@capacitor/core";
 import type {
   FtpClientPlugin,
   FtpListOptions,
   FtpEntry,
   FtpReadOptions,
+  FtpReadProgressEvent,
   FtpWriteOptions,
   FtpPingOptions,
 } from "./ftpClient";
@@ -147,5 +149,18 @@ export class FtpClientWeb implements FtpClientPlugin {
       traceContext: options.traceContext,
     });
     return { ok: payload?.ok === true };
+  }
+
+  async cancelRead(_options: { requestId: string }): Promise<void> {
+    // The web FTP bridge performs a single bounded request per call and has no
+    // server-side cancellation channel, so there is nothing to abort here.
+  }
+
+  async addListener(
+    _eventName: "ftpReadProgress",
+    _listenerFunc: (event: FtpReadProgressEvent) => void,
+  ): Promise<PluginListenerHandle> {
+    // The web bridge does not stream byte progress; return an inert handle.
+    return { remove: async () => {} };
   }
 }

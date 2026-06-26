@@ -268,6 +268,43 @@ class FtpClientPluginTest {
   }
 
   @Test
+  fun listDirectoryDoesNotCascadeToMlsdOrNlstOnTimeout() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    `when`(ftpClient.isConnected).thenReturn(true)
+    // A timeout on LIST means the firmware FTP data channel is buckling. The plugin
+    // must fail fast and NOT open further MLSD/NLST PASV connections (those would
+    // also time out and triple the connection churn that wedges the c64u firmware —
+    // 1541ultimate issue #364).
+    `when`(ftpClient.listFiles("/")).thenThrow(SocketTimeoutException("Read timed out"))
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("secret")
+    `when`(call.getString("path")).thenReturn("/")
+
+    val latch = CountDownLatch(1)
+    doAnswer {
+              latch.countDown()
+              null
+            }
+            .`when`(call)
+            .reject(any(String::class.java), any(Exception::class.java))
+
+    plugin.listDirectory(call)
+
+    assertTrue(latch.await(10, TimeUnit.SECONDS))
+    verify(ftpClient, never()).mlistDir(any(String::class.java))
+    verify(ftpClient, never()).listNames(any(String::class.java))
+  }
+
+  @Test
   fun listDirectorySkipsDotEntries() {
     val plugin = FtpClientPlugin()
     plugin.runTask = { runnable -> runnable.run() }
@@ -317,13 +354,9 @@ class FtpClientPluginTest {
     plugin.ftpClientFactory = { ftpClient }
 
     `when`(ftpClient.login("user", "secret")).thenReturn(true)
-    doAnswer { invocation ->
-              val output = invocation.getArgument<java.io.ByteArrayOutputStream>(1)
-              output.write(payload.toByteArray(Charsets.UTF_8))
-              true
-            }
-            .`when`(ftpClient)
-            .retrieveFile(eq("/songlengths.md5"), any())
+    `when`(ftpClient.retrieveFileStream(eq("/songlengths.md5")))
+            .thenReturn(java.io.ByteArrayInputStream(payload.toByteArray(Charsets.UTF_8)))
+    `when`(ftpClient.completePendingCommand()).thenReturn(true)
     `when`(ftpClient.isConnected).thenReturn(true)
 
     val call = mock(PluginCall::class.java)
@@ -469,7 +502,7 @@ class FtpClientPluginTest {
     plugin.ftpClientFactory = { ftpClient }
 
     `when`(ftpClient.login("user", "")).thenReturn(true)
-    `when`(ftpClient.retrieveFile(eq("/missing.sid"), any())).thenReturn(false)
+    `when`(ftpClient.retrieveFileStream(eq("/missing.sid"))).thenReturn(null)
     `when`(ftpClient.isConnected).thenReturn(true)
 
     val call = mock(PluginCall::class.java)
@@ -777,6 +810,54 @@ class FtpClientPluginTest {
     plugin.readFile(call)
 
     assertTrue((rejectedMessage ?: "").startsWith("FTP readFile timed out after "))
+  }
+
+  @Test
+  fun cancelReadRejectsMissingRequestId() {
+    val plugin = FtpClientPlugin()
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("requestId")).thenReturn(null)
+
+    plugin.cancelRead(call)
+
+    verify(call).reject("requestId is required")
+  }
+
+  @Test
+  fun cancelReadResolvesForKnownRequestId() {
+    val plugin = FtpClientPlugin()
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("requestId")).thenReturn("ftp-read-7")
+
+    plugin.cancelRead(call)
+
+    verify(call).resolve()
+  }
+
+  @Test
+  fun readFileWithZeroTimeoutDisablesIdleSocketTimeout() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "")).thenReturn(true)
+    `when`(ftpClient.retrieveFileStream(eq("/songlengths.md5")))
+            .thenReturn(java.io.ByteArrayInputStream(ByteArray(0)))
+    `when`(ftpClient.completePendingCommand()).thenReturn(true)
+    `when`(ftpClient.isConnected).thenReturn(true)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getString("path")).thenReturn("/songlengths.md5")
+    `when`(call.getInt("port")).thenReturn(21)
+    // timeoutMs == 0 means "no idle timeout" for a slow multi-MB songlengths read.
+    `when`(call.getInt("timeoutMs")).thenReturn(0)
+
+    plugin.readFile(call)
+
+    verify(ftpClient).soTimeout = 0
+    verify(ftpClient).completePendingCommand()
   }
 
   @Test

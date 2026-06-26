@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import type { PluginListenerHandle } from "@capacitor/core";
 import { addErrorLog, buildErrorLogDetails } from "@/lib/logging";
 import { decrementFtpInFlight, incrementFtpInFlight } from "@/lib/diagnostics/diagnosticsActivity";
 import {
@@ -29,6 +30,18 @@ export type FtpListResult = {
 };
 
 export const FTP_CONNECT_TIMEOUT_MS = 1_500;
+
+export type FtpReadProgress = { bytesRead: number; totalBytes: number };
+
+// Read options plus optional progress reporting and cancellation. onProgress is
+// driven by native "ftpReadProgress" events; signal cancels the in-flight read
+// (closing the data stream) so a large/slow transfer can be aborted cleanly.
+export type FtpReadInteractionOptions = FtpReadOptions & {
+  onProgress?: (progress: FtpReadProgress) => void;
+  signal?: AbortSignal;
+};
+
+let ftpReadRequestCounter = 0;
 
 const withDefaultConnectTimeout = <T extends { connectTimeoutMs?: number }>(options: T): T => ({
   ...options,
@@ -143,14 +156,43 @@ export const listFtpDirectory = async (
 
 const executeFtpRead = async (
   action: TraceActionContext,
-  ftpOptions: FtpReadOptions,
+  ftpOptions: FtpReadInteractionOptions,
   path: string,
   intent: InteractionIntent,
 ): Promise<{ data: string; sizeBytes?: number }> => {
+  // onProgress/signal are JS-side concerns and must not cross the native bridge
+  // or land in the (serialized) trace payload.
+  const { onProgress, signal, ...nativeReadOptions } = ftpOptions;
+  const requestId =
+    nativeReadOptions.requestId ??
+    (onProgress || signal ? `ftp-read-${(ftpReadRequestCounter += 1)}` : undefined);
+
   incrementFtpInFlight();
   const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-  const requestPayload = { ...ftpOptions, path };
+  const requestPayload = { ...nativeReadOptions, path };
+
+  let progressListener: PluginListenerHandle | undefined;
+  let abortListener: (() => void) | undefined;
   try {
+    if (requestId && onProgress) {
+      progressListener = await FtpClient.addListener("ftpReadProgress", (event) => {
+        if (event.requestId !== requestId) return;
+        onProgress({ bytesRead: event.bytesRead, totalBytes: event.totalBytes });
+      });
+    }
+    if (requestId && signal) {
+      const requestCancel = () => {
+        void FtpClient.cancelRead({ requestId }).catch(() => {
+          /* best-effort cancellation */
+        });
+      };
+      if (signal.aborted) {
+        requestCancel();
+      } else {
+        abortListener = requestCancel;
+        signal.addEventListener("abort", requestCancel, { once: true });
+      }
+    }
     const response = await withFtpInteraction(
       {
         action,
@@ -160,7 +202,8 @@ const executeFtpRead = async (
         host: ftpOptions.host,
         port: ftpOptions.port,
       },
-      async () => await FtpClient.readFile(withDefaultConnectTimeout({ ...ftpOptions, path })),
+      async () =>
+        await FtpClient.readFile(withDefaultConnectTimeout({ ...nativeReadOptions, path, requestId })),
     );
     const responsePayload = {
       data: response.data,
@@ -211,12 +254,22 @@ const executeFtpRead = async (
     recordTraceError(action, err);
     throw error;
   } finally {
+    if (abortListener && signal) {
+      signal.removeEventListener("abort", abortListener);
+    }
+    if (progressListener) {
+      try {
+        await progressListener.remove();
+      } catch {
+        /* listener teardown is best-effort */
+      }
+    }
     decrementFtpInFlight();
   }
 };
 
 export const readFtpFile = async (
-  options: FtpReadOptions & { __c64uIntent?: InteractionIntent },
+  options: FtpReadInteractionOptions & { __c64uIntent?: InteractionIntent },
 ): Promise<{ data: string; sizeBytes?: number }> => {
   const { __c64uIntent, ...ftpOptions } = options;
   const intent = __c64uIntent ?? "user";
