@@ -293,3 +293,27 @@ describe("FtpClientWeb error handling", () => {
     await expect(client.listDirectory({ host: "c64u" })).rejects.toThrow("unauthorized");
   });
 });
+
+describe("FtpClientWeb unsupported operations", () => {
+  it("rejects recursive listing — the web bridge cannot enumerate recursively", async () => {
+    const client = new FtpClientWeb();
+    await expect(client.listDirectoryRecursive({ host: "c64u", path: "/" })).rejects.toThrow(
+      "FTP bridge recursive listing is unavailable on web.",
+    );
+  });
+
+  it("cancelRead resolves to a no-op (the web bridge has no cancellation channel)", async () => {
+    const client = new FtpClientWeb();
+    await expect(client.cancelRead({ requestId: "ftp-read-1" })).resolves.toBeUndefined();
+  });
+
+  it("addListener returns an inert handle whose remove() is a no-op", async () => {
+    const client = new FtpClientWeb();
+    const listener = vi.fn();
+    const handle = await client.addListener("ftpReadProgress", listener);
+    expect(typeof handle.remove).toBe("function");
+    await expect(handle.remove()).resolves.toBeUndefined();
+    // The web bridge never streams progress, so the listener is never invoked.
+    expect(listener).not.toHaveBeenCalled();
+  });
+});

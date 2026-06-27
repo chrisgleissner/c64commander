@@ -17,7 +17,9 @@ import { clearRamAndReboot, loadMemoryRanges } from "@/lib/machine/ramOperations
 import { selectRamDumpFolder } from "@/lib/machine/ramDumpStorage";
 import { loadRamDumpFolderConfig, type RamDumpFolderConfig } from "@/lib/config/ramDumpFolderStore";
 import { resetDiskDevices, resetPrinterDevice } from "@/lib/disks/resetDrives";
-import { createSnapshot } from "@/lib/snapshot/snapshotCreation";
+import { createCpuSnapshot, createSnapshot, CpuSnapshotUnsupportedError } from "@/lib/snapshot/snapshotCreation";
+import { restoreCpuSnapshotFromDecoded } from "@/lib/snapshot/cpu/cpuSnapshot";
+import { CpuCaptureFailedError } from "@/lib/snapshot/cpu/captureEngine";
 import { deleteSnapshotFromStore, snapshotEntryToBytes, updateSnapshotLabel } from "@/lib/snapshot/snapshotStore";
 import { decodeSnapshot } from "@/lib/snapshot/snapshotFormat";
 import { getCurrentPlaybackSnapshotLabel } from "@/lib/snapshot/currentPlaybackSnapshotLabel";
@@ -192,12 +194,51 @@ export function useHomeActions() {
     setMachineExecutionState("running");
   });
 
+  const handleSaveCpuSnapshot = trace(async function handleSaveCpuSnapshot() {
+    await runMachineTask(
+      "save-cpu",
+      async () => {
+        const currentPlaybackLabel = getCurrentPlaybackSnapshotLabel();
+        let result;
+        try {
+          result = await createCpuSnapshot(api, {
+            label: currentPlaybackLabel,
+            contentName: currentPlaybackLabel,
+          });
+        } catch (error) {
+          // CPU capture can't serve every program — SEI tight loops and
+          // vector-protected demos have no rideable interrupt. Degrade with a
+          // clear, actionable message; a plain RAM snapshot always works.
+          if (error instanceof CpuCaptureFailedError || error instanceof CpuSnapshotUnsupportedError) {
+            throw new Error(
+              "Couldn't capture CPU state for this program (it disables or protects its interrupts). " +
+                "Use a Program or Basic RAM snapshot instead.",
+            );
+          }
+          throw error;
+        }
+        toast({
+          title: "CPU + RAM snapshot saved",
+          description: `${result.displayTimestamp} — PC $${result.cpu.pc.toString(16).toUpperCase().padStart(4, "0")}`,
+        });
+      },
+      "",
+    );
+    setMachineExecutionState("running");
+  });
+
   const handleRestoreSnapshot = trace(async function handleRestoreSnapshot(snapshot: SnapshotStorageEntry) {
     await runMachineTask(
       "load-ram",
       async () => {
         const bytes = snapshotEntryToBytes(snapshot);
         const decoded = decodeSnapshot(bytes);
+        // CPU+RAM snapshots resume at the exact PC via the uploaded-cartridge
+        // path; only when the snapshot actually carries verified CPU state.
+        if (decoded.metadata?.cpu_state_captured && decoded.metadata.cpu) {
+          await restoreCpuSnapshotFromDecoded(api, decoded);
+          return;
+        }
         const ranges = decoded.ranges.map((r, i) => ({
           start: r.start,
           bytes: decoded.blocks[i],
@@ -277,6 +318,7 @@ export function useHomeActions() {
     handleAction,
     handlePauseResume,
     handleSaveRam,
+    handleSaveCpuSnapshot,
     handleRestoreSnapshot,
     handleDeleteSnapshot,
     handleUpdateSnapshotLabel,

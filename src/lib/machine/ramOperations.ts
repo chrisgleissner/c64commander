@@ -20,23 +20,11 @@ const READ_CHUNK_SIZE_BYTES = 0x1000;
 const WRITE_CHUNK_SIZE_BYTES = 0x1000;
 const WAIT_BETWEEN_RETRIES_MS = 120;
 const DEFAULT_RETRY_ATTEMPTS = 2;
-// The CIA timer registers ($xx04-$xx07: Timer A/B lo/hi) are the only registers
-// a snapshot restore must NOT write. The firmware's readmem returns the live
-// timer *down-counter* there, while writemem sets the timer *latch* — so writing
-// a captured counter back as the latch reprograms the CIA1 Timer A jiffy IRQ and
-// the cursor blinks faster on every consecutive restore. Every other CIA
-// register is safe and worth restoring: ports ($xx00/$xx01, including the CIA2
-// VIC-bank select), DDR, TOD, serial, ICR and control. CIA registers mirror
-// every 16 bytes through each page, so the timer registers also appear at
-// $xx14-$xx17, $xx24-$xx27, ... — match on the low nibble to cover the mirrors.
-const CIA_PAGES_START = 0xdc00; // CIA1 $DC00-$DCFF and CIA2 $DD00-$DDFF are contiguous
-const CIA_PAGES_END_EXCLUSIVE = 0xde00;
-
-const isCiaTimerRegister = (address: number) => {
-  if (address < CIA_PAGES_START || address >= CIA_PAGES_END_EXCLUSIVE) return false;
-  const register = address & 0x0f;
-  return register >= 0x04 && register <= 0x07;
-};
+// The CIA-timer-register skip lives in its own dependency-free module so the
+// CPU-snapshot restore path can share it without importing the REST client.
+// (See ciaTimerRegisters.ts for the full rationale — the cursor-blink hazard.)
+export { isCiaTimerRegister } from "@/lib/machine/ciaTimerRegisters";
+import { isCiaTimerRegister } from "@/lib/machine/ciaTimerRegisters";
 
 type RamRange = {
   start: number;

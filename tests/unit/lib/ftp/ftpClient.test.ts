@@ -6,7 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { FTP_CONNECT_TIMEOUT_MS, listFtpDirectory, pingFtp, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
+import {
+  FTP_CONNECT_TIMEOUT_MS,
+  listFtpDirectory,
+  listFtpDirectoryRecursive,
+  pingFtp,
+  readFtpFile,
+  writeFtpFile,
+} from "@/lib/ftp/ftpClient";
 import { FtpClient } from "@/lib/native/ftpClient";
 import { withFtpInteraction } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { getActiveAction, runWithImplicitAction } from "@/lib/tracing/actionTrace";
@@ -18,9 +25,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/native/ftpClient", () => ({
   FtpClient: {
     listDirectory: vi.fn(),
+    listDirectoryRecursive: vi.fn(),
     readFile: vi.fn(),
     writeFile: vi.fn(),
     pingFtp: vi.fn(),
+    cancelRead: vi.fn(async () => {}),
+    addListener: vi.fn(async () => ({ remove: async () => {} })),
   },
 }));
 vi.mock("@/lib/deviceInteraction/deviceInteractionManager", () => ({
@@ -185,6 +195,181 @@ describe("ftpClient", () => {
 
       expect(runWithImplicitAction).not.toHaveBeenCalled();
       expect(recordFtpOperation).toHaveBeenCalledWith(mockAction, expect.anything());
+    });
+  });
+
+  describe("readFtpFile progress + cancellation", () => {
+    const mockReadOptions = { ...mockListOptions, path: "/Songlengths.md5", totalBytes: 100 };
+
+    it("forwards byte progress from ftpReadProgress events and tears the listener down", async () => {
+      let progressCb: ((event: { requestId: string; bytesRead: number; totalBytes: number }) => void) | undefined;
+      const remove = vi.fn(async () => {});
+      vi.mocked(FtpClient.addListener).mockImplementation(async (_event: any, cb: any) => {
+        progressCb = cb;
+        return { remove } as any;
+      });
+      let resolveRead: (value: { data: string; sizeBytes: number }) => void = () => {};
+      vi.mocked(FtpClient.readFile).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveRead = resolve;
+          }),
+      );
+
+      const onProgress = vi.fn();
+      const promise = readFtpFile({ ...mockReadOptions, onProgress } as any);
+      await vi.waitFor(() => expect(FtpClient.readFile).toHaveBeenCalled());
+
+      const readArgs = vi.mocked(FtpClient.readFile).mock.calls[0]?.[0] as any;
+      expect(typeof readArgs.requestId).toBe("string");
+      expect(readArgs.totalBytes).toBe(100);
+
+      // matching requestId is forwarded; mismatched events are ignored
+      progressCb?.({ requestId: readArgs.requestId, bytesRead: 50, totalBytes: 100 });
+      progressCb?.({ requestId: "someone-else", bytesRead: 999, totalBytes: 100 });
+      expect(onProgress).toHaveBeenCalledTimes(1);
+      expect(onProgress).toHaveBeenCalledWith({ bytesRead: 50, totalBytes: 100 });
+
+      resolveRead({ data: "QQ==", sizeBytes: 1 });
+      await promise;
+      expect(remove).toHaveBeenCalled();
+    });
+
+    it("cancels the in-flight native read when the abort signal fires", async () => {
+      let resolveRead: (value: { data: string; sizeBytes: number }) => void = () => {};
+      vi.mocked(FtpClient.readFile).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveRead = resolve;
+          }),
+      );
+      const controller = new AbortController();
+
+      const promise = readFtpFile({ ...mockReadOptions, onProgress: vi.fn(), signal: controller.signal } as any);
+      await vi.waitFor(() => expect(FtpClient.readFile).toHaveBeenCalled());
+      const readArgs = vi.mocked(FtpClient.readFile).mock.calls[0]?.[0] as any;
+
+      controller.abort();
+      expect(FtpClient.cancelRead).toHaveBeenCalledWith({ requestId: readArgs.requestId });
+
+      resolveRead({ data: "QQ==", sizeBytes: 1 });
+      await promise;
+    });
+
+    it("never registers a progress listener for a plain read (no onProgress/signal)", async () => {
+      vi.mocked(FtpClient.readFile).mockResolvedValue({ data: "QQ==", sizeBytes: 1 });
+      await readFtpFile(mockReadOptions);
+      expect(FtpClient.addListener).not.toHaveBeenCalled();
+      const readArgs = vi.mocked(FtpClient.readFile).mock.calls[0]?.[0] as any;
+      expect(readArgs.requestId).toBeUndefined();
+    });
+  });
+
+  describe("listFtpDirectoryRecursive", () => {
+    const mockEntries = [
+      { name: "demo.sid", path: "/HVSC/demo.sid", type: 1, size: 1024 },
+      { name: "sub", path: "/HVSC/sub", type: 2 },
+    ];
+
+    it("lists recursively and returns entries plus partial failures", async () => {
+      // clearAllMocks keeps implementations, so a leaked getActiveAction stub from an
+      // earlier test could force the active-action path — pin the implicit path here.
+      vi.mocked(getActiveAction).mockReturnValue(undefined as never);
+      const partialFailures = [{ path: "/HVSC/locked", message: "permission denied" }];
+      vi.mocked(FtpClient.listDirectoryRecursive).mockResolvedValue({
+        entries: mockEntries,
+        partialFailures,
+      } as any);
+
+      const result = await listFtpDirectoryRecursive({ ...mockListOptions, path: "/HVSC", maxDepth: 4 });
+
+      expect(result.path).toBe("/HVSC");
+      expect(result.entries).toEqual(mockEntries);
+      expect(result.partialFailures).toEqual(partialFailures);
+      expect(runWithImplicitAction).toHaveBeenCalledWith("ftp.list-recursive", expect.any(Function));
+      expect(recordFtpOperation).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ command: "LIST-RECURSIVE", result: "success" }),
+      );
+      expect(decrementFtpInFlight).toHaveBeenCalled();
+    });
+
+    it("defaults partialFailures to an empty array when the bridge omits them", async () => {
+      vi.mocked(FtpClient.listDirectoryRecursive).mockResolvedValue({ entries: [] } as any);
+
+      const result = await listFtpDirectoryRecursive({ ...mockListOptions, path: "" });
+
+      // Empty path normalizes to the FTP root.
+      expect(result.path).toBe("/");
+      expect(result.partialFailures).toEqual([]);
+      expect(FtpClient.listDirectoryRecursive).toHaveBeenCalledWith(
+        expect.objectContaining({ path: "/", connectTimeoutMs: FTP_CONNECT_TIMEOUT_MS }),
+      );
+    });
+
+    it("uses an existing active action when available", async () => {
+      const mockAction = { id: "recursive-active" };
+      vi.mocked(getActiveAction).mockReturnValue(mockAction as any);
+      vi.mocked(FtpClient.listDirectoryRecursive).mockResolvedValue({ entries: [], partialFailures: [] } as any);
+
+      await listFtpDirectoryRecursive({ ...mockListOptions, path: "/" });
+
+      expect(runWithImplicitAction).not.toHaveBeenCalled();
+      expect(recordFtpOperation).toHaveBeenCalledWith(mockAction, expect.anything());
+    });
+
+    it("logs and rethrows recursive listing failures", async () => {
+      vi.mocked(FtpClient.listDirectoryRecursive).mockRejectedValue(new Error("recursive boom"));
+
+      await expect(listFtpDirectoryRecursive({ ...mockListOptions, path: "/HVSC" })).rejects.toThrow("recursive boom");
+
+      expect(addErrorLog).toHaveBeenCalled();
+      expect(recordTraceError).toHaveBeenCalled();
+      expect(recordFtpOperation).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ command: "LIST-RECURSIVE", result: "failure" }),
+      );
+      expect(decrementFtpInFlight).toHaveBeenCalled();
+    });
+  });
+
+  describe("readFtpFile edge branches", () => {
+    const mockReadOptions = { ...mockListOptions, path: "/Songlengths.md5", totalBytes: 100 };
+
+    it("cancels immediately when the signal is already aborted before the read starts", async () => {
+      vi.mocked(FtpClient.readFile).mockResolvedValue({ data: "QQ==", sizeBytes: 1 });
+      const controller = new AbortController();
+      controller.abort(); // pre-aborted
+
+      await readFtpFile({ ...mockReadOptions, onProgress: vi.fn(), signal: controller.signal } as any);
+
+      const readArgs = vi.mocked(FtpClient.readFile).mock.calls[0]?.[0] as any;
+      expect(FtpClient.cancelRead).toHaveBeenCalledWith({ requestId: readArgs.requestId });
+    });
+
+    it("logs when the native cancelRead itself rejects", async () => {
+      vi.mocked(FtpClient.cancelRead).mockRejectedValueOnce(new Error("cancel failed"));
+      vi.mocked(FtpClient.readFile).mockResolvedValue({ data: "QQ==", sizeBytes: 1 });
+      const controller = new AbortController();
+      controller.abort();
+
+      await readFtpFile({ ...mockReadOptions, onProgress: vi.fn(), signal: controller.signal } as any);
+
+      // buildErrorLogDetails is automocked → second arg is undefined.
+      await vi.waitFor(() => expect(addErrorLog).toHaveBeenCalledWith("FTP cancelRead failed", undefined));
+    });
+
+    it("logs when tearing down the progress listener fails", async () => {
+      vi.mocked(FtpClient.addListener).mockResolvedValueOnce({
+        remove: vi.fn(async () => {
+          throw new Error("remove failed");
+        }),
+      } as any);
+      vi.mocked(FtpClient.readFile).mockResolvedValue({ data: "QQ==", sizeBytes: 1 });
+
+      await readFtpFile({ ...mockReadOptions, onProgress: vi.fn() } as any);
+
+      expect(addErrorLog).toHaveBeenCalledWith("FTP progress listener cleanup failed", undefined);
     });
   });
 

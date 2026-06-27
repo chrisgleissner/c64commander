@@ -17,6 +17,7 @@ vi.mock("@/lib/config/deviceSafetySettings", () => ({
     configsCooldownMs: 500,
     drivesCooldownMs: 500,
     ftpListCooldownMs: 300,
+    telnetConnectCooldownMs: 300,
     backoffBaseMs: 300,
     backoffMaxMs: 3000,
     backoffFactor: 1.8,

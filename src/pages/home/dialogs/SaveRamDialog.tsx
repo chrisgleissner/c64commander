@@ -35,6 +35,8 @@ interface SaveRamDialogProps {
   onOpenChange: (open: boolean) => void;
   onSave: (type: SnapshotType, customRanges?: MemoryRange[]) => void;
   onSaveReu?: () => void;
+  /** Captures full CPU + RAM state (resumes at the exact PC on restore). */
+  onSaveCpu?: () => void;
   isSaving: boolean;
   telnetAvailable?: boolean;
   telnetBusy?: boolean;
@@ -79,6 +81,7 @@ export function SaveRamDialog({
   onOpenChange,
   onSave,
   onSaveReu,
+  onSaveCpu,
   isSaving,
   telnetAvailable = false,
   telnetBusy = false,
@@ -154,6 +157,23 @@ export function SaveRamDialog({
         <AppDialogBody>
           {!showCustom ? (
             <div className="space-y-2" data-testid="save-ram-type-list">
+              {typeof onSaveCpu === "function" && (
+                <button
+                  data-testid="save-ram-type-cpu"
+                  className="w-full text-left rounded-lg border border-primary/50 bg-primary/5 hover:bg-accent hover:text-accent-foreground px-4 py-3 transition-colors disabled:opacity-50"
+                  onClick={() => {
+                    onSaveCpu();
+                    handleClose();
+                  }}
+                  disabled={isSaving}
+                >
+                  <div className="font-semibold text-sm">CPU + RAM Snapshot</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">Resumes a program where it left off.</div>
+                  <div className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+                    Best for BASIC &amp; simple programs. Fast-action games may not resume.
+                  </div>
+                </button>
+              )}
               {SNAPSHOT_TYPE_LIST.map((config) => (
                 <button
                   key={config.type}

@@ -71,6 +71,8 @@ type TelnetRequestMeta = {
   action: TraceActionContext;
   actionId: string;
   intent: InteractionIntent;
+  host?: string;
+  port?: number;
 };
 
 type RestFailureKind = "timeout" | "abort" | "network" | "http-status";
@@ -274,6 +276,7 @@ const updateConfig = () => {
   restCache.clear();
   restCooldownUntil.clear();
   ftpConnectCooldownUntil.clear();
+  telnetConnectCooldownUntil.clear();
   restInflight.clear();
   ftpInflight.clear();
   restErrorStreak = 0;
@@ -301,6 +304,7 @@ export const resetInteractionState = (reason: string) => {
     resetConfigWriteThrottle(reason);
   }
   ftpConnectCooldownUntil.clear();
+  telnetConnectCooldownUntil.clear();
   ftpInflight.clear();
   restErrorStreak = 0;
   restBackoffUntilMs = 0;
@@ -348,6 +352,7 @@ const restCooldownUntil = new Map<string, number>();
 
 const ftpInflight = new Map<string, Promise<unknown>>();
 const ftpConnectCooldownUntil = new Map<string, number>();
+const telnetConnectCooldownUntil = new Map<string, number>();
 
 let restErrorStreak = 0;
 let restBackoffUntilMs = 0;
@@ -873,6 +878,32 @@ const applyFtpConnectPacing = async (hostScope: string, action: TraceActionConte
   ftpConnectCooldownUntil.set(hostScope, Date.now() + cooldownMs);
 };
 
+const applyTelnetConnectPacing = async (hostScope: string, action: TraceActionContext, intent: InteractionIntent) => {
+  const cooldownMs = config.telnetConnectCooldownMs;
+  if (cooldownMs <= 0) return;
+  const now = Date.now();
+  const cooldownUntil = telnetConnectCooldownUntil.get(hostScope) ?? 0;
+  if (now < cooldownUntil) {
+    const waitMs = cooldownUntil - now;
+    recordDeviceGuard(action, {
+      decision: "defer",
+      reason: "cooldown",
+      waitMs,
+    });
+    addLog("debug", "Telnet connect pacing delay applied", {
+      transport: "telnet",
+      hostScope,
+      intent,
+      waitMs,
+      cooldownMs,
+      deviceSafetyMode: config.mode,
+      effectiveDeviceSafetyMode: config.resolution?.effectiveMode ?? config.mode,
+    });
+    await sleep(waitMs);
+  }
+  telnetConnectCooldownUntil.set(hostScope, Date.now() + cooldownMs);
+};
+
 export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () => Promise<T>): Promise<T> => {
   if (isTestEnv()) {
     markDeviceRequestStart();
@@ -1026,6 +1057,7 @@ export const withTelnetInteraction = async <T>(meta: TelnetRequestMeta, handler:
       untilMs: telnetCircuitUntilMs,
     });
   }
+  const hostScope = `${(meta.host ?? "any").toLowerCase()}:${meta.port ?? 23}`;
 
   const scheduleTask = async () => {
     if (telnetBackoffUntilMs > Date.now()) {
@@ -1038,6 +1070,7 @@ export const withTelnetInteraction = async <T>(meta: TelnetRequestMeta, handler:
       await sleep(waitMs);
     }
 
+    await applyTelnetConnectPacing(hostScope, meta.action, meta.intent);
     markDeviceRequestStart();
     try {
       const result = await handler();

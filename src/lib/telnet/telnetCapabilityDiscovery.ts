@@ -326,37 +326,64 @@ const discoverInitialMenu = async (
   menuKey: TelnetMenuKey,
   runner: TelnetSessionRunner,
 ): Promise<TelnetDiscoveredInitialMenu> => {
-  const rootScreen = await runner.withSession(async (session) => await openActionMenu(session, menuKey));
-  const rootMenu = findTopMenu(rootScreen);
-  if (!rootMenu) {
-    throw new TelnetError("Initial action menu not detected during discovery", "DISCOVERY_FAILED");
-  }
-
-  const nodes: Record<string, TelnetDiscoveredNode> = {};
-
-  for (let targetIndex = 0; targetIndex < rootMenu.items.length; targetIndex += 1) {
-    const label = rootMenu.items[targetIndex]?.label;
-    if (!label) continue;
-    const node = await runner.withSession(async (session) => {
-      const initialScreen = await openActionMenu(session, menuKey);
-      const topMenu = findTopMenu(initialScreen);
-      if (!topMenu) {
-        throw new TelnetError("Top-level action menu disappeared during discovery", "DESYNC");
-      }
-      const { menu } = await navigateToMenuIndex(session, initialScreen, topMenu, targetIndex);
-      await session.sendKey("RIGHT");
-      return await discoverNodeAfterOpening(session, menu);
-    });
-    if (node) {
-      nodes[label] = node;
+  return await runner.withSession(async (session) => {
+    let currentScreen = await openActionMenu(session, menuKey);
+    let rootMenu = findTopMenu(currentScreen);
+    if (!rootMenu) {
+      throw new TelnetError("Initial action menu not detected during discovery", "DISCOVERY_FAILED");
     }
-  }
 
-  return {
-    items: rootMenu.items.map((item) => item.label),
-    defaultItem: rootMenu.items[rootMenu.selectedIndex]?.label ?? rootMenu.items[0]?.label ?? null,
-    nodes,
-  };
+    const labels = rootMenu.items.map((item) => item.label);
+    const defaultItem = rootMenu.items[rootMenu.selectedIndex]?.label ?? rootMenu.items[0]?.label ?? null;
+    const nodes: Record<string, TelnetDiscoveredNode> = {};
+
+    const matchesRootLabels = (menu: ParsedMenu | null) =>
+      Boolean(menu) && labels.every((label, index) => matchLabel(menu!.items[index]?.label ?? "", label));
+
+    // After RIGHT opens a category's submenu, return to the root action menu.
+    // LEFT backs out one menu level on both the Ultimate firmware and the mock
+    // (ESCAPE/RESTORE dismisses the whole menu, so it cannot step back to the
+    // root). If the probe dismissed the root menu entirely (e.g. a direct-entry
+    // screen), re-open it before continuing to the next category.
+    const returnToRootMenu = async (): Promise<{ screen: TelnetScreen; menu: ParsedMenu }> => {
+      await session.sendKey("LEFT");
+      for (let attempt = 0; attempt < MAX_OPEN_MENU_READS; attempt += 1) {
+        const screen = await session.readScreen(STEP_TIMEOUT_MS);
+        const menu = findTopMenu(screen);
+        if (matchesRootLabels(menu)) {
+          return { screen, menu: menu! };
+        }
+      }
+      const reopened = await openActionMenu(session, menuKey);
+      const menu = findTopMenu(reopened);
+      if (matchesRootLabels(menu)) {
+        return { screen: reopened, menu: menu! };
+      }
+      throw new TelnetError("Top-level action menu did not return after discovery probe", "DESYNC");
+    };
+
+    for (let targetIndex = 0; targetIndex < labels.length; targetIndex += 1) {
+      const label = labels[targetIndex];
+      if (!label) continue;
+      const navigated = await navigateToMenuIndex(session, currentScreen, rootMenu, targetIndex);
+      currentScreen = navigated.screen;
+      rootMenu = navigated.menu;
+      await session.sendKey("RIGHT");
+      const node = await discoverNodeAfterOpening(session, rootMenu);
+      if (node) {
+        nodes[label] = node;
+      }
+      const restored = await returnToRootMenu();
+      currentScreen = restored.screen;
+      rootMenu = restored.menu;
+    }
+
+    return {
+      items: labels,
+      defaultItem,
+      nodes,
+    };
+  });
 };
 
 export const discoverTelnetCapabilities = async ({

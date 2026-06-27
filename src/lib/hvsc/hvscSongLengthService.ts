@@ -151,8 +151,13 @@ const isReadableFile = async (path: string) => {
   }
 };
 
-const discoverSonglengthFiles = async (): Promise<SongLengthSourceFile[]> => {
-  if (!isHvscInstalled()) {
+const discoverSonglengthFiles = async (force = false): Promise<SongLengthSourceFile[]> => {
+  // `force` is set by the post-ingestion reload: the library (incl. Songlengths.md5)
+  // has just been written to disk, but the install-version state is committed only
+  // AFTER this reload runs, so `isHvscInstalled()` would still be false here and
+  // wrongly skip discovery. The lazy cold-start path keeps the gate to avoid probing
+  // (and creating) the HVSC dirs on every SID md5 lookup before HVSC exists.
+  if (!force && !isHvscInstalled()) {
     addLog("debug", "HVSC songlengths bootstrap skipped because HVSC is not installed", {
       service: "hvsc-songlengths",
     });
@@ -242,11 +247,12 @@ const discoverSonglengthFiles = async (): Promise<SongLengthSourceFile[]> => {
   return files;
 };
 
-const loadInternal = async (trigger: "cold-start" | "config-change") => {
+const loadInternal = async (trigger: "cold-start" | "config-change", force = false) => {
+  const discover = () => discoverSonglengthFiles(force);
   if (trigger === "cold-start") {
-    await facade.loadOnColdStart(HVSC_LIBRARY_DIR, discoverSonglengthFiles, "hvsc-library");
+    await facade.loadOnColdStart(HVSC_LIBRARY_DIR, discover, "hvsc-library");
   } else {
-    await facade.reloadOnConfigChange(HVSC_LIBRARY_DIR, discoverSonglengthFiles, "hvsc-library");
+    await facade.reloadOnConfigChange(HVSC_LIBRARY_DIR, discover, "hvsc-library");
   }
   await syncHvscBrowseProjection(trigger);
 };
@@ -264,12 +270,12 @@ const syncHvscBrowseProjection = async (trigger: "cold-start" | "config-change")
   });
 };
 
-const runLoad = async (trigger: "cold-start" | "config-change") => {
+const runLoad = async (trigger: "cold-start" | "config-change", force = false) => {
   if (activeLoad) {
     await activeLoad;
     return;
   }
-  activeLoad = loadInternal(trigger).finally(() => {
+  activeLoad = loadInternal(trigger, force).finally(() => {
     activeLoad = null;
     hasAttemptedColdStartLoad = true;
   });
@@ -281,8 +287,8 @@ export const ensureHvscSonglengthsReadyOnColdStart = async () => {
   await runLoad("cold-start");
 };
 
-export const reloadHvscSonglengthsOnConfigChange = async () => {
-  await runLoad("config-change");
+export const reloadHvscSonglengthsOnConfigChange = async (options?: { force?: boolean }) => {
+  await runLoad("config-change", options?.force ?? false);
 };
 
 export const resolveHvscSonglengthDuration = async (query: SongLengthResolveQuery): Promise<SongLengthResolution> => {

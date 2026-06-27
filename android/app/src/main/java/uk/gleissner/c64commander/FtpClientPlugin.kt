@@ -31,6 +31,19 @@ class FtpClientPlugin : Plugin() {
   private val logTag = "FtpClientPlugin"
   private val defaultConnectTimeoutMs = 1_500
   private val defaultTransferTimeoutMs = 8_000
+  private val readChunkSize = 64 * 1024
+  private val readProgressIntervalBytes = 128L * 1024L
+  private val readAbortedMessage = "FTP read aborted"
+  private val defaultRecursiveMaxDepth = 8
+  private val defaultRecursiveMaxEntries = 5_000
+  private val maxNlstMetadataProbes = 64
+
+  // requestIds the JS layer has asked to cancel mid-read, and the live input
+  // streams keyed by requestId. cancelRead() closes the stream so a blocked
+  // read() unblocks immediately — this lets the user abort even a stalled
+  // transfer cleanly, releasing the firmware's FTP data channel.
+  private val cancelledReads = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+  private val activeReadStreams = java.util.concurrent.ConcurrentHashMap<String, java.io.InputStream>()
   private val timeoutMessagePattern = Regex("\\b(timed out|timeout)\\b", RegexOption.IGNORE_CASE)
   internal var ftpClientFactory: () -> FTPClient = { FTPClient() }
   internal var runTask: (Runnable) -> Unit = { runnable -> executor.execute(runnable) }
@@ -56,8 +69,15 @@ class FtpClientPlugin : Plugin() {
   }
 
   private fun resolveTransferTimeoutMs(call: PluginCall): Int {
-    val configured = call.getInt("timeoutMs")?.takeIf { it > 0 } ?: defaultTransferTimeoutMs
-    return configured.coerceIn(1_000, 60_000)
+    // timeoutMs == 0 explicitly means "no idle timeout": let a slow-but-steady
+    // large transfer (e.g. the ~5 MiB HVSC songlengths DB over the c64u's slow
+    // FTP) run to completion. Cancellation (cancelRead closing the stream) is the
+    // safety valve instead of a short timeout. A null/absent value keeps the
+    // conservative default; positive values are bounded to a sane range.
+    val configured = call.getInt("timeoutMs")
+    if (configured != null && configured == 0) return 0
+    val resolved = configured?.takeIf { it > 0 } ?: defaultTransferTimeoutMs
+    return resolved.coerceIn(1_000, 600_000)
   }
 
   private fun resolveConnectTimeoutMs(call: PluginCall): Int {
@@ -117,6 +137,30 @@ class FtpClientPlugin : Plugin() {
     }
   }
 
+  private fun ftpFileToEntry(path: String, file: FTPFile): JSObject? {
+    val name = file.name ?: return null
+    if (name == "." || name == "..") return null
+    return JSObject().apply {
+      put("name", name)
+      put("path", buildPath(path, name))
+      put("type", if (file.isDirectory) "dir" else "file")
+      if (file.size >= 0) put("size", file.size)
+      val modified =
+              file.timestamp?.time?.let { date ->
+                val formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+                formatter.timeZone = TimeZone.getTimeZone("UTC")
+                formatter.format(date)
+              }
+      if (!modified.isNullOrBlank()) put("modifiedAt", modified)
+    }
+  }
+
+  private fun recursiveFailure(path: String, message: String): JSObject =
+          JSObject().apply {
+            put("path", path)
+            put("message", message)
+          }
+
   @PluginMethod
   fun listDirectory(call: PluginCall) {
     val host = call.getString("host")
@@ -149,20 +193,7 @@ class FtpClientPlugin : Plugin() {
                 val entries = JSArray()
                 val files = resolveListing(client, path)
                 files.forEach { file ->
-                  val name = file.name ?: return@forEach
-                  if (name == "." || name == "..") return@forEach
-                  val entry = JSObject()
-                  entry.put("name", name)
-                  entry.put("path", buildPath(path, name))
-                  entry.put("type", if (file.isDirectory) "dir" else "file")
-                  if (file.size >= 0) entry.put("size", file.size)
-                  val modified =
-                          file.timestamp?.time?.let { date ->
-                            val formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
-                            formatter.timeZone = TimeZone.getTimeZone("UTC")
-                            formatter.format(date)
-                          }
-                  if (!modified.isNullOrBlank()) entry.put("modifiedAt", modified)
+                  val entry = ftpFileToEntry(path, file) ?: return@forEach
                   entries.put(entry)
                 }
 
@@ -198,22 +229,20 @@ class FtpClientPlugin : Plugin() {
   }
 
   @PluginMethod
-  fun readFile(call: PluginCall) {
+  fun listDirectoryRecursive(call: PluginCall) {
     val host = call.getString("host")
     if (host.isNullOrBlank()) {
       call.reject("host is required")
       return
     }
-    val path = call.getString("path")
-    if (path.isNullOrBlank()) {
-      call.reject("path is required")
-      return
-    }
     val port = call.getInt("port") ?: 21
     val username = call.getString("username") ?: "user"
     val password = call.getString("password") ?: ""
+    val path = call.getString("path") ?: "/"
     val timeoutMs = resolveTransferTimeoutMs(call)
     val connectTimeoutMs = resolveConnectTimeoutMs(call)
+    val maxDepth = (call.getInt("maxDepth") ?: defaultRecursiveMaxDepth).coerceIn(0, 32)
+    val maxEntries = (call.getInt("maxEntries") ?: defaultRecursiveMaxEntries).coerceIn(1, 50_000)
 
     runTask(
             Runnable {
@@ -230,11 +259,202 @@ class FtpClientPlugin : Plugin() {
                 client.enterLocalPassiveMode()
                 client.setFileType(FTP.BINARY_FILE_TYPE)
 
-                val output = java.io.ByteArrayOutputStream()
-                val success = client.retrieveFile(path, output)
-                if (!success) {
+                val entries = JSArray()
+                val failures = JSArray()
+                val queue = ArrayDeque<Pair<String, Int>>()
+                val visited = linkedSetOf<String>()
+                queue.add(path to 0)
+                var examinedEntries = 0
+                var capped = false
+                var timedOut = false
+
+                while (queue.isNotEmpty() && !capped && !timedOut) {
+                  val (currentPath, depth) = queue.removeFirst()
+                  if (!visited.add(currentPath)) continue
+                  val files =
+                          try {
+                            resolveListing(client, currentPath)
+                          } catch (error: Exception) {
+                          failures.put(recursiveFailure(currentPath, error.message ?: "FTP listing failed"))
+                          AppLogger.warn(
+                                  pluginContextOrNull(),
+                                  logTag,
+                                  "FTP recursive listing skipped folder",
+                                  "FtpClientPlugin",
+                                  error,
+                          )
+                          // A data-channel timeout means the firmware's single-threaded
+                          // FTP is already wedging on PASV cycles; continuing would pile
+                          // on more data channels against known-flaky firmware. Bail the
+                          // whole walk (surfacing this one failure) instead of churning.
+                          if (error is java.net.SocketTimeoutException) {
+                            timedOut = true
+                            break
+                          }
+                          continue
+                        }
+
+                  for (file in files) {
+                    val entry = ftpFileToEntry(currentPath, file) ?: continue
+                    examinedEntries += 1
+                    if (examinedEntries > maxEntries) {
+                      failures.put(
+                              recursiveFailure(
+                                      currentPath,
+                                      "FTP recursive listing stopped after $maxEntries entries",
+                              )
+                      )
+                      capped = true
+                      break
+                    }
+                    if (file.isDirectory) {
+                      val entryPath = buildPath(currentPath, file.name)
+                      if (depth < maxDepth) {
+                        queue.add(entryPath to depth + 1)
+                      } else {
+                        failures.put(
+                                recursiveFailure(
+                                        entryPath,
+                                        "FTP recursive listing max depth $maxDepth reached",
+                                )
+                        )
+                      }
+                    } else {
+                      entries.put(entry)
+                    }
+                  }
+                }
+
+                val result = JSObject()
+                result.put("entries", entries)
+                result.put("partialFailures", failures)
+                result.put("timed_out", timedOut)
+                call.resolve(result)
+              } catch (error: Exception) {
+                val message = buildFailureMessage("listDirectoryRecursive", error, connectTimeoutMs, timeoutMs)
+                AppLogger.error(
+                        pluginContextOrNull(),
+                        logTag,
+                        "FTP listDirectoryRecursive failed",
+                        "FtpClientPlugin",
+                        error,
+                        traceFields(call),
+                )
+                call.reject(message, error)
+              } finally {
+                try {
+                  if (client.isConnected) client.disconnect()
+                } catch (error: Exception) {
+                  AppLogger.warn(
+                          pluginContextOrNull(),
+                          logTag,
+                          "Failed to disconnect recursive FTP client",
+                          "FtpClientPlugin",
+                          error
+                  )
+                }
+              }
+            }
+    )
+  }
+
+  @PluginMethod
+  fun readFile(call: PluginCall) {
+    val host = call.getString("host")
+    if (host.isNullOrBlank()) {
+      call.reject("host is required")
+      return
+    }
+    val path = call.getString("path")
+    if (path.isNullOrBlank()) {
+      call.reject("path is required")
+      return
+    }
+    val port = call.getInt("port") ?: 21
+    val username = call.getString("username") ?: "user"
+    val password = call.getString("password") ?: ""
+    val timeoutMs = resolveTransferTimeoutMs(call)
+    val connectTimeoutMs = resolveConnectTimeoutMs(call)
+    val requestId = call.getString("requestId")?.takeIf { it.isNotBlank() }
+    val totalBytes = (call.getInt("totalBytes") ?: 0).coerceAtLeast(0)
+
+    runTask(
+            Runnable {
+              val client = ftpClientFactory()
+              var stream: java.io.InputStream? = null
+              try {
+                // Honor a cancellation requested before this read started (e.g. an
+                // already-aborted AbortSignal fired cancelRead first) instead of
+                // erasing it. The previous `cancelledReads.remove(requestId)` here
+                // could discard a legitimate pre-abort and let the transfer run.
+                if (requestId != null && cancelledReads.contains(requestId)) {
+                  call.reject(readAbortedMessage)
+                  return@Runnable
+                }
+                applyPreConnectTimeouts(client, connectTimeoutMs)
+                client.connect(host, port)
+                applyConnectedTimeouts(client, timeoutMs)
+                val loggedIn = client.login(username, password)
+                if (!loggedIn) {
+                  call.reject("FTP login failed")
+                  return@Runnable
+                }
+                client.enterLocalPassiveMode()
+                client.setFileType(FTP.BINARY_FILE_TYPE)
+
+                // Stream the file in chunks rather than a single blocking
+                // retrieveFile() so we can (a) report byte progress and (b) let
+                // the user abort mid-transfer. A clean abort closes the stream and
+                // disconnects, which releases the firmware's FTP data channel
+                // instead of leaving it half-open (which can wedge it).
+                val input = client.retrieveFileStream(path)
+                if (input == null) {
                   call.reject("FTP file read failed")
                   return@Runnable
+                }
+                stream = input
+                if (requestId != null) activeReadStreams[requestId] = input
+
+                val output =
+                        java.io.ByteArrayOutputStream(if (totalBytes > 0) totalBytes else readChunkSize)
+                val buffer = ByteArray(readChunkSize)
+                var bytesRead = 0L
+                var lastProgressAt = 0L
+                while (true) {
+                  if (requestId != null && cancelledReads.contains(requestId)) {
+                    throw java.io.IOException(readAbortedMessage)
+                  }
+                  val read =
+                          try {
+                            input.read(buffer)
+                          } catch (ioError: java.io.IOException) {
+                            if (requestId != null && cancelledReads.contains(requestId)) {
+                              throw java.io.IOException(readAbortedMessage)
+                            }
+                            throw ioError
+                          }
+                  if (read == -1) break
+                  output.write(buffer, 0, read)
+                  bytesRead += read
+                  if (requestId != null && bytesRead - lastProgressAt >= readProgressIntervalBytes) {
+                    lastProgressAt = bytesRead
+                    emitReadProgress(requestId, bytesRead, totalBytes.toLong())
+                  }
+                }
+                input.close()
+                stream = null
+                if (requestId != null) activeReadStreams.remove(requestId)
+                val completed = client.completePendingCommand()
+                if (!completed) {
+                  call.reject("FTP file read failed")
+                  return@Runnable
+                }
+                if (requestId != null) {
+                  emitReadProgress(
+                          requestId,
+                          bytesRead,
+                          if (totalBytes > 0) totalBytes.toLong() else bytesRead,
+                  )
                 }
                 val bytes = output.toByteArray()
                 val encoded = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
@@ -243,17 +463,39 @@ class FtpClientPlugin : Plugin() {
                 result.put("sizeBytes", bytes.size)
                 call.resolve(result)
               } catch (error: Exception) {
-                val message = buildFailureMessage("readFile", error, connectTimeoutMs, timeoutMs)
-                AppLogger.error(
-                        pluginContextOrNull(),
-                        logTag,
-                        "FTP readFile failed",
-                        "FtpClientPlugin",
-                        error,
-                        traceFields(call),
-                )
-                call.reject(message, error)
+                if (requestId != null &&
+                                (cancelledReads.contains(requestId) ||
+                                        error.message == readAbortedMessage)
+                ) {
+                  call.reject(readAbortedMessage)
+                } else {
+                  val message = buildFailureMessage("readFile", error, connectTimeoutMs, timeoutMs)
+                  AppLogger.error(
+                          pluginContextOrNull(),
+                          logTag,
+                          "FTP readFile failed",
+                          "FtpClientPlugin",
+                          error,
+                          traceFields(call),
+                  )
+                  call.reject(message, error)
+                }
               } finally {
+                if (requestId != null) {
+                  activeReadStreams.remove(requestId)
+                  cancelledReads.remove(requestId)
+                }
+                try {
+                  stream?.close()
+                } catch (error: Exception) {
+                  AppLogger.warn(
+                          pluginContextOrNull(),
+                          logTag,
+                          "Failed to close FTP read stream",
+                          "FtpClientPlugin",
+                          error,
+                  )
+                }
                 try {
                   if (client.isConnected) client.disconnect()
                 } catch (error: Exception) {
@@ -268,6 +510,50 @@ class FtpClientPlugin : Plugin() {
               }
             }
     )
+  }
+
+  @PluginMethod
+  fun cancelRead(call: PluginCall) {
+    val requestId = call.getString("requestId")?.takeIf { it.isNotBlank() }
+    if (requestId == null) {
+      call.reject("requestId is required")
+      return
+    }
+    cancelledReads.add(requestId)
+    // Close the in-flight stream so a blocked read() unblocks immediately, even
+    // if the transfer has stalled.
+    try {
+      activeReadStreams[requestId]?.close()
+    } catch (error: Exception) {
+      AppLogger.warn(
+              pluginContextOrNull(),
+              logTag,
+              "Failed to close FTP read stream on cancel",
+              "FtpClientPlugin",
+              error,
+      )
+    }
+    call.resolve()
+  }
+
+  private fun emitReadProgress(requestId: String, bytesRead: Long, totalBytes: Long) {
+    try {
+      val payload = JSObject()
+      payload.put("requestId", requestId)
+      payload.put("bytesRead", bytesRead)
+      payload.put("totalBytes", totalBytes)
+      notifyListeners("ftpReadProgress", payload)
+    } catch (error: Exception) {
+      // Progress reporting is best-effort; a missing bridge/listener must never
+      // fail the underlying read.
+      AppLogger.warn(
+              pluginContextOrNull(),
+              logTag,
+              "Failed to emit FTP read progress",
+              "FtpClientPlugin",
+              error,
+      )
+    }
   }
 
   @PluginMethod
@@ -413,6 +699,17 @@ class FtpClientPlugin : Plugin() {
         }
       }
     } catch (error: Exception) {
+      // A timeout means the FTP data channel stopped responding — typically the
+      // single-threaded c64u firmware FTP buckling under connection churn. Cascading
+      // to MLSD then NLST opens two MORE PASV data connections that will also time
+      // out, tripling the rapid connection cycling that wedges the firmware's TCP
+      // stack (1541ultimate issue #364: "repeated FTP cycles fail until power-cycle").
+      // Fail fast on a timeout so the firmware gets breathing room; only cascade for
+      // genuine LIST-unsupported / capability errors (which surface as other errors).
+      if (error is SocketTimeoutException ||
+              timeoutMessagePattern.containsMatchIn(error.message ?: "")) {
+        throw error
+      }
       AppLogger.warn(
               pluginContextOrNull(),
               logTag,
@@ -459,13 +756,23 @@ class FtpClientPlugin : Plugin() {
       return emptyArray()
     }
 
-    return names.mapNotNull { rawName ->
+    if (names.size > maxNlstMetadataProbes) {
+      AppLogger.warn(
+              pluginContextOrNull(),
+              logTag,
+              "FTP NLST fallback metadata probe cap reached",
+              "FtpClientPlugin",
+              IllegalStateException("NLST returned ${names.size} names; probing first $maxNlstMetadataProbes"),
+      )
+    }
+
+    return names.take(maxNlstMetadataProbes).mapNotNull { rawName ->
       val name = rawName.substringAfterLast('/').trim()
       if (name.isBlank() || name == "." || name == "..") {
         return@mapNotNull null
       }
       val fullPath = buildPath(path, name)
-      resolveFileFromMetadata(client, fullPath, name) ?: synthesizeFileFromDirectoryProbe(client, fullPath, name)
+      resolveFileFromMetadata(client, fullPath, name) ?: synthesizeFileFromName(name)
     }.toTypedArray()
   }
 
@@ -488,55 +795,10 @@ class FtpClientPlugin : Plugin() {
     }
   }
 
-  private fun synthesizeFileFromDirectoryProbe(client: FTPClient, fullPath: String, name: String): FTPFile {
-    val workingDirectory =
-            try {
-              client.printWorkingDirectory()
-            } catch (error: Exception) {
-              AppLogger.warn(
-                      pluginContextOrNull(),
-                      logTag,
-                      "FTP PWD probe failed during NLST fallback",
-                      "FtpClientPlugin",
-                      error,
-              )
-              null
-            }
-    val isDirectory =
-            try {
-              client.changeWorkingDirectory(fullPath)
-            } catch (error: Exception) {
-              AppLogger.warn(
-                      pluginContextOrNull(),
-                      logTag,
-                      "FTP CWD probe failed during NLST fallback",
-                      "FtpClientPlugin",
-                      error,
-              )
-              false
-            }
-
-    if (isDirectory) {
-      try {
-        if (!workingDirectory.isNullOrBlank()) {
-          client.changeWorkingDirectory(workingDirectory)
-        } else {
-          client.changeToParentDirectory()
-        }
-      } catch (error: Exception) {
-        AppLogger.warn(
-                pluginContextOrNull(),
-                logTag,
-                "Failed to restore FTP working directory after NLST fallback probe",
-                "FtpClientPlugin",
-                error,
-        )
-      }
-    }
-
+  private fun synthesizeFileFromName(name: String): FTPFile {
     return FTPFile().apply {
       this.name = name
-      type = if (isDirectory) FTPFile.DIRECTORY_TYPE else FTPFile.FILE_TYPE
+      type = FTPFile.FILE_TYPE
     }
   }
 

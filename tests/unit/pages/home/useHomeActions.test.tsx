@@ -24,6 +24,8 @@ const loadMemoryRangesMock = vi.fn();
 const selectRamDumpFolderMock = vi.fn();
 
 const createSnapshotMock = vi.fn();
+const createCpuSnapshotMock = vi.fn();
+const restoreCpuSnapshotFromDecodedMock = vi.fn();
 const deleteSnapshotFromStoreMock = vi.fn();
 const updateSnapshotLabelMock = vi.fn();
 const snapshotEntryToBytesMock = vi.fn();
@@ -84,6 +86,26 @@ vi.mock("@/lib/config/ramDumpFolderStore", () => ({
 
 vi.mock("@/lib/snapshot/snapshotCreation", () => ({
   createSnapshot: (...args: unknown[]) => createSnapshotMock(...args),
+  createCpuSnapshot: (...args: unknown[]) => createCpuSnapshotMock(...args),
+  CpuSnapshotUnsupportedError: class CpuSnapshotUnsupportedError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = "CpuSnapshotUnsupportedError";
+    }
+  },
+}));
+
+vi.mock("@/lib/snapshot/cpu/cpuSnapshot", () => ({
+  restoreCpuSnapshotFromDecoded: (...args: unknown[]) => restoreCpuSnapshotFromDecodedMock(...args),
+}));
+
+vi.mock("@/lib/snapshot/cpu/captureEngine", () => ({
+  CpuCaptureFailedError: class CpuCaptureFailedError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = "CpuCaptureFailedError";
+    }
+  },
 }));
 
 vi.mock("@/lib/snapshot/snapshotStore", () => ({
@@ -121,6 +143,12 @@ describe("useHomeActions", () => {
     powerOffMutateAsyncMock.mockResolvedValue(undefined);
     clearRamAndRebootMock.mockResolvedValue(undefined);
     createSnapshotMock.mockResolvedValue({ displayTimestamp: "2026-01-01 12:00:00" });
+    createCpuSnapshotMock.mockResolvedValue({
+      displayTimestamp: "2026-01-01 12:00:00",
+      cpu: { pc: 0xc000, a: 0, x: 0, y: 0, sp: 0xf6, p: 0x30 },
+      captureMethod: "rli",
+    });
+    restoreCpuSnapshotFromDecodedMock.mockResolvedValue({ ok: true, rtiFrameAddress: 0x01f4 });
     getCurrentPlaybackSnapshotLabelMock.mockReturnValue(undefined);
     loadMemoryRangesMock.mockResolvedValue(undefined);
     snapshotEntryToBytesMock.mockReturnValue(new Uint8Array(100));
@@ -367,5 +395,109 @@ describe("useHomeActions", () => {
     const { result } = renderHook(() => useHomeActions());
     result.current.handleUpdateSnapshotLabel("snap-1", "Updated note");
     expect(updateSnapshotLabelMock).toHaveBeenCalledWith("snap-1", "Updated note");
+  });
+
+  describe("handleSaveCpuSnapshot", () => {
+    it("captures a CPU+RAM snapshot and toasts the resume PC", async () => {
+      getCurrentPlaybackSnapshotLabelMock.mockReturnValue("Boss.prg");
+      const { result } = renderHook(() => useHomeActions());
+
+      await act(async () => {
+        await result.current.handleSaveCpuSnapshot();
+      });
+
+      expect(createCpuSnapshotMock).toHaveBeenCalledWith(apiMock, {
+        label: "Boss.prg",
+        contentName: "Boss.prg",
+      });
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "CPU + RAM snapshot saved",
+          description: expect.stringContaining("PC $C000"),
+        }),
+      );
+    });
+
+    it("degrades with an actionable message when the program protects its interrupts", async () => {
+      const { CpuCaptureFailedError } = await import("@/lib/snapshot/cpu/captureEngine");
+      createCpuSnapshotMock.mockRejectedValueOnce(new CpuCaptureFailedError("no rideable interrupt"));
+      const { result } = renderHook(() => useHomeActions());
+
+      await act(async () => {
+        await result.current.handleSaveCpuSnapshot();
+      });
+
+      expect(reportUserErrorMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "HOME_MACHINE_SAVE_CPU",
+          description: expect.stringContaining("Use a Program or Basic RAM snapshot instead"),
+        }),
+      );
+    });
+
+    it("degrades the same way when the device does not support CPU snapshots", async () => {
+      const { CpuSnapshotUnsupportedError } = await import("@/lib/snapshot/snapshotCreation");
+      createCpuSnapshotMock.mockRejectedValueOnce(new CpuSnapshotUnsupportedError("firmware too old"));
+      const { result } = renderHook(() => useHomeActions());
+
+      await act(async () => {
+        await result.current.handleSaveCpuSnapshot();
+      });
+
+      expect(reportUserErrorMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "HOME_MACHINE_SAVE_CPU",
+          description: expect.stringContaining("Use a Program or Basic RAM snapshot instead"),
+        }),
+      );
+    });
+
+    it("rethrows an unexpected (non-capture) error unchanged", async () => {
+      createCpuSnapshotMock.mockRejectedValueOnce(new Error("disk full"));
+      const { result } = renderHook(() => useHomeActions());
+
+      await act(async () => {
+        await result.current.handleSaveCpuSnapshot();
+      });
+
+      expect(reportUserErrorMock).toHaveBeenCalledWith(
+        expect.objectContaining({ operation: "HOME_MACHINE_SAVE_CPU", description: "disk full" }),
+      );
+    });
+  });
+
+  it("routes a CPU-state snapshot restore through the uploaded-cartridge path", async () => {
+    decodeSnapshotMock.mockReturnValue({
+      version: 2,
+      snapshotType: "program",
+      timestamp: 0,
+      ranges: [{ start: 0, length: 100 }],
+      blocks: [new Uint8Array(100)],
+      metadata: {
+        snapshot_type: "program",
+        display_ranges: [],
+        created_at: "",
+        cpu_state_captured: true,
+        cpu: { pc: 0xc000, a: 0, x: 0, y: 0, sp: 0xf6, p: 0x30, flags: {} },
+      },
+    });
+    const snapshot: SnapshotStorageEntry = {
+      id: "snap-cpu",
+      filename: "c64-program.c64snap",
+      bytesBase64: "",
+      createdAt: "2026-01-01T12:00:00.000Z",
+      snapshotType: "program",
+      metadata: { snapshot_type: "program", display_ranges: [], created_at: "2026-01-01 12:00:00" },
+    };
+
+    const { result } = renderHook(() => useHomeActions());
+    await act(async () => {
+      await result.current.handleRestoreSnapshot(snapshot);
+    });
+
+    expect(restoreCpuSnapshotFromDecodedMock).toHaveBeenCalledWith(apiMock, expect.objectContaining({ version: 2 }));
+    // The CPU path returns early — the RAM-range loader must not run.
+    expect(loadMemoryRangesMock).not.toHaveBeenCalled();
+    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: "Snapshot restored" }));
   });
 });

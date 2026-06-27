@@ -53,6 +53,7 @@ describe("settingsTransfer", () => {
           configsCooldownMs: 1200,
           drivesCooldownMs: 1000,
           ftpListCooldownMs: 800,
+          telnetConnectCooldownMs: 800,
           backoffBaseMs: 500,
           backoffMaxMs: 6000,
           backoffFactor: 2,

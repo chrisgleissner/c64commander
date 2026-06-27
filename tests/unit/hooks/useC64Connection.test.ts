@@ -32,6 +32,7 @@ import {
   pollingPauseRegistry,
 } from "@/lib/query/c64PollingGovernance";
 import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
+import { markDeviceRequestEnd } from "@/lib/deviceInteraction/deviceStateStore";
 
 const connectionSnapshot = {
   state: "REAL_CONNECTED" as const,
@@ -458,6 +459,61 @@ describe("useC64Connection", () => {
       });
 
       expect(mockApi.getDrives).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the health poll alive after a recent success instead of halting the interval", async () => {
+    // Regression for the refetchInterval self-halt: the /v1/info refetchInterval used
+    // to return `false` when a request had succeeded < HEALTH_CHECK_INTERVAL_MS ago.
+    // React Query treats a `false` interval as "stop polling entirely" and never
+    // re-arms it on a time basis, so the health heartbeat permanently halted after a
+    // recent success (badge stuck until remount/navigation). The fix moves that
+    // time-based coalescing into the queryFn (return cached info) and keeps the
+    // interval armed, so polling resumes once the success goes stale.
+    const HEALTH_CHECK_INTERVAL_MS = 60_000; // mirrors the (unexported) constant in the hook
+    vi.useFakeTimers();
+    try {
+      mockApi.getInfo.mockClear();
+
+      const { wrapper } = createWrapper(); // screenActive=true, REAL_CONNECTED
+      renderHook(() => useC64Connection(), { wrapper });
+
+      // Mount fetch (cache empty → always networks). One poll so far.
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(mockApi.getInfo).toHaveBeenCalledTimes(1);
+
+      // Simulate another device request succeeding ~half an interval in (e.g. a drives
+      // poll), so the next scheduled health tick falls inside the coalescing window.
+      await act(async () => {
+        vi.advanceTimersByTime(HEALTH_CHECK_INTERVAL_MS / 2);
+        markDeviceRequestEnd({ success: true });
+        await Promise.resolve();
+      });
+
+      // First interval tick: success was HEALTH_CHECK_INTERVAL_MS/2 ago → the queryFn
+      // must COALESCE (return cached, no network). On the OLD code the timer fired a
+      // real refetch here (count would become 2) and THEN tore the interval down.
+      await act(async () => {
+        vi.advanceTimersByTime(HEALTH_CHECK_INTERVAL_MS / 2);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(mockApi.getInfo).toHaveBeenCalledTimes(1);
+
+      // Keep advancing well past the success window. The interval must still be armed
+      // and poll again now that the success is stale. On the OLD code the interval was
+      // already dead, so the count would stay at 1.
+      await act(async () => {
+        vi.advanceTimersByTime(HEALTH_CHECK_INTERVAL_MS * 3);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(mockApi.getInfo.mock.calls.length).toBeGreaterThan(1);
     } finally {
       vi.useRealTimers();
     }

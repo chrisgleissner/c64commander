@@ -38,6 +38,7 @@ const {
   selectRamDumpFolderSpy,
   saveRamDumpFolderConfigSpy,
   createSnapshotSpy,
+  createCpuSnapshotSpy,
   loadMemoryRangesSpy,
   deleteSnapshotFromStoreSpy,
   updateSnapshotLabelSpy,
@@ -61,6 +62,7 @@ const {
   selectRamDumpFolderSpy: vi.fn(),
   saveRamDumpFolderConfigSpy: vi.fn(),
   createSnapshotSpy: vi.fn(),
+  createCpuSnapshotSpy: vi.fn(),
   loadMemoryRangesSpy: vi.fn(),
   deleteSnapshotFromStoreSpy: vi.fn(),
   updateSnapshotLabelSpy: vi.fn(),
@@ -277,6 +279,26 @@ vi.mock("@/lib/config/ramDumpFolderStore", () => ({
 
 vi.mock("@/lib/snapshot/snapshotCreation", () => ({
   createSnapshot: createSnapshotSpy,
+  createCpuSnapshot: createCpuSnapshotSpy,
+  CpuSnapshotUnsupportedError: class CpuSnapshotUnsupportedError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = "CpuSnapshotUnsupportedError";
+    }
+  },
+}));
+
+vi.mock("@/lib/snapshot/cpu/captureEngine", () => ({
+  CpuCaptureFailedError: class CpuCaptureFailedError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = "CpuCaptureFailedError";
+    }
+  },
+}));
+
+vi.mock("@/lib/snapshot/cpu/cpuSnapshot", () => ({
+  restoreCpuSnapshotFromDecoded: vi.fn(),
 }));
 
 vi.mock("@/lib/snapshot/snapshotStore", () => ({
@@ -447,6 +469,11 @@ describe("HomePage RAM actions", () => {
       menuOpen: true,
     });
     createSnapshotSpy.mockResolvedValue({ displayTimestamp: "2026-01-01 12:00:00" });
+    createCpuSnapshotSpy.mockResolvedValue({
+      displayTimestamp: "2026-01-01 12:00:00",
+      cpu: { pc: 0xc000, a: 0, x: 0, y: 0, sp: 0xf6, p: 0x30 },
+      captureMethod: "rli",
+    });
     reuWorkflowSaveSnapshotSpy.mockResolvedValue({
       metadata: { content_name: "capture.reu" },
       snapshotType: "reu",
@@ -680,6 +707,20 @@ describe("HomePage RAM actions", () => {
       ),
     );
     expect(toastSpy).toHaveBeenCalledWith(expect.objectContaining({ title: "Snapshot saved" }));
+  }, 15000);
+
+  it("captures a CPU+RAM snapshot when the CPU+RAM type is selected", async () => {
+    renderHomePage();
+
+    fireEvent.click(screen.getByRole("button", { name: /save ram/i }));
+    await waitFor(() => expect(screen.getByTestId("save-ram-dialog")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId("save-ram-type-cpu"));
+
+    await waitFor(() => expect(createCpuSnapshotSpy).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(toastSpy).toHaveBeenCalledWith(expect.objectContaining({ title: "CPU + RAM snapshot saved" })),
+    );
   }, 15000);
 
   it("opens Snapshot Manager dialog when Load RAM button is clicked", async () => {

@@ -596,6 +596,68 @@ describe("addFileSelections batching", () => {
     );
   });
 
+  it("skips an oversized ultimate songlengths file instead of FTP-reading it", async () => {
+    const deps = createDeps();
+    deps.collectSonglengthsCandidates.mockReturnValue(["/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5"]);
+    const source = createUltimateSource(async (path: string) => {
+      if (path === "/USB2/test-data/SID") {
+        return [{ type: "file" as const, name: "10_Orbyte.sid", path: "/USB2/test-data/SID/10_Orbyte.sid" }];
+      }
+      if (path.replace(/\/$/, "") === "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS") {
+        return [
+          {
+            type: "file" as const,
+            name: "Songlengths.md5",
+            path: "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5",
+            // Above the 6 MiB auto-read cap: skip rather than pull an unreasonably
+            // large file over the c64u's fragile FTP.
+            sizeBytes: 7_000_000,
+          },
+        ];
+      }
+      return [];
+    });
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const result = await handler(source, [{ type: "dir", name: "SID", path: "/USB2/test-data/SID" }]);
+
+    expect(result).toBe(true);
+    // The oversized songlengths file must be skipped: nothing discovered/merged,
+    // so no FTP read is ever attempted for it.
+    expect(deps.mergeSonglengthsFiles).not.toHaveBeenCalled();
+  });
+
+  it("still auto-reads an ultimate songlengths file at the size limit boundary", async () => {
+    const deps = createDeps();
+    deps.collectSonglengthsCandidates.mockReturnValue(["/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5"]);
+    const source = createUltimateSource(async (path: string) => {
+      if (path === "/USB2/test-data/SID") {
+        return [{ type: "file" as const, name: "10_Orbyte.sid", path: "/USB2/test-data/SID/10_Orbyte.sid" }];
+      }
+      if (path.replace(/\/$/, "") === "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS") {
+        return [
+          {
+            type: "file" as const,
+            name: "Songlengths.md5",
+            path: "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5",
+            sizeBytes: 6_291_456, // exactly at the 6 MiB limit — still allowed (real HVSC DB is ~5 MiB)
+          },
+        ];
+      }
+      return [];
+    });
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const result = await handler(source, [{ type: "dir", name: "SID", path: "/USB2/test-data/SID" }]);
+
+    expect(result).toBe(true);
+    expect(deps.mergeSonglengthsFiles).toHaveBeenCalledWith([
+      expect.objectContaining({
+        path: "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5",
+      }),
+    ]);
+  });
+
   it("flushes 5k hvsc files in a single bulk batch", async () => {
     const deps = createDeps();
     const filesPerFolder = 500;
@@ -635,4 +697,81 @@ describe("addFileSelections batching", () => {
     expect(deps.setPlaylist).toHaveBeenCalledTimes(1);
     expect(deps.applySonglengthsToItems).not.toHaveBeenCalled();
   }, 60_000);
+});
+
+describe("addFileSelections — c64u (ultimate) songlengths auto-read", () => {
+  beforeEach(() => {
+    vi.mocked(addLog).mockClear();
+  });
+
+  it("reads a small ultimate songlengths file over FTP with byte-progress reporting", async () => {
+    const { readFtpFile } = await import("@/lib/ftp/ftpClient");
+    vi.mocked(readFtpFile).mockImplementation(async (opts: any) => {
+      // Exercise both progress message forms (known total, then unknown total).
+      opts.onProgress?.({ bytesRead: 512, totalBytes: opts.totalBytes });
+      opts.onProgress?.({ bytesRead: 1024, totalBytes: 0 });
+      return { data: "QUJDRA==", sizeBytes: 4 }; // base64 "ABCD"
+    });
+
+    const deps = createDeps();
+    // The progress + finally code only runs if setAddItemsProgress actually applies
+    // its updater, so emulate the real setState here.
+    let progressState: { message?: string } = { message: "Scanning…" };
+    deps.setAddItemsProgress = vi.fn((updater: unknown) => {
+      progressState = typeof updater === "function" ? (updater as (p: unknown) => never)(progressState) : (updater as never);
+    });
+
+    const source = createUltimateSource(async () => [
+      {
+        type: "file" as const,
+        name: "Songlengths.md5",
+        path: "/DOCUMENTS/Songlengths.md5",
+        sizeBytes: 1024,
+        modifiedAt: "2026-01-01T00:00:00Z",
+      },
+      { type: "file" as const, name: "Commando.sid", path: "/DOCUMENTS/Commando.sid", sizeBytes: 100 },
+    ]);
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const result = await handler(source, [{ type: "dir", name: "DOCUMENTS", path: "/DOCUMENTS" }]);
+    expect(result).toBe(true);
+
+    expect(deps.mergeSonglengthsFiles).toHaveBeenCalledTimes(1);
+    const discovered = deps.mergeSonglengthsFiles.mock.calls[0][0] as Array<{ path: string; file: any }>;
+    const songFile = discovered.find((entry) => entry.path.endsWith("Songlengths.md5"))!.file;
+
+    const buffer = await songFile.arrayBuffer();
+    expect(Array.from(new Uint8Array(buffer))).toEqual([0x41, 0x42, 0x43, 0x44]); // "ABCD"
+    // No idle timeout (timeoutMs:0) + the known size is forwarded for progress.
+    expect(readFtpFile).toHaveBeenCalledWith(expect.objectContaining({ timeoutMs: 0, totalBytes: 1024 }));
+    // The finally block restores the generic scanning message.
+    expect(progressState.message).toBe("Scanning…");
+  });
+
+  it("skips auto-reading an oversized ultimate songlengths file", async () => {
+    const { readFtpFile } = await import("@/lib/ftp/ftpClient");
+    vi.mocked(readFtpFile).mockReset();
+
+    const deps = createDeps();
+    const source = createUltimateSource(async () => [
+      {
+        type: "file" as const,
+        name: "Songlengths.md5",
+        path: "/DOCUMENTS/Songlengths.md5",
+        sizeBytes: 7_000_000, // > 6 MiB auto-read ceiling
+      },
+    ]);
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    await handler(source, [{ type: "dir", name: "DOCUMENTS", path: "/DOCUMENTS" }]);
+
+    expect(addLog).toHaveBeenCalledWith(
+      "info",
+      "Skipping oversized c64u songlengths auto-load",
+      expect.objectContaining({ sizeBytes: 7_000_000 }),
+    );
+    // Oversized files are not surfaced as a songlengths source.
+    expect(deps.mergeSonglengthsFiles).not.toHaveBeenCalled();
+    expect(readFtpFile).not.toHaveBeenCalled();
+  });
 });

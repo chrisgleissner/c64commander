@@ -7,8 +7,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { decodeSnapshot, encodeSnapshot } from "@/lib/snapshot/snapshotFormat";
-import type { MemoryRange, SnapshotMetadata } from "@/lib/snapshot/snapshotTypes";
+import { decodeSnapshot, encodeSnapshot, FLAG_HAS_CPU_STATE } from "@/lib/snapshot/snapshotFormat";
+import type { CpuStateMeta, MemoryRange, SnapshotMetadata } from "@/lib/snapshot/snapshotTypes";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -87,6 +87,85 @@ describe("encodeSnapshot / decodeSnapshot", () => {
     const decoded = decodeSnapshot(bytes);
 
     expect(decoded.blocks[0]).toEqual(largeBlock);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Format v2 — CPU-state snapshots
+// ---------------------------------------------------------------------------
+
+const CPU_STATE: CpuStateMeta = {
+  pc: 0xc000,
+  a: 0x12,
+  x: 0x34,
+  y: 0x56,
+  sp: 0xf8,
+  p: 0b1010_0001,
+  flags: { n: true, v: false, b: false, d: false, i: false, z: false, c: true },
+};
+
+describe("snapshot format v2 (CPU state)", () => {
+  it("stays v1 with flags=0 for RAM-only snapshots (no behavior change)", () => {
+    const meta: SnapshotMetadata = {
+      snapshot_type: "program",
+      display_ranges: ["$0000-$FFFF"],
+      created_at: "2026-01-01 00:00:00",
+    };
+    const decoded = decodeSnapshot(encodeSnapshot("program", TS, RANGES, BLOCKS, meta));
+    expect(decoded.version).toBe(1);
+    expect(decoded.flags).toBe(0);
+    expect(decoded.hasCpuState).toBe(false);
+  });
+
+  it("writes v2 and sets the CPU-state flag bit when a cpu block is present", () => {
+    const meta: SnapshotMetadata = {
+      snapshot_type: "program",
+      display_ranges: ["$0000-$FFFF"],
+      created_at: "2026-01-01 00:00:00",
+      cpu: CPU_STATE,
+      cpu_state_captured: true,
+      capture_method: "rli",
+      restore_method: "cur",
+      firmware: { product: "Ultimate 64 Elite", firmware_version: "3.14e", api_version: "0.1" },
+      cartridge: { was_active: false, ram_resident_assumed: true },
+    };
+    const decoded = decodeSnapshot(encodeSnapshot("program", TS, RANGES, BLOCKS, meta));
+
+    expect(decoded.version).toBe(2);
+    expect(decoded.flags & FLAG_HAS_CPU_STATE).toBe(FLAG_HAS_CPU_STATE);
+    expect(decoded.hasCpuState).toBe(true);
+    expect(decoded.metadata?.cpu).toEqual(CPU_STATE);
+    expect(decoded.metadata?.cpu_state_captured).toBe(true);
+    expect(decoded.metadata?.capture_method).toBe("rli");
+    expect(decoded.metadata?.firmware?.firmware_version).toBe("3.14e");
+  });
+
+  it("round-trips CPU + full stack page bytes", () => {
+    const stackPage = new Uint8Array(0x100);
+    for (let i = 0; i < stackPage.length; i++) stackPage[i] = (0xff - i) & 0xff;
+    const meta: SnapshotMetadata = {
+      snapshot_type: "program",
+      display_ranges: ["$0100-$01FF"],
+      created_at: "2026-01-01 00:00:00",
+      cpu: CPU_STATE,
+    };
+    const decoded = decodeSnapshot(
+      encodeSnapshot("program", TS, [{ start: 0x0100, length: 0x100 }], [stackPage], meta),
+    );
+    expect(decoded.blocks[0]).toEqual(stackPage);
+    expect(decoded.metadata?.cpu).toEqual(CPU_STATE);
+  });
+
+  it("still rejects an unknown (v3) version", () => {
+    const meta: SnapshotMetadata = {
+      snapshot_type: "program",
+      display_ranges: [],
+      created_at: "2026-01-01 00:00:00",
+      cpu: CPU_STATE,
+    };
+    const bytes = new Uint8Array(encodeSnapshot("program", TS, [], [], meta));
+    new DataView(bytes.buffer).setUint16(8, 3, true);
+    expect(() => decodeSnapshot(bytes)).toThrow(/Unsupported/);
   });
 });
 

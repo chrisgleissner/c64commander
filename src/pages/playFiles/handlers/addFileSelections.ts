@@ -143,27 +143,56 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
   const hasMd5SonglengthsFile = (entries: SonglengthsFileEntry[] | undefined) =>
     Boolean(entries?.some((entry) => entry.path.toLowerCase().endsWith(".md5")));
 
+  const formatSonglengthsMib = (bytes: number) => (bytes / (1024 * 1024)).toFixed(1);
+
   const buildUltimateSonglengthsFile = (
     entryPath: string,
     entryName: string,
     modifiedAt?: string | null,
+    sizeBytes?: number | null,
+    signal?: AbortSignal,
   ): LocalPlayFile => {
     const normalizedPath = normalizeSourcePath(entryPath);
     const lastModified = parseModifiedAt(modifiedAt) ?? Date.now();
+    const totalBytes = typeof sizeBytes === "number" && sizeBytes > 0 ? sizeBytes : 0;
     return {
       name: entryName,
       webkitRelativePath: normalizedPath,
       lastModified,
       arrayBuffer: async () => {
         const { deviceHost: rawHost, password = "" } = getC64APIConfigSnapshot();
-        const { data } = await readFtpFile({
-          host: normalizeFtpHost(rawHost),
-          port: getStoredFtpPort(),
-          password,
-          path: normalizedPath,
-        });
-        const bytes = base64ToUint8(data);
-        return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+        try {
+          const { data } = await readFtpFile({
+            host: normalizeFtpHost(rawHost),
+            port: getStoredFtpPort(),
+            password,
+            path: normalizedPath,
+            // No idle timeout: a slow multi-MB songlengths read over the c64u's
+            // single-threaded FTP must run to completion. User-cancellation (via
+            // the add-flow signal) is the escape, not a short transfer timeout —
+            // a timeout that truncates the transfer can wedge the firmware's FTP
+            // data channel.
+            timeoutMs: 0,
+            totalBytes,
+            signal,
+            onProgress: ({ bytesRead, totalBytes: total }) => {
+              const readMib = formatSonglengthsMib(bytesRead);
+              const message =
+                total > 0
+                  ? `Reading song-length database… ${readMib} / ${formatSonglengthsMib(total)} MB`
+                  : `Reading song-length database… ${readMib} MB`;
+              setAddItemsProgress((prev) => ({ ...prev, message }));
+            },
+          });
+          const bytes = base64ToUint8(data);
+          return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+        } finally {
+          setAddItemsProgress((prev) =>
+            typeof prev.message === "string" && prev.message.startsWith("Reading song-length database")
+              ? { ...prev, message: "Scanning…" }
+              : prev,
+          );
+        }
       },
     };
   };
@@ -182,6 +211,14 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
   // batch and flushing once eliminates O(n) intermediate React re-renders
   // that caused >10 min wall time for ~4500 items on Pixel 4 class hardware.
   const HVSC_BULK_BATCH_THRESHOLD = 200_000;
+
+  // Largest c64u (ultimate) songlengths file we will auto-read over FTP during an
+  // add. The HVSC Songlengths.md5 is ~5 MiB and may grow toward 6 MiB over the
+  // coming years, so we allow it through. The read itself is streamed with no idle
+  // timeout, byte-progress reporting, and user-cancellation (see
+  // buildUltimateSonglengthsFile) so a slow multi-MB transfer completes cleanly
+  // instead of timing out and wedging the firmware's FTP data channel.
+  const MAX_AUTO_ULTIMATE_SONGLENGTHS_BYTES = 6_291_456; // 6 MiB
 
   const measureAddBatch = async <T>(
     sourceType: SourceLocation["type"],
@@ -776,11 +813,31 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           knownSonglengths.add(normalizedPath);
           discovered.push({ path: normalizedPath, file });
         };
-        const resolveSonglengthsFile = (entryPath: string, entryName: string, modifiedAt?: string | null) => {
+        const resolveSonglengthsFile = (
+          entryPath: string,
+          entryName: string,
+          modifiedAt?: string | null,
+          sizeBytes?: number | null,
+        ) => {
           const normalizedPath = normalizeSourcePath(entryPath);
           const lastModified = parseModifiedAt(modifiedAt);
           if (source.type === "ultimate") {
-            return buildUltimateSonglengthsFile(normalizedPath, entryName, modifiedAt);
+            // Auto-reading a large songlengths database (e.g. the multi-MB HVSC
+            // Songlengths.md5) over the c64u's fragile single-threaded FTP
+            // reliably exceeds the 8s transfer timeout and can wedge the device's
+            // FTP data channel until a power-cycle. Skip the auto load for
+            // oversized files; durations fall back to the default (the user can
+            // still select a songlengths file manually). Small custom songlengths
+            // files are unaffected.
+            if (sizeBytes != null && sizeBytes > MAX_AUTO_ULTIMATE_SONGLENGTHS_BYTES) {
+              addLog("info", "Skipping oversized c64u songlengths auto-load", {
+                path: normalizedPath,
+                sizeBytes,
+                limit: MAX_AUTO_ULTIMATE_SONGLENGTHS_BYTES,
+              });
+              return undefined;
+            }
+            return buildUltimateSonglengthsFile(normalizedPath, entryName, modifiedAt, sizeBytes, abortSignal);
           }
           const entry = entriesMap?.get(normalizedPath);
           return (
@@ -793,7 +850,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         selectedFiles
           .filter((entry) => entry.type === "file" && isSonglengthsFileName(entry.name))
           .forEach((entry) => {
-            const file = resolveSonglengthsFile(entry.path, entry.name, entry.modifiedAt);
+            const file = resolveSonglengthsFile(entry.path, entry.name, entry.modifiedAt, entry.sizeBytes);
             addSonglengthsEntry(entry.path, file);
           });
 
@@ -801,7 +858,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           // Songlengths entries were already tracked during streaming recursive traversal;
           // register any that the selectedFiles scan above missed (e.g. different path casing).
           for (const entry of recursiveSonglengthsEntries) {
-            const file = resolveSonglengthsFile(entry.path, entry.name, entry.modifiedAt);
+            const file = resolveSonglengthsFile(entry.path, entry.name, entry.modifiedAt, entry.sizeBytes);
             addSonglengthsEntry(entry.path, file);
           }
         } else {
@@ -814,7 +871,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
               recursiveEntries
                 .filter((entry) => entry.type === "file" && isSonglengthsFileName(entry.name))
                 .forEach((entry) => {
-                  const file = resolveSonglengthsFile(entry.path, entry.name, entry.modifiedAt);
+                  const file = resolveSonglengthsFile(entry.path, entry.name, entry.modifiedAt, entry.sizeBytes);
                   addSonglengthsEntry(entry.path, file);
                 });
             } catch (error) {
@@ -849,7 +906,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
                 const songPath = normalizeSourcePath(songEntry.path);
                 addSonglengthsEntry(
                   songPath,
-                  resolveSonglengthsFile(songEntry.path, songEntry.name, songEntry.modifiedAt),
+                  resolveSonglengthsFile(songEntry.path, songEntry.name, songEntry.modifiedAt, songEntry.sizeBytes),
                 );
               } catch (error) {
                 addLog("debug", "Failed to list entries while scanning for songlengths file", {
@@ -886,7 +943,12 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
                 ? { path: candidate, meta: direct }
                 : entriesByLowerPath.get(candidate.toLowerCase());
               if (!resolved) return;
-              const file = resolveSonglengthsFile(resolved.path, resolved.meta.name, resolved.meta.modifiedAt);
+              const file = resolveSonglengthsFile(
+                resolved.path,
+                resolved.meta.name,
+                resolved.meta.modifiedAt,
+                resolved.meta.sizeBytes,
+              );
               addSonglengthsEntry(resolved.path, file);
             });
           } else {
@@ -906,7 +968,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
                 const songPath = normalizeSourcePath(songEntry.path);
                 addSonglengthsEntry(
                   songPath,
-                  resolveSonglengthsFile(songEntry.path, songEntry.name, songEntry.modifiedAt),
+                  resolveSonglengthsFile(songEntry.path, songEntry.name, songEntry.modifiedAt, songEntry.sizeBytes),
                 );
               } catch (error) {
                 addLog("debug", "Failed to list entries while scanning for songlengths file", {

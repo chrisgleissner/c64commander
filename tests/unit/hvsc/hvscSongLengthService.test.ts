@@ -192,6 +192,33 @@ describe("hvscSongLengthService", () => {
       expect(Filesystem.readdir).not.toHaveBeenCalled();
     });
 
+    it("probes and reads the songlengths file when forced even though install state says not installed", async () => {
+      // Regression: during a baseline install the library (incl. Songlengths.md5) is on disk
+      // but installedVersion is committed only after the post-ingestion reload. The forced
+      // reload must bypass the install-state gate so durations are loaded immediately.
+      vi.mocked(loadHvscState).mockReturnValue({
+        installedBaselineVersion: null,
+        installedVersion: 0,
+        ingestionState: "installing",
+        lastUpdateCheckUtcMs: null,
+        ingestionError: null,
+        ingestionSummary: null,
+        updates: {},
+      });
+      vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
+      vi.mocked(Filesystem.readdir)
+        .mockResolvedValueOnce({ files: ["Songlengths.md5"] } as any)
+        .mockResolvedValueOnce({ files: [] } as any);
+      vi.mocked(Filesystem.stat).mockResolvedValueOnce({ type: "file" } as any);
+      vi.mocked(Filesystem.readFile).mockResolvedValueOnce({ data: btoa("md5=0:10") } as any);
+
+      const files = await __test__.discoverSonglengthFiles(true);
+
+      expect(files).toHaveLength(1);
+      expect(files[0].path.toLowerCase().endsWith(".md5")).toBe(true);
+      expect(Filesystem.readdir).toHaveBeenCalled();
+    });
+
     it("returns md5 before txt and skips missing roots", async () => {
       vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
       vi.mocked(Filesystem.readdir)
