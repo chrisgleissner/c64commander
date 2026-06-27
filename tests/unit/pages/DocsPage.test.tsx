@@ -100,6 +100,38 @@ describe("DocsPage", () => {
     expect(screen.queryByText(/Lighting Studio/)).not.toBeInTheDocument();
   });
 
+  it("documents every feature-flagged surface when all flags are enabled", () => {
+    featureFlagsRef.flags = {
+      background_execution_enabled: true,
+      commoserve_enabled: true,
+      demo_mode_enabled: true,
+      home_telnet_clear_ram_reboot_enabled: true,
+      home_telnet_config_actions_enabled: true,
+      home_telnet_drive_actions_enabled: true,
+      home_telnet_power_cycle_enabled: true,
+      home_telnet_printer_actions_enabled: true,
+      home_telnet_reu_snapshot_enabled: true,
+      hvsc_enabled: true,
+      keypad_input_enabled: true,
+      lighting_studio_enabled: true,
+      ram_snapshots_enabled: true,
+    };
+
+    render(<DocsPage />);
+
+    fireEvent.click(screen.getByTestId("docs-toggle-getting-started"));
+    fireEvent.click(screen.getByTestId("docs-toggle-home"));
+
+    expect(screen.getByText(/Automatic Demo Mode/)).toBeInTheDocument();
+    expect(screen.getByText(/Save RAM/)).toBeInTheDocument();
+    expect(screen.getByText(/Power Cycle/)).toBeInTheDocument();
+    expect(screen.getByText(/Reboot \(Clr Mem\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Save REU/)).toBeInTheDocument();
+    expect(screen.getByText(/Telnet shortcuts add device-menu actions/)).toBeInTheDocument();
+    expect(screen.getByText(/Advanced config actions add Save to File/)).toBeInTheDocument();
+    expect(screen.getByText(/Lighting Studio adds Studio/)).toBeInTheDocument();
+  });
+
   it("omits documentation for disabled feature-flagged surfaces", () => {
     featureFlagsRef.flags = {
       ...defaultFlags,

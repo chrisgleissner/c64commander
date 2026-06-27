@@ -106,6 +106,21 @@ describe("buildCrt — CHIP packets", () => {
   it("throws on an out-of-range load address", () => {
     expect(() => buildCrt({ chips: [{ loadAddress: 0x10000, data: image(16) }] })).toThrow(/loadAddress/);
   });
+
+  it("throws when a control line is not a byte", () => {
+    expect(() => buildCrt({ exrom: 256, chips: [{ loadAddress: 0x8000, data: image(16) }] })).toThrow(
+      /exrom must be a byte/,
+    );
+    expect(() => buildCrt({ game: -1, chips: [{ loadAddress: 0x8000, data: image(16) }] })).toThrow(
+      /game must be a byte/,
+    );
+  });
+
+  it("throws when the hardware type is not a 16-bit value", () => {
+    expect(() => buildCrt({ hwType: 0x10000, chips: [{ loadAddress: 0x8000, data: image(16) }] })).toThrow(
+      /hwType must be a 16-bit value/,
+    );
+  });
 });
 
 describe("buildCrt — accepted by the repo's own CRT validator", () => {

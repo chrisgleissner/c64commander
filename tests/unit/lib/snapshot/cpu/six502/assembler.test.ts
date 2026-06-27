@@ -13,6 +13,7 @@ import {
   beq,
   bne,
   db,
+  dw,
   jmp,
   label,
   lda,
@@ -128,6 +129,34 @@ describe("six502 assembler — .org, .db and validation", () => {
 
   it("rejects a backwards .org", () => {
     expect(() => assemble([rti(), rti(), org(0x8000)], 0x8000)).toThrow(/moves backwards/);
+  });
+
+  it("rejects an origin outside the 16-bit address space", () => {
+    expect(() => assemble([rti()], 0x10000)).toThrow(/origin out of range/);
+    expect(() => assemble([rti()], -1)).toThrow(/origin out of range/);
+  });
+
+  it("rejects a program that overruns the 64 KiB address space", () => {
+    // origin $FFFF + a 3-byte absolute instruction overflows past $10000.
+    expect(() => assemble([lda.abs(0x1234)], 0xffff)).toThrow(/overruns the 64 KiB/);
+  });
+
+  it("rejects an operand-bearing op constructed without an operand", () => {
+    expect(() => assemble([{ t: "op", mnemonic: "LDA", mode: "abs", operand: null }], 0x8000)).toThrow(
+      /requires an operand/,
+    );
+  });
+
+  it("rejects a .db byte out of range", () => {
+    expect(() => assemble([db(0x100)], 0x8000)).toThrow(/\.db byte out of range/);
+  });
+
+  it("rejects a .dw value out of range", () => {
+    expect(() => assemble([dw(0x10000)], 0x8000)).toThrow(/\.dw value out of range/);
+  });
+
+  it("rejects a 16-bit operand out of range", () => {
+    expect(() => assemble([lda.abs(0x10000)], 0x8000)).toThrow(/16-bit operand out of range/);
   });
 });
 

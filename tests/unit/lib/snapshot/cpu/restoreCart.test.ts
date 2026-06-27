@@ -139,6 +139,59 @@ describe("restoreCpuSnapshot — refuses unsupported snapshots", () => {
   });
 });
 
+describe("restoreCpuSnapshot — transport retries (fragile firmware)", () => {
+  it("retries a writemem that returns an error array, then succeeds", async () => {
+    const fw = new MockFirmware();
+    let calls = 0;
+    fw.api.writeMemoryBlock = async (address: string, data: Uint8Array) => {
+      calls += 1;
+      if (calls <= 2) return { errors: ["device busy"] };
+      fw.writes.push({ address: parseInt(address, 16), bytes: Array.from(data) });
+      return { errors: [] };
+    };
+
+    const result = await restoreCpuSnapshot(fw.api, { cpu: CPU, ramRanges: [fullRamRange()] }, clock());
+    expect(result.ok).toBe(true);
+    expect(calls).toBeGreaterThan(3); // first call retried twice before succeeding
+  });
+
+  it("gives up and throws after exhausting writemem retries", async () => {
+    const fw = new MockFirmware();
+    fw.api.writeMemoryBlock = async () => {
+      throw new Error("connection reset by peer");
+    };
+
+    await expect(
+      restoreCpuSnapshot(fw.api, { cpu: CPU, ramRanges: [fullRamRange()] }, clock()),
+    ).rejects.toThrow("connection reset by peer");
+  });
+
+  it("retries a transient readmem failure while polling for READY", async () => {
+    const fw = new MockFirmware();
+    let reads = 0;
+    fw.api.readMemory = async () => {
+      reads += 1;
+      if (reads === 1) throw new Error("transient 404");
+      return new Uint8Array([0xa5]); // READY thereafter
+    };
+
+    const result = await restoreCpuSnapshot(fw.api, { cpu: CPU, ramRanges: [fullRamRange()] }, clock());
+    expect(result.ok).toBe(true);
+    expect(reads).toBeGreaterThan(1);
+  });
+
+  it("throws when readmem keeps failing during the READY handshake", async () => {
+    const fw = new MockFirmware();
+    fw.api.readMemory = async () => {
+      throw new Error("socket dead");
+    };
+
+    await expect(restoreCpuSnapshot(fw.api, { cpu: CPU, ramRanges: [fullRamRange()] }, clock())).rejects.toThrow(
+      "socket dead",
+    );
+  });
+});
+
 describe("readByteFromRanges", () => {
   it("reads a byte covered by a range and returns undefined otherwise", () => {
     const ranges: CpuRestoreRange[] = [{ start: 0x0800, bytes: new Uint8Array([0xaa, 0xbb, 0xcc]) }];

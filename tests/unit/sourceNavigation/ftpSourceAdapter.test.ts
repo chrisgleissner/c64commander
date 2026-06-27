@@ -284,6 +284,17 @@ describe("ftpSourceAdapter", () => {
     expect(listFtpDirectoryMock).toHaveBeenCalledTimes(1);
   });
 
+  it("rethrows (does not swallow) an AbortError raised by the underlying listing", async () => {
+    isNativePlatformMock.mockReturnValue(false);
+    const abortError = new Error("listing aborted");
+    abortError.name = "AbortError";
+    listFtpDirectoryMock.mockRejectedValue(abortError);
+
+    const source = createUltimateSourceLocation();
+    // The recursive walker treats an AbortError as fatal, not a per-folder partial failure.
+    await expect(source.listFilesRecursive("/")).rejects.toThrow("listing aborted");
+  });
+
   it("logs when cached FTP listing is corrupted", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     localStorage.setItem(FTP_CACHE_KEY, "{bad-json");

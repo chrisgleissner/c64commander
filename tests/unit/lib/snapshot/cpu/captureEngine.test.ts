@@ -131,6 +131,73 @@ describe("captureCpuState (RLI)", () => {
   });
 });
 
+describe("captureCpuState — error recovery", () => {
+  it("rolls back the live patch and throws when the register block is unstable across reads", async () => {
+    const fw = new CaptureMock();
+    let scratchReads = 0;
+    const realRead = fw.api.readMemory;
+    fw.api.readMemory = async (address: string, length = 1) => {
+      const bytes = await realRead(address, length);
+      // The two readScratch reads are 7-byte reads at scrPcl; perturb the 2nd so
+      // the verify comparison fails.
+      if (parse(address) === L.scrPcl && length === 7) {
+        scratchReads += 1;
+        if (scratchReads === 2) bytes[2] = (bytes[2]! ^  0xff) & 0xff; // flip A
+      }
+      return bytes;
+    };
+
+    await expect(captureCpuState(fw.api, clock())).rejects.toThrow(/not stable/);
+    // restorePatch put the original IRQ vector + safe region back.
+    expect(fw.mem.get(0x0314)).toBe(ORIG_IRQ[0]);
+    expect(fw.mem.get(0x0315)).toBe(ORIG_IRQ[1]);
+    expect(fw.mem.get(0x033c)).toBe(0xa0);
+  });
+
+  it("restores the live patch and rethrows when a transport error fires mid-capture", async () => {
+    const fw = new CaptureMock();
+    let polls = 0;
+    const realRead = fw.api.readMemory;
+    fw.api.readMemory = async (address: string, length = 1) => {
+      if (parse(address) === L.captured) {
+        polls += 1;
+        if (polls === 1) throw new Error("socket closed mid-poll");
+      }
+      return realRead(address, length);
+    };
+
+    await expect(captureCpuState(fw.api, clock())).rejects.toThrow(/socket closed mid-poll/);
+    // The catch ran restorePatch: original vector + region restored.
+    expect(fw.mem.get(0x0314)).toBe(ORIG_IRQ[0]);
+    expect(fw.mem.get(0x033c)).toBe(0xa0);
+  });
+
+  it("logs (and swallows) a failure during the post-capture rollback while surfacing the original error", async () => {
+    const fw = new CaptureMock();
+    let scratchReads = 0;
+    const realRead = fw.api.readMemory;
+    fw.api.readMemory = async (address: string, length = 1) => {
+      const bytes = await realRead(address, length);
+      if (parse(address) === L.scrPcl && length === 7) {
+        scratchReads += 1;
+        if (scratchReads === 2) bytes[2] = (bytes[2]! ^  0xff) & 0xff;
+      }
+      return bytes;
+    };
+    let writes = 0;
+    const realWrite = fw.api.writeMemoryBlock;
+    fw.api.writeMemoryBlock = async (address: string, data: Uint8Array) => {
+      writes += 1;
+      // writes 1-2 install the patch; the restore writes (>=3) fail.
+      if (writes >= 3) throw new Error("restore write failed");
+      return realWrite(address, data);
+    };
+
+    // The unstable-read failure still propagates; the restore failure is logged, not rethrown.
+    await expect(captureCpuState(fw.api, clock())).rejects.toThrow(/not stable/);
+  });
+});
+
 describe("resumeAfterCapture", () => {
   it("restores the vector, releases the spin loop, and restores the safe region", async () => {
     const fw = new CaptureMock();

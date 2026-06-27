@@ -100,6 +100,29 @@ describe("captureCpuSnapshotData", () => {
     });
     await expect(captureCpuSnapshotData(api, dumpFullRam)).rejects.toThrow(/dump failed/);
   });
+
+  it("rejects a RAM dump that is not exactly 64 KiB", async () => {
+    const { api } = makeCaptureMock();
+    const dumpFullRam = vi.fn(async () => new Uint8Array(1234));
+    await expect(captureCpuSnapshotData(api, dumpFullRam)).rejects.toThrow(/64 KiB/);
+  });
+
+  it("logs but does not reject when resuming the program fails after a clean capture", async () => {
+    const { api } = makeCaptureMock();
+    let writes = 0;
+    const realWrite = api.writeMemoryBlock;
+    api.writeMemoryBlock = async (address: string, data: Uint8Array) => {
+      writes += 1;
+      // writes 1-2 install the capture patch; the resumeAfterCapture writes (>=3) fail.
+      if (writes >= 3) throw new Error("resume write failed");
+      return realWrite(address, data);
+    };
+    const dumpFullRam = vi.fn(async () => new Uint8Array(0x10000));
+
+    const data = await captureCpuSnapshotData(api, dumpFullRam);
+    // The snapshot data is still returned; the resume failure is swallowed + logged.
+    expect(data.cpu).toEqual({ pc: 0xc000, a: 0x11, x: 0x22, y: 0x33, sp: 0xf6, p: 0x30 });
+  });
 });
 
 describe("buildCpuSnapshotMetadata", () => {

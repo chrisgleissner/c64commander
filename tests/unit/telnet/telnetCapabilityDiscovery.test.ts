@@ -625,3 +625,74 @@ describe("discoverTelnetCapabilities", () => {
     expect(secondSnapshot).toBe(firstSnapshot);
   });
 });
+
+describe("discoverInitialMenu — returnToRootMenu reopen fallback", () => {
+  beforeEach(() => {
+    clearTelnetCapabilityCache();
+  });
+
+  // A runner with a single fixed screen queue (no auto-restored-root injection), so
+  // the exact LEFT-back/reopen sequence can be scripted deterministically.
+  const scriptedRunner = (screens: TelnetScreen[]): TelnetSessionRunner => ({
+    withSession: async <T,>(callback: (session: TelnetSessionApi) => Promise<T>) => {
+      const queue = [...screens];
+      const session: TelnetSessionApi = {
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        sendKey: vi.fn(),
+        sendRaw: vi.fn(),
+        readScreen: vi.fn(async () => {
+          const next = queue.shift();
+          if (!next) throw new Error("scripted screen queue exhausted");
+          return next;
+        }),
+        isConnected: vi.fn().mockReturnValue(true),
+      };
+      return callback(session);
+    },
+  });
+
+  const deviceInfo = {
+    product: "C64 Ultimate",
+    firmware_version: "1.1.0",
+    hostname: "c64u",
+    unique_id: "c64u-reopen",
+  };
+
+  it("re-opens the action menu when LEFT does not step back to the root", async () => {
+    // Sequence: open root → probe submenu → 3 LEFT reads that miss the root → reopen restores it.
+    const runner = scriptedRunner([
+      createRootScreen(["OnlyCat"]),
+      createSubmenuScreen(["OnlyCat"], 0, ["Sub1"]),
+      createScreen({ menus: [] }),
+      createScreen({ menus: [] }),
+      createScreen({ menus: [] }),
+      createRootScreen(["OnlyCat"]), // reopened menu matches the root labels
+    ]);
+
+    const snapshot = await discoverTelnetCapabilities({
+      cacheKey: "c64u-reopen|F1",
+      deviceInfo,
+      menuKey: "F1",
+      runner,
+    });
+
+    expect(snapshot.initialMenu.items).toEqual(["OnlyCat"]);
+    expect(snapshot.initialMenu.nodes["OnlyCat"]).toMatchObject({ kind: "submenu" });
+  });
+
+  it("throws DESYNC when even the reopened menu does not match the root", async () => {
+    const runner = scriptedRunner([
+      createRootScreen(["OnlyCat"]),
+      createSubmenuScreen(["OnlyCat"], 0, ["Sub1"]),
+      createScreen({ menus: [] }),
+      createScreen({ menus: [] }),
+      createScreen({ menus: [] }),
+      createRootScreen(["DifferentMenu"]), // reopened menu has the wrong labels
+    ]);
+
+    await expect(
+      discoverTelnetCapabilities({ cacheKey: "c64u-desync|F1", deviceInfo, menuKey: "F1", runner }),
+    ).rejects.toThrow(/did not return after discovery probe/);
+  });
+});

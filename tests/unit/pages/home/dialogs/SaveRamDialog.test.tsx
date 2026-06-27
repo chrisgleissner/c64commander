@@ -267,6 +267,32 @@ describe("SaveRamDialog — CPU+RAM option & limitation note", () => {
     expect(cpuBtn).toHaveTextContent(/Fast-action games may not resume/i);
   });
 
+  it("invokes onSaveCpu and closes the dialog when the CPU+RAM option is clicked", () => {
+    const onSaveCpu = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <SaveRamDialog
+        open={true}
+        onOpenChange={onOpenChange}
+        onSave={vi.fn()}
+        onSaveCpu={onSaveCpu}
+        isSaving={false}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("save-ram-type-cpu"));
+
+    expect(onSaveCpu).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("disables the CPU+RAM option while a save is in flight", () => {
+    render(
+      <SaveRamDialog open={true} onOpenChange={vi.fn()} onSave={vi.fn()} onSaveCpu={vi.fn()} isSaving={true} />,
+    );
+    expect(screen.getByTestId("save-ram-type-cpu")).toBeDisabled();
+  });
+
   it("omits the CPU+RAM option entirely when onSaveCpu is not provided", () => {
     render(<SaveRamDialog open={true} onOpenChange={vi.fn()} onSave={vi.fn()} isSaving={false} />);
     expect(screen.queryByTestId("save-ram-type-cpu")).toBeNull();

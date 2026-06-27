@@ -146,6 +146,36 @@ describe("getCartridgeConfig", () => {
     expect(meta.ram_resident_assumed).toBe(true);
   });
 
+  it("extracts a numeric config value (stringified)", async () => {
+    const response: ConfigResponse = {
+      [CARTRIDGE_CATEGORY]: { [CARTRIDGE_ITEM]: 42 },
+      errors: [],
+    } as unknown as ConfigResponse;
+    const meta = await getCartridgeConfig(makeApi({ getConfigItem: vi.fn(async () => response) }));
+    expect(meta.configured_name).toBe("42");
+    expect(meta.was_active).toBe(true);
+  });
+
+  it("reports no cartridge when the category value is malformed (array)", async () => {
+    const response: ConfigResponse = {
+      [CARTRIDGE_CATEGORY]: [],
+      errors: [],
+    } as unknown as ConfigResponse;
+    const meta = await getCartridgeConfig(makeApi({ getConfigItem: vi.fn(async () => response) }));
+    expect(meta.configured_name).toBeUndefined();
+    expect(meta.was_active).toBe(false);
+  });
+
+  it("reports no cartridge when the item is an object without a 'selected' field", async () => {
+    const response: ConfigResponse = {
+      [CARTRIDGE_CATEGORY]: { [CARTRIDGE_ITEM]: { options: ["None"] } },
+      errors: [],
+    } as unknown as ConfigResponse;
+    const meta = await getCartridgeConfig(makeApi({ getConfigItem: vi.fn(async () => response) }));
+    expect(meta.configured_name).toBeUndefined();
+    expect(meta.was_active).toBe(false);
+  });
+
   it("degrades to unknown when the config read throws", async () => {
     const meta = await getCartridgeConfig(
       makeApi({
