@@ -457,11 +457,17 @@ export function DeviceDiscoveryInterstitial() {
                 id="startup-manual-device-host"
                 value={manualHostInput}
                 onChange={(event) => {
-                  setManualHostInput(event.target.value);
+                  const nextHostInput = event.target.value;
+                  setManualHostInput(nextHostInput);
                   setManualError(null);
-                  setManualPasswordTarget(null);
-                  setPasswordInput("");
-                  setPasswordError(null);
+                  if (
+                    manualPasswordTarget &&
+                    normalizeHostKey(manualPasswordTarget.host) !== normalizeHostKey(nextHostInput)
+                  ) {
+                    setManualPasswordTarget(null);
+                    setPasswordInput("");
+                    setPasswordError(null);
+                  }
                 }}
                 autoFocus
                 placeholder="c64u or 192.168.1.64"

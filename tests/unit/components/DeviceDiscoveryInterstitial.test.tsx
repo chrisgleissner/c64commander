@@ -197,6 +197,16 @@ describe("DeviceDiscoveryInterstitial", () => {
     });
   });
 
+  it("validates an empty manual host before probing", () => {
+    discoveryState = { ...discoveryState, candidates: [] };
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("startup-manual-device-connect"));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Enter a host or IP address.");
+    expect(probeDeviceReachability).not.toHaveBeenCalled();
+  });
+
   it("asks for a password before saving a manually entered password-protected host", async () => {
     discoveryState = { ...discoveryState, candidates: [] };
     probeDeviceReachability.mockResolvedValueOnce({ ok: false, deviceInfo: null, error: "HTTP 403" });
@@ -236,6 +246,118 @@ describe("DeviceDiscoveryInterstitial", () => {
       expect(setPasswordForDevice).toHaveBeenCalledWith("manual-192-168-1-14-80", "secret");
       expect(switchSavedDevice).toHaveBeenCalledWith("manual-192-168-1-14-80");
     });
+  });
+
+  it("keeps the manual password prompt while host edits normalize to the same target", async () => {
+    discoveryState = { ...discoveryState, candidates: [] };
+    probeDeviceReachability.mockResolvedValueOnce({ ok: false, deviceInfo: null, error: "HTTP 403" });
+    renderDialog();
+
+    fireEvent.change(screen.getByTestId("startup-manual-device-host-input"), { target: { value: "c64u" } });
+    fireEvent.click(screen.getByTestId("startup-manual-device-connect"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("startup-device-password-panel")).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByTestId("startup-device-password-input"), { target: { value: "secret" } });
+    fireEvent.change(screen.getByTestId("startup-manual-device-host-input"), { target: { value: " C64U " } });
+
+    expect(screen.getByTestId("startup-device-password-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("startup-device-password-input")).toHaveValue("secret");
+
+    fireEvent.change(screen.getByTestId("startup-manual-device-host-input"), { target: { value: "u64" } });
+
+    expect(screen.queryByTestId("startup-device-password-panel")).not.toBeInTheDocument();
+  });
+
+  it("updates an existing manual host and stores its confirmed password", async () => {
+    discoveryState = { ...discoveryState, candidates: [] };
+    savedDevices = { selectedDeviceId: "device-1", devices: [{ id: "known-c64u", host: "c64u", hasPassword: false }] };
+    probeDeviceReachability
+      .mockResolvedValueOnce({ ok: false, deviceInfo: null, error: "HTTP 403" })
+      .mockResolvedValueOnce({
+        ok: true,
+        deviceInfo: { product: "C64 Ultimate", hostname: "c64u", unique_id: "C64U-1" },
+        error: null,
+      });
+    renderDialog();
+
+    fireEvent.change(screen.getByTestId("startup-manual-device-host-input"), { target: { value: "c64u" } });
+    fireEvent.click(screen.getByTestId("startup-manual-device-connect"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("startup-device-password-panel")).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByTestId("startup-device-password-input"), { target: { value: "secret" } });
+    fireEvent.click(screen.getByTestId("startup-device-password-confirm"));
+
+    await waitFor(() => {
+      expect(updateSavedDevice).toHaveBeenCalledWith(
+        "known-c64u",
+        expect.objectContaining({
+          host: "c64u",
+          httpPort: 80,
+          lastKnownProduct: "U64E",
+          lastKnownHostname: "c64u",
+          lastKnownUniqueId: "C64U-1",
+          hasPassword: true,
+        }),
+      );
+      expect(addSavedDevice).not.toHaveBeenCalled();
+      expect(setPasswordForDevice).toHaveBeenCalledWith("known-c64u", "secret");
+      expect(switchSavedDevice).toHaveBeenCalledWith("known-c64u");
+    });
+  });
+
+  it("reports probe errors from manual host checks", async () => {
+    discoveryState = { ...discoveryState, candidates: [] };
+    probeDeviceReachability.mockRejectedValueOnce(new Error("network down"));
+    renderDialog();
+
+    fireEvent.change(screen.getByTestId("startup-manual-device-host-input"), { target: { value: "c64u" } });
+    fireEvent.click(screen.getByTestId("startup-manual-device-connect"));
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "STARTUP_MANUAL_DEVICE_CONNECT",
+          deviceHost: "c64u",
+          description: "network down",
+        }),
+      );
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent("network down");
+  });
+
+  it("reports probe errors while confirming a manual device password", async () => {
+    discoveryState = { ...discoveryState, candidates: [] };
+    probeDeviceReachability
+      .mockResolvedValueOnce({ ok: false, deviceInfo: null, error: "HTTP 403" })
+      .mockRejectedValueOnce(new Error("password check failed"));
+    renderDialog();
+
+    fireEvent.change(screen.getByTestId("startup-manual-device-host-input"), { target: { value: "c64u" } });
+    fireEvent.click(screen.getByTestId("startup-manual-device-connect"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("startup-device-password-panel")).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByTestId("startup-device-password-input"), { target: { value: "secret" } });
+    fireEvent.click(screen.getByTestId("startup-device-password-confirm"));
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "STARTUP_MANUAL_DEVICE_PASSWORD",
+          deviceHost: "c64u",
+          description: "password check failed",
+        }),
+      );
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent("password check failed");
   });
 
   it("saves a discovered device without switching to it", async () => {
