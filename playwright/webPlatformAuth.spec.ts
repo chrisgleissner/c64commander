@@ -304,6 +304,11 @@ test.describe("Web platform auth + proxy @web-platform", () => {
     }
 
     await page.goto("/play");
+    const startupDiscoveryClose = page.getByTestId("startup-device-discovery-close");
+    if ((await startupDiscoveryClose.count()) > 0 && (await startupDiscoveryClose.first().isVisible())) {
+      await startupDiscoveryClose.first().click();
+    }
+
     const addButton = page.getByRole("button", {
       name: /Add items|Add more items/i,
     });
