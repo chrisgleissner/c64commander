@@ -142,7 +142,7 @@ describe("captureCpuState — error recovery", () => {
       // the verify comparison fails.
       if (parse(address) === L.scrPcl && length === 7) {
         scratchReads += 1;
-        if (scratchReads === 2) bytes[2] = (bytes[2]! ^  0xff) & 0xff; // flip A
+        if (scratchReads === 2) bytes[2] = (bytes[2]! ^ 0xff) & 0xff; // flip A
       }
       return bytes;
     };
@@ -180,7 +180,7 @@ describe("captureCpuState — error recovery", () => {
       const bytes = await realRead(address, length);
       if (parse(address) === L.scrPcl && length === 7) {
         scratchReads += 1;
-        if (scratchReads === 2) bytes[2] = (bytes[2]! ^  0xff) & 0xff;
+        if (scratchReads === 2) bytes[2] = (bytes[2]! ^ 0xff) & 0xff;
       }
       return bytes;
     };

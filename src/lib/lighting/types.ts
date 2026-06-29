@@ -50,12 +50,7 @@ export type LightingLinkMode = "linked" | "mirrored" | "independent";
 export type LightingComposePreset = "mirror" | "contrast" | "keyboard-focus" | "case-halo";
 
 export type LightingConnectionSentinelState =
-  | "connected"
-  | "connecting"
-  | "retrying"
-  | "disconnected"
-  | "demo"
-  | "error";
+  "connected" | "connecting" | "retrying" | "disconnected" | "demo" | "error";
 
 export type LightingSourceBucket = "local" | "c64u" | "hvsc" | "commoserve" | "disks" | "idle";
 

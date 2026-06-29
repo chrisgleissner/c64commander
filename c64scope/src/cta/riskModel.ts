@@ -358,14 +358,7 @@ export function evaluateCtaAction(request: CtaActionRequest, tracker: MutationBu
 // ---------------------------------------------------------------------------
 
 export type CtaResultStatus =
-  | "PASS"
-  | "FAIL"
-  | "BLOCKED"
-  | "INCONCLUSIVE"
-  | "NOT_PRESENT"
-  | "SPEC_GAP"
-  | "UNCLASSIFIED"
-  | "CALIBRATION_ONLY";
+  "PASS" | "FAIL" | "BLOCKED" | "INCONCLUSIVE" | "NOT_PRESENT" | "SPEC_GAP" | "UNCLASSIFIED" | "CALIBRATION_ONLY";
 
 export function isPass(status: CtaResultStatus): boolean {
   return status === "PASS";

@@ -64,6 +64,10 @@ test-results/
 .cov-*/
 agents/coverage-agents.xml
 
+# Locally generated manuals
+docs/manual/**/*.pdf
+docs/manual/**/.last-build
+
 # Test fixtures
 .cache/hvsc/
 android/app/src/test/fixtures/HVSC_Update_84.7z

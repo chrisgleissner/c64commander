@@ -8,11 +8,7 @@
 
 export type KeypadCanaryStatus = "PASS" | "FAIL";
 export type KeypadCanaryStepKind =
-  | "tab-shortcut"
-  | "overlay-shortcut"
-  | "dpad-traversal"
-  | "keypad-activation"
-  | "touch-activation";
+  "tab-shortcut" | "overlay-shortcut" | "dpad-traversal" | "keypad-activation" | "touch-activation";
 
 export interface KeypadCanaryStep {
   id: string;

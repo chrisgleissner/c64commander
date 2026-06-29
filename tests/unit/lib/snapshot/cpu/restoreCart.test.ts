@@ -161,9 +161,9 @@ describe("restoreCpuSnapshot — transport retries (fragile firmware)", () => {
       throw new Error("connection reset by peer");
     };
 
-    await expect(
-      restoreCpuSnapshot(fw.api, { cpu: CPU, ramRanges: [fullRamRange()] }, clock()),
-    ).rejects.toThrow("connection reset by peer");
+    await expect(restoreCpuSnapshot(fw.api, { cpu: CPU, ramRanges: [fullRamRange()] }, clock())).rejects.toThrow(
+      "connection reset by peer",
+    );
   });
 
   it("retries a transient readmem failure while polling for READY", async () => {

@@ -52,8 +52,7 @@ const buildSnapshot = (cacheKey: string): TelnetCapabilitySnapshot => ({
       {
         actionId,
         status: (actionId === "resetC64" || actionId === "rebootC64" ? "supported" : "unsupported") as
-          | "supported"
-          | "unsupported",
+          "supported" | "unsupported",
         reason: actionId === "powerCycle" ? "Power Cycle is not available on Ultimate 64 Elite 3.14e." : "Unsupported",
         target:
           actionId === "resetC64"

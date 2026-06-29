@@ -7,11 +7,7 @@
  */
 
 export type ConfigWriteFailureCode =
-  | "CONFIG_ITEM_NOT_FOUND"
-  | "INVALID_ENUM_VALUE"
-  | "INVALID_NUMERIC_VALUE"
-  | "OUT_OF_RANGE"
-  | "FIRMWARE_WRITE_REJECTED";
+  "CONFIG_ITEM_NOT_FOUND" | "INVALID_ENUM_VALUE" | "INVALID_NUMERIC_VALUE" | "OUT_OF_RANGE" | "FIRMWARE_WRITE_REJECTED";
 
 type ConfigWriteErrorContext = {
   category?: string;

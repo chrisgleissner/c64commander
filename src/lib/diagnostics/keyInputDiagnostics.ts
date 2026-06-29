@@ -38,23 +38,11 @@ import { shouldSuppressDiagnosticsSideEffects } from "@/lib/diagnostics/diagnost
 
 /** The "family" of a physical key, for grouping mapping calibration by hardware. */
 export type KeyFamily =
-  | "digit"
-  | "numpad-digit"
-  | "dpad"
-  | "enter"
-  | "delete"
-  | "star"
-  | "hash"
-  | "modifier"
-  | "unknown";
+  "digit" | "numpad-digit" | "dpad" | "enter" | "delete" | "star" | "hash" | "modifier" | "unknown";
 
 /** Reasons a recognized key did not produce an effect (logged when `handled` is false). */
 export type KeyInputIgnoredReason =
-  | "setting-disabled"
-  | "pointer-modality"
-  | "no-binding"
-  | "editable-target-passthrough"
-  | "ignored-by-controller";
+  "setting-disabled" | "pointer-modality" | "no-binding" | "editable-target-passthrough" | "ignored-by-controller";
 
 /** Structural subset of a raw (native or React synthetic) keyboard event we record. */
 export interface KeyInputRawEvent {

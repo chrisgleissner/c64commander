@@ -9,11 +9,7 @@
 export type SliderPopupState = "Hidden" | "VisibleActive" | "VisibleIdle" | "Closing";
 
 export type SliderPopupEvent =
-  | "interaction-start"
-  | "interaction-update"
-  | "interaction-end"
-  | "idle-timeout"
-  | "force-hide";
+  "interaction-start" | "interaction-update" | "interaction-end" | "idle-timeout" | "force-hide";
 
 export const SLIDER_POPUP_MIN_VISIBLE_MS = 500;
 export const SLIDER_POPUP_IDLE_CLOSE_MS = 800;

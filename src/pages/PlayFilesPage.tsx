@@ -162,8 +162,7 @@ export default function PlayFilesPage() {
   };
 
   type ConfigPickerState =
-    | { itemId: string; sourceType: "ultimate" }
-    | { itemId: string; sourceType: "local"; sourceId: string };
+    { itemId: string; sourceType: "ultimate" } | { itemId: string; sourceType: "local"; sourceId: string };
 
   type PendingConfigChangeState = {
     itemId: string;

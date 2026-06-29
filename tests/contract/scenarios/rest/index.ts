@@ -277,8 +277,7 @@ export function buildRestScenarios(): RestScenario[] {
       });
       if (itemDetailResp.status !== 200) return;
       const itemDetail = (itemDetailResp.data as Record<string, unknown>)[targetCategory] as
-        | Record<string, unknown>
-        | undefined;
+        Record<string, unknown> | undefined;
       const itemEntry = itemDetail ? (itemDetail[itemName] as Record<string, unknown> | undefined) : undefined;
       if (!itemEntry || typeof itemEntry !== "object") return;
       const current = itemEntry.current ?? itemEntry;

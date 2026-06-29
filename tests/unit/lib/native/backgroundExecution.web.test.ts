@@ -141,12 +141,7 @@ describe("BackgroundExecutionWeb", () => {
   });
 
   it("sets wakeLock to null and returns early when wakeLock has no release method", async () => {
-    const requestMock = vi.fn(
-      async () =>
-        ({
-          /* no release */
-        }) as unknown as WakeLockSentinel,
-    );
+    const requestMock = vi.fn(async () => ({/* no release */}) as unknown as WakeLockSentinel);
     Object.defineProperty(window.navigator, "wakeLock", {
       configurable: true,
       value: { request: requestMock },

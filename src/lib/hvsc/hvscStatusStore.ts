@@ -10,14 +10,7 @@ import type { HvscProgressEvent } from "./hvscTypes";
 import { addLog } from "@/lib/logging";
 
 export type HvscFailureCategory =
-  | "network"
-  | "remote"
-  | "download"
-  | "extraction"
-  | "storage"
-  | "corrupt-archive"
-  | "unsupported-format"
-  | "unknown";
+  "network" | "remote" | "download" | "extraction" | "storage" | "corrupt-archive" | "unsupported-format" | "unknown";
 
 export type HvscStepStatus = "idle" | "in-progress" | "success" | "failure";
 
