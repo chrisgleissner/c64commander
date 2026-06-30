@@ -5,8 +5,7 @@ const FEATURE_FLAG_STORAGE_PREFIX = "c64u_feature_flag:";
 
 declare global {
   var __setFeatureFlagTestState:
-    | ((state?: { developerMode?: boolean; overrides?: Record<string, boolean> }) => void)
-    | undefined;
+    ((state?: { developerMode?: boolean; overrides?: Record<string, boolean> }) => void) | undefined;
 }
 
 describe("test setup feature flag isolation", () => {

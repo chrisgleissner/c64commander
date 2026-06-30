@@ -1210,8 +1210,7 @@ describe("usePlaybackController", () => {
     await result.current.startPlaylist(resolvedItems, 0);
 
     const mergeUpdater = setPlaylist.mock.calls.find(([value]) => typeof value === "function")?.[0] as
-      | ((items: PlaylistItem[]) => PlaylistItem[])
-      | undefined;
+      ((items: PlaylistItem[]) => PlaylistItem[]) | undefined;
     expect(mergeUpdater).toBeDefined();
     expect(mergeUpdater?.([extraItem])).toEqual([...resolvedItems, extraItem]);
   });

@@ -634,7 +634,7 @@ describe("discoverInitialMenu — returnToRootMenu reopen fallback", () => {
   // A runner with a single fixed screen queue (no auto-restored-root injection), so
   // the exact LEFT-back/reopen sequence can be scripted deterministically.
   const scriptedRunner = (screens: TelnetScreen[]): TelnetSessionRunner => ({
-    withSession: async <T,>(callback: (session: TelnetSessionApi) => Promise<T>) => {
+    withSession: async <T>(callback: (session: TelnetSessionApi) => Promise<T>) => {
       const queue = [...screens];
       const session: TelnetSessionApi = {
         connect: vi.fn(),

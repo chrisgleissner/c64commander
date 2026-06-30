@@ -13,14 +13,7 @@ const WINDOW_MS = 5 * 60 * 1000;
 
 /** Endpoint classes per §12.6 — grounded in existing request behavior. */
 export type EndpointClass =
-  | "Info"
-  | "Configs (full tree)"
-  | "Config items"
-  | "Drives"
-  | "Machine control"
-  | "FTP list"
-  | "FTP read"
-  | "Other";
+  "Info" | "Configs (full tree)" | "Config items" | "Drives" | "Machine control" | "FTP list" | "FTP read" | "Other";
 
 /** Transport family per §12.6 */
 export type TransportFamily = "REST" | "FTP" | "Telnet";

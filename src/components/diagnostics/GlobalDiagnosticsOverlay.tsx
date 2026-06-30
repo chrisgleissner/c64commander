@@ -200,8 +200,7 @@ export const GlobalDiagnosticsOverlay = () => {
   useEffect(() => {
     const handleRequest = (event: Event) => {
       const detail = (event as CustomEvent).detail as
-        | { preset?: DiagnosticsEntryPreset; panel?: DiagnosticsPanelKey | null }
-        | undefined;
+        { preset?: DiagnosticsEntryPreset; panel?: DiagnosticsPanelKey | null } | undefined;
       if (!detail?.preset) return;
       clearDiagnosticsOpenRequest();
       setRequestedPanel(detail.panel ?? null);

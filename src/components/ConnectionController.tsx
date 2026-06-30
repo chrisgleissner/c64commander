@@ -168,8 +168,7 @@ export function ConnectionController() {
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent).detail as
-        | { baseUrl?: string; password?: string; deviceHost?: string }
-        | undefined;
+        { baseUrl?: string; password?: string; deviceHost?: string } | undefined;
       if (!detail) return;
       const next = {
         baseUrl: typeof detail.baseUrl === "string" ? detail.baseUrl : "",

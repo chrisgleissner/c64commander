@@ -12,10 +12,7 @@ import { getPasswordForDevice } from "@/lib/secureStorage";
 import { getSavedDeviceById, getSelectedSavedDevice } from "./store";
 
 export type OriginDeviceUnavailableReason =
-  | "origin-device-unreachable"
-  | "origin-device-removed"
-  | "origin-device-mismatch"
-  | "origin-file-missing";
+  "origin-device-unreachable" | "origin-device-removed" | "origin-device-mismatch" | "origin-file-missing";
 
 export type DeviceBoundContentOrigin = {
   sourceKind: "ultimate";

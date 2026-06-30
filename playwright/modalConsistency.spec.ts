@@ -9,7 +9,7 @@
 import { test, expect } from "@playwright/test";
 import type { Page, TestInfo } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
-import { seedUiMocks } from "./uiMocks";
+import { dismissStartupDiscoveryDialog, seedUiMocks } from "./uiMocks";
 import { allowWarnings, assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 import { saveCoverageFromPage } from "./withCoverage";
 
@@ -152,6 +152,7 @@ test.describe("Modal close-control consistency", () => {
 
     const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "OFFLINE_NO_DEMO", { timeout: 10000 });
+    await dismissStartupDiscoveryDialog(page);
     // UnifiedHealthBadge now opens the Diagnostics sheet directly instead of a connection-status popover.
     await indicator.click();
 
@@ -173,6 +174,7 @@ test.describe("Modal close-control consistency", () => {
 
     const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "OFFLINE_NO_DEMO", { timeout: 10000 });
+    await dismissStartupDiscoveryDialog(page);
     // UnifiedHealthBadge now opens the Diagnostics sheet directly instead of a connection-status popover.
     await indicator.click();
 

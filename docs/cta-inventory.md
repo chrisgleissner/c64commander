@@ -313,10 +313,13 @@ config Save/Load/Manage, RAM snapshot manager, song selector, drive-status
 details, item/disk pickers, Diagnostics dialog, Open Source Licenses page.
 
 **Automatic device discovery dialog** (`startup-discovered-device-*`, shown after
-startup/resume discovery finds devices while no configured device is reachable):
+startup/resume discovery completes while no configured device is reachable):
 Use — button — `startup-use-discovered-device-*` — R✅ I✅ ; Save — button —
 `startup-save-discovered-device-*` — R✅ I✅ ; password entry — password/buttons
 — `startup-device-password-*` — R✅ I✅ `[only for password-protected devices]` ;
+manual host/IP — text input — `startup-manual-device-host-input` — R✅ I✅
+`[when discovery finds no devices]` ; manual Connect — button —
+`startup-manual-device-connect` — R✅ I✅ `[when discovery finds no devices]` ;
 Open Settings — button — `startup-device-discovery-open-settings` — R✅ I✅ ;
 Not now / Close — buttons — `startup-device-discovery-dismiss`,
 `startup-device-discovery-close` — R✅ I✅.

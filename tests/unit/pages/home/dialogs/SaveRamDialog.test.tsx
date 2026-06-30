@@ -271,13 +271,7 @@ describe("SaveRamDialog — CPU+RAM option & limitation note", () => {
     const onSaveCpu = vi.fn();
     const onOpenChange = vi.fn();
     render(
-      <SaveRamDialog
-        open={true}
-        onOpenChange={onOpenChange}
-        onSave={vi.fn()}
-        onSaveCpu={onSaveCpu}
-        isSaving={false}
-      />,
+      <SaveRamDialog open={true} onOpenChange={onOpenChange} onSave={vi.fn()} onSaveCpu={onSaveCpu} isSaving={false} />,
     );
 
     fireEvent.click(screen.getByTestId("save-ram-type-cpu"));
@@ -287,9 +281,7 @@ describe("SaveRamDialog — CPU+RAM option & limitation note", () => {
   });
 
   it("disables the CPU+RAM option while a save is in flight", () => {
-    render(
-      <SaveRamDialog open={true} onOpenChange={vi.fn()} onSave={vi.fn()} onSaveCpu={vi.fn()} isSaving={true} />,
-    );
+    render(<SaveRamDialog open={true} onOpenChange={vi.fn()} onSave={vi.fn()} onSaveCpu={vi.fn()} isSaving={true} />);
     expect(screen.getByTestId("save-ram-type-cpu")).toBeDisabled();
   });
 

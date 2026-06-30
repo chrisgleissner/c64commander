@@ -8,13 +8,7 @@ import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import type { PlaylistItem } from "./types";
 
 export type PlaylistRepositoryPhase =
-  | "IDLE"
-  | "SCANNING"
-  | "INGESTING"
-  | "COMMITTING"
-  | "BACKGROUND_COMMITTING"
-  | "READY"
-  | "ERROR";
+  "IDLE" | "SCANNING" | "INGESTING" | "COMMITTING" | "BACKGROUND_COMMITTING" | "READY" | "ERROR";
 
 export type PlaylistRepositorySyncSnapshot = {
   playlistId: string;

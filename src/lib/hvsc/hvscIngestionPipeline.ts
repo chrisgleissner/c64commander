@@ -11,13 +11,7 @@ import { addErrorLog, addLog } from "@/lib/logging";
 // ── Pipeline state machine ───────────────────────────────────────
 
 export type HvscPipelineState =
-  | "IDLE"
-  | "DOWNLOADING"
-  | "DOWNLOADED"
-  | "EXTRACTING"
-  | "EXTRACTED"
-  | "INGESTING"
-  | "READY";
+  "IDLE" | "DOWNLOADING" | "DOWNLOADED" | "EXTRACTING" | "EXTRACTED" | "INGESTING" | "READY";
 
 export type PipelineStateMachine = {
   transition: (next: HvscPipelineState, details?: Record<string, unknown>) => void;

@@ -441,25 +441,30 @@ describe("c64api", () => {
     expect(addErrorLogMock).toHaveBeenCalledWith("Smoke mode blocked mutating request", expect.any(Object));
   });
 
-  it("uses patched fetch on native platforms", async () => {
+  it("uses CapacitorHttp.request with native connect/read timeouts on native platforms", async () => {
+    // BUG-066: native device REST must go through CapacitorHttp.request (with a real
+    // native timeout) rather than the patched window.fetch (which sets no timeout and
+    // lets a dead pooled connection hang indefinitely after the device reboots).
     (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
     (window as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
       isNativePlatform: () => true,
     };
-    const fetchMock = getFetchMock();
-    fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ errors: [] }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
-    );
+    capacitorHttpMock.mockResolvedValue({
+      status: 200,
+      headers: { "content-type": "application/json" },
+      data: { errors: [] },
+      url: "http://c64u/v1/info",
+    });
 
     const api = new C64API("http://c64u");
     const result = await api.getInfo();
     expect(result.errors).toEqual([]);
-    expect(fetchMock).toHaveBeenCalled();
-    expect(capacitorHttpMock).not.toHaveBeenCalled();
+    expect(capacitorHttpMock).toHaveBeenCalled();
+    const requestArgs = capacitorHttpMock.mock.calls[0][0] as { connectTimeout?: number; readTimeout?: number };
+    expect(requestArgs.connectTimeout).toBeGreaterThan(0);
+    expect(requestArgs.readTimeout).toBeGreaterThan(0);
+    expect(getFetchMock()).not.toHaveBeenCalled();
   });
 
   it("does not persist runtime config updates", async () => {
@@ -508,18 +513,19 @@ describe("c64api", () => {
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
       isNativePlatform: () => true,
     };
-    const fetchMock = getFetchMock();
-    fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ errors: [] }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
-    );
+    // CapacitorHttp parses a JSON response into an object (non-string `data`); the native
+    // transport adapter must re-serialize it so the JSON parsing downstream still works.
+    capacitorHttpMock.mockResolvedValue({
+      status: 200,
+      headers: { "content-type": "application/json" },
+      data: { errors: [] },
+      url: "http://c64u/v1/version",
+    });
 
     const api = new C64API("http://c64u");
     const result = await api.getVersion();
     expect(result.errors).toEqual([]);
-    expect(fetchMock).toHaveBeenCalled();
+    expect(capacitorHttpMock).toHaveBeenCalled();
   });
 
   it("logs parse failures for invalid json responses", async () => {
@@ -549,13 +555,12 @@ describe("c64api", () => {
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
       isNativePlatform: () => true,
     };
-    const fetchMock = getFetchMock();
-    fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ errors: ["bad"] }), {
-        status: 400,
-        headers: { "content-type": "application/json" },
-      }),
-    );
+    capacitorHttpMock.mockResolvedValue({
+      status: 400,
+      headers: { "content-type": "application/json" },
+      data: { errors: ["bad"] },
+      url: "http://c64u/v1/info",
+    });
 
     const api = new C64API("http://c64u");
     await expect(api.getInfo()).rejects.toThrow("HTTP 400");

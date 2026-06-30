@@ -6,7 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { test, expect } from "@playwright/test";
+import { test, expect, type Locator } from "@playwright/test";
+import { dismissStartupDiscoveryDialog } from "./uiMocks";
 import { saveCoverageFromPage } from "./withCoverage";
 
 test.afterEach(async ({ page }, testInfo) => {
@@ -14,19 +15,31 @@ test.afterEach(async ({ page }, testInfo) => {
 });
 
 test("verify comprehensive user tracing", async ({ page }) => {
+  const isLocatorVisible = async (locator: Locator, label: string) => {
+    try {
+      return await locator.isVisible();
+    } catch (error) {
+      console.warn(`Unable to inspect ${label}.`, error);
+      return false;
+    }
+  };
+
   const waitForBackdropToClear = async () => {
     const backdrop = page.locator('div[data-state="open"][aria-hidden="true"][data-aria-hidden="true"]').last();
-    if (await backdrop.isVisible().catch(() => false)) {
-      // Press Escape as a last-resort fallback to dismiss any overlay whose
-      // close button wasn't found by dismissBlockingDialogIfPresent.
+    if (await isLocatorVisible(backdrop, "open modal backdrop")) {
       await page.keyboard.press("Escape");
       await expect(backdrop).toBeHidden({ timeout: 10000 });
     }
   };
 
   const dismissBlockingDialogIfPresent = async () => {
+    if (await dismissStartupDiscoveryDialog(page)) {
+      await waitForBackdropToClear();
+      return;
+    }
+
     const continueInDemoMode = page.getByRole("button", { name: /continue in demo mode/i }).first();
-    if (await continueInDemoMode.isVisible().catch(() => false)) {
+    if (await isLocatorVisible(continueInDemoMode, "demo mode continue button")) {
       await continueInDemoMode.click();
       await waitForBackdropToClear();
       return;
@@ -36,8 +49,16 @@ test("verify comprehensive user tracing", async ({ page }) => {
       .getByRole("dialog")
       .getByRole("button", { name: /close|dismiss|ok|cancel/i })
       .first();
-    if (await closeButton.isVisible().catch(() => false)) {
-      await closeButton.click();
+    if (await isLocatorVisible(closeButton, "generic dialog close button")) {
+      try {
+        await closeButton.click({ timeout: 5000, noWaitAfter: true });
+      } catch (error) {
+        console.warn("Generic dialog close button changed while being dismissed.", error);
+        if (!(await isLocatorVisible(page.getByRole("dialog").first(), "generic dialog after close failure"))) {
+          return;
+        }
+        await page.keyboard.press("Escape");
+      }
       await waitForBackdropToClear();
     }
   };

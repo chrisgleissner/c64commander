@@ -44,8 +44,7 @@ export interface ScopeErrorResult {
 }
 
 export type ScopeResult<T extends Record<string, unknown> = Record<string, unknown>> =
-  | ScopeOkResult<T>
-  | ScopeErrorResult;
+  ScopeOkResult<T> | ScopeErrorResult;
 
 export type ScopeToolResponse = CallToolResult;
 

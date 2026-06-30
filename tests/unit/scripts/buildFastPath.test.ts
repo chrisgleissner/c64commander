@@ -104,6 +104,21 @@ describe("build fast path helper", () => {
     ]);
   });
 
+  it("marks only helper-injected debug saved devices for test cleanup", () => {
+    const result = runBash(
+      [
+        `source ${JSON.stringify(helperPath)}`,
+        "HELPER_INJECTED_DEFAULT_DEBUG_SAVED_DEVICES=false",
+        "should_unset_helper_debug_saved_devices_for_tests && echo unset || echo keep",
+        "HELPER_INJECTED_DEFAULT_DEBUG_SAVED_DEVICES=true",
+        "should_unset_helper_debug_saved_devices_for_tests && echo unset || echo keep",
+      ].join("\n"),
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim().split("\n")).toEqual(["keep", "unset"]);
+  });
+
   it("disables npm install and formatting for the fast local apk install path when dependencies are current", () => {
     const repoRoot = makeRepoFixture();
     const script = [

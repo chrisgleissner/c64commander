@@ -77,6 +77,7 @@ import { TransmissionGuard, type SupportedC64FileType, type TransmissionValidati
 import { collectTraceHeaders } from "@/lib/tracing/payloadPreview";
 import { notifyReachable } from "@/lib/connection/reachabilityEvents";
 import { getLifecycleState } from "@/lib/appLifecycle";
+import { CapacitorHttp } from "@capacitor/core";
 
 // A request that fails with a generic network/timeout class while the app is
 // in the background is almost always the WebView/Capacitor pausing the request
@@ -331,6 +332,110 @@ const fetchWithSignalCompatibility = async (
     }
     throw error;
   }
+};
+
+// Statuses whose responses must not carry a body; the Response constructor throws
+// ("Response with null body status cannot have body") if we pass one.
+const NULL_BODY_HTTP_STATUSES = new Set([101, 103, 204, 205, 304]);
+
+// Decode the binary body CapacitorHttp returns for a responseType:"arraybuffer" request
+// (base64 string on native; raw byte array as a defensive fallback). Mirrors the
+// production-proven decoder in src/lib/archive/client.ts (kept inline to avoid coupling
+// the device API client to the archive module). `atob` performs forgiving-base64 decode,
+// so the line-wrapped Android Base64.DEFAULT output decodes correctly.
+const decodeNativeBase64ToArrayBuffer = (value: unknown): ArrayBuffer => {
+  if (value instanceof ArrayBuffer) return value;
+  if (Array.isArray(value)) return Uint8Array.from(value as number[]).buffer;
+  if (typeof value === "string") {
+    if (typeof atob === "function") {
+      const decoded = atob(value);
+      return Uint8Array.from(decoded, (char) => char.charCodeAt(0)).buffer;
+    }
+    return Uint8Array.from(Buffer.from(value, "base64")).buffer as ArrayBuffer;
+  }
+  return new ArrayBuffer(0);
+};
+
+// Native device REST transport.
+//
+// On native platforms the Capacitor-patched `window.fetch` routes through the native
+// HTTP client (Android: OkHttp-backed HttpURLConnection) but it neither forwards a
+// connect/read timeout (the underlying timeout therefore defaults to 0 = infinite) nor
+// lets us control the `Connection` header (it is stripped/managed by the stack, so the
+// wire is always keep-alive). Connections are consequently pooled and reused. When the
+// device's TCP endpoint silently goes away — e.g. it is rebooted and its fresh stack no
+// longer knows the old socket, sending no RST — a request that reuses such a pooled
+// connection blocks forever at the native read. The JS-level AbortSignal/timeout rejects
+// the JS promise but cannot cancel the native read, so the dead connection is never
+// marked broken: OkHttp keeps handing it back out and every probe times out. The device
+// looks offline until the OS finally tears the half-open socket down (~30s) or the app is
+// restarted (a fresh process starts with an empty pool) — which is exactly why a
+// fresh-process CLI health check succeeds while the running app stays wedged.
+//
+// Calling CapacitorHttp.request directly lets us set a real native connect/read timeout.
+// A reused-but-dead connection now fails fast with a socket timeout; OkHttp evicts it and
+// the next request opens a fresh connection, so the app recovers on its own within a probe
+// cycle instead of staying offline until a restart. (BUG-066)
+const capacitorHttpDeviceFetch = async (
+  url: string,
+  init: { method?: string; headers?: Record<string, string>; body?: BodyInit | null },
+  timeoutMs: number,
+  responseType: "json" | "arraybuffer" = "json",
+): Promise<Response> => {
+  const method = (init.method || "GET").toUpperCase();
+  const headers = init.headers ?? {};
+  let native: { status: number; headers?: Record<string, string>; data?: unknown };
+  try {
+    native = await CapacitorHttp.request({
+      url,
+      method,
+      headers,
+      ...(init.body != null ? { data: init.body } : {}),
+      connectTimeout: timeoutMs,
+      readTimeout: timeoutMs,
+      responseType,
+    });
+  } catch (error) {
+    // Normalize to the shape the patched WebFetch produces on a transport error so the
+    // downstream classification / circuit-breaker / retry logic stays unchanged.
+    const message = error instanceof Error ? error.message : String(error ?? "");
+    throw new Error(
+      /time\s?d?\s?out|timeout/i.test(message)
+        ? `Failed to fetch: timed out (${message})`
+        : `Failed to fetch (${message})`,
+    );
+  }
+
+  const responseHeaders = new Headers();
+  for (const [key, value] of Object.entries((native.headers ?? {}) as Record<string, string>)) {
+    if (value != null) responseHeaders.set(key, String(value));
+  }
+  const status = native.status;
+  const data = native.data;
+
+  // Binary responses (responseType "arraybuffer") come back as a base64 string we decode
+  // to the original bytes. CapacitorHttp still parses a JSON content-type into an object
+  // even when arraybuffer was requested, so an object here is the JSON path (e.g. an error
+  // body or readMemory's JSON fallback) — fall through to the JSON branch below.
+  if (responseType === "arraybuffer" && typeof data === "string") {
+    return new Response(NULL_BODY_HTTP_STATUSES.has(status) ? null : decodeNativeBase64ToArrayBuffer(data), {
+      status,
+      statusText: "",
+      headers: responseHeaders,
+    });
+  }
+
+  // CapacitorHttp parses JSON bodies into an object; mirror the on-wire content type so
+  // the JSON parsing in parseResponseJson/inspectResponsePayload accepts the body.
+  const body = typeof data === "string" ? data : JSON.stringify(data ?? {});
+  if (typeof data !== "string" && !responseHeaders.has("content-type")) {
+    responseHeaders.set("content-type", "application/json");
+  }
+  return new Response(NULL_BODY_HTTP_STATUSES.has(status) ? null : body, {
+    status,
+    statusText: "",
+    headers: responseHeaders,
+  });
 };
 
 const parseHttpStatusFromErrorMessage = (message: string) => {
@@ -1265,16 +1370,24 @@ export class C64API {
                 }
 
                 // Keep C64U REST calls stateless and avoid cookie bridge churn on native startup.
+                // Native direct-device requests go through CapacitorHttp.request so we can set a
+                // real native connect/read timeout; the patched window.fetch sets none, which lets a
+                // reused-but-dead pooled connection hang indefinitely after the device reboots (see
+                // capacitorHttpDeviceFetch). Web/proxy transports keep the standard fetch path.
+                const useNativeDeviceTransport =
+                  isNativePlatform() && !baseUrl.includes(WEB_PROXY_PATH) && !isLocalProxy(baseUrl);
                 const response = await awaitPromiseWithAbortSignal(
-                  fetchWithSignalCompatibility(
-                    url,
-                    {
-                      ...requestOptions,
-                      headers,
-                      credentials: requestOptions.credentials ?? "omit",
-                    },
-                    timedSignal.signal,
-                  ),
+                  useNativeDeviceTransport
+                    ? capacitorHttpDeviceFetch(url, { method, headers, body: requestOptions.body }, requestTimeoutMs)
+                    : fetchWithSignalCompatibility(
+                        url,
+                        {
+                          ...requestOptions,
+                          headers,
+                          credentials: requestOptions.credentials ?? "omit",
+                        },
+                        timedSignal.signal,
+                      ),
                   timedSignal.signal,
                 );
                 throwIfSuperseded();
@@ -1572,12 +1685,24 @@ export class C64API {
 
   private async fetchWithTimeout(
     url: string,
-    options: RequestInit & { __c64uIntent?: InteractionIntent; __c64uTraceSuppressed?: boolean },
+    options: RequestInit & {
+      __c64uIntent?: InteractionIntent;
+      __c64uTraceSuppressed?: boolean;
+      // Opt-in (readMemory only): bodyless native GET whose binary response should be
+      // fetched via CapacitorHttp.request so it gets a real native read timeout. Body
+      // carrying callers (uploads / writeMemoryBlock) deliberately do NOT set this and
+      // keep the battle-tested patched-fetch marshalling untouched.
+      __c64uNativeArrayBufferResponse?: boolean;
+    },
     timeoutMs?: number,
   ): Promise<Response> {
     const intent = options.__c64uIntent ?? "user";
     options.__c64uTraceSuppressed = true;
     delete (options as { __c64uIntent?: InteractionIntent }).__c64uIntent;
+    const nativeArrayBufferResponse = Boolean(
+      (options as { __c64uNativeArrayBufferResponse?: boolean }).__c64uNativeArrayBufferResponse,
+    );
+    delete (options as { __c64uNativeArrayBufferResponse?: boolean }).__c64uNativeArrayBufferResponse;
     const body = options.body;
 
     const method = (options.method || "GET").toString().toUpperCase();
@@ -1632,17 +1757,34 @@ export class C64API {
 
           // Keep upload/control calls stateless to avoid cookie bridge lookups.
           const timedSignal = createTimedRequestSignal(options.signal ?? undefined, timeoutMs);
+          // Only a bodyless native direct-device GET (readMemory) is routed through
+          // CapacitorHttp.request, for the native read timeout (see capacitorHttpDeviceFetch
+          // / BUG-066). The `normalizedBody.body == null` guard guarantees no body-carrying
+          // upload ever takes this path, so their patched-fetch marshalling is untouched.
+          const useNativeArrayBufferTransport =
+            nativeArrayBufferResponse &&
+            normalizedBody.body == null &&
+            isNativePlatform() &&
+            !url.includes(WEB_PROXY_PATH) &&
+            !isLocalProxy(url);
           try {
             const response = await awaitPromiseWithAbortSignal(
-              fetchWithSignalCompatibility(
-                url,
-                {
-                  ...options,
-                  body: normalizedBody.body,
-                  credentials: options.credentials ?? "omit",
-                },
-                timedSignal.signal,
-              ),
+              useNativeArrayBufferTransport
+                ? capacitorHttpDeviceFetch(
+                    url,
+                    { method, headers: options.headers as Record<string, string> | undefined },
+                    timeoutMs ?? CONTROL_REQUEST_TIMEOUT_MS,
+                    "arraybuffer",
+                  )
+                : fetchWithSignalCompatibility(
+                    url,
+                    {
+                      ...options,
+                      body: normalizedBody.body,
+                      credentials: options.credentials ?? "omit",
+                    },
+                    timedSignal.signal,
+                  ),
               timedSignal.signal,
             );
             if (response.ok) {
@@ -2095,7 +2237,15 @@ export class C64API {
     };
     const response = await this.fetchWithTimeout(
       url,
-      { headers, signal: options.signal, __c64uIntent: options.__c64uIntent },
+      {
+        headers,
+        signal: options.signal,
+        __c64uIntent: options.__c64uIntent,
+        // Bodyless GET: route through CapacitorHttp.request on native so the binary read
+        // gets a real native read timeout and a dead pooled connection is evicted after a
+        // device reboot instead of hanging (BUG-066).
+        __c64uNativeArrayBufferResponse: true,
+      },
       options.timeoutMs ?? CONTROL_REQUEST_TIMEOUT_MS,
     );
     if (!response.ok) {

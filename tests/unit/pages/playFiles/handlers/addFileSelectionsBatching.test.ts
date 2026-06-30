@@ -718,7 +718,8 @@ describe("addFileSelections — c64u (ultimate) songlengths auto-read", () => {
     // its updater, so emulate the real setState here.
     let progressState: { message?: string } = { message: "Scanning…" };
     deps.setAddItemsProgress = vi.fn((updater: unknown) => {
-      progressState = typeof updater === "function" ? (updater as (p: unknown) => never)(progressState) : (updater as never);
+      progressState =
+        typeof updater === "function" ? (updater as (p: unknown) => never)(progressState) : (updater as never);
     });
 
     const source = createUltimateSource(async () => [

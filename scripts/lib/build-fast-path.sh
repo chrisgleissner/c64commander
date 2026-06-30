@@ -14,6 +14,10 @@ build_debug_saved_devices_bootstrap_json() {
 EOF
 }
 
+should_unset_helper_debug_saved_devices_for_tests() {
+  [[ "${HELPER_INJECTED_DEFAULT_DEBUG_SAVED_DEVICES:-false}" == "true" ]]
+}
+
 dependencies_are_current() {
   local repo_root="$1"
   local top_snapshot="$repo_root/node_modules/.package-lock.json"

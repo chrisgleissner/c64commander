@@ -113,8 +113,7 @@ const definitionFor = (id: FeatureFlagId): FeatureFlagDefinition => {
     throw new Error(`Unknown feature flag id: ${id}`);
   }
   const variantOverride = variant.featureFlags[id] as
-    | Pick<FeatureFlagDefinition, "enabled" | "visible_to_user" | "developer_only">
-    | undefined;
+    Pick<FeatureFlagDefinition, "enabled" | "visible_to_user" | "developer_only"> | undefined;
   return variantOverride ? { ...definition, ...variantOverride } : definition;
 };
 
