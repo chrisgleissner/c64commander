@@ -291,6 +291,9 @@ jobs:
             npm run build
           fi
 
+      - name: Resolve Playwright version metadata
+        run: bash scripts/resolve-version.sh
+
       - name: Install tesseract-ocr
         run: |
           if command -v sudo >/dev/null 2>&1; then
@@ -432,6 +435,9 @@ jobs:
             echo "coverage instrumentation missing; rebuilding with coverage instrumentation"
             VITE_COVERAGE=true VITE_ENABLE_TEST_PROBES=1 npm run build
           fi
+
+      - name: Resolve Playwright version metadata
+        run: bash scripts/resolve-version.sh
 
       - name: Install tesseract-ocr
         run: |
