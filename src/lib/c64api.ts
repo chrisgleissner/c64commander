@@ -77,6 +77,7 @@ import { TransmissionGuard, type SupportedC64FileType, type TransmissionValidati
 import { collectTraceHeaders } from "@/lib/tracing/payloadPreview";
 import { notifyReachable } from "@/lib/connection/reachabilityEvents";
 import { getLifecycleState } from "@/lib/appLifecycle";
+import { CapacitorHttp } from "@capacitor/core";
 
 // A request that fails with a generic network/timeout class while the app is
 // in the background is almost always the WebView/Capacitor pausing the request
@@ -331,6 +332,78 @@ const fetchWithSignalCompatibility = async (
     }
     throw error;
   }
+};
+
+// Statuses whose responses must not carry a body; the Response constructor throws
+// ("Response with null body status cannot have body") if we pass one.
+const NULL_BODY_HTTP_STATUSES = new Set([101, 103, 204, 205, 304]);
+
+// Native device REST transport.
+//
+// On native platforms the Capacitor-patched `window.fetch` routes through the native
+// HTTP client (Android: OkHttp-backed HttpURLConnection) but it neither forwards a
+// connect/read timeout (the underlying timeout therefore defaults to 0 = infinite) nor
+// lets us control the `Connection` header (it is stripped/managed by the stack, so the
+// wire is always keep-alive). Connections are consequently pooled and reused. When the
+// device's TCP endpoint silently goes away — e.g. it is rebooted and its fresh stack no
+// longer knows the old socket, sending no RST — a request that reuses such a pooled
+// connection blocks forever at the native read. The JS-level AbortSignal/timeout rejects
+// the JS promise but cannot cancel the native read, so the dead connection is never
+// marked broken: OkHttp keeps handing it back out and every probe times out. The device
+// looks offline until the OS finally tears the half-open socket down (~30s) or the app is
+// restarted (a fresh process starts with an empty pool) — which is exactly why a
+// fresh-process CLI health check succeeds while the running app stays wedged.
+//
+// Calling CapacitorHttp.request directly lets us set a real native connect/read timeout.
+// A reused-but-dead connection now fails fast with a socket timeout; OkHttp evicts it and
+// the next request opens a fresh connection, so the app recovers on its own within a probe
+// cycle instead of staying offline until a restart. (BUG-066)
+const capacitorHttpDeviceFetch = async (
+  url: string,
+  init: { method?: string; headers?: Record<string, string>; body?: BodyInit | null },
+  timeoutMs: number,
+): Promise<Response> => {
+  const method = (init.method || "GET").toUpperCase();
+  const headers = init.headers ?? {};
+  let native: { status: number; headers?: Record<string, string>; data?: unknown };
+  try {
+    native = await CapacitorHttp.request({
+      url,
+      method,
+      headers,
+      ...(init.body != null ? { data: init.body } : {}),
+      connectTimeout: timeoutMs,
+      readTimeout: timeoutMs,
+      responseType: "json",
+    });
+  } catch (error) {
+    // Normalize to the shape the patched WebFetch produces on a transport error so the
+    // downstream classification / circuit-breaker / retry logic stays unchanged.
+    const message = error instanceof Error ? error.message : String(error ?? "");
+    throw new Error(
+      /time\s?d?\s?out|timeout/i.test(message)
+        ? `Failed to fetch: timed out (${message})`
+        : `Failed to fetch (${message})`,
+    );
+  }
+
+  const responseHeaders = new Headers();
+  for (const [key, value] of Object.entries((native.headers ?? {}) as Record<string, string>)) {
+    if (value != null) responseHeaders.set(key, String(value));
+  }
+  // CapacitorHttp parses JSON bodies into an object; mirror the on-wire content type so
+  // the JSON parsing in parseResponseJson/inspectResponsePayload accepts the body.
+  const data = native.data;
+  const body = typeof data === "string" ? data : JSON.stringify(data ?? {});
+  if (typeof data !== "string" && !responseHeaders.has("content-type")) {
+    responseHeaders.set("content-type", "application/json");
+  }
+  const status = native.status;
+  return new Response(NULL_BODY_HTTP_STATUSES.has(status) ? null : body, {
+    status,
+    statusText: "",
+    headers: responseHeaders,
+  });
 };
 
 const parseHttpStatusFromErrorMessage = (message: string) => {
@@ -1265,16 +1338,24 @@ export class C64API {
                 }
 
                 // Keep C64U REST calls stateless and avoid cookie bridge churn on native startup.
+                // Native direct-device requests go through CapacitorHttp.request so we can set a
+                // real native connect/read timeout; the patched window.fetch sets none, which lets a
+                // reused-but-dead pooled connection hang indefinitely after the device reboots (see
+                // capacitorHttpDeviceFetch). Web/proxy transports keep the standard fetch path.
+                const useNativeDeviceTransport =
+                  isNativePlatform() && !baseUrl.includes(WEB_PROXY_PATH) && !isLocalProxy(baseUrl);
                 const response = await awaitPromiseWithAbortSignal(
-                  fetchWithSignalCompatibility(
-                    url,
-                    {
-                      ...requestOptions,
-                      headers,
-                      credentials: requestOptions.credentials ?? "omit",
-                    },
-                    timedSignal.signal,
-                  ),
+                  useNativeDeviceTransport
+                    ? capacitorHttpDeviceFetch(url, { method, headers, body: requestOptions.body }, requestTimeoutMs)
+                    : fetchWithSignalCompatibility(
+                        url,
+                        {
+                          ...requestOptions,
+                          headers,
+                          credentials: requestOptions.credentials ?? "omit",
+                        },
+                        timedSignal.signal,
+                      ),
                   timedSignal.signal,
                 );
                 throwIfSuperseded();

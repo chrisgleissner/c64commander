@@ -1,6 +1,6 @@
 # C64 Commander Manual
 
-Connect, control, play, mount, and diagnose a Commodore 64 Ultimate.
+Connect, control, play, mount, and diagnose a Commodore 64 Ultimate, Ultimate 64, Ultimate 64 Elite, Ultimate 64 Elite II, or Ultimate-II+(L).
 
 ![C64 Commander launch screen](../../img/app/launch/profiles/medium/04-app-ready.png)
 
@@ -20,7 +20,7 @@ Connect, control, play, mount, and diagnose a Commodore 64 Ultimate.
 
 ## Welcome
 
-C64 Commander controls a Commodore 64 Ultimate from one app.
+C64 Commander controls a Commodore 64 Ultimate, Ultimate 64, Ultimate 64 Elite, Ultimate 64 Elite II, or Ultimate-II+(L) from one app.
 
 The main jobs are:
 
@@ -32,23 +32,29 @@ Start with the walkthrough if you are new to the app. Use the reference sections
 
 ## Before You Start
 
-Connection has three parts: the app device, the C64 Ultimate, and the local network between them.
+### Supported Machines
 
-Put the device running the app and the C64 Ultimate on the same Wi-Fi or wired LAN. Then open **Network Services & Timezone** on the C64 Ultimate.
+C64 Commander is the broad edition. It works with the Commodore 64 Ultimate, Ultimate 64, Ultimate 64 Elite, Ultimate 64 Elite II, and Ultimate-II+(L).
+
+The app may call the device-file source **C64U** in lists and pickers. In that place, read it as storage on the connected Ultimate-family device, reached through FTP.
+
+Connection has three parts: the app device, the connected Ultimate-family device, and the local network between them.
+
+Put the device running the app and the connected Ultimate-family device on the same Wi-Fi or wired LAN. Then open **Network Services & Timezone** on the target device.
 
 ![C64 Ultimate Network Services & Timezone menu](../../img/setup/enable_services.png)
 
 Enable the services the app uses:
 
 - **Web Remote Control Service**: required for most control and status operations.
-- **FTP File Service**: needed for C64U file browsing, playlists, and disk collections.
+- **FTP File Service**: needed for device file browsing, playlists, and disk collections.
 - **Telnet Remote Menu Service**: used for advanced menu-backed actions when those actions are enabled.
 
-Note the IP address under **Wired Network Setup** or **WI-FI Network Setup**. You may need it if local discovery cannot see the device.
+Note the IP address under **Wired Network Setup** or **WI-FI Network Setup**. You may need it if local discovery cannot see the target device.
 
 ## First Connection
 
-Start C64 Commander. If no saved device is reachable, it scans the local network for C64 Ultimate devices.
+Start C64 Commander. If no saved device is reachable, it scans the local network for supported devices.
 
 If devices are found:
 
@@ -58,7 +64,7 @@ If devices are found:
 
 If no devices are found, C64 Commander opens a manual setup prompt.
 
-Enter a hostname such as `c64u` or an IP address such as `192.168.1.64`, then choose **Connect**. If the device answers but requires a password, the same dialog asks for it before saving and connecting.
+Enter a hostname such as `c64u`, `u64`, or `u2`, or an IP address such as `192.168.1.64`, then choose **Connect**. If the device answers but requires a password, the same dialog asks for it before saving and connecting.
 
 A healthy badge at the top right confirms that the active device is responding. You can scan again later from **Settings > Connection > Discover devices**.
 
@@ -78,7 +84,7 @@ Start at the top. The system strip confirms which app build, device, and firmwar
 
 Keep moving down and you reach Quick Config. These are the settings you are likely to touch in the middle of a session: CPU speed, RAM expansion, joystick swap, serial bus mode, video output, scan lines, or interface behavior.
 
-The lower cards cover drives, printer, SID mixer, streams, and configuration actions. **Save to flash** writes changed device settings to the C64 Ultimate flash configuration.
+The lower cards cover drives, printer, SID mixer, streams, and configuration actions. **Save to flash** writes the current device settings to flash on the connected Ultimate-family device when you need an explicit save.
 
 ### Play
 
@@ -146,9 +152,9 @@ Config is the complete configuration tree.
 
 Search for a category, open it, and edit rows directly. The app chooses the right control for each item: slider, switch, select, or text field.
 
-A change is sent to the active device immediately. The firmware applies it and marks the changed configuration store as needing a flash save.
+A change is sent to the active device immediately. The firmware applies it at once.
 
-Use **Save to flash** when the changed device settings should survive a device reboot or power cycle. Until then, they are active for the running device configuration but not written to flash.
+Use **Save to flash** when **Auto save config** is **Ask** or **No**, or when you want to force a flash save now. To make configuration changes save themselves, set **Auto save config** to **Yes**. On a Commodore 64 Ultimate, set it at **C= + RESTORE > User interface > Auto save config**. C64 Commander mirrors that menu in Config as **User interface > Auto save config**. On other supported devices, search Config for **Auto Save Config** if the menu naming differs.
 
 Use Config when you know the setting exists but not where the device menu hides it. Search reduces the tree to matching categories and rows. After changing a value, wait for the write to finish before changing another related setting.
 
@@ -192,7 +198,7 @@ The Share action packages useful evidence. Use it before restarting the app if y
 
 ### Device Switching
 
-Device Switcher is for homes with more than one saved C64 Ultimate.
+Device Switcher is for homes with more than one saved Ultimate-family device.
 
 ![Device switcher](../../img/app/diagnostics/switch-device/profiles/medium/01-picker.png)
 
@@ -238,7 +244,7 @@ Preferred path: Home Quick Actions. Use Diagnostics only if the device does not 
 4. Select files or folders.
 5. Confirm and press Play.
 
-Preferred path: Play. Use C64U source for files already on the device; use Local for files on the Android device.
+Preferred path: Play. Use C64U source for files already on the target device; use Local for files on the Android device.
 
 ### Build a Playlist from Folders
 
@@ -313,18 +319,20 @@ Preferred path: adjust drive setup before mounting.
 1. Try **Home > Quick Config** first.
 2. If the setting is not there, open **Config** and search.
 3. Change the value.
-4. Use **Save to flash** if the change should survive a device reboot or power cycle.
+4. Use **Save to flash** if **Auto save config** is **Ask** or **No** and the change should survive a device reboot or power cycle.
 
 Preferred path: Home for common settings; Config for the full tree.
 
 ### Save Device Configuration
+
+Use this flow when **Auto save config** is **Ask** or **No**, or when you want to force a flash save now.
 
 1. Make the changes you need on Home or Config.
 2. Confirm the device is healthy.
 3. Open **Home > Config actions**.
 4. Choose **Save to flash**.
 
-Preferred path: change first, then save once. Avoid repeated flash writes while experimenting.
+Preferred path: set **Auto save config** to **Yes** when you want the firmware to save changes automatically. On a Commodore 64 Ultimate, set it at **C= + RESTORE > User interface > Auto save config**. C64 Commander mirrors that menu in Config as **User interface > Auto save config**. On other supported devices, search Config for **Auto Save Config** if the menu naming differs.
 
 ### Investigate a Problem
 
@@ -346,14 +354,15 @@ Preferred path: Share before restart when you are trying to preserve evidence.
 
 ## Safe Device Use
 
-C64 Commander uses normal REST, FTP, and Telnet requests, but C64 Ultimate firmware can still become unresponsive under some network conditions. The app reduces risk by pacing traffic and surfacing errors.
+C64 Commander uses normal REST, FTP, and Telnet requests, but the connected Ultimate-family device firmware can still become unresponsive under some network conditions. The app reduces risk by pacing traffic and surfacing errors.
 
 Good habits:
 
 - avoid repeating the same command while the device is already busy;
 - use Device Safety presets instead of raising concurrency aggressively;
-- prefer Conservative when testing unstable firmware or Wi-Fi;
-- power-cycle the C64 Ultimate if all TCP services stop responding while ping still works.
+- choose Balanced only for Ultimate 64-family firmware newer than 3.15;
+- choose Conservative for older firmware, unknown firmware, Wi-Fi, or a first setup;
+- power-cycle the target device if all TCP services stop responding while ping still works.
 
 The CPU speed setting can briefly drop the network while the device applies a clock change. Wait for the app to reconnect.
 
@@ -389,7 +398,7 @@ Some controls appear only when the connected device reports support. Others are 
 
 ### Device stops answering
 
-Open Diagnostics if possible and check recent REST/FTP/Telnet activity. If HTTP, FTP, and Telnet all refuse connections while ping still works, manually power-cycle the C64 Ultimate.
+Open Diagnostics if possible and check recent REST/FTP/Telnet activity. If HTTP, FTP, and Telnet all refuse connections while ping still works, manually power-cycle the connected Ultimate-family device.
 
 ## Feature Reference
 
@@ -414,7 +423,7 @@ Preferred locations are marked first.
 | Printer controls | **Home > Printer**, Config | Home is preferred. |
 | SID mixer | **Home > SID / Audio mixer**, Config > Audio Mixer | Home is preferred for live mixing. |
 | Streams | **Home > Streams**, Config | Visible when the device exposes streaming support. |
-| Save/load device config | **Home > Config actions** | Use Save to flash when device settings should survive a reboot or power cycle. |
+| Save/load device config | **Home > Config actions** | Use Save to flash when Auto save config is Ask or No, or when you want to force a flash save now. |
 | App-stored config snapshots | **Home > Config actions** | Local app snapshots, separate from device flash. |
 | Advanced config file actions | **Home > Config actions** | Optional. Enable it in Settings > Experimental Features. |
 | Advanced drive shortcuts | **Home > Drives** | Optional. Enable it in Settings > Experimental Features. |
@@ -427,7 +436,7 @@ Preferred locations are marked first.
 | Demo Mode | **Settings > Connection** | Optional. Enable it in Settings > Stable Features. |
 | Background playback scheduling | **Play**, Android app permissions | Always enabled in this variant. |
 | Display profile and theme | **Settings > Appearance** | Medium screenshots in this manual match this guide's presentation. |
-| Device Safety | **Settings > Device Safety** | Use Balanced normally; Conservative for unstable networks. |
+| Device Safety | **Settings > Device Safety** | Use Balanced for Ultimate 64-family devices when they run firmware newer than 3.15, where the relevant fixes are available from nightly builds. Otherwise use Conservative. |
 | Diagnostics | **Header badge / `*`**, Settings > Diagnostics | Badge is preferred for fast access. |
 | Logs, traces, errors, health checks | **Diagnostics** | Use filters and Share for support. |
 | Built-in help | **Docs** | Good for quick reminders inside the app. |
@@ -477,7 +486,7 @@ Press Menu when no focused control has its own menu. The Quick Menu offers page 
 | Source | Used in | Meaning |
 | --- | --- | --- |
 | Local | Play, Disks | Files and folders available to the Android device running the app. |
-| C64U | Play, Disks | Files on the C64 Ultimate through FTP. |
+| C64U | Play, Disks | Files on the connected Ultimate-family device through FTP. |
 | HVSC | Play | On by default. You can change it in Settings > Stable Features. SID library browsing after preparation. |
 | CommoServe | Play, Disks | On by default. You can change it in Settings > Stable Features. Online archive search. |
 
@@ -491,6 +500,6 @@ Supported playback/import types include SID, MOD, PRG, CRT, D64, G64, D71, G71, 
 | Degraded badge | Some check or recent activity suggests trouble. | Open Diagnostics. |
 | Unhealthy badge | The selected device is not responding correctly. | Run a health check; verify network services. |
 | Offline state | No live connection is active. | Use discovery, manual host entry, or Settings > Connection. |
-| 401/403 password prompt | The device requires its network password. | Enter the C64 Ultimate network password. |
-| TCP refused while ping works | The C64 Ultimate TCP stack may be wedged. | Stop traffic and power-cycle the device. |
+| 401/403 password prompt | The device requires its network password. | Enter the target device network password. |
+| TCP refused while ping works | The target device TCP stack may be wedged. | Stop traffic and power-cycle the device. |
 | CPU-speed network drop | Firmware may briefly drop network while applying clock changes. | Wait for reconnect before changing more settings. |

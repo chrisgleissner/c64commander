@@ -214,6 +214,79 @@ const featureAvailability = (feature) => {
 
 const includeFeature = (features, id) => Boolean(features[id]?.isMentionable);
 
+const isC64uRemoteVariant = (variant) => variant.id === "c64u-remote";
+
+const targetDeviceDescription = (variant) =>
+  isC64uRemoteVariant(variant)
+    ? "a Commodore 64 Ultimate"
+    : "a Commodore 64 Ultimate, Ultimate 64, Ultimate 64 Elite, Ultimate 64 Elite II, or Ultimate-II+(L)";
+
+const targetDeviceShortName = (variant) =>
+  isC64uRemoteVariant(variant) ? "the Commodore 64 Ultimate" : "the connected Ultimate-family device";
+
+const targetDevicePasswordName = (variant) =>
+  isC64uRemoteVariant(variant) ? "the Commodore 64 Ultimate network password" : "the target device network password";
+
+const t9HostnameExamples = (variant) =>
+  isC64uRemoteVariant(variant)
+    ? "entries such as `c64u` and `192.168.1.64`"
+    : "entries such as `c64u`, `u64`, `u2`, and `192.168.1.64`";
+
+const supportedMachinesSection = ({ appName, variant }) =>
+  isC64uRemoteVariant(variant)
+    ? ["### Your C64 Ultimate", "", `${appName} is made for controlling a Commodore 64 Ultimate on your local network.`]
+    : [
+        "### Supported Machines",
+        "",
+        `${appName} is the broad edition. It works with the Commodore 64 Ultimate, Ultimate 64, Ultimate 64 Elite, Ultimate 64 Elite II, and Ultimate-II+(L).`,
+        "",
+        "The app may call the device-file source **C64U** in lists and pickers. In that place, read it as storage on the connected Ultimate-family device, reached through FTP.",
+      ];
+
+const deviceSafetyGuidance = (variant) =>
+  isC64uRemoteVariant(variant)
+    ? "Use Conservative as the normal starting point for C64U Remote."
+    : "Use Balanced for Ultimate 64-family devices when they run firmware newer than 3.15, where the relevant fixes are available from nightly builds. Otherwise use Conservative.";
+
+const safeDeviceUseIntro = ({ appName, variant }) =>
+  `${appName} uses normal REST, FTP, and Telnet requests, but ${targetDeviceShortName(
+    variant,
+  )} firmware can still become unresponsive under some network conditions. The app reduces risk by pacing traffic and surfacing errors.`;
+
+const safeDeviceUseHabits = (variant) =>
+  isC64uRemoteVariant(variant)
+    ? [
+        "- avoid repeating the same command while the device is already busy;",
+        "- use Device Safety presets instead of raising concurrency aggressively;",
+        "- keep Conservative selected until your Commodore 64 Ultimate and network have proved steady;",
+        "- power-cycle the Commodore 64 Ultimate if all TCP services stop responding while ping still works.",
+      ]
+    : [
+        "- avoid repeating the same command while the device is already busy;",
+        "- use Device Safety presets instead of raising concurrency aggressively;",
+        "- choose Balanced only for Ultimate 64-family firmware newer than 3.15;",
+        "- choose Conservative for older firmware, unknown firmware, Wi-Fi, or a first setup;",
+        "- power-cycle the target device if all TCP services stop responding while ping still works.",
+      ];
+
+const discoveryTargetDescription = (variant) =>
+  isC64uRemoteVariant(variant) ? "a Commodore 64 Ultimate" : "supported devices";
+
+const autoSaveConfigLocation = (variant) =>
+  isC64uRemoteVariant(variant)
+    ? "Set it on the Commodore 64 Ultimate at **C= + RESTORE > User interface > Auto save config**; the same setting appears in Config as **User interface > Auto save config**."
+    : "On a Commodore 64 Ultimate, set it at **C= + RESTORE > User interface > Auto save config**. C64 Commander mirrors that menu in Config as **User interface > Auto save config**. On other supported devices, search Config for **Auto Save Config** if the menu naming differs.";
+
+const autoSaveConfigGuidance = (variant) =>
+  `To make configuration changes save themselves, set **Auto save config** to **Yes**. ${autoSaveConfigLocation(
+    variant,
+  )}`;
+
+const saveToFlashGuidance = (variant) =>
+  `Use **Save to flash** when **Auto save config** is **Ask** or **No**, or when you want to force a flash save now. ${autoSaveConfigGuidance(
+    variant,
+  )}`;
+
 const featureRows = ({ features, variant }) => {
   const rows = [
     [
@@ -284,7 +357,7 @@ const featureRows = ({ features, variant }) => {
     [
       "Save/load device config",
       "**Home > Config actions**",
-      "Use Save to flash when device settings should survive a reboot or power cycle.",
+      "Use Save to flash when Auto save config is Ask or No, or when you want to force a flash save now.",
     ],
     ["App-stored config snapshots", "**Home > Config actions**", "Local app snapshots, separate from device flash."],
   );
@@ -346,7 +419,7 @@ const featureRows = ({ features, variant }) => {
       "**Settings > Appearance**",
       `${variant.id === "c64u-remote" ? "Compact" : "Medium"} screenshots in this manual match this guide's presentation.`,
     ],
-    ["Device Safety", "**Settings > Device Safety**", "Use Balanced normally; Conservative for unstable networks."],
+    ["Device Safety", "**Settings > Device Safety**", deviceSafetyGuidance(variant)],
     ["Diagnostics", "**Header badge / `*`**, Settings > Diagnostics", "Badge is preferred for fast access."],
     ["Logs, traces, errors, health checks", "**Diagnostics**", "Use filters and Share for support."],
     ["Built-in help", "**Docs**", "Good for quick reminders inside the app."],
@@ -355,10 +428,16 @@ const featureRows = ({ features, variant }) => {
   return rows;
 };
 
-const sourceRows = (features) => {
+const sourceRows = ({ features, variant }) => {
   const rows = [
     ["Local", "Play, Disks", "Files and folders available to the Android device running the app."],
-    ["C64U", "Play, Disks", "Files on the C64 Ultimate through FTP."],
+    [
+      "C64U",
+      "Play, Disks",
+      isC64uRemoteVariant(variant)
+        ? "Files on the Commodore 64 Ultimate through FTP."
+        : "Files on the connected Ultimate-family device through FTP.",
+    ],
   ];
   if (includeFeature(features, "hvsc_enabled")) {
     rows.push([
@@ -450,7 +529,7 @@ const renderKeyboardReference = ({ features, variant }) => {
       "4. Press `*` in host fields to cycle separators.",
       "5. Use Back to leave the field.",
       "",
-      "For hostnames, this makes entries such as `c64u`, `u64`, and `192.168.1.64` practical without a touchscreen.",
+      `For hostnames, this makes ${t9HostnameExamples(variant)} practical without a touchscreen.`,
     );
   }
 
@@ -467,7 +546,7 @@ const renderKeyboardReference = ({ features, variant }) => {
 export const renderManualMarkdown = ({ variant, features }) => {
   const appName = variant.displayName;
   const title = `${appName} Manual`;
-  const subtitle = "Connect, control, play, mount, and diagnose a Commodore 64 Ultimate.";
+  const subtitle = `Connect, control, play, mount, and diagnose ${targetDeviceDescription(variant)}.`;
   const profile = variant.id === "c64u-remote" ? "compact" : "medium";
   const sourceLabels = ["Local", "C64U"];
   if (includeFeature(features, "hvsc_enabled")) sourceLabels.push("HVSC");
@@ -502,7 +581,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "## Welcome",
     "",
-    `${appName} controls a Commodore 64 Ultimate from one app.`,
+    `${appName} controls ${targetDeviceDescription(variant)} from one app.`,
     "",
     "The main jobs are:",
     "",
@@ -514,23 +593,27 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "## Before You Start",
     "",
-    "Connection has three parts: the app device, the C64 Ultimate, and the local network between them.",
+    ...supportedMachinesSection({ appName, variant }),
     "",
-    "Put the device running the app and the C64 Ultimate on the same Wi-Fi or wired LAN. Then open **Network Services & Timezone** on the C64 Ultimate.",
+    `Connection has three parts: the app device, ${targetDeviceShortName(variant)}, and the local network between them.`,
+    "",
+    `Put the device running the app and ${targetDeviceShortName(variant)} on the same Wi-Fi or wired LAN. Then open **Network Services & Timezone** on the target device.`,
     "",
     docsImage("C64 Ultimate Network Services & Timezone menu", "setup/enable_services.png"),
     "",
     "Enable the services the app uses:",
     "",
     "- **Web Remote Control Service**: required for most control and status operations.",
-    "- **FTP File Service**: needed for C64U file browsing, playlists, and disk collections.",
+    "- **FTP File Service**: needed for device file browsing, playlists, and disk collections.",
     "- **Telnet Remote Menu Service**: used for advanced menu-backed actions when those actions are enabled.",
     "",
-    "Note the IP address under **Wired Network Setup** or **WI-FI Network Setup**. You may need it if local discovery cannot see the device.",
+    "Note the IP address under **Wired Network Setup** or **WI-FI Network Setup**. You may need it if local discovery cannot see the target device.",
     "",
     "## First Connection",
     "",
-    `Start ${appName}. If no saved device is reachable, it scans the local network for C64 Ultimate devices.`,
+    `Start ${appName}. If no saved device is reachable, it scans the local network for ${discoveryTargetDescription(
+      variant,
+    )}.`,
     "",
     "If devices are found:",
     "",
@@ -540,7 +623,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     `If no devices are found, ${appName} opens a manual setup prompt.`,
     "",
-    "Enter a hostname such as `c64u` or an IP address such as `192.168.1.64`, then choose **Connect**. If the device answers but requires a password, the same dialog asks for it before saving and connecting.",
+    isC64uRemoteVariant(variant)
+      ? "Enter a hostname such as `c64u` or an IP address such as `192.168.1.64`, then choose **Connect**. If the Commodore 64 Ultimate answers but requires a password, the same dialog asks for it before saving and connecting."
+      : "Enter a hostname such as `c64u`, `u64`, or `u2`, or an IP address such as `192.168.1.64`, then choose **Connect**. If the device answers but requires a password, the same dialog asks for it before saving and connecting.",
     "",
     "A healthy badge at the top right confirms that the active device is responding. You can scan again later from **Settings > Connection > Discover devices**.",
     "",
@@ -560,7 +645,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     `Keep moving down and you reach Quick Config. These are the settings you are likely to touch in the middle of a session: ${choiceList(quickConfigItems)}.`,
     "",
-    "The lower cards cover drives, printer, SID mixer, streams, and configuration actions. **Save to flash** writes changed device settings to the C64 Ultimate flash configuration.",
+    `The lower cards cover drives, printer, SID mixer, streams, and configuration actions. **Save to flash** writes the current device settings to flash on ${targetDeviceShortName(
+      variant,
+    )} when you need an explicit save.`,
     "",
     "### Play",
     "",
@@ -628,9 +715,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Search for a category, open it, and edit rows directly. The app chooses the right control for each item: slider, switch, select, or text field.",
     "",
-    "A change is sent to the active device immediately. The firmware applies it and marks the changed configuration store as needing a flash save.",
+    "A change is sent to the active device immediately. The firmware applies it at once.",
     "",
-    "Use **Save to flash** when the changed device settings should survive a device reboot or power cycle. Until then, they are active for the running device configuration but not written to flash.",
+    saveToFlashGuidance(variant),
     "",
     "Use Config when you know the setting exists but not where the device menu hides it. Search reduces the tree to matching categories and rows. After changing a value, wait for the write to finish before changing another related setting.",
     "",
@@ -674,7 +761,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "### Device Switching",
     "",
-    "Device Switcher is for homes with more than one saved C64 Ultimate.",
+    isC64uRemoteVariant(variant)
+      ? "Device Switcher is for homes with more than one saved Commodore 64 Ultimate."
+      : "Device Switcher is for homes with more than one saved Ultimate-family device.",
     "",
     image("Device switcher", profile, "diagnostics/switch-device/profiles/{profile}/01-picker.png"),
     "",
@@ -720,7 +809,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "4. Select files or folders.",
     "5. Confirm and press Play.",
     "",
-    "Preferred path: Play. Use C64U source for files already on the device; use Local for files on the Android device.",
+    "Preferred path: Play. Use C64U source for files already on the target device; use Local for files on the Android device.",
     "",
     "### Build a Playlist from Folders",
     "",
@@ -795,18 +884,22 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "1. Try **Home > Quick Config** first.",
     "2. If the setting is not there, open **Config** and search.",
     "3. Change the value.",
-    "4. Use **Save to flash** if the change should survive a device reboot or power cycle.",
+    "4. Use **Save to flash** if **Auto save config** is **Ask** or **No** and the change should survive a device reboot or power cycle.",
     "",
     "Preferred path: Home for common settings; Config for the full tree.",
     "",
     "### Save Device Configuration",
+    "",
+    "Use this flow when **Auto save config** is **Ask** or **No**, or when you want to force a flash save now.",
     "",
     "1. Make the changes you need on Home or Config.",
     "2. Confirm the device is healthy.",
     "3. Open **Home > Config actions**.",
     "4. Choose **Save to flash**.",
     "",
-    "Preferred path: change first, then save once. Avoid repeated flash writes while experimenting.",
+    `Preferred path: set **Auto save config** to **Yes** when you want the firmware to save changes automatically. ${autoSaveConfigLocation(
+      variant,
+    )}`,
     "",
     "### Investigate a Problem",
     "",
@@ -828,14 +921,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "## Safe Device Use",
     "",
-    `${appName} uses normal REST, FTP, and Telnet requests, but C64 Ultimate firmware can still become unresponsive under some network conditions. The app reduces risk by pacing traffic and surfacing errors.`,
+    safeDeviceUseIntro({ appName, variant }),
     "",
     "Good habits:",
     "",
-    "- avoid repeating the same command while the device is already busy;",
-    "- use Device Safety presets instead of raising concurrency aggressively;",
-    "- prefer Conservative when testing unstable firmware or Wi-Fi;",
-    "- power-cycle the C64 Ultimate if all TCP services stop responding while ping still works.",
+    ...safeDeviceUseHabits(variant),
     "",
     "The CPU speed setting can briefly drop the network while the device applies a clock change. Wait for the app to reconnect.",
     "",
@@ -871,7 +961,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "### Device stops answering",
     "",
-    "Open Diagnostics if possible and check recent REST/FTP/Telnet activity. If HTTP, FTP, and Telnet all refuse connections while ping still works, manually power-cycle the C64 Ultimate.",
+    `Open Diagnostics if possible and check recent REST/FTP/Telnet activity. If HTTP, FTP, and Telnet all refuse connections while ping still works, manually power-cycle ${targetDeviceShortName(variant)}.`,
     "",
     "## Feature Reference",
     "",
@@ -883,7 +973,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "## File and Source Reference",
     "",
-    table(["Source", "Used in", "Meaning"], sourceRows(features)),
+    table(["Source", "Used in", "Meaning"], sourceRows({ features, variant })),
     "",
     "Supported playback/import types include SID, MOD, PRG, CRT, D64, G64, D71, G71, and D81. Disk collection workflows focus on disk images: D64, G64, D71, G71, and D81.",
     "",
@@ -907,11 +997,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
         [
           "401/403 password prompt",
           "The device requires its network password.",
-          "Enter the C64 Ultimate network password.",
+          `Enter ${targetDevicePasswordName(variant)}.`,
         ],
         [
           "TCP refused while ping works",
-          "The C64 Ultimate TCP stack may be wedged.",
+          `${isC64uRemoteVariant(variant) ? "The Commodore 64 Ultimate" : "The target device"} TCP stack may be wedged.`,
           "Stop traffic and power-cycle the device.",
         ],
         [
@@ -1005,7 +1095,7 @@ export const buildManualContexts = async () => {
       markdownFile: path.join(manualDir, `${basename}.md`),
       pdfFile: path.join(manualDir, `${basename}.pdf`),
       title: `${variant.displayName} Manual`,
-      subtitle: "Connect, control, play, mount, and diagnose a Commodore 64 Ultimate.",
+      subtitle: `Connect, control, play, mount, and diagnose ${targetDeviceDescription(variant)}.`,
     });
   }
   return contexts.sort((a, b) => a.variant.id.localeCompare(b.variant.id));

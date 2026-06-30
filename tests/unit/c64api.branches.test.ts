@@ -8,6 +8,7 @@
 
 // @vitest-environment node
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { CapacitorHttp } from "@capacitor/core";
 import {
   C64API,
   getC64API,
@@ -264,6 +265,7 @@ const getCachedPasswordMock = getCachedPassword as unknown as ReturnType<typeof 
 const loadStoredPasswordMock = loadStoredPassword as unknown as ReturnType<typeof vi.fn>;
 const recordRestResponseMock = recordRestResponse as unknown as ReturnType<typeof vi.fn>;
 const recordTraceErrorMock = recordTraceError as unknown as ReturnType<typeof vi.fn>;
+const capacitorHttpMock = CapacitorHttp.request as unknown as ReturnType<typeof vi.fn>;
 
 const withNoPerformance = async (run: () => Promise<void>) => {
   const original = globalThis.performance;
@@ -299,6 +301,7 @@ describe("c64api branches", () => {
     smokeEnabledMock.mockReset();
     smokeReadOnlyMock.mockReset();
     fetchMock.mockReset();
+    capacitorHttpMock.mockReset();
     fuzzEnabledMock.mockReturnValue(false);
     fuzzSafeMock.mockReturnValue(true);
     getSmokeConfigMock.mockReturnValue(undefined);
@@ -370,28 +373,45 @@ describe("c64api branches", () => {
       headers: { "content-type": "application/json" },
     });
 
-  it("closes native direct-device REST connections without changing web or proxy requests", async () => {
+  const okNativeResponse = (body: object = { errors: [] }, status = 200) => ({
+    status,
+    headers: { "content-type": "application/json" },
+    data: body,
+  });
+
+  it("routes native direct-device REST through CapacitorHttp without changing web or proxy requests", async () => {
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(okJsonResponse());
     const api = new C64API("http://c64u");
 
     await api.getInfo({ __c64uBypassCache: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(capacitorHttpMock).not.toHaveBeenCalled();
     expect((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.headers).not.toMatchObject({
       Connection: "close",
     });
 
     (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
     fetchMock.mockClear();
-    fetchMock.mockResolvedValue(okJsonResponse());
+    capacitorHttpMock.mockResolvedValue(okNativeResponse());
     await api.getInfo({ __c64uBypassCache: true });
-    expect((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.headers).toMatchObject({
-      Connection: "close",
-    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(capacitorHttpMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: "http://c64u/v1/info",
+        method: "GET",
+        connectTimeout: expect.any(Number),
+        readTimeout: expect.any(Number),
+      }),
+    );
 
     api.setBaseUrl("http://127.0.0.1:8787/api/rest");
     fetchMock.mockClear();
+    capacitorHttpMock.mockClear();
     fetchMock.mockResolvedValue(okJsonResponse());
     await api.getInfo({ __c64uBypassCache: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(capacitorHttpMock).not.toHaveBeenCalled();
     expect((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.headers).not.toMatchObject({
       Connection: "close",
     });
@@ -894,11 +914,12 @@ describe("c64api branches", () => {
     (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
 
     const fetchMock = getFetchMock();
-    fetchMock.mockResolvedValue(okJsonResponse());
+    capacitorHttpMock.mockResolvedValue(okNativeResponse());
 
     const api = new C64API("http://c64u");
     await api.getInfo();
-    expect(fetchMock).toHaveBeenCalled();
+    expect(capacitorHttpMock).toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("uses __c64uAllowNativePlatform override for platform detection", async () => {
@@ -908,11 +929,12 @@ describe("c64api branches", () => {
     (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
 
     const fetchMock = getFetchMock();
-    fetchMock.mockResolvedValue(okJsonResponse());
+    capacitorHttpMock.mockResolvedValue(okNativeResponse());
 
     const api = new C64API("http://c64u");
     await api.getInfo();
-    expect(fetchMock).toHaveBeenCalled();
+    expect(capacitorHttpMock).toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   // #18: Constructor with VITE_WEB_PLATFORM set
