@@ -40,6 +40,7 @@ RUN_CONTRACT_PARITY=false
 RUN_DOCKER_BUILD=false
 RUN_DOCKER_START=false
 FAST_LOCAL_APK_INSTALL=false
+HELPER_INJECTED_DEFAULT_DEBUG_SAVED_DEVICES=false
 PLAYWRIGHT_DEVICES=""
 PLAYWRIGHT_PORT_RESOLVED=false
 APK_PATH=""
@@ -1686,6 +1687,14 @@ if [[ "$RECORD_TRACES" == "true" ]]; then
   fi
 fi
 
+run_root_test_command() {
+  if should_unset_helper_debug_saved_devices_for_tests; then
+    (cd "$ROOT_DIR" && env -u VITE_DEBUG_SAVED_DEVICES_JSON "$@")
+  else
+    (cd "$ROOT_DIR" && "$@")
+  fi
+}
+
 if [[ "$RUN_INSTALL" == "true" ]]; then
   log "Installing npm dependencies"
   (cd "$ROOT_DIR" && npm install --no-audit --no-fund)
@@ -1719,6 +1728,7 @@ if [[ "$RUN_BUILD" == "true" ]]; then
 
   if [[ -z "${VITE_DEBUG_SAVED_DEVICES_JSON:-}" && "$APK_VARIANT" == "debug" ]]; then
     export VITE_DEBUG_SAVED_DEVICES_JSON="$(build_debug_saved_devices_bootstrap_json)"
+    HELPER_INJECTED_DEFAULT_DEBUG_SAVED_DEVICES=true
   fi
 
   if [[ "$FAST_LOCAL_APK_INSTALL" == "true" ]]; then
@@ -1748,7 +1758,7 @@ fi
 
 if [[ "$RUN_TEST" == "true" ]]; then
   log "Running tests"
-  (cd "$ROOT_DIR" && npm test)
+  run_root_test_command npm test
   AGENT_PYTHON="$ROOT_DIR/.venv/bin/python3"
   if [[ -f "$AGENT_PYTHON" ]]; then
     log "Running Python agent tests"
@@ -1758,9 +1768,9 @@ if [[ "$RUN_TEST" == "true" ]]; then
   fi
   (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
   if [[ "$RUN_SCREENSHOTS" == "true" ]]; then
-    (cd "$ROOT_DIR" && PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-4}" npm run test:e2e)
+    run_root_test_command env PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-4}" npm run test:e2e
   else
-    (cd "$ROOT_DIR" && PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-4}" npx playwright test --grep-invert @screenshots)
+    run_root_test_command env PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-4}" npx playwright test --grep-invert @screenshots
   fi
   (cd "$ROOT_DIR/android" && ./gradlew test --warning-mode none)
   if [[ "$RUN_ANDROID_TESTS" == "true" ]]; then
@@ -1770,24 +1780,24 @@ fi
 
 if [[ "$RUN_TEST_UNIT" == "true" ]]; then
   log "Running unit tests"
-  (cd "$ROOT_DIR" && npm test)
+  run_root_test_command npm test
 fi
 
 if [[ "$RUN_TEST_E2E" == "true" ]]; then
   log "Running E2E tests"
   (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
-  (cd "$ROOT_DIR" && PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-4}" npx playwright test --grep-invert @screenshots)
+  run_root_test_command env PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-4}" npx playwright test --grep-invert @screenshots
 fi
 
 if [[ "$RUN_TEST_E2E_NATIVE" == "true" ]]; then
   log "Running native runtime E2E gates"
-  (cd "$ROOT_DIR" && npm run test:e2e:native)
+  run_root_test_command npm run test:e2e:native
 fi
 
 if [[ "$RUN_TEST_E2E_CI" == "true" ]]; then
   log "Running CI mirror (screenshots + E2E + validation)"
   (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
-  (cd "$ROOT_DIR" && PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-4}" npm run test:e2e:ci)
+  run_root_test_command env PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-4}" npm run test:e2e:ci
 fi
 
 if [[ "$RUN_VALIDATE_EVIDENCE" == "true" ]]; then
@@ -1797,7 +1807,7 @@ fi
 
 if [[ "$RUN_COVERAGE" == "true" ]]; then
   log "Running coverage (unit + e2e)"
-  (cd "$ROOT_DIR" && ./scripts/collect-coverage.sh)
+  run_root_test_command ./scripts/collect-coverage.sh
   (cd "$ROOT_DIR" && EXPECT_WEB_COVERAGE=1 node scripts/verify-coverage-artifacts.mjs)
   (cd "$ROOT_DIR" && COVERAGE_MIN=91 node scripts/check-coverage-threshold.mjs)
   if [[ "$RUN_ANDROID_COVERAGE" == "true" ]]; then
@@ -1813,21 +1823,21 @@ fi
 if [[ "$RUN_SCREENSHOTS" == "true" ]]; then
   log "Capturing screenshots"
   (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
-  (cd "$ROOT_DIR" && \
+  run_root_test_command env \
     VITE_GIT_SHA="screenshots" \
     VITE_BUILD_TIME="1970-01-01T00:00:00Z" \
     SOURCE_DATE_EPOCH="0" \
     PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-4}" \
-    npm run screenshots)
+    npm run screenshots
 fi
 
 if [[ "$RUN_VIDEO" == "true" ]]; then
   log "Recording walkthrough video"
   (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
-  (cd "$ROOT_DIR" && \
+  run_root_test_command env \
     PLAYWRIGHT_DEVICES="${PLAYWRIGHT_DEVICES:-phone}" \
     PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-1}" \
-    npm run video)
+    npm run video
 fi
 
 if [[ "$RUN_FUZZ" == "true" ]]; then
@@ -1845,7 +1855,7 @@ if [[ "$RUN_FUZZ" == "true" ]]; then
   if [[ "$RUN_BUILD" == "true" || -f "$ROOT_DIR/dist/index.html" ]]; then
     export PLAYWRIGHT_SKIP_BUILD=1
   fi
-  (cd "$ROOT_DIR" && FUZZ_RUN_MODE="local" node scripts/run-fuzz.mjs "${FUZZ_ARGS[@]}")
+  run_root_test_command env FUZZ_RUN_MODE="local" node scripts/run-fuzz.mjs "${FUZZ_ARGS[@]}"
 fi
 
 if [[ "$RUN_DOCKER_BUILD" == "true" ]]; then
