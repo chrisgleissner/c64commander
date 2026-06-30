@@ -95,6 +95,58 @@ describe("C64API native device transport (BUG-066: reboot stale-connection recov
     expect(CapacitorHttp.request).toHaveBeenCalledTimes(2);
   });
 
+  const toBase64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
+
+  it("reads memory over the native arraybuffer transport with byte fidelity and a native timeout", async () => {
+    const bytes = new Uint8Array([0x00, 0x01, 0x7f, 0x80, 0xff, 0x42]);
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({
+      status: 200,
+      headers: { "content-type": "application/octet-stream" },
+      data: toBase64(bytes),
+      url: `${DEVICE_BASE}/v1/machine:readmem`,
+    } as never);
+
+    const api = new C64API(DEVICE_BASE, undefined, "192.168.1.50");
+    const result = await api.readMemory("0400", bytes.length, { timeoutMs: 1500, __c64uIntent: "system" } as never);
+
+    expect(Array.from(result)).toEqual(Array.from(bytes));
+    expect(fetchSpy).not.toHaveBeenCalled();
+    const call = vi.mocked(CapacitorHttp.request).mock.calls[0][0];
+    expect(call.method).toBe("GET");
+    expect(call.responseType).toBe("arraybuffer");
+    expect(call.connectTimeout).toBe(1500);
+    expect(call.readTimeout).toBe(1500);
+  });
+
+  it("handles readMemory's JSON fallback over the native transport", async () => {
+    const bytes = new Uint8Array([0x10, 0x20, 0x30]);
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({
+      status: 200,
+      headers: { "content-type": "application/json" },
+      data: { data: toBase64(bytes) },
+      url: `${DEVICE_BASE}/v1/machine:readmem`,
+    } as never);
+
+    const api = new C64API(DEVICE_BASE, undefined, "192.168.1.50");
+    const result = await api.readMemory("0400", bytes.length, { timeoutMs: 1500, __c64uIntent: "system" } as never);
+    expect(Array.from(result)).toEqual(Array.from(bytes));
+  });
+
+  it("readMemory fails fast on a native socket timeout (does not hang)", async () => {
+    vi.mocked(CapacitorHttp.request).mockRejectedValue(new Error("Read timed out"));
+    const api = new C64API(DEVICE_BASE, undefined, "192.168.1.50");
+    await expect(api.readMemory("0400", 4, { timeoutMs: 1500, __c64uIntent: "system" } as never)).rejects.toThrow();
+  });
+
+  it("does NOT reroute body-carrying writes — writeMemoryBlock stays on the patched fetch", async () => {
+    // Guard the conservative scope: only bodyless readMemory uses CapacitorHttp.request.
+    // Binary-body marshalling must remain on the battle-tested fetch path.
+    const api = new C64API(DEVICE_BASE, undefined, "192.168.1.50");
+    await api.writeMemoryBlock("0400", new Uint8Array([1, 2, 3]), { __c64uIntent: "system" } as never);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(CapacitorHttp.request).not.toHaveBeenCalled();
+  });
+
   it("still uses standard fetch on web (non-native) platforms", async () => {
     delete (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__;
     (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = false;
