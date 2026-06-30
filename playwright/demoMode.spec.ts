@@ -10,7 +10,7 @@ import { test, expect } from "@playwright/test";
 import type { Locator, Page, Route, TestInfo } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { variant } from "../src/generated/variant";
-import { seedUiMocks } from "./uiMocks";
+import { dismissStartupDiscoveryDialog, seedUiMocks } from "./uiMocks";
 import {
   allowWarnings,
   assertNoUiIssues,
@@ -102,6 +102,7 @@ const closeDiagnosticsDialog = async (page: Page) => {
 };
 
 const openDiagnosticsConnectionActions = async (page: Page, indicator: Locator) => {
+  await dismissStartupDiscoveryDialog(page);
   await clickWithoutNavigationWait(page, indicator);
   const dialog = page.getByRole("dialog", { name: "Diagnostics" });
   await expect(dialog).toBeVisible({ timeout: 10000 });
@@ -232,6 +233,7 @@ test.describe("Automatic Demo Mode", () => {
     const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "OFFLINE_NO_DEMO", { timeout: 10000 });
 
+    await dismissStartupDiscoveryDialog(page);
     await indicator.click();
     const dialog = page.getByRole("dialog", { name: "Diagnostics" });
     await expect(dialog).toBeVisible();

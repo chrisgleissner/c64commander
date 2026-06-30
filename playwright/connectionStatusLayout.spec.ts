@@ -9,7 +9,7 @@
 import { test, expect } from "@playwright/test";
 import type { Locator, Page, TestInfo } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
-import { seedUiMocks } from "./uiMocks";
+import { dismissStartupDiscoveryDialog, seedUiMocks } from "./uiMocks";
 import {
   allowWarnings,
   assertNoUiIssues,
@@ -175,6 +175,7 @@ test.describe("Connection Status diagnostics layout", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "OFFLINE_NO_DEMO", { timeout: 10000 });
+    await dismissStartupDiscoveryDialog(page);
     await indicator.click();
     const dialog = page.getByRole("dialog", { name: "Diagnostics" });
     await expect(dialog).toBeVisible();

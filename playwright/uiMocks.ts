@@ -8,7 +8,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { ensureValidSidBase64 } from "./sidFixture";
 import { variant } from "../src/generated/variant";
 
@@ -33,6 +33,50 @@ type HvscFixture = {
     durations?: number[];
   }>;
 };
+
+export async function dismissStartupDiscoveryDialog(page: Page) {
+  const clickIfVisible = async (locator: Locator, label: string) => {
+    const button = locator.first();
+    let visible = false;
+    try {
+      visible = (await locator.count()) > 0 && (await button.isVisible());
+    } catch (error) {
+      console.warn(`Unable to inspect startup discovery ${label}.`, error);
+      return false;
+    }
+    if (!visible) {
+      return false;
+    }
+
+    try {
+      const handle = await button.elementHandle();
+      if (!handle) {
+        return false;
+      }
+      await page.evaluate((node) => (node as HTMLElement).click(), handle);
+      return true;
+    } catch (error) {
+      console.warn(`Startup discovery ${label} changed while being dismissed.`, error);
+      try {
+        if ((await locator.count()) === 0 || !(await button.isVisible())) {
+          return true;
+        }
+      } catch (visibilityError) {
+        console.warn(`Unable to recheck startup discovery ${label}.`, visibilityError);
+        return true;
+      }
+      await button.click({ timeout: 5000, force: true, noWaitAfter: true });
+      return true;
+    }
+  };
+
+  const dismissButton = page.getByTestId("startup-device-discovery-dismiss");
+  if (await clickIfVisible(dismissButton, "dismiss button")) {
+    return true;
+  }
+  const closeButton = page.getByTestId("startup-device-discovery-close");
+  return clickIfVisible(closeButton, "close button");
+}
 
 const configState = JSON.parse(
   fs.readFileSync(path.resolve("playwright/fixtures/c64u/configState.json"), "utf8"),

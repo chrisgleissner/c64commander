@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import { saveCoverageFromPage } from "./withCoverage";
+import { dismissStartupDiscoveryDialog } from "./uiMocks";
 
 test.afterEach(async ({ page }, testInfo) => {
   await saveCoverageFromPage(page, testInfo.title);
@@ -304,11 +305,7 @@ test.describe("Web platform auth + proxy @web-platform", () => {
     }
 
     await page.goto("/play");
-    const startupDiscoveryClose = page.getByTestId("startup-device-discovery-close");
-    if ((await startupDiscoveryClose.count()) > 0 && (await startupDiscoveryClose.first().isVisible())) {
-      await startupDiscoveryClose.first().click();
-    }
-
+    await dismissStartupDiscoveryDialog(page);
     const addButton = page.getByRole("button", {
       name: /Add items|Add more items/i,
     });
