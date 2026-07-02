@@ -103,7 +103,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-043 | SecureStorage builds EncryptedSharedPreferences per call, unsynchronized | native | P2 | correctness, data-loss, robustness, perf | medium | S | FIXED (52b59dd8) |
 | HARD9-044 | FTP/SAF readFile buffers whole file ×3.3 in heap — OOM on large files | native | P2 | robustness, perf, correctness | high | M | OPEN |
 | HARD9-045 | normalizeSourcePath collapses internal whitespace, corrupting paths | sources | P2 | correctness, robustness | high | S | OPEN |
-| HARD9-046 | Ingestion finalize overwrites songlengths projection with duration-less records | hvsc | P2 | correctness, data-loss | medium | M | OPEN |
+| HARD9-046 | Ingestion finalize overwrites songlengths projection with duration-less records | hvsc | P2 | correctness, data-loss | medium | M | FIXED (517057d1) |
 | HARD9-047 | Web local sources list files after reload that can no longer be opened | sources | P2 | correctness, ux | medium | M | OPEN |
 | HARD9-048 | Disk library save effect writes stale/empty state before load settles | sources | P2 | data-loss, robustness | medium | S | FIXED (93683f38) |
 | HARD9-049 | Archive entries with a dot in the name rejected despite byte detection | sources | P2 | correctness, ux | high | S | OPEN |
@@ -521,11 +521,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Fix sketch:** Restrict `normalizeSourcePath` to structural normalization (leading slash, collapse duplicate `/`); drop the whitespace collapse/trim (trim only fully-blank input).
 
 ### HARD9-046 — Ingestion finalize overwrites the songlengths projection with duration-less, metadata-stripped song records
-- **Area:** hvsc · **Severity:** P2 · **Dimensions:** correctness, data-loss · **Confidence:** medium · **Effort:** M · **Status:** OPEN
+- **Area:** hvsc · **Severity:** P2 · **Dimensions:** correctness, data-loss · **Confidence:** medium · **Effort:** M · **Status:** FIXED (517057d1)
 - **Files:** `src/lib/hvsc/hvscBrowseIndexStore.ts:707-716`, `src/lib/hvsc/hvscIngestionRuntime.ts:437-443,549,589`, `src/lib/hvsc/hvscSongLengthService.ts:262-271`
 - **Failure scenario:** Non-native ingest order: write library → songlengths reload (builds projection *with* durations) → `browseIndex.finalize()` (saves *its* snapshot last, overwriting the projection). `upsertSong` stores `durationSeconds: song.durationSeconds ?? null` and the call site passes none, so every ingested song persists with null duration; in `update` mode it also replaces previously hydrated records (title/author/released wiped). Until the next cold-start re-sync, HVSC browse/adds show missing durations (3:00 default) and lose hydrated titles.
 - **Evidence:** `upsertSong` assigns a minimal record — no merge; `finalize()` runs after the songlengths reload; `saveHvscBrowseIndexSnapshot` unconditionally overwrites both persisted snapshots.
 - **Fix sketch:** Make `upsertSong` merge with the existing record and resolve durations from the fresh songlengths backend before finalize; or run `finalize()` before the songlengths reload so the projection wins.
+- **Resolution (517057d1):** Combined both halves of the fix sketch, since either alone still loses data (reordering alone just flips which source's fields get discarded, since `buildHvscBrowseIndexFromSonglengthSnapshot` blindly rebuilds too). `upsertSong` now merges onto any existing record instead of replacing it. `browseIndex.finalize()` now runs before the songlengths reload. The songlengths projection sync (`syncHvscBrowseProjection`) now calls a new `mergeSonglengthDurationsIntoBrowseIndex(existingSnapshot, songlengthSnapshot)`, which loads whatever is currently persisted and updates only the duration fields of matching songs (via `updateHvscBrowseSong`), adding a seeded record only for paths with no existing entry - instead of rebuilding a duration-only snapshot from scratch and overwriting. New tests cover the merge functions directly plus a call-order assertion (finalize before reload) in the ingestion runtime; all proven failing against pre-fix code via `git stash`. `npx vitest run tests/unit/hvsc` (504 tests) and full `npm test -- --run` (658 files / 7805 tests) pass.
 
 ### HARD9-047 — Web/desktop local sources list files after reload that can no longer be opened
 - **Area:** sources · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** medium · **Effort:** M · **Status:** OPEN
