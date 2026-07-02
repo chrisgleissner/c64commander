@@ -121,7 +121,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-061 | Second user CTA during half-open circuit probe hard-fails instead of queueing | transport | P3 | ux | high | S | FIXED (82492610) |
 | HARD9-062 | Startup saved-device fallback commits selection before verification | transport | P3 | correctness, ux | medium | S | FIXED (16fc9351) |
 | HARD9-063 | Volume sync wedges after starting a new track from paused state | playback | P3 | correctness, robustness | medium | S | OPEN |
-| HARD9-064 | Session restore revives "playing" UI for a dead device session | playback | P3 | correctness, ux | medium | S | OPEN |
+| HARD9-064 | Session restore revives "playing" UI for a dead device session | playback | P3 | correctness, ux | medium | S | FIXED (aea8d46d) |
 | HARD9-065 | resolveVolumeSyncDecision is dead code diverging from live sync logic | playback | P3 | robustness | high | S | OPEN |
 | HARD9-066 | handlePlaylistSelect carries a bogus dependency | playback | P3 | robustness | high | S | OPEN |
 | HARD9-067 | Snapshot restore halts CIA TOD clocks / flips ICR mask bits | snapshot | P3 | correctness | medium | S | OPEN |
@@ -629,10 +629,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Fix sketch:** Clear `pausingFromPauseRef`/`resumingFromPauseRef`/`pauseMuteSnapshotRef` at the start of `playItem`.
 
 ### HARD9-064 — Session restore trusts a stale snapshot and revives "playing" UI for a dead device session
-- **Area:** playback · **Severity:** P3 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
+- **Area:** playback · **Severity:** P3 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (aea8d46d)
 - **Files:** `src/pages/playFiles/hooks/usePlaybackPersistence.ts:377-443`, `src/pages/PlayFilesPage.tsx:1169`
 - **Failure scenario:** User plays a track, navigates away, stops the C64 by other means (Home reset, power cycle) or the track ended hours ago in a suspended WebView. Returning to Play, restore applies `setIsPlaying(true)` with a guard whose `dueAtMs` is long past — the overdue guard fires `handleNext("auto")` on the first tick and launches the next track on a machine the user deliberately stopped. No staleness bound on `pending.updatedAt`, no device-state cross-check.
 - **Fix sketch:** Reject/downgrade restores whose `updatedAt`/`dueAtMs` are overdue beyond a threshold: restore position paused instead of auto-launching.
+- **Resolution (aea8d46d):** Added `isPlaybackSessionRestoreStale` in `playFilesUtils.ts`: a restore is stale when `pending.updatedAt` is more than 5 minutes old. Since the persist effect only re-fires while the 1s timeline interval is ticking, `updatedAt` age measures how long the app was backgrounded/suspended/away, not how long the track was playing - a brief navigation and back still restores playing normally, matching the existing "overdue but fresh" test. A stale `isPlaying && !isPaused` restore now downgrades to `isPlaying=true, isPaused=true` (position restored, no guard armed) instead of arming auto-advance.
 
 ### HARD9-065 — resolveVolumeSyncDecision helper is dead code diverging from the live sync logic
 - **Area:** playback · **Severity:** P3 · **Dimensions:** robustness · **Confidence:** high · **Effort:** S · **Status:** OPEN
