@@ -125,7 +125,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-065 | resolveVolumeSyncDecision is dead code diverging from live sync logic | playback | P3 | robustness | high | S | FIXED (d9fe1f3a) |
 | HARD9-066 | handlePlaylistSelect carries a bogus dependency | playback | P3 | robustness | high | S | FIXED (38fa569e) |
 | HARD9-067 | Snapshot restore halts CIA TOD clocks / flips ICR mask bits | snapshot | P3 | correctness | medium | S | OPEN |
-| HARD9-068 | resolveLocalDiskBlob cross-source fallback can mount the wrong disk | disks | P3 | correctness | medium | S | OPEN |
+| HARD9-068 | resolveLocalDiskBlob cross-source fallback can mount the wrong disk | disks | P3 | correctness | medium | S | FIXED (99df20ef) |
 | HARD9-069 | Snapshot store silently drops oldest snapshot at the 100 cap | snapshot | P3 | data-loss, ux | high | S | OPEN |
 | HARD9-070 | FTP control encoding never set — non-ASCII filenames unfetchable | native | P3 | correctness, ux | medium | S | OPEN |
 | HARD9-071 | Mock C64U HTTP+FTP servers ship in release builds, registered unconditionally | native | P3 | security, robustness | high | M | OPEN |
@@ -675,10 +675,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Fix sketch:** Extend the skip predicate to $xx08-$xx0B and $xx0D (+mirrors) in both restore paths.
 
 ### HARD9-068 — resolveLocalDiskBlob cross-source fallback can silently mount the wrong same-named disk
-- **Area:** disks · **Severity:** P3 · **Dimensions:** correctness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
+- **Area:** disks · **Severity:** P3 · **Dimensions:** correctness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (99df20ef)
 - **Files:** `src/lib/disks/diskMount.ts:287-298`
 - **Failure scenario:** If a disk's `sourceId` no longer resolves (source removed/re-added → new id), the code loops over all local sources and returns the first file whose source-relative path matches `disk.path`. Two folders can both contain `/side-a.d64` — the user mounts library disk X and gets folder Y's different bytes, no warning.
 - **Fix sketch:** When the disk has a `sourceId`, don't fall back to other sources (fail with the accurate re-add message); optionally verify `sizeBytes` before accepting a fallback hit.
+- **Resolution (99df20ef):** Took the first fix-sketch option - a disk with a `sourceId` now throws the existing accurate error (shared with HARD9-011's fix) as soon as its own source fails to produce bytes, instead of scanning every other source. Skipped the `sizeBytes` verification alternative since the no-fallback approach eliminates the wrong-disk risk outright rather than merely reducing it. Also closes a residual gap in HARD9-011: CommoServe disks always carry a `sourceId` that never matches a local source, so without this fix they could still fall through to the same wrong-disk risk before reaching the CommoServe-specific error message.
 
 ### HARD9-069 — Snapshot store silently drops the oldest snapshot at the 100 cap
 - **Area:** snapshot · **Severity:** P3 · **Dimensions:** data-loss, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** OPEN
