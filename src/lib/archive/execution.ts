@@ -34,7 +34,13 @@ const toRuntimeFile = (binary: ArchiveBinary): LocalPlayFile => ({
 });
 
 const ensureExecutableName = (fileName: string, detectedType: string) => {
-  if (fileName.includes(".")) return fileName;
+  // A dot in the name does not mean the name already carries a playable
+  // extension - "TURBO ASSEMBLER V5.2" has one (from its version number)
+  // but getPlayCategory(".2") is null. Only skip appending when the name
+  // as given already resolves to a category; otherwise append the
+  // byte-detected type's extension regardless of any unrelated dots. See
+  // HARD9-049.
+  if (getPlayCategory(fileName)) return fileName;
   const extension = FILE_TYPE_TO_EXTENSION[detectedType];
   return extension ? `${fileName}.${extension}` : fileName;
 };
