@@ -180,31 +180,38 @@ const listFilesRecursive = async (
     return attachPartialFailures(entries, failures);
   }
 
-  const queue = [path || "/"];
+  const queue: Array<{ path: string; depth: number }> = [{ path: path || "/", depth: 0 }];
   const visited = new Set<string>();
   const results: SourceEntry[] = [];
   const partialFailures: SourceRecursiveFailure[] = [];
   const maxConcurrent = 3;
   const pending = new Set<Promise<void>>();
+  // Web has no native cap, so a large USB root walks the entire tree - tens
+  // of thousands of LIST round-trips, minutes of scanning - and platforms
+  // disagree (native silently truncates at the same limits). Apply the same
+  // caps here and surface truncation via partialFailures, matching native's
+  // messages exactly. See HARD9-081.
+  let examinedEntries = 0;
+  let capped = false;
 
-  const processPath = async (current: string) => {
+  const processPath = async (current: { path: string; depth: number }) => {
     assertNotAborted();
-    if (!current || visited.has(current)) return;
-    visited.add(current);
+    if (!current.path || visited.has(current.path)) return;
+    visited.add(current.path);
     let entries: SourceEntry[];
     try {
-      entries = await listEntries(current);
+      entries = await listEntries(current.path);
     } catch (error) {
       if (signal?.aborted || (error as Error).name === "AbortError") {
         throw error;
       }
       const err = error as Error;
       partialFailures.push({
-        path: current,
+        path: current.path,
         message: err.message,
       });
       addLog("warn", "FTP recursive directory listing skipped folder", {
-        path: current,
+        path: current.path,
         error: {
           name: err.name,
           message: err.message,
@@ -215,14 +222,31 @@ const listFilesRecursive = async (
     }
     assertNotAborted();
     let filesFound = 0;
-    entries.forEach((entry) => {
+    for (const entry of entries) {
+      if (capped) break;
+      examinedEntries += 1;
+      if (examinedEntries > FTP_RECURSIVE_MAX_ENTRIES) {
+        partialFailures.push({
+          path: current.path,
+          message: `FTP recursive listing stopped after ${FTP_RECURSIVE_MAX_ENTRIES} entries`,
+        });
+        capped = true;
+        break;
+      }
       if (entry.type === "dir") {
-        queue.push(entry.path);
+        if (current.depth < FTP_RECURSIVE_MAX_DEPTH) {
+          queue.push({ path: entry.path, depth: current.depth + 1 });
+        } else {
+          partialFailures.push({
+            path: entry.path,
+            message: `FTP recursive listing max depth ${FTP_RECURSIVE_MAX_DEPTH} reached`,
+          });
+        }
       } else {
         results.push(entry);
         filesFound += 1;
       }
-    });
+    }
     // Report incremental progress so a slow broad-folder scan shows a climbing
     // count instead of a stuck "Scanning… 0 items" (S2-DISKS-FTP-RECURSIVE-SCAN-STALL).
     if (filesFound > 0) {
@@ -231,19 +255,22 @@ const listFilesRecursive = async (
   };
 
   try {
-    while (queue.length || pending.size) {
+    while ((queue.length || pending.size) && !capped) {
       assertNotAborted();
-      while (queue.length && pending.size < maxConcurrent) {
+      while (queue.length && pending.size < maxConcurrent && !capped) {
         assertNotAborted();
-        const nextPath = queue.shift();
-        if (!nextPath) continue;
-        const job = processPath(nextPath).finally(() => pending.delete(job));
+        const next = queue.shift();
+        if (!next) continue;
+        const job = processPath(next).finally(() => pending.delete(job));
         pending.add(job);
       }
       if (pending.size) {
         await Promise.race(pending);
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
+    }
+    if (capped) {
+      await Promise.allSettled(Array.from(pending));
     }
 
     return attachPartialFailures(results, partialFailures);

@@ -268,6 +268,63 @@ describe("ftpSourceAdapter", () => {
     );
   });
 
+  it("caps the web recursive scan at the same max depth as native, reporting truncation (HARD9-081)", async () => {
+    // Regression: the web BFS had no depth cap at all, unlike native (8
+    // levels) - a deeply nested USB folder walked the entire tree with no
+    // indication anything was cut short.
+    listFtpDirectoryMock.mockImplementation(async ({ path }) => {
+      const depth = path === "/" ? 0 : path.split("/").length - 1;
+      return {
+        entries: [
+          { type: "dir", name: `level${depth + 1}`, path: `${path === "/" ? "" : path}/level${depth + 1}` },
+          {
+            type: "file",
+            name: `file${depth}.sid`,
+            path: `${path === "/" ? "" : path}/file${depth}.sid`,
+            size: 1,
+            modifiedAt: "now",
+          },
+        ],
+      };
+    });
+
+    const source = createUltimateSourceLocation();
+    const results = await source.listFilesRecursive("/");
+
+    // Depths 0..8 (9 levels) are walked - depth 8 is the last one allowed to
+    // recurse further, so files 0..8 are collected (9 files) and the
+    // depth-9 subfolder is reported as truncated instead of walked forever.
+    expect(results.length).toBe(9);
+    expect(results.partialFailures?.some((failure) => failure.message.includes("max depth 8 reached"))).toBe(true);
+  });
+
+  it("caps the web recursive scan at the same max entries as native, reporting truncation (HARD9-081)", async () => {
+    // Regression: the web BFS had no entry-count cap at all, unlike native
+    // (5000 entries) - a broad folder scanned tens of thousands of entries
+    // with no indication anything was cut short.
+    const manyFiles = Array.from({ length: 5001 }, (_, index) => ({
+      type: "file" as const,
+      name: `song${index}.sid`,
+      path: `/song${index}.sid`,
+      size: 1,
+      modifiedAt: "now",
+    }));
+    listFtpDirectoryMock.mockImplementation(async ({ path }) => {
+      if (path === "/") {
+        return { entries: manyFiles };
+      }
+      return { entries: [] };
+    });
+
+    const source = createUltimateSourceLocation();
+    const results = await source.listFilesRecursive("/");
+
+    expect(results.length).toBe(5000);
+    expect(
+      results.partialFailures?.some((failure) => failure.message.includes("stopped after 5000 entries")),
+    ).toBe(true);
+  });
+
   it("cancels recursive listing and stops further FTP calls", async () => {
     const controller = new AbortController();
     listFtpDirectoryMock.mockImplementation(async ({ path }) => {
