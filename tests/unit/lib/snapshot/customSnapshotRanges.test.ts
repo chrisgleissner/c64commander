@@ -65,4 +65,30 @@ describe("customSnapshotRanges", () => {
       ],
     });
   });
+
+  it("splits a full 0000-FFFF range into sub-65536-byte pieces instead of overflowing the u16 length field (HARD9-009)", () => {
+    const result = validateCustomSnapshotRanges([{ start: "0000", end: "FFFF" }]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.ranges).toEqual([
+      { start: 0x0000, length: 0xffff },
+      { start: 0xffff, length: 1 },
+    ]);
+    // Every range fits in the format's u16 length field and the split covers
+    // every byte of the requested range exactly once, with no gap/overlap.
+    for (const range of result.ranges) {
+      expect(range.length).toBeGreaterThanOrEqual(1);
+      expect(range.length).toBeLessThanOrEqual(0xffff);
+    }
+    const totalBytes = result.ranges.reduce((sum, range) => sum + range.length, 0);
+    expect(totalBytes).toBe(0x10000);
+  });
+
+  it("does not split a range that already fits within the u16 length field", () => {
+    const result = validateCustomSnapshotRanges([{ start: "0000", end: "FFFE" }]);
+    expect(result).toEqual({
+      ok: true,
+      ranges: [{ start: 0x0000, length: 0xffff }],
+    });
+  });
 });
