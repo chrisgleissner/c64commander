@@ -26,7 +26,7 @@ vi.mock("@/lib/native/platform", () => ({
 
 import { createLocalSourceLocation } from "@/lib/sourceNavigation/localSourceAdapter";
 import { LocalSourceListingError } from "@/lib/sourceNavigation/localSourceErrors";
-import type { LocalSourceRecord } from "@/lib/sourceNavigation/localSourcesStore";
+import { setLocalSourceRuntimeFiles, type LocalSourceRecord } from "@/lib/sourceNavigation/localSourcesStore";
 
 const buildAndroidSource = (): LocalSourceRecord => ({
   id: "source-1",
@@ -224,6 +224,7 @@ describe("localSourceAdapter", () => {
     platformState.platform = "web";
     platformState.nativePlatform = false;
     const source = buildWebSource();
+    setLocalSourceRuntimeFiles(source.id, {});
 
     const location = createLocalSourceLocation(source);
     const rootEntries = await location.listEntries("/");
@@ -246,6 +247,7 @@ describe("localSourceAdapter", () => {
     platformState.platform = "web";
     platformState.nativePlatform = false;
     const source = buildWebSource();
+    setLocalSourceRuntimeFiles(source.id, {});
 
     const location = createLocalSourceLocation(source);
     const files = await location.listFilesRecursive("/music");
@@ -409,6 +411,7 @@ describe("localSourceAdapter", () => {
         },
       ],
     });
+    setLocalSourceRuntimeFiles(source.id, {});
     const location = createLocalSourceLocation(source);
     const before = Date.now();
     const result = await location.listFilesRecursive("/");
@@ -462,9 +465,61 @@ describe("localSourceAdapter", () => {
         },
       ],
     });
+    setLocalSourceRuntimeFiles(source.id, {});
     const location = createLocalSourceLocation(source);
     const result = await location.listFilesRecursive("/");
     expect(result.length).toBe(1);
     expect(result[0].name).toBe("song.sid");
+  });
+
+  it("throws when an entries-mode source has no live runtime files (HARD9-047)", async () => {
+    // Regression: after a page reload, a restored entries-mode source keeps
+    // its persisted entries metadata but the in-memory File handles behind
+    // it are gone. Listing must surface a clear "re-add this folder" error
+    // instead of silently returning entries that resolve to nothing.
+    platformState.platform = "web";
+    platformState.nativePlatform = false;
+    // Unique id - the runtime-files map is a module-level singleton, and
+    // other tests in this file register the default "source-web" id.
+    const source = buildWebSource({ id: "source-web-reloaded" });
+    // Deliberately not calling setLocalSourceRuntimeFiles - simulates a
+    // source restored from persisted storage after a reload.
+
+    const location = createLocalSourceLocation(source);
+
+    await expect(location.listEntries("/")).rejects.toMatchObject({
+      code: "local-runtime-files-missing",
+    });
+    await expect(location.listFilesRecursive("/")).rejects.toMatchObject({
+      code: "local-runtime-files-missing",
+    });
+    expect(location.isAvailable).toBe(false);
+  });
+
+  it("does not gate root-path resolution on runtime files - only actual listing", async () => {
+    // resolveRootPath only reads persisted entry metadata; it must not
+    // throw just because the source has not (yet) been reselected. Only
+    // the listing methods should surface the re-add error.
+    platformState.platform = "web";
+    platformState.nativePlatform = false;
+    // Unique id - the runtime-files map is a module-level singleton, and
+    // other tests in this file register the default "source-web" id.
+    const source = buildWebSource({
+      id: "source-web-rootpath-reloaded",
+      rootPath: "/music",
+      entries: [
+        {
+          name: "song.sid",
+          relativePath: "music/song.sid",
+          sizeBytes: 100,
+          modifiedAt: null,
+        },
+      ],
+    });
+
+    const location = createLocalSourceLocation(source);
+
+    expect(location.rootPath).toBe("/music");
+    expect(location.isAvailable).toBe(false);
   });
 });

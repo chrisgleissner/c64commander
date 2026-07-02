@@ -17,7 +17,9 @@ import type { SourceEntry, SourceLocation } from "./types";
 import {
   getLocalSourceListingMode,
   getLocalSourceRuntimeFile,
+  hasLocalSourceRuntimeFiles,
   requireLocalSourceEntries,
+  requireLocalSourceRuntimeFiles,
   type LocalSourceRecord,
 } from "./localSourcesStore";
 import { LocalSourceListingError } from "./localSourceErrors";
@@ -35,8 +37,10 @@ const toLocalPlayFile = (entry: {
   arrayBuffer: async () => new ArrayBuffer(0),
 });
 
-const buildFileList = (source: LocalSourceRecord) =>
-  requireLocalSourceEntries(source, "localSourceAdapter.buildFileList").map((entry) => toLocalPlayFile(entry));
+const buildFileList = (source: LocalSourceRecord) => {
+  requireLocalSourceRuntimeFiles(source, "localSourceAdapter.buildFileList");
+  return requireLocalSourceEntries(source, "localSourceAdapter.buildFileList").map((entry) => toLocalPlayFile(entry));
+};
 
 const toSourceEntryPath = (relativePath: string) => normalizeSourcePath(relativePath);
 
@@ -197,6 +201,7 @@ export const createLocalSourceLocation = (source: LocalSourceRecord): SourceLoca
     if (options?.signal?.aborted) {
       throw new DOMException("Aborted", "AbortError");
     }
+    requireLocalSourceRuntimeFiles(source, "localSourceAdapter.listFilesRecursive");
     const normalized = normalizeSourcePath(path);
     const prefix = normalized.endsWith("/") ? normalized : `${normalized}/`;
     return requireLocalSourceEntries(source, "localSourceAdapter.listFilesRecursive")
@@ -210,12 +215,17 @@ export const createLocalSourceLocation = (source: LocalSourceRecord): SourceLoca
       .filter((entry) => entry.path.startsWith(prefix) || entry.path === normalized);
   };
 
+  const isSaf = getLocalSourceListingMode(source) === "saf";
+  // Entries-mode sources persist their file metadata but not the underlying
+  // File handles, which live only in the in-memory runtime map and are gone
+  // after a reload. See HARD9-047.
+  const hasRuntimeFiles = isSaf || hasLocalSourceRuntimeFiles(source.id);
   return {
     id: source.id,
     type: "local",
     name: source.name,
     rootPath,
-    isAvailable: !source.requiresReselect && (!isAndroid || getLocalSourceListingMode(source) === "saf"),
+    isAvailable: !source.requiresReselect && hasRuntimeFiles && (!isAndroid || isSaf),
     listEntries,
     listFilesRecursive,
   };

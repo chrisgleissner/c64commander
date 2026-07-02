@@ -9,7 +9,7 @@
 import { describe, expect, it } from "vitest";
 import { createLocalSourceLocation } from "@/lib/sourceNavigation/localSourceAdapter";
 import { ensureWithinRoot, getParentPathWithinRoot, isPathWithinRoot } from "@/lib/sourceNavigation/paths";
-import type { LocalSourceRecord } from "@/lib/sourceNavigation/localSourcesStore";
+import { setLocalSourceRuntimeFiles, type LocalSourceRecord } from "@/lib/sourceNavigation/localSourcesStore";
 
 describe("scoped browser paths", () => {
   it("keeps navigation within root", () => {
@@ -36,6 +36,11 @@ describe("local scoped source", () => {
       { name: "Demo.sid", relativePath: "Test Folder/Sub Folder/Demo.sid" },
     ],
   };
+  // Registers the live runtime files this source's entries were built from -
+  // required since HARD9-047 (a source without them is treated as needing
+  // to be re-added, matching a real reload where the in-memory File handles
+  // are gone).
+  setLocalSourceRuntimeFiles(localSource.id, {});
 
   it("lists folders and files under root", async () => {
     const scoped = createLocalSourceLocation(localSource);

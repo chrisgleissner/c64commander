@@ -144,6 +144,13 @@ export const setLocalSourceRuntimeFiles = (sourceId: string, files: Record<strin
   runtimeFilesBySource.set(sourceId, files);
 };
 
+// The persisted `entries` metadata (name/size/path) survives a reload, but
+// the `File` handles behind it live only in this in-memory map - they are
+// gone the moment the page reloads. Without this check, a restored
+// entries-mode source lists every file as if it were still fully browsable;
+// selecting one then resolves to no file at all. See HARD9-047.
+export const hasLocalSourceRuntimeFiles = (sourceId: string) => runtimeFilesBySource.has(sourceId);
+
 export const getLocalSourceRuntimeFile = (sourceId: string, path: string) => {
   const normalized = normalizeSourcePath(path);
   return runtimeFilesBySource.get(sourceId)?.[normalized];
@@ -326,6 +333,23 @@ export const requireLocalSourceEntries = (source: LocalSourceRecord, context: st
     });
   }
   return source.entries;
+};
+
+// The persisted `entries` metadata (checked by requireLocalSourceEntries
+// above) survives a reload, but the `File` handles behind it live only in
+// the in-memory runtimeFilesBySource map and are gone the moment the page
+// reloads. Call this at actual file-listing/reading entry points (not
+// metadata-only ones like resolving a root path) - a restored entries-mode
+// source would otherwise list every file as if still fully browsable, and
+// selecting one resolves to no file at all. See HARD9-047.
+export const requireLocalSourceRuntimeFiles = (source: LocalSourceRecord, context: string): void => {
+  if (getLocalSourceListingMode(source) === "saf") return;
+  if (hasLocalSourceRuntimeFiles(source.id)) return;
+  throw new LocalSourceListingError(
+    "This folder must be re-added; its files are no longer available in this browser session.",
+    "local-runtime-files-missing",
+    { sourceId: source.id, context },
+  );
 };
 
 export const validateSource = async (sourceId: string): Promise<boolean> => {
