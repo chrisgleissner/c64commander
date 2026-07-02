@@ -108,7 +108,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-048 | Disk library save effect writes stale/empty state before load settles | sources | P2 | data-loss, robustness | medium | S | FIXED (93683f38) |
 | HARD9-049 | Archive entries with a dot in the name rejected despite byte detection | sources | P2 | correctness, ux | high | S | OPEN |
 | HARD9-050 | Throttled-preview sliders leave device at intermediate value on return-to-start | config | P2 | correctness, ux | high | S | FIXED (98d3da2d) |
-| HARD9-051 | Home quick-config writes never set hasChanges → Revert stays disabled | config | P2 | correctness, ux | high | S | OPEN |
+| HARD9-051 | Home quick-config writes never set hasChanges → Revert stays disabled | config | P2 | correctness, ux | high | S | FIXED (e8e46468) |
 | HARD9-052 | Home optimistic pins: no routing-epoch clear, no watchdog | config | P2 | robustness, ux | high | S | OPEN |
 | HARD9-053 | Profile load/revert sends entire config as one giant POST /v1/configs | config | P2 | robustness, perf | medium | M | OPEN |
 | HARD9-054 | Audio Mixer solo routing bypasses mutation layer; stale snapshot restore | config | P2 | correctness, robustness | medium | M | OPEN |
@@ -563,11 +563,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (98d3da2d):** Added `previewSentDuringDragRef`, set in `flushPreview` whenever a throttled preview is actually sent (independent of `lastPreviewSentAtRef`, which `onValueCommit` already clears for throttle-timing purposes before the commit-skip check runs). The commit-skip equality check now also requires no preview was sent this drag. New test proven failing against pre-fix code via `git stash`; a contrast test confirms `commitOnly` mode (which never sends previews) still correctly skips the commit in the same scenario.
 
 ### HARD9-051 — Home quick-config writes never set hasChanges, so "Revert Changes" stays disabled
-- **Area:** config · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** config · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** FIXED (e8e46468)
 - **Files:** `src/pages/home/hooks/useConfigActions.ts:29-74`, `src/pages/HomePage.tsx:1717-1727`
 - **Failure scenario:** Changing Video Mode, Turbo Control, SID address, UltiSID filter, or any LightingSummaryCard select on Home routes through `useConfigActions.updateConfigValue` (direct `api.setConfigValue`) — `updateHasChanges` is never called, so the Revert card stays disabled: users cannot revert changes made from Home. Slider writes and Config-page writes DO set the flag — inconsistent, looks arbitrary.
 - **Evidence:** `updateConfigValue` success path invalidates queries and toasts but contains no `updateHasChanges(...)` (compare `useC64Connection.ts:527,550/557`).
 - **Fix sketch:** Call `updateHasChanges(getActiveBaseUrl(), true)` on success (or route through `useC64SetConfig`).
+- **Resolution (e8e46468):** Added the same `updateHasChanges(getActiveBaseUrl(), true)` call to `updateConfigValue`'s success path. New test proven failing against pre-fix code via `git stash`.
 
 ### HARD9-052 — Home optimistic pins have no routing-epoch clear and no watchdog — a lost echo disables the control until remount
 - **Area:** config · **Severity:** P2 · **Dimensions:** robustness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** OPEN
