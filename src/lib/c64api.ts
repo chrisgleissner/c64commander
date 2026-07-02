@@ -263,6 +263,42 @@ const requiresSequentialItemWrites = (category: string, entries: Array<[string, 
   entries.some(([item]) => item === U64_TURBO_CONTROL_ITEM) &&
   entries.some(([item]) => U64_CPU_SPEED_DEPENDENT_ITEMS.has(item));
 
+// Loading an app profile or reverting builds a payload of every writable item in
+// every category - hundreds of items for a full config. Sending that as one
+// merged POST /v1/configs is the exact temp-file-buffering handler documented
+// above at its largest possible body; cap each merged POST at this many items
+// (across however many categories) so a bulk load/revert becomes several small,
+// throttled POSTs instead of the single largest body the app can produce. Small
+// multi-item writes (a handful of items) are far below this and are unaffected.
+const MAX_MERGED_CONFIG_WRITE_ITEMS = 20;
+
+const chunkMergedConfigEntries = (
+  entriesByCategory: Array<[string, Array<[string, string | number]>]>,
+): Array<Record<string, Record<string, string | number>>> => {
+  const chunks: Array<Record<string, Record<string, string | number>>> = [];
+  let currentChunk: Record<string, Record<string, string | number>> = {};
+  let currentChunkSize = 0;
+
+  entriesByCategory.forEach(([category, entries]) => {
+    entries.forEach(([item, value]) => {
+      if (currentChunkSize >= MAX_MERGED_CONFIG_WRITE_ITEMS) {
+        chunks.push(currentChunk);
+        currentChunk = {};
+        currentChunkSize = 0;
+      }
+      if (!currentChunk[category]) {
+        currentChunk[category] = {};
+      }
+      currentChunk[category][item] = value;
+      currentChunkSize += 1;
+    });
+  });
+  if (currentChunkSize > 0) {
+    chunks.push(currentChunk);
+  }
+  return chunks;
+};
+
 const resolveDeclaredConfigWriteValue = (
   category: string,
   item: string,
@@ -2070,7 +2106,7 @@ export class C64API {
         });
       }),
     );
-    const mergedPayload: Record<string, Record<string, string | number>> = {};
+    const mergedEntriesByCategory: Array<[string, Array<[string, string | number]>]> = [];
     const sequentialPayloads: Array<Record<string, Record<string, string | number>>> = [];
     Object.entries(resolvedEntriesByCategory).forEach(([category, entries]) => {
       if (requiresSequentialItemWrites(category, entries)) {
@@ -2079,9 +2115,9 @@ export class C64API {
         });
         return;
       }
-      mergedPayload[category] = Object.fromEntries(entries);
+      mergedEntriesByCategory.push([category, entries]);
     });
-    const requestPayloads = [...(Object.keys(mergedPayload).length ? [mergedPayload] : []), ...sequentialPayloads];
+    const requestPayloads = [...chunkMergedConfigEntries(mergedEntriesByCategory), ...sequentialPayloads];
     const errors: string[] = [];
     for (const requestPayload of requestPayloads) {
       // Device-safety: the firmware's `POST /v1/configs` handler buffers the
