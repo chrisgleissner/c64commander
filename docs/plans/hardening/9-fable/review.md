@@ -117,7 +117,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-057 | Trace persistence exceeds sessionStorage quota; size accounting broken on restore | diagnostics | P2 | performance, data-loss, correctness | high | S | OPEN |
 | HARD9-058 | Fetch trace duplicates full request/response payloads in the hot path | diagnostics | P2 | performance | high | M | OPEN |
 | HARD9-059 | Smoke-mode localStorage fallback is a self-perpetuating latch in prod | state | P2 | robustness, security, correctness | medium | S | OPEN |
-| HARD9-060 | Background health probes pass allowDuringError but the state gate ignores it | transport | P3 | correctness, ux | high | S | OPEN |
+| HARD9-060 | Background health probes pass allowDuringError but the state gate ignores it | transport | P3 | correctness, ux | high | S | FIXED (1d16f3de) |
 | HARD9-061 | Second user CTA during half-open circuit probe hard-fails instead of queueing | transport | P3 | ux | high | S | FIXED (82492610) |
 | HARD9-062 | Startup saved-device fallback commits selection before verification | transport | P3 | correctness, ux | medium | S | OPEN |
 | HARD9-063 | Volume sync wedges after starting a new track from paused state | playback | P3 | correctness, robustness | medium | S | OPEN |
@@ -598,10 +598,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 ## P3 — Low
 
 ### HARD9-060 — Background health probes pass allowDuringError but the state gate ignores it for background intent
-- **Area:** transport · **Severity:** P3 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** transport · **Severity:** P3 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** FIXED (1d16f3de)
 - **Files:** `src/lib/diagnostics/healthCheckEngine.ts:188-192,536-543`, `src/lib/deviceInteraction/deviceInteractionManager.ts:548-554`
 - **Failure scenario:** While OFFLINE (device state ERROR), the background-maintenance connectivity probe runs with `__c64uAllowDuringError: true`, expecting to run during ERROR. `shouldBlockForState` returns true for background intent before consulting `allowDuringError` (honored only for system intent) — the probe fails with `"Device not ready for requests"` before any I/O. Health UI shows that gate message as the device's health error instead of the actual reachability result; the health check can never observe the 403/"connection refused" that would explain the outage (compounds HARD9-001).
 - **Fix sketch:** Honor `allowDuringError` for background intent (the flag is opt-in, set only by probes), or resolve probe intent to "system" for background maintenance.
+- **Resolution (1d16f3de):** `shouldBlockForState` now honors `allowDuringError` for both `system` and `background` REST intents while keeping ordinary background traffic blocked in ERROR. Added regression coverage for an explicit background `/v1/info` recovery probe running in ERROR with `allowDuringError: true` and `bypassCircuit: true`.
 
 ### HARD9-061 — Second user CTA during a half-open circuit probe hard-fails instead of queueing
 - **Area:** transport · **Severity:** P3 · **Dimensions:** ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** FIXED (82492610)

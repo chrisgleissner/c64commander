@@ -2,15 +2,15 @@
 
 ## Current state
 - Branch: fix/hardening
-- Last commit reviewed/created: 82492610 "Fix HARD9-061 half-open probe double taps"
-- Working tree: clean after HARD9-061 status update commit
+- Last commit reviewed/created: 1d16f3de "Fix HARD9-060 background recovery probes"
+- Working tree: clean after HARD9-060 status update commit
 - Review doc: docs/plans/hardening/9-fable/review.md
 - 95 findings (HARD9-001..095)
 
 ## Plan
 Work batches in order from review.md:
 1. Auth & password UX: 001, 004, 025, 028, 043  <- DONE
-2. Native request lane & circuit UX: 002, 023, 022, 024, 061, 060, 062  <- IN PROGRESS (002/023/022/024/061 fixed)
+2. Native request lane & circuit UX: 002, 023, 022, 024, 061, 060, 062  <- IN PROGRESS (002/023/022/024/061/060 fixed)
 3. Playback duration/songlengths: 005, 006, 008, 064
 4. Playback lifecycle: 029, 030, 031, 033, 063, 007
 5. Playback perf: 032, 034, 065, 066
@@ -101,6 +101,10 @@ Work batches in order from review.md:
   `"Device circuit probe already in flight"`. If the first probe succeeds, the
   second request runs normally; if it fails, the second request rejects with the
   standard `"Device circuit open"` transient-connectivity error.
+- HARD9-060: 1d16f3de - `shouldBlockForState` now honors
+  `allowDuringError` for explicit background recovery probes in ERROR state,
+  while ordinary background traffic remains blocked. Health-maintenance REST
+  probes can now perform real I/O and report the actual reachability result.
 
 ## Validation
 - `npx tsc --noEmit`: PASS (after HARD9-001)
@@ -136,6 +140,11 @@ Work batches in order from review.md:
 - `npx eslint src --quiet`: PASS (after HARD9-061; first run caught an accidental `let now` in telnet failure code from an overly broad patch, fixed and rerun PASS)
 - `npx prettier --check src/lib/deviceInteraction/deviceInteractionManager.ts tests/unit/lib/deviceInteraction/deviceInteractionManager.circuit.test.ts`: PASS (after HARD9-061)
 - `git diff --check`: PASS (after HARD9-061)
+- `npx vitest run tests/unit/lib/deviceInteraction/deviceInteractionManager.test.ts tests/unit/lib/deviceInteraction/deviceInteractionManager.circuit.test.ts`: PASS (60 tests, after HARD9-060)
+- `npx tsc --noEmit`: PASS (after HARD9-060)
+- `npx eslint src --quiet`: PASS (after HARD9-060)
+- `npx prettier --check src/lib/deviceInteraction/deviceInteractionManager.ts tests/unit/lib/deviceInteraction/deviceInteractionManager.test.ts`: PASS (after HARD9-060)
+- `git diff --check`: PASS (after HARD9-060)
 - `npm run format:check:ts -- --ignore-unknown src/lib/connection/connectionManager.ts tests/unit/connection/connectionManager.test.ts`: FAIL (script checks the whole repo's `**/*.{ts,tsx,json}` pattern before appended args; reports pre-existing formatting warnings in `src/pages/SettingsPage.tsx` plus the touched connection test before targeted Prettier write. Targeted file check above passes after formatting touched files.)
 - `npx vitest run tests/unit/pages/SettingsPage.test.tsx`: PASS (83/83, +4 new
   tests covering HARD9-004/025/028)
@@ -161,9 +170,9 @@ Work batches in order from review.md:
   real c64u) before calling this fully closed.
 
 ## Remaining
-- Next batch: Native request lane & circuit UX — HARD9-060, HARD9-062.
-- Next issue: HARD9-060 (background maintenance probes with
-  `allowDuringError` are blocked before I/O).
+- Next batch: Native request lane & circuit UX — HARD9-062.
+- Next issue: HARD9-062 (startup saved-device fallback commits selection
+  before verification and keeps it on failure).
 - HARD9-003 (Android bottom safe-area inset) is a HIL-proven P1 usability
   blocker per the operating instructions — fix early if auth work stalls.
 
