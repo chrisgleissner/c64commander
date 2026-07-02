@@ -101,7 +101,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-041 | Late setDueAtMs resurrects phantom FGS + wake lock after Stop | native | P2 | correctness, robustness, ux, perf | high | M | FIXED (97a79ce5) |
 | HARD9-042 | Stale-generation FGS start intent never calls startForeground (crash risk) | native | P2 | correctness, robustness | medium | S | FIXED (065137fc) |
 | HARD9-043 | SecureStorage builds EncryptedSharedPreferences per call, unsynchronized | native | P2 | correctness, data-loss, robustness, perf | medium | S | FIXED (52b59dd8) |
-| HARD9-044 | FTP/SAF readFile buffers whole file ×3.3 in heap — OOM on large files | native | P2 | robustness, perf, correctness | high | M | OPEN |
+| HARD9-044 | FTP/SAF readFile buffers whole file ×3.3 in heap — OOM on large files | native | P2 | robustness, perf, correctness | high | M | FIXED (c2a6d90e) |
 | HARD9-045 | normalizeSourcePath collapses internal whitespace, corrupting paths | sources | P2 | correctness, robustness | high | S | FIXED (1f3e9de3) |
 | HARD9-046 | Ingestion finalize overwrites songlengths projection with duration-less records | hvsc | P2 | correctness, data-loss | medium | M | FIXED (517057d1) |
 | HARD9-047 | Web local sources list files after reload that can no longer be opened | sources | P2 | correctness, ux | medium | M | FIXED (857fd280) |
@@ -514,11 +514,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (52b59dd8):** `SecureStoragePlugin` now uses a synchronized cached holder for production `EncryptedSharedPreferences`, so concurrent plugin calls share one initialization path instead of racing `MasterKey`/Tink keyset creation. Production encrypted-storage failures clear the cached holder, clear/delete the encrypted preference files, delete the AndroidKeyStore master-key alias when present, and recover reads as `{ value: null }` so the JS auth flow asks the user to re-enter the password. Writes retry once after recovery. Injected test providers still reject, preserving deterministic hard-failure coverage.
 
 ### HARD9-044 — FTP/SAF readFile buffers entire file + Base64 in heap — OOM on large files
-- **Area:** native · **Severity:** P2 · **Dimensions:** robustness, performance, correctness · **Confidence:** high · **Effort:** M · **Status:** OPEN
+- **Area:** native · **Severity:** P2 · **Dimensions:** robustness, performance, correctness · **Confidence:** high · **Effort:** M · **Status:** FIXED (c2a6d90e)
 - **Files:** `android/.../FtpClientPlugin.kt:418-464`, `android/.../FolderPickerPlugin.kt:432-441,470-481`
 - **Failure scenario:** `FtpClientPlugin.readFile` accumulates the whole transfer in a `ByteArrayOutputStream`, then `toByteArray()` (copy 2), then Base64 (~1.33×, copy 3) — peak ≈3.3× file size plus bridge JSON. `FolderPickerPlugin.readFile`/`readFileFromTree` do the same; `pickFile` accepts `*/*`. Tapping a large file (a .dnp disk pack, firmware image) drives the app into OOM — hard crash, possibly mid-playback.
 - **Evidence:** No size cap anywhere in either plugin.
 - **Fix sketch:** Enforce a max-size guard (clear rejection above e.g. 32MB), and/or stream to a cache file and return a URI/path for large payloads.
+- **Resolution (c2a6d90e):** Applied the first fix sketch option (max-size guard, not a streaming-to-disk rewrite). `FtpClientPlugin.readFile` rejects immediately when a caller-declared `totalBytes` exceeds 32MB, and separately checks the running byte count inside the existing chunked read loop, so an absent/wrong hint can't bypass the guard. `FolderPickerPlugin` replaced both unbounded `readBytes()` calls (`readFile`, `readFileFromTree`) with a shared bounded-read helper checking the same 32MB cap during the read. Both caps are `internal var` for test overridability. Added regression tests for the upfront and incremental FTP guards and the SAF `readFile` guard (a symmetrical `readFileFromTree` test was attempted but dropped - SAF tree-URI resolution doesn't work against a plain `file://` URI in this test harness, and the guard logic is shared via the same helper already covered by `readFile`'s test). Confirmed all new tests fail to compile against the pre-fix code via git-stash.
 
 ### HARD9-045 — normalizeSourcePath collapses internal whitespace, corrupting legitimate paths on every source
 - **Area:** sources · **Severity:** P2 · **Dimensions:** correctness, robustness · **Confidence:** high · **Effort:** S · **Status:** FIXED (1f3e9de3)
