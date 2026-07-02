@@ -207,4 +207,28 @@ class MockFtpServerTest {
     socket.close()
     server.stop()
   }
+
+  @Test
+  fun idleCommandConnectionIsReleasedBySocketReadTimeout() {
+    val rootDir = tempFolder.newFolder("ftp-root7")
+    val server = MockFtpServer(rootDir, null)
+    // Without a command-socket read timeout, a client that connects and then
+    // sends nothing parks a worker forever on reader.readLine() (HARD10-004 F2).
+    server.commandSocketReadTimeoutMs = 200
+    val port = server.start()
+
+    val socket = Socket("127.0.0.1", port)
+    socket.soTimeout = 3_000
+    val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
+
+    assertTrue(reader.readLine().startsWith("220"))
+    // Deliberately send no command. The server's read timeout must fire and close
+    // the connection (readLine returns null at EOF) within a bounded window rather
+    // than hanging past the client's own read timeout.
+    val next = reader.readLine()
+    assertNull("Expected the server to close the idle command connection", next)
+
+    socket.close()
+    server.stop()
+  }
 }

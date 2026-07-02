@@ -15,6 +15,7 @@ import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -109,5 +110,49 @@ class MockC64UPluginTest {
 
     verify(call).resolve()
     verify(call, never()).reject(anyString())
+  }
+
+  @Test
+  fun handleOnDestroyStopsRunningServers() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val plugin = MockC64UPlugin()
+    setPluginBridge(plugin, context)
+
+    val config = JSObject().apply {
+      put("general", JSObject().apply { put("baseUrl", "http://localhost") })
+    }
+    val startCall = mock(PluginCall::class.java)
+    `when`(startCall.getObject("config")).thenReturn(config)
+    val startLatch = CountDownLatch(1)
+    var rejected = false
+    doAnswer {
+      startLatch.countDown()
+      null
+    }.`when`(startCall).resolve(any())
+    doAnswer {
+      rejected = true
+      startLatch.countDown()
+      null
+    }.`when`(startCall).reject(anyString(), any(Exception::class.java))
+
+    plugin.startServer(startCall)
+    assertTrue(startLatch.await(5, TimeUnit.SECONDS))
+
+    // Destroying the plugin (e.g. Activity teardown while demo mode is active)
+    // must stop both loopback servers so they stop listening (HARD10-004).
+    // handleOnDestroy is protected on the Capacitor Plugin base class, so invoke
+    // it the same way the bridge does.
+    val destroy = MockC64UPlugin::class.java.getDeclaredMethod("handleOnDestroy")
+    destroy.isAccessible = true
+    destroy.invoke(plugin)
+
+    if (!rejected) {
+      val serverField = MockC64UPlugin::class.java.getDeclaredField("server")
+      serverField.isAccessible = true
+      assertNull(serverField.get(plugin))
+      val ftpField = MockC64UPlugin::class.java.getDeclaredField("ftpServer")
+      ftpField.isAccessible = true
+      assertNull(ftpField.get(plugin))
+    }
   }
 }

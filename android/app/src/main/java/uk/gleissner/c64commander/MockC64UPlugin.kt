@@ -79,6 +79,22 @@ class MockC64UPlugin : Plugin() {
     }
   }
 
+  // Without this the HTTP + FTP loopback servers keep running (and keep listening
+  // on their ports) if the app is destroyed while demo mode is active, e.g. the
+  // user backgrounds the app and the OS tears down the Activity (HARD10-004).
+  override fun handleOnDestroy() {
+    try {
+      server?.stop()
+      ftpServer?.stop()
+    } catch (error: Exception) {
+      Log.w(logTag, "Failed to stop mock C64U servers on destroy", error)
+    } finally {
+      server = null
+      ftpServer = null
+    }
+    super.handleOnDestroy()
+  }
+
   private fun prepareFtpRootDir(): java.io.File {
     val root = java.io.File(context.cacheDir, "mock-ftp-root")
     if (root.exists()) {

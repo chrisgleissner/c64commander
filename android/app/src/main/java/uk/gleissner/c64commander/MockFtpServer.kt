@@ -35,7 +35,11 @@ class MockFtpServer(
   private val rootDir: File,
   private val password: String?,
 ) {
-  private val executor = Executors.newCachedThreadPool()
+  // Bounded (not newCachedThreadPool) so a burst of idle command connections
+  // cannot spawn unbounded threads and exhaust the process (HARD10-004 F3). One
+  // thread is permanently held by acceptLoop; the rest serve clients, and an idle
+  // client is evicted by commandSocketReadTimeoutMs below.
+  private val executor = Executors.newFixedThreadPool(MAX_CLIENT_THREADS)
   private val sockets = Collections.synchronizedSet(mutableSetOf<Socket>())
   private var serverSocket: ServerSocket? = null
   @Volatile private var running = false
@@ -49,8 +53,15 @@ class MockFtpServer(
   // tests can exercise the timeout path without waiting out the real duration.
   internal var dataConnectionAcceptTimeoutMs: Int = 10_000
 
+  // Bounds how long the command socket may stall between commands before the
+  // worker is released. Without it a client that connects and sends nothing (or
+  // stops mid-session) parks a worker forever on reader.readLine() (HARD10-004
+  // F2). Injectable so tests can drive the timeout without waiting it out.
+  internal var commandSocketReadTimeoutMs: Int = 30_000
+
   private companion object {
     const val LOG_TAG = "MockFtpServer"
+    const val MAX_CLIENT_THREADS = 16
   }
 
   fun start(preferredPort: Int? = null): Int {
@@ -99,6 +110,11 @@ class MockFtpServer(
   }
 
   private fun handleClient(socket: Socket) {
+    try {
+      socket.soTimeout = commandSocketReadTimeoutMs
+    } catch (error: Exception) {
+      Log.w(LOG_TAG, "Failed to set command socket timeout", error)
+    }
     val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
     val writer = BufferedWriter(OutputStreamWriter(socket.getOutputStream()))
     val session = FtpSession(rootDir, password, writer, dataConnectionAcceptTimeoutMs)
