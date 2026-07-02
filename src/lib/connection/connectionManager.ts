@@ -739,20 +739,12 @@ const tryReachableSavedDeviceFallback = async (
     trigger,
     deviceId: reachable.device.id,
   });
-  selectSavedDevice(reachable.device.id);
-  applyC64APIRuntimeConfig(
-    buildBaseUrlFromDeviceHost(reachable.deviceHost),
-    reachable.password ?? undefined,
-    reachable.deviceHost,
-    {
-      reason: "startup-reachable-saved-device",
-    },
-  );
   const verification = await verifyCurrentConnectionTarget({
     deviceHost: reachable.deviceHost,
     password: reachable.password,
   });
   if (verification.ok && verification.deviceInfo) {
+    selectSavedDevice(reachable.device.id);
     completeSavedDeviceVerification(reachable.device.id, verification.deviceInfo);
     return true;
   }

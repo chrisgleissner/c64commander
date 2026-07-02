@@ -238,7 +238,7 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
     expect(selectSavedDeviceMock).toHaveBeenCalledWith("secured");
   });
 
-  it("does not connect when the reachable device fails verification (lines 728-730, 1042)", async () => {
+  it("does not switch saved-device selection when the reachable device fails verification", async () => {
     // Sweep probe -> healthy (reachable), verification probe -> unhealthy (fails).
     getInfoMock.mockResolvedValueOnce(HEALTHY).mockResolvedValueOnce(UNHEALTHY);
     getSavedDevicesSnapshotMock.mockReturnValue(
@@ -251,13 +251,9 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
     await discoverConnection("startup");
     await flushAsync();
 
-    // selectSavedDevice still runs (we committed the runtime config), but the
-    // failed verification means completeSavedDeviceVerification is NOT called.
-    // verifyCurrentConnectionTarget runs its own "switch" discovery run, which
-    // supersedes the startup run, so the fallback returns false and the stale
-    // startup run unwinds (line 1042) without entering LAN discovery.
-    expect(selectSavedDeviceMock).toHaveBeenCalledWith("flaky");
+    expect(selectSavedDeviceMock).not.toHaveBeenCalled();
     expect(completeSavedDeviceVerificationMock).not.toHaveBeenCalled();
+    expect(applyC64APIRuntimeConfigMock).not.toHaveBeenCalled();
   });
 
   it("skips the sweep and proceeds to LAN discovery when there are no other saved devices", async () => {
