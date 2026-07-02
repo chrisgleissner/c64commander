@@ -42,6 +42,37 @@ let cachedLogs: LogEntry[] | null = null;
 // browser/WebView context.
 let pendingPersistTimer: number | null = null;
 
+// True only for the synchronous span of a "c64u-logs-updated" dispatch that
+// WE trigger. Our own listener uses it to tell an internal log write (cache
+// already updated by addLog/writeLogs - keep HARD9-020's parse-free hot path)
+// apart from an EXTERNAL rewrite of the persisted logs (a test seeding
+// c64u_app_logs, or any future out-of-band writer) that dispatches the same
+// event and must invalidate the now-stale cache so the next read re-parses.
+let dispatchingOwnLogsUpdate = false;
+
+const dispatchLogsUpdated = () => {
+  if (typeof window === "undefined") return;
+  dispatchingOwnLogsUpdate = true;
+  try {
+    window.dispatchEvent(new CustomEvent("c64u-logs-updated"));
+  } finally {
+    dispatchingOwnLogsUpdate = false;
+  }
+};
+
+if (typeof window !== "undefined") {
+  window.addEventListener("c64u-logs-updated", () => {
+    if (dispatchingOwnLogsUpdate) return;
+    // An external actor rewrote persisted logs underneath us; drop the cache
+    // so the next read re-parses localStorage. addLog-driven updates skip this
+    // branch (they already updated the cache), so the log hot path stays
+    // parse-free. Restores the pre-HARD9-020 "write localStorage + dispatch
+    // event => app re-reads" contract that the diagnostics overlay and E2E
+    // log-seeding helpers rely on.
+    cachedLogs = null;
+  });
+}
+
 const buildId = () =>
   (typeof crypto !== "undefined" && "randomUUID" in crypto && crypto.randomUUID()) ||
   `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
@@ -150,7 +181,7 @@ export const addLog = (level: LogLevel, message: string, details?: unknown) => {
   };
   cachedLogs = [entry, ...readLogs()].slice(0, MAX_LOGS);
   scheduleLogPersist();
-  window.dispatchEvent(new CustomEvent("c64u-logs-updated"));
+  dispatchLogsUpdated();
 };
 
 export const addErrorLog = (message: string, details?: unknown) => {
@@ -184,7 +215,7 @@ export const buildErrorLogDetails = (error: Error, details: Record<string, unkno
 export const setExternalLogs = (logs: LogEntry[]) => {
   if (typeof window === "undefined") return;
   externalLogs = logs;
-  window.dispatchEvent(new CustomEvent("c64u-logs-updated"));
+  dispatchLogsUpdated();
 };
 
 const mergeLogs = () => {
@@ -210,7 +241,7 @@ export const getErrorLogs = (): LogEntry[] => getProblemLogs();
 export const clearLogs = () => {
   if (typeof window === "undefined" || typeof localStorage === "undefined") return;
   writeLogs([]);
-  window.dispatchEvent(new CustomEvent("c64u-logs-updated"));
+  dispatchLogsUpdated();
 };
 
 export const formatLogsForShare = (entries: LogEntry[], options: { redacted?: boolean } = {}) =>

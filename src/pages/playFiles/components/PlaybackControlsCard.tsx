@@ -47,6 +47,7 @@ export type PlaybackControlsCardProps = {
   onReshuffle: () => void;
   reshuffleActive: boolean;
   reshuffleDisabled: boolean;
+  shuffleSeed: number | null;
 };
 
 const PLAY_TRANSPORT_FOCUS_ORDER = {
@@ -91,6 +92,7 @@ export const PlaybackControlsCard = ({
   onReshuffle,
   reshuffleActive,
   reshuffleDisabled,
+  shuffleSeed,
 }: PlaybackControlsCardProps) => {
   const previousFocusRef = useFocusItem<HTMLButtonElement>({
     id: "play-transport-previous",
@@ -255,6 +257,11 @@ export const PlaybackControlsCard = ({
             id="playlist-reshuffle"
             data-testid="playlist-reshuffle"
             data-active={reshuffleActive ? "true" : "false"}
+            // Non-destructive shuffle (HARD9-007) never reorders the visible
+            // playlist, so the live seed of the next/prev order layer is
+            // surfaced here as a diagnostic: a changed value proves Reshuffle
+            // re-seeded the traversal without disturbing the curated list.
+            data-shuffle-seed={shuffleSeed ?? ""}
             className={reshuffleActive ? "bg-accent text-accent-foreground" : undefined}
           >
             <Shuffle className="h-4 w-4 mr-1" />

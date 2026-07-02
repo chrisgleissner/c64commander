@@ -941,7 +941,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "playlist-populated");
   });
 
-  test("reshuffle changes playlist order and keeps current track index", async ({
+  test("reshuffle re-seeds the playback order and keeps the current track index and curated list", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     const playlistItems: Array<{
@@ -1001,14 +1001,22 @@ test.describe("Playback file browser (part 2)", () => {
     const currentTrack = "shuffle-0.sid";
     const beforeIndex = beforeTitles.indexOf(currentTrack);
 
-    await page.getByRole("button", { name: "Reshuffle" }).click();
+    // Non-destructive shuffle (HARD9-007): Reshuffle re-seeds the next/prev
+    // traversal order but does NOT reorder the curated visible list, and the
+    // currently-playing track is unaffected. Prove the reshuffle happened via
+    // the seed diagnostic, then assert the visible order and the current
+    // track's position are both preserved.
+    const reshuffleButton = page.getByTestId("playlist-reshuffle");
+    const seedBefore = await reshuffleButton.getAttribute("data-shuffle-seed");
+
+    await reshuffleButton.click();
     await snap(page, testInfo, "reshuffle-clicked");
 
-    await expect.poll(async () => (await getTitles()).join("|")).not.toBe(beforeTitles.join("|"));
+    await expect.poll(async () => reshuffleButton.getAttribute("data-shuffle-seed")).not.toBe(seedBefore);
     const afterTitles = await getTitles();
     const afterIndex = afterTitles.indexOf(currentTrack);
 
-    expect(afterTitles.join("|")).not.toBe(beforeTitles.join("|"));
+    expect(afterTitles.join("|")).toBe(beforeTitles.join("|"));
     expect(afterIndex).toBe(beforeIndex);
   });
 

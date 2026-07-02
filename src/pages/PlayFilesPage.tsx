@@ -1788,6 +1788,7 @@ export default function PlayFilesPage() {
                 onReshuffle={handleReshuffle}
                 reshuffleActive={reshuffleActive}
                 reshuffleDisabled={!shuffleEnabled || playlist.length < 2}
+                shuffleSeed={shuffleSeed}
               />
               <PlaybackSettingsPanel
                 durationSliderMax={DURATION_SLIDER_STEPS}

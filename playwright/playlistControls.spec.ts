@@ -110,7 +110,9 @@ test.describe("Playlist controls and advanced features", () => {
     await snap(page, testInfo, "shuffle-disabled");
   });
 
-  test("reshuffle changes playlist order @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("reshuffle re-seeds the playback order without disturbing the curated list @layout", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
 
@@ -127,13 +129,20 @@ test.describe("Playlist controls and advanced features", () => {
     const initialOrder = await getPlaylistOrder(page);
     expect(initialOrder.length).toBeGreaterThan(1);
 
-    await page.getByRole("button", { name: "Reshuffle" }).click();
+    // Shuffle is a non-destructive playback-order layer (HARD9-007): enabling
+    // it generates a seed that drives next/prev traversal, and Reshuffle draws
+    // a NEW seed - it never reorders the curated visible list. Assert both: the
+    // seed changes (Reshuffle is functional) and the visible order is
+    // preserved (the curated order is no longer destroyed irreversibly).
+    const reshuffleButton = page.getByTestId("playlist-reshuffle");
     await expect
-      .poll(async () => {
-        const nextOrder = await getPlaylistOrder(page);
-        return nextOrder.join("|");
-      })
-      .not.toBe(initialOrder.join("|"));
+      .poll(async () => reshuffleButton.getAttribute("data-shuffle-seed"))
+      .not.toBe("");
+    const seedBefore = await reshuffleButton.getAttribute("data-shuffle-seed");
+
+    await reshuffleButton.click();
+    await expect.poll(async () => reshuffleButton.getAttribute("data-shuffle-seed")).not.toBe(seedBefore);
+    expect((await getPlaylistOrder(page)).join("|")).toBe(initialOrder.join("|"));
     await snap(page, testInfo, "reshuffle-changed");
   });
 

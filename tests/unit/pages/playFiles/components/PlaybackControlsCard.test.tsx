@@ -52,6 +52,7 @@ const buildProps = (overrides: Partial<PlaybackControlsCardProps> = {}): Playbac
   onReshuffle: vi.fn(),
   reshuffleActive: false,
   reshuffleDisabled: true,
+  shuffleSeed: null,
   ...overrides,
 });
 
