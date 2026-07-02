@@ -102,7 +102,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-042 | Stale-generation FGS start intent never calls startForeground (crash risk) | native | P2 | correctness, robustness | medium | S | OPEN |
 | HARD9-043 | SecureStorage builds EncryptedSharedPreferences per call, unsynchronized | native | P2 | correctness, data-loss, robustness, perf | medium | S | FIXED (52b59dd8) |
 | HARD9-044 | FTP/SAF readFile buffers whole file ×3.3 in heap — OOM on large files | native | P2 | robustness, perf, correctness | high | M | OPEN |
-| HARD9-045 | normalizeSourcePath collapses internal whitespace, corrupting paths | sources | P2 | correctness, robustness | high | S | OPEN |
+| HARD9-045 | normalizeSourcePath collapses internal whitespace, corrupting paths | sources | P2 | correctness, robustness | high | S | FIXED (1f3e9de3) |
 | HARD9-046 | Ingestion finalize overwrites songlengths projection with duration-less records | hvsc | P2 | correctness, data-loss | medium | M | FIXED (517057d1) |
 | HARD9-047 | Web local sources list files after reload that can no longer be opened | sources | P2 | correctness, ux | medium | M | OPEN |
 | HARD9-048 | Disk library save effect writes stale/empty state before load settles | sources | P2 | data-loss, robustness | medium | S | FIXED (93683f38) |
@@ -517,11 +517,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Fix sketch:** Enforce a max-size guard (clear rejection above e.g. 32MB), and/or stream to a cache file and return a URI/path for large payloads.
 
 ### HARD9-045 — normalizeSourcePath collapses internal whitespace, corrupting legitimate paths on every source
-- **Area:** sources · **Severity:** P2 · **Dimensions:** correctness, robustness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** sources · **Severity:** P2 · **Dimensions:** correctness, robustness · **Confidence:** high · **Effort:** S · **Status:** FIXED (1f3e9de3)
 - **Files:** `src/lib/sourceNavigation/paths.ts:9-14`, `src/lib/sourceNavigation/useSourceNavigator.ts:89`, `src/lib/sourceNavigation/localSourceAdapter.ts:54,89-93`
 - **Failure scenario:** A directory named `My  Demos` (double space — legal FAT name) cannot be opened: every navigation routes through `ensureWithinRoot` → `normalizeSourcePath`, which does `value.replace(/\s+/g, " ").trim()`, rewriting the request to `/My Demos`. FTP LIST fails ("not found"); for web local sources the prefix match misses (raw stored paths keep the double space) and the folder renders empty; Android SAF hits the same mangled path.
 - **Evidence:** `paths.ts:11` — name corruption, not normalization; adapter-produced entry paths are un-collapsed, so navigateTo(entry.path) → normalized safePath no longer matches.
 - **Fix sketch:** Restrict `normalizeSourcePath` to structural normalization (leading slash, collapse duplicate `/`); drop the whitespace collapse/trim (trim only fully-blank input).
+- **Resolution (1f3e9de3):** Implemented the fix sketch exactly: `normalizeSourcePath` now only prepends a leading slash and collapses duplicate `/`; a blank or whitespace-only input still maps to `/`, but any input with real content keeps its whitespace untouched. A dedicated Explore search of the full `tests/` tree confirmed no other test fixture (across all ~20 call sites: local sources, HVSC, disk mount, playlist sync, config file references) relied on the removed collapse/trim behavior - all of them derive paths from filesystem entries, not raw typed input. New regression test proven failing against the pre-fix collapse via `git stash`.
 
 ### HARD9-046 — Ingestion finalize overwrites the songlengths projection with duration-less, metadata-stripped song records
 - **Area:** hvsc · **Severity:** P2 · **Dimensions:** correctness, data-loss · **Confidence:** medium · **Effort:** M · **Status:** FIXED (517057d1)
