@@ -10,7 +10,7 @@ import { renderHook, act } from "@testing-library/react";
 import { useDiskLibrary, buildDiskEntryFromDrive, toDisplayName } from "@/hooks/useDiskLibrary";
 import { loadDiskLibrary, saveDiskLibrary } from "@/lib/disks/diskStore";
 import { buildDiskTreeState } from "@/lib/disks/diskTree";
-import { createDiskEntry } from "@/lib/disks/diskTypes";
+import { createDiskEntry, type DiskEntry } from "@/lib/disks/diskTypes";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 
 vi.mock("@/lib/disks/diskStore");
@@ -219,6 +219,38 @@ describe("useDiskLibrary", () => {
 
     expect(result.current.disks.map((disk) => disk.id)).toEqual([secondDisk.id]);
     expect(result.current.runtimeFiles).toEqual({});
+  });
+
+  it("never persists the previous device's disks under the new uniqueId when switching (HARD9-048)", () => {
+    const staleDisk = createDiskEntry({ path: "/device-a-only.d64", location: "local" });
+    const freshDisk = createDiskEntry({ path: "/device-b.d64", location: "local" });
+    vi.mocked(loadDiskLibrary)
+      .mockReturnValueOnce({ disks: [] })
+      .mockReturnValueOnce({ disks: [freshDisk] });
+
+    const { result, rerender } = renderHook(({ uniqueId }) => useDiskLibrary(uniqueId), {
+      initialProps: { uniqueId: "device-a" },
+    });
+
+    act(() => {
+      result.current.addDisks([staleDisk]);
+    });
+    expect(result.current.disks.map((disk) => disk.id)).toEqual([staleDisk.id]);
+
+    rerender({ uniqueId: "device-b" });
+
+    // No call may ever have persisted device-a's disk list under the
+    // device-b key - the load and save effects fire in the same commit on
+    // a uniqueId change, and the save effect's `disks` closure is stale
+    // (still device-a's) for that one transitional render.
+    const staleWrites = vi
+      .mocked(saveDiskLibrary)
+      .mock.calls.filter(
+        ([id, state]) => id === "device-b" && (state as { disks: DiskEntry[] }).disks.some((d) => d.id === staleDisk.id),
+      );
+    expect(staleWrites).toHaveLength(0);
+
+    expect(result.current.disks.map((disk) => disk.id)).toEqual([freshDisk.id]);
   });
 
   it("removeDisk is a no-op on runtimeFiles when disk has no runtime file", () => {
