@@ -137,4 +137,74 @@ class MockFtpServerTest {
     client.disconnect()
     server.stop()
   }
+
+  @Test
+  fun pathContainmentRejectsSiblingDirectorySharingRootPrefix() {
+    val root = tempFolder.newFolder("mock-ftp-root")
+    // A sibling directory whose name merely starts with the root's name -
+    // "mock-ftp-rootX" - must NOT be treated as contained within "mock-ftp-root".
+    val sibling = tempFolder.newFolder("mock-ftp-rootX")
+
+    assertFalse(
+            "Sibling directory sharing a string prefix with the root must not pass containment (HARD9-071)",
+            isPathContainedInRoot(sibling.canonicalFile.path, root.canonicalFile.path),
+    )
+  }
+
+  @Test
+  fun pathContainmentAcceptsRootItselfAndGenuineChildren() {
+    val root = tempFolder.newFolder("mock-ftp-root2")
+    val child = java.io.File(root, "sub/demo.sid")
+    child.parentFile?.mkdirs()
+    child.writeText("data")
+
+    assertTrue(isPathContainedInRoot(root.canonicalFile.path, root.canonicalFile.path))
+    assertTrue(isPathContainedInRoot(child.canonicalFile.path, root.canonicalFile.path))
+  }
+
+  @Test
+  fun passiveDataConnectionTimesOutInsteadOfHangingForeverOnAnUnusedPasv() {
+    val rootDir = tempFolder.newFolder("ftp-root6")
+    java.io.File(rootDir, "demo.sid").writeText("data")
+    val server = MockFtpServer(rootDir, null)
+    server.dataConnectionAcceptTimeoutMs = 200
+    val port = server.start()
+
+    val socket = Socket("127.0.0.1", port)
+    val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
+    val writer = BufferedWriter(OutputStreamWriter(socket.getOutputStream()))
+
+    reader.readLine()
+    writer.write("USER user\r\n")
+    writer.flush()
+    reader.readLine()
+    writer.write("PASS anything\r\n")
+    writer.flush()
+    reader.readLine()
+
+    writer.write("PASV\r\n")
+    writer.flush()
+    reader.readLine()
+
+    // Deliberately never connect to the PASV data port, then issue LIST. Without
+    // a bounded soTimeout on the passive ServerSocket, accept() blocks forever
+    // and the client never receives a "150"/timeout response at all (HARD9-071).
+    // This test proves the session terminates within a bounded window instead of
+    // hanging - it does not wait out the full production timeout.
+    writer.write("LIST\r\n")
+    writer.flush()
+
+    socket.soTimeout = 3_000
+    try {
+      reader.readLine()
+    } catch (error: java.net.SocketTimeoutException) {
+      fail(
+              "Expected the FTP session to eventually close/respond once the data " +
+                      "connection accept() times out, not hang past the client's own read timeout",
+      )
+    }
+
+    socket.close()
+    server.stop()
+  }
 }

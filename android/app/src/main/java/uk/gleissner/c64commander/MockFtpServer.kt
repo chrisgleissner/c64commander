@@ -23,6 +23,14 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
 
+// A plain String.startsWith(root) lets a sibling directory that merely shares the
+// root's name as a string prefix (e.g. root "mock-ftp-root", sibling
+// "mock-ftp-rootX") pass containment, since the sibling's path also starts with
+// the root's path string (HARD9-071). Extracted as a top-level internal function
+// so the exact containment logic is directly unit-testable.
+internal fun isPathContainedInRoot(canonicalTargetPath: String, canonicalRootPath: String): Boolean =
+        canonicalTargetPath == canonicalRootPath || canonicalTargetPath.startsWith(canonicalRootPath + File.separator)
+
 class MockFtpServer(
   private val rootDir: File,
   private val password: String?,
@@ -33,6 +41,14 @@ class MockFtpServer(
   @Volatile private var running = false
   var port: Int = 0
     private set
+
+  // Bounds how long a PASV data connection waits for the client to actually
+  // connect. Without this, a PASV+LIST/RETR client that never connects parks
+  // the executor thread in dataServer.accept() forever (HARD9-071). Injectable
+  // (matching this codebase's socketFactory/httpConnectionFactory convention) so
+  // tests can exercise the timeout path without waiting out the real duration.
+  internal var dataConnectionAcceptTimeoutMs: Int = 10_000
+
   private companion object {
     const val LOG_TAG = "MockFtpServer"
   }
@@ -85,7 +101,7 @@ class MockFtpServer(
   private fun handleClient(socket: Socket) {
     val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
     val writer = BufferedWriter(OutputStreamWriter(socket.getOutputStream()))
-    val session = FtpSession(rootDir, password, writer)
+    val session = FtpSession(rootDir, password, writer, dataConnectionAcceptTimeoutMs)
     session.send("220 Mock C64U FTP ready")
 
     try {
@@ -113,6 +129,7 @@ class MockFtpServer(
     private val rootDir: File,
     private val password: String?,
     private val writer: BufferedWriter,
+    private val dataConnectionAcceptTimeoutMs: Int,
   ) {
     private var cwd: String = "/"
     private var loggedIn = false
@@ -257,6 +274,7 @@ class MockFtpServer(
         send("425 Use PASV first")
         return
       }
+      dataServer.soTimeout = dataConnectionAcceptTimeoutMs
       val dataSocket = dataServer.accept()
       try {
         block(dataSocket)
@@ -322,7 +340,7 @@ class MockFtpServer(
       val target = if (relative.isBlank()) rootDir else File(rootDir, relative)
       val canonicalRoot = rootDir.canonicalFile
       val canonicalTarget = target.canonicalFile
-      return if (canonicalTarget.path.startsWith(canonicalRoot.path)) canonicalTarget else null
+      return if (isPathContainedInRoot(canonicalTarget.path, canonicalRoot.path)) canonicalTarget else null
     }
 
     private fun isDirectory(path: String): Boolean {
