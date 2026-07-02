@@ -96,7 +96,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-036 | CPU restore failure strands machine in restore cart; no RAM-only fallback | snapshot | P2 | correctness, robustness, ux | high | M | FIXED (f856dfee) |
 | HARD9-037 | Mount sheet permits concurrent mounts to the same drive | disks | P2 | correctness, ux | medium | S | FIXED (ca393156) |
 | HARD9-038 | Local-disk rotation/eject-before-delete break after first drives poll | disks | P2 | correctness, ux | medium | M | FIXED (5db6d86a) |
-| HARD9-039 | Capture-timeout rollback can corrupt safe region while CPU executes it | snapshot | P2 | correctness, robustness | medium | S | OPEN |
+| HARD9-039 | Capture-timeout rollback can corrupt safe region while CPU executes it | snapshot | P2 | correctness, robustness | medium | S | FIXED (42421f0b) |
 | HARD9-040 | Failed HVSC baseline promotion can delete the only library copy | native | P2 | data-loss, correctness, robustness | high | S | OPEN |
 | HARD9-041 | Late setDueAtMs resurrects phantom FGS + wake lock after Stop | native | P2 | correctness, robustness, ux, perf | high | M | OPEN |
 | HARD9-042 | Stale-generation FGS start intent never calls startForeground (crash risk) | native | P2 | correctness, robustness | medium | S | OPEN |
@@ -466,11 +466,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (5db6d86a):** Implemented the fix sketch's parenthetical exactly - match by uploaded filename (`image_file` basename) against the overridden local disk's path basename before clearing; keep the override on a match, clear as before otherwise (empty drive or a different image). The regression test caught a real trap: asserting on the visible label alone is unreliable, since `mountedLabel` falls back to the raw polled `image_file` string when no disk resolves, which can coincidentally read identically to the correct resolution - the test uses a display name that differs from the path basename to actually distinguish "override kept" from "override cleared, same text by coincidence."
 
 ### HARD9-039 — Capture-timeout rollback can corrupt the safe region while the CPU is executing it (late-interrupt race)
-- **Area:** snapshot · **Severity:** P2 · **Dimensions:** correctness, robustness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
+- **Area:** snapshot · **Severity:** P2 · **Dimensions:** correctness, robustness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (42421f0b)
 - **Files:** `src/lib/snapshot/cpu/captureEngine.ts:169-187,209`
 - **Failure scenario:** The poll loop checks `captured`; on deadline it pauses and rolls back (restore vector, restore safe region, try next candidate). If the program's IRQ fires between the final `captured` read and `machinePause()` (up to 50ms + latency), the CPU is frozen *inside* the handler's spin loop at $033C. The rollback then overwrites the spin-loop code under the CPU's feet; on resume the CPU executes arbitrary restored bytes at its current PC — crashing the program the user asked to snapshot.
 - **Evidence:** `if (!captured) { await api.machinePause(); await api.writeMemoryBlock(vectorAddr, irqVector); await api.writeMemoryBlock(base, savedRegion); continue; }` — no re-check of `layout.captured` after pausing.
 - **Fix sketch:** After `machinePause()` in the timeout path, re-read the captured flag; if it flipped, treat the attempt as a successful capture.
+- **Resolution (42421f0b):** Implemented the fix sketch exactly - split the single `if (!captured)` block into two: the first calls `machinePause()` and re-reads the flag; the second (the actual rollback + `continue`) only runs if it's still false after that re-check. A flipped flag now falls through unchanged into the existing "captured" handling (stable-read verification etc.), with no duplicated logic.
 
 ### HARD9-040 — Failed HVSC baseline promotion can delete the only copy of the user's library
 - **Area:** native · **Severity:** P2 · **Dimensions:** data-loss, correctness, robustness · **Confidence:** high · **Effort:** S · **Status:** OPEN
