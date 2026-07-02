@@ -21,41 +21,70 @@ import java.lang.reflect.Field
 import java.net.CookieHandler
 
 open class MainActivity : BridgeActivity() {
-  internal fun ensureCapacitorPluginAssetPath(filesDirectory: File = filesDir) {
+  internal fun ensureCapacitorPluginAssetPath(
+    filesDirectory: File = filesDir,
+    launchOrphanCleanup: (Runnable) -> Unit = { task -> Thread(task, "PluginAssetOrphanCleanup").start() },
+  ) {
     val pluginsPath = File(filesDirectory, "public/plugins")
-    // Recoverable: file already exists in the expected shape. Bridge will read it.
+    // Fast, cheap happy path (a single stat call) stays synchronous on this
+    // thread — this is the case on every normal launch, so it must add no
+    // measurable overhead. Bridge will read this file once it starts.
     if (pluginsPath.isFile) return
     try {
-      if (pluginsPath.isDirectory && !pluginsPath.deleteRecursively()) {
-        // Unrecoverable: directory exists where a file is required and we
-        // cannot replace it. Continuing would leave the bridge in a broken
-        // state where plugin invocations behave unpredictably.
-        throw IllegalStateException(
-                "Capacitor plugin asset path is a directory and cannot be removed: ${pluginsPath.absolutePath}",
-        )
+      if (pluginsPath.isDirectory) {
+        // A stray directory here can be arbitrarily large (HARD9-077); a
+        // synchronous deleteRecursively() of it can stall this (main) thread
+        // toward the ANR threshold. Renaming it out of the way is an O(1)
+        // filesystem metadata operation regardless of the directory's size,
+        // freeing the required path immediately; the actual bulk delete of
+        // the orphaned directory then runs on a background thread with
+        // nothing downstream needing to wait for it to finish.
+        val orphan = File(filesDirectory, "public/plugins-orphan-${System.currentTimeMillis()}")
+        if (pluginsPath.renameTo(orphan)) {
+          launchOrphanCleanup(
+                  Runnable {
+                    try {
+                      orphan.deleteRecursively()
+                    } catch (error: Exception) {
+                      AppLogger.warn(
+                              null,
+                              "MainActivity",
+                              "Failed to clean up orphaned Capacitor plugin asset directory",
+                              "MainActivity",
+                              error,
+                      )
+                    }
+                  },
+          )
+        } else if (!pluginsPath.deleteRecursively()) {
+          // Rename failed (e.g. cross-filesystem) and the direct delete also
+          // failed. Repairable disk hiccup: log and best-effort continue —
+          // Capacitor will recreate the file on first plugin call — instead
+          // of throwing and turning this into a startup crash loop.
+          AppLogger.warn(
+                  null,
+                  "MainActivity",
+                  "Unable to remove stray Capacitor plugin asset directory; continuing without repair",
+                  "MainActivity",
+          )
+          return
+        }
       }
 
       val parent = pluginsPath.parentFile
       if (parent != null && !parent.exists() && !parent.mkdirs()) {
-        throw IllegalStateException(
-                "Failed to create Capacitor plugin asset parent directory: ${parent.absolutePath}",
+        AppLogger.warn(
+                null,
+                "MainActivity",
+                "Failed to create Capacitor plugin asset parent directory; continuing without repair",
+                "MainActivity",
         )
+        return
       }
 
       if (!pluginsPath.exists()) {
         pluginsPath.writeText("[]")
       }
-    } catch (error: IllegalStateException) {
-      // Surface unrecoverable failures so the launch fails fast instead of
-      // limping along with a broken plugin path.
-      AppLogger.warn(
-              this,
-              "MainActivity",
-              "Unrecoverable Capacitor plugin asset path failure",
-              "MainActivity",
-              error,
-      )
-      throw error
     } catch (error: Exception) {
       // Recoverable I/O hiccup (e.g. transient permission denial during a
       // backup restore). Log with context and let onCreate continue —

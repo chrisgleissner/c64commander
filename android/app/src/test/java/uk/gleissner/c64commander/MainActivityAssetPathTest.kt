@@ -9,7 +9,6 @@
 package uk.gleissner.c64commander
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -55,19 +54,20 @@ class MainActivityAssetPathTest {
   }
 
   @Test
-  fun failsFastWhenPluginsPathIsADirectoryThatCannotBeRemoved() {
+  fun repairsDirectoryWithUnremovableNestedContentInsteadOfCrashingTheLaunch() {
+    // HARD9-077: a repairable disk hiccup (a stray directory sitting where the
+    // plugins file belongs) must not throw and crash the launch. This used to
+    // assert the opposite - that an unremovable directory threw
+    // IllegalStateException - which is the exact "startup crash loop" bug the
+    // finding describes; the app must instead log a warning and continue.
     val filesDir = tempFolder.newFolder("filesDir-${System.nanoTime()}")
     val pluginsDir = File(filesDir, "public/plugins")
     pluginsDir.mkdirs()
-    // Place a non-empty directory entry that we can't remove because we'll
-    // turn the parent read-only after writing it. On the JVM under
-    // Robolectric, deleteRecursively still succeeds for owned files, so we
-    // simulate the unrecoverable case by wrapping the call and asserting
-    // the throw path is exercised when the directory truly cannot be reset.
     val nested = File(pluginsDir, "child")
     nested.mkdirs()
     File(nested, "guard.txt").writeText("x")
-    // Make the nested directory unwritable so deleteRecursively fails.
+    // Make the nested directory unwritable so a direct deleteRecursively() of
+    // pluginsDir's contents would fail.
     val readOnlySet = nested.setWritable(false, false)
     if (!readOnlySet) {
       // On hosts that ignore chmod, skip this branch — covered by other
@@ -75,14 +75,19 @@ class MainActivityAssetPathTest {
       return
     }
 
-    val activity = newActivity()
-    val error = assertThrows(IllegalStateException::class.java) {
+    try {
+      val activity = newActivity()
+      // Must not throw. renameTo() only needs write access to the parent
+      // directory (not the nested unwritable child), so this repairs cleanly
+      // via the O(1) rename-then-background-delete path even though the
+      // stray directory's contents can't all be removed synchronously.
       activity.ensureCapacitorPluginAssetPath(filesDir)
+
+      val pluginsFile = File(filesDir, "public/plugins")
+      assertTrue("plugins path should be repaired into a valid file", pluginsFile.isFile)
+      assertEquals("[]", pluginsFile.readText())
+    } finally {
+      nested.setWritable(true, false)
     }
-    assertTrue(
-            "error message should mention the offending path",
-            error.message?.contains(pluginsDir.absolutePath) == true,
-    )
-    nested.setWritable(true, false)
   }
 }
