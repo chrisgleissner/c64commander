@@ -84,7 +84,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-024 | Circuit/state-gate error toasts classified "unknown", never auto-clear | transport | P2 | ux, correctness | high | S | FIXED (22147b34) |
 | HARD9-025 | Password field write race between connection state and secure-storage load | settings | P2 | correctness, data-loss | medium | S | FIXED (df7ddcd9) |
 | HARD9-026 | 600ms drag-settle timer collapses a held swipe mid-gesture | shell | P2 | ux, correctness | high | S | FIXED (d2bc8ea6) |
-| HARD9-027 | Diagnostics overlay scroll save/restore targets the wrong scroller (dead code) | shell | P2 | correctness, ux | high | S | OPEN |
+| HARD9-027 | Diagnostics overlay scroll save/restore targets the wrong scroller (dead code) | shell | P2 | correctness, ux | high | S | FIXED (c09fd66c) |
 | HARD9-028 | Saved-device switch reports auth failure as "offline" | settings | P2 | ux, correctness | medium | M | FIXED (df7ddcd9) |
 | HARD9-029 | Playing a new track while machine paused leaves C64 frozen, UI "playing" | playback | P2 | correctness, robustness | medium | S | FIXED (3cfc137c) |
 | HARD9-030 | Deleting the playing item resets UI but device keeps playing; watchdog armed | playback | P2 | correctness, ux | high | M | FIXED (4d7c357b) |
@@ -379,11 +379,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (d2bc8ea6):** Implemented the fix sketch exactly: added an `onActiveChange` callback to `useSwipeGesture`, fired whenever pointer capture for a gesture starts/ends (independent of dx changing). The settle-timer effect now keys only on `runway.phase` (not dx), starting once on entering "dragging" instead of restarting on every pointermove; each firing checks the live pointer-active state before resetting - if still down, it re-schedules another check instead of snapping back, only resetting once the pointer has genuinely gone away. New regression tests proven failing against the pre-fix code via `git stash`; the pre-existing "resets an orphaned drag" test (the intended missed-pointerup recovery) passes unchanged.
 
 ### HARD9-027 — Diagnostics overlay scroll save/restore targets the wrong scroller (dead code)
-- **Area:** shell · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** shell · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** FIXED (c09fd66c)
 - **Files:** `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx:99,174,244-255`, `src/index.css:700-725`, `src/components/layout/PageContainer.tsx:40`
 - **Failure scenario:** The overlay snapshots `window.scrollY` on open and restores it on close — but the app never scrolls the window: pages scroll inside `.page-shell`. `window.scrollY` is always 0, so restore is a no-op. Any path resetting `.page-shell` `scrollTop` while the full-screen sheet is open (page remount in a swipe slot, Radix scroll lock, the route-driven `navigate("/settings")` on close) loses the user's scroll position with nothing to restore it.
 - **Evidence:** scrollRestoreRef effect reads/writes only window scroll; no code touches `[data-page-scroll-container]`.
 - **Fix sketch:** Capture and restore the active `.page-shell`'s `scrollTop` (rAF after close), or delete the effect if the container provably preserves scroll.
+- **Resolution (c09fd66c):** Implemented the fix sketch's first option: saves/restores the active page's own `scrollTop` (still via `requestAnimationFrame` after close), found via `[data-slot-active="true"] [data-page-scroll-container="true"]` - the exact selector SwipeNavigationLayer already uses to mark which mounted page slot is interactive. `/diagnostics` routes always map to the Settings tab slot, so this selector is reliably present. New regression test proven failing against the pre-fix window-scroll code via `git stash`.
 
 ### HARD9-028 — Saved-device switch reports auth failure as "offline", misdirecting the user
 - **Area:** settings · **Severity:** P2 · **Dimensions:** ux-responsiveness, correctness · **Confidence:** medium · **Effort:** M · **Status:** FIXED (df7ddcd9)
