@@ -122,7 +122,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-062 | Startup saved-device fallback commits selection before verification | transport | P3 | correctness, ux | medium | S | FIXED (16fc9351) |
 | HARD9-063 | Volume sync wedges after starting a new track from paused state | playback | P3 | correctness, robustness | medium | S | FIXED (3cfc137c) |
 | HARD9-064 | Session restore revives "playing" UI for a dead device session | playback | P3 | correctness, ux | medium | S | FIXED (aea8d46d) |
-| HARD9-065 | resolveVolumeSyncDecision is dead code diverging from live sync logic | playback | P3 | robustness | high | S | OPEN |
+| HARD9-065 | resolveVolumeSyncDecision is dead code diverging from live sync logic | playback | P3 | robustness | high | S | FIXED (d9fe1f3a) |
 | HARD9-066 | handlePlaylistSelect carries a bogus dependency | playback | P3 | robustness | high | S | OPEN |
 | HARD9-067 | Snapshot restore halts CIA TOD clocks / flips ICR mask bits | snapshot | P3 | correctness | medium | S | OPEN |
 | HARD9-068 | resolveLocalDiskBlob cross-source fallback can mount the wrong disk | disks | P3 | correctness | medium | S | OPEN |
@@ -643,10 +643,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (aea8d46d):** Added `isPlaybackSessionRestoreStale` in `playFilesUtils.ts`: a restore is stale when `pending.updatedAt` is more than 5 minutes old. Since the persist effect only re-fires while the 1s timeline interval is ticking, `updatedAt` age measures how long the app was backgrounded/suspended/away, not how long the track was playing - a brief navigation and back still restores playing normally, matching the existing "overdue but fresh" test. A stale `isPlaying && !isPaused` restore now downgrades to `isPlaying=true, isPaused=true` (position restored, no guard armed) instead of arming auto-advance.
 
 ### HARD9-065 — resolveVolumeSyncDecision helper is dead code diverging from the live sync logic
-- **Area:** playback · **Severity:** P3 · **Dimensions:** robustness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** playback · **Severity:** P3 · **Dimensions:** robustness · **Confidence:** high · **Effort:** S · **Status:** FIXED (d9fe1f3a)
 - **Files:** `src/pages/playFiles/playbackGuards.ts:28-38`, `src/pages/PlayFilesPage.tsx:113`, `src/pages/playFiles/hooks/useVolumeOverride.ts:1027-1061`
 - **Failure scenario:** Maintenance hazard: PlayFilesPage imports `resolveVolumeSyncDecision` but never calls it; the actual pending-write hold logic is re-implemented inline with subtly different rules (2500ms staleness only in the unmuted branch — a muted pending write that never confirms defers muted-sync indefinitely until the separate 5000ms stale-clear). Two sources of truth invite regressions.
 - **Fix sketch:** Use the tested helper in both branches (or delete it) so muted and unmuted pending writes share the same bounded hold.
+- **Resolution (d9fe1f3a):** Discovered a second, better-suited, also-dead helper (`resolvePlaybackSyncDecision` in `playbackMixerSync.ts`) that already compares both `index` and `muted` and already had unit test coverage; wired it into both branches of the live sync effect, giving the muted branch the same 2500ms staleness bound the unmuted branch already had. Deleted the strictly-worse, still-unused `resolveVolumeSyncDecision`/`VolumeUiTarget` from `playbackGuards.ts` (it only compared `index`, not `muted`) and its dead import in `PlayFilesPage.tsx`. Added an integration regression test manually confirmed to fail against the pre-fix code (via `git stash`) and pass after.
 
 ### HARD9-066 — handlePlaylistSelect carries a bogus dependency
 - **Area:** playback · **Severity:** P3 · **Dimensions:** robustness · **Confidence:** high · **Effort:** S · **Status:** OPEN
