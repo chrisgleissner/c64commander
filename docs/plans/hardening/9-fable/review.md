@@ -87,7 +87,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-027 | Diagnostics overlay scroll save/restore targets the wrong scroller (dead code) | shell | P2 | correctness, ux | high | S | OPEN |
 | HARD9-028 | Saved-device switch reports auth failure as "offline" | settings | P2 | ux, correctness | medium | M | FIXED (df7ddcd9) |
 | HARD9-029 | Playing a new track while machine paused leaves C64 frozen, UI "playing" | playback | P2 | correctness, robustness | medium | S | FIXED (3cfc137c) |
-| HARD9-030 | Deleting the playing item resets UI but device keeps playing; watchdog armed | playback | P2 | correctness, ux | high | M | OPEN |
+| HARD9-030 | Deleting the playing item resets UI but device keeps playing; watchdog armed | playback | P2 | correctness, ux | high | M | FIXED (4d7c357b) |
 | HARD9-031 | Auto-advance dies when user navigates away from Play page | playback | P2 | correctness, ux | high | L | OPEN |
 | HARD9-032 | Playlist rows rebuilt on every 1s timeline tick (memoization defeated) | playback | P2 | performance, ux | high | S | OPEN |
 | HARD9-033 | Cancel during add-items can throw inside a React state updater | playback | P2 | robustness, correctness | medium | S | OPEN |
@@ -387,11 +387,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (3cfc137c):** `playItem` now calls `resumeMachineWithRetry` when `isPausedRef.current` is true, right after `ensureUnmuted`/obtaining the API handle and before building the play plan - matching the fix sketch and `handleStop`'s existing resume-before-command pattern. A resume failure reports a user error and aborts the launch (via `throw`) instead of silently proceeding into a still-frozen machine, since every other launch entry point (Next/Previous/row-tap/startPlaylist) funnels through `playItem`.
 
 ### HARD9-030 — Deleting the currently-playing item resets the UI but leaves the device playing and the native watchdog armed
-- **Area:** playback · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** M · **Status:** OPEN
+- **Area:** playback · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** M · **Status:** FIXED (4d7c357b)
 - **Files:** `src/pages/PlayFilesPage.tsx:1432-1460`
 - **Failure scenario:** While playing, user removes the current item (or clears the playlist). `removePlaylistItemsById` sets `isPlaying=false` without any device stop — music keeps playing on the C64 while the UI shows stopped; pressing "Play" launches a new track over the running one. `autoAdvanceGuardRef.current = null` is set but `setAutoAdvanceDueAtMs(null)` never called, so the Android background service keeps its due-time armed and wakes for a phantom auto-skip.
 - **Evidence:** The state-reset block contains no `getC64API()` stop, no `restoreVolumeOverrides`, no `setAutoAdvanceDueAtMs(null)` (contrast `handleStop`, `usePlaybackController.ts:1081-1101`). The `setIsPlaying`/`setCurrentIndex` calls also run inside the `setPlaylist` updater (impure updater — render-replay hazard).
 - **Fix sketch:** When the removed set contains the playing item, route through `handleStop()`; move side-effectful state updates out of the `setPlaylist` updater.
+- **Resolution (4d7c357b):** Added a pure `planPlaylistItemRemoval` helper (playbackGuards.ts) that computes the filtered playlist, recomputed current index, and whether the device needs stopping. `removePlaylistItemsById` now calls the existing `handleStop()` (full teardown: resume-if-paused, device stop, volume restore, guard/due-at clear) when the plan says so, and applies `setPlaylist`/`setCurrentIndex` directly with computed values instead of nesting side-effectful setState calls inside the `setPlaylist` updater.
 
 ### HARD9-031 — Auto-advance dies when the user navigates away from the Play page
 - **Area:** playback · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** L · **Status:** OPEN
