@@ -524,6 +524,11 @@ export function useC64SetConfig() {
         queryKey: ["c64-category", variables.category],
       });
       queryClient.invalidateQueries({ queryKey: ["c64-all-config"] });
+      // Home reads exclusively through c64-config-items/c64-config-item, not
+      // c64-category/c64-all-config - without this, Home stays stale up to
+      // the 30s staleTime after a Config-page write. See HARD9-017.
+      queryClient.invalidateQueries({ queryKey: ["c64-config-items", variables.category] });
+      queryClient.invalidateQueries({ queryKey: ["c64-config-item", variables.category] });
       updateHasChanges(getActiveBaseUrl(), true);
     },
   });
@@ -554,6 +559,10 @@ export function useC64UpdateConfigBatch() {
         queryKey: ["c64-category", variables.category],
       });
       queryClient.invalidateQueries({ queryKey: ["c64-all-config"] });
+      // See HARD9-017: Home reads through c64-config-items/c64-config-item,
+      // which c64-category/c64-all-config invalidation does not reach.
+      queryClient.invalidateQueries({ queryKey: ["c64-config-items", variables.category] });
+      queryClient.invalidateQueries({ queryKey: ["c64-config-item", variables.category] });
       updateHasChanges(getActiveBaseUrl(), true);
     },
   });

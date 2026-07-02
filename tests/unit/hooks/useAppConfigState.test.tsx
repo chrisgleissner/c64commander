@@ -218,6 +218,24 @@ describe("useAppConfigState", () => {
     expect(updateHasChanges).toHaveBeenCalledWith(expect.any(String), false);
   });
 
+  it("revertToInitial invalidates c64-config-items/c64-config-item so Home reflects it (HARD9-017)", async () => {
+    loadInitialSnapshot.mockReturnValue({
+      savedAt: "t",
+      data: { Audio: { items: { Vol: { value: "7" } } } },
+    });
+    getCategories.mockResolvedValue({ categories: ["Audio"] });
+    getCategory.mockResolvedValue({ items: { Vol: { selected: "7" } } });
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const { result } = renderHook(() => useAppConfigState(), { wrapper });
+
+    await act(async () => {
+      await result.current.revertToInitial();
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-config-items"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-config-item"] });
+  });
+
   it("revertToInitial reports verification mismatches after applying the snapshot", async () => {
     loadInitialSnapshot.mockReturnValue({
       savedAt: "t",

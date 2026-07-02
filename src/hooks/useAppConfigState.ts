@@ -415,6 +415,13 @@ export function useAppConfigState() {
 
       queryClient.invalidateQueries({ queryKey: ["c64-category"] });
       queryClient.invalidateQueries({ queryKey: ["c64-all-config"] });
+      // Home's quick-config controls (Turbo, Video Mode, RAM Expansion, SID
+      // cards, lighting) read exclusively through c64-config-items/
+      // c64-config-item, not c64-category/c64-all-config - without this,
+      // Load From App / Revert / Load From Flash all keep showing pre-load
+      // values on Home until the 30s staleTime lapses. See HARD9-017.
+      queryClient.invalidateQueries({ queryKey: ["c64-config-items"] });
+      queryClient.invalidateQueries({ queryKey: ["c64-config-item"] });
     },
     [queryClient],
   );
