@@ -76,7 +76,11 @@ class InsufficientMemoryException(
         )
 
 interface HvscArchiveExtractor {
-  fun probe(archiveFile: File, mode: HvscArchiveMode): ArchiveProfile
+  fun probe(
+          archiveFile: File,
+          mode: HvscArchiveMode,
+          cancellationToken: AtomicBoolean = AtomicBoolean(false),
+  ): ArchiveProfile
 
   fun extract(
           archiveFile: File,
@@ -91,7 +95,11 @@ interface HvscArchiveExtractor {
 class DefaultHvscArchiveExtractor(
         private val sevenZipExecutableProvider: () -> File? = { null },
 ) : HvscArchiveExtractor {
-  override fun probe(archiveFile: File, mode: HvscArchiveMode): ArchiveProfile {
+  override fun probe(
+          archiveFile: File,
+          mode: HvscArchiveMode,
+          cancellationToken: AtomicBoolean,
+  ): ArchiveProfile {
     Trace.beginSection("hvsc:probe")
     try {
       require(archiveFile.exists() && archiveFile.isFile) {
@@ -99,7 +107,7 @@ class DefaultHvscArchiveExtractor(
       }
       return when {
         archiveFile.name.endsWith(".7z", ignoreCase = true) ->
-                probeSevenZipArchive(archiveFile, mode)
+                probeSevenZipArchive(archiveFile, mode, cancellationToken)
         archiveFile.name.endsWith(".zip", ignoreCase = true) -> probeZipArchive(archiveFile, mode)
         else -> throw IllegalStateException("Unsupported archive format: ${archiveFile.name}")
       }
@@ -118,7 +126,7 @@ class DefaultHvscArchiveExtractor(
   ): ExtractionResult {
     Trace.beginSection("hvsc:extract")
     try {
-      val profile = probe(archiveFile, mode)
+      val profile = probe(archiveFile, mode, cancellationToken)
       enforceMemoryBudget(profile, memoryBudget)
       if (cancellationToken.get()) {
         throw java.util.concurrent.CancellationException("HVSC extraction cancelled")
@@ -189,12 +197,40 @@ class DefaultHvscArchiveExtractor(
     }
   }
 
-  private fun probeSevenZipArchive(archiveFile: File, mode: HvscArchiveMode): ArchiveProfile {
+  private fun probeSevenZipArchive(
+          archiveFile: File,
+          mode: HvscArchiveMode,
+          cancellationToken: AtomicBoolean,
+  ): ArchiveProfile {
     val executable = requireSevenZipExecutable()
     val process =
             ProcessBuilder(listOf(executable.absolutePath, "l", "-slt", archiveFile.absolutePath))
                     .redirectErrorStream(true)
                     .start()
+
+    // Mirrors extractSevenZipToRawTree's cancellation monitor: without this, a
+    // pathological archive can wedge "7zz l -slt" indefinitely on useLines/waitFor,
+    // and cancelIngestion() has nothing to kill - every retry then rejects with
+    // "HVSC ingestion already running" until the app is force-stopped. See HARD9-074.
+    val cancellationMonitor = Thread {
+      while (process.isAlive) {
+        if (cancellationToken.get()) {
+          process.destroy()
+          if (process.isAlive) {
+            process.destroyForcibly()
+          }
+          break
+        }
+        try {
+          Thread.sleep(50)
+        } catch (_: InterruptedException) {
+          Thread.currentThread().interrupt()
+          return@Thread
+        }
+      }
+    }
+    cancellationMonitor.isDaemon = true
+    cancellationMonitor.start()
 
     var beforeSeparator = true
     var methodChain: String? = null
@@ -241,38 +277,48 @@ class DefaultHvscArchiveExtractor(
       currentEncrypted = false
     }
 
-    process.inputStream.bufferedReader().useLines { lines ->
-      lines.forEach { line ->
-        when {
-          line == "----------" -> {
-            beforeSeparator = false
-            finalizeEntry()
-          }
-          beforeSeparator -> {
-            when {
-              line.startsWith("Method = ") -> methodChain = line.substringAfter("Method = ").trim()
-              line.startsWith("Solid = ") -> solid = line.substringAfter("Solid = ").trim() == "+"
-              line.startsWith("Blocks = ") ->
-                      blocks = line.substringAfter("Blocks = ").trim().toIntOrNull()
+    try {
+      process.inputStream.bufferedReader().useLines { lines ->
+        lines.forEach { line ->
+          when {
+            line == "----------" -> {
+              beforeSeparator = false
+              finalizeEntry()
             }
+            beforeSeparator -> {
+              when {
+                line.startsWith("Method = ") -> methodChain = line.substringAfter("Method = ").trim()
+                line.startsWith("Solid = ") -> solid = line.substringAfter("Solid = ").trim() == "+"
+                line.startsWith("Blocks = ") ->
+                        blocks = line.substringAfter("Blocks = ").trim().toIntOrNull()
+              }
+            }
+            line.isBlank() -> finalizeEntry()
+            line.startsWith("Path = ") -> {
+              finalizeEntry()
+              currentPath = line.substringAfter("Path = ")
+            }
+            line.startsWith("Size = ") ->
+                    currentSize = line.substringAfter("Size = ").trim().toLongOrNull() ?: 0L
+            line.startsWith("Attributes = ") ->
+                    currentDirectory = line.substringAfter("Attributes = ").contains('D')
+            line.startsWith("Encrypted = ") ->
+                    currentEncrypted = line.substringAfter("Encrypted = ").trim() == "+"
           }
-          line.isBlank() -> finalizeEntry()
-          line.startsWith("Path = ") -> {
-            finalizeEntry()
-            currentPath = line.substringAfter("Path = ")
-          }
-          line.startsWith("Size = ") ->
-                  currentSize = line.substringAfter("Size = ").trim().toLongOrNull() ?: 0L
-          line.startsWith("Attributes = ") ->
-                  currentDirectory = line.substringAfter("Attributes = ").contains('D')
-          line.startsWith("Encrypted = ") ->
-                  currentEncrypted = line.substringAfter("Encrypted = ").trim() == "+"
         }
+      }
+    } catch (error: IOException) {
+      if (!cancellationToken.get()) {
+        throw error
       }
     }
     finalizeEntry()
 
     val exitCode = process.waitFor()
+    cancellationMonitor.join(100)
+    if (cancellationToken.get()) {
+      throw java.util.concurrent.CancellationException("HVSC archive probe cancelled")
+    }
     if (exitCode != 0) {
       throw IOException(
               "Upstream 7-Zip probe failed for ${archiveFile.absolutePath} (exit=$exitCode)"

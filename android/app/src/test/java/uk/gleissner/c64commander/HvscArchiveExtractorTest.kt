@@ -169,4 +169,49 @@ class HvscArchiveExtractorTest {
       script.delete()
     }
   }
+
+  @Test
+  fun `cancellation stops a wedged seven zip probe (HARD9-074)`() {
+    // Regression: probeSevenZipArchive ("7zz l -slt") previously had no
+    // cancellation monitor at all, unlike extractSevenZipToRawTree ("7zz x").
+    // A pathological/wedged archive would block probe()'s useLines/waitFor
+    // indefinitely, and cancelIngestion() had nothing to kill - every retry
+    // rejected with "HVSC ingestion already running" until the app was
+    // force-stopped. This fake 7zz script's "l" branch hangs the way a
+    // wedged real probe would.
+    val script = createTempFile(prefix = "fake-7zz-probe-", suffix = ".sh")
+    script.writeText(
+            "#!/usr/bin/env bash\n" +
+                    "set -euo pipefail\n" +
+                    "if [[ \"$1\" == \"l\" ]]; then\n" +
+                    "  for i in $(seq 1 1000); do\n" +
+                    "    sleep 0.01\n" +
+                    "  done\n" +
+                    "  exit 0\n" +
+                    "fi\n" +
+                    "exit 1\n"
+    )
+    script.setExecutable(true)
+
+    val localExtractor = DefaultHvscArchiveExtractor { script }
+    val archive = createTempFile(prefix = "fake-archive-probe-", suffix = ".7z")
+    archive.writeText("placeholder")
+    val cancellationToken = AtomicBoolean(false)
+
+    try {
+      val thread = Thread {
+        try {
+          localExtractor.probe(archive, HvscArchiveMode.BASELINE, cancellationToken)
+        } catch (_: java.util.concurrent.CancellationException) {}
+      }
+      thread.start()
+      Thread.sleep(50)
+      cancellationToken.set(true)
+      thread.join(2000)
+      assertTrue("Expected probe thread to stop after cancellation", !thread.isAlive)
+    } finally {
+      archive.delete()
+      script.delete()
+    }
+  }
 }
