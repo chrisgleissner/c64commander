@@ -78,7 +78,7 @@ export function useConfigActions() {
       }
       return true;
     } catch (error) {
-      authoritativeValues.restoreEntry(key, previousEntry);
+      authoritativeValues.restoreEntry(key, previousEntry, value);
       reportUserError({
         operation,
         title: "Update failed",

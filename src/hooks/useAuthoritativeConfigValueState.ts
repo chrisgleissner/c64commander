@@ -114,9 +114,22 @@ export function useAuthoritativeConfigValueState(options: { equals?: Authoritati
   );
 
   const restoreEntry = useCallback(
-    (key: string, previousEntry?: AuthoritativeConfigValueEntry) => {
-      clearWatchdogTimer(key);
+    (
+      key: string,
+      previousEntry: AuthoritativeConfigValueEntry | undefined,
+      expectedCurrentValue: AuthoritativeConfigValue,
+    ) => {
+      // Rapid A-then-B writes to the same item can both be in flight at once:
+      // if A fails first, its own rollback must not resurrect/clobber a pin
+      // that a newer write (B) has since taken over. Only apply the rollback
+      // if the store's current entry still equals the value THIS write
+      // pinned - otherwise a newer write is now in charge of this key and
+      // its own success/failure handling owns the outcome. See HARD9-086.
+      let applied = false;
       setEntries((previous) => {
+        const current = previous[key];
+        if (!current || current.value !== expectedCurrentValue) return previous;
+        applied = true;
         const next = { ...previous };
         if (previousEntry) {
           next[key] = previousEntry;
@@ -125,6 +138,9 @@ export function useAuthoritativeConfigValueState(options: { equals?: Authoritati
         }
         return next;
       });
+      if (applied) {
+        clearWatchdogTimer(key);
+      }
     },
     [clearWatchdogTimer],
   );

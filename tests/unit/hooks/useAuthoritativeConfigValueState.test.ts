@@ -144,3 +144,82 @@ describe("useAuthoritativeConfigValueState watchdog (HARD9-052)", () => {
     expect(result.current.pending).toEqual({});
   });
 });
+
+describe("useAuthoritativeConfigValueState restoreEntry race (HARD9-086)", () => {
+  it("does not resurrect a stale pin (delete) when a newer write has already superseded it", () => {
+    // Regression: pick A (pin A, write A), quickly pick B (pin B, write B
+    // queued). Write A fails - its own rollback used to unconditionally
+    // delete the pin, flipping the UI to the stale device value while B was
+    // still in flight, even though B's own pin should still be authoritative.
+    const { result } = renderHook(() => useAuthoritativeConfigValueState());
+
+    act(() => {
+      result.current.replaceEntry("Video::Mode", "A");
+    });
+    act(() => {
+      result.current.replaceEntry("Video::Mode", "B");
+    });
+
+    act(() => {
+      result.current.restoreEntry("Video::Mode", undefined, "A");
+    });
+
+    expect(result.current.values).toEqual({ "Video::Mode": "B" });
+  });
+
+  it("does not clobber a newer pin when an older write's rollback tries to restore a prior value", () => {
+    // If B also fails after A already rolled back (in the old code), B's
+    // rollback would re-pin A - a value the device never accepted - latched
+    // until an accidental echo or remount. Simulated here by having B's
+    // rollback run after C has already superseded it: it must not resurrect
+    // A over C's pin either.
+    const { result } = renderHook(() => useAuthoritativeConfigValueState());
+
+    act(() => {
+      result.current.replaceEntry("Video::Mode", "A");
+    });
+    act(() => {
+      result.current.replaceEntry("Video::Mode", "B");
+    });
+    act(() => {
+      result.current.replaceEntry("Video::Mode", "C");
+    });
+
+    act(() => {
+      result.current.restoreEntry("Video::Mode", { value: "A" }, "B");
+    });
+
+    expect(result.current.values).toEqual({ "Video::Mode": "C" });
+  });
+
+  it("still applies the rollback when no newer write has superseded it", () => {
+    const { result } = renderHook(() => useAuthoritativeConfigValueState());
+
+    act(() => {
+      result.current.replaceEntry("Video::Mode", "A");
+    });
+
+    act(() => {
+      result.current.restoreEntry("Video::Mode", undefined, "A");
+    });
+
+    expect(result.current.values).toEqual({});
+  });
+
+  it("still restores to a prior value when no newer write has superseded it", () => {
+    const { result } = renderHook(() => useAuthoritativeConfigValueState());
+
+    act(() => {
+      result.current.replaceEntry("Video::Mode", "A");
+    });
+    act(() => {
+      result.current.replaceEntry("Video::Mode", "B");
+    });
+
+    act(() => {
+      result.current.restoreEntry("Video::Mode", { value: "A" }, "B");
+    });
+
+    expect(result.current.values).toEqual({ "Video::Mode": "A" });
+  });
+});

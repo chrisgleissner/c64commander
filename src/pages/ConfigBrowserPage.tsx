@@ -526,7 +526,7 @@ function CategorySection({
           item: itemName,
         },
       });
-      authoritativeValues.restoreEntry(key, previousEntry);
+      authoritativeValues.restoreEntry(key, previousEntry, value);
       return false;
     }
   };
