@@ -15,6 +15,7 @@ import {
   formatLogsForShare,
   getErrorLogs,
   getLogs,
+  resetLoggingCacheForTests,
   setExternalLogs,
 } from "@/lib/logging";
 import { APP_SETTINGS_KEYS } from "@/lib/config/appSettings";
@@ -95,6 +96,7 @@ ensureLocalStorage();
 describe("logging", () => {
   beforeEach(() => {
     localStorage.clear();
+    resetLoggingCacheForTests();
     setTraceDeviceContext(null);
   });
 
@@ -376,6 +378,96 @@ describe("logging", () => {
     setExternalLogs(logs);
     const merged = getLogs();
     expect(merged).toHaveLength(1);
+  });
+
+  it("does not throw and sanitizes a circular details value (HARD9-020)", () => {
+    setExternalLogs([]);
+    const circular: Record<string, unknown> = { reason: "boom" };
+    circular.self = circular;
+
+    expect(() => addLog("error", "Unhandled promise rejection", { reason: circular })).not.toThrow();
+
+    const logs = getLogs();
+    expect(logs).toHaveLength(1);
+    // Circular details must be JSON-round-trippable (no throw) and must not
+    // silently vanish - the sanitized placeholder is present somewhere in
+    // the serialized details.
+    expect(() => JSON.stringify(logs[0].details)).not.toThrow();
+    expect(JSON.stringify(logs[0].details)).toContain("Circular");
+  });
+
+  it("does not throw when persisting a circular-details entry to localStorage (HARD9-020)", () => {
+    vi.useFakeTimers();
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+
+    expect(() => addLog("warn", "circular payload", circular)).not.toThrow();
+    expect(() => vi.advanceTimersByTime(600)).not.toThrow();
+
+    const raw = localStorage.getItem("c64u_app_logs");
+    expect(raw).toBeTruthy();
+    expect(() => JSON.parse(raw as string)).not.toThrow();
+    vi.useRealTimers();
+  });
+
+  it("debounces persistence: rapid successive addLog calls only persist once after the debounce window (HARD9-020)", () => {
+    vi.useFakeTimers();
+
+    addLog("info", "line 1");
+    addLog("info", "line 2");
+    addLog("info", "line 3");
+
+    // Still within the debounce window: nothing persisted to storage yet,
+    // even though all three entries are already visible in-memory.
+    expect(localStorage.getItem("c64u_app_logs")).toBeNull();
+    expect(getLogs()).toHaveLength(3);
+
+    vi.advanceTimersByTime(600);
+
+    const written = JSON.parse(localStorage.getItem("c64u_app_logs") as string);
+    expect(written).toHaveLength(3);
+    vi.useRealTimers();
+  });
+
+  it("recovers from a quota-exceeded write by halving the log count and retrying (HARD9-020)", () => {
+    // vi.spyOn(localStorage, ...) does not reliably intercept calls made
+    // from another module against jsdom's Storage implementation in this
+    // environment, so this test stubs the whole global instead.
+    vi.useFakeTimers();
+    const store = new Map<string, string>();
+    let callCount = 0;
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        callCount += 1;
+        if (callCount === 1) {
+          throw new Error("QuotaExceededError");
+        }
+        store.set(key, value);
+      },
+      removeItem: (key: string) => store.delete(key),
+      clear: () => store.clear(),
+      key: (index: number) => Array.from(store.keys())[index] ?? null,
+      get length() {
+        return store.size;
+      },
+    });
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    addLog("info", "first");
+    addLog("info", "second");
+
+    expect(() => vi.advanceTimersByTime(600)).not.toThrow();
+
+    // First attempt threw; the retry with a halved log count must have
+    // succeeded (no "Failed to persist" warning) and actually written.
+    expect(callCount).toBe(2);
+    expect(warnSpy).not.toHaveBeenCalledWith("Failed to persist logs to localStorage", expect.anything());
+    const written = JSON.parse(store.get("c64u_app_logs") as string);
+    expect(written.length).toBe(1);
+
+    warnSpy.mockRestore();
+    vi.useRealTimers();
   });
 
   afterEach(() => {

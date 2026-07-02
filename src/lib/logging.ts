@@ -29,13 +29,50 @@ const MAX_STACK_CHARS = 3000;
 
 const LOG_KEY = "c64u_app_logs";
 const MAX_LOGS = 500;
+const LOG_WRITE_DEBOUNCE_MS = 500;
 let externalLogs: LogEntry[] = [];
+
+// In-memory cache of persisted logs, populated lazily from localStorage on
+// first access and kept in sync by addLog. Reads never re-parse the full
+// blob, and writes are debounced (see scheduleLogPersist), avoiding O(store)
+// JSON.parse/stringify work on every single log line. See HARD9-020.
+let cachedLogs: LogEntry[] | null = null;
+// window.setTimeout returns a number (unlike Node's setTimeout, which
+// returns a Timeout object) - typed explicitly since this module runs in a
+// browser/WebView context.
+let pendingPersistTimer: number | null = null;
 
 const buildId = () =>
   (typeof crypto !== "undefined" && "randomUUID" in crypto && crypto.randomUUID()) ||
   `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
 
-const readLogs = (): LogEntry[] => {
+/**
+ * Sanitizes log details into a plain, JSON-safe value at capture time (not
+ * just before a localStorage write). A circular reference or otherwise
+ * unserializable value (e.g. `addErrorLog("Unhandled promise rejection", {
+ * reason: event.reason })` with a circular reason) would otherwise throw
+ * inside JSON.stringify wherever an entry's details are later serialized -
+ * localStorage persistence, formatLogsForShare, etc. See HARD9-020.
+ */
+const safeSerializeDetails = (details: unknown): unknown => {
+  if (details === undefined) return undefined;
+  try {
+    const seen = new WeakSet<object>();
+    return JSON.parse(
+      JSON.stringify(details, (_key, value) => {
+        if (typeof value === "object" && value !== null) {
+          if (seen.has(value)) return "[Circular]";
+          seen.add(value);
+        }
+        return value;
+      }),
+    );
+  } catch (error) {
+    return { serializationError: error instanceof Error ? error.message : String(error) };
+  }
+};
+
+const readLogsFromStorage = (): LogEntry[] => {
   if (typeof localStorage === "undefined") return [];
   const raw = localStorage.getItem(LOG_KEY);
   if (!raw) return [];
@@ -47,9 +84,56 @@ const readLogs = (): LogEntry[] => {
   }
 };
 
-const writeLogs = (logs: LogEntry[]) => {
+const readLogs = (): LogEntry[] => {
+  if (cachedLogs === null) {
+    cachedLogs = readLogsFromStorage();
+  }
+  return cachedLogs;
+};
+
+const persistLogsNow = (logs: LogEntry[]) => {
   if (typeof localStorage === "undefined") return;
-  localStorage.setItem(LOG_KEY, JSON.stringify(logs.slice(0, MAX_LOGS)));
+  const bounded = logs.slice(0, MAX_LOGS);
+  try {
+    localStorage.setItem(LOG_KEY, JSON.stringify(bounded));
+  } catch (error) {
+    // Most likely a quota-exceeded error. Halve the log count and retry
+    // once instead of throwing back into the caller - addLog is reached
+    // from a patched console.warn/console.error, so an uncaught throw here
+    // would make any app code calling console.warn fail unexpectedly.
+    try {
+      const halved = bounded.slice(0, Math.floor(bounded.length / 2));
+      localStorage.setItem(LOG_KEY, JSON.stringify(halved));
+      cachedLogs = halved;
+    } catch (retryError) {
+      console.warn("Failed to persist logs to localStorage", { error, retryError });
+    }
+  }
+};
+
+// Uses the global setTimeout/clearTimeout rather than window.setTimeout:
+// some test environments provide a minimal window mock (dispatchEvent only,
+// no timer methods) even though addLog's own guard only checks that window
+// exists, not that it has a full timer API. The global functions are
+// available in every environment this module runs in (browser, WebView,
+// Node-based tests).
+const scheduleLogPersist = () => {
+  if (pendingPersistTimer !== null) {
+    clearTimeout(pendingPersistTimer);
+  }
+  pendingPersistTimer = setTimeout(() => {
+    pendingPersistTimer = null;
+    persistLogsNow(cachedLogs ?? []);
+  }, LOG_WRITE_DEBOUNCE_MS) as unknown as number;
+};
+
+const writeLogs = (logs: LogEntry[]) => {
+  cachedLogs = logs.slice(0, MAX_LOGS);
+  if (pendingPersistTimer !== null) {
+    clearTimeout(pendingPersistTimer);
+    pendingPersistTimer = null;
+  }
+  persistLogsNow(cachedLogs);
 };
 
 export const addLog = (level: LogLevel, message: string, details?: unknown) => {
@@ -61,11 +145,11 @@ export const addLog = (level: LogLevel, message: string, details?: unknown) => {
     level,
     message,
     timestamp: new Date().toISOString(),
-    details,
+    details: safeSerializeDetails(details),
     device: toDiagnosticsDeviceAttribution(getTraceContextSnapshot().device),
   };
-  const logs = [entry, ...readLogs()];
-  writeLogs(logs);
+  cachedLogs = [entry, ...readLogs()].slice(0, MAX_LOGS);
+  scheduleLogPersist();
   window.dispatchEvent(new CustomEvent("c64u-logs-updated"));
 };
 
@@ -138,3 +222,12 @@ export const formatLogsForShare = (entries: LogEntry[], options: { redacted?: bo
       return `[${formatLocalTime(entry.timestamp)}] ${entry.level.toUpperCase()} - ${message}${details}`;
     })
     .join("\n\n");
+
+/** Test-only: drop the in-memory log cache so a stubbed/cleared localStorage is re-read fresh. */
+export const resetLoggingCacheForTests = () => {
+  cachedLogs = null;
+  if (pendingPersistTimer !== null) {
+    clearTimeout(pendingPersistTimer);
+  }
+  pendingPersistTimer = null;
+};
