@@ -111,6 +111,32 @@ export const sliderToDurationSeconds = (value: number) => {
   return clampDurationSeconds(Math.round(seconds));
 };
 
+/**
+ * How long a persisted playback session can go un-refreshed (no active tick)
+ * before a restore is no longer trusted to resume as "playing". The persist
+ * effect only re-fires while the 1s timeline interval is running, so this
+ * measures how long the app has been backgrounded/suspended/navigated away,
+ * not how long the track itself has been playing. See HARD9-064.
+ */
+export const SESSION_RESTORE_STALE_MS = 5 * 60 * 1000;
+
+/**
+ * True when a restored "isPlaying" session was last confirmed alive too long
+ * ago to trust that the C64 is still doing what the session claims (it may
+ * have been reset/power-cycled, or the app process was suspended for hours).
+ * A missing/unparseable timestamp is treated as stale (fail safe).
+ */
+export const isPlaybackSessionRestoreStale = (
+  updatedAt: string | null | undefined,
+  nowMs: number,
+  staleAfterMs: number = SESSION_RESTORE_STALE_MS,
+): boolean => {
+  if (!updatedAt) return true;
+  const updatedAtMs = Date.parse(updatedAt);
+  if (!Number.isFinite(updatedAtMs)) return true;
+  return nowMs - updatedAtMs > staleAfterMs;
+};
+
 export const resolvePlayTargetIndex = (playlistLength: number, currentIndex: number): number | null => {
   if (playlistLength <= 0) return null;
   if (currentIndex < 0) return 0;

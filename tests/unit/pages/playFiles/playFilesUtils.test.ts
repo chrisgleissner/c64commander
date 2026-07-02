@@ -28,6 +28,8 @@ import {
   parseModifiedAt,
   extractAudioMixerItems,
   shuffleArray,
+  isPlaybackSessionRestoreStale,
+  SESSION_RESTORE_STALE_MS,
   DURATION_MIN_SECONDS,
   DURATION_MAX_SECONDS,
 } from "@/pages/playFiles/playFilesUtils";
@@ -260,6 +262,34 @@ describe("playFilesUtils", () => {
       ];
 
       expect(applyDurationOverrideToPlaylist(playlist, 12_000)).toBe(playlist);
+    });
+  });
+
+  describe("isPlaybackSessionRestoreStale", () => {
+    it("is not stale just under the threshold", () => {
+      const now = 10_000_000;
+      const updatedAt = new Date(now - SESSION_RESTORE_STALE_MS + 1).toISOString();
+      expect(isPlaybackSessionRestoreStale(updatedAt, now)).toBe(false);
+    });
+
+    it("is stale once past the threshold", () => {
+      const now = 10_000_000;
+      const updatedAt = new Date(now - SESSION_RESTORE_STALE_MS - 1).toISOString();
+      expect(isPlaybackSessionRestoreStale(updatedAt, now)).toBe(true);
+    });
+
+    it("honors a custom staleAfterMs override", () => {
+      const now = 10_000_000;
+      const updatedAt = new Date(now - 1_000).toISOString();
+      expect(isPlaybackSessionRestoreStale(updatedAt, now, 500)).toBe(true);
+      expect(isPlaybackSessionRestoreStale(updatedAt, now, 5_000)).toBe(false);
+    });
+
+    it("treats a missing or unparseable timestamp as stale", () => {
+      const now = 10_000_000;
+      expect(isPlaybackSessionRestoreStale(null, now)).toBe(true);
+      expect(isPlaybackSessionRestoreStale(undefined, now)).toBe(true);
+      expect(isPlaybackSessionRestoreStale("not-a-date", now)).toBe(true);
     });
   });
 

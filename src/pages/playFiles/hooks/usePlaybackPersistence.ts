@@ -12,6 +12,7 @@ import {
   PLAYBACK_SESSION_KEY,
   PLAYLIST_STORAGE_PREFIX,
   buildPlaylistStorageKey,
+  isPlaybackSessionRestoreStale,
   isSongCategory,
   parseModifiedAt,
 } from "../playFilesUtils";
@@ -20,7 +21,7 @@ import { resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapt
 import { buildLocalPlayFileFromTree, buildLocalPlayFileFromUri } from "@/lib/playback/fileLibraryUtils";
 import type { PlaybackClock } from "@/lib/playback/playbackClock";
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 import { getPlaylistDataRepository } from "@/lib/playlistRepository";
 import type { PlaylistSessionRecord, TrackRecord } from "@/lib/playlistRepository";
 import { resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
@@ -400,18 +401,32 @@ export function usePlaybackPersistence({
       sessionRestoreSettledRef.current = true;
       return;
     }
+    const now = Date.now();
+    // A restore claiming "isPlaying" whose last confirmed-live tick is too old
+    // to trust (app suspended for a long time, or the C64 was reset/power-cycled
+    // by other means while the process was dead) is downgraded to paused instead
+    // of arming auto-advance and silently launching a new track on a machine the
+    // user did not leave running. See HARD9-064.
+    const staleActiveRestore =
+      pending.isPlaying && !pending.isPaused && isPlaybackSessionRestoreStale(pending.updatedAt, now);
+    if (staleActiveRestore) {
+      addLog("warn", "Discarded stale active playback session restore; resuming paused", {
+        playlistStorageKey,
+        updatedAt: pending.updatedAt,
+        ageMs: now - Date.parse(pending.updatedAt),
+      });
+    }
     setCurrentIndex(matchedIndex);
     setElapsedMs(Math.max(0, pending.elapsedMs));
     setPlayedMs(Math.max(0, pending.playedMs));
     setDurationMs(pending.durationMs);
-    setIsPlaying(pending.isPlaying);
-    setIsPaused(pending.isPaused);
+    setIsPlaying(staleActiveRestore ? true : pending.isPlaying);
+    setIsPaused(staleActiveRestore ? true : pending.isPaused);
     const restoredItem = playlist[matchedIndex];
     if (restoredItem && isSongCategory(restoredItem.category)) {
       setCurrentSubsongCount(restoredItem.subsongCount ?? null);
     }
-    const now = Date.now();
-    if (pending.isPlaying && !pending.isPaused) {
+    if (pending.isPlaying && !pending.isPaused && !staleActiveRestore) {
       trackStartedAtRef.current = now - Math.max(0, pending.elapsedMs);
       playedClockRef.current.hydrate(Math.max(0, pending.playedMs), now);
       if (typeof pending.durationMs === "number" && pending.durationMs > 0) {
