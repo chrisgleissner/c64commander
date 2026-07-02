@@ -113,7 +113,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-053 | Profile load/revert sends entire config as one giant POST /v1/configs | config | P2 | robustness, perf | medium | M | OPEN |
 | HARD9-054 | Audio Mixer solo routing bypasses mutation layer; stale snapshot restore | config | P2 | correctness, robustness | medium | M | OPEN |
 | HARD9-055 | Error-toast eviction + sliding dedup window silently hide persistent failures | diagnostics | P2 | correctness, ux | high | M | FIXED (59e45da0) |
-| HARD9-056 | Backend-decision correlation set grows unbounded | diagnostics | P2 | performance, robustness | high | S | OPEN |
+| HARD9-056 | Backend-decision correlation set grows unbounded | diagnostics | P2 | performance, robustness | high | S | FIXED (caa0549f) |
 | HARD9-057 | Trace persistence exceeds sessionStorage quota; size accounting broken on restore | diagnostics | P2 | performance, data-loss, correctness | high | S | OPEN |
 | HARD9-058 | Fetch trace duplicates full request/response payloads in the hot path | diagnostics | P2 | performance | high | M | OPEN |
 | HARD9-059 | Smoke-mode localStorage fallback is a self-perpetuating latch in prod | state | P2 | robustness, security, correctness | medium | S | OPEN |
@@ -580,11 +580,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (59e45da0):** Implemented both parts of the fix sketch rather than choosing one, since they compound the same finding: `ADD_TOAST` now diffs the kept-vs-incoming toast sets and invokes `onToastDismiss` for anything `limitToasts` dropped, and the dedup entry's `timestamp` is no longer overwritten on each duplicate (only `count` increments), so the 30s window is anchored to the first occurrence.
 
 ### HARD9-056 — Backend-decision correlation set grows unbounded over long sessions
-- **Area:** diagnostics · **Severity:** P2 · **Dimensions:** performance, robustness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** diagnostics · **Severity:** P2 · **Dimensions:** performance, robustness · **Confidence:** high · **Effort:** S · **Status:** FIXED (caa0549f)
 - **Files:** `src/lib/tracing/traceSession.ts:43,135-147`
 - **Failure scenario:** `decisionByCorrelation` accumulates one string per correlation ID forever; every poll tick/click/REST/FTP/Telnet action mints a new ID. Trace events evict after 30min/25k, but this set is only cleared by manual "Clear diagnostics". Days-long sessions leak tens of thousands of retained strings invisible to the byte cap.
 - **Evidence:** `const decisionByCorrelation = new Set<string>()`; adds on every first request per correlation; no eviction in `evictExpired`/`enforceLimits`.
 - **Fix sketch:** Drop entries when their correlated events evict, or use a bounded LRU (clear oldest half at cap).
+- **Resolution (caa0549f):** Took the bounded-LRU option from the fix sketch (simpler and lower-risk than precise cross-referencing against event eviction, since this Set is only a one-time "already emitted" dedup flag, not data needing precise lifetimes). Added `trimOldestHalfAtCapacity`, called from `emitBackendDecision` before every insert, capped at the same `MAX_EVENT_COUNT` (25,000) used for the events array.
 
 ### HARD9-057 — Trace persistence exceeds sessionStorage quota; size accounting broken after restore
 - **Area:** diagnostics · **Severity:** P2 · **Dimensions:** performance, data-loss, correctness · **Confidence:** high · **Effort:** S · **Status:** OPEN
