@@ -223,6 +223,45 @@ describe("HomeDiskManager Dialogs", () => {
     await waitFor(() => expectMountDiskToDriveCall("a", "1"));
   }, 10_000);
 
+  it("ignores a second mount tap to the same drive while the first mount is still pending (HARD9-037)", async () => {
+    let resolveMount: (() => void) | undefined;
+    vi.mocked(mountDiskToDrive).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveMount = () => resolve();
+        }),
+    );
+
+    render(<HomeDiskManager />);
+    fireEvent.click(screen.getByTestId("drive-mount-toggle-a"));
+
+    const clickMountAt = (index: number) => {
+      const dialogList = screen.getAllByTestId("mock-action-list")[1];
+      const buttons = within(dialogList).getAllByText("Mount");
+      fireEvent.click(buttons[index]);
+    };
+    clickMountAt(0);
+
+    await waitFor(() => expect(mountDiskToDrive).toHaveBeenCalledTimes(1));
+
+    // A second tap - same disk or another - while the first mount to Drive A
+    // hasn't settled must not race a second mount against the same drive.
+    // Re-query fresh each time: the pending mount re-renders the sheet, so a
+    // cached button reference from before the first click can go stale.
+    clickMountAt(0);
+    clickMountAt(1);
+
+    // handleMountDisk's own path to mountDiskToDrive crosses a real await
+    // (queryClient.cancelQueries) before invoking it, so an unguarded second
+    // tap wouldn't show up as an extra call synchronously - give it a real
+    // chance to land before asserting the count stayed at one.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mountDiskToDrive).toHaveBeenCalledTimes(1);
+
+    resolveMount?.();
+    await waitFor(() => expect(screen.queryByTestId("mount-disk-sheet")).not.toBeInTheDocument());
+  }, 10_000);
+
   it("lets an empty mount dialog open the Add disks picker", async () => {
     mockDiskLibrary.disks = [];
 

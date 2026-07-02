@@ -2187,9 +2187,14 @@ export const HomeDiskManager = () => {
               items={buildDiskListItems(sortedDisks, {
                 showSelection: false,
                 showMenu: false,
-                disableActions: !status.isConnected,
+                // A local-disk mount can take tens of seconds (SAF read
+                // timeout up to 45s + upload) with the sheet still open and
+                // no busy indicator otherwise - a second tap here would race
+                // a second mount against the same drive. See HARD9-037.
+                disableActions: !status.isConnected || Boolean(activeDrive && driveMutationPending[activeDrive]),
                 onMount: (entry) => {
                   if (!activeDrive) return;
+                  if (driveMutationPending[activeDrive]) return;
                   void handleMountDisk(activeDrive, entry).finally(() => setActiveDrive(null));
                 },
               })}
