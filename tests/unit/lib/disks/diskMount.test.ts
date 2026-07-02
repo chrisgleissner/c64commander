@@ -374,35 +374,43 @@ describe("diskMount", () => {
       }
     });
 
-    it("skips sourceId-targeted lookup and iterates all sources when sourceId not found", async () => {
+    it("throws instead of scanning other sources when sourceId is set but not found (HARD9-068)", async () => {
       const runtimeFile = new File(["data"], "test.d64");
       vi.mocked(loadLocalSources).mockReturnValue([{ id: "src1" } as any]);
       vi.mocked(getLocalSourceRuntimeFile).mockReturnValue(runtimeFile as any);
 
-      const blob = await resolveLocalDiskBlob({
-        path: "/test.d64",
-        location: "local",
-        sourceId: "nonexistent",
-      } as any);
-      // Falls through to all-sources loop, picks up src1
-      expect(blob).toBe(runtimeFile);
+      await expect(
+        resolveLocalDiskBlob({
+          path: "/test.d64",
+          location: "local",
+          sourceId: "nonexistent",
+        } as any),
+      ).rejects.toThrow("Local disk access is missing");
+      // src1 must never be scanned by path - a disk with a sourceId that
+      // doesn't resolve must fail, not silently pick up another source's
+      // same-named file. See HARD9-068.
+      expect(getLocalSourceRuntimeFile).not.toHaveBeenCalled();
     });
 
-    it("falls through to all-sources loop when sourceId match yields null", async () => {
-      const runtimeFile = new File(["data"], "test.d64");
+    it("throws instead of scanning other sources when the sourceId-matched source yields null (HARD9-068)", async () => {
       vi.mocked(loadLocalSources).mockReturnValue([{ id: "src1" } as any, { id: "src2" } as any]);
       vi.mocked(getLocalSourceListingMode).mockReturnValue("tree" as any);
+      // src1 (sourceId-targeted) yields null; src2 would yield a file if scanned.
       vi.mocked(getLocalSourceRuntimeFile)
-        .mockReturnValueOnce(null) // src1 in sourceId-targeted call
-        .mockReturnValueOnce(null) // src1 in all-sources loop
-        .mockReturnValueOnce(runtimeFile as any); // src2 in all-sources loop
+        .mockReturnValueOnce(null)
+        .mockReturnValue(new File(["data"], "test.d64") as any);
 
-      const blob = await resolveLocalDiskBlob({
-        path: "/test.d64",
-        location: "local",
-        sourceId: "src1",
-      } as any);
-      expect(blob).toBe(runtimeFile);
+      await expect(
+        resolveLocalDiskBlob({
+          path: "/test.d64",
+          location: "local",
+          sourceId: "src1",
+        } as any),
+      ).rejects.toThrow("Local disk access is missing");
+      // src2 must never be consulted - two libraries can both contain the
+      // same relative path, and silently picking up the wrong one is
+      // exactly what HARD9-068 closes off.
+      expect(getLocalSourceRuntimeFile).toHaveBeenCalledTimes(1);
     });
 
     it("logs source entry resolution failures before trying other sources", async () => {

@@ -284,12 +284,30 @@ export const resolveLocalDiskBlob = async (
     return null;
   };
 
+  const throwUnresolvedLocalDiskError = (): never => {
+    // A CommoServe-imported disk's bytes only ever live in the in-memory
+    // runtimeFiles map (React state) - navigating away or restarting loses
+    // them, and its sourceId never resolves via loadLocalSources() (CommoServe
+    // is not a persisted local source). The generic "re-add the folder"
+    // message is meaningless here since there is no folder/file to re-add.
+    // See HARD9-011.
+    if (disk.sourceKind === "commoserve") {
+      throw new Error("This disk's data is no longer available. Re-import it from CommoServe to mount it again.");
+    }
+    throw new Error("Local disk access is missing. Re-add the folder or file to refresh permissions.");
+  };
+
   if (disk.sourceId) {
     const source = sources.find((entry) => entry.id === disk.sourceId);
     if (source) {
       const blob = await resolveFromSource(source);
       if (blob) return blob;
     }
+    // A disk with a sourceId must resolve through that specific source or
+    // not at all - falling back to scanning every other local source by path
+    // risks silently mounting a different folder's same-named file (e.g. two
+    // libraries both containing /side-a.d64). See HARD9-068.
+    return throwUnresolvedLocalDiskError();
   }
 
   for (const source of sources) {
@@ -297,17 +315,7 @@ export const resolveLocalDiskBlob = async (
     if (blob) return blob;
   }
 
-  // A CommoServe-imported disk's bytes only ever live in the in-memory
-  // runtimeFiles map (React state) - navigating away or restarting loses
-  // them, and its sourceId never resolves via loadLocalSources() (CommoServe
-  // is not a persisted local source). The generic "re-add the folder"
-  // message is meaningless here since there is no folder/file to re-add.
-  // See HARD9-011.
-  if (disk.sourceKind === "commoserve") {
-    throw new Error("This disk's data is no longer available. Re-import it from CommoServe to mount it again.");
-  }
-
-  throw new Error("Local disk access is missing. Re-add the folder or file to refresh permissions.");
+  return throwUnresolvedLocalDiskError();
 };
 
 export const mountDiskToDrive = async (
