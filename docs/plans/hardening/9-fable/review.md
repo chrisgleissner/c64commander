@@ -67,7 +67,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-007 | Shuffle doesn't shuffle; Reshuffle irreversibly destroys order | playback | P1 | correctness, data-loss, ux | high | M | FIXED (9fdc7ca9) |
 | HARD9-008 | Songlengths cache cleared on every playlist change → repeated multi-MB re-parses | playback | P1 | performance, ux | high | S | FIXED (51a5a117) |
 | HARD9-009 | Full-range custom snapshot silently saves empty (u16 truncation) | snapshot | P1 | correctness, data-loss | high [verified] | S | OPEN |
-| HARD9-010 | Mount/eject success judged by HTTP status; firmware in-body errors discarded | disks | P1 | correctness, ux, robustness | medium | S | OPEN |
+| HARD9-010 | Mount/eject success judged by HTTP status; firmware in-body errors discarded | disks | P1 | correctness, ux, robustness | medium | S | FIXED (c734dd1d) |
 | HARD9-011 | CommoServe-imported disks permanently unmountable after remount | disks | P1 | data-loss, ux, correctness | high | M | OPEN |
 | HARD9-012 | Disks page hardcodes read-only mounts, breaking in-game saves | disks | P1 | correctness, ux | medium | S | OPEN |
 | HARD9-013 | HVSC ingest promise never settles after cancel (reject in cancelled coroutine) | native | P1 | correctness, ux, robustness | high [verified] | S | OPEN |
@@ -236,11 +236,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Fix sketch:** In `encodeSnapshot`, reject or split ranges with `length > 0xFFFF` (reuse the CPU_SNAPSHOT_RANGES-style split), or clamp in `validateCustomSnapshotRanges`.
 
 ### HARD9-010 — Mount/eject success judged by HTTP status only — firmware in-body errors discarded, false "Disk mounted" toasts
-- **Area:** disks · **Severity:** P1 · **Dimensions:** correctness, ux-responsiveness, robustness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
+- **Area:** disks · **Severity:** P1 · **Dimensions:** correctness, ux-responsiveness, robustness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (c734dd1d)
 - **Files:** `src/lib/c64api.ts:2346-2437`, `src/lib/disks/diskMount.ts:324-344`, `src/components/disks/HomeDiskManager.tsx:592-611,661-668`
 - **Failure scenario:** The firmware reports many failures as HTTP 200 with a non-empty `errors` array (the codebase itself proves this: `assertConfigWriteAccepted` at `c64api.ts:1141-1167` and `writeWithRetry` in `restoreCart.ts:105-118` both check `result.errors`). `mountDrive`/`mountDriveUpload`/`unmountDrive` return `{ errors: string[] }` but no caller inspects it. An in-body rejected mount yields the "Disk mounted" toast, sets the optimistic `mountedByDrive[drive]` override, and clears `driveErrors` — success shown, drive unchanged.
 - **Evidence:** `HomeDiskManager.tsx:592-607` never checks the return; `diskMount.ts:326-344` discards the API result.
 - **Fix sketch:** Add an `assertDriveWriteAccepted`-style check inside `mountDrive`/`mountDriveUpload`/`unmountDrive`, throwing with the joined firmware errors so the existing error path surfaces the real reason.
+- **Resolution (c734dd1d):** Implemented the fix sketch exactly as written - added `assertDriveWriteAccepted` (mirrors the existing `assertConfigWriteAccepted`) and called it from all three drive write methods right after their response is parsed, before returning. `HomeDiskManager.tsx`'s `handleMountDisk`/`handleEject` and `diskMount.ts`'s `mountDiskToDrive` already had correct catch/reportUserError/driveErrors handling in place - they just never received a rejection to catch, so no UI-layer changes were needed.
 
 ### HARD9-011 — CommoServe/runtime-file disks become permanently unmountable after page remount, with a misleading error
 - **Area:** disks · **Severity:** P1 · **Dimensions:** data-loss, ux-responsiveness, correctness · **Confidence:** high · **Effort:** M · **Status:** OPEN
