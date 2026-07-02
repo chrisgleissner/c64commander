@@ -166,6 +166,10 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollResetFrameRef = useRef<number | null>(null);
+  // Tracks pointer-capture liveness independent of dx changing, so the
+  // drag-settle timer below can tell a stationary held pointer apart from
+  // a genuinely missed pointerup/pointercancel. See HARD9-026.
+  const pointerActiveRef = useRef(false);
   const runtimeMotionMode = readRuntimeMotionMode();
   const transitionConfig = resolveTransitionConfig(profile, runtimeMotionMode, runway.lastVelocityX);
   const resetContainerScroll = useCallback((reason: string) => {
@@ -291,20 +295,36 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     return () => clearTimeout(timer);
   }, [runway.phase, runway.targetIndex, transitionConfig.durationMs]);
 
+  // Recovers a runway stuck in "dragging" after a missed pointerup/
+  // pointercancel (some WebView/OS combinations drop it). Re-arming this on
+  // every dx change made a pointer held stationary >600ms - a normal
+  // mid-gesture pause, not a missed event - indistinguishable from the
+  // failure this timer exists to catch, snapping the runway back while the
+  // finger was still down. Keyed only on phase (not dx) so it does not
+  // restart on every pointermove, and each firing checks actual pointer
+  // liveness (fed by useSwipeGesture's onActiveChange) before resetting -
+  // if the pointer is still down, it re-checks later instead. See
+  // HARD9-026.
   useEffect(() => {
     if (runway.phase !== "dragging") return;
-    const timer = setTimeout(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const checkSettled = () => {
       const current = runwayRef.current;
       if (current.phase !== "dragging") return;
+      if (pointerActiveRef.current) {
+        timer = setTimeout(checkSettled, DRAG_SETTLE_TIMEOUT_MS);
+        return;
+      }
       addLog("debug", "[SwipeNav] drag-reset-synthesized", {
         center: TAB_ROUTES[current.centerIndex].label,
         settleAfterMs: DRAG_SETTLE_TIMEOUT_MS,
         dragOffsetPx: current.dragOffsetPx,
       });
       setRunway(buildIdleState(current.centerIndex));
-    }, DRAG_SETTLE_TIMEOUT_MS);
+    };
+    timer = setTimeout(checkSettled, DRAG_SETTLE_TIMEOUT_MS);
     return () => clearTimeout(timer);
-  }, [runway.centerIndex, runway.dragOffsetPx, runway.phase]);
+  }, [runway.phase]);
 
   const onProgress = useCallback(
     (dx: number, velocityX: number) => {
@@ -384,6 +404,9 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     onProgress,
     onCommit,
     onCancel,
+    onActiveChange: (active) => {
+      pointerActiveRef.current = active;
+    },
   });
 
   const transform = useMemo(() => {

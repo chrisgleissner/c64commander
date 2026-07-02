@@ -385,6 +385,7 @@ describe("useSwipeGesture integration", () => {
       onProgress: ReturnType<typeof vi.fn>;
       onCommit: ReturnType<typeof vi.fn>;
       onCancel: ReturnType<typeof vi.fn>;
+      onActiveChange?: ReturnType<typeof vi.fn>;
     };
     withExcludedChild?: boolean;
   }) => {
@@ -427,6 +428,61 @@ describe("useSwipeGesture integration", () => {
     expect(callbacks.onProgress).not.toHaveBeenCalled();
     expect(callbacks.onCommit).not.toHaveBeenCalled();
     expect(callbacks.onCancel).not.toHaveBeenCalled();
+  });
+
+  it("reports pointer activity independent of dx changes (HARD9-026)", () => {
+    // Regression: consumers need a liveness signal that does not depend on
+    // dx changing, so a stuck-state recovery timer can tell a stationary
+    // held pointer apart from a genuinely missed pointerup/pointercancel.
+    const callbacks = {
+      onProgress: vi.fn(),
+      onCommit: vi.fn(),
+      onCancel: vi.fn(),
+      onActiveChange: vi.fn(),
+    };
+
+    render(React.createElement(GestureHarness, { callbacks }));
+    const surface = screen.getByTestId("gesture-surface");
+
+    surface.dispatchEvent(
+      createPointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 5, isPrimary: true }),
+    );
+    expect(callbacks.onActiveChange).toHaveBeenLastCalledWith(true);
+
+    surface.dispatchEvent(
+      createPointerEvent(
+        "pointermove",
+        { bubbles: true, pointerId: 5, clientX: 60, clientY: 0 },
+        10,
+      ),
+    );
+    // A stationary hold (no further pointermove) must not fire onActiveChange
+    // again or flip it to false - only pointerup/pointercancel does that.
+    expect(callbacks.onActiveChange).toHaveBeenCalledTimes(1);
+
+    surface.dispatchEvent(
+      createPointerEvent("pointerup", { bubbles: true, pointerId: 5, clientX: 60, clientY: 0 }, 700),
+    );
+    expect(callbacks.onActiveChange).toHaveBeenLastCalledWith(false);
+    expect(callbacks.onActiveChange).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not report pointer activity for gestures excluded from swipe navigation", () => {
+    const callbacks = {
+      onProgress: vi.fn(),
+      onCommit: vi.fn(),
+      onCancel: vi.fn(),
+      onActiveChange: vi.fn(),
+    };
+
+    render(React.createElement(GestureHarness, { callbacks, withExcludedChild: true }));
+    const excluded = screen.getByTestId("excluded-origin");
+
+    excluded.dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 6, isPrimary: true }),
+    );
+
+    expect(callbacks.onActiveChange).not.toHaveBeenCalled();
   });
 
   it("locks vertical gestures without committing or cancelling navigation", () => {

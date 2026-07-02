@@ -18,6 +18,7 @@ type GestureCallbacks = {
   onProgress: (dx: number, velocityX: number) => void;
   onCommit: (direction: 1 | -1, metadata: { dx: number; dy: number; velocityX: number }) => void;
   onCancel: (metadata: { dx: number; dy: number; velocityX: number }) => void;
+  onActiveChange?: (active: boolean) => void;
 };
 
 const mocks = vi.hoisted(() => ({
@@ -498,6 +499,46 @@ describe("SwipeNavigationLayer", () => {
         "[SwipeNav] drag-reset-synthesized",
         expect.objectContaining({ center: "Play", settleAfterMs: 600, dragOffsetPx: -96 }),
       );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not snap a held-still drag back to idle while the pointer is still down (HARD9-026)", async () => {
+    // Regression: the settle timer used to re-arm on every dx change, so a
+    // pointer held stationary (finger still down, just paused) for >600ms
+    // was indistinguishable from a genuinely missed pointerup and got
+    // snapped back to idle under the user's finger.
+    renderLayer("/play", undefined, false, true);
+    const runway = await screen.findByTestId("swipe-navigation-runway");
+
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        capturedCallbacks?.onProgress(-96, -0.5);
+        capturedCallbacks?.onActiveChange?.(true);
+      });
+      expect(runway).toHaveAttribute("data-runway-phase", "dragging");
+
+      act(() => {
+        vi.advanceTimersByTime(600);
+      });
+
+      // The pointer is still reported active, so the runway must still be
+      // dragging - not synthesized back to idle out from under the user.
+      expect(runway).toHaveAttribute("data-runway-phase", "dragging");
+      expect(mocks.addLog).not.toHaveBeenCalledWith(
+        "debug",
+        "[SwipeNav] drag-reset-synthesized",
+        expect.anything(),
+      );
+
+      // Once the pointer genuinely lifts, the next check settles normally.
+      act(() => {
+        capturedCallbacks?.onActiveChange?.(false);
+        vi.advanceTimersByTime(600);
+      });
+      expect(runway).toHaveAttribute("data-runway-phase", "idle");
     } finally {
       vi.useRealTimers();
     }

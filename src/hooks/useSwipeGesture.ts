@@ -72,6 +72,11 @@ export type SwipeGestureCallbacks = {
   onProgress: (dx: number, velocityX: number) => void;
   onCommit: (direction: SwipeDirection, metadata: SwipeGestureMetadata) => void;
   onCancel: (metadata: SwipeGestureMetadata) => void;
+  // Fires whenever pointer capture for a gesture starts/ends, independent of
+  // dx changing. Lets a consumer's stuck-state recovery timer distinguish a
+  // stationary held pointer (dx not changing, but still legitimately down)
+  // from a genuinely missed pointerup/pointercancel. See HARD9-026.
+  onActiveChange?: (active: boolean) => void;
 };
 
 type GestureState = {
@@ -132,6 +137,7 @@ export function useSwipeGesture(
         }
       }
       stateRef.current = { ...IDLE };
+      callbacksRef.current.onActiveChange?.(false);
     },
     [containerRef],
   );
@@ -177,6 +183,7 @@ export function useSwipeGesture(
         velocityX: 0,
         intent: "undecided",
       };
+      callbacksRef.current.onActiveChange?.(true);
     },
     [containerRef],
   );
