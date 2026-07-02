@@ -37,6 +37,7 @@ import {
   listSongsRecursiveFromBrowseIndex,
   loadHvscBrowseIndexSnapshot,
   saveHvscBrowseIndexSnapshot,
+  streamSongsRecursiveFromBrowseIndex,
   verifyHvscBrowseIndexIntegrity,
 } from "@/lib/hvsc/hvscBrowseIndexStore";
 
@@ -822,13 +823,35 @@ describe("listSongsRecursiveFromBrowseIndex", () => {
     expect(songs).toBeNull();
   });
 
-  it("returns null for empty snapshot (stale after native ingest clears index)", () => {
+  it("returns null for empty snapshot (stale after native ingest clears index) (HARD9-015)", () => {
     const snapshot = buildHvscBrowseIndexFromEntries([]);
 
     expect(listSongsRecursiveFromBrowseIndex(snapshot, "/DEMOS")).toBeNull();
     expect(listSongsRecursiveFromBrowseIndex(snapshot, "/GAMES")).toBeNull();
-    // Root "/" always exists in the folder map, but has 0 songs
-    expect(listSongsRecursiveFromBrowseIndex(snapshot, "/")).toEqual([]);
+    // Root "/" always exists in the folder map even for a wholly-empty
+    // snapshot (buildHvscBrowseIndexFromEntries always seeds it), so it
+    // can't be distinguished from a poisoned/incomplete index by presence
+    // alone. Root queries must also fall back, not just non-root ones -
+    // this is exactly the loophole "add all from HVSC root" hit before the
+    // fix: a poisoned-but-truthy snapshot's root always exists, so only
+    // checking "root missing" let a bulk-add from "/" silently return zero
+    // songs instead of falling back to BFS. See HARD9-015.
+    expect(listSongsRecursiveFromBrowseIndex(snapshot, "/")).toBeNull();
+  });
+
+  it("does not treat a non-empty snapshot with a single song as empty, including at root", () => {
+    // Guards the new "whole snapshot has zero songs" check added for
+    // HARD9-015 against being off-by-one / over-triggering: a snapshot with
+    // exactly one song must still resolve at root, not fall back to null.
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: "/MUSICIANS/A/Song.sid", name: "Song.sid", type: "sid" },
+    ]);
+    expect(listSongsRecursiveFromBrowseIndex(snapshot, "/")).toEqual(
+      expect.arrayContaining([expect.objectContaining({ virtualPath: "/MUSICIANS/A/Song.sid" })]),
+    );
+    expect(listSongsRecursiveFromBrowseIndex(snapshot, "/MUSICIANS")).toEqual(
+      expect.arrayContaining([expect.objectContaining({ virtualPath: "/MUSICIANS/A/Song.sid" })]),
+    );
   });
 
   it("handles deeply nested folder hierarchy", () => {
@@ -866,5 +889,38 @@ describe("listSongsRecursiveFromBrowseIndex", () => {
     const songs = listSongsRecursiveFromBrowseIndex(snapshot, "/DEMOS");
     expect(songs).toHaveLength(1);
     expect(songs![0]!.fileName).toBe("One.sid");
+  });
+
+  describe("streamSongsRecursiveFromBrowseIndex", () => {
+    it("returns null for a wholly-empty snapshot instead of streaming zero chunks (HARD9-015)", async () => {
+      const snapshot = buildHvscBrowseIndexFromEntries([]);
+      const chunks: unknown[] = [];
+
+      const result = await streamSongsRecursiveFromBrowseIndex(snapshot, "/", {
+        onChunk: (songs) => {
+          chunks.push(songs);
+        },
+      });
+
+      expect(result).toBeNull();
+      expect(chunks).toHaveLength(0);
+    });
+
+    it("streams all songs under a non-empty snapshot", async () => {
+      const snapshot = buildHvscBrowseIndexFromEntries([
+        { path: "/DEMOS/A/One.sid", name: "One.sid", type: "sid" },
+        { path: "/DEMOS/B/Two.sid", name: "Two.sid", type: "sid" },
+      ]);
+      const streamed: string[] = [];
+
+      const result = await streamSongsRecursiveFromBrowseIndex(snapshot, "/DEMOS", {
+        onChunk: (songs) => {
+          songs.forEach((song) => streamed.push(song.fileName));
+        },
+      });
+
+      expect(result).toEqual({ totalSongs: 2 });
+      expect(streamed.sort()).toEqual(["One.sid", "Two.sid"]);
+    });
   });
 });

@@ -792,14 +792,21 @@ export const listFolderFromBrowseIndex = (
  * Traverses the in-memory browse index without any I/O, async overhead,
  * or smoke-benchmark recording — designed for bulk playlist operations.
  *
- * Returns null when the root folder is not present in the snapshot,
- * signaling an incomplete or stale index (callers should fall back
- * to the paged BFS path).
+ * Returns null when the root folder is not present in the snapshot, or when
+ * the snapshot has zero songs anywhere, signaling an incomplete or stale
+ * index (callers should fall back to the paged BFS path). A wholly-empty
+ * snapshot is never trusted as "genuinely empty library, zero songs" -
+ * `buildHvscBrowseIndexFromEntries` always seeds a root folder row even for
+ * zero entries, so an empty root row alone doesn't distinguish "poisoned by
+ * a failed integrity rebuild before the real index loaded" from "there
+ * really are no songs". A real non-empty HVSC install never has zero songs
+ * in the whole snapshot, so this check is safe. See HARD9-015.
  */
 export const listSongsRecursiveFromBrowseIndex = (
   snapshot: HvscBrowseIndexSnapshot,
   folderPath: string,
 ): HvscBrowseIndexedSong[] | null => {
+  if (Object.keys(snapshot.songs).length === 0) return null;
   const normalizedRoot = normalizeFolderPath(folderPath);
   if (!snapshot.folders[normalizedRoot]) return null;
   const queue = [normalizedRoot];
@@ -824,6 +831,8 @@ export const listSongsRecursiveFromBrowseIndex = (
   return songs;
 };
 
+// Same "wholly-empty snapshot is never trustworthy" reasoning as
+// listSongsRecursiveFromBrowseIndex above - see HARD9-015.
 export const streamSongsRecursiveFromBrowseIndex = async (
   snapshot: HvscBrowseIndexSnapshot,
   folderPath: string,
@@ -832,6 +841,7 @@ export const streamSongsRecursiveFromBrowseIndex = async (
     onChunk: (songs: HvscBrowseIndexedSong[]) => Promise<void> | void;
   },
 ): Promise<{ totalSongs: number } | null> => {
+  if (Object.keys(snapshot.songs).length === 0) return null;
   const normalizedRoot = normalizeFolderPath(folderPath);
   if (!snapshot.folders[normalizedRoot]) return null;
 
