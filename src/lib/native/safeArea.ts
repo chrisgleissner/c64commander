@@ -55,7 +55,7 @@ const convertPhysicalPixelsToCssPixels = (value: number) => {
 const normalizeAndroidInsets = (insets: SafeAreaInsets): SafeAreaInsets => ({
   top: convertPhysicalPixelsToCssPixels(insets.top),
   right: convertPhysicalPixelsToCssPixels(insets.right),
-  bottom: 0,
+  bottom: convertPhysicalPixelsToCssPixels(insets.bottom),
   left: convertPhysicalPixelsToCssPixels(insets.left),
 });
 
