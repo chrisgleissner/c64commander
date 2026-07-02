@@ -148,7 +148,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-088 | Failed throttled preview snaps the slider thumb back mid-drag | config | P3 | ux, robustness | high | S | FIXED (1e2a8e67) |
 | HARD9-089 | Category Refresh drops optimistic pins even when the refetch failed | config | P3 | robustness, correctness | medium | S | FIXED (e7261121) |
 | HARD9-090 | Duplicate "Automatic Demo Mode" control with duplicate DOM id | settings | P3 | a11y, correctness | high | S | FIXED (2a13bb1c) |
-| HARD9-091 | Notification-duration slider persists on every drag tick | settings | P3 | performance, robustness | high | S | OPEN |
+| HARD9-091 | Notification-duration slider persists on every drag tick | settings | P3 | performance, robustness | high | S | FIXED (0f8b213b) |
 | HARD9-092 | Orientation lock re-applied on every SettingsPage mount (incl. swipe transits) | settings | P3 | robustness, performance | high | S | OPEN |
 | HARD9-093 | Mouse-drag gesture state stranded by a missed pointerup before intent lock | shell | P3 | robustness, ux | medium | S | OPEN |
 | HARD9-094 | Deferred startup bootstrap never runs if the app launches hidden | state | P3 | robustness, correctness | medium | S | OPEN |
@@ -857,10 +857,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (2a13bb1c):** Implemented the fix sketch's first option: deleted the leftover duplicate "Config" card entirely - it had no other content, so removing the single checkbox row that was its whole body meant removing the whole card. The Connection card's instance (already first in the DOM) is canonical. New regression test (assert exactly one `#demo-mode-enabled` element) proven failing against the pre-fix duplicate via `git stash`; a pre-existing `getByRole`/accessible-name-based test passed on both sides of the fix, since `<label for>` always resolves to the first matching element regardless of which label is queried - exactly the underlying bug, and not surfaced by that style of query.
 
 ### HARD9-091 — Notification-duration slider persists to storage on every drag tick
-- **Area:** settings · **Severity:** P3 · **Dimensions:** performance, robustness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** settings · **Severity:** P3 · **Dimensions:** performance, robustness · **Confidence:** high · **Effort:** S · **Status:** FIXED (0f8b213b)
 - **Files:** `src/pages/SettingsPage.tsx:2570-2583`
 - **Failure scenario:** `onValueChange={([v]) => { setNotificationDurationMs(v); saveNotificationDurationMs(v); }}` persists + broadcasts `c64u-app-settings-updated` on every pointermove tick — dozens of synchronous localStorage writes re-running every settings listener mid-gesture. Every other numeric setting commits on blur/Enter.
 - **Fix sketch:** Keep `onValueChange` for local state; move the save into `onValueCommit`.
+- **Resolution (0f8b213b):** Split the handler exactly as sketched: `onValueChange` now only calls `setNotificationDurationMs` (local draft state, updates the "Duration: Ns" label immediately); `onValueCommit` (fires once, on release) calls `saveNotificationDurationMs`. Added a regression test that mocks `Slider` as a native range input distinguishing drag ticks (`onChange`) from release (`onMouseUp`), asserting the save is not called across 3 ticks and is called exactly once, with the final value, after release. Confirmed via git-stash that the test fails against the pre-fix handler (3 calls, one per tick).
 
 ### HARD9-092 — Orientation lock re-applied on every SettingsPage mount (including swipe transits)
 - **Area:** settings · **Severity:** P3 · **Dimensions:** robustness, performance · **Confidence:** high · **Effort:** S · **Status:** OPEN
