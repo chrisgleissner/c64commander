@@ -100,6 +100,52 @@ describe("ftpSourceAdapter", () => {
     expect(listFtpDirectoryMock).toHaveBeenCalledTimes(2);
   });
 
+  it("clears cache for descendant paths too, not just the exact refreshed path (HARD9-082)", async () => {
+    // Regression: Refresh only invalidated the exact current path - a
+    // recursive "Add folder" from an ancestor would still resolve
+    // unrefreshed children through the (up to 10-minute-stale) cache.
+    listFtpDirectoryMock.mockResolvedValue({
+      entries: [{ type: "file", name: "track.sid", path: "/music/track.sid", size: 123, modifiedAt: "now" }],
+    });
+
+    const source = createUltimateSourceLocation();
+    await source.listEntries("/music");
+    await source.listEntries("/music/sub");
+    expect(listFtpDirectoryMock).toHaveBeenCalledTimes(2);
+
+    source.clearCacheForPath("/music");
+
+    await source.listEntries("/music");
+    await source.listEntries("/music/sub");
+    expect(listFtpDirectoryMock).toHaveBeenCalledTimes(4);
+  });
+
+  it("recursive scans always read live instead of serving stale cached children (HARD9-082)", async () => {
+    // Regression: the recursive BFS resolved every child via the same
+    // cache used by ordinary browsing (10-minute TTL) - new device-side
+    // files were missing and deleted files were still offered until the
+    // cache naturally expired.
+    listFtpDirectoryMock.mockImplementation(async ({ path }) => {
+      if (path === "/") {
+        return { entries: [{ type: "dir", name: "music", path: "/music" }] };
+      }
+      return {
+        entries: [{ type: "file", name: "track.sid", path: "/music/track.sid", size: 1, modifiedAt: "now" }],
+      };
+    });
+
+    const source = createUltimateSourceLocation();
+    // Populate the cache for "/music" via ordinary (cached) browsing first.
+    await source.listEntries("/music");
+    expect(listFtpDirectoryMock).toHaveBeenCalledTimes(1);
+
+    await source.listFilesRecursive("/");
+
+    // "/" (root) and "/music" both fetched live during the recursive walk,
+    // even though "/music" was already cached.
+    expect(listFtpDirectoryMock).toHaveBeenCalledTimes(3);
+  });
+
   it("recursively lists files across directories", async () => {
     listFtpDirectoryMock.mockImplementation(async ({ path }) => {
       if (path === "/") {

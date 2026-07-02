@@ -87,20 +87,34 @@ const setCachedEntries = (key: string, entries: SourceEntry[]) => {
   saveCache(cache);
 };
 
-const clearCachedEntries = (key: string) => {
+// Refresh clearing only the exact current path left every descendant
+// serving up to CACHE_TTL_MS-stale entries: a recursive "Add folder" from
+// an ancestor would still resolve unrefreshed children through the cache.
+// Clears the exact path plus everything nested under it. See HARD9-082.
+const clearCachedEntriesUnderPrefix = (host: string, port: number | undefined, path: string) => {
+  const normalizedPath = path || "/";
+  const keyPrefix = `${host}:${port ?? ""}:`;
+  const exactKey = `${keyPrefix}${normalizedPath}`;
+  const descendantPrefix = `${keyPrefix}${normalizedPath.endsWith("/") ? normalizedPath : `${normalizedPath}/`}`;
   const cache = loadCache();
-  delete cache.entries[key];
-  cache.order = cache.order.filter((entry) => entry !== key);
+  const keysToRemove = new Set(
+    Object.keys(cache.entries).filter((key) => key === exactKey || key.startsWith(descendantPrefix)),
+  );
+  if (!keysToRemove.size) return;
+  keysToRemove.forEach((key) => delete cache.entries[key]);
+  cache.order = cache.order.filter((entry) => !keysToRemove.has(entry));
   saveCache(cache);
 };
 
-const listEntries = async (path: string): Promise<SourceEntry[]> => {
+const listEntries = async (path: string, options?: { skipCache?: boolean }): Promise<SourceEntry[]> => {
   const { deviceHost: rawHost, password = "" } = getC64APIConfigSnapshot();
   const host = normalizeFtpHost(rawHost);
   const normalizedPath = path && path !== "" ? path : "/";
   const cacheKey = buildCacheKey(host, getStoredFtpPort(), normalizedPath);
-  const cached = getCachedEntries(cacheKey);
-  if (cached) return cached;
+  if (!options?.skipCache) {
+    const cached = getCachedEntries(cacheKey);
+    if (cached) return cached;
+  }
 
   const result = await listFtpDirectory({
     host,
@@ -200,7 +214,12 @@ const listFilesRecursive = async (
     visited.add(current.path);
     let entries: SourceEntry[];
     try {
-      entries = await listEntries(current.path);
+      // Recursive scans always read live: a stale cached child (up to
+      // CACHE_TTL_MS old) would silently omit files added, or still offer
+      // files deleted, since the scan's start (Refresh only ever
+      // invalidates the folder it was called on, not every folder a
+      // recursive walk happens to visit). See HARD9-082.
+      entries = await listEntries(current.path, { skipCache: true });
     } catch (error) {
       if (signal?.aborted || (error as Error).name === "AbortError") {
         throw error;
@@ -293,7 +312,6 @@ export const createUltimateSourceLocation = (options?: { name?: string }): Sourc
   clearCacheForPath: (path) => {
     const { deviceHost: rawHost } = getC64APIConfigSnapshot();
     const host = normalizeFtpHost(rawHost);
-    const cacheKey = buildCacheKey(host, getStoredFtpPort(), path || "/");
-    clearCachedEntries(cacheKey);
+    clearCachedEntriesUnderPrefix(host, getStoredFtpPort(), path || "/");
   },
 });
