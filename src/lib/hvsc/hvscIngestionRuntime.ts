@@ -178,6 +178,12 @@ export const resetHvscLibraryData = async (): Promise<void> => {
     ingestionState: "idle",
     ingestionError: null,
     ingestionSummary: null,
+    // Per-version "update already applied" records from the previous install
+    // must not survive a reset - updateHvscState keeps the existing
+    // `updates` map when the patch omits it, so without this every
+    // incremental update would be skipped forever on reinstall ("Update N
+    // already applied"), permanently stuck at the baseline. See HARD9-014.
+    updates: {},
   });
   saveHvscStatusSummary(getDefaultHvscStatusSummary());
   resetHvscProgressSummaryStage();
@@ -264,6 +270,12 @@ export const applyIngestionSuccess = ({
       completedAt: new Date().toISOString(),
       archiveName,
     },
+    // A fresh baseline install invalidates any "update already applied"
+    // records from whatever library was there before - those version
+    // numbers were layered on top of the OLD baseline. Without this, a
+    // direct baseline reinstall (not preceded by an explicit reset) hits
+    // the same permanently-stuck-skipping-updates bug as HARD9-014.
+    ...(plan.type === "baseline" ? { updates: {} } : {}),
   });
 };
 
