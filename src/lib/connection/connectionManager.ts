@@ -36,7 +36,7 @@ import { addLog } from "@/lib/logging";
 import { getSmokeConfig, initializeSmokeMode, isSmokeModeEnabled, recordSmokeStatus } from "@/lib/smoke/smokeMode";
 import { resetInteractionState } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { updateDeviceConnectionState } from "@/lib/deviceInteraction/deviceStateStore";
-import { normalizeTransportError } from "@/lib/c64api/transportErrors";
+import { isAuthRequiredError, normalizeTransportError } from "@/lib/c64api/transportErrors";
 import { clearConnectivityErrorToastsForHost } from "@/lib/uiErrors";
 import { registerReachabilityListener, type ReachabilitySource } from "@/lib/connection/reachabilityEvents";
 import {
@@ -56,6 +56,8 @@ export type ProbeInfoResult = {
   ok: boolean;
   deviceInfo: DeviceInfo | null;
   error: string | null;
+  /** Set when the failure was a 401/403 — the device answered, it rejected the password. */
+  authRequired?: boolean;
 };
 
 export type ConnectionSnapshot = Readonly<{
@@ -175,6 +177,7 @@ const probeInfoWithConnectionConfig = async (
         ok: false,
         deviceInfo: null,
         error: message,
+        authRequired: isAuthRequiredError(error),
       };
     }
     // Contextualize raw transport failures (e.g. DNS "Unable to resolve host")
@@ -296,6 +299,7 @@ export async function probeInfoOnce(
         ok: false,
         deviceInfo: null,
         error: message,
+        authRequired: isAuthRequiredError(error),
       };
     }
     const failure = normalizeTransportError(error, { host: config.deviceHost });

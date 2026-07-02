@@ -19,7 +19,7 @@ import {
 import { reportUserError } from "@/lib/uiErrors";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import { discoverConnection } from "@/lib/connection/connectionManager";
-import { setPasswordForDevice } from "@/lib/secureStorage";
+import { clearPasswordForDevice, getPasswordForDevice, setPasswordForDevice } from "@/lib/secureStorage";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, clearLogs, getErrorLogs, getLogs } from "@/lib/logging";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
@@ -1016,6 +1016,91 @@ describe("SettingsPage", () => {
     await waitFor(() => {
       expect(vi.mocked(setPasswordForDevice)).toHaveBeenCalledWith("saved-device-1", "new-password");
       expect(mockUpdateConfig).toHaveBeenCalledWith("c64u", "new-password");
+    });
+  });
+
+  it("never loads the real saved password into the editable field (HARD9-004)", async () => {
+    savedDevicesRef.current = {
+      ...savedDevicesRef.current,
+      devices: [{ ...savedDevicesRef.current.devices[0], hasPassword: true }],
+    };
+    vi.mocked(getPasswordForDevice).mockResolvedValue("super-secret");
+
+    renderSettingsPage();
+
+    // The field shows a locked placeholder, never the real secret, and does not
+    // fetch it from secure storage just to render.
+    const lockedField = screen.getByLabelText(/network password/i) as HTMLInputElement;
+    expect(lockedField).toBeDisabled();
+    expect(lockedField.value).not.toBe("super-secret");
+    expect(vi.mocked(getPasswordForDevice)).not.toHaveBeenCalled();
+
+    // Clicking Change reveals an empty, editable field — not the real password.
+    fireEvent.click(screen.getByRole("button", { name: /^change$/i }));
+    const editableField = screen.getByLabelText(/network password/i) as HTMLInputElement;
+    expect(editableField).not.toBeDisabled();
+    expect(editableField.value).toBe("");
+  });
+
+  it("does not persist a stray keystroke and rejects a wrong replacement password without saving it (HARD9-004)", async () => {
+    savedDevicesRef.current = {
+      ...savedDevicesRef.current,
+      devices: [{ ...savedDevicesRef.current.devices[0], hasPassword: true }],
+    };
+    mockEvaluateNewDeviceReachability.mockResolvedValue({ status: "needs-password" });
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /^change$/i }));
+    fireEvent.change(screen.getByLabelText(/network password/i), { target: { value: "wrong-password" } });
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/wrong password for this device/i)).toBeInTheDocument();
+    });
+    expect(vi.mocked(setPasswordForDevice)).not.toHaveBeenCalled();
+    expect(vi.mocked(clearPasswordForDevice)).not.toHaveBeenCalled();
+    expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
+  });
+
+  it("saving without touching an already-saved password keeps it unchanged and reuses it for verification", async () => {
+    savedDevicesRef.current = {
+      ...savedDevicesRef.current,
+      devices: [{ ...savedDevicesRef.current.devices[0], hasPassword: true }],
+    };
+    vi.mocked(getPasswordForDevice).mockResolvedValue("existing-secret");
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(mockUpdateConfig).toHaveBeenCalledWith("c64u", "existing-secret");
+      expect(mockSwitchSavedDevice).toHaveBeenCalledWith("saved-device-1");
+    });
+    expect(vi.mocked(setPasswordForDevice)).not.toHaveBeenCalled();
+    expect(vi.mocked(clearPasswordForDevice)).not.toHaveBeenCalled();
+  });
+
+  it("reports a wrong-password saved-device switch as an auth failure, not offline (HARD9-028)", async () => {
+    mockSwitchSavedDevice.mockResolvedValueOnce({
+      ok: false,
+      deviceInfo: null,
+      error: "HTTP 403: Forbidden",
+      authRequired: true,
+    });
+
+    renderSettingsPage();
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "CONNECTION_SAVE",
+          title: "Unable to save connection",
+          description: "The device rejected the password. Check the password and try again.",
+        }),
+      );
     });
   });
 

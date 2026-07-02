@@ -208,13 +208,25 @@ const isValidConnectionPort = (value: string) => {
   return Number.isInteger(parsed) && parsed >= 1 && parsed <= 65535;
 };
 
-const isOfflineSwitchResult = (value: unknown): value is { ok: false; error?: string | null } =>
+const isOfflineSwitchResult = (
+  value: unknown,
+): value is { ok: false; error?: string | null; authRequired?: boolean } =>
   typeof value === "object" && value !== null && "ok" in value && (value as { ok?: unknown }).ok === false;
+
+// The device answered but rejected the password (HTTP 401/403) — this is not the same
+// failure as an unreachable device, and must not be reported as one (HARD9-028).
+const describeSwitchFailure = (
+  verification: { error?: string | null; authRequired?: boolean },
+  fallbackMessage: string,
+): string =>
+  verification.authRequired
+    ? "The device rejected the password. Check the password and try again."
+    : (verification.error ?? fallbackMessage);
 
 export default function SettingsPage() {
   const { profile } = useDisplayProfile();
   const navigate = useNavigate();
-  const { status, baseUrl, runtimeBaseUrl, password, deviceHost, updateConfig, refetch } = useC64Connection();
+  const { status, baseUrl, runtimeBaseUrl, deviceHost, updateConfig, refetch } = useC64Connection();
   const savedDevices = useSavedDevices();
   const switchSavedDevice = useSavedDeviceSwitching();
   const connectionSnapshot = useConnectionState();
@@ -232,9 +244,15 @@ export default function SettingsPage() {
   const buildInfo = getBuildInfo();
   const buildInfoRows = getBuildInfoRows(buildInfo);
   const settingsDocumentationLink = getSettingsDocumentationLink();
-  const passwordInputRef = useRef(password);
+  // The saved device's real password is never loaded into this ref/state (HARD9-004):
+  // both start empty and only ever hold what the user has actually typed this session.
+  const passwordInputRef = useRef("");
 
-  const [passwordInput, setPasswordInput] = useState(password);
+  const [passwordInput, setPasswordInput] = useState("");
+  // Whether the password field is showing an editable draft. Starts `true` (editable)
+  // and is corrected to match the selected device on the first effect pass below.
+  const [passwordEditing, setPasswordEditing] = useState(true);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [deviceDraft, setDeviceDraft] = useState<SavedDeviceEditorDraft>(() =>
     buildSavedDeviceEditorDraft(
       {
@@ -427,11 +445,6 @@ export default function SettingsPage() {
   }, [hvscUpdateCheckIntervalInput]);
 
   useEffect(() => {
-    passwordInputRef.current = password;
-    setPasswordInput(password);
-  }, [password]);
-
-  useEffect(() => {
     if (!selectedSavedDevice) {
       return;
     }
@@ -449,21 +462,19 @@ export default function SettingsPage() {
     selectedSavedDevice?.telnetPort,
   ]);
 
+  // The password field never loads the real secret (HARD9-004): switching the selected
+  // device (or its hasPassword flag changing after a save) just resets to an empty draft,
+  // locked/read-only when a password is already saved, directly editable otherwise. This
+  // also removes the write race from HARD9-025 — nothing here overwrites an in-progress
+  // keystroke, since no effect mirrors live connection/password state into this field.
   useEffect(() => {
     if (!selectedSavedDevice) {
       return;
     }
-    let cancelled = false;
-    void (async () => {
-      const nextPassword = selectedSavedDevice.hasPassword ? await getPasswordForDevice(selectedSavedDevice.id) : null;
-      if (!cancelled) {
-        passwordInputRef.current = nextPassword ?? "";
-        setPasswordInput(nextPassword ?? "");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    setPasswordInput("");
+    passwordInputRef.current = "";
+    setPasswordEditing(!selectedSavedDevice.hasPassword);
+    setPasswordError(null);
   }, [selectedSavedDevice?.id, selectedSavedDevice?.hasPassword]);
 
   const handleDeviceDraftChange = useCallback(
@@ -640,8 +651,18 @@ export default function SettingsPage() {
     if (hostError || portError || nextDeviceNameError) return;
     const nextHost = stripPortFromDeviceHost(deviceDraft.host.trim() || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
     const nextDeviceHost = buildDeviceHostWithHttpPort(nextHost, Number(deviceDraft.httpPort));
-    const trimmedPassword = passwordInputRef.current.trim();
-    const hasPassword = trimmedPassword.length > 0;
+    // The field never displays the real saved secret (HARD9-004): while `passwordEditing`
+    // is false the user hasn't touched it, so reuse the stored password unchanged instead
+    // of the empty value that's actually sitting in the (never-shown) input.
+    const isChangingPassword = passwordEditing;
+    const typedPassword = passwordInputRef.current.trim();
+    const effectivePassword = isChangingPassword
+      ? typedPassword
+      : selectedSavedDevice.hasPassword
+        ? ((await getPasswordForDevice(selectedSavedDevice.id)) ?? "")
+        : "";
+    const hasPassword = effectivePassword.length > 0;
+    setPasswordError(null);
     setIsSaving(true);
     try {
       // Pre-commit reachability gate: never persist an unreachable device. When an
@@ -650,7 +671,7 @@ export default function SettingsPage() {
       const reachability = await evaluateNewDeviceReachability({
         host: nextHost,
         deviceHost: nextDeviceHost,
-        password: hasPassword ? trimmedPassword : null,
+        password: hasPassword ? effectivePassword : null,
       });
       if (reachability.status === "unreachable") {
         if (reachability.suggestedAddress) {
@@ -664,13 +685,21 @@ export default function SettingsPage() {
         }
         return;
       }
+      if (reachability.status === "needs-password" && isChangingPassword && hasPassword) {
+        // The just-typed password was itself rejected by the device. A wrong password
+        // must never be persisted (HARD9-004) — surface it as an auth failure, not a save.
+        setPasswordError("Wrong password for this device.");
+        return;
+      }
       setReachabilitySuggestion(null);
       setStoredFtpPort(Number(deviceDraft.ftpPort));
       setStoredTelnetPort(Number(deviceDraft.telnetPort));
-      if (hasPassword) {
-        await setPasswordForDevice(selectedSavedDevice.id, trimmedPassword);
-      } else {
-        await clearPasswordForDevice(selectedSavedDevice.id);
+      if (isChangingPassword) {
+        if (hasPassword) {
+          await setPasswordForDevice(selectedSavedDevice.id, effectivePassword);
+        } else {
+          await clearPasswordForDevice(selectedSavedDevice.id);
+        }
       }
       updateSavedDevice(selectedSavedDevice.id, {
         name: deviceDraft.name,
@@ -681,14 +710,19 @@ export default function SettingsPage() {
         telnetPort: Number(deviceDraft.telnetPort),
         hasPassword,
       });
-      updateConfig(nextDeviceHost, hasPassword ? trimmedPassword : undefined);
+      updateConfig(nextDeviceHost, hasPassword ? effectivePassword : undefined);
       const verification = await switchSavedDevice(selectedSavedDevice.id);
       if (isOfflineSwitchResult(verification)) {
         throw new Error(
-          verification.error ??
+          describeSwitchFailure(
+            verification,
             `Unable to reach ${nextHost}. Check the hostname/IP address and confirm the device is powered on.`,
+          ),
         );
       }
+      setPasswordInput("");
+      passwordInputRef.current = "";
+      setPasswordEditing(!hasPassword);
       toast({ title: "Connection settings saved" });
     } catch (error) {
       reportUserError({
@@ -822,8 +856,10 @@ export default function SettingsPage() {
       const verification = await switchSavedDevice(persisted.deviceId);
       if (isOfflineSwitchResult(verification)) {
         throw new Error(
-          verification.error ??
+          describeSwitchFailure(
+            verification,
             `Unable to connect to ${persisted.host}. The device was discovered, but did not answer the follow-up connection check.`,
+          ),
         );
       }
       toast({ title: "Discovered device selected" });
@@ -1293,19 +1329,73 @@ export default function SettingsPage() {
                     <Lock className="h-3 w-3" />
                     Network Password
                   </Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={passwordInput}
-                    onChange={(e) => {
-                      const nextPassword = e.target.value;
-                      passwordInputRef.current = nextPassword;
-                      setPasswordInput(nextPassword);
-                    }}
-                    placeholder="Optional"
-                    className="font-sans"
-                  />
-                  <p className="text-xs text-muted-foreground">Only needed if your device uses one.</p>
+                  {selectedSavedDevice?.hasPassword && !passwordEditing ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="password"
+                        type="password"
+                        value="••••••••"
+                        readOnly
+                        disabled
+                        aria-label="Network Password saved"
+                        className="font-sans"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setPasswordError(null);
+                          setPasswordInput("");
+                          passwordInputRef.current = "";
+                          setPasswordEditing(true);
+                        }}
+                      >
+                        Change
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="password"
+                        type="password"
+                        value={passwordInput}
+                        autoFocus={Boolean(selectedSavedDevice?.hasPassword)}
+                        onChange={(e) => {
+                          const nextPassword = e.target.value;
+                          passwordInputRef.current = nextPassword;
+                          setPasswordInput(nextPassword);
+                          setPasswordError(null);
+                        }}
+                        placeholder="Optional"
+                        className="font-sans"
+                      />
+                      {selectedSavedDevice?.hasPassword ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setPasswordError(null);
+                            setPasswordInput("");
+                            passwordInputRef.current = "";
+                            setPasswordEditing(false);
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      ) : null}
+                    </div>
+                  )}
+                  {passwordError ? (
+                    <p className="text-xs text-destructive">{passwordError}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      {selectedSavedDevice?.hasPassword && !passwordEditing
+                        ? "Password saved."
+                        : "Only needed if your device uses one."}
+                    </p>
+                  )}
                 </div>
               </div>
 
