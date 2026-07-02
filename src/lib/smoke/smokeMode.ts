@@ -163,14 +163,23 @@ const getErrorMessage = (error: unknown) => {
 const isMissingFileError = (error: unknown) =>
   /does not exist|not exist|no such file|not found/i.test(getErrorMessage(error));
 
-const shouldReadSmokeConfigFromFilesystem = () => {
-  if (!Capacitor.isNativePlatform()) return false;
+const isSmokeProbeContextEnabled = () => {
   if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") return true;
   if (typeof window !== "undefined" && (window as SmokeBootstrapWindow).__c64uReadSmokeConfigFromFilesystem === true) {
     return true;
   }
   return false;
 };
+
+const shouldReadSmokeConfigFromFilesystem = () => Capacitor.isNativePlatform() && isSmokeProbeContextEnabled();
+
+// The localStorage fallback exists for web/non-native smoke runs (no
+// Filesystem plugin), so it can't require Capacitor.isNativePlatform() like
+// the filesystem check above - but it must still require the SAME explicit
+// probe-context opt-in. Without this gate, a stray key left over from any
+// past smoke/E2E run on the same device profile would silently and
+// permanently latch a production WebView into smoke mode (HARD9-059).
+const shouldReadSmokeConfigFromStorage = () => isSmokeProbeContextEnabled();
 
 const readSmokeConfigFromStorage = (): SmokeConfig | null => {
   if (typeof localStorage === "undefined") return null;
@@ -202,6 +211,7 @@ export const initializeSmokeMode = async (): Promise<SmokeConfig | null> => {
   cachedSmokeConfig = null;
 
   let config: SmokeConfig | null = null;
+  let configFromFilesystem = false;
 
   if (shouldReadSmokeConfigFromFilesystem()) {
     // Probe via Filesystem.stat first so a missing optional file does not
@@ -230,6 +240,7 @@ export const initializeSmokeMode = async (): Promise<SmokeConfig | null> => {
           encoding: Encoding.UTF8,
         });
         config = parseSmokeConfig(JSON.parse(result.data));
+        configFromFilesystem = config !== null;
       } catch (error) {
         addLog("warn", "Failed to read smoke config from filesystem", {
           error: (error as Error).message,
@@ -239,12 +250,21 @@ export const initializeSmokeMode = async (): Promise<SmokeConfig | null> => {
     }
   }
 
-  config ??= readSmokeConfigFromStorage();
+  if (!config && shouldReadSmokeConfigFromStorage()) {
+    config = readSmokeConfigFromStorage();
+  }
 
   if (!config) return null;
 
   cachedSmokeConfig = config;
-  writeSmokeConfigToStorage(config);
+  // Only mirror a FRESH filesystem read into storage (a perf cache for the
+  // next cold launch, avoiding a Filesystem round-trip). Re-persisting a
+  // value we just read straight FROM storage would re-write the same key on
+  // every single launch indefinitely - the self-perpetuating latch this
+  // finding describes.
+  if (configFromFilesystem) {
+    writeSmokeConfigToStorage(config);
+  }
   await persistSmokeFeatureFlags(config.featureFlags);
 
   if (config.debugLogging) {
