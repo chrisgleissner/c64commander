@@ -154,6 +154,58 @@ describe("playlistRepositorySync", () => {
     expect(repository.replacePlaylistItems).not.toHaveBeenCalled();
   });
 
+  it("chains two rapid commits for the same playlistId so the second write only starts after the first fully finishes (HARD9-034)", async () => {
+    const playlistId = buildPlaylistStorageKey("device-1");
+    const firstItems = [buildPlaylistItem(1)];
+    const secondItems = [buildPlaylistItem(1), buildPlaylistItem(2)];
+    const callOrder: string[] = [];
+    let committedCount = 0;
+    let releaseFirstWrite: (() => void) | null = null;
+    const firstWriteGate = new Promise<void>((resolve) => {
+      releaseFirstWrite = resolve;
+    });
+
+    const repository = {
+      replacePlaylistSnapshot: vi.fn(async (_id: string, snapshot: { playlistItems: unknown[] }) => {
+        const label = snapshot.playlistItems.length === firstItems.length ? "A" : "B";
+        callOrder.push(`${label}:write-start`);
+        if (label === "A") {
+          await firstWriteGate;
+        }
+        committedCount = snapshot.playlistItems.length;
+        callOrder.push(`${label}:write-end`);
+      }),
+      upsertTracks: vi.fn().mockResolvedValue(undefined),
+      replacePlaylistItems: vi.fn().mockResolvedValue(undefined),
+      getPlaylistItems: vi.fn(),
+      getPlaylistItemCount: vi.fn(async () => committedCount),
+      getTracksByIds: vi.fn(),
+      saveSession: vi.fn(),
+      getSession: vi.fn(),
+      queryPlaylist: vi.fn(),
+      createSession: vi.fn(),
+      next: vi.fn(),
+      getRandomSession: vi.fn(),
+      saveRandomSession: vi.fn(),
+    };
+
+    const promiseA = commitPlaylistSnapshot({ playlistId, items: firstItems, repository: repository as any });
+    await vi.waitFor(() => expect(callOrder).toContain("A:write-start"));
+
+    const promiseB = commitPlaylistSnapshot({ playlistId, items: secondItems, repository: repository as any });
+    // Give B's microtask queue a chance to run; without chaining it would
+    // start writing concurrently with A instead of waiting.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(callOrder).not.toContain("B:write-start");
+
+    releaseFirstWrite?.();
+    const [resultA, resultB] = await Promise.all([promiseA, promiseB]);
+
+    expect(callOrder).toEqual(["A:write-start", "A:write-end", "B:write-start", "B:write-end"]);
+    expect(resultA.committedCount).toBe(firstItems.length);
+    expect(resultB.committedCount).toBe(secondItems.length);
+  });
+
   describe("snapshot key (PH8: persisted-metadata coverage)", () => {
     const playlistId = "ph8-playlist";
     const buildRepo = (count: number) =>

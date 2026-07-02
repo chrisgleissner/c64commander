@@ -165,6 +165,40 @@ const readValue = async <T>(key: string): Promise<T | null> => {
   return (values.get(key) as T | undefined) ?? null;
 };
 
+const deleteValues = async (keys: string[]) => {
+  if (!keys.length) return;
+  const db = await openDb();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE, "readwrite");
+      const store = tx.objectStore(STORE);
+      let remaining = keys.length;
+      let settled = false;
+
+      const rejectOnce = (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+      };
+
+      keys.forEach((key) => {
+        const request = store.delete(key);
+        request.onsuccess = () => {
+          if (settled) return;
+          remaining -= 1;
+          if (remaining === 0) {
+            settled = true;
+            resolve();
+          }
+        };
+        request.onerror = () => rejectOnce(request.error ?? new Error("IndexedDB delete failed"));
+      });
+    });
+  } finally {
+    db.close();
+  }
+};
+
 const isOpenFailure = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);
   return /open/i.test(message);
@@ -316,17 +350,54 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
     await writeValues(tracks.map((track) => [trackKey(track.trackId), track]));
   }
 
+  private async readPreviousPlaylistItemIds(playlistId: string): Promise<string[]> {
+    const orders = await readValue<PlaylistOrderRecord>(playlistOrderKey(playlistId)).catch((error) => {
+      if (isOpenFailure(error)) {
+        throw error;
+      }
+      return warnReadFailureAndReturn<PlaylistOrderRecord | null>(error, null);
+    });
+    return orders?.["playlist-position"] ?? [];
+  }
+
+  private async deleteStalePlaylistItems(playlistId: string, previousIds: string[], nextIds: Set<string>) {
+    const staleKeys = previousIds
+      .filter((id) => !nextIds.has(id))
+      .map((id) => playlistItemKey(playlistId, id));
+    if (!staleKeys.length) return;
+    await deleteValues(staleKeys).catch((error) => {
+      addLog("warn", "Failed to delete stale playlist-item records from IndexedDB", {
+        playlistId,
+        staleCount: staleKeys.length,
+        error,
+      });
+    });
+  }
+
   async replacePlaylistSnapshot(playlistId: string, snapshot: SerializedPlaylistSnapshot): Promise<void> {
     await this.ensureInitialized();
     const sortedItems = [...snapshot.playlistItems].sort((left, right) => left.sortKey.localeCompare(right.sortKey));
     const tracksById = new Map(snapshot.tracks.map((track) => [track.trackId, track] as const));
     const { orders, queryIndex } = buildPlaylistOrders(sortedItems, tracksById);
+    const previousIds = await this.readPreviousPlaylistItemIds(playlistId);
     await writeValues([
       ...snapshot.tracks.map((track) => [trackKey(track.trackId), track] as [string, unknown]),
       ...sortedItems.map((item) => [playlistItemKey(playlistId, item.playlistItemId), item] as [string, unknown]),
       [playlistOrderKey(playlistId), orders],
       [playlistQueryIndexKey(playlistId), queryIndex],
     ]);
+    // Replacing a snapshot only puts the current items; stale playlist-item
+    // records for removed items are never overwritten by a later write and
+    // would otherwise accumulate forever. Track records are not cleaned up
+    // here since a trackId can legitimately be shared across playlistIds
+    // (e.g. the same file added on more than one device); deleting them on a
+    // single playlist's replace risks breaking hydration for another
+    // playlist still referencing the same track. See HARD9-034.
+    await this.deleteStalePlaylistItems(
+      playlistId,
+      previousIds,
+      new Set(sortedItems.map((item) => item.playlistItemId)),
+    );
   }
 
   async getTracksByIds(trackIds: string[]): Promise<Map<string, TrackRecord>> {
@@ -352,11 +423,19 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
     const sortedItems = [...items].sort((left, right) => left.sortKey.localeCompare(right.sortKey));
     const tracksById = await this.getTracksByIds([...new Set(sortedItems.map((item) => item.trackId))]);
     const { orders, queryIndex } = buildPlaylistOrders(sortedItems, tracksById);
+    const previousIds = await this.readPreviousPlaylistItemIds(playlistId);
     await writeValues([
       ...sortedItems.map((item) => [playlistItemKey(playlistId, item.playlistItemId), item] as [string, unknown]),
       [playlistOrderKey(playlistId), orders],
       [playlistQueryIndexKey(playlistId), queryIndex],
     ]);
+    // See replacePlaylistSnapshot's comment: clean up stale playlist-item
+    // records for removed items; track records are left alone (HARD9-034).
+    await this.deleteStalePlaylistItems(
+      playlistId,
+      previousIds,
+      new Set(sortedItems.map((item) => item.playlistItemId)),
+    );
   }
 
   private async loadPlaylistQueryIndex(playlistId: string): Promise<PersistedPlaylistQueryIndex> {

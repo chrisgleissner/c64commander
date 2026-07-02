@@ -71,6 +71,14 @@ const createFakeIndexedDb = (options: FakeIndexedDbOptions = {}) => {
           });
           return request;
         },
+        delete: (key: string) => {
+          const request: Record<string, unknown> = {};
+          queueMicrotask(() => {
+            ensureStore(storeName).delete(key);
+            (request.onsuccess as (() => void) | undefined)?.();
+          });
+          return request;
+        },
       }),
     }),
     close: () => {},
@@ -287,6 +295,54 @@ describe("indexedDB playlist repository", () => {
 
     expect(page.totalMatchCount).toBe(1);
     expect(page.rows.map((row) => row.playlistItem.playlistItemId)).toEqual(["item-b"]);
+  });
+
+  it("deletes stale playlist-item records for items removed by a later replacePlaylistSnapshot, but keeps track records (HARD9-034)", async () => {
+    const repository = getIndexedDbPlaylistDataRepository({
+      preferDurableStorage: false,
+    });
+    const stateStore = (globalThis.indexedDB as IDBFactory & { __stores: Map<string, Map<string, unknown>> }).__stores;
+
+    await repository.replacePlaylistSnapshot?.("playlist-default", {
+      tracks: [buildTrack({ trackId: "track-a" }), buildTrack({ trackId: "track-b" })],
+      playlistItems: [buildItem("item-a", "track-a", "0001"), buildItem("item-b", "track-b", "0002")],
+    });
+
+    const storeAfterFirst = stateStore.get("state");
+    expect(storeAfterFirst?.has("playlist-item:playlist-default:item-a")).toBe(true);
+    expect(storeAfterFirst?.has("playlist-item:playlist-default:item-b")).toBe(true);
+
+    // Second replace drops item-a entirely.
+    await repository.replacePlaylistSnapshot?.("playlist-default", {
+      tracks: [buildTrack({ trackId: "track-b" })],
+      playlistItems: [buildItem("item-b", "track-b", "0001")],
+    });
+
+    const storeAfterSecond = stateStore.get("state");
+    expect(storeAfterSecond?.has("playlist-item:playlist-default:item-a")).toBe(false);
+    expect(storeAfterSecond?.has("playlist-item:playlist-default:item-b")).toBe(true);
+    // Track records are never deleted by a replace - only playlist-item keys.
+    expect(storeAfterSecond?.has("track:track-a")).toBe(true);
+    expect(storeAfterSecond?.has("track:track-b")).toBe(true);
+  });
+
+  it("deletes stale playlist-item records for items removed by a later replacePlaylistItems", async () => {
+    const repository = getIndexedDbPlaylistDataRepository({
+      preferDurableStorage: false,
+    });
+    const stateStore = (globalThis.indexedDB as IDBFactory & { __stores: Map<string, Map<string, unknown>> }).__stores;
+
+    await repository.upsertTracks([buildTrack({ trackId: "track-a" }), buildTrack({ trackId: "track-b" })]);
+    await repository.replacePlaylistItems("playlist-default", [
+      buildItem("item-a", "track-a", "0001"),
+      buildItem("item-b", "track-b", "0002"),
+    ]);
+
+    await repository.replacePlaylistItems("playlist-default", [buildItem("item-b", "track-b", "0001")]);
+
+    const store = stateStore.get("state");
+    expect(store?.has("playlist-item:playlist-default:item-a")).toBe(false);
+    expect(store?.has("playlist-item:playlist-default:item-b")).toBe(true);
   });
 
   it("rebuilds a missing persisted query index from stored playlist rows", async () => {
