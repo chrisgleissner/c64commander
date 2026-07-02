@@ -79,7 +79,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-019 | Full trace ZIP exported on every recorded error | diagnostics | P1 | performance, ux | high | S | OPEN |
 | HARD9-020 | Unguarded localStorage log writes; O(n) parse/stringify per log line | diagnostics | P1 | robustness, correctness, perf | high | M | OPEN |
 | HARD9-021 | Closed diagnostics overlay copies full trace/log stores on every event | diagnostics | P1 | performance, ux | high | M | OPEN |
-| HARD9-022 | CONSERVATIVE preset gets no half-open probe; user CTAs hard-fail in circuit window | transport | P2 | ux, correctness | high | S | OPEN |
+| HARD9-022 | CONSERVATIVE preset gets no half-open probe; user CTAs hard-fail in circuit window | transport | P2 | ux, correctness | high | S | FIXED (9ab556cb) |
 | HARD9-023 | Background requests retry 3× with zero delay, holding the REST lane ~9s | transport | P2 | ux, perf, robustness | high | S | FIXED (3ceecd75) |
 | HARD9-024 | Circuit/state-gate error toasts classified "unknown", never auto-clear | transport | P2 | ux, correctness | high | S | OPEN |
 | HARD9-025 | Password field write race between connection state and secure-storage load | settings | P2 | correctness, data-loss | medium | S | FIXED (df7ddcd9) |
@@ -320,12 +320,13 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 ## P2 — Medium
 
 ### HARD9-022 — CONSERVATIVE circuit breaker still hard-fails user CTAs during the circuit window — half-open probe only exists for presets that don't need it
-- **Area:** transport · **Severity:** P2 · **Dimensions:** ux-responsiveness, correctness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** transport · **Severity:** P2 · **Dimensions:** ux-responsiveness, correctness · **Confidence:** high · **Effort:** S · **Status:** FIXED (9ab556cb)
 - **Files:** `src/lib/config/deviceSafetySettings.ts:120-136`, `src/lib/deviceInteraction/deviceInteractionManager.ts:548-554,677-699`
 - **Failure scenario:** Two consecutive background-poll network failures (weight 1.0 each) reach CONSERVATIVE's threshold of 2 and open the circuit for 6s. `shouldBlockForState` deliberately lets user intent through the state gate while the circuit is open, but `withRestInteraction` throws `"Device circuit open"` because `userHalfOpenProbe` requires `allowUserOverrideCircuit`, which CONSERVATIVE sets `false`. Every tap in the window produces a destructive error toast, triggered by traffic the user never initiated. The preset whose device most needs a controlled recovery probe is the only one that gets none.
 - **Evidence:** `const userHalfOpenProbe = circuitOpen && meta.intent === "user" && config.allowUserOverrideCircuit;` vs CONSERVATIVE `allowUserOverrideCircuit: false, circuitBreakerThreshold: 2`.
 - **Fix sketch:** Make the single-flight half-open probe unconditional for user intent (the `restUserCircuitProbeInFlight` single-flighting already provides device protection); keep `allowUserOverrideCircuit` governing only unrestricted override.
 - **Notes:** Carried over from hardening/5 P0-2, materially reduced (P0-1's expiry timer is fixed so the wedge is bounded at 6s; timeouts now weigh 0.5).
+- **Resolution (9ab556cb):** REST user half-open probes no longer depend on `allowUserOverrideCircuit`; any user-intent REST request may run the existing single-flight probe while the REST circuit is open. System/background requests remain blocked, and the existing `restUserCircuitProbeInFlight` guard still rejects a second concurrent user probe. Added regression coverage for CONSERVATIVE-style disabled override and for the single-flight guard.
 
 ### HARD9-023 — Background-intent requests retry 3× with zero delay, occupying the single REST lane for up to ~9s ahead of user CTAs
 - **Area:** transport · **Severity:** P2 · **Dimensions:** ux-responsiveness, performance, robustness · **Confidence:** high · **Effort:** S · **Status:** FIXED (3ceecd75)
