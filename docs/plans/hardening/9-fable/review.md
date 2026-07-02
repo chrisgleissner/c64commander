@@ -112,7 +112,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-052 | Home optimistic pins: no routing-epoch clear, no watchdog | config | P2 | robustness, ux | high | S | OPEN |
 | HARD9-053 | Profile load/revert sends entire config as one giant POST /v1/configs | config | P2 | robustness, perf | medium | M | OPEN |
 | HARD9-054 | Audio Mixer solo routing bypasses mutation layer; stale snapshot restore | config | P2 | correctness, robustness | medium | M | OPEN |
-| HARD9-055 | Error-toast eviction + sliding dedup window silently hide persistent failures | diagnostics | P2 | correctness, ux | high | M | OPEN |
+| HARD9-055 | Error-toast eviction + sliding dedup window silently hide persistent failures | diagnostics | P2 | correctness, ux | high | M | FIXED (59e45da0) |
 | HARD9-056 | Backend-decision correlation set grows unbounded | diagnostics | P2 | performance, robustness | high | S | OPEN |
 | HARD9-057 | Trace persistence exceeds sessionStorage quota; size accounting broken on restore | diagnostics | P2 | performance, data-loss, correctness | high | S | OPEN |
 | HARD9-058 | Fetch trace duplicates full request/response payloads in the hot path | diagnostics | P2 | performance | high | M | OPEN |
@@ -572,11 +572,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Fix sketch:** Route solo writes through `useC64UpdateConfigBatch` (with reconciliation like `useInteractiveConfigWrite`); timestamp the snapshot and only auto-restore if fresh (minutes), else discard and log.
 
 ### HARD9-055 — Error-toast eviction + sliding dedup window silently hide persistent failures
-- **Area:** diagnostics · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** M · **Status:** OPEN
+- **Area:** diagnostics · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** M · **Status:** FIXED (59e45da0)
 - **Files:** `src/hooks/use-toast.ts:68-81,101-131`, `src/lib/uiErrors.ts:199-212`
 - **Failure scenario:** A destructive error toast shows for a recurring failure. A second destructive toast arrives; `limitToasts` drops the older one straight from state — without dispatching DISMISS, so its `onToastDismiss` (which deletes the `dedupMap` entry) never fires. Each recurrence refreshes the stale dedup timestamp, so the 30s window slides forever: the error never re-toasts while it keeps failing. ERROR_POLICY's "error toasts stay until dismissed" is broken; the user permanently loses visibility of a live failure.
 - **Evidence:** `limitToasts` truncates in ADD_TOAST with no side-effect for dropped toasts; `onToastDismiss` only runs in DISMISS_TOAST.
 - **Fix sketch:** Invoke `onToastDismiss` for evicted toasts in ADD_TOAST; in uiErrors don't slide the window (keep original timestamp) or verify the toast is still live before suppressing.
+- **Resolution (59e45da0):** Implemented both parts of the fix sketch rather than choosing one, since they compound the same finding: `ADD_TOAST` now diffs the kept-vs-incoming toast sets and invokes `onToastDismiss` for anything `limitToasts` dropped, and the dedup entry's `timestamp` is no longer overwritten on each duplicate (only `count` increments), so the 30s window is anchored to the first occurrence.
 
 ### HARD9-056 — Backend-decision correlation set grows unbounded over long sessions
 - **Area:** diagnostics · **Severity:** P2 · **Dimensions:** performance, robustness · **Confidence:** high · **Effort:** S · **Status:** OPEN
