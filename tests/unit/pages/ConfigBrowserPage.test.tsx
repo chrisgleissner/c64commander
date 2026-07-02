@@ -308,8 +308,12 @@ describe("ConfigBrowserPage", () => {
       isLoading: false,
     });
 
-    vi.mocked(getC64API).mockReturnValue({
-      updateConfigBatch: vi.fn().mockRejectedValue(new Error("Update failed")),
+    // Solo/unsolo routes through useC64UpdateConfigBatch (not a direct
+    // api.updateConfigBatch call), so it invalidates queries and marks
+    // hasChanges like every other config write. See HARD9-054.
+    mockUseC64UpdateConfigBatch.mockReturnValue({
+      mutateAsync: vi.fn().mockRejectedValue(new Error("Update failed")),
+      isPending: false,
     });
 
     const refetch = vi.fn();
@@ -390,8 +394,13 @@ describe("ConfigBrowserPage", () => {
       data: { categories: ["Audio Mixer"] },
       isLoading: false,
     });
+    // Solo/unsolo routes through useC64UpdateConfigBatch (not a direct
+    // api.updateConfigBatch call). See HARD9-054.
     const updateConfigBatch = vi.fn().mockResolvedValue({ errors: [] });
-    vi.mocked(getC64API).mockReturnValue({ updateConfigBatch } as any);
+    mockUseC64UpdateConfigBatch.mockReturnValue({
+      mutateAsync: updateConfigBatch,
+      isPending: false,
+    });
 
     let audioMixerItems = {
       "Vol Ultisid 1": { selected: "0 dB", options: ["OFF", "0 dB"] },
@@ -425,6 +434,90 @@ describe("ConfigBrowserPage", () => {
 
     expect(await screen.findByTestId("audio-mixer-solo-vol-ultisid-1")).toBeChecked();
     expect(updateConfigBatch).not.toHaveBeenCalled();
+  });
+
+  it("discards a stale audio mixer solo snapshot instead of auto-restoring it (HARD9-054)", async () => {
+    // Regression: the mount-time restore effect used to read the solo
+    // snapshot from sessionStorage unconditionally and write those old
+    // volumes back to the device, even if the snapshot was hours old (an
+    // interrupted previous session) and volumes had changed since -
+    // silently clobbering current settings on the next Config visit.
+    sessionStorage.clear();
+    const staleSavedAtMs = Date.now() - 6 * 60 * 1000; // older than the 5-minute freshness window
+    sessionStorage.setItem(
+      "c64u_audio_mixer_solo_snapshot",
+      JSON.stringify({
+        savedAtMs: staleSavedAtMs,
+        items: [{ name: "Vol Ultisid 1", value: "-6 dB", options: ["-6 dB", "0 dB"] }],
+      }),
+    );
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["Audio Mixer"] },
+      isLoading: false,
+    });
+    const mutateAsync = vi.fn().mockResolvedValue({ errors: [] });
+    mockUseC64UpdateConfigBatch.mockReturnValue({ mutateAsync, isPending: false });
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: {
+        [categoryName]: {
+          items: {
+            "Vol Ultisid 1": { selected: "0 dB", options: ["-6 dB", "0 dB"] },
+          },
+        },
+      },
+      isLoading: false,
+      refetch: vi.fn(),
+    }));
+
+    renderConfigBrowserPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
+    await screen.findByTestId("audio-mixer-solo-vol-ultisid-1");
+
+    // Give the mount-time restore effect a chance to run (it fires
+    // unconditionally on mount when not already soloed).
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mutateAsync).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem("c64u_audio_mixer_solo_snapshot")).toBeNull();
+  });
+
+  it("auto-restores a fresh audio mixer solo snapshot on mount (HARD9-054)", async () => {
+    sessionStorage.clear();
+    const freshSavedAtMs = Date.now() - 30 * 1000; // well within the freshness window
+    sessionStorage.setItem(
+      "c64u_audio_mixer_solo_snapshot",
+      JSON.stringify({
+        savedAtMs: freshSavedAtMs,
+        items: [{ name: "Vol Ultisid 1", value: "-6 dB", options: ["-6 dB", "0 dB"] }],
+      }),
+    );
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["Audio Mixer"] },
+      isLoading: false,
+    });
+    const mutateAsync = vi.fn().mockResolvedValue({ errors: [] });
+    mockUseC64UpdateConfigBatch.mockReturnValue({ mutateAsync, isPending: false });
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: {
+        [categoryName]: {
+          items: {
+            "Vol Ultisid 1": { selected: "0 dB", options: ["-6 dB", "0 dB"] },
+          },
+        },
+      },
+      isLoading: false,
+      refetch: vi.fn(),
+    }));
+
+    renderConfigBrowserPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
+    await screen.findByTestId("audio-mixer-solo-vol-ultisid-1");
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
   });
 
   it("reports config update failures", async () => {

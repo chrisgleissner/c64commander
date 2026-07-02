@@ -27,11 +27,11 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 import { resolveAudioMixerResetValue } from "@/lib/config/audioMixer";
 import { useRefreshControl } from "@/hooks/useRefreshControl";
 import { isAudioMixerValueEqual } from "@/lib/config/audioMixer";
-import { BACKGROUND_REQUEST_TIMEOUT_MS, getC64API, type ConfigCategory, type ConfigResponse } from "@/lib/c64api";
+import { BACKGROUND_REQUEST_TIMEOUT_MS, type ConfigCategory, type ConfigResponse } from "@/lib/c64api";
 import { cn } from "@/lib/utils";
 import { buildSoloRoutingUpdates, isSidVolumeName, soloReducer } from "@/lib/config/audioMixerSolo";
 import { normalizeConfigItem, type NormalizedConfigItem } from "@/lib/config/normalizeConfigItem";
@@ -63,6 +63,18 @@ type ConfigListItem = {
   value: string | number;
   options?: string[];
   details?: NormalizedConfigItem["details"];
+};
+
+// A solo-mode snapshot older than this is discarded instead of auto-restored:
+// it likely belongs to an interrupted previous session (crash, force-close
+// before the unmount cleanup ran), and volumes may have changed on the device
+// since it was written - restoring it would silently clobber current settings.
+// See HARD9-054.
+const AUDIO_MIXER_SOLO_SNAPSHOT_MAX_AGE_MS = 5 * 60 * 1000;
+
+type StoredAudioMixerSoloSnapshot = {
+  savedAtMs: number;
+  items: ConfigListItem[];
 };
 
 // Extract the normalized item list for a category from a raw config response.
@@ -323,6 +335,53 @@ function CategorySection({
     [],
   );
 
+  // Reads the solo snapshot from sessionStorage, discarding (and logging) it
+  // instead of returning it if it is older than the freshness window - it
+  // likely belongs to an interrupted previous session and current device
+  // volumes may no longer match it. See HARD9-054.
+  const readFreshSoloSnapshot = useCallback((): ConfigListItem[] | null => {
+    let stored: string | null = null;
+    try {
+      stored = sessionStorage.getItem(soloSnapshotKey);
+    } catch (error) {
+      addErrorLog("Solo snapshot read failed", {
+        error: (error as Error).message,
+      });
+      return null;
+    }
+    if (!stored) return null;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(stored);
+    } catch (error) {
+      addErrorLog("Solo snapshot parse failed", {
+        error: (error as Error).message,
+      });
+      return null;
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const { savedAtMs, items } = parsed as Partial<StoredAudioMixerSoloSnapshot>;
+    if (typeof savedAtMs !== "number" || !Array.isArray(items) || items.length === 0) return null;
+    const ageMs = Date.now() - savedAtMs;
+    if (ageMs > AUDIO_MIXER_SOLO_SNAPSHOT_MAX_AGE_MS) {
+      addLog("info", "Discarding stale Audio Mixer solo snapshot instead of restoring it", {
+        ageMs,
+        maxAgeMs: AUDIO_MIXER_SOLO_SNAPSHOT_MAX_AGE_MS,
+      });
+      try {
+        sessionStorage.removeItem(soloSnapshotKey);
+      } catch (error) {
+        addErrorLog("Stale solo snapshot cleanup failed", {
+          error: (error as Error).message,
+        });
+      }
+      return null;
+    }
+    return items;
+  }, [soloSnapshotKey]);
+
+  const updateAudioMixerBatch = updateConfigBatch.mutateAsync;
+
   const applySoloRouting = useCallback(
     async (soloItem: string | null, configuredOverride?: ConfigListItem[]) => {
       if (!isAudioMixer) return;
@@ -332,7 +391,10 @@ function CategorySection({
       if (soloItem) {
         soloSnapshotRef.current = configured;
         try {
-          sessionStorage.setItem(soloSnapshotKey, JSON.stringify(configured));
+          sessionStorage.setItem(
+            soloSnapshotKey,
+            JSON.stringify({ savedAtMs: Date.now(), items: configured } satisfies StoredAudioMixerSoloSnapshot),
+          );
         } catch (error) {
           addErrorLog("Solo snapshot save failed", {
             error: (error as Error).message,
@@ -342,8 +404,12 @@ function CategorySection({
       const updates = buildSoloRoutingUpdates(configured, soloItem);
       if (Object.keys(updates).length === 0) return;
       try {
-        const api = getC64API();
-        await api.updateConfigBatch({ [categoryName]: updates });
+        // Routes through the shared mutation (not a direct api.updateConfigBatch
+        // call) so a solo/unsolo write invalidates c64-config-items/c64-category
+        // and marks hasChanges, same as every other config write - Home no
+        // longer kept showing pre-solo volumes after a solo toggle. See
+        // HARD9-054.
+        await updateAudioMixerBatch({ category: categoryName, updates });
         if (!soloItem) {
           try {
             sessionStorage.removeItem(soloSnapshotKey);
@@ -368,7 +434,7 @@ function CategorySection({
     },
     // audioConfiguredRef is intentionally omitted from deps: refs have stable identity
     // and audioConfiguredRef.current is read at call time, not at dependency capture time.
-    [isAudioMixer, categoryName, reportUserError],
+    [isAudioMixer, categoryName, reportUserError, updateAudioMixerBatch],
   );
 
   useEffect(() => {
@@ -391,51 +457,30 @@ function CategorySection({
     if (!isAudioMixer) return;
     if (soloState.soloItem) return;
     if (restoredSnapshotRef.current) return;
-    let stored: string | null = null;
-    try {
-      stored = sessionStorage.getItem(soloSnapshotKey);
-    } catch (error) {
-      addErrorLog("Solo snapshot read failed", {
-        error: (error as Error).message,
-      });
-      restoredSnapshotRef.current = true;
-      return;
+    // readFreshSoloSnapshot already discards (and logs) a stale snapshot
+    // instead of returning it - a snapshot from an interrupted previous
+    // session must not silently overwrite volumes that may have changed on
+    // the device since. See HARD9-054.
+    const snapshot = readFreshSoloSnapshot();
+    restoredSnapshotRef.current = true;
+    if (snapshot) {
+      void applySoloRouting(null, snapshot);
     }
-    if (!stored) {
-      restoredSnapshotRef.current = true;
-      return;
-    }
-    try {
-      const parsed = JSON.parse(stored) as ConfigListItem[];
-      if (Array.isArray(parsed) && parsed.length) {
-        void applySoloRouting(null, parsed);
-      }
-    } catch (error) {
-      addErrorLog("Solo snapshot parse failed", {
-        error: (error as Error).message,
-      });
-    } finally {
-      restoredSnapshotRef.current = true;
-    }
-  }, [applySoloRouting, isAudioMixer, soloState.soloItem]);
+  }, [applySoloRouting, isAudioMixer, readFreshSoloSnapshot, soloState.soloItem]);
 
   const restoreSoloRouting = useCallback(
     (reason: "close" | "unmount") => {
       if (!isAudioMixer) return;
       if (!wasSoloActiveRef.current && !soloItemRef.current) return;
       const configured = audioConfiguredRef.current.length ? audioConfiguredRef.current : itemsRef.current;
-      let snapshot = soloSnapshotRef.current.length ? soloSnapshotRef.current : configured;
-      try {
-        const stored = sessionStorage.getItem(soloSnapshotKey);
-        if (stored) {
-          const parsed = JSON.parse(stored) as ConfigListItem[];
-          if (Array.isArray(parsed) && parsed.length) snapshot = parsed;
-        }
-      } catch (error) {
-        addErrorLog("Solo snapshot restore failed", {
-          error: (error as Error).message,
-        });
-      }
+      const fallbackSnapshot = soloSnapshotRef.current.length ? soloSnapshotRef.current : configured;
+      // readFreshSoloSnapshot discards a stale snapshot instead of returning
+      // it; fall back to the in-memory ref/current items in that case
+      // (normally this snapshot was just written moments ago when solo was
+      // toggled on, so it is fresh - the fallback only matters if the tab
+      // was backgrounded for a long time while solo was active). See
+      // HARD9-054.
+      const snapshot = readFreshSoloSnapshot() ?? fallbackSnapshot;
       if (snapshot.length) {
         void applySoloRouting(null, snapshot);
       }
@@ -445,7 +490,7 @@ function CategorySection({
         dispatchSolo({ type: "reset" });
       }
     },
-    [applySoloRouting, isAudioMixer],
+    [applySoloRouting, isAudioMixer, readFreshSoloSnapshot],
   );
 
   useEffect(() => {
