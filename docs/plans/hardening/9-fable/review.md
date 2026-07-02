@@ -137,7 +137,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-077 | MainActivity.onCreate does synchronous filesystem repair on main thread | native | P3 | ux, performance | high | S | OPEN |
 | HARD9-078 | Recursive FTP listing's timed_out flag dropped by the JS contract | native | P3 | correctness | high | S | FIXED (2b5a6dda) |
 | HARD9-079 | Native CommoServe transport ignores AbortSignal — Cancel doesn't cancel | sources | P3 | robustness, perf, ux | high | M | FIXED (ac5b8c17) |
-| HARD9-080 | Shared preset-refresh promise: unmount-abort → unhandled rejection, stuck status | sources | P3 | robustness, correctness | high | S | OPEN |
+| HARD9-080 | Shared preset-refresh promise: unmount-abort → unhandled rejection, stuck status | sources | P3 | robustness, correctness | high | S | FIXED (c5c8393f) |
 | HARD9-081 | Web FTP recursive scan unbounded while native caps at depth 8 / 5000 | sources | P3 | robustness, perf, correctness | high | S | OPEN |
 | HARD9-082 | Refresh clears only the exact current path; recursive adds serve 10-min-stale cache | sources | P3 | correctness, ux | high | S | OPEN |
 | HARD9-083 | Pre-aborted FTP read still performs the full transfer | sources | P3 | robustness, performance | medium | S | OPEN |
@@ -778,10 +778,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (ac5b8c17):** Implemented the fix sketch exactly: an already-aborted signal rejects before `CapacitorHttp.request` is ever called; otherwise the request promise races against an abort-triggered rejection via a new `raceAgainstAbort` helper, with the abort listener always cleaned up via `.finally()` and the losing side's eventual result/error explicitly dropped (no-op `.catch`) so it can never surface as an unhandled rejection. Two new regression tests proven failing against the pre-fix code via `git stash`.
 
 ### HARD9-080 — Shared preset-refresh promise turns unmount-abort into an unhandled rejection and a stuck "pending" status
-- **Area:** sources · **Severity:** P3 · **Dimensions:** robustness, correctness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** sources · **Severity:** P3 · **Dimensions:** robustness, correctness · **Confidence:** high · **Effort:** S · **Status:** FIXED (c5c8393f)
 - **Files:** `src/hooks/useOnlineArchive.ts:225-272`
 - **Failure scenario:** Open the Add Items dialog on the CommoServe tab and close within the 10s preset fetch: cleanup aborts; the `.catch` rethrows for the aborted case; the consumer chain (`void refreshPromise.then(...).finally(...)`, no `.catch`) rejects unhandled — surfacing in global error reporting. `presetRefreshStatus` stays "pending", so the next mount briefly reports loading for a refresh that isn't running.
 - **Fix sketch:** Don't rethrow on abort (resolve to cached/seeded presets, delete status); attach `.catch(() => {})` to the consumer chain; use a detached signal for the shared refresh.
+- **Resolution (c5c8393f):** Implemented all three parts of the fix sketch: the shared request no longer receives any individual mount's `AbortSignal` (genuinely shared cache-warming work, detached from any one subscriber's lifecycle); its own `.catch` always resolves to cached/seeded presets instead of rethrowing, so it can no longer reject; the per-mount consumer chain got a defensive `.catch(() => {})` too (it's its own separate promise). New regression test (unmount before the shared refresh settles, then reject as a real aborted network call would) proven failing - one unhandled `DOMException` rejection - against the pre-fix code via `git stash`.
 
 ### HARD9-081 — Web FTP recursive scan is unbounded while native caps at depth 8 / 5000 entries
 - **Area:** sources · **Severity:** P3 · **Dimensions:** robustness, performance, correctness · **Confidence:** high · **Effort:** S · **Status:** OPEN
