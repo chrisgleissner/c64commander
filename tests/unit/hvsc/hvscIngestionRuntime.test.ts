@@ -390,6 +390,14 @@ describe("hvscIngestionRuntime", () => {
     expect(summaryPatch?.ingestionSummary?.failedSongs).toBe(0);
     expect(browseIndexMutable.upsertSong).toHaveBeenCalled();
     expect(browseIndexMutable.finalize).toHaveBeenCalled();
+    // HARD9-046: browseIndex.finalize() (persists fileName/sidMetadata parsed
+    // during extraction) must commit before the songlengths reload, whose
+    // projection sync merges durations onto that persisted state - reversed,
+    // finalize()'s duration-less snapshot would clobber the durations the
+    // songlengths reload had just written.
+    expect(vi.mocked(browseIndexMutable.finalize).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(reloadHvscSonglengthsOnConfigChange).mock.invocationCallOrder[0]!,
+    );
   });
 
   it("fails ingestion when a SID cannot be written", async () => {

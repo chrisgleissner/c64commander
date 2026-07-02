@@ -657,6 +657,34 @@ export const buildHvscBrowseIndexFromSonglengthSnapshot = (
   };
 };
 
+/**
+ * Merges songlengths durations into an existing browse index snapshot in place,
+ * instead of replacing it with a fresh duration-only projection built purely from
+ * buildHvscBrowseIndexFromSonglengthSnapshot. A song already present in
+ * [baseSnapshot] (e.g. one that was just ingested, carrying sidMetadata and
+ * trackSubsongs parsed straight from its file) only has its duration fields
+ * updated; a song with no existing entry (e.g. songlengths ran before any
+ * ingestion has ever populated the index) is added as a seeded record, matching
+ * the previous behavior for that case. See HARD9-046.
+ */
+export const mergeSonglengthDurationsIntoBrowseIndex = (
+  baseSnapshot: HvscBrowseIndexSnapshot | null,
+  songlengthSnapshot: InMemorySongLengthSnapshot,
+): HvscBrowseIndexSnapshot => {
+  const snapshot = baseSnapshot ?? createEmptyHvscBrowseIndexSnapshot();
+  songlengthSnapshot.pathToSeconds.forEach((durationsSeconds, virtualPath) => {
+    const normalizedPath = normalizePath(virtualPath);
+    if (snapshot.songs[normalizedPath]) {
+      updateHvscBrowseSong(snapshot, normalizedPath, { durationsSeconds });
+    } else {
+      snapshot.songs[normalizedPath] = createSeededSong(normalizedPath, durationsSeconds);
+    }
+  });
+  snapshot.updatedAt = new Date().toISOString();
+  snapshot.folders = buildFoldersFromSongs(snapshot.songs);
+  return snapshot;
+};
+
 export const updateHvscBrowseSong = (
   snapshot: HvscBrowseIndexSnapshot,
   virtualPath: string,
@@ -706,10 +734,17 @@ export const createHvscBrowseIndexMutable = async (mode: "baseline" | "update") 
   return {
     upsertSong: (song: HvscBrowseIndexedSong) => {
       const normalizedPath = normalizePath(song.virtualPath);
+      // Merge onto any existing record (e.g. from a prior ingest + songlengths
+      // sync in "update" mode) instead of replacing it outright - extraction
+      // only ever knows fileName/sidMetadata/trackSubsongs, so blindly
+      // overwriting wiped previously hydrated canonicalTitle/canonicalAuthor/
+      // released/duration fields on every re-ingest. See HARD9-046.
+      const existing = snapshot.songs[normalizedPath];
       snapshot.songs[normalizedPath] = {
+        ...existing,
         virtualPath: normalizedPath,
-        fileName: song.fileName || getFileName(normalizedPath),
-        durationSeconds: song.durationSeconds ?? null,
+        fileName: song.fileName || existing?.fileName || getFileName(normalizedPath),
+        durationSeconds: song.durationSeconds ?? existing?.durationSeconds ?? null,
         sidMetadata: song.sidMetadata ?? null,
         trackSubsongs: song.trackSubsongs ?? null,
       };

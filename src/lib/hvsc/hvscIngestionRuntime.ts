@@ -547,6 +547,32 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
     await promoteLibraryStagingDir();
   }
 
+  // Persist browseIndex (fileName/sidMetadata/trackSubsongs parsed during
+  // extraction) *before* the songlengths reload below, so the songlengths
+  // projection sync - which now merges durations onto whatever is already
+  // persisted rather than overwriting it wholesale - is the last write and
+  // ends up with both duration data and the freshly-parsed metadata. Doing
+  // this the other way around (as before) let the songlengths reload persist
+  // durations first, only for this finalize() to immediately clobber them
+  // with a duration-less snapshot. See HARD9-046.
+  const indexBuildPerfScope = beginHvscPerfScope("ingest:index-build", {
+    archiveName,
+    archiveType: plan.type,
+    archiveVersion: plan.version,
+  });
+  let indexBuildPerfError: Error | null = null;
+  try {
+    await browseIndex.finalize();
+  } catch (error) {
+    indexBuildPerfError = error as Error;
+    throw error;
+  } finally {
+    endHvscPerfScope(
+      indexBuildPerfScope,
+      indexBuildPerfError ? { outcome: "error", errorMessage: indexBuildPerfError.message } : { outcome: "success" },
+    );
+  }
+
   resetSonglengthsCache();
   const songlengthsPerfScope = beginHvscPerfScope("ingest:songlengths", {
     archiveName,
@@ -589,24 +615,6 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
       failedSongs: ingestionSummary.failedSongs,
       failedPaths: ingestionSummary.failedPaths,
     });
-  }
-
-  const indexBuildPerfScope = beginHvscPerfScope("ingest:index-build", {
-    archiveName,
-    archiveType: plan.type,
-    archiveVersion: plan.version,
-  });
-  let indexBuildPerfError: Error | null = null;
-  try {
-    await browseIndex.finalize();
-  } catch (error) {
-    indexBuildPerfError = error as Error;
-    throw error;
-  } finally {
-    endHvscPerfScope(
-      indexBuildPerfScope,
-      indexBuildPerfError ? { outcome: "error", errorMessage: indexBuildPerfError.message } : { outcome: "success" },
-    );
   }
 
   applyIngestionSuccess({
