@@ -99,8 +99,19 @@ export const loadSnapshotStore = (): SnapshotStorageEntry[] => {
 /** Converts a stored entry back to bytes for restore or export. */
 export const snapshotEntryToBytes = (entry: SnapshotStorageEntry): Uint8Array => base64ToUint8(entry.bytesBase64);
 
-/** Saves a new snapshot to the store. Drops oldest if MAX_SNAPSHOTS reached. */
-export const saveSnapshotToStore = (entry: Omit<SnapshotStorageEntry, "bytesBase64"> & { bytes: Uint8Array }) => {
+export type SaveSnapshotResult = {
+  /** The snapshot dropped to stay within MAX_SNAPSHOTS, if any. See HARD9-069. */
+  evictedSnapshot: SnapshotStorageEntry | null;
+};
+
+/**
+ * Saves a new snapshot to the store. Drops the oldest if MAX_SNAPSHOTS is
+ * reached and reports which one, so the caller can warn the user instead of
+ * letting a saved game state disappear with nothing mentioning it.
+ */
+export const saveSnapshotToStore = (
+  entry: Omit<SnapshotStorageEntry, "bytesBase64"> & { bytes: Uint8Array },
+): SaveSnapshotResult => {
   const { bytes, ...rest } = entry;
   const storageEntry: SnapshotStorageEntry = {
     ...rest,
@@ -108,11 +119,14 @@ export const saveSnapshotToStore = (entry: Omit<SnapshotStorageEntry, "bytesBase
   };
   const data = readStore();
   data.snapshots.unshift(storageEntry);
+  let evictedSnapshot: SnapshotStorageEntry | null = null;
   if (data.snapshots.length > MAX_SNAPSHOTS) {
+    evictedSnapshot = data.snapshots[data.snapshots.length - 1] ?? null;
     data.snapshots.splice(MAX_SNAPSHOTS);
   }
   writeStore(data);
   dispatchUpdate(loadSnapshotStore());
+  return { evictedSnapshot };
 };
 
 /** Removes a snapshot by ID. */

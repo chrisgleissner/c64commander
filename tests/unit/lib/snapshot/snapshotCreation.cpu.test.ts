@@ -75,7 +75,7 @@ beforeEach(() => {
     expect(image.length).toBe(0x10000);
     return sampleData();
   });
-  saveSnapshotToStoreMock.mockReturnValue(undefined);
+  saveSnapshotToStoreMock.mockReturnValue({ evictedSnapshot: null });
 });
 
 describe("createCpuSnapshot", () => {

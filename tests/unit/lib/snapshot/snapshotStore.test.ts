@@ -137,13 +137,24 @@ describe("saveSnapshotToStore", () => {
     expect(loaded[0].bytesBase64.length).toBeGreaterThan(0);
   });
 
-  it("drops oldest entry when MAX_SNAPSHOTS is exceeded", () => {
-    // Save 101 entries; the 101st should evict the oldest
+  it("drops oldest entry when MAX_SNAPSHOTS is exceeded and reports it (HARD9-069)", () => {
+    // Save 101 entries; the 101st should evict the oldest.
+    let lastResult;
     for (let i = 0; i < 101; i++) {
-      saveSnapshotToStore(makeEntry(`id${i}`, `2026-01-${String(i + 1).padStart(2, "0")}T00:00:00.000Z`));
+      lastResult = saveSnapshotToStore(makeEntry(`id${i}`, `2026-01-${String(i + 1).padStart(2, "0")}T00:00:00.000Z`));
     }
     const loaded = loadSnapshotStore();
     expect(loaded).toHaveLength(100);
+    expect(loaded.some((e) => e.id === "id0")).toBe(false);
+    // The 101st save (the one that pushed the store over the cap) must
+    // report which entry it dropped, so the caller can warn the user
+    // instead of a save silently vanishing an existing snapshot.
+    expect(lastResult?.evictedSnapshot?.id).toBe("id0");
+  });
+
+  it("reports no eviction while under MAX_SNAPSHOTS", () => {
+    const result = saveSnapshotToStore(makeEntry("under-cap"));
+    expect(result.evictedSnapshot).toBeNull();
   });
 });
 

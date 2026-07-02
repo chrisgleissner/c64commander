@@ -143,12 +143,13 @@ describe("useHomeActions", () => {
     resumeMutateAsyncMock.mockResolvedValue(undefined);
     powerOffMutateAsyncMock.mockResolvedValue(undefined);
     clearRamAndRebootMock.mockResolvedValue(undefined);
-    createSnapshotMock.mockResolvedValue({ displayTimestamp: "2026-01-01 12:00:00" });
+    createSnapshotMock.mockResolvedValue({ displayTimestamp: "2026-01-01 12:00:00", evictedSnapshotLabel: null });
     createCpuSnapshotMock.mockResolvedValue({
       displayTimestamp: "2026-01-01 12:00:00",
       cpu: { pc: 0xc000, a: 0, x: 0, y: 0, sp: 0xf6, p: 0x30 },
       captureMethod: "rli",
       resumeError: null,
+      evictedSnapshotLabel: null,
     });
     restoreCpuSnapshotFromDecodedMock.mockResolvedValue({ ok: true, rtiFrameAddress: 0x01f4 });
     getCurrentPlaybackSnapshotLabelMock.mockReturnValue(undefined);
@@ -225,6 +226,37 @@ describe("useHomeActions", () => {
       contentName: undefined,
     });
     expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: "Snapshot saved" }));
+  });
+
+  it("warns when saving evicts the oldest snapshot to stay within the library cap (HARD9-069)", async () => {
+    createSnapshotMock.mockResolvedValueOnce({
+      displayTimestamp: "2026-01-01 12:00:00",
+      evictedSnapshotLabel: "Boss fight",
+    });
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handleSaveRam("program");
+    });
+
+    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: "Snapshot saved" }));
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Oldest snapshot removed",
+        description: expect.stringContaining("Boss fight"),
+        variant: "destructive",
+      }),
+    );
+  });
+
+  it("does not warn about eviction when the library is under the cap", async () => {
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handleSaveRam("program");
+    });
+
+    expect(toastMock).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Oldest snapshot removed" }));
   });
 
   it("uses the current playback item as the default snapshot comment", async () => {
@@ -416,6 +448,30 @@ describe("useHomeActions", () => {
         expect.objectContaining({
           title: "CPU + RAM snapshot saved",
           description: expect.stringContaining("PC $C000"),
+        }),
+      );
+    });
+
+    it("warns when saving a CPU+RAM snapshot evicts the oldest to stay within the library cap (HARD9-069)", async () => {
+      createCpuSnapshotMock.mockResolvedValueOnce({
+        displayTimestamp: "2026-01-01 12:00:00",
+        cpu: { pc: 0xc000, a: 0, x: 0, y: 0, sp: 0xf6, p: 0x30 },
+        captureMethod: "rli",
+        resumeError: null,
+        evictedSnapshotLabel: "Old boss save",
+      });
+      const { result } = renderHook(() => useHomeActions());
+
+      await act(async () => {
+        await result.current.handleSaveCpuSnapshot();
+      });
+
+      expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: "CPU + RAM snapshot saved" }));
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Oldest snapshot removed",
+          description: expect.stringContaining("Old boss save"),
+          variant: "destructive",
         }),
       );
     });

@@ -186,6 +186,17 @@ export function useHomeActions() {
           title: "Snapshot saved",
           description: result.displayTimestamp,
         });
+        // The store silently drops the oldest snapshot at the MAX_SNAPSHOTS
+        // cap - warn so the user knows a saved game state just disappeared
+        // instead of finding out only when they go looking for it later.
+        // See HARD9-069.
+        if (result.evictedSnapshotLabel) {
+          toast({
+            title: "Oldest snapshot removed",
+            description: `The library is full - "${result.evictedSnapshotLabel}" was deleted to make room.`,
+            variant: "destructive",
+          });
+        }
       },
       // runMachineTask also toasts success — we suppress that and toast inside
       // the action to include the timestamp.  Pass empty strings to avoid a
@@ -233,6 +244,14 @@ export function useHomeActions() {
           toast({
             title: "CPU + RAM snapshot saved",
             description: `${result.displayTimestamp} — PC $${result.cpu.pc.toString(16).toUpperCase().padStart(4, "0")}`,
+          });
+        }
+        // See HARD9-069 (handleSaveRam above has the same warning).
+        if (result.evictedSnapshotLabel) {
+          toast({
+            title: "Oldest snapshot removed",
+            description: `The library is full - "${result.evictedSnapshotLabel}" was deleted to make room.`,
+            variant: "destructive",
           });
         }
       },
