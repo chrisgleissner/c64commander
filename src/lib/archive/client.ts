@@ -211,8 +211,13 @@ export abstract class BaseArchiveClient implements ArchiveClient {
       // cancellation. Race it against the signal so Cancel stops the
       // caller from WAITING immediately (instead of hanging until the up
       // to 30s transfer completes) and drop this request's eventual
-      // result/error once it has lost the race. See HARD9-079.
-      nativeRequestPromise.catch(() => {});
+      // result/error once it has lost the race. See HARD9-079. Log the
+      // dropped rejection at debug so a future regression (e.g. a sync
+      // throw inside raceAgainstAbort) that lets this reject stays visible
+      // in the trace instead of being silently swallowed.
+      nativeRequestPromise.catch((error) => {
+        addLog("debug", "Archive native request dropped after abort race", buildErrorLogDetails(error));
+      });
       const response = signal
         ? await this.raceAgainstAbort(nativeRequestPromise, signal)
         : await nativeRequestPromise;

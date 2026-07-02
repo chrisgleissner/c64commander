@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createArchiveClient } from "@/lib/archive/client";
 import { executeArchiveEntry } from "@/lib/archive/execution";
 import { resolveArchiveClientConfig } from "@/lib/archive/config";
+import { addLog, buildErrorLogDetails } from "@/lib/logging";
 import type {
   ArchiveClientConfigInput,
   ArchiveClientResolvedConfig,
@@ -267,9 +268,14 @@ export const useOnlineArchive = (config: ArchiveClientConfigInput) => {
       })
       // The shared promise above never rejects, but this per-mount chain is
       // its own separate promise (a synchronous throw inside the .then
-      // callback would otherwise still surface as an unhandled rejection
-      // here specifically). See HARD9-080.
-      .catch(() => {})
+      // callback - e.g. setPresets or normalizePresets throwing on a
+      // malformed preset - would otherwise still surface as an unhandled
+      // rejection here specifically). See HARD9-080. Log at debug so such a
+      // future regression stays diagnosable instead of being silently
+      // discarded.
+      .catch((error) => {
+        addLog("debug", "Online archive preset refresh consumer chain error", buildErrorLogDetails(error));
+      })
       .finally(() => {
         if (!controller.signal.aborted) {
           setPresetsLoading(false);

@@ -462,12 +462,20 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
               // outside a normal try/catch (e.g. StrictMode double-invoke), where a
               // thrown AbortError propagates to the nearest error boundary instead
               // of being caught by this async function. See HARD9-033.
-              let next: PlaylistItem[] = [];
+              //
+              // The snapshot ref is mirrored INSIDE the updater (not after
+              // setPlaylist returns): React does not guarantee the functional
+              // updater runs synchronously at dispatch time (eager bail-out vs.
+              // deferred commit), so assigning from a post-call `next` could read
+              // a stale []; the next batch reads playlistSnapshotRef.current for
+              // its expectedCount and would under-report. The assignment is pure
+              // and idempotent (same value on a StrictMode double-invoke). See
+              // HARD10 PR review.
               setPlaylist((prev) => {
-                next = [...prev, ...resolvedItems];
+                const next = [...prev, ...resolvedItems];
+                playlistSnapshotRef.current = next;
                 return next;
               });
-              playlistSnapshotRef.current = next;
               await new Promise((resolve) => setTimeout(resolve, 0));
             },
             {
@@ -635,12 +643,17 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             // outside a normal try/catch (e.g. StrictMode double-invoke), where a
             // thrown AbortError propagates to the nearest error boundary instead
             // of being caught by this async function. See HARD9-033.
-            let next: PlaylistItem[] = [];
+            //
+            // The snapshot ref is mirrored INSIDE the updater (not after
+            // setPlaylist returns): React does not guarantee the functional
+            // updater runs synchronously at dispatch time, so a post-call read
+            // could observe a stale []. The assignment is pure and idempotent.
+            // See HARD10 PR review.
             setPlaylist((prev) => {
-              next = prev.length === 0 ? resolvedItems : [...prev, ...resolvedItems];
+              const next = prev.length === 0 ? resolvedItems : [...prev, ...resolvedItems];
+              playlistSnapshotRef.current = next;
               return next;
             });
-            playlistSnapshotRef.current = next;
             addLog("debug", "[hvsc-perf] setPlaylist done", { ms: Date.now() - spT0 });
             await new Promise((resolve) => setTimeout(resolve, 0));
             addLog("debug", "[hvsc-perf] appendPlaylistBatch done", { totalMs: Date.now() - batchT0 });

@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "@/hooks/use-toast";
 import { resolveUnmuteFallbackIndexForSteps, useVolumeOverride } from "@/pages/playFiles/hooks/useVolumeOverride";
 import { waitForMachineTransitionsToSettle } from "@/lib/deviceInteraction/deviceActivityGate";
@@ -147,6 +147,15 @@ vi.mock("@/pages/playFiles/playFilesUtils", () => ({
 }));
 
 describe("useVolumeOverride", () => {
+  afterEach(() => {
+    // Several tests vi.spyOn(Date, "now") without restoring; without this the
+    // mocked clock leaks into subsequent tests in this file and can cause
+    // order-dependent failures. restoreAllMocks only undoes vi.spyOn spies
+    // (the module-level vi.fn() mocks are re-seeded by beforeEach).
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     pollingPauseRegistry.__resetForTest();
