@@ -139,7 +139,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-079 | Native CommoServe transport ignores AbortSignal — Cancel doesn't cancel | sources | P3 | robustness, perf, ux | high | M | FIXED (ac5b8c17) |
 | HARD9-080 | Shared preset-refresh promise: unmount-abort → unhandled rejection, stuck status | sources | P3 | robustness, correctness | high | S | FIXED (c5c8393f) |
 | HARD9-081 | Web FTP recursive scan unbounded while native caps at depth 8 / 5000 | sources | P3 | robustness, perf, correctness | high | S | FIXED (78bdd05f) |
-| HARD9-082 | Refresh clears only the exact current path; recursive adds serve 10-min-stale cache | sources | P3 | correctness, ux | high | S | OPEN |
+| HARD9-082 | Refresh clears only the exact current path; recursive adds serve 10-min-stale cache | sources | P3 | correctness, ux | high | S | FIXED (f60a46e1) |
 | HARD9-083 | Pre-aborted FTP read still performs the full transfer | sources | P3 | robustness, performance | medium | S | OPEN |
 | HARD9-084 | HVSC cancellation unchecked during deletion pass and finalize | hvsc | P3 | ux, robustness | high | S | FIXED (67a7dd88) |
 | HARD9-085 | CategorySection disables every row while any single write is pending | config | P3 | ux | medium | S | FIXED (f6e9f349) |
@@ -792,10 +792,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (78bdd05f):** Implemented the fix sketch exactly: applied the already-defined `FTP_RECURSIVE_MAX_DEPTH`/`FTP_RECURSIVE_MAX_ENTRIES` constants (previously only passed to the native bridge) to the web BFS, tracking per-path depth through the queue and a shared examined-entries counter mirroring the native Kotlin logic exactly. Truncation surfaces through the existing `partialFailures` mechanism with messages matching native's wording ("max depth N reached" / "stopped after N entries"). Two new regression tests (nested-folder chain past depth 8; single folder with 5001 files) proven failing against the pre-fix code via `git stash` (one timed out from the unbounded scan, one showed 5001 not 5000).
 
 ### HARD9-082 — Refresh clears only the exact current path — recursive adds and re-entry serve a 10-minute-stale FTP cache
-- **Area:** sources · **Severity:** P3 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** sources · **Severity:** P3 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** FIXED (f60a46e1)
 - **Files:** `src/lib/sourceNavigation/ftpSourceAdapter.ts:29,97-120,255-260`, `src/lib/sourceNavigation/useSourceNavigator.ts:190-194`
 - **Failure scenario:** User saves a new file onto the C64U from the device side, taps Refresh (current folder fresh), then "Add folder" on the parent: the recursive BFS resolves every child via `getCachedEntries` (10-min TTL) — new files missing, deleted files still offered, no staleness indication.
 - **Fix sketch:** Bypass (or prefix-invalidate) the cache for recursive scans; clear all keys under the current path prefix on Refresh.
+- **Resolution (f60a46e1):** Implemented both parts of the fix sketch: `clearCacheForPath` now prefix-invalidates (exact path plus everything nested under it, matched against the already-known host/port rather than parsing paths back out of composite keys); the recursive scan's `listEntries` calls always skip the read cache (`skipCache: true`), so a recursive "Add folder" reflects live device state regardless of prior Refresh state. Both paths still write through the cache, so ordinary browsing after a recursive scan stays fast. Two new regression tests proven failing against the pre-fix code via `git stash`.
 
 ### HARD9-083 — Pre-aborted or early-aborted FTP read still performs the full transfer
 - **Area:** sources · **Severity:** P3 · **Dimensions:** robustness, performance · **Confidence:** medium · **Effort:** S · **Status:** OPEN
