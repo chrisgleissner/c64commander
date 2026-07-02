@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -596,6 +596,63 @@ describe("ConfigBrowserPage", () => {
     const rowB = await screen.findByTestId("row-item-b");
     expect(rowA).toHaveAttribute("data-loading", "false");
     expect(rowB).toHaveAttribute("data-loading", "false");
+  });
+
+  it("keeps a pending pin latched and reports the failure when Refresh's refetch does not succeed (HARD9-089)", async () => {
+    // Regression: react-query's refetch() resolves (does not throw) on
+    // failure. handleRefresh used to run its device-truth re-sync
+    // unconditionally, dropping every pending optimistic pin and re-syncing
+    // to stale cached data on a momentary refresh failure, with no
+    // indication anything went wrong.
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["General"] },
+      isLoading: false,
+    });
+    mockUseC64SetConfig.mockReturnValue({
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    });
+    const refetchError = new Error("device unreachable");
+    const refetch = vi.fn().mockResolvedValue({ isSuccess: false, isError: true, error: refetchError, data: undefined });
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: {
+        [categoryName]: {
+          items: {
+            "Item A": { selected: "1", options: ["1", "2", "updated"] },
+          },
+        },
+      },
+      isLoading: false,
+      refetch,
+    }));
+
+    renderConfigBrowserPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /general/i }));
+
+    const rowA = await screen.findByTestId("row-item-a");
+    fireEvent.click(within(rowA).getByRole("button", { name: /update item a/i }));
+
+    await waitFor(() => {
+      expect(rowA).toHaveAttribute("data-value", "updated");
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: /refresh/i }));
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "CONFIG_REFRESH",
+          error: refetchError,
+        }),
+      );
+    });
+
+    // The pin must survive the failed refresh instead of reverting to the
+    // stale pre-update device value.
+    expect(rowA).toHaveAttribute("data-value", "updated");
+    expect(rowA).toHaveAttribute("data-loading", "true");
   });
 
   it("keeps the updated local value visible until the device payload catches up", async () => {

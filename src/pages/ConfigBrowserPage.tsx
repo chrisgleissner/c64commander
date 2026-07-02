@@ -715,6 +715,22 @@ function CategorySection({
     }
     try {
       const refreshed = await refetch();
+      if (!refreshed?.isSuccess) {
+        // react-query's refetch() resolves (does not throw) on failure - without
+        // this check, a Refresh while the device is momentarily unreachable
+        // still dropped every pending optimistic pin and re-synced Audio Mixer
+        // to stale cached data, with no failure indication at all. See
+        // HARD9-089.
+        reportUserError({
+          operation: "CONFIG_REFRESH",
+          title: "Refresh failed",
+          description:
+            refreshed?.error instanceof Error ? refreshed.error.message : "The device did not respond to refresh.",
+          error: refreshed?.error,
+          context: { category: categoryName },
+        });
+        return;
+      }
       // Refresh is an explicit "re-sync from device truth" affordance: drop any
       // optimistic overrides so a value changed out-of-band (e.g. a stale pin
       // that will never echo its pinned value) reconciles to the device value
