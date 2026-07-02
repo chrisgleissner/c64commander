@@ -145,7 +145,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-085 | CategorySection disables every row while any single write is pending | config | P3 | ux | medium | S | FIXED (f6e9f349) |
 | HARD9-086 | Optimistic rollback can resurrect a stale pin on racing writes | config | P3 | correctness | high | S | FIXED (81bd6011) |
 | HARD9-087 | useInteractiveConfigWrite pending/burst flags wrong under concurrent writes | config | P3 | correctness, ux | high | S | FIXED (d03ffcb9) |
-| HARD9-088 | Failed throttled preview snaps the slider thumb back mid-drag | config | P3 | ux, robustness | high | S | OPEN |
+| HARD9-088 | Failed throttled preview snaps the slider thumb back mid-drag | config | P3 | ux, robustness | high | S | FIXED (1e2a8e67) |
 | HARD9-089 | Category Refresh drops optimistic pins even when the refetch failed | config | P3 | robustness, correctness | medium | S | FIXED (e7261121) |
 | HARD9-090 | Duplicate "Automatic Demo Mode" control with duplicate DOM id | settings | P3 | a11y, correctness | high | S | OPEN |
 | HARD9-091 | Notification-duration slider persists on every drag tick | settings | P3 | performance, robustness | high | S | OPEN |
@@ -822,10 +822,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (d03ffcb9):** Implemented the fix sketch exactly: replaced the shared boolean with `pendingCountRef`, incremented at the start of each `write()` and decremented in its `finally`; `isPending` now only flips to false once the count reaches zero, so an overlapping write's own settlement can no longer mask a still-in-flight sibling. New test starts two overlapping writes, resolves the first while the second is still pending, and asserts `isPending` stays `true` until the second also settles; proven failing against the pre-fix boolean flag via `git stash`.
 
 ### HARD9-088 — Failed throttled preview snaps the slider thumb back mid-drag
-- **Area:** config · **Severity:** P3 · **Dimensions:** ux-responsiveness, robustness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** config · **Severity:** P3 · **Dimensions:** ux-responsiveness, robustness · **Confidence:** high · **Effort:** S · **Status:** FIXED (1e2a8e67)
 - **Files:** `src/hooks/useDeviceBoundSlider.ts:224-233`
 - **Failure scenario:** While dragging a lighting/pan slider, one throttled preview write fails transiently. `handlePreviewError` calls `setDraftSliderValue(null)` even though `isDraggingRef.current` is true — the thumb jumps back to the device value under the user's finger until the next drag tick. Reads as the app fighting the user.
 - **Fix sketch:** Skip `setDraftSliderValue(null)` while dragging (keep the error callback).
+- **Resolution (1e2a8e67):** Implemented the fix sketch exactly: `setDraftSliderValue(null)` is now gated on `!isDraggingRef.current`, so a preview failure mid-drag surfaces the error via `onError` without moving the thumb; the draft still clears normally once the drag ends. Two pre-existing LightingSummaryCard tests had encoded the old snap-back as expected behavior and were updated to assert the drag value is retained (their mocked Slider never fires `onValueCommit`, so the drag never formally ends in that harness) - both proven failing against the pre-fix code via a targeted revert. New `useDeviceBoundSlider` unit test proven failing against the pre-fix unconditional clear via `git stash`.
 
 ### HARD9-089 — Category Refresh drops optimistic pins even when the refetch failed, silently masking a dead re-sync
 - **Area:** config · **Severity:** P3 · **Dimensions:** robustness, correctness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (e7261121)
