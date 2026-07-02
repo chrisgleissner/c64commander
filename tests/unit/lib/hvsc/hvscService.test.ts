@@ -88,13 +88,11 @@ vi.mock("@/lib/hvsc/hvscBrowseIndexStore", () => ({
   })),
 }));
 
+// Mock the native module so the real registerPlugin("HvscIngestion") call
+// never runs under jsdom. hvscService does not invoke any HvscIngestion method
+// (the former queryAllSongs surface was removed in HARD10-010).
 vi.mock("@/lib/native/hvscIngestion", () => ({
-  HvscIngestion: {
-    queryAllSongs: vi.fn(async () => ({
-      totalSongs: 1,
-      songs: [{ virtualPath: "/DEMOS/a.sid", fileName: "a.sid" }],
-    })),
-  },
+  HvscIngestion: {},
 }));
 
 describe("hvscService", () => {

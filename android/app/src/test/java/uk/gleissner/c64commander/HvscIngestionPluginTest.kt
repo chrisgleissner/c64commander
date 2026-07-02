@@ -114,44 +114,6 @@ class HvscIngestionPluginTest {
     assertTrue(resolveLatch.await(5, TimeUnit.SECONDS))
     assertTrue((payloadHolder[0]?.getLong("metadataRows") ?: -1L) >= 0L)
   }
-
-  @Test
-  fun queryAllSongsRunsOffTheCallingThreadAndResolves() {
-    // Regression: queryAllSongs used to scan the full metadata index and
-    // build the JSArray synchronously on the calling (Capacitor plugin
-    // handler) thread, blocking ALL other native plugin dispatch for its
-    // duration. It now launches on scope's Dispatchers.IO and only hops back
-    // to Main to resolve/reject - which, unlike the synchronous getIngestionStats
-    // above, means this call must return before resolve() has run, and (under
-    // Robolectric) the resolve stays queued on the shadow main looper until
-    // explicitly pumped. See HARD9-075 and HARD9-013 (NonCancellable pumping).
-    val call = mock(PluginCall::class.java)
-    val resolveLatch = CountDownLatch(1)
-    val payloadHolder = arrayOfNulls<JSObject>(1)
-
-    doAnswer { invocation ->
-              payloadHolder[0] = invocation.getArgument(0) as JSObject
-              resolveLatch.countDown()
-              null
-            }
-            .`when`(call)
-            .resolve(any(JSObject::class.java))
-
-    plugin.queryAllSongs(call)
-
-    // The call must return before the query/resolve completes.
-    assertEquals(1L, resolveLatch.count)
-
-    val deadline = System.currentTimeMillis() + 5000
-    while (resolveLatch.count > 0 && System.currentTimeMillis() < deadline) {
-      org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
-      Thread.sleep(10)
-    }
-
-    assertTrue(resolveLatch.await(0, TimeUnit.SECONDS))
-    assertTrue((payloadHolder[0]?.getLong("totalSongs") ?: -1L) >= 0L)
-  }
-
   @Test
   fun emitProgressPublishesExpectedPayloadShape() {
     val method =
