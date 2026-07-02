@@ -83,7 +83,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-023 | Background requests retry 3× with zero delay, holding the REST lane ~9s | transport | P2 | ux, perf, robustness | high | S | FIXED (3ceecd75) |
 | HARD9-024 | Circuit/state-gate error toasts classified "unknown", never auto-clear | transport | P2 | ux, correctness | high | S | FIXED (22147b34) |
 | HARD9-025 | Password field write race between connection state and secure-storage load | settings | P2 | correctness, data-loss | medium | S | FIXED (df7ddcd9) |
-| HARD9-026 | 600ms drag-settle timer collapses a held swipe mid-gesture | shell | P2 | ux, correctness | high | S | OPEN |
+| HARD9-026 | 600ms drag-settle timer collapses a held swipe mid-gesture | shell | P2 | ux, correctness | high | S | FIXED (d2bc8ea6) |
 | HARD9-027 | Diagnostics overlay scroll save/restore targets the wrong scroller (dead code) | shell | P2 | correctness, ux | high | S | OPEN |
 | HARD9-028 | Saved-device switch reports auth failure as "offline" | settings | P2 | ux, correctness | medium | M | FIXED (df7ddcd9) |
 | HARD9-029 | Playing a new track while machine paused leaves C64 frozen, UI "playing" | playback | P2 | correctness, robustness | medium | S | FIXED (3cfc137c) |
@@ -371,11 +371,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (df7ddcd9):** Both racing effects are gone rather than dirty-guarded — the HARD9-004 fix removed the `[password]`-mirroring effect and the async `getPasswordForDevice` preload effect entirely, since the field never displays the real secret. The only remaining effect resets the field on `[selectedSavedDevice?.id, selectedSavedDevice?.hasPassword]` (an actual device switch), which is the one case where resetting the draft is correct; there is no longer any effect that can overwrite an in-progress keystroke from live connection/password state.
 
 ### HARD9-026 — 600ms drag-settle timer collapses a held swipe
-- **Area:** shell · **Severity:** P2 · **Dimensions:** ux-responsiveness, correctness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** shell · **Severity:** P2 · **Dimensions:** ux-responsiveness, correctness · **Confidence:** high · **Effort:** S · **Status:** FIXED (d2bc8ea6)
 - **Files:** `src/components/SwipeNavigationLayer.tsx:294-307`, `src/hooks/useSwipeGesture.ts:184-248`
 - **Failure scenario:** User drags horizontally to peek at the next tab, then holds still >600ms. No pointermove fires, so `dragOffsetPx` stops changing and the `phase === "dragging"` effect's timer expires: `setRunway(buildIdleState(...))` snaps the runway back *while the finger is down*. The next movement re-enters onProgress with full dx — visual jump. Releasing during the reset silently loses a swipe that had crossed the commit threshold.
 - **Evidence:** The effect re-arms on `[centerIndex, dragOffsetPx, phase]` — it only stays alive while dx changes; a stationary held pointer is indistinguishable from the missed-pointerup case the timer was added for.
 - **Fix sketch:** Feed pointer liveness (gesture-active flag or heartbeats from `useSwipeGesture`), not dx-change, into the settle timer; only run it when no pointer is down.
+- **Resolution (d2bc8ea6):** Implemented the fix sketch exactly: added an `onActiveChange` callback to `useSwipeGesture`, fired whenever pointer capture for a gesture starts/ends (independent of dx changing). The settle-timer effect now keys only on `runway.phase` (not dx), starting once on entering "dragging" instead of restarting on every pointermove; each firing checks the live pointer-active state before resetting - if still down, it re-schedules another check instead of snapping back, only resetting once the pointer has genuinely gone away. New regression tests proven failing against the pre-fix code via `git stash`; the pre-existing "resets an orphaned drag" test (the intended missed-pointerup recovery) passes unchanged.
 
 ### HARD9-027 — Diagnostics overlay scroll save/restore targets the wrong scroller (dead code)
 - **Area:** shell · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** OPEN
