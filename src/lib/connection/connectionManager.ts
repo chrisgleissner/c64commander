@@ -37,6 +37,7 @@ import { getSmokeConfig, initializeSmokeMode, isSmokeModeEnabled, recordSmokeSta
 import { resetInteractionState } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { updateDeviceConnectionState } from "@/lib/deviceInteraction/deviceStateStore";
 import { isAuthRequiredError, normalizeTransportError } from "@/lib/c64api/transportErrors";
+import { notifyAuthRequired } from "@/lib/auth/authChallenge";
 import { clearConnectivityErrorToastsForHost } from "@/lib/uiErrors";
 import { registerReachabilityListener, type ReachabilitySource } from "@/lib/connection/reachabilityEvents";
 import {
@@ -74,6 +75,7 @@ export type ConnectionSnapshot = Readonly<{
 
 const STARTUP_PROBE_INTERVAL_MS = 700;
 const PROBE_REQUEST_TIMEOUT_MS = 2500;
+const AUTH_REQUIRED_PROBE_ERROR = "Password required";
 
 const isTestProbeEnabled = () => {
   const env = import.meta.env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
@@ -207,6 +209,16 @@ const isProbePayloadHealthy = (payload: unknown) => {
   return typeof product === "string" && product.trim().length > 0;
 };
 
+const reportAuthRequiredProbe = (config: Awaited<ReturnType<typeof loadPersistedConnectionConfig>>): void => {
+  addLog("info", "Discovery probe rejected by device; raising password challenge", {
+    deviceHost: config.deviceHost,
+  });
+  setSnapshot({ lastProbeError: AUTH_REQUIRED_PROBE_ERROR });
+  notifyAuthRequired({ host: config.deviceHost });
+};
+
+const isAuthRequiredProbeFailure = (): boolean => snapshot.lastProbeError === AUTH_REQUIRED_PROBE_ERROR;
+
 export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<boolean> {
   const config = await loadPersistedConnectionConfig();
   const timeoutMs = options.timeoutMs ?? loadDiscoveryProbeTimeoutMs();
@@ -227,7 +239,9 @@ export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: num
   } catch (error) {
     const message = (error as Error | undefined)?.message ?? "Unknown probe failure";
     const normalizedMessage = message;
-    if (!/^HTTP\s+\d+/.test(normalizedMessage)) {
+    if (isAuthRequiredError(error)) {
+      reportAuthRequiredProbe(config);
+    } else if (!/^HTTP\s+\d+/.test(normalizedMessage)) {
       const host = (() => {
         try {
           return new URL(config.baseUrl).hostname;
@@ -1068,8 +1082,10 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
     cancelled = true;
     globalThis.clearInterval(probeTimer);
     cancelActiveDiscovery();
-    const discovered = await tryAutomaticDeviceDiscoveryFallback(trigger, discoveryRun.isCurrent);
-    if (discovered) return;
+    if (!isAuthRequiredProbeFailure()) {
+      const discovered = await tryAutomaticDeviceDiscoveryFallback(trigger, discoveryRun.isCurrent);
+      if (discovered) return;
+    }
     if (!discoveryRun.isCurrent()) return;
     setSnapshot({ lastProbeFailedAtMs: Date.now() });
     if (isDemoModeRequested()) {

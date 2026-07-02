@@ -72,6 +72,16 @@ vi.mock("../../../src/lib/uiErrors", async () => {
   };
 });
 
+const notifyAuthRequired = vi.fn();
+vi.mock("../../../src/lib/auth/authChallenge", () => ({
+  notifyAuthRequired,
+  notifyAuthSatisfied: vi.fn(),
+  getAuthChallengeSnapshot: vi.fn(() => null),
+  resetAuthChallengeForTests: vi.fn(),
+  useAuthChallenge: vi.fn(() => null),
+  subscribeAuthChallenge: vi.fn(() => () => undefined),
+}));
+
 const startMockServer = vi.fn(async () => {
   throw new Error("Mock C64U server is only available on native platforms.");
 });
@@ -172,6 +182,7 @@ describe("connectionManager", () => {
       unsupported: false,
     });
     persistDiscoveredDevice.mockClear();
+    notifyAuthRequired.mockClear();
   });
 
   afterEach(() => {
@@ -889,6 +900,66 @@ describe("connectionManager", () => {
     );
 
     await expect(probeOnce()).resolves.toBe(false);
+  });
+
+  it("raises the password challenge when a discovery probe gets 403 (HARD9-001)", async () => {
+    const { probeOnce, getConnectionSnapshot } = await import("../../../src/lib/connection/connectionManager");
+    localStorage.setItem("c64u_device_host", "c64u");
+    localStorage.removeItem("c64u_has_password");
+
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ errors: ["forbidden"] }), {
+        status: 403,
+        statusText: "Forbidden",
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    await expect(probeOnce()).resolves.toBe(false);
+    expect(notifyAuthRequired).toHaveBeenCalledTimes(1);
+    expect(notifyAuthRequired).toHaveBeenCalledWith(expect.objectContaining({ host: "c64u" }));
+    expect(getConnectionSnapshot().lastProbeError).toBe("Password required");
+  });
+
+  it("keeps startup discovery recoverable when every probe is rejected for auth (HARD9-001)", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+    localStorage.setItem("c64u_device_host", "c64u");
+    localStorage.removeItem("c64u_has_password");
+
+    vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(600);
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ errors: ["forbidden"] }), {
+        status: 403,
+        statusText: "Forbidden",
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    await initializeConnectionManager();
+    const discovery = discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(700);
+    await discovery;
+
+    expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+    expect(getConnectionSnapshot().lastProbeError).toBe("Password required");
+    expect(notifyAuthRequired).toHaveBeenCalledWith(expect.objectContaining({ host: "c64u" }));
+  });
+
+  it("does not raise the password challenge for a non-auth HTTP failure (500)", async () => {
+    const { probeOnce } = await import("../../../src/lib/connection/connectionManager");
+    localStorage.setItem("c64u_device_host", "c64u");
+    localStorage.removeItem("c64u_has_password");
+
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ product: "C64" }), {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    await expect(probeOnce()).resolves.toBe(false);
+    expect(notifyAuthRequired).not.toHaveBeenCalled();
   });
 
   it("handles non-JSON content type by returning null payload (healthy if response ok)", async () => {
