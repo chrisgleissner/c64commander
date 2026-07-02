@@ -62,6 +62,28 @@ describe("toast reducer", () => {
     expect(result.toasts[0].id).toBe("err-2");
   });
 
+  it("invokes onToastDismiss for a toast dropped by limitToasts, not just an explicit DISMISS_TOAST (HARD9-055)", () => {
+    const evictedDismiss = vi.fn();
+    const state = {
+      toasts: [
+        { id: "t1", open: true },
+        { id: "t2", open: true, onToastDismiss: evictedDismiss },
+      ],
+    };
+    const addThird = {
+      type: "ADD_TOAST" as const,
+      toast: { id: "t3", open: true },
+    };
+
+    const result = reducer(state, addThird);
+
+    // TOAST_LIMIT is 2: the newest plus the oldest existing toast survive,
+    // and the one pushed out (t2) is still "open" - never explicitly
+    // dismissed - so only limitToasts eviction would have removed it.
+    expect(result.toasts.map((toast) => toast.id)).toEqual(["t3", "t1"]);
+    expect(evictedDismiss).toHaveBeenCalledTimes(1);
+  });
+
   it("adds, updates, dismisses, and removes toasts", () => {
     const initial = { toasts: [] };
     const added = reducer(initial, {

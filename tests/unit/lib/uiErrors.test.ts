@@ -328,6 +328,30 @@ describe("uiErrors", () => {
       expect(toast).toHaveBeenCalledTimes(2);
       vi.useRealTimers();
     });
+
+    it("does not slide the dedup window forever: a persistently recurring error still re-toasts ~30s after it started (HARD9-055)", () => {
+      vi.useFakeTimers();
+      vi.mocked(toast).mockReturnValue({ id: "1", dismiss: vi.fn(), update: vi.fn() });
+
+      reportUserError({ operation: "LOAD_FILE", title: "E", description: "Host unreachable", deviceHost: "u64" });
+
+      // The same error recurs every 5s, well inside the 30s window each time -
+      // under the old sliding-window bug, this reset the window on every call
+      // and the error would never re-toast.
+      for (let i = 0; i < 5; i += 1) {
+        vi.advanceTimersByTime(5_000);
+        reportUserError({ operation: "LOAD_FILE", title: "E", description: "Host unreachable", deviceHost: "u64" });
+      }
+      expect(toast).toHaveBeenCalledTimes(1);
+
+      // Total elapsed since the FIRST occurrence is now 25s + one more 6s tick
+      // pushes past the 30s window anchored to that first occurrence.
+      vi.advanceTimersByTime(6_000);
+      reportUserError({ operation: "LOAD_FILE", title: "E", description: "Host unreachable", deviceHost: "u64" });
+
+      expect(toast).toHaveBeenCalledTimes(2);
+      vi.useRealTimers();
+    });
   });
 
   describe("ERROR_POLICY §6 — stale-clear: error toast dismissed on success (H-03)", () => {
