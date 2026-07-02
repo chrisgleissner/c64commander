@@ -20,25 +20,6 @@ export const releaseSingleFlight = (ref: BooleanRef): void => {
   ref.current = false;
 };
 
-export type VolumeUiTarget = {
-  index: number;
-  setAtMs: number;
-};
-
-export type VolumeSyncDecision = "apply" | "clear" | "defer";
-
-export const resolveVolumeSyncDecision = (
-  pendingTarget: VolumeUiTarget | null,
-  nextIndex: number,
-  nowMs: number,
-  holdMs = 2500,
-): VolumeSyncDecision => {
-  if (!pendingTarget) return "apply";
-  if (pendingTarget.index === nextIndex) return "clear";
-  if (nowMs - pendingTarget.setAtMs < holdMs) return "defer";
-  return "clear";
-};
-
 export type AutoAdvanceDurationChangeInput = {
   isPlaying: boolean;
   isPaused: boolean;

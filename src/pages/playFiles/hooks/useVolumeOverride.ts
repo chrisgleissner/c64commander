@@ -32,7 +32,7 @@ import {
 } from "@/lib/config/sidVolumeControl";
 import { reduceVolumeState, type VolumeAction } from "../volumeState";
 import { extractAudioMixerItems, parseVolumeOption } from "../playFilesUtils";
-import { type PlaybackSyncIntent, type PlaybackSyncState } from "../playbackMixerSync";
+import { resolvePlaybackSyncDecision, type PlaybackSyncIntent, type PlaybackSyncState } from "../playbackMixerSync";
 import { resolveMutedSyncIndex, resolveMostCommonIndex, shouldHoldManualMuteSync } from "../volumeSync";
 
 type SidMuteSnapshot = {
@@ -1025,16 +1025,15 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
         muted: true,
       };
       const pendingWrite = pendingVolumeWriteRef.current;
-      if (pendingWrite) {
-        if (pendingWrite.index === nextIndex && pendingWrite.muted) {
-          clearPendingVolumeWrite();
-        } else {
-          addLog("debug", "Play volume sync deferred while muted write confirmation is pending", {
-            pendingIndex: pendingWrite.index,
-            deviceIndex: nextIndex,
-          });
-          return;
-        }
+      const mutedDecision = resolvePlaybackSyncDecision(pendingWrite, { index: nextIndex, muted: true }, Date.now());
+      if (mutedDecision === "clear") {
+        clearPendingVolumeWrite();
+      } else if (mutedDecision === "defer") {
+        addLog("debug", "Play volume sync deferred while muted write confirmation is pending", {
+          pendingIndex: pendingWrite?.index,
+          deviceIndex: nextIndex,
+        });
+        return;
       }
       if (!volumeMuted || volumeIndex !== nextIndex || volumeState.reason !== "sync") {
         dispatchTrackedVolume({ type: "sync", index: nextIndex, muted: true });
@@ -1047,18 +1046,15 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       muted: false,
     };
     const pendingWrite = pendingVolumeWriteRef.current;
-    if (pendingWrite) {
-      if (pendingWrite.index === nextIndex && pendingWrite.muted === false) {
-        clearPendingVolumeWrite();
-      } else if (Date.now() - pendingWrite.setAtMs >= 2500) {
-        clearPendingVolumeWrite();
-      } else {
-        addLog("debug", "Play volume sync deferred while unmuted write confirmation is pending", {
-          pendingIndex: pendingWrite.index,
-          deviceIndex: nextIndex,
-        });
-        return;
-      }
+    const unmutedDecision = resolvePlaybackSyncDecision(pendingWrite, { index: nextIndex, muted: false }, Date.now());
+    if (unmutedDecision === "clear") {
+      clearPendingVolumeWrite();
+    } else if (unmutedDecision === "defer") {
+      addLog("debug", "Play volume sync deferred while unmuted write confirmation is pending", {
+        pendingIndex: pendingWrite?.index,
+        deviceIndex: nextIndex,
+      });
+      return;
     }
     // Hardware has confirmed the unmuted state – clear the resume guard.
     resumingFromPauseRef.current = false;

@@ -110,11 +110,7 @@ import {
 } from "@/pages/playFiles/backgroundExecutionPolicy";
 import { setPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
-import {
-  planPlaylistItemRemoval,
-  resolveAutoAdvanceDueAtMsOnDurationChange,
-  resolveVolumeSyncDecision,
-} from "@/pages/playFiles/playbackGuards";
+import { planPlaylistItemRemoval, resolveAutoAdvanceDueAtMsOnDurationChange } from "@/pages/playFiles/playbackGuards";
 import type { PlayableEntry, PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from "@/pages/playFiles/types";
 import {
   buildConfigReferenceFromBrowserSelection,

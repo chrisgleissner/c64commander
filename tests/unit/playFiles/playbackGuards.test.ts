@@ -7,12 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  releaseSingleFlight,
-  resolveVolumeSyncDecision,
-  tryAcquireSingleFlight,
-  type BooleanRef,
-} from "@/pages/playFiles/playbackGuards";
+import { releaseSingleFlight, tryAcquireSingleFlight, type BooleanRef } from "@/pages/playFiles/playbackGuards";
 import { resolvePlayTargetIndex } from "@/pages/playFiles/playFilesUtils";
 
 describe("playbackGuards", () => {
@@ -40,16 +35,5 @@ describe("playbackGuards", () => {
     expect(tryAcquireSingleFlight(lock)).toBe(false);
     releaseSingleFlight(lock);
     expect(tryAcquireSingleFlight(lock)).toBe(true);
-  });
-
-  it("defers volume sync while UI target is still in its hold window", () => {
-    const now = 10_000;
-    expect(resolveVolumeSyncDecision({ index: 7, setAtMs: now - 200 }, 3, now, 2500)).toBe("defer");
-  });
-
-  it("clears pending volume target once backend matches or hold window expires", () => {
-    const now = 10_000;
-    expect(resolveVolumeSyncDecision({ index: 5, setAtMs: now - 50 }, 5, now, 2500)).toBe("clear");
-    expect(resolveVolumeSyncDecision({ index: 5, setAtMs: now - 4000 }, 3, now, 2500)).toBe("clear");
   });
 });

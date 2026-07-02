@@ -432,6 +432,49 @@ describe("useVolumeOverride", () => {
     );
   });
 
+  it("clears a mismatched muted pending write once the 2500ms hold expires, matching the unmuted branch's bound (HARD9-065)", async () => {
+    let nowMs = 1_000_000;
+    vi.spyOn(Date, "now").mockImplementation(() => nowMs);
+    audioMixerItemsRef.current = defaultMixerItems("OFF");
+
+    const { result, rerender } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => expect(result.current.volumeState.muted).toBe(true));
+
+    act(() => {
+      result.current.pendingVolumeWriteRef.current = {
+        index: 999,
+        muted: true,
+        setAtMs: nowMs,
+      };
+      audioMixerItemsRef.current = defaultMixerItems("OFF");
+      rerender();
+    });
+
+    // Still within the 2500ms hold: a mismatched muted pending write must be
+    // kept, exactly like the unmuted branch already does.
+    nowMs += 1000;
+    act(() => {
+      audioMixerItemsRef.current = defaultMixerItems("OFF");
+      rerender();
+    });
+    expect(result.current.pendingVolumeWriteRef.current).not.toBeNull();
+
+    // Past the 2500ms hold, but well under the separate unconditional 5000ms
+    // hard fallback - before HARD9-065, a mismatched muted pending write
+    // deferred indefinitely here instead of clearing at the same 2500ms
+    // bound the unmuted branch already honored.
+    nowMs += 1600;
+    act(() => {
+      audioMixerItemsRef.current = defaultMixerItems("OFF");
+      rerender();
+    });
+
+    await waitFor(() => expect(result.current.pendingVolumeWriteRef.current).toBeNull());
+  });
+
   it("mutes to -42 dB and restores the current slider target on unmute", async () => {
     audioMixerItemsRef.current = defaultMixerItems("5");
 
