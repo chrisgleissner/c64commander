@@ -114,7 +114,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-054 | Audio Mixer solo routing bypasses mutation layer; stale snapshot restore | config | P2 | correctness, robustness | medium | M | OPEN |
 | HARD9-055 | Error-toast eviction + sliding dedup window silently hide persistent failures | diagnostics | P2 | correctness, ux | high | M | FIXED (59e45da0) |
 | HARD9-056 | Backend-decision correlation set grows unbounded | diagnostics | P2 | performance, robustness | high | S | FIXED (caa0549f) |
-| HARD9-057 | Trace persistence exceeds sessionStorage quota; size accounting broken on restore | diagnostics | P2 | performance, data-loss, correctness | high | S | OPEN |
+| HARD9-057 | Trace persistence exceeds sessionStorage quota; size accounting broken on restore | diagnostics | P2 | performance, data-loss, correctness | high | S | FIXED (616e19c5) |
 | HARD9-058 | Fetch trace duplicates full request/response payloads in the hot path | diagnostics | P2 | performance | high | M | OPEN |
 | HARD9-059 | Smoke-mode localStorage fallback is a self-perpetuating latch in prod | state | P2 | robustness, security, correctness | medium | S | OPEN |
 | HARD9-060 | Background health probes pass allowDuringError but the state gate ignores it | transport | P3 | correctness, ux | high | S | FIXED (1d16f3de) |
@@ -588,11 +588,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (caa0549f):** Took the bounded-LRU option from the fix sketch (simpler and lower-risk than precise cross-referencing against event eviction, since this Set is only a one-time "already emitted" dedup flag, not data needing precise lifetimes). Added `trimOldestHalfAtCapacity`, called from `emitBackendDecision` before every insert, capped at the same `MAX_EVENT_COUNT` (25,000) used for the events array.
 
 ### HARD9-057 — Trace persistence exceeds sessionStorage quota; size accounting broken after restore
-- **Area:** diagnostics · **Severity:** P2 · **Dimensions:** performance, data-loss, correctness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** diagnostics · **Severity:** P2 · **Dimensions:** performance, data-loss, correctness · **Confidence:** high · **Effort:** S · **Status:** FIXED (616e19c5)
 - **Files:** `src/lib/tracing/traceSession.ts:66-71,277-329`, `src/lib/tracing/traceBridge.ts:64-70`
 - **Failure scenario:** (a) `beforeunload` → `persistTracesToSession` stringifies up to 50MB into a ~5MB-quota sessionStorage: QuotaExceeded swallowed → traces silently lost after paying the full synchronous stringify cost during unload. (b) `restoreTracesFromSession` pushes restored events into `events` but never appends `eventSizes`/`totalBytes`; `dropOldest` then shifts misaligned arrays and the 50MB byte cap stops being enforced for restored sessions.
 - **Evidence:** Persist = single `JSON.stringify(events)` + `setItem`; restore mutates `events` only; `dropOldest` assumes 1:1 alignment.
 - **Fix sketch:** Persist only the newest slice that fits (~2MB); rebuild size accounting after restore (same path as `replaceTraceEvents`).
+- **Resolution (616e19c5):** Implemented both parts of the fix sketch as written. Added `selectNewestEventsWithinBudget`, a pure suffix-selection helper using the already-tracked `eventSizes`, and had `persistTracesToSession` stringify only the newest slice under a 2MB budget instead of the full session. `restoreTracesFromSession` now builds its deduplicated/sorted merge and hands it to the existing `replaceTraceEvents`, which already rebuilds `eventSizes`/`totalBytes`/`decisionByCorrelation` correctly from a full event list, instead of hand-mutating `events` in place.
 
 ### HARD9-058 — Fetch trace duplicates full request/response payloads in the hot path
 - **Area:** diagnostics · **Severity:** P2 · **Dimensions:** performance · **Confidence:** high · **Effort:** M · **Status:** OPEN
