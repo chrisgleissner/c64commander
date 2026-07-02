@@ -2,15 +2,15 @@
 
 ## Current state
 - Branch: fix/hardening
-- Last commit reviewed/created: 53eda43f "Fix HARD9-001 auth-required discovery dead-end"
-- Working tree: review/progress docs pending after HARD9-001 status update
+- Last commit reviewed/created: 52b59dd8 "Fix HARD9-043 secure storage initialization"
+- Working tree: review/progress docs pending after HARD9-043 status update
 - Review doc: docs/plans/hardening/9-fable/review.md
 - 95 findings (HARD9-001..095)
 
 ## Plan
 Work batches in order from review.md:
-1. Auth & password UX: 001, 004, 025, 028, 043  <- IN PROGRESS (001/004/025/028 done, 043 remains)
-2. Native request lane & circuit UX: 002, 023, 022, 024, 061, 060, 062
+1. Auth & password UX: 001, 004, 025, 028, 043  <- DONE
+2. Native request lane & circuit UX: 002, 023, 022, 024, 061, 060, 062  <- NEXT
 3. Playback duration/songlengths: 005, 006, 008, 064
 4. Playback lifecycle: 029, 030, 031, 033, 063, 007
 5. Playback perf: 032, 034, 065, 066
@@ -63,9 +63,17 @@ Work batches in order from review.md:
   `describeSwitchFailure` helper in SettingsPage.tsx reports "The device
   rejected the password. Check the password and try again." instead of the
   generic offline/unreachable message at both `switchSavedDevice` call sites
-  (Save & Connect, discovered-device confirm). NOT done: an AUTH-distinct
-  connection-state badge (ties into HARD9-001, still open) — only the two
-  save/switch error messages were corrected, not the persistent badge state.
+  (Save & Connect, discovered-device confirm). The later HARD9-001 fix raises
+  the auth prompt from discovery probes and preserves the password-required
+  offline reason; no separate `ConnectionState` enum value was added.
+- HARD9-043: 52b59dd8 - Native SecureStorage now initializes production
+  `EncryptedSharedPreferences` through a synchronized cached holder instead of
+  rebuilding `MasterKey`/preferences for every plugin call. If production
+  encrypted storage throws, the plugin clears the cached holder, clears/deletes
+  the encrypted preference files, deletes the AndroidKeyStore master-key alias
+  when available, and degrades `getPassword` to `{ value: null }` so the app
+  asks the user to re-enter the password. `setPassword` retries once after
+  recovery. Injected test providers still reject, preserving hard-failure tests.
 
 ## Validation
 - `npx tsc --noEmit`: PASS (after HARD9-001)
@@ -73,6 +81,10 @@ Work batches in order from review.md:
 - `npx vitest run tests/unit/connection/connectionManager.test.ts tests/unit/lib/auth/authChallengeController.test.ts tests/unit/components/DeviceAuthChallengeDialog.test.tsx tests/unit/lib/auth/authChallenge.test.ts`: PASS (4 files / 114 tests, after HARD9-001)
 - `npx prettier --check src/lib/connection/connectionManager.ts tests/unit/connection/connectionManager.test.ts`: PASS
 - `git diff --check`: PASS
+- `./gradlew testDebugUnitTest --tests uk.gleissner.c64commander.SecureStoragePluginTest`: PASS (after HARD9-043)
+- `./gradlew assembleDebug`: PASS (after HARD9-043)
+- `npx tsc --noEmit`: PASS (after HARD9-043)
+- `npx eslint src --quiet`: PASS (after HARD9-043)
 - `npm run format:check:ts -- --ignore-unknown src/lib/connection/connectionManager.ts tests/unit/connection/connectionManager.test.ts`: FAIL (script checks the whole repo's `**/*.{ts,tsx,json}` pattern before appended args; reports pre-existing formatting warnings in `src/pages/SettingsPage.tsx` plus the touched connection test before targeted Prettier write. Targeted file check above passes after formatting touched files.)
 - `npx vitest run tests/unit/pages/SettingsPage.test.tsx`: PASS (83/83, +4 new
   tests covering HARD9-004/025/028)
@@ -98,11 +110,10 @@ Work batches in order from review.md:
   real c64u) before calling this fully closed.
 
 ## Remaining
-- Next batch: finish Auth & password UX — HARD9-043 (native Kotlin
-  SecureStorage: builds EncryptedSharedPreferences per call, unsynchronized —
-  Android-only, needs Gradle validation).
-- After that: Batch 2, Native request lane & circuit UX (002, 023, 022, 024,
-  061, 060, 062).
+- Next batch: Native request lane & circuit UX — HARD9-002, HARD9-023,
+  HARD9-022, HARD9-024, HARD9-061, HARD9-060, HARD9-062.
+- Next issue: HARD9-002 (native FIFO request lane defeats user-intent
+  priority and holds the slot through scheduler cooldown/backoff deferrals).
 - HARD9-003 (Android bottom safe-area inset) is a HIL-proven P1 usability
   blocker per the operating instructions — fix early if auth work stalls.
 

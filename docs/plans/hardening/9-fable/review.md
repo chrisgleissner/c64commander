@@ -100,7 +100,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-040 | Failed HVSC baseline promotion can delete the only library copy | native | P2 | data-loss, correctness, robustness | high | S | OPEN |
 | HARD9-041 | Late setDueAtMs resurrects phantom FGS + wake lock after Stop | native | P2 | correctness, robustness, ux, perf | high | M | OPEN |
 | HARD9-042 | Stale-generation FGS start intent never calls startForeground (crash risk) | native | P2 | correctness, robustness | medium | S | OPEN |
-| HARD9-043 | SecureStorage builds EncryptedSharedPreferences per call, unsynchronized | native | P2 | correctness, data-loss, robustness, perf | medium | S | OPEN |
+| HARD9-043 | SecureStorage builds EncryptedSharedPreferences per call, unsynchronized | native | P2 | correctness, data-loss, robustness, perf | medium | S | FIXED (52b59dd8) |
 | HARD9-044 | FTP/SAF readFile buffers whole file ×3.3 in heap — OOM on large files | native | P2 | robustness, perf, correctness | high | M | OPEN |
 | HARD9-045 | normalizeSourcePath collapses internal whitespace, corrupting paths | sources | P2 | correctness, robustness | high | S | OPEN |
 | HARD9-046 | Ingestion finalize overwrites songlengths projection with duration-less records | hvsc | P2 | correctness, data-loss | medium | M | OPEN |
@@ -469,11 +469,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Fix sketch:** In stale/null-intent branches, call `startForeground(NOTIFICATION_ID, buildNotification())` then immediately `stopForeground(STOP_FOREGROUND_REMOVE)` + `stopSelf(startId)`.
 
 ### HARD9-043 — SecureStorage builds EncryptedSharedPreferences + MasterKey on every call with no synchronization
-- **Area:** native · **Severity:** P2 · **Dimensions:** correctness, data-loss, robustness, performance · **Confidence:** medium · **Effort:** S · **Status:** OPEN
+- **Area:** native · **Severity:** P2 · **Dimensions:** correctness, data-loss, robustness, performance · **Confidence:** medium · **Effort:** S · **Status:** FIXED (52b59dd8)
 - **Files:** `android/.../SecureStoragePlugin.kt:28-36`
 - **Failure scenario:** `getPrefs()` runs `MasterKey.Builder(...).build()` + `EncryptedSharedPreferences.create(...)` per invocation. Jetpack security-crypto's first-time keyset creation is not safe against concurrent creators: overlapping `getPassword` (connect) and `setPassword` (dialog) can corrupt the Tink keyset, after which every get/set rejects forever — the stored C64U password unrecoverable until app data is cleared. Even absent the race, per-call Keystore round-trips add 50-500ms to every password read on the shared plugin thread.
 - **Evidence:** `private fun getPrefs() = prefsProvider?.invoke() ?: EncryptedSharedPreferences.create(...)` — no caching, no lock.
 - **Fix sketch:** Single `@Synchronized` lazy holder; add corruption recovery (delete pref file + keystore entry, return null) so a corrupted keyset degrades to "re-enter password".
+- **Resolution (52b59dd8):** `SecureStoragePlugin` now uses a synchronized cached holder for production `EncryptedSharedPreferences`, so concurrent plugin calls share one initialization path instead of racing `MasterKey`/Tink keyset creation. Production encrypted-storage failures clear the cached holder, clear/delete the encrypted preference files, delete the AndroidKeyStore master-key alias when present, and recover reads as `{ value: null }` so the JS auth flow asks the user to re-enter the password. Writes retry once after recovery. Injected test providers still reject, preserving deterministic hard-failure coverage.
 
 ### HARD9-044 — FTP/SAF readFile buffers entire file + Base64 in heap — OOM on large files
 - **Area:** native · **Severity:** P2 · **Dimensions:** robustness, performance, correctness · **Confidence:** high · **Effort:** M · **Status:** OPEN
