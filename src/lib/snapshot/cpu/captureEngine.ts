@@ -178,9 +178,19 @@ export const captureCpuState = async (api: CaptureCpuApi, options: CaptureOption
       }
 
       if (!captured) {
+        // The interrupt can still fire in the gap between the last poll read
+        // above and machinePause() taking effect (up to ~50ms + latency) - if
+        // so the CPU is now frozen inside the handler's spin loop, and rolling
+        // back would overwrite that spin-loop code under its feet, corrupting
+        // the program on resume. Re-check after pausing before deciding this
+        // candidate truly timed out. See HARD9-039.
+        await api.machinePause();
+        captured = (await api.readMemory(toHexAddress(layout.captured), 1))[0] === 0x01;
+      }
+
+      if (!captured) {
         // This vector's interrupt never fired. Roll back and stay paused so the
         // next candidate can install cleanly.
-        await api.machinePause();
         await api.writeMemoryBlock(toHexAddress(vectorAddr), irqVector);
         await api.writeMemoryBlock(toHexAddress(base), savedRegion);
         continue;
