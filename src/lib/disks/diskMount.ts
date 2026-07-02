@@ -297,6 +297,16 @@ export const resolveLocalDiskBlob = async (
     if (blob) return blob;
   }
 
+  // A CommoServe-imported disk's bytes only ever live in the in-memory
+  // runtimeFiles map (React state) - navigating away or restarting loses
+  // them, and its sourceId never resolves via loadLocalSources() (CommoServe
+  // is not a persisted local source). The generic "re-add the folder"
+  // message is meaningless here since there is no folder/file to re-add.
+  // See HARD9-011.
+  if (disk.sourceKind === "commoserve") {
+    throw new Error("This disk's data is no longer available. Re-import it from CommoServe to mount it again.");
+  }
+
   throw new Error("Local disk access is missing. Re-add the folder or file to refresh permissions.");
 };
 

@@ -158,6 +158,18 @@ describe("diskMount", () => {
       );
     });
 
+    it("throws an accurate re-import message for a commoserve disk with no runtime bytes (HARD9-011)", async () => {
+      vi.mocked(loadLocalSources).mockReturnValue([]);
+      await expect(
+        resolveLocalDiskBlob({
+          path: "/archive-disk.d64",
+          location: "local",
+          sourceId: "commoserve-1",
+          sourceKind: "commoserve",
+        } as any),
+      ).rejects.toThrow("Re-import it from CommoServe");
+    });
+
     it("rejects oversized runtime disk files before reading them into memory", async () => {
       const oversizedFile = {
         size: 64 * 1024 * 1024 + 1,

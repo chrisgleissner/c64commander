@@ -1118,6 +1118,7 @@ export const HomeDiskManager = () => {
               path: normalized,
               location: "local",
               sourceId: source.id,
+              sourceKind: "commoserve",
               name: binary.fileName || selection.name,
               group: source.name,
               sizeBytes: binary.bytes.byteLength,

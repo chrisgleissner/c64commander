@@ -21,6 +21,13 @@ export type DiskEntry = {
   origin?: DeviceBoundContentOrigin | null;
   group: string | null;
   sourceId?: string | null;
+  // "commoserve" disks hold their bytes only in memory (runtimeFiles) - the
+  // persisted entry itself has no localUri/localTreeUri and its sourceId
+  // never resolves via loadLocalSources(), so this is the only way to tell
+  // "re-download from CommoServe" apart from "re-add the removed local
+  // folder" once the runtime bytes are gone (e.g. after a remount). See
+  // HARD9-011.
+  sourceKind?: "commoserve" | null;
   localUri?: string | null;
   localTreeUri?: string | null;
   sizeBytes?: number | null;
@@ -82,6 +89,7 @@ export const createDiskEntry = (params: {
   origin?: DeviceBoundContentOrigin | null;
   group?: string | null;
   sourceId?: string | null;
+  sourceKind?: "commoserve" | null;
   localUri?: string | null;
   localTreeUri?: string | null;
   name?: string | null;
@@ -103,6 +111,7 @@ export const createDiskEntry = (params: {
     origin,
     group: params.group ?? null,
     sourceId: params.sourceId ?? null,
+    sourceKind: params.sourceKind ?? null,
     localUri: params.localUri ?? null,
     localTreeUri: params.localTreeUri ?? null,
     sizeBytes: params.sizeBytes ?? null,
