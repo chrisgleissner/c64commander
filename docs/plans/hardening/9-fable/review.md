@@ -93,7 +93,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-033 | Cancel during add-items can throw inside a React state updater | playback | P2 | robustness, correctness | medium | S | FIXED (9d4a5b91) |
 | HARD9-034 | Concurrent playlist repository commits can persist a stale snapshot | playback | P2 | data-loss, robustness | medium | M | FIXED (9c58f95c) |
 | HARD9-035 | CPU snapshot "saved" toast while C64 left frozen (resume failure swallowed) | snapshot | P2 | correctness, robustness, ux | high | S | FIXED (60775949) |
-| HARD9-036 | CPU restore failure strands machine in restore cart; no RAM-only fallback | snapshot | P2 | correctness, robustness, ux | high | M | OPEN |
+| HARD9-036 | CPU restore failure strands machine in restore cart; no RAM-only fallback | snapshot | P2 | correctness, robustness, ux | high | M | FIXED (f856dfee) |
 | HARD9-037 | Mount sheet permits concurrent mounts to the same drive | disks | P2 | correctness, ux | medium | S | FIXED (ca393156) |
 | HARD9-038 | Local-disk rotation/eject-before-delete break after first drives poll | disks | P2 | correctness, ux | medium | M | FIXED (5db6d86a) |
 | HARD9-039 | Capture-timeout rollback can corrupt safe region while CPU executes it | snapshot | P2 | correctness, robustness | medium | S | OPEN |
@@ -442,11 +442,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (60775949):** Took the "return it" half of the fix sketch, not "rethrow" - throwing would discard the successfully-captured (and separately valid) snapshot data via the caller's try/catch, when capture and resume are genuinely independent outcomes. Added a `resumeError: Error | null` field threaded through `captureCpuSnapshotData` → `createCpuSnapshot` → `handleSaveCpuSnapshot`, which now shows the exact destructive toast wording the fix sketch suggested (adapted to name the underlying error) instead of the bare success toast.
 
 ### HARD9-036 — CPU restore failures strand the machine in the restore cart and never fall back to RAM-only restore
-- **Area:** snapshot · **Severity:** P2 · **Dimensions:** correctness, robustness, ux-responsiveness · **Confidence:** high · **Effort:** M · **Status:** OPEN
+- **Area:** snapshot · **Severity:** P2 · **Dimensions:** correctness, robustness, ux-responsiveness · **Confidence:** high · **Effort:** M · **Status:** FIXED (f856dfee)
 - **Files:** `src/pages/home/hooks/useHomeActions.ts:230-252`, `src/lib/snapshot/cpu/restoreCart.ts:79-85,209-246`
 - **Failure scenario:** (a) `CpuRestoreUnsupportedError` is documented as "the caller should offer RAM-only restore", but `handleRestoreSnapshot` catches nothing — raw "stack pointer $f is below the safe minimum…" toast, no fallback. (b) Worse: if the handshake fails after `runCartridgeUpload` (READY timeout, or a write failing all 4 retries mid-DMA), the C64 has already been reset into the uploaded spin-loop cart — frozen — and the error path performs no recovery (no reset, no release-flag retry, no guidance).
 - **Evidence:** `useHomeActions.ts:238-240` `await restoreCpuSnapshotFromDecoded(api, decoded); return;` inside `runMachineTask`, whose catch only calls `reportUserError`.
 - **Fix sketch:** Catch `CpuRestoreUnsupportedError` → fall back to `loadMemoryRanges`; for post-upload failures, best-effort `machineReset` (or write RESTORE_FLAG_GO) and tell the user the machine may need a reset.
+- **Resolution (f856dfee):** Implemented the fix sketch's (a) exactly - `handleRestoreSnapshot` now catches `CpuRestoreUnsupportedError` and falls back to `loadMemoryRanges`, toasting why exact CPU state couldn't be restored. For (b), chose `machineReset` over the "or write RESTORE_FLAG_GO" alternative: releasing the cart via the GO flag when the RAM/RTI-frame writes never completed would finalize into an incomplete or absent RTI frame and likely crash into garbage on resume, whereas a full reset recovers correctly regardless of which post-upload step failed. `restoreCpuSnapshot` now wraps everything after the cartridge upload in a try/catch that attempts the reset best-effort and rethrows an error whose message states the outcome ("the machine was automatically reset" or "power-cycle the machine manually").
 
 ### HARD9-037 — Mount sheet permits concurrent mounts to the same drive
 - **Area:** disks · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (ca393156)
