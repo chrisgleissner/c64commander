@@ -131,7 +131,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-071 | Mock C64U HTTP+FTP servers ship in release builds, registered unconditionally | native | P3 | security, robustness | high | M | OPEN |
 | HARD9-072 | TelnetSocket state read/written across threads without synchronization | native | P3 | correctness, robustness | high | S | OPEN |
 | HARD9-073 | cancelRead after completion leaves permanent entries in cancelledReads | native | P3 | correctness, performance | high | S | OPEN |
-| HARD9-074 | 7-Zip probe subprocess has no timeout — wedged probe bricks ingestion | native | P3 | robustness, ux | medium | S | OPEN |
+| HARD9-074 | 7-Zip probe subprocess has no timeout — wedged probe bricks ingestion | native | P3 | robustness, ux | medium | S | FIXED (cef0d129) |
 | HARD9-075 | queryAllSongs materializes 50k rows on the shared Capacitor plugin thread | native | P3 | performance, ux | high | S | OPEN |
 | HARD9-076 | Device-discovery probe leaks HttpURLConnection on body-read failure | native | P3 | robustness, performance | high | S | OPEN |
 | HARD9-077 | MainActivity.onCreate does synchronous filesystem repair on main thread | native | P3 | ux, performance | high | S | OPEN |
@@ -724,10 +724,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Fix sketch:** In `cancelRead`, only flag if `activeReadStreams` contains the id (close-and-flag atomically); otherwise no-op.
 
 ### HARD9-074 — 7-Zip probe subprocess has no timeout/cancellation — a wedged probe bricks ingestion until restart
-- **Area:** native · **Severity:** P3 · **Dimensions:** robustness, ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
+- **Area:** native · **Severity:** P3 · **Dimensions:** robustness, ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (cef0d129)
 - **Files:** `android/.../hvsc/HvscArchiveExtractor.kt:192-298`, `android/.../HvscIngestionPlugin.kt:396-399`
 - **Failure scenario:** `extractSevenZipToRawTree` has a cancellation-monitor thread, but `probeSevenZipArchive` (`7zz l -slt`) has none: `useLines`/`waitFor` block indefinitely on a pathological archive. `cancelIngestion` sets the token but nothing kills the probe; every retry rejects with "HVSC ingestion already running" until force-stop.
 - **Fix sketch:** Reuse the extract-path cancellation monitor for the probe (poll token, `destroyForcibly`), or `waitFor(timeout)` with destroy on expiry.
+- **Resolution (cef0d129):** `probe()` runs from `extract()` before `extractSevenZipToRawTree`'s own monitor even starts, so this needed its own cancellation support rather than reuse of that specific thread instance. Threaded a `cancellationToken` parameter through the `HvscArchiveExtractor.probe` interface (default `AtomicBoolean(false)`, so existing non-cancelling call sites are unaffected) and applied the exact same destroy/destroyForcibly monitor pattern already used in `extractSevenZipToRawTree` to `probeSevenZipArchive`. New test drives a fake `7zz` script whose `l` (list/probe) branch hangs and confirms cancellation stops it; fails to compile against the pre-fix `probe()` signature (`git stash`), passes with the fix. `./gradlew testDebugUnitTest` (full suite) passes.
 
 ### HARD9-075 — queryAllSongs materializes the full 50k-row index on the shared Capacitor plugin thread
 - **Area:** native · **Severity:** P3 · **Dimensions:** performance, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** OPEN
