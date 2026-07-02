@@ -525,6 +525,74 @@ class FtpClientPluginTest {
   }
 
   @Test
+  fun readFileRejectsDeclaredOversizeBeforeConnecting() {
+    // HARD9-044: a caller-declared totalBytes above the cap is rejected before
+    // ever opening a connection, avoiding a wasted connect+login round trip.
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    plugin.maxReadFileBytes = 100L
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getString("path")).thenReturn("/big.dnp")
+    `when`(call.getInt("totalBytes")).thenReturn(200)
+
+    var rejectedMessage: String? = null
+    doAnswer { invocation ->
+              rejectedMessage = invocation.getArgument(0) as String?
+              null
+            }
+            .`when`(call)
+            .reject(any<String>())
+
+    plugin.readFile(call)
+
+    assertNotNull(rejectedMessage)
+    assertTrue(rejectedMessage!!.contains("maximum readable size"))
+    verify(ftpClient, never()).connect(any<String>(), org.mockito.ArgumentMatchers.anyInt())
+  }
+
+  @Test
+  fun readFileRejectsWhenActualTransferExceedsSizeCapWithoutDeclaredTotalBytes() {
+    // HARD9-044: the incremental guard must catch an oversized transfer even
+    // when totalBytes was never supplied (or under-declared) by the caller -
+    // it can't rely solely on a possibly-absent/wrong upfront size hint.
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    plugin.maxReadFileBytes = 10L
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+    val payload = "THIS PAYLOAD IS DEFINITELY MORE THAN TEN BYTES LONG"
+
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    `when`(ftpClient.retrieveFileStream(eq("/big.dnp")))
+            .thenReturn(java.io.ByteArrayInputStream(payload.toByteArray(Charsets.UTF_8)))
+    `when`(ftpClient.isConnected).thenReturn(true)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("secret")
+    `when`(call.getString("path")).thenReturn("/big.dnp")
+
+    var rejectedMessage: String? = null
+    doAnswer { invocation ->
+              rejectedMessage = invocation.getArgument(0) as String?
+              null
+            }
+            .`when`(call)
+            .reject(any(String::class.java), any(Exception::class.java))
+
+    plugin.readFile(call)
+
+    assertNotNull(rejectedMessage)
+    assertTrue(rejectedMessage!!.contains("maximum readable size"))
+  }
+
+  @Test
   fun cancelReadAfterCompletionDoesNotSpuriouslyAbortAReusedRequestId() {
     // Regression (HARD9-073): a cancelRead() arriving after readFile()
     // already finished (routine when it races natural completion on

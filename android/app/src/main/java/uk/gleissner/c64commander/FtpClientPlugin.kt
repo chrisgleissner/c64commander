@@ -34,6 +34,12 @@ class FtpClientPlugin : Plugin() {
   private val readChunkSize = 64 * 1024
   private val readProgressIntervalBytes = 128L * 1024L
   private val readAbortedMessage = "FTP read aborted"
+  // readFile buffers the whole transfer in memory, then copies it again via
+  // toByteArray(), then Base64-encodes it (~1.33x) - peak heap for one read is
+  // ~3.3x the file's size. Without a cap, a large file (a .dnp disk pack,
+  // firmware image) drives the app into OOM. See HARD9-044.
+  // internal var so tests can shrink it instead of generating multi-MB payloads.
+  internal var maxReadFileBytes = 32L * 1024L * 1024L
   private val defaultRecursiveMaxDepth = 8
   private val defaultRecursiveMaxEntries = 5_000
   private val maxNlstMetadataProbes = 64
@@ -401,6 +407,10 @@ class FtpClientPlugin : Plugin() {
     val connectTimeoutMs = resolveConnectTimeoutMs(call)
     val requestId = call.getString("requestId")?.takeIf { it.isNotBlank() }
     val totalBytes = (call.getInt("totalBytes") ?: 0).coerceAtLeast(0)
+    if (totalBytes > maxReadFileBytes) {
+      call.reject("File exceeds the maximum readable size (${maxReadFileBytes / (1024 * 1024)}MB)")
+      return
+    }
 
     runTask(
             Runnable {
@@ -462,8 +472,13 @@ class FtpClientPlugin : Plugin() {
                             throw ioError
                           }
                   if (read == -1) break
-                  output.write(buffer, 0, read)
                   bytesRead += read
+                  if (bytesRead > maxReadFileBytes) {
+                    throw java.io.IOException(
+                            "File exceeds the maximum readable size (${maxReadFileBytes / (1024 * 1024)}MB)"
+                    )
+                  }
+                  output.write(buffer, 0, read)
                   if (requestId != null && bytesRead - lastProgressAt >= readProgressIntervalBytes) {
                     lastProgressAt = bytesRead
                     emitReadProgress(requestId, bytesRead, totalBytes.toLong())
