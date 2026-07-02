@@ -14,6 +14,7 @@ import { buildConfigKey, readItemValue } from "../utils/HomeConfigUtils";
 import { reportUserError } from "@/lib/uiErrors";
 import { toast } from "@/hooks/use-toast";
 import { useAuthoritativeConfigValueState } from "@/hooks/useAuthoritativeConfigValueState";
+import { getActiveBaseUrl, updateHasChanges } from "@/lib/config/appConfigStore";
 
 export function useConfigActions() {
   const api = getC64API();
@@ -39,6 +40,12 @@ export function useConfigActions() {
     authoritativeValues.replaceEntry(key, value);
     try {
       await api.setConfigValue(category, itemName, value);
+      // useC64SetConfig/useC64UpdateConfigBatch (Config-page and slider
+      // writes) already set this; this direct api.setConfigValue call
+      // bypassed both, so Home's Video Mode/Turbo/SID address/UltiSID
+      // filter/lighting selects never enabled "Revert Changes". See
+      // HARD9-051.
+      updateHasChanges(getActiveBaseUrl(), true);
       if (!options.suppressToast) {
         toast({ title: successTitle });
       }
