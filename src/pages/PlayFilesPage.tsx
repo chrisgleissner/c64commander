@@ -1387,20 +1387,17 @@ export default function PlayFilesPage() {
     );
   };
 
-  const handlePlaylistSelect = useCallback(
-    (item: PlaylistItem, selected: boolean) => {
-      setSelectedPlaylistIds((prev) => {
-        const next = new Set(prev);
-        if (selected) {
-          next.add(item.id);
-        } else {
-          next.delete(item.id);
-        }
-        return next;
-      });
-    },
-    [queueBackgroundDueAtUpdate],
-  );
+  const handlePlaylistSelect = useCallback((item: PlaylistItem, selected: boolean) => {
+    setSelectedPlaylistIds((prev) => {
+      const next = new Set(prev);
+      if (selected) {
+        next.add(item.id);
+      } else {
+        next.delete(item.id);
+      }
+      return next;
+    });
+  }, []);
 
   const toggleSelectAllPlaylist = useCallback(() => {
     setSelectedPlaylistIds(allPlaylistSelected ? new Set() : new Set(playlistIds));
