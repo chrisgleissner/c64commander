@@ -142,7 +142,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-082 | Refresh clears only the exact current path; recursive adds serve 10-min-stale cache | sources | P3 | correctness, ux | high | S | OPEN |
 | HARD9-083 | Pre-aborted FTP read still performs the full transfer | sources | P3 | robustness, performance | medium | S | OPEN |
 | HARD9-084 | HVSC cancellation unchecked during deletion pass and finalize | hvsc | P3 | ux, robustness | high | S | FIXED (67a7dd88) |
-| HARD9-085 | CategorySection disables every row while any single write is pending | config | P3 | ux | medium | S | OPEN |
+| HARD9-085 | CategorySection disables every row while any single write is pending | config | P3 | ux | medium | S | FIXED (f6e9f349) |
 | HARD9-086 | Optimistic rollback can resurrect a stale pin on racing writes | config | P3 | correctness | high | S | FIXED (81bd6011) |
 | HARD9-087 | useInteractiveConfigWrite pending/burst flags wrong under concurrent writes | config | P3 | correctness, ux | high | S | OPEN |
 | HARD9-088 | Failed throttled preview snaps the slider thumb back mid-drag | config | P3 | ux, robustness | high | S | OPEN |
@@ -801,10 +801,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (67a7dd88):** Added `ensureNotCancelledLocal()` checks at every remaining stage boundary in the non-native path (before/after the deletion loop, on every deletion-loop iteration, before `promoteLibraryStagingDir`, before `finalize()`, before the songlengths reload). `applyIngestionSuccess` (the shared success helper called by both native and non-native paths) now takes `cancelToken`/`cancelTokens` and calls the existing `ensureNotCancelledWith` check before applying any state, refusing to flip a cancelled ingestion back to "ready" - this closes the race window for both paths in one place instead of chasing every call site. New tests cover the deletion-loop-boundary case (cancel mid-loop via a mocked `deleteLibraryFile`, asserting the loop stops and `promoteLibraryStagingDir` never runs) and `applyIngestionSuccess`'s refusal directly; both proven failing against pre-fix code via `git stash`. `npx vitest run tests/unit/hvsc` (506 tests) and full `npm test -- --run` (658 files / 7807 tests) pass.
 
 ### HARD9-085 — CategorySection disables every row while any single write is pending
-- **Area:** config · **Severity:** P3 · **Dimensions:** ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
+- **Area:** config · **Severity:** P3 · **Dimensions:** ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (f6e9f349)
 - **Files:** `src/pages/ConfigBrowserPage.tsx:186,838-841`
 - **Failure scenario:** `isLoading={setConfig.isPending || ...}` uses the section's shared mutation state: while one item's PUT is in flight (spaced by the write throttle), every other row in the category renders disabled — the second control appears dead until the first write settles.
 - **Fix sketch:** Drop `setConfig.isPending` from row-level `isLoading`; rely on per-item `authoritativeValues.pending[key]`.
+- **Resolution (f6e9f349):** Implemented the fix sketch exactly: dropped `setConfig.isPending` from row-level `isLoading`, keeping only the per-item `authoritativeValues.pending[key]` check. New test renders two items in one category with `setConfig.isPending: true` and confirms both rows report `isLoading=false`, proven failing against the pre-fix code via `git stash`.
 
 ### HARD9-086 — Optimistic rollback can resurrect a stale pin when two rapid writes to the same item race
 - **Area:** config · **Severity:** P3 · **Dimensions:** correctness · **Confidence:** high · **Effort:** S · **Status:** FIXED (81bd6011)
