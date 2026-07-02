@@ -10,6 +10,13 @@ import java.io.File
 import java.lang.reflect.Method
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -348,5 +355,84 @@ class HvscIngestionPluginTest {
                     String
 
     assertEquals("something entirely unrelated", result)
+  }
+
+  // ---------------------------------------------------------------------
+  // HARD9-013: withContext(Dispatchers.Main) inside a cancelled coroutine's
+  // catch block never runs its lambda, so a bare `call.reject(...)` there
+  // (as ingestHvsc's CancellationException and generic Exception catch
+  // blocks used before the fix) never reaches the JS side - the awaited
+  // ingestHvsc() promise hangs forever after cancelIngestion() is called.
+  // These two tests isolate and deterministically prove the exact
+  // coroutines mechanism the fix (withContext(NonCancellable +
+  // Dispatchers.Main)) relies on, without needing to race the real
+  // ingestion pipeline's asynchronous cancellation timing.
+  // ---------------------------------------------------------------------
+
+  @Test
+  fun withContextOnCancelledJobSkipsItsBlockWithoutNonCancellable() {
+    val delivered = CountDownLatch(1)
+    val started = CountDownLatch(1)
+    val proceed = CountDownLatch(1)
+    val completion = CountDownLatch(1)
+    val job = Job()
+    val scope = CoroutineScope(Dispatchers.IO + job)
+
+    scope.launch {
+      started.countDown()
+      proceed.await(5, TimeUnit.SECONDS) // park until the test cancels the job from outside
+      try {
+        withContext(Dispatchers.Main) { delivered.countDown() }
+      } catch (_: CancellationException) {
+        // expected: withContext threw on entry instead of running its block
+      } finally {
+        completion.countDown()
+      }
+    }
+
+    assertTrue(started.await(5, TimeUnit.SECONDS))
+    job.cancel()
+    proceed.countDown()
+
+    assertTrue(completion.await(5, TimeUnit.SECONDS))
+    assertEquals(1L, delivered.count) // never counted down - block never ran
+  }
+
+  @Test
+  fun withContextNonCancellableStillDeliversAfterJobCancellation() {
+    val delivered = CountDownLatch(1)
+    val started = CountDownLatch(1)
+    val proceed = CountDownLatch(1)
+    val completion = CountDownLatch(1)
+    val job = Job()
+    val scope = CoroutineScope(Dispatchers.IO + job)
+
+    scope.launch {
+      started.countDown()
+      proceed.await(5, TimeUnit.SECONDS)
+      try {
+        withContext(NonCancellable + Dispatchers.Main) { delivered.countDown() }
+      } finally {
+        completion.countDown()
+      }
+    }
+
+    assertTrue(started.await(5, TimeUnit.SECONDS))
+    job.cancel()
+    proceed.countDown()
+
+    // Unlike the cancelled-and-thrown-immediately path in the previous test,
+    // withContext(NonCancellable + ...) really does dispatch its block onto
+    // Dispatchers.Main - which under Robolectric queues onto the shadow main
+    // looper instead of running inline, so this thread (the JUnit runner
+    // thread, which Robolectric treats as "main") must pump it explicitly.
+    val deadline = System.currentTimeMillis() + 5000
+    while (completion.count > 0 && System.currentTimeMillis() < deadline) {
+      org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+      Thread.sleep(10)
+    }
+
+    assertTrue(completion.await(0, TimeUnit.SECONDS))
+    assertTrue(delivered.await(0, TimeUnit.SECONDS))
   }
 }

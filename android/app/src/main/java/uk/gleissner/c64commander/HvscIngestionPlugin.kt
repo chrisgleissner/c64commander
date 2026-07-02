@@ -30,6 +30,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -646,7 +647,13 @@ open class HvscIngestionPlugin : Plugin() {
                         cancelled,
                         traceFields(call)
                 )
-                withContext(Dispatchers.Main) {
+                // NonCancellable: this coroutine's Job is already cancelled at this
+                // point (that's how we got into this catch block), and plain
+                // withContext(Dispatchers.Main) checks the Job on entry and throws
+                // immediately without running its block - the reject would never
+                // reach the JS side, hanging the awaited promise forever. See
+                // HARD9-013.
+                withContext(NonCancellable + Dispatchers.Main) {
                   call.reject("HVSC ingestion cancelled", "HVSC_CANCELLED", cancelled)
                 }
               } catch (error: Exception) {
@@ -685,7 +692,11 @@ open class HvscIngestionPlugin : Plugin() {
                         error,
                         traceFields(call)
                 )
-                withContext(Dispatchers.Main) {
+                // Same reasoning as the CancellationException catch above: this
+                // path also runs after activeJob?.cancel() when a non-cancellation
+                // error races the cancel, so it needs NonCancellable too. See
+                // HARD9-013.
+                withContext(NonCancellable + Dispatchers.Main) {
                   call.reject(buildIngestionFailureMessage(error), error)
                 }
               } finally {
