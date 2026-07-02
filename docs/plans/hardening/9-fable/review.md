@@ -124,7 +124,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-064 | Session restore revives "playing" UI for a dead device session | playback | P3 | correctness, ux | medium | S | FIXED (aea8d46d) |
 | HARD9-065 | resolveVolumeSyncDecision is dead code diverging from live sync logic | playback | P3 | robustness | high | S | FIXED (d9fe1f3a) |
 | HARD9-066 | handlePlaylistSelect carries a bogus dependency | playback | P3 | robustness | high | S | FIXED (38fa569e) |
-| HARD9-067 | Snapshot restore halts CIA TOD clocks / flips ICR mask bits | snapshot | P3 | correctness | medium | S | OPEN |
+| HARD9-067 | Snapshot restore halts CIA TOD clocks / flips ICR mask bits | snapshot | P3 | correctness | medium | S | FIXED (c021c0fc) |
 | HARD9-068 | resolveLocalDiskBlob cross-source fallback can mount the wrong disk | disks | P3 | correctness | medium | S | FIXED (99df20ef) |
 | HARD9-069 | Snapshot store silently drops oldest snapshot at the 100 cap | snapshot | P3 | data-loss, ux | high | S | OPEN |
 | HARD9-070 | FTP control encoding never set — non-ASCII filenames unfetchable | native | P3 | correctness, ux | medium | S | OPEN |
@@ -674,10 +674,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (38fa569e):** Changed the deps array to `[]` per the fix sketch; the body only calls `setSelectedPlaylistIds` with a functional updater and closes over its own parameters.
 
 ### HARD9-067 — Snapshot restore halts the CIA TOD clocks and can flip interrupt-mask bits (ICR write semantics)
-- **Area:** snapshot · **Severity:** P3 · **Dimensions:** correctness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
+- **Area:** snapshot · **Severity:** P3 · **Dimensions:** correctness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (c021c0fc)
 - **Files:** `src/lib/machine/ciaTimerRegisters.ts:26-35`, `src/lib/machine/ramOperations.ts:360-397`, `src/lib/snapshot/cpu/restoreCart.ts:145-172`
 - **Failure scenario:** The CIA skip predicate excludes only $xx04-$xx07 (+mirrors); TOD ($xx08-$xx0B) and ICR ($xx0D) are written on every program-type restore. On the 6526, writing TOD hours stops the TOD clock until a tenths write restarts it — the restore writes ascending (tenths first, hours last), leaving both CIAs' TOD clocks halted after every restore; TOD-timed software breaks silently. ICR is write-mask semantics: a captured read-value like $83 re-enables interrupt sources the program had disabled → spurious NMIs/IRQs.
 - **Fix sketch:** Extend the skip predicate to $xx08-$xx0B and $xx0D (+mirrors) in both restore paths.
+- **Resolution (c021c0fc):** Implemented the fix sketch exactly - extended `isCiaTimerRegister` (the single shared predicate both restore paths already call) to also match $xx08-$xx0B and $xx0D. Added a dedicated unit test file (`ciaTimerRegisters.test.ts`) pinning every register in both CIA pages and their mirrors, since this small pure function had no direct test coverage before (only indirect coverage via its two consumers).
 
 ### HARD9-068 — resolveLocalDiskBlob cross-source fallback can silently mount the wrong same-named disk
 - **Area:** disks · **Severity:** P3 · **Dimensions:** correctness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (99df20ef)
