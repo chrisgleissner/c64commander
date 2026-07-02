@@ -375,6 +375,70 @@ describe("archive client", () => {
     expect(binary.bytes).toEqual(new Uint8Array([1, 8, 96]));
   });
 
+  it("rejects immediately on abort instead of waiting for CapacitorHttp to settle (HARD9-079)", async () => {
+    // Regression: CapacitorHttp.request() has no AbortSignal support - Cancel
+    // used to roll the UI back while the native transfer (up to 30s) kept
+    // running underneath, and the caller's promise stayed pending until it
+    // finally settled on its own. requestJson wraps every error into a
+    // generic Error, so the caller-visible signal is "did the promise settle
+    // promptly", not the wrapped error's name (callers already discriminate
+    // cancellation via controller.signal.aborted, not error.name).
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    let resolveRequest!: (value: unknown) => void;
+    vi.mocked(CapacitorHttp.request).mockReturnValue(
+      new Promise((resolve) => {
+        resolveRequest = resolve;
+      }) as never,
+    );
+
+    const client = createArchiveClient(buildDefaultArchiveClientConfig());
+    const controller = new AbortController();
+    const searchPromise = client.search({ name: "joyride", category: "apps" }, { signal: controller.signal });
+
+    let settled = false;
+    searchPromise.catch(() => {}).finally(() => {
+      settled = true;
+    });
+
+    controller.abort();
+    // A real macrotask tick (not a fixed number of microtask ticks, which is
+    // fragile given the actual promise chain depth) - guarantees every
+    // pending microtask has drained without ever resolving the underlying
+    // CapacitorHttp promise. If the fix isn't in place, `settled` stays
+    // false forever.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(settled).toBe(true);
+    await expect(searchPromise).rejects.toBeInstanceOf(Error);
+
+    // The native request eventually settling afterward must not surface
+    // as an unhandled rejection or otherwise blow up.
+    resolveRequest({
+      status: 200,
+      data: [{ id: "100", category: 40, name: "Joyride" }],
+      headers: { "content-type": "application/json" },
+    });
+    await Promise.resolve();
+  });
+
+  it("rejects immediately when the signal is already aborted before the native request starts (HARD9-079)", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({
+      status: 200,
+      data: [{ id: "100", category: 40, name: "Joyride" }],
+      headers: { "content-type": "application/json" },
+    } as never);
+
+    const client = createArchiveClient(buildDefaultArchiveClientConfig());
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      client.search({ name: "joyride", category: "apps" }, { signal: controller.signal }),
+    ).rejects.toBeInstanceOf(Error);
+    expect(vi.mocked(CapacitorHttp.request)).not.toHaveBeenCalled();
+  });
+
   it("falls back to fetch when native platform detection throws", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockImplementation(() => {
       throw new Error("platform probe failed");
