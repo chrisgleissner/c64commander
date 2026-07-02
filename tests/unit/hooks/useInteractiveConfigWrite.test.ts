@@ -429,6 +429,72 @@ describe("useInteractiveConfigWrite", () => {
     expect(result.current.isPending).toBe(false);
   });
 
+  it("keeps isPending true across overlapping writes instead of dropping it when only the first settles (HARD9-087)", async () => {
+    // Regression: two overlapping write() calls shared one
+    // writeBurstActiveRef/isPending flag, so whichever call settled FIRST
+    // reset it to false while the second was still in flight - isPending
+    // read false during an active write, and a third write starting right
+    // then saw burst=false, skipping the 400ms coalescing quiet window.
+    let resolveFirst!: () => void;
+    const firstPending = new Promise<void>((resolve) => {
+      resolveFirst = resolve;
+    });
+    let resolveSecond!: () => void;
+    const secondPending = new Promise<void>((resolve) => {
+      resolveSecond = resolve;
+    });
+    mockMutateAsync.mockReturnValueOnce(firstPending).mockReturnValueOnce(secondPending);
+
+    const { result } = renderHook(() => useInteractiveConfigWrite({ category: "Audio Mixer" }), {
+      wrapper: createWrapper(),
+    });
+
+    let firstWritePromise!: Promise<void>;
+    act(() => {
+      firstWritePromise = result.current.write({ "SID1 Volume": "1" });
+    });
+
+    // Wait until the first write's job has actually reached its mutation
+    // call, so the second write() below is processed as a separate,
+    // sequential job rather than merged into the still-queued first one.
+    await act(async () => {
+      while (mockMutateAsync.mock.calls.length < 1) {
+        await Promise.resolve();
+      }
+    });
+
+    // Scheduled while the first write is still in flight, so it is treated
+    // as a burst continuation and its own beforeRun applies the 400ms quiet
+    // window before its mutation call.
+    let secondWritePromise!: Promise<void>;
+    act(() => {
+      secondWritePromise = result.current.write({ "SID1 Pan": "2" });
+    });
+
+    await act(async () => {
+      resolveFirst();
+      await firstWritePromise;
+    });
+
+    // The second write's own mutation has not even started yet (it is still
+    // in its quiet-window wait) - isPending must stay true, not drop to
+    // false just because the first write finished.
+    expect(result.current.isPending).toBe(true);
+
+    await act(async () => {
+      // Let the second write's quiet-window setTimeout (400ms) elapse under
+      // fake timers so its beforeRun resolves and its mutation call fires.
+      await vi.advanceTimersByTimeAsync(500);
+      while (mockMutateAsync.mock.calls.length < 2) {
+        await Promise.resolve();
+      }
+      resolveSecond();
+      await secondWritePromise;
+    });
+
+    expect(result.current.isPending).toBe(false);
+  });
+
   it("resets isPending to false when mutateAsync rejects", async () => {
     mockMutateAsync.mockRejectedValueOnce(new Error("oops"));
 
