@@ -908,59 +908,74 @@ open class HvscIngestionPlugin : Plugin() {
 
   @PluginMethod
   fun queryAllSongs(call: PluginCall) {
-    var dbHelper: HvscMetadataDbHelper? = null
-    var db: SQLiteDatabase? = null
-    try {
-      dbHelper = HvscMetadataDbHelper(this)
-      db = dbHelper.readableDatabase
-      val songs = JSArray()
-      db.rawQuery("SELECT virtual_path, file_name FROM hvsc_song_index ORDER BY virtual_path", null)
-              .use { cursor ->
-                val pathIdx = cursor.getColumnIndexOrThrow("virtual_path")
-                val nameIdx = cursor.getColumnIndexOrThrow("file_name")
-                while (cursor.moveToNext()) {
-                  val row = JSObject()
-                  row.put("virtualPath", cursor.getString(pathIdx))
-                  row.put("fileName", cursor.getString(nameIdx))
-                  songs.put(row)
+    // Unlike ingestHvsc, this used to run synchronously on Capacitor's single
+    // plugin handler thread: scanning the full ~50k-row index and building a
+    // multi-MB JSArray blocked ALL other native plugin dispatch (FTP, telnet,
+    // background-execution start/stop, secure storage) for its duration. Moved
+    // the query itself onto scope's Dispatchers.IO so the plugin thread is
+    // freed immediately; only the resolve/reject hop back to Main. See
+    // HARD9-075.
+    scope.launch {
+      var dbHelper: HvscMetadataDbHelper? = null
+      var db: SQLiteDatabase? = null
+      try {
+        dbHelper = HvscMetadataDbHelper(this@HvscIngestionPlugin)
+        db = dbHelper.readableDatabase
+        val songs = JSArray()
+        db.rawQuery("SELECT virtual_path, file_name FROM hvsc_song_index ORDER BY virtual_path", null)
+                .use { cursor ->
+                  val pathIdx = cursor.getColumnIndexOrThrow("virtual_path")
+                  val nameIdx = cursor.getColumnIndexOrThrow("file_name")
+                  while (cursor.moveToNext()) {
+                    val row = JSObject()
+                    row.put("virtualPath", cursor.getString(pathIdx))
+                    row.put("fileName", cursor.getString(nameIdx))
+                    songs.put(row)
+                  }
                 }
-              }
-      val payload = JSObject()
-      payload.put("songs", songs)
-      payload.put("totalSongs", songs.length())
-      call.resolve(payload)
-    } catch (error: Exception) {
-      AppLogger.error(
-              pluginContextOrNull(),
-              logTag,
-              "Failed to query all HVSC songs",
-              "HvscIngestionPlugin",
-              error,
-              traceFields(call)
-      )
-      call.reject(error.message ?: "HVSC queryAllSongs failed", error)
-    } finally {
-      try {
-        db?.close()
+        val payload = JSObject()
+        payload.put("songs", songs)
+        payload.put("totalSongs", songs.length())
+        // NonCancellable: handleOnDestroy() cancels `scope`, and a plain
+        // withContext(Dispatchers.Main) checks the Job on entry and throws
+        // immediately without running its block if that races this resolve -
+        // the promise would hang instead of settling. See HARD9-013.
+        withContext(NonCancellable + Dispatchers.Main) { call.resolve(payload) }
       } catch (error: Exception) {
-        AppLogger.warn(
+        AppLogger.error(
                 pluginContextOrNull(),
                 logTag,
-                "Failed to close HVSC metadata database after queryAllSongs",
+                "Failed to query all HVSC songs",
                 "HvscIngestionPlugin",
-                error
+                error,
+                traceFields(call)
         )
-      }
-      try {
-        dbHelper?.close()
-      } catch (error: Exception) {
-        AppLogger.warn(
-                pluginContextOrNull(),
-                logTag,
-                "Failed to close HVSC metadata db helper after queryAllSongs",
-                "HvscIngestionPlugin",
-                error
-        )
+        withContext(NonCancellable + Dispatchers.Main) {
+          call.reject(error.message ?: "HVSC queryAllSongs failed", error)
+        }
+      } finally {
+        try {
+          db?.close()
+        } catch (error: Exception) {
+          AppLogger.warn(
+                  pluginContextOrNull(),
+                  logTag,
+                  "Failed to close HVSC metadata database after queryAllSongs",
+                  "HvscIngestionPlugin",
+                  error
+          )
+        }
+        try {
+          dbHelper?.close()
+        } catch (error: Exception) {
+          AppLogger.warn(
+                  pluginContextOrNull(),
+                  logTag,
+                  "Failed to close HVSC metadata db helper after queryAllSongs",
+                  "HvscIngestionPlugin",
+                  error
+          )
+        }
       }
     }
   }
