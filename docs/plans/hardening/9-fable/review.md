@@ -147,7 +147,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-087 | useInteractiveConfigWrite pending/burst flags wrong under concurrent writes | config | P3 | correctness, ux | high | S | FIXED (d03ffcb9) |
 | HARD9-088 | Failed throttled preview snaps the slider thumb back mid-drag | config | P3 | ux, robustness | high | S | FIXED (1e2a8e67) |
 | HARD9-089 | Category Refresh drops optimistic pins even when the refetch failed | config | P3 | robustness, correctness | medium | S | FIXED (e7261121) |
-| HARD9-090 | Duplicate "Automatic Demo Mode" control with duplicate DOM id | settings | P3 | a11y, correctness | high | S | OPEN |
+| HARD9-090 | Duplicate "Automatic Demo Mode" control with duplicate DOM id | settings | P3 | a11y, correctness | high | S | FIXED (2a13bb1c) |
 | HARD9-091 | Notification-duration slider persists on every drag tick | settings | P3 | performance, robustness | high | S | OPEN |
 | HARD9-092 | Orientation lock re-applied on every SettingsPage mount (incl. swipe transits) | settings | P3 | robustness, performance | high | S | OPEN |
 | HARD9-093 | Mouse-drag gesture state stranded by a missed pointerup before intent lock | shell | P3 | robustness, ux | medium | S | OPEN |
@@ -850,10 +850,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (e7261121):** Implemented the fix sketch: `handleRefresh` now checks `refreshed?.isSuccess` immediately after `await refetch()` and, on failure, reports a `CONFIG_REFRESH` error (via the existing `reportUserError` path) and returns before touching `clearMatching`/the Audio Mixer re-sync — a pending pin now survives a failed refresh instead of reverting to stale data with no indication anything went wrong. New test pins a value, fails the Refresh's refetch, and asserts both the error report and that the pin is still shown; proven failing against the pre-fix unconditional re-sync via a targeted revert of just this hunk.
 
 ### HARD9-090 — Duplicate "Automatic Demo Mode" control with duplicate DOM id
-- **Area:** settings · **Severity:** P3 · **Dimensions:** a11y, correctness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** settings · **Severity:** P3 · **Dimensions:** a11y, correctness · **Confidence:** high · **Effort:** S · **Status:** FIXED (2a13bb1c)
 - **Files:** `src/pages/SettingsPage.tsx:1312-1334,1785-1821`
 - **Failure scenario:** With `demo_mode_enabled` on, both the Connection card and the Config card render `<Checkbox id="demo-mode-enabled">` + matching Label. Clicking the second card's label activates the first card's checkbox (first-id-wins); screen readers mis-associate; two identical settings ship with no hint they're the same switch.
 - **Fix sketch:** Delete the leftover duplicate (Connection card is canonical), or give it a unique id.
+- **Resolution (2a13bb1c):** Implemented the fix sketch's first option: deleted the leftover duplicate "Config" card entirely - it had no other content, so removing the single checkbox row that was its whole body meant removing the whole card. The Connection card's instance (already first in the DOM) is canonical. New regression test (assert exactly one `#demo-mode-enabled` element) proven failing against the pre-fix duplicate via `git stash`; a pre-existing `getByRole`/accessible-name-based test passed on both sides of the fix, since `<label for>` always resolves to the first matching element regardless of which label is queried - exactly the underlying bug, and not surfaced by that style of query.
 
 ### HARD9-091 — Notification-duration slider persists to storage on every drag tick
 - **Area:** settings · **Severity:** P3 · **Dimensions:** performance, robustness · **Confidence:** high · **Effort:** S · **Status:** OPEN
