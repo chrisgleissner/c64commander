@@ -125,6 +125,7 @@ vi.mock("@/hooks/useC64Connection", () => ({
       },
     },
   }),
+  useConnectionRoutingEpoch: () => 0,
   useC64Drives: () => ({
     data: {
       drives: [{ a: { enabled: true } }, { b: { enabled: true } }],

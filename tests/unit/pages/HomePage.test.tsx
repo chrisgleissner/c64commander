@@ -520,6 +520,7 @@ vi.mock("@/hooks/useC64Connection", () => ({
   useC64Connection: () => ({
     status: statusPayloadRef.current,
   }),
+  useConnectionRoutingEpoch: () => 0,
   useC64Drives: () => ({
     data: drivesPayloadRef.current,
     refetch: vi.fn().mockImplementation(() => queryClientMockRef.current.fetchQuery()),
