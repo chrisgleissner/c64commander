@@ -14,6 +14,9 @@ export type MockC64UPlugin = {
     baseUrl: string;
     port: number;
     ftpPort?: number;
+    // Per-boot bearer token the WebView must present to the loopback mock servers
+    // (HTTP `X-Mock-Token` header, FTP password). Absent on the web stub.
+    token?: string;
   }>;
   stopServer: () => Promise<void>;
 };

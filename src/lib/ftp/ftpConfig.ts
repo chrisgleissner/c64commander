@@ -14,6 +14,10 @@ const SAVED_DEVICES_STORAGE_KEY = "c64u_saved_devices:v1";
 const DEFAULT_FTP_PORT = 21;
 
 let runtimeFtpPortOverride: number | null = null;
+// Session-scoped FTP password used while demo mode is active: the per-boot mock
+// token the authenticated mock FTP server requires. Mirrors the port override —
+// set when the mock server starts, cleared when it stops (HARD10-005).
+let runtimeFtpPasswordOverride: string | null = null;
 
 const isValidFtpPort = (port: number) => Number.isInteger(port) && port >= 1 && port <= 65535;
 
@@ -94,6 +98,16 @@ export const setRuntimeFtpPortOverride = (port: number | null) => {
 
 export const clearRuntimeFtpPortOverride = () => {
   runtimeFtpPortOverride = null;
+};
+
+export const setRuntimeFtpPasswordOverride = (password: string | null) => {
+  runtimeFtpPasswordOverride = password && password.length > 0 ? password : null;
+};
+
+export const getRuntimeFtpPasswordOverride = () => runtimeFtpPasswordOverride;
+
+export const clearRuntimeFtpPasswordOverride = () => {
+  runtimeFtpPasswordOverride = null;
 };
 
 export const getFtpBridgeUrl = () => {

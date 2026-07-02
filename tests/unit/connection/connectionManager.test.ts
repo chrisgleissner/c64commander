@@ -88,6 +88,7 @@ const startMockServer = vi.fn(async () => {
 const stopMockServer = vi.fn(async () => undefined);
 const getActiveMockBaseUrl = vi.fn(() => null);
 const getActiveMockFtpPort = vi.fn(() => null);
+const getActiveMockToken = vi.fn(() => null);
 const startDeviceDiscovery = vi.fn(async () => ({
   candidates: [],
   scannedHosts: 0,
@@ -101,6 +102,7 @@ vi.mock("../../../src/lib/mock/mockServer", () => ({
   stopMockServer,
   getActiveMockBaseUrl,
   getActiveMockFtpPort,
+  getActiveMockToken,
 }));
 
 vi.mock("../../../src/lib/deviceDiscovery/discoveryManager", () => ({

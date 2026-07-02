@@ -209,6 +209,35 @@ class MockFtpServerTest {
   }
 
   @Test
+  fun ftpRejectsWrongPasswordWhenTokenConfigured() {
+    val rootDir = tempFolder.newFolder("ftp-root-token")
+    // A non-blank password (the per-boot token, HARD10-005) requires an exact
+    // match — the isNullOrBlank() bypass only applies to the unauthenticated
+    // null-password mode used by other tests.
+    val server = MockFtpServer(rootDir, "boot-token")
+    val port = server.start()
+
+    val socket = Socket("127.0.0.1", port)
+    val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
+    val writer = BufferedWriter(OutputStreamWriter(socket.getOutputStream()))
+
+    assertTrue(reader.readLine().startsWith("220"))
+    writer.write("USER user\r\n")
+    writer.flush()
+    assertTrue(reader.readLine().startsWith("331"))
+    writer.write("PASS wrong\r\n")
+    writer.flush()
+    assertTrue("Wrong password must be rejected", reader.readLine().startsWith("530"))
+
+    writer.write("PASS boot-token\r\n")
+    writer.flush()
+    assertTrue("Correct token must log in", reader.readLine().startsWith("230"))
+
+    socket.close()
+    server.stop()
+  }
+
+  @Test
   fun idleCommandConnectionIsReleasedBySocketReadTimeout() {
     val rootDir = tempFolder.newFolder("ftp-root7")
     val server = MockFtpServer(rootDir, null)

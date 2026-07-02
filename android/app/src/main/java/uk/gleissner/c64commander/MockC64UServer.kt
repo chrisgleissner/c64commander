@@ -51,6 +51,12 @@ private class RequestTooLargeException : Exception()
 class MockC64UServer(
         private val state: MockC64UState,
         private val timingProfile: MockTimingProfile = MockTimingProfile.defaultProfile(),
+        // Per-boot random token the WebView must present as `X-Mock-Token`. When
+        // set (non-empty), every non-OPTIONS request without an exact match is
+        // rejected 401, authenticating this otherwise-open loopback surface with
+        // zero user-visible change (HARD10-005). Null/empty = unauthenticated
+        // (legacy behaviour, used by tests that don't exercise auth).
+        private val authToken: String? = null,
 ) {
   constructor(state: MockC64UState) : this(state, MockTimingProfile.defaultProfile())
 
@@ -274,7 +280,13 @@ class MockC64UServer(
 
   private fun handleRequest(request: HttpRequest): HttpResponse {
     if (request.method == "OPTIONS") {
+      // Preflight must stay unauthenticated so browser CORS still works; it carries
+      // no side effects and returns no device data (HARD10-005).
       return HttpResponse(204, emptyMap(), ByteArray(0))
+    }
+
+    if (!authToken.isNullOrEmpty() && request.headers["x-mock-token"] != authToken) {
+      return errorResponse(401, "Unauthorized")
     }
 
     val path = request.path
@@ -687,6 +699,7 @@ class MockC64UServer(
               200 -> "OK"
               204 -> "No Content"
               400 -> "Bad Request"
+              401 -> "Unauthorized"
               404 -> "Not Found"
               413 -> "Payload Too Large"
               else -> "Internal Server Error"
@@ -696,7 +709,7 @@ class MockC64UServer(
             mutableMapOf(
                     "Access-Control-Allow-Origin" to "*",
                     "Access-Control-Allow-Methods" to "GET,POST,PUT,OPTIONS",
-                    "Access-Control-Allow-Headers" to "Content-Type, X-Password, X-C64U-Host",
+                    "Access-Control-Allow-Headers" to "Content-Type, X-Password, X-C64U-Host, X-Mock-Token",
                     "Connection" to "close",
             )
     headers.putAll(response.headers)

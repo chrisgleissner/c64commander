@@ -11,7 +11,8 @@ import { MockC64U } from "@/lib/native/mockC64u";
 
 let activeMockBaseUrl: string | null = null;
 let activeFtpPort: number | null = null;
-let startPromise: Promise<{ baseUrl: string; ftpPort?: number }> | null = null;
+let activeMockToken: string | null = null;
+let startPromise: Promise<{ baseUrl: string; ftpPort?: number; token?: string }> | null = null;
 
 const loadMockConfigPayload = async () => {
   const module = await import("@/lib/mock/mockConfig");
@@ -20,12 +21,15 @@ const loadMockConfigPayload = async () => {
 
 export const getActiveMockBaseUrl = () => activeMockBaseUrl;
 export const getActiveMockFtpPort = () => activeFtpPort;
+export const getActiveMockToken = () => activeMockToken;
 
 export const startMockServer = async (): Promise<{
   baseUrl: string;
   ftpPort?: number;
+  token?: string;
 }> => {
-  if (activeMockBaseUrl) return { baseUrl: activeMockBaseUrl, ftpPort: activeFtpPort || undefined };
+  if (activeMockBaseUrl)
+    return { baseUrl: activeMockBaseUrl, ftpPort: activeFtpPort || undefined, token: activeMockToken || undefined };
   if (startPromise) return startPromise;
 
   startPromise = (async () => {
@@ -34,7 +38,8 @@ export const startMockServer = async (): Promise<{
       const response = await MockC64U.startServer({ config });
       activeMockBaseUrl = response.baseUrl;
       activeFtpPort = response.ftpPort ?? null;
-      return { baseUrl: response.baseUrl, ftpPort: response.ftpPort };
+      activeMockToken = response.token ?? null;
+      return { baseUrl: response.baseUrl, ftpPort: response.ftpPort, token: response.token };
     } catch (error) {
       addErrorLog("Mock C64U server failed to start", {
         error: (error as Error).message,
@@ -66,5 +71,6 @@ export const stopMockServer = async () => {
   } finally {
     activeMockBaseUrl = null;
     activeFtpPort = null;
+    activeMockToken = null;
   }
 };

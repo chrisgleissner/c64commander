@@ -498,4 +498,60 @@ class MockC64UServerTest {
     connection.disconnect()
     server.stop()
   }
+
+  @Test
+  fun requestsRequireMatchingTokenWhenConfigured() {
+    val state =
+            MockC64UState.fromPayload(
+                    JSONObject().apply {
+                      put("general", JSONObject().apply { put("baseUrl", "http://localhost") })
+                    }
+            )
+    val server = MockC64UServer(state, MockTimingProfile.defaultProfile(), "sekrit-token")
+    server.start()
+    waitForServer(server)
+
+    // No token -> 401 (HARD10-005).
+    val noToken = URL("${server.baseUrl}/v1/info").openConnection() as HttpURLConnection
+    noToken.requestMethod = "GET"
+    assertEquals(401, noToken.responseCode)
+    noToken.disconnect()
+
+    // Wrong token -> 401.
+    val wrongToken = URL("${server.baseUrl}/v1/info").openConnection() as HttpURLConnection
+    wrongToken.requestMethod = "GET"
+    wrongToken.setRequestProperty("X-Mock-Token", "nope")
+    assertEquals(401, wrongToken.responseCode)
+    wrongToken.disconnect()
+
+    // Correct token -> 200.
+    val withToken = URL("${server.baseUrl}/v1/info").openConnection() as HttpURLConnection
+    withToken.requestMethod = "GET"
+    withToken.setRequestProperty("X-Mock-Token", "sekrit-token")
+    assertEquals(200, withToken.responseCode)
+    withToken.disconnect()
+
+    server.stop()
+  }
+
+  @Test
+  fun optionsPreflightIsAllowedWithoutToken() {
+    val state =
+            MockC64UState.fromPayload(
+                    JSONObject().apply {
+                      put("general", JSONObject().apply { put("baseUrl", "http://localhost") })
+                    }
+            )
+    val server = MockC64UServer(state, MockTimingProfile.defaultProfile(), "sekrit-token")
+    server.start()
+    waitForServer(server)
+
+    // Preflight must stay unauthenticated so browser CORS still works (HARD10-005).
+    val options = URL("${server.baseUrl}/v1/info").openConnection() as HttpURLConnection
+    options.requestMethod = "OPTIONS"
+    assertEquals(204, options.responseCode)
+    options.disconnect()
+
+    server.stop()
+  }
 }

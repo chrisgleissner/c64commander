@@ -40,6 +40,8 @@ vi.mock("@/lib/secureStorage", () => ({
 vi.mock("@/lib/ftp/ftpConfig", () => ({
   setRuntimeFtpPortOverride: vi.fn(),
   clearRuntimeFtpPortOverride: vi.fn(),
+  setRuntimeFtpPasswordOverride: vi.fn(),
+  clearRuntimeFtpPasswordOverride: vi.fn(),
 }));
 
 vi.mock("@/lib/mock/mockServer", () => ({
@@ -47,6 +49,7 @@ vi.mock("@/lib/mock/mockServer", () => ({
   stopMockServer: vi.fn(),
   getActiveMockBaseUrl: () => null,
   getActiveMockFtpPort: () => null,
+  getActiveMockToken: () => null,
 }));
 
 vi.mock("@/lib/config/appSettings", () => ({

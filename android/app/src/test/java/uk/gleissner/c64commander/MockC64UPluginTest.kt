@@ -77,6 +77,11 @@ class MockC64UPluginTest {
       assertNotNull(resolved?.getInteger("port"))
       assertNotNull(resolved?.getString("baseUrl"))
       assertNotNull(resolved?.getInteger("ftpPort"))
+      // Per-boot auth token must be returned so the WebView can authenticate
+      // (HARD10-005).
+      val token = resolved?.getString("token")
+      assertNotNull(token)
+      assertTrue("Expected a non-trivial token, got: $token", (token?.length ?: 0) >= 32)
     }
 
     val stopCall = mock(PluginCall::class.java)

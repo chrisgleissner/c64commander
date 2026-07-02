@@ -12,6 +12,7 @@ import {
   applyC64APIConfigFromStorage,
   applyC64APIRuntimeConfig,
   buildBaseUrlFromDeviceHost,
+  getC64API,
   getC64APIConfigSnapshot,
   getDeviceHostFromBaseUrl,
   resolveDeviceHostFromStorage,
@@ -22,8 +23,19 @@ import {
   stripPortFromDeviceHost,
 } from "@/lib/c64api/hostConfig";
 import { getPassword as loadStoredPassword, getPasswordForDevice } from "@/lib/secureStorage";
-import { clearRuntimeFtpPortOverride, setRuntimeFtpPortOverride } from "@/lib/ftp/ftpConfig";
-import { getActiveMockBaseUrl, getActiveMockFtpPort, startMockServer, stopMockServer } from "@/lib/mock/mockServer";
+import {
+  clearRuntimeFtpPasswordOverride,
+  clearRuntimeFtpPortOverride,
+  setRuntimeFtpPasswordOverride,
+  setRuntimeFtpPortOverride,
+} from "@/lib/ftp/ftpConfig";
+import {
+  getActiveMockBaseUrl,
+  getActiveMockFtpPort,
+  getActiveMockToken,
+  startMockServer,
+  stopMockServer,
+} from "@/lib/mock/mockServer";
 import {
   loadAutomaticDemoModeEnabled,
   loadDiscoveryProbeTimeoutMs,
@@ -613,6 +625,9 @@ const stopDemoServer = async () => {
   } finally {
     demoServerStartedThisSession = false;
     clearRuntimeFtpPortOverride();
+    clearRuntimeFtpPasswordOverride();
+    // applyC64APIConfigFromStorage() re-routes to the real device and clears the
+    // mock token via applyC64APIRuntimeConfig.
     await applyC64APIConfigFromStorage();
   }
 };
@@ -879,6 +894,12 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
     applyC64APIRuntimeConfig(activeMockUrl, undefined, mockHost);
     const activeFtpPort = getActiveMockFtpPort();
     if (activeFtpPort) setRuntimeFtpPortOverride(activeFtpPort);
+    // Authenticate the WebView to the (now token-gated) loopback mock servers.
+    // applyC64APIRuntimeConfig above cleared any prior mock token, so re-apply it
+    // here for both the HTTP (X-Mock-Token) and FTP (password) surfaces.
+    const activeToken = getActiveMockToken();
+    getC64API().setMockToken(activeToken ?? undefined);
+    setRuntimeFtpPasswordOverride(activeToken);
     addLog("info", "Demo mode using mock C64U", {
       trigger,
       baseUrl: activeMockUrl,
@@ -902,11 +923,13 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
 const transitionToSmokeMockConnected = async (trigger: DiscoveryTrigger) => {
   cancelActiveDiscovery();
   dismissDemoInterstitial();
-  const { baseUrl, ftpPort } = await startMockServer();
+  const { baseUrl, ftpPort, token } = await startMockServer();
   demoServerStartedThisSession = true;
   const mockHost = getDeviceHostFromBaseUrl(baseUrl);
   applyC64APIRuntimeConfig(baseUrl, undefined, mockHost);
   if (ftpPort) setRuntimeFtpPortOverride(ftpPort);
+  getC64API().setMockToken(token ?? undefined);
+  setRuntimeFtpPasswordOverride(token ?? null);
   setSnapshot({
     lastProbeAtMs: Date.now(),
     lastProbeSucceededAtMs: Date.now(),

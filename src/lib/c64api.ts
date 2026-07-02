@@ -817,6 +817,10 @@ export interface DrivesResponse {
 
 export class C64API {
   private password?: string;
+  // Per-boot token for the in-app demo-mode mock server. Sent as `X-Mock-Token`
+  // so the (now authenticated) loopback mock accepts WebView requests. Only ever
+  // set while routing to the mock; cleared on every routing change (HARD10-005).
+  private mockToken?: string;
   private deviceHost: string;
   private apiBaseUrl: string;
   private readonly inFlightReadRequests = new Map<string, Promise<unknown>>();
@@ -866,6 +870,14 @@ export class C64API {
     return this.password;
   }
 
+  setMockToken(token?: string) {
+    this.mockToken = token;
+  }
+
+  getMockToken() {
+    return this.mockToken;
+  }
+
   getDeviceHost() {
     return this.deviceHost;
   }
@@ -894,6 +906,9 @@ export class C64API {
     const headers: Record<string, string> = {};
     if (this.password) {
       headers["X-Password"] = this.password;
+    }
+    if (this.mockToken) {
+      headers["X-Mock-Token"] = this.mockToken;
     }
     const baseUrl = this.getBaseUrl();
     if (baseUrl.includes(WEB_PROXY_PATH) || isLocalProxy(baseUrl)) {
@@ -2984,6 +2999,10 @@ export function applyC64APIRuntimeConfig(
   api.setBaseUrl(resolvedBaseUrl);
   api.setPassword(password);
   api.setDeviceHost(resolvedDeviceHost);
+  // Clear any prior mock token by default; the demo-mode caller re-applies it via
+  // setMockToken() right after this call so the token never leaks to a real device
+  // (HARD10-005).
+  api.setMockToken(undefined);
   addLog("info", "API routing updated (runtime)", {
     baseUrl: resolvedBaseUrl,
     deviceHost: resolvedDeviceHost,
