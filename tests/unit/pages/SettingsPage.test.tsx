@@ -1339,6 +1339,22 @@ describe("SettingsPage", () => {
     expect(saveDebugLoggingEnabled).toHaveBeenCalledWith(false);
   });
 
+  it("renders the Automatic Demo Mode control exactly once, not duplicated across cards (HARD9-090)", () => {
+    // Regression: the Connection card and a separate "Config" card both
+    // rendered a checkbox with the same id="demo-mode-enabled". Per the
+    // HTML spec, <label for> resolution always finds the FIRST element
+    // with a given id, so the second card's label silently activated the
+    // first card's checkbox instead of its own - a duplicate DOM id that
+    // getByRole's accessible-name matching does not surface as ambiguous.
+    featureFlagsRef.current.demo_mode_enabled = true;
+    vi.mocked(loadDemoModeEnabled).mockReturnValue(true);
+
+    const { container } = renderSettingsPage();
+
+    expect(container.querySelectorAll("#demo-mode-enabled")).toHaveLength(1);
+    expect(screen.getAllByText(/automatic demo mode/i)).toHaveLength(1);
+  });
+
   it("disabling the demo-mode feature flag clears the persisted demo-mode setting", async () => {
     featureFlagsRef.current.demo_mode_enabled = true;
     vi.mocked(loadDemoModeEnabled).mockReturnValue(true);
