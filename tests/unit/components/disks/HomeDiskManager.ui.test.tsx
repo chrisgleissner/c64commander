@@ -340,6 +340,75 @@ describe("HomeDiskManager UI & Interactions", () => {
     });
   });
 
+  it("keeps a local disk's mounted override while the poll still shows the same uploaded filename (HARD9-038)", async () => {
+    // Display name deliberately differs from the path basename: once the
+    // override is (correctly or incorrectly) cleared, resolveMountedDiskId's
+    // poll fallback can never resolve a "local"-location disk, so the label
+    // falls back to the raw polled image_file string instead of disk.name.
+    // Asserting on the display name - not the path basename that also
+    // happens to be the polled filename - is what actually distinguishes
+    // "override kept" from "override cleared, coincidentally same text".
+    const disk = createMockDisk({
+      id: "local-optimistic-disk",
+      name: "Local Optimistic Disk",
+      path: "/local-optimistic.d64",
+      location: "local",
+    });
+    let drivesResult = {
+      data: { drives: [{ a: createMockDrive() }, { b: createMockDrive() }] },
+      dataUpdatedAt: 1,
+    };
+
+    (useDiskLibrary as any).mockReturnValue({
+      disks: [disk],
+      runtimeFiles: {},
+      removeDisk: mockRemoveDisk,
+    });
+    (useC64Drives as any).mockImplementation(() => drivesResult);
+    (mountDiskToDrive as any).mockResolvedValue(undefined);
+
+    const view = render(<HomeDiskManager />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mount" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("drive-mounted-label-a")).toHaveTextContent("Local Optimistic Disk");
+    });
+
+    // The firmware never reports "local"-location disks by path (only
+    // "ultimate" ones), but it does echo back the uploaded filename. A poll
+    // landing after the mount that still shows that same filename must not
+    // clear the override - only a poll showing something else (or empty)
+    // should.
+    drivesResult = {
+      data: {
+        drives: [
+          { a: createMockDrive({ image_file: "local-optimistic.d64", image_path: "/" }) },
+          { b: createMockDrive() },
+        ],
+      },
+      dataUpdatedAt: Date.now() + 1000,
+    };
+    view.rerender(<HomeDiskManager />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("drive-mounted-label-a")).toHaveTextContent("Local Optimistic Disk");
+    });
+
+    // A later poll that genuinely shows a different (or no) image still clears it.
+    drivesResult = {
+      data: { drives: [{ a: createMockDrive({ image_file: "", image_path: "" }) }, { b: createMockDrive() }] },
+      dataUpdatedAt: Date.now() + 2000,
+    };
+    view.rerender(<HomeDiskManager />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("drive-mounted-label-a")).toHaveTextContent("No disk mounted");
+    });
+  });
+
   it("clears a drive power override when fresh drive data after the toggle disagrees", async () => {
     let drivesResult = {
       data: { drives: [{ a: createMockDrive({ enabled: true }) }, { b: createMockDrive() }] },

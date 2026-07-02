@@ -58,6 +58,7 @@ import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 import {
   createDiskEntry,
   getDiskFolderPath,
+  getDiskName,
   getLeafFolderName,
   isDiskImagePath,
   normalizeDiskPath,
@@ -409,6 +410,28 @@ export const HomeDiskManager = () => {
       Object.keys(next).forEach((drive) => {
         const setAt = mountedByDriveSetAtRef.current[drive];
         if (typeof setAt !== "number" || drivesDataUpdatedAt < setAt) return;
+        const overrideDiskId = next[drive];
+        if (overrideDiskId) {
+          const overriddenDisk = disksById[overrideDiskId];
+          if (overriddenDisk?.location === "local") {
+            // resolveMountedDiskId's poll-based fallback only ever matches
+            // "ultimate"-location disks (it compares image_path/image_file
+            // against disk.path), so a local (uploaded-blob) disk's mount can
+            // never be re-derived from the poll once this override is gone.
+            // Clearing it as soon as any poll lands (the original design,
+            // intended for error/power overrides) made rotation and
+            // eject-before-delete stop working the instant the mount
+            // succeeded. Keep the override while the poll still shows the
+            // same uploaded filename mounted; only clear when the drive
+            // genuinely reports something else (empty or a different
+            // image). See HARD9-038.
+            const driveInfo = drivesData?.drives?.find((entry) => entry[drive])?.[drive];
+            const polledBasename = driveInfo?.image_file ? getDiskName(driveInfo.image_file) : null;
+            if (polledBasename && polledBasename === getDiskName(overriddenDisk.path)) {
+              return;
+            }
+          }
+        }
         delete next[drive];
         delete mountedByDriveSetAtRef.current[drive];
         changed = true;
