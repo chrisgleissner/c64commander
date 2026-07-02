@@ -144,7 +144,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-084 | HVSC cancellation unchecked during deletion pass and finalize | hvsc | P3 | ux, robustness | high | S | FIXED (67a7dd88) |
 | HARD9-085 | CategorySection disables every row while any single write is pending | config | P3 | ux | medium | S | FIXED (f6e9f349) |
 | HARD9-086 | Optimistic rollback can resurrect a stale pin on racing writes | config | P3 | correctness | high | S | FIXED (81bd6011) |
-| HARD9-087 | useInteractiveConfigWrite pending/burst flags wrong under concurrent writes | config | P3 | correctness, ux | high | S | OPEN |
+| HARD9-087 | useInteractiveConfigWrite pending/burst flags wrong under concurrent writes | config | P3 | correctness, ux | high | S | FIXED (d03ffcb9) |
 | HARD9-088 | Failed throttled preview snaps the slider thumb back mid-drag | config | P3 | ux, robustness | high | S | OPEN |
 | HARD9-089 | Category Refresh drops optimistic pins even when the refetch failed | config | P3 | robustness, correctness | medium | S | FIXED (e7261121) |
 | HARD9-090 | Duplicate "Automatic Demo Mode" control with duplicate DOM id | settings | P3 | a11y, correctness | high | S | OPEN |
@@ -815,10 +815,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (81bd6011):** Implemented the fix sketch exactly: `restoreEntry` now takes a required third argument (the value this write pinned) and only applies the delete/restore if the store's current entry for that key still equals it - otherwise a newer write has since taken ownership of the key and its own success/failure handling is authoritative. Updated all three call sites to pass their pinned value. New tests cover both the two-writes-racing case (older rollback must not clobber a newer pin) and the ordinary single-write rollback case (must still apply normally), proven failing against the pre-fix 2-arg signature via `git stash`.
 
 ### HARD9-087 — useInteractiveConfigWrite pending/burst flags are wrong under concurrent writes
-- **Area:** config · **Severity:** P3 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** config · **Severity:** P3 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** FIXED (d03ffcb9)
 - **Files:** `src/hooks/useInteractiveConfigWrite.ts:150-186`
 - **Failure scenario:** Two overlapping writes on one lane: the first to settle runs `finally: writeBurstActiveRef.current = false; setIsPending(false)` while the second is still in flight — `isPending` reads false during an active write; a third write sees `burst=false` → `quietUntil=0`, skipping the 400ms coalescing window.
 - **Fix sketch:** In-flight counter (`pendingCountRef`); derive `isPending`/burst from `count > 0`.
+- **Resolution (d03ffcb9):** Implemented the fix sketch exactly: replaced the shared boolean with `pendingCountRef`, incremented at the start of each `write()` and decremented in its `finally`; `isPending` now only flips to false once the count reaches zero, so an overlapping write's own settlement can no longer mask a still-in-flight sibling. New test starts two overlapping writes, resolves the first while the second is still pending, and asserts `isPending` stays `true` until the second also settles; proven failing against the pre-fix boolean flag via `git stash`.
 
 ### HARD9-088 — Failed throttled preview snaps the slider thumb back mid-drag
 - **Area:** config · **Severity:** P3 · **Dimensions:** ux-responsiveness, robustness · **Confidence:** high · **Effort:** S · **Status:** OPEN
