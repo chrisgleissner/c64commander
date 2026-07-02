@@ -21,11 +21,14 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.any
 import org.robolectric.RobolectricTestRunner
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 @RunWith(RobolectricTestRunner::class)
 class SecureStoragePluginTest {
@@ -43,6 +46,11 @@ class SecureStoragePluginTest {
     field.isAccessible = true
     field.set(target, bridge)
   }
+
+  private fun memoryPrefs(context: Context, name: String) =
+    context.getSharedPreferences(name, Context.MODE_PRIVATE).also {
+      it.edit().clear().commit()
+    }
 
   @Test
   fun setPasswordRejectsMissingValue() {
@@ -111,6 +119,123 @@ class SecureStoragePluginTest {
   }
 
   @Test
+  fun encryptedPrefsFactoryIsSynchronizedAndCachedAcrossOperations() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    setPluginBridge(plugin, context)
+    val prefs = memoryPrefs(context, "secure-storage-plugin-cache-test")
+    var factoryCalls = 0
+    plugin.encryptedPrefsFactory = {
+      factoryCalls += 1
+      prefs
+    }
+
+    val setCall = mock(PluginCall::class.java)
+    org.mockito.Mockito.`when`(setCall.getString("value")).thenReturn("secret")
+    plugin.setPassword(setCall)
+    verify(setCall).resolve()
+
+    val getCall = mock(PluginCall::class.java)
+    var resolved: JSObject? = null
+    doAnswer { invocation: org.mockito.invocation.InvocationOnMock ->
+      resolved = invocation.getArgument(0) as JSObject
+      null
+    }.`when`(getCall).resolve(org.mockito.Mockito.any())
+    plugin.getPassword(getCall)
+
+    val clearCall = mock(PluginCall::class.java)
+    plugin.clearPassword(clearCall)
+    verify(clearCall).resolve()
+
+    assertEquals("secret", resolved?.getString("value"))
+    assertEquals(1, factoryCalls)
+  }
+
+  @Test
+  fun concurrentPasswordReadsShareOneEncryptedPrefsCreation() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    setPluginBridge(plugin, context)
+    val prefs = memoryPrefs(context, "secure-storage-plugin-concurrent-cache-test")
+    val factoryCalls = AtomicInteger(0)
+    plugin.encryptedPrefsFactory = {
+      factoryCalls.incrementAndGet()
+      Thread.sleep(50)
+      prefs
+    }
+
+    val workers = 6
+    val executor = Executors.newFixedThreadPool(workers)
+    val ready = CountDownLatch(workers)
+    val start = CountDownLatch(1)
+    val done = CountDownLatch(workers)
+    repeat(workers) {
+      executor.execute {
+        ready.countDown()
+        start.await(2, TimeUnit.SECONDS)
+        plugin.getPassword(mock(PluginCall::class.java))
+        done.countDown()
+      }
+    }
+
+    assertTrue(ready.await(2, TimeUnit.SECONDS))
+    start.countDown()
+    assertTrue(done.await(2, TimeUnit.SECONDS))
+    executor.shutdownNow()
+    assertEquals(1, factoryCalls.get())
+  }
+
+  @Test
+  fun setPasswordRecoversFromCorruptedEncryptedPrefsAndRetriesOnce() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    setPluginBridge(plugin, context)
+    val prefs = memoryPrefs(context, "secure-storage-plugin-recovery-test")
+    var factoryCalls = 0
+    plugin.encryptedPrefsFactory = {
+      factoryCalls += 1
+      if (factoryCalls == 1) throw RuntimeException("corrupt keyset")
+      prefs
+    }
+
+    val setCall = mock(PluginCall::class.java)
+    org.mockito.Mockito.`when`(setCall.getString("value")).thenReturn("secret")
+    plugin.setPassword(setCall)
+
+    verify(setCall).resolve()
+    verify(setCall, never()).reject(any(), any(Exception::class.java))
+    assertEquals(2, factoryCalls)
+
+    val getCall = mock(PluginCall::class.java)
+    var resolved: JSObject? = null
+    doAnswer { invocation: org.mockito.invocation.InvocationOnMock ->
+      resolved = invocation.getArgument(0) as JSObject
+      null
+    }.`when`(getCall).resolve(org.mockito.Mockito.any())
+    plugin.getPassword(getCall)
+
+    assertEquals("secret", resolved?.getString("value"))
+    assertEquals(2, factoryCalls)
+  }
+
+  @Test
+  fun getPasswordReturnsNullAfterEncryptedPrefsRecovery() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    setPluginBridge(plugin, context)
+    plugin.encryptedPrefsFactory = { throw RuntimeException("corrupt keyset") }
+
+    val getCall = mock(PluginCall::class.java)
+    var resolved: JSObject? = null
+    doAnswer { invocation: org.mockito.invocation.InvocationOnMock ->
+      resolved = invocation.getArgument(0) as JSObject
+      null
+    }.`when`(getCall).resolve(org.mockito.Mockito.any())
+
+    plugin.getPassword(getCall)
+
+    verify(getCall).resolve(org.mockito.Mockito.any())
+    verify(getCall, never()).reject(any(), any(Exception::class.java))
+    assertEquals(null, resolved?.getString("value"))
+  }
+
+  @Test
   fun setPasswordRejectsWhenPrefsProviderFails() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     setPluginBridge(plugin, context)
@@ -122,6 +247,7 @@ class SecureStoragePluginTest {
     plugin.setPassword(call)
 
     verify(call).reject(any(), any(Exception::class.java))
+    verify(call, never()).resolve()
   }
 
   @Test
@@ -134,6 +260,7 @@ class SecureStoragePluginTest {
     plugin.getPassword(call)
 
     verify(call).reject(any(), any(Exception::class.java))
+    verify(call, never()).resolve(org.mockito.Mockito.any())
   }
 
   @Test
@@ -146,5 +273,6 @@ class SecureStoragePluginTest {
     plugin.clearPassword(call)
 
     verify(call).reject(any(), any(Exception::class.java))
+    verify(call, never()).resolve()
   }
 }
