@@ -78,7 +78,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-018 | Save-to-App / revert baseline / verification read a stale persistent cache | config | P1 | correctness, data-loss | high | M | OPEN |
 | HARD9-019 | Full trace ZIP exported on every recorded error | diagnostics | P1 | performance, ux | high | S | FIXED (4c292809) |
 | HARD9-020 | Unguarded localStorage log writes; O(n) parse/stringify per log line | diagnostics | P1 | robustness, correctness, perf | high | M | FIXED (24cd3ce4) |
-| HARD9-021 | Closed diagnostics overlay copies full trace/log stores on every event | diagnostics | P1 | performance, ux | high | M | OPEN |
+| HARD9-021 | Closed diagnostics overlay copies full trace/log stores on every event | diagnostics | P1 | performance, ux | high | M | FIXED (7a72f6e7) |
 | HARD9-022 | CONSERVATIVE preset gets no half-open probe; user CTAs hard-fail in circuit window | transport | P2 | ux, correctness | high | S | FIXED (9ab556cb) |
 | HARD9-023 | Background requests retry 3× with zero delay, holding the REST lane ~9s | transport | P2 | ux, perf, robustness | high | S | FIXED (3ceecd75) |
 | HARD9-024 | Circuit/state-gate error toasts classified "unknown", never auto-clear | transport | P2 | ux, correctness | high | S | FIXED (22147b34) |
@@ -316,11 +316,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (24cd3ce4):** Implemented all three parts of the fix sketch. `persistLogsNow` wraps the write in try/catch, halving and retrying once on failure (warns, never throws, on a second failure). `addLog` sanitizes `details` through a circular-safe JSON round-trip at capture time, protecting every later serialization point (storage, `formatLogsForShare`), not just the immediate write. Reads/writes go through an in-memory cache with 500ms debounced persistence instead of a full parse/stringify per call. Discovered mid-fix that `window.setTimeout` is unsafe here (some test environments provide a minimal `window` with `dispatchEvent` but no timer methods) and switched to the global `setTimeout`/`clearTimeout`.
 
 ### HARD9-021 — Closed diagnostics overlay copies full trace/log stores on every event
-- **Area:** diagnostics · **Severity:** P1 · **Dimensions:** performance, ux-responsiveness · **Confidence:** high · **Effort:** M · **Status:** OPEN
+- **Area:** diagnostics · **Severity:** P1 · **Dimensions:** performance, ux-responsiveness · **Confidence:** high · **Effort:** M · **Status:** FIXED (7a72f6e7)
 - **Files:** `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx:111-113,185-198`, `src/lib/tracing/traceSession.ts:130-132,242`, `src/lib/logging.ts:69,106-119`, `src/App.tsx:257`
 - **Failure scenario:** `GlobalDiagnosticsOverlay` is always mounted. Every trace event append dispatches `c64u-traces-updated` → `setTraceEvents(getTraceEvents())`, copying the entire up-to-25,000-element array and re-rendering the overlay — even while closed. A single REST poll emits ~3 events = 3 full copies + renders. Every `addLog` dispatches → `setLogs(getLogs())` AND `setErrorLogs(getErrorLogs())`, each re-parsing the full 500-entry localStorage blob (`getErrorLogs` calls `getLogs` again) — one log line costs three full JSON parses. Idle polling alone drives continuous O(25k) main-thread work over long sessions.
 - **Evidence:** Listeners registered unconditionally at `GlobalDiagnosticsOverlay.tsx:185-198`; `getTraceEvents()` returns `[...events]`.
 - **Fix sketch:** Subscribe/refresh only while `overlayOpen` (seed state on open); have `getErrorLogs` filter an already-fetched list; batch/throttle update events.
+- **Resolution (7a72f6e7):** Both listener-registration effects (logs/error-logs, trace events) now only subscribe while `overlayOpen` is true and unsubscribe on close, seeding a fresh snapshot on open per the fix sketch. The `getErrorLogs` re-parsing concern was already resolved by HARD9-020's in-memory log cache landed earlier this session, so no separate change was needed for that half of the evidence.
 
 ---
 
