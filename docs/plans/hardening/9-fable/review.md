@@ -134,7 +134,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-074 | 7-Zip probe subprocess has no timeout — wedged probe bricks ingestion | native | P3 | robustness, ux | medium | S | FIXED (cef0d129) |
 | HARD9-075 | queryAllSongs materializes 50k rows on the shared Capacitor plugin thread | native | P3 | performance, ux | high | S | FIXED (3a1f6469) |
 | HARD9-076 | Device-discovery probe leaks HttpURLConnection on body-read failure | native | P3 | robustness, performance | high | S | FIXED (9003d8e9) |
-| HARD9-077 | MainActivity.onCreate does synchronous filesystem repair on main thread | native | P3 | ux, performance | high | S | OPEN |
+| HARD9-077 | MainActivity.onCreate does synchronous filesystem repair on main thread | native | P3 | ux, performance | high | S | FIXED (e2c09eb8) |
 | HARD9-078 | Recursive FTP listing's timed_out flag dropped by the JS contract | native | P3 | correctness | high | S | FIXED (2b5a6dda) |
 | HARD9-079 | Native CommoServe transport ignores AbortSignal — Cancel doesn't cancel | sources | P3 | robustness, perf, ux | high | M | FIXED (ac5b8c17) |
 | HARD9-080 | Shared preset-refresh promise: unmount-abort → unhandled rejection, stuck status | sources | P3 | robustness, correctness | high | S | FIXED (c5c8393f) |
@@ -765,10 +765,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (9003d8e9):** Implemented the fix sketch exactly: captured the connection outside the try body and added a `finally { openedConnection?.disconnect() }`, the only path that reliably runs regardless of which branch the probe takes. Left the existing explicit success/4xx `disconnect()` calls in place (harmless - idempotent). Added an injectable `httpConnectionFactory` (matching the existing `ftpClientFactory` pattern in `FtpClientPlugin`) so the body-read-failure path could be tested directly with a mocked connection; new regression test proven failing (disconnect() never called) against the pre-fix code via a targeted revert.
 
 ### HARD9-077 — MainActivity.onCreate performs synchronous filesystem repair on the main thread
-- **Area:** native · **Severity:** P3 · **Dimensions:** ux-responsiveness, performance · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** native · **Severity:** P3 · **Dimensions:** ux-responsiveness, performance · **Confidence:** high · **Effort:** S · **Status:** FIXED (e2c09eb8)
 - **Files:** `android/.../MainActivity.kt:24-71,97-99`
 - **Failure scenario:** `ensureCapacitorPluginAssetPath()` runs first in `onCreate` on the UI thread: stat, potential `deleteRecursively()` of an arbitrarily large stray directory, mkdirs, writeText. On slow/contended flash this stalls cold start toward the ANR threshold; the deliberate `throw` converts a repairable disk hiccup into a startup crash loop.
 - **Fix sketch:** Keep the fast `isFile` happy path on-thread; move delete/rewrite repair off-thread (complete before bridge first use); log + best-effort continue instead of throwing.
+- **Resolution (e2c09eb8):** Kept the fast `isFile` check synchronous (negligible cost). For the repair case, replaced the synchronous `deleteRecursively()` with an O(1) `renameTo()` that frees the required path immediately regardless of the stray directory's size (rename only needs write access to the parent directory, not the moved directory's contents); the orphaned directory's bulk deletion then runs on a background thread with nothing downstream needing to wait for it - genuinely different from "background thread + join," which would block the main thread for the same duration and not address the ANR risk at all. Both remaining failure paths now log a warning and return instead of throwing. A pre-existing test (`failsFastWhenPluginsPathIsADirectoryThatCannotBeRemoved`) asserted the old throw-and-crash behavior as correct - per this session's test litmus test, that was the bug itself, not a legitimate invariant, so it was rewritten to assert the directory is repaired without throwing.
 
 ### HARD9-078 — Recursive FTP listing's timed_out flag is dropped by the JS contract
 - **Area:** native · **Severity:** P3 · **Dimensions:** correctness · **Confidence:** high · **Effort:** S · **Status:** FIXED (2b5a6dda)
