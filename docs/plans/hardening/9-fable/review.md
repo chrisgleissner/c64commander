@@ -66,7 +66,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-006 | Mid-track duration change never re-arms auto-advance guard | playback | P1 | correctness, ux | high | S | FIXED (e3fdff49) |
 | HARD9-007 | Shuffle doesn't shuffle; Reshuffle irreversibly destroys order | playback | P1 | correctness, data-loss, ux | high | M | FIXED (9fdc7ca9) |
 | HARD9-008 | Songlengths cache cleared on every playlist change → repeated multi-MB re-parses | playback | P1 | performance, ux | high | S | FIXED (51a5a117) |
-| HARD9-009 | Full-range custom snapshot silently saves empty (u16 truncation) | snapshot | P1 | correctness, data-loss | high [verified] | S | OPEN |
+| HARD9-009 | Full-range custom snapshot silently saves empty (u16 truncation) | snapshot | P1 | correctness, data-loss | high [verified] | S | FIXED (247dd9cf) |
 | HARD9-010 | Mount/eject success judged by HTTP status; firmware in-body errors discarded | disks | P1 | correctness, ux, robustness | medium | S | FIXED (c734dd1d) |
 | HARD9-011 | CommoServe-imported disks permanently unmountable after remount | disks | P1 | data-loss, ux, correctness | high | M | PARTIAL FIX (63347046) |
 | HARD9-012 | Disks page hardcodes read-only mounts, breaking in-game saves | disks | P1 | correctness, ux | medium | S | FIXED (d8ed34c4) |
@@ -229,11 +229,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (51a5a117):** Removed the `[playlist, songlengthsFiles]` cache-clearing effect entirely; `loadSonglengthBundleForPath`'s existing path:mtime signature check already invalidates the right cache entries when songlengths files actually change. `applySonglengthsToItems` now skips items that already have a resolved duration, except items tagged `durationSource: "default"` (the HARD9-005 fallback marker) which stay eligible so they can still pick up a real duration later; a successful resolution clears that marker so a later slider drag doesn't re-clobber it. Benefits both the PlayFilesPage enrichment effect and `startPlaylist`'s full-playlist re-resolution pass called out in the failure scenario.
 
 ### HARD9-009 — Full-range custom snapshot ($0000-$FFFF) silently saves an empty snapshot (u16 length truncation)
-- **Area:** snapshot · **Severity:** P1 · **Dimensions:** correctness, data-loss · **Confidence:** high **[verified]** · **Effort:** S · **Status:** OPEN
+- **Area:** snapshot · **Severity:** P1 · **Dimensions:** correctness, data-loss · **Confidence:** high **[verified]** · **Effort:** S · **Status:** FIXED (247dd9cf)
 - **Files:** `src/lib/snapshot/snapshotFormat.ts:109-112`, `src/lib/snapshot/customSnapshotRanges.ts:105-111`, `src/lib/snapshot/snapshotCreation.ts:179-197`
 - **Failure scenario:** User picks Save RAM → Custom and enters 0000–FFFF. `length = 0x10000` passes validation and `dumpRamRanges`, but `writeUint16LE(view, descriptorOffset + 2, range.length)` truncates 0x10000 to 0. The 64KiB of data is appended, but on decode `ranges[0].length === 0` → restore writes nothing and still toasts "Snapshot restored". Silent, discovered only when the user needs the snapshot.
 - **Evidence:** `MemoryRange.length` documented "1–65536" (`snapshotTypes.ts:32`); the CPU-snapshot path explicitly works around this exact overflow (`cpuSnapshot.ts:35-44`) but the custom-range path has no guard or split.
 - **Fix sketch:** In `encodeSnapshot`, reject or split ranges with `length > 0xFFFF` (reuse the CPU_SNAPSHOT_RANGES-style split), or clamp in `validateCustomSnapshotRanges`.
+- **Resolution (247dd9cf):** Implemented both fix-sketch options together since they guard different layers - `validateCustomSnapshotRanges` now splits any range over 0xFFFF bytes into safe sub-ranges (a general split, not the CPU path's stack-page-specific 3-way split, since that reasoning doesn't apply to arbitrary custom ranges), and `encodeSnapshot` throws on any range outside 1-65535 as a defensive backstop at the format's actual writable boundary, so this exact class of silent corruption can't recur even from a future caller mistake.
 
 ### HARD9-010 — Mount/eject success judged by HTTP status only — firmware in-body errors discarded, false "Disk mounted" toasts
 - **Area:** disks · **Severity:** P1 · **Dimensions:** correctness, ux-responsiveness, robustness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (c734dd1d)
