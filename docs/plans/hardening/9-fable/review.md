@@ -149,7 +149,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-089 | Category Refresh drops optimistic pins even when the refetch failed | config | P3 | robustness, correctness | medium | S | FIXED (e7261121) |
 | HARD9-090 | Duplicate "Automatic Demo Mode" control with duplicate DOM id | settings | P3 | a11y, correctness | high | S | FIXED (2a13bb1c) |
 | HARD9-091 | Notification-duration slider persists on every drag tick | settings | P3 | performance, robustness | high | S | FIXED (0f8b213b) |
-| HARD9-092 | Orientation lock re-applied on every SettingsPage mount (incl. swipe transits) | settings | P3 | robustness, performance | high | S | OPEN |
+| HARD9-092 | Orientation lock re-applied on every SettingsPage mount (incl. swipe transits) | settings | P3 | robustness, performance | high | S | FIXED (ea304c83) |
 | HARD9-093 | Mouse-drag gesture state stranded by a missed pointerup before intent lock | shell | P3 | robustness, ux | medium | S | OPEN |
 | HARD9-094 | Deferred startup bootstrap never runs if the app launches hidden | state | P3 | robustness, correctness | medium | S | OPEN |
 | HARD9-095 | Module-scope import.meta.env read in App.tsx (Playwright collection tripwire) | state | P3 | robustness | high | S | OPEN |
@@ -864,10 +864,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (0f8b213b):** Split the handler exactly as sketched: `onValueChange` now only calls `setNotificationDurationMs` (local draft state, updates the "Duration: Ns" label immediately); `onValueCommit` (fires once, on release) calls `saveNotificationDurationMs`. Added a regression test that mocks `Slider` as a native range input distinguishing drag ticks (`onChange`) from release (`onMouseUp`), asserting the save is not called across 3 ticks and is called exactly once, with the final value, after release. Confirmed via git-stash that the test fails against the pre-fix handler (3 calls, one per tick).
 
 ### HARD9-092 — Orientation lock re-applied on every SettingsPage mount (including swipe transits)
-- **Area:** settings · **Severity:** P3 · **Dimensions:** robustness, performance · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** settings · **Severity:** P3 · **Dimensions:** robustness, performance · **Confidence:** high · **Effort:** S · **Status:** FIXED (ea304c83)
 - **Files:** `src/pages/SettingsPage.tsx:890-894`, `src/components/SwipeNavigationLayer.tsx:429-481`, `src/main.tsx:79`
 - **Failure scenario:** `useEffect(() => { void applyScreenOrientationMode(mode); }, [mode])` fires on mount — and SettingsPage is transiently mounted by the swipe runway whenever Settings becomes an adjacent panel during a transition. Every swipe brushing past Settings issues a native `ScreenOrientation.lock()/unlock()` mid-animation, duplicating the startup apply. This is the documented "app re-applies stored orientation" trap generalized; the redundant plugin round-trips land in the most jank-sensitive frame window.
 - **Fix sketch:** Apply inside `commitScreenOrientationMode` and delete the effect; startup application already exists in main.tsx.
+- **Resolution (ea304c83):** Applied exactly as sketched: deleted the mode-keyed mount effect; `commitScreenOrientationMode` (only invoked from the user's own tap on an orientation option) now calls `applyScreenOrientationMode` itself, right after persisting. Startup application in `main.tsx:79` is unchanged and remains the sole source of the mount-time apply. Added regression tests asserting mount alone never calls `applyScreenOrientationMode`, and that a user selection calls it exactly once with the chosen mode; both fail against the pre-fix effect via git-stash.
 
 ### HARD9-093 — Mouse-drag gesture state stranded by a missed pointerup before intent lock
 - **Area:** shell · **Severity:** P3 · **Dimensions:** robustness, ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
