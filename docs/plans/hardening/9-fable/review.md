@@ -81,7 +81,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-021 | Closed diagnostics overlay copies full trace/log stores on every event | diagnostics | P1 | performance, ux | high | M | OPEN |
 | HARD9-022 | CONSERVATIVE preset gets no half-open probe; user CTAs hard-fail in circuit window | transport | P2 | ux, correctness | high | S | FIXED (9ab556cb) |
 | HARD9-023 | Background requests retry 3× with zero delay, holding the REST lane ~9s | transport | P2 | ux, perf, robustness | high | S | FIXED (3ceecd75) |
-| HARD9-024 | Circuit/state-gate error toasts classified "unknown", never auto-clear | transport | P2 | ux, correctness | high | S | OPEN |
+| HARD9-024 | Circuit/state-gate error toasts classified "unknown", never auto-clear | transport | P2 | ux, correctness | high | S | FIXED (22147b34) |
 | HARD9-025 | Password field write race between connection state and secure-storage load | settings | P2 | correctness, data-loss | medium | S | FIXED (df7ddcd9) |
 | HARD9-026 | 600ms drag-settle timer collapses a held swipe mid-gesture | shell | P2 | ux, correctness | high | S | OPEN |
 | HARD9-027 | Diagnostics overlay scroll save/restore targets the wrong scroller (dead code) | shell | P2 | correctness, ux | high | S | OPEN |
@@ -337,11 +337,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (3ceecd75):** Removed the immediate scheduled-timeout retry branch from `C64API.request`; background REST calls now make one attempt per scheduler handler and rely on the polling cadence for later retries. Background timeout aborts still record expected diagnostic responses, but they no longer emit `C64U_HTTP_RETRY`, sleep/re-enter the handler, or occupy the REST/native lane for repeated zero-delay attempts. Updated unit coverage locks one-attempt behavior and expected timeout classification.
 
 ### HARD9-024 — Circuit/state-gate error toasts are classified "unknown" and never auto-clear on recovery
-- **Area:** transport · **Severity:** P2 · **Dimensions:** ux-responsiveness, correctness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** transport · **Severity:** P2 · **Dimensions:** ux-responsiveness, correctness · **Confidence:** high · **Effort:** S · **Status:** FIXED (22147b34)
 - **Files:** `src/lib/uiErrors.ts:107-116,140-151`, `src/lib/deviceInteraction/deviceInteractionManager.ts:644,687`
 - **Failure scenario:** A user CTA during a 6s circuit window throws `"Device circuit open"` (or `"Device not ready for requests"` during OFFLINE). `isTransientConnectivityFailure`'s regex matches neither → errorClass "unknown" → destructive persistent toast. On recovery, `clearConnectivityErrorToastsForHost` clears only `|connectivity`-class entries, so the stale error stays pinned (destructive toasts are pinned first in `limitToasts`) while everything works.
 - **Evidence:** Regex at `uiErrors.ts:142` (`host unreachable|service unavailable|http 503|failed to fetch|net::err|request timed out|networkerror|dns`) vs the gate messages; recovery filter `key.endsWith("|connectivity")`.
 - **Fix sketch:** Add the gate/circuit messages to the connectivity classification (they are by definition transient availability states), or tag gate-thrown errors with a structured class honored by `deriveErrorClass`.
+- **Resolution (22147b34):** Extended `isTransientConnectivityFailure` to include device circuit and state-gate messages, including `"Device circuit open"`, `"Device circuit probe already in flight"`, and `"Device not ready for requests"` (plus FTP/Telnet state-gate variants). Because `deriveErrorClass` and recovery logging both use this shared classifier, these errors now dedupe as `connectivity`, log with `recoverableConnectivityIssue`, and clear through `clearConnectivityErrorToastsForHost` on host recovery. Added unit coverage for direct classification and recovery dismissal.
 
 ### HARD9-025 — Password-field write race between connection state and secure-storage load
 - **Area:** settings · **Severity:** P2 · **Dimensions:** correctness, data-loss · **Confidence:** medium · **Effort:** S · **Status:** FIXED (df7ddcd9)
