@@ -129,7 +129,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-069 | Snapshot store silently drops oldest snapshot at the 100 cap | snapshot | P3 | data-loss, ux | high | S | FIXED (9d2c3222) |
 | HARD9-070 | FTP control encoding never set — non-ASCII filenames unfetchable | native | P3 | correctness, ux | medium | S | FIXED (5b1a1b41) |
 | HARD9-071 | Mock C64U HTTP+FTP servers ship in release builds, registered unconditionally | native | P3 | security, robustness | high | M | OPEN |
-| HARD9-072 | TelnetSocket state read/written across threads without synchronization | native | P3 | correctness, robustness | high | S | OPEN |
+| HARD9-072 | TelnetSocket state read/written across threads without synchronization | native | P3 | correctness, robustness | high | S | FIXED (2eb18602) |
 | HARD9-073 | cancelRead after completion leaves permanent entries in cancelledReads | native | P3 | correctness, performance | high | S | FIXED (8ce52528) |
 | HARD9-074 | 7-Zip probe subprocess has no timeout — wedged probe bricks ingestion | native | P3 | robustness, ux | medium | S | FIXED (cef0d129) |
 | HARD9-075 | queryAllSongs materializes 50k rows on the shared Capacitor plugin thread | native | P3 | performance, ux | high | S | FIXED (3a1f6469) |
@@ -729,10 +729,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Fix sketch:** Move Mock* registration behind `BuildConfig.DEBUG`/a debug source set; fix the prefix check to `startsWith(root + File.separator)`; set an accept timeout.
 
 ### HARD9-072 — TelnetSocket state read/written across threads without synchronization
-- **Area:** native · **Severity:** P3 · **Dimensions:** correctness, robustness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** native · **Severity:** P3 · **Dimensions:** correctness, robustness · **Confidence:** high · **Effort:** S · **Status:** FIXED (2eb18602)
 - **Files:** `android/.../TelnetSocketPlugin.kt:36-38,184-189,275-283`
 - **Failure scenario:** `socket`/`inputStream`/`outputStream` are plain vars written on the single-thread executor but `isConnected` reads them on the Capacitor plugin thread (no volatile/lock) — stale state possible; `handleOnDestroy` calls `closeSocket()` off-executor while a queued read/send may touch the same streams. JS polling `isConnected` after `connect()` can see `connected=false` and tear down a healthy session.
 - **Fix sketch:** Mark fields `@Volatile` (or route `isConnected` through the executor); `handleOnDestroy` should `shutdownNow()` then close without interleaving.
+- **Resolution (2eb18602):** Marked all three fields `@Volatile` (fixes the `isConnected()` cross-thread visibility gap directly). For `handleOnDestroy`, added a bounded `executor.awaitTermination()` between `shutdownNow()` and `closeSocket()` so an in-flight task genuinely finishes touching the fields before the destroy thread closes/nulls them, instead of racing it; bounded to 2x the default read timeout so teardown can't hang on an arbitrarily long caller-specified read timeout. Added a test using the plugin's real executor (not the synchronous test stub) with a socket whose `connect()` blocks until released 100ms later, asserting `handleOnDestroy()` genuinely waits (>=90ms) rather than returning immediately; confirmed it fails against the pre-fix code via git-stash and is stable across repeated runs. The `@Volatile` fix itself is a standard JMM correction whose core property (cross-thread visibility) isn't reliably reproducible in a deterministic unit test - documented as a known test-coverage limit, not left unverified by static reasoning alone.
 
 ### HARD9-073 — cancelRead after completion leaves permanent entries in cancelledReads
 - **Area:** native · **Severity:** P3 · **Dimensions:** correctness, performance · **Confidence:** high · **Effort:** S · **Status:** FIXED (8ce52528)
