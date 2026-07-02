@@ -115,7 +115,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-055 | Error-toast eviction + sliding dedup window silently hide persistent failures | diagnostics | P2 | correctness, ux | high | M | FIXED (59e45da0) |
 | HARD9-056 | Backend-decision correlation set grows unbounded | diagnostics | P2 | performance, robustness | high | S | FIXED (caa0549f) |
 | HARD9-057 | Trace persistence exceeds sessionStorage quota; size accounting broken on restore | diagnostics | P2 | performance, data-loss, correctness | high | S | FIXED (616e19c5) |
-| HARD9-058 | Fetch trace duplicates full request/response payloads in the hot path | diagnostics | P2 | performance | high | M | OPEN |
+| HARD9-058 | Fetch trace duplicates full request/response payloads in the hot path | diagnostics | P2 | performance | high | M | FIXED (7e7172b1) |
 | HARD9-059 | Smoke-mode localStorage fallback is a self-perpetuating latch in prod | state | P2 | robustness, security, correctness | medium | S | OPEN |
 | HARD9-060 | Background health probes pass allowDuringError but the state gate ignores it | transport | P3 | correctness, ux | high | S | FIXED (1d16f3de) |
 | HARD9-061 | Second user CTA during half-open circuit probe hard-fails instead of queueing | transport | P3 | ux | high | S | FIXED (82492610) |
@@ -596,11 +596,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (616e19c5):** Implemented both parts of the fix sketch as written. Added `selectNewestEventsWithinBudget`, a pure suffix-selection helper using the already-tracked `eventSizes`, and had `persistTracesToSession` stringify only the newest slice under a 2MB budget instead of the full session. `restoreTracesFromSession` now builds its deduplicated/sorted merge and hands it to the existing `replaceTraceEvents`, which already rebuilds `eventSizes`/`totalBytes`/`decisionByCorrelation` correctly from a full event list, instead of hand-mutating `events` in place.
 
 ### HARD9-058 — Fetch trace duplicates full request/response payloads in the hot path
-- **Area:** diagnostics · **Severity:** P2 · **Dimensions:** performance · **Confidence:** high · **Effort:** M · **Status:** OPEN
+- **Area:** diagnostics · **Severity:** P2 · **Dimensions:** performance · **Confidence:** high · **Effort:** M · **Status:** FIXED (7e7172b1)
 - **Files:** `src/lib/c64api/requestRuntime.ts:256-346`, `src/lib/tracing/fetchTrace.ts:62,78`
 - **Failure scenario:** Every `/v1/` request is traced: request Blobs/ArrayBuffers are fully copied (`await body.arrayBuffer()` → `new Uint8Array`) just to build a preview — uploading a multi-MB disk image doubles it in memory; every response is `clone()`d and fully read, and for JSON the *entire parsed body* is stored in the trace event, keeping whole config payloads resident in the 25k-event store — inflating HARD9-019/021/057 costs.
 - **Evidence:** `inspectRequestPayload` binary branches; `inspectResponsePayload` JSON branch stores full parse; called unconditionally from `executeTracedFetch`.
 - **Fix sketch:** Build previews from a bounded prefix (first 4-16KB via `blob.slice()`); store `payloadPreview` + size summary above a threshold.
+- **Resolution (7e7172b1):** Took the "size summary above a threshold" half of the fix sketch and applied it symmetrically to both directions, using signals that are free to check upfront rather than a bounded-prefix stream read: request Blobs skip `arrayBuffer()` entirely above 64KB (their `.size` is already known, no read needed for a summary), and responses skip the clone+read+parse above the same threshold when a declared `Content-Length` says so (JSON/text/binary all get a `{ type, sizeBytes, truncated: true }` summary with no preview). Chose "no preview" over a bounded-prefix read for the skipped case deliberately: a preview built from raw un-parsed bytes would bypass the existing key-based sensitive-data redaction (which only runs against parsed structures), so skipping the read is both simpler and strictly safer than adding a redaction gap. Responses without a usable `Content-Length` (chunked) and all bodies under the threshold are unaffected — the exact prior full-read/full-store behavior, since the app's real traffic (config gets/sets, small listings) is almost entirely small.
 
 ### HARD9-059 — Smoke-mode localStorage fallback is a self-perpetuating latch in production
 - **Area:** state · **Severity:** P2 · **Dimensions:** robustness, security, correctness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
