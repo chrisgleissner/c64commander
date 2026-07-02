@@ -29,6 +29,8 @@ export type TrackRecord = {
   sizeBytes?: number | null;
   modifiedAt?: string | null;
   defaultDurationMs?: number | null;
+  /** "default" if defaultDurationMs came from the Default-duration slider fallback, not resolved metadata. */
+  durationSource?: "default" | null;
   subsongCount?: number | null;
   createdAt: string;
   updatedAt: string;

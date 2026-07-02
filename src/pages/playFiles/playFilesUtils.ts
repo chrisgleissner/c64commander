@@ -117,8 +117,21 @@ export const resolvePlayTargetIndex = (playlistLength: number, currentIndex: num
   return currentIndex < playlistLength ? currentIndex : 0;
 };
 
+/**
+ * Applies the "Default duration" fallback to playlist items that don't have a
+ * resolved duration (songlengths/SID header/HVSC md5 lookup), without clobbering
+ * items whose duration was actually resolved. An item is eligible if it has no
+ * duration yet, or if its current duration was itself a prior default-fallback
+ * write (durationSource: "default") — so later slider changes keep tracking
+ * un-resolved items instead of freezing at the first drag. See HARD9-005.
+ */
 export const applyDurationOverrideToPlaylist = (playlist: PlaylistItem[], durationMs: number) => {
-  const updated = playlist.map((entry) => (entry.durationMs === durationMs ? entry : { ...entry, durationMs }));
+  const updated = playlist.map((entry) => {
+    const isDefaultable = entry.durationSource === "default" || entry.durationMs === undefined || entry.durationMs === null;
+    if (!isDefaultable) return entry;
+    if (entry.durationMs === durationMs && entry.durationSource === "default") return entry;
+    return { ...entry, durationMs, durationSource: "default" as const };
+  });
   return updated.some((entry, index) => entry !== playlist[index]) ? updated : playlist;
 };
 

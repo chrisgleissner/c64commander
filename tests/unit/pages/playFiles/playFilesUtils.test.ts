@@ -186,7 +186,11 @@ describe("playFilesUtils", () => {
   });
 
   describe("applyDurationOverrideToPlaylist", () => {
-    const createPlaylistItem = (id: string, durationMs: number | undefined): PlaylistItem => ({
+    const createPlaylistItem = (
+      id: string,
+      durationMs: number | undefined,
+      durationSource?: "default" | null,
+    ): PlaylistItem => ({
       id,
       request: {
         source: "ultimate",
@@ -196,6 +200,7 @@ describe("playFilesUtils", () => {
       label: id,
       path: `/${id}.sid`,
       durationMs,
+      durationSource,
       sourceId: null,
       sizeBytes: null,
       modifiedAt: null,
@@ -209,19 +214,50 @@ describe("playFilesUtils", () => {
       subsongCount: null,
     });
 
-    it("updates every playlist item's duration", () => {
-      const first = createPlaylistItem("first", 180_000);
-      const second = createPlaylistItem("second", 90_000);
-      const playlist = [first, second];
+    it("fills unresolved items and tags them as default-sourced", () => {
+      const unresolved = createPlaylistItem("unresolved", undefined);
+      const playlist = [unresolved];
 
       const updated = applyDurationOverrideToPlaylist(playlist, 12_000);
 
-      expect(updated[0]).toEqual({ ...first, durationMs: 12_000 });
-      expect(updated[1]).toEqual({ ...second, durationMs: 12_000 });
+      expect(updated[0]).toEqual({ ...unresolved, durationMs: 12_000, durationSource: "default" });
     });
 
-    it("returns the original playlist when every duration already matches", () => {
-      const playlist = [createPlaylistItem("first", 12_000), createPlaylistItem("second", 12_000)];
+    it("keeps updating an item that was previously default-sourced", () => {
+      const previouslyDefaulted = createPlaylistItem("defaulted", 90_000, "default");
+      const playlist = [previouslyDefaulted];
+
+      const updated = applyDurationOverrideToPlaylist(playlist, 12_000);
+
+      expect(updated[0]).toEqual({ ...previouslyDefaulted, durationMs: 12_000, durationSource: "default" });
+    });
+
+    it("never clobbers an item whose duration was resolved from metadata", () => {
+      const resolved = createPlaylistItem("resolved", 180_000);
+      const playlist = [resolved];
+
+      const updated = applyDurationOverrideToPlaylist(playlist, 12_000);
+
+      expect(updated).toBe(playlist);
+      expect(updated[0]).toBe(resolved);
+    });
+
+    it("only updates unresolved/default items in a mixed playlist, leaving resolved items untouched", () => {
+      const resolved = createPlaylistItem("resolved", 180_000);
+      const unresolved = createPlaylistItem("unresolved", undefined);
+      const playlist = [resolved, unresolved];
+
+      const updated = applyDurationOverrideToPlaylist(playlist, 12_000);
+
+      expect(updated[0]).toBe(resolved);
+      expect(updated[1]).toEqual({ ...unresolved, durationMs: 12_000, durationSource: "default" });
+    });
+
+    it("returns the original playlist when every eligible duration already matches", () => {
+      const playlist = [
+        createPlaylistItem("resolved", 12_000),
+        createPlaylistItem("defaulted", 12_000, "default"),
+      ];
 
       expect(applyDurationOverrideToPlaylist(playlist, 12_000)).toBe(playlist);
     });

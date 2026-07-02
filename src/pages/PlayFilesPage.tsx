@@ -1097,6 +1097,7 @@ export default function PlayFilesPage() {
         configPreview: entry.configPreview ?? null,
         archiveRef: entry.archiveRef ?? null,
         durationMs: entry.durationMs,
+        durationSource: entry.durationSource ?? null,
         subsongCount: entry.subsongCount,
         sourceId: resolvedSourceId,
         sizeBytes: entry.sizeBytes ?? null,

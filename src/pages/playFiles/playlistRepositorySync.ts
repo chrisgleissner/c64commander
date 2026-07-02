@@ -220,6 +220,7 @@ export const serializePlaylistToRepository = (
       sizeBytes: item.sizeBytes ?? null,
       modifiedAt: item.modifiedAt ?? null,
       defaultDurationMs: item.durationMs ?? null,
+      durationSource: item.durationSource ?? null,
       subsongCount: item.subsongCount ?? null,
       createdAt: item.addedAt ?? nowIso,
       updatedAt: nowIso,

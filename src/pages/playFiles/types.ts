@@ -20,6 +20,16 @@ import type {
 import type { ArchivePlaylistReference } from "@/lib/archive/types";
 import type { DeviceBoundContentOrigin } from "@/lib/savedDevices/deviceBoundOrigin";
 
+/**
+ * Marks a playlist item's `durationMs` as having come from the "Default duration"
+ * slider/input rather than resolved metadata (songlengths, SID header, HVSC md5
+ * lookup). Absent/null means the duration is either unresolved or was genuinely
+ * resolved; only the default-duration write path ever sets "default". This lets
+ * the slider keep updating un-resolved items on every change while never
+ * clobbering an item whose duration was actually resolved (see HARD9-005).
+ */
+export type PlaylistItemDurationSource = "default";
+
 export type PlayableEntry = {
   source: PlaySource;
   name: string;
@@ -33,6 +43,7 @@ export type PlayableEntry = {
   configPreview?: ConfigPreview | null;
   archiveRef?: ArchivePlaylistReference | null;
   durationMs?: number;
+  durationSource?: PlaylistItemDurationSource | null;
   songNr?: number;
   subsongCount?: number;
   sourceId?: string | null;
@@ -54,6 +65,7 @@ export type PlaylistItem = {
   configPreview?: ConfigPreview | null;
   archiveRef?: ArchivePlaylistReference | null;
   durationMs?: number;
+  durationSource?: PlaylistItemDurationSource | null;
   subsongCount?: number;
   sourceId?: string | null;
   sizeBytes?: number | null;
@@ -82,6 +94,7 @@ export type StoredPlaylistState = {
     configOverrides?: ConfigValueOverride[] | null;
     archiveRef?: ArchivePlaylistReference | null;
     durationMs?: number;
+    durationSource?: PlaylistItemDurationSource | null;
     songNr?: number;
     subsongCount?: number;
     sourceId?: string | null;
