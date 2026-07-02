@@ -1281,6 +1281,11 @@ export class C64API {
       }
     }
 
+    const serializeOnDevice = isNativePlatform() && !baseUrl.includes(WEB_PROXY_PATH) && !isLocalProxy(baseUrl);
+    const runNativeSerialized = <R>(handler: () => Promise<R>) =>
+      serializeOnDevice
+        ? serializeNativeDeviceRequest(handler, loadDeviceSafetyConfig().restMaxConcurrency)
+        : handler();
     const runRequest = () =>
       runWithImplicitAction(`rest.${method.toLowerCase()} ${path}`, async (action) =>
         withRestInteraction(
@@ -1298,323 +1303,310 @@ export class C64API {
             bypassBackoff,
             bypassCircuit,
           },
-          async () => {
-            const requestId = buildRequestId();
-            const idleContext = getIdleContext();
-            const scheduledRequest = intent === "background";
-            const requestTimeoutMs = timeoutMs ?? resolveDefaultRestRequestTimeoutMs(intent);
-            const maxAttempts = scheduledRequest ? SCHEDULED_REQUEST_MAX_ATTEMPTS : 1;
-            const requestTrace = await inspectRequestPayload(requestOptions.body);
-            let lastError: unknown = null;
-            const firstAttemptStartedAt = Date.now();
-            const isSuperseded = () => this.requestGeneration !== requestGeneration;
-            const throwIfSuperseded = () => {
-              if (!isSuperseded()) return;
-              addLog("debug", "C64 API request superseded by routing change", {
-                method,
-                path,
-                url,
-                requestId,
-                requestDeviceHost,
-                currentDeviceHost: this.deviceHost,
-              });
-              throw createAbortError();
-            };
+          () =>
+            runNativeSerialized(async () => {
+              const requestId = buildRequestId();
+              const idleContext = getIdleContext();
+              const scheduledRequest = intent === "background";
+              const requestTimeoutMs = timeoutMs ?? resolveDefaultRestRequestTimeoutMs(intent);
+              const maxAttempts = scheduledRequest ? SCHEDULED_REQUEST_MAX_ATTEMPTS : 1;
+              const requestTrace = await inspectRequestPayload(requestOptions.body);
+              let lastError: unknown = null;
+              const firstAttemptStartedAt = Date.now();
+              const isSuperseded = () => this.requestGeneration !== requestGeneration;
+              const throwIfSuperseded = () => {
+                if (!isSuperseded()) return;
+                addLog("debug", "C64 API request superseded by routing change", {
+                  method,
+                  path,
+                  url,
+                  requestId,
+                  requestDeviceHost,
+                  currentDeviceHost: this.deviceHost,
+                });
+                throw createAbortError();
+              };
 
-            for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-              const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-              let status: number | "error" = "error";
-              let responseRecorded = false;
-              recordRestRequest(action, {
-                method,
-                url,
-                normalizedUrl: normalizeUrlPath(url),
-                headers: collectTraceHeaders(headers),
-                body: requestTrace.body,
-                payloadPreview: requestTrace.payloadPreview,
-              });
+              for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+                const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+                let status: number | "error" = "error";
+                let responseRecorded = false;
+                recordRestRequest(action, {
+                  method,
+                  url,
+                  normalizedUrl: normalizeUrlPath(url),
+                  headers: collectTraceHeaders(headers),
+                  body: requestTrace.body,
+                  payloadPreview: requestTrace.payloadPreview,
+                });
 
-              const timedSignal = createTimedRequestSignal(requestSignal, requestTimeoutMs);
-              try {
-                if (shouldBlockSmokeMutation(method)) {
-                  addErrorLog(
-                    "Smoke mode blocked mutating request",
-                    buildErrorLogDetails(new Error("Smoke mode blocked mutating request"), {
-                      path,
-                      url,
-                      method,
-                      baseUrl,
-                      deviceHost: this.deviceHost,
-                    }),
-                  );
-                  console.info("C64U_SMOKE_MUTATION_BLOCKED", JSON.stringify({ method, path, url, requestId }));
-                  throw new Error("Smoke mode blocked mutating request");
-                }
-                if (isFuzzModeEnabled() && !isFuzzSafeBaseUrl(baseUrl)) {
-                  addErrorLog(
-                    "Fuzz mode blocked real device request",
-                    buildErrorLogDetails(new Error("Fuzz mode blocked request"), {
-                      path,
-                      url,
-                      baseUrl,
-                      deviceHost: this.deviceHost,
-                    }),
-                  );
-                  const blocked = new Error("Fuzz mode blocked request") as Error & { __fuzzBlocked?: boolean };
-                  blocked.__fuzzBlocked = true;
-                  throw blocked;
-                }
-
-                if (isSmokeModeEnabled()) {
-                  console.info("C64U_HTTP", JSON.stringify({ method, path, url, requestId, attempt }));
-                }
-
-                // Keep C64U REST calls stateless and avoid cookie bridge churn on native startup.
-                // Native direct-device requests go through CapacitorHttp.request so we can set a
-                // real native connect/read timeout; the patched window.fetch sets none, which lets a
-                // reused-but-dead pooled connection hang indefinitely after the device reboots (see
-                // capacitorHttpDeviceFetch). Web/proxy transports keep the standard fetch path.
-                const useNativeDeviceTransport =
-                  isNativePlatform() && !baseUrl.includes(WEB_PROXY_PATH) && !isLocalProxy(baseUrl);
-                const response = await awaitPromiseWithAbortSignal(
-                  useNativeDeviceTransport
-                    ? capacitorHttpDeviceFetch(url, { method, headers, body: requestOptions.body }, requestTimeoutMs)
-                    : fetchWithSignalCompatibility(
+                const timedSignal = createTimedRequestSignal(requestSignal, requestTimeoutMs);
+                try {
+                  if (shouldBlockSmokeMutation(method)) {
+                    addErrorLog(
+                      "Smoke mode blocked mutating request",
+                      buildErrorLogDetails(new Error("Smoke mode blocked mutating request"), {
+                        path,
                         url,
-                        {
-                          ...requestOptions,
-                          headers,
-                          credentials: requestOptions.credentials ?? "omit",
-                        },
-                        timedSignal.signal,
-                      ),
-                  timedSignal.signal,
-                );
-                throwIfSuperseded();
-
-                status = response.status;
-                const durationMs = Math.max(
-                  0,
-                  Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
-                );
-                const responseTrace = await inspectResponsePayload(response);
-                throwIfSuperseded();
-                if (!response.ok) {
-                  const err = annotateRestFailure(
-                    new Error(buildHttpErrorMessage(response.status, response.statusText)),
-                    "http-status",
-                    { httpStatus: response.status },
-                  );
-                  const failure = classifyError(err, "integration");
-                  const expectedFailure =
-                    (expectedMissing && method === "GET" && response.status === 404) || expectedFailureOption;
-                  recordRestResponse(action, {
-                    method,
-                    path,
-                    url,
-                    status: response.status,
-                    headers: responseTrace.headers,
-                    body: responseTrace.body,
-                    payloadPreview: responseTrace.payloadPreview,
-                    durationMs,
-                    error: err,
-                    expectedFailure,
-                  });
-                  if (!expectedFailure) {
-                    recordTraceError(action, err, failure);
+                        method,
+                        baseUrl,
+                        deviceHost: this.deviceHost,
+                      }),
+                    );
+                    console.info("C64U_SMOKE_MUTATION_BLOCKED", JSON.stringify({ method, path, url, requestId }));
+                    throw new Error("Smoke mode blocked mutating request");
                   }
-                  responseRecorded = true;
-                  this.maybeRaiseAuthChallenge(response.status, suppressAuthChallenge);
-                  throw err;
-                }
+                  if (isFuzzModeEnabled() && !isFuzzSafeBaseUrl(baseUrl)) {
+                    addErrorLog(
+                      "Fuzz mode blocked real device request",
+                      buildErrorLogDetails(new Error("Fuzz mode blocked request"), {
+                        path,
+                        url,
+                        baseUrl,
+                        deviceHost: this.deviceHost,
+                      }),
+                    );
+                    const blocked = new Error("Fuzz mode blocked request") as Error & { __fuzzBlocked?: boolean };
+                    blocked.__fuzzBlocked = true;
+                    throw blocked;
+                  }
 
-                if (skipSuccessBodyInspection) {
-                  noteRestReachable(url, requestDeviceHost);
+                  if (isSmokeModeEnabled()) {
+                    console.info("C64U_HTTP", JSON.stringify({ method, path, url, requestId, attempt }));
+                  }
+
+                  // Keep C64U REST calls stateless and avoid cookie bridge churn on native startup.
+                  // Native direct-device requests go through CapacitorHttp.request so we can set a
+                  // real native connect/read timeout; the patched window.fetch sets none, which lets a
+                  // reused-but-dead pooled connection hang indefinitely after the device reboots (see
+                  // capacitorHttpDeviceFetch). Web/proxy transports keep the standard fetch path.
+                  const useNativeDeviceTransport =
+                    isNativePlatform() && !baseUrl.includes(WEB_PROXY_PATH) && !isLocalProxy(baseUrl);
+                  const response = await awaitPromiseWithAbortSignal(
+                    useNativeDeviceTransport
+                      ? capacitorHttpDeviceFetch(url, { method, headers, body: requestOptions.body }, requestTimeoutMs)
+                      : fetchWithSignalCompatibility(
+                          url,
+                          {
+                            ...requestOptions,
+                            headers,
+                            credentials: requestOptions.credentials ?? "omit",
+                          },
+                          timedSignal.signal,
+                        ),
+                    timedSignal.signal,
+                  );
+                  throwIfSuperseded();
+
+                  status = response.status;
+                  const durationMs = Math.max(
+                    0,
+                    Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+                  );
+                  const responseTrace = await inspectResponsePayload(response);
+                  throwIfSuperseded();
+                  if (!response.ok) {
+                    const err = annotateRestFailure(
+                      new Error(buildHttpErrorMessage(response.status, response.statusText)),
+                      "http-status",
+                      { httpStatus: response.status },
+                    );
+                    const failure = classifyError(err, "integration");
+                    const expectedFailure =
+                      (expectedMissing && method === "GET" && response.status === 404) || expectedFailureOption;
+                    recordRestResponse(action, {
+                      method,
+                      path,
+                      url,
+                      status: response.status,
+                      headers: responseTrace.headers,
+                      body: responseTrace.body,
+                      payloadPreview: responseTrace.payloadPreview,
+                      durationMs,
+                      error: err,
+                      expectedFailure,
+                    });
+                    if (!expectedFailure) {
+                      recordTraceError(action, err, failure);
+                    }
+                    responseRecorded = true;
+                    this.maybeRaiseAuthChallenge(response.status, suppressAuthChallenge);
+                    throw err;
+                  }
+
+                  if (skipSuccessBodyInspection) {
+                    noteRestReachable(url, requestDeviceHost);
+                    this.clearAuthChallengeOnSuccess();
+                    recordRestResponse(action, {
+                      method,
+                      path,
+                      url,
+                      status: response.status,
+                      headers: collectTraceHeaders(response.headers),
+                      body: null,
+                      payloadPreview: null,
+                      durationMs,
+                      error: null,
+                    });
+                    responseRecorded = true;
+                    if (!DEDUPEABLE_READ_METHODS.has(method)) {
+                      this.resetRequestReadState();
+                    }
+                    return { errors: [] } as T;
+                  }
+
+                  const parsedBody = await this.parseResponseJson<T>(response, path);
+                  throwIfSuperseded();
+                  noteRestReachable(url, requestDeviceHost, path === "/v1/info" ? (parsedBody as DeviceInfo) : null);
                   this.clearAuthChallengeOnSuccess();
                   recordRestResponse(action, {
                     method,
                     path,
                     url,
                     status: response.status,
-                    headers: collectTraceHeaders(response.headers),
-                    body: null,
-                    payloadPreview: null,
+                    headers: responseTrace.headers,
+                    body: responseTrace.body ?? parsedBody,
+                    payloadPreview: responseTrace.payloadPreview,
                     durationMs,
                     error: null,
                   });
                   responseRecorded = true;
+
                   if (!DEDUPEABLE_READ_METHODS.has(method)) {
                     this.resetRequestReadState();
                   }
-                  return { errors: [] } as T;
-                }
 
-                const parsedBody = await this.parseResponseJson<T>(response, path);
-                throwIfSuperseded();
-                noteRestReachable(url, requestDeviceHost, path === "/v1/info" ? (parsedBody as DeviceInfo) : null);
-                this.clearAuthChallengeOnSuccess();
-                recordRestResponse(action, {
-                  method,
-                  path,
-                  url,
-                  status: response.status,
-                  headers: responseTrace.headers,
-                  body: responseTrace.body ?? parsedBody,
-                  payloadPreview: responseTrace.payloadPreview,
-                  durationMs,
-                  error: null,
-                });
-                responseRecorded = true;
-
-                if (!DEDUPEABLE_READ_METHODS.has(method)) {
-                  this.resetRequestReadState();
-                }
-
-                return parsedBody;
-              } catch (error) {
-                lastError = error;
-                const fuzzBlocked = (error as { __fuzzBlocked?: boolean }).__fuzzBlocked;
-                const rawMessage = (error as Error).message || "Request failed";
-                const callerAborted = requestSignal?.aborted === true;
-                const superseded = isSuperseded();
-                const cancelledAbort = isAbortLikeError(error) && !timedSignal.didTimeout();
-                const isAbort = isAbortLikeError(error) || timedSignal.didTimeout() || /timed out/i.test(rawMessage);
-                const isNetworkFailure = isNetworkFailureMessage(rawMessage);
-                const failure = classifyError(error);
-                const normalizedError =
-                  !callerAborted && !superseded && (isAbort || isNetworkFailure)
-                    ? resolveHostErrorMessage(rawMessage)
-                    : rawMessage;
-                const durationMs = Math.max(
-                  0,
-                  Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
-                );
-                const elapsedSinceFirstAttemptMs = Date.now() - firstAttemptStartedAt;
-                const scheduledTimeoutFailure =
-                  scheduledRequest &&
-                  !callerAborted &&
-                  !superseded &&
-                  isAbort &&
-                  elapsedSinceFirstAttemptMs <= SCHEDULED_REQUEST_RETRY_GUARD_MS;
-                const retryingScheduledTimeout = scheduledTimeoutFailure && attempt < maxAttempts;
-                if (!responseRecorded) {
-                  const expectedFailure =
-                    callerAborted ||
-                    superseded ||
-                    cancelledAbort ||
-                    scheduledTimeoutFailure ||
-                    expectedFailureOption ||
-                    failure.isExpected ||
-                    isExpectedBackgroundNetworkFailure(
+                  return parsedBody;
+                } catch (error) {
+                  lastError = error;
+                  const fuzzBlocked = (error as { __fuzzBlocked?: boolean }).__fuzzBlocked;
+                  const rawMessage = (error as Error).message || "Request failed";
+                  const callerAborted = requestSignal?.aborted === true;
+                  const superseded = isSuperseded();
+                  const cancelledAbort = isAbortLikeError(error) && !timedSignal.didTimeout();
+                  const isAbort = isAbortLikeError(error) || timedSignal.didTimeout() || /timed out/i.test(rawMessage);
+                  const isNetworkFailure = isNetworkFailureMessage(rawMessage);
+                  const failure = classifyError(error);
+                  const normalizedError =
+                    !callerAborted && !superseded && (isAbort || isNetworkFailure)
+                      ? resolveHostErrorMessage(rawMessage)
+                      : rawMessage;
+                  const durationMs = Math.max(
+                    0,
+                    Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+                  );
+                  const elapsedSinceFirstAttemptMs = Date.now() - firstAttemptStartedAt;
+                  const scheduledTimeoutFailure =
+                    scheduledRequest &&
+                    !callerAborted &&
+                    !superseded &&
+                    isAbort &&
+                    elapsedSinceFirstAttemptMs <= SCHEDULED_REQUEST_RETRY_GUARD_MS;
+                  const retryingScheduledTimeout = scheduledTimeoutFailure && attempt < maxAttempts;
+                  if (!responseRecorded) {
+                    const expectedFailure =
+                      callerAborted ||
+                      superseded ||
+                      cancelledAbort ||
+                      scheduledTimeoutFailure ||
+                      expectedFailureOption ||
+                      failure.isExpected ||
+                      isExpectedBackgroundNetworkFailure(
+                        error as Error,
+                        isAbort,
+                        isNetworkFailure,
+                        timedSignal.didTimeout() || /timed out/i.test(rawMessage),
+                      );
+                    recordRestResponse(action, {
+                      method,
+                      path,
+                      url,
+                      status: status === "error" ? null : status,
+                      headers: {},
+                      body: null,
+                      payloadPreview: null,
+                      durationMs,
+                      error: error as Error,
+                      expectedFailure,
+                    });
+                    if (!expectedFailure) {
+                      recordTraceError(action, error as Error, failure);
+                    }
+                  }
+                  if (superseded) {
+                    addLog("debug", "C64 API request failure ignored after routing change", {
+                      method,
+                      path,
+                      url,
+                      requestId,
+                      requestDeviceHost,
+                      currentDeviceHost: this.deviceHost,
+                      rawError: rawMessage,
+                    });
+                    throw createAbortError();
+                  }
+                  if (
+                    !fuzzBlocked &&
+                    intent !== "system" &&
+                    !callerAborted &&
+                    !cancelledAbort &&
+                    !scheduledTimeoutFailure &&
+                    !expectedFailureOption &&
+                    !failure.isExpected &&
+                    !isExpectedBackgroundNetworkFailure(
                       error as Error,
                       isAbort,
                       isNetworkFailure,
                       timedSignal.didTimeout() || /timed out/i.test(rawMessage),
-                    );
-                  recordRestResponse(action, {
-                    method,
-                    path,
-                    url,
-                    status: status === "error" ? null : status,
-                    headers: {},
-                    body: null,
-                    payloadPreview: null,
-                    durationMs,
-                    error: error as Error,
-                    expectedFailure,
-                  });
-                  if (!expectedFailure) {
-                    recordTraceError(action, error as Error, failure);
-                  }
-                }
-                if (superseded) {
-                  addLog("debug", "C64 API request failure ignored after routing change", {
-                    method,
-                    path,
-                    url,
-                    requestId,
-                    requestDeviceHost,
-                    currentDeviceHost: this.deviceHost,
-                    rawError: rawMessage,
-                  });
-                  throw createAbortError();
-                }
-                if (
-                  !fuzzBlocked &&
-                  intent !== "system" &&
-                  !callerAborted &&
-                  !cancelledAbort &&
-                  !scheduledTimeoutFailure &&
-                  !expectedFailureOption &&
-                  !failure.isExpected &&
-                  !isExpectedBackgroundNetworkFailure(
-                    error as Error,
-                    isAbort,
-                    isNetworkFailure,
-                    timedSignal.didTimeout() || /timed out/i.test(rawMessage),
-                  )
-                ) {
-                  const isTransientFailure =
-                    isAbort ||
-                    isNetworkFailure ||
-                    isTransientConnectivityFailure(rawMessage) ||
-                    isTransientConnectivityFailure(normalizedError);
-                  const failureDetails = buildErrorLogDetails(error as Error, {
-                    path,
-                    url,
-                    requestId,
-                    attempt,
-                    maxAttempts,
-                    retryCount: attempt - 1,
-                    method,
-                    deviceState: idleContext.deviceState,
-                    idleMs: idleContext.idleMs,
-                    wasIdle: idleContext.wasIdle,
-                    durationMs,
-                    error: normalizedError,
-                    rawError: rawMessage,
-                    errorDetail: isDnsFailure(rawMessage) ? "DNS lookup failed" : undefined,
-                  });
-                  // Always log as error so the entry is captured when the diagnostics
-                  // overlay is open (warn is suppressed by the overlay). The transient
-                  // flag distinguishes recoverable network blips from genuine defects.
-                  addErrorLog(
-                    "C64 API request failed",
-                    isTransientFailure ? { ...failureDetails, transient: true } : failureDetails,
-                  );
-                  console.info(
-                    "C64U_HTTP_FAILURE",
-                    JSON.stringify({
-                      requestId,
-                      method,
+                    )
+                  ) {
+                    const isTransientFailure =
+                      isAbort ||
+                      isNetworkFailure ||
+                      isTransientConnectivityFailure(rawMessage) ||
+                      isTransientConnectivityFailure(normalizedError);
+                    const failureDetails = buildErrorLogDetails(error as Error, {
                       path,
+                      url,
+                      requestId,
                       attempt,
                       maxAttempts,
+                      retryCount: attempt - 1,
+                      method,
+                      deviceState: idleContext.deviceState,
                       idleMs: idleContext.idleMs,
                       wasIdle: idleContext.wasIdle,
                       durationMs,
                       error: normalizedError,
-                    }),
-                  );
-                }
+                      rawError: rawMessage,
+                      errorDetail: isDnsFailure(rawMessage) ? "DNS lookup failed" : undefined,
+                    });
+                    // Always log as error so the entry is captured when the diagnostics
+                    // overlay is open (warn is suppressed by the overlay). The transient
+                    // flag distinguishes recoverable network blips from genuine defects.
+                    addErrorLog(
+                      "C64 API request failed",
+                      isTransientFailure ? { ...failureDetails, transient: true } : failureDetails,
+                    );
+                    console.info(
+                      "C64U_HTTP_FAILURE",
+                      JSON.stringify({
+                        requestId,
+                        method,
+                        path,
+                        attempt,
+                        maxAttempts,
+                        idleMs: idleContext.idleMs,
+                        wasIdle: idleContext.wasIdle,
+                        durationMs,
+                        error: normalizedError,
+                      }),
+                    );
+                  }
 
-                if (retryingScheduledTimeout) {
-                  const retryDelayMs = 0;
-                  addLog("warn", "C64 API retry scheduled after scheduled timeout", {
-                    requestId,
-                    method,
-                    path,
-                    attempt,
-                    maxAttempts,
-                    retryDelayMs,
-                    elapsedSinceFirstAttemptMs,
-                    retryTrigger: "scheduled_timeout_abort",
-                    idleMs: idleContext.idleMs,
-                    wasIdle: idleContext.wasIdle,
-                  });
-                  console.info(
-                    "C64U_HTTP_RETRY",
-                    JSON.stringify({
+                  if (retryingScheduledTimeout) {
+                    const retryDelayMs = 0;
+                    addLog("warn", "C64 API retry scheduled after scheduled timeout", {
                       requestId,
                       method,
                       path,
@@ -1622,48 +1614,55 @@ export class C64API {
                       maxAttempts,
                       retryDelayMs,
                       elapsedSinceFirstAttemptMs,
-                    }),
-                  );
-                  if (retryDelayMs > 0) {
-                    await waitWithAbortSignal(retryDelayMs, requestSignal);
+                      retryTrigger: "scheduled_timeout_abort",
+                      idleMs: idleContext.idleMs,
+                      wasIdle: idleContext.wasIdle,
+                    });
+                    console.info(
+                      "C64U_HTTP_RETRY",
+                      JSON.stringify({
+                        requestId,
+                        method,
+                        path,
+                        attempt,
+                        maxAttempts,
+                        retryDelayMs,
+                        elapsedSinceFirstAttemptMs,
+                      }),
+                    );
+                    if (retryDelayMs > 0) {
+                      await waitWithAbortSignal(retryDelayMs, requestSignal);
+                    }
+                    continue;
                   }
-                  continue;
-                }
 
-                if (callerAborted) {
-                  throw annotateRestFailure(createAbortError(), "abort", { callerCancelled: true });
-                }
+                  if (callerAborted) {
+                    throw annotateRestFailure(createAbortError(), "abort", { callerCancelled: true });
+                  }
 
-                if (cancelledAbort) {
-                  throw annotateRestFailure(createAbortError(), "abort", { callerCancelled: true });
-                }
+                  if (cancelledAbort) {
+                    throw annotateRestFailure(createAbortError(), "abort", { callerCancelled: true });
+                  }
 
-                if (isAbort || isNetworkFailure) {
-                  throw annotateRestFailure(
-                    new Error(resolveHostErrorMessage(rawMessage)),
-                    timedSignal.didTimeout() || /timed out/i.test(rawMessage) ? "timeout" : "network",
-                  );
+                  if (isAbort || isNetworkFailure) {
+                    throw annotateRestFailure(
+                      new Error(resolveHostErrorMessage(rawMessage)),
+                      timedSignal.didTimeout() || /timed out/i.test(rawMessage) ? "timeout" : "network",
+                    );
+                  }
+                  throw error;
+                } finally {
+                  timedSignal.cleanup();
+                  this.logRestCall(method, path, status, startedAt);
                 }
-                throw error;
-              } finally {
-                timedSignal.cleanup();
-                this.logRestCall(method, path, status, startedAt);
               }
-            }
 
-            throw lastError as Error;
-          },
+              throw lastError as Error;
+            }),
         ),
       );
 
-    // Route native direct-device requests through the single-connection lane so we
-    // never open concurrent connections to the firmware's single-threaded,
-    // Tx-starvation-prone network stack (see serializeNativeDeviceRequest). Web/proxy
-    // transports have no such constraint and run unserialized.
-    const serializeOnDevice = isNativePlatform() && !baseUrl.includes(WEB_PROXY_PATH) && !isLocalProxy(baseUrl);
-    const executeRequest = serializeOnDevice
-      ? () => serializeNativeDeviceRequest(runRequest, loadDeviceSafetyConfig().restMaxConcurrency)
-      : runRequest;
+    const executeRequest = runRequest;
 
     if (!allowInFlightDedupe || !readRequestKey) {
       return executeRequest();

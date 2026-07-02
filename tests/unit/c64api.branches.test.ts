@@ -417,6 +417,43 @@ describe("c64api branches", () => {
     });
   });
 
+  it("does not hold the native device slot while a background request waits for scheduler cooldown (HARD9-002)", async () => {
+    vi.useFakeTimers();
+    try {
+      (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
+      localStorage.setItem("c64u_device_safety_mode", "CONSERVATIVE");
+      const requestPaths: string[] = [];
+      capacitorHttpMock.mockImplementation(async (request: { url: string }) => {
+        requestPaths.push(new URL(request.url).pathname);
+        if (request.url.endsWith("/v1/info")) {
+          return okNativeResponse({ product: "C64 Ultimate", errors: [] });
+        }
+        return okNativeResponse({ errors: [] });
+      });
+      const api = new C64API("http://c64u");
+
+      await api.saveConfig({ __c64uIntent: "background" });
+      const delayedBackground = api.saveConfig({
+        __c64uIntent: "background",
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(requestPaths).toEqual(["/v1/configs:save_to_flash"]);
+
+      const userRequest = api.getInfo({ __c64uIntent: "user", __c64uBypassCache: true });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(requestPaths).toEqual(["/v1/configs:save_to_flash", "/v1/info"]);
+      await expect(userRequest).resolves.toEqual(expect.objectContaining({ product: "C64 Ultimate" }));
+
+      await vi.advanceTimersByTimeAsync(1300);
+      await expect(delayedBackground).resolves.toEqual(expect.objectContaining({ errors: [] }));
+      expect(requestPaths).toEqual(["/v1/configs:save_to_flash", "/v1/info", "/v1/configs:save_to_flash"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // Regression for S1-C64U-FIRMWARE-TCP-WEDGE-ON-IDLE-RECONNECT: native device
   // requests must run one connection at a time so we never starve the c64u
   // firmware's single Rx/Tx WiFi buffer / single-threaded network task.
