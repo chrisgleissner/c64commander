@@ -486,6 +486,60 @@ class FtpClientPluginTest {
   }
 
   @Test
+  fun cancelReadAfterCompletionDoesNotSpuriouslyAbortAReusedRequestId() {
+    // Regression (HARD9-073): a cancelRead() arriving after readFile()
+    // already finished (routine when it races natural completion on
+    // navigate-away) used to re-add the requestId to cancelledReads with
+    // nothing left to ever remove it - so a later read reusing that same
+    // requestId (the JS-side counter resets on WebView reload while this
+    // plugin instance survives) instantly and spuriously rejected.
+    val payload = "HELLO"
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    `when`(ftpClient.retrieveFileStream(eq("/songlengths.md5")))
+            .thenReturn(java.io.ByteArrayInputStream(payload.toByteArray(Charsets.UTF_8)))
+    `when`(ftpClient.completePendingCommand()).thenReturn(true)
+    `when`(ftpClient.isConnected).thenReturn(true)
+
+    val readCall = mock(PluginCall::class.java)
+    `when`(readCall.getString("host")).thenReturn("127.0.0.1")
+    `when`(readCall.getInt("port")).thenReturn(21)
+    `when`(readCall.getString("username")).thenReturn("user")
+    `when`(readCall.getString("password")).thenReturn("secret")
+    `when`(readCall.getString("path")).thenReturn("/songlengths.md5")
+    `when`(readCall.getString("requestId")).thenReturn("ftp-read-reused")
+
+    // First read completes fully before any cancel arrives.
+    plugin.readFile(readCall)
+    verify(readCall).resolve(any())
+
+    // A cancelRead for the same id arrives late, after completion.
+    val cancelCall = mock(PluginCall::class.java)
+    `when`(cancelCall.getString("requestId")).thenReturn("ftp-read-reused")
+    plugin.cancelRead(cancelCall)
+    verify(cancelCall).resolve()
+
+    // The id is reused for a brand-new read; it must not be spuriously
+    // rejected by the stale late-cancel mark.
+    val reusedCall = mock(PluginCall::class.java)
+    `when`(reusedCall.getString("host")).thenReturn("127.0.0.1")
+    `when`(reusedCall.getInt("port")).thenReturn(21)
+    `when`(reusedCall.getString("username")).thenReturn("user")
+    `when`(reusedCall.getString("password")).thenReturn("secret")
+    `when`(reusedCall.getString("path")).thenReturn("/songlengths.md5")
+    `when`(reusedCall.getString("requestId")).thenReturn("ftp-read-reused")
+
+    plugin.readFile(reusedCall)
+
+    verify(reusedCall).resolve(any())
+    verify(reusedCall, never()).reject(eq("FTP read aborted"))
+  }
+
+  @Test
   fun readFileRejectsOnLoginFailure() {
     val plugin = FtpClientPlugin()
     plugin.runTask = { runnable -> runnable.run() }
