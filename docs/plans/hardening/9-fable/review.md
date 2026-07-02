@@ -109,7 +109,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-049 | Archive entries with a dot in the name rejected despite byte detection | sources | P2 | correctness, ux | high | S | OPEN |
 | HARD9-050 | Throttled-preview sliders leave device at intermediate value on return-to-start | config | P2 | correctness, ux | high | S | FIXED (98d3da2d) |
 | HARD9-051 | Home quick-config writes never set hasChanges → Revert stays disabled | config | P2 | correctness, ux | high | S | FIXED (e8e46468) |
-| HARD9-052 | Home optimistic pins: no routing-epoch clear, no watchdog | config | P2 | robustness, ux | high | S | OPEN |
+| HARD9-052 | Home optimistic pins: no routing-epoch clear, no watchdog | config | P2 | robustness, ux | high | S | FIXED (fae4b7e9) |
 | HARD9-053 | Profile load/revert sends entire config as one giant POST /v1/configs | config | P2 | robustness, perf | medium | M | OPEN |
 | HARD9-054 | Audio Mixer solo routing bypasses mutation layer; stale snapshot restore | config | P2 | correctness, robustness | medium | M | OPEN |
 | HARD9-055 | Error-toast eviction + sliding dedup window silently hide persistent failures | diagnostics | P2 | correctness, ux | high | M | FIXED (59e45da0) |
@@ -571,11 +571,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (e8e46468):** Added the same `updateHasChanges(getActiveBaseUrl(), true)` call to `updateConfigValue`'s success path. New test proven failing against pre-fix code via `git stash`.
 
 ### HARD9-052 — Home optimistic pins have no routing-epoch clear and no watchdog — a lost echo disables the control until remount
-- **Area:** config · **Severity:** P2 · **Dimensions:** robustness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** config · **Severity:** P2 · **Dimensions:** robustness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** FIXED (fae4b7e9)
 - **Files:** `src/pages/home/hooks/useConfigActions.ts:22-27`, `src/pages/ConfigBrowserPage.tsx:908-912`, `src/hooks/useAuthoritativeConfigValueState.ts:124-136`
 - **Failure scenario:** A Home select write returns HTTP success, but the device reboots/drops before the value persists or the reconciliation refetch lands. The pinned entry never matches an echo, so `pending[key]` stays true forever: the row shows the never-applied value AND stays disabled for as long as HomePage stays mounted. ConfigBrowserPage explicitly fixed this class (BUG-033) by clearing pins on `routingEpoch` change; the Home store has no equivalent, and select pins have no reconciliation watchdog.
 - **Evidence:** `ConfigBrowserPage.tsx:908-912` (`useEffect(clearAll, [routingEpoch])` with BUG-033 rationale) has no counterpart in useConfigActions; `resolveValue` only self-clears on an exact echo.
 - **Fix sketch:** Subscribe `useConnectionRoutingEpoch()` in `useConfigActions` and `clearAll()` on change; add a per-entry expiry (reuse `resolveDeviceBoundSliderWatchdogMs`) so a never-echoed pin decays.
+- **Resolution (fae4b7e9):** Added the routingEpoch-clear effect to `useConfigActions`, mirroring `ConfigBrowserPage`'s existing BUG-033 pattern exactly. Added the per-entry watchdog directly to the shared `useAuthoritativeConfigValueState` hook (armed on `replaceEntry`, cancelled on `clearEntry`/`restoreEntry`/`clearAll`/`clearMatching`) reusing `resolveDeviceBoundSliderWatchdogMs` - since the hook is shared, this closes the same latent gap in `ConfigBrowserPage`'s select pins too, not just Home's. New tests proven failing against pre-fix code via `git stash`; two existing HomePage test files needed their `@/hooks/useC64Connection` mock extended with `useConnectionRoutingEpoch` (only those two render the full `ConfigActionsProvider` tree - the other 30 files mocking that module were unaffected).
 
 ### HARD9-053 — Loading an app profile / revert sends the entire device config as one giant POST /v1/configs
 - **Area:** config · **Severity:** P2 · **Dimensions:** robustness, performance · **Confidence:** medium · **Effort:** M · **Status:** OPEN
