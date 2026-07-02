@@ -310,14 +310,22 @@ export function useSwipeGesture(
 
     container.addEventListener("pointerdown", handlePointerDown, { passive: true });
     container.addEventListener("pointermove", handlePointerMove, { passive: true });
-    container.addEventListener("pointerup", handlePointerEnd, { passive: true });
-    container.addEventListener("pointercancel", handlePointerEnd, { passive: true });
+    // pointerup/pointercancel are bound on window, not container: pointer
+    // capture is deferred until intent is confirmed "navigating" (see
+    // handlePointerDown), so a mouse drag that stays under the axis-lock
+    // threshold (or classifies "locked") has no capture yet — releasing
+    // outside the container would otherwise never reach a container-scoped
+    // listener, stranding stateRef.current.active=true and swallowing the
+    // next pointerdown. Window listeners still receive captured-pointer
+    // releases too (they bubble past the capturing element to window).
+    window.addEventListener("pointerup", handlePointerEnd, { passive: true });
+    window.addEventListener("pointercancel", handlePointerEnd, { passive: true });
 
     return () => {
       container.removeEventListener("pointerdown", handlePointerDown);
       container.removeEventListener("pointermove", handlePointerMove);
-      container.removeEventListener("pointerup", handlePointerEnd);
-      container.removeEventListener("pointercancel", handlePointerEnd);
+      window.removeEventListener("pointerup", handlePointerEnd);
+      window.removeEventListener("pointercancel", handlePointerEnd);
     };
   }, [containerRef, handlePointerDown, handlePointerEnd, handlePointerMove]);
 }

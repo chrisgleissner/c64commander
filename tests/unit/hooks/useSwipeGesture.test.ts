@@ -467,6 +467,46 @@ describe("useSwipeGesture integration", () => {
     expect(callbacks.onActiveChange).toHaveBeenCalledTimes(2);
   });
 
+  it("recovers when a drag under the axis-lock threshold releases outside the container (HARD9-093)", () => {
+    // Pointer capture is deferred until intent is confirmed "navigating" (see
+    // handlePointerDown), so a mouse drag that never crosses the axis-lock
+    // threshold has no capture. If the button comes up over an element
+    // outside the container, a container-scoped pointerup listener never
+    // fires, stranding stateRef.current.active=true and swallowing the next
+    // press.
+    const callbacks = {
+      onProgress: vi.fn(),
+      onCommit: vi.fn(),
+      onCancel: vi.fn(),
+      onActiveChange: vi.fn(),
+    };
+
+    render(React.createElement(GestureHarness, { callbacks }));
+    const surface = screen.getByTestId("gesture-surface");
+
+    surface.dispatchEvent(
+      createPointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 1, isPrimary: true }),
+    );
+    expect(callbacks.onActiveChange).toHaveBeenLastCalledWith(true);
+
+    surface.dispatchEvent(
+      createPointerEvent("pointermove", { bubbles: true, pointerId: 1, clientX: 3, clientY: 0 }, 10),
+    );
+
+    // The release lands on an element that is not the container or one of
+    // its descendants (e.g. the pointer drifted off the swipeable surface
+    // before the button came up).
+    document.body.dispatchEvent(
+      createPointerEvent("pointerup", { bubbles: true, pointerId: 1, clientX: 3, clientY: 0 }, 50),
+    );
+    expect(callbacks.onActiveChange).toHaveBeenLastCalledWith(false);
+
+    surface.dispatchEvent(
+      createPointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 2, isPrimary: true }),
+    );
+    expect(callbacks.onActiveChange).toHaveBeenLastCalledWith(true);
+  });
+
   it("does not report pointer activity for gestures excluded from swipe navigation", () => {
     const callbacks = {
       onProgress: vi.fn(),
