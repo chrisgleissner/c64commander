@@ -86,7 +86,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-026 | 600ms drag-settle timer collapses a held swipe mid-gesture | shell | P2 | ux, correctness | high | S | OPEN |
 | HARD9-027 | Diagnostics overlay scroll save/restore targets the wrong scroller (dead code) | shell | P2 | correctness, ux | high | S | OPEN |
 | HARD9-028 | Saved-device switch reports auth failure as "offline" | settings | P2 | ux, correctness | medium | M | FIXED (df7ddcd9) |
-| HARD9-029 | Playing a new track while machine paused leaves C64 frozen, UI "playing" | playback | P2 | correctness, robustness | medium | S | OPEN |
+| HARD9-029 | Playing a new track while machine paused leaves C64 frozen, UI "playing" | playback | P2 | correctness, robustness | medium | S | FIXED (3cfc137c) |
 | HARD9-030 | Deleting the playing item resets UI but device keeps playing; watchdog armed | playback | P2 | correctness, ux | high | M | OPEN |
 | HARD9-031 | Auto-advance dies when user navigates away from Play page | playback | P2 | correctness, ux | high | L | OPEN |
 | HARD9-032 | Playlist rows rebuilt on every 1s timeline tick (memoization defeated) | playback | P2 | performance, ux | high | S | OPEN |
@@ -120,7 +120,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-060 | Background health probes pass allowDuringError but the state gate ignores it | transport | P3 | correctness, ux | high | S | FIXED (1d16f3de) |
 | HARD9-061 | Second user CTA during half-open circuit probe hard-fails instead of queueing | transport | P3 | ux | high | S | FIXED (82492610) |
 | HARD9-062 | Startup saved-device fallback commits selection before verification | transport | P3 | correctness, ux | medium | S | FIXED (16fc9351) |
-| HARD9-063 | Volume sync wedges after starting a new track from paused state | playback | P3 | correctness, robustness | medium | S | OPEN |
+| HARD9-063 | Volume sync wedges after starting a new track from paused state | playback | P3 | correctness, robustness | medium | S | FIXED (3cfc137c) |
 | HARD9-064 | Session restore revives "playing" UI for a dead device session | playback | P3 | correctness, ux | medium | S | FIXED (aea8d46d) |
 | HARD9-065 | resolveVolumeSyncDecision is dead code diverging from live sync logic | playback | P3 | robustness | high | S | OPEN |
 | HARD9-066 | handlePlaylistSelect carries a bogus dependency | playback | P3 | robustness | high | S | OPEN |
@@ -379,11 +379,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (df7ddcd9):** Added `authRequired?: boolean` to `ProbeInfoResult`, set from `isAuthRequiredError(error)` in both `probeInfoOnce` and `probeInfoWithConnectionConfig`'s HTTP-status catch branch, so it flows unchanged through `verifyCurrentConnectionTarget` → `useSavedDeviceSwitching`'s returned verification. `SettingsPage.tsx` now has a `describeSwitchFailure` helper used at both `switchSavedDevice` call sites (Save & Connect, discovered-device confirm): when `authRequired` is set it reports "The device rejected the password. Check the password and try again." instead of the generic unreachable/offline fallback. **Not done:** an AUTH-distinct badge state (that part ties into HARD9-001, still open) — this fix only corrects the error message shown at the two save/switch call sites, not the persistent connection-state badge.
 
 ### HARD9-029 — Playing a new track while the machine is paused leaves the C64 frozen with UI showing "playing"
-- **Area:** playback · **Severity:** P2 · **Dimensions:** correctness, robustness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
+- **Area:** playback · **Severity:** P2 · **Dimensions:** correctness, robustness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (3cfc137c)
 - **Files:** `src/pages/playFiles/hooks/usePlaybackController.ts:584-880,1052-1067,1211-1264`
 - **Failure scenario:** User pauses (machinePause — DMA halt, SIDs muted), then presses Next/Previous or taps a row. `flushPendingUserSkip`/`startPlaylist` go straight to `playItem` without resuming the machine. `handleStop`'s own code proves resume-before-command is required (`resumeMachineWithRetry` before `machineReset`). If the launch doesn't clear the halt, the new track loads into a frozen machine: UI flips to playing, elapsed runs, auto-advance arms — no audio, machine wedged until Stop.
 - **Evidence:** `handleStop`: `if (isPaused) { await resumeMachineWithRetry(api); }` — neither `playItem` nor `flushPendingUserSkip` nor `startPlaylist` performs this; `flushPendingUserSkip` calls `playItem(...)` then `setIsPaused(false)` with no machine resume.
 - **Fix sketch:** In `playItem` (or the skip/startPlaylist entries), if `isPausedRef.current`, call `resumeMachineWithRetry` before executing the play plan.
+- **Resolution (3cfc137c):** `playItem` now calls `resumeMachineWithRetry` when `isPausedRef.current` is true, right after `ensureUnmuted`/obtaining the API handle and before building the play plan - matching the fix sketch and `handleStop`'s existing resume-before-command pattern. A resume failure reports a user error and aborts the launch (via `throw`) instead of silently proceeding into a still-frozen machine, since every other launch entry point (Next/Previous/row-tap/startPlaylist) funnels through `playItem`.
 
 ### HARD9-030 — Deleting the currently-playing item resets the UI but leaves the device playing and the native watchdog armed
 - **Area:** playback · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** M · **Status:** OPEN
@@ -623,10 +624,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (16fc9351):** Deferred saved-device selection until after `verifyCurrentConnectionTarget` succeeds for the reachable fallback candidate. The verifier already accepts candidate host/password and applies runtime config only on successful verification, so a probe-ok/verify-fail candidate no longer updates selected saved-device state or runtime config. Updated the saved-device sweep regression to assert no selection/runtime commit on verification failure.
 
 ### HARD9-063 — Volume sync wedges after starting a new track from the paused state
-- **Area:** playback · **Severity:** P3 · **Dimensions:** correctness, robustness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
+- **Area:** playback · **Severity:** P3 · **Dimensions:** correctness, robustness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (3cfc137c)
 - **Files:** `src/pages/playFiles/hooks/useVolumeOverride.ts:1004-1014`, `src/pages/playFiles/hooks/usePlaybackController.ts:1211-1264`
 - **Failure scenario:** User pauses (pause-mute sets `pausingFromPauseRef = true`), then starts a different track via Next/row-tap instead of resuming. `playItem → ensureUnmuted` unmutes the SIDs, so Audio Mixer refetches report unmuted values. The device-sync effect then permanently returns at `if (pausingFromPauseRef.current && activeIndices.length) return;` — the flag is only cleared on a muted reading or by the pause/resume paths that were bypassed. Slider stops tracking device-side volume changes until the next pause/resume cycle.
 - **Fix sketch:** Clear `pausingFromPauseRef`/`resumingFromPauseRef`/`pauseMuteSnapshotRef` at the start of `playItem`.
+- **Resolution (3cfc137c):** `playItem` now clears `pauseMuteSnapshotRef`/`pausingFromPauseRef`/`resumingFromPauseRef` unconditionally at the start of every call, exactly per the fix sketch. Fixed together with HARD9-029 since both touch the same function and the same pause-state refs.
 
 ### HARD9-064 — Session restore trusts a stale snapshot and revives "playing" UI for a dead device session
 - **Area:** playback · **Severity:** P3 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (aea8d46d)
