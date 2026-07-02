@@ -1,4 +1,26 @@
-import previewLayoutAscii from "../../assets/lighting/c64-layout.txt?raw";
+// The C64 case/keyboard/LED layout grid, inlined as a string constant.
+// Previously imported from c64-layout.txt via Vite's `?raw` suffix, but that
+// eager top-level import broke Playwright's Node-based spec collection for any
+// E2E spec transitively importing this module (its Node transform can't parse
+// the `?raw` suffix). Inlining removes the tripwire; a unit test asserts this
+// constant stays byte-identical to the parsed layout. See HARD10-008.
+const previewLayoutAscii = `
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx__xxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxx-------------------------------------------------xxxx-----xxxxx
+xxx-------------------------------------------------xxxx-----xxxxx
+xxx-------------------------------------------------xxxx-----xxxxx
+xxx-------------------------------------------------xxxx-----xxxxx
+xxx-------------------------------------------------xxxx-----xxxxx
+xxx-------------------------------------------------xxxx-----xxxxx
+xxxxxxxxxx----------------------------xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+`.replace(/^\n/, "");
 
 export type C64PreviewRegionKind = "case" | "keyboard" | "led";
 

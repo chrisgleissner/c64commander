@@ -1,8 +1,21 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { C64_PREVIEW_LAYOUT, parseC64PreviewLayout } from "@/lib/lighting/c64PreviewLayout";
 
 describe("C64 preview layout", () => {
+  it("keeps the inlined ASCII grid byte-identical to the source asset (HARD10-008)", () => {
+    // The grid is inlined as a string constant (the previous c64-layout.txt
+    // ?raw import broke Playwright's Node spec collection). The .txt asset is
+    // retained as the source of truth; this guard fails if the inlined copy
+    // drifts from it, so future edits stay in sync without reintroducing ?raw.
+    const assetPath = resolve(process.cwd(), "src/assets/lighting/c64-layout.txt");
+    const fromAsset = parseC64PreviewLayout(readFileSync(assetPath, "utf8"));
+    expect(C64_PREVIEW_LAYOUT).toEqual(fromAsset);
+  });
+
   it("classifies case, keyboard, and LED regions from the authoritative ASCII layout", () => {
     expect(C64_PREVIEW_LAYOUT.width).toBe(66);
     expect(C64_PREVIEW_LAYOUT.height).toBe(15);
