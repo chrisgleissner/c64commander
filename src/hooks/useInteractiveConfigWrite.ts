@@ -101,6 +101,11 @@ export function useInteractiveConfigWrite({
         await waitForMachineTransitionsToSettle();
         await waitForInteractiveWriteQuietUntil(quietUntilRef.current);
       },
+      // This lane is shared by every control in the category (e.g. all 8 SID
+      // sliders). Merge instead of replace so committing item A's write while
+      // item B's write is still pending combines both into one batch, instead
+      // of silently discarding item B's intent. See HARD9-016.
+      merge: (previous, next) => ({ ...previous, ...next }),
       run: async (updates) => {
         const safety = loadDeviceSafetyConfig();
         const endBurst = beginInteractiveWriteBurst(safety.configsCooldownMs);

@@ -134,6 +134,33 @@ describe("useInteractiveConfigWrite", () => {
     expect(mockMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ updates: { "SID1 Volume": "12" } }));
   });
 
+  it("merges writes to different items instead of dropping the earlier one (HARD9-016)", async () => {
+    // Regression: one lane is shared by all 8 SID sliders (4 SIDs x
+    // vol/pan). Committing SID1 volume then SID1 pan within the quiet
+    // window used to replace the queued volume job outright - the volume
+    // write was never sent, yet its caller's promise still resolved as a
+    // success once the pan write went through.
+    const { result } = renderHook(() => useInteractiveConfigWrite({ category: "Audio Mixer" }), {
+      wrapper: createWrapper(),
+    });
+
+    act(() => {
+      result.current.write({ "SID1 Volume": "5" });
+      result.current.write({ "SID1 Pan": "8" });
+    });
+
+    expect(mockMutateAsync).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(mockMutateAsync).toHaveBeenCalledTimes(1);
+    expect(mockMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ updates: { "SID1 Volume": "5", "SID1 Pan": "8" } }),
+    );
+  });
+
   it("sends the first idle device write without an input-quiet delay", async () => {
     const { result } = renderHook(() => useInteractiveConfigWrite({ category: "Audio Mixer" }), {
       wrapper: createWrapper(),

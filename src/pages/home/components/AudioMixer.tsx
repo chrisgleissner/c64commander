@@ -491,6 +491,12 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
               volumeStep={SID_SLIDER_STEP}
               onVolumeCommit={handleVolumeCommit}
               onVolumePreview={handleVolumePreview}
+              // commitOnly (unlike pan below, which defaults to "throttled"): avoids
+              // sending a live audio-level write on every drag tick, which would
+              // otherwise cause audible level jumps/clicks while dragging. Both
+              // share the same interactiveWrite lane, which now merges pending
+              // per-item writes instead of dropping one when both fire close
+              // together - see HARD9-016.
               volumePreviewMode="commitOnly"
               volumeRound={resolveVolumeIndexValue}
               volumeValueFormatter={volumeValueFormatter}
