@@ -107,7 +107,7 @@ describe("captureCpuSnapshotData", () => {
     await expect(captureCpuSnapshotData(api, dumpFullRam)).rejects.toThrow(/64 KiB/);
   });
 
-  it("logs but does not reject when resuming the program fails after a clean capture", async () => {
+  it("logs, surfaces via resumeError, but does not reject when resuming fails after a clean capture (HARD9-035)", async () => {
     const { api } = makeCaptureMock();
     let writes = 0;
     const realWrite = api.writeMemoryBlock;
@@ -120,8 +120,19 @@ describe("captureCpuSnapshotData", () => {
     const dumpFullRam = vi.fn(async () => new Uint8Array(0x10000));
 
     const data = await captureCpuSnapshotData(api, dumpFullRam);
-    // The snapshot data is still returned; the resume failure is swallowed + logged.
+    // The snapshot data is still returned (not discarded); the resume
+    // failure must be surfaced on the result, not just swallowed + logged,
+    // so the caller can tell the user the C64 may still be frozen.
     expect(data.cpu).toEqual({ pc: 0xc000, a: 0x11, x: 0x22, y: 0x33, sp: 0xf6, p: 0x30 });
+    expect(data.resumeError).toBeInstanceOf(Error);
+    expect(data.resumeError?.message).toBe("resume write failed");
+  });
+
+  it("returns a null resumeError when resume succeeds", async () => {
+    const { api } = makeCaptureMock();
+    const dumpFullRam = vi.fn(async () => new Uint8Array(0x10000));
+    const data = await captureCpuSnapshotData(api, dumpFullRam);
+    expect(data.resumeError).toBeNull();
   });
 });
 
@@ -131,6 +142,7 @@ describe("buildCpuSnapshotMetadata", () => {
     blocks: [new Uint8Array(0x10000)],
     cpu: { pc: 0xc000, a: 0x11, x: 0x22, y: 0x33, sp: 0xf6, p: 0x30 },
     captureMethod: "rli",
+    resumeError: null,
   };
 
   it("emits honest v2 metadata", () => {
@@ -170,6 +182,7 @@ describe("restoreCpuSnapshotFromDecoded", () => {
       blocks: CPU_SNAPSHOT_RANGES.map((r) => image.slice(r.start, r.start + r.length)),
       cpu: { pc: 0xc000, a: 0x11, x: 0x22, y: 0x33, sp: 0xf6, p: 0x30 },
       captureMethod: "rli",
+      resumeError: null,
     };
     const meta = buildCpuSnapshotMetadata(data, { createdAt: "2026-06-26 12:00:00" });
     const bytes = encodeSnapshot("program", new Date(0), data.ranges, data.blocks, meta);

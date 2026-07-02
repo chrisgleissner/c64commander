@@ -228,7 +228,7 @@ export class CpuSnapshotUnsupportedError extends Error {
 export const createCpuSnapshot = async (
   api: C64API,
   options: { label?: string; contentName?: string } = {},
-): Promise<{ displayTimestamp: string; cpu: CpuState; captureMethod: "rli" | "isn" }> => {
+): Promise<{ displayTimestamp: string; cpu: CpuState; captureMethod: "rli" | "isn"; resumeError: Error | null }> => {
   const capability = await detectSnapshotCapability(api);
   if (!capability.cpuSnapshotSupported) {
     throw new CpuSnapshotUnsupportedError(capability.reason ?? "this device does not support CPU snapshots");
@@ -265,5 +265,5 @@ export const createCpuSnapshot = async (
     metadata,
   });
 
-  return { displayTimestamp, cpu: data.cpu, captureMethod: data.captureMethod };
+  return { displayTimestamp, cpu: data.cpu, captureMethod: data.captureMethod, resumeError: data.resumeError };
 };

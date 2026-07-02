@@ -147,6 +147,7 @@ describe("useHomeActions", () => {
       displayTimestamp: "2026-01-01 12:00:00",
       cpu: { pc: 0xc000, a: 0, x: 0, y: 0, sp: 0xf6, p: 0x30 },
       captureMethod: "rli",
+      resumeError: null,
     });
     restoreCpuSnapshotFromDecodedMock.mockResolvedValue({ ok: true, rtiFrameAddress: 0x01f4 });
     getCurrentPlaybackSnapshotLabelMock.mockReturnValue(undefined);
@@ -414,6 +415,32 @@ describe("useHomeActions", () => {
         expect.objectContaining({
           title: "CPU + RAM snapshot saved",
           description: expect.stringContaining("PC $C000"),
+        }),
+      );
+    });
+
+    it("warns the user the machine may still be frozen when resume fails after a clean capture (HARD9-035)", async () => {
+      createCpuSnapshotMock.mockResolvedValueOnce({
+        displayTimestamp: "2026-01-01 12:00:00",
+        cpu: { pc: 0xc000, a: 0, x: 0, y: 0, sp: 0xf6, p: 0x30 },
+        captureMethod: "rli",
+        resumeError: new Error("machine resume write failed"),
+      });
+      const { result } = renderHook(() => useHomeActions());
+
+      await act(async () => {
+        await result.current.handleSaveCpuSnapshot();
+      });
+
+      // The snapshot still saved (createCpuSnapshot resolved) - this must
+      // not be reported as an operation failure, but the user still needs
+      // to know the machine likely needs a manual Restore/reset.
+      expect(reportUserErrorMock).not.toHaveBeenCalled();
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: expect.stringContaining("may still be frozen"),
+          description: expect.stringContaining("machine resume write failed"),
+          variant: "destructive",
         }),
       );
     });

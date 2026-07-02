@@ -217,10 +217,23 @@ export function useHomeActions() {
           }
           throw error;
         }
-        toast({
-          title: "CPU + RAM snapshot saved",
-          description: `${result.displayTimestamp} — PC $${result.cpu.pc.toString(16).toUpperCase().padStart(4, "0")}`,
-        });
+        // The snapshot itself is valid even when resumeError is set - only
+        // the post-capture resume failed, which can leave the C64 frozen
+        // with the IRQ vector still pointed at the capture handler. Surface
+        // that (not just log it) so the user knows to Restore or reset
+        // instead of assuming playback is live again. See HARD9-035.
+        if (result.resumeError) {
+          toast({
+            title: "CPU + RAM snapshot saved — program may still be frozen",
+            description: `${result.displayTimestamp} — the machine could not resume automatically (${result.resumeError.message}). Use Restore or reset the machine.`,
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "CPU + RAM snapshot saved",
+            description: `${result.displayTimestamp} — PC $${result.cpu.pc.toString(16).toUpperCase().padStart(4, "0")}`,
+          });
+        }
       },
       "",
     );
