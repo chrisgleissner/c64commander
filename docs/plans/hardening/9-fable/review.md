@@ -106,7 +106,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-046 | Ingestion finalize overwrites songlengths projection with duration-less records | hvsc | P2 | correctness, data-loss | medium | M | FIXED (517057d1) |
 | HARD9-047 | Web local sources list files after reload that can no longer be opened | sources | P2 | correctness, ux | medium | M | FIXED (857fd280) |
 | HARD9-048 | Disk library save effect writes stale/empty state before load settles | sources | P2 | data-loss, robustness | medium | S | FIXED (93683f38) |
-| HARD9-049 | Archive entries with a dot in the name rejected despite byte detection | sources | P2 | correctness, ux | high | S | OPEN |
+| HARD9-049 | Archive entries with a dot in the name rejected despite byte detection | sources | P2 | correctness, ux | high | S | FIXED (5bed16c5) |
 | HARD9-050 | Throttled-preview sliders leave device at intermediate value on return-to-start | config | P2 | correctness, ux | high | S | FIXED (98d3da2d) |
 | HARD9-051 | Home quick-config writes never set hasChanges → Revert stays disabled | config | P2 | correctness, ux | high | S | FIXED (e8e46468) |
 | HARD9-052 | Home optimistic pins: no routing-epoch clear, no watchdog | config | P2 | robustness, ux | high | S | FIXED (fae4b7e9) |
@@ -550,11 +550,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (93683f38):** Neither fix-sketch option verbatim - a plain ref set inside the load effect can't distinguish "just loaded for this id" from "about to be loaded for this id" within the same commit (both effects observe the ref's post-load value). Bundled `uniqueId` and `disks` into one state object (`libraryState`) updated atomically by a single `setState`, so the save effect can reliably detect the transitional render via `libraryState.uniqueId !== uniqueId` - true only on the one render where the load effect's `setLibraryState` hasn't landed yet - and skip persisting exactly there.
 
 ### HARD9-049 — Archive entries with a dot in the name are rejected even when byte detection succeeds
-- **Area:** sources · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** sources · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** FIXED (5bed16c5)
 - **Files:** `src/lib/archive/execution.ts:36-40,58-62`
 - **Failure scenario:** CommoServe entry named e.g. `TURBO ASSEMBLER V5.2` (version dot, no real extension): `FileTypeDetector.detect` correctly identifies the bytes, validation passes, but `ensureExecutableName` returns the name unchanged because `fileName.includes(".")`; `getPlayCategory(".2")` yields null → "Unsupported archive file" — hard failure for a file the app just proved it supports.
 - **Evidence:** `if (fileName.includes(".")) return fileName;` treats any dot as a valid play extension. `FILE_TYPE_TO_EXTENSION` also lacks `t64`/`tap` though the type presets offer them.
 - **Fix sketch:** Check `getPlayCategory(fileName)` first; append the detected-type extension whenever the existing name doesn't map to a category; extend the extension map.
+- **Resolution (5bed16c5):** Implemented the primary fix sketch: `ensureExecutableName` now checks `getPlayCategory(fileName)` directly and only skips appending an extension when the name as given already resolves to a playable category. Did NOT extend `FILE_TYPE_TO_EXTENSION`/`SupportedC64FileType` for `t64`/`tap`: those are search-filter presets in `useOnlineArchive.ts` only - `FileTypeDetector` has no byte-level detection for tape images and `getPlayCategory` has no tape-image category at all, so the app cannot play them regardless of naming; adding those keys would be unreachable dead code without implementing full tape-image playback support, which is out of scope for this finding. New regression test proven failing against the pre-fix dot check via `git stash`.
 
 ### HARD9-050 — Throttled-preview sliders leave the device at an intermediate value when the user returns to the start position
 - **Area:** config · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** FIXED (98d3da2d)
