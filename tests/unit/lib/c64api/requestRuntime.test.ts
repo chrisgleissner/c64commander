@@ -444,4 +444,104 @@ describe("requestRuntime", () => {
         .join(""),
     );
   });
+
+  describe("large payload handling (HARD9-058)", () => {
+    it("skips reading a large request blob entirely, keeping only a size summary", async () => {
+      const bigBlob = new Blob(["x".repeat(70_000)], { type: "application/octet-stream" });
+      // Spy on arrayBuffer to prove the full blob is never read for tracing.
+      const arrayBufferSpy = vi.spyOn(bigBlob, "arrayBuffer");
+
+      await expect(inspectRequestPayload(bigBlob)).resolves.toEqual({
+        body: { type: "blob", sizeBytes: 70_000, mimeType: "application/octet-stream", source: "blob" },
+        payloadPreview: null,
+      });
+      expect(arrayBufferSpy).not.toHaveBeenCalled();
+    });
+
+    it("still previews a small request blob under the threshold", async () => {
+      const smallBlob = new Blob(["abc"], { type: "text/plain" });
+      await expect(inspectRequestPayload(smallBlob)).resolves.toMatchObject({
+        body: { type: "blob", sizeBytes: 3, mimeType: "text/plain" },
+        payloadPreview: expect.objectContaining({ ascii: "abc" }),
+      });
+    });
+
+    it("skips reading a large declared-length JSON response, keeping only a size summary", async () => {
+      const bigJson = JSON.stringify({ value: "x".repeat(70_000) });
+      const response = {
+        headers: new Headers({ "content-type": "application/json", "content-length": String(bigJson.length) }),
+        status: 200,
+        clone: () => ({
+          text: async () => {
+            throw new Error("should not read a large declared-length response body");
+          },
+        }),
+      } as unknown as Response;
+
+      await expect(inspectResponsePayload(response)).resolves.toEqual({
+        headers: expect.objectContaining({ "content-type": "application/json" }),
+        body: { type: "json", sizeBytes: bigJson.length, truncated: true },
+        payloadPreview: null,
+      });
+    });
+
+    it("skips reading a large declared-length text response, keeping only a size summary", async () => {
+      const bigText = "x".repeat(70_000);
+      const response = {
+        headers: new Headers({ "content-type": "text/plain", "content-length": String(bigText.length) }),
+        status: 200,
+        clone: () => ({
+          text: async () => {
+            throw new Error("should not read a large declared-length response body");
+          },
+        }),
+      } as unknown as Response;
+
+      await expect(inspectResponsePayload(response)).resolves.toEqual({
+        headers: expect.objectContaining({ "content-type": "text/plain" }),
+        body: { type: "text", sizeBytes: bigText.length, truncated: true },
+        payloadPreview: null,
+      });
+    });
+
+    it("skips reading a large declared-length binary response, keeping only a size summary", async () => {
+      const bigSizeBytes = 70_000;
+      const response = {
+        headers: new Headers({ "content-type": "application/octet-stream", "content-length": String(bigSizeBytes) }),
+        status: 200,
+        clone: () => ({
+          arrayBuffer: async () => {
+            throw new Error("should not read a large declared-length response body");
+          },
+        }),
+      } as unknown as Response;
+
+      await expect(inspectResponsePayload(response)).resolves.toEqual({
+        headers: expect.objectContaining({ "content-type": "application/octet-stream" }),
+        body: { type: "binary", sizeBytes: bigSizeBytes, mimeType: "application/octet-stream", truncated: true },
+        payloadPreview: null,
+      });
+    });
+
+    it("reads the full body when Content-Length is small or absent, unchanged from before", async () => {
+      const smallJson = JSON.stringify({ ok: true });
+      await expect(
+        inspectResponsePayload(
+          new Response(smallJson, {
+            headers: { "content-type": "application/json", "content-length": String(smallJson.length) },
+          }),
+        ),
+      ).resolves.toMatchObject({ body: { ok: true }, payloadPreview: expect.objectContaining({ ascii: smallJson }) });
+
+      // No content-length header at all - can't cheaply tell it's large, so falls back to a full read.
+      const chunkedResponse = {
+        headers: new Headers({ "content-type": "application/json" }),
+        status: 200,
+        clone: () => ({ text: async () => JSON.stringify({ chunked: true }) }),
+      } as unknown as Response;
+      await expect(inspectResponsePayload(chunkedResponse)).resolves.toMatchObject({
+        body: { chunked: true },
+      });
+    });
+  });
 });

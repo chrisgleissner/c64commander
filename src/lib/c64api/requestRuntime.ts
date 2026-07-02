@@ -19,6 +19,14 @@ import type { PayloadPreview, TraceHeaders } from "@/lib/tracing/types";
 
 const IDLE_RECOVERY_THRESHOLD_MS = 10_000;
 
+// Request/response tracing runs on every /v1/ call. Bodies at or above this
+// size (e.g. multi-MB disk image uploads/downloads, large config dumps) skip
+// the full read/parse and are recorded as a size summary only, with no
+// payload preview - avoids fully copying large payloads into memory just to
+// trace them and keeps the whole body out of the in-memory trace store. See
+// HARD9-058.
+const TRACE_LARGE_PAYLOAD_THRESHOLD_BYTES = 64 * 1024;
+
 const isFile = (value: unknown): value is File => typeof File !== "undefined" && value instanceof File;
 
 const isBlob = (value: unknown): value is Blob => typeof Blob !== "undefined" && value instanceof Blob;
@@ -254,6 +262,12 @@ export const inspectRequestPayload = async (
     };
   }
   if (isBlob(body)) {
+    // body is already just a summary regardless of size; only the preview
+    // needs the actual bytes, so skip reading (and copying) large blobs
+    // like disk image uploads entirely rather than doubling them in memory.
+    if (body.size > TRACE_LARGE_PAYLOAD_THRESHOLD_BYTES) {
+      return { body: summarizeBinaryBody(body), payloadPreview: null };
+    }
     const bytes = new Uint8Array(await body.arrayBuffer());
     return {
       body: summarizeBinaryBody(body),
@@ -288,8 +302,23 @@ export const inspectResponsePayload = async (
   if (contentLength === "0" || response.status === 204) {
     return { headers, body: null, payloadPreview: null };
   }
+  // Only trust a declared Content-Length to skip the read/parse entirely -
+  // chunked/unknown-size responses keep the existing full-read behavior
+  // below, since we can't cheaply tell whether they're large upfront.
+  const declaredSizeBytes = contentLength ? Number(contentLength) : null;
+  const isLargeResponse =
+    declaredSizeBytes !== null &&
+    Number.isFinite(declaredSizeBytes) &&
+    declaredSizeBytes > TRACE_LARGE_PAYLOAD_THRESHOLD_BYTES;
 
   if (contentType.includes("application/json")) {
+    if (isLargeResponse) {
+      return {
+        headers,
+        body: { type: "json", sizeBytes: declaredSizeBytes, truncated: true },
+        payloadPreview: null,
+      };
+    }
     try {
       const text = await response.clone().text();
       if (!text) {
@@ -312,6 +341,13 @@ export const inspectResponsePayload = async (
   }
 
   if (contentType.startsWith("text/") || contentType.includes("xml") || contentType.includes("html")) {
+    if (isLargeResponse) {
+      return {
+        headers,
+        body: { type: "text", sizeBytes: declaredSizeBytes, truncated: true },
+        payloadPreview: null,
+      };
+    }
     try {
       const text = await response.clone().text();
       return {
@@ -328,6 +364,14 @@ export const inspectResponsePayload = async (
       });
       return { headers, body: null, payloadPreview: null };
     }
+  }
+
+  if (isLargeResponse) {
+    return {
+      headers,
+      body: { type: "binary", sizeBytes: declaredSizeBytes, mimeType: contentType || null, truncated: true },
+      payloadPreview: null,
+    };
   }
 
   try {
