@@ -546,8 +546,8 @@ const shouldBlockForState = (intent: InteractionIntent, allowDuringDiscovery?: b
     return !(allowDuringDiscovery && intent === "system");
   }
   if (state === "ERROR") {
+    if ((intent === "system" || intent === "background") && allowDuringError) return false;
     if (intent === "background") return true;
-    if (intent === "system" && allowDuringError) return false;
     if (intent === "user" && snapshot.circuitOpenUntilMs && Date.now() < snapshot.circuitOpenUntilMs) return false;
     if (intent === "user" && config.allowUserOverrideCircuit) return false;
     return true;
