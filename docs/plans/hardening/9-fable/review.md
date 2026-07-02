@@ -89,7 +89,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-029 | Playing a new track while machine paused leaves C64 frozen, UI "playing" | playback | P2 | correctness, robustness | medium | S | FIXED (3cfc137c) |
 | HARD9-030 | Deleting the playing item resets UI but device keeps playing; watchdog armed | playback | P2 | correctness, ux | high | M | FIXED (4d7c357b) |
 | HARD9-031 | Auto-advance dies when user navigates away from Play page | playback | P2 | correctness, ux | high | L | OPEN |
-| HARD9-032 | Playlist rows rebuilt on every 1s timeline tick (memoization defeated) | playback | P2 | performance, ux | high | S | OPEN |
+| HARD9-032 | Playlist rows rebuilt on every 1s timeline tick (memoization defeated) | playback | P2 | performance, ux | high | S | FIXED (5dd1d25c) |
 | HARD9-033 | Cancel during add-items can throw inside a React state updater | playback | P2 | robustness, correctness | medium | S | FIXED (9d4a5b91) |
 | HARD9-034 | Concurrent playlist repository commits can persist a stale snapshot | playback | P2 | data-loss, robustness | medium | M | OPEN |
 | HARD9-035 | CPU snapshot "saved" toast while C64 left frozen (resume failure swallowed) | snapshot | P2 | correctness, robustness, ux | high | S | OPEN |
@@ -403,11 +403,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Fix sketch:** Hoist the auto-advance engine (guard, due-time timer, background auto-skip listener, `handleNext("auto")`) into an app-level controller/provider that outlives the Play page; the page renders its state.
 
 ### HARD9-032 — Playlist row list rebuilt on every 1-second timeline tick (memoization defeated by inline callbacks)
-- **Area:** playback · **Severity:** P2 · **Dimensions:** performance, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** playback · **Severity:** P2 · **Dimensions:** performance, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** FIXED (5dd1d25c)
 - **Files:** `src/pages/PlayFilesPage.tsx:1627-1665`, `src/pages/playFiles/hooks/usePlaylistListItems.tsx:60-285`
 - **Failure scenario:** While playing, `setElapsedMs` re-renders PlayFilesPage every second. Both `usePlaylistListItems` calls receive freshly-created inline arrows (`onAttachLocalConfig`, `onOpenConfig`, ...), so the `useMemo` deps change every render and the entire ActionListItem array — JSX meta nodes, 20+ menu items per row, perf scopes, and `recordSmokeBenchmarkSnapshot("playlist-render")` — is rebuilt twice per second (preview + view-all, up to 200+ rows). Constant CPU burn during playback on device hardware.
 - **Evidence:** `usePlaylistListItems.tsx:266-285` lists the handlers in memo deps; `PlayFilesPage.tsx:1633-1635` passes new lambdas each render; `effectivePlaylistItemDuration` also changes identity with `pendingDurationOverrideMs`.
 - **Fix sketch:** Wrap the inline handlers in `useCallback` (they close over stable setters); gate the benchmark/perf-scope recording off the recompute path.
+- **Resolution (5dd1d25c):** Wrapped `onAttachLocalConfig`/`onOpenConfig` in `useCallback` (`handleAttachLocalConfigVoid`, `handleOpenConfig`); every other prop passed to `usePlaylistListItems` was already a stable `useCallback` or module-level import. Since the perf-scope/benchmark recording lives inside the same `useMemo` body, it stops re-firing every second as a direct consequence of the memo no longer being defeated - no separate gate was needed.
 
 ### HARD9-033 — Cancel during add-items can throw inside a React state updater
 - **Area:** playback · **Severity:** P2 · **Dimensions:** robustness, correctness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (9d4a5b91)
