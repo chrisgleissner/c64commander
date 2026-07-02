@@ -95,7 +95,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-035 | CPU snapshot "saved" toast while C64 left frozen (resume failure swallowed) | snapshot | P2 | correctness, robustness, ux | high | S | OPEN |
 | HARD9-036 | CPU restore failure strands machine in restore cart; no RAM-only fallback | snapshot | P2 | correctness, robustness, ux | high | M | OPEN |
 | HARD9-037 | Mount sheet permits concurrent mounts to the same drive | disks | P2 | correctness, ux | medium | S | FIXED (ca393156) |
-| HARD9-038 | Local-disk rotation/eject-before-delete break after first drives poll | disks | P2 | correctness, ux | medium | M | OPEN |
+| HARD9-038 | Local-disk rotation/eject-before-delete break after first drives poll | disks | P2 | correctness, ux | medium | M | FIXED (5db6d86a) |
 | HARD9-039 | Capture-timeout rollback can corrupt safe region while CPU executes it | snapshot | P2 | correctness, robustness | medium | S | OPEN |
 | HARD9-040 | Failed HVSC baseline promotion can delete the only library copy | native | P2 | data-loss, correctness, robustness | high | S | OPEN |
 | HARD9-041 | Late setDueAtMs resurrects phantom FGS + wake lock after Stop | native | P2 | correctness, robustness, ux, perf | high | M | OPEN |
@@ -455,11 +455,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (ca393156):** Took the first fix-sketch option - added `driveMutationPending[activeDrive]` to the sheet's `disableActions`. Also added a matching check directly inside `onMount` (return early if already pending) since the mocked-list regression test proved the disabled-row re-render lags the async mount chain by one tick - a synchronous guard at the call site is what actually stops the second `mountDiskToDrive` call, the disabled row is the visual explanation for it. Did not add a spinner row (not required to close the race; the existing disabled-row treatment already used elsewhere in this component is sufficient busy feedback).
 
 ### HARD9-038 — Local-disk group rotation and eject-before-delete break as soon as the first drives poll lands
-- **Area:** disks · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** medium · **Effort:** M · **Status:** OPEN
+- **Area:** disks · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** medium · **Effort:** M · **Status:** FIXED (5db6d86a)
 - **Files:** `src/components/disks/HomeDiskManager.tsx:404-417,767-777,926-958`
 - **Failure scenario:** After mounting a local (uploaded-blob) disk, `mountedByDrive[drive] = disk.id` makes rotation work. The reconciliation effect deletes that override on the first poll with `dataUpdatedAt >= setAt` (seconds later). `resolveMountedDiskId` then falls back to matching `entry.location === "ultimate" && entry.path === buildDrivePath(...)` — local disks can never match. `mountedDisk` becomes null: rotate arrows vanish, `handleRotate` no-ops, and `handleDeleteDisk` no longer ejects the still-mounted disk. Disk groups — whose whole point is side-swapping — only work for C64U-resident disks or for seconds after a local mount.
 - **Evidence:** Override-clear comment (lines 213-219) explains the design for errors/power; for local mounts the poll payload is unmatchable to a local library entry.
 - **Fix sketch:** Don't clear `mountedByDrive` for local-location disks while the poll still shows an `image_file` (or match by uploaded filename == disk.path basename); clear only when the drive reports empty or a different image.
+- **Resolution (5db6d86a):** Implemented the fix sketch's parenthetical exactly - match by uploaded filename (`image_file` basename) against the overridden local disk's path basename before clearing; keep the override on a match, clear as before otherwise (empty drive or a different image). The regression test caught a real trap: asserting on the visible label alone is unreliable, since `mountedLabel` falls back to the raw polled `image_file` string when no disk resolves, which can coincidentally read identically to the correct resolution - the test uses a display name that differs from the path basename to actually distinguish "override kept" from "override cleared, same text by coincidence."
 
 ### HARD9-039 — Capture-timeout rollback can corrupt the safe region while the CPU is executing it (late-interrupt race)
 - **Area:** snapshot · **Severity:** P2 · **Dimensions:** correctness, robustness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
