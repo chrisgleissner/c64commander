@@ -589,9 +589,12 @@ export const HomeDiskManager = () => {
     setDriveMutationPending((prev) => ({ ...prev, [drive]: true }));
     try {
       const runtimeFile = diskLibrary.runtimeFiles[disk.id];
-      await runDriveMutationWithSettledPolling(() =>
-        mountDiskToDrive(api, drive, disk, runtimeFile, { mode: "readonly" }),
-      );
+      // Match Play's mount mode (mountDiskToDrive/mountDriveUpload both
+      // default to "readwrite") so a disk mounted from the library behaves
+      // the same as one launched via Play - games saving high scores/state
+      // to the user's own D64s must not fail with DOS 26 "WRITE PROTECT ON".
+      // See HARD9-012.
+      await runDriveMutationWithSettledPolling(() => mountDiskToDrive(api, drive, disk, runtimeFile));
       if (mountCompletionGenerationRef.current[drive] !== mountGeneration) {
         addLog("debug", "Ignoring stale disk mount completion", {
           drive,

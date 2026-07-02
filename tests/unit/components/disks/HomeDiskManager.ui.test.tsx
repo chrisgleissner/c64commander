@@ -278,7 +278,7 @@ describe("HomeDiskManager UI & Interactions", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
 
     await waitFor(() => {
-      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined, { mode: "readonly" });
+      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined);
     });
 
     fireEvent.click(screen.getByTestId("drive-reset-a"));
@@ -569,7 +569,7 @@ describe("HomeDiskManager UI & Interactions", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
 
     await waitFor(() => {
-      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined, { mode: "readonly" });
+      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined);
     });
 
     view.unmount();
@@ -613,7 +613,7 @@ describe("HomeDiskManager UI & Interactions", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
 
     await waitFor(() => {
-      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined, { mode: "readonly" });
+      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined);
     });
 
     view.rerender(

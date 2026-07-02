@@ -332,7 +332,7 @@ describe("HomeDiskManager", () => {
     fireEvent.click(driveABtn);
 
     await waitFor(() => {
-      expect(mockMountDisk).toHaveBeenCalledWith("a", "/disk2.d64", "d64", "readonly");
+      expect(mockMountDisk).toHaveBeenCalledWith("a", "/disk2.d64", "d64", "readwrite");
     });
   });
 

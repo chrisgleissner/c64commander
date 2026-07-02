@@ -641,7 +641,7 @@ describe("HomeDiskManager Extended", () => {
 
     await waitFor(
       () => {
-        expect(mockMountDisk).toHaveBeenCalledWith("a", "/disk2.d64", "d64", "readonly");
+        expect(mockMountDisk).toHaveBeenCalledWith("a", "/disk2.d64", "d64", "readwrite");
       },
       { timeout: 15000 },
     );
