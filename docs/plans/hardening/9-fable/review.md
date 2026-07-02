@@ -152,7 +152,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-092 | Orientation lock re-applied on every SettingsPage mount (incl. swipe transits) | settings | P3 | robustness, performance | high | S | FIXED (ea304c83) |
 | HARD9-093 | Mouse-drag gesture state stranded by a missed pointerup before intent lock | shell | P3 | robustness, ux | medium | S | FIXED (f7332087) |
 | HARD9-094 | Deferred startup bootstrap never runs if the app launches hidden | state | P3 | robustness, correctness | medium | S | OPEN |
-| HARD9-095 | Module-scope import.meta.env read in App.tsx (Playwright collection tripwire) | state | P3 | robustness | high | S | OPEN |
+| HARD9-095 | Module-scope import.meta.env read in App.tsx (Playwright collection tripwire) | state | P3 | robustness | high | S | FIXED (9ad41ef0) |
 
 ---
 
@@ -886,11 +886,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Fix sketch:** `document.hidden` check falling back to `setTimeout(work, 0)` (or run once on `visibilitychange`).
 
 ### HARD9-095 — Module-scope import.meta.env read in App.tsx (Playwright collection tripwire)
-- **Area:** state · **Severity:** P3 · **Dimensions:** robustness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** state · **Severity:** P3 · **Dimensions:** robustness · **Confidence:** high · **Effort:** S · **Status:** FIXED (9ad41ef0)
 - **Files:** `src/App.tsx:76-79`
 - **Failure scenario:** `const coverageProbeModulesAvailable = shouldBundleCoverageProbeModules();` executes `import.meta.env.VITE_ENABLE_TEST_PROBES`/`PROD` reads at module-evaluation time. Per the documented project failure class, any spec/config that transitively imports this module crashes Playwright `--list` (Node) collection for all shards. App.tsx exports test-oriented helpers that are natural import targets. (The probe pages themselves are correctly excluded from production builds.)
 - **Evidence:** Reported independently by two reviewers; the codebase pattern elsewhere (traceBridge.ts:35-43, smokeMode.ts:168) reads the env lazily.
 - **Fix sketch:** Compute lazily (memoized function) where the lazy `import()`s are declared; no env read at module scope.
+- **Resolution (9ad41ef0):** Applied the fix sketch exactly: the four coverage-probe `lazy()` component references moved behind a memoized `getCoverageProbeModules()`, computed and cached on first call from within `AppRoutes`/`DeviceSwitchLabLauncherGate`'s render bodies, matching the codebase's own `isTestProbeEnabled`/`shouldReadSmokeConfigFromFilesystem` lazy-read convention. A direct reproduction via `playwright test --list` against a spec importing `src/App.tsx` was attempted but is independently blocked by a pre-existing, unrelated defect - `src/lib/lighting/c64PreviewLayout.ts` imports an asset via Vite's `?raw` suffix, which Playwright's own Node transform can't parse regardless of this fix (out of scope here). The exact crash is also not reproducible under vitest (its `import.meta.env` is a real object, unlike Playwright's loader). Validation relies on typecheck/eslint, the full pre-existing `App.runtime.test.tsx` suite (28 tests) passing unchanged, and a new test proving the memoized getter resolves correctly across repeated mount/unmount cycles.
 
 ---
 
