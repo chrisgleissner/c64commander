@@ -94,7 +94,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-034 | Concurrent playlist repository commits can persist a stale snapshot | playback | P2 | data-loss, robustness | medium | M | FIXED (9c58f95c) |
 | HARD9-035 | CPU snapshot "saved" toast while C64 left frozen (resume failure swallowed) | snapshot | P2 | correctness, robustness, ux | high | S | OPEN |
 | HARD9-036 | CPU restore failure strands machine in restore cart; no RAM-only fallback | snapshot | P2 | correctness, robustness, ux | high | M | OPEN |
-| HARD9-037 | Mount sheet permits concurrent mounts to the same drive | disks | P2 | correctness, ux | medium | S | OPEN |
+| HARD9-037 | Mount sheet permits concurrent mounts to the same drive | disks | P2 | correctness, ux | medium | S | FIXED (ca393156) |
 | HARD9-038 | Local-disk rotation/eject-before-delete break after first drives poll | disks | P2 | correctness, ux | medium | M | OPEN |
 | HARD9-039 | Capture-timeout rollback can corrupt safe region while CPU executes it | snapshot | P2 | correctness, robustness | medium | S | OPEN |
 | HARD9-040 | Failed HVSC baseline promotion can delete the only library copy | native | P2 | data-loss, correctness, robustness | high | S | OPEN |
@@ -447,11 +447,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Fix sketch:** Catch `CpuRestoreUnsupportedError` → fall back to `loadMemoryRanges`; for post-upload failures, best-effort `machineReset` (or write RESTORE_FLAG_GO) and tell the user the machine may need a reset.
 
 ### HARD9-037 — Mount sheet permits concurrent mounts to the same drive
-- **Area:** disks · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
+- **Area:** disks · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (ca393156)
 - **Files:** `src/components/disks/HomeDiskManager.tsx:583-656,2181-2191`
 - **Failure scenario:** The "Mount disk to Drive A" sheet stays open until the mount settles, and its rows are only disabled by `disableActions: !status.isConnected` — not by `mountPending`. A local-disk mount can take tens of seconds (SAF read timeout up to 45s + upload) with no busy indicator, so the user taps a second disk. Two mounts race to the same drive; the generation guard only suppresses stale UI effects, not firmware request order — drive can end up with disk 1 while the UI reports disk 2.
 - **Evidence:** `buildDiskListItems(sortedDisks, { ..., disableActions: !status.isConnected, onMount: ... })` — no `mountPending`, unlike the drive-card buttons (line 1739).
 - **Fix sketch:** Include `driveMutationPending[activeDrive]` in the sheet's `disableActions` (or close on tap) and show an in-flight spinner row.
+- **Resolution (ca393156):** Took the first fix-sketch option - added `driveMutationPending[activeDrive]` to the sheet's `disableActions`. Also added a matching check directly inside `onMount` (return early if already pending) since the mocked-list regression test proved the disabled-row re-render lags the async mount chain by one tick - a synchronous guard at the call site is what actually stops the second `mountDiskToDrive` call, the disabled row is the visual explanation for it. Did not add a spinner row (not required to close the race; the existing disabled-row treatment already used elsewhere in this component is sufficient busy feedback).
 
 ### HARD9-038 — Local-disk group rotation and eject-before-delete break as soon as the first drives poll lands
 - **Area:** disks · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** medium · **Effort:** M · **Status:** OPEN
