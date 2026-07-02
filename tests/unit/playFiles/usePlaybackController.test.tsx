@@ -1080,6 +1080,68 @@ describe("usePlaybackController", () => {
     );
   });
 
+  it("resumes a DMA-paused machine before playing a new track (HARD9-029)", async () => {
+    const playlist = [createPlaylistItem()];
+    const machineResume = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getC64API).mockReturnValue({ machineResume } as any);
+
+    const { result } = renderPlaybackController(playlist, { isPaused: true });
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    expect(machineResume).toHaveBeenCalled();
+  });
+
+  it("does not attempt to resume when the machine was not paused", async () => {
+    const playlist = [createPlaylistItem()];
+    const machineResume = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getC64API).mockReturnValue({ machineResume } as any);
+
+    const { result } = renderPlaybackController(playlist, { isPaused: false });
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    expect(machineResume).not.toHaveBeenCalled();
+  });
+
+  it("aborts the new-track launch and reports an error if resuming from pause fails (HARD9-029)", async () => {
+    const playlist = [createPlaylistItem()];
+    const machineResume = vi.fn().mockRejectedValue(new Error("resume failed"));
+    vi.mocked(getC64API).mockReturnValue({ machineResume } as any);
+
+    const { result } = renderPlaybackController(playlist, { isPaused: true });
+
+    await expect(result.current.playItem(playlist[0], { playlistIndex: 0 })).rejects.toThrow("resume failed");
+
+    expect(vi.mocked(reportUserError)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "PLAYBACK_RESUME",
+        title: "Resume failed",
+        description: "resume failed",
+      }),
+    );
+  });
+
+  it("clears stale pause-mute bookkeeping refs when starting a new track (HARD9-063)", async () => {
+    const playlist = [createPlaylistItem()];
+    const pauseMuteSnapshotRef = { current: { volumes: { "SID 1": "0 dB" }, enablement: {} } as any };
+    const pausingFromPauseRef = { current: true };
+    const resumingFromPauseRef = { current: true };
+
+    const { result } = renderPlaybackController(playlist, {
+      isPaused: false,
+      pauseMuteSnapshotRef,
+      pausingFromPauseRef,
+      resumingFromPauseRef,
+    });
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    expect(pauseMuteSnapshotRef.current).toBeNull();
+    expect(pausingFromPauseRef.current).toBe(false);
+    expect(resumingFromPauseRef.current).toBe(false);
+  });
+
   it("pauses without mixer writes when no enabled SID outputs are active", async () => {
     const playlist = [
       createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),

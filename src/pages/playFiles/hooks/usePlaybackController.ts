@@ -587,6 +587,13 @@ export function usePlaybackController({
       options?: { rebootBeforePlay?: boolean; playlistIndex?: number; playlistSize?: number },
     ) => {
       return enqueuePlayTransition(async () => {
+        // Starting a track (Next/Previous/row-tap) from a paused state bypasses
+        // handlePauseResume, which is the only other place these pause-mute
+        // bookkeeping refs are cleared. Left stale, pausingFromPauseRef alone
+        // permanently disables the volume device-sync effect. See HARD9-063.
+        pauseMuteSnapshotRef.current = null;
+        pausingFromPauseRef.current = false;
+        resumingFromPauseRef.current = false;
         let effectiveRequest = item.request;
         let effectivePath = item.path;
         if (effectiveRequest.source === "commoserve" && !effectiveRequest.file) {
@@ -712,6 +719,25 @@ export function usePlaybackController({
         }
         await ensureUnmuted({ refreshItems: true });
         const api = getC64API();
+        if (isPausedRef.current) {
+          // The machine is DMA-paused (frozen). Launching a new track without
+          // resuming first leaves it frozen while the UI flips to "playing" -
+          // no audio, wedged until Stop. See HARD9-029.
+          try {
+            await resumeMachineWithRetry(api);
+          } catch (error) {
+            reportUserError({
+              operation: "PLAYBACK_RESUME",
+              title: "Resume failed",
+              description: (error as Error).message,
+              error,
+              context: {
+                item: item.label,
+              },
+            });
+            throw error;
+          }
+        }
         const resolvedDurationBase = durationOverride ?? item.durationMs;
         const request: PlayRequest =
           typeof resolvedDurationBase === "number"
@@ -894,6 +920,10 @@ export function usePlaybackController({
       resolveSidMetadata,
       resolveSonglengthDurationMsForPath,
       resolveUltimateSidDurationByMd5,
+      resumeMachineWithRetry,
+      pauseMuteSnapshotRef,
+      pausingFromPauseRef,
+      resumingFromPauseRef,
       setVisibleCurrentIndex,
       setCurrentSubsongCount,
       setDurationMs,
@@ -905,6 +935,7 @@ export function usePlaybackController({
       setTrackInstanceId,
       setAutoAdvanceDueAtMs,
       autoAdvanceGuardRef,
+      isPausedRef,
       playedClockRef,
       trackInstanceIdRef,
       trackStartedAtRef,
