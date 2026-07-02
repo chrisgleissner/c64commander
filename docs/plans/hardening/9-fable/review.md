@@ -126,7 +126,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-066 | handlePlaylistSelect carries a bogus dependency | playback | P3 | robustness | high | S | FIXED (38fa569e) |
 | HARD9-067 | Snapshot restore halts CIA TOD clocks / flips ICR mask bits | snapshot | P3 | correctness | medium | S | FIXED (c021c0fc) |
 | HARD9-068 | resolveLocalDiskBlob cross-source fallback can mount the wrong disk | disks | P3 | correctness | medium | S | FIXED (99df20ef) |
-| HARD9-069 | Snapshot store silently drops oldest snapshot at the 100 cap | snapshot | P3 | data-loss, ux | high | S | OPEN |
+| HARD9-069 | Snapshot store silently drops oldest snapshot at the 100 cap | snapshot | P3 | data-loss, ux | high | S | FIXED (9d2c3222) |
 | HARD9-070 | FTP control encoding never set — non-ASCII filenames unfetchable | native | P3 | correctness, ux | medium | S | OPEN |
 | HARD9-071 | Mock C64U HTTP+FTP servers ship in release builds, registered unconditionally | native | P3 | security, robustness | high | M | OPEN |
 | HARD9-072 | TelnetSocket state read/written across threads without synchronization | native | P3 | correctness, robustness | high | S | OPEN |
@@ -688,10 +688,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (99df20ef):** Took the first fix-sketch option - a disk with a `sourceId` now throws the existing accurate error (shared with HARD9-011's fix) as soon as its own source fails to produce bytes, instead of scanning every other source. Skipped the `sizeBytes` verification alternative since the no-fallback approach eliminates the wrong-disk risk outright rather than merely reducing it. Also closes a residual gap in HARD9-011: CommoServe disks always carry a `sourceId` that never matches a local source, so without this fix they could still fall through to the same wrong-disk risk before reaching the CommoServe-specific error message.
 
 ### HARD9-069 — Snapshot store silently drops the oldest snapshot at the 100 cap
-- **Area:** snapshot · **Severity:** P3 · **Dimensions:** data-loss, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** snapshot · **Severity:** P3 · **Dimensions:** data-loss, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** FIXED (9d2c3222)
 - **Files:** `src/lib/snapshot/snapshotStore.ts:103-116`, `src/lib/snapshot/snapshotTypes.ts:192`
 - **Failure scenario:** `saveSnapshotToStore` unshifts and `splice(MAX_SNAPSHOTS)` discards the oldest without notice or export prompt. The oldest saved game state disappears at snapshot #101; nothing mentions eviction.
 - **Fix sketch:** Toast a warning naming the dropped snapshot, or refuse the save with "library full — delete or export".
+- **Resolution (9d2c3222):** Took the toast-warning option - refusing every save once the library fills would be far more disruptive to a user just trying to save their progress. `saveSnapshotToStore` now returns which entry it evicted (if any); `createSnapshot`/`createCpuSnapshot` surface it as `evictedSnapshotLabel`; `handleSaveRam`/`handleSaveCpuSnapshot` show an additional destructive toast naming the dropped snapshot alongside the normal success toast.
 
 ### HARD9-070 — FTP control encoding never set — non-ASCII filenames garble and become unfetchable
 - **Area:** native · **Severity:** P3 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
