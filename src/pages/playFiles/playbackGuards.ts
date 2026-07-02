@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import type { PlaylistItem } from "./types";
+
 export type BooleanRef = { current: boolean };
 
 export const tryAcquireSingleFlight = (ref: BooleanRef): boolean => {
@@ -66,4 +68,37 @@ export const resolveAutoAdvanceDueAtMsOnDurationChange = ({
   const nextDueAtMs = trackStartedAtMs + durationMs;
   if (nextDueAtMs === currentDueAtMs) return null;
   return nextDueAtMs;
+};
+
+export type PlaylistRemovalPlan = {
+  next: PlaylistItem[];
+  nextCurrentIndex: number;
+  shouldStopDevice: boolean;
+};
+
+/**
+ * Computes the result of removing a set of playlist items: the filtered
+ * playlist, the recomputed current index, and whether the device needs to be
+ * stopped because the currently-playing/paused item is one of the ones being
+ * removed. Deleting the playing item without stopping the device leaves the
+ * C64 playing a track the playlist no longer has, with the UI showing
+ * stopped. See HARD9-030.
+ */
+export const planPlaylistItemRemoval = (
+  playlist: PlaylistItem[],
+  currentIndex: number,
+  ids: ReadonlySet<string>,
+  isPlaying: boolean,
+  isPaused: boolean,
+): PlaylistRemovalPlan => {
+  const currentId = currentIndex >= 0 ? playlist[currentIndex]?.id : undefined;
+  const removingPlayingItem = Boolean(currentId && ids.has(currentId));
+  const next = playlist.filter((item) => !ids.has(item.id));
+  const nextCurrentIndex =
+    currentIndex < 0 ? currentIndex : currentId ? next.findIndex((entry) => entry.id === currentId) : -1;
+  return {
+    next,
+    nextCurrentIndex,
+    shouldStopDevice: removingPlayingItem && (isPlaying || isPaused),
+  };
 };

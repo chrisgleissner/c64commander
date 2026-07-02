@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  planPlaylistItemRemoval,
   resolveAutoAdvanceDueAtMsOnDurationChange,
   resolveVolumeSyncDecision,
   type VolumeUiTarget,
 } from "@/pages/playFiles/playbackGuards";
+import type { PlaylistItem } from "@/pages/playFiles/types";
 
 describe("playbackGuards resolveVolumeSyncDecision", () => {
   it("applies sync when there is no pending ui target", () => {
@@ -109,5 +111,74 @@ describe("playbackGuards resolveAutoAdvanceDueAtMsOnDurationChange", () => {
         currentDueAtMs: 1_180_000,
       }),
     ).toBeNull();
+  });
+});
+
+describe("playbackGuards planPlaylistItemRemoval", () => {
+  const item = (id: string): PlaylistItem => ({
+    id,
+    request: { source: "ultimate", path: `/${id}.sid` },
+    category: "sid",
+    label: id,
+    path: `/${id}.sid`,
+  });
+
+  it("does not stop the device when removing items that are not the playing item", () => {
+    const playlist = [item("a"), item("b"), item("c")];
+    const plan = planPlaylistItemRemoval(playlist, 1, new Set(["c"]), true, false);
+
+    expect(plan.shouldStopDevice).toBe(false);
+    expect(plan.next.map((entry) => entry.id)).toEqual(["a", "b"]);
+    expect(plan.nextCurrentIndex).toBe(1);
+  });
+
+  it("stops the device when removing the currently-playing item", () => {
+    const playlist = [item("a"), item("b"), item("c")];
+    const plan = planPlaylistItemRemoval(playlist, 1, new Set(["b"]), true, false);
+
+    expect(plan.shouldStopDevice).toBe(true);
+    expect(plan.next.map((entry) => entry.id)).toEqual(["a", "c"]);
+    expect(plan.nextCurrentIndex).toBe(-1);
+  });
+
+  it("stops the device when removing the currently-paused item", () => {
+    const playlist = [item("a"), item("b")];
+    const plan = planPlaylistItemRemoval(playlist, 0, new Set(["a"]), false, true);
+
+    expect(plan.shouldStopDevice).toBe(true);
+  });
+
+  it("does not stop the device when removing the current item while stopped", () => {
+    const playlist = [item("a"), item("b")];
+    const plan = planPlaylistItemRemoval(playlist, 0, new Set(["a"]), false, false);
+
+    expect(plan.shouldStopDevice).toBe(false);
+    expect(plan.nextCurrentIndex).toBe(-1);
+  });
+
+  it("recomputes the current index to follow the playing item after earlier items are removed", () => {
+    const playlist = [item("a"), item("b"), item("c")];
+    const plan = planPlaylistItemRemoval(playlist, 2, new Set(["a"]), true, false);
+
+    expect(plan.shouldStopDevice).toBe(false);
+    expect(plan.next.map((entry) => entry.id)).toEqual(["b", "c"]);
+    expect(plan.nextCurrentIndex).toBe(1);
+  });
+
+  it("leaves a negative current index untouched when nothing is selected/loaded", () => {
+    const playlist = [item("a"), item("b")];
+    const plan = planPlaylistItemRemoval(playlist, -1, new Set(["a"]), false, false);
+
+    expect(plan.shouldStopDevice).toBe(false);
+    expect(plan.nextCurrentIndex).toBe(-1);
+  });
+
+  it("clearing the whole playlist while playing stops the device and resets the index", () => {
+    const playlist = [item("a"), item("b")];
+    const plan = planPlaylistItemRemoval(playlist, 0, new Set(["a", "b"]), true, false);
+
+    expect(plan.shouldStopDevice).toBe(true);
+    expect(plan.next).toEqual([]);
+    expect(plan.nextCurrentIndex).toBe(-1);
   });
 });

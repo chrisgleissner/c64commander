@@ -110,7 +110,11 @@ import {
 } from "@/pages/playFiles/backgroundExecutionPolicy";
 import { setPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
-import { resolveAutoAdvanceDueAtMsOnDurationChange, resolveVolumeSyncDecision } from "@/pages/playFiles/playbackGuards";
+import {
+  planPlaylistItemRemoval,
+  resolveAutoAdvanceDueAtMsOnDurationChange,
+  resolveVolumeSyncDecision,
+} from "@/pages/playFiles/playbackGuards";
 import type { PlayableEntry, PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from "@/pages/playFiles/types";
 import {
   buildConfigReferenceFromBrowserSelection,
@@ -1433,31 +1437,27 @@ export default function PlayFilesPage() {
   const removePlaylistItemsById = useCallback(
     (ids: Set<string>) => {
       if (!ids.size) return;
-      setPlaylist((prev) => {
-        const next = prev.filter((item) => !ids.has(item.id));
-        const currentId = prev[currentIndex]?.id;
-        if (currentId && ids.has(currentId)) {
-          setIsPlaying(false);
-          setIsPaused(false);
-          setElapsedMs(0);
-          setDurationMs(undefined);
-          trackStartedAtRef.current = null;
-          autoAdvanceGuardRef.current = null;
-        }
-        setCurrentIndex((prevIndex) => {
-          if (prevIndex < 0) return prevIndex;
-          if (!currentId) return -1;
-          return next.findIndex((entry) => entry.id === currentId);
-        });
-        return next;
-      });
+      const plan = planPlaylistItemRemoval(playlist, currentIndex, ids, isPlaying, isPaused);
+      if (plan.shouldStopDevice) {
+        // Route through handleStop so the C64 actually stops instead of
+        // continuing to play a track the playlist no longer has, and so the
+        // native auto-advance watchdog due-time is cleared. handleStop
+        // performs the full teardown (resume-if-paused, device stop, volume
+        // restore, guard/due-at clear) that used to be partially and
+        // impurely duplicated as setState calls inside the setPlaylist
+        // updater below. See HARD9-030.
+        void handleStop();
+      }
+      setPlaylist(plan.next);
+      if (currentIndex >= 0) {
+        setCurrentIndex(plan.nextCurrentIndex);
+      }
       setSelectedPlaylistIds((prev) => {
         if (!prev.size) return prev;
-        const next = new Set(Array.from(prev).filter((id) => !ids.has(id)));
-        return next;
+        return new Set(Array.from(prev).filter((id) => !ids.has(id)));
       });
     },
-    [currentIndex],
+    [currentIndex, handleStop, isPaused, isPlaying, playlist],
   );
 
   const handleRemoveSelectedPlaylist = useCallback(() => {
