@@ -880,10 +880,12 @@ function CategorySection({
                         onValueChange={(v) =>
                           isSidVolume ? handleAudioValueChange(item.name, v) : handleValueChange(item.name, v)
                         }
-                        isLoading={
-                          setConfig.isPending ||
-                          Boolean(authoritativeValues.pending[canonicalConfigKey(categoryName, item.name)])
-                        }
+                        // Per-item pending only - setConfig.isPending is the section's
+                        // SHARED mutation state, so keying disablement off it disabled
+                        // every row in the category while any single item's write was
+                        // in flight (spaced by the write throttle), making unrelated
+                        // rows appear dead. See HARD9-085.
+                        isLoading={Boolean(authoritativeValues.pending[canonicalConfigKey(categoryName, item.name)])}
                         readOnly={isReadOnly}
                         className={rowClassName}
                         rightAccessory={rightAccessory}

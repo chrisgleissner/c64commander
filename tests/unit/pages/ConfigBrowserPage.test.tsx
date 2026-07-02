@@ -91,13 +91,19 @@ vi.mock("@/components/ConfigItemRow", () => ({
     value,
     rightAccessory,
     onValueChange,
+    isLoading,
   }: {
     name: string;
     value?: string | number;
     rightAccessory?: ReactNode;
     onValueChange?: (value: string) => void;
+    isLoading?: boolean;
   }) => (
-    <div data-testid={`row-${name.toLowerCase().replace(/\s+/g, "-")}`} data-value={String(value ?? "")}>
+    <div
+      data-testid={`row-${name.toLowerCase().replace(/\s+/g, "-")}`}
+      data-value={String(value ?? "")}
+      data-loading={String(Boolean(isLoading))}
+    >
       <span>{name}</span>
       <button type="button" onClick={() => onValueChange?.("updated")}>
         Update {name}
@@ -553,6 +559,43 @@ describe("ConfigBrowserPage", () => {
         }),
       );
     });
+  });
+
+  it("does not disable unrelated rows while the shared mutation is pending for a different item (HARD9-085)", async () => {
+    // Regression: row isLoading was keyed off setConfig.isPending, the
+    // section's SHARED mutation state - while one item's PUT was in flight
+    // (spaced by the write throttle), every OTHER row in the category
+    // rendered disabled too, appearing dead until the first write settled.
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["General"] },
+      isLoading: false,
+    });
+    mockUseC64SetConfig.mockReturnValue({
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: true,
+    });
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: {
+        [categoryName]: {
+          items: {
+            "Item A": { selected: "1", options: ["1", "2"] },
+            "Item B": { selected: "3", options: ["3", "4"] },
+          },
+        },
+      },
+      isLoading: false,
+      refetch: vi.fn(),
+    }));
+
+    renderConfigBrowserPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /general/i }));
+
+    const rowA = await screen.findByTestId("row-item-a");
+    const rowB = await screen.findByTestId("row-item-b");
+    expect(rowA).toHaveAttribute("data-loading", "false");
+    expect(rowB).toHaveAttribute("data-loading", "false");
   });
 
   it("keeps the updated local value visible until the device payload catches up", async () => {
