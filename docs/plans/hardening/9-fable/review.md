@@ -123,7 +123,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-063 | Volume sync wedges after starting a new track from paused state | playback | P3 | correctness, robustness | medium | S | FIXED (3cfc137c) |
 | HARD9-064 | Session restore revives "playing" UI for a dead device session | playback | P3 | correctness, ux | medium | S | FIXED (aea8d46d) |
 | HARD9-065 | resolveVolumeSyncDecision is dead code diverging from live sync logic | playback | P3 | robustness | high | S | FIXED (d9fe1f3a) |
-| HARD9-066 | handlePlaylistSelect carries a bogus dependency | playback | P3 | robustness | high | S | OPEN |
+| HARD9-066 | handlePlaylistSelect carries a bogus dependency | playback | P3 | robustness | high | S | FIXED (38fa569e) |
 | HARD9-067 | Snapshot restore halts CIA TOD clocks / flips ICR mask bits | snapshot | P3 | correctness | medium | S | OPEN |
 | HARD9-068 | resolveLocalDiskBlob cross-source fallback can mount the wrong disk | disks | P3 | correctness | medium | S | OPEN |
 | HARD9-069 | Snapshot store silently drops oldest snapshot at the 100 cap | snapshot | P3 | data-loss, ux | high | S | OPEN |
@@ -650,10 +650,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (d9fe1f3a):** Discovered a second, better-suited, also-dead helper (`resolvePlaybackSyncDecision` in `playbackMixerSync.ts`) that already compares both `index` and `muted` and already had unit test coverage; wired it into both branches of the live sync effect, giving the muted branch the same 2500ms staleness bound the unmuted branch already had. Deleted the strictly-worse, still-unused `resolveVolumeSyncDecision`/`VolumeUiTarget` from `playbackGuards.ts` (it only compared `index`, not `muted`) and its dead import in `PlayFilesPage.tsx`. Added an integration regression test manually confirmed to fail against the pre-fix code (via `git stash`) and pass after.
 
 ### HARD9-066 — handlePlaylistSelect carries a bogus dependency
-- **Area:** playback · **Severity:** P3 · **Dimensions:** robustness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** playback · **Severity:** P3 · **Dimensions:** robustness · **Confidence:** high · **Effort:** S · **Status:** FIXED (38fa569e)
 - **Files:** `src/pages/PlayFilesPage.tsx:1386-1399`
 - **Failure scenario:** `useCallback((item, selected) => { setSelectedPlaylistIds(...) }, [queueBackgroundDueAtUpdate])` — dep unrelated to the body. No current impact, but it documents an editing accident and masks staleness if the closure grows.
 - **Fix sketch:** Change the dependency array to `[]`.
+- **Resolution (38fa569e):** Changed the deps array to `[]` per the fix sketch; the body only calls `setSelectedPlaylistIds` with a functional updater and closes over its own parameters.
 
 ### HARD9-067 — Snapshot restore halts the CIA TOD clocks and can flip interrupt-mask bits (ICR write semantics)
 - **Area:** snapshot · **Severity:** P3 · **Dimensions:** correctness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
