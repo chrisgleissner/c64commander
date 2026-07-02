@@ -675,7 +675,7 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
 
   const now = Date.now();
   const circuitOpen = restCircuitUntilMs > now && !meta.bypassCircuit;
-  const userHalfOpenProbe = circuitOpen && meta.intent === "user" && config.allowUserOverrideCircuit;
+  const userHalfOpenProbe = circuitOpen && meta.intent === "user";
   let reservedUserHalfOpenProbe = false;
   if (circuitOpen && !userHalfOpenProbe) {
     recordDeviceGuard(meta.action, {
