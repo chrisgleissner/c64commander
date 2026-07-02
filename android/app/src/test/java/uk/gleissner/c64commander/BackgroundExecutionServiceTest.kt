@@ -200,6 +200,69 @@ class BackgroundExecutionServiceTest {
     }
 
     @Test
+    fun nullIntentStickyRestartSatisfiesForegroundContractBeforeStopping() {
+        controller.create()
+
+        service.onStartCommand(null, 0, 1)
+
+        // On O+, this dispatch may have originated from startForegroundService(); failing to
+        // call startForeground() before stopping risks a RemoteServiceException crash
+        // (HARD9-042). A throwaway notification satisfies the contract, then is torn back down —
+        // ShadowService.stopForeground(true) clears lastForegroundNotification but not
+        // lastForegroundNotificationId, so checking the id (>0 = startForeground was called)
+        // together with isForegroundStopped proves the full sequence ran.
+        val shadowService = Shadows.shadowOf(service)
+        assertTrue(
+            "Null sticky-restart dispatch must call startForeground before stopping",
+            shadowService.lastForegroundNotificationId > 0,
+        )
+        assertTrue("Foreground must be torn back down immediately", shadowService.isForegroundStopped)
+    }
+
+    @Test
+    fun staleGenerationIntentSatisfiesForegroundContractBeforeStopping() {
+        controller.create()
+        setCompanionField("commandGeneration", 5L)
+
+        val staleIntent = Intent(service, BackgroundExecutionService::class.java)
+        staleIntent.putExtra(BackgroundExecutionService.EXTRA_COMMAND_GENERATION, 3L)
+        val result = service.onStartCommand(staleIntent, 0, 1)
+
+        assertEquals(android.app.Service.START_NOT_STICKY, result)
+        val shadowService = Shadows.shadowOf(service)
+        assertTrue(
+            "Stale-generation dispatch must call startForeground before stopping (HARD9-042)",
+            shadowService.lastForegroundNotificationId > 0,
+        )
+        assertTrue("Foreground must be torn back down immediately", shadowService.isForegroundStopped)
+        assertFalse(BackgroundExecutionService.isRunning)
+    }
+
+    @Test
+    fun staleGenerationIntentWhileAlreadyRunningDoesNotTearDownActiveNotification() {
+        controller.create()
+        startService()
+        assertTrue(BackgroundExecutionService.isRunning)
+
+        val shadowService = Shadows.shadowOf(service)
+        assertNotNull("Expected the running service to already show a notification", shadowService.lastForegroundNotification)
+        assertFalse("Should not have stopped foreground yet", shadowService.isForegroundStopped)
+
+        setCompanionField("commandGeneration", 5L)
+        val staleIntent = Intent(service, BackgroundExecutionService::class.java)
+        staleIntent.putExtra(BackgroundExecutionService.EXTRA_COMMAND_GENERATION, 3L)
+        service.onStartCommand(staleIntent, 0, 2)
+
+        // A stale intent for an ALREADY-running service must not tear down the active
+        // notification out from under it - the foreground contract is already satisfied.
+        assertFalse(
+            "A stale intent for an already-running service must not stop the active foreground notification",
+            shadowService.isForegroundStopped,
+        )
+        assertTrue("Service should remain running", BackgroundExecutionService.isRunning)
+    }
+
+    @Test
     fun serviceStartInitializesMediaSessionAndAudioFocusState() {
         controller.create()
         startService()

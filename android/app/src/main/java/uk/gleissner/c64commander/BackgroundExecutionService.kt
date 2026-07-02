@@ -174,7 +174,7 @@ class BackgroundExecutionService : Service() {
                     "Ignoring sticky restart without command; JS must explicitly re-register background execution",
                     "BackgroundExecutionService"
             )
-            stopSelf(startId)
+            satisfyForegroundContractAndStop(startId)
             return START_NOT_STICKY
         }
         val action = intent.action
@@ -186,7 +186,7 @@ class BackgroundExecutionService : Service() {
                     "Ignoring stale background execution command (intentGeneration=$intentGeneration, currentGeneration=$commandGeneration)",
                     "BackgroundExecutionService"
             )
-            stopSelf(startId)
+            satisfyForegroundContractAndStop(startId)
             return START_NOT_STICKY
         }
         if (startPendingGeneration == intentGeneration) {
@@ -247,6 +247,32 @@ class BackgroundExecutionService : Service() {
 
     private fun applyDueAtUpdate(nextDueAtMs: Long?) {
         handler.post { updateDueAtInternal(nextDueAtMs) }
+    }
+
+    /**
+     * Every start() / updateDueAt() call reaches us via startForegroundService() on O+, which
+     * obligates the service to call startForeground() promptly regardless of which onStartCommand
+     * branch handles it. The stale-generation and null-intent (sticky restart) branches used to
+     * stopSelf() without ever doing so, risking a RemoteServiceException crash (HARD9-042). Satisfy
+     * the contract with a throwaway notification, then immediately tear it back down — but only
+     * when the service isn't already legitimately in the foreground under a newer generation;
+     * otherwise this would tear down that still-active notification out from under it.
+     */
+    private fun satisfyForegroundContractAndStop(startId: Int) {
+        if (!isRunning) {
+            startForeground(NOTIFICATION_ID, buildNotification())
+            stopForegroundCompat()
+        }
+        stopSelf(startId)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun stopForegroundCompat() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            stopForeground(true)
+        }
     }
 
     private fun buildNotification(): Notification {
