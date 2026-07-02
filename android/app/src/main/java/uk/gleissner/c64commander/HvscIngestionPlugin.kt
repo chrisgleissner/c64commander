@@ -236,6 +236,82 @@ open class HvscIngestionPlugin : Plugin() {
     return SidHeader(songs = songs, startSong = startSong)
   }
 
+  /**
+   * Deletes [oldRoot] only when [libraryRoot] currently exists - i.e. only once a valid
+   * (current or successfully recovered) library is confirmed in place. If a baseline
+   * promotion fails and its recovery also fails, [libraryRoot] won't exist and [oldRoot] may
+   * be the sole surviving copy of the user's HVSC library; it must be left alone so a later
+   * attempt can still find it, instead of being wiped as "stale leftover junk". See HARD9-040.
+   */
+  private fun cleanupHvscOldRootIfLibraryPresent(libraryRoot: File, oldRoot: File) {
+    if (libraryRoot.exists() && oldRoot.exists()) {
+      oldRoot.deleteRecursively()
+    }
+  }
+
+  /**
+   * Promotes a completed baseline ingest from [stagingRoot] into [libraryRoot], swapping the
+   * previous library out to [oldRoot] first. The directory swap runs before the DB rewrite is
+   * committed, and the DB rewrite is rolled back (files un-swapped, best-effort) on failure, so
+   * a failure at any point leaves the DB and the filesystem describing the same library instead
+   * of one describing files the other no longer has. Throws on failure; never deletes [oldRoot]
+   * unless [libraryRoot] holds a valid promoted (or successfully recovered) library. See
+   * HARD9-040.
+   */
+  private fun promoteBaselineLibrary(
+          libraryRoot: File,
+          stagingRoot: File,
+          oldRoot: File,
+          db: SQLiteDatabase,
+          deferredUpserts: List<SongUpsertRow>,
+          updatedAt: Long,
+  ) {
+    if (libraryRoot.exists()) {
+      if (!libraryRoot.renameTo(oldRoot)) {
+        throw IllegalStateException("Failed to rename library to old: ${libraryRoot.absolutePath}")
+      }
+    }
+    if (!stagingRoot.renameTo(libraryRoot)) {
+      // Attempt to recover: rename old back to library
+      if (oldRoot.exists()) oldRoot.renameTo(libraryRoot)
+      throw IllegalStateException(
+              "Failed to promote staging directory: ${stagingRoot.absolutePath}"
+      )
+    }
+
+    try {
+      db.beginTransaction()
+      try {
+        db.delete("hvsc_song_index", null, null)
+        for (row in deferredUpserts) {
+          val cv =
+                  ContentValues().apply {
+                    put("virtual_path", row.virtualPath)
+                    put("file_name", row.fileName)
+                    if (row.songs != null) put("songs", row.songs) else putNull("songs")
+                    if (row.startSong != null) put("start_song", row.startSong)
+                    else putNull("start_song")
+                    put("updated_at_ms", updatedAt)
+                  }
+          db.insertWithOnConflict("hvsc_song_index", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+        }
+        db.setTransactionSuccessful()
+      } finally {
+        db.endTransaction()
+      }
+    } catch (dbError: Exception) {
+      // Files are already promoted but the metadata rewrite failed (and was rolled back
+      // above) - undo the directory swap, best-effort, so the DB keeps describing the same
+      // files that are actually on disk instead of the newly-promoted ones.
+      if (libraryRoot.renameTo(stagingRoot) && oldRoot.exists()) {
+        oldRoot.renameTo(libraryRoot)
+      }
+      throw dbError
+    }
+
+    cleanupHvscOldRootIfLibraryPresent(libraryRoot, oldRoot)
+  }
+
   private fun flushSongBatch(db: SQLiteDatabase, batch: MutableList<SongUpsertRow>): Int {
     if (batch.isEmpty()) return 0
     Trace.beginSection("hvsc:flushSongBatch")
@@ -408,21 +484,27 @@ open class HvscIngestionPlugin : Plugin() {
               val filesDir = context.filesDir
               val stagingRoot = File(filesDir, "hvsc/library-staging")
               val oldRoot = File(filesDir, "hvsc/library-old")
+              val libraryRoot = File(filesDir, "hvsc/library")
               try {
                 val archiveFile = resolveArchiveFile(relativeArchivePath)
                 if (archiveFile.length() <= 0L) {
                   throw IllegalStateException("HVSC archive is empty: ${archiveFile.absolutePath}")
                 }
 
-                val libraryRoot = File(filesDir, "hvsc/library")
                 dbHelper = HvscMetadataDbHelper(this@HvscIngestionPlugin)
                 db = dbHelper.writableDatabase
                 val writableDb =
                         db ?: throw IllegalStateException("Failed to open HVSC metadata database")
 
-                // Clean up stale staging artifacts from a previous interrupted ingest
+                // Clean up stale staging artifacts from a previous interrupted ingest.
+                // oldRoot is only discarded here when libraryRoot also exists - if a
+                // prior promotion failed catastrophically, oldRoot may be the sole
+                // surviving copy of the library and libraryRoot won't exist; leave it
+                // in place so this attempt (if it succeeds) or a future one can still
+                // find it, instead of wiping the user's last backup on every retry.
+                // See HARD9-040.
                 if (stagingRoot.exists()) stagingRoot.deleteRecursively()
-                if (oldRoot.exists()) oldRoot.deleteRecursively()
+                cleanupHvscOldRootIfLibraryPresent(libraryRoot, oldRoot)
 
                 val extractionRoot = if (resetLibrary) stagingRoot else libraryRoot
                 if (resetLibrary) {
@@ -540,50 +622,17 @@ open class HvscIngestionPlugin : Plugin() {
                   )
                 }
 
-                // Atomic promotion: DB swap + directory swap for baseline ingests
+                // Atomic promotion: directory swap, then DB commit, for baseline
+                // ingests. See HARD9-040 and promoteBaselineLibrary's doc comment.
                 if (resetLibrary) {
-                  val updatedAt = System.currentTimeMillis()
-                  writableDb.beginTransaction()
-                  try {
-                    writableDb.delete("hvsc_song_index", null, null)
-                    for (row in result.deferredUpserts) {
-                      val cv =
-                              ContentValues().apply {
-                                put("virtual_path", row.virtualPath)
-                                put("file_name", row.fileName)
-                                if (row.songs != null) put("songs", row.songs) else putNull("songs")
-                                if (row.startSong != null) put("start_song", row.startSong)
-                                else putNull("start_song")
-                                put("updated_at_ms", updatedAt)
-                              }
-                      writableDb.insertWithOnConflict(
-                              "hvsc_song_index",
-                              null,
-                              cv,
-                              SQLiteDatabase.CONFLICT_REPLACE
-                      )
-                    }
-                    writableDb.setTransactionSuccessful()
-                  } finally {
-                    writableDb.endTransaction()
-                  }
-
-                  // Directory swap: staging → library (atomically visible)
-                  if (libraryRoot.exists()) {
-                    if (!libraryRoot.renameTo(oldRoot)) {
-                      throw IllegalStateException(
-                              "Failed to rename library to old: ${libraryRoot.absolutePath}"
-                      )
-                    }
-                  }
-                  if (!stagingRoot.renameTo(libraryRoot)) {
-                    // Attempt to recover: rename old back to library
-                    if (oldRoot.exists()) oldRoot.renameTo(libraryRoot)
-                    throw IllegalStateException(
-                            "Failed to promote staging directory: ${stagingRoot.absolutePath}"
-                    )
-                  }
-                  if (oldRoot.exists()) oldRoot.deleteRecursively()
+                  promoteBaselineLibrary(
+                          libraryRoot = libraryRoot,
+                          stagingRoot = stagingRoot,
+                          oldRoot = oldRoot,
+                          db = writableDb,
+                          deferredUpserts = result.deferredUpserts,
+                          updatedAt = System.currentTimeMillis(),
+                  )
                 }
 
                 val payload = JSObject()
@@ -626,17 +675,22 @@ open class HvscIngestionPlugin : Plugin() {
                             traceFields(call)
                     )
                   }
-                  try {
-                    oldRoot.deleteRecursively()
-                  } catch (cleanupError: Exception) {
-                    AppLogger.warn(
-                            pluginContextOrNull(),
-                            logTag,
-                            "Failed to clean up HVSC old root after cancellation: ${oldRoot.absolutePath}",
-                            "HvscIngestionPlugin",
-                            cleanupError,
-                            traceFields(call)
-                    )
+                  // Only clean up oldRoot once libraryRoot is confirmed present -
+                  // if promotion failed and recovery also failed, oldRoot may be
+                  // the sole surviving copy of the user's library. See HARD9-040.
+                  if (libraryRoot.exists()) {
+                    try {
+                      oldRoot.deleteRecursively()
+                    } catch (cleanupError: Exception) {
+                      AppLogger.warn(
+                              pluginContextOrNull(),
+                              logTag,
+                              "Failed to clean up HVSC old root after cancellation: ${oldRoot.absolutePath}",
+                              "HvscIngestionPlugin",
+                              cleanupError,
+                              traceFields(call)
+                      )
+                    }
                   }
                 }
                 AppLogger.warn(
@@ -671,17 +725,22 @@ open class HvscIngestionPlugin : Plugin() {
                             traceFields(call)
                     )
                   }
-                  try {
-                    oldRoot.deleteRecursively()
-                  } catch (cleanupError: Exception) {
-                    AppLogger.warn(
-                            pluginContextOrNull(),
-                            logTag,
-                            "Failed to clean up HVSC old root after failure: ${oldRoot.absolutePath}",
-                            "HvscIngestionPlugin",
-                            cleanupError,
-                            traceFields(call)
-                    )
+                  // Only clean up oldRoot once libraryRoot is confirmed present -
+                  // if promotion failed and recovery also failed, oldRoot may be
+                  // the sole surviving copy of the user's library. See HARD9-040.
+                  if (libraryRoot.exists()) {
+                    try {
+                      oldRoot.deleteRecursively()
+                    } catch (cleanupError: Exception) {
+                      AppLogger.warn(
+                              pluginContextOrNull(),
+                              logTag,
+                              "Failed to clean up HVSC old root after failure: ${oldRoot.absolutePath}",
+                              "HvscIngestionPlugin",
+                              cleanupError,
+                              traceFields(call)
+                      )
+                    }
                   }
                 }
                 AppLogger.error(
