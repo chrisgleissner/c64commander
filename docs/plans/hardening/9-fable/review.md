@@ -77,7 +77,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-017 | Profile load/revert/flash-load never invalidate `c64-config-items` | config | P1 | correctness, ux | high [verified] | S | OPEN |
 | HARD9-018 | Save-to-App / revert baseline / verification read a stale persistent cache | config | P1 | correctness, data-loss | high | M | OPEN |
 | HARD9-019 | Full trace ZIP exported on every recorded error | diagnostics | P1 | performance, ux | high | S | FIXED (4c292809) |
-| HARD9-020 | Unguarded localStorage log writes; O(n) parse/stringify per log line | diagnostics | P1 | robustness, correctness, perf | high | M | OPEN |
+| HARD9-020 | Unguarded localStorage log writes; O(n) parse/stringify per log line | diagnostics | P1 | robustness, correctness, perf | high | M | FIXED (24cd3ce4) |
 | HARD9-021 | Closed diagnostics overlay copies full trace/log stores on every event | diagnostics | P1 | performance, ux | high | M | OPEN |
 | HARD9-022 | CONSERVATIVE preset gets no half-open probe; user CTAs hard-fail in circuit window | transport | P2 | ux, correctness | high | S | FIXED (9ab556cb) |
 | HARD9-023 | Background requests retry 3× with zero delay, holding the REST lane ~9s | transport | P2 | ux, perf, robustness | high | S | FIXED (3ceecd75) |
@@ -308,11 +308,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (4c292809):** Removed the background export entirely rather than debouncing it: `getLastTraceExport()`/the `"c64u-trace-exported"` event it dispatched have no callers/listeners anywhere in the app, and the real Share/Download Diagnostics flow (`traceExport.ts`, `traceBridge.ts`) always calls `exportTraceZip()` itself, fresh, on demand - the eager per-error export was pure wasted work with no functional purpose to preserve. The error event itself is still recorded via `appendEvent`, and the duplicate-Error-instance dedup guard is unchanged.
 
 ### HARD9-020 — Unguarded localStorage log writes; O(n) parse/stringify per log line
-- **Area:** diagnostics · **Severity:** P1 · **Dimensions:** robustness, correctness, performance · **Confidence:** high · **Effort:** M · **Status:** OPEN
+- **Area:** diagnostics · **Severity:** P1 · **Dimensions:** robustness, correctness, performance · **Confidence:** high · **Effort:** M · **Status:** FIXED (24cd3ce4)
 - **Files:** `src/lib/logging.ts:50-70`, `src/lib/diagnostics/logger.ts:206-235`, `src/App.tsx:392-394`
 - **Failure scenario:** (a) localStorage quota exceeded: `writeLogs` has no try/catch, so `addLog` throws; the console bridge routes every `console.warn/error` through `logger.warn/error` → `addLog`, so any app code calling `console.warn` now throws unexpectedly. (b) `addErrorLog("Unhandled promise rejection", { reason: event.reason })` with a circular `reason` throws inside the rejection handler. (c) Every log line does JSON.parse of the entire 500-entry blob + full re-stringify + synchronous `setItem` — O(store) main-thread work per line, amplified by the console bridge.
 - **Evidence:** `writeLogs` (logging.ts:50-53) — bare `localStorage.setItem(LOG_KEY, JSON.stringify(...))`; `addLog` — `const logs = [entry, ...readLogs()]; writeLogs(logs)`; console bridge has re-entrancy guarding only.
 - **Fix sketch:** try/catch around `writeLogs` (drop oldest/halve on quota), sanitize `details` with a safe serializer, keep logs in an in-memory ring with debounced persistence.
+- **Resolution (24cd3ce4):** Implemented all three parts of the fix sketch. `persistLogsNow` wraps the write in try/catch, halving and retrying once on failure (warns, never throws, on a second failure). `addLog` sanitizes `details` through a circular-safe JSON round-trip at capture time, protecting every later serialization point (storage, `formatLogsForShare`), not just the immediate write. Reads/writes go through an in-memory cache with 500ms debounced persistence instead of a full parse/stringify per call. Discovered mid-fix that `window.setTimeout` is unsafe here (some test environments provide a minimal `window` with `dispatchEvent` but no timer methods) and switched to the global `setTimeout`/`clearTimeout`.
 
 ### HARD9-021 — Closed diagnostics overlay copies full trace/log stores on every event
 - **Area:** diagnostics · **Severity:** P1 · **Dimensions:** performance, ux-responsiveness · **Confidence:** high · **Effort:** M · **Status:** OPEN
