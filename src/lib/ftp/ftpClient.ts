@@ -287,6 +287,15 @@ const executeFtpRead = async (
   // onProgress/signal are JS-side concerns and must not cross the native bridge
   // or land in the (serialized) trace payload.
   const { onProgress, signal, ...nativeReadOptions } = ftpOptions;
+  // A caller can abort a queued read before the native call is even
+  // attempted (e.g. cancelling a bulk import). Without this, the
+  // cancelRead() fired below races an INDEPENDENT native bridge call
+  // against readFile()'s own bridge call with no ordering guarantee - if
+  // readFile() wins that race, the full transfer runs anyway despite
+  // already being cancelled. See HARD9-083.
+  if (signal?.aborted) {
+    throw new DOMException("Aborted", "AbortError");
+  }
   const requestId =
     nativeReadOptions.requestId ?? (onProgress || signal ? `ftp-read-${(ftpReadRequestCounter += 1)}` : undefined);
 
