@@ -65,7 +65,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-005 | Duration slider clobbers every playlist item's resolved duration | playback | P1 | correctness, data-loss | high [verified] | M | FIXED (76cb69da) |
 | HARD9-006 | Mid-track duration change never re-arms auto-advance guard | playback | P1 | correctness, ux | high | S | FIXED (e3fdff49) |
 | HARD9-007 | Shuffle doesn't shuffle; Reshuffle irreversibly destroys order | playback | P1 | correctness, data-loss, ux | high | M | OPEN |
-| HARD9-008 | Songlengths cache cleared on every playlist change → repeated multi-MB re-parses | playback | P1 | performance, ux | high | S | OPEN |
+| HARD9-008 | Songlengths cache cleared on every playlist change → repeated multi-MB re-parses | playback | P1 | performance, ux | high | S | FIXED (51a5a117) |
 | HARD9-009 | Full-range custom snapshot silently saves empty (u16 truncation) | snapshot | P1 | correctness, data-loss | high [verified] | S | OPEN |
 | HARD9-010 | Mount/eject success judged by HTTP status; firmware in-body errors discarded | disks | P1 | correctness, ux, robustness | medium | S | OPEN |
 | HARD9-011 | CommoServe-imported disks permanently unmountable after remount | disks | P1 | data-loss, ux, correctness | high | M | OPEN |
@@ -220,11 +220,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Fix sketch:** Implement shuffle as a playback-order layer (use the existing `RandomPlaySession` seed/cursor machinery in next/auto-advance) instead of mutating the stored playlist; keep Reshuffle as "new seed".
 
 ### HARD9-008 — Songlengths bundle cache cleared on every playlist change → repeated multi-MB re-parses
-- **Area:** playback · **Severity:** P1 · **Dimensions:** performance, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** playback · **Severity:** P1 · **Dimensions:** performance, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** FIXED (51a5a117)
 - **Files:** `src/pages/playFiles/hooks/useSonglengths.ts:133-135,293-296,359,451-469`, `src/pages/PlayFilesPage.tsx:1405-1430`
 - **Failure scenario:** With a Songlengths.md5 loaded (up to 6MiB auto-loaded), every playlist identity change — every track transition (`playItem`'s duration update), every duration-slider persist, every add batch — (1) clears `songlengthsCacheRef`, then (2) the enrichment effect re-runs `applySonglengthsToItems` over the entire playlist, re-parsing the database once per distinct folder. Seconds of main-thread work per auto-advance on device hardware; the same full pass inside `startPlaylist` delays playback start on every row tap.
 - **Evidence:** `useEffect(() => { songlengthsCacheRef.current.clear(); }, [playlist, songlengthsFiles]);` clears on every playlist reference change; the enrichment effect iterates all SID items even when `durationMs` is already set; the bundle signature (`path:mtime`) already detects staleness, making the blanket clear redundant.
 - **Fix sketch:** Drop the cache-clearing effect (signature check already invalidates stale bundles) and skip enrichment for items with resolved `durationMs`.
+- **Resolution (51a5a117):** Removed the `[playlist, songlengthsFiles]` cache-clearing effect entirely; `loadSonglengthBundleForPath`'s existing path:mtime signature check already invalidates the right cache entries when songlengths files actually change. `applySonglengthsToItems` now skips items that already have a resolved duration, except items tagged `durationSource: "default"` (the HARD9-005 fallback marker) which stay eligible so they can still pick up a real duration later; a successful resolution clears that marker so a later slider drag doesn't re-clobber it. Benefits both the PlayFilesPage enrichment effect and `startPlaylist`'s full-playlist re-resolution pass called out in the failure scenario.
 
 ### HARD9-009 — Full-range custom snapshot ($0000-$FFFF) silently saves an empty snapshot (u16 length truncation)
 - **Area:** snapshot · **Severity:** P1 · **Dimensions:** correctness, data-loss · **Confidence:** high **[verified]** · **Effort:** S · **Status:** OPEN
