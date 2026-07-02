@@ -118,7 +118,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-058 | Fetch trace duplicates full request/response payloads in the hot path | diagnostics | P2 | performance | high | M | OPEN |
 | HARD9-059 | Smoke-mode localStorage fallback is a self-perpetuating latch in prod | state | P2 | robustness, security, correctness | medium | S | OPEN |
 | HARD9-060 | Background health probes pass allowDuringError but the state gate ignores it | transport | P3 | correctness, ux | high | S | OPEN |
-| HARD9-061 | Second user CTA during half-open circuit probe hard-fails instead of queueing | transport | P3 | ux | high | S | OPEN |
+| HARD9-061 | Second user CTA during half-open circuit probe hard-fails instead of queueing | transport | P3 | ux | high | S | FIXED (82492610) |
 | HARD9-062 | Startup saved-device fallback commits selection before verification | transport | P3 | correctness, ux | medium | S | OPEN |
 | HARD9-063 | Volume sync wedges after starting a new track from paused state | playback | P3 | correctness, robustness | medium | S | OPEN |
 | HARD9-064 | Session restore revives "playing" UI for a dead device session | playback | P3 | correctness, ux | medium | S | OPEN |
@@ -326,7 +326,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Evidence:** `const userHalfOpenProbe = circuitOpen && meta.intent === "user" && config.allowUserOverrideCircuit;` vs CONSERVATIVE `allowUserOverrideCircuit: false, circuitBreakerThreshold: 2`.
 - **Fix sketch:** Make the single-flight half-open probe unconditional for user intent (the `restUserCircuitProbeInFlight` single-flighting already provides device protection); keep `allowUserOverrideCircuit` governing only unrestricted override.
 - **Notes:** Carried over from hardening/5 P0-2, materially reduced (P0-1's expiry timer is fixed so the wedge is bounded at 6s; timeouts now weigh 0.5).
-- **Resolution (9ab556cb):** REST user half-open probes no longer depend on `allowUserOverrideCircuit`; any user-intent REST request may run the existing single-flight probe while the REST circuit is open. System/background requests remain blocked, and the existing `restUserCircuitProbeInFlight` guard still rejects a second concurrent user probe. Added regression coverage for CONSERVATIVE-style disabled override and for the single-flight guard.
+- **Resolution (9ab556cb):** REST user half-open probes no longer depend on `allowUserOverrideCircuit`; any user-intent REST request may run the existing single-flight probe while the REST circuit is open. System/background requests remain blocked. Added regression coverage for CONSERVATIVE-style disabled override. The second-tap behavior was later changed by HARD9-061 so queued user work waits for the in-flight probe instead of being rejected.
 
 ### HARD9-023 — Background-intent requests retry 3× with zero delay, occupying the single REST lane for up to ~9s ahead of user CTAs
 - **Area:** transport · **Severity:** P2 · **Dimensions:** ux-responsiveness, performance, robustness · **Confidence:** high · **Effort:** S · **Status:** FIXED (3ceecd75)
@@ -604,10 +604,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Fix sketch:** Honor `allowDuringError` for background intent (the flag is opt-in, set only by probes), or resolve probe intent to "system" for background maintenance.
 
 ### HARD9-061 — Second user CTA during a half-open circuit probe hard-fails instead of queueing
-- **Area:** transport · **Severity:** P3 · **Dimensions:** ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** transport · **Severity:** P3 · **Dimensions:** ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** FIXED (82492610)
 - **Files:** `src/lib/deviceInteraction/deviceInteractionManager.ts:688-699`
 - **Failure scenario:** On BALANCED/RELAXED with circuit open, the first tap becomes the single-flight half-open probe; a second tap within its duration throws `"Device circuit probe already in flight"` — a hard CTA failure with an error toast, produced purely by the protection mechanism. Users double-tap exactly when the first tap appears unresponsive.
 - **Fix sketch:** Await the in-flight probe's outcome: success → run the second request; failure → reject with the standard circuit-open error (transient-classified per HARD9-024).
+- **Resolution (82492610):** Replaced the REST half-open probe boolean flag with the in-flight probe promise. A second user REST request now records a deferred circuit guard and awaits the first probe; if the first probe succeeds, the second request continues through the normal request path, and if the first probe fails, the second request rejects with the standard `"Device circuit open"` error. Added regression coverage for both queued-success and queued-failure double-tap paths.
 
 ### HARD9-062 — Startup saved-device fallback commits the selection before verification and keeps it on failure
 - **Area:** transport · **Severity:** P3 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
