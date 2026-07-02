@@ -19,10 +19,12 @@ import java.io.BufferedReader
 import java.io.IOException
 import java.io.InputStreamReader
 import java.net.ConnectException
+import java.net.HttpURLConnection
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.SocketTimeoutException
+import java.net.URL
 import java.net.UnknownHostException
 import org.json.JSONException
 import java.nio.charset.StandardCharsets
@@ -40,6 +42,7 @@ import org.junit.runner.RunWith
 import org.mockito.Mockito.any
 import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.robolectric.RobolectricTestRunner
 
@@ -154,6 +157,24 @@ class DeviceDiscoveryPluginTest {
     assertEquals(setOf("test"), candidate.sources)
     // An IPv4-literal host is never echoed back as a hostname.
     assertNull(candidate.host)
+  }
+
+  @Test
+  fun probeTargetDisconnectsWhenBodyReadFails() {
+    // Regression (HARD9-076): only the explicit success/4xx paths called
+    // disconnect() - an exception thrown while reading the response body
+    // (e.g. the device dropping mid-transfer under load) skipped all of
+    // them, leaking the connection's socket/FD. A `finally` must cover this
+    // path too.
+    val connection = mock(HttpURLConnection::class.java)
+    plugin.httpConnectionFactory = { connection }
+    `when`(connection.responseCode).thenReturn(200)
+    `when`(connection.inputStream).thenThrow(IOException("mid-body read failure"))
+
+    val candidate = plugin.probeTarget(target("127.0.0.1", 8080), 1_000)
+
+    assertNull(candidate)
+    verify(connection).disconnect()
   }
 
   @Test
