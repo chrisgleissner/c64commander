@@ -7,6 +7,7 @@
  */
 
 import { isCiaTimerRegister } from "@/lib/machine/ciaTimerRegisters";
+import { addErrorLog } from "@/lib/logging";
 import type { CpuState } from "./cpuState";
 import { assertValidCpuState } from "./cpuState";
 import { buildCrt } from "./crt";
@@ -44,6 +45,13 @@ export type RestoreCpuApi = {
     data: Uint8Array,
     options?: Record<string, unknown>,
   ) => Promise<{ errors: string[] }>;
+  /**
+   * Used only as a best-effort recovery when a failure strikes after the
+   * restore cartridge has already been uploaded (the C64 is reset into it
+   * and frozen at that point regardless of what this restore attempt does
+   * next) - never called for a pre-upload failure. See HARD9-036.
+   */
+  machineReset: () => Promise<{ errors: string[] }>;
 };
 
 export type CpuRestoreRange = {
@@ -210,38 +218,67 @@ export const restoreCpuSnapshot = async (
   const blob = new Blob([crt as BlobPart], { type: "application/octet-stream" });
   await api.runCartridgeUpload(blob, { filename });
 
-  // 2) Wait for the cold-start to reach its spin loop ($02 == READY).
-  const deadline = now() + readyTimeout;
-  let ready = false;
-  for (;;) {
-    const value = (await readWithRetry(api, toHexAddress(RESTORE_FLAG_ADDR), 1, sleep))[0];
-    if (value === RESTORE_FLAG_READY) {
-      ready = true;
-      break;
+  // From here on the C64 is definitely reset into our spin-loop cart - any
+  // failure below leaves it frozen there with no way for the user to get it
+  // back short of a manual power-cycle. Writing the $02 GO flag as a
+  // "recovery" isn't safe in general (steps 3/4 not finishing means the RTI
+  // frame the cart finalizes into may be incomplete or absent, so releasing
+  // it can crash into garbage); a full machine reset is the one recovery
+  // that's safe regardless of which step failed. Best-effort only - if the
+  // reset itself fails there is nothing left to try here. See HARD9-036.
+  try {
+    // 2) Wait for the cold-start to reach its spin loop ($02 == READY).
+    const deadline = now() + readyTimeout;
+    let ready = false;
+    for (;;) {
+      const value = (await readWithRetry(api, toHexAddress(RESTORE_FLAG_ADDR), 1, sleep))[0];
+      if (value === RESTORE_FLAG_READY) {
+        ready = true;
+        break;
+      }
+      if (now() >= deadline) break;
+      await sleep(pollInterval);
     }
-    if (now() >= deadline) break;
-    await sleep(pollInterval);
+    if (!ready) {
+      throw new Error("CPU restore: cartridge did not reach its handshake (READY flag never set)");
+    }
+
+    // 3) DMA the snapshot RAM (skipping $02 and the CIA timer registers).
+    for (const { start, bytes } of ramRanges) {
+      await writeRangeWithSkips(api, start, bytes, sleep);
+    }
+
+    // 4) Plant the RTI frame (P, PCL, PCH) in the free stack just below the saved SP.
+    const rtiFrameAddress = RESTORE_STUB_ADDR + cpu.sp - 2;
+    await writeWithRetry(
+      api,
+      toHexAddress(rtiFrameAddress),
+      new Uint8Array([cpu.p & 0xff, cpu.pc & 0xff, (cpu.pc >> 8) & 0xff]),
+      sleep,
+    );
+
+    // 5) Release: the cart copies the finalize stub to the free stack and resumes.
+    await writeWithRetry(api, toHexAddress(RESTORE_FLAG_ADDR), new Uint8Array([RESTORE_FLAG_GO]), sleep);
+
+    return { ok: true, rtiFrameAddress };
+  } catch (error) {
+    let recovery = "reset not attempted";
+    try {
+      await api.machineReset();
+      recovery = "the machine was automatically reset";
+    } catch (resetError) {
+      addErrorLog("CPU restore recovery reset failed", {
+        error: (resetError as Error).message,
+      });
+      recovery = "automatic reset also failed - power-cycle the machine manually";
+    }
+    const original = error as Error;
+    const augmented = new Error(`${original.message} (${recovery})`);
+    augmented.name = original.name;
+    addErrorLog("CPU restore failed after cartridge upload", {
+      error: original.message,
+      recovery,
+    });
+    throw augmented;
   }
-  if (!ready) {
-    throw new Error("CPU restore: cartridge did not reach its handshake (READY flag never set)");
-  }
-
-  // 3) DMA the snapshot RAM (skipping $02 and the CIA timer registers).
-  for (const { start, bytes } of ramRanges) {
-    await writeRangeWithSkips(api, start, bytes, sleep);
-  }
-
-  // 4) Plant the RTI frame (P, PCL, PCH) in the free stack just below the saved SP.
-  const rtiFrameAddress = RESTORE_STUB_ADDR + cpu.sp - 2;
-  await writeWithRetry(
-    api,
-    toHexAddress(rtiFrameAddress),
-    new Uint8Array([cpu.p & 0xff, cpu.pc & 0xff, (cpu.pc >> 8) & 0xff]),
-    sleep,
-  );
-
-  // 5) Release: the cart copies the finalize stub to the free stack and resumes.
-  await writeWithRetry(api, toHexAddress(RESTORE_FLAG_ADDR), new Uint8Array([RESTORE_FLAG_GO]), sleep);
-
-  return { ok: true, rtiFrameAddress };
 };

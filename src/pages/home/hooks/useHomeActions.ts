@@ -19,6 +19,7 @@ import { loadRamDumpFolderConfig, type RamDumpFolderConfig } from "@/lib/config/
 import { resetDiskDevices, resetPrinterDevice } from "@/lib/disks/resetDrives";
 import { createCpuSnapshot, createSnapshot, CpuSnapshotUnsupportedError } from "@/lib/snapshot/snapshotCreation";
 import { restoreCpuSnapshotFromDecoded } from "@/lib/snapshot/cpu/cpuSnapshot";
+import { CpuRestoreUnsupportedError } from "@/lib/snapshot/cpu/restoreCart";
 import { CpuCaptureFailedError } from "@/lib/snapshot/cpu/captureEngine";
 import { deleteSnapshotFromStore, snapshotEntryToBytes, updateSnapshotLabel } from "@/lib/snapshot/snapshotStore";
 import { decodeSnapshot } from "@/lib/snapshot/snapshotFormat";
@@ -246,20 +247,48 @@ export function useHomeActions() {
       async () => {
         const bytes = snapshotEntryToBytes(snapshot);
         const decoded = decodeSnapshot(bytes);
+        const successLabel = snapshot.metadata.label ?? snapshot.metadata.created_at;
+        const loadRamOnly = async () => {
+          const ranges = decoded.ranges.map((r, i) => ({
+            start: r.start,
+            bytes: decoded.blocks[i],
+          }));
+          await loadMemoryRanges(api, ranges);
+        };
         // CPU+RAM snapshots resume at the exact PC via the uploaded-cartridge
         // path; only when the snapshot actually carries verified CPU state.
         if (decoded.metadata?.cpu_state_captured && decoded.metadata.cpu) {
-          await restoreCpuSnapshotFromDecoded(api, decoded);
+          try {
+            await restoreCpuSnapshotFromDecoded(api, decoded);
+          } catch (error) {
+            // CpuRestoreUnsupportedError is thrown before any cartridge
+            // upload (stack pointer too low, missing the $01 banking byte) -
+            // nothing on the device has been touched yet, so a RAM-only
+            // restore is always a safe fallback instead of just failing
+            // outright. Any other error means the cartridge was already
+            // uploaded and restoreCpuSnapshotFromDecoded has already
+            // attempted a recovery reset - let it propagate to the normal
+            // error-toast path below (its message already explains the
+            // recovery outcome). See HARD9-036.
+            if (!(error instanceof CpuRestoreUnsupportedError)) throw error;
+            addErrorLog("CPU restore unsupported, falling back to RAM-only restore", {
+              error: error.message,
+            });
+            await loadRamOnly();
+            toast({
+              title: "Snapshot restored (RAM only)",
+              description: `${successLabel} — exact CPU state could not be restored (${error.message})`,
+              variant: "destructive",
+            });
+            return;
+          }
+          toast({ title: "Snapshot restored", description: successLabel });
           return;
         }
-        const ranges = decoded.ranges.map((r, i) => ({
-          start: r.start,
-          bytes: decoded.blocks[i],
-        }));
-        await loadMemoryRanges(api, ranges);
+        await loadRamOnly();
+        toast({ title: "Snapshot restored", description: successLabel });
       },
-      "Snapshot restored",
-      snapshot.metadata.label ?? snapshot.metadata.created_at,
+      "",
     );
     setMachineExecutionState("running");
   });

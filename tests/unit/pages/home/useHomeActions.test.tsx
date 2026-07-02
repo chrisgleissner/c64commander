@@ -132,6 +132,7 @@ vi.mock("@/lib/snapshot/currentPlaybackSnapshotLabel", () => ({
 
 import { useHomeActions } from "@/pages/home/hooks/useHomeActions";
 import type { SnapshotStorageEntry } from "@/lib/snapshot/snapshotTypes";
+import { CpuRestoreUnsupportedError } from "@/lib/snapshot/cpu/restoreCart";
 
 describe("useHomeActions", () => {
   beforeEach(() => {
@@ -526,5 +527,95 @@ describe("useHomeActions", () => {
     // The CPU path returns early — the RAM-range loader must not run.
     expect(loadMemoryRangesMock).not.toHaveBeenCalled();
     expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: "Snapshot restored" }));
+  });
+
+  it("falls back to a RAM-only restore when CPU restore is unsupported (HARD9-036)", async () => {
+    decodeSnapshotMock.mockReturnValue({
+      version: 2,
+      snapshotType: "program",
+      timestamp: 0,
+      ranges: [{ start: 0, length: 100 }],
+      blocks: [new Uint8Array(100)],
+      metadata: {
+        snapshot_type: "program",
+        display_ranges: [],
+        created_at: "",
+        cpu_state_captured: true,
+        cpu: { pc: 0xc000, a: 0, x: 0, y: 0, sp: 0xf6, p: 0x30, flags: {} },
+      },
+    });
+    restoreCpuSnapshotFromDecodedMock.mockRejectedValueOnce(
+      new CpuRestoreUnsupportedError("stack pointer $05 is below the safe minimum"),
+    );
+    const snapshot: SnapshotStorageEntry = {
+      id: "snap-cpu-unsupported",
+      filename: "c64-program.c64snap",
+      bytesBase64: "",
+      createdAt: "2026-01-01T12:00:00.000Z",
+      snapshotType: "program",
+      metadata: { snapshot_type: "program", display_ranges: [], created_at: "2026-01-01 12:00:00" },
+    };
+
+    const { result } = renderHook(() => useHomeActions());
+    await act(async () => {
+      await result.current.handleRestoreSnapshot(snapshot);
+    });
+
+    // CpuRestoreUnsupportedError is thrown before any cartridge upload -
+    // nothing on the device was touched, so RAM-only restore is safe.
+    expect(loadMemoryRangesMock).toHaveBeenCalledWith(apiMock, [{ start: 0, bytes: expect.any(Uint8Array) }]);
+    expect(reportUserErrorMock).not.toHaveBeenCalled();
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: expect.stringContaining("RAM only"),
+        description: expect.stringContaining("stack pointer $05"),
+        variant: "destructive",
+      }),
+    );
+  });
+
+  it("reports a post-upload CPU restore failure as an error instead of silently falling back (HARD9-036)", async () => {
+    decodeSnapshotMock.mockReturnValue({
+      version: 2,
+      snapshotType: "program",
+      timestamp: 0,
+      ranges: [{ start: 0, length: 100 }],
+      blocks: [new Uint8Array(100)],
+      metadata: {
+        snapshot_type: "program",
+        display_ranges: [],
+        created_at: "",
+        cpu_state_captured: true,
+        cpu: { pc: 0xc000, a: 0, x: 0, y: 0, sp: 0xf6, p: 0x30, flags: {} },
+      },
+    });
+    // restoreCpuSnapshotFromDecoded itself already attempts a recovery reset
+    // and augments the message before rejecting (see restoreCart.ts) - this
+    // is a plain Error, not CpuRestoreUnsupportedError, since the cartridge
+    // was already uploaded by this point.
+    restoreCpuSnapshotFromDecodedMock.mockRejectedValueOnce(
+      new Error("CPU restore: cartridge did not reach its handshake (the machine was automatically reset)"),
+    );
+    const snapshot: SnapshotStorageEntry = {
+      id: "snap-cpu-post-upload-fail",
+      filename: "c64-program.c64snap",
+      bytesBase64: "",
+      createdAt: "2026-01-01T12:00:00.000Z",
+      snapshotType: "program",
+      metadata: { snapshot_type: "program", display_ranges: [], created_at: "2026-01-01 12:00:00" },
+    };
+
+    const { result } = renderHook(() => useHomeActions());
+    await act(async () => {
+      await result.current.handleRestoreSnapshot(snapshot);
+    });
+
+    expect(loadMemoryRangesMock).not.toHaveBeenCalled();
+    expect(reportUserErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "HOME_MACHINE_LOAD_RAM",
+        description: expect.stringContaining("automatically reset"),
+      }),
+    );
   });
 });
