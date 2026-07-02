@@ -150,7 +150,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-090 | Duplicate "Automatic Demo Mode" control with duplicate DOM id | settings | P3 | a11y, correctness | high | S | FIXED (2a13bb1c) |
 | HARD9-091 | Notification-duration slider persists on every drag tick | settings | P3 | performance, robustness | high | S | FIXED (0f8b213b) |
 | HARD9-092 | Orientation lock re-applied on every SettingsPage mount (incl. swipe transits) | settings | P3 | robustness, performance | high | S | FIXED (ea304c83) |
-| HARD9-093 | Mouse-drag gesture state stranded by a missed pointerup before intent lock | shell | P3 | robustness, ux | medium | S | OPEN |
+| HARD9-093 | Mouse-drag gesture state stranded by a missed pointerup before intent lock | shell | P3 | robustness, ux | medium | S | FIXED (f7332087) |
 | HARD9-094 | Deferred startup bootstrap never runs if the app launches hidden | state | P3 | robustness, correctness | medium | S | OPEN |
 | HARD9-095 | Module-scope import.meta.env read in App.tsx (Playwright collection tripwire) | state | P3 | robustness | high | S | OPEN |
 
@@ -871,10 +871,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (ea304c83):** Applied exactly as sketched: deleted the mode-keyed mount effect; `commitScreenOrientationMode` (only invoked from the user's own tap on an orientation option) now calls `applyScreenOrientationMode` itself, right after persisting. Startup application in `main.tsx:79` is unchanged and remains the sole source of the mount-time apply. Added regression tests asserting mount alone never calls `applyScreenOrientationMode`, and that a user selection calls it exactly once with the chosen mode; both fail against the pre-fix effect via git-stash.
 
 ### HARD9-093 — Mouse-drag gesture state stranded by a missed pointerup before intent lock
-- **Area:** shell · **Severity:** P3 · **Dimensions:** robustness, ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
+- **Area:** shell · **Severity:** P3 · **Dimensions:** robustness, ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (f7332087)
 - **Files:** `src/hooks/useSwipeGesture.ts:139-182,226-232,250-298`
 - **Failure scenario:** Pointer capture is deferred until intent is "navigating". A mouse drag staying under the 10px threshold (or classified "locked") has no capture; releasing outside the window means the container never gets `pointerup`, `state.active` stays true, and the next `pointerdown` is swallowed — one full press-drag interaction lost. Desktop/web only (touch has implicit capture).
 - **Fix sketch:** Listen for `pointerup`/`pointercancel` on `window` (or reset on a fresh `pointerdown` from the same pointerId).
+- **Resolution (f7332087):** Applied the fix sketch's first option: `pointerup`/`pointercancel` listeners moved from the container to `window`. A window listener still receives captured-pointer releases (they bubble past the capturing element), so the confirmed-"navigating" path is unaffected; it now also catches releases that land outside the container while capture was never set. Added a regression test that presses+moves under the axis-lock threshold, dispatches `pointerup` on `document.body` (outside the container) instead of the surface, and asserts the gesture still resets and the next `pointerdown` is not swallowed; confirmed it fails against the pre-fix container-only listeners via git-stash.
 
 ### HARD9-094 — Deferred startup bootstrap never runs if the app launches hidden
 - **Area:** state · **Severity:** P3 · **Dimensions:** robustness, correctness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
