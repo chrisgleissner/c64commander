@@ -35,6 +35,11 @@ import { buildPayloadPreviewFromJson, buildPayloadPreviewFromText } from "@/lib/
 const RETENTION_WINDOW_MS = 30 * 60 * 1000;
 const MAX_EVENT_COUNT = 25_000;
 const MAX_STORAGE_BYTES = 50 * 1024 * 1024;
+// decisionByCorrelation is a one-time "already emitted" dedup flag per
+// correlationId, not data that needs precise LRU/lifetime tracking - bounding
+// it and clearing the oldest half at the cap is enough to stop unbounded
+// growth over days-long sessions. See HARD9-056.
+const MAX_DECISION_CORRELATIONS = MAX_EVENT_COUNT;
 
 let sessionStartMs = Date.now();
 let events: TraceEvent[] = [];
@@ -132,6 +137,23 @@ const appendEvent = <T extends Record<string, unknown>>(
   }
 };
 
+/**
+ * Trims the oldest half of a Set's entries (insertion order) once it reaches
+ * capacity, in place. Exported standalone so its bounding behavior can be
+ * unit-tested without needing to hit the real production capacity. See
+ * HARD9-056.
+ */
+export const trimOldestHalfAtCapacity = <T>(set: Set<T>, capacity: number): void => {
+  if (set.size < capacity) return;
+  const dropCount = Math.floor(set.size / 2);
+  const oldest = set.values();
+  for (let index = 0; index < dropCount; index += 1) {
+    const next = oldest.next();
+    if (next.done) break;
+    set.delete(next.value);
+  }
+};
+
 const emitBackendDecision = (
   origin: TraceOrigin,
   correlationId: string,
@@ -139,6 +161,7 @@ const emitBackendDecision = (
   reason: BackendDecisionReason,
 ) => {
   if (decisionByCorrelation.has(correlationId)) return;
+  trimOldestHalfAtCapacity(decisionByCorrelation, MAX_DECISION_CORRELATIONS);
   decisionByCorrelation.add(correlationId);
   appendEvent("backend-decision", origin, correlationId, {
     selectedTarget: target,

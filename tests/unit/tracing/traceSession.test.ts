@@ -60,6 +60,7 @@ import {
   restoreTracesFromSession,
   recordDeviceGuard,
   TRACE_SESSION,
+  trimOldestHalfAtCapacity,
 } from "@/lib/tracing/traceSession";
 import { getCurrentTraceIdCounters, setTraceIdCounters } from "@/lib/tracing/traceIds";
 import type { TraceActionContext } from "@/lib/tracing/types";
@@ -1181,5 +1182,28 @@ describe("traceSession", () => {
       errorType: null,
     });
     expect(getTraceEvents().some((e) => e.type === "error")).toBe(false);
+  });
+
+  describe("trimOldestHalfAtCapacity", () => {
+    it("does nothing while the set is below capacity", () => {
+      const set = new Set(["a", "b", "c"]);
+      trimOldestHalfAtCapacity(set, 4);
+      expect(set).toEqual(new Set(["a", "b", "c"]));
+    });
+
+    it("drops the oldest half once the set reaches capacity, keeping newest entries", () => {
+      const set = new Set(["a", "b", "c", "d"]);
+      trimOldestHalfAtCapacity(set, 4);
+      expect(set).toEqual(new Set(["c", "d"]));
+    });
+
+    it("keeps trimming down as more entries are added past capacity", () => {
+      const set = new Set(["a", "b", "c", "d"]);
+      trimOldestHalfAtCapacity(set, 4);
+      set.add("e");
+      set.add("f");
+      trimOldestHalfAtCapacity(set, 4);
+      expect(set).toEqual(new Set(["e", "f"]));
+    });
   });
 });
