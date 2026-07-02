@@ -69,7 +69,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-009 | Full-range custom snapshot silently saves empty (u16 truncation) | snapshot | P1 | correctness, data-loss | high [verified] | S | OPEN |
 | HARD9-010 | Mount/eject success judged by HTTP status; firmware in-body errors discarded | disks | P1 | correctness, ux, robustness | medium | S | FIXED (c734dd1d) |
 | HARD9-011 | CommoServe-imported disks permanently unmountable after remount | disks | P1 | data-loss, ux, correctness | high | M | OPEN |
-| HARD9-012 | Disks page hardcodes read-only mounts, breaking in-game saves | disks | P1 | correctness, ux | medium | S | OPEN |
+| HARD9-012 | Disks page hardcodes read-only mounts, breaking in-game saves | disks | P1 | correctness, ux | medium | S | FIXED (d8ed34c4) |
 | HARD9-013 | HVSC ingest promise never settles after cancel (reject in cancelled coroutine) | native | P1 | correctness, ux, robustness | high [verified] | S | OPEN |
 | HARD9-014 | Stale "update applied" records survive HVSC reset, block updates forever | hvsc | P1 | correctness, data-loss, ux | high [verified] | S | OPEN |
 | HARD9-015 | Poisoned empty browse snapshot → recursive HVSC add returns zero songs | hvsc | P1 | correctness, ux, robustness | medium | M | OPEN |
@@ -252,11 +252,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Notes:** Same root pattern as HARD9-047 (web local sources).
 
 ### HARD9-012 — Disks page hardcodes every mount as read-only, breaking in-game disk saves
-- **Area:** disks · **Severity:** P1 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
+- **Area:** disks · **Severity:** P1 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (d8ed34c4)
 - **Files:** `src/components/disks/HomeDiskManager.tsx:592-594`, `src/lib/playback/playbackRouter.ts:516-527`
 - **Failure scenario:** `handleMountDisk` always passes `{ mode: "readonly" }` (introduced in fe212a59, a test-hardening PR), including for the user's own D64s on the C64U. Games saving high scores/states fail with DOS 26 "WRITE PROTECT ON". The same disk launched via Play mounts `"readwrite"` (`playbackRouter.ts:520`; `mountDiskToDrive` default) — inconsistent, and no UI exposes the mode.
 - **Evidence:** `HomeDiskManager.tsx:593` is the only production caller passing a mode; `MountDiskToDriveOptions` defaults to `"readwrite"` (`diskMount.ts:310`).
 - **Fix sketch:** Default library mounts to `readwrite` (matching playback) or expose a read-only toggle in the mount sheet; if read-only-by-default is intended, surface the mode on the drive card so DOS 26 is explicable.
+- **Resolution (d8ed34c4):** Took the first fix-sketch option - removed the `{ mode: "readonly" }` override entirely so library mounts fall back to `mountDiskToDrive`'s existing `readwrite` default, matching Play exactly. No read-only toggle was added since nothing in the codebase or its history indicates read-only-by-default was an intentional product decision (it traces to one line added incidentally in a large unrelated hardening commit).
 
 ### HARD9-013 — HVSC ingest promise never settles after explicit cancel (reject skipped in cancelled coroutine)
 - **Area:** native · **Severity:** P1 · **Dimensions:** correctness, ux-responsiveness, robustness · **Confidence:** high **[verified]** · **Effort:** S · **Status:** OPEN
