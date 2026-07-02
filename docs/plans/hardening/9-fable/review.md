@@ -76,7 +76,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-016 | Latest-intent write lane drops committed writes to a different config item | config | P1 | data-loss, correctness, ux | high | M | OPEN |
 | HARD9-017 | Profile load/revert/flash-load never invalidate `c64-config-items` | config | P1 | correctness, ux | high [verified] | S | OPEN |
 | HARD9-018 | Save-to-App / revert baseline / verification read a stale persistent cache | config | P1 | correctness, data-loss | high | M | OPEN |
-| HARD9-019 | Full trace ZIP exported on every recorded error | diagnostics | P1 | performance, ux | high | S | OPEN |
+| HARD9-019 | Full trace ZIP exported on every recorded error | diagnostics | P1 | performance, ux | high | S | FIXED (4c292809) |
 | HARD9-020 | Unguarded localStorage log writes; O(n) parse/stringify per log line | diagnostics | P1 | robustness, correctness, perf | high | M | OPEN |
 | HARD9-021 | Closed diagnostics overlay copies full trace/log stores on every event | diagnostics | P1 | performance, ux | high | M | OPEN |
 | HARD9-022 | CONSERVATIVE preset gets no half-open probe; user CTAs hard-fail in circuit window | transport | P2 | ux, correctness | high | S | FIXED (9ab556cb) |
@@ -300,11 +300,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Fix sketch:** Give `fetchAllConfig` a `fresh: true` mode bypassing `getCachedCategory` for snapshot capture, Save-to-App, and revert verification; keep the cache for background enrichment only (or add read timestamps and reject stale entries).
 
 ### HARD9-019 — Full trace ZIP exported on every recorded error
-- **Area:** diagnostics · **Severity:** P1 · **Dimensions:** performance, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** diagnostics · **Severity:** P1 · **Dimensions:** performance, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** FIXED (4c292809)
 - **Files:** `src/lib/tracing/traceSession.ts:573-591,604-613`, `src/lib/tracing/fetchTrace.ts:90,157-159`, `src/App.tsx:352-395`
 - **Failure scenario:** Device unreachable (common per c64u flakiness). Every failed poll produces a fresh `Error`, so `errorOnce` (WeakSet keyed by Error identity) never dedups; each failure runs `exportTraceZip()` — `JSON.stringify(getTraceEvents(), null, 2)` over up to 25,000 events / 50MB plus synchronous `zipSync` — on the main thread, every few seconds, for the entire outage. UI jank, battery drain, GC churn.
 - **Evidence:** `recordTraceError` schedules `setTimeout(() => { const data = exportTraceZip(); ... })` unconditionally; callers include every non-OK HTTP response, every non-expected network failure, every window error/unhandled rejection, every failed traced action.
 - **Fix sketch:** Build the export lazily when the diagnostics share flow actually consumes `getLastTraceExport()`, or debounce error exports (≥60s apart) and cap the exported slice.
+- **Resolution (4c292809):** Removed the background export entirely rather than debouncing it: `getLastTraceExport()`/the `"c64u-trace-exported"` event it dispatched have no callers/listeners anywhere in the app, and the real Share/Download Diagnostics flow (`traceExport.ts`, `traceBridge.ts`) always calls `exportTraceZip()` itself, fresh, on demand - the eager per-error export was pure wasted work with no functional purpose to preserve. The error event itself is still recorded via `appendEvent`, and the duplicate-Error-instance dedup guard is unchanged.
 
 ### HARD9-020 — Unguarded localStorage log writes; O(n) parse/stringify per log line
 - **Area:** diagnostics · **Severity:** P1 · **Dimensions:** robustness, correctness, performance · **Confidence:** high · **Effort:** M · **Status:** OPEN
