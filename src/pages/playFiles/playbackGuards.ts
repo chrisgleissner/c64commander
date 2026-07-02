@@ -36,3 +36,34 @@ export const resolveVolumeSyncDecision = (
   if (nowMs - pendingTarget.setAtMs < holdMs) return "defer";
   return "clear";
 };
+
+export type AutoAdvanceDurationChangeInput = {
+  isPlaying: boolean;
+  isPaused: boolean;
+  durationMs: number | undefined;
+  trackStartedAtMs: number | null;
+  currentDueAtMs: number | undefined;
+};
+
+/**
+ * Recomputes the auto-advance due-time when the playing track's duration
+ * changes mid-track (the "Default duration" slider/input). Returns the new
+ * absolute due-time, or null when no re-arm is needed (paused, no track
+ * playing, or the recomputed value already matches). Only applies while
+ * actively playing: on resume from pause, handlePauseResume already
+ * recomputes dueAtMs from the live durationMs and elapsedMs. See HARD9-006.
+ */
+export const resolveAutoAdvanceDueAtMsOnDurationChange = ({
+  isPlaying,
+  isPaused,
+  durationMs,
+  trackStartedAtMs,
+  currentDueAtMs,
+}: AutoAdvanceDurationChangeInput): number | null => {
+  if (!isPlaying || isPaused) return null;
+  if (typeof durationMs !== "number") return null;
+  if (trackStartedAtMs === null) return null;
+  const nextDueAtMs = trackStartedAtMs + durationMs;
+  if (nextDueAtMs === currentDueAtMs) return null;
+  return nextDueAtMs;
+};

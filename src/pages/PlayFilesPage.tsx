@@ -110,7 +110,7 @@ import {
 } from "@/pages/playFiles/backgroundExecutionPolicy";
 import { setPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
-import { resolveVolumeSyncDecision } from "@/pages/playFiles/playbackGuards";
+import { resolveAutoAdvanceDueAtMsOnDurationChange, resolveVolumeSyncDecision } from "@/pages/playFiles/playbackGuards";
 import type { PlayableEntry, PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from "@/pages/playFiles/types";
 import {
   buildConfigReferenceFromBrowserSelection,
@@ -1544,6 +1544,27 @@ export default function PlayFilesPage() {
     if (debouncedDurationOverrideMs === undefined) return;
     persistDurationOverride(debouncedDurationOverrideMs);
   }, [debouncedDurationOverrideMs, persistDurationOverride]);
+
+  // Re-arm the auto-advance guard when the playing track's duration changes
+  // mid-track (slider/input), so auto-advance fires at the new duration
+  // instead of the stale one captured at track launch. No-op while paused
+  // (handlePauseResume already recomputes dueAtMs from the live durationMs
+  // on resume) and a no-op on ordinary track launches, since playItem sets
+  // trackStartedAtRef/guard.dueAtMs and durationMs together already in sync.
+  useEffect(() => {
+    const guard = autoAdvanceGuardRef.current;
+    const nextDueAtMs = resolveAutoAdvanceDueAtMsOnDurationChange({
+      isPlaying,
+      isPaused,
+      durationMs,
+      trackStartedAtMs: trackStartedAtRef.current,
+      currentDueAtMs: guard?.dueAtMs,
+    });
+    if (nextDueAtMs === null || !guard) return;
+    guard.dueAtMs = nextDueAtMs;
+    guard.autoFired = false;
+    setAutoAdvanceDueAtMs(nextDueAtMs);
+  }, [durationMs, isPaused, isPlaying, setAutoAdvanceDueAtMs]);
 
   const handleDurationSliderChange = useCallback(
     (value: number[]) => {
