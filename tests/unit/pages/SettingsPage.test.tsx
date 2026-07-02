@@ -36,6 +36,7 @@ import {
   saveHideStatusBar,
   saveHideNavigationBar,
   saveVolumeSliderPreviewIntervalMs,
+  saveNotificationDurationMs,
   APP_SETTINGS_KEYS,
 } from "@/lib/config/appSettings";
 import * as deviceSafetySettings from "@/lib/config/deviceSafetySettings";
@@ -511,6 +512,24 @@ vi.mock("@/lib/config/appSettings", () => ({
 
 vi.mock("@/lib/native/screenOrientation", () => ({
   applyScreenOrientationMode: vi.fn(async () => undefined),
+}));
+
+vi.mock("@/components/ui/slider", () => ({
+  // The only <Slider> on SettingsPage is the notification-duration control.
+  // Mocked as a native range input so tests can distinguish drag ticks
+  // (onValueChange -> onChange) from the drag release (onValueCommit -> onMouseUp),
+  // matching the mock convention already used for this component elsewhere.
+  Slider: ({ value, onValueChange, onValueCommit, ...props }: any) => (
+    <input
+      type="range"
+      min={props.min}
+      max={props.max}
+      step={props.step}
+      value={value?.[0] ?? 0}
+      onChange={(event) => onValueChange?.([Number((event.target as HTMLInputElement).value)])}
+      onMouseUp={(event) => onValueCommit?.([Number((event.target as HTMLInputElement).value)])}
+    />
+  ),
 }));
 
 vi.mock("@/components/archive/OnlineArchiveDialog", () => ({
@@ -2210,6 +2229,28 @@ describe("SettingsPage", () => {
 
       await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
     });
+  });
+});
+
+describe("SettingsPage notification duration slider", () => {
+  it("does not persist on every drag tick, only when the drag is released", () => {
+    renderSettingsPage();
+
+    const slider = screen.getByRole("slider");
+
+    fireEvent.change(slider, { target: { value: "4500" } });
+    fireEvent.change(slider, { target: { value: "5000" } });
+    fireEvent.change(slider, { target: { value: "5500" } });
+
+    // Local UI (the "Duration: Ns" label) tracks every drag tick immediately...
+    expect(screen.getByText(/Duration: 5\.5s/)).toBeInTheDocument();
+    // ...but nothing is written to device/localStorage mid-drag.
+    expect(saveNotificationDurationMs).not.toHaveBeenCalled();
+
+    fireEvent.mouseUp(slider);
+
+    expect(saveNotificationDurationMs).toHaveBeenCalledTimes(1);
+    expect(saveNotificationDurationMs).toHaveBeenCalledWith(5500);
   });
 });
 

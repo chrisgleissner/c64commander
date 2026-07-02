@@ -2625,10 +2625,8 @@ export default function SettingsPage() {
                   max={NOTIFICATION_DURATION_MAX_MS}
                   step={500}
                   value={[notificationDurationMs]}
-                  onValueChange={([value]) => {
-                    setNotificationDurationMs(value);
-                    saveNotificationDurationMs(value);
-                  }}
+                  onValueChange={([value]) => setNotificationDurationMs(value)}
+                  onValueCommit={([value]) => saveNotificationDurationMs(value)}
                 />
                 <p className="text-xs text-muted-foreground">Default 4s. Range 2–8s.</p>
               </div>
