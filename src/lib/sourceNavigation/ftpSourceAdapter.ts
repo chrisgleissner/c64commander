@@ -166,7 +166,18 @@ const listFilesRecursive = async (
     if (entries.length > 0) {
       onProgress?.(entries.length);
     }
-    return attachPartialFailures(entries, result.partialFailures ?? []);
+    const failures = result.partialFailures ?? [];
+    // The native walk bails on the first FTP data-channel timeout instead of
+    // cascading into more PASV connections against known-flaky firmware -
+    // that early exit must be visible, not silently presented as a complete
+    // listing. Reuses the existing partialFailures surface. See HARD9-078.
+    if (result.timedOut) {
+      failures.push({
+        path: normalizedPath,
+        message: "Listing incomplete: device FTP timed out",
+      });
+    }
+    return attachPartialFailures(entries, failures);
   }
 
   const queue = [path || "/"];

@@ -169,6 +169,26 @@ describe("ftpSourceAdapter", () => {
     expect(deltas).toEqual([2]);
   });
 
+  it("surfaces a native timedOut walk as a partial failure (HARD9-078)", async () => {
+    // Regression: the native walk bailing early on an FTP data-channel
+    // timeout must not present a silently truncated tree as a complete
+    // listing.
+    isNativePlatformMock.mockReturnValue(true);
+    listFtpDirectoryRecursiveMock.mockResolvedValue({
+      path: "/",
+      entries: [{ type: "file", name: "root.sid", path: "/root.sid", size: 5, modifiedAt: "now" }],
+      partialFailures: [],
+      timedOut: true,
+    });
+
+    const source = createUltimateSourceLocation();
+    const results = await source.listFilesRecursive("/");
+
+    expect(results.partialFailures).toEqual([
+      { path: "/", message: "Listing incomplete: device FTP timed out" },
+    ]);
+  });
+
   it("reports incremental onProgress as files are discovered during the recursive walk", async () => {
     // Regression for S2-DISKS-FTP-RECURSIVE-SCAN-STALL: a broad-folder scan must
     // report progress as it goes, not only once at the end (which showed a stuck

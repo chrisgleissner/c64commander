@@ -33,6 +33,10 @@ export type FtpListResult = {
 
 export type FtpRecursiveListResult = FtpListResult & {
   partialFailures: FtpRecursiveFailure[];
+  // True when the native walk bailed early because the device's FTP data
+  // channel timed out mid-walk - entries/partialFailures reflect only what
+  // was gathered before the bail, not the full tree. See HARD9-078.
+  timedOut: boolean;
 };
 
 export const FTP_CONNECT_TIMEOUT_MS = 1_500;
@@ -193,6 +197,7 @@ const executeFtpRecursiveList = async (
     const responsePayload = {
       entries: response.entries,
       partialFailures: response.partialFailures ?? [],
+      timedOut: response.timedOut ?? false,
     };
     recordFtpOperation(action, {
       operation: "list",
@@ -215,6 +220,7 @@ const executeFtpRecursiveList = async (
       path: normalizedPath,
       entries: response.entries,
       partialFailures: response.partialFailures ?? [],
+      timedOut: response.timedOut ?? false,
     };
   } catch (error) {
     const err = error as Error;

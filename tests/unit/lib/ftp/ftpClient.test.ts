@@ -307,6 +307,26 @@ describe("ftpClient", () => {
       );
     });
 
+    it("propagates timedOut from the native bridge (HARD9-078)", async () => {
+      vi.mocked(FtpClient.listDirectoryRecursive).mockResolvedValue({
+        entries: mockEntries,
+        partialFailures: [],
+        timedOut: true,
+      } as any);
+
+      const result = await listFtpDirectoryRecursive({ ...mockListOptions, path: "/HVSC" });
+
+      expect(result.timedOut).toBe(true);
+    });
+
+    it("defaults timedOut to false when the bridge omits it", async () => {
+      vi.mocked(FtpClient.listDirectoryRecursive).mockResolvedValue({ entries: [] } as any);
+
+      const result = await listFtpDirectoryRecursive({ ...mockListOptions, path: "" });
+
+      expect(result.timedOut).toBe(false);
+    });
+
     it("uses an existing active action when available", async () => {
       const mockAction = { id: "recursive-active" };
       vi.mocked(getActiveAction).mockReturnValue(mockAction as any);

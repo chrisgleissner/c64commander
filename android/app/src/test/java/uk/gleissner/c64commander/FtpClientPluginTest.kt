@@ -403,6 +403,45 @@ class FtpClientPluginTest {
   }
 
   @Test
+  fun listDirectoryRecursiveReportsTimedOutOnDataChannelTimeout() {
+    // Regression (HARD9-078): the response field was "timed_out" (snake_case)
+    // while the JS side reads/declares nothing but camelCase fields, so this
+    // "the walk aborted early" signal was never actually surfaced anywhere.
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    `when`(ftpClient.listFiles("/")).thenThrow(SocketTimeoutException("data channel timed out"))
+    `when`(ftpClient.isConnected).thenReturn(true)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("secret")
+    `when`(call.getString("path")).thenReturn("/")
+    `when`(call.getInt("maxDepth")).thenReturn(8)
+    `when`(call.getInt("maxEntries")).thenReturn(5000)
+
+    var resolved: JSObject? = null
+    doAnswer { invocation ->
+              resolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(any())
+
+    plugin.listDirectoryRecursive(call)
+
+    assertEquals(true, resolved?.getBoolean("timedOut"))
+    val failures = resolved?.getJSONArray("partialFailures")
+    assertNotNull(failures)
+    assertEquals(1, failures?.length())
+  }
+
+  @Test
   fun listDirectorySkipsDotEntries() {
     val plugin = FtpClientPlugin()
     plugin.runTask = { runnable -> runnable.run() }

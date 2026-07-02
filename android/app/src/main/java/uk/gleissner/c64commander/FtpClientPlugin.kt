@@ -347,7 +347,12 @@ class FtpClientPlugin : Plugin() {
                 val result = JSObject()
                 result.put("entries", entries)
                 result.put("partialFailures", failures)
-                result.put("timed_out", timedOut)
+                // camelCase to match every other field in this response and the
+                // rest of the plugin's JS-facing contract - the JS side has no
+                // snake_case fields anywhere else, so "timed_out" was never read
+                // by either spelling and the "walk aborted early" signal was
+                // silently dropped. See HARD9-078.
+                result.put("timedOut", timedOut)
                 call.resolve(result)
               } catch (error: Exception) {
                 val message = buildFailureMessage("listDirectoryRecursive", error, connectTimeoutMs, timeoutMs)
