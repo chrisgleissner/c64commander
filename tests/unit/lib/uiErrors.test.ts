@@ -14,6 +14,7 @@ import {
   clearToastsOnDeviceSwitch,
   clearConnectivityErrorToastsForHost,
   __clearDedupStateForTests,
+  isTransientConnectivityFailure,
 } from "@/lib/uiErrors";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
@@ -207,6 +208,13 @@ describe("uiErrors", () => {
     expect(addLog).not.toHaveBeenCalledWith("warn", expect.anything(), expect.anything());
   });
 
+  it.each(["Device circuit open", "Device circuit probe already in flight", "Device not ready for requests"])(
+    "classifies %s as a transient connectivity failure",
+    (message) => {
+      expect(isTransientConnectivityFailure(message)).toBe(true);
+    },
+  );
+
   describe("ERROR_POLICY §3 — background operations are S0 (log only, never toast)", () => {
     it("suppresses toast when background is true and logs with suppressedReason", () => {
       reportUserError({
@@ -385,6 +393,33 @@ describe("uiErrors", () => {
 
       expect(connectivityDismiss).toHaveBeenCalledTimes(1);
       expect(otherDismiss).not.toHaveBeenCalled();
+    });
+
+    it("clearConnectivityErrorToastsForHost dismisses circuit and state-gate toasts for that host", () => {
+      const circuitDismiss = vi.fn();
+      const stateDismiss = vi.fn();
+      vi.mocked(toast).mockReturnValueOnce({ id: "1", dismiss: circuitDismiss, update: vi.fn() });
+      vi.mocked(toast).mockReturnValueOnce({ id: "2", dismiss: stateDismiss, update: vi.fn() });
+
+      reportUserError({
+        operation: "RESET_MACHINE",
+        title: "E",
+        description: "Reset failed",
+        error: new Error("Device circuit open"),
+        deviceHost: "u64",
+      });
+      reportUserError({
+        operation: "MOUNT_DISK",
+        title: "E",
+        description: "Mount failed",
+        error: new Error("Device not ready for requests"),
+        deviceHost: "u64",
+      });
+
+      clearConnectivityErrorToastsForHost("u64");
+
+      expect(circuitDismiss).toHaveBeenCalledTimes(1);
+      expect(stateDismiss).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -139,7 +139,7 @@ const buildErrorDetails = (error?: unknown) => {
 // instead of duplicating transient-failure pattern strings.
 export const isTransientConnectivityFailure = (message: string): boolean => {
   const normalized = message.toLowerCase();
-  return /host unreachable|service unavailable|http 503|failed to fetch|net::err|request timed out|networkerror|dns/.test(
+  return /host unreachable|service unavailable|http 503|failed to fetch|net::err|request timed out|networkerror|dns|device circuit open|device circuit probe already in flight|device not ready for (?:requests|ftp|telnet)/.test(
     normalized,
   );
 };
