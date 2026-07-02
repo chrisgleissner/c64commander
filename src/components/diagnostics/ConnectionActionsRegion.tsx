@@ -48,11 +48,15 @@ const toErrorMessage = (error: unknown) => (error instanceof Error ? error.messa
 
 /** §7.2 — Whether Retry connection should be visible */
 const shouldShowRetry = (connectivity: ConnectivityState): boolean =>
-  connectivity === "Offline" || connectivity === "Not yet connected" || connectivity === "Demo";
+  connectivity === "Offline" ||
+  connectivity === "Auth" ||
+  connectivity === "Not yet connected" ||
+  connectivity === "Demo";
 
 /** §7.2 — Whether the region should expand by default */
 export const isRecoveryFirstState = (connectivity: ConnectivityState, hadRecentFailure?: boolean): boolean =>
   connectivity === "Offline" ||
+  connectivity === "Auth" ||
   connectivity === "Not yet connected" ||
   connectivity === "Demo" ||
   Boolean(hadRecentFailure);

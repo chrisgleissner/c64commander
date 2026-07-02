@@ -475,8 +475,11 @@ export function UnifiedHealthBadge({ className }: Props) {
       // When the device is offline, a tap actively kicks off a reconnect in
       // addition to opening Diagnostics. The passive background re-probe can be
       // slow to recover when the device was unreachable at app launch, so this
-      // gives the user an immediate, obvious recovery affordance.
-      if (connectivity === "Offline") {
+      // gives the user an immediate, obvious recovery affordance. In the Auth
+      // sub-case (device reachable but rejected the password) the same manual
+      // probe re-hits the 401/403 and re-raises the password prompt via
+      // notifyAuthRequired (HARD9-001), so the badge tap is the recovery path.
+      if (connectivity === "Offline" || connectivity === "Auth") {
         void discoverConnection("manual");
       }
       requestDiagnosticsOpen("header");

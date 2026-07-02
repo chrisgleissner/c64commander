@@ -75,7 +75,7 @@ export type ConnectionSnapshot = Readonly<{
 
 const STARTUP_PROBE_INTERVAL_MS = 700;
 const PROBE_REQUEST_TIMEOUT_MS = 2500;
-const AUTH_REQUIRED_PROBE_ERROR = "Password required";
+export const AUTH_REQUIRED_PROBE_ERROR = "Password required";
 
 const isTestProbeEnabled = () => {
   const env = import.meta.env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
