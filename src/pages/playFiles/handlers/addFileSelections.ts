@@ -458,12 +458,16 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
               const resolvedItems = await applySonglengthsToItems(batch);
               throwIfAborted();
               appendedArchiveItems += resolvedItems.length;
+              // throwIfAborted must not run inside the updater: React may invoke it
+              // outside a normal try/catch (e.g. StrictMode double-invoke), where a
+              // thrown AbortError propagates to the nearest error boundary instead
+              // of being caught by this async function. See HARD9-033.
+              let next: PlaylistItem[] = [];
               setPlaylist((prev) => {
-                throwIfAborted();
-                const next = [...prev, ...resolvedItems];
-                playlistSnapshotRef.current = next;
+                next = [...prev, ...resolvedItems];
                 return next;
               });
+              playlistSnapshotRef.current = next;
               await new Promise((resolve) => setTimeout(resolve, 0));
             },
             {
@@ -626,12 +630,17 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             });
             appendedPlaylistItems += resolvedItems.length;
             const spT0 = Date.now();
+            throwIfAborted();
+            // throwIfAborted must not run inside the updater: React may invoke it
+            // outside a normal try/catch (e.g. StrictMode double-invoke), where a
+            // thrown AbortError propagates to the nearest error boundary instead
+            // of being caught by this async function. See HARD9-033.
+            let next: PlaylistItem[] = [];
             setPlaylist((prev) => {
-              throwIfAborted();
-              const next = prev.length === 0 ? resolvedItems : [...prev, ...resolvedItems];
-              playlistSnapshotRef.current = next;
+              next = prev.length === 0 ? resolvedItems : [...prev, ...resolvedItems];
               return next;
             });
+            playlistSnapshotRef.current = next;
             addLog("debug", "[hvsc-perf] setPlaylist done", { ms: Date.now() - spT0 });
             await new Promise((resolve) => setTimeout(resolve, 0));
             addLog("debug", "[hvsc-perf] appendPlaylistBatch done", { totalMs: Date.now() - batchT0 });
