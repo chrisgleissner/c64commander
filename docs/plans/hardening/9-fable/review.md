@@ -133,7 +133,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-073 | cancelRead after completion leaves permanent entries in cancelledReads | native | P3 | correctness, performance | high | S | FIXED (8ce52528) |
 | HARD9-074 | 7-Zip probe subprocess has no timeout — wedged probe bricks ingestion | native | P3 | robustness, ux | medium | S | FIXED (cef0d129) |
 | HARD9-075 | queryAllSongs materializes 50k rows on the shared Capacitor plugin thread | native | P3 | performance, ux | high | S | FIXED (3a1f6469) |
-| HARD9-076 | Device-discovery probe leaks HttpURLConnection on body-read failure | native | P3 | robustness, performance | high | S | OPEN |
+| HARD9-076 | Device-discovery probe leaks HttpURLConnection on body-read failure | native | P3 | robustness, performance | high | S | FIXED (9003d8e9) |
 | HARD9-077 | MainActivity.onCreate does synchronous filesystem repair on main thread | native | P3 | ux, performance | high | S | OPEN |
 | HARD9-078 | Recursive FTP listing's timed_out flag dropped by the JS contract | native | P3 | correctness | high | S | OPEN |
 | HARD9-079 | Native CommoServe transport ignores AbortSignal — Cancel doesn't cancel | sources | P3 | robustness, perf, ux | high | M | OPEN |
@@ -751,10 +751,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Fix sketch:** Run on `Dispatchers.IO` (resolving via NonCancellable main); page the query (limit/offset) to bound bridge payloads.
 
 ### HARD9-076 — Device-discovery probe leaks HttpURLConnection when the /v1/info body read fails
-- **Area:** native · **Severity:** P3 · **Dimensions:** robustness, performance · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** native · **Severity:** P3 · **Dimensions:** robustness, performance · **Confidence:** high · **Effort:** S · **Status:** FIXED (9003d8e9)
 - **Files:** `android/.../DeviceDiscoveryPlugin.kt:219-307`
 - **Failure scenario:** `probeTarget` only calls `connection.disconnect()` on explicit success/4xx paths. If the `inputStream` read throws mid-body (device drops under load), the catch swallows and returns null without disconnecting — sockets/FDs accumulate during repeated rediscovery against a flaky device.
 - **Fix sketch:** `try { ... } finally { connection.disconnect() }` around the probe body.
+- **Resolution (9003d8e9):** Implemented the fix sketch exactly: captured the connection outside the try body and added a `finally { openedConnection?.disconnect() }`, the only path that reliably runs regardless of which branch the probe takes. Left the existing explicit success/4xx `disconnect()` calls in place (harmless - idempotent). Added an injectable `httpConnectionFactory` (matching the existing `ftpClientFactory` pattern in `FtpClientPlugin`) so the body-read-failure path could be tested directly with a mocked connection; new regression test proven failing (disconnect() never called) against the pre-fix code via a targeted revert.
 
 ### HARD9-077 — MainActivity.onCreate performs synchronous filesystem repair on the main thread
 - **Area:** native · **Severity:** P3 · **Dimensions:** ux-responsiveness, performance · **Confidence:** high · **Effort:** S · **Status:** OPEN
