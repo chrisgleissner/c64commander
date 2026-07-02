@@ -570,25 +570,13 @@ export const recordTraceError = (action: TraceActionContext, error: Error, class
     errorType: resolved.errorType,
     failureClass: resolved.failureClass,
   });
-  if (typeof window !== "undefined") {
-    window.setTimeout(() => {
-      try {
-        const data = exportTraceZip();
-        lastExport = {
-          reason: "error",
-          timestamp: new Date().toISOString(),
-          data,
-        };
-        window.dispatchEvent(
-          new CustomEvent("c64u-trace-exported", {
-            detail: { reason: "error" },
-          }),
-        );
-      } catch (errorExport) {
-        console.warn("Failed to export error trace:", errorExport);
-      }
-    }, 0);
-  }
+  // Recording the error event above is the only work needed here. A full
+  // trace ZIP (JSON.stringify of up to 25k events + synchronous zipSync) used
+  // to be built on every single recorded error - during an outage that ran
+  // every few seconds on the main thread with nothing consuming the result
+  // (getLastTraceExport()/"c64u-trace-exported" have no callers/listeners in
+  // the app; the real Share/Download Diagnostics flow always builds a fresh
+  // export on demand via exportTraceZip()). See HARD9-019.
 };
 
 export const buildAppMetadata = () => {

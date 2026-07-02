@@ -469,7 +469,7 @@ describe("traceSession", () => {
     );
   });
 
-  it("deduplicates trace errors and exports on error", async () => {
+  it("deduplicates trace errors without triggering a background export (HARD9-019)", async () => {
     vi.useFakeTimers();
     const error = new Error("boom");
 
@@ -493,9 +493,13 @@ describe("traceSession", () => {
 
     vi.runAllTimers();
 
-    const lastExport = getLastTraceExport();
-    expect(lastExport?.reason).toBe("error");
-    expect(dispatchSpy).toHaveBeenCalled();
+    // Recording an error must not build a full trace ZIP - nothing consumes
+    // it (the real Share/Download Diagnostics flow always builds a fresh
+    // export on demand via exportTraceZip()). The ordinary "a trace event
+    // was appended" notification still fires (appendEvent's own concern,
+    // unrelated to this fix).
+    expect(getLastTraceExport()).toBeNull();
+    expect(dispatchSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: "c64u-trace-exported" }));
   });
 
   it("exports trace zips on demand", () => {
@@ -1058,30 +1062,6 @@ describe("traceSession", () => {
     replaceTraceEvents([oversizedEvent] as any);
 
     expect(getTraceEvents()).toHaveLength(0);
-  });
-
-  it("recordTraceError warns when error-trace export dispatch fails", () => {
-    vi.useFakeTimers();
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    vi.stubGlobal("window", {
-      dispatchEvent: vi.fn((event: { type?: string }) => {
-        if (event.type === "c64u-trace-exported") {
-          throw new Error("dispatch failed");
-        }
-      }),
-      setTimeout,
-      CustomEvent: class CustomEvent {
-        constructor(
-          public type: string,
-          public detail?: any,
-        ) {}
-      },
-    });
-
-    recordTraceError(action, new Error("boom"));
-    vi.runAllTimers();
-
-    expect(warnSpy).toHaveBeenCalledWith("Failed to export error trace:", expect.any(Error));
   });
 
   it("evictExpired calls dropOldest for truly expired events (line 73)", () => {
