@@ -238,6 +238,12 @@ export const buildIngestionFailureMessage = (failedSongs: number, totalSongs: nu
  * Shared helper: apply the canonical success state.  Both native and non-native paths
  * must call this so the `ingestionSummary` shape and `ingestionState` = 'ready' contract
  * are enforced at the facade boundary.
+ *
+ * Refuses to overwrite a cancelled state: cancellation is checked cooperatively at each
+ * stage boundary elsewhere in the pipeline, but the gap between the last check and this
+ * call (deletion loop, directory promotion, songlengths reload, finalize) is where a
+ * late-arriving cancel could otherwise still flip "Cancelled" back to "ready". See
+ * HARD9-084.
  */
 export const applyIngestionSuccess = ({
   plan,
@@ -247,6 +253,8 @@ export const applyIngestionSuccess = ({
   ingestedSongs,
   failedSongs,
   failedPaths,
+  cancelToken,
+  cancelTokens,
 }: {
   plan: { type: "baseline" | "update"; version: number };
   baselineInstalled: number | null;
@@ -255,7 +263,10 @@ export const applyIngestionSuccess = ({
   ingestedSongs: number;
   failedSongs: number;
   failedPaths: string[];
+  cancelToken: string;
+  cancelTokens: Map<string, { cancelled: boolean }>;
 }) => {
+  ensureNotCancelledWith(cancelTokens, cancelToken, (patch) => updateHvscState(patch as Partial<HvscState>));
   updateHvscState({
     installedBaselineVersion: baselineInstalled,
     installedVersion: plan.version,
@@ -507,11 +518,19 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
     );
   }
   pipeline.transition("EXTRACTED");
+  ensureNotCancelledLocal();
 
   pipeline.transition("INGESTING", { deletionCount: deletions.length });
   const deletionFailures: string[] = [];
   if (deletions.length) {
     for (const path of deletions) {
+      // Extraction is the only stage that checked cancellation (inside onEntry);
+      // everything after it - this deletion loop (up to thousands of round-trips
+      // on a large update), directory promotion, songlengths reload, and
+      // finalize - used to run unconditionally to completion even after cancel,
+      // so "Cancelled" in the UI coexisted with an ingest still mutating the
+      // library. See HARD9-084.
+      ensureNotCancelledLocal();
       try {
         await deleteLibraryFile(path);
         browseIndex.deleteSong(path);
@@ -543,10 +562,12 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
     );
   }
 
+  ensureNotCancelledLocal();
   if (plan.type === "baseline") {
     await promoteLibraryStagingDir();
   }
 
+  ensureNotCancelledLocal();
   // Persist browseIndex (fileName/sidMetadata/trackSubsongs parsed during
   // extraction) *before* the songlengths reload below, so the songlengths
   // projection sync - which now merges durations onto whatever is already
@@ -573,6 +594,7 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
     );
   }
 
+  ensureNotCancelledLocal();
   resetSonglengthsCache();
   const songlengthsPerfScope = beginHvscPerfScope("ingest:songlengths", {
     archiveName,
@@ -625,6 +647,8 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
     ingestedSongs: ingestionSummary.ingestedSongs,
     failedSongs: ingestionSummary.failedSongs,
     failedPaths: ingestionSummary.failedPaths,
+    cancelToken,
+    cancelTokens,
   });
   if (plan.type === "update") {
     markUpdateApplied(plan.version, "success");
@@ -791,6 +815,8 @@ const ingestArchivePathNative = async (options: {
       ingestedSongs: result.songsIngested,
       failedSongs: result.failedSongs,
       failedPaths: result.failedPaths,
+      cancelToken,
+      cancelTokens: runtimeState.cancelTokens,
     });
 
     if (plan.type === "update") {

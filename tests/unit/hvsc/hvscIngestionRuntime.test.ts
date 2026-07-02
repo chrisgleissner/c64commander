@@ -1218,6 +1218,48 @@ describe("hvscIngestionRuntime", () => {
     );
   });
 
+  it("stops the deletion loop and skips promote/finalize/success after cancellation mid-loop (HARD9-084)", async () => {
+    // Regression: cancellation was previously only checked inside extraction's
+    // onEntry - once extraction finished, the deletion loop (up to thousands
+    // of round-trips on a large update), directory promotion, songlengths
+    // reload, and finalize all ran unconditionally to completion even after
+    // a cancel request, so "Cancelled" in the UI coexisted with an ingest
+    // still mutating the library.
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
+      await onEntry?.("HVSC/DELETE.TXT", new TextEncoder().encode("one.sid\ntwo.sid\n"));
+    });
+    vi.mocked(deleteLibraryFile).mockImplementation(async (path: string) => {
+      if (path === "/one.sid") {
+        await cancelHvscInstall("token-cancel-deletion-loop");
+      }
+    });
+
+    await expect(installOrUpdateHvsc("token-cancel-deletion-loop")).rejects.toThrow();
+
+    // Cancellation caught before the second deletion - the loop did not run
+    // to completion.
+    expect(deleteLibraryFile).toHaveBeenCalledTimes(1);
+    expect(promoteLibraryStagingDir).not.toHaveBeenCalled();
+    const statePatches = vi.mocked(updateHvscState).mock.calls.map(([patch]) => patch as Record<string, unknown>);
+    expect(
+      statePatches.some((patch) => patch.ingestionState === "ready"),
+    ).toBe(false);
+    expect(statePatches).toContainEqual(
+      expect.objectContaining({ ingestionState: "idle", ingestionError: "Cancelled" }),
+    );
+  });
+
   // Coverage: checkForHvscUpdates returns [] when already up-to-date (BRDA:212 empty array branch)
   it("returns empty requiredUpdates when already at latest version", async () => {
     vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
@@ -1531,6 +1573,8 @@ describe("ingestion shared helpers (P0-E)", () => {
       ingestedSongs: 100,
       failedSongs: 0,
       failedPaths: [],
+      cancelToken: "test-token",
+      cancelTokens: new Map(),
     });
     expect(vi.mocked(updateHvscState)).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1551,6 +1595,8 @@ describe("ingestion shared helpers (P0-E)", () => {
       ingestedSongs: 100,
       failedSongs: 0,
       failedPaths: [],
+      cancelToken: "test-token",
+      cancelTokens: new Map(),
     });
     const patch = vi.mocked(updateHvscState).mock.calls.at(-1)?.[0] as Record<string, unknown>;
     expect(patch).not.toHaveProperty("updates");
@@ -1569,6 +1615,8 @@ describe("ingestion shared helpers (P0-E)", () => {
       ingestedSongs: 100,
       failedSongs: 0,
       failedPaths: [],
+      cancelToken: "test-token",
+      cancelTokens: new Map(),
     });
     expect(vi.mocked(updateHvscState)).toHaveBeenCalledWith(expect.objectContaining({ updates: {} }));
   });
@@ -1576,6 +1624,34 @@ describe("ingestion shared helpers (P0-E)", () => {
   it("resetHvscLibraryData clears stale update-applied records so reinstalled updates are not skipped forever (HARD9-014)", async () => {
     await resetHvscLibraryData();
     expect(vi.mocked(updateHvscState)).toHaveBeenCalledWith(expect.objectContaining({ updates: {} }));
+  });
+
+  it("applyIngestionSuccess refuses to overwrite a cancelled state (HARD9-084)", () => {
+    // A cancel that lands after the last cooperative check but before this
+    // call (deletion loop, directory promotion, songlengths reload, finalize)
+    // must not flip "Cancelled" back to "ready".
+    const cancelTokens = new Map([["cancel-me", { cancelled: true }]]);
+
+    expect(() =>
+      applyIngestionSuccess({
+        plan: { type: "update", version: 84 },
+        baselineInstalled: 74,
+        archiveName: "HVSC_Update_84.7z",
+        totalSongs: 100,
+        ingestedSongs: 100,
+        failedSongs: 0,
+        failedPaths: [],
+        cancelToken: "cancel-me",
+        cancelTokens,
+      }),
+    ).toThrow();
+
+    expect(vi.mocked(updateHvscState)).not.toHaveBeenCalledWith(
+      expect.objectContaining({ ingestionState: "ready" }),
+    );
+    expect(vi.mocked(updateHvscState)).toHaveBeenCalledWith(
+      expect.objectContaining({ ingestionState: "idle", ingestionError: "Cancelled" }),
+    );
   });
 
   it("applyIngestionFailureAndThrow calls updateHvscState with ingestionState error and throws", () => {
