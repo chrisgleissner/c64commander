@@ -141,7 +141,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-081 | Web FTP recursive scan unbounded while native caps at depth 8 / 5000 | sources | P3 | robustness, perf, correctness | high | S | OPEN |
 | HARD9-082 | Refresh clears only the exact current path; recursive adds serve 10-min-stale cache | sources | P3 | correctness, ux | high | S | OPEN |
 | HARD9-083 | Pre-aborted FTP read still performs the full transfer | sources | P3 | robustness, performance | medium | S | OPEN |
-| HARD9-084 | HVSC cancellation unchecked during deletion pass and finalize | hvsc | P3 | ux, robustness | high | S | OPEN |
+| HARD9-084 | HVSC cancellation unchecked during deletion pass and finalize | hvsc | P3 | ux, robustness | high | S | FIXED (67a7dd88) |
 | HARD9-085 | CategorySection disables every row while any single write is pending | config | P3 | ux | medium | S | OPEN |
 | HARD9-086 | Optimistic rollback can resurrect a stale pin on racing writes | config | P3 | correctness | high | S | OPEN |
 | HARD9-087 | useInteractiveConfigWrite pending/burst flags wrong under concurrent writes | config | P3 | correctness, ux | high | S | OPEN |
@@ -785,10 +785,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Fix sketch:** Throw `AbortError` immediately when pre-aborted; have native remember cancelled requestIds briefly so cancel-before-start wins (see HARD9-073 for the flip side).
 
 ### HARD9-084 — HVSC ingestion cancellation unchecked during the deletion pass and index finalize
-- **Area:** hvsc · **Severity:** P3 · **Dimensions:** ux-responsiveness, robustness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** hvsc · **Severity:** P3 · **Dimensions:** ux-responsiveness, robustness · **Confidence:** high · **Effort:** S · **Status:** FIXED (67a7dd88)
 - **Files:** `src/lib/hvsc/hvscIngestionRuntime.ts:499-532,538-598,1265-1289`
 - **Failure scenario:** Cancel just as extraction completes on a large update: `ensureNotCancelledLocal` is only consulted inside `onEntry`, so the deletion loop (thousands of `deleteLibraryFile` round-trips), `promoteLibraryStagingDir`, songlengths reload, and `finalize()` all run after the cancel — the "Cancelled" UI state coexists with an ingest that keeps mutating the library and then flips state to "ready" via `applyIngestionSuccess`.
 - **Fix sketch:** Check the token at each stage boundary and inside the deletion loop; have `applyIngestionSuccess` refuse to overwrite a cancelled state for the same ingestion id.
+- **Resolution (67a7dd88):** Added `ensureNotCancelledLocal()` checks at every remaining stage boundary in the non-native path (before/after the deletion loop, on every deletion-loop iteration, before `promoteLibraryStagingDir`, before `finalize()`, before the songlengths reload). `applyIngestionSuccess` (the shared success helper called by both native and non-native paths) now takes `cancelToken`/`cancelTokens` and calls the existing `ensureNotCancelledWith` check before applying any state, refusing to flip a cancelled ingestion back to "ready" - this closes the race window for both paths in one place instead of chasing every call site. New tests cover the deletion-loop-boundary case (cancel mid-loop via a mocked `deleteLibraryFile`, asserting the loop stops and `promoteLibraryStagingDir` never runs) and `applyIngestionSuccess`'s refusal directly; both proven failing against pre-fix code via `git stash`. `npx vitest run tests/unit/hvsc` (506 tests) and full `npm test -- --run` (658 files / 7807 tests) pass.
 
 ### HARD9-085 — CategorySection disables every row while any single write is pending
 - **Area:** config · **Severity:** P3 · **Dimensions:** ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
