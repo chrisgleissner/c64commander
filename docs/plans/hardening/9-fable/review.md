@@ -80,7 +80,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-020 | Unguarded localStorage log writes; O(n) parse/stringify per log line | diagnostics | P1 | robustness, correctness, perf | high | M | OPEN |
 | HARD9-021 | Closed diagnostics overlay copies full trace/log stores on every event | diagnostics | P1 | performance, ux | high | M | OPEN |
 | HARD9-022 | CONSERVATIVE preset gets no half-open probe; user CTAs hard-fail in circuit window | transport | P2 | ux, correctness | high | S | OPEN |
-| HARD9-023 | Background requests retry 3× with zero delay, holding the REST lane ~9s | transport | P2 | ux, perf, robustness | high | S | OPEN |
+| HARD9-023 | Background requests retry 3× with zero delay, holding the REST lane ~9s | transport | P2 | ux, perf, robustness | high | S | FIXED (3ceecd75) |
 | HARD9-024 | Circuit/state-gate error toasts classified "unknown", never auto-clear | transport | P2 | ux, correctness | high | S | OPEN |
 | HARD9-025 | Password field write race between connection state and secure-storage load | settings | P2 | correctness, data-loss | medium | S | FIXED (df7ddcd9) |
 | HARD9-026 | 600ms drag-settle timer collapses a held swipe mid-gesture | shell | P2 | ux, correctness | high | S | OPEN |
@@ -328,11 +328,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Notes:** Carried over from hardening/5 P0-2, materially reduced (P0-1's expiry timer is fixed so the wedge is bounded at 6s; timeouts now weigh 0.5).
 
 ### HARD9-023 — Background-intent requests retry 3× with zero delay, occupying the single REST lane for up to ~9s ahead of user CTAs
-- **Area:** transport · **Severity:** P2 · **Dimensions:** ux-responsiveness, performance, robustness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** transport · **Severity:** P2 · **Dimensions:** ux-responsiveness, performance, robustness · **Confidence:** high · **Effort:** S · **Status:** FIXED (3ceecd75)
 - **Files:** `src/lib/c64api.ts:113-114,1306,1493-1631`
 - **Failure scenario:** Device goes busy (demo loading — precisely when users tap). A background `/v1/info`/drives poll times out at 3000ms; `scheduledTimeoutFailure` retries immediately (`retryDelayMs = 0`) at 3000ms and again at 6000ms elapsed, all inside one `withRestInteraction` handler — the single REST lane and native FIFO slot (HARD9-002) are held ~9s. The 0ms re-fire also hits an already-struggling device back-to-back.
 - **Evidence:** `maxAttempts = scheduledRequest ? SCHEDULED_REQUEST_MAX_ATTEMPTS : 1`, `const retryDelayMs = 0`, guard `SCHEDULED_REQUEST_RETRY_GUARD_MS = 6000`.
 - **Fix sketch:** Drop background in-handler retries to 1 (the poll interval is the retry), or release the lane between attempts with a small backoff; cap total handler occupancy.
+- **Resolution (3ceecd75):** Removed the immediate scheduled-timeout retry branch from `C64API.request`; background REST calls now make one attempt per scheduler handler and rely on the polling cadence for later retries. Background timeout aborts still record expected diagnostic responses, but they no longer emit `C64U_HTTP_RETRY`, sleep/re-enter the handler, or occupy the REST/native lane for repeated zero-delay attempts. Updated unit coverage locks one-attempt behavior and expected timeout classification.
 
 ### HARD9-024 — Circuit/state-gate error toasts are classified "unknown" and never auto-clear on recovery
 - **Area:** transport · **Severity:** P2 · **Dimensions:** ux-responsiveness, correctness · **Confidence:** high · **Effort:** S · **Status:** OPEN
