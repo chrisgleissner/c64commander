@@ -644,12 +644,11 @@ describe("c64api branches", () => {
     expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
   });
 
-  // #3: scheduled retry path after a timeout/network failure
-  it("marks retried scheduled timeouts as expected and does not raise diagnostics errors", async () => {
+  it("marks background timeout aborts as expected and does not retry inside the REST handler", async () => {
     vi.useFakeTimers();
     try {
       const fetchMock = getFetchMock();
-      fetchMock.mockImplementationOnce(() => new Promise<Response>(() => {})).mockResolvedValueOnce(okJsonResponse());
+      fetchMock.mockImplementationOnce(() => new Promise<Response>(() => {}));
 
       deviceStateSnapshotMock.mockReturnValue({
         state: "READY",
@@ -664,8 +663,8 @@ describe("c64api branches", () => {
       const api = new C64API("http://c64u");
       const pending = api.getInfo({ __c64uIntent: "background", __c64uBypassCache: true });
       await vi.advanceTimersByTimeAsync(3000);
-      await expect(pending).resolves.toEqual(expect.objectContaining({ errors: [] }));
-      expect(fetchMock).toHaveBeenCalledTimes(2);
+      await expect(pending).rejects.toThrow("Host unreachable");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(recordRestResponseMock).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
@@ -2104,7 +2103,7 @@ describe("c64api branches", () => {
   });
 
   describe("BUG-074 scheduled timeout classification", () => {
-    it("does not emit an App error trace for scheduled timeout aborts after retries are exhausted", async () => {
+    it("does not emit an App error trace for scheduled timeout aborts", async () => {
       const fetchMock = getFetchMock();
       fetchMock.mockImplementation(
         (_url: string, opts: RequestInit) =>
@@ -2122,7 +2121,7 @@ describe("c64api branches", () => {
         "Host unreachable",
       );
 
-      expect(recordRestResponseMock).toHaveBeenCalledTimes(3);
+      expect(recordRestResponseMock).toHaveBeenCalledTimes(1);
       expect(recordRestResponseMock.mock.calls.every(([, response]) => response.expectedFailure === true)).toBe(true);
       expect(recordTraceErrorMock).not.toHaveBeenCalled();
       expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());

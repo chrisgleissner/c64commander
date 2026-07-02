@@ -64,7 +64,6 @@ import {
   isAbortLikeError,
   normalizeUrlPath,
   wait,
-  waitWithAbortSignal,
 } from "@/lib/c64api/requestRuntime";
 import {
   loadConfigEnrichmentCategory,
@@ -110,8 +109,6 @@ export const BACKGROUND_REQUEST_TIMEOUT_MS = 3000;
 // Backwards-compatible aliases (kept until all call sites are migrated).
 const CONTROL_REQUEST_TIMEOUT_MS = INTERACTIVE_CONTROL_TIMEOUT_MS;
 const SCHEDULED_REQUEST_TIMEOUT_MS = BACKGROUND_REQUEST_TIMEOUT_MS;
-const SCHEDULED_REQUEST_MAX_ATTEMPTS = 3;
-const SCHEDULED_REQUEST_RETRY_GUARD_MS = 6000;
 const UPLOAD_REQUEST_TIMEOUT_MS = 5000;
 const PLAYBACK_REQUEST_TIMEOUT_MS = 5000;
 // Drive mount/eject are heavier firmware ops than a tappable control: real
@@ -1309,10 +1306,9 @@ export class C64API {
               const idleContext = getIdleContext();
               const scheduledRequest = intent === "background";
               const requestTimeoutMs = timeoutMs ?? resolveDefaultRestRequestTimeoutMs(intent);
-              const maxAttempts = scheduledRequest ? SCHEDULED_REQUEST_MAX_ATTEMPTS : 1;
+              const maxAttempts = 1;
               const requestTrace = await inspectRequestPayload(requestOptions.body);
               let lastError: unknown = null;
-              const firstAttemptStartedAt = Date.now();
               const isSuperseded = () => this.requestGeneration !== requestGeneration;
               const throwIfSuperseded = () => {
                 if (!isSuperseded()) return;
@@ -1495,14 +1491,7 @@ export class C64API {
                     0,
                     Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
                   );
-                  const elapsedSinceFirstAttemptMs = Date.now() - firstAttemptStartedAt;
-                  const scheduledTimeoutFailure =
-                    scheduledRequest &&
-                    !callerAborted &&
-                    !superseded &&
-                    isAbort &&
-                    elapsedSinceFirstAttemptMs <= SCHEDULED_REQUEST_RETRY_GUARD_MS;
-                  const retryingScheduledTimeout = scheduledTimeoutFailure && attempt < maxAttempts;
+                  const scheduledTimeoutFailure = scheduledRequest && !callerAborted && !superseded && isAbort;
                   if (!responseRecorded) {
                     const expectedFailure =
                       callerAborted ||
@@ -1602,38 +1591,6 @@ export class C64API {
                         error: normalizedError,
                       }),
                     );
-                  }
-
-                  if (retryingScheduledTimeout) {
-                    const retryDelayMs = 0;
-                    addLog("warn", "C64 API retry scheduled after scheduled timeout", {
-                      requestId,
-                      method,
-                      path,
-                      attempt,
-                      maxAttempts,
-                      retryDelayMs,
-                      elapsedSinceFirstAttemptMs,
-                      retryTrigger: "scheduled_timeout_abort",
-                      idleMs: idleContext.idleMs,
-                      wasIdle: idleContext.wasIdle,
-                    });
-                    console.info(
-                      "C64U_HTTP_RETRY",
-                      JSON.stringify({
-                        requestId,
-                        method,
-                        path,
-                        attempt,
-                        maxAttempts,
-                        retryDelayMs,
-                        elapsedSinceFirstAttemptMs,
-                      }),
-                    );
-                    if (retryDelayMs > 0) {
-                      await waitWithAbortSignal(retryDelayMs, requestSignal);
-                    }
-                    continue;
                   }
 
                   if (callerAborted) {

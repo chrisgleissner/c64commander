@@ -837,7 +837,7 @@ describe("c64api", () => {
     }
   });
 
-  it("retries scheduled requests at most twice after 3-second timeouts", async () => {
+  it("does not retry background requests inside the active REST handler after timeouts (HARD9-023)", async () => {
     vi.useFakeTimers();
     try {
       const fetchMock = getFetchMock();
@@ -850,19 +850,20 @@ describe("c64api", () => {
       await vi.advanceTimersByTimeAsync(2999);
       expect(fetchMock).toHaveBeenCalledTimes(1);
       await vi.advanceTimersByTimeAsync(1);
-      expect(fetchMock).toHaveBeenCalledTimes(2);
-      await vi.advanceTimersByTimeAsync(3000);
-      expect(fetchMock).toHaveBeenCalledTimes(3);
-      await vi.advanceTimersByTimeAsync(3000);
 
       await expect(pending).rejects.toThrow("Host unreachable");
-      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(addLogMock).not.toHaveBeenCalledWith(
+        "warn",
+        "C64 API retry scheduled after scheduled timeout",
+        expect.anything(),
+      );
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("does not start a scheduled retry when elapsed time already exceeds the retry guard", async () => {
+  it("classifies long background timeouts as expected without starting a retry", async () => {
     vi.useFakeTimers();
     try {
       const fetchMock = getFetchMock();
@@ -880,6 +881,7 @@ describe("c64api", () => {
 
       await expect(pending).rejects.toThrow("Host unreachable");
       expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
     } finally {
       vi.useRealTimers();
     }
