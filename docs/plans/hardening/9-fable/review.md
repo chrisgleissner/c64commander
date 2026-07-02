@@ -63,7 +63,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-003 | Android bottom safe-area inset hardcoded to 0 → controls in gesture zone | shell | P1 | ux, a11y, correctness | high [verified][HIL] | M | FIXED (f5570328) |
 | HARD9-004 | Saved-password editor silently mutates and persists the secret | settings | P1 | data-loss, ux, security | high [verified][HIL] | M | FIXED (df7ddcd9) |
 | HARD9-005 | Duration slider clobbers every playlist item's resolved duration | playback | P1 | correctness, data-loss | high [verified] | M | FIXED (76cb69da) |
-| HARD9-006 | Mid-track duration change never re-arms auto-advance guard | playback | P1 | correctness, ux | high | S | OPEN |
+| HARD9-006 | Mid-track duration change never re-arms auto-advance guard | playback | P1 | correctness, ux | high | S | FIXED (e3fdff49) |
 | HARD9-007 | Shuffle doesn't shuffle; Reshuffle irreversibly destroys order | playback | P1 | correctness, data-loss, ux | high | M | OPEN |
 | HARD9-008 | Songlengths cache cleared on every playlist change → repeated multi-MB re-parses | playback | P1 | performance, ux | high | S | OPEN |
 | HARD9-009 | Full-range custom snapshot silently saves empty (u16 truncation) | snapshot | P1 | correctness, data-loss | high [verified] | S | OPEN |
@@ -205,11 +205,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (76cb69da):** Added an optional `durationSource?: "default"` marker to `PlaylistItem`/`PlayableEntry`/the IndexedDB `TrackRecord`, set only by `applyDurationOverrideToPlaylist`. The function now only fills items with no duration yet or whose current duration was itself a prior default write; a genuinely resolved duration (songlengths/SID header/HVSC md5, or anything set outside the override path) is never touched, matching the fix sketch. The marker is threaded through the existing persistence plumbing (mechanical additions alongside `subsongCount`/`sizeBytes`) so it survives reload. `playlistItemDuration`'s existing runtime fallback (`item.durationMs ?? durationFallbackMs`) was left unchanged; it already covered unresolved items independently of this write path.
 
 ### HARD9-006 — Changing duration mid-track does not re-arm the auto-advance guard
-- **Area:** playback · **Severity:** P1 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** playback · **Severity:** P1 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** FIXED (e3fdff49)
 - **Files:** `src/pages/PlayFilesPage.tsx:1547-1557,1159-1180`, `src/pages/playFiles/hooks/usePlaybackController.ts:846-857`
 - **Failure scenario:** Track playing with duration 3:00 (`dueAtMs = start+180000`). User drags duration to 10:00 — progress bar shows 10:00 but `autoAdvanceGuardRef.current.dueAtMs` is never updated, so `syncPlaybackTimeline` still auto-advances at 3:00. Reverse: shortening 10:00→1:00 pins the progress bar at 100%/0:00 remaining while the track keeps playing for 9 more minutes.
 - **Evidence:** Only writers of `dueAtMs` are `playItem`, pause/resume, and session restore; the duration handlers update `durationMs` state only. `syncPlaybackTimeline` fires purely on `now >= guard.dueAtMs`; the native watchdog gets the same stale value via `autoAdvanceDueAtMs`.
 - **Fix sketch:** When `durationMs` changes for the playing track, recompute `guard.dueAtMs = trackStartedAtRef.current + newDurationMs` (respecting paused state) and call `setAutoAdvanceDueAtMs`.
+- **Resolution (e3fdff49):** Added a pure `resolveAutoAdvanceDueAtMsOnDurationChange` helper in `playbackGuards.ts` and a `PlayFilesPage` effect watching `durationMs` that recomputes `guard.dueAtMs = trackStartedAtRef.current + durationMs` exactly per the fix sketch. Returns null (no-op) while paused, since `handlePauseResume` already recomputes `dueAtMs` from the live `durationMs`/`elapsedMs` on resume, and is a no-op on ordinary track launches since `playItem` already sets `trackStartedAtRef`/`guard.dueAtMs`/`durationMs` in sync. Re-arming through `setAutoAdvanceDueAtMs` reuses the existing effect that pushes the value to the native background watchdog.
 
 ### HARD9-007 — Shuffle checkbox does not shuffle playback; Reshuffle irreversibly destroys curated order
 - **Area:** playback · **Severity:** P1 · **Dimensions:** correctness, data-loss, ux-responsiveness · **Confidence:** high · **Effort:** M · **Status:** OPEN
