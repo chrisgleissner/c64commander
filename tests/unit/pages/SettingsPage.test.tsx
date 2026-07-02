@@ -39,6 +39,7 @@ import {
   saveNotificationDurationMs,
   APP_SETTINGS_KEYS,
 } from "@/lib/config/appSettings";
+import { applyScreenOrientationMode } from "@/lib/native/screenOrientation";
 import * as deviceSafetySettings from "@/lib/config/deviceSafetySettings";
 import { exportSettingsJson, importSettingsJson } from "@/lib/config/settingsTransfer";
 import {
@@ -2251,6 +2252,27 @@ describe("SettingsPage notification duration slider", () => {
 
     expect(saveNotificationDurationMs).toHaveBeenCalledTimes(1);
     expect(saveNotificationDurationMs).toHaveBeenCalledWith(5500);
+  });
+});
+
+describe("SettingsPage screen orientation lock", () => {
+  it("does not re-apply the orientation lock on mount (startup already applies it)", () => {
+    renderSettingsPage();
+
+    // A transient mount (e.g. an adjacent swipe-runway slot) must not issue a
+    // redundant native ScreenOrientation.lock()/unlock() round-trip; main.tsx
+    // already applied the persisted mode at startup.
+    expect(applyScreenOrientationMode).not.toHaveBeenCalled();
+  });
+
+  it("applies the orientation lock only when the user actually changes it", () => {
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "Landscape" }));
+
+    expect(saveScreenOrientationMode).toHaveBeenCalledWith("landscape");
+    expect(applyScreenOrientationMode).toHaveBeenCalledTimes(1);
+    expect(applyScreenOrientationMode).toHaveBeenCalledWith("landscape");
   });
 });
 

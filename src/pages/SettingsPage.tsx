@@ -923,13 +923,10 @@ export default function SettingsPage() {
     { value: "auto", label: "Auto" },
   ];
 
-  useEffect(() => {
-    void applyScreenOrientationMode(screenOrientationMode);
-  }, [screenOrientationMode]);
-
   const commitScreenOrientationMode = (mode: ScreenOrientationMode) => {
     setScreenOrientationMode(mode);
     saveScreenOrientationMode(mode);
+    void applyScreenOrientationMode(mode);
   };
 
   const commitHideStatusBar = (enabled: boolean) => {
