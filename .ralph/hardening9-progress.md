@@ -2,15 +2,15 @@
 
 ## Current state
 - Branch: fix/hardening
-- Last commit reviewed/created: 52b59dd8 "Fix HARD9-043 secure storage initialization"
-- Working tree: review/progress docs pending after HARD9-043 status update
+- Last commit reviewed/created: 1ab881f5 "Fix HARD9-002 native request lane priority"
+- Working tree: clean after HARD9-002 status update commit
 - Review doc: docs/plans/hardening/9-fable/review.md
 - 95 findings (HARD9-001..095)
 
 ## Plan
 Work batches in order from review.md:
 1. Auth & password UX: 001, 004, 025, 028, 043  <- DONE
-2. Native request lane & circuit UX: 002, 023, 022, 024, 061, 060, 062  <- NEXT
+2. Native request lane & circuit UX: 002, 023, 022, 024, 061, 060, 062  <- IN PROGRESS (002 fixed)
 3. Playback duration/songlengths: 005, 006, 008, 064
 4. Playback lifecycle: 029, 030, 031, 033, 063, 007
 5. Playback perf: 032, 034, 065, 066
@@ -74,6 +74,11 @@ Work batches in order from review.md:
   when available, and degrades `getPassword` to `{ value: null }` so the app
   asks the user to re-enter the password. `setPassword` retries once after
   recovery. Injected test providers still reject, preserving hard-failure tests.
+- HARD9-002: 1ab881f5 - Native direct-device REST serialization now acquires
+  the native socket slot inside the scheduled `withRestInteraction` request
+  handler, after scheduler cooldown/backoff/priority admission. A cooled
+  background `saveConfig` no longer blocks a ready user `getInfo` from reaching
+  `CapacitorHttp`, while actual native direct-device I/O remains serialized.
 
 ## Validation
 - `npx tsc --noEmit`: PASS (after HARD9-001)
@@ -85,6 +90,10 @@ Work batches in order from review.md:
 - `./gradlew assembleDebug`: PASS (after HARD9-043)
 - `npx tsc --noEmit`: PASS (after HARD9-043)
 - `npx eslint src --quiet`: PASS (after HARD9-043)
+- `npx vitest run tests/unit/c64api.test.ts tests/unit/c64api.branches.test.ts`: PASS (158 tests, after HARD9-002)
+- `npx tsc --noEmit`: PASS (after HARD9-002)
+- `npx eslint src --quiet`: PASS (after HARD9-002)
+- `git diff --check`: PASS (after HARD9-002)
 - `npm run format:check:ts -- --ignore-unknown src/lib/connection/connectionManager.ts tests/unit/connection/connectionManager.test.ts`: FAIL (script checks the whole repo's `**/*.{ts,tsx,json}` pattern before appended args; reports pre-existing formatting warnings in `src/pages/SettingsPage.tsx` plus the touched connection test before targeted Prettier write. Targeted file check above passes after formatting touched files.)
 - `npx vitest run tests/unit/pages/SettingsPage.test.tsx`: PASS (83/83, +4 new
   tests covering HARD9-004/025/028)
@@ -110,10 +119,10 @@ Work batches in order from review.md:
   real c64u) before calling this fully closed.
 
 ## Remaining
-- Next batch: Native request lane & circuit UX — HARD9-002, HARD9-023,
-  HARD9-022, HARD9-024, HARD9-061, HARD9-060, HARD9-062.
-- Next issue: HARD9-002 (native FIFO request lane defeats user-intent
-  priority and holds the slot through scheduler cooldown/backoff deferrals).
+- Next batch: Native request lane & circuit UX — HARD9-023, HARD9-022,
+  HARD9-024, HARD9-061, HARD9-060, HARD9-062.
+- Next issue: HARD9-023 (background requests retry 3x with zero delay while
+  occupying the REST lane).
 - HARD9-003 (Android bottom safe-area inset) is a HIL-proven P1 usability
   blocker per the operating instructions — fix early if auth work stalls.
 

@@ -59,7 +59,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | ID | Title | Area | Sev | Dimensions | Conf | Effort | Status |
 |---|---|---|---|---|---|---|---|
 | HARD9-001 | Wrong/changed device password strands app in OFFLINE with no prompt | transport | P0 | ux, correctness, robustness | high [HIL] | M | FIXED (53eda43f) |
-| HARD9-002 | Native FIFO request lane defeats user-intent priority | transport | P1 | ux, perf, correctness | high [verified] | M | OPEN |
+| HARD9-002 | Native FIFO request lane defeats user-intent priority | transport | P1 | ux, perf, correctness | high [verified] | M | FIXED (1ab881f5) |
 | HARD9-003 | Android bottom safe-area inset hardcoded to 0 → controls in gesture zone | shell | P1 | ux, a11y, correctness | high [verified][HIL] | M | OPEN |
 | HARD9-004 | Saved-password editor silently mutates and persists the secret | settings | P1 | data-loss, ux, security | high [verified][HIL] | M | FIXED (df7ddcd9) |
 | HARD9-005 | Duration slider clobbers every playlist item's resolved duration | playback | P1 | correctness, data-loss | high [verified] | M | OPEN |
@@ -171,12 +171,13 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 ## P1 — High
 
 ### HARD9-002 — Native FIFO request lane defeats user-intent priority and holds the slot through cooldown/backoff deferrals
-- **Area:** transport · **Severity:** P1 · **Dimensions:** ux-responsiveness, performance, correctness · **Confidence:** high **[verified]** · **Effort:** M · **Status:** OPEN
+- **Area:** transport · **Severity:** P1 · **Dimensions:** ux-responsiveness, performance, correctness · **Confidence:** high **[verified]** · **Effort:** M · **Status:** FIXED (1ab881f5)
 - **Files:** `src/lib/c64api.ts:518-549`, `src/lib/c64api.ts:1663-1666`, `src/lib/deviceInteraction/deviceInteractionManager.ts:207-223`, `src/lib/deviceInteraction/deviceInteractionManager.ts:818-833`
 - **Failure scenario:** On Android with CONSERVATIVE (AUTO default for every c64u until firmware is known), a background `/v1/configs` or `/v1/drives` read enters `serializeNativeDeviceRequest` and then sits in the REST scheduler deferred by `getReadyAtMs` (configsCooldown 1200ms, or backoff up to 6000ms) — *while holding the single native slot*. A user tap (Reset, Pause, mount) is pushed into `nativeDeviceRequestQueue`, which is strict FIFO with no intent field, so the CTA waits out the background read's entire cooldown/backoff plus every already-queued request. Taps feel dead for multiple seconds exactly when the device is slow.
 - **Evidence:** `request()` builds `executeRequest = () => serializeNativeDeviceRequest(runRequest, restMaxConcurrency)` (`c64api.ts:1663-1666`); the slot is acquired before `runRequest` runs (`await new Promise(...queue.push...); return await run()`) and `pumpNativeDeviceRequestQueue` pops FIFO. `runRequest` → `withRestInteraction` → `restScheduler.schedule({...getReadyAtMs})`; deferred tasks keep the slot occupied. With limit 1, the priority scheduler only ever holds one `request()`-originated task at a time — `user > system > background` ordering is unreachable for the entire REST surface on native.
 - **Fix sketch:** Acquire the native slot *inside* the scheduled task (wrap the `withRestInteraction` handler, not the whole `runRequest`), or give `nativeDeviceRequestQueue` intent-priority ordering. Don't hold the slot across `getReadyAtMs` deferrals — only while a request is actually in flight.
 - **Notes:** Introduced with the BUG-066/native-serialization work; the scheduler priority verified in hardening/5 is now bypassed on native.
+- **Resolution (1ab881f5):** Native direct-device REST serialization now wraps only the actual request handler inside `withRestInteraction`, after scheduler priority/cooldown/backoff admission, instead of wrapping the whole scheduled request. Background work that is waiting for scheduler cooldown no longer occupies the only native device slot, so ready user CTAs can run first while actual native direct-device I/O remains serialized. Added regression coverage where a cooled background `saveConfig` is pending and a user `getInfo` reaches `CapacitorHttp` before the delayed background request.
 
 ### HARD9-003 — Android bottom safe-area inset hardcoded to 0 — bottom controls sit in the system gesture zone
 - **Area:** shell · **Severity:** P1 · **Dimensions:** ux-responsiveness, a11y, correctness · **Confidence:** high **[verified][HIL]** · **Effort:** M · **Status:** OPEN
