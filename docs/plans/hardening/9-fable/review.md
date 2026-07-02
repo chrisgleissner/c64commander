@@ -127,7 +127,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-067 | Snapshot restore halts CIA TOD clocks / flips ICR mask bits | snapshot | P3 | correctness | medium | S | FIXED (c021c0fc) |
 | HARD9-068 | resolveLocalDiskBlob cross-source fallback can mount the wrong disk | disks | P3 | correctness | medium | S | FIXED (99df20ef) |
 | HARD9-069 | Snapshot store silently drops oldest snapshot at the 100 cap | snapshot | P3 | data-loss, ux | high | S | FIXED (9d2c3222) |
-| HARD9-070 | FTP control encoding never set — non-ASCII filenames unfetchable | native | P3 | correctness, ux | medium | S | OPEN |
+| HARD9-070 | FTP control encoding never set — non-ASCII filenames unfetchable | native | P3 | correctness, ux | medium | S | FIXED (5b1a1b41) |
 | HARD9-071 | Mock C64U HTTP+FTP servers ship in release builds, registered unconditionally | native | P3 | security, robustness | high | M | OPEN |
 | HARD9-072 | TelnetSocket state read/written across threads without synchronization | native | P3 | correctness, robustness | high | S | OPEN |
 | HARD9-073 | cancelRead after completion leaves permanent entries in cancelledReads | native | P3 | correctness, performance | high | S | OPEN |
@@ -711,10 +711,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (9d2c3222):** Took the toast-warning option - refusing every save once the library fills would be far more disruptive to a user just trying to save their progress. `saveSnapshotToStore` now returns which entry it evicted (if any); `createSnapshot`/`createCpuSnapshot` surface it as `evictedSnapshotLabel`; `handleSaveRam`/`handleSaveCpuSnapshot` show an additional destructive toast naming the dropped snapshot alongside the normal success toast.
 
 ### HARD9-070 — FTP control encoding never set — non-ASCII filenames garble and become unfetchable
-- **Area:** native · **Severity:** P3 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
+- **Area:** native · **Severity:** P3 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (5b1a1b41)
 - **Files:** `android/.../FtpClientPlugin.kt:180-196,394-410`
 - **Failure scenario:** commons-net defaults to ISO-8859-1 and no UTF-8 autodetect. A USB stick with UTF-8 filenames (accented scene names) lists as mojibake; the RETR with the re-encoded path 550s — visible but never playable.
 - **Fix sketch:** `client.autodetectUTF8 = true` (and/or `controlEncoding = "UTF-8"`) in a shared setup helper before `connect()`.
+- **Resolution (5b1a1b41):** Implemented the fix sketch exactly: added `client.autodetectUTF8 = true` to `applyPreConnectTimeouts`, which every one of the plugin's 5 connect sites already calls immediately before `client.connect()`. New Mockito-based test verifies `setAutodetectUTF8(true)` is called before `connect()`, proven failing against the pre-fix client via `git stash`.
 
 ### HARD9-071 — Mock C64U HTTP + FTP servers ship in release builds and are registered unconditionally
 - **Area:** native · **Severity:** P3 · **Dimensions:** security, robustness · **Confidence:** high · **Effort:** M · **Status:** OPEN
