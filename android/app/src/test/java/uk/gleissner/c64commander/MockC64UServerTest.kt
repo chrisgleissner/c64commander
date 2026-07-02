@@ -380,4 +380,122 @@ class MockC64UServerTest {
             elapsedMs >= 160
     )
   }
+
+  private fun newBareServer(): MockC64UServer {
+    val state =
+            MockC64UState.fromPayload(
+                    JSONObject().apply {
+                      put("general", JSONObject().apply { put("baseUrl", "http://localhost") })
+                    }
+            )
+    return MockC64UServer(state)
+  }
+
+  private fun sendRawRequestAndReadStatus(port: Int, rawRequest: String): String? {
+    Socket("127.0.0.1", port).use { socket ->
+      socket.soTimeout = 5_000
+      socket.getOutputStream().apply {
+        write(rawRequest.toByteArray())
+        flush()
+      }
+      return socket.getInputStream().bufferedReader().readLine()
+    }
+  }
+
+  @Test
+  fun oversizedContentLengthIsRejectedWithoutAllocating() {
+    val server = newBareServer()
+    server.start()
+    waitForServer(server)
+
+    // A 2 GB Content-Length: honouring it would allocate ByteArray(2_000_000_000)
+    // and OutOfMemoryError the process (HARD10-003 H1). The parser must reject it
+    // before reading any body.
+    val statusLine =
+            sendRawRequestAndReadStatus(
+                    server.port,
+                    "POST /v1/configs HTTP/1.1\r\nHost: localhost\r\nContent-Length: 2000000000\r\n\r\n",
+            )
+
+    assertNotNull(statusLine)
+    assertTrue("Expected 413, got: $statusLine", statusLine!!.contains("413"))
+    server.stop()
+  }
+
+  @Test
+  fun overlongHeaderLineIsRejected() {
+    val server = newBareServer()
+    server.start()
+    waitForServer(server)
+
+    // A single header line far exceeding the 8 KB cap must not grow the read
+    // buffer without bound (HARD10-003 H2).
+    val hugeValue = "x".repeat(20_000)
+    val statusLine =
+            sendRawRequestAndReadStatus(
+                    server.port,
+                    "GET /v1/info HTTP/1.1\r\nX-Huge: $hugeValue\r\n\r\n",
+            )
+
+    assertNotNull(statusLine)
+    assertTrue("Expected 413, got: $statusLine", statusLine!!.contains("413"))
+    server.stop()
+  }
+
+  @Test
+  fun tooManyHeaderLinesRejected() {
+    val server = newBareServer()
+    server.start()
+    waitForServer(server)
+
+    // 100 header lines exceeds the 64-header cap (HARD10-003 H2).
+    val builder = StringBuilder("GET /v1/info HTTP/1.1\r\n")
+    repeat(100) { index -> builder.append("X-H$index: v\r\n") }
+    builder.append("\r\n")
+    val statusLine = sendRawRequestAndReadStatus(server.port, builder.toString())
+
+    assertNotNull(statusLine)
+    assertTrue("Expected 413, got: $statusLine", statusLine!!.contains("413"))
+    server.stop()
+  }
+
+  @Test
+  fun idleConnectionIsReleasedBySocketReadTimeout() {
+    val server = newBareServer()
+    // Without a read timeout a client that connects and sends nothing parks a
+    // worker forever (HARD10-003 H3). A short injectable timeout proves the worker
+    // is released and the connection closed within a bounded window.
+    server.socketReadTimeoutMs = 200
+    server.start()
+    waitForServer(server)
+
+    Socket("127.0.0.1", server.port).use { socket ->
+      socket.soTimeout = 3_000
+      val firstByte = socket.getInputStream().read()
+      assertEquals("Expected the server to close the idle connection (EOF)", -1, firstByte)
+    }
+    server.stop()
+  }
+
+  @Test
+  fun writememBodyExceedingCapIsRejected() {
+    val server = newBareServer()
+    server.start()
+    waitForServer(server)
+
+    // 70 000 bytes is under the 1 MB Content-Length cap but over the 64 KB
+    // writemem cap, so it must be rejected rather than written into the map
+    // (HARD10-003 H7).
+    val connection =
+            URL("${server.baseUrl}/v1/machine:writemem?address=0000").openConnection() as
+                    HttpURLConnection
+    connection.requestMethod = "POST"
+    connection.doOutput = true
+    connection.setRequestProperty("Content-Type", "application/octet-stream")
+    connection.outputStream.use { it.write(ByteArray(70_000)) }
+
+    assertEquals(413, connection.responseCode)
+    connection.disconnect()
+    server.stop()
+  }
 }

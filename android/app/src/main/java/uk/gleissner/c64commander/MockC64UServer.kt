@@ -42,6 +42,12 @@ data class HttpResponse(
         val body: ByteArray,
 )
 
+// Thrown while parsing a request whose declared/observed size exceeds a hard cap
+// (Content-Length, an over-long header line, or too many header lines). Surfaces
+// as a 413 to the client instead of letting the parser allocate an attacker-chosen
+// buffer or accumulate unbounded header bytes (HARD10-003 H1/H2).
+private class RequestTooLargeException : Exception()
+
 class MockC64UServer(
         private val state: MockC64UState,
         private val timingProfile: MockTimingProfile = MockTimingProfile.defaultProfile(),
@@ -49,7 +55,11 @@ class MockC64UServer(
   constructor(state: MockC64UState) : this(state, MockTimingProfile.defaultProfile())
 
   private val acceptExecutor = Executors.newSingleThreadExecutor()
-  private val connectionExecutor = Executors.newCachedThreadPool()
+  // Bounded (not newCachedThreadPool) so a burst of idle/slow connections cannot
+  // spawn unbounded threads and exhaust the process (HARD10-003 H4). Combined with
+  // the per-socket read timeout below, a slow-loris client is handled a bounded
+  // few at a time and each is evicted on timeout.
+  private val connectionExecutor = Executors.newFixedThreadPool(MAX_CONNECTION_THREADS)
   private val requestExecutor = Executors.newSingleThreadExecutor()
   private val sockets = Collections.synchronizedSet(mutableSetOf<Socket>())
   private var serverSocket: ServerSocket? = null
@@ -58,6 +68,24 @@ class MockC64UServer(
   @Volatile private var requestSequence = 0
   var port: Int = 0
     private set
+
+  // Bounds how long a connected client may stall between bytes before its worker
+  // is released. Without it a client that connects and sends nothing parks a
+  // worker forever (HARD10-003 H3). Injectable (matching this codebase's
+  // socketFactory/dataConnectionAcceptTimeoutMs convention) so tests can drive the
+  // timeout without waiting out the real duration.
+  internal var socketReadTimeoutMs: Int = 15_000
+
+  private companion object {
+    const val MAX_CONNECTION_THREADS = 32
+    // 1 MB: far above any legitimate mock request. The largest real body is the
+    // full 64 KB RAM image POSTed to /v1/machine:writemem; config batches are tiny.
+    const val MAX_REQUEST_BODY_BYTES = 1_048_576
+    const val MAX_HEADER_LINE_BYTES = 8_192
+    const val MAX_HEADER_COUNT = 64
+    // The C64 address space is 64 KB, so no legitimate writemem exceeds this.
+    const val MAX_WRITEMEM_BYTES = 65_536
+  }
 
   val baseUrl: String
     get() = "http://127.0.0.1:$port"
@@ -108,9 +136,10 @@ class MockC64UServer(
   private fun handleClient(socket: Socket) {
     socket.use { client ->
       try {
+        client.soTimeout = socketReadTimeoutMs
         val input = BufferedInputStream(client.getInputStream())
         val output = BufferedOutputStream(client.getOutputStream())
-        val request = readRequest(input) ?: return
+        val request = readRequest(input) ?: return@use
         val response =
                 requestExecutor
                         .submit<HttpResponse> {
@@ -129,10 +158,26 @@ class MockC64UServer(
                         .get()
         writeResponse(output, response)
         output.flush()
+      } catch (tooLarge: RequestTooLargeException) {
+        // Reject an oversized/abusive request cheaply, before its body is ever
+        // allocated (HARD10-003 H1/H2). Best-effort response; the parser has not
+        // written anything yet, so a fresh output stream is safe.
+        try {
+          val output = BufferedOutputStream(client.getOutputStream())
+          writeResponse(output, errorResponse(413, "Request entity too large"))
+          output.flush()
+        } catch (error: Exception) {
+          Log.w(logTag, "Failed to send 413 response", error)
+        }
       } catch (error: ExecutionException) {
         Log.w(logTag, "Mock request execution failed", error.cause ?: error)
       } catch (error: Exception) {
         Log.w(logTag, "Mock client handling failed", error)
+      } catch (throwable: Throwable) {
+        // Errors (e.g. OutOfMemoryError from a hostile request) are not Exceptions;
+        // without this a single connection could escalate to killing the process
+        // (HARD10-003 H4). Confine it to this connection.
+        Log.w(logTag, "Mock client handling failed (throwable)", throwable)
       }
     }
     sockets.remove(socket)
@@ -155,9 +200,12 @@ class MockC64UServer(
     val query = target.substringAfter("?", "")
     val headers = mutableMapOf<String, String>()
 
+    var headerCount = 0
     while (true) {
       val line = readLine(input) ?: break
       if (line.isEmpty()) break
+      headerCount += 1
+      if (headerCount > MAX_HEADER_COUNT) throw RequestTooLargeException()
       val idx = line.indexOf(":")
       if (idx <= 0) continue
       val name = line.substring(0, idx).trim().lowercase(Locale.ROOT)
@@ -166,6 +214,7 @@ class MockC64UServer(
     }
 
     val contentLength = headers["content-length"]?.toIntOrNull() ?: 0
+    if (contentLength > MAX_REQUEST_BODY_BYTES) throw RequestTooLargeException()
     val body =
             if (contentLength > 0) {
               readBytes(input, contentLength)
@@ -187,6 +236,9 @@ class MockC64UServer(
         break
       }
       if (byte != '\r'.code) {
+        // Bound the request line / each header line so an unterminated line cannot
+        // grow the buffer without limit (HARD10-003 H2).
+        if (buffer.size() >= MAX_HEADER_LINE_BYTES) throw RequestTooLargeException()
         buffer.write(byte)
       }
     }
@@ -384,6 +436,11 @@ class MockC64UServer(
               } else {
                 request.body.map { it.toInt() and 0xFF }
               }
+      // Cap consistently with the readmem cap so a writemem cannot grow the
+      // in-memory map without bound (HARD10-003 H7).
+      if (bytes.size > MAX_WRITEMEM_BYTES) {
+        return errorResponse(413, "Too many bytes")
+      }
       bytes.forEachIndexed { idx, value -> state.memory[address + idx] = value }
       return okResponse()
     }
@@ -631,6 +688,7 @@ class MockC64UServer(
               204 -> "No Content"
               400 -> "Bad Request"
               404 -> "Not Found"
+              413 -> "Payload Too Large"
               else -> "Internal Server Error"
             }
     output.write("HTTP/1.1 ${response.status} $statusText\r\n".toByteArray(StandardCharsets.UTF_8))
