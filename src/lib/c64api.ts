@@ -1163,6 +1163,21 @@ export class C64API {
     });
   }
 
+  // Mount/eject success was previously judged by HTTP status only - the
+  // firmware reports many rejections as HTTP 200 with a non-empty `errors`
+  // array (same shape assertConfigWriteAccepted already checks), which
+  // callers weren't inspecting, so a rejected mount still showed a "Disk
+  // mounted" toast with the drive unchanged. See HARD9-010.
+  private assertDriveWriteAccepted(response: { errors?: string[] }, operation: string, drive: string) {
+    const firmwareErrors = Array.isArray(response.errors)
+      ? response.errors.filter((entry) => entry.trim().length > 0)
+      : [];
+    if (firmwareErrors.length === 0) {
+      return;
+    }
+    throw new Error(`Firmware rejected drive ${drive.toUpperCase()} ${operation}: ${firmwareErrors.join("; ")}`);
+  }
+
   private getReadRequestBudgetValue<T>(key: string, nowMs: number): T | null {
     this.pruneReadRequestBudget(nowMs);
     const cached = this.readRequestBudget.get(key);
@@ -2308,7 +2323,12 @@ export class C64API {
     let path = `/v1/drives/${drive}:mount?image=${encodeURIComponent(image)}`;
     if (type) path += `&type=${encodeURIComponent(type)}`;
     if (mode) path += `&mode=${encodeURIComponent(mode)}`;
-    return this.request(path, { method: "PUT", timeoutMs: MOUNT_REQUEST_TIMEOUT_MS });
+    const response = await this.request<{ errors: string[] }>(path, {
+      method: "PUT",
+      timeoutMs: MOUNT_REQUEST_TIMEOUT_MS,
+    });
+    this.assertDriveWriteAccepted(response, "mount", drive);
+    return response;
   }
 
   async mountDriveUpload(
@@ -2383,13 +2403,20 @@ export class C64API {
       throw error;
     }
 
-    return this.parseResponseJson(response, path, {
+    const result = await this.parseResponseJson<{ errors: string[] }>(response, path, {
       allowNonJsonSuccess: true,
     });
+    this.assertDriveWriteAccepted(result, "mount", drive);
+    return result;
   }
 
   async unmountDrive(drive: "a" | "b"): Promise<{ errors: string[] }> {
-    return this.request(`/v1/drives/${drive}:remove`, { method: "PUT", timeoutMs: MOUNT_REQUEST_TIMEOUT_MS });
+    const response = await this.request<{ errors: string[] }>(`/v1/drives/${drive}:remove`, {
+      method: "PUT",
+      timeoutMs: MOUNT_REQUEST_TIMEOUT_MS,
+    });
+    this.assertDriveWriteAccepted(response, "eject", drive);
+    return response;
   }
 
   async resetDrive(drive: string): Promise<{ errors: string[] }> {

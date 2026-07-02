@@ -1457,6 +1457,42 @@ describe("c64api", () => {
     expect(addErrorLogMock).toHaveBeenCalledWith("Drive mount upload failed", expect.any(Object));
   });
 
+  it("throws on firmware-rejected drive mount/eject even when HTTP status is 200 (HARD9-010)", async () => {
+    const fetchMock = getFetchMock();
+    const firmwareRejected = () =>
+      new Response(JSON.stringify({ errors: ["Image not found"] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    fetchMock.mockImplementation(() => Promise.resolve(firmwareRejected()));
+
+    const api = new C64API("http://c64u");
+
+    await expect(api.mountDrive("a", "/missing.d64", "1541", "readwrite")).rejects.toThrow(
+      "Firmware rejected drive A mount: Image not found",
+    );
+    await expect(api.mountDriveUpload("a", createValidD64Blob(), "d64", "readwrite")).rejects.toThrow(
+      "Firmware rejected drive A mount: Image not found",
+    );
+    await expect(api.unmountDrive("b")).rejects.toThrow("Firmware rejected drive B eject: Image not found");
+  });
+
+  it("does not throw when the firmware errors array is present but empty or blank", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ errors: ["", "   "] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    const api = new C64API("http://c64u");
+    await expect(api.mountDrive("a", "/ok.d64", "1541", "readwrite")).resolves.toEqual({ errors: ["", "   "] });
+    await expect(api.unmountDrive("a")).resolves.toEqual({ errors: ["", "   "] });
+  });
+
   it("uses fetch for binary uploads on native platforms", async () => {
     (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
     (window as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
