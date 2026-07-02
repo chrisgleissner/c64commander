@@ -140,7 +140,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-080 | Shared preset-refresh promise: unmount-abort → unhandled rejection, stuck status | sources | P3 | robustness, correctness | high | S | FIXED (c5c8393f) |
 | HARD9-081 | Web FTP recursive scan unbounded while native caps at depth 8 / 5000 | sources | P3 | robustness, perf, correctness | high | S | FIXED (78bdd05f) |
 | HARD9-082 | Refresh clears only the exact current path; recursive adds serve 10-min-stale cache | sources | P3 | correctness, ux | high | S | FIXED (f60a46e1) |
-| HARD9-083 | Pre-aborted FTP read still performs the full transfer | sources | P3 | robustness, performance | medium | S | OPEN |
+| HARD9-083 | Pre-aborted FTP read still performs the full transfer | sources | P3 | robustness, performance | medium | S | FIXED (ec41e834) |
 | HARD9-084 | HVSC cancellation unchecked during deletion pass and finalize | hvsc | P3 | ux, robustness | high | S | FIXED (67a7dd88) |
 | HARD9-085 | CategorySection disables every row while any single write is pending | config | P3 | ux | medium | S | FIXED (f6e9f349) |
 | HARD9-086 | Optimistic rollback can resurrect a stale pin on racing writes | config | P3 | correctness | high | S | FIXED (81bd6011) |
@@ -799,10 +799,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (f60a46e1):** Implemented both parts of the fix sketch: `clearCacheForPath` now prefix-invalidates (exact path plus everything nested under it, matched against the already-known host/port rather than parsing paths back out of composite keys); the recursive scan's `listEntries` calls always skip the read cache (`skipCache: true`), so a recursive "Add folder" reflects live device state regardless of prior Refresh state. Both paths still write through the cache, so ordinary browsing after a recursive scan stays fast. Two new regression tests proven failing against the pre-fix code via `git stash`.
 
 ### HARD9-083 — Pre-aborted or early-aborted FTP read still performs the full transfer
-- **Area:** sources · **Severity:** P3 · **Dimensions:** robustness, performance · **Confidence:** medium · **Effort:** S · **Status:** OPEN
+- **Area:** sources · **Severity:** P3 · **Dimensions:** robustness, performance · **Confidence:** medium · **Effort:** S · **Status:** FIXED (ec41e834)
 - **Files:** `src/lib/ftp/ftpClient.ts:300-329`
 - **Failure scenario:** A caller aborts a queued FTP read before the native call starts (user cancels a bulk import): `executeFtpRead` sees `signal.aborted`, fires `cancelRead` (no-op — read not registered yet), then proceeds to `readFile(...)` anyway, downloading the whole file.
 - **Fix sketch:** Throw `AbortError` immediately when pre-aborted; have native remember cancelled requestIds briefly so cancel-before-start wins (see HARD9-073 for the flip side).
+- **Resolution (ec41e834):** Implemented the first half of the fix sketch: `executeFtpRead` now throws an `AbortError` immediately when the signal is already aborted, without ever calling native `readFile` (or `cancelRead` - nothing is in flight yet to cancel). The second half ("native remember cancelled requestIds briefly") is effectively covered by HARD9-073's already-shipped fix, which lets a `cancelRead` that lands before `readFile`'s own pre-abort check correctly register the cancellation; the narrower bridge-call-ordering race between the two independent native calls is inherent to Capacitor's async bridge and not fully eliminable, but is no longer reachable for the primary (pre-aborted-at-entry) case this finding describes. An existing test encoded the old behavior (asserting `readFile` was called even when pre-aborted) and was rewritten to assert the new contract; proven failing against the pre-fix code via `git stash`.
 
 ### HARD9-084 — HVSC ingestion cancellation unchecked during the deletion pass and index finalize
 - **Area:** hvsc · **Severity:** P3 · **Dimensions:** ux-responsiveness, robustness · **Confidence:** high · **Effort:** S · **Status:** FIXED (67a7dd88)
