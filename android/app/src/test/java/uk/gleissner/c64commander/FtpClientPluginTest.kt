@@ -814,6 +814,35 @@ class FtpClientPluginTest {
   }
 
   @Test
+  fun listDirectoryEnablesUtf8AutodetectionBeforeConnecting() {
+    // Regression (HARD9-070): commons-net defaults to ISO-8859-1 on the
+    // control channel with no UTF-8 autodetection - a USB stick with
+    // non-ASCII filenames lists as mojibake and a subsequent RETR of the
+    // re-encoded name 550s. autodetectUTF8 must be set before connect().
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    `when`(ftpClient.listFiles("/")).thenReturn(emptyArray())
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("secret")
+    `when`(call.getString("path")).thenReturn("/")
+
+    plugin.listDirectory(call)
+
+    val ordered = inOrder(ftpClient)
+    ordered.verify(ftpClient).setAutodetectUTF8(true)
+    ordered.verify(ftpClient).connect("127.0.0.1", 21)
+  }
+
+  @Test
   fun listDirectoryAppliesConfiguredConnectTimeoutSeparatelyFromTransferTimeout() {
     val plugin = FtpClientPlugin()
     plugin.runTask = { runnable -> runnable.run() }

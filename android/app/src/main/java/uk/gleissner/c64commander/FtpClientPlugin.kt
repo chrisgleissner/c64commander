@@ -88,6 +88,12 @@ class FtpClientPlugin : Plugin() {
   private fun applyPreConnectTimeouts(client: FTPClient, timeoutMs: Int) {
     client.connectTimeout = timeoutMs
     client.defaultTimeout = timeoutMs
+    // commons-net defaults to ISO-8859-1 on the control channel with no UTF-8
+    // autodetection. A USB stick with non-ASCII filenames (accented scene
+    // names) lists as mojibake, and re-encoding the mangled name for a
+    // subsequent RETR 550s - visible in the listing but never fetchable. See
+    // HARD9-070.
+    client.autodetectUTF8 = true
   }
 
   private fun applyConnectedTimeouts(client: FTPClient, timeoutMs: Int) {
