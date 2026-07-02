@@ -21,6 +21,9 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketAddress
 import java.net.SocketTimeoutException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -416,6 +419,51 @@ class TelnetSocketPluginTest {
     )
   }
 
+  @Test
+  fun handleOnDestroyWaitsForInFlightTaskBeforeClosingSocket() {
+    // Uses the plugin's REAL single-thread executor (does not override runTask)
+    // so connect() genuinely runs on a separate thread, reproducing the actual
+    // race handleOnDestroy() must avoid (HARD9-072): closing the socket from the
+    // destroy thread while an in-flight task is still touching it.
+    val realPlugin = TelnetSocketPlugin()
+    injectBridge(realPlugin, context)
+
+    val startedLatch = CountDownLatch(1)
+    val released = AtomicBoolean(false)
+    val socket = BlockingConnectSocket(startedLatch, released)
+    realPlugin.socketFactory = { socket }
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("c64u")
+    realPlugin.connect(call)
+
+    assertTrue("connect() task did not start on the executor thread", startedLatch.await(1, TimeUnit.SECONDS))
+
+    Thread {
+              Thread.sleep(100)
+              released.set(true)
+            }
+            .start()
+
+    val destroyStartNs = System.nanoTime()
+    invokeHandleOnDestroy(realPlugin)
+    val destroyDurationMs = (System.nanoTime() - destroyStartNs) / 1_000_000
+
+    // Proves handleOnDestroy genuinely waited for the in-flight task to finish
+    // (~100ms) instead of returning immediately and racing closeSocket() against
+    // it on a different thread.
+    assertTrue(
+            "Expected handleOnDestroy to wait for the in-flight task (waited ${destroyDurationMs}ms)",
+            destroyDurationMs >= 90,
+    )
+  }
+
+  private fun invokeHandleOnDestroy(target: TelnetSocketPlugin) {
+    val method = TelnetSocketPlugin::class.java.getDeclaredMethod("handleOnDestroy")
+    method.isAccessible = true
+    method.invoke(target)
+  }
+
   private fun injectBridge(target: Plugin, ctx: Context) {
     val bridge = mock(Bridge::class.java)
     `when`(bridge.context).thenReturn(ctx)
@@ -467,6 +515,31 @@ private class FakeSocket(
     connected = false
     closed = true
   }
+}
+
+private class BlockingConnectSocket(
+        private val startedLatch: CountDownLatch,
+        private val released: AtomicBoolean,
+) : Socket() {
+  // Simulates a blocking socket call that does NOT respond to Thread.interrupt()
+  // (matches real java.net.Socket I/O semantics - only closing the socket, or in
+  // this case flipping `released`, unblocks it), so the test can prove
+  // handleOnDestroy() actually waits rather than relying on shutdownNow()'s
+  // interrupt to unblock it.
+  override fun connect(endpoint: SocketAddress?, timeout: Int) {
+    startedLatch.countDown()
+    while (!released.get()) {
+      try {
+        Thread.sleep(5)
+      } catch (_: InterruptedException) {
+        // Ignored - a plain blocking Socket.connect() would not unwind here either.
+      }
+    }
+  }
+
+  override fun getInputStream(): InputStream = TrackingInputStream()
+
+  override fun getOutputStream(): OutputStream = TrackingOutputStream()
 }
 
 private class TrackingInputStream(
