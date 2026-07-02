@@ -1075,20 +1075,6 @@ export class C64API {
     saveConfigEnrichmentCategory(this.activeConfigEnrichmentNamespaceKey, category, nextItems);
   }
 
-  getCachedCategory(category: string): ConfigResponse | null {
-    const cachedItems = this.getCachedConfigCategoryItems(category);
-    if (!cachedItems || Object.keys(cachedItems).length === 0) {
-      return null;
-    }
-
-    return {
-      [category]: {
-        items: cloneBudgetValue(cachedItems),
-      },
-      errors: [],
-    } as ConfigResponse;
-  }
-
   /**
    * Synchronous read of a single item's CACHED config metadata (options/values + details),
    * served from the firmware-namespaced persistent enrichment cache (in-memory → localStorage).

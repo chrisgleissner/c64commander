@@ -57,35 +57,21 @@ describe("C64API setBaseUrl", () => {
     await api.getInfo();
     await api.getCategory("U64 Specific Settings");
 
-    expect(api.getCachedCategory("U64 Specific Settings")).toEqual({
-      "U64 Specific Settings": {
-        items: {
-          "System Mode": {
-            selected: "PAL",
-            values: ["PAL", "NTSC"],
-          },
-        },
-      },
-      errors: [],
+    expect(api.getCachedConfigItem("U64 Specific Settings", "System Mode")).toEqual({
+      selected: "PAL",
+      values: ["PAL", "NTSC"],
     });
 
     api.setBaseUrl("http://c64u");
     api.setDeviceHost("c64u");
-    expect(api.getCachedCategory("U64 Specific Settings")).toBeNull();
+    expect(api.getCachedConfigItem("U64 Specific Settings", "System Mode")).toBeUndefined();
 
     api.setBaseUrl("http://u64");
     api.setDeviceHost("u64");
 
-    expect(api.getCachedCategory("U64 Specific Settings")).toEqual({
-      "U64 Specific Settings": {
-        items: {
-          "System Mode": {
-            selected: "PAL",
-            values: ["PAL", "NTSC"],
-          },
-        },
-      },
-      errors: [],
+    expect(api.getCachedConfigItem("U64 Specific Settings", "System Mode")).toEqual({
+      selected: "PAL",
+      values: ["PAL", "NTSC"],
     });
     expect(requestMock).toHaveBeenCalledTimes(2);
   });
