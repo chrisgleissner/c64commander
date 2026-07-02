@@ -476,4 +476,54 @@ describe("GlobalDiagnosticsOverlay", () => {
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
+
+  it("does not refresh logs/traces while closed, but seeds and refreshes once opened (HARD9-021)", async () => {
+    const { getLogs, getErrorLogs } = await import("@/lib/logging");
+    const { getTraceEvents } = await import("@/lib/tracing/traceSession");
+    consumeDiagnosticsOpenRequestMock.mockReturnValue(null);
+
+    renderOverlay();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    const logsCallsWhileClosed = vi.mocked(getLogs).mock.calls.length;
+    const errorLogsCallsWhileClosed = vi.mocked(getErrorLogs).mock.calls.length;
+    const tracesCallsWhileClosed = vi.mocked(getTraceEvents).mock.calls.length;
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent("c64u-logs-updated"));
+      window.dispatchEvent(new CustomEvent("c64u-traces-updated"));
+    });
+
+    // No listener is registered while closed, so these events must not have
+    // triggered any additional store reads.
+    expect(vi.mocked(getLogs).mock.calls.length).toBe(logsCallsWhileClosed);
+    expect(vi.mocked(getErrorLogs).mock.calls.length).toBe(errorLogsCallsWhileClosed);
+    expect(vi.mocked(getTraceEvents).mock.calls.length).toBe(tracesCallsWhileClosed);
+
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent("c64u-diagnostics-open-request", {
+          detail: { preset: "header", panel: null },
+        }),
+      );
+    });
+    await screen.findByRole("dialog");
+
+    // Opening must seed a fresh snapshot.
+    expect(vi.mocked(getLogs).mock.calls.length).toBeGreaterThan(logsCallsWhileClosed);
+    expect(vi.mocked(getErrorLogs).mock.calls.length).toBeGreaterThan(errorLogsCallsWhileClosed);
+    expect(vi.mocked(getTraceEvents).mock.calls.length).toBeGreaterThan(tracesCallsWhileClosed);
+
+    const logsCallsAfterOpen = vi.mocked(getLogs).mock.calls.length;
+    const tracesCallsAfterOpen = vi.mocked(getTraceEvents).mock.calls.length;
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent("c64u-logs-updated"));
+      window.dispatchEvent(new CustomEvent("c64u-traces-updated"));
+    });
+
+    // Once open, the listeners are live and refresh on every event.
+    expect(vi.mocked(getLogs).mock.calls.length).toBeGreaterThan(logsCallsAfterOpen);
+    expect(vi.mocked(getTraceEvents).mock.calls.length).toBeGreaterThan(tracesCallsAfterOpen);
+  });
 });

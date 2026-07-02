@@ -182,20 +182,32 @@ export const GlobalDiagnosticsOverlay = () => {
     [navigate, routePanel, setDialogOpen],
   );
 
+  // Only subscribe (and only refresh) while the overlay is actually open: it
+  // is always mounted, so unconditional listeners here copied the full
+  // logs/error-logs/trace-events stores on every single log line and trace
+  // event append, even while nothing was visible to show it. Seed a fresh
+  // snapshot on open, since these are not kept live while closed and could
+  // otherwise show a stale snapshot from before the last close. See
+  // HARD9-021.
   useEffect(() => {
+    if (!overlayOpen) return;
+    setLogs(getLogs());
+    setErrorLogs(getErrorLogs());
     const handler = () => {
       setLogs(getLogs());
       setErrorLogs(getErrorLogs());
     };
     window.addEventListener("c64u-logs-updated", handler);
     return () => window.removeEventListener("c64u-logs-updated", handler);
-  }, []);
+  }, [overlayOpen]);
 
   useEffect(() => {
+    if (!overlayOpen) return;
+    setTraceEvents(getTraceEvents());
     const handler = () => setTraceEvents(getTraceEvents());
     window.addEventListener("c64u-traces-updated", handler);
     return () => window.removeEventListener("c64u-traces-updated", handler);
-  }, []);
+  }, [overlayOpen]);
 
   useEffect(() => {
     const handleRequest = (event: Event) => {
