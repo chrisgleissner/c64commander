@@ -136,7 +136,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-076 | Device-discovery probe leaks HttpURLConnection on body-read failure | native | P3 | robustness, performance | high | S | FIXED (9003d8e9) |
 | HARD9-077 | MainActivity.onCreate does synchronous filesystem repair on main thread | native | P3 | ux, performance | high | S | OPEN |
 | HARD9-078 | Recursive FTP listing's timed_out flag dropped by the JS contract | native | P3 | correctness | high | S | FIXED (2b5a6dda) |
-| HARD9-079 | Native CommoServe transport ignores AbortSignal — Cancel doesn't cancel | sources | P3 | robustness, perf, ux | high | M | OPEN |
+| HARD9-079 | Native CommoServe transport ignores AbortSignal — Cancel doesn't cancel | sources | P3 | robustness, perf, ux | high | M | FIXED (ac5b8c17) |
 | HARD9-080 | Shared preset-refresh promise: unmount-abort → unhandled rejection, stuck status | sources | P3 | robustness, correctness | high | S | OPEN |
 | HARD9-081 | Web FTP recursive scan unbounded while native caps at depth 8 / 5000 | sources | P3 | robustness, perf, correctness | high | S | OPEN |
 | HARD9-082 | Refresh clears only the exact current path; recursive adds serve 10-min-stale cache | sources | P3 | correctness, ux | high | S | OPEN |
@@ -771,10 +771,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (2b5a6dda):** Implemented the fix sketch exactly: renamed to `timedOut`, added to the `FtpClientPlugin` TS type and `FtpRecursiveListResult`, and surfaced it in `ftpSourceAdapter.listFilesRecursive` via the existing `partialFailures` mechanism (a synthetic "Listing incomplete: device FTP timed out" entry) rather than inventing a new UI surface for a signal nothing currently renders directly. New Kotlin test proven failing (field missing under the expected name) against the pre-fix `timed_out` spelling via `git stash`; new TS tests proven failing against the pre-fix code the same way.
 
 ### HARD9-079 — Native CommoServe transport ignores AbortSignal — Cancel doesn't cancel
-- **Area:** sources · **Severity:** P3 · **Dimensions:** robustness, performance, ux-responsiveness · **Confidence:** high · **Effort:** M · **Status:** OPEN
+- **Area:** sources · **Severity:** P3 · **Dimensions:** robustness, performance, ux-responsiveness · **Confidence:** high · **Effort:** M · **Status:** FIXED (ac5b8c17)
 - **Files:** `src/lib/archive/client.ts:183-214`, `src/hooks/useOnlineArchive.ts:199-223`
 - **Failure scenario:** On native, `requestWithTransport` routes through `CapacitorHttp.request` and never wires `options.signal`; `cancel()` rolls the UI back but the search/entries/binary download (up to 30s) keeps transferring. Cancel + new search stacks concurrent native requests against a slow archive host; on metered connections the cancelled download completes anyway.
 - **Fix sketch:** Reject early when `signal.aborted`; race the request promise against a signal-abort promise (drop the result).
+- **Resolution (ac5b8c17):** Implemented the fix sketch exactly: an already-aborted signal rejects before `CapacitorHttp.request` is ever called; otherwise the request promise races against an abort-triggered rejection via a new `raceAgainstAbort` helper, with the abort listener always cleaned up via `.finally()` and the losing side's eventual result/error explicitly dropped (no-op `.catch`) so it can never surface as an unhandled rejection. Two new regression tests proven failing against the pre-fix code via `git stash`.
 
 ### HARD9-080 — Shared preset-refresh promise turns unmount-abort into an unhandled rejection and a stuck "pending" status
 - **Area:** sources · **Severity:** P3 · **Dimensions:** robustness, correctness · **Confidence:** high · **Effort:** S · **Status:** OPEN
