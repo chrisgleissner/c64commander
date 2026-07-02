@@ -119,7 +119,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-059 | Smoke-mode localStorage fallback is a self-perpetuating latch in prod | state | P2 | robustness, security, correctness | medium | S | OPEN |
 | HARD9-060 | Background health probes pass allowDuringError but the state gate ignores it | transport | P3 | correctness, ux | high | S | FIXED (1d16f3de) |
 | HARD9-061 | Second user CTA during half-open circuit probe hard-fails instead of queueing | transport | P3 | ux | high | S | FIXED (82492610) |
-| HARD9-062 | Startup saved-device fallback commits selection before verification | transport | P3 | correctness, ux | medium | S | OPEN |
+| HARD9-062 | Startup saved-device fallback commits selection before verification | transport | P3 | correctness, ux | medium | S | FIXED (16fc9351) |
 | HARD9-063 | Volume sync wedges after starting a new track from paused state | playback | P3 | correctness, robustness | medium | S | OPEN |
 | HARD9-064 | Session restore revives "playing" UI for a dead device session | playback | P3 | correctness, ux | medium | S | OPEN |
 | HARD9-065 | resolveVolumeSyncDecision is dead code diverging from live sync logic | playback | P3 | robustness | high | S | OPEN |
@@ -612,10 +612,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (82492610):** Replaced the REST half-open probe boolean flag with the in-flight probe promise. A second user REST request now records a deferred circuit guard and awaits the first probe; if the first probe succeeds, the second request continues through the normal request path, and if the first probe fails, the second request rejects with the standard `"Device circuit open"` error. Added regression coverage for both queued-success and queued-failure double-tap paths.
 
 ### HARD9-062 — Startup saved-device fallback commits the selection before verification and keeps it on failure
-- **Area:** transport · **Severity:** P3 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
+- **Area:** transport · **Severity:** P3 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (16fc9351)
 - **Files:** `src/lib/connection/connectionManager.ts:716-741`
 - **Failure scenario:** On startup with the selected device unreachable, `tryReachableSavedDeviceFallback` probes others; on a hit it calls `selectSavedDevice(...)` and applies runtime config *before* `verifyCurrentConnectionTarget`. If verification fails (probe-ok-then-verify-fail is realistic on a flaky c64u), the function returns false and flows to discovery/OFFLINE — but the selection is never rolled back: the user's chosen device has been silently switched to one the app isn't even connected to, and the next startup targets the wrong device.
 - **Fix sketch:** Capture the previous `selectedDeviceId` and restore it (plus runtime config) when verification fails, or defer `selectSavedDevice` until after verification.
+- **Resolution (16fc9351):** Deferred saved-device selection until after `verifyCurrentConnectionTarget` succeeds for the reachable fallback candidate. The verifier already accepts candidate host/password and applies runtime config only on successful verification, so a probe-ok/verify-fail candidate no longer updates selected saved-device state or runtime config. Updated the saved-device sweep regression to assert no selection/runtime commit on verification failure.
 
 ### HARD9-063 — Volume sync wedges after starting a new track from the paused state
 - **Area:** playback · **Severity:** P3 · **Dimensions:** correctness, robustness · **Confidence:** medium · **Effort:** S · **Status:** OPEN

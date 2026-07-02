@@ -2,16 +2,16 @@
 
 ## Current state
 - Branch: fix/hardening
-- Last commit reviewed/created: 1d16f3de "Fix HARD9-060 background recovery probes"
-- Working tree: clean after HARD9-060 status update commit
+- Last commit reviewed/created: 16fc9351 "Fix HARD9-062 fallback selection rollback"
+- Working tree: clean after HARD9-062 status update commit
 - Review doc: docs/plans/hardening/9-fable/review.md
 - 95 findings (HARD9-001..095)
 
 ## Plan
 Work batches in order from review.md:
 1. Auth & password UX: 001, 004, 025, 028, 043  <- DONE
-2. Native request lane & circuit UX: 002, 023, 022, 024, 061, 060, 062  <- IN PROGRESS (002/023/022/024/061/060 fixed)
-3. Playback duration/songlengths: 005, 006, 008, 064
+2. Native request lane & circuit UX: 002, 023, 022, 024, 061, 060, 062  <- DONE
+3. Playback duration/songlengths: 005, 006, 008, 064  <- NEXT
 4. Playback lifecycle: 029, 030, 031, 033, 063, 007
 5. Playback perf: 032, 034, 065, 066
 6. Diagnostics hot path: 019, 020, 021, 055, 056, 057, 058
@@ -105,6 +105,10 @@ Work batches in order from review.md:
   `allowDuringError` for explicit background recovery probes in ERROR state,
   while ordinary background traffic remains blocked. Health-maintenance REST
   probes can now perform real I/O and report the actual reachability result.
+- HARD9-062: 16fc9351 - Startup saved-device fallback now verifies a
+  reachable candidate before selecting it. A candidate that answers the sweep
+  probe but fails `verifyCurrentConnectionTarget` no longer replaces the user's
+  selected saved device or commits runtime config.
 
 ## Validation
 - `npx tsc --noEmit`: PASS (after HARD9-001)
@@ -145,6 +149,13 @@ Work batches in order from review.md:
 - `npx eslint src --quiet`: PASS (after HARD9-060)
 - `npx prettier --check src/lib/deviceInteraction/deviceInteractionManager.ts tests/unit/lib/deviceInteraction/deviceInteractionManager.test.ts`: PASS (after HARD9-060)
 - `git diff --check`: PASS (after HARD9-060)
+- `npx vitest run tests/unit/lib/connection/connectionManagerSavedDeviceSweep.test.ts tests/unit/connection/connectionManager.test.ts tests/unit/connection/connectionManager.startup.test.ts`: PASS (86 tests, after HARD9-062)
+- `npx tsc --noEmit`: PASS (after HARD9-062)
+- `npx eslint src --quiet`: PASS (after HARD9-062)
+- `npx prettier --check src/lib/connection/connectionManager.ts tests/unit/lib/connection/connectionManagerSavedDeviceSweep.test.ts`: PASS (after HARD9-062)
+- `git diff --check`: PASS (after HARD9-062)
+- Pixel 4 APK deploy / HIL validation: NOT RUN for the transport batch in this
+  checkpoint; no APK was built and no hardware device was exercised.
 - `npm run format:check:ts -- --ignore-unknown src/lib/connection/connectionManager.ts tests/unit/connection/connectionManager.test.ts`: FAIL (script checks the whole repo's `**/*.{ts,tsx,json}` pattern before appended args; reports pre-existing formatting warnings in `src/pages/SettingsPage.tsx` plus the touched connection test before targeted Prettier write. Targeted file check above passes after formatting touched files.)
 - `npx vitest run tests/unit/pages/SettingsPage.test.tsx`: PASS (83/83, +4 new
   tests covering HARD9-004/025/028)
@@ -170,9 +181,10 @@ Work batches in order from review.md:
   real c64u) before calling this fully closed.
 
 ## Remaining
-- Next batch: Native request lane & circuit UX — HARD9-062.
-- Next issue: HARD9-062 (startup saved-device fallback commits selection
-  before verification and keeps it on failure).
+- Next batch: Playback duration/songlengths — HARD9-005, HARD9-006,
+  HARD9-008, HARD9-064.
+- Next issue: HARD9-005 (duration slider clobbers every playlist item's
+  resolved duration).
 - HARD9-003 (Android bottom safe-area inset) is a HIL-proven P1 usability
   blocker per the operating instructions — fix early if auth work stalls.
 
