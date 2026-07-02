@@ -160,9 +160,9 @@ import { mountDiskToDrive } from "@/lib/disks/diskMount";
 const expectMountDiskToDriveCall = (drive: string, diskId: string) => {
   const call = vi.mocked(mountDiskToDrive).mock.calls.at(-1);
   expect(call?.slice(0, 4)).toEqual([expect.anything(), drive, expect.objectContaining({ id: diskId }), undefined]);
-  if (call && call.length > 4) {
-    expect(call[4]).toEqual({ mode: "readonly" });
-  }
+  // The mount always carries the archive-config map so CommoServe disks can
+  // re-download their bytes on demand. See HARD10-002.
+  expect(call?.[4]).toEqual(expect.objectContaining({ archiveConfigs: expect.anything() }));
 };
 
 // --- TESTS ---
@@ -302,6 +302,15 @@ describe("HomeDiskManager Dialogs", () => {
             name: "archive-game.d64",
             path: "/archive-game.d64",
             sourceId: "archive-commoserve",
+            // Persisted archive coordinates enable on-demand re-download after
+            // the in-memory runtime bytes are lost. See HARD10-002.
+            archiveRef: {
+              sourceId: "archive-commoserve",
+              resultId: "123",
+              category: 42,
+              entryId: 7,
+              entryPath: "archive-game.d64",
+            },
           }),
         ],
         expect.anything(),

@@ -41,6 +41,18 @@ vi.mock("@/lib/savedDevices/deviceBoundOrigin", () => ({
   isOriginOnSelectedDevice: mockIsOriginOnSelectedDevice,
 }));
 
+const { mockDownloadBinary, mockCreateArchiveClient } = vi.hoisted(() => {
+  const download = vi.fn();
+  return {
+    mockDownloadBinary: download,
+    mockCreateArchiveClient: vi.fn(() => ({ downloadBinary: download })),
+  };
+});
+
+vi.mock("@/lib/archive/client", () => ({
+  createArchiveClient: mockCreateArchiveClient,
+}));
+
 import { FolderPicker } from "@/lib/native/folderPicker";
 import {
   loadLocalSources,
@@ -50,11 +62,42 @@ import {
 } from "@/lib/sourceNavigation/localSourcesStore";
 import { addErrorLog } from "@/lib/logging";
 import { buildDiskMountType, resolveLocalDiskBlob, mountDiskToDrive } from "@/lib/disks/diskMount";
+import { clearArchiveDiskCacheForTests } from "@/lib/archive/archiveDiskCache";
+
+const ARCHIVE_CONFIG = {
+  id: "commoserve-1",
+  name: "CommoServe",
+  baseUrl: "http://commoserve.example",
+  enabled: true,
+};
+
+const buildArchiveDisk = () =>
+  ({
+    path: "/archive-game.d64",
+    location: "local",
+    sourceId: "commoserve-1",
+    sourceKind: "commoserve",
+    archiveRef: {
+      sourceId: "commoserve-1",
+      resultId: "123",
+      category: 42,
+      entryId: 7,
+      entryPath: "archive-game.d64",
+    },
+  }) as any;
 
 describe("diskMount", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockIsOriginOnSelectedDevice.mockReturnValue(true);
+    clearArchiveDiskCacheForTests();
+    mockCreateArchiveClient.mockReturnValue({ downloadBinary: mockDownloadBinary });
+    mockDownloadBinary.mockResolvedValue({
+      fileName: "archive-game.d64",
+      bytes: new Uint8Array([1, 2, 3, 4]),
+      contentType: "application/octet-stream",
+      url: "http://commoserve.example/leet/search/bin/123/42/7",
+    });
   });
 
   describe("buildDiskMountType", () => {
@@ -158,7 +201,7 @@ describe("diskMount", () => {
       );
     });
 
-    it("throws an accurate re-import message for a commoserve disk with no runtime bytes (HARD9-011)", async () => {
+    it("throws an accurate re-import message for a commoserve disk with no runtime bytes and no archiveRef (HARD9-011)", async () => {
       vi.mocked(loadLocalSources).mockReturnValue([]);
       await expect(
         resolveLocalDiskBlob({
@@ -168,6 +211,78 @@ describe("diskMount", () => {
           sourceKind: "commoserve",
         } as any),
       ).rejects.toThrow("Re-import it from CommoServe");
+      // Legacy entries (imported before HARD10-002) have no archiveRef, so
+      // there is nothing to re-download - the terminal fallback still applies.
+      expect(mockCreateArchiveClient).not.toHaveBeenCalled();
+    });
+
+    it("re-downloads an archiveRef commoserve disk on mount after runtime bytes are cleared (HARD10-002)", async () => {
+      // No runtimeFile and no local sources: the in-memory bytes are gone
+      // (device switch / restart). The archiveRef must drive a fresh download.
+      vi.mocked(loadLocalSources).mockReturnValue([]);
+      const blob = await resolveLocalDiskBlob(buildArchiveDisk(), undefined, {
+        archiveConfigs: { "commoserve-1": ARCHIVE_CONFIG },
+      });
+
+      expect(blob).toBeInstanceOf(Blob);
+      expect(blob.size).toBe(4);
+      expect(mockCreateArchiveClient).toHaveBeenCalledWith(ARCHIVE_CONFIG);
+      expect(mockDownloadBinary).toHaveBeenCalledWith("123", 42, 7, "archive-game.d64", {
+        signal: undefined,
+      });
+      // A local-source scan must never happen for an archive-backed disk.
+      expect(getLocalSourceRuntimeFile).not.toHaveBeenCalled();
+    });
+
+    it("serves a second archiveRef mount from the cache without re-downloading (HARD10-002)", async () => {
+      vi.mocked(loadLocalSources).mockReturnValue([]);
+      await resolveLocalDiskBlob(buildArchiveDisk(), undefined, {
+        archiveConfigs: { "commoserve-1": ARCHIVE_CONFIG },
+      });
+      const second = await resolveLocalDiskBlob(buildArchiveDisk(), undefined, {
+        archiveConfigs: { "commoserve-1": ARCHIVE_CONFIG },
+      });
+
+      expect(second).toBeInstanceOf(Blob);
+      expect(mockDownloadBinary).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects an oversized archiveRef re-download before mounting (HARD10-002)", async () => {
+      vi.mocked(loadLocalSources).mockReturnValue([]);
+      mockDownloadBinary.mockResolvedValue({
+        fileName: "archive-game.d64",
+        bytes: new Uint8Array(64 * 1024 * 1024 + 1),
+        contentType: "application/octet-stream",
+        url: "http://commoserve.example/leet/search/bin/123/42/7",
+      });
+
+      await expect(
+        resolveLocalDiskBlob(buildArchiveDisk(), undefined, {
+          archiveConfigs: { "commoserve-1": ARCHIVE_CONFIG },
+        }),
+      ).rejects.toThrow("too large to mount");
+    });
+
+    it("aborts an archiveRef re-download when the signal is already aborted (HARD10-002)", async () => {
+      vi.mocked(loadLocalSources).mockReturnValue([]);
+      const controller = new AbortController();
+      controller.abort();
+
+      await expect(
+        resolveLocalDiskBlob(buildArchiveDisk(), undefined, {
+          archiveConfigs: { "commoserve-1": ARCHIVE_CONFIG },
+          signal: controller.signal,
+        }),
+      ).rejects.toThrow(/cancelled|aborted/i);
+      expect(mockDownloadBinary).not.toHaveBeenCalled();
+    });
+
+    it("throws when the archive source config is unavailable for an archiveRef disk (HARD10-002)", async () => {
+      vi.mocked(loadLocalSources).mockReturnValue([]);
+      await expect(
+        resolveLocalDiskBlob(buildArchiveDisk(), undefined, { archiveConfigs: {} }),
+      ).rejects.toThrow("Archive source configuration unavailable for commoserve-1");
+      expect(mockDownloadBinary).not.toHaveBeenCalled();
     });
 
     it("rejects oversized runtime disk files before reading them into memory", async () => {
@@ -540,6 +655,20 @@ describe("diskMount", () => {
           location: "ultimate",
         } as any),
       ).rejects.toThrow("mount error");
+    });
+
+    it("threads archiveConfigs so a commoserve disk re-downloads and mounts via upload (HARD10-002)", async () => {
+      vi.mocked(loadLocalSources).mockReturnValue([]);
+      await mountDiskToDrive(mockApi as any, "a", buildArchiveDisk(), undefined, {
+        archiveConfigs: { "commoserve-1": ARCHIVE_CONFIG },
+      });
+
+      expect(mockDownloadBinary).toHaveBeenCalledWith("123", 42, 7, "archive-game.d64", {
+        signal: undefined,
+      });
+      expect(mockApi.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d64", "readwrite", {
+        filename: "/archive-game.d64",
+      });
     });
   });
 });

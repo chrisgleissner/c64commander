@@ -95,8 +95,34 @@ describe("diskTypes helpers", () => {
     expect(entry.modifiedAt).toBe("2024-01-01T00:00:00Z");
     expect(entry.importedAt).toBe("2024-01-01T00:00:00Z");
     expect(entry.importOrder).toBe(2);
+    expect(entry.archiveRef).toBeNull();
 
     nowSpy.mockRestore();
+  });
+
+  it("threads an archiveRef through the factory for commoserve disks (HARD10-002)", () => {
+    const entry = createDiskEntry({
+      path: "/archive-game.d64",
+      location: "local",
+      sourceId: "commoserve-1",
+      sourceKind: "commoserve",
+      archiveRef: {
+        sourceId: "commoserve-1",
+        resultId: "123",
+        category: 42,
+        entryId: 7,
+        entryPath: "archive-game.d64",
+      },
+    });
+
+    expect(entry.sourceKind).toBe("commoserve");
+    expect(entry.archiveRef).toEqual({
+      sourceId: "commoserve-1",
+      resultId: "123",
+      category: 42,
+      entryId: 7,
+      entryPath: "archive-game.d64",
+    });
   });
 
   it("returns location labels", () => {

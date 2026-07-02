@@ -617,7 +617,9 @@ export const HomeDiskManager = () => {
       // the same as one launched via Play - games saving high scores/state
       // to the user's own D64s must not fail with DOS 26 "WRITE PROTECT ON".
       // See HARD9-012.
-      await runDriveMutationWithSettledPolling(() => mountDiskToDrive(api, drive, disk, runtimeFile));
+      await runDriveMutationWithSettledPolling(() =>
+        mountDiskToDrive(api, drive, disk, runtimeFile, { archiveConfigs }),
+      );
       if (mountCompletionGenerationRef.current[drive] !== mountGeneration) {
         addLog("debug", "Ignoring stale disk mount completion", {
           drive,
@@ -1142,6 +1144,16 @@ export const HomeDiskManager = () => {
               location: "local",
               sourceId: source.id,
               sourceKind: "commoserve",
+              // Persist the deterministic archive coordinates so the disk can be
+              // re-downloaded on mount after its in-memory runtime bytes are lost
+              // (device switch / app restart). See HARD10-002.
+              archiveRef: {
+                sourceId: source.id,
+                resultId,
+                category,
+                entryId: diskEntry.id,
+                entryPath: diskEntry.path,
+              },
               name: binary.fileName || selection.name,
               group: source.name,
               sizeBytes: binary.bytes.byteLength,

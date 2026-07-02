@@ -7,6 +7,7 @@
  */
 
 import { DISK_IMAGE_EXTENSIONS, getFileExtension } from "@/lib/playback/fileTypes";
+import type { ArchivePlaylistReference } from "@/lib/archive/types";
 import type { ConfigFileReference } from "@/lib/config/configFileReference";
 import type { ConfigCandidate, ConfigResolutionOrigin, ConfigValueOverride } from "@/lib/config/playbackConfig";
 import { buildSelectedDeviceBoundOrigin, type DeviceBoundContentOrigin } from "@/lib/savedDevices/deviceBoundOrigin";
@@ -28,6 +29,13 @@ export type DiskEntry = {
   // folder" once the runtime bytes are gone (e.g. after a remount). See
   // HARD9-011.
   sourceKind?: "commoserve" | null;
+  // For "commoserve" disks, the deterministic archive coordinates needed to
+  // re-download the bytes on demand after the in-memory runtimeFiles cache is
+  // gone (device switch / app restart). Mirrors the playlist re-download
+  // pattern (ArchivePlaylistReference). Legacy entries imported before this
+  // was persisted have no archiveRef and fall back to the re-import error.
+  // See HARD10-002.
+  archiveRef?: ArchivePlaylistReference | null;
   localUri?: string | null;
   localTreeUri?: string | null;
   sizeBytes?: number | null;
@@ -90,6 +98,7 @@ export const createDiskEntry = (params: {
   group?: string | null;
   sourceId?: string | null;
   sourceKind?: "commoserve" | null;
+  archiveRef?: ArchivePlaylistReference | null;
   localUri?: string | null;
   localTreeUri?: string | null;
   name?: string | null;
@@ -112,6 +121,7 @@ export const createDiskEntry = (params: {
     group: params.group ?? null,
     sourceId: params.sourceId ?? null,
     sourceKind: params.sourceKind ?? null,
+    archiveRef: params.archiveRef ?? null,
     localUri: params.localUri ?? null,
     localTreeUri: params.localTreeUri ?? null,
     sizeBytes: params.sizeBytes ?? null,
