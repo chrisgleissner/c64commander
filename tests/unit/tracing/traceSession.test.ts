@@ -61,6 +61,7 @@ import {
   recordDeviceGuard,
   TRACE_SESSION,
   trimOldestHalfAtCapacity,
+  selectNewestEventsWithinBudget,
 } from "@/lib/tracing/traceSession";
 import { getCurrentTraceIdCounters, setTraceIdCounters } from "@/lib/tracing/traceIds";
 import type { TraceActionContext } from "@/lib/tracing/types";
@@ -1205,5 +1206,128 @@ describe("traceSession", () => {
       trimOldestHalfAtCapacity(set, 4);
       expect(set).toEqual(new Set(["e", "f"]));
     });
+  });
+
+  describe("selectNewestEventsWithinBudget", () => {
+    it("keeps everything when the total is within budget", () => {
+      const list = ["a", "b", "c"];
+      const sizes = [10, 10, 10];
+      expect(selectNewestEventsWithinBudget(list, sizes, 100)).toEqual(["a", "b", "c"]);
+    });
+
+    it("drops the oldest entries once the cumulative size exceeds the budget", () => {
+      const list = ["a", "b", "c", "d"];
+      const sizes = [10, 10, 10, 10];
+      expect(selectNewestEventsWithinBudget(list, sizes, 25)).toEqual(["c", "d"]);
+    });
+
+    it("always keeps at least the single newest entry, even if it alone exceeds the budget", () => {
+      const list = ["a", "b"];
+      const sizes = [5, 1000];
+      expect(selectNewestEventsWithinBudget(list, sizes, 10)).toEqual(["b"]);
+    });
+
+    it("returns an empty array unchanged", () => {
+      expect(selectNewestEventsWithinBudget([], [], 100)).toEqual([]);
+    });
+  });
+
+  it("persistTracesToSession only persists the newest events within the persist budget (HARD9-057)", () => {
+    const storage: Record<string, string> = {};
+    vi.stubGlobal("sessionStorage", {
+      setItem: (key: string, value: string) => {
+        storage[key] = value;
+      },
+      getItem: (key: string) => storage[key] ?? null,
+      removeItem: (key: string) => {
+        delete storage[key];
+      },
+    });
+    vi.stubGlobal("window", {
+      dispatchEvent: vi.fn(),
+      setTimeout: vi.fn(),
+      CustomEvent: class {},
+    });
+
+    // Each event carries a ~200KB payload; 20 of them (~4MB) comfortably
+    // exceeds the 2MB persist budget, so only a newest suffix should reach
+    // sessionStorage instead of the full in-memory session.
+    const bigPayload = "x".repeat(200_000);
+    const bulky = Array.from({ length: 20 }, (_, i) => ({
+      id: `trace-bulky-${i}`,
+      timestamp: new Date(i).toISOString(),
+      relativeMs: i,
+      type: "error" as const,
+      origin: "user" as const,
+      correlationId: `COR-${i}`,
+      data: { message: bigPayload },
+    }));
+    replaceTraceEvents(bulky as any);
+
+    persistTracesToSession();
+
+    const persisted = JSON.parse(storage[SESSION_STORAGE_KEY]) as Array<{ id: string }>;
+    expect(persisted.length).toBeGreaterThan(0);
+    expect(persisted.length).toBeLessThan(bulky.length);
+    expect(persisted[persisted.length - 1].id).toBe("trace-bulky-19");
+    expect(persisted.some((e) => e.id === "trace-bulky-0")).toBe(false);
+  });
+
+  it("restoreTracesFromSession rebuilds the decision-dedup set from restored events (HARD9-057)", () => {
+    const storage: Record<string, string> = {};
+    vi.stubGlobal("sessionStorage", {
+      setItem: (key: string, value: string) => {
+        storage[key] = value;
+      },
+      getItem: (key: string) => storage[key] ?? null,
+      removeItem: (key: string) => {
+        delete storage[key];
+      },
+    });
+    vi.stubGlobal("window", {
+      dispatchEvent: vi.fn(),
+      setTimeout: vi.fn(),
+      CustomEvent: class {},
+    });
+
+    storage[SESSION_STORAGE_KEY] = JSON.stringify([
+      {
+        id: "E-RESTORED-DECISION",
+        timestamp: new Date().toISOString(),
+        relativeMs: 0,
+        type: "backend-decision",
+        origin: "user",
+        correlationId: "RESTORED-DECISION",
+        data: {
+          lifecycleState: "foreground",
+          sourceKind: null,
+          localAccessMode: null,
+          trackInstanceId: null,
+          playlistItemId: null,
+          selectedTarget: "real-device",
+          reason: "reachable",
+        },
+      },
+    ]);
+
+    restoreTracesFromSession();
+    expect(getTraceEvents()).toHaveLength(1);
+
+    // A backend-decision for the same correlation id known only via the
+    // restored payload must still be suppressed - proving restore rebuilt
+    // decisionByCorrelation from the restored events (via the same path
+    // replaceTraceEvents uses) instead of leaving it empty.
+    recordRestRequest(
+      { ...action, correlationId: "RESTORED-DECISION" },
+      {
+        method: "GET",
+        url: "http://x",
+        normalizedUrl: "http://x",
+        headers: {},
+        body: null,
+      },
+    );
+    const decisions = getTraceEvents().filter((e) => e.type === "backend-decision");
+    expect(decisions).toHaveLength(1);
   });
 });

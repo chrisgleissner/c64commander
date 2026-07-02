@@ -286,11 +286,36 @@ export const replaceTraceEvents = (nextEvents: TraceEvent[]) => {
 
 const SESSION_STORAGE_KEY = "c64u_persisted_traces";
 const SESSION_COUNTERS_KEY = "c64u_persisted_trace_counters";
+// sessionStorage quotas are commonly ~5-10MB per origin (sometimes smaller in
+// WebViews); the in-memory session can hold up to MAX_STORAGE_BYTES (50MB).
+// Persisting only the newest slice under this budget keeps beforeunload
+// persistence well clear of quota limits and avoids stringifying tens of MB
+// synchronously during unload. See HARD9-057.
+const PERSIST_BUDGET_BYTES = 2 * 1024 * 1024;
 
 type PersistedCounters = {
   eventCounter: number;
   correlationCounter: number;
   sessionStartMs: number;
+};
+
+/**
+ * Selects the newest suffix of `list` whose cumulative size (via the
+ * matching `sizes` entries) fits within `budgetBytes`, always keeping at
+ * least the single newest entry. Exported standalone so the budget logic is
+ * unit-testable without reproducing a multi-MB in-memory session. See
+ * HARD9-057.
+ */
+export const selectNewestEventsWithinBudget = <T>(list: T[], sizes: number[], budgetBytes: number): T[] => {
+  let bytes = 0;
+  let count = 0;
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const size = sizes[index] ?? 0;
+    if (count > 0 && bytes + size > budgetBytes) break;
+    bytes += size;
+    count += 1;
+  }
+  return count === list.length ? list : list.slice(list.length - count);
 };
 
 /**
@@ -300,7 +325,8 @@ type PersistedCounters = {
 export const persistTracesToSession = () => {
   if (typeof sessionStorage === "undefined") return;
   try {
-    const data = JSON.stringify(events);
+    const toPersist = selectNewestEventsWithinBudget(events, eventSizes, PERSIST_BUDGET_BYTES);
+    const data = JSON.stringify(toPersist);
     sessionStorage.setItem(SESSION_STORAGE_KEY, data);
     // Also persist counters so new events continue from the right IDs
     const counters = getCurrentTraceIdCounters();
@@ -335,14 +361,21 @@ export const restoreTracesFromSession = () => {
     const restored = JSON.parse(data) as TraceEvent[];
     if (Array.isArray(restored) && restored.length > 0) {
       const existingIds = new Set(events.map((e) => e.id));
+      const merged = [...events];
       for (const event of restored) {
         if (!existingIds.has(event.id)) {
-          events.push(event);
+          merged.push(event);
           existingIds.add(event.id);
         }
       }
-      // Sort by relativeMs to maintain order
-      events.sort((a, b) => a.relativeMs - b.relativeMs);
+      // Sort by relativeMs to maintain order, then rebuild size accounting
+      // and the decision-dedup set from the merged list via the same path
+      // replaceTraceEvents uses. Previously restored events were pushed
+      // straight into `events` with no matching eventSizes/totalBytes
+      // entries, desyncing dropOldest's parallel shift and silently
+      // disabling the 50MB byte cap for restored sessions. See HARD9-057.
+      merged.sort((a, b) => a.relativeMs - b.relativeMs);
+      replaceTraceEvents(merged);
     }
     // Clear persisted data after restore
     sessionStorage.removeItem(SESSION_STORAGE_KEY);
