@@ -90,7 +90,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-030 | Deleting the playing item resets UI but device keeps playing; watchdog armed | playback | P2 | correctness, ux | high | M | FIXED (4d7c357b) |
 | HARD9-031 | Auto-advance dies when user navigates away from Play page | playback | P2 | correctness, ux | high | L | OPEN |
 | HARD9-032 | Playlist rows rebuilt on every 1s timeline tick (memoization defeated) | playback | P2 | performance, ux | high | S | OPEN |
-| HARD9-033 | Cancel during add-items can throw inside a React state updater | playback | P2 | robustness, correctness | medium | S | OPEN |
+| HARD9-033 | Cancel during add-items can throw inside a React state updater | playback | P2 | robustness, correctness | medium | S | FIXED (9d4a5b91) |
 | HARD9-034 | Concurrent playlist repository commits can persist a stale snapshot | playback | P2 | data-loss, robustness | medium | M | OPEN |
 | HARD9-035 | CPU snapshot "saved" toast while C64 left frozen (resume failure swallowed) | snapshot | P2 | correctness, robustness, ux | high | S | OPEN |
 | HARD9-036 | CPU restore failure strands machine in restore cart; no RAM-only fallback | snapshot | P2 | correctness, robustness, ux | high | M | OPEN |
@@ -409,11 +409,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Fix sketch:** Wrap the inline handlers in `useCallback` (they close over stable setters); gate the benchmark/perf-scope recording off the recompute path.
 
 ### HARD9-033 — Cancel during add-items can throw inside a React state updater
-- **Area:** playback · **Severity:** P2 · **Dimensions:** robustness, correctness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
+- **Area:** playback · **Severity:** P2 · **Dimensions:** robustness, correctness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (9d4a5b91)
 - **Files:** `src/pages/playFiles/handlers/addFileSelections.ts:461-466,629-634`
 - **Failure scenario:** User starts a large import, hits Cancel (or switches device, which also aborts) as a batch append is scheduled. `setPlaylist((prev) => { throwIfAborted(); ... })` throws `AbortError` from inside the updater during React's render phase → propagates to the nearest error boundary; Play page white-screens instead of "Add cancelled". The updater is also impure (`playlistSnapshotRef.current = next`).
 - **Evidence:** `setPlaylist((prev) => { throwIfAborted(); const next = ...; playlistSnapshotRef.current = next; return next; });`.
 - **Fix sketch:** Check `throwIfAborted()` before calling `setPlaylist`; keep the updater pure; mirror `playlistSnapshotRef` after the call.
+- **Resolution (9d4a5b91):** Moved `throwIfAborted()` to run only before both `setPlaylist` calls; the updaters now only compute and return the next array, and `playlistSnapshotRef.current` is assigned from the result after `setPlaylist` returns, exactly per the fix sketch. Existing device-switch-mid-batch cancellation coverage (`addFileSelections.deviceSwitch.test.ts`) already exercises `setPlaylist` being skipped once cancellation is observed after an async batch resolves and passes unchanged; the exact single-tick race the purity fix guards against is not practically reproducible in a unit test.
 
 ### HARD9-034 — Concurrent playlist repository commits can persist a stale snapshot
 - **Area:** playback · **Severity:** P2 · **Dimensions:** data-loss, robustness · **Confidence:** medium · **Effort:** M · **Status:** OPEN
