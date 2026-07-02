@@ -146,7 +146,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-086 | Optimistic rollback can resurrect a stale pin on racing writes | config | P3 | correctness | high | S | FIXED (81bd6011) |
 | HARD9-087 | useInteractiveConfigWrite pending/burst flags wrong under concurrent writes | config | P3 | correctness, ux | high | S | OPEN |
 | HARD9-088 | Failed throttled preview snaps the slider thumb back mid-drag | config | P3 | ux, robustness | high | S | OPEN |
-| HARD9-089 | Category Refresh drops optimistic pins even when the refetch failed | config | P3 | robustness, correctness | medium | S | OPEN |
+| HARD9-089 | Category Refresh drops optimistic pins even when the refetch failed | config | P3 | robustness, correctness | medium | S | FIXED (e7261121) |
 | HARD9-090 | Duplicate "Automatic Demo Mode" control with duplicate DOM id | settings | P3 | a11y, correctness | high | S | OPEN |
 | HARD9-091 | Notification-duration slider persists on every drag tick | settings | P3 | performance, robustness | high | S | OPEN |
 | HARD9-092 | Orientation lock re-applied on every SettingsPage mount (incl. swipe transits) | settings | P3 | robustness, performance | high | S | OPEN |
@@ -827,10 +827,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Fix sketch:** Skip `setDraftSliderValue(null)` while dragging (keep the error callback).
 
 ### HARD9-089 — Category Refresh drops optimistic pins even when the refetch failed, silently masking a dead re-sync
-- **Area:** config · **Severity:** P3 · **Dimensions:** robustness, correctness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
+- **Area:** config · **Severity:** P3 · **Dimensions:** robustness, correctness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (e7261121)
 - **Files:** `src/pages/ConfigBrowserPage.tsx:663-691`
 - **Failure scenario:** Refresh while the device is momentarily unreachable: react-query `refetch()` resolves with the error embedded, so `clearMatching(...)` still drops every pending pin and the Audio Mixer re-sync reads the STALE previous data as device truth. No failure indication — old values shown, in-flight write pins gone.
 - **Fix sketch:** Check `refreshed?.isSuccess` before clearing pins/re-syncing; toast on explicit-refresh failure.
+- **Resolution (e7261121):** Implemented the fix sketch: `handleRefresh` now checks `refreshed?.isSuccess` immediately after `await refetch()` and, on failure, reports a `CONFIG_REFRESH` error (via the existing `reportUserError` path) and returns before touching `clearMatching`/the Audio Mixer re-sync — a pending pin now survives a failed refresh instead of reverting to stale data with no indication anything went wrong. New test pins a value, fails the Refresh's refetch, and asserts both the error report and that the pin is still shown; proven failing against the pre-fix unconditional re-sync via a targeted revert of just this hunk.
 
 ### HARD9-090 — Duplicate "Automatic Demo Mode" control with duplicate DOM id
 - **Area:** settings · **Severity:** P3 · **Dimensions:** a11y, correctness · **Confidence:** high · **Effort:** S · **Status:** OPEN
