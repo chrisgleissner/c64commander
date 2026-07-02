@@ -7,9 +7,14 @@
  */
 
 export const normalizeSourcePath = (value: string) => {
-  if (!value) return "/";
-  const trimmed = value.replace(/\s+/g, " ").trim();
-  const leading = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  // Only structural normalization here (leading slash, collapse duplicate
+  // "/"). Internal whitespace is part of the path (e.g. "My  Demos" is a
+  // legal FAT directory name with a double space) - collapsing or trimming
+  // it rewrites the request to a path that no longer exists. A blank (or
+  // whitespace-only) value has no real path to preserve, so it still maps
+  // to the root. See HARD9-045.
+  if (!value || value.trim() === "") return "/";
+  const leading = value.startsWith("/") ? value : `/${value}`;
   return leading.replace(/\/+/g, "/");
 };
 

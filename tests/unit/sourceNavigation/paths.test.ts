@@ -27,8 +27,14 @@ describe("normalizeSourcePath", () => {
     expect(normalizeSourcePath("/games//level1//file")).toBe("/games/level1/file");
   });
 
-  it("trims whitespace", () => {
-    expect(normalizeSourcePath("  /games/file  ")).toBe("/games/file");
+  it("returns / for a whitespace-only string", () => {
+    expect(normalizeSourcePath("   ")).toBe("/");
+  });
+
+  it("preserves internal whitespace in a legitimate path segment (HARD9-045)", () => {
+    // "My  Demos" (double space) is a legal FAT/exFAT directory name -
+    // collapsing it rewrites the request to a path that does not exist.
+    expect(normalizeSourcePath("/My  Demos/file.sid")).toBe("/My  Demos/file.sid");
   });
 });
 
