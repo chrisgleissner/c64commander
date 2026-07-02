@@ -107,31 +107,30 @@ class BackgroundExecutionService : Service() {
                 activeService.applyDueAtUpdate(dueAtMs)
                 return
             }
-            if (dueAtMs == null) {
-                val pendingGeneration = startPendingGeneration
-                if (pendingGeneration != null) {
-                    val intent = Intent(context, BackgroundExecutionService::class.java)
-                    intent.action = ACTION_UPDATE_DUE_AT
-                    intent.putExtra(EXTRA_COMMAND_GENERATION, pendingGeneration)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        context.startForegroundService(intent)
-                    } else {
-                        context.startService(intent)
-                    }
-                    return
-                }
+            // No running instance: only forward the update if a start() is genuinely
+            // still in flight (startPendingGeneration), carrying that SAME captured
+            // generation so onStartCommand accepts it once the service comes up.
+            // Never start a fresh service from here — a due timer without an active
+            // session (e.g. this update raced a stop()) has no consumer, and unlike a
+            // start()-triggered intent, using the current (post-stop) commandGeneration
+            // would pass the staleness check and resurrect a phantom foreground
+            // service + wake lock (HARD9-041).
+            val pendingGeneration = startPendingGeneration
+            if (pendingGeneration == null) {
                 AppLogger.debug(
                         context,
                         TAG,
-                        "Not running — ignoring dueAt clear request",
+                        "Not running — ignoring dueAt ${if (dueAtMs == null) "clear" else "update"} request",
                         "BackgroundExecutionService"
                 )
                 return
             }
             val intent = Intent(context, BackgroundExecutionService::class.java)
             intent.action = ACTION_UPDATE_DUE_AT
-            intent.putExtra(EXTRA_DUE_AT_MS, dueAtMs)
-            intent.putExtra(EXTRA_COMMAND_GENERATION, commandGeneration)
+            if (dueAtMs != null) {
+                intent.putExtra(EXTRA_DUE_AT_MS, dueAtMs)
+            }
+            intent.putExtra(EXTRA_COMMAND_GENERATION, pendingGeneration)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {

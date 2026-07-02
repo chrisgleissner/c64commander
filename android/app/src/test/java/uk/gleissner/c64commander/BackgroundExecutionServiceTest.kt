@@ -242,14 +242,19 @@ class BackgroundExecutionServiceTest {
 
     @Test
     @Config(sdk = [Build.VERSION_CODES.N])
-    fun updateDueAtUsesStartServiceOnPreO() {
+    fun updateDueAtUsesStartServiceOnPreOWhenStartIsPending() {
         val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+
+        // A non-null dueAt update only forwards while a start() is genuinely
+        // pending (HARD9-041) — mirrors updateDueAtNullDuringPendingStartQueuesClearIntent.
+        BackgroundExecutionService.start(appContext)
+        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
+        assertNotNull("Expected initial start intent", shadowApp.nextStartedService)
 
         BackgroundExecutionService.updateDueAt(appContext, System.currentTimeMillis() + 10_000L)
 
-        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
         val started = shadowApp.nextStartedService
-        assertNotNull("Expected updateDueAt to start service on pre-O", started)
+        assertNotNull("Expected updateDueAt to forward via startService on pre-O while a start is pending", started)
         assertEquals(
             BackgroundExecutionService.ACTION_UPDATE_DUE_AT,
             started?.action,
@@ -265,6 +270,17 @@ class BackgroundExecutionServiceTest {
         assertFalse("Stopped service should remain stopped after clearing dueAt", BackgroundExecutionService.isRunning)
         val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
         assertNull("Expected no service start for a stopped-service dueAt clear", shadowApp.nextStartedService)
+    }
+
+    @Test
+    fun updateDueAtNonNullDoesNotStartStoppedService() {
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+
+        BackgroundExecutionService.updateDueAt(appContext, System.currentTimeMillis() + 10_000L)
+
+        assertFalse("Stopped service should remain stopped after a dueAt update (HARD9-041)", BackgroundExecutionService.isRunning)
+        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
+        assertNull("Expected no service start for a stopped-service dueAt update", shadowApp.nextStartedService)
     }
 
     @Test
@@ -295,6 +311,35 @@ class BackgroundExecutionServiceTest {
         service.onStartCommand(startIntent, 0, 1)
 
         assertFalse("Stale start intent should not leave service running", BackgroundExecutionService.isRunning)
+    }
+
+    @Test
+    fun updateDueAtNonNullAfterStopDoesNotResurrectService() {
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+
+        // Start and let the service actually come up.
+        BackgroundExecutionService.start(appContext)
+        val startIntent = Shadows.shadowOf(appContext as android.app.Application).nextStartedService
+        assertNotNull("Expected initial start intent", startIntent)
+        controller.create()
+        service.onStartCommand(startIntent, 0, 1)
+        assertTrue(BackgroundExecutionService.isRunning)
+
+        // Stop bumps commandGeneration and clears the pending-start generation.
+        BackgroundExecutionService.stop(appContext)
+        controller.destroy()
+        assertFalse(BackgroundExecutionService.isRunning)
+
+        // A queued auto-advance due update (JS's async latest-intent lane) flushes
+        // late, after the app already believes background execution is off.
+        BackgroundExecutionService.updateDueAt(appContext, System.currentTimeMillis() + 30_000L)
+
+        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
+        assertNull(
+            "A non-null dueAt update after stop must not resurrect the foreground service (HARD9-041)",
+            shadowApp.nextStartedService,
+        )
+        assertFalse(BackgroundExecutionService.isRunning)
     }
 
     @Test
