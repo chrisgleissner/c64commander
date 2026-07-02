@@ -151,7 +151,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-091 | Notification-duration slider persists on every drag tick | settings | P3 | performance, robustness | high | S | FIXED (0f8b213b) |
 | HARD9-092 | Orientation lock re-applied on every SettingsPage mount (incl. swipe transits) | settings | P3 | robustness, performance | high | S | FIXED (ea304c83) |
 | HARD9-093 | Mouse-drag gesture state stranded by a missed pointerup before intent lock | shell | P3 | robustness, ux | medium | S | FIXED (f7332087) |
-| HARD9-094 | Deferred startup bootstrap never runs if the app launches hidden | state | P3 | robustness, correctness | medium | S | OPEN |
+| HARD9-094 | Deferred startup bootstrap never runs if the app launches hidden | state | P3 | robustness, correctness | medium | S | FIXED (547695b1) |
 | HARD9-095 | Module-scope import.meta.env read in App.tsx (Playwright collection tripwire) | state | P3 | robustness | high | S | FIXED (9ad41ef0) |
 
 ---
@@ -882,10 +882,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (f7332087):** Applied the fix sketch's first option: `pointerup`/`pointercancel` listeners moved from the container to `window`. A window listener still receives captured-pointer releases (they bubble past the capturing element), so the confirmed-"navigating" path is unaffected; it now also catches releases that land outside the container while capture was never set. Added a regression test that presses+moves under the axis-lock threshold, dispatches `pointerup` on `document.body` (outside the container) instead of the surface, and asserts the gesture still resets and the next `pointerdown` is not swallowed; confirmed it fails against the pre-fix container-only listeners via git-stash.
 
 ### HARD9-094 — Deferred startup bootstrap never runs if the app launches hidden
-- **Area:** state · **Severity:** P3 · **Dimensions:** robustness, correctness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
+- **Area:** state · **Severity:** P3 · **Dimensions:** robustness, correctness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (547695b1)
 - **Files:** `src/main.tsx:26-81`
 - **Failure scenario:** `scheduleAfterFirstPaint` gates the deferred bootstrap on double `requestAnimationFrame`; rAF doesn't fire while hidden. An app launched in the background (intent, restored session, screen off) never installs async-context propagation, fetch tracing, the trace bridge, interaction capture, or secure-storage priming until first becoming visible — requests made meanwhile are untraced; diagnostics for exactly the hard-to-reproduce background-startup bug class are missing.
 - **Fix sketch:** `document.hidden` check falling back to `setTimeout(work, 0)` (or run once on `visibilitychange`).
+- **Resolution (547695b1):** Applied the fix sketch's first option: `scheduleAfterFirstPaint` now checks `document.hidden` at call time and, if already hidden, skips the rAF gate entirely and goes straight to `runWhenIdle()` (`requestIdleCallback`, falling back to `setTimeout(work, 0)`) - both of which run regardless of document visibility. The normal visible-launch path is untouched, still gated by the same double rAF as before. `main.tsx` had zero existing test coverage; added `tests/unit/main.test.ts` with the module's ~15 dependencies mocked (matching the codebase's established heavy-mock pattern for side-effecting bootstrap modules, e.g. `App.runtime.test.tsx`), with a hidden-launch test (rAF spy that never invokes its callback, simulating real hidden-tab throttling) and a visible-launch test (existing double-rAF gate unchanged); confirmed the hidden-launch test fails against the pre-fix code via git-stash.
 
 ### HARD9-095 — Module-scope import.meta.env read in App.tsx (Playwright collection tripwire)
 - **Area:** state · **Severity:** P3 · **Dimensions:** robustness · **Confidence:** high · **Effort:** S · **Status:** FIXED (9ad41ef0)
