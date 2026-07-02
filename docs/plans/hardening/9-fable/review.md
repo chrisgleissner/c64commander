@@ -130,7 +130,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-070 | FTP control encoding never set — non-ASCII filenames unfetchable | native | P3 | correctness, ux | medium | S | FIXED (5b1a1b41) |
 | HARD9-071 | Mock C64U HTTP+FTP servers ship in release builds, registered unconditionally | native | P3 | security, robustness | high | M | OPEN |
 | HARD9-072 | TelnetSocket state read/written across threads without synchronization | native | P3 | correctness, robustness | high | S | OPEN |
-| HARD9-073 | cancelRead after completion leaves permanent entries in cancelledReads | native | P3 | correctness, performance | high | S | OPEN |
+| HARD9-073 | cancelRead after completion leaves permanent entries in cancelledReads | native | P3 | correctness, performance | high | S | FIXED (8ce52528) |
 | HARD9-074 | 7-Zip probe subprocess has no timeout — wedged probe bricks ingestion | native | P3 | robustness, ux | medium | S | FIXED (cef0d129) |
 | HARD9-075 | queryAllSongs materializes 50k rows on the shared Capacitor plugin thread | native | P3 | performance, ux | high | S | FIXED (3a1f6469) |
 | HARD9-076 | Device-discovery probe leaks HttpURLConnection on body-read failure | native | P3 | robustness, performance | high | S | OPEN |
@@ -730,10 +730,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Fix sketch:** Mark fields `@Volatile` (or route `isConnected` through the executor); `handleOnDestroy` should `shutdownNow()` then close without interleaving.
 
 ### HARD9-073 — cancelRead after completion leaves permanent entries in cancelledReads
-- **Area:** native · **Severity:** P3 · **Dimensions:** correctness, performance · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** native · **Severity:** P3 · **Dimensions:** correctness, performance · **Confidence:** high · **Effort:** S · **Status:** FIXED (8ce52528)
 - **Files:** `android/.../FtpClientPlugin.kt:390-393,483-487,515-537`
 - **Failure scenario:** `readFile`'s finally removes the requestId from `cancelledReads`; if the JS AbortSignal fires just after (abort racing natural completion — routine on navigate-away), `cancelRead` re-adds the id and nothing removes it. Unbounded growth over long sessions; and since a pre-registered id instantly rejects any future read with that id, requestId reuse (JS counter resets on WebView reload while native survives) yields spurious "FTP read aborted" failures.
 - **Fix sketch:** In `cancelRead`, only flag if `activeReadStreams` contains the id (close-and-flag atomically); otherwise no-op.
+- **Resolution (8ce52528):** Deviated from the literal fix sketch: gating solely on `activeReadStreams` would have broken the existing, intentional "honor a cancellation requested before this read started" pre-abort handling (a prior fix), since `activeReadStreams` is only populated after connect/login succeeds - well after a legitimate pre-abort can legitimately arrive during the (potentially slow) connect/login phase. Instead added a `completedReads` set, marked in `readFile`'s finally and reclaimed at the start of every `readFile` call (so a reused id is never blocked by a stale mark from its previous use); `cancelRead` now no-ops if the id is already in `completedReads`. Capped at 256 entries to bound memory in a long session. New regression test (complete a read, cancel it late, reuse the same requestId) proven failing against the pre-fix code via `git stash`.
 
 ### HARD9-074 — 7-Zip probe subprocess has no timeout/cancellation — a wedged probe bricks ingestion until restart
 - **Area:** native · **Severity:** P3 · **Dimensions:** robustness, ux-responsiveness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (cef0d129)
