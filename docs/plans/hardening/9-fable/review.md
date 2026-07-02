@@ -135,7 +135,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-075 | queryAllSongs materializes 50k rows on the shared Capacitor plugin thread | native | P3 | performance, ux | high | S | FIXED (3a1f6469) |
 | HARD9-076 | Device-discovery probe leaks HttpURLConnection on body-read failure | native | P3 | robustness, performance | high | S | FIXED (9003d8e9) |
 | HARD9-077 | MainActivity.onCreate does synchronous filesystem repair on main thread | native | P3 | ux, performance | high | S | OPEN |
-| HARD9-078 | Recursive FTP listing's timed_out flag dropped by the JS contract | native | P3 | correctness | high | S | OPEN |
+| HARD9-078 | Recursive FTP listing's timed_out flag dropped by the JS contract | native | P3 | correctness | high | S | FIXED (2b5a6dda) |
 | HARD9-079 | Native CommoServe transport ignores AbortSignal — Cancel doesn't cancel | sources | P3 | robustness, perf, ux | high | M | OPEN |
 | HARD9-080 | Shared preset-refresh promise: unmount-abort → unhandled rejection, stuck status | sources | P3 | robustness, correctness | high | S | OPEN |
 | HARD9-081 | Web FTP recursive scan unbounded while native caps at depth 8 / 5000 | sources | P3 | robustness, perf, correctness | high | S | OPEN |
@@ -764,10 +764,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Fix sketch:** Keep the fast `isFile` happy path on-thread; move delete/rewrite repair off-thread (complete before bridge first use); log + best-effort continue instead of throwing.
 
 ### HARD9-078 — Recursive FTP listing's timed_out flag is dropped by the JS contract
-- **Area:** native · **Severity:** P3 · **Dimensions:** correctness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** native · **Severity:** P3 · **Dimensions:** correctness · **Confidence:** high · **Effort:** S · **Status:** FIXED (2b5a6dda)
 - **Files:** `android/.../FtpClientPlugin.kt:269-294,331`, `src/lib/native/ftpClient.ts:86-88`, `src/lib/ftp/ftpClient.ts:193-218`
 - **Failure scenario:** Native resolves `{ entries, partialFailures, timed_out }` (snake_case) but the TS type declares only `entries`/`partialFailures`, and no caller reads either spelling — the "walk aborted early because device FTP is wedging" signal is invisible: a silently truncated recursive listing presents as complete.
 - **Fix sketch:** Rename to `timedOut`, add to the TS types and `FtpRecursiveListResult`, surface "listing incomplete — device FTP timed out".
+- **Resolution (2b5a6dda):** Implemented the fix sketch exactly: renamed to `timedOut`, added to the `FtpClientPlugin` TS type and `FtpRecursiveListResult`, and surfaced it in `ftpSourceAdapter.listFilesRecursive` via the existing `partialFailures` mechanism (a synthetic "Listing incomplete: device FTP timed out" entry) rather than inventing a new UI surface for a signal nothing currently renders directly. New Kotlin test proven failing (field missing under the expected name) against the pre-fix `timed_out` spelling via `git stash`; new TS tests proven failing against the pre-fix code the same way.
 
 ### HARD9-079 — Native CommoServe transport ignores AbortSignal — Cancel doesn't cancel
 - **Area:** sources · **Severity:** P3 · **Dimensions:** robustness, performance, ux-responsiveness · **Confidence:** high · **Effort:** M · **Status:** OPEN
