@@ -138,7 +138,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-078 | Recursive FTP listing's timed_out flag dropped by the JS contract | native | P3 | correctness | high | S | FIXED (2b5a6dda) |
 | HARD9-079 | Native CommoServe transport ignores AbortSignal — Cancel doesn't cancel | sources | P3 | robustness, perf, ux | high | M | FIXED (ac5b8c17) |
 | HARD9-080 | Shared preset-refresh promise: unmount-abort → unhandled rejection, stuck status | sources | P3 | robustness, correctness | high | S | FIXED (c5c8393f) |
-| HARD9-081 | Web FTP recursive scan unbounded while native caps at depth 8 / 5000 | sources | P3 | robustness, perf, correctness | high | S | OPEN |
+| HARD9-081 | Web FTP recursive scan unbounded while native caps at depth 8 / 5000 | sources | P3 | robustness, perf, correctness | high | S | FIXED (78bdd05f) |
 | HARD9-082 | Refresh clears only the exact current path; recursive adds serve 10-min-stale cache | sources | P3 | correctness, ux | high | S | OPEN |
 | HARD9-083 | Pre-aborted FTP read still performs the full transfer | sources | P3 | robustness, performance | medium | S | OPEN |
 | HARD9-084 | HVSC cancellation unchecked during deletion pass and finalize | hvsc | P3 | ux, robustness | high | S | FIXED (67a7dd88) |
@@ -785,10 +785,11 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Resolution (c5c8393f):** Implemented all three parts of the fix sketch: the shared request no longer receives any individual mount's `AbortSignal` (genuinely shared cache-warming work, detached from any one subscriber's lifecycle); its own `.catch` always resolves to cached/seeded presets instead of rethrowing, so it can no longer reject; the per-mount consumer chain got a defensive `.catch(() => {})` too (it's its own separate promise). New regression test (unmount before the shared refresh settles, then reject as a real aborted network call would) proven failing - one unhandled `DOMException` rejection - against the pre-fix code via `git stash`.
 
 ### HARD9-081 — Web FTP recursive scan is unbounded while native caps at depth 8 / 5000 entries
-- **Area:** sources · **Severity:** P3 · **Dimensions:** robustness, performance, correctness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** sources · **Severity:** P3 · **Dimensions:** robustness, performance, correctness · **Confidence:** high · **Effort:** S · **Status:** FIXED (78bdd05f)
 - **Files:** `src/lib/sourceNavigation/ftpSourceAdapter.ts:31-32,146-157,172-245`
 - **Failure scenario:** "Add folder" on a large USB root: native stops at 8 levels/5000 entries (silently truncating — user believes everything was added), while web walks the entire tree with no cap — tens of thousands of LIST round-trips, minutes of scan; inconsistent results between platforms.
 - **Fix sketch:** Apply the same caps in the web BFS; on both paths surface truncation (`partialFailures`/`truncated`) so the user knows the scan was cut short.
+- **Resolution (78bdd05f):** Implemented the fix sketch exactly: applied the already-defined `FTP_RECURSIVE_MAX_DEPTH`/`FTP_RECURSIVE_MAX_ENTRIES` constants (previously only passed to the native bridge) to the web BFS, tracking per-path depth through the queue and a shared examined-entries counter mirroring the native Kotlin logic exactly. Truncation surfaces through the existing `partialFailures` mechanism with messages matching native's wording ("max depth N reached" / "stopped after N entries"). Two new regression tests (nested-folder chain past depth 8; single folder with 5001 files) proven failing against the pre-fix code via `git stash` (one timed out from the unbounded scan, one showed 5001 not 5000).
 
 ### HARD9-082 — Refresh clears only the exact current path — recursive adds and re-entry serve a 10-minute-stale FTP cache
 - **Area:** sources · **Severity:** P3 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** OPEN
