@@ -235,7 +235,15 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
         if (previewGenerationRef.current !== generation) {
           return;
         }
-        setDraftSliderValue(null);
+        // Only clear the local draft (snapping the thumb to the device
+        // value) once the drag has ended - while still dragging, the user's
+        // finger is the source of truth, and yanking the thumb back
+        // mid-gesture on a transient preview failure reads as the app
+        // fighting the user. The error is still surfaced either way. See
+        // HARD9-088.
+        if (!isDraggingRef.current) {
+          setDraftSliderValue(null);
+        }
         onError?.(error, {
           phase: "preview",
           value: nextValue,

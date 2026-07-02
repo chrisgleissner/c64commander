@@ -403,6 +403,41 @@ describe("useDeviceBoundSlider", () => {
     expect(preview).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps the dragged value visible after a transient preview failure mid-drag (HARD9-088)", () => {
+    // Regression: a preview failure used to unconditionally clear the local
+    // draft, snapping the thumb back to the (stale, poll-paused) device
+    // value while the user's finger was still on it - the slider visibly
+    // fought the user mid-gesture even though the drag itself was fine and
+    // the user had not let go yet.
+    const onError = vi.fn();
+    const preview = vi.fn(() => {
+      throw new Error("sync preview failure");
+    });
+    const { result } = renderHook(() =>
+      useDeviceBoundSlider({
+        deviceValue: 0,
+        domain: createNumericSliderDomain({ min: 0, max: 100, round: Math.round }),
+        previewMode: "throttled",
+        preview,
+        commit: vi.fn(),
+        onError,
+        previewThrottleMs: 200,
+      }),
+    );
+
+    act(() => {
+      result.current.onValueChange([10]);
+    });
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "sync preview failure" }),
+      expect.objectContaining({ phase: "preview", value: 10 }),
+    );
+    // Still dragging (no onValueCommit yet) - the thumb must stay put.
+    expect(result.current.sliderValue).toBe(10);
+    expect(result.current.displayValue).toBe(10);
+  });
+
   it("ignores stale async preview failures after commit bumps generation", async () => {
     const run = createDeferred();
     const onError = vi.fn();
