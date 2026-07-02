@@ -226,3 +226,94 @@ export const shuffleArray = <T>(items: T[]) => {
   }
   return shuffled;
 };
+
+/**
+ * Shuffle is implemented as a non-destructive playback-order layer: the
+ * curated playlist array is never reordered. A deterministic seed produces a
+ * shuffled traversal order over the current item ids; "next"/"previous" walk
+ * that order and resolve back to the matching index in the curated array.
+ * See HARD9-007.
+ */
+export const generateShuffleSeed = () => Math.floor(Math.random() * 0xffffffff);
+
+export const seededShuffleIds = (ids: string[], seed: number) => {
+  const shuffled = [...ids];
+  let state = seed >>> 0;
+  const nextRandom = () => {
+    state = Math.imul(1664525, state) + 1013904223;
+    return (state >>> 0) / 4294967296;
+  };
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(nextRandom() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+};
+
+const resolveShuffleOrderPosition = (playlist: PlaylistItem[], currentIndex: number, order: string[]) => {
+  const currentId = currentIndex >= 0 ? playlist[currentIndex]?.id : undefined;
+  const position = currentId ? order.indexOf(currentId) : -1;
+  return position >= 0 ? position : 0;
+};
+
+const resolveIndexForId = (playlist: PlaylistItem[], id: string | undefined) => {
+  if (id === undefined) return -1;
+  return playlist.findIndex((item) => item.id === id);
+};
+
+/**
+ * Resolves the next playlist index for both linear and shuffle traversal.
+ * Returns null when the end is reached without repeat enabled (the caller
+ * should stop instead of advancing), matching the pre-shuffle linear
+ * contract.
+ */
+export const resolveNextPlaylistIndex = (
+  playlist: PlaylistItem[],
+  currentIndex: number,
+  repeatEnabled: boolean,
+  shuffleEnabled: boolean,
+  shuffleSeed: number | null,
+): number | null => {
+  if (!playlist.length) return null;
+  if (!shuffleEnabled || shuffleSeed === null) {
+    let nextIndex = currentIndex + 1;
+    if (nextIndex >= playlist.length) {
+      if (!repeatEnabled) return null;
+      nextIndex = 0;
+    }
+    return nextIndex;
+  }
+  const order = seededShuffleIds(playlist.map((item) => item.id), shuffleSeed);
+  let nextPosition = resolveShuffleOrderPosition(playlist, currentIndex, order) + 1;
+  if (nextPosition >= order.length) {
+    if (!repeatEnabled) return null;
+    nextPosition = 0;
+  }
+  const resolvedIndex = resolveIndexForId(playlist, order[nextPosition]);
+  return resolvedIndex >= 0 ? resolvedIndex : null;
+};
+
+/**
+ * Resolves the previous playlist index for both linear and shuffle
+ * traversal. Always returns an index (clamps to the start of the order
+ * without repeat, restarting the current track), matching the pre-shuffle
+ * linear contract.
+ */
+export const resolvePreviousPlaylistIndex = (
+  playlist: PlaylistItem[],
+  currentIndex: number,
+  repeatEnabled: boolean,
+  shuffleEnabled: boolean,
+  shuffleSeed: number | null,
+): number => {
+  if (!playlist.length) return 0;
+  if (!shuffleEnabled || shuffleSeed === null) {
+    return currentIndex > 0 ? currentIndex - 1 : repeatEnabled && playlist.length > 1 ? playlist.length - 1 : 0;
+  }
+  const order = seededShuffleIds(playlist.map((item) => item.id), shuffleSeed);
+  const currentPosition = resolveShuffleOrderPosition(playlist, currentIndex, order);
+  const prevPosition =
+    currentPosition > 0 ? currentPosition - 1 : repeatEnabled && order.length > 1 ? order.length - 1 : 0;
+  const resolvedIndex = resolveIndexForId(playlist, order[prevPosition]);
+  return resolvedIndex >= 0 ? resolvedIndex : 0;
+};

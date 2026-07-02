@@ -45,6 +45,7 @@ interface UsePlaybackPersistenceProps {
   autoAdvanceDueAtMs: number | null;
   setCurrentSubsongCount: (value: number | null) => void;
   shuffleEnabled?: boolean;
+  shuffleSeed?: number | null;
   repeatEnabled?: boolean;
   activePlaylistQuery?: string | null;
   setActivePlaylistQuery?: (value: string) => void;
@@ -99,6 +100,7 @@ export function usePlaybackPersistence({
   autoAdvanceDueAtMs,
   setCurrentSubsongCount,
   shuffleEnabled = false,
+  shuffleSeed = null,
   repeatEnabled = false,
   activePlaylistQuery = null,
   setActivePlaylistQuery,
@@ -507,7 +509,7 @@ export function usePlaybackPersistence({
       playedMs,
       shuffleEnabled,
       repeatEnabled,
-      randomSeed: null,
+      randomSeed: shuffleSeed,
       randomCursor: null,
       activeQuery: activePlaylistQuery,
       updatedAt: new Date().toISOString(),
@@ -531,6 +533,7 @@ export function usePlaybackPersistence({
     repeatEnabled,
     restoreVersion,
     shuffleEnabled,
+    shuffleSeed,
   ]);
 
   // Persist Session

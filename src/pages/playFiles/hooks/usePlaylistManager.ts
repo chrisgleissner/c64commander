@@ -7,43 +7,19 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CATEGORY_OPTIONS, shuffleArray } from "../playFilesUtils";
+import { CATEGORY_OPTIONS, generateShuffleSeed } from "../playFilesUtils";
 import type { PlayFileCategory } from "@/lib/playback/fileTypes";
 import type { PlaylistItem } from "@/pages/playFiles/types";
-
-export const reshufflePlaylist = (items: PlaylistItem[], lockedIndex: number) => {
-  if (items.length < 2) return items;
-  if (lockedIndex >= 0 && lockedIndex < items.length) {
-    const currentItem = items[lockedIndex];
-    const rest = items.filter((_, index) => index !== lockedIndex);
-    const shuffled = shuffleArray(rest);
-    const insertIndex = Math.min(lockedIndex, shuffled.length);
-    let next = [...shuffled.slice(0, insertIndex), currentItem, ...shuffled.slice(insertIndex)];
-    if (next.map((item) => item.id).join("|") === items.map((item) => item.id).join("|")) {
-      if (rest.length > 1) {
-        const swapped = [...shuffled];
-        [swapped[0], swapped[1]] = [swapped[1], swapped[0]];
-        next = [...swapped.slice(0, insertIndex), currentItem, ...swapped.slice(insertIndex)];
-      }
-    }
-    return next;
-  }
-
-  let shuffled = shuffleArray(items);
-  if (shuffled.map((item) => item.id).join("|") === items.map((item) => item.id).join("|")) {
-    if (shuffled.length > 1) {
-      const swapped = [...shuffled];
-      [swapped[0], swapped[1]] = [swapped[1], swapped[0]];
-      shuffled = swapped;
-    }
-  }
-  return shuffled;
-};
 
 export function usePlaylistManager() {
   const [playlist, setPlaylist] = useState<PlaylistItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [shuffleEnabled, setShuffleEnabled] = useState(false);
+  // The curated playlist array is never reordered for shuffle - it is a
+  // non-destructive playback-order layer keyed by this seed (see
+  // resolveNextPlaylistIndex/resolvePreviousPlaylistIndex in
+  // playFilesUtils.ts). See HARD9-007.
+  const [shuffleSeed, setShuffleSeed] = useState<number | null>(null);
   const [repeatEnabled, setRepeatEnabled] = useState(false);
   const [playlistTypeFilters, setPlaylistTypeFilters] = useState<PlayFileCategory[]>(CATEGORY_OPTIONS);
   const [selectedPlaylistIds, setSelectedPlaylistIds] = useState<Set<string>>(new Set());
@@ -61,10 +37,12 @@ export function usePlaylistManager() {
     });
   }, [playlist]);
 
-  const handleReshufflePlaylist = useCallback(
-    (items: PlaylistItem[], lockedIndex: number) => reshufflePlaylist(items, lockedIndex),
-    [],
-  );
+  // Lazily generate a shuffle order the first time shuffle is turned on.
+  useEffect(() => {
+    if (shuffleEnabled && shuffleSeed === null) {
+      setShuffleSeed(generateShuffleSeed());
+    }
+  }, [shuffleEnabled, shuffleSeed]);
 
   const handleReshuffle = useCallback(() => {
     if (!shuffleEnabled || !playlist.length) return;
@@ -76,8 +54,10 @@ export function usePlaylistManager() {
       setReshuffleActive(false);
       reshuffleTimerRef.current = null;
     }, 200);
-    setPlaylist((prev) => handleReshufflePlaylist(prev, currentIndex));
-  }, [currentIndex, handleReshufflePlaylist, playlist.length, shuffleEnabled]);
+    // "Reshuffle" is a new seed for the non-destructive order layer, not a
+    // physical reorder of the curated playlist.
+    setShuffleSeed(generateShuffleSeed());
+  }, [playlist.length, shuffleEnabled]);
 
   useEffect(
     () => () => {
@@ -96,6 +76,8 @@ export function usePlaylistManager() {
     setCurrentIndex,
     shuffleEnabled,
     setShuffleEnabled,
+    shuffleSeed,
+    setShuffleSeed,
     repeatEnabled,
     setRepeatEnabled,
     playlistTypeFilters,
@@ -106,7 +88,6 @@ export function usePlaylistManager() {
     setIsPlaylistLoading,
     reshuffleActive,
     setReshuffleActive,
-    reshufflePlaylist: handleReshufflePlaylist,
     handleReshuffle,
   };
 }

@@ -48,7 +48,11 @@ import {
   isConfigReferenceUnavailableError,
 } from "@/lib/config/applyConfigFileReference";
 import { buildPlaybackConfigSignature, resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
-import type { AudioMixerItem } from "@/pages/playFiles/playFilesUtils";
+import {
+  resolveNextPlaylistIndex,
+  resolvePreviousPlaylistIndex,
+  type AudioMixerItem,
+} from "@/pages/playFiles/playFilesUtils";
 import type { VolumeAction } from "@/pages/playFiles/volumeState";
 import type { SidEnablement } from "@/lib/config/sidVolumeControl";
 
@@ -117,6 +121,8 @@ interface UsePlaybackControllerProps {
   setTrackInstanceId: (v: number) => void;
 
   repeatEnabled: boolean;
+  shuffleEnabled: boolean;
+  shuffleSeed: number | null;
 
   // Dependencies
   localEntriesBySourceId: Map<
@@ -206,6 +212,8 @@ export function usePlaybackController({
   setDurationMs,
   setCurrentSubsongCount,
   repeatEnabled,
+  shuffleEnabled,
+  shuffleSeed,
   localEntriesBySourceId,
   localSourceTreeUris,
   buildHvscLocalPlayFile,
@@ -1260,22 +1268,22 @@ export function usePlaybackController({
         let resolvedStopAtEnd = pending.stopAtEnd;
         if (anotherTransitionAdvanced) {
           if (pending.operation === "PLAYBACK_NEXT") {
-            resolvedTargetIndex = activeIndex + 1;
-            if (resolvedTargetIndex >= activePlaylist.length) {
-              if (repeatEnabled) {
-                resolvedTargetIndex = 0;
-              } else {
-                resolvedTargetIndex = null;
-                resolvedStopAtEnd = true;
-              }
-            }
+            resolvedTargetIndex = resolveNextPlaylistIndex(
+              activePlaylist,
+              activeIndex,
+              repeatEnabled,
+              shuffleEnabled,
+              shuffleSeed,
+            );
+            resolvedStopAtEnd = resolvedTargetIndex === null;
           } else {
-            resolvedTargetIndex =
-              activeIndex > 0
-                ? activeIndex - 1
-                : repeatEnabled && activePlaylist.length > 1
-                  ? activePlaylist.length - 1
-                  : 0;
+            resolvedTargetIndex = resolvePreviousPlaylistIndex(
+              activePlaylist,
+              activeIndex,
+              repeatEnabled,
+              shuffleEnabled,
+              shuffleSeed,
+            );
             resolvedStopAtEnd = false;
           }
         }
@@ -1320,6 +1328,8 @@ export function usePlaybackController({
     playedClockRef,
     reportPlaybackStartFailure,
     repeatEnabled,
+    shuffleEnabled,
+    shuffleSeed,
     setAutoAdvanceDueAtMs,
     setIsPaused,
     setIsPlaying,
@@ -1390,16 +1400,13 @@ export function usePlaybackController({
         if (!activePlaylist.length) return;
         cancelAutoAdvance();
         const activeIndex = currentIndexRef.current;
-        let nextIndex = activeIndex + 1;
+        const nextIndex = resolveNextPlaylistIndex(activePlaylist, activeIndex, repeatEnabled, shuffleEnabled, shuffleSeed);
         const now = Date.now();
         playedClockRef.current.pause(now);
         setPlayedMs(playedClockRef.current.current(now));
-        if (nextIndex >= activePlaylist.length) {
-          if (!repeatEnabled) {
-            await scheduleUserSkip(null, true, activeIndex, "PLAYBACK_NEXT", "Playback next failed");
-            return;
-          }
-          nextIndex = 0;
+        if (nextIndex === null) {
+          await scheduleUserSkip(null, true, activeIndex, "PLAYBACK_NEXT", "Playback next failed");
+          return;
         }
         setVisibleCurrentIndex(nextIndex);
         await scheduleUserSkip(nextIndex, false, activeIndex, "PLAYBACK_NEXT", "Playback next failed");
@@ -1415,17 +1422,14 @@ export function usePlaybackController({
         guard.autoFired = true;
 
         const activeIndex = currentIndexRef.current;
-        let nextIndex = activeIndex + 1;
+        const nextIndex = resolveNextPlaylistIndex(activePlaylist, activeIndex, repeatEnabled, shuffleEnabled, shuffleSeed);
         const now = Date.now();
         playedClockRef.current.pause(now);
         setPlayedMs(playedClockRef.current.current(now));
         const currentItem = activePlaylist[activeIndex];
-        if (nextIndex >= activePlaylist.length) {
-          if (!repeatEnabled) {
-            finishPlaylistPlayback("auto-end");
-            return;
-          }
-          nextIndex = 0;
+        if (nextIndex === null) {
+          finishPlaylistPlayback("auto-end");
+          return;
         }
 
         const nextItem = activePlaylist[nextIndex];
@@ -1465,6 +1469,8 @@ export function usePlaybackController({
       finishPlaylistPlayback,
       playItem,
       repeatEnabled,
+      shuffleEnabled,
+      shuffleSeed,
       playedClockRef,
       scheduleUserSkip,
       setVisibleCurrentIndex,
@@ -1481,15 +1487,23 @@ export function usePlaybackController({
     const activePlaylist = playlistRef.current;
     if (!activePlaylist.length) return;
     const activeIndex = currentIndexRef.current;
-    const prevIndex =
-      activeIndex > 0 ? activeIndex - 1 : repeatEnabled && activePlaylist.length > 1 ? activePlaylist.length - 1 : 0;
+    const prevIndex = resolvePreviousPlaylistIndex(activePlaylist, activeIndex, repeatEnabled, shuffleEnabled, shuffleSeed);
     cancelAutoAdvance();
     const now = Date.now();
     playedClockRef.current.pause(now);
     setPlayedMs(playedClockRef.current.current(now));
     setVisibleCurrentIndex(prevIndex);
     await scheduleUserSkip(prevIndex, false, activeIndex, "PLAYBACK_PREVIOUS", "Playback previous failed");
-  }, [cancelAutoAdvance, repeatEnabled, playedClockRef, setPlayedMs, scheduleUserSkip, setVisibleCurrentIndex]);
+  }, [
+    cancelAutoAdvance,
+    repeatEnabled,
+    shuffleEnabled,
+    shuffleSeed,
+    playedClockRef,
+    setPlayedMs,
+    scheduleUserSkip,
+    setVisibleCurrentIndex,
+  ]);
 
   const playlistItemDuration = useCallback(
     (item: PlaylistItem, index: number) => {

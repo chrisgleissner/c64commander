@@ -1,6 +1,7 @@
 import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
+import { seededShuffleIds } from "@/pages/playFiles/playFilesUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { executePlayPlan } from "@/lib/playback/playbackRouter";
 import { clearArchivePlaybackCacheForTests } from "@/lib/archive/archivePlaybackCache";
@@ -97,6 +98,8 @@ const renderPlaybackController = (
     isPlaying?: boolean;
     isPaused?: boolean;
     repeatEnabled?: boolean;
+    shuffleEnabled?: boolean;
+    shuffleSeed?: number | null;
     setPlaylist?: ReturnType<typeof vi.fn>;
     setCurrentIndex?: ReturnType<typeof vi.fn>;
     setIsPlaying?: ReturnType<typeof vi.fn>;
@@ -164,6 +167,8 @@ const renderPlaybackController = (
       setDurationMs: options?.setDurationMs ?? vi.fn(),
       setCurrentSubsongCount: options?.setCurrentSubsongCount ?? vi.fn(),
       repeatEnabled: options?.repeatEnabled ?? false,
+      shuffleEnabled: options?.shuffleEnabled ?? false,
+      shuffleSeed: options?.shuffleSeed ?? null,
       localEntriesBySourceId: new Map(),
       localSourceTreeUris: new Map(),
       buildHvscLocalPlayFile: options?.buildHvscLocalPlayFile,
@@ -2155,5 +2160,80 @@ describe("usePlaybackController", () => {
 
     expect(setCurrentIndex).toHaveBeenCalledWith(1);
     expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+  });
+
+  it("handleNext walks the shuffled order instead of the curated array order when shuffle is enabled (HARD9-007)", async () => {
+    const playlist = [
+      createPlaylistItem({ id: "item-1", label: "one.prg", path: "/PROGRAMS/one.prg" }),
+      createPlaylistItem({ id: "item-2", label: "two.prg", path: "/PROGRAMS/two.prg" }),
+      createPlaylistItem({ id: "item-3", label: "three.prg", path: "/PROGRAMS/three.prg" }),
+    ];
+    const seed = 4242;
+    const order = seededShuffleIds(
+      playlist.map((item) => item.id),
+      seed,
+    );
+    const startIndex = playlist.findIndex((item) => item.id === order[0]);
+    const expectedNextIndex = playlist.findIndex((item) => item.id === order[1]);
+    const setCurrentIndex = vi.fn();
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: startIndex,
+      isPlaying: true,
+      shuffleEnabled: true,
+      shuffleSeed: seed,
+      setCurrentIndex,
+    });
+
+    await result.current.handleNext("user");
+
+    expect(setCurrentIndex).toHaveBeenCalledWith(expectedNextIndex);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+  });
+
+  it("handlePrevious walks the shuffled order backward when shuffle is enabled (HARD9-007)", async () => {
+    const playlist = [
+      createPlaylistItem({ id: "item-1", label: "one.prg", path: "/PROGRAMS/one.prg" }),
+      createPlaylistItem({ id: "item-2", label: "two.prg", path: "/PROGRAMS/two.prg" }),
+      createPlaylistItem({ id: "item-3", label: "three.prg", path: "/PROGRAMS/three.prg" }),
+    ];
+    const seed = 4242;
+    const order = seededShuffleIds(
+      playlist.map((item) => item.id),
+      seed,
+    );
+    const startIndex = playlist.findIndex((item) => item.id === order[1]);
+    const expectedPrevIndex = playlist.findIndex((item) => item.id === order[0]);
+    const setCurrentIndex = vi.fn();
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: startIndex,
+      isPlaying: true,
+      shuffleEnabled: true,
+      shuffleSeed: seed,
+      setCurrentIndex,
+    });
+
+    await result.current.handlePrevious();
+
+    expect(setCurrentIndex).toHaveBeenCalledWith(expectedPrevIndex);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not reorder the curated playlist when shuffle-walking to the next track", async () => {
+    const playlist = [
+      createPlaylistItem({ id: "item-1", label: "one.prg", path: "/PROGRAMS/one.prg" }),
+      createPlaylistItem({ id: "item-2", label: "two.prg", path: "/PROGRAMS/two.prg" }),
+      createPlaylistItem({ id: "item-3", label: "three.prg", path: "/PROGRAMS/three.prg" }),
+    ];
+    const originalOrder = playlist.map((item) => item.id);
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: 0,
+      isPlaying: true,
+      shuffleEnabled: true,
+      shuffleSeed: 4242,
+    });
+
+    await result.current.handleNext("user");
+
+    expect(playlist.map((item) => item.id)).toEqual(originalOrder);
   });
 });
