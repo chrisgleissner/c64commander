@@ -105,7 +105,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-045 | normalizeSourcePath collapses internal whitespace, corrupting paths | sources | P2 | correctness, robustness | high | S | OPEN |
 | HARD9-046 | Ingestion finalize overwrites songlengths projection with duration-less records | hvsc | P2 | correctness, data-loss | medium | M | OPEN |
 | HARD9-047 | Web local sources list files after reload that can no longer be opened | sources | P2 | correctness, ux | medium | M | OPEN |
-| HARD9-048 | Disk library save effect writes stale/empty state before load settles | sources | P2 | data-loss, robustness | medium | S | OPEN |
+| HARD9-048 | Disk library save effect writes stale/empty state before load settles | sources | P2 | data-loss, robustness | medium | S | FIXED (93683f38) |
 | HARD9-049 | Archive entries with a dot in the name rejected despite byte detection | sources | P2 | correctness, ux | high | S | OPEN |
 | HARD9-050 | Throttled-preview sliders leave device at intermediate value on return-to-start | config | P2 | correctness, ux | high | S | OPEN |
 | HARD9-051 | Home quick-config writes never set hasChanges → Revert stays disabled | config | P2 | correctness, ux | high | S | OPEN |
@@ -528,11 +528,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Notes:** Same root pattern as HARD9-011 (CommoServe disks).
 
 ### HARD9-048 — Disk library save effect writes stale/empty state before the load effect settles
-- **Area:** sources · **Severity:** P2 · **Dimensions:** data-loss, robustness · **Confidence:** medium · **Effort:** S · **Status:** OPEN
+- **Area:** sources · **Severity:** P2 · **Dimensions:** data-loss, robustness · **Confidence:** medium · **Effort:** S · **Status:** FIXED (93683f38)
 - **Files:** `src/hooks/useDiskLibrary.ts:55-74`
 - **Failure scenario:** On mount (and every `uniqueId` change), the persist effect (`saveDiskLibrary(uniqueId, { disks })`) runs in the same commit as the load effect, before loaded disks re-render — writing `[]` on first mount, or the previous device's list under the new device's key on an A→B switch. Normally the follow-up render rewrites correct data, but a fast unmount or app kill in that window wipes or cross-contaminates the disk library.
 - **Evidence:** Load effect's `setDisks(normalized)` doesn't update the `disks` binding the save effect reads in the same commit; no hydrated guard.
 - **Fix sketch:** Track `hydratedForIdRef` and skip persisting until the load for the current `uniqueId` has committed; or persist in explicit mutators.
+- **Resolution (93683f38):** Neither fix-sketch option verbatim - a plain ref set inside the load effect can't distinguish "just loaded for this id" from "about to be loaded for this id" within the same commit (both effects observe the ref's post-load value). Bundled `uniqueId` and `disks` into one state object (`libraryState`) updated atomically by a single `setState`, so the save effect can reliably detect the transitional render via `libraryState.uniqueId !== uniqueId` - true only on the one render where the load effect's `setLibraryState` hasn't landed yet - and skip persisting exactly there.
 
 ### HARD9-049 — Archive entries with a dot in the name are rejected even when byte detection succeeds
 - **Area:** sources · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** OPEN
