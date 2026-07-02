@@ -1650,15 +1650,23 @@ export default function PlayFilesPage() {
   const currentPlayingItemId =
     (isPlaying || isPaused) && currentIndex >= 0 ? (playlist[currentIndex]?.id ?? null) : null;
 
+  // Stable identities so usePlaylistListItems's useMemo isn't defeated by a
+  // fresh inline arrow on every 1s elapsedMs tick during playback (HARD9-032).
+  const handleAttachLocalConfigVoid = useCallback(
+    (item: PlaylistItem) => void handleAttachLocalConfig(item),
+    [handleAttachLocalConfig],
+  );
+  const handleOpenConfig = useCallback((item: PlaylistItem) => setActiveConfigItemId(item.id), []);
+
   const playlistPreviewListItems = usePlaylistListItems({
     filteredPlaylist: previewFilteredPlaylist,
     playlist,
     selectedPlaylistIds,
     isPlaylistLoading,
     handlePlaylistSelect,
-    onAttachLocalConfig: (item) => void handleAttachLocalConfig(item),
+    onAttachLocalConfig: handleAttachLocalConfigVoid,
     onAttachUltimateConfig: handleAttachUltimateConfig,
-    onOpenConfig: (item) => setActiveConfigItemId(item.id),
+    onOpenConfig: handleOpenConfig,
     onRemoveConfig: handleRemoveConfig,
     startPlaylist,
     playlistItemDuration: effectivePlaylistItemDuration,
@@ -1676,9 +1684,9 @@ export default function PlayFilesPage() {
     selectedPlaylistIds,
     isPlaylistLoading,
     handlePlaylistSelect,
-    onAttachLocalConfig: (item) => void handleAttachLocalConfig(item),
+    onAttachLocalConfig: handleAttachLocalConfigVoid,
     onAttachUltimateConfig: handleAttachUltimateConfig,
-    onOpenConfig: (item) => setActiveConfigItemId(item.id),
+    onOpenConfig: handleOpenConfig,
     onRemoveConfig: handleRemoveConfig,
     startPlaylist,
     playlistItemDuration: effectivePlaylistItemDuration,
