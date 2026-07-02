@@ -107,7 +107,7 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 | HARD9-047 | Web local sources list files after reload that can no longer be opened | sources | P2 | correctness, ux | medium | M | OPEN |
 | HARD9-048 | Disk library save effect writes stale/empty state before load settles | sources | P2 | data-loss, robustness | medium | S | FIXED (93683f38) |
 | HARD9-049 | Archive entries with a dot in the name rejected despite byte detection | sources | P2 | correctness, ux | high | S | OPEN |
-| HARD9-050 | Throttled-preview sliders leave device at intermediate value on return-to-start | config | P2 | correctness, ux | high | S | OPEN |
+| HARD9-050 | Throttled-preview sliders leave device at intermediate value on return-to-start | config | P2 | correctness, ux | high | S | FIXED (98d3da2d) |
 | HARD9-051 | Home quick-config writes never set hasChanges → Revert stays disabled | config | P2 | correctness, ux | high | S | OPEN |
 | HARD9-052 | Home optimistic pins: no routing-epoch clear, no watchdog | config | P2 | robustness, ux | high | S | OPEN |
 | HARD9-053 | Profile load/revert sends entire config as one giant POST /v1/configs | config | P2 | robustness, perf | medium | M | OPEN |
@@ -555,11 +555,12 @@ prior hardening (rounds 1–8) that demonstrably fixed most transport-layer P0s 
 - **Fix sketch:** Check `getPlayCategory(fileName)` first; append the detected-type extension whenever the existing name doesn't map to a category; extend the extension map.
 
 ### HARD9-050 — Throttled-preview sliders leave the device at an intermediate value when the user returns to the start position
-- **Area:** config · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** OPEN
+- **Area:** config · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** FIXED (98d3da2d)
 - **Files:** `src/hooks/useDeviceBoundSlider.ts:462-465,504-507`, `src/pages/home/components/LightingSummaryCard.tsx:255-270`
 - **Failure scenario:** LED brightness 50. User drags to 80 (throttled previews write 60/70/80), reconsiders, returns to 50 and releases. `onValueCommit` cancels the trailing preview, then hits `if (equals(deviceValue, nextValue)) { clearLatchedState(); return; }` — `deviceValue` is still pre-drag 50 (polling paused during drag) — so NO corrective write is sent. Device stays at the last preview (e.g. 70); UI shows 50 until the next refetch, then jumps.
 - **Evidence:** Polling pause freezes `deviceValue`; the commit-skip equality compares against the frozen value while previews already mutated device state.
 - **Fix sketch:** Track `previewSentRef` during the drag; if any preview flushed, always send the commit even when `nextValue` equals the pre-drag device value.
+- **Resolution (98d3da2d):** Added `previewSentDuringDragRef`, set in `flushPreview` whenever a throttled preview is actually sent (independent of `lastPreviewSentAtRef`, which `onValueCommit` already clears for throttle-timing purposes before the commit-skip check runs). The commit-skip equality check now also requires no preview was sent this drag. New test proven failing against pre-fix code via `git stash`; a contrast test confirms `commitOnly` mode (which never sends previews) still correctly skips the commit in the same scenario.
 
 ### HARD9-051 — Home quick-config writes never set hasChanges, so "Revert Changes" stays disabled
 - **Area:** config · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** S · **Status:** OPEN
