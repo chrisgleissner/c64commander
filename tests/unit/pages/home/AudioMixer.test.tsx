@@ -298,6 +298,35 @@ describe("AudioMixer", () => {
     });
   });
 
+  it("does not render master volume for a value-only placeholder without options", () => {
+    resolveConfigValueSpy.mockImplementation(
+      (_payload: unknown, _category: string, itemName: string, fallback: string | number) =>
+        itemName === "Vol Master" ? "0 dB" : fallback,
+    );
+    mockSidControlEntries.mockReturnValue({
+      sidControlEntries: [baseSidEntry("socket1", "SID Socket 1")],
+      sidSilenceTargets: [],
+      sidAddressingCategory: undefined,
+      ultiSidCategory: undefined,
+      sidSocketsCategory: undefined,
+      audioMixerCategory: {
+        "Audio Mixer": {
+          items: {
+            "Vol Master": {
+              selected: "0 dB",
+              options: [],
+            },
+          },
+        },
+      },
+    });
+
+    render(<AudioMixer {...defaultProps} />);
+
+    expect(screen.queryByTestId("home-sid-master-volume")).toBeNull();
+    expect(screen.queryByTestId("home-sid-volume-master")).toBeNull();
+  });
+
   it("renders multiple SID cards when multiple entries exist", () => {
     mockSidControlEntries.mockReturnValue({
       sidControlEntries: [baseSidEntry("socket1", "SID Socket 1"), baseSidEntry("socket2", "SID Socket 2")],

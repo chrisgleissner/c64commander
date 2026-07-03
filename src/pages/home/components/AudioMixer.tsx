@@ -196,7 +196,7 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
     "Audio Mixer",
     AUDIO_MIXER_MASTER_VOLUME_ITEM,
   ).map(String);
-  const hasMasterVolume = masterVolumeOptions.length > 0 || masterVolumeValue.trim().length > 0;
+  const hasMasterVolume = masterVolumeOptions.length > 0;
   const resolvedMasterVolumeOptions = masterVolumeOptions.length ? masterVolumeOptions : [masterVolumeValue];
   const masterVolumeIndex = resolveOptionIndex(resolvedMasterVolumeOptions, masterVolumeValue);
   const masterVolumeCenterIndex = resolveVolumeCenterIndex(resolvedMasterVolumeOptions);
