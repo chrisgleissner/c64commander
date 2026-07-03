@@ -298,6 +298,10 @@ android {
     }
     testOptions {
         unitTests.returnDefaultValues = true
+        // Required for Robolectric to resolve app resource ids (R.string.*, etc.)
+        // at test runtime; without it, Resources.getString() throws
+        // NotFoundException even for resources that compile fine.
+        unitTests.includeAndroidResources = true
         unitTests.all {
             jacoco {
                 enabled = true

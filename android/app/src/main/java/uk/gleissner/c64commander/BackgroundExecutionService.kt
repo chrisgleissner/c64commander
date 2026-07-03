@@ -286,7 +286,7 @@ class BackgroundExecutionService : Service() {
                 )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("C64 Commander")
+                .setContentTitle(getString(R.string.app_name))
                 .setContentText("Playback active")
                 .setSmallIcon(android.R.drawable.ic_media_play)
                 .setOngoing(true)

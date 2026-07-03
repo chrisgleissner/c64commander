@@ -284,6 +284,22 @@ class BackgroundExecutionServiceTest {
     }
 
     @Test
+    fun notificationTitleUsesAppNameResourceInsteadOfHardcodedBranding() {
+        controller.create()
+        startService()
+
+        val shadowService = Shadows.shadowOf(service)
+        val notification = shadowService.lastForegroundNotification
+        assertNotNull("Expected an active foreground notification", notification)
+        val title = notification?.extras?.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString()
+        assertEquals(
+            "Notification title must use the app_name resource so C64U Remote is not mis-branded as C64 Commander (HARD11-005)",
+            service.getString(R.string.app_name),
+            title,
+        )
+    }
+
+    @Test
     fun onBindReturnsNull() {
         controller.create()
         assertNull("onBind should return null for a started service", service.onBind(null))
