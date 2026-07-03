@@ -1,0 +1,1192 @@
+openapi: 3.1.0
+info:
+  title: Ultimate-II REST API
+  version: 3.15 alpha
+  summary: REST API exposed by the Ultimate-II 3.14a firmware.
+  description: |
+    Source-derived OpenAPI description for the HTTP API implemented in
+    `/software/api` of the 1541ultimate firmware tree and linked into the
+    `target/u2/riscv/ultimate` firmware target.
+
+    The U2 target links the shared `routes`, `files`, `drives`, `runners`,
+    `configs`, and `machine` route modules. It does not link `route_streams`;
+    keyboard/joystick injection, debug registers, and power-off are also omitted
+    because the firmware source gates or rejects those operations on non-U64
+    targets.
+
+    JSON responses include an `errors` array. Binary endpoints return
+    `application/octet-stream` on success and JSON with `errors` when the request
+    cannot be completed.
+
+    If a network password is configured on the device, every API request must
+    include the `X-Password` header. If no network password is configured, the
+    same endpoints are available without the header.
+servers:
+  - url: http://u2
+    description: Ultimate-II on the local network
+  - url: http://{host}
+    description: Custom Ultimate host or IP address
+    variables:
+      host:
+        default: u2
+tags:
+  - name: System
+  - name: Runners
+  - name: Configuration
+  - name: Machine
+  - name: Drives
+  - name: Files
+security:
+  - NetworkPassword: []
+  - {}
+components:
+  securitySchemes:
+    NetworkPassword:
+      type: apiKey
+      in: header
+      name: X-Password
+      description: Required only when the device network password is configured.
+  parameters:
+    Category:
+      name: category
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Configuration category name or firmware wildcard pattern.
+    Item:
+      name: item
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Configuration item name or firmware wildcard pattern.
+    Setting:
+      name: setting
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Configuration value carried as the third path segment.
+    Drive:
+      name: drive
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [a, b]
+      description: Internal drive slot.
+    FilePath:
+      name: path
+      in: path
+      required: true
+      allowReserved: true
+      schema:
+        type: string
+      description: Device filesystem path below `/v1/files/`; URL-encode reserved characters.
+    Address:
+      name: address
+      in: query
+      required: true
+      schema:
+        type: string
+        pattern: "^(0x)?[0-9A-Fa-f]{1,4}$"
+      description: C64 address in hexadecimal.
+    Length:
+      name: length
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 65536
+        default: 256
+    FileQuery:
+      name: file
+      in: query
+      required: true
+      schema:
+        type: string
+      description: Absolute or device-relative file path.
+    SongNumber:
+      name: songnr
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    DiskName:
+      name: diskname
+      in: query
+      required: false
+      schema:
+        type: string
+    D64Tracks:
+      name: tracks
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 35
+        maximum: 41
+        default: 35
+    DnpTracks:
+      name: tracks
+      in: query
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 255
+  schemas:
+    ErrorList:
+      type: object
+      required: [errors]
+      properties:
+        errors:
+          type: array
+          items:
+            type: string
+    VersionResponse:
+      allOf:
+        - $ref: "#/components/schemas/ErrorList"
+        - type: object
+          required: [version]
+          properties:
+            version:
+              type: string
+              example: "0.1"
+    InfoResponse:
+      allOf:
+        - $ref: "#/components/schemas/ErrorList"
+        - type: object
+          required: [product, firmware_version, fpga_version, hostname]
+          properties:
+            product:
+              type: string
+              example: Ultimate-II
+            firmware_version:
+              type: string
+              example: 3.15 alpha
+            fpga_version:
+              type: string
+              example: U2
+            core_version:
+              type: string
+              description: Present on Ultimate 64-class firmware builds.
+              example: 1.4B
+            hostname:
+              type: string
+            unique_id:
+              type: string
+    ConfigCategoriesResponse:
+      allOf:
+        - $ref: "#/components/schemas/ErrorList"
+        - type: object
+          required: [categories]
+          properties:
+            categories:
+              type: array
+              items:
+                type: string
+    ConfigValue:
+      oneOf:
+        - type: string
+        - type: integer
+    ConfigItemDetail:
+      type: object
+      required: [current]
+      properties:
+        current:
+          $ref: "#/components/schemas/ConfigValue"
+        values:
+          type: array
+          items:
+            type: string
+        presets:
+          type: array
+          items:
+            type: string
+        min:
+          type: integer
+        max:
+          type: integer
+        format:
+          type: string
+        default:
+          $ref: "#/components/schemas/ConfigValue"
+      additionalProperties: true
+    ConfigCategoryResponse:
+      allOf:
+        - $ref: "#/components/schemas/ErrorList"
+        - type: object
+          additionalProperties:
+            type: object
+            additionalProperties:
+              oneOf:
+                - $ref: "#/components/schemas/ConfigValue"
+                - $ref: "#/components/schemas/ConfigItemDetail"
+    ConfigBatchUpdate:
+      type: object
+      additionalProperties:
+        type: object
+        additionalProperties:
+          $ref: "#/components/schemas/ConfigValue"
+      example:
+        Drive A Settings:
+          Drive: Enabled
+          Drive Bus ID: 8
+    ConfigStoreListResponse:
+      allOf:
+        - $ref: "#/components/schemas/ErrorList"
+        - type: object
+          properties:
+            loaded:
+              type: array
+              items:
+                type: string
+            written:
+              type: array
+              items:
+                type: string
+            reset:
+              type: array
+              items:
+                type: string
+    ActionResponse:
+      allOf:
+        - $ref: "#/components/schemas/ErrorList"
+        - type: object
+          additionalProperties: true
+    DriveInfo:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        bus_id:
+          type: integer
+        type:
+          type: string
+        rom:
+          type: string
+        image_file:
+          type: string
+        image_path:
+          type: string
+        last_error:
+          type: string
+        partitions:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              path:
+                type: string
+      additionalProperties: true
+    DriveListResponse:
+      allOf:
+        - $ref: "#/components/schemas/ErrorList"
+        - type: object
+          required: [drives]
+          properties:
+            drives:
+              type: array
+              items:
+                type: object
+                additionalProperties:
+                  $ref: "#/components/schemas/DriveInfo"
+    FileInfoResponse:
+      allOf:
+        - $ref: "#/components/schemas/ErrorList"
+        - type: object
+          required: [files]
+          properties:
+            files:
+              type: object
+              properties:
+                path:
+                  type: string
+                filename:
+                  type: string
+                size:
+                  type: integer
+                extension:
+                  type: string
+              additionalProperties: true
+  requestBodies:
+    BinaryUpload:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            required: [file]
+            properties:
+              file:
+                type: string
+                format: binary
+        application/octet-stream:
+          schema:
+            type: string
+            format: binary
+    SidUpload:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            required: [file]
+            properties:
+              file:
+                type: array
+                minItems: 1
+                maxItems: 2
+                items:
+                  type: string
+                  format: binary
+                description: First file is the SID; optional second file is SID song-length data.
+  responses:
+    JsonOk:
+      description: Successful JSON response.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ActionResponse"
+    BadRequest:
+      description: Request could not be parsed or failed validation.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorList"
+    Forbidden:
+      description: Network password is configured and `X-Password` is missing or wrong.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorList"
+    NotFound:
+      description: Route, file, category, item, or active menu screen was not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorList"
+    PreconditionFailed:
+      description: Required request body was missing.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorList"
+    NotImplemented:
+      description: Firmware route exists, but the current FPGA or hardware capability is unavailable.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorList"
+    ServerError:
+      description: Device-side operation failed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorList"
+paths:
+  /v1/help:
+    get:
+      tags: [System]
+      operationId: getHelp
+      summary: Return minimal HTML help for a command.
+      parameters:
+        - name: command
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: HTML help.
+          content:
+            text/html:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/version:
+    get:
+      tags: [System]
+      operationId: getApiVersion
+      summary: Get REST API version.
+      responses:
+        "200":
+          description: API version.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/info:
+    get:
+      tags: [System]
+      operationId: getDeviceInfo
+      summary: Get device identity and firmware versions.
+      responses:
+        "200":
+          description: Device information.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InfoResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/runners:sidplay:
+    put:
+      tags: [Runners]
+      operationId: playSidFromFile
+      summary: Play a SID file already present on the device filesystem.
+      parameters:
+        - $ref: "#/components/parameters/FileQuery"
+        - $ref: "#/components/parameters/SongNumber"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Runners]
+      operationId: playUploadedSid
+      summary: Upload and play a SID file.
+      parameters:
+        - $ref: "#/components/parameters/SongNumber"
+      requestBody:
+        $ref: "#/components/requestBodies/SidUpload"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /v1/runners:modplay:
+    put:
+      tags: [Runners]
+      operationId: playModFromFile
+      summary: Play a MOD file from the device filesystem.
+      description: Requires the FPGA sampler capability.
+      parameters:
+        - $ref: "#/components/parameters/FileQuery"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+    post:
+      tags: [Runners]
+      operationId: playUploadedMod
+      summary: Upload and play a MOD file.
+      description: Requires the FPGA sampler capability.
+      requestBody:
+        $ref: "#/components/requestBodies/BinaryUpload"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+  /v1/runners:load_prg:
+    put:
+      tags: [Runners]
+      operationId: loadPrgFromFile
+      summary: Load a PRG from the device filesystem without starting it.
+      parameters:
+        - $ref: "#/components/parameters/FileQuery"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Runners]
+      operationId: loadUploadedPrg
+      summary: Upload a PRG and load it without starting it.
+      requestBody:
+        $ref: "#/components/requestBodies/BinaryUpload"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /v1/runners:run_prg:
+    put:
+      tags: [Runners]
+      operationId: runPrgFromFile
+      summary: Load and run a PRG from the device filesystem.
+      parameters:
+        - $ref: "#/components/parameters/FileQuery"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Runners]
+      operationId: runUploadedPrg
+      summary: Upload, load, and run a PRG.
+      requestBody:
+        $ref: "#/components/requestBodies/BinaryUpload"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /v1/runners:run_crt:
+    put:
+      tags: [Runners]
+      operationId: runCrtFromFile
+      summary: Load and start a CRT cartridge image from the device filesystem.
+      parameters:
+        - $ref: "#/components/parameters/FileQuery"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Runners]
+      operationId: runUploadedCrt
+      summary: Upload, load, and start a CRT cartridge image.
+      requestBody:
+        $ref: "#/components/requestBodies/BinaryUpload"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /v1/configs:
+    get:
+      tags: [Configuration]
+      operationId: listConfigCategories
+      summary: List configuration categories.
+      responses:
+        "200":
+          description: Configuration categories.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfigCategoriesResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Configuration]
+      operationId: batchUpdateConfig
+      summary: Apply a JSON batch of configuration values.
+      description: Use single-item `PUT` for interactive writes; batch POST buffers the body on-device.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfigBatchUpdate"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /v1/configs/{category}:
+    get:
+      tags: [Configuration]
+      operationId: getConfigCategory
+      summary: Get matching configuration categories and their current values.
+      parameters:
+        - $ref: "#/components/parameters/Category"
+      responses:
+        "200":
+          description: Matching category values.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfigCategoryResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/configs/{category}/{item}:
+    get:
+      tags: [Configuration]
+      operationId: getConfigItem
+      summary: Get detailed metadata for matching configuration items.
+      parameters:
+        - $ref: "#/components/parameters/Category"
+        - $ref: "#/components/parameters/Item"
+      responses:
+        "200":
+          description: Matching item metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfigCategoryResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    put:
+      tags: [Configuration]
+      operationId: updateConfigItem
+      summary: Update one configuration item using the `value` query parameter.
+      parameters:
+        - $ref: "#/components/parameters/Category"
+        - $ref: "#/components/parameters/Item"
+        - name: value
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/configs/{category}/{item}/{setting}:
+    put:
+      tags: [Configuration]
+      operationId: updateConfigItemByPath
+      summary: Update one configuration item using the third path segment as the value.
+      parameters:
+        - $ref: "#/components/parameters/Category"
+        - $ref: "#/components/parameters/Item"
+        - $ref: "#/components/parameters/Setting"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/configs:load_from_flash:
+    put:
+      tags: [Configuration]
+      operationId: loadAllConfigsFromFlash
+      summary: Reload all configuration stores from flash.
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/configs/{category}:load_from_flash:
+    put:
+      tags: [Configuration]
+      operationId: loadConfigCategoryFromFlash
+      summary: Reload matching configuration stores from flash.
+      parameters:
+        - $ref: "#/components/parameters/Category"
+      responses:
+        "200":
+          description: Matching stores loaded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfigStoreListResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/configs:save_to_flash:
+    put:
+      tags: [Configuration]
+      operationId: saveAllConfigsToFlash
+      summary: Save stale configuration stores to flash.
+      responses:
+        "200":
+          description: Stores written.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfigStoreListResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/configs/{category}:save_to_flash:
+    put:
+      tags: [Configuration]
+      operationId: saveConfigCategoryToFlash
+      summary: Save matching stale configuration stores to flash.
+      parameters:
+        - $ref: "#/components/parameters/Category"
+      responses:
+        "200":
+          description: Matching stores written.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfigStoreListResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/configs:reset_to_default:
+    put:
+      tags: [Configuration]
+      operationId: resetAllConfigsToDefault
+      summary: Reset all configuration stores to firmware defaults.
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/configs/{category}:reset_to_default:
+    put:
+      tags: [Configuration]
+      operationId: resetConfigCategoryToDefault
+      summary: Reset matching configuration stores to firmware defaults.
+      parameters:
+        - $ref: "#/components/parameters/Category"
+      responses:
+        "200":
+          description: Matching stores reset.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfigStoreListResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/machine:reset:
+    put:
+      tags: [Machine]
+      operationId: resetMachine
+      summary: Reset the C64.
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/machine:reboot:
+    put:
+      tags: [Machine]
+      operationId: rebootMachine
+      summary: Reboot the C64.
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/machine:pause:
+    put:
+      tags: [Machine]
+      operationId: pauseMachine
+      summary: Pause the machine using DMA.
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/machine:resume:
+    put:
+      tags: [Machine]
+      operationId: resumeMachine
+      summary: Resume a paused machine.
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/machine:menu_button:
+    put:
+      tags: [Machine]
+      operationId: pressMenuButton
+      summary: Press the Ultimate menu button.
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/machine:writemem:
+    put:
+      tags: [Machine]
+      operationId: writeMemoryHex
+      summary: Write up to 128 bytes of C64 memory from a hex string.
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - name: data
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: "^([0-9A-Fa-f]{2}){1,128}$"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Machine]
+      operationId: writeMemoryUpload
+      summary: Write C64 memory from an uploaded binary payload.
+      parameters:
+        - $ref: "#/components/parameters/Address"
+      requestBody:
+        $ref: "#/components/requestBodies/BinaryUpload"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /v1/machine:readmem:
+    get:
+      tags: [Machine]
+      operationId: readMemory
+      summary: Read C64 memory as raw bytes.
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - $ref: "#/components/parameters/Length"
+      responses:
+        "200":
+          description: Raw memory bytes.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/machine:menu_screen:
+    get:
+      tags: [Machine]
+      operationId: readMenuScreen
+      summary: Read the active Ultimate menu screen matrix as raw bytes.
+      description: Returns 404 JSON when no active menu screen matrix is available.
+      responses:
+        "200":
+          description: Active screen matrix bytes.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/machine:measure:
+    get:
+      tags: [Machine]
+      operationId: measureCartridgeBus
+      summary: Capture cartridge-bus timing as a VCD file.
+      responses:
+        "200":
+          description: VCD timing capture.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+  /v1/drives:
+    get:
+      tags: [Drives]
+      operationId: listDrives
+      summary: List internal drives and IEC service devices.
+      responses:
+        "200":
+          description: Drive list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriveListResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/drives/{drive}:mount:
+    put:
+      tags: [Drives]
+      operationId: mountDiskImage
+      summary: Mount a disk image from the device filesystem.
+      parameters:
+        - $ref: "#/components/parameters/Drive"
+        - name: image
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [d64, g64, d71, g71, d81]
+        - name: mode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [readwrite, readonly, unlinked]
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Drives]
+      operationId: mountUploadedDiskImage
+      summary: Upload and mount a disk image.
+      parameters:
+        - $ref: "#/components/parameters/Drive"
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [d64, g64, d71, g71, d81]
+        - name: mode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [readwrite, readonly, unlinked]
+      requestBody:
+        $ref: "#/components/requestBodies/BinaryUpload"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /v1/drives/{drive}:reset:
+    put:
+      tags: [Drives]
+      operationId: resetDrive
+      summary: Reset a drive.
+      parameters:
+        - $ref: "#/components/parameters/Drive"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/drives/{drive}:remove:
+    put:
+      tags: [Drives]
+      operationId: removeMountedImage
+      summary: Remove the mounted image from a drive.
+      parameters:
+        - $ref: "#/components/parameters/Drive"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/drives/{drive}:on:
+    put:
+      tags: [Drives]
+      operationId: powerOnDrive
+      summary: Power on a drive.
+      parameters:
+        - $ref: "#/components/parameters/Drive"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/drives/{drive}:off:
+    put:
+      tags: [Drives]
+      operationId: powerOffDrive
+      summary: Power off a drive.
+      parameters:
+        - $ref: "#/components/parameters/Drive"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/drives/{drive}:unlink:
+    put:
+      tags: [Drives]
+      operationId: unlinkMountedImage
+      summary: Unlink the mounted image from host storage.
+      parameters:
+        - $ref: "#/components/parameters/Drive"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/drives/{drive}:load_rom:
+    put:
+      tags: [Drives]
+      operationId: loadDriveRomFromFile
+      summary: Load a drive ROM from the device filesystem.
+      parameters:
+        - $ref: "#/components/parameters/Drive"
+        - $ref: "#/components/parameters/FileQuery"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Drives]
+      operationId: loadUploadedDriveRom
+      summary: Upload and load a drive ROM.
+      parameters:
+        - $ref: "#/components/parameters/Drive"
+      requestBody:
+        $ref: "#/components/requestBodies/BinaryUpload"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /v1/drives/{drive}:set_mode:
+    put:
+      tags: [Drives]
+      operationId: setDriveMode
+      summary: Set drive emulation mode.
+      parameters:
+        - $ref: "#/components/parameters/Drive"
+        - name: mode
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: ["1541", "1571", "1581"]
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/files/{path}:info:
+    get:
+      tags: [Files]
+      operationId: getFileInfo
+      summary: Get metadata for a device filesystem path.
+      parameters:
+        - $ref: "#/components/parameters/FilePath"
+      responses:
+        "200":
+          description: File metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileInfoResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/files/{path}:create_d64:
+    put:
+      tags: [Files]
+      operationId: createD64
+      summary: Create and format a D64 image.
+      parameters:
+        - $ref: "#/components/parameters/FilePath"
+        - $ref: "#/components/parameters/D64Tracks"
+        - $ref: "#/components/parameters/DiskName"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /v1/files/{path}:create_d71:
+    put:
+      tags: [Files]
+      operationId: createD71
+      summary: Create and format a D71 image.
+      parameters:
+        - $ref: "#/components/parameters/FilePath"
+        - $ref: "#/components/parameters/DiskName"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /v1/files/{path}:create_d81:
+    put:
+      tags: [Files]
+      operationId: createD81
+      summary: Create and format a D81 image.
+      parameters:
+        - $ref: "#/components/parameters/FilePath"
+        - $ref: "#/components/parameters/DiskName"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /v1/files/{path}:create_dnp:
+    put:
+      tags: [Files]
+      operationId: createDnp
+      summary: Create and format a DNP image.
+      parameters:
+        - $ref: "#/components/parameters/FilePath"
+        - $ref: "#/components/parameters/DnpTracks"
+        - $ref: "#/components/parameters/DiskName"
+      responses:
+        "200":
+          $ref: "#/components/responses/JsonOk"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/ServerError"
