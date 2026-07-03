@@ -23,11 +23,50 @@ import {
 } from "@/lib/config/appSettings";
 import { loadDeviceSafetyConfig, saveDeviceSafetyMode } from "@/lib/config/deviceSafetySettings";
 import { featureFlagManager } from "@/lib/config/featureFlags";
+import { setDeveloperModeEnabled } from "@/lib/config/developerModeStore";
 import { exportSettingsSnapshot, importSettingsJson, SETTINGS_EXPORT_VERSION } from "@/lib/config/settingsTransfer";
+
+const buildImportPayload = (featureFlags: Record<string, boolean>) => ({
+  version: SETTINGS_EXPORT_VERSION,
+  appSettings: {
+    debugLoggingEnabled: false,
+    configWriteIntervalMs: 800,
+    automaticDemoModeEnabled: false,
+    startupDiscoveryWindowMs: 4200,
+    backgroundRediscoveryIntervalMs: 7000,
+    discoveryProbeTimeoutMs: 3200,
+    diskAutostartMode: "dma",
+    screenOrientationMode: "landscape",
+    volumeSliderPreviewIntervalMs: 300,
+    archiveHostOverride: "archive.local:3002",
+    archiveClientIdOverride: "Custom",
+    archiveUserAgentOverride: "Custom Agent",
+  },
+  featureFlags,
+  deviceSafety: {
+    mode: "TROUBLESHOOTING",
+    restMaxConcurrency: 1,
+    ftpMaxConcurrency: 1,
+    infoCacheMs: 400,
+    configsCacheMs: 800,
+    configsCooldownMs: 400,
+    drivesCooldownMs: 400,
+    ftpListCooldownMs: 300,
+    telnetConnectCooldownMs: 200,
+    backoffBaseMs: 200,
+    backoffMaxMs: 1200,
+    backoffFactor: 1.4,
+    circuitBreakerThreshold: 2,
+    circuitBreakerCooldownMs: 1500,
+    discoveryProbeIntervalMs: 500,
+    allowUserOverrideCircuit: false,
+  },
+});
 
 describe("settingsTransfer", () => {
   beforeEach(async () => {
     localStorage.clear();
+    setDeveloperModeEnabled(false);
     await featureFlagManager.load();
     await featureFlagManager.replaceOverrides({});
   });
@@ -261,5 +300,53 @@ describe("settingsTransfer", () => {
 
     const result = await importSettingsJson(JSON.stringify(payload));
     expect(result.ok).toBe(false);
+  });
+
+  describe("developer-only feature-flag import gating (HARD11-001)", () => {
+    it("drops hidden/developer-only flag overrides when developer mode is off", async () => {
+      setDeveloperModeEnabled(false);
+      const payload = buildImportPayload({
+        home_telnet_reu_snapshot_enabled: true,
+        background_execution_enabled: false,
+        commoserve_enabled: false,
+      });
+
+      const result = await importSettingsJson(JSON.stringify(payload));
+      expect(result.ok).toBe(true);
+
+      const snapshot = await exportSettingsSnapshot();
+      expect(snapshot.featureFlags).not.toHaveProperty("home_telnet_reu_snapshot_enabled");
+      expect(snapshot.featureFlags).not.toHaveProperty("background_execution_enabled");
+      // A standard user-toggleable flag in the same payload still applies.
+      expect(snapshot.featureFlags).toEqual({ commoserve_enabled: false });
+    });
+
+    it("persists hidden/developer-only flag overrides when developer mode is on", async () => {
+      setDeveloperModeEnabled(true);
+      const payload = buildImportPayload({
+        home_telnet_reu_snapshot_enabled: true,
+        background_execution_enabled: false,
+      });
+
+      const result = await importSettingsJson(JSON.stringify(payload));
+      expect(result.ok).toBe(true);
+
+      const snapshot = await exportSettingsSnapshot();
+      expect(snapshot.featureFlags).toEqual({
+        home_telnet_reu_snapshot_enabled: true,
+        background_execution_enabled: false,
+      });
+    });
+
+    it("keeps applying standard user-toggleable flags regardless of developer mode", async () => {
+      setDeveloperModeEnabled(false);
+      const payload = buildImportPayload({ hvsc_enabled: false });
+
+      const result = await importSettingsJson(JSON.stringify(payload));
+      expect(result.ok).toBe(true);
+
+      const snapshot = await exportSettingsSnapshot();
+      expect(snapshot.featureFlags).toEqual({ hvsc_enabled: false });
+    });
   });
 });

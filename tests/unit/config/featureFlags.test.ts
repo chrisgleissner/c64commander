@@ -29,6 +29,7 @@ import {
   InMemoryFeatureFlagRepository,
   PluginFeatureFlagRepository,
   isFeatureEnabled,
+  isFeatureFlagStandardUserToggleable,
   isHvscEnabled,
   isKnownFeatureFlagId,
 } from "@/lib/config/featureFlags";
@@ -434,6 +435,19 @@ describe("featureFlags", () => {
 
     it("isKnownFeatureFlagId rejects unknown ids", () => {
       expect(isKnownFeatureFlagId("nope")).toBe(false);
+    });
+
+    describe("isFeatureFlagStandardUserToggleable (HARD11-001)", () => {
+      it("is true for a visible, non-developer-only flag", () => {
+        expect(isFeatureFlagStandardUserToggleable("hvsc_enabled")).toBe(true);
+        expect(isFeatureFlagStandardUserToggleable("commoserve_enabled")).toBe(true);
+      });
+
+      it("is false for hidden/developer-only flags", () => {
+        expect(isFeatureFlagStandardUserToggleable("home_telnet_reu_snapshot_enabled")).toBe(false);
+        expect(isFeatureFlagStandardUserToggleable("background_execution_enabled")).toBe(false);
+        expect(isFeatureFlagStandardUserToggleable("lighting_studio_enabled")).toBe(false);
+      });
     });
   });
 });

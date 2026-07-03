@@ -42,9 +42,11 @@ import {
 import {
   FEATURE_FLAG_IDS,
   featureFlagManager,
+  isFeatureFlagStandardUserToggleable,
   isKnownFeatureFlagId,
   type FeatureFlagId,
 } from "@/lib/config/featureFlags";
+import { getDeveloperModeEnabled } from "@/lib/config/developerModeStore";
 import {
   loadDeviceSafetyConfig,
   saveAllowUserOverrideCircuit,
@@ -242,7 +244,10 @@ const validateAppSettings = (value: unknown, optionalKeys: readonly string[] = [
   return null;
 };
 
-const sanitizeFeatureFlags = (value: unknown): Partial<Record<FeatureFlagId, boolean>> | { error: string } => {
+const sanitizeFeatureFlags = (
+  value: unknown,
+  developerModeEnabled: boolean,
+): Partial<Record<FeatureFlagId, boolean>> | { error: string } => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return { error: "featureFlags must be an object." };
   }
@@ -254,6 +259,13 @@ const sanitizeFeatureFlags = (value: unknown): Partial<Record<FeatureFlagId, boo
     }
     if (typeof rawValue !== "boolean") {
       return { error: `featureFlags.${key} must be boolean.` };
+    }
+    // Hidden/developer-only flags (experimental device-touching features,
+    // or disabling background_execution_enabled) must not be silently
+    // flippable by importing a hand-edited or shared settings file outside
+    // developer mode (HARD11-001).
+    if (!developerModeEnabled && !isFeatureFlagStandardUserToggleable(key)) {
+      continue;
     }
     next[key] = rawValue;
   }
@@ -302,7 +314,7 @@ export const importSettingsJson = async (raw: string): Promise<{ ok: true } | { 
   let importedFeatureFlags: Partial<Record<FeatureFlagId, boolean>> = {};
   if (version === SETTINGS_EXPORT_VERSION) {
     try {
-      const sanitized = sanitizeFeatureFlags(payload.featureFlags);
+      const sanitized = sanitizeFeatureFlags(payload.featureFlags, getDeveloperModeEnabled());
       if ("error" in sanitized) {
         return { ok: false, error: sanitized.error };
       }
