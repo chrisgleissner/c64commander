@@ -8,6 +8,8 @@
 
 import {
   buildPlaylistItemId,
+  buildSubsongSwitchItem,
+  shouldDetachPlaybackOnSavedDeviceSwitch,
   applyDurationOverrideToPlaylist,
   formatTime,
   formatBytes,
@@ -263,6 +265,127 @@ describe("playFilesUtils", () => {
       const playlist = [createPlaylistItem("resolved", 12_000), createPlaylistItem("defaulted", 12_000, "default")];
 
       expect(applyDurationOverrideToPlaylist(playlist, 12_000)).toBe(playlist);
+    });
+  });
+
+  describe("shouldDetachPlaybackOnSavedDeviceSwitch (HARD11-002)", () => {
+    it("does not detach on the initial observation (component mount)", () => {
+      expect(
+        shouldDetachPlaybackOnSavedDeviceSwitch({
+          previousDeviceId: null,
+          nextDeviceId: "device-a",
+          isPlaying: true,
+          isPaused: false,
+        }),
+      ).toBe(false);
+    });
+
+    it("does not detach when re-selecting the same device", () => {
+      expect(
+        shouldDetachPlaybackOnSavedDeviceSwitch({
+          previousDeviceId: "device-a",
+          nextDeviceId: "device-a",
+          isPlaying: true,
+          isPaused: false,
+        }),
+      ).toBe(false);
+    });
+
+    it("does not detach on a real device change while nothing is playing", () => {
+      expect(
+        shouldDetachPlaybackOnSavedDeviceSwitch({
+          previousDeviceId: "device-a",
+          nextDeviceId: "device-b",
+          isPlaying: false,
+          isPaused: false,
+        }),
+      ).toBe(false);
+    });
+
+    it("detaches on a real device change while playing", () => {
+      expect(
+        shouldDetachPlaybackOnSavedDeviceSwitch({
+          previousDeviceId: "device-a",
+          nextDeviceId: "device-b",
+          isPlaying: true,
+          isPaused: false,
+        }),
+      ).toBe(true);
+    });
+
+    it("detaches on a real device change while paused", () => {
+      expect(
+        shouldDetachPlaybackOnSavedDeviceSwitch({
+          previousDeviceId: "device-a",
+          nextDeviceId: "device-b",
+          isPlaying: false,
+          isPaused: true,
+        }),
+      ).toBe(true);
+    });
+  });
+
+  describe("buildSubsongSwitchItem (HARD11-004)", () => {
+    const createSubsongItem = (overrides: Partial<PlaylistItem> = {}): PlaylistItem => ({
+      id: "demo",
+      request: { source: "ultimate", path: "/MUSICIANS/Test/demo.sid", songNr: 1 },
+      category: "sid",
+      label: "demo.sid",
+      path: "/MUSICIANS/Test/demo.sid",
+      durationMs: 30_000,
+      durationSource: null,
+      subsongCount: 3,
+      sourceId: null,
+      sizeBytes: null,
+      modifiedAt: null,
+      addedAt: null,
+      status: "ready",
+      unavailableReason: null,
+      ...overrides,
+    });
+
+    it("strips a resolved duration so playItem re-resolves it for the new subsong", () => {
+      const item = createSubsongItem({ durationMs: 30_000, durationSource: null });
+
+      const next = buildSubsongSwitchItem(item, 3, 3);
+
+      expect(next.request.songNr).toBe(3);
+      expect(next.durationMs).toBeUndefined();
+      expect(next.durationSource).toBeNull();
+    });
+
+    it("preserves a manual default-duration override across a subsong switch", () => {
+      const item = createSubsongItem({ durationMs: 60_000, durationSource: "default" });
+
+      const next = buildSubsongSwitchItem(item, 2, 3);
+
+      expect(next.request.songNr).toBe(2);
+      expect(next.durationMs).toBe(60_000);
+      expect(next.durationSource).toBe("default");
+    });
+
+    it("clamps the requested songNr to the known subsong count", () => {
+      const item = createSubsongItem();
+
+      expect(buildSubsongSwitchItem(item, 99, 3).request.songNr).toBe(3);
+      expect(buildSubsongSwitchItem(item, 0, 3).request.songNr).toBe(1);
+      expect(buildSubsongSwitchItem(item, -5, 3).request.songNr).toBe(1);
+    });
+
+    it("clamps to at least 1 when the subsong count is unknown", () => {
+      const item = createSubsongItem();
+
+      expect(buildSubsongSwitchItem(item, 0, null).request.songNr).toBe(1);
+      expect(buildSubsongSwitchItem(item, 7, null).request.songNr).toBe(7);
+    });
+
+    it("does not mutate the original item", () => {
+      const item = createSubsongItem();
+      const before = { ...item, request: { ...item.request } };
+
+      buildSubsongSwitchItem(item, 2, 3);
+
+      expect(item).toEqual(before);
     });
   });
 

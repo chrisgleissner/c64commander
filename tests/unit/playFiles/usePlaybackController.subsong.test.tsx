@@ -33,6 +33,7 @@ vi.mock("@/lib/playback/playbackRouter", () => ({
 
 vi.mock("@/lib/hvsc", () => ({
   getHvscDurationByMd5Seconds: vi.fn(async () => null),
+  getHvscDurationsByMd5Seconds: vi.fn(async () => null),
 }));
 
 vi.mock("@/lib/sid/sidUtils", () => ({

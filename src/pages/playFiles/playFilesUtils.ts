@@ -162,6 +162,57 @@ export const applyDurationOverrideToPlaylist = (playlist: PlaylistItem[], durati
   return updated.some((entry, index) => entry !== playlist[index]) ? updated : playlist;
 };
 
+/**
+ * True when an observed saved-device selection change must locally detach
+ * the Play transport instead of letting it keep firing against whatever
+ * device is now selected. Saved devices + the always-visible health-badge
+ * switcher let a user hop devices while Play stays mounted;
+ * executeSavedDeviceSwitch mutates the C64 API singleton in place, so
+ * auto-advance/Stop would otherwise launch tracks or reset/reboot the NEW
+ * device while the device that was actually playing keeps going with no
+ * reachable control. `previousDeviceId === null` means this is the initial
+ * observation (component mount) - there is nothing to detach from yet.
+ * See HARD11-002.
+ */
+export const shouldDetachPlaybackOnSavedDeviceSwitch = ({
+  previousDeviceId,
+  nextDeviceId,
+  isPlaying,
+  isPaused,
+}: {
+  previousDeviceId: string | null;
+  nextDeviceId: string;
+  isPlaying: boolean;
+  isPaused: boolean;
+}): boolean => {
+  if (previousDeviceId === null || previousDeviceId === nextDeviceId) return false;
+  return isPlaying || isPaused;
+};
+
+/**
+ * Builds the playlist item for a live subsong switch (the subsong picker
+ * shown while a multi-subsong SID is playing). Songlengths are resolved
+ * per-subsong, so the previous subsong's `durationMs` must not carry over -
+ * otherwise the new subsong is cut off (or overruns) at the wrong time and
+ * the stale duration persists onto the playlist item. Clearing it lets
+ * `playItem` re-resolve the duration for the new `songNr`. A user-entered
+ * "Default duration" override (`durationSource: "default"`) is preserved
+ * since it intentionally applies to any subsong. See HARD11-004.
+ */
+export const buildSubsongSwitchItem = (
+  item: PlaylistItem,
+  nextSongNr: number,
+  knownSubsongCount: number | null,
+): PlaylistItem => {
+  const capped = knownSubsongCount ? Math.min(Math.max(1, nextSongNr), knownSubsongCount) : Math.max(1, nextSongNr);
+  const preserveManualDuration = item.durationSource === "default";
+  return {
+    ...item,
+    request: { ...item.request, songNr: capped },
+    ...(preserveManualDuration ? {} : { durationMs: undefined, durationSource: null }),
+  };
+};
+
 export const buildPlaylistItemId = ({
   source,
   sourceId,

@@ -3,13 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import { seededShuffleIds } from "@/pages/playFiles/playFilesUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
-import { executePlayPlan } from "@/lib/playback/playbackRouter";
+import { executePlayPlan, tryFetchUltimateSidBlob } from "@/lib/playback/playbackRouter";
 import { clearArchivePlaybackCacheForTests } from "@/lib/archive/archivePlaybackCache";
 import { getC64API } from "@/lib/c64api";
 import { reportUserError } from "@/lib/uiErrors";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
-import { getHvscDurationByMd5Seconds } from "@/lib/hvsc";
+import { getHvscDurationsByMd5Seconds } from "@/lib/hvsc";
 import { applyConfigFileReference, ensureConfigFileReferenceAccessible } from "@/lib/config/applyConfigFileReference";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 
@@ -43,6 +43,7 @@ vi.mock("@/lib/playback/playbackRouter", () => ({
 
 vi.mock("@/lib/hvsc", () => ({
   getHvscDurationByMd5Seconds: vi.fn(async () => null),
+  getHvscDurationsByMd5Seconds: vi.fn(async () => null),
 }));
 
 vi.mock("@/lib/sid/sidUtils", () => ({
@@ -425,6 +426,36 @@ describe("usePlaybackController", () => {
     // The device only learns the true song length when the SID is sent as a
     // REST payload with the SSL songlength attached (duration-propagation contract).
     expect((options as { skipSidSslPropagation?: boolean } | undefined)?.skipSidSslPropagation).toBeUndefined();
+  });
+
+  it("indexes the ultimate-source HVSC MD5 duration fallback by songNr (HARD11-004)", async () => {
+    vi.mocked(tryFetchUltimateSidBlob).mockResolvedValueOnce({
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(4)),
+    } as any);
+    vi.mocked(getHvscDurationsByMd5Seconds).mockResolvedValueOnce([10, 20, 30]);
+    const playlist = [
+      createPlaylistItem({
+        category: "sid",
+        label: "10_Orbyte.sid",
+        path: "/USB2/test-data/SID/10_Orbyte.sid",
+        request: {
+          source: "ultimate",
+          path: "/USB2/test-data/SID/10_Orbyte.sid",
+          songNr: 3,
+        },
+        durationMs: undefined,
+        subsongCount: 3,
+      }),
+    ];
+    const { result } = renderPlaybackController(playlist);
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ durationMs: 30_000 }),
+      expect.anything(),
+    );
   });
 
   it("reports a play start superseded by a routing change as a notice, not a destructive error", async () => {
@@ -1661,11 +1692,11 @@ describe("usePlaybackController", () => {
       subsongCount: 3,
       readable: true,
     });
-    expect(vi.mocked(getHvscDurationByMd5Seconds)).not.toHaveBeenCalled();
+    expect(vi.mocked(getHvscDurationsByMd5Seconds)).not.toHaveBeenCalled();
   });
 
   it("falls back to HVSC MD5 duration lookup for local SID metadata", async () => {
-    vi.mocked(getHvscDurationByMd5Seconds).mockResolvedValueOnce(99);
+    vi.mocked(getHvscDurationsByMd5Seconds).mockResolvedValueOnce([99]);
     const file = {
       name: "demo.sid",
       arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
@@ -1674,6 +1705,37 @@ describe("usePlaybackController", () => {
 
     await expect(result.current.resolveSidMetadata(file as any, null)).resolves.toEqual({
       durationMs: 99_000,
+      subsongCount: 3,
+      readable: true,
+    });
+  });
+
+  it("indexes the HVSC MD5 duration fallback by songNr instead of always using subsong 1 (HARD11-004)", async () => {
+    // durations[0] = subsong 1, durations[2] = subsong 3.
+    vi.mocked(getHvscDurationsByMd5Seconds).mockResolvedValueOnce([30, 90, 240]);
+    const file = {
+      name: "demo.sid",
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    } as unknown as File;
+    const { result } = renderPlaybackController([createPlaylistItem()]);
+
+    await expect(result.current.resolveSidMetadata(file as any, 3)).resolves.toEqual({
+      durationMs: 240_000,
+      subsongCount: 3,
+      readable: true,
+    });
+  });
+
+  it("falls back to the fallback duration when songNr is out of range for the HVSC MD5 durations array", async () => {
+    vi.mocked(getHvscDurationsByMd5Seconds).mockResolvedValueOnce([30, 90]);
+    const file = {
+      name: "demo.sid",
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    } as unknown as File;
+    const { result } = renderPlaybackController([createPlaylistItem()]);
+
+    await expect(result.current.resolveSidMetadata(file as any, 5)).resolves.toEqual({
+      durationMs: 45_000,
       subsongCount: 3,
       readable: true,
     });

@@ -29,7 +29,7 @@ import {
   type LocalPlayFile,
   type PlayRequest,
 } from "@/lib/playback/playbackRouter";
-import { getHvscDurationByMd5Seconds } from "@/lib/hvsc";
+import { getHvscDurationsByMd5Seconds } from "@/lib/hvsc";
 import {
   getLocalFilePath,
   isSongCategory,
@@ -66,6 +66,20 @@ const markHandledUiError = (error: unknown) => {
 
 const isHandledUiError = (error: unknown): error is HandledUiError =>
   error instanceof Error && Boolean((error as HandledUiError).c64uHandled);
+
+/**
+ * The md5-fallback duration lookup is per-subsong (HVSC durations are indexed
+ * songNr - 1, mirroring the local songlengths backend), so a bare
+ * `getHvscDurationByMd5Seconds` call silently returns subsong 1's length for
+ * any other songNr. See HARD11-004 (related facet).
+ */
+const resolveHvscDurationSecondsForSongNr = async (md5: string, songNr?: number | null): Promise<number | null> => {
+  const durations = await getHvscDurationsByMd5Seconds(md5);
+  if (!durations?.length) return null;
+  const index = songNr && songNr > 0 ? songNr - 1 : 0;
+  if (index < 0 || index >= durations.length) return null;
+  return durations[index] ?? null;
+};
 
 type SidMuteSnapshot = {
   volumes: Record<string, string | number>;
@@ -469,7 +483,7 @@ export function usePlaybackController({
 
         const { computeSidMd5 } = await import("@/lib/sid/sidUtils");
         const md5 = await computeSidMd5(buffer);
-        const seconds = await getHvscDurationByMd5Seconds(md5);
+        const seconds = await resolveHvscDurationSecondsForSongNr(md5, songNr);
         const durationMs = seconds !== undefined && seconds !== null ? seconds * 1000 : durationFallbackMs;
         return { durationMs, subsongCount, readable: true } as const;
       } catch (error) {
@@ -495,7 +509,7 @@ export function usePlaybackController({
         const buffer = await blob.arrayBuffer();
         const { computeSidMd5 } = await import("@/lib/sid/sidUtils");
         const md5 = await computeSidMd5(buffer);
-        const seconds = await getHvscDurationByMd5Seconds(md5);
+        const seconds = await resolveHvscDurationSecondsForSongNr(md5, songNr);
         if (seconds === undefined || seconds === null) return null;
         return seconds * 1000;
       } catch (error) {
@@ -576,14 +590,25 @@ export function usePlaybackController({
     (reason: "auto-end" | "user-next-end") => {
       const now = Date.now();
       playedClockRef.current.pause(now);
-      setIsPlaying(false);
-      setIsPaused(false);
+      const currentItem = playlistRef.current[currentIndexRef.current];
+      // Song categories (sid/mod) do not self-stop: the C64 keeps the tune
+      // playing audibly past its resolved songlength. Flipping isPlaying to
+      // false here (as prg/crt/disk correctly do, since a reset would destroy
+      // their running session) would leave the device playing with no Stop
+      // affordance - the combined Play/Stop button derives its label from
+      // isPlaying. Keep isPlaying true so Stop stays reachable and issues its
+      // normal silence/reset through handleStop(). See HARD11-003.
+      const deviceStillPlaying = Boolean(currentItem && isSongCategory(currentItem.category));
+      if (!deviceStillPlaying) {
+        setIsPlaying(false);
+        setIsPaused(false);
+      }
       autoAdvanceGuardRef.current = null;
       setAutoAdvanceDueAtMs(null);
-      addLog("info", "Playlist playback ended without device stop", {
+      addLog("info", "Playlist playback ended", {
         reason,
         currentIndex: currentIndexRef.current,
-        deviceAction: "none",
+        deviceAction: deviceStillPlaying ? "none-song-still-audible" : "none",
       });
     },
     [autoAdvanceGuardRef, playedClockRef, setAutoAdvanceDueAtMs, setIsPaused, setIsPlaying],

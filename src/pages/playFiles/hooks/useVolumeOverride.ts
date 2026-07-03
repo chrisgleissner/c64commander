@@ -754,6 +754,35 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     ],
   );
 
+  // Drops the in-flight volume-override session without writing anything to a
+  // device. A saved-device switch during active playback re-targets the C64
+  // API singleton to the new device (HARD11-002); a subsequent restore/mute
+  // write would otherwise apply the OLD device's captured snapshot to the NEW
+  // device's mixer. Local bookkeeping only — never call this when the current
+  // API target still owns the snapshot being cleared.
+  const discardVolumeSession = useCallback(
+    (reason: string) => {
+      if (
+        !volumeSessionActiveRef.current &&
+        !volumeSessionSnapshotRef.current &&
+        !manualMuteSnapshotRef.current &&
+        !pauseMuteSnapshotRef.current
+      ) {
+        return;
+      }
+      volumeSessionSnapshotRef.current = null;
+      volumeSessionActiveRef.current = false;
+      manualMuteSnapshotRef.current = null;
+      pauseMuteSnapshotRef.current = null;
+      pausingFromPauseRef.current = false;
+      resumingFromPauseRef.current = false;
+      dispatchTrackedVolume({ type: "reset", index: defaultVolumeIndex });
+      volumeUiTargetRef.current = null;
+      addLog("info", "Volume session discarded without device write", { reason });
+    },
+    [defaultVolumeIndex, dispatchTrackedVolume],
+  );
+
   const sendVolumeWrite = useCallback(
     async (nextIndex: number, phase: "preview" | "commit") => {
       if (manualMuteIntentRef.current) {
@@ -1238,6 +1267,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     resolveVolumeIndex,
     resolveEnabledSidVolumeItems,
     restoreVolumeOverrides,
+    discardVolumeSession,
     ensureVolumeSessionSnapshot,
     reserveVolumeUiTarget,
     applyAudioMixerUpdates,

@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { USER_TRANSPORT_COALESCE_MS, usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { executePlayPlan } from "@/lib/playback/playbackRouter";
+import { getC64API } from "@/lib/c64api";
 import { addLog } from "@/lib/logging";
 
 vi.mock("@/lib/archive/client", () => ({
@@ -34,6 +35,7 @@ vi.mock("@/lib/playback/playbackRouter", () => ({
 
 vi.mock("@/lib/hvsc", () => ({
   getHvscDurationByMd5Seconds: vi.fn(async () => null),
+  getHvscDurationsByMd5Seconds: vi.fn(async () => null),
 }));
 
 vi.mock("@/lib/sid/sidUtils", () => ({
@@ -218,12 +220,57 @@ describe("usePlaybackController auto advance", () => {
     expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(3);
     expect(vi.mocked(addLog)).toHaveBeenCalledWith(
       "info",
-      "Playlist playback ended without device stop",
+      "Playlist playback ended",
       expect.objectContaining({
         reason: "auto-end",
         deviceAction: "none",
       }),
     );
+  });
+
+  it("keeps a Stop affordance reachable when a song-category playlist ends (HARD11-003)", async () => {
+    const playlist = [
+      {
+        ...createPlaylistItem("one", 1_000),
+        category: "sid" as const,
+        request: { source: "ultimate" as const, path: "/PROGRAMS/one.prg" },
+      },
+    ];
+    const { result } = renderPlaybackHarness(playlist);
+
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    expect(result.current.isPlaying).toBe(true);
+
+    await act(async () => {
+      await result.current.handleNext("auto", result.current.trackInstanceIdRef.current);
+    });
+
+    // The SID keeps playing past its songlength; the device was never told to
+    // stop, so the transport must still report "playing" (Stop stays reachable)
+    // instead of silently flipping to Play with no way to stop the audio.
+    expect(result.current.isPlaying).toBe(true);
+    expect(result.current.isPaused).toBe(false);
+    expect(result.current.autoAdvanceGuardRef.current).toBeNull();
+    expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+      "info",
+      "Playlist playback ended",
+      expect.objectContaining({
+        reason: "auto-end",
+        deviceAction: "none-song-still-audible",
+      }),
+    );
+
+    const machineReset = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+
+    await act(async () => {
+      await result.current.handleStop();
+    });
+
+    expect(machineReset).toHaveBeenCalledTimes(1);
+    expect(result.current.isPlaying).toBe(false);
   });
 
   it("wraps back to the first playlist item when repeat is enabled", async () => {

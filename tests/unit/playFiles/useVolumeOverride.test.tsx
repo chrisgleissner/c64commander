@@ -1304,6 +1304,53 @@ describe("useVolumeOverride", () => {
     expect(result.current.volumeSessionSnapshotRef.current).toBeNull();
   });
 
+  it("discards an active volume session locally without writing anything to a device (HARD11-002)", async () => {
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    act(() => {
+      result.current.volumeSessionActiveRef.current = true;
+      result.current.volumeSessionSnapshotRef.current = { "SID 1": "0" };
+      result.current.manualMuteSnapshotRef.current = { volumes: { "SID 1": "0" }, enablement: { sid1: true } } as any;
+      result.current.pauseMuteSnapshotRef.current = { volumes: { "SID 1": "0" }, enablement: { sid1: true } } as any;
+      result.current.pausingFromPauseRef.current = true;
+      result.current.resumingFromPauseRef.current = true;
+      result.current.dispatchVolume({ type: "mute", reason: "manual" });
+    });
+    expect(result.current.volumeState.muted).toBe(true);
+
+    act(() => {
+      result.current.discardVolumeSession("saved-device-switch");
+    });
+
+    expect(mutateAsyncMock).not.toHaveBeenCalled();
+    expect(result.current.volumeSessionActiveRef.current).toBe(false);
+    expect(result.current.volumeSessionSnapshotRef.current).toBeNull();
+    expect(result.current.manualMuteSnapshotRef.current).toBeNull();
+    expect(result.current.pauseMuteSnapshotRef.current).toBeNull();
+    expect(result.current.pausingFromPauseRef.current).toBe(false);
+    expect(result.current.resumingFromPauseRef.current).toBe(false);
+    // A background device-sync effect may immediately re-dispatch a "sync"
+    // action once the mute/session bookkeeping clears - that is expected
+    // reconciliation, not part of this fix. The relevant assertion is that
+    // the manual mute state was cleared rather than left stuck "muted".
+    expect(result.current.volumeState.muted).toBe(false);
+  });
+
+  it("does nothing when discarding a volume session with nothing active", () => {
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: false, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    act(() => {
+      result.current.discardVolumeSession("no-op");
+    });
+
+    expect(mutateAsyncMock).not.toHaveBeenCalled();
+    expect(result.current.volumeSessionActiveRef.current).toBe(false);
+  });
+
   it("waits for machine transitions before applying restore updates", async () => {
     buildEnabledSidRestoreUpdatesMock.mockReturnValue({ "SID 1": "5" });
     const transitionGateMock = vi.mocked(waitForMachineTransitionsToSettle);
