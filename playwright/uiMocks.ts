@@ -524,6 +524,9 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
         getHvscDurationByMd5: async () => ({
           durationSeconds: 42,
         }),
+        getHvscDurationsByMd5: async () => ({
+          durationsSeconds: [42],
+        }),
       };
     },
     {
