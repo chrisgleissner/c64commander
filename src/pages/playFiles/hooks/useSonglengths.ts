@@ -471,9 +471,7 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
               options,
             });
             updated.push(
-              resolvedDurationMs === null
-                ? item
-                : { ...item, durationMs: resolvedDurationMs, durationSource: null },
+              resolvedDurationMs === null ? item : { ...item, durationMs: resolvedDurationMs, durationSource: null },
             );
           }
         }

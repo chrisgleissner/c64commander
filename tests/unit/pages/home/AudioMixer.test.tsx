@@ -76,6 +76,19 @@ vi.mock("@/hooks/useC64Connection", () => ({
   useC64Drives: () => ({ data: { drives: [] }, refetch: vi.fn() }),
 }));
 
+vi.mock("@/components/ui/slider", () => ({
+  Slider: (props: any) => (
+    <button
+      type="button"
+      data-testid={props["data-testid"]}
+      disabled={props.disabled}
+      onClick={() => props.onValueCommit?.([3])}
+    >
+      {props.valueFormatter?.(props.value?.[0] ?? 0)}
+    </button>
+  ),
+}));
+
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   isDiagnosticsOverlayActive: () => false,
   subscribeDiagnosticsOverlay: () => () => {},
@@ -220,12 +233,16 @@ describe("AudioMixer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     interactiveWriteSpy.mockReset();
+    resolveConfigValueSpy.mockImplementation(
+      (_payload: unknown, _category: string, _itemName: string, fallback: string | number) => fallback,
+    );
     mockSidControlEntries.mockReturnValue({
       sidControlEntries: [baseSidEntry("socket1", "SID Socket 1")],
       sidSilenceTargets: [],
       sidAddressingCategory: undefined,
       ultiSidCategory: undefined,
       sidSocketsCategory: undefined,
+      audioMixerCategory: undefined,
     });
   });
 
@@ -246,6 +263,39 @@ describe("AudioMixer", () => {
     render(<AudioMixer {...defaultProps} />);
     expect(screen.getByTestId("sid-card-socket1")).toBeDefined();
     expect(screen.getByText("SID Socket 1")).toBeDefined();
+  });
+
+  it("renders and writes the master volume when Vol Master is available", async () => {
+    resolveConfigValueSpy.mockImplementation(
+      (_payload: unknown, _category: string, itemName: string, fallback: string | number) =>
+        itemName === "Vol Master" ? "0 dB" : fallback,
+    );
+    mockSidControlEntries.mockReturnValue({
+      sidControlEntries: [baseSidEntry("socket1", "SID Socket 1")],
+      sidSilenceTargets: [],
+      sidAddressingCategory: undefined,
+      ultiSidCategory: undefined,
+      sidSocketsCategory: undefined,
+      audioMixerCategory: {
+        "Audio Mixer": {
+          items: {
+            "Vol Master": {
+              selected: "0 dB",
+              options: ["OFF", "-42 dB", "0 dB", "+6 dB"],
+            },
+          },
+        },
+      },
+    });
+
+    render(<AudioMixer {...defaultProps} />);
+
+    expect(screen.getByTestId("home-sid-master-volume")).toBeDefined();
+    fireEvent.click(screen.getByTestId("home-sid-volume-master"));
+
+    await vi.waitFor(() => {
+      expect(interactiveWriteSpy).toHaveBeenCalledWith({ "Vol Master": "+6 dB" });
+    });
   });
 
   it("renders multiple SID cards when multiple entries exist", () => {

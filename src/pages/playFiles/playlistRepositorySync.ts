@@ -420,7 +420,10 @@ export const commitPlaylistSnapshot = async ({
       }
     });
 
-  commitChainTails.set(playlistId, promise.catch(() => undefined));
+  commitChainTails.set(
+    playlistId,
+    promise.catch(() => undefined),
+  );
   inflightCommits.set(playlistId, {
     snapshotKey,
     promise,

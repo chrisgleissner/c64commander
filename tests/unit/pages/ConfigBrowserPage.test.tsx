@@ -614,7 +614,9 @@ describe("ConfigBrowserPage", () => {
       isPending: false,
     });
     const refetchError = new Error("device unreachable");
-    const refetch = vi.fn().mockResolvedValue({ isSuccess: false, isError: true, error: refetchError, data: undefined });
+    const refetch = vi
+      .fn()
+      .mockResolvedValue({ isSuccess: false, isError: true, error: refetchError, data: undefined });
     mockUseC64Category.mockImplementation((categoryName: string) => ({
       data: {
         [categoryName]: {

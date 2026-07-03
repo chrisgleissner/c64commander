@@ -260,10 +260,7 @@ describe("playFilesUtils", () => {
     });
 
     it("returns the original playlist when every eligible duration already matches", () => {
-      const playlist = [
-        createPlaylistItem("resolved", 12_000),
-        createPlaylistItem("defaulted", 12_000, "default"),
-      ];
+      const playlist = [createPlaylistItem("resolved", 12_000), createPlaylistItem("defaulted", 12_000, "default")];
 
       expect(applyDurationOverrideToPlaylist(playlist, 12_000)).toBe(playlist);
     });

@@ -450,11 +450,7 @@ describe("useSwipeGesture integration", () => {
     expect(callbacks.onActiveChange).toHaveBeenLastCalledWith(true);
 
     surface.dispatchEvent(
-      createPointerEvent(
-        "pointermove",
-        { bubbles: true, pointerId: 5, clientX: 60, clientY: 0 },
-        10,
-      ),
+      createPointerEvent("pointermove", { bubbles: true, pointerId: 5, clientX: 60, clientY: 0 }, 10),
     );
     // A stationary hold (no further pointermove) must not fire onActiveChange
     // again or flip it to false - only pointerup/pointercancel does that.

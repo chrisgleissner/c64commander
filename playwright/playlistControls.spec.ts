@@ -135,9 +135,7 @@ test.describe("Playlist controls and advanced features", () => {
     // seed changes (Reshuffle is functional) and the visible order is
     // preserved (the curated order is no longer destroyed irreversibly).
     const reshuffleButton = page.getByTestId("playlist-reshuffle");
-    await expect
-      .poll(async () => reshuffleButton.getAttribute("data-shuffle-seed"))
-      .not.toBe("");
+    await expect.poll(async () => reshuffleButton.getAttribute("data-shuffle-seed")).not.toBe("");
     const seedBefore = await reshuffleButton.getAttribute("data-shuffle-seed");
 
     await reshuffleButton.click();

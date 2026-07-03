@@ -421,9 +421,7 @@ describe("C64API request identity", () => {
     const category = "Audio Mixer";
     const itemNames = Array.from({ length: 25 }, (_, index) => `Item ${index}`);
     const updates = Object.fromEntries(itemNames.map((name) => [name, "0 dB"]));
-    const categoryItems = Object.fromEntries(
-      itemNames.map((name) => [name, { selected: "0 dB", options: ["0 dB"] }]),
-    );
+    const categoryItems = Object.fromEntries(itemNames.map((name) => [name, { selected: "0 dB", options: ["0 dB"] }]));
 
     vi.stubGlobal(
       "fetch",

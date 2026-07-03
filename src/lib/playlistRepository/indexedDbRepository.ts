@@ -433,9 +433,7 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
   }
 
   private async deleteStalePlaylistItems(playlistId: string, previousIds: string[], nextIds: Set<string>) {
-    const staleKeys = previousIds
-      .filter((id) => !nextIds.has(id))
-      .map((id) => playlistItemKey(playlistId, id));
+    const staleKeys = previousIds.filter((id) => !nextIds.has(id)).map((id) => playlistItemKey(playlistId, id));
     if (!staleKeys.length) return;
     await deleteValues(staleKeys).catch((error) => {
       addLog("warn", "Failed to delete stale playlist-item records from IndexedDB", {

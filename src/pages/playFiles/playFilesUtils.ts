@@ -153,7 +153,8 @@ export const resolvePlayTargetIndex = (playlistLength: number, currentIndex: num
  */
 export const applyDurationOverrideToPlaylist = (playlist: PlaylistItem[], durationMs: number) => {
   const updated = playlist.map((entry) => {
-    const isDefaultable = entry.durationSource === "default" || entry.durationMs === undefined || entry.durationMs === null;
+    const isDefaultable =
+      entry.durationSource === "default" || entry.durationMs === undefined || entry.durationMs === null;
     if (!isDefaultable) return entry;
     if (entry.durationMs === durationMs && entry.durationSource === "default") return entry;
     return { ...entry, durationMs, durationSource: "default" as const };
@@ -283,7 +284,10 @@ export const resolveNextPlaylistIndex = (
     }
     return nextIndex;
   }
-  const order = seededShuffleIds(playlist.map((item) => item.id), shuffleSeed);
+  const order = seededShuffleIds(
+    playlist.map((item) => item.id),
+    shuffleSeed,
+  );
   let nextPosition = resolveShuffleOrderPosition(playlist, currentIndex, order) + 1;
   if (nextPosition >= order.length) {
     if (!repeatEnabled) return null;
@@ -310,7 +314,10 @@ export const resolvePreviousPlaylistIndex = (
   if (!shuffleEnabled || shuffleSeed === null) {
     return currentIndex > 0 ? currentIndex - 1 : repeatEnabled && playlist.length > 1 ? playlist.length - 1 : 0;
   }
-  const order = seededShuffleIds(playlist.map((item) => item.id), shuffleSeed);
+  const order = seededShuffleIds(
+    playlist.map((item) => item.id),
+    shuffleSeed,
+  );
   const currentPosition = resolveShuffleOrderPosition(playlist, currentIndex, order);
   const prevPosition =
     currentPosition > 0 ? currentPosition - 1 : repeatEnabled && order.length > 1 ? order.length - 1 : 0;

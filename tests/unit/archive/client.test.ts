@@ -396,9 +396,11 @@ describe("archive client", () => {
     const searchPromise = client.search({ name: "joyride", category: "apps" }, { signal: controller.signal });
 
     let settled = false;
-    searchPromise.catch(() => {}).finally(() => {
-      settled = true;
-    });
+    searchPromise
+      .catch(() => {})
+      .finally(() => {
+        settled = true;
+      });
 
     controller.abort();
     // A real macrotask tick (not a fixed number of microtask ticks, which is

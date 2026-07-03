@@ -279,9 +279,9 @@ describe("diskMount", () => {
 
     it("throws when the archive source config is unavailable for an archiveRef disk (HARD10-002)", async () => {
       vi.mocked(loadLocalSources).mockReturnValue([]);
-      await expect(
-        resolveLocalDiskBlob(buildArchiveDisk(), undefined, { archiveConfigs: {} }),
-      ).rejects.toThrow("Archive source configuration unavailable for commoserve-1");
+      await expect(resolveLocalDiskBlob(buildArchiveDisk(), undefined, { archiveConfigs: {} })).rejects.toThrow(
+        "Archive source configuration unavailable for commoserve-1",
+      );
       expect(mockDownloadBinary).not.toHaveBeenCalled();
     });
 

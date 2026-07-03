@@ -1252,9 +1252,7 @@ describe("hvscIngestionRuntime", () => {
     expect(deleteLibraryFile).toHaveBeenCalledTimes(1);
     expect(promoteLibraryStagingDir).not.toHaveBeenCalled();
     const statePatches = vi.mocked(updateHvscState).mock.calls.map(([patch]) => patch as Record<string, unknown>);
-    expect(
-      statePatches.some((patch) => patch.ingestionState === "ready"),
-    ).toBe(false);
+    expect(statePatches.some((patch) => patch.ingestionState === "ready")).toBe(false);
     expect(statePatches).toContainEqual(
       expect.objectContaining({ ingestionState: "idle", ingestionError: "Cancelled" }),
     );
@@ -1646,9 +1644,7 @@ describe("ingestion shared helpers (P0-E)", () => {
       }),
     ).toThrow();
 
-    expect(vi.mocked(updateHvscState)).not.toHaveBeenCalledWith(
-      expect.objectContaining({ ingestionState: "ready" }),
-    );
+    expect(vi.mocked(updateHvscState)).not.toHaveBeenCalledWith(expect.objectContaining({ ingestionState: "ready" }));
     expect(vi.mocked(updateHvscState)).toHaveBeenCalledWith(
       expect.objectContaining({ ingestionState: "idle", ingestionError: "Cancelled" }),
     );

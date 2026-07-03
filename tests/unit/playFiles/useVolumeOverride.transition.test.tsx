@@ -84,6 +84,7 @@ vi.mock("@/lib/config/audioMixerSolo", () => ({
 }));
 
 vi.mock("@/lib/config/configItems", () => ({
+  AUDIO_MIXER_MASTER_VOLUME_ITEM: "Vol Master",
   AUDIO_MIXER_VOLUME_ITEMS: ["SID 1"],
   SID_ADDRESSING_ITEMS: ["SID_ADDR"],
   SID_SOCKETS_ITEMS: ["SID_SOCKET"],

@@ -218,9 +218,7 @@ export abstract class BaseArchiveClient implements ArchiveClient {
       nativeRequestPromise.catch((error) => {
         addLog("debug", "Archive native request dropped after abort race", buildErrorLogDetails(error));
       });
-      const response = signal
-        ? await this.raceAgainstAbort(nativeRequestPromise, signal)
-        : await nativeRequestPromise;
+      const response = signal ? await this.raceAgainstAbort(nativeRequestPromise, signal) : await nativeRequestPromise;
       const headers = new Headers(
         Object.entries((response.headers ?? {}) as Record<string, string>).map(([key, value]) => [key, String(value)]),
       );

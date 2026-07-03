@@ -1400,7 +1400,13 @@ export function usePlaybackController({
         if (!activePlaylist.length) return;
         cancelAutoAdvance();
         const activeIndex = currentIndexRef.current;
-        const nextIndex = resolveNextPlaylistIndex(activePlaylist, activeIndex, repeatEnabled, shuffleEnabled, shuffleSeed);
+        const nextIndex = resolveNextPlaylistIndex(
+          activePlaylist,
+          activeIndex,
+          repeatEnabled,
+          shuffleEnabled,
+          shuffleSeed,
+        );
         const now = Date.now();
         playedClockRef.current.pause(now);
         setPlayedMs(playedClockRef.current.current(now));
@@ -1422,7 +1428,13 @@ export function usePlaybackController({
         guard.autoFired = true;
 
         const activeIndex = currentIndexRef.current;
-        const nextIndex = resolveNextPlaylistIndex(activePlaylist, activeIndex, repeatEnabled, shuffleEnabled, shuffleSeed);
+        const nextIndex = resolveNextPlaylistIndex(
+          activePlaylist,
+          activeIndex,
+          repeatEnabled,
+          shuffleEnabled,
+          shuffleSeed,
+        );
         const now = Date.now();
         playedClockRef.current.pause(now);
         setPlayedMs(playedClockRef.current.current(now));
@@ -1487,7 +1499,13 @@ export function usePlaybackController({
     const activePlaylist = playlistRef.current;
     if (!activePlaylist.length) return;
     const activeIndex = currentIndexRef.current;
-    const prevIndex = resolvePreviousPlaylistIndex(activePlaylist, activeIndex, repeatEnabled, shuffleEnabled, shuffleSeed);
+    const prevIndex = resolvePreviousPlaylistIndex(
+      activePlaylist,
+      activeIndex,
+      repeatEnabled,
+      shuffleEnabled,
+      shuffleSeed,
+    );
     cancelAutoAdvance();
     const now = Date.now();
     playedClockRef.current.pause(now);

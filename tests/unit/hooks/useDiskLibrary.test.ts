@@ -246,7 +246,8 @@ describe("useDiskLibrary", () => {
     const staleWrites = vi
       .mocked(saveDiskLibrary)
       .mock.calls.filter(
-        ([id, state]) => id === "device-b" && (state as { disks: DiskEntry[] }).disks.some((d) => d.id === staleDisk.id),
+        ([id, state]) =>
+          id === "device-b" && (state as { disks: DiskEntry[] }).disks.some((d) => d.id === staleDisk.id),
       );
     expect(staleWrites).toHaveLength(0);
 

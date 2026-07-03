@@ -208,9 +208,7 @@ const isValidConnectionPort = (value: string) => {
   return Number.isInteger(parsed) && parsed >= 1 && parsed <= 65535;
 };
 
-const isOfflineSwitchResult = (
-  value: unknown,
-): value is { ok: false; error?: string | null; authRequired?: boolean } =>
+const isOfflineSwitchResult = (value: unknown): value is { ok: false; error?: string | null; authRequired?: boolean } =>
   typeof value === "object" && value !== null && "ok" in value && (value as { ok?: unknown }).ok === false;
 
 // The device answered but rejected the password (HTTP 401/403) — this is not the same

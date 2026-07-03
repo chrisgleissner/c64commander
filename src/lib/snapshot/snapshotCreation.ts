@@ -209,7 +209,9 @@ export const createSnapshot = async (
 
   return {
     displayTimestamp,
-    evictedSnapshotLabel: evictedSnapshot ? (evictedSnapshot.metadata.label ?? evictedSnapshot.metadata.created_at) : null,
+    evictedSnapshotLabel: evictedSnapshot
+      ? (evictedSnapshot.metadata.label ?? evictedSnapshot.metadata.created_at)
+      : null,
   };
 };
 
@@ -279,6 +281,8 @@ export const createCpuSnapshot = async (
     cpu: data.cpu,
     captureMethod: data.captureMethod,
     resumeError: data.resumeError,
-    evictedSnapshotLabel: evictedSnapshot ? (evictedSnapshot.metadata.label ?? evictedSnapshot.metadata.created_at) : null,
+    evictedSnapshotLabel: evictedSnapshot
+      ? (evictedSnapshot.metadata.label ?? evictedSnapshot.metadata.created_at)
+      : null,
   };
 };

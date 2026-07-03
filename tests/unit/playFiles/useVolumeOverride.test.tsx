@@ -95,7 +95,8 @@ vi.mock("@/lib/config/audioMixerSolo", () => ({
 }));
 
 vi.mock("@/lib/config/configItems", () => ({
-  AUDIO_MIXER_VOLUME_ITEMS: ["SID 1"],
+  AUDIO_MIXER_MASTER_VOLUME_ITEM: "Vol Master",
+  AUDIO_MIXER_VOLUME_ITEMS: ["Vol Master", "SID 1"],
   SID_ADDRESSING_ITEMS: ["SID_ADDR"],
   SID_SOCKETS_ITEMS: ["SID_SOCKET"],
 }));
@@ -120,6 +121,7 @@ const buildEnabledSidVolumeUpdatesMock = vi.fn((_items: MixerItem[], _enablement
   "SID 1": target,
 }));
 const buildEnabledSidVolumeSnapshotMock = vi.fn(() => ({ "SID 1": "5" }));
+const buildEnabledSidMuteUpdatesMock = vi.fn(() => ({ "SID 1": "-42 dB" }));
 const buildSidEnablementMock = vi.fn(() => ({ sid1: true }));
 const filterEnabledSidVolumeItemsMock = vi.fn((items: MixerItem[]) => items);
 const buildSidVolumeStepsMock = vi.fn(() => [
@@ -135,7 +137,7 @@ vi.mock("@/lib/config/sidVolumeControl", () => ({
   buildSidEnablement: (...args: unknown[]) => buildSidEnablementMock(...args),
   buildSidVolumeSteps: (...args: unknown[]) => buildSidVolumeStepsMock(...args),
   filterEnabledSidVolumeItems: (...args: unknown[]) => filterEnabledSidVolumeItemsMock(...args),
-  buildEnabledSidMuteUpdates: vi.fn(() => ({ "SID 1": "-42 dB" })),
+  buildEnabledSidMuteUpdates: (...args: unknown[]) => buildEnabledSidMuteUpdatesMock(...args),
   buildEnabledSidVolumeUpdates: (...args: unknown[]) => buildEnabledSidVolumeUpdatesMock(...args),
   isSidVolumeOffValue: vi.fn((value: string | number | undefined) => value === "OFF"),
   resolveSidMutedVolumeOption: vi.fn(() => "-42 dB"),
@@ -192,6 +194,8 @@ describe("useVolumeOverride", () => {
         "SID 1": target,
       }),
     );
+    buildEnabledSidMuteUpdatesMock.mockReset();
+    buildEnabledSidMuteUpdatesMock.mockReturnValue({ "SID 1": "-42 dB" });
     buildSidEnablementMock.mockReset();
     buildSidEnablementMock.mockReturnValue({ sid1: true });
     filterEnabledSidVolumeItemsMock.mockReset();
@@ -342,6 +346,62 @@ describe("useVolumeOverride", () => {
       expect.objectContaining({
         category: "Audio Mixer",
         updates: { "SID 1": "5" },
+      }),
+    );
+  });
+
+  it("uses Vol Master for playback volume writes when the firmware exposes it", async () => {
+    audioMixerItemsRef.current = [
+      {
+        name: "Vol Master",
+        value: "0",
+        options: ["OFF", "-42 dB", "0", "5"],
+      },
+      {
+        name: "SID 1",
+        value: "0",
+        options: ["OFF", "-42 dB", "0", "5"],
+      },
+    ];
+    const mapTargetUpdates = (items: MixerItem[], _enablement: unknown, target: string) =>
+      Object.fromEntries(items.map((item) => [item.name, target]));
+    buildEnabledSidVolumeUpdatesMock.mockImplementation(mapTargetUpdates);
+    buildEnabledSidMutedToTargetUpdatesMock.mockImplementation(mapTargetUpdates);
+    buildEnabledSidMuteUpdatesMock.mockImplementation((items: MixerItem[]) =>
+      Object.fromEntries(items.map((item) => [item.name, "-42 dB"])),
+    );
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.enabledSidVolumeItems.map((item) => item.name)).toEqual(["Vol Master"]);
+      expect(result.current.volumeState.index).toBe(0);
+      expect(result.current.volumeState.muted).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.handleVolumeCommit(1);
+    });
+
+    expect(mutateAsyncMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: "Audio Mixer",
+        updates: { "Vol Master": "5" },
+      }),
+    );
+
+    mutateAsyncMock.mockClear();
+
+    await act(async () => {
+      await result.current.handleToggleMute();
+    });
+
+    expect(mutateAsyncMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: "Audio Mixer",
+        updates: { "Vol Master": "-42 dB" },
       }),
     );
   });

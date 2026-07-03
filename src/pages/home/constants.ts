@@ -104,6 +104,7 @@ export const LIGHTING_HOME_ITEMS = LIGHTING_SUMMARY_ITEMS;
 export const LED_STRIP_HOME_ITEMS = LIGHTING_HOME_ITEMS;
 export const KEYBOARD_LIGHTING_HOME_ITEMS = LIGHTING_HOME_ITEMS;
 export const SID_AUDIO_ITEMS = [
+  "Vol Master",
   "Vol Socket 1",
   "Vol Socket 2",
   "Vol UltiSid 1",

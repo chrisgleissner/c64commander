@@ -103,7 +103,7 @@ persistent status badge that appear on every page).
 
 | Page     | Route       |    CTAs | Notes                                                                                                                                    |
 | -------- | ----------- | ------: | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Home     | `/`         |     112 | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots.                                    |
+| Home     | `/`         |     113 | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots.                                    |
 | Settings | `/settings` | 77 (+2) | Connection, devices, display (+2 native Android full-screen toggles), feature flags, network/cache, notifications, dev-mode, build info. |
 | Play     | `/play`     |      32 | Transport, volume, playback flags, playlist, type filters, HVSC.                                                                         |
 | Config   | `/config`   |      30 | Search + 22 config-category accordions (each expands to config-item rows).                                                               |
@@ -192,6 +192,7 @@ not-connected / empty / single-device).
   - Bus — select — `home-printer-bus` — R✅ I✅
 - **SID / Audio mixer** (`data-section-label="SID"`) — per socket/UltiSID:
   - Reset — button — `home-sid-reset` — R✅ I✅
+  - Master volume — slider — `home-sid-volume-master` — R✅ I✅ when the live `Vol Master` item exists.
   - Enable toggle — button — `home-sid-toggle-*` — R✅ I✅
   - Type / Address / Shaping ×N — select — `home-sid-type-*`, `home-sid-address-*`, `home-sid-shaping-*` — R✅ I✅
   - Volume, Pan — slider ×2 — R✅ I✅

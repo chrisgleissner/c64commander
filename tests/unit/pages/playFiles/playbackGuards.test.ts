@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  planPlaylistItemRemoval,
-  resolveAutoAdvanceDueAtMsOnDurationChange,
-} from "@/pages/playFiles/playbackGuards";
+import { planPlaylistItemRemoval, resolveAutoAdvanceDueAtMsOnDurationChange } from "@/pages/playFiles/playbackGuards";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
 describe("playbackGuards resolveAutoAdvanceDueAtMsOnDurationChange", () => {

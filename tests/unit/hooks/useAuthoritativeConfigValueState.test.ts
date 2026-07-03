@@ -13,7 +13,10 @@ vi.mock("@/hooks/useDeviceBoundSlider", () => ({
   resolveDeviceBoundSliderWatchdogMs: () => 1000,
 }));
 
-import { isAuthoritativeConfigValueEqual, useAuthoritativeConfigValueState } from "@/hooks/useAuthoritativeConfigValueState";
+import {
+  isAuthoritativeConfigValueEqual,
+  useAuthoritativeConfigValueState,
+} from "@/hooks/useAuthoritativeConfigValueState";
 
 describe("isAuthoritativeConfigValueEqual", () => {
   it("returns true for identical strings", () => {

@@ -527,11 +527,7 @@ describe("SwipeNavigationLayer", () => {
       // The pointer is still reported active, so the runway must still be
       // dragging - not synthesized back to idle out from under the user.
       expect(runway).toHaveAttribute("data-runway-phase", "dragging");
-      expect(mocks.addLog).not.toHaveBeenCalledWith(
-        "debug",
-        "[SwipeNav] drag-reset-synthesized",
-        expect.anything(),
-      );
+      expect(mocks.addLog).not.toHaveBeenCalledWith("debug", "[SwipeNav] drag-reset-synthesized", expect.anything());
 
       // Once the pointer genuinely lifts, the next check settles normally.
       act(() => {
