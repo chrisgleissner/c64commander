@@ -9,6 +9,7 @@ import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 const mutateAsyncMock = vi.fn();
 const getConfigItemsMock = vi.fn();
 const refetchAudioMixerCategoryMock = vi.fn().mockResolvedValue(undefined);
+const refetchMasterAudioMixerCategoryMock = vi.fn().mockResolvedValue(undefined);
 const refetchSidSocketsCategoryMock = vi.fn().mockResolvedValue(undefined);
 const refetchSidAddressingCategoryMock = vi.fn().mockResolvedValue(undefined);
 
@@ -38,6 +39,27 @@ const audioMixerItemsRef = {
   current: [] as MixerItem[],
 };
 
+const audioMixerSelectionCache = {
+  source: null as MixerItem[] | null,
+  values: new Map<string, MixerItem[]>(),
+};
+
+const selectAudioMixerItems = (items: string[]) => {
+  const key = items.join("|");
+  if (audioMixerSelectionCache.source !== audioMixerItemsRef.current) {
+    audioMixerSelectionCache.source = audioMixerItemsRef.current;
+    audioMixerSelectionCache.values.clear();
+  }
+  const cachedValue = audioMixerSelectionCache.values.get(key);
+  if (cachedValue) {
+    return cachedValue;
+  }
+  const requestedItems = new Set(items);
+  const value = audioMixerItemsRef.current.filter((item) => requestedItems.has(item.name));
+  audioMixerSelectionCache.values.set(key, value);
+  return value;
+};
+
 const defaultMixerItems = (value: string): MixerItem[] => [
   {
     name: "SID 1",
@@ -58,20 +80,26 @@ vi.mock("@/hooks/useC64Connection", () => ({
     mutateAsync: mutateAsyncMock,
     isPending: false,
   }),
-  useC64ConfigItems: (category: string) => ({
-    data:
-      category === "Audio Mixer"
-        ? audioMixerItemsRef.current
-        : category === "SID Sockets Configuration"
-          ? sidSocketsCategoryRef.current
-          : sidAddressingCategoryRef.current,
-    refetch:
-      category === "Audio Mixer"
-        ? refetchAudioMixerCategoryMock
-        : category === "SID Sockets Configuration"
-          ? refetchSidSocketsCategoryMock
-          : refetchSidAddressingCategoryMock,
-  }),
+  useC64ConfigItems: (category: string, items: string[]) => {
+    const isMasterAudioMixerQuery = category === "Audio Mixer" && items.includes("Vol Master");
+    return {
+      data:
+        category === "Audio Mixer"
+          ? selectAudioMixerItems(items)
+          : category === "SID Sockets Configuration"
+            ? sidSocketsCategoryRef.current
+            : sidAddressingCategoryRef.current,
+      refetch:
+        category === "Audio Mixer"
+          ? isMasterAudioMixerQuery
+            ? refetchMasterAudioMixerCategoryMock
+            : refetchAudioMixerCategoryMock
+          : category === "SID Sockets Configuration"
+            ? refetchSidSocketsCategoryMock
+            : refetchSidAddressingCategoryMock,
+      isFetched: true,
+    };
+  },
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -96,7 +124,7 @@ vi.mock("@/lib/config/audioMixerSolo", () => ({
 
 vi.mock("@/lib/config/configItems", () => ({
   AUDIO_MIXER_MASTER_VOLUME_ITEM: "Vol Master",
-  AUDIO_MIXER_VOLUME_ITEMS: ["Vol Master", "SID 1"],
+  AUDIO_MIXER_VOLUME_ITEMS: ["SID 1", "SID 2"],
   SID_ADDRESSING_ITEMS: ["SID_ADDR"],
   SID_SOCKETS_ITEMS: ["SID_SOCKET"],
 }));
@@ -171,6 +199,7 @@ describe("useVolumeOverride", () => {
     sidAddressingCategoryRef.current = {};
     mutateAsyncMock.mockResolvedValue(undefined);
     refetchAudioMixerCategoryMock.mockClear();
+    refetchMasterAudioMixerCategoryMock.mockClear();
     refetchSidSocketsCategoryMock.mockClear();
     refetchSidAddressingCategoryMock.mockClear();
     getConfigItemsMock.mockImplementation((category: string) => {
@@ -402,6 +431,38 @@ describe("useVolumeOverride", () => {
       expect.objectContaining({
         category: "Audio Mixer",
         updates: { "Vol Master": "-42 dB" },
+      }),
+    );
+  });
+
+  it("ignores an empty Vol Master placeholder and keeps SID fallback controls enabled", async () => {
+    audioMixerItemsRef.current = [
+      {
+        name: "Vol Master",
+        value: "",
+        options: [],
+      },
+      ...defaultMixerItems("0"),
+    ];
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.enabledSidVolumeItems.map((item) => item.name)).toEqual(["SID 1"]);
+      expect(result.current.volumeSteps).toHaveLength(2);
+      expect(result.current.volumeState.muted).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.handleVolumeCommit(1);
+    });
+
+    expect(mutateAsyncMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: "Audio Mixer",
+        updates: { "SID 1": "5" },
       }),
     );
   });

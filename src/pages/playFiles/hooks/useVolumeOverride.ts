@@ -36,7 +36,7 @@ import {
   type SidEnablement,
 } from "@/lib/config/sidVolumeControl";
 import { reduceVolumeState, type VolumeAction } from "../volumeState";
-import { extractAudioMixerItems, parseVolumeOption } from "../playFilesUtils";
+import { extractAudioMixerItems, parseVolumeOption, type AudioMixerItem } from "../playFilesUtils";
 import { resolvePlaybackSyncDecision, type PlaybackSyncIntent, type PlaybackSyncState } from "../playbackMixerSync";
 import { resolveMutedSyncIndex, resolveMostCommonIndex, shouldHoldManualMuteSync } from "../volumeSync";
 
@@ -68,6 +68,9 @@ type EnsureUnmutedOptions = {
 const PLAYBACK_RECONCILE_MIN_DELAY_MS = 50;
 const PLAYBACK_RECONCILE_MAX_DELAY_MS = 250;
 const PENDING_VOLUME_WRITE_STALE_MS = 5000;
+
+const isExposedMasterVolumeItem = (item: AudioMixerItem) =>
+  item.name === AUDIO_MIXER_MASTER_VOLUME_ITEM && Array.isArray(item.options) && item.options.length > 0;
 
 const isAbortLikeError = (error: unknown) => {
   const name = (error as { name?: string } | undefined)?.name;
@@ -131,6 +134,11 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     AUDIO_MIXER_VOLUME_ITEMS,
     status.isConnected || status.isConnecting,
   );
+  const {
+    data: masterAudioMixerCategory,
+    refetch: refetchMasterAudioMixerCategory,
+    isFetched: masterAudioMixerFetched,
+  } = useC64ConfigItems("Audio Mixer", [AUDIO_MIXER_MASTER_VOLUME_ITEM], status.isConnected || status.isConnecting);
   const { data: sidSocketsCategory, refetch: refetchSidSocketsCategory } = useC64ConfigItems(
     "SID Sockets Configuration",
     SID_SOCKETS_ITEMS,
@@ -146,9 +154,13 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     () => extractAudioMixerItems(audioMixerCategory as Record<string, unknown> | undefined),
     [audioMixerCategory],
   );
+  const masterAudioMixerItems = useMemo(
+    () => extractAudioMixerItems(masterAudioMixerCategory as Record<string, unknown> | undefined),
+    [masterAudioMixerCategory],
+  );
   const masterVolumeItem = useMemo(
-    () => audioMixerItems.find((item) => item.name === AUDIO_MIXER_MASTER_VOLUME_ITEM),
-    [audioMixerItems],
+    () => masterAudioMixerItems.find(isExposedMasterVolumeItem),
+    [masterAudioMixerItems],
   );
   const sidVolumeItems = useMemo(() => audioMixerItems.filter((item) => isSidVolumeName(item.name)), [audioMixerItems]);
   const sidEnablement = useMemo(
@@ -421,9 +433,19 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     );
     playbackReconcileTimerRef.current = window.setTimeout(() => {
       playbackReconcileTimerRef.current = null;
-      void Promise.all([refetchAudioMixerCategory(), refetchSidSocketsCategory(), refetchSidAddressingCategory()]);
+      void Promise.all([
+        refetchAudioMixerCategory(),
+        refetchMasterAudioMixerCategory(),
+        refetchSidSocketsCategory(),
+        refetchSidAddressingCategory(),
+      ]);
     }, delayMs);
-  }, [refetchAudioMixerCategory, refetchSidAddressingCategory, refetchSidSocketsCategory]);
+  }, [
+    refetchAudioMixerCategory,
+    refetchMasterAudioMixerCategory,
+    refetchSidAddressingCategory,
+    refetchSidSocketsCategory,
+  ]);
 
   const applyAudioMixerUpdates = useCallback(
     async (updates: Record<string, string | number>, context: string) => {
@@ -568,6 +590,25 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     [sidVolumeItems],
   );
 
+  const resolveMasterVolumeItem = useCallback(
+    async (forceRefresh = false) => {
+      if (masterVolumeItem && !forceRefresh) return masterVolumeItem;
+      const readOptions = forceRefresh
+        ? { __c64uIntent: "background" as const, __c64uBypassCache: true }
+        : { __c64uIntent: "background" as const };
+      try {
+        const data = await getC64API().getConfigItems("Audio Mixer", [AUDIO_MIXER_MASTER_VOLUME_ITEM], readOptions);
+        return extractAudioMixerItems(data as Record<string, unknown>).find(isExposedMasterVolumeItem) ?? null;
+      } catch (error) {
+        addErrorLog("Master volume lookup failed", {
+          error: (error as Error).message,
+        });
+        return null;
+      }
+    },
+    [masterVolumeItem],
+  );
+
   const resolveSidEnablement = useCallback(
     async (forceRefresh = false) => {
       if (!forceRefresh && sidSocketsCategory && sidAddressingCategory) {
@@ -599,27 +640,23 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   const resolvePlaybackVolumeItems = useCallback(
     async (forceRefresh = false) => {
       if (masterVolumeItem && !forceRefresh) return [masterVolumeItem];
-      if (playbackVolumeItems.length && !forceRefresh) return playbackVolumeItems;
-      const readOptions = forceRefresh
-        ? { __c64uIntent: "background" as const, __c64uBypassCache: true }
-        : { __c64uIntent: "background" as const };
-      try {
-        const data = await getC64API().getConfigItems("Audio Mixer", AUDIO_MIXER_VOLUME_ITEMS, readOptions);
-        const items = extractAudioMixerItems(data as Record<string, unknown>);
-        const master = items.find((item) => item.name === AUDIO_MIXER_MASTER_VOLUME_ITEM);
-        if (master) return [master];
-        const sidItems = items.filter((item) => isSidVolumeName(item.name));
-        const enablement = forceRefresh ? await resolveSidEnablement(true) : sidEnablement;
-        const filteredItems = filterEnabledSidVolumeItems(sidItems, enablement);
-        return filteredItems.length || sidItems.length === 0 ? filteredItems : sidItems;
-      } catch (error) {
-        addErrorLog("Playback volume lookup failed", {
-          error: (error as Error).message,
-        });
-        return [];
-      }
+      if (playbackVolumeItems.length && !forceRefresh && masterAudioMixerFetched) return playbackVolumeItems;
+      const master = await resolveMasterVolumeItem(forceRefresh);
+      if (master) return [master];
+      const sidItems = await resolveSidVolumeItems(forceRefresh);
+      const enablement = forceRefresh ? await resolveSidEnablement(true) : sidEnablement;
+      const filteredItems = filterEnabledSidVolumeItems(sidItems, enablement);
+      return filteredItems.length || sidItems.length === 0 ? filteredItems : sidItems;
     },
-    [masterVolumeItem, playbackVolumeItems, resolveSidEnablement, sidEnablement],
+    [
+      masterAudioMixerFetched,
+      masterVolumeItem,
+      playbackVolumeItems,
+      resolveMasterVolumeItem,
+      resolveSidEnablement,
+      resolveSidVolumeItems,
+      sidEnablement,
+    ],
   );
 
   const resolveEnabledSidVolumeItems = useCallback(
