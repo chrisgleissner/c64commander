@@ -63,14 +63,17 @@ is normally only one lockfile-touching PR in flight. If drift still appears,
 reconcile with `npm install` in both `/` and `/c64scope` and commit the result.
 
 **D — Toolchain-coupled deps (the gold-standard pattern).** A dep bumped past
-what a pinned toolchain supports. Two live examples:
+what a pinned toolchain supports. One live example, one resolved:
 
-- `kotlinx-coroutines-test` 1.9+ needs the Kotlin 2.2 stdlib; Android still
-  compiles with Kotlin 1.9.x.
 - The **Gradle wrapper** must move in lockstep with the Android Gradle Plugin.
   Gradle 9.6 broke AGP 8.13.2 (`Failed to apply plugin
 'com.android.internal.application' > Failed to create service
-'...AndroidProblemReporterProvider'`).
+'...AndroidProblemReporterProvider'`) — still an ignored pair today, now pinned
+  at AGP 9.2.1 / Gradle 9.6.1.
+- `kotlinx-coroutines-test` 1.9+ needed the Kotlin 2.2 stdlib while Android
+  still compiled with Kotlin 1.9.x. Resolved by the Capacitor 6→8 upgrade,
+  which bumped the Android Kotlin toolchain to 2.2.20 — the dep is no longer
+  pinned or ignored in Dependabot.
 
 _Fix (replicate this for any toolchain-coupled dep):_
 
