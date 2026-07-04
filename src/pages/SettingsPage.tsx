@@ -2675,6 +2675,7 @@ export default function SettingsPage() {
                   value={[notificationDurationMs]}
                   onValueChange={([value]) => setNotificationDurationMs(value)}
                   onValueCommit={([value]) => saveNotificationDurationMs(value)}
+                  data-testid="settings-notification-duration-slider"
                 />
                 <p className="text-xs text-muted-foreground">Default 4s. Range 2–8s.</p>
               </div>

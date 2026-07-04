@@ -2237,7 +2237,10 @@ describe("SettingsPage notification duration slider", () => {
   it("does not persist on every drag tick, only when the drag is released", () => {
     renderSettingsPage();
 
-    const slider = screen.getByRole("slider");
+    // The page now has more than one slider (e.g. the autofire rate), so scope
+    // to the notification-duration slider via its own labelled row.
+    const durationRow = screen.getByText(/^Duration: /).closest("div") as HTMLElement;
+    const slider = within(durationRow).getByRole("slider");
 
     fireEvent.change(slider, { target: { value: "4500" } });
     fireEvent.change(slider, { target: { value: "5000" } });
@@ -2252,6 +2255,21 @@ describe("SettingsPage notification duration slider", () => {
 
     expect(saveNotificationDurationMs).toHaveBeenCalledTimes(1);
     expect(saveNotificationDurationMs).toHaveBeenCalledWith(5500);
+  });
+});
+
+describe("SettingsPage autofire rate slider (Issue 3b)", () => {
+  it("exposes the autofire rate slider and reflects a drag in its label and localStorage", () => {
+    renderSettingsPage();
+
+    const autofireRow = screen.getByText(/^Autofire rate: /).closest("div") as HTMLElement;
+    const slider = within(autofireRow).getByRole("slider");
+    fireEvent.change(slider, { target: { value: "8" } });
+
+    expect(screen.getByText(/Autofire rate: 8\/s/)).toBeInTheDocument();
+
+    fireEvent.mouseUp(slider);
+    expect(localStorage.getItem("c64u_remote_input_autofire_rate_hz")).toBe("8");
   });
 });
 
