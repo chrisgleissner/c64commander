@@ -765,11 +765,12 @@ button:focus-visible,
     padding-bottom: var(--app-tab-bar-safe-area-bottom);
     pointer-events: none;
     /* Paint the frame (including the safe-area padding region below the nav) with
-       the nav's own surface colour so that under Android edge-to-edge — where the
-       navigation bar is transparent and the app draws behind it — the bottom
-       inset blends into the nav instead of exposing a band of the darker page
-       background beneath it (Issue 5). Must match the .tab-bar `bg-card` below. */
-    background-color: hsl(var(--card));
+       the same chrome surface the nav uses (`--background`, matching the header
+       rail — see AppBar) so that under Android edge-to-edge — where the navigation
+       bar is transparent and the app draws behind it — the bottom inset blends
+       into the nav instead of exposing the brand-blue page background beneath it
+       (Issue 5). Must match the .tab-bar `bg-background` class. */
+    background-color: hsl(var(--background));
   }
 
   .tab-bar {

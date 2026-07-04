@@ -104,7 +104,7 @@ export function TabBar() {
       data-interstitial-active={interstitialActive ? "true" : "false"}
     >
       <nav
-        className="tab-bar app-chrome-rail app-chrome-rail-bottom"
+        className="tab-bar app-chrome-rail app-chrome-rail-bottom bg-background"
         data-app-chrome-family="primary"
         data-focus-scope="tabbar"
       >
