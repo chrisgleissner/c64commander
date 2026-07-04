@@ -71,18 +71,21 @@ function TabBarButton({
         { title: tab.label },
         "Tab",
       )}
-      className={`tab-item touch-none ${isActive ? "active" : ""}`}
+      className={cn("tab-item touch-none relative isolate", isActive && "active")}
     >
-      <div className="relative">
-        <Icon className="h-[1.375rem] w-[1.375rem]" />
-        {isActive && (
-          <motion.div
-            layoutId="tab-indicator"
-            className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary"
-            transition={{ type: "spring", stiffness: 500, damping: 30 }}
-          />
-        )}
-      </div>
+      {/* A calm rounded highlight sitting behind the active tab's icon + label
+          (the active icon/label are already tinted `text-primary` by
+          `.tab-item.active`). Shares one `layoutId` across tabs so it glides to
+          the selected tab on navigation instead of the previous dust-speck dot. */}
+      {isActive && (
+        <motion.span
+          layoutId="tab-indicator"
+          aria-hidden="true"
+          className="absolute inset-x-1 inset-y-0.5 -z-10 rounded-xl bg-primary/15"
+          transition={{ type: "spring", stiffness: 400, damping: 32 }}
+        />
+      )}
+      <Icon className="h-[1.375rem] w-[1.375rem]" />
       <span className="text-[9px] font-medium leading-none">{tab.label}</span>
     </button>
   );

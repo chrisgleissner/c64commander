@@ -113,6 +113,18 @@ Operational dashboard: machine controls, quick actions, light effects, drives, p
   </tr>
 </table>
 
+### Remote Control (Couch Remote)
+
+An optional on-screen joystick and keyboard relay that turns the phone into a "couch remote" for the C64. On Ultimate firmware that exposes `machine:input` (U64 family, 3.15-alpha and newer) it relays real joystick directions/fire and the full C64 keyboard over REST; on older or C64U firmware it degrades gracefully to a kernal keyboard-buffer fallback (typing only, with unsupported keys clearly disabled). The controls are size-adjustable (**S**–**XXL**) with haptic feedback for big fingers on small screens, the port swap and autofire are separated from the action controls to avoid accidental presses, and an immersive **Game mode** hides everything but the joystick controls — edge-anchored stick and fire — for no-look thumb play. Enable it under **Settings → Experimental Features → Remote Input** (developer mode).
+
+<table>
+  <tr>
+    <td><img src="docs/img/app/home/remote-input/01-joystick.png" alt="Remote Control joystick with large adjustable stick and fire" width="360"/></td>
+    <td><img src="docs/img/app/home/remote-input/02-game-mode.png" alt="Remote Control immersive Game mode with edge-anchored stick and fire" width="360"/></td>
+    <td><img src="docs/img/app/home/remote-input/03-keyboard.png" alt="Remote Control full on-screen C64 keyboard" width="360"/></td>
+  </tr>
+</table>
+
 ### Play
 
 Build playlists for programs and songs sourced from the local device, C64U storage, HVSC, or CommoServe. Supports autoplay, shuffle, repeat, subsong selection, and automatic song length discovery.

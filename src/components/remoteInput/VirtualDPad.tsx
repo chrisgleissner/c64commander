@@ -17,8 +17,7 @@ import {
   ArrowUpLeft,
   ArrowUpRight,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { DirectionPad, type DirectionPadCell } from "@/components/remoteInput/DirectionPad";
 import type { HeldJoystickInputs } from "@/lib/remoteInput/joystickHeldSet";
 import type { JoystickInputName } from "@/lib/c64api";
 
@@ -26,6 +25,8 @@ export type VirtualDPadProps = {
   heldInputs: HeldJoystickInputs;
   onHeldInputsChange: (next: HeldJoystickInputs) => void;
   disabled?: boolean;
+  /** Overall square size of the 3x3 pad, in px (defaults to the compact 128px). */
+  sizePx?: number;
 };
 
 const DPAD_CELLS: ReadonlyArray<{
@@ -33,16 +34,29 @@ const DPAD_CELLS: ReadonlyArray<{
   inputs: JoystickInputName[];
   icon: typeof ArrowUp;
   gridArea: string;
+  ariaLabel: string;
 } | null> = [
-  { key: "up-left", inputs: ["up", "left"], icon: ArrowUpLeft, gridArea: "ul" },
-  { key: "up", inputs: ["up"], icon: ArrowUp, gridArea: "u" },
-  { key: "up-right", inputs: ["up", "right"], icon: ArrowUpRight, gridArea: "ur" },
-  { key: "left", inputs: ["left"], icon: ArrowLeft, gridArea: "l" },
+  { key: "up-left", inputs: ["up", "left"], icon: ArrowUpLeft, gridArea: "ul", ariaLabel: "Joystick up and left" },
+  { key: "up", inputs: ["up"], icon: ArrowUp, gridArea: "u", ariaLabel: "Joystick up" },
+  { key: "up-right", inputs: ["up", "right"], icon: ArrowUpRight, gridArea: "ur", ariaLabel: "Joystick up and right" },
+  { key: "left", inputs: ["left"], icon: ArrowLeft, gridArea: "l", ariaLabel: "Joystick left" },
   null,
-  { key: "right", inputs: ["right"], icon: ArrowRight, gridArea: "r" },
-  { key: "down-left", inputs: ["down", "left"], icon: ArrowDownLeft, gridArea: "dl" },
-  { key: "down", inputs: ["down"], icon: ArrowDown, gridArea: "d" },
-  { key: "down-right", inputs: ["down", "right"], icon: ArrowDownRight, gridArea: "dr" },
+  { key: "right", inputs: ["right"], icon: ArrowRight, gridArea: "r", ariaLabel: "Joystick right" },
+  {
+    key: "down-left",
+    inputs: ["down", "left"],
+    icon: ArrowDownLeft,
+    gridArea: "dl",
+    ariaLabel: "Joystick down and left",
+  },
+  { key: "down", inputs: ["down"], icon: ArrowDown, gridArea: "d", ariaLabel: "Joystick down" },
+  {
+    key: "down-right",
+    inputs: ["down", "right"],
+    icon: ArrowDownRight,
+    gridArea: "dr",
+    ariaLabel: "Joystick down and right",
+  },
 ];
 
 /**
@@ -51,8 +65,13 @@ const DPAD_CELLS: ReadonlyArray<{
  * analog dragging. Each cell composes with the held set the same way the
  * fire button does, so it never disturbs directions/fire held via any other
  * input method (physical D-pad, keyboard arrows, swipe).
+ *
+ * The visual pad itself is the shared {@link DirectionPad}; VirtualDPad only
+ * wires it to JOYSTICK hold semantics. The keyboard Cursor Pad wires the same
+ * visual to keyboard cursor taps instead — the two never share action
+ * semantics (see CursorPad).
  */
-export const VirtualDPad = ({ heldInputs, onHeldInputsChange, disabled = false }: VirtualDPadProps) => {
+export const VirtualDPad = ({ heldInputs, onHeldInputsChange, disabled = false, sizePx = 128 }: VirtualDPadProps) => {
   const setCellHeld = useCallback(
     (inputs: JoystickInputName[], held: boolean) => {
       if (disabled) return;
@@ -66,33 +85,28 @@ export const VirtualDPad = ({ heldInputs, onHeldInputsChange, disabled = false }
 
   const isCellHeld = (inputs: JoystickInputName[]) => inputs.every((input) => heldInputs.has(input));
 
+  const cells: ReadonlyArray<DirectionPadCell | null> = DPAD_CELLS.map((cell) =>
+    cell
+      ? {
+          key: cell.key,
+          testId: `remote-input-dpad-${cell.key}`,
+          ariaLabel: cell.ariaLabel,
+          icon: cell.icon,
+          gridArea: cell.gridArea,
+          pressed: isCellHeld(cell.inputs),
+          disabled,
+          onPressStart: () => setCellHeld(cell.inputs, true),
+          onPressEnd: () => setCellHeld(cell.inputs, false),
+        }
+      : null,
+  );
+
   return (
-    <div
-      className="grid h-32 w-32 grid-cols-3 grid-rows-3 gap-1"
-      data-testid="remote-input-virtual-dpad"
-      style={{ gridTemplateAreas: '"ul u ur" "l . r" "dl d dr"' }}
-    >
-      {DPAD_CELLS.map((cell, index) =>
-        cell ? (
-          <Button
-            key={cell.key}
-            size="icon"
-            variant={isCellHeld(cell.inputs) ? "default" : "secondary"}
-            className={cn("h-full w-full")}
-            style={{ gridArea: cell.gridArea }}
-            data-testid={`remote-input-dpad-${cell.key}`}
-            data-pressed={isCellHeld(cell.inputs) ? "true" : "false"}
-            disabled={disabled}
-            onPointerDown={() => setCellHeld(cell.inputs, true)}
-            onPointerUp={() => setCellHeld(cell.inputs, false)}
-            onPointerCancel={() => setCellHeld(cell.inputs, false)}
-          >
-            <cell.icon className="h-4 w-4" />
-          </Button>
-        ) : (
-          <div key={`spacer-${index}`} style={{ gridArea: "." }} />
-        ),
-      )}
-    </div>
+    <DirectionPad
+      cells={cells}
+      sizePx={sizePx}
+      gridTemplateAreas='"ul u ur" "l . r" "dl d dr"'
+      testId="remote-input-virtual-dpad"
+    />
   );
 };

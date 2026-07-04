@@ -54,7 +54,7 @@ describe("featureFlags persistence and logging", () => {
       commoserve_enabled: "stable",
       demo_mode_enabled: "stable",
       lighting_studio_enabled: "experimental",
-      remote_input_enabled: "experimental",
+      remote_input_enabled: "stable",
       background_execution_enabled: "experimental",
       home_telnet_reu_snapshot_enabled: "experimental",
       ram_snapshots_enabled: "stable",
@@ -77,6 +77,19 @@ describe("featureFlags persistence and logging", () => {
     // Standard-user toggleable is derived as visible_to_user && !developer_only,
     // so this row remains available for users who need to disable keyboard navigation.
     expect(Boolean(keypad?.visible_to_user) && !keypad?.developer_only).toBe(true);
+  });
+
+  it("ships the Remote Control (couch remote) as a user-visible, default-on stable flag", () => {
+    // The couch remote is on by default and no longer hidden behind developer
+    // mode; joystick relay is gated at runtime on machine:input support, not by
+    // this flag. Users can still turn the whole surface off from Settings.
+    const remote = FEATURE_FLAG_DEFINITIONS.find((definition) => definition.id === "remote_input_enabled");
+    expect(remote).toBeDefined();
+    expect(remote?.enabled).toBe(true);
+    expect(remote?.visible_to_user).toBe(true);
+    expect(remote?.developer_only).toBe(false);
+    expect(remote?.group).toBe("stable");
+    expect(Boolean(remote?.visible_to_user) && !remote?.developer_only).toBe(true);
   });
 
   it("persists a non-default override and it survives a reload through a fresh manager", async () => {

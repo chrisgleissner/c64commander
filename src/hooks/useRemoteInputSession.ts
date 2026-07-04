@@ -88,6 +88,15 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
   const pendingTypedEventsRef = useRef<MachineInputEvent[]>([]);
   const flushTimerRef = useRef<number | null>(null);
   const autofireStartedAtMsRef = useRef<number | null>(null);
+  // HARD13-002: bumped on every immediate (safety-critical) send. A coalesced
+  // input send waits out the device-safeguard throttle before it dispatches; an
+  // immediate release-all / port-swap release does NOT wait. Without a guard,
+  // that immediate release can overtake a still-waiting coalesced press and the
+  // press then lands AFTER the release, re-asserting an input the user just
+  // cleared - a stuck joystick direction on the device with no local state to
+  // reflect it. Each coalesced dispatch captures the generation at schedule time
+  // and drops itself if an immediate send has since superseded it.
+  const sendGenerationRef = useRef(0);
 
   // `immediate` bypasses the device-safeguard cooldown (Settings → device
   // safety → machine input cooldown): safety-critical releases (panic
@@ -96,6 +105,8 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
   const sendEventsNow = useCallback((events: MachineInputEvent[], options: { immediate?: boolean } = {}) => {
     if (!events.length) return;
     const { immediate = false } = options;
+    if (immediate) sendGenerationRef.current += 1;
+    const generation = sendGenerationRef.current;
     setConnectionStatus("sending");
     for (const batch of chunkMachineInputEvents(events)) {
       const dispatch = () =>
@@ -120,7 +131,12 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       if (immediate) {
         void dispatch();
       } else {
-        void waitForMachineInputThrottle().then(dispatch);
+        void waitForMachineInputThrottle().then(() => {
+          // Superseded by a later immediate release/port-swap while we waited:
+          // drop this stale press so it can't land after the release (HARD13-002).
+          if (generation !== sendGenerationRef.current) return;
+          return dispatch();
+        });
       }
     }
   }, []);
@@ -154,11 +170,21 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       window.clearTimeout(flushTimerRef.current);
       flushTimerRef.current = null;
     }
+    // HARD13-001: whether we still owe the device a release depends on what we
+    // actually relayed, NOT on the current tier. A capability downgrade (full →
+    // kernal-fallback via a device switch, connection blip, or transient probe
+    // failure) updates `tierRef` to the new tier BEFORE this runs, so gating the
+    // network release on `tierRef.current === "full"` made the downgrade safety
+    // net inert - it cleared local state but never released the inputs still
+    // held on the device. A non-empty last-sent set is only ever populated by
+    // the full-tier relay path, so it is a reliable "we owe a release" signal
+    // independent of the now-current tier.
+    const hadRelayedInputs = lastSentHeldSetRef.current.size > 0;
     pendingHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
     lastSentHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
     pendingTypedEventsRef.current = [];
     setHeldJoystickInputsState(EMPTY_HELD_JOYSTICK_INPUTS);
-    if (tierRef.current === "full") {
+    if (hadRelayedInputs || tierRef.current === "full") {
       sendEventsNow(buildReleaseAllEvent(), { immediate: true });
     }
   }, [sendEventsNow]);
@@ -322,7 +348,11 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
   useEffect(() => {
     return () => {
       if (flushTimerRef.current !== null) window.clearTimeout(flushTimerRef.current);
-      if (lastSentHeldSetRef.current.size > 0 && tierRef.current === "full") {
+      // HARD13-001: a non-empty last-sent set is only ever populated by the
+      // full-tier relay, so it alone signals "we owe the device a release" -
+      // don't additionally gate on the current tier, which may already have
+      // been downgraded (unmount triggered by a device switch / disconnect).
+      if (lastSentHeldSetRef.current.size > 0) {
         void getC64API()
           .sendMachineInputBatch({ events: buildReleaseAllEvent() })
           .catch((error) => {

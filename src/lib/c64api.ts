@@ -581,6 +581,36 @@ export const serializeNativeDeviceRequest = async <T>(run: () => Promise<T>, max
   }
 };
 
+// HARD13: a dedicated, single-slot lane for the machine-input relay (remote
+// joystick/keyboard). It is intentionally SEPARATE from the shared bulk-REST
+// semaphore above so a burst of slow polling (config/drive/info reads) can never
+// starve the high-frequency input relay and drop it below the 10/sec floor. It
+// stays single-slot so the input path still opens at most one connection to the
+// device's single-threaded network task at a time (the JS-side machineInput
+// throttle already caps the send rate; this bounds in-flight concurrency).
+let activeMachineInputRequests = 0;
+const machineInputRequestQueue: Array<{ resolve: () => void }> = [];
+const pumpMachineInputRequestQueue = () => {
+  while (machineInputRequestQueue.length > 0 && activeMachineInputRequests < 1) {
+    const next = machineInputRequestQueue.shift();
+    if (!next) break;
+    activeMachineInputRequests += 1;
+    next.resolve();
+  }
+};
+export const serializeMachineInputRequest = async <T>(run: () => Promise<T>): Promise<T> => {
+  await new Promise<void>((resolve) => {
+    machineInputRequestQueue.push({ resolve });
+    pumpMachineInputRequestQueue();
+  });
+  try {
+    return await run();
+  } finally {
+    activeMachineInputRequests = Math.max(0, activeMachineInputRequests - 1);
+    pumpMachineInputRequestQueue();
+  }
+};
+
 const createTimedRequestSignal = (outerSignal: AbortSignal | undefined, timeoutMs?: number) => {
   const effectiveTimeoutMs = resolveEffectiveRequestTimeoutMs(timeoutMs);
   let timedOut = false;
@@ -869,6 +899,14 @@ type C64ReadRequestOptions = RequestInit & {
   __c64uBypassCooldown?: boolean;
   __c64uBypassBackoff?: boolean;
   __c64uBypassCircuit?: boolean;
+  /**
+   * HARD13: route this request through the dedicated low-latency machine-input
+   * lane instead of the shared bulk-REST concurrency semaphore, so the
+   * high-frequency joystick/keyboard relay is never starved behind slow polling
+   * (config/drive/info) requests. Combined with the bypass flags above, this
+   * keeps the input relay flowing at its own throttle-governed rate (>=10/sec).
+   */
+  __c64uInputLane?: boolean;
   __c64uExpectedMissing?: boolean;
   __c64uExpectedFailure?: boolean;
   __c64uSkipItemEnrichment?: boolean;
@@ -1398,6 +1436,7 @@ export class C64API {
     const bypassCooldown = Boolean(options.__c64uBypassCooldown);
     const bypassBackoff = Boolean(options.__c64uBypassBackoff);
     const bypassCircuit = Boolean(options.__c64uBypassCircuit);
+    const useInputLane = Boolean(options.__c64uInputLane);
     const expectedMissing = Boolean(options.__c64uExpectedMissing);
     const expectedFailureOption = Boolean(options.__c64uExpectedFailure);
     const skipSuccessBodyInspection = Boolean(options.__c64uSkipSuccessBodyInspection);
@@ -1415,6 +1454,7 @@ export class C64API {
     delete (requestOptions as { __c64uBypassCooldown?: boolean }).__c64uBypassCooldown;
     delete (requestOptions as { __c64uBypassBackoff?: boolean }).__c64uBypassBackoff;
     delete (requestOptions as { __c64uBypassCircuit?: boolean }).__c64uBypassCircuit;
+    delete (requestOptions as { __c64uInputLane?: boolean }).__c64uInputLane;
     delete (requestOptions as { __c64uExpectedMissing?: boolean }).__c64uExpectedMissing;
     delete (requestOptions as { __c64uExpectedFailure?: boolean }).__c64uExpectedFailure;
     delete (requestOptions as { __c64uSkipSuccessBodyInspection?: boolean }).__c64uSkipSuccessBodyInspection;
@@ -1454,7 +1494,9 @@ export class C64API {
     const serializeOnDevice = isNativePlatform() && !baseUrl.includes(WEB_PROXY_PATH) && !isLocalProxy(baseUrl);
     const runNativeSerialized = <R>(handler: () => Promise<R>) =>
       serializeOnDevice
-        ? serializeNativeDeviceRequest(handler, loadDeviceSafetyConfig().restMaxConcurrency)
+        ? useInputLane
+          ? serializeMachineInputRequest(handler)
+          : serializeNativeDeviceRequest(handler, loadDeviceSafetyConfig().restMaxConcurrency)
         : handler();
     const runRequest = () =>
       runWithImplicitAction(`rest.${method.toLowerCase()} ${path}`, async (action) =>
@@ -2358,11 +2400,23 @@ export class C64API {
 
   // HARD12-017: relay keyboard/joystick events to the C64 (U64-family + machine:input
   // firmware only; gated by deviceCapabilities.supportsMachineInput before use).
+  // HARD13: the relay is a purpose-built, low-latency, high-frequency lane. It
+  // must NOT be governed by the bulk-REST circuit breaker / backoff / cooldown /
+  // shared concurrency semaphore that protect heavy config/drive reads: those
+  // trip on transient (e.g. Wi-Fi roam) failures or saturate under polling and
+  // would silently stall key/joystick relay even while the device is fast. The
+  // relay has its own rate limit (machineInputThrottle) and drop-coalesce, so it
+  // bypasses those governors and runs on its own single-slot input lane, keeping
+  // throughput at the configured >=10/sec floor independent of polling load.
   async sendMachineInputBatch(batch: MachineInputBatch): Promise<MachineInputStateResponse> {
     const response = await this.request<MachineInputStateResponse>("/v1/machine:input", {
       method: "POST",
       timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
       body: JSON.stringify(batch),
+      __c64uBypassCircuit: true,
+      __c64uBypassBackoff: true,
+      __c64uBypassCooldown: true,
+      __c64uInputLane: true,
     });
     this.assertActionAccepted(response, "machine input event batch");
     return response;

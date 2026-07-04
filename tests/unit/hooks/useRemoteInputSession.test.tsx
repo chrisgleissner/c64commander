@@ -332,6 +332,11 @@ describe("useRemoteInputSession", () => {
     rerender({ tier: "kernal-fallback" });
 
     expect(result.current.heldJoystickInputs.size).toBe(0);
+    // HARD13-001 regression: clearing local state is not enough - the inputs are
+    // still physically held on the device, so the downgrade must also relay a
+    // release_all. Previously this was gated on the (already-downgraded) current
+    // tier and silently skipped, stranding the held direction on the device.
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({ events: [{ kind: "release_all" }] });
   });
 
   describe("edge cases and stress (port swap, autofire races, bursts)", () => {

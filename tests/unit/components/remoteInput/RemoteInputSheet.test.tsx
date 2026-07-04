@@ -160,6 +160,111 @@ describe("RemoteInputSheet", () => {
     expect(sendSpecialKeyMock).toHaveBeenCalledWith("run_stop");
   });
 
+  // HARD13-004: RUN/STOP and RESTORE have no kernal keyboard-buffer equivalent,
+  // so on the fallback tier the session drops them silently. The buttons must be
+  // explicitly disabled (like CTRL/C=), not left live-looking dead controls.
+  it("disables RUN/STOP and RESTORE on the kernal-fallback tier (no fallback equivalent)", () => {
+    tierState.tier = "kernal-fallback";
+    initialSessionOutputMode = "type";
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+
+    const runStopButtons = screen.getAllByTestId("remote-input-key-run-stop");
+    expect(runStopButtons.length).toBeGreaterThan(0);
+    runStopButtons.forEach((button) => expect(button).toBeDisabled());
+    expect(screen.getByTestId("remote-input-key-restore")).toBeDisabled();
+  });
+
+  // HARD13 accessibility: adjustable control size, persisted, so big fingers on
+  // small screens get usable controls.
+  it("adjusts and persists the control size via the size stepper", () => {
+    localStorage.clear();
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+
+    expect(screen.getByTestId("remote-input-size-label").textContent).toBe("L"); // default (above the old cramped M)
+
+    fireEvent.click(screen.getByTestId("remote-input-size-increase"));
+    expect(screen.getByTestId("remote-input-size-label").textContent).toBe("XL");
+    expect(localStorage.getItem("c64u_remote_input_control_size")).toBe("XL");
+
+    fireEvent.click(screen.getByTestId("remote-input-size-decrease"));
+    fireEvent.click(screen.getByTestId("remote-input-size-decrease"));
+    expect(screen.getByTestId("remote-input-size-label").textContent).toBe("M");
+    expect(screen.getByTestId("remote-input-size-decrease")).toBeDisabled(); // clamped at min
+  });
+
+  // HARD13 accessibility: immersive "game mode" strips everything but the
+  // joystick action controls for no-look play.
+  it("game mode hides the mode toggle and quick-keys bar, keeping only joystick controls", () => {
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+    expect(screen.getByTestId("remote-input-output-mode-toggle")).toBeInTheDocument();
+    expect(screen.getByTestId("remote-input-quick-keys-bar")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));
+
+    expect(screen.queryByTestId("remote-input-output-mode-toggle")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("remote-input-quick-keys-bar")).not.toBeInTheDocument();
+    expect(screen.getByTestId("remote-input-virtual-joystick")).toBeInTheDocument();
+    expect(screen.getByTestId("remote-input-fire-button")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));
+    expect(screen.getByTestId("remote-input-output-mode-toggle")).toBeInTheDocument();
+  });
+
+  it("offers game mode only in Joystick mode on a joystick-capable tier", () => {
+    initialSessionOutputMode = "type";
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+    expect(screen.queryByTestId("remote-input-immersive-toggle")).not.toBeInTheDocument();
+  });
+
+  it("does not offer game mode on the kernal-fallback tier", () => {
+    tierState.tier = "kernal-fallback";
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+    expect(screen.queryByTestId("remote-input-immersive-toggle")).not.toBeInTheDocument();
+  });
+
+  describe("Joystick vs Type interaction separation", () => {
+    // The Type-tab Cursor Pad and the Joystick D-pad share a visual component
+    // but must NEVER share action semantics: the Cursor Pad emits keyboard
+    // cursor movement, the D-pad emits joystick directions, and neither leaks
+    // into the other's channel.
+    it("routes the Type-tab cursor pad to keyboard cursor movement, never the joystick held set", () => {
+      initialSessionOutputMode = "type";
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+
+      fireEvent.click(screen.getByTestId("remote-input-key-cursor-up"));
+
+      expect(sendCursorMock).toHaveBeenCalledWith("up");
+      expect(setHeldJoystickInputsMock).not.toHaveBeenCalled();
+    });
+
+    it("routes the Joystick D-pad to the joystick held set, never keyboard cursor movement", () => {
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+
+      fireEvent.click(screen.getByTestId("remote-input-movement-style-dpad"));
+      fireEvent.pointerDown(screen.getByTestId("remote-input-dpad-up"));
+
+      expect(setHeldJoystickInputsMock).toHaveBeenCalledWith(new Set(["up"]));
+      expect(sendCursorMock).not.toHaveBeenCalled();
+    });
+
+    it("keeps Release All and Exit reachable in Type mode alongside the keyboard", () => {
+      initialSessionOutputMode = "type";
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+
+      expect(screen.getByTestId("remote-input-type-keyboard")).toBeInTheDocument();
+      expect(screen.getByTestId("remote-input-panic-button")).toBeInTheDocument();
+      expect(screen.getByTestId("remote-input-exit-button")).toBeInTheDocument();
+    });
+
+    it("hides the joystick-only size stepper and quick-keys bar in Type mode", () => {
+      initialSessionOutputMode = "type";
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+
+      expect(screen.queryByTestId("remote-input-size-stepper")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("remote-input-quick-keys-bar")).not.toBeInTheDocument();
+    });
+  });
+
   describe("edge cases and stress (physical key storms, T9, diagonals)", () => {
     // Joystick movement must work via all four paths: hardware D-pad, a
     // regular keyboard's cursor/arrow keys, the virtual stick/D-pad/swipe on

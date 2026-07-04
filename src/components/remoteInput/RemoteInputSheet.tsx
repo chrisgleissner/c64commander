@@ -6,8 +6,18 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useRef } from "react";
-import { AlertTriangle, Gamepad2, Keyboard as KeyboardIcon, Wifi, WifiOff } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  AlertTriangle,
+  Gamepad2,
+  Keyboard as KeyboardIcon,
+  Maximize2,
+  Minimize2,
+  Minus,
+  Plus,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AppSheet,
@@ -24,8 +34,17 @@ import { resolveInputProfile } from "@/lib/input/profiles";
 import { resolveSemanticAction } from "@/lib/input/keyEvent";
 import { dpadActionToJoystickInputs, t9KeyToJoystickInputs } from "@/lib/remoteInput/joystickDigitalMapping";
 import { remoteInputSupportsJoystick, REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT } from "@/lib/remoteInput/capabilityTier";
+import {
+  DEFAULT_REMOTE_INPUT_CONTROL_SIZE,
+  loadRemoteInputControlSize,
+  remoteInputControlScale,
+  REMOTE_INPUT_CONTROL_SIZE_LABEL,
+  saveRemoteInputControlSize,
+  stepRemoteInputControlSize,
+  type RemoteInputControlSize,
+} from "@/lib/remoteInput/remoteInputControlSettings";
 import { VirtualJoystick } from "@/components/remoteInput/VirtualJoystick";
-import { OnScreenKeyboard } from "@/components/remoteInput/OnScreenKeyboard";
+import { TypeKeyboard } from "@/components/remoteInput/TypeKeyboard";
 import { QuickKeysBar } from "@/components/remoteInput/QuickKeysBar";
 import type { JoystickInputName } from "@/lib/c64api";
 
@@ -39,15 +58,33 @@ export type RemoteInputSheetProps = {
 const PHYSICAL_INPUT_KEYMAP = resolveInputProfile("keypad");
 
 /**
- * HARD12-017 v1: the "couch remote for your C64" sheet. Thin shell over the
- * tested pure mappings (`@/lib/remoteInput/*`) and the coalesced transport
- * (`useRemoteInputSession`) — see docs/plans/hardening/12-fable/plan.md.
+ * HARD12-017 v1 / HARD13 ergonomics: the "couch remote for your C64" sheet.
+ * Thin shell over the tested pure mappings (`@/lib/remoteInput/*`) and the
+ * coalesced transport (`useRemoteInputSession`). Controls scale with a persisted
+ * size preference and an immersive gaming mode strips everything but the
+ * joystick action controls for no-look play — see docs/plans/hardening/13.
  */
 export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) => {
   const { tier } = useRemoteInputCapabilityTier(open);
   const session = useRemoteInputSession({ tier });
   const joystickAvailable = remoteInputSupportsJoystick(tier);
   const heldPhysicalKeysRef = useRef<Set<string>>(new Set());
+  const [controlSize, setControlSize] = useState<RemoteInputControlSize>(DEFAULT_REMOTE_INPUT_CONTROL_SIZE);
+  const [immersive, setImmersive] = useState(false);
+  const scale = remoteInputControlScale(controlSize);
+
+  // Rehydrate the persisted control-size preference when the sheet opens.
+  useEffect(() => {
+    if (open) setControlSize(loadRemoteInputControlSize());
+  }, [open]);
+
+  const changeSize = useCallback((direction: 1 | -1) => {
+    setControlSize((current) => {
+      const next = stepRemoteInputControlSize(current, direction);
+      saveRemoteInputControlSize(next);
+      return next;
+    });
+  }, []);
 
   const recomputePhysicalHeldSet = useCallback(() => {
     const inputs = new Set<JoystickInputName>();
@@ -97,11 +134,19 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     heldPhysicalKeysRef.current.clear();
   }, [session.outputMode]);
 
+  // Immersive mode is joystick-only; drop out of it if joystick relay becomes
+  // unavailable (tier downgrade) so the user is never stranded in a stripped
+  // layout that can't do anything.
+  useEffect(() => {
+    if (!joystickAvailable && immersive) setImmersive(false);
+  }, [joystickAvailable, immersive]);
+
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       if (!nextOpen) {
         heldPhysicalKeysRef.current.clear();
         session.releaseAll();
+        setImmersive(false);
       }
       onOpenChange(nextOpen);
     },
@@ -112,6 +157,53 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     if (mode === "joystick" && !joystickAvailable) return;
     session.setOutputMode(mode);
   };
+
+  // The size stepper scales the JOYSTICK action controls; the Type-tab keyboard
+  // sizes itself from the measured available space instead, so this control is
+  // joystick-only and hidden in Type mode (no compact vertical space spent on it).
+  const sizeStepper = (
+    <div className="flex items-center gap-1" data-testid="remote-input-size-stepper">
+      <span className="mr-1 text-xs text-muted-foreground">Size</span>
+      <Button
+        size="icon"
+        variant="secondary"
+        className="h-8 w-8"
+        aria-label="Smaller controls"
+        data-testid="remote-input-size-decrease"
+        disabled={controlSize === "M"}
+        onClick={() => changeSize(-1)}
+      >
+        <Minus className="h-4 w-4" />
+      </Button>
+      <span className="w-8 text-center text-sm font-semibold" data-testid="remote-input-size-label">
+        {REMOTE_INPUT_CONTROL_SIZE_LABEL[controlSize]}
+      </span>
+      <Button
+        size="icon"
+        variant="secondary"
+        className="h-8 w-8"
+        aria-label="Larger controls"
+        data-testid="remote-input-size-increase"
+        disabled={controlSize === "XXL"}
+        onClick={() => changeSize(1)}
+      >
+        <Plus className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+
+  const immersiveToggle = joystickAvailable && session.outputMode === "joystick" && (
+    <Button
+      size="sm"
+      variant={immersive ? "default" : "secondary"}
+      data-testid="remote-input-immersive-toggle"
+      aria-pressed={immersive}
+      onClick={() => setImmersive((value) => !value)}
+    >
+      {immersive ? <Minimize2 className="mr-1.5 h-4 w-4" /> : <Maximize2 className="mr-1.5 h-4 w-4" />}
+      {immersive ? "Exit game mode" : "Game mode"}
+    </Button>
+  );
 
   return (
     <AppSheet open={open} onOpenChange={handleOpenChange}>
@@ -136,29 +228,39 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
             </span>
           </AppSheetTitle>
         </AppSheetHeader>
-        <AppSheetBody className="flex flex-col gap-4">
-          <div className="flex items-center justify-center gap-2" data-testid="remote-input-output-mode-toggle">
-            <Button
-              size="sm"
-              variant={session.outputMode === "joystick" ? "default" : "secondary"}
-              data-testid="remote-input-mode-joystick"
-              disabled={!joystickAvailable}
-              title={!joystickAvailable ? REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT : undefined}
-              onClick={() => handleOutputModeChange("joystick")}
-            >
-              <Gamepad2 className="mr-1.5 h-4 w-4" /> Joystick
-            </Button>
-            <Button
-              size="sm"
-              variant={session.outputMode === "type" ? "default" : "secondary"}
-              data-testid="remote-input-mode-type"
-              onClick={() => handleOutputModeChange("type")}
-            >
-              <KeyboardIcon className="mr-1.5 h-4 w-4" /> Type
-            </Button>
+        <AppSheetBody className={cn("flex flex-col gap-4", (immersive || session.outputMode === "type") && "flex-1")}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {immersive ? (
+              <span className="text-sm font-semibold text-muted-foreground">Game mode</span>
+            ) : (
+              <div className="flex items-center gap-2" data-testid="remote-input-output-mode-toggle">
+                <Button
+                  size="sm"
+                  variant={session.outputMode === "joystick" ? "default" : "secondary"}
+                  data-testid="remote-input-mode-joystick"
+                  disabled={!joystickAvailable}
+                  title={!joystickAvailable ? REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT : undefined}
+                  onClick={() => handleOutputModeChange("joystick")}
+                >
+                  <Gamepad2 className="mr-1.5 h-4 w-4" /> Joystick
+                </Button>
+                <Button
+                  size="sm"
+                  variant={session.outputMode === "type" ? "default" : "secondary"}
+                  data-testid="remote-input-mode-type"
+                  onClick={() => handleOutputModeChange("type")}
+                >
+                  <KeyboardIcon className="mr-1.5 h-4 w-4" /> Type
+                </Button>
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              {session.outputMode === "joystick" ? sizeStepper : null}
+              {immersiveToggle}
+            </div>
           </div>
 
-          {!joystickAvailable && session.outputMode === "joystick" ? (
+          {!immersive && !joystickAvailable && session.outputMode === "joystick" ? (
             <p className="flex items-center justify-center gap-1.5 text-center text-sm text-muted-foreground">
               <AlertTriangle className="h-4 w-4" /> {REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT}
             </p>
@@ -174,17 +276,33 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
               onAutofireEnabledChange={session.setAutofireEnabled}
               disabled={!joystickAvailable}
               disabledHint={REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT}
+              scale={scale}
+              immersive={immersive}
             />
           ) : (
-            <OnScreenKeyboard onKey={session.sendKeyboardInputs} onSpecialKey={session.sendSpecialKey} tier={tier} />
+            <TypeKeyboard
+              className="min-h-0 flex-1"
+              onChar={session.sendChar}
+              onKey={session.sendKeyboardInputs}
+              onCursor={session.sendCursor}
+              onSpecialKey={session.sendSpecialKey}
+              tier={tier}
+            />
           )}
 
-          <QuickKeysBar
-            onChar={session.sendChar}
-            onCursor={session.sendCursor}
-            onSpecialKey={session.sendSpecialKey}
-            className={cn(session.outputMode === "joystick" && "border-t border-border pt-3")}
-          />
+          {/* The quick-keys bar rides alongside the JOYSTICK for one-tap
+              SPACE/RETURN/cursor without leaving game control; in Type mode the
+              keyboard's own pinned deck already covers these, so it's omitted. */}
+          {!immersive && session.outputMode === "joystick" ? (
+            <QuickKeysBar
+              onChar={session.sendChar}
+              onCursor={session.sendCursor}
+              onSpecialKey={session.sendSpecialKey}
+              tier={tier}
+              scale={scale}
+              className="border-t border-border pt-3"
+            />
+          ) : null}
         </AppSheetBody>
         <AppSheetFooter className="flex items-center justify-between">
           <Button

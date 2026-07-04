@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { resolveSwipeDirections, SWIPE_TAP_HOLD_MS } from "@/lib/remoteInput/swipeGesture";
 import type { HeldJoystickInputs } from "@/lib/remoteInput/joystickHeldSet";
@@ -16,6 +16,8 @@ export type SwipePadProps = {
   heldInputs: HeldJoystickInputs;
   onHeldInputsChange: (next: HeldJoystickInputs) => void;
   disabled?: boolean;
+  /** Square size of the swipe surface, in px (defaults to the compact 128px). */
+  sizePx?: number;
 };
 
 /**
@@ -25,11 +27,27 @@ export type SwipePadProps = {
  * distinct from the stick/D-pad's sustained hold-while-touching model. Good
  * for "one nudge" menu/high-score navigation without needing precise control.
  */
-export const SwipePad = ({ heldInputs, onHeldInputsChange, disabled = false }: SwipePadProps) => {
+export const SwipePad = ({ heldInputs, onHeldInputsChange, disabled = false, sizePx = 128 }: SwipePadProps) => {
   const originRef = useRef<{ x: number; y: number; atMs: number } | null>(null);
   const activePointerIdRef = useRef<number | null>(null);
   const releaseTimerRef = useRef<number | null>(null);
+  // HARD13-003: the deferred auto-release must read the held set as it is when
+  // the timer FIRES, not a snapshot taken at swipe time - otherwise an input
+  // pressed during the ~120ms hold window (e.g. fire) is clobbered by the
+  // release. Kept in a ref so the timer always sees the latest held set.
+  const heldInputsRef = useRef(heldInputs);
+  heldInputsRef.current = heldInputs;
   const [lastSwipeDirections, setLastSwipeDirections] = useState<JoystickInputName[]>([]);
+
+  // HARD13-003: clear a pending auto-release timer on unmount (movement-style
+  // switch / sheet close) so it can't fire against a torn-down session and
+  // re-press a swipe direction AFTER the sheet's release-all (stuck input).
+  useEffect(
+    () => () => {
+      if (releaseTimerRef.current !== null) window.clearTimeout(releaseTimerRef.current);
+    },
+    [],
+  );
 
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -55,17 +73,21 @@ export const SwipePad = ({ heldInputs, onHeldInputsChange, disabled = false }: S
 
       if (releaseTimerRef.current !== null) window.clearTimeout(releaseTimerRef.current);
       setLastSwipeDirections(directions);
-      const next = new Set(heldInputs);
+      const next = new Set(heldInputsRef.current);
       directions.forEach((input) => next.add(input));
       onHeldInputsChange(next);
 
       releaseTimerRef.current = window.setTimeout(() => {
         releaseTimerRef.current = null;
         setLastSwipeDirections([]);
-        onHeldInputsChange(new Set([...next].filter((input) => !directions.includes(input))) as HeldJoystickInputs);
+        // Release only the swipe directions from whatever is held NOW, so an
+        // input pressed during the hold window is preserved (HARD13-003).
+        const current = new Set(heldInputsRef.current);
+        directions.forEach((input) => current.delete(input));
+        onHeldInputsChange(current as HeldJoystickInputs);
       }, SWIPE_TAP_HOLD_MS);
     },
-    [disabled, heldInputs, onHeldInputsChange],
+    [disabled, onHeldInputsChange],
   );
 
   const cancel = useCallback(() => {
@@ -76,9 +98,10 @@ export const SwipePad = ({ heldInputs, onHeldInputsChange, disabled = false }: S
   return (
     <div
       className={cn(
-        "flex h-32 w-32 touch-none items-center justify-center rounded-xl border border-dashed border-border bg-muted text-center text-xs text-muted-foreground",
+        "flex touch-none items-center justify-center rounded-xl border border-dashed border-border bg-muted text-center text-xs text-muted-foreground",
         disabled && "opacity-40",
       )}
+      style={{ width: sizePx, height: sizePx }}
       data-testid="remote-input-swipe-pad"
       data-last-swipe={lastSwipeDirections.join("+") || undefined}
       onPointerDown={handlePointerDown}

@@ -172,6 +172,53 @@ describe("useRemoteInputSession chaos/stress (real device-safeguard throttle)", 
     expect(sendMachineInputBatchMock).toHaveBeenCalledWith({ events: [{ kind: "release_all" }] });
   }, 5000);
 
+  it("drops a throttle-delayed coalesced press that a panic release superseded (HARD13-002, no stuck input)", async () => {
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+    // Baseline send so the throttle has a lastSentAt to measure against (the
+    // very first send always resolves instantly, with nothing to wait behind).
+    act(() => result.current.setHeldJoystickInputs(new Set(["up"])));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(40);
+    });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(1);
+
+    // A second change flushes at +40ms and then WAITS out the 100ms cooldown -
+    // the "right" press is now sitting behind the throttle, not yet dispatched.
+    act(() => result.current.setHeldJoystickInputs(new Set(["up", "right"])));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(40);
+    });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(1);
+
+    // Panic release while the coalesced press is still throttle-waiting. It is
+    // immediate (unthrottled), so it dispatches ahead of the waiting press.
+    act(() => result.current.releaseAll());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({ events: [{ kind: "release_all" }] });
+    const callsAfterRelease = sendMachineInputBatchMock.mock.calls.length;
+
+    // Drain the throttle fully: the superseded press must NOT fire now, or it
+    // would re-assert "right" on the device AFTER the release - a stuck input.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(sendMachineInputBatchMock.mock.calls.length).toBe(callsAfterRelease);
+
+    // Reconstruct the device state from every relayed diff: fully released.
+    const finalHeld = new Set<string>();
+    for (const call of sendMachineInputBatchMock.mock.calls) {
+      for (const event of call[0].events as Array<{ kind?: string; transition?: string; inputs?: string[] }>) {
+        if (event.kind === "release_all") finalHeld.clear();
+        if (event.transition === "press") event.inputs?.forEach((input) => finalHeld.add(input));
+        if (event.transition === "release") event.inputs?.forEach((input) => finalHeld.delete(input));
+      }
+    }
+    expect(finalHeld.size).toBe(0);
+  }, 5000);
+
   it("removes the throttle entirely under a 0ms (RELAXED) cooldown, relaying as fast as the user can press", async () => {
     deviceSafetyConfigState.machineInputCooldownMs = 0;
     const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));

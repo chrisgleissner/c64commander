@@ -108,12 +108,12 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
   },
   {
     id: "remote_input_enabled",
-    enabled: false,
-    visible_to_user: false,
-    developer_only: true,
-    group: "experimental",
-    title: "Remote Input",
-    description: "Enable the remote keyboard/joystick input sheet (couch remote for the C64).",
+    enabled: true,
+    visible_to_user: true,
+    developer_only: false,
+    group: "stable",
+    title: "Remote Control",
+    description: "Show the on-screen Remote Control (couch remote) for typing and joystick input. Joystick relay is enabled automatically only when the connected device's REST API supports the machine:input endpoint; otherwise keyboard control is offered on its own.",
   },
   {
     id: "ram_snapshots_enabled",
