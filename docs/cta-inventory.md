@@ -103,7 +103,7 @@ persistent status badge that appear on every page).
 
 | Page     | Route       |     CTAs | Notes                                                                                                                                                                                             |
 | -------- | ----------- | -------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Home     | `/`         | 113 (+1) | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots. `+1` Remote Control tile behind `remote_input_enabled` (developer_only; hidden by default). |
+| Home     | `/`         | 113 (+1) | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots. `+1` Remote Input tile behind `remote_input_enabled` (stable, enabled and user-visible by default in C64 Commander; disabled and hidden in C64U Remote per `variants/feature-flags/c64u-remote.yaml`). |
 | Settings | `/settings` |  77 (+2) | Connection, devices, display (+2 native Android full-screen toggles), feature flags, network/cache, notifications, dev-mode, build info.                                                          |
 | Play     | `/play`     |  32 (+1) | Transport, volume, playback flags, playlist, type filters, HVSC. `+1` Open Controller button, shown only while playing, behind `remote_input_enabled`.                                            |
 | Config   | `/config`   |       30 | Search + 22 config-category accordions (each expands to config-item rows).                                                                                                                        |
@@ -153,7 +153,7 @@ not-connected / empty / single-device).
     - Save custom — button — `save-ram-custom-confirm` — R✅ I✅
   - Load RAM — button — `home-load-ram` — R✅ I✅ _(flag)_
   - Power Off — button (danger) — R✅ I✅ (confirm dialog)
-  - Remote Control — button — `home-machine-inline-openRemoteInput` — R✅ I✅ _(flag `remote_input_enabled`, developer_only; hidden by default)_ — opens the **Remote Input sheet** (§5)
+  - Remote Input — button — `home-machine-inline-openRemoteInput` — R✅ I✅ _(flag `remote_input_enabled`; stable, enabled and visible by default in C64 Commander, disabled+hidden in C64U Remote)_ — opens the **Remote Input sheet** (§5)
   - RAM dump folder — button (`...`) — `ram-dump-folder-trigger` — R✅ I✅
 - **Quick Config → CPU & RAM** (`home-cpu-summary`)
   - Turbo Control — select — `home-cpu-turbo-control` — R✅ I✅ (verified: opens Off/Manual/C64U Turbo Registers/TurboEnable Bit)
@@ -341,9 +341,18 @@ ordinary focus-ring CTAs in both output modes.
 
 - Output mode toggle: Joystick / Type — buttons — `remote-input-mode-joystick`,
   `remote-input-mode-type` — R✅ I✅ ; Joystick disabled with an inline hint on
-  devices/firmware without `machine:input` (kernal-fallback tier)
+  devices/firmware without `machine:input` (kernal-fallback tier); hidden in
+  Game mode
 - Connection indicator — status text — `remote-input-connection-indicator` —
   not interactive
+- Control size stepper (Joystick mode only) — decrease/increase buttons + label
+  — `remote-input-size-decrease`, `remote-input-size-increase`,
+  `remote-input-size-label` — R✅ I✅ (M/L/XL/XXL, persisted; scales the
+  joystick action controls, not the Type-tab keyboard, which sizes itself from
+  measured space)
+- Game mode toggle (Joystick mode, joystick-capable tier only) — button —
+  `remote-input-immersive-toggle` — R✅ I✅ — enters/exits the stripped,
+  edge-anchored no-look layout; auto-exits if the tier downgrades mid-session
 - **Joystick mode:**
   - Port swap — switch (one-tap toggle, same directness as Autofire) —
     `remote-input-port-switch` — R✅ I✅ (default Port 2; label shows the
@@ -371,16 +380,26 @@ up-right,down-left,down-right}` — R✅ I✅ (touch only)
     keymap) → joystick direction; keypad 2/4/6/8 → direction (1/3/7/9 →
     diagonals); keypad 5/0 or D-pad center/select → fire. Held while the
     physical key is held; released on key-up.
-- **Type mode — on-screen C64 keyboard** (`remote-input-on-screen-keyboard`,
-  the primary Type surface; full physical layout) — buttons
-  `remote-input-key-<name>` (e.g. `remote-input-key-a`,
-  `remote-input-key-return`) — R✅ I✅ for every key, incl. the dual-legend
-  cursor keys (`remote-input-key-cursor_left_right`,
-  `remote-input-key-cursor_up_down`)
-  - Sticky SHIFT — button (latch/toggle) — `remote-input-key-shift` — R✅ I✅
-  - Sticky CTRL / C= (Commodore) — buttons — `remote-input-key-ctrl`,
-    `remote-input-key-commodore` — R✅ I✅ `[disabled: kernal-fallback tier —
-no PETSCII/keyboard-buffer equivalent for these modifiers]`
+- **Type mode — on-screen C64 keyboard** (`remote-input-type-keyboard`, the
+  primary Type surface) — buttons `remote-input-key-<name>` (e.g.
+  `remote-input-key-a`, `remote-input-key-return`) — R✅ I✅ for every key.
+  Compact/medium profiles render a pinned high-value deck
+  (`remote-input-keyboard-deck`: cursor pad `remote-input-cursor-pad-group` +
+  immediate RETURN/SPACE `remote-input-keyboard-immediate`, then
+  CLR/HOME/INS/DEL `remote-input-keyboard-edit`, F1–F8
+  `remote-input-keyboard-function`, and RUN/STOP/RESTORE/C=/CTRL/SHIFT
+  `remote-input-keyboard-system`) above a scrollable alphanumeric/symbol grid
+  (`remote-input-keyboard-grid`); the expanded profile renders the physical
+  C64 rows directly in `remote-input-keyboard-grid` with the function-key
+  cluster alongside
+  - One-shot SHIFT / CTRL / C= (Commodore) latches — buttons —
+    `remote-input-key-shift`, `remote-input-key-ctrl`,
+    `remote-input-key-commodore` — R✅ I✅ (apply to exactly the next key,
+    then auto-clear); CTRL/C= `[disabled: kernal-fallback tier — no
+PETSCII/keyboard-buffer equivalent for these modifiers]`
+  - SHIFT LOCK — button (persistent latch, separate from the one-shot SHIFT
+    above) — `remote-input-key-shift-lock` — R✅ I✅ — stays applied to every
+    key until toggled off
   - RUN/STOP, RESTORE — buttons — `remote-input-key-run-stop`,
     `remote-input-key-restore` — R✅ I✅ `[RESTORE unavailable on the
 kernal-fallback tier — no keyboard-buffer byte; still shown, no-ops]`
