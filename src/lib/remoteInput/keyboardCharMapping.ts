@@ -48,6 +48,15 @@ const UNSHIFTED_CHAR_TO_KEY: Record<string, KeyboardInputName> = {
 
 /** Shifted-symbol chars that are not the shifted form of a letter. */
 const SHIFTED_CHAR_TO_KEY: Record<string, KeyboardInputName> = {
+  "!": "1",
+  '"': "2",
+  "#": "3",
+  $: "4",
+  "%": "5",
+  "&": "6",
+  "'": "7",
+  "(": "8",
+  ")": "9",
   "?": "slash",
   "<": "comma",
   ">": "period",

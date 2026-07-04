@@ -9,7 +9,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getC64API } from "@/lib/c64api";
 import type { JoystickInputName, KeyboardInputName, MachineInputEvent } from "@/lib/c64api";
-import { injectAutostart } from "@/lib/playback/autostart";
 import { addErrorLog, buildErrorLogDetails } from "@/lib/logging";
 import type { RemoteInputTier } from "@/lib/remoteInput/capabilityTier";
 import { remoteInputSupportsJoystick } from "@/lib/remoteInput/capabilityTier";
@@ -31,6 +30,7 @@ import { autofireCycle, DEFAULT_AUTOFIRE_RATE_HZ } from "@/lib/remoteInput/autof
 import type { SpecialKeyboardKey } from "@/lib/remoteInput/specialKeyMapping";
 import { specialKeyToKeyboardInputEvent, specialKeyToPetscii } from "@/lib/remoteInput/specialKeyMapping";
 import { waitForMachineInputThrottle } from "@/lib/remoteInput/machineInputThrottle";
+import { enqueueKernalFallbackInjection } from "@/lib/remoteInput/kernalFallbackInjector";
 
 export type RemoteInputOutputMode = "joystick" | "type";
 export type RemoteInputConnectionStatus = "idle" | "sending" | "error";
@@ -258,7 +258,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
         scheduleFlush();
         return;
       }
-      void injectAutostart(getC64API(), stringToPetsciiBytes(char)).catch((error) => {
+      void enqueueKernalFallbackInjection(getC64API(), stringToPetsciiBytes(char)).catch((error) => {
         addErrorLog(
           "Remote input kernal-fallback char injection failed",
           buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { char }),
@@ -280,7 +280,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       // this tier rather than guessed; only round-trippable chords proceed.
       const char = keyboardInputsToChar(inputs);
       if (char === null) return;
-      void injectAutostart(getC64API(), stringToPetsciiBytes(char)).catch((error) => {
+      void enqueueKernalFallbackInjection(getC64API(), stringToPetsciiBytes(char)).catch((error) => {
         addErrorLog(
           "Remote input kernal-fallback keyboard-chord injection failed",
           buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { inputs }),
@@ -298,13 +298,15 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
         scheduleFlush();
         return;
       }
-      void injectAutostart(getC64API(), new Uint8Array([cursorKeyToPetscii(direction)])).catch((error) => {
-        addErrorLog(
-          "Remote input kernal-fallback cursor injection failed",
-          buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { direction }),
-        );
-        setConnectionStatus("error");
-      });
+      void enqueueKernalFallbackInjection(getC64API(), new Uint8Array([cursorKeyToPetscii(direction)])).catch(
+        (error) => {
+          addErrorLog(
+            "Remote input kernal-fallback cursor injection failed",
+            buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { direction }),
+          );
+          setConnectionStatus("error");
+        },
+      );
     },
     [scheduleFlush],
   );
@@ -318,7 +320,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       }
       const petscii = specialKeyToPetscii(key);
       if (petscii === null) return; // RUN/STOP, RESTORE: no kernal-buffer equivalent on this tier.
-      void injectAutostart(getC64API(), new Uint8Array([petscii])).catch((error) => {
+      void enqueueKernalFallbackInjection(getC64API(), new Uint8Array([petscii])).catch((error) => {
         addErrorLog(
           "Remote input kernal-fallback special-key injection failed",
           buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { key }),
