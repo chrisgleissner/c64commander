@@ -61,6 +61,19 @@ describe("VirtualDPad", () => {
     expect(screen.getByTestId("remote-input-dpad-up")).toBeDisabled();
   });
 
+  // Lead F2: mouse (unlike touch) gets no implicit pointer capture on press -
+  // without it, dragging off a cell before releasing leaves it stuck held.
+  it("captures the pointer on press so a drag-off before release still releases correctly", () => {
+    render(<VirtualDPad heldInputs={EMPTY_HELD_JOYSTICK_INPUTS} onHeldInputsChange={onHeldInputsChangeMock} />);
+    const cell = screen.getByTestId("remote-input-dpad-up");
+    const setPointerCaptureMock = vi.fn();
+    cell.setPointerCapture = setPointerCaptureMock;
+
+    fireEvent.pointerDown(cell, { pointerId: 7 });
+
+    expect(setPointerCaptureMock).toHaveBeenCalledWith(7);
+  });
+
   it("marks a cell pressed only when every one of its directions is held", () => {
     render(<VirtualDPad heldInputs={new Set(["up"]) as never} onHeldInputsChange={onHeldInputsChangeMock} />);
 

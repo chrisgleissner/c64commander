@@ -9,6 +9,7 @@
 import type { ComponentType } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { capturePointerBestEffort } from "@/lib/remoteInput/pointerCapture";
 
 /**
  * A purely presentational directional pad: a size-fixed 3×3 grid of cells laid
@@ -77,7 +78,10 @@ export const DirectionPad = ({ cells, sizePx, gridTemplateAreas, testId, classNa
             data-pressed={cell.pressed ? "true" : "false"}
             aria-label={cell.ariaLabel}
             disabled={cell.disabled}
-            onPointerDown={cell.onPressStart}
+            onPointerDown={(event) => {
+              if (cell.onPressStart) capturePointerBestEffort(event.currentTarget, event.pointerId, "d-pad cell");
+              cell.onPressStart?.();
+            }}
             onPointerUp={cell.onPressEnd}
             onPointerCancel={cell.onPressEnd}
             onClick={cell.onActivate}

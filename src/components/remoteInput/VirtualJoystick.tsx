@@ -11,10 +11,10 @@ import { Gamepad2, Hand, MoveDiagonal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { addLog, buildErrorLogDetails } from "@/lib/logging";
 import { VirtualDPad } from "@/components/remoteInput/VirtualDPad";
 import { SwipePad } from "@/components/remoteInput/SwipePad";
 import { vibrateTap } from "@/lib/remoteInput/haptics";
+import { capturePointerBestEffort } from "@/lib/remoteInput/pointerCapture";
 import type { HeldJoystickInputs } from "@/lib/remoteInput/joystickHeldSet";
 import type { JoystickInputName } from "@/lib/c64api";
 
@@ -107,21 +107,7 @@ export const VirtualJoystick = ({
       if (disabled) return;
       const zone = stickZoneRef.current;
       if (!zone) return;
-      try {
-        zone.setPointerCapture(event.pointerId);
-      } catch (error) {
-        // Pointer capture is best-effort (some older WebViews lack support):
-        // the drag still mostly works via ordinary move events as long as the
-        // finger stays over the zone, so degrade rather than let this become
-        // an uncaught exception that aborts the whole gesture.
-        addLog(
-          "warn",
-          "Remote input stick pointer capture unavailable",
-          buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), {
-            pointerId: event.pointerId,
-          }),
-        );
-      }
+      capturePointerBestEffort(zone, event.pointerId, "stick");
       activePointerIdRef.current = event.pointerId;
       originRef.current = { x: event.clientX, y: event.clientY };
       setStickOffset({ x: 0, y: 0 });
@@ -246,7 +232,10 @@ export const VirtualJoystick = ({
       disabled={disabled}
       data-testid="remote-input-fire-button"
       data-pressed={heldInputs.has("fire") ? "true" : "false"}
-      onPointerDown={() => setFireHeld("fire", true)}
+      onPointerDown={(event) => {
+        capturePointerBestEffort(event.currentTarget, event.pointerId, "fire button");
+        setFireHeld("fire", true);
+      }}
       onPointerUp={() => setFireHeld("fire", false)}
       onPointerCancel={() => setFireHeld("fire", false)}
     >

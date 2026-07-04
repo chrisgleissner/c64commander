@@ -133,6 +133,20 @@ describe("VirtualJoystick", () => {
     expect(onHeldInputsChangeMock).toHaveBeenLastCalledWith(new Set());
   });
 
+  // Lead F2: mouse (unlike touch) gets no implicit pointer capture on press -
+  // without it, dragging the mouse off FIRE before releasing leaves it stuck
+  // held (no pointerup ever reaches the button).
+  it("captures the pointer on press so a drag-off before release still releases correctly", () => {
+    renderStick();
+    const fireButton = screen.getByTestId("remote-input-fire-button");
+    const setPointerCaptureMock = vi.fn();
+    fireButton.setPointerCapture = setPointerCaptureMock;
+
+    fireEvent.pointerDown(fireButton, { pointerId: 3 });
+
+    expect(setPointerCaptureMock).toHaveBeenCalledWith(3);
+  });
+
   it("swaps the joystick port with a single tap, just like the autofire toggle", () => {
     renderStick();
     // Default port is 2 (per the session hook), so the switch starts "on".
