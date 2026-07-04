@@ -251,7 +251,18 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
 
   return (
     <AppSheet open={open} onOpenChange={handleOpenChange}>
-      <AppSheetContent data-testid="remote-input-sheet" onKeyDown={handlePhysicalKeyDown} onKeyUp={handlePhysicalKeyUp}>
+      <AppSheetContent
+        data-testid="remote-input-sheet"
+        // The sheet reserves a 5rem bottom clearance (to sit above the app tab
+        // bar), but the tab bar is hidden while any sheet is open, so with the
+        // footer visible that clearance is just dead space below Release All /
+        // Close. Drop it here; the footer supplies its own safe-area padding.
+        // Immersive game mode keeps the default clearance (no footer) so its
+        // edge-anchored controls still clear the navigation bar.
+        className={showFooterActions ? "pb-0" : undefined}
+        onKeyDown={handlePhysicalKeyDown}
+        onKeyUp={handlePhysicalKeyUp}
+      >
         <AppSheetHeader>
           <AppSheetTitle className="flex items-center gap-2">
             Remote Input

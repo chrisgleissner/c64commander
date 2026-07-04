@@ -821,3 +821,12 @@ button:focus-visible,
     -webkit-tap-highlight-color: transparent;
   }
 }
+
+/* Remote Input is a held-control surface (FIRE, D-pad, keys): a long-press must
+   keep firing/repeating, never trigger the WebView's text-selection or
+   copy/callout on the button glyphs. Disable selection across the whole sheet. */
+[data-testid="remote-input-sheet"] {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}

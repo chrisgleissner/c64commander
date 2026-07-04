@@ -387,15 +387,17 @@ up-right,down-left,down-right}` — R✅ I✅ (touch only)
 - **Type mode — on-screen C64 keyboard** (`remote-input-type-keyboard`, the
   primary Type surface) — buttons `remote-input-key-<name>` (e.g.
   `remote-input-key-a`, `remote-input-key-return`) — R✅ I✅ for every key.
-  Compact/medium profiles render a pinned high-value deck
+  Compact/medium profiles render a high-value deck
   (`remote-input-keyboard-deck`: cursor pad `remote-input-cursor-pad-group` +
   immediate RETURN/SPACE `remote-input-keyboard-immediate`, then
   CLR/HOME/INS/DEL `remote-input-keyboard-edit`, F1–F8
   `remote-input-keyboard-function`, and RUN/STOP/RESTORE/C=/CTRL/SHIFT
-  `remote-input-keyboard-system`) above a scrollable alphanumeric/symbol grid
-  (`remote-input-keyboard-grid`); the expanded profile renders the physical
-  C64 rows directly in `remote-input-keyboard-grid` with the function-key
-  cluster alongside. The cursor-pad keys
+  `remote-input-keyboard-system`) above the alphanumeric/symbol grid
+  (`remote-input-keyboard-grid`), with the deck AND grid together in one scroll
+  container (`remote-input-keyboard-scroll`) so the whole keyboard scrolls as a
+  unit on short viewports; the expanded profile renders the physical C64 rows
+  directly in `remote-input-keyboard-grid` with the function-key cluster
+  alongside. The cursor-pad keys
   (`remote-input-key-cursor-{up,down,left,right}`) auto-repeat while held by
   touch (initial delay then a brisk repeat, like C64 hardware); a keypad/
   focus-ring activation still emits a single cursor move (R✅ I✅ preserved)

@@ -101,18 +101,25 @@ describe("TypeKeyboard", () => {
     });
   });
 
-  describe("compact pinned controls", () => {
-    it("pins the cursor pad, RETURN and SPACE in the deck, outside the scrollable grid", () => {
+  describe("compact deck + grid scrolling", () => {
+    it("scrolls the whole keyboard (deck + grid) in one container so no key is stranded off-screen", () => {
       renderKeyboard("compact");
+      const scroll = screen.getByTestId("remote-input-keyboard-scroll");
       const deck = screen.getByTestId("remote-input-keyboard-deck");
       const grid = screen.getByTestId("remote-input-keyboard-grid");
 
+      // The cursor pad + immediate RETURN/SPACE keep their high-value deck grouping...
       expect(within(deck).getByTestId("remote-input-cursor-pad")).toBeInTheDocument();
       expect(within(deck).getByTestId("remote-input-key-return")).toBeInTheDocument();
       expect(within(deck).getByTestId("remote-input-key-space")).toBeInTheDocument();
 
-      // The grid is a distinct scroll container that does NOT hold the pinned deck controls.
-      expect(grid.className).toMatch(/overflow-y-auto/);
+      // ...but the whole keyboard now scrolls together: ONE scroll container holds
+      // both the deck and the grid (rather than pinning the deck and scrolling only
+      // the sliver beneath it).
+      expect(scroll.className).toMatch(/overflow-y-auto/);
+      expect(scroll.contains(deck)).toBe(true);
+      expect(scroll.contains(grid)).toBe(true);
+      // The grid stays a distinct group and never duplicates the deck controls.
       expect(grid.contains(deck)).toBe(false);
       expect(within(grid).queryByTestId("remote-input-cursor-pad")).toBeNull();
       expect(within(grid).queryByTestId("remote-input-key-return")).toBeNull();

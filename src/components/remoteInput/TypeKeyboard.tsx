@@ -267,9 +267,17 @@ export const TypeKeyboard = ({
       data-profile={profile}
     >
       {layout.kind === "deck" ? (
-        <>
-          {/* Pinned high-value deck — stays visible while the grid scrolls. */}
-          <div className="flex shrink-0 flex-col gap-2" data-testid="remote-input-keyboard-deck">
+        // The WHOLE keyboard scrolls as one surface (deck + grid together), so on
+        // short viewports every key is reachable by scrolling instead of only the
+        // sliver beneath the system row. The bottom padding keeps the last row
+        // clear of the sheet's bottom action bar.
+        <div
+          className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pb-6 pr-0.5"
+          data-testid="remote-input-keyboard-scroll"
+        >
+          {/* High-value deck: cursor pad + immediate RETURN/SPACE, then the edit /
+              function / system rows. */}
+          <div className="flex flex-col gap-2" data-testid="remote-input-keyboard-deck">
             {/* Cursor pad (largest, visually isolated) + immediate RETURN/SPACE beside it. */}
             <div className="flex items-stretch gap-3">
               <div className="shrink-0" data-testid="remote-input-cursor-pad-group">
@@ -305,20 +313,14 @@ export const TypeKeyboard = ({
 
           <div className="border-t border-border" role="separator" />
 
-          {/* Only the alphanumeric / symbol grid scrolls. The bottom padding keeps
-              the last row clear of the persistent bottom action bar so every key
-              stays comfortably reachable on small screens. */}
-          <div
-            className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain pb-6 pr-0.5"
-            data-testid="remote-input-keyboard-grid"
-          >
+          <div className="space-y-1" data-testid="remote-input-keyboard-grid">
             {layout.grid.map((row, rowIndex) => (
               <div key={rowIndex} className="flex gap-1">
                 {row.map((def) => renderKey(def, { heightPx: gridKeyHeightPx, grow: true }))}
               </div>
             ))}
           </div>
-        </>
+        </div>
       ) : (
         // Expanded: the physical C64 rows on the left; F1–F8 as a bounded box on
         // the right (shared X origin, uniform width/height) rather than tacked on

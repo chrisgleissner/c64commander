@@ -167,6 +167,20 @@ describe("RemoteInputSheet", () => {
     expect(setHeldJoystickInputsMock).not.toHaveBeenCalled();
   });
 
+  it("drops the tab-bar bottom clearance when the footer is shown, so no dead space sits below Release All / Close", () => {
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+    const sheet = screen.getByTestId("remote-input-sheet");
+    expect(sheet.className).toContain("pb-0");
+    expect(sheet.className).not.toContain("app-sheet-bottom-clearance");
+  });
+
+  it("keeps the bottom clearance in game mode (no footer) so the edge-anchored controls clear the nav bar", () => {
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+    fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));
+    const sheet = screen.getByTestId("remote-input-sheet");
+    expect(sheet.className).toContain("app-sheet-bottom-clearance");
+  });
+
   it("latches SHIFT on the on-screen keyboard, applies it to the next key, then auto-clears", () => {
     initialSessionOutputMode = "type";
     render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
