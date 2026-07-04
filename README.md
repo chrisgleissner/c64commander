@@ -122,9 +122,11 @@ Remote Input includes:
 - **Joystick** - **Analog**, **D-Pad**, and **Swipe** controls, **FIRE**, autofire, port selection, and an immersive **Game mode** that simplifies the layout.
 - **Keys** - a touchscreen C64 keyboard with direct access to common control, edit, function, and system keys.
 
-Joystick relay requires Ultimate 64 firmware 3.15 or above. It does not work on U2 cartridges due to hardware limitations. On unsupported devices, Remote Input opens in keyboard-only mode. The feature is on by default and can be disabled under **Settings > Stable Features > Remote Input**.
+Joystick support requires an Ultimate 64 with firmware 3.15 or above. Due to hardware limitations, it does not work on U2.
 
-Joystick tab:
+#### Joystick Tab
+
+The following shows the Joystick tab in standard and Game mode.
 
 <table>
   <tr>
@@ -133,7 +135,9 @@ Joystick tab:
   </tr>
 </table>
 
-Keys tab:
+#### Keys Tab
+
+The following shows the Keys tab using various display profiles, from small to large.
 
 <table>
   <tr>

@@ -351,8 +351,22 @@ describe("VirtualJoystick", () => {
       expect(screen.queryByTestId("remote-input-swipe-pad")).not.toBeInTheDocument();
     });
 
-    it("never itself clears the held set when switching touch style (unlike switching Joystick/Type output mode, which deliberately does)", () => {
-      renderStick(new Set(["up"]));
+    // HARD15-005: the outgoing control unmounts before its own pointer-up can
+    // fire, so a held direction must be stripped explicitly on switch or it
+    // stays pressed on the device with an unbounded window.
+    it("strips held directions (but preserves fire) when switching movement style", () => {
+      renderStick(new Set(["right", "fire"]));
+
+      fireEvent.click(screen.getByTestId("remote-input-movement-style-dpad"));
+
+      expect(onHeldInputsChangeMock).toHaveBeenCalledTimes(1);
+      const strippedSet = onHeldInputsChangeMock.mock.calls[0][0] as Set<string>;
+      expect(strippedSet.has("right")).toBe(false);
+      expect(strippedSet.has("fire")).toBe(true);
+    });
+
+    it("makes no call when switching movement style with no direction held (avoid a redundant flush)", () => {
+      renderStick(new Set(["fire"]));
 
       fireEvent.click(screen.getByTestId("remote-input-movement-style-dpad"));
       fireEvent.click(screen.getByTestId("remote-input-movement-style-swipe"));
