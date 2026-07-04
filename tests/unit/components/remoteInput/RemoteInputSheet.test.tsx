@@ -27,27 +27,41 @@ const sendSpecialKeyMock = vi.fn();
 const releaseAllMock = vi.fn();
 
 let initialSessionOutputMode: "joystick" | "type" = "joystick";
+let initialSessionHeldJoystickInputs: ReadonlySet<string> = new Set();
 
 vi.mock("@/hooks/useRemoteInputCapabilityTier", () => ({
   useRemoteInputCapabilityTier: () => tierState,
 }));
 
-// Uses real React state for outputMode (unlike a plain module-variable mock)
-// so that calling setOutputMode actually re-renders the sheet, matching the
-// real hook - needed to test effects that react to outputMode changing.
+// Uses real React state for outputMode and heldJoystickInputs (unlike a plain
+// module-variable mock) so that calling setOutputMode/setHeldJoystickInputs
+// actually re-renders the sheet, matching the real hook - needed to test
+// effects that react to those changing (and, for held inputs, the E2
+// merge-not-replace fix in recomputePhysicalHeldSet).
 vi.mock("@/hooks/useRemoteInputSession", () => ({
   useRemoteInputSession: () => {
     const [outputMode, setOutputModeState] = useState<"joystick" | "type">(initialSessionOutputMode);
+    const [heldJoystickInputs, setHeldJoystickInputsState] = useState<ReadonlySet<string>>(
+      initialSessionHeldJoystickInputs,
+    );
     return {
       outputMode,
       setOutputMode: (mode: "joystick" | "type") => {
+        if (mode === outputMode) return;
+        // Mirrors the real hook's setOutputMode, which calls releaseAll()
+        // (clearing the held set) before applying the mode - the E2 test
+        // below depends on this being faithful to the real hook.
+        setHeldJoystickInputsState(new Set());
         setOutputModeState(mode);
         setOutputModeMock(mode);
       },
       port: 2,
       setPort: setPortMock,
-      heldJoystickInputs: new Set(),
-      setHeldJoystickInputs: setHeldJoystickInputsMock,
+      heldJoystickInputs,
+      setHeldJoystickInputs: (next: ReadonlySet<string>) => {
+        setHeldJoystickInputsState(next);
+        setHeldJoystickInputsMock(next);
+      },
       autofireEnabled: false,
       setAutofireEnabled: setAutofireEnabledMock,
       autofireRateHz: 10,
@@ -70,6 +84,7 @@ describe("RemoteInputSheet", () => {
     tierState.loading = false;
     tierState.resolved = true;
     initialSessionOutputMode = "joystick";
+    initialSessionHeldJoystickInputs = new Set();
     vi.clearAllMocks();
   });
 
@@ -553,6 +568,25 @@ describe("RemoteInputSheet", () => {
       fireEvent.keyDown(sheet, { code: "ArrowRight", key: "ArrowRight" });
 
       expect(setHeldJoystickInputsMock).toHaveBeenLastCalledWith(new Set(["right"]));
+    });
+
+    // HARD13 residual E2: recomputePhysicalHeldSet used to REPLACE the whole
+    // held set from physical keys only, dropping a concurrently touch-held
+    // input (e.g. fire held via the on-screen button) on a device with both.
+    it("merges a physical key press with an already touch-held input instead of replacing the held set", () => {
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      const sheet = screen.getByTestId("remote-input-sheet");
+
+      fireEvent.pointerDown(screen.getByTestId("remote-input-fire-button"));
+      expect(setHeldJoystickInputsMock).toHaveBeenLastCalledWith(new Set(["fire"]));
+
+      fireEvent.keyDown(sheet, { code: "ArrowUp", key: "ArrowUp" });
+      const heldAfterPhysicalPress = setHeldJoystickInputsMock.mock.calls.at(-1)?.[0] as Set<string>;
+      expect(heldAfterPhysicalPress.has("fire")).toBe(true);
+      expect(heldAfterPhysicalPress.has("up")).toBe(true);
+
+      fireEvent.keyUp(sheet, { code: "ArrowUp", key: "ArrowUp" });
+      expect(setHeldJoystickInputsMock).toHaveBeenLastCalledWith(new Set(["fire"]));
     });
 
     it("a key that maps to no joystick or semantic action at all is ignored without side effects", () => {

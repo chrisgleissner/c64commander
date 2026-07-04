@@ -70,6 +70,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   const session = useRemoteInputSession({ tier });
   const joystickAvailable = remoteInputSupportsJoystick(tier);
   const heldPhysicalKeysRef = useRef<Set<string>>(new Set());
+  const previousPhysicalInputsRef = useRef<Set<JoystickInputName>>(new Set());
   const [controlSize, setControlSize] = useState<RemoteInputControlSize>(DEFAULT_REMOTE_INPUT_CONTROL_SIZE);
   const [immersive, setImmersive] = useState(false);
   const scale = remoteInputControlScale(controlSize);
@@ -87,13 +88,25 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     });
   }, []);
 
+  // HARD13 residual (E2): merge with the session's current held set instead
+  // of replacing it wholesale - a device with both physical keys and touch
+  // (e.g. a fire button held via touch) must not have the touch-held inputs
+  // clobbered by a physical key press/release. Only inputs this function
+  // itself contributed last time are eligible for removal; anything the
+  // rest of the sheet (touch) is holding survives untouched.
   const recomputePhysicalHeldSet = useCallback(() => {
-    const inputs = new Set<JoystickInputName>();
+    const currentPhysicalInputs = new Set<JoystickInputName>();
     heldPhysicalKeysRef.current.forEach((action) => {
-      t9KeyToJoystickInputs(action as never).forEach((input) => inputs.add(input));
-      dpadActionToJoystickInputs(action as never).forEach((input) => inputs.add(input));
+      t9KeyToJoystickInputs(action as never).forEach((input) => currentPhysicalInputs.add(input));
+      dpadActionToJoystickInputs(action as never).forEach((input) => currentPhysicalInputs.add(input));
     });
-    session.setHeldJoystickInputs(inputs);
+    const next = new Set(session.heldJoystickInputs);
+    previousPhysicalInputsRef.current.forEach((input) => {
+      if (!currentPhysicalInputs.has(input)) next.delete(input);
+    });
+    currentPhysicalInputs.forEach((input) => next.add(input));
+    previousPhysicalInputsRef.current = currentPhysicalInputs;
+    session.setHeldJoystickInputs(next);
   }, [session]);
 
   // Physical T9/D-pad raw capture (Joystick mode only): while focus is inside
@@ -127,12 +140,16 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     [recomputePhysicalHeldSet],
   );
 
-  // Clear tracked physical keys on every output-mode change. Without this, a
-  // direction held while switching to Type mode (no keyup, e.g. the user's
-  // thumb never lifts) stays recorded, and switching back to Joystick mode
-  // later resurrects it as phantom-held alongside whatever is pressed next.
+  // Clear tracked physical keys (and what they last contributed) on every
+  // output-mode change. Without this, a direction held while switching to
+  // Type mode (no keyup, e.g. the user's thumb never lifts) stays recorded,
+  // and switching back to Joystick mode later resurrects it as phantom-held
+  // alongside whatever is pressed next - or, for `previousPhysicalInputsRef`,
+  // wrongly strips a same-named input a NEW touch hold contributed in the
+  // meantime (E2's merge logic only knows to remove what it itself added).
   useEffect(() => {
     heldPhysicalKeysRef.current.clear();
+    previousPhysicalInputsRef.current.clear();
   }, [session.outputMode]);
 
   // Immersive mode is joystick-only; drop out of it if joystick relay becomes
