@@ -165,7 +165,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     if (open && probeStartedRef.current && !tierLoading && !joystickAvailable && session.outputMode === "joystick") {
       session.setOutputMode("type");
     }
-  }, [open, tierLoading, joystickAvailable, session]);
+  }, [open, tierLoading, joystickAvailable, session.outputMode, session.setOutputMode]);
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {

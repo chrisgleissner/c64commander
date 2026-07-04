@@ -353,6 +353,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       // don't additionally gate on the current tier, which may already have
       // been downgraded (unmount triggered by a device switch / disconnect).
       if (lastSentHeldSetRef.current.size > 0) {
+        sendGenerationRef.current += 1;
         void getC64API()
           .sendMachineInputBatch({ events: buildReleaseAllEvent() })
           .catch((error) => {

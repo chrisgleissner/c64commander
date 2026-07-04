@@ -119,10 +119,10 @@ Use your phone as a second-screen controller for the C64, with joystick and keyb
 
 Remote Input includes:
 
-- **Joystick** - **Analog**, **D-Pad**, and **Swipe** controls, **FIRE**, autofire, port selection, and **Game mode**.
+- **Joystick** - **Analog**, **D-Pad**, and **Swipe** controls, **FIRE**, autofire, port selection, and an immersive **Game mode** that simplifies the layout.
 - **Keys** - a touchscreen C64 keyboard with direct access to common control, edit, function, and system keys.
 
-Joystick relay requires Ultimate 64 firmware 3.15 or above. It does not work on U2 cartridges due to hardware limitations. On unsupported devices, Remote Input opens in keyboard-only mode. The feature can be disabled in **Settings**.
+Joystick relay requires Ultimate 64 firmware 3.15 or above. It does not work on U2 cartridges due to hardware limitations. On unsupported devices, Remote Input opens in keyboard-only mode. The feature is on by default and can be disabled under **Settings > Stable Features > Remote Input**.
 
 Joystick tab:
 

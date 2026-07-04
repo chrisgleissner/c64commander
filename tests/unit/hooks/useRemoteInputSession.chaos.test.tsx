@@ -219,6 +219,34 @@ describe("useRemoteInputSession chaos/stress (real device-safeguard throttle)", 
     expect(finalHeld.size).toBe(0);
   }, 5000);
 
+  it("drops a throttle-delayed coalesced press when unmount release supersedes it (HARD13-002 cleanup path)", async () => {
+    const { result, unmount } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+    act(() => result.current.setHeldJoystickInputs(new Set(["up"])));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(40);
+    });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(1);
+
+    act(() => result.current.setHeldJoystickInputs(new Set(["up", "right"])));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(40);
+    });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      unmount();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({ events: [{ kind: "release_all" }] });
+    const callsAfterUnmount = sendMachineInputBatchMock.mock.calls.length;
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(sendMachineInputBatchMock.mock.calls.length).toBe(callsAfterUnmount);
+  }, 5000);
+
   it("removes the throttle entirely under a 0ms (RELAXED) cooldown, relaying as fast as the user can press", async () => {
     deviceSafetyConfigState.machineInputCooldownMs = 0;
     const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
