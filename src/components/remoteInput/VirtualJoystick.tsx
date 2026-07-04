@@ -151,36 +151,6 @@ export const VirtualJoystick = ({
     applyDirections([]);
   }, [applyDirections]);
 
-  // HARD15-005: switching movement style unmounts the outgoing control before
-  // its own pointer-up can fire, so a held direction would otherwise stay
-  // pressed on the device with an unbounded window. Strip only the four
-  // directions (fire, held via the always-visible fire button, survives) and
-  // skip the call entirely when nothing was held, to avoid a redundant flush.
-  const releaseHeldDirections = useCallback(() => {
-    const next = new Set(heldInputs);
-    let removedAny = false;
-    (["up", "down", "left", "right"] as const).forEach((direction) => {
-      if (next.delete(direction)) removedAny = true;
-    });
-    if (removedAny) onHeldInputsChange(next);
-  }, [heldInputs, onHeldInputsChange]);
-
-  const handleMovementStyleChange = useCallback(
-    (id: MovementStyle) => {
-      if (id !== movementStyle) {
-        releaseHeldDirections();
-        // A mid-drag switch must not leave a stale gesture behind on the
-        // control being switched away from.
-        activePointerIdRef.current = null;
-        originRef.current = null;
-        directionsRef.current = [];
-        setStickOffset({ x: 0, y: 0 });
-      }
-      setMovementStyle(id);
-    },
-    [movementStyle, releaseHeldDirections],
-  );
-
   const setFireHeld = useCallback(
     (input: JoystickInputName, held: boolean) => {
       if (disabled) return;
@@ -303,7 +273,7 @@ export const VirtualJoystick = ({
                 variant={movementStyle === id ? "default" : "secondary"}
                 disabled={disabled}
                 data-testid={`remote-input-movement-style-${id}`}
-                onClick={() => handleMovementStyleChange(id)}
+                onClick={() => setMovementStyle(id)}
               >
                 <Icon className="mr-1.5 h-4 w-4" /> {label}
               </Button>

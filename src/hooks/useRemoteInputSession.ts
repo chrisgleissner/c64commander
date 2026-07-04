@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getC64API } from "@/lib/c64api";
 import type { JoystickInputName, KeyboardInputName, MachineInputEvent } from "@/lib/c64api";
+import { injectAutostart } from "@/lib/playback/autostart";
 import { addErrorLog, buildErrorLogDetails } from "@/lib/logging";
 import type { RemoteInputTier } from "@/lib/remoteInput/capabilityTier";
 import { remoteInputSupportsJoystick } from "@/lib/remoteInput/capabilityTier";
@@ -30,7 +31,6 @@ import { autofireCycle, DEFAULT_AUTOFIRE_RATE_HZ } from "@/lib/remoteInput/autof
 import type { SpecialKeyboardKey } from "@/lib/remoteInput/specialKeyMapping";
 import { specialKeyToKeyboardInputEvent, specialKeyToPetscii } from "@/lib/remoteInput/specialKeyMapping";
 import { waitForMachineInputThrottle } from "@/lib/remoteInput/machineInputThrottle";
-import { enqueueKernalFallbackInjection } from "@/lib/remoteInput/kernalFallbackInjector";
 
 export type RemoteInputOutputMode = "joystick" | "type";
 export type RemoteInputConnectionStatus = "idle" | "sending" | "error";
@@ -120,35 +120,11 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
                 eventCount: batch.length,
               }),
             );
-            // HARD15-007: a batch failure (a timeout especially) does not
-            // guarantee the device never applied it - the RESPONSE, not the
-            // request, may be what was lost. Capture whether we owe a release
-            // before the resets below erase the only signal of it, so a
-            // timed-out-but-applied press can still be recovered instead of
-            // becoming a release the user's own subsequent release-diff can
-            // never produce (drop-coalesce reset it to the same empty state).
-            const owedRelease = lastSentHeldSetRef.current.size > 0 || batch.some((event) => event.kind === "joystick");
-            const wasReleaseAll = batch.length === 1 && batch[0].kind === "release_all";
             // Drop-coalesce, not retry: forget what we thought was held so the
             // next real change re-syncs cleanly instead of compounding drift.
             lastSentHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
             pendingHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
             setConnectionStatus("error");
-            if (owedRelease && !wasReleaseAll) {
-              // Direct API call, not routed through sendEventsNow: idempotent
-              // and single-shot, so it cannot recurse into this same catch.
-              void getC64API()
-                .sendMachineInputBatch({ events: buildReleaseAllEvent() })
-                .catch((releaseError) => {
-                  addErrorLog(
-                    "Remote input recovery release-all after send failure failed",
-                    buildErrorLogDetails(
-                      releaseError instanceof Error ? releaseError : new Error(String(releaseError)),
-                      {},
-                    ),
-                  );
-                });
-            }
           });
       // Dispatch immediate (safety-critical) sends synchronously, with no
       // throttle wait at all - only the ordinary coalesced stream awaits it.
@@ -174,15 +150,11 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
           Date.now(),
         )
       : pendingHeldSetRef.current;
-    // HARD15-004: only overwrite lastSent when this flush actually relayed a
-    // held-set diff. A downgraded-tier flush (heldSetEvents === []) must not
-    // silently wipe the "we owe the device a release" signal that setPort and
-    // the tier-downgrade effect below both rely on.
-    let heldSetEvents: MachineInputEvent[] = [];
-    if (tierRef.current === "full" && outputMode === "joystick") {
-      heldSetEvents = heldSetDiffToInputBatch(lastSentHeldSetRef.current, effectiveHeldSet, portRef.current);
-      lastSentHeldSetRef.current = effectiveHeldSet;
-    }
+    const heldSetEvents =
+      tierRef.current === "full" && outputMode === "joystick"
+        ? heldSetDiffToInputBatch(lastSentHeldSetRef.current, effectiveHeldSet, portRef.current)
+        : [];
+    lastSentHeldSetRef.current = effectiveHeldSet;
     const typedEvents = pendingTypedEventsRef.current;
     pendingTypedEventsRef.current = [];
     sendEventsNow([...heldSetEvents, ...typedEvents]);
@@ -233,13 +205,8 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       // ports must release it there first (never assume it "moves" with the
       // swap) or it's stranded held forever on a port nothing reads from
       // anymore. This must not wait for the coalesce window: it's a discrete
-      // user action, not a burst of pointer/key events. HARD15-004: gate on
-      // lastSentHeldSetRef (what was actually relayed) per the HARD13-001
-      // doctrine above in releaseAll - pendingHeldSetRef + the current tier
-      // can both have already moved on inside the 40ms release-coalesce
-      // window, stranding the press on the old port with the release wiped
-      // below but never sent.
-      if (lastSentHeldSetRef.current.size > 0) {
+      // user action, not a burst of pointer/key events.
+      if (pendingHeldSetRef.current.size > 0 && tierRef.current === "full") {
         sendEventsNow(
           heldSetDiffToInputBatch(lastSentHeldSetRef.current, EMPTY_HELD_JOYSTICK_INPUTS, portRef.current),
           { immediate: true },
@@ -291,7 +258,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
         scheduleFlush();
         return;
       }
-      void enqueueKernalFallbackInjection(getC64API(), stringToPetsciiBytes(char)).catch((error) => {
+      void injectAutostart(getC64API(), stringToPetsciiBytes(char)).catch((error) => {
         addErrorLog(
           "Remote input kernal-fallback char injection failed",
           buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { char }),
@@ -313,7 +280,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       // this tier rather than guessed; only round-trippable chords proceed.
       const char = keyboardInputsToChar(inputs);
       if (char === null) return;
-      void enqueueKernalFallbackInjection(getC64API(), stringToPetsciiBytes(char)).catch((error) => {
+      void injectAutostart(getC64API(), stringToPetsciiBytes(char)).catch((error) => {
         addErrorLog(
           "Remote input kernal-fallback keyboard-chord injection failed",
           buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { inputs }),
@@ -331,15 +298,13 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
         scheduleFlush();
         return;
       }
-      void enqueueKernalFallbackInjection(getC64API(), new Uint8Array([cursorKeyToPetscii(direction)])).catch(
-        (error) => {
-          addErrorLog(
-            "Remote input kernal-fallback cursor injection failed",
-            buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { direction }),
-          );
-          setConnectionStatus("error");
-        },
-      );
+      void injectAutostart(getC64API(), new Uint8Array([cursorKeyToPetscii(direction)])).catch((error) => {
+        addErrorLog(
+          "Remote input kernal-fallback cursor injection failed",
+          buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { direction }),
+        );
+        setConnectionStatus("error");
+      });
     },
     [scheduleFlush],
   );
@@ -353,7 +318,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       }
       const petscii = specialKeyToPetscii(key);
       if (petscii === null) return; // RUN/STOP, RESTORE: no kernal-buffer equivalent on this tier.
-      void enqueueKernalFallbackInjection(getC64API(), new Uint8Array([petscii])).catch((error) => {
+      void injectAutostart(getC64API(), new Uint8Array([petscii])).catch((error) => {
         addErrorLog(
           "Remote input kernal-fallback special-key injection failed",
           buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { key }),
@@ -366,12 +331,8 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
 
   // Stuck-input safety net: release everything on unmount, tab/app
   // backgrounding, and whenever the tier stops supporting joystick relay.
-  // HARD15-004: gate on lastSentHeldSetRef too, not just local UI state - a
-  // downgrade landing inside the release-coalesce window (UI already empty,
-  // device still pressed) must not skip the release just because
-  // heldJoystickInputs happens to read empty at this instant.
   useEffect(() => {
-    if (!remoteInputSupportsJoystick(tier) && (heldJoystickInputs.size > 0 || lastSentHeldSetRef.current.size > 0)) {
+    if (!remoteInputSupportsJoystick(tier) && heldJoystickInputs.size > 0) {
       releaseAll();
     }
   }, [tier]);
