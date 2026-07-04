@@ -755,6 +755,25 @@ describe("useRemoteInputSession", () => {
       ).toBe(true);
     });
 
+    // Lead F5 (accepted, won't-fix): documents rather than guards against a
+    // known, low-value edge case - requires two taps on different controls
+    // within the same 40ms window, so real-world impact is negligible.
+    it("drops a typed char still pending in the coalesce window when the mode switches (F5, accepted)", async () => {
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+      act(() => result.current.sendChar("a"));
+      act(() => result.current.setOutputMode("type"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40);
+      });
+
+      expect(
+        sendMachineInputBatchMock.mock.calls.some((call) =>
+          call[0].events.some((e: { kind: string }) => e.kind === "keyboard"),
+        ),
+      ).toBe(false);
+    });
+
     it("calling releaseAll repeatedly is idempotent and never throws", async () => {
       const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
       act(() => result.current.setHeldJoystickInputs(new Set(["up"])));

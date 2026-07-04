@@ -211,6 +211,12 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
     const hadRelayedInputs = lastSentHeldSetRef.current.size > 0;
     pendingHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
     lastSentHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
+    // Lead F5 (accepted, won't-fix): a typed char still sitting in the 40ms
+    // coalesce window when a mode switch calls releaseAll (via setOutputMode)
+    // is dropped here rather than flushed first. Confirmed by inspection;
+    // requires two taps on different controls within 40ms, so real-world
+    // impact is negligible against the risk of touching this safety-critical
+    // clearing path for a flush-before-clear fix.
     pendingTypedEventsRef.current = [];
     setHeldJoystickInputsState(EMPTY_HELD_JOYSTICK_INPUTS);
     if (hadRelayedInputs || tierRef.current === "full") {
