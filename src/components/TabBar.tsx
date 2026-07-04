@@ -6,7 +6,6 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { motion } from "framer-motion";
 import { Home, Sliders, Settings, BookOpen, Play, Disc } from "lucide-react";
 import { useLocation, useNavigate, type NavigateFunction } from "react-router-dom";
 import { useInterstitialActive } from "@/components/ui/interstitial-state";
@@ -75,14 +74,13 @@ function TabBarButton({
     >
       {/* A calm rounded highlight sitting behind the active tab's icon + label
           (the active icon/label are already tinted `text-primary` by
-          `.tab-item.active`). Shares one `layoutId` across tabs so it glides to
-          the selected tab on navigation instead of the previous dust-speck dot. */}
+          `.tab-item.active`). Static: it just appears on the selected tab with
+          no slide animation, sized close to the button's own bounds (like the
+          tap-feedback flash) so it fully engulfs the icon + label. */}
       {isActive && (
-        <motion.span
-          layoutId="tab-indicator"
+        <span
           aria-hidden="true"
-          className="absolute inset-x-1 inset-y-0.5 -z-10 rounded-xl bg-primary/15"
-          transition={{ type: "spring", stiffness: 400, damping: 32 }}
+          className="pointer-events-none absolute inset-x-0.5 inset-y-0.5 -z-10 rounded-xl bg-primary/15"
         />
       )}
       <Icon className="h-[1.375rem] w-[1.375rem]" />
@@ -106,7 +104,7 @@ export function TabBar() {
       data-interstitial-active={interstitialActive ? "true" : "false"}
     >
       <nav
-        className="tab-bar app-chrome-rail app-chrome-rail-bottom bg-background"
+        className="tab-bar app-chrome-rail app-chrome-rail-bottom"
         data-app-chrome-family="primary"
         data-focus-scope="tabbar"
       >

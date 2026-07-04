@@ -43,6 +43,12 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
+import {
+  loadAutofireRateHz,
+  saveAutofireRateHz,
+  MIN_AUTOFIRE_RATE_HZ,
+  MAX_AUTOFIRE_RATE_HZ,
+} from "@/lib/remoteInput/autofire";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
@@ -323,6 +329,7 @@ export default function SettingsPage() {
   const [volumeSliderPreviewIntervalMs, setVolumeSliderPreviewIntervalMs] = useState(
     loadVolumeSliderPreviewIntervalMs(),
   );
+  const [autofireRateHz, setAutofireRateHz] = useState(loadAutofireRateHz());
   const [startupDiscoveryWindowInput, setStartupDiscoveryWindowInput] = useState(
     String(loadStartupDiscoveryWindowMs() / 1000),
   );
@@ -1865,6 +1872,24 @@ export default function SettingsPage() {
                     Classic KERNAL load mounts the disk and uses LOAD"*",8,1 then RUN. DMA (Direct Memory Access)
                     extracts the first PRG from a D64/D71/D81 image and writes it directly to C64 memory for faster
                     starts. Some loaders may not like DMA.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm">Autofire rate: {autofireRateHz}/s</Label>
+                  <Slider
+                    min={MIN_AUTOFIRE_RATE_HZ}
+                    max={MAX_AUTOFIRE_RATE_HZ}
+                    step={1}
+                    value={[autofireRateHz]}
+                    onValueChange={([value]) => setAutofireRateHz(value)}
+                    onValueCommit={([value]) => saveAutofireRateHz(value)}
+                    aria-label="Autofire rate"
+                    data-testid="settings-autofire-rate-slider"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    How many times per second Remote Input Autofire presses FIRE while held. Also adjustable on the
+                    Remote Input joystick. Default 5/s. Range {MIN_AUTOFIRE_RATE_HZ}–{MAX_AUTOFIRE_RATE_HZ}/s.
                   </p>
                 </div>
               </div>

@@ -26,12 +26,12 @@ vi.mock("@/lib/logging", () => ({
   buildErrorLogDetails: (error: Error, context: Record<string, unknown>) => ({ error: error.message, ...context }),
 }));
 
-// The device-safeguard rate-limit (HARD12-017) is its own orthogonal concern
-// with dedicated coverage in machineInputThrottle.test.ts; here it always
-// resolves immediately so this file's coalescing/debounce timing assertions
-// stay exact.
+// The device-safeguard serialization (HARD12-017) is its own orthogonal concern
+// with dedicated coverage in machineInputThrottle.test.ts; here it dispatches
+// immediately (no serialization/queue) so this file's coalescing/debounce timing
+// assertions stay exact.
 vi.mock("@/lib/remoteInput/machineInputThrottle", () => ({
-  waitForMachineInputThrottle: async () => undefined,
+  runSerializedMachineInput: (dispatch: () => unknown) => Promise.resolve(dispatch()),
 }));
 
 import { useRemoteInputSession } from "@/hooks/useRemoteInputSession";
@@ -605,18 +605,18 @@ describe("useRemoteInputSession", () => {
     // Regression: disabling autofire while the last-sent state happened to be
     // mid "off phase" of the duty cycle left the base held set (which still
     // includes "fire" - the user's finger never left the button) un-relayed,
-    // because nothing forced a resync flush on the toggle itself. Uses a very
-    // slow rate (0.1Hz -> 10s period, 5s half) so the off-phase window is wide
-    // and the assertion isn't sensitive to exact interval/debounce interleaving.
+    // because nothing forced a resync flush on the toggle itself. Uses the
+    // slowest rate (1Hz -> 1s period, 500ms half) so the off-phase window is
+    // wide and the assertion isn't sensitive to exact interval/debounce interleaving.
     it("re-syncs the true held state when autofire is disabled mid off-phase", async () => {
       const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
-      act(() => result.current.setAutofireRateHz(0.1));
+      act(() => result.current.setAutofireRateHz(1));
       act(() => result.current.setAutofireEnabled(true));
       act(() => result.current.setHeldJoystickInputs(new Set(["fire"])));
 
-      // Comfortably past the 5s half-period boundary, still within the 10s period.
+      // Comfortably past the 500ms half-period boundary, still within the 1s period.
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(5100);
+        await vi.advanceTimersByTimeAsync(700);
       });
       const lastEventsBeforeDisable = sendMachineInputBatchMock.mock.calls.at(-1)?.[0];
       const fireEventBeforeDisable = lastEventsBeforeDisable?.events.find((e: { inputs?: string[] }) =>
@@ -828,6 +828,136 @@ describe("useRemoteInputSession", () => {
       });
       // Should have ticked/flushed multiple times without erroring.
       expect(sendMachineInputBatchMock.mock.calls.length).toBeGreaterThan(0);
+    });
+
+    // Issue 3b: the phase is an explicit boolean flipped by a dedicated interval,
+    // so it can never alias against the flush cadence and get stuck on one phase
+    // (the original "autofire never fires" bug). Prove it oscillates across MANY
+    // full cycles - both presses and releases, repeatedly - at the default rate.
+    const collectFireTransitions = () => {
+      const transitions: string[] = [];
+      for (const call of sendMachineInputBatchMock.mock.calls) {
+        for (const event of call[0].events as Array<{ inputs?: string[]; transition?: string }>) {
+          if (event.transition && event.inputs?.includes("fire")) transitions.push(event.transition);
+        }
+      }
+      return transitions;
+    };
+
+    it.each([5, 10])("oscillates fire on/off across many full cycles at %iHz (Issue 3b, no aliasing)", async (rate) => {
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+      act(() => result.current.setAutofireRateHz(rate));
+      act(() => result.current.setHeldJoystickInputs(new Set(["fire"])));
+      act(() => result.current.setAutofireEnabled(true));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+
+      const transitions = collectFireTransitions();
+      expect(transitions.filter((t) => t === "press").length).toBeGreaterThanOrEqual(3);
+      expect(transitions.filter((t) => t === "release").length).toBeGreaterThanOrEqual(3);
+    });
+
+    // Issue 3c anti-choppy: with no joystick movement, autofire edges flush on a
+    // smooth, regular cadence (~one half-period apart), never clustered or dropped.
+    it("keeps autofire on a smooth, regular cadence when nothing else is moving (Issue 3c)", async () => {
+      const sendTimes: number[] = [];
+      sendMachineInputBatchMock.mockImplementation(async () => {
+        sendTimes.push(Date.now());
+        return { errors: [], keyboard: { inputs: [] }, joysticks: [] };
+      });
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+      act(() => result.current.setAutofireRateHz(5)); // 100ms half-period
+      act(() => result.current.setHeldJoystickInputs(new Set(["fire"])));
+      act(() => result.current.setAutofireEnabled(true));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+
+      expect(sendTimes.length).toBeGreaterThanOrEqual(8);
+      // Skip the very first gap (initial coalesce flush -> first toggle); every
+      // steady-state toggle is one half-period apart with no jitter.
+      for (let i = 2; i < sendTimes.length; i += 1) {
+        const gap = sendTimes[i] - sendTimes[i - 1];
+        expect(gap).toBeGreaterThanOrEqual(95);
+        expect(gap).toBeLessThanOrEqual(105);
+      }
+    });
+
+    // Issue 3c: a joystick move arriving just before an autofire edge (<10ms)
+    // merges into the SAME outgoing packet - one call carrying both changes.
+    it("merges a joystick move within the autofire coalesce window into one packet (Issue 3c)", async () => {
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+      act(() => result.current.setAutofireRateHz(5)); // ticks at t=100, 200, ...
+      act(() => result.current.setHeldJoystickInputs(new Set(["fire"])));
+      act(() => result.current.setAutofireEnabled(true));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(95); // just before the t=100 toggle; initial press-fire already sent
+      });
+      sendMachineInputBatchMock.mockClear();
+
+      act(() => result.current.setHeldJoystickInputs(new Set(["fire", "up"]))); // move at t=95, 5ms before the edge
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30); // through the t=100 edge + merged flush
+      });
+
+      expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(1);
+      const events = sendMachineInputBatchMock.mock.calls[0][0].events as Array<{
+        transition: string;
+        inputs: string[];
+      }>;
+      expect(events.some((e) => e.transition === "press" && e.inputs.includes("up"))).toBe(true);
+      expect(events.some((e) => e.transition === "release" && e.inputs.includes("fire"))).toBe(true);
+    });
+
+    // Issue 3c: a joystick move NOT near an autofire edge is dispatched promptly
+    // on its own window - never held hostage waiting for an edge that won't join.
+    it("dispatches a joystick move far from any autofire edge on its own window (Issue 3c)", async () => {
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+      act(() => result.current.setAutofireRateHz(5)); // ticks every 100ms
+      act(() => result.current.setHeldJoystickInputs(new Set(["fire"])));
+      act(() => result.current.setAutofireEnabled(true));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(215); // t=215: 15ms past the t=200 edge, 85ms before the next
+      });
+      sendMachineInputBatchMock.mockClear();
+
+      act(() => result.current.setHeldJoystickInputs(new Set(["fire", "up"]))); // move at t=215
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(41); // its own 40ms window (t=255), well before the t=300 edge
+      });
+
+      const hasUpPress = sendMachineInputBatchMock.mock.calls.some((call) =>
+        (call[0].events as Array<{ transition: string; inputs?: string[] }>).some(
+          (e) => e.transition === "press" && e.inputs?.includes("up"),
+        ),
+      );
+      expect(hasUpPress).toBe(true);
+    });
+
+    // Issue 3e: leaving the joystick overlay (releaseAll: sheet close, tab/mode
+    // switch, unmount, panic) must STOP autofire, not just release held inputs.
+    it("stops autofire when releaseAll runs, with no further phase toggles (Issue 3e)", async () => {
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+      act(() => result.current.setHeldJoystickInputs(new Set(["fire"])));
+      act(() => result.current.setAutofireEnabled(true));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(120);
+      });
+      expect(result.current.autofireEnabled).toBe(true);
+
+      act(() => result.current.releaseAll());
+      expect(result.current.autofireEnabled).toBe(false);
+
+      sendMachineInputBatchMock.mockClear();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000); // well past many would-be toggle intervals
+      });
+      expect(sendMachineInputBatchMock).not.toHaveBeenCalled();
     });
   });
 });

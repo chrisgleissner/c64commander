@@ -8,44 +8,47 @@
 
 import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 
-let lastSentAtMs: number | null = null;
+let lastCompletedAtMs: number | null = null;
 let queue: Promise<void> = Promise.resolve();
 
-const runThrottled = async (): Promise<void> => {
-  const cooldownMs = loadDeviceSafetyConfig().machineInputCooldownMs;
-  const now = Date.now();
-  if (cooldownMs <= 0 || lastSentAtMs === null) {
-    lastSentAtMs = now;
-    return;
-  }
-  const elapsed = now - lastSentAtMs;
-  const waitMs = cooldownMs - elapsed;
-  if (waitMs > 0) {
-    await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
-  }
-  lastSentAtMs = Date.now();
-};
-
 /**
- * HARD12-017 device-safeguard entry: enforces the user-configured minimum
- * interval between consecutive `POST /v1/machine:input` sends (Settings →
- * device safety → "Machine input cooldown"). Calls are serialized through a
- * FIFO queue — without this, two nearly-simultaneous callers can both read
- * the same stale `lastSentAtMs` before either updates it and both slip
- * through with zero gap between the actual sends, defeating the rate limit
- * (found via chaos testing). Unlike `configWriteThrottle`, there is no
- * cancellation model: the transport's own coalescing already collapses
- * bursts, so this is purely a floor on how often an actual network call may
- * fire. A RELAXED-mode cooldown of 0ms resolves instantly ("as many as the
- * user can press").
+ * HARD12-017 device-safeguard entry for `POST /v1/machine:input` (the remote
+ * joystick/keyboard relay). Dispatches are serialized through a FIFO queue whose
+ * unit of work is the ENTIRE dispatch — the actual network call and its response,
+ * not just a gate check. This guarantees the app never has two machine:input
+ * calls in flight at once (the Ultimate firmware runs a single-threaded network
+ * task; overlapping requests are exactly the concurrency it is fragile to), while
+ * adding ZERO artificial delay: with the default 0ms cooldown the only spacing
+ * between consecutive calls is the real ~15ms end-to-end round-trip of a single
+ * call. Non-overlap is the correct — and sufficient — safety model for this
+ * high-frequency endpoint; a fixed cooldown is intentionally NOT the mechanism.
+ *
+ * The optional `machineInputCooldownMs` (Settings → device safety) is an extra
+ * floor measured from the PREVIOUS dispatch's completion, for anyone who wants
+ * more spacing than non-overlap alone; it defaults to 0 in every safety mode.
+ *
+ * Never retries: `dispatch` owns its own error handling, and a rejected dispatch
+ * still keeps the queue healthy so one failed call cannot wedge the chain.
  */
-export const waitForMachineInputThrottle = (): Promise<void> => {
-  const next = queue.then(runThrottled);
-  queue = next;
+export const runSerializedMachineInput = (dispatch: () => Promise<unknown> | unknown): Promise<void> => {
+  const run = async () => {
+    const cooldownMs = loadDeviceSafetyConfig().machineInputCooldownMs;
+    if (cooldownMs > 0 && lastCompletedAtMs !== null) {
+      const waitMs = cooldownMs - (Date.now() - lastCompletedAtMs);
+      if (waitMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
+    }
+    try {
+      await dispatch();
+    } finally {
+      lastCompletedAtMs = Date.now();
+    }
+  };
+  const next = queue.then(run);
+  queue = next.catch(() => {});
   return next;
 };
 
 export const resetMachineInputThrottleForTests = () => {
-  lastSentAtMs = null;
+  lastCompletedAtMs = null;
   queue = Promise.resolve();
 };

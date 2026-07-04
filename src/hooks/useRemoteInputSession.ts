@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getC64API } from "@/lib/c64api";
-import type { JoystickInputName, KeyboardInputName, MachineInputEvent } from "@/lib/c64api";
+import type { KeyboardInputName, MachineInputEvent } from "@/lib/c64api";
 import { addErrorLog, buildErrorLogDetails } from "@/lib/logging";
 import type { RemoteInputTier } from "@/lib/remoteInput/capabilityTier";
 import { remoteInputSupportsJoystick } from "@/lib/remoteInput/capabilityTier";
@@ -26,10 +26,15 @@ import {
   heldSetDiffToInputBatch,
 } from "@/lib/remoteInput/joystickHeldSet";
 import type { HeldJoystickInputs } from "@/lib/remoteInput/joystickHeldSet";
-import { autofireCycle, DEFAULT_AUTOFIRE_RATE_HZ } from "@/lib/remoteInput/autofire";
+import {
+  applyAutofirePhase,
+  clampAutofireRateHz,
+  loadAutofireRateHz,
+  saveAutofireRateHz,
+} from "@/lib/remoteInput/autofire";
 import type { SpecialKeyboardKey } from "@/lib/remoteInput/specialKeyMapping";
 import { specialKeyToKeyboardInputEvent, specialKeyToPetscii } from "@/lib/remoteInput/specialKeyMapping";
-import { waitForMachineInputThrottle } from "@/lib/remoteInput/machineInputThrottle";
+import { runSerializedMachineInput } from "@/lib/remoteInput/machineInputThrottle";
 import { enqueueKernalFallbackInjection } from "@/lib/remoteInput/kernalFallbackInjector";
 import { registerActiveInputRelease, unregisterActiveInputRelease } from "@/lib/remoteInput/activeInputRelease";
 
@@ -38,6 +43,15 @@ export type RemoteInputConnectionStatus = "idle" | "sending" | "error";
 
 /** Held-set changes within this window collapse into one network call (device-safety). */
 const COALESCE_WINDOW_MS = 40;
+/**
+ * Issue 3c: autofire duty-cycle edges flush on their own tight window instead of
+ * riding the 40ms drag debounce, so autofire stays on a regular cadence at any
+ * configured rate. A joystick move that is already pending — or arrives within
+ * this window — merges into the same outgoing packet (one call carrying both the
+ * move and the toggle); a move further away than this is dispatched on its own
+ * 40ms window and is never held hostage waiting for an autofire edge to join.
+ */
+const AUTOFIRE_COALESCE_WINDOW_MS = 10;
 
 export type UseRemoteInputSessionOptions = {
   tier: RemoteInputTier;
@@ -77,7 +91,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
   const [port, setPortState] = useState<1 | 2>(2);
   const [heldJoystickInputs, setHeldJoystickInputsState] = useState<HeldJoystickInputs>(EMPTY_HELD_JOYSTICK_INPUTS);
   const [autofireEnabled, setAutofireEnabled] = useState(false);
-  const [autofireRateHz, setAutofireRateHz] = useState(DEFAULT_AUTOFIRE_RATE_HZ);
+  const [autofireRateHz, setAutofireRateHzState] = useState(loadAutofireRateHz);
   const [connectionStatus, setConnectionStatus] = useState<RemoteInputConnectionStatus>("idle");
 
   const tierRef = useRef(tier);
@@ -88,7 +102,10 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
   const pendingHeldSetRef = useRef<HeldJoystickInputs>(EMPTY_HELD_JOYSTICK_INPUTS);
   const pendingTypedEventsRef = useRef<MachineInputEvent[]>([]);
   const flushTimerRef = useRef<number | null>(null);
-  const autofireStartedAtMsRef = useRef<number | null>(null);
+  /** Wall-clock time the pending flush is scheduled to fire; lets an autofire edge pull it earlier. */
+  const flushDueAtRef = useRef<number>(0);
+  /** Explicit autofire duty-cycle phase, flipped only by the dedicated interval below. */
+  const autofirePhaseOnRef = useRef(true);
   // HARD13-002: bumped on every immediate (safety-critical) send. A coalesced
   // input send waits out the device-safeguard throttle before it dispatches; an
   // immediate release-all / port-swap release does NOT wait. Without a guard,
@@ -152,11 +169,12 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
             }
           });
       // Dispatch immediate (safety-critical) sends synchronously, with no
-      // throttle wait at all - only the ordinary coalesced stream awaits it.
+      // serialization wait at all - only the ordinary coalesced stream is
+      // serialized so it never overlaps itself on the wire (device-safety).
       if (immediate) {
         void dispatch();
       } else {
-        void waitForMachineInputThrottle().then(() => {
+        void runSerializedMachineInput(() => {
           // Superseded by a later immediate release/port-swap while we waited:
           // drop this stale press so it can't land after the release (HARD13-002).
           if (generation !== sendGenerationRef.current) return;
@@ -168,13 +186,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
 
   const flush = useCallback(() => {
     flushTimerRef.current = null;
-    const effectiveHeldSet = autofireEnabled
-      ? autofireCycle(
-          pendingHeldSetRef.current,
-          { enabled: true, rateHz: autofireRateHz, startedAtMs: autofireStartedAtMsRef.current ?? Date.now() },
-          Date.now(),
-        )
-      : pendingHeldSetRef.current;
+    const effectiveHeldSet = applyAutofirePhase(pendingHeldSetRef.current, autofireEnabled, autofirePhaseOnRef.current);
     // HARD15-004: only overwrite lastSent when this flush actually relayed a
     // held-set diff. A downgraded-tier flush (heldSetEvents === []) must not
     // silently wipe the "we owe the device a release" signal that setPort and
@@ -187,12 +199,28 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
     const typedEvents = pendingTypedEventsRef.current;
     pendingTypedEventsRef.current = [];
     sendEventsNow([...heldSetEvents, ...typedEvents]);
-  }, [autofireEnabled, autofireRateHz, outputMode, sendEventsNow]);
+  }, [autofireEnabled, outputMode, sendEventsNow]);
 
-  const scheduleFlush = useCallback(() => {
-    if (flushTimerRef.current !== null) return;
-    flushTimerRef.current = window.setTimeout(flush, COALESCE_WINDOW_MS);
-  }, [flush]);
+  const scheduleFlushIn = useCallback(
+    (windowMs: number) => {
+      const dueAt = Date.now() + windowMs;
+      if (flushTimerRef.current !== null) {
+        // Only ever pull the pending flush EARLIER, never push it later: an
+        // autofire edge (10ms) preempts a drag's pending 40ms window so it is
+        // not delayed, while a drag move cannot stall an imminent autofire
+        // edge. A pending joystick change already sits in pendingHeldSetRef, so
+        // the earlier flush carries it too - that IS the sub-10ms coalescing of
+        // a near-simultaneous move + autofire toggle into one packet (Issue 3c).
+        if (dueAt >= flushDueAtRef.current) return;
+        window.clearTimeout(flushTimerRef.current);
+      }
+      flushDueAtRef.current = dueAt;
+      flushTimerRef.current = window.setTimeout(flush, windowMs);
+    },
+    [flush],
+  );
+
+  const scheduleFlush = useCallback(() => scheduleFlushIn(COALESCE_WINDOW_MS), [scheduleFlushIn]);
 
   const releaseAll = useCallback(() => {
     if (flushTimerRef.current !== null) {
@@ -219,6 +247,13 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
     // clearing path for a flush-before-clear fix.
     pendingTypedEventsRef.current = [];
     setHeldJoystickInputsState(EMPTY_HELD_JOYSTICK_INPUTS);
+    // Issue 3e: leaving the joystick overlay - sheet close, output-mode/tab
+    // switch (setOutputMode calls this), unmount, tier downgrade, panic button -
+    // must also STOP autofire, not merely release the held inputs. Without this
+    // its dedicated ticking interval keeps running for the life of the page and
+    // reopening the sheet silently resumes firing the user never re-enabled.
+    setAutofireEnabled(false);
+    autofirePhaseOnRef.current = true;
     if (hadRelayedInputs || tierRef.current === "full") {
       sendEventsNow(buildReleaseAllEvent(), { immediate: true });
     }
@@ -270,7 +305,10 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
 
   const setAutofireEnabledSafe = useCallback(
     (enabled: boolean) => {
-      autofireStartedAtMsRef.current = enabled ? Date.now() : null;
+      // Every enable starts at the "on" phase - matches the real-hardware feel
+      // of "your press starts the pulse", and gives disable a clean phase to
+      // leave from (the value is irrelevant while disabled).
+      autofirePhaseOnRef.current = true;
       setAutofireEnabled(enabled);
       // The last-sent state may be mid "off phase" of the duty cycle at the
       // moment autofire is toggled - without forcing a flush here, a user who
@@ -282,14 +320,30 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
     [scheduleFlush],
   );
 
-  // Autofire ticks on a timer so the held fire input keeps oscillating even
-  // when the user isn't moving the stick (a static held press).
+  const setAutofireRateHz = useCallback((rateHz: number) => {
+    const clamped = clampAutofireRateHz(rateHz);
+    setAutofireRateHzState(clamped);
+    saveAutofireRateHz(clamped);
+  }, []);
+
+  // Autofire ticks on its own dedicated interval, one tick per half-cycle, so
+  // the toggle IS the timer rather than an incidental sample of elapsed time.
+  // The previous design computed "on/off" from `Date.now() % period` but only
+  // ever evaluated it whenever the transport's ~40ms coalesce-window flush
+  // happened to run - at the (now former) 10Hz default that sampling cadence
+  // aliased against the 100ms period and could settle on a single phase
+  // forever, silently never firing. An explicit phase flip driven by its own
+  // interval cannot alias: each half-cycle gets its own scheduled toggle.
   useEffect(() => {
-    if (!autofireEnabled || !pendingHeldSetRef.current.has("fire" as JoystickInputName)) return;
-    const intervalMs = Math.max(1000 / Math.max(autofireRateHz, 0.1) / 4, 10);
-    const timer = window.setInterval(scheduleFlush, intervalMs);
+    if (!autofireEnabled) return;
+    autofirePhaseOnRef.current = true;
+    const halfPeriodMs = Math.max(500 / Math.max(autofireRateHz, 0.1), 10);
+    const timer = window.setInterval(() => {
+      autofirePhaseOnRef.current = !autofirePhaseOnRef.current;
+      scheduleFlushIn(AUTOFIRE_COALESCE_WINDOW_MS);
+    }, halfPeriodMs);
     return () => window.clearInterval(timer);
-  }, [autofireEnabled, autofireRateHz, heldJoystickInputs, scheduleFlush]);
+  }, [autofireEnabled, autofireRateHz, scheduleFlushIn]);
 
   const sendChar = useCallback(
     (char: string) => {

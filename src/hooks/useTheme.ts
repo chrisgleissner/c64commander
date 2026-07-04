@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
+import { syncNativeSystemBarAppearance } from "@/lib/native/safeArea";
 type Theme = "light" | "dark" | "system";
 
 const THEME_STORAGE_KEY = "c64u_theme";
@@ -33,6 +34,10 @@ export function useTheme() {
 
       document.documentElement.classList.remove("light", "dark");
       document.documentElement.classList.add(resolved);
+
+      // Keep the native (edge-to-edge, transparent) status/navigation bar icons
+      // legible against the app background as the theme changes (Issue 6).
+      void syncNativeSystemBarAppearance(resolved);
     };
 
     updateResolvedTheme();

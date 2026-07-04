@@ -31,6 +31,8 @@ const LivingJoystick = ({ port = 2 }: { port?: 1 | 2 }) => {
       onHeldInputsChange={setHeldInputs}
       autofireEnabled={autofireEnabled}
       onAutofireEnabledChange={setAutofireEnabled}
+      autofireRateHz={5}
+      onAutofireRateHzChange={() => {}}
     />
   );
 };
@@ -60,6 +62,8 @@ describe("VirtualJoystick", () => {
         onHeldInputsChange={onHeldInputsChangeMock}
         autofireEnabled={false}
         onAutofireEnabledChange={setAutofireEnabledChangeMock}
+        autofireRateHz={5}
+        onAutofireRateHzChange={() => {}}
       />,
     );
 
@@ -163,6 +167,8 @@ describe("VirtualJoystick", () => {
         onHeldInputsChange={onHeldInputsChangeMock}
         autofireEnabled={false}
         onAutofireEnabledChange={setAutofireEnabledChangeMock}
+        autofireRateHz={5}
+        onAutofireRateHzChange={() => {}}
       />,
     );
     expect(screen.getByTestId("remote-input-port-toggle")).toHaveTextContent("Port 1");
@@ -183,6 +189,8 @@ describe("VirtualJoystick", () => {
         onHeldInputsChange={onHeldInputsChangeMock}
         autofireEnabled={false}
         onAutofireEnabledChange={setAutofireEnabledChangeMock}
+        autofireRateHz={5}
+        onAutofireRateHzChange={() => {}}
         disabled
         disabledHint="Needs newer firmware"
       />,
@@ -398,6 +406,8 @@ describe("VirtualJoystick", () => {
           onHeldInputsChange={onHeldInputsChangeMock}
           autofireEnabled={false}
           onAutofireEnabledChange={setAutofireEnabledChangeMock}
+          autofireRateHz={5}
+          onAutofireRateHzChange={() => {}}
         />,
       );
       expect(screen.getByTestId("remote-input-movement-style-toggle")).toBeInTheDocument();
@@ -410,6 +420,8 @@ describe("VirtualJoystick", () => {
           onHeldInputsChange={onHeldInputsChangeMock}
           autofireEnabled={false}
           onAutofireEnabledChange={setAutofireEnabledChangeMock}
+          autofireRateHz={5}
+          onAutofireRateHzChange={() => {}}
           immersive
         />,
       );
@@ -432,6 +444,8 @@ describe("VirtualJoystick", () => {
           onHeldInputsChange={onHeldInputsChangeMock}
           autofireEnabled={false}
           onAutofireEnabledChange={setAutofireEnabledChangeMock}
+          autofireRateHz={5}
+          onAutofireRateHzChange={() => {}}
           disabled
         />,
       );

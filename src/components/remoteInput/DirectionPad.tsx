@@ -7,6 +7,7 @@
  */
 
 import type { ComponentType } from "react";
+import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { capturePointerBestEffort } from "@/lib/remoteInput/pointerCapture";
@@ -14,13 +15,16 @@ import { capturePointerBestEffort } from "@/lib/remoteInput/pointerCapture";
 /**
  * A purely presentational directional pad: a size-fixed 3×3 grid of cells laid
  * out by CSS grid areas. It has NO built-in joystick or keyboard semantics —
- * each cell simply renders what it is told and calls back on interaction. Two
- * interaction styles are supported per cell and never mixed by this component:
+ * each cell simply renders what it is told and calls back on interaction:
  *
  * - hold  — `onPressStart`/`onPressEnd` (pointer down/up/cancel). The joystick
- *           D-pad uses this to add/remove a held direction.
- * - tap   — `onActivate` (click). The keyboard Cursor Pad uses this to emit one
- *           cursor movement per press.
+ *           D-pad uses this to add/remove a held direction; the keyboard Cursor
+ *           Pad uses it to auto-repeat a cursor key while held.
+ * - tap   — `onActivate` (click). A cell may set this ALONGSIDE the hold
+ *           callbacks: a real pointer press is handled by `onPressStart` and the
+ *           trailing synthetic click is suppressed, so `onActivate` fires only
+ *           for a keypad/focus-ring `.click()` (which dispatches no pointerdown),
+ *           keeping the cell reachable by keypad without double-acting on touch.
  *
  * Because behaviour lives entirely in the caller-supplied callbacks, the same
  * visual pad serves the Joystick tab and the Type tab without ever conflating
@@ -55,6 +59,55 @@ export type DirectionPadProps = {
   className?: string;
 };
 
+const DirectionPadButton = ({
+  cell,
+  iconPx,
+  labelFontPx,
+}: {
+  cell: DirectionPadCell;
+  iconPx: number;
+  labelFontPx: number;
+}) => {
+  // True once a real pointer press has driven onPressStart, so the trailing
+  // synthetic click is skipped; a keypad/focus-ring `.click()` (no pointerdown)
+  // leaves it false and falls through to the single-shot onActivate.
+  const handledByPointerRef = useRef(false);
+
+  return (
+    <Button
+      size="icon"
+      variant={cell.pressed ? "default" : "secondary"}
+      className="h-full w-full"
+      style={{ gridArea: cell.gridArea }}
+      data-testid={cell.testId}
+      data-pressed={cell.pressed ? "true" : "false"}
+      aria-label={cell.ariaLabel}
+      disabled={cell.disabled}
+      onPointerDown={(event) => {
+        if (!cell.onPressStart) return;
+        capturePointerBestEffort(event.currentTarget, event.pointerId, "d-pad cell");
+        handledByPointerRef.current = true;
+        cell.onPressStart();
+      }}
+      onPointerUp={cell.onPressEnd}
+      onPointerCancel={cell.onPressEnd}
+      onClick={() => {
+        if (handledByPointerRef.current) {
+          handledByPointerRef.current = false;
+          return;
+        }
+        cell.onActivate?.();
+      }}
+    >
+      {cell.label ? (
+        <span style={{ fontSize: labelFontPx, fontWeight: 600, whiteSpace: "nowrap" }}>{cell.label}</span>
+      ) : cell.icon ? (
+        <cell.icon style={{ width: iconPx, height: iconPx }} />
+      ) : null}
+    </Button>
+  );
+};
+
 export const DirectionPad = ({ cells, sizePx, gridTemplateAreas, testId, className }: DirectionPadProps) => {
   const iconPx = Math.max(16, Math.round(sizePx / 6));
   const labelFontPx = Math.max(11, Math.round(sizePx / 9));
@@ -68,30 +121,7 @@ export const DirectionPad = ({ cells, sizePx, gridTemplateAreas, testId, classNa
     >
       {cells.map((cell, index) =>
         cell ? (
-          <Button
-            key={cell.key}
-            size="icon"
-            variant={cell.pressed ? "default" : "secondary"}
-            className="h-full w-full"
-            style={{ gridArea: cell.gridArea }}
-            data-testid={cell.testId}
-            data-pressed={cell.pressed ? "true" : "false"}
-            aria-label={cell.ariaLabel}
-            disabled={cell.disabled}
-            onPointerDown={(event) => {
-              if (cell.onPressStart) capturePointerBestEffort(event.currentTarget, event.pointerId, "d-pad cell");
-              cell.onPressStart?.();
-            }}
-            onPointerUp={cell.onPressEnd}
-            onPointerCancel={cell.onPressEnd}
-            onClick={cell.onActivate}
-          >
-            {cell.label ? (
-              <span style={{ fontSize: labelFontPx, fontWeight: 600, whiteSpace: "nowrap" }}>{cell.label}</span>
-            ) : cell.icon ? (
-              <cell.icon style={{ width: iconPx, height: iconPx }} />
-            ) : null}
-          </Button>
+          <DirectionPadButton key={cell.key} cell={cell} iconPx={iconPx} labelFontPx={labelFontPx} />
         ) : (
           <div key={`spacer-${index}`} style={{ gridArea: "." }} />
         ),

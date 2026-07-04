@@ -10,11 +10,14 @@ import { useCallback, useRef, useState } from "react";
 import { Gamepad2, Hand, MoveDiagonal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import { VirtualDPad } from "@/components/remoteInput/VirtualDPad";
 import { SwipePad } from "@/components/remoteInput/SwipePad";
 import { vibrateTap } from "@/lib/remoteInput/haptics";
 import { capturePointerBestEffort } from "@/lib/remoteInput/pointerCapture";
+import { resolveDragDirections } from "@/lib/remoteInput/dragDirectionResolution";
+import { MAX_AUTOFIRE_RATE_HZ, MIN_AUTOFIRE_RATE_HZ } from "@/lib/remoteInput/autofire";
 import type { HeldJoystickInputs } from "@/lib/remoteInput/joystickHeldSet";
 import type { JoystickInputName } from "@/lib/c64api";
 
@@ -25,6 +28,8 @@ export type VirtualJoystickProps = {
   onHeldInputsChange: (next: HeldJoystickInputs) => void;
   autofireEnabled: boolean;
   onAutofireEnabledChange: (enabled: boolean) => void;
+  autofireRateHz: number;
+  onAutofireRateHzChange: (rateHz: number) => void;
   disabled?: boolean;
   disabledHint?: string;
   /** Control-size multiplier (from the user's size preference). */
@@ -41,27 +46,12 @@ const MOVEMENT_STYLES: ReadonlyArray<{ id: MovementStyle; label: string; icon: t
   { id: "swipe", label: "Swipe", icon: MoveDiagonal },
 ];
 
-/** Thumb displacement past this fraction of the stick radius resolves to a direction (generous dead zone). */
-const DEAD_ZONE_FRACTION = 0.25;
 /** Base geometry (px) at scale 1.0; the user's size preference multiplies these. */
 const BASE_CONTROL_PX = 132;
 const BASE_FIRE_PX = 92;
 const IMMERSIVE_ACTION_TOP_GAP_PX = 16;
 const IMMERSIVE_ACTION_BOTTOM_OFFSET_PX = 40;
 const ACTION_CONTROL_STACK_GAP_PX = 32;
-
-const resolveDirections = (dx: number, dy: number, radius: number): JoystickInputName[] => {
-  const distance = Math.hypot(dx, dy);
-  if (distance < radius * DEAD_ZONE_FRACTION) return [];
-  const angle = Math.atan2(dy, dx);
-  const directions: JoystickInputName[] = [];
-  // 8-way resolution: split the circle into horizontal/vertical components.
-  if (Math.cos(angle) > 0.35) directions.push("right");
-  else if (Math.cos(angle) < -0.35) directions.push("left");
-  if (Math.sin(angle) > 0.35) directions.push("down");
-  else if (Math.sin(angle) < -0.35) directions.push("up");
-  return directions;
-};
 
 export const VirtualJoystick = ({
   port,
@@ -70,6 +60,8 @@ export const VirtualJoystick = ({
   onHeldInputsChange,
   autofireEnabled,
   onAutofireEnabledChange,
+  autofireRateHz,
+  onAutofireRateHzChange,
   disabled = false,
   disabledHint,
   scale = 1,
@@ -125,7 +117,7 @@ export const VirtualJoystick = ({
       const clampedDistance = Math.min(Math.hypot(dx, dy), radius);
       const angle = Math.atan2(dy, dx);
       setStickOffset({ x: Math.cos(angle) * clampedDistance, y: Math.sin(angle) * clampedDistance });
-      applyDirections(resolveDirections(dx, dy, radius));
+      applyDirections(resolveDragDirections(dx, dy, radius));
     },
     [applyDirections],
   );
@@ -244,18 +236,35 @@ export const VirtualJoystick = ({
   );
 
   const autofireToggle = (
-    <label
+    <div
       className="flex flex-col items-center gap-2 rounded-3xl bg-background/90 px-3 py-2 text-center text-sm shadow-lg backdrop-blur-sm"
       data-testid="remote-input-autofire-toggle"
     >
-      <Switch
-        checked={autofireEnabled}
-        onCheckedChange={onAutofireEnabledChange}
-        disabled={disabled}
-        data-testid="remote-input-autofire-switch"
-      />
-      <span className="text-xs font-semibold uppercase tracking-wide">Autofire</span>
-    </label>
+      <label className="flex flex-col items-center gap-2">
+        <Switch
+          checked={autofireEnabled}
+          onCheckedChange={onAutofireEnabledChange}
+          disabled={disabled}
+          data-testid="remote-input-autofire-switch"
+        />
+        <span className="text-xs font-semibold uppercase tracking-wide">Autofire</span>
+      </label>
+      <div className="flex w-24 items-center gap-1.5" data-testid="remote-input-autofire-rate">
+        <Slider
+          value={[autofireRateHz]}
+          min={MIN_AUTOFIRE_RATE_HZ}
+          max={MAX_AUTOFIRE_RATE_HZ}
+          step={1}
+          disabled={disabled}
+          onValueChange={([value]) => onAutofireRateHzChange(value)}
+          aria-label="Autofire rate"
+          data-testid="remote-input-autofire-rate-slider"
+        />
+        <span className="w-7 shrink-0 text-right text-xs tabular-nums" data-testid="remote-input-autofire-rate-label">
+          {autofireRateHz}/s
+        </span>
+      </div>
+    </div>
   );
 
   const portToggle = (

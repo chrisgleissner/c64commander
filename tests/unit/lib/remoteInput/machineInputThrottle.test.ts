@@ -14,96 +14,126 @@ vi.mock("@/lib/config/deviceSafetySettings", () => ({
   loadDeviceSafetyConfig: () => loadDeviceSafetyConfigMock(),
 }));
 
-import { resetMachineInputThrottleForTests, waitForMachineInputThrottle } from "@/lib/remoteInput/machineInputThrottle";
+import { resetMachineInputThrottleForTests, runSerializedMachineInput } from "@/lib/remoteInput/machineInputThrottle";
 
-describe("waitForMachineInputThrottle", () => {
+describe("runSerializedMachineInput", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     resetMachineInputThrottleForTests();
-    loadDeviceSafetyConfigMock.mockReturnValue({ machineInputCooldownMs: 100 });
+    loadDeviceSafetyConfigMock.mockReturnValue({ machineInputCooldownMs: 0 });
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it("resolves immediately on the first call regardless of the configured cooldown", async () => {
-    let resolved = false;
-    void waitForMachineInputThrottle().then(() => {
-      resolved = true;
+  // Issue 3d: the core device-safety guarantee for machine:input - never two
+  // calls in flight at once, so the Ultimate's single-threaded network task
+  // never sees overlapping requests. The second dispatch must not START until
+  // the first has fully settled.
+  it("never lets two dispatches overlap - the second does not start until the first settles", async () => {
+    const started: string[] = [];
+    let resolveFirst!: () => void;
+    const first = runSerializedMachineInput(() => {
+      started.push("first");
+      return new Promise<void>((resolve) => {
+        resolveFirst = resolve;
+      });
     });
+    const second = runSerializedMachineInput(() => {
+      started.push("second");
+      return Promise.resolve();
+    });
+
     await vi.advanceTimersByTimeAsync(0);
-    expect(resolved).toBe(true);
-  });
+    expect(started).toEqual(["first"]); // second is queued behind the still-in-flight first
 
-  it("waits out the remainder of the cooldown on a call that arrives too soon", async () => {
-    await waitForMachineInputThrottle();
-    vi.advanceTimersByTime(40); // 60ms remaining of the 100ms cooldown
-
-    let resolved = false;
-    void waitForMachineInputThrottle().then(() => {
-      resolved = true;
-    });
-    await vi.advanceTimersByTimeAsync(59);
-    expect(resolved).toBe(false);
-    await vi.advanceTimersByTimeAsync(1);
-    expect(resolved).toBe(true);
-  });
-
-  it("resolves immediately once the cooldown has already fully elapsed", async () => {
-    await waitForMachineInputThrottle();
-    vi.advanceTimersByTime(100);
-
-    let resolved = false;
-    void waitForMachineInputThrottle().then(() => {
-      resolved = true;
-    });
+    resolveFirst();
     await vi.advanceTimersByTimeAsync(0);
-    expect(resolved).toBe(true);
-  });
-
-  it("never waits when the configured cooldown is 0 (RELAXED, 'as many as the user can press')", async () => {
-    loadDeviceSafetyConfigMock.mockReturnValue({ machineInputCooldownMs: 0 });
-    await waitForMachineInputThrottle();
-
-    let resolved = false;
-    void waitForMachineInputThrottle().then(() => {
-      resolved = true;
-    });
-    await vi.advanceTimersByTimeAsync(0);
-    expect(resolved).toBe(true);
-  });
-
-  it("re-reads the cooldown on every call, so a mid-session mode change takes effect immediately", async () => {
-    await waitForMachineInputThrottle();
-    loadDeviceSafetyConfigMock.mockReturnValue({ machineInputCooldownMs: 0 });
-
-    let resolved = false;
-    void waitForMachineInputThrottle().then(() => {
-      resolved = true;
-    });
-    await vi.advanceTimersByTimeAsync(0);
-    expect(resolved).toBe(true);
-  });
-
-  // Regression (found by chaos-testing useRemoteInputSession): two callers
-  // that both invoke waitForMachineInputThrottle() in the SAME tick (before
-  // either has updated lastSentAtMs) used to both read the same stale
-  // baseline and both resolve immediately, letting two sends land with zero
-  // gap between them - silently defeating the whole rate limit. Calls must
-  // be serialized so the second one always sees the first one's effect.
-  it("serializes two truly-simultaneous callers instead of letting both slip through with zero gap", async () => {
-    await waitForMachineInputThrottle(); // establishes the baseline
-    vi.advanceTimersByTime(10); // only 10ms elapsed of the 100ms cooldown
-
-    const resolvedAtMs: number[] = [];
-    const first = waitForMachineInputThrottle().then(() => resolvedAtMs.push(Date.now()));
-    const second = waitForMachineInputThrottle().then(() => resolvedAtMs.push(Date.now()));
-
-    await vi.advanceTimersByTimeAsync(200);
     await Promise.all([first, second]);
+    expect(started).toEqual(["first", "second"]);
+  });
 
-    expect(resolvedAtMs).toHaveLength(2);
-    expect(resolvedAtMs[1] - resolvedAtMs[0]).toBeGreaterThanOrEqual(100);
+  // Issue 3d: with the default 0ms cooldown the only spacing is the real call
+  // latency, so a serialized burst runs back-to-back (never overlapping) in order.
+  it("runs dispatches back-to-back in order with zero added delay when the cooldown is 0", async () => {
+    const order: number[] = [];
+    const dispatches = [1, 2, 3].map((n) =>
+      runSerializedMachineInput(() => {
+        order.push(n);
+        return Promise.resolve();
+      }),
+    );
+
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.all(dispatches);
+    expect(order).toEqual([1, 2, 3]);
+  });
+
+  it("applies an optional cooldown floor measured from the previous dispatch's completion", async () => {
+    loadDeviceSafetyConfigMock.mockReturnValue({ machineInputCooldownMs: 100 });
+    await runSerializedMachineInput(() => Promise.resolve()); // first: nothing to wait behind
+
+    let secondStarted = false;
+    const second = runSerializedMachineInput(() => {
+      secondStarted = true;
+      return Promise.resolve();
+    });
+
+    await vi.advanceTimersByTimeAsync(99);
+    expect(secondStarted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await second;
+    expect(secondStarted).toBe(true);
+  });
+
+  it("re-reads the cooldown on every dispatch, so a mid-session mode change takes effect immediately", async () => {
+    loadDeviceSafetyConfigMock.mockReturnValue({ machineInputCooldownMs: 100 });
+    await runSerializedMachineInput(() => Promise.resolve());
+
+    loadDeviceSafetyConfigMock.mockReturnValue({ machineInputCooldownMs: 0 });
+    let secondStarted = false;
+    const second = runSerializedMachineInput(() => {
+      secondStarted = true;
+      return Promise.resolve();
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    await second;
+    expect(secondStarted).toBe(true);
+  });
+
+  it("keeps the queue healthy after a dispatch rejects - a later dispatch still runs", async () => {
+    const failing = runSerializedMachineInput(() => Promise.reject(new Error("transient device error")));
+    await expect(failing).rejects.toThrow("transient device error");
+
+    let laterRan = false;
+    await runSerializedMachineInput(() => {
+      laterRan = true;
+      return Promise.resolve();
+    });
+    expect(laterRan).toBe(true);
+  });
+
+  it("does not overlap even when a dispatch rejects - the next waits for the failed one to settle first", async () => {
+    const started: string[] = [];
+    let rejectFirst!: (error: Error) => void;
+    const first = runSerializedMachineInput(() => {
+      started.push("first");
+      return new Promise<void>((_, reject) => {
+        rejectFirst = reject;
+      });
+    });
+    const second = runSerializedMachineInput(() => {
+      started.push("second");
+      return Promise.resolve();
+    });
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(started).toEqual(["first"]);
+
+    rejectFirst(new Error("boom"));
+    await expect(first).rejects.toThrow("boom");
+    await second;
+    expect(started).toEqual(["first", "second"]);
   });
 });

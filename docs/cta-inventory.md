@@ -366,13 +366,17 @@ ordinary focus-ring CTAs in both output modes.
   - **D-Pad style** (`remote-input-virtual-dpad`) — discrete 8-way
     tap-and-hold buttons — `remote-input-dpad-{up,down,left,right,up-left,
 up-right,down-left,down-right}` — R✅ I✅ (touch only)
-  - **Swipe style** (`remote-input-swipe-pad`) — a large flick surface; a
-    fast directional swipe sends a brief tap (auto-releases) rather than a
-    sustained hold — touch only
+  - **Swipe style** (`remote-input-swipe-pad`) — a large free-drag surface;
+    dragging steers the joystick live along the drawn path (same 8-way live
+    resolution as the Stick, no fixed knob) and releases the instant the finger
+    lifts — sustained, not a one-shot tap — touch only. Shows a drag dot
+    (`remote-input-swipe-dot`) while dragging.
   - Fire — button (press-and-hold) — `remote-input-fire-button` — R✅ I✅
   - Autofire — switch — `remote-input-autofire-switch` — R✅ I✅ (rendered in
     a separate pill above FIRE in both standard and Game mode for extra thumb
     clearance)
+  - Autofire rate — slider — `remote-input-autofire-rate-slider` — R✅ I✅
+    (1–10/s, default 5, persisted; also settable from Settings → Play and Disk)
   - **Physical D-pad / regular keyboard cursor keys / T9, while Joystick mode
     is active** (not focus-ring CTAs — raw relay, works regardless of the
     selected touch movement style above): hardware D-pad Up/Down/Left/Right
@@ -391,7 +395,10 @@ up-right,down-left,down-right}` — R✅ I✅ (touch only)
   `remote-input-keyboard-system`) above a scrollable alphanumeric/symbol grid
   (`remote-input-keyboard-grid`); the expanded profile renders the physical
   C64 rows directly in `remote-input-keyboard-grid` with the function-key
-  cluster alongside
+  cluster alongside. The cursor-pad keys
+  (`remote-input-key-cursor-{up,down,left,right}`) auto-repeat while held by
+  touch (initial delay then a brisk repeat, like C64 hardware); a keypad/
+  focus-ring activation still emits a single cursor move (R✅ I✅ preserved)
   - One-shot SHIFT / CTRL / C= (Commodore) latches — buttons —
     `remote-input-key-shift`, `remote-input-key-ctrl`,
     `remote-input-key-commodore` — R✅ I✅ (apply to exactly the next key,

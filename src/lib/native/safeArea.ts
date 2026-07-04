@@ -27,6 +27,7 @@ export type SystemBarsVisibility = {
 type SafeAreaPlugin = {
   getInsets: () => Promise<SafeAreaInsets>;
   setSystemBarsVisibility: (options: SystemBarsVisibility) => Promise<void>;
+  setSystemBarsAppearance: (options: { light: boolean }) => Promise<void>;
 };
 
 const SafeArea = registerPlugin<SafeAreaPlugin>("SafeArea", {
@@ -107,6 +108,21 @@ export const setSystemBarsVisibility = async (options: SystemBarsVisibility): Pr
     console.warn("Failed to set system bars visibility", { error });
   }
   await syncNativeSafeAreaInsets();
+};
+
+/**
+ * Match the native status/navigation-bar icon appearance to the app's resolved
+ * theme so the clock/battery icons stay legible over the (transparent, edge-to-
+ * edge) bars: light theme → dark icons, dark theme → light icons. No-op off
+ * native Android. Re-invoked whenever the resolved theme changes (see useTheme).
+ */
+export const syncNativeSystemBarAppearance = async (resolvedTheme: "light" | "dark"): Promise<void> => {
+  if (!isNativePlatform() || getPlatform() !== "android") return;
+  try {
+    await SafeArea.setSystemBarsAppearance({ light: resolvedTheme === "light" });
+  } catch (error) {
+    console.warn("Failed to set native system bar appearance", { error });
+  }
 };
 
 export const installNativeSafeAreaSync = () => {

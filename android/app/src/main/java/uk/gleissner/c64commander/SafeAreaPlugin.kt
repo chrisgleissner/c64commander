@@ -81,4 +81,36 @@ class SafeAreaPlugin : Plugin() {
       call.resolve()
     }
   }
+
+  /**
+   * Set the system-bar icon appearance to match the app's resolved light/dark
+   * theme. The activity draws edge-to-edge with transparent status/navigation
+   * bars, so the bars have no colour of their own — their icons are only legible
+   * if their contrast tracks the app background beneath them. `light = true`
+   * (app in LIGHT theme) requests dark icons; `light = false` requests light
+   * icons. Without this the icons default to light and vanish against a light
+   * app background (Issue 6).
+   */
+  @PluginMethod
+  fun setSystemBarsAppearance(call: PluginCall) {
+    val light = call.getBoolean("light", false) ?: false
+
+    val activity = activity
+    if (activity == null) {
+      call.reject("Activity unavailable")
+      return
+    }
+    val window = activity.window
+    if (window == null) {
+      call.reject("Window unavailable")
+      return
+    }
+
+    activity.runOnUiThread {
+      val controller = WindowCompat.getInsetsController(window, window.decorView)
+      controller.isAppearanceLightStatusBars = light
+      controller.isAppearanceLightNavigationBars = light
+      call.resolve()
+    }
+  }
 }

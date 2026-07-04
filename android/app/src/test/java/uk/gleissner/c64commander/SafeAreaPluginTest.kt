@@ -149,4 +149,58 @@ class SafeAreaPluginTest {
     verify(controller).show(WindowInsetsCompat.Type.navigationBars())
     verify(call).resolve()
   }
+
+  @Test
+  fun setSystemBarsAppearanceRejectsWhenActivityIsUnavailable() {
+    setPluginBridge(plugin, null)
+    val call = mock(PluginCall::class.java)
+
+    plugin.setSystemBarsAppearance(call)
+
+    verify(call).reject("Activity unavailable")
+  }
+
+  @Test
+  fun setSystemBarsAppearanceRejectsWhenWindowIsUnavailable() {
+    val activity = mock(AppCompatActivity::class.java)
+    doReturn(null as Window?).`when`(activity).window
+    setPluginBridge(plugin, activity)
+    val call = mock(PluginCall::class.java)
+
+    plugin.setSystemBarsAppearance(call)
+
+    verify(call).reject("Window unavailable")
+  }
+
+  @Test
+  fun setSystemBarsAppearanceRequestsDarkIconsForLightThemeAndResolves() {
+    val activity = mock(AppCompatActivity::class.java)
+    val window = mock(Window::class.java)
+    val decorView = mock(View::class.java)
+    val controller = mock(WindowInsetsControllerCompat::class.java)
+    doReturn(window).`when`(activity).window
+    doReturn(decorView).`when`(window).decorView
+    doAnswer { invocation ->
+              (invocation.getArgument(0) as Runnable).run()
+              null
+            }
+            .`when`(activity)
+            .runOnUiThread(org.mockito.Mockito.any())
+    setPluginBridge(plugin, activity)
+    val call = mock(PluginCall::class.java)
+    doReturn(true).`when`(call).getBoolean("light", false)
+
+    mockStatic(WindowCompat::class.java).use { staticMock ->
+      staticMock
+              .`when`<WindowInsetsControllerCompat> { WindowCompat.getInsetsController(window, decorView) }
+              .thenReturn(controller)
+
+      plugin.setSystemBarsAppearance(call)
+    }
+
+    // light=true -> light bars -> dark icons on both bars.
+    verify(controller).isAppearanceLightStatusBars = true
+    verify(controller).isAppearanceLightNavigationBars = true
+    verify(call).resolve()
+  }
 }

@@ -52,13 +52,15 @@ export type DeviceSafetyConfig = {
   drivesCooldownMs: number;
   ftpListCooldownMs: number;
   telnetConnectCooldownMs: number;
-  // HARD12-017: minimum interval between consecutive POST /v1/machine:input
-  // sends (the remote joystick/keyboard relay). Deliberately its own, looser
-  // entry rather than reusing configsCooldownMs/restMaxConcurrency: the
-  // endpoint is purpose-built for low-latency, high-frequency input (~15ms
-  // end to end on a LAN) and tolerates materially more load than the other
-  // REST endpoints, which is why RELAXED removes the throttle entirely
-  // instead of just loosening it.
+  // HARD12-017: OPTIONAL extra floor (ms) between consecutive POST
+  // /v1/machine:input sends, measured from the previous send's completion. The
+  // primary device-safety mechanism for this endpoint is non-overlap
+  // serialization (never two calls in flight at once - see
+  // machineInputThrottle), which is always on regardless of mode; the natural
+  // ~15ms end-to-end round-trip of a serialized call provides all the spacing
+  // this purpose-built low-latency relay actually needs. So this cooldown
+  // defaults to 0 in every mode (zero added delay) and exists only as a
+  // power-user knob for anyone who wants more spacing than non-overlap alone.
   machineInputCooldownMs: number;
   backoffBaseMs: number;
   backoffMaxMs: number;
@@ -101,9 +103,8 @@ const MODE_DEFAULTS: Record<ConcreteDeviceSafetyMode, Omit<DeviceSafetyConfig, "
     drivesCooldownMs: 200,
     ftpListCooldownMs: 100,
     telnetConnectCooldownMs: 100,
-    // "As many as the user can press" - machine:input is purpose-built for
-    // low-latency, high-frequency relay and does not need the throttle other
-    // endpoints do.
+    // Non-overlap serialization (always on) is the machine:input safety model;
+    // no added delay on top - "as many as the user can press".
     machineInputCooldownMs: 0,
     backoffBaseMs: 100,
     backoffMaxMs: 1500,
@@ -122,9 +123,8 @@ const MODE_DEFAULTS: Record<ConcreteDeviceSafetyMode, Omit<DeviceSafetyConfig, "
     drivesCooldownMs: 500,
     ftpListCooldownMs: 300,
     telnetConnectCooldownMs: 300,
-    // Default: up to 10 interactions/sec (100ms between consecutive
-    // joystick-move/type events relayed to the device).
-    machineInputCooldownMs: 100,
+    // Non-overlap serialization is sufficient for this endpoint; no added floor.
+    machineInputCooldownMs: 0,
     backoffBaseMs: 200,
     backoffMaxMs: 3000,
     backoffFactor: 1.8,
@@ -142,11 +142,11 @@ const MODE_DEFAULTS: Record<ConcreteDeviceSafetyMode, Omit<DeviceSafetyConfig, "
     drivesCooldownMs: 1000,
     ftpListCooldownMs: 800,
     telnetConnectCooldownMs: 800,
-    // Still looser than the other CONSERVATIVE cooldowns: even on the least-
-    // trusted firmware, machine:input tolerates more load than config/drive
-    // writes, so it keeps a real (if reduced) rate rather than matching the
-    // heavier per-request endpoints.
-    machineInputCooldownMs: 200,
+    // Even on the least-trusted firmware, non-overlap serialization (one
+    // in-flight call at a time, restMaxConcurrency already 1) is the machine:input
+    // safety model; a serialized single-request stream cannot wedge the stack the
+    // way concurrent connections can, so no added time floor is imposed here.
+    machineInputCooldownMs: 0,
     backoffBaseMs: 300,
     backoffMaxMs: 6000,
     backoffFactor: 2,
@@ -164,7 +164,7 @@ const MODE_DEFAULTS: Record<ConcreteDeviceSafetyMode, Omit<DeviceSafetyConfig, "
     drivesCooldownMs: 300,
     ftpListCooldownMs: 200,
     telnetConnectCooldownMs: 200,
-    machineInputCooldownMs: 100,
+    machineInputCooldownMs: 0,
     backoffBaseMs: 200,
     backoffMaxMs: 1200,
     backoffFactor: 1.4,

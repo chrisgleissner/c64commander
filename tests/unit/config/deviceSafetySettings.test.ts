@@ -330,27 +330,27 @@ describe("deviceSafetySettings AUTO mode", () => {
     unsubscribe();
   });
 
-  // HARD12-017: machine:input gets its own, looser cooldown entry - the
-  // endpoint is purpose-built for low-latency, high-frequency relay and
-  // tolerates materially more load than the other REST endpoints.
+  // Issue 3d: machine:input safety is now non-overlap serialization (always on,
+  // regardless of mode - see machineInputThrottle), so the cooldown is an OPTIONAL
+  // extra floor that defaults to 0 (zero added delay) in every mode.
   describe("machineInputCooldownMs", () => {
-    it("removes the throttle entirely under RELAXED ('as many as the user can press')", async () => {
+    it("defaults to 0 (non-overlap only, no added delay) under RELAXED", async () => {
       const { safety } = await loadModules();
       safety.saveDeviceSafetyMode("RELAXED");
       expect(safety.loadDeviceSafetyConfig().machineInputCooldownMs).toBe(0);
     });
 
-    it("defaults to 100ms (10 interactions/sec) under BALANCED", async () => {
+    it("defaults to 0 under BALANCED (non-overlap serialization is the safety model)", async () => {
       const { safety } = await loadModules();
       safety.saveDeviceSafetyMode("BALANCED");
-      expect(safety.loadDeviceSafetyConfig().machineInputCooldownMs).toBe(100);
+      expect(safety.loadDeviceSafetyConfig().machineInputCooldownMs).toBe(0);
     });
 
-    it("still allows a real (if reduced) rate under CONSERVATIVE, unlike the fully-serialized REST/FTP concurrency", async () => {
+    it("defaults to 0 even under CONSERVATIVE - a serialized single-request stream cannot wedge the stack", async () => {
       const { safety } = await loadModules();
       safety.saveDeviceSafetyMode("CONSERVATIVE");
       const config = safety.loadDeviceSafetyConfig();
-      expect(config.machineInputCooldownMs).toBe(200);
+      expect(config.machineInputCooldownMs).toBe(0);
       expect(config.machineInputCooldownMs).toBeLessThan(config.configsCooldownMs);
     });
 
@@ -368,7 +368,7 @@ describe("deviceSafetySettings AUTO mode", () => {
       expect(safety.loadDeviceSafetyConfig().machineInputCooldownMs).toBe(150);
 
       safety.resetDeviceSafetyOverrides();
-      expect(safety.loadDeviceSafetyConfig().machineInputCooldownMs).toBe(100);
+      expect(safety.loadDeviceSafetyConfig().machineInputCooldownMs).toBe(0);
     });
 
     it("broadcasts a device-safety-updated event when the override changes", async () => {
