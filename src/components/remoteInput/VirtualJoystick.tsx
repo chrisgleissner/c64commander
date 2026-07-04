@@ -46,6 +46,9 @@ const DEAD_ZONE_FRACTION = 0.25;
 /** Base geometry (px) at scale 1.0; the user's size preference multiplies these. */
 const BASE_CONTROL_PX = 132;
 const BASE_FIRE_PX = 92;
+const IMMERSIVE_ACTION_TOP_GAP_PX = 16;
+const IMMERSIVE_ACTION_BOTTOM_OFFSET_PX = 40;
+const ACTION_CONTROL_STACK_GAP_PX = 32;
 
 const resolveDirections = (dx: number, dy: number, radius: number): JoystickInputName[] => {
   const distance = Math.hypot(dx, dy);
@@ -221,6 +224,33 @@ export const VirtualJoystick = ({
     </Button>
   );
 
+  const autofireToggle = (
+    <label
+      className="flex flex-col items-center gap-2 rounded-3xl bg-background/90 px-3 py-2 text-center text-sm shadow-lg backdrop-blur-sm"
+      data-testid="remote-input-autofire-toggle"
+    >
+      <Switch
+        checked={autofireEnabled}
+        onCheckedChange={onAutofireEnabledChange}
+        disabled={disabled}
+        data-testid="remote-input-autofire-switch"
+      />
+      <span className="text-xs font-semibold uppercase tracking-wide">Autofire</span>
+    </label>
+  );
+
+  const portToggle = (
+    <label className="flex items-center gap-2 text-sm" data-testid="remote-input-port-toggle">
+      <Switch
+        checked={port === 2}
+        onCheckedChange={(checked) => onSetPort(checked ? 2 : 1)}
+        disabled={disabled}
+        data-testid="remote-input-port-switch"
+      />
+      Port {port}
+    </label>
+  );
+
   return (
     <div className={cn("flex flex-col gap-3", immersive && "h-full")} data-testid="remote-input-virtual-joystick">
       {disabled ? (
@@ -229,16 +259,12 @@ export const VirtualJoystick = ({
         </p>
       ) : null}
 
-      {/* Occasional toggles live in a top row, away from the constant-use action
-          zone below, so mid-game thumbs never accidentally flip the port or
-          autofire. The port swap is further separated by a divider. Game mode is
-          a focused control surface: the movement-style selector (a secondary
-          setting picked before play) is hidden so only autofire/port ride along
-          the stick and FIRE. */}
+      {/* Secondary settings stay away from the constant-use action zone below.
+          Game mode hides the movement-style selector, keeps the port swap on the
+          left rail, and lifts Autofire onto its own control just above FIRE. */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        {immersive ? (
-          <span aria-hidden="true" />
-        ) : (
+        {portToggle}
+        {!immersive ? (
           <div className="flex items-center gap-1.5" data-testid="remote-input-movement-style-toggle">
             {MOVEMENT_STYLES.map(({ id, label, icon: Icon }) => (
               <Button
@@ -253,41 +279,39 @@ export const VirtualJoystick = ({
               </Button>
             ))}
           </div>
-        )}
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm" data-testid="remote-input-autofire-toggle">
-            <Switch
-              checked={autofireEnabled}
-              onCheckedChange={onAutofireEnabledChange}
-              disabled={disabled}
-              data-testid="remote-input-autofire-switch"
-            />
-            Autofire
-          </label>
-          {/* Port swap kept "a bit separate" (its own divided cell) — a
-              deliberate action, not something to hit while firing. */}
-          <label
-            className="flex items-center gap-2 border-l border-border pl-3 text-sm"
-            data-testid="remote-input-port-toggle"
-          >
-            <Switch
-              checked={port === 2}
-              onCheckedChange={(checked) => onSetPort(checked ? 2 : 1)}
-              disabled={disabled}
-              data-testid="remote-input-port-switch"
-            />
-            Port {port}
-          </label>
-        </div>
+        ) : null}
       </div>
 
       {/* Action zone: big directional control + big FIRE. In immersive mode the
-          two are anchored to the bottom corners for no-look thumb reach, held a
-          clear gap (bottom-8) above the persistent Release All / Close bar so a
-          firing thumb never strays onto those buttons. */}
-      <div className={cn("flex items-end justify-between gap-4", immersive && "relative min-h-0 flex-1")}>
-        <div className={cn(immersive && "absolute bottom-8 left-1")}>{movementControl}</div>
-        <div className={cn("flex items-center", immersive && "absolute bottom-8 right-1")}>{fireButton}</div>
+          controls stay edge-anchored for no-look thumb reach with extra vertical
+          clearance from both the top controls and the footer. */}
+      <div
+        className={cn("flex items-end justify-between gap-4", immersive && "relative min-h-0 flex-1")}
+        style={
+          immersive
+            ? {
+                paddingTop: IMMERSIVE_ACTION_TOP_GAP_PX,
+              }
+            : undefined
+        }
+      >
+        <div
+          className={cn(immersive && "absolute left-1")}
+          style={immersive ? { bottom: IMMERSIVE_ACTION_BOTTOM_OFFSET_PX } : undefined}
+        >
+          {movementControl}
+        </div>
+        <div
+          className={cn("flex items-end", immersive && "absolute right-1")}
+          style={
+            immersive ? { minHeight: controlPx, bottom: IMMERSIVE_ACTION_BOTTOM_OFFSET_PX } : { minHeight: controlPx }
+          }
+        >
+          <div className="flex flex-col-reverse items-center" style={{ gap: ACTION_CONTROL_STACK_GAP_PX }}>
+            {fireButton}
+            {autofireToggle}
+          </div>
+        </div>
       </div>
     </div>
   );

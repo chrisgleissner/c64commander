@@ -202,16 +202,22 @@ describe("RemoteInputSheet", () => {
     render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
     expect(screen.getByTestId("remote-input-output-mode-toggle")).toBeInTheDocument();
     expect(screen.getByTestId("remote-input-quick-keys-bar")).toBeInTheDocument();
+    expect(screen.getByTestId("remote-input-panic-button")).toBeInTheDocument();
+    expect(screen.getByTestId("remote-input-exit-button")).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));
 
     expect(screen.queryByTestId("remote-input-output-mode-toggle")).not.toBeInTheDocument();
     expect(screen.queryByTestId("remote-input-quick-keys-bar")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("remote-input-panic-button")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("remote-input-exit-button")).not.toBeInTheDocument();
     expect(screen.getByTestId("remote-input-virtual-joystick")).toBeInTheDocument();
     expect(screen.getByTestId("remote-input-fire-button")).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));
     expect(screen.getByTestId("remote-input-output-mode-toggle")).toBeInTheDocument();
+    expect(screen.getByTestId("remote-input-panic-button")).toBeInTheDocument();
+    expect(screen.getByTestId("remote-input-exit-button")).toBeInTheDocument();
   });
 
   it("offers game mode only in Joystick mode on a joystick-capable tier", () => {
@@ -316,7 +322,7 @@ describe("RemoteInputSheet", () => {
       expect(joystick.compareDocumentPosition(keys) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
-    it("labels the footer dismiss action 'Close' (distinct from 'Exit game mode')", () => {
+    it("labels the standard footer dismiss action 'Close' (distinct from 'Exit game mode')", () => {
       render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
       expect(screen.getByTestId("remote-input-exit-button")).toHaveTextContent("Close");
     });

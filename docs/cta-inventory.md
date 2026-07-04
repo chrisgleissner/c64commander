@@ -328,8 +328,8 @@ Not now / Close — buttons — `startup-device-discovery-dismiss`,
 `startup-device-discovery-close` — R✅ I✅.
 
 **Remote Input sheet** (`remote-input-sheet`, HARD12-017, behind
-`remote_input_enabled` — developer_only, hidden by default; opened from Home's
-"Remote Control" tile or Play's "Open Controller" button): a Radix
+`remote_input_enabled`; opened from Home's "Remote Input" tile or Play's "Open
+Controller" button): a Radix
 `[role=dialog]` sheet, so it is a normal keypad-navigable overlay scope like any
 other (Up/Down/OK, Back closes) — **except** while **Joystick** output mode is
 selected, physical D-pad/T9 digit key presses are read directly by the sheet to
@@ -347,7 +347,7 @@ ordinary focus-ring CTAs in both output modes.
 - **Joystick mode:**
   - Port swap — switch (one-tap toggle, same directness as Autofire) —
     `remote-input-port-switch` — R✅ I✅ (default Port 2; label shows the
-    current port)
+    current port; docked on the left rail in both standard and Game mode)
   - Movement style toggle: Stick / D-Pad / Swipe — buttons —
     `remote-input-movement-style-{stick,dpad,swipe}` — R✅ I✅ (default Stick;
     switching style never itself releases a held direction)
@@ -361,7 +361,9 @@ up-right,down-left,down-right}` — R✅ I✅ (touch only)
     fast directional swipe sends a brief tap (auto-releases) rather than a
     sustained hold — touch only
   - Fire — button (press-and-hold) — `remote-input-fire-button` — R✅ I✅
-  - Autofire — switch — `remote-input-autofire-switch` — R✅ I✅
+  - Autofire — switch — `remote-input-autofire-switch` — R✅ I✅ (rendered in
+    a separate pill above FIRE in both standard and Game mode for extra thumb
+    clearance)
   - **Physical D-pad / regular keyboard cursor keys / T9, while Joystick mode
     is active** (not focus-ring CTAs — raw relay, works regardless of the
     selected touch movement style above): hardware D-pad Up/Down/Left/Right
@@ -383,15 +385,19 @@ no PETSCII/keyboard-buffer equivalent for these modifiers]`
     `remote-input-key-restore` — R✅ I✅ `[RESTORE unavailable on the
 kernal-fallback tier — no keyboard-buffer byte; still shown, no-ops]`
   - F1 / F3 / F5 / F7 — buttons — `remote-input-key-f{1,3,5,7}` — R✅ I✅
-- **Always visible in both modes — quick-keys bar**
+- **Standard Joystick mode only — quick-keys bar**
   (`remote-input-quick-keys-bar`): SPACE, RETURN, RUN/STOP, F1/F3/F5/F7, cursor
   Up/Down/Left/Right — buttons — `remote-input-key-{space,return,run-stop,f1,f3,f5,f7,cursor-up,cursor-down,cursor-left,cursor-right}`
-  — R✅ I✅
-- **Safety** — Release All (panic button) — button (destructive) —
-  `remote-input-panic-button` — R✅ I✅ — releases every held/latched input
-  regardless of tracked state
-- Exit — button — `remote-input-exit-button` — R✅ I✅ ; Android Back also
-  exits (closes the sheet and releases all held inputs)
+  — R✅ I✅ (hidden in Game mode and Type mode)
+- **Standard Joystick mode and Type mode only — footer actions**
+  - Safety — Release All (panic button) — button (destructive) —
+    `remote-input-panic-button` — R✅ I✅ — releases every held/latched input
+    regardless of tracked state
+  - Exit — button — `remote-input-exit-button` — R✅ I✅ ; Android Back also
+    exits (closes the sheet and releases all held inputs)
+- **Joystick Game mode only**: no footer actions; dismissal is via the sheet
+  header close button or the `remote-input-immersive-toggle` "Exit game mode"
+  control
 
 **Keypad Quick Menu** (`keypad-quick-menu`, opened by the Menu key when the
 focused item has no context menu): a keypad-navigable list of jump-to-page (×6),

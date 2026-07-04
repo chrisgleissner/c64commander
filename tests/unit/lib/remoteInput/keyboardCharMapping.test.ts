@@ -47,6 +47,12 @@ describe("charToKeyboardInputEvents", () => {
     ]);
   });
 
+  it("maps the shifted number row, including the BASIC-critical quote (HARD15-003)", () => {
+    expect(charToKeyboardInputEvents('"')).toEqual([
+      { kind: "keyboard", inputs: ["2", "left_shift"], transition: "tap" },
+    ]);
+  });
+
   it("returns an empty array for a character with no C64 key equivalent, rather than guessing", () => {
     expect(charToKeyboardInputEvents("~")).toEqual([]);
     expect(charToKeyboardInputEvents("\\")).toEqual([]);
@@ -67,10 +73,10 @@ describe("charToKeyboardInputEvents", () => {
 
 describe("stringToKeyboardInputEvents", () => {
   it("decomposes a whole string into one tap event per character", () => {
-    expect(stringToKeyboardInputEvents("Hi!")).toEqual([
+    expect(stringToKeyboardInputEvents("Hi~")).toEqual([
       { kind: "keyboard", inputs: ["h", "left_shift"], transition: "tap" },
       { kind: "keyboard", inputs: ["i"], transition: "tap" },
-      // "!" has no clean C64 key equivalent — skipped, not guessed.
+      // "~" has no clean C64 key equivalent — skipped, not guessed.
     ]);
   });
 
@@ -102,6 +108,13 @@ describe("keyboardInputsToChar", () => {
 
   it("returns null for an unmapped single key", () => {
     expect(keyboardInputsToChar(["f1"])).toBeNull();
+  });
+
+  it("maps the shifted number row (HARD15-003), including the BASIC-critical quote", () => {
+    expect(keyboardInputsToChar(["2", "left_shift"])).toBe('"');
+    expect(keyboardInputsToChar(["1", "left_shift"])).toBe("!");
+    expect(keyboardInputsToChar(["8", "left_shift"])).toBe("(");
+    expect(keyboardInputsToChar(["9", "left_shift"])).toBe(")");
   });
 });
 

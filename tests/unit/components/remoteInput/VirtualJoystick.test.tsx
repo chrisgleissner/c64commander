@@ -323,6 +323,18 @@ describe("VirtualJoystick", () => {
       expect(screen.getByTestId("remote-input-stick-zone")).toBeInTheDocument();
     });
 
+    it("keeps Port on the left rail and stacks Autofire above FIRE in the standard layout", () => {
+      renderStick();
+
+      const portToggle = screen.getByTestId("remote-input-port-toggle");
+      const movementStyleToggle = screen.getByTestId("remote-input-movement-style-toggle");
+      expect(portToggle.compareDocumentPosition(movementStyleToggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+      const fireStack = screen.getByTestId("remote-input-fire-button").parentElement;
+      expect(fireStack).toHaveClass("flex-col-reverse");
+      expect(screen.getByTestId("remote-input-autofire-toggle")).toBeInTheDocument();
+    });
+
     it("switches between all three touch styles' surfaces", () => {
       renderStick();
 
@@ -377,6 +389,10 @@ describe("VirtualJoystick", () => {
       expect(screen.queryByTestId("remote-input-movement-style-toggle")).not.toBeInTheDocument();
       expect(screen.getByTestId("remote-input-stick-zone")).toBeInTheDocument();
       expect(screen.getByTestId("remote-input-fire-button")).toBeInTheDocument();
+      expect(screen.getByTestId("remote-input-port-toggle")).toBeInTheDocument();
+      const fireStack = screen.getByTestId("remote-input-fire-button").parentElement;
+      expect(fireStack).toHaveClass("flex-col-reverse");
+      expect(screen.getByTestId("remote-input-autofire-toggle")).toBeInTheDocument();
     });
 
     it("does not allow switching style while disabled", () => {

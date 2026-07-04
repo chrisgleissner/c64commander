@@ -35,6 +35,11 @@ vi.mock("@/lib/remoteInput/machineInputThrottle", () => ({
 }));
 
 import { useRemoteInputSession } from "@/hooks/useRemoteInputSession";
+import { resetKernalFallbackInjectionQueueForTests } from "@/lib/remoteInput/kernalFallbackInjector";
+
+const flushMicrotasks = async () => {
+  for (let i = 0; i < 4; i += 1) await Promise.resolve();
+};
 
 describe("useRemoteInputSession", () => {
   beforeEach(() => {
@@ -42,6 +47,7 @@ describe("useRemoteInputSession", () => {
     sendMachineInputBatchMock.mockClear();
     injectAutostartMock.mockClear();
     addErrorLogMock.mockClear();
+    resetKernalFallbackInjectionQueueForTests();
   });
 
   afterEach(() => {
@@ -144,6 +150,59 @@ describe("useRemoteInputSession", () => {
       result.current.sendKeyboardInputs(["a", "left_shift"]);
     });
     expect(injectAutostartMock).toHaveBeenCalledWith(expect.anything(), new Uint8Array([0x41]));
+  });
+
+  it("round-trips a shifted digit (the BASIC quote) through the kernal fallback char path (HARD15-003)", async () => {
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "kernal-fallback" }));
+    await act(async () => {
+      result.current.sendKeyboardInputs(["2", "left_shift"]);
+    });
+    expect(injectAutostartMock).toHaveBeenCalledWith(expect.anything(), new Uint8Array([0x22]));
+  });
+
+  it("serializes concurrent kernal-fallback injections instead of racing them (HARD15-001)", async () => {
+    let resolveFirst!: () => void;
+    injectAutostartMock.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveFirst = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "kernal-fallback" }));
+
+    act(() => result.current.sendChar("a"));
+    await act(flushMicrotasks);
+    expect(injectAutostartMock).toHaveBeenCalledTimes(1);
+
+    act(() => result.current.sendChar("b"));
+    await act(flushMicrotasks);
+    // The second injection must wait for the first to settle, not race it.
+    expect(injectAutostartMock).toHaveBeenCalledTimes(1);
+
+    resolveFirst();
+    await act(flushMicrotasks);
+
+    expect(injectAutostartMock).toHaveBeenCalledTimes(2);
+    expect(injectAutostartMock).toHaveBeenNthCalledWith(1, expect.anything(), new Uint8Array([0x41]));
+    expect(injectAutostartMock).toHaveBeenNthCalledWith(2, expect.anything(), new Uint8Array([0x42]));
+  });
+
+  it("keeps the kernal-fallback injection queue alive after one injection fails (HARD15-001 error isolation)", async () => {
+    injectAutostartMock.mockRejectedValueOnce(new Error("device offline"));
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "kernal-fallback" }));
+
+    act(() => result.current.sendChar("a"));
+    await act(flushMicrotasks);
+    expect(result.current.connectionStatus).toBe("error");
+    expect(addErrorLogMock).toHaveBeenCalledWith(
+      "Remote input kernal-fallback char injection failed",
+      expect.any(Object),
+    );
+
+    act(() => result.current.sendChar("b"));
+    await act(flushMicrotasks);
+    expect(injectAutostartMock).toHaveBeenCalledTimes(2);
+    expect(injectAutostartMock).toHaveBeenNthCalledWith(2, expect.anything(), new Uint8Array([0x42]));
   });
 
   it("sends a release_all event and clears the held set on releaseAll (panic button / stuck-input safety)", async () => {

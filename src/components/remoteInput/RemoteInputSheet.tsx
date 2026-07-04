@@ -231,6 +231,8 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     </Button>
   );
 
+  const showFooterActions = !(immersive && session.outputMode === "joystick");
+
   return (
     <AppSheet open={open} onOpenChange={handleOpenChange}>
       <AppSheetContent data-testid="remote-input-sheet" onKeyDown={handlePhysicalKeyDown} onKeyUp={handlePhysicalKeyUp}>
@@ -328,26 +330,26 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
             />
           ) : null}
         </AppSheetBody>
-        <AppSheetFooter className="flex items-center justify-between">
-          <Button
-            size="sm"
-            variant="destructive"
-            data-testid="remote-input-panic-button"
-            onClick={() => session.releaseAll()}
-          >
-            Release All
-          </Button>
-          {/* "Close" (dismiss the modal), kept distinct from the "Exit game mode"
-              toggle in the header so the two are never ambiguous. */}
-          <Button
-            size="sm"
-            variant="secondary"
-            data-testid="remote-input-exit-button"
-            onClick={() => handleOpenChange(false)}
-          >
-            Close
-          </Button>
-        </AppSheetFooter>
+        {showFooterActions ? (
+          <AppSheetFooter className="flex items-center justify-between">
+            <Button
+              size="sm"
+              variant="destructive"
+              data-testid="remote-input-panic-button"
+              onClick={() => session.releaseAll()}
+            >
+              Release All
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              data-testid="remote-input-exit-button"
+              onClick={() => handleOpenChange(false)}
+            >
+              Close
+            </Button>
+          </AppSheetFooter>
+        ) : null}
       </AppSheetContent>
     </AppSheet>
   );
