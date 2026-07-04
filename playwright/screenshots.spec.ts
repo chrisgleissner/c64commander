@@ -1681,11 +1681,11 @@ test.describe("App screenshots", () => {
   });
 
   test(
-    "capture couch-remote screenshots",
+    "capture remote-input screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
-      allowWarnings(testInfo, "Couch Remote capability probe + relay logging during screenshots.");
-      allowVisualOverflow(testInfo, "Couch Remote keyboard grid scrolls inside the sheet.");
+      allowWarnings(testInfo, "Remote Input capability probe + relay logging during screenshots.");
+      allowVisualOverflow(testInfo, "Remote Input keyboard grid scrolls inside the sheet.");
 
       await page.goto("/");
       await waitForConnected(page);
@@ -1723,26 +1723,26 @@ test.describe("App screenshots", () => {
           await setProfile(shot.w, shot.h, shot.profile);
           await expect(keyboard).toHaveAttribute("data-profile", shot.profile, { timeout: 10000 });
           await captureScreenshot(page, testInfo, shot.file, { locator: sheet });
-          console.log(`[couch-remote] captured ${shot.file}`);
+          console.log(`[remote-input] captured ${shot.file}`);
         } catch (error) {
           const actual = await keyboard.getAttribute("data-profile").catch(() => "unknown");
-          console.warn(`[couch-remote] FAILED ${shot.file} (wanted ${shot.profile}, got ${actual}):`, error);
+          console.warn(`[remote-input] FAILED ${shot.file} (wanted ${shot.profile}, got ${actual}):`, error);
         }
       }
 
-      // Refresh joystick + game-mode shots so the header reads "Couch Remote".
+      // Refresh joystick + game-mode shots so the header reads "Remote Input".
       try {
         await setProfile(393, 760, "medium");
         await page.getByTestId("remote-input-mode-joystick").click();
         await expect(page.getByTestId("remote-input-virtual-joystick")).toBeVisible();
         await captureScreenshot(page, testInfo, "home/remote-input/01-joystick.png", { locator: sheet });
-        console.log("[couch-remote] captured 01-joystick.png");
+        console.log("[remote-input] captured 01-joystick.png");
         await page.getByTestId("remote-input-immersive-toggle").click();
         await captureScreenshot(page, testInfo, "home/remote-input/02-game-mode.png", { locator: sheet });
-        console.log("[couch-remote] captured 02-game-mode.png");
+        console.log("[remote-input] captured 02-game-mode.png");
         await page.getByTestId("remote-input-immersive-toggle").click();
       } catch (error) {
-        console.warn("[couch-remote] joystick/game-mode capture failed:", error);
+        console.warn("[remote-input] joystick/game-mode capture failed:", error);
       }
     },
   );

@@ -113,37 +113,33 @@ Operational dashboard: machine controls, quick actions, light effects, drives, p
   </tr>
 </table>
 
-### Couch Remote
+### Remote Input
 
-Turn your phone into a wireless controller for the C64 — an on-screen joystick and keyboard relayed to the machine over your network. It is on by default: open it from the **Couch Remote** quick action on **Home**, or the **Couch Remote** button on **Play** while something is running.
+Use your phone as a second-screen controller for the C64, with joystick and keyboard input relayed over your network. Open it from **Remote Input** on **Home**, or from **Play** while a machine is running.
 
-There are two tabs, each tuned for its job:
+Remote Input includes:
 
-- **Joystick** — a large, thumb-friendly stick (choose **Stick**, **D-Pad**, or **Swipe** movement), a big FIRE button, autofire, and port select. A one-tap **Game mode** strips the screen down to an edge-anchored stick and fire for no-look play. Everything is size-adjustable with haptic feedback.
-- **Type** — a real C64 keyboard that reshapes itself to the screen. A dedicated **Cursor Pad** gives you the four cursor keys as one big, isolated cross, kept well clear of destructive keys so a shaky tap can never hit RESTORE or RUN/STOP. **RETURN** and **SPACE** stay pinned and reachable without scrolling; the letters and symbols scroll when space is tight.
+- **Joystick** - **Analog**, **D-Pad**, and **Swipe** controls, **FIRE**, autofire, port selection, and **Game mode**.
+- **Keys** - a touchscreen C64 keyboard with direct access to common control, edit, function, and system keys.
 
-The Type keyboard adapts to the space it is given — a task-oriented deck (cursor pad, RETURN/SPACE, edit, function and system keys, with the alphanumeric grid scrolling below) on small phones, and the full physical C64 layout on tablets, desktop, and large screens.
+Joystick relay requires Ultimate 64 firmware 3.15 or above. It does not work on U2 cartridges due to hardware limitations. On unsupported devices, Remote Input opens in keyboard-only mode. The feature can be disabled in **Settings**.
 
-Every high-value key is one tap, with no manual Shift chords: **CLR**, **INS**, and the shifted function keys **F2/F4/F6/F8** are direct keys, and the C64 character-arrow keys (← and ↑) stay clearly distinct from cursor movement. Shifted symbols appear as secondary legends, and every key carries an accessible label.
-
-The joystick relay needs Ultimate firmware that exposes the `machine:input` REST endpoint (U64 family). On any other device the Couch Remote opens straight into keyboard-only mode — no joystick, everything else works. You can turn the whole feature off in **Settings**.
-
-The Joystick tab, and its no-look **Game mode**:
+Joystick tab:
 
 <table>
   <tr>
-    <td><img src="docs/img/app/home/remote-input/01-joystick.png" alt="Couch Remote Joystick tab with a large adjustable stick and fire button" width="360"/></td>
-    <td><img src="docs/img/app/home/remote-input/02-game-mode.png" alt="Couch Remote Game mode with an edge-anchored stick and fire button" width="360"/></td>
+    <td><img src="docs/img/app/home/remote-input/01-joystick.png" alt="Remote Input Joystick tab with a large adjustable stick and fire button" width="360"/></td>
+    <td><img src="docs/img/app/home/remote-input/02-game-mode.png" alt="Remote Input Game mode with an edge-anchored stick and fire button" width="360"/></td>
   </tr>
 </table>
 
-The Type tab, adapting from a small phone to a tablet/desktop — cursor pad and pinned keys stay put, the layout grows into the full C64 keyboard:
+Keys tab:
 
 <table>
   <tr>
-    <td><img src="docs/img/app/home/remote-input/03-keyboard-compact.png" alt="Couch Remote Type tab on a small phone: isolated cursor pad, pinned RETURN and SPACE, and a scrollable key grid" width="240"/></td>
-    <td><img src="docs/img/app/home/remote-input/04-keyboard-medium.png" alt="Couch Remote Type tab on a phone with recognizable C64 key ordering" width="240"/></td>
-    <td><img src="docs/img/app/home/remote-input/05-keyboard-expanded.png" alt="Couch Remote Type tab on a tablet or desktop showing the full physical C64 keyboard layout" width="360"/></td>
+    <td><img src="docs/img/app/home/remote-input/03-keyboard-compact.png" alt="Remote Input Keys tab on a small phone: isolated cursor pad, pinned RETURN and SPACE, and a scrollable key grid" width="240"/></td>
+    <td><img src="docs/img/app/home/remote-input/04-keyboard-medium.png" alt="Remote Input Keys tab on a phone with recognizable C64 key ordering" width="240"/></td>
+    <td><img src="docs/img/app/home/remote-input/05-keyboard-expanded.png" alt="Remote Input Keys tab on a tablet or desktop showing the full physical C64 keyboard layout with an aligned F-key box" width="360"/></td>
   </tr>
 </table>
 
