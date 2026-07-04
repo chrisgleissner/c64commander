@@ -50,7 +50,7 @@ describe("useRemoteInputCapabilityTier", () => {
 
   it("defaults to the conservative kernal-fallback tier when not connected, without probing", () => {
     const { result } = renderHook(() => useRemoteInputCapabilityTier());
-    expect(result.current).toEqual({ tier: "kernal-fallback", loading: false });
+    expect(result.current).toEqual({ tier: "kernal-fallback", loading: false, resolved: false });
     expect(probeMachineInputCapabilityMock).not.toHaveBeenCalled();
   });
 
@@ -61,7 +61,7 @@ describe("useRemoteInputCapabilityTier", () => {
 
     const { result } = renderHook(() => useRemoteInputCapabilityTier());
 
-    await waitFor(() => expect(result.current).toEqual({ tier: "full", loading: false }));
+    await waitFor(() => expect(result.current).toEqual({ tier: "full", loading: false, resolved: true }));
     expect(probeMachineInputCapabilityMock).toHaveBeenCalledWith(
       expect.objectContaining({ deviceId: "device-a", firmwareVersion: "3.15", coreVersion: "1.4B" }),
     );
@@ -74,7 +74,7 @@ describe("useRemoteInputCapabilityTier", () => {
 
     const { result } = renderHook(() => useRemoteInputCapabilityTier());
 
-    await waitFor(() => expect(result.current).toEqual({ tier: "kernal-fallback", loading: false }));
+    await waitFor(() => expect(result.current).toEqual({ tier: "kernal-fallback", loading: false, resolved: true }));
   });
 
   it("falls back to kernal-fallback and logs when the probe itself rejects", async () => {
@@ -84,7 +84,7 @@ describe("useRemoteInputCapabilityTier", () => {
 
     const { result } = renderHook(() => useRemoteInputCapabilityTier());
 
-    await waitFor(() => expect(result.current).toEqual({ tier: "kernal-fallback", loading: false }));
+    await waitFor(() => expect(result.current).toEqual({ tier: "kernal-fallback", loading: false, resolved: false }));
     expect(addErrorLogMock).toHaveBeenCalledWith("Remote input capability probe failed", expect.any(Object));
   });
 
@@ -94,11 +94,11 @@ describe("useRemoteInputCapabilityTier", () => {
 
     const { result } = renderHook(() => useRemoteInputCapabilityTier(false));
 
-    expect(result.current).toEqual({ tier: "kernal-fallback", loading: false });
+    expect(result.current).toEqual({ tier: "kernal-fallback", loading: false, resolved: false });
     expect(probeMachineInputCapabilityMock).not.toHaveBeenCalled();
   });
 
-  it("resets to the conservative tier when the connection drops", async () => {
+  it("resets to the conservative, unresolved tier when the connection drops", async () => {
     statusState.isConnected = true;
     statusState.deviceInfo = { core_version: "1.4B" };
     probeMachineInputCapabilityMock.mockResolvedValue({ status: "available" });
@@ -109,6 +109,27 @@ describe("useRemoteInputCapabilityTier", () => {
     statusState.isConnected = false;
     rerender();
 
-    expect(result.current).toEqual({ tier: "kernal-fallback", loading: false });
+    expect(result.current).toEqual({ tier: "kernal-fallback", loading: false, resolved: false });
   });
+
+  // HARD15-006: `resolved` must distinguish a genuine probe answer from the
+  // shared default/reset shape - an error/auth-required outcome uses the same
+  // tier value as "not yet probed" but must NOT be treated as resolved, so a
+  // consumer (the sheet's smart-default effect) does not act on it as if the
+  // device had genuinely been found unsupported.
+  it.each([
+    ["error", "kernal-fallback"],
+    ["auth-required", "auth-required"],
+  ] as const)(
+    "marks the tier unresolved (though still updated) for a non-definitive '%s' probe status",
+    async (status, expectedTier) => {
+      statusState.isConnected = true;
+      statusState.deviceInfo = { core_version: "1.4B" };
+      probeMachineInputCapabilityMock.mockResolvedValue({ status });
+
+      const { result } = renderHook(() => useRemoteInputCapabilityTier());
+
+      await waitFor(() => expect(result.current).toEqual({ tier: expectedTier, loading: false, resolved: false }));
+    },
+  );
 });

@@ -250,8 +250,17 @@ export const probeMachineInputCapability = async (
         httpStatus,
       }),
     );
-    const result = buildMachineInputProbeResult(resolveMachineInputStatusFromHttp(httpStatus), cacheKey, httpStatus);
-    machineInputProbeCache.set(cacheKey, result);
+    const status = resolveMachineInputStatusFromHttp(httpStatus);
+    const result = buildMachineInputProbeResult(status, cacheKey, httpStatus);
+    // HARD15-002: cache only definitive firmware answers (404/405 -> missing,
+    // 501 -> hardware-unavailable). "error" (timeout/network blip) and
+    // "auth-required" are transient/recoverable - caching them would
+    // permanently downgrade a capable device to keyboard-only after one
+    // hiccup, with no production invalidation path. Leaving them uncached
+    // means the next probe (every sheet open re-probes) simply tries again.
+    if (status === "missing" || status === "hardware-unavailable") {
+      machineInputProbeCache.set(cacheKey, result);
+    }
     return result;
   }
 };

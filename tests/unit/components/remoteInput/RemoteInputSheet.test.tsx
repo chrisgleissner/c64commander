@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const tierState = {
   tier: "full" as "full" | "kernal-fallback" | "auth-required",
   loading: false,
+  resolved: true,
 };
 
 const setOutputModeMock = vi.fn();
@@ -67,6 +68,7 @@ describe("RemoteInputSheet", () => {
   beforeEach(() => {
     tierState.tier = "full";
     tierState.loading = false;
+    tierState.resolved = true;
     initialSessionOutputMode = "joystick";
     vi.clearAllMocks();
   });
@@ -280,6 +282,7 @@ describe("RemoteInputSheet", () => {
     it("defaults to Type mode after the probe settles on a keyboard-only device", () => {
       tierState.tier = "kernal-fallback";
       tierState.loading = true; // probe in flight when the sheet opens
+      tierState.resolved = false;
       const { rerender } = render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
 
       // Still probing → do not switch yet.
@@ -287,6 +290,7 @@ describe("RemoteInputSheet", () => {
 
       // Probe resolves to a tier without joystick support → auto-switch to Type.
       tierState.loading = false;
+      tierState.resolved = true;
       rerender(<RemoteInputSheet open onOpenChange={vi.fn()} />);
       expect(setOutputModeMock).toHaveBeenCalledWith("type");
     });
@@ -294,12 +298,43 @@ describe("RemoteInputSheet", () => {
     it("never bounces a full-tier device off Joystick during the capability probe", () => {
       tierState.tier = "full";
       tierState.loading = true;
+      tierState.resolved = false;
       const { rerender } = render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
 
       tierState.loading = false;
+      tierState.resolved = true;
       rerender(<RemoteInputSheet open onOpenChange={vi.fn()} />);
 
       expect(setOutputModeMock).not.toHaveBeenCalledWith("type");
+    });
+
+    // HARD15-006: a transient connection blip resets the tier hook to the
+    // default kernal-fallback/unresolved shape mid-session - indistinguishable
+    // from "not yet probed" by tier/loading alone. `resolved` lets the sheet
+    // tell the two apart, so the blip disables the Joystick tab instead of
+    // yanking the user into Keys mode, and re-enables it once the tier
+    // resolves again on reconnect.
+    it("does not bounce out of Joystick mode on a transient connection blip, and recovers on reconnect", () => {
+      const { rerender } = render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      expect(screen.getByTestId("remote-input-mode-joystick")).toBeEnabled();
+
+      // The tier hook's disconnect-reset path: kernal-fallback/not-loading/
+      // unresolved - the same shape a genuine unsupported-device probe would
+      // leave, MINUS `resolved`.
+      tierState.tier = "kernal-fallback";
+      tierState.loading = false;
+      tierState.resolved = false;
+      rerender(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+
+      expect(setOutputModeMock).not.toHaveBeenCalledWith("type");
+      expect(screen.getByTestId("remote-input-mode-joystick")).toBeDisabled();
+
+      // Reconnect: the tier re-resolves to full.
+      tierState.tier = "full";
+      tierState.resolved = true;
+      rerender(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+
+      expect(screen.getByTestId("remote-input-mode-joystick")).toBeEnabled();
     });
   });
 

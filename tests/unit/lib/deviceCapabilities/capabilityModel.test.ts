@@ -207,6 +207,54 @@ describe("deviceCapabilities — probeMachineInputCapability", () => {
 
     expect(api.getMachineInputState).toHaveBeenCalledTimes(1);
   });
+
+  it("does not cache a transient error - a later successful probe with the same inputs resolves available (HARD15-002)", async () => {
+    let attempt = 0;
+    const api = createApi(async () => {
+      attempt += 1;
+      if (attempt === 1) throw new Error("timeout"); // no c64uHttpStatus - a network/timeout blip.
+      return { errors: [], keyboard: { inputs: [] }, joysticks: [] };
+    });
+    const input = { api, deviceId: "u64", firmwareVersion: "3.15 alpha", coreVersion: "1.4B" };
+
+    const first = await probeMachineInputCapability(input);
+    expect(first.status).toBe("error");
+
+    const second = await probeMachineInputCapability(input);
+    expect(second.status).toBe("available");
+    expect(api.getMachineInputState).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not cache auth-required - a later successful probe with the same inputs resolves available (HARD15-002)", async () => {
+    let attempt = 0;
+    const api = createApi(async () => {
+      attempt += 1;
+      if (attempt === 1) throw httpError(403);
+      return { errors: [], keyboard: { inputs: [] }, joysticks: [] };
+    });
+    const input = { api, deviceId: "u64", firmwareVersion: "3.15 alpha", coreVersion: "1.4B" };
+
+    const first = await probeMachineInputCapability(input);
+    expect(first.status).toBe("auth-required");
+
+    const second = await probeMachineInputCapability(input);
+    expect(second.status).toBe("available");
+    expect(api.getMachineInputState).toHaveBeenCalledTimes(2);
+  });
+
+  it("still caches a definitive missing result - the hot path stays request-free (HARD15-002 guard)", async () => {
+    const api = createApi(async () => {
+      throw httpError(404);
+    });
+    const input = { api, deviceId: "c64u", firmwareVersion: "1.1.0", coreVersion: "1.0.0" };
+
+    const first = await probeMachineInputCapability(input);
+    expect(first.status).toBe("missing");
+
+    const second = await probeMachineInputCapability(input);
+    expect(second.status).toBe("missing");
+    expect(api.getMachineInputState).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("deviceCapabilities — detectStreamingFromConfig", () => {

@@ -66,16 +66,10 @@ const PHYSICAL_INPUT_KEYMAP = resolveInputProfile("keypad");
  * joystick action controls for no-look play — see docs/plans/hardening/13.
  */
 export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) => {
-  const { tier, loading: tierLoading } = useRemoteInputCapabilityTier(open);
+  const { tier, loading: tierLoading, resolved } = useRemoteInputCapabilityTier(open);
   const session = useRemoteInputSession({ tier });
   const joystickAvailable = remoteInputSupportsJoystick(tier);
   const heldPhysicalKeysRef = useRef<Set<string>>(new Set());
-  // Whether a capability probe actually ran during this open-session. Guards the
-  // "default to Type mode" effect below against the transient pre-probe state,
-  // which is indistinguishable from a resolved kernal-fallback tier
-  // ({ tier: "kernal-fallback", loading: false }) and would otherwise bounce a
-  // full-tier device off the Joystick tab before the probe confirms support.
-  const probeStartedRef = useRef(false);
   const [controlSize, setControlSize] = useState<RemoteInputControlSize>(DEFAULT_REMOTE_INPUT_CONTROL_SIZE);
   const [immersive, setImmersive] = useState(false);
   const scale = remoteInputControlScale(controlSize);
@@ -148,24 +142,20 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     if (!joystickAvailable && immersive) setImmersive(false);
   }, [joystickAvailable, immersive]);
 
-  // Note that a probe ran this open-session (loading went true), and reset the
-  // flag whenever the sheet closes so the next open re-arms the guard.
-  useEffect(() => {
-    if (tierLoading) probeStartedRef.current = true;
-  }, [tierLoading]);
-  useEffect(() => {
-    if (!open) probeStartedRef.current = false;
-  }, [open]);
-
   // Smart default: when the connected device's REST API has no machine:input
   // support (keyboard-only), open straight into Type mode rather than a disabled
-  // Joystick tab. Only after the probe has settled, so a full-tier device is
-  // never bounced off Joystick during the initial capability check.
+  // Joystick tab. Gated on `resolved` (HARD15-006), not merely `!tierLoading` -
+  // the tier also reads as the default kernal-fallback value before any probe
+  // has ever run AND during a transient connection blip mid-session (the tier
+  // hook resets synchronously on disconnect). `resolved` distinguishes a
+  // genuine probed answer from both of those, so a transient blip no longer
+  // bounces the user out of Joystick mode - it only disables the tab (see the
+  // hint below) until the tier resolves again.
   useEffect(() => {
-    if (open && probeStartedRef.current && !tierLoading && !joystickAvailable && session.outputMode === "joystick") {
+    if (open && resolved && !tierLoading && !joystickAvailable && session.outputMode === "joystick") {
       session.setOutputMode("type");
     }
-  }, [open, tierLoading, joystickAvailable, session.outputMode, session.setOutputMode]);
+  }, [open, resolved, tierLoading, joystickAvailable, session.outputMode, session.setOutputMode]);
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {

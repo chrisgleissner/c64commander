@@ -9,7 +9,7 @@
 import { useEffect, useState } from "react";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { getC64API } from "@/lib/c64api";
-import { probeMachineInputCapability } from "@/lib/deviceCapabilities";
+import { probeMachineInputCapability, type MachineInputCapabilityStatus } from "@/lib/deviceCapabilities";
 import { resolveRemoteInputTier, type RemoteInputTier } from "@/lib/remoteInput/capabilityTier";
 import { getSelectedSavedDevice } from "@/lib/savedDevices/store";
 import { addErrorLog, buildErrorLogDetails } from "@/lib/logging";
@@ -17,7 +17,21 @@ import { addErrorLog, buildErrorLogDetails } from "@/lib/logging";
 export type RemoteInputCapabilityState = {
   tier: RemoteInputTier;
   loading: boolean;
+  /**
+   * HARD15-006: whether `tier` reflects an actual, definitive probe result
+   * rather than the default/reset state - `{tier: "kernal-fallback", loading:
+   * false}` is otherwise indistinguishable between "genuinely probed and
+   * unsupported" and "not yet probed / mid-blip", which used to bounce the
+   * sheet's smart-default effect out of Joystick mode on every transient
+   * disconnect. Composes with HARD15-002: an `error`/`auth-required` probe
+   * outcome is also uncached, so it is treated the same as "not yet probed"
+   * here too.
+   */
+  resolved: boolean;
 };
+
+const isDefinitiveStatus = (status: MachineInputCapabilityStatus): boolean =>
+  status !== "error" && status !== "auth-required";
 
 // HARD12-017: resolves which remote-input tier a connected device supports.
 // Defaults to the conservative "kernal-fallback" tier while the probe is
@@ -28,7 +42,11 @@ export type RemoteInputCapabilityState = {
 // open, not merely rendered dark behind the feature flag.
 export const useRemoteInputCapabilityTier = (enabled = true): RemoteInputCapabilityState => {
   const { status } = useC64Connection();
-  const [state, setState] = useState<RemoteInputCapabilityState>({ tier: "kernal-fallback", loading: false });
+  const [state, setState] = useState<RemoteInputCapabilityState>({
+    tier: "kernal-fallback",
+    loading: false,
+    resolved: false,
+  });
 
   const deviceInfo = status.deviceInfo;
   const isConnected = status.isConnected;
@@ -37,7 +55,7 @@ export const useRemoteInputCapabilityTier = (enabled = true): RemoteInputCapabil
 
   useEffect(() => {
     if (!enabled || !isConnected) {
-      setState({ tier: "kernal-fallback", loading: false });
+      setState({ tier: "kernal-fallback", loading: false, resolved: false });
       return;
     }
     let cancelled = false;
@@ -51,7 +69,11 @@ export const useRemoteInputCapabilityTier = (enabled = true): RemoteInputCapabil
     })
       .then((result) => {
         if (cancelled) return;
-        setState({ tier: resolveRemoteInputTier(result.status), loading: false });
+        setState({
+          tier: resolveRemoteInputTier(result.status),
+          loading: false,
+          resolved: isDefinitiveStatus(result.status),
+        });
       })
       .catch((error) => {
         if (cancelled) return;
@@ -59,7 +81,7 @@ export const useRemoteInputCapabilityTier = (enabled = true): RemoteInputCapabil
           "Remote input capability probe failed",
           buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { deviceId }),
         );
-        setState({ tier: "kernal-fallback", loading: false });
+        setState({ tier: "kernal-fallback", loading: false, resolved: false });
       });
     return () => {
       cancelled = true;
