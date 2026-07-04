@@ -6,13 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useRef, type MutableRefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { createArchiveClient } from "@/lib/archive/client";
 import { getCachedArchivePlayback, setCachedArchivePlayback } from "@/lib/archive/archivePlaybackCache";
 import { buildArchivePlayPlan } from "@/lib/archive/execution";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { getC64API } from "@/lib/c64api";
 import { beginMachineTransition } from "@/lib/deviceInteraction/deviceActivityGate";
+import { setMachineExecutionPaused, setMachineExecutionRunning } from "@/lib/deviceInteraction/machineExecutionStore";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import {
   createMachineTransitionCoordinator,
@@ -186,9 +187,13 @@ interface UsePlaybackControllerProps {
   ensureUnmuted: (options?: { force?: boolean; refreshItems?: boolean }) => Promise<void>;
 
   // Refs
+  // HARD12-007: the second parameter is `reset` (whether to zero the cumulative
+  // base), not `playing`. The earlier `playing: boolean` typing invited the
+  // regression where every track start passed `true`, resetting the cumulative
+  // "Remaining" clock each track.
   playedClockRef: MutableRefObject<{
-    start: (now: number, playing: boolean) => void;
-    stop: (now: number, playing: boolean) => void;
+    start: (now: number, reset?: boolean) => void;
+    stop: (now: number, reset?: boolean) => void;
     pause: (now: number) => void;
     resume: (now: number) => void;
     reset: () => void;
@@ -270,6 +275,10 @@ export function usePlaybackController({
   const currentIndexRef = useRef(currentIndex);
   const isPlayingRef = useRef(isPlaying);
   const isPausedRef = useRef(isPaused);
+  // HARD12-018: tracks that the last song in the playlist auto-ended so that
+  // background execution can stop even though `isPlaying` stays true (the Stop
+  // affordance must remain available). Reset whenever a new track starts.
+  const [playlistEnded, setPlaylistEnded] = useState(false);
   const userTransportQueueRef = useRef(Promise.resolve());
   const pendingUserSkipRef = useRef<PendingUserSkip | null>(null);
   const flushPendingUserSkipRef = useRef<() => Promise<void>>(async () => undefined);
@@ -605,6 +614,7 @@ export function usePlaybackController({
       }
       autoAdvanceGuardRef.current = null;
       setAutoAdvanceDueAtMs(null);
+      setPlaylistEnded(true);
       addLog("info", "Playlist playback ended", {
         reason,
         currentIndex: currentIndexRef.current,
@@ -627,6 +637,9 @@ export function usePlaybackController({
         pauseMuteSnapshotRef.current = null;
         pausingFromPauseRef.current = false;
         resumingFromPauseRef.current = false;
+        // HARD12-018: starting a new track invalidates any prior "playlist
+        // ended" sentinel so background execution may resume if needed.
+        setPlaylistEnded(false);
         let effectiveRequest = item.request;
         let effectivePath = item.path;
         if (effectiveRequest.source === "commoserve" && !effectiveRequest.file) {
@@ -900,7 +913,10 @@ export function usePlaybackController({
           setVisibleCurrentIndex(options.playlistIndex);
         }
         trackStartedAtRef.current = now;
-        playedClockRef.current.start(now, true);
+        // HARD12-007: do NOT pass reset=true here — `startPlaylist`'s explicit
+        // .reset() already handles the playlist-start case, and resetting per
+        // track is the bug that made "Remaining" snap to 0 on every auto-advance.
+        playedClockRef.current.start(now);
         setPlayedMs(playedClockRef.current.current(now));
         if (typeof resolvedDuration === "number") {
           autoAdvanceGuardRef.current = {
@@ -1017,6 +1033,8 @@ export function usePlaybackController({
         cancelAutoAdvance();
         playedClockRef.current.reset();
         setPlayedMs(0);
+        setPlaylistEnded(false);
+        setMachineExecutionRunning();
         const resolvedItems = await applySonglengthsToItems(items);
         setPlaylist((prev) => {
           if (!prev.length) return resolvedItems;
@@ -1154,6 +1172,9 @@ export function usePlaybackController({
       lastAppliedPlaybackConfigSignatureRef.current = null;
       autoAdvanceGuardRef.current = null;
       setAutoAdvanceDueAtMs(null);
+      // HARD12-020: stopping clears any shared pause state so Home does not
+      // keep showing "paused" or attempt a stale pause-mute restore.
+      setMachineExecutionRunning();
       try {
         await restoreVolumeOverrides("stop");
       } catch (error) {
@@ -1203,6 +1224,9 @@ export function usePlaybackController({
               await resumeMachineWithRetry(api);
               await unmuteAfterMachineResume();
               setIsPaused(false);
+              // HARD12-020: publish the resumed state so Home's pause/resume
+              // control converges with Play instead of assuming "running".
+              setMachineExecutionRunning();
               const now = Date.now();
               trackStartedAtRef.current = now - elapsedMs;
               playedClockRef.current.resume(now);
@@ -1228,6 +1252,11 @@ export function usePlaybackController({
             setPlayedMs(playedClockRef.current.current(now));
             setIsPaused(true);
             setAutoAdvanceDueAtMs(null);
+            // HARD12-020: publish the paused state and whether a SID pause-mute
+            // snapshot was captured so Home can show the correct label and
+            // restore the mixer on a Home-initiated resume (Play may be an
+            // unmounted placeholder when the user resumes from Home).
+            setMachineExecutionPaused({ pauseMutePending: pauseMuteSnapshotRef.current !== null });
           } finally {
             endTransition();
           }
@@ -1564,6 +1593,7 @@ export function usePlaybackController({
     handlePauseResume,
     handleNext,
     handlePrevious,
+    playlistEnded,
     resolveSidMetadata,
     resolveUltimateSidDurationByMd5,
     playlistItemDuration,

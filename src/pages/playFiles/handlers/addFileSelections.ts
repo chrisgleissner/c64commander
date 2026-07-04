@@ -571,11 +571,32 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         });
         return [...merged.values()];
       };
+      // HARD12-015: build the per-parent prefetched entry map once per parent
+      // (on first need) and cache it. Previously the map was rebuilt wholesale
+      // inside every getPrefetchedConfigEntriesByPath call (one call per file
+      // in the per-file loop), making the cumulative merge work quadratic in
+      // the per-folder file count for single-folder batch adds. The merged
+      // content is unchanged; only the rebuild cadence drops from O(calls).
       const prefetchedConfigEntriesByPath = new Map<string, SourceEntry[]>();
       const getPrefetchedConfigEntriesByPath = () => {
         selectedFilesByParent.forEach((_, path) => {
           const normalizedPath = normalizeSourcePath(path);
-          prefetchedConfigEntriesByPath.set(normalizedPath, getDirectoryEntries(path));
+          if (!prefetchedConfigEntriesByPath.has(normalizedPath)) {
+            prefetchedConfigEntriesByPath.set(normalizedPath, getDirectoryEntries(path));
+          }
+        });
+        // Also include parents that came from listingCache alone (no selected
+        // files), so discoverConfigCandidates can resolve sibling entries
+        // without round-tripping through source.listEntries again.
+        listingCache.forEach((entries, path) => {
+          const normalizedPath = normalizeSourcePath(path);
+          if (!prefetchedConfigEntriesByPath.has(normalizedPath)) {
+            const merged = new Map<string, SourceEntry>();
+            entries.forEach((entry) => {
+              if (entry.type === "file") merged.set(normalizeSourcePath(entry.path), entry);
+            });
+            prefetchedConfigEntriesByPath.set(normalizedPath, [...merged.values()]);
+          }
         });
         return prefetchedConfigEntriesByPath;
       };
@@ -884,25 +905,21 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             addSonglengthsEntry(entry.path, file);
           }
         } else {
+          // HARD12-014: when the user opted out of recursion the add itself
+          // walks only one level (see listEntries branch above). The
+          // songlengths discovery must respect the same scope — search the
+          // already-cached direct children of every selected directory rather
+          // than calling listFilesRecursive (which on a load-fragile c64u FTP
+          // service can stall the whole control plane).
           const directorySelections = selections.filter((selection) => selection.type === "dir");
           for (const selection of directorySelections) {
-            try {
-              throwIfAborted();
-              const recursiveEntries = await source.listFilesRecursive(selection.path, { signal: abortSignal });
-              throwIfAborted();
-              recursiveEntries
-                .filter((entry) => entry.type === "file" && isSonglengthsFileName(entry.name))
-                .forEach((entry) => {
-                  const file = resolveSonglengthsFile(entry.path, entry.name, entry.modifiedAt, entry.sizeBytes);
-                  addSonglengthsEntry(entry.path, file);
-                });
-            } catch (error) {
-              addLog("warn", "Failed to recursively list files for songlengths discovery.", {
-                sourceId: source.id,
-                selectionPath: selection.path,
-                error: (error as Error).message,
+            const directChildren = listingCache.get(selection.path) ?? [];
+            directChildren
+              .filter((entry) => entry.type === "file" && isSonglengthsFileName(entry.name))
+              .forEach((entry) => {
+                const file = resolveSonglengthsFile(entry.path, entry.name, entry.modifiedAt, entry.sizeBytes);
+                addSonglengthsEntry(entry.path, file);
               });
-            }
           }
         }
 

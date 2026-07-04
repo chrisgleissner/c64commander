@@ -382,7 +382,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
             if (!ftpBlob) {
               throw new Error("SID FTP fetch failed for SSL propagation");
             }
-            const sslPayload = createSslPayload(plan.durationMs as number);
+            const sslPayload = createSslPayload(plan.durationMs as number, { songNr: plan.songNr });
             const sslBlob = new Blob([sslPayload], {
               type: "application/octet-stream",
             });
@@ -437,7 +437,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
         if (!blob) throw new Error("Missing local SID data.");
         const sslBlob =
           plan.durationMs && plan.durationMs > 0
-            ? new Blob([createSslPayload(plan.durationMs)], {
+            ? new Blob([createSslPayload(plan.durationMs, { songNr: plan.songNr })], {
                 type: "application/octet-stream",
               })
             : undefined;

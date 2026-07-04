@@ -71,4 +71,33 @@ describe("sidUtils", () => {
   it("falls back to one song when parsing fails", () => {
     expect(getSidSongCount(null as unknown as ArrayBuffer)).toBe(1);
   });
+
+  it("HARD12-021: writes the duration to the songNr-1 slot and zero-pads earlier slots", () => {
+    // song 3 of 3, duration 90.5s → 0x01 0x30 at offset (3-1)*2 = 4
+    const payload = createSslPayload(90500, { songNr: 3 });
+    expect(payload.length).toBe(6);
+    expect(toHex(payload)).toBe("000000000130");
+  });
+
+  it("HARD12-021: writes a single zero-padded slot when songNr is 1", () => {
+    const payload = createSslPayload(90500, { songNr: 1 });
+    expect(payload.length).toBe(2);
+    expect(toHex(payload)).toBe("0130");
+  });
+
+  it("HARD12-021: uses per-subsong durationSeconds at songNr-1 slot when provided", () => {
+    // 5 slots; subsong 3 has duration 75s → 0x01 0x15 at offset 4
+    const payload = createSslPayload(0, {
+      songNr: 3,
+      subsongDurationsSeconds: [null, null, 75, null, null],
+    });
+    expect(payload.length).toBe(6);
+    expect(toHex(payload)).toBe("000000000115");
+  });
+
+  it("HARD12-021: leaves the songNr-1 slot zero when neither per-subsong nor active duration is known", () => {
+    const payload = createSslPayload(0, { songNr: 4 });
+    expect(payload.length).toBe(8);
+    expect(Array.from(payload)).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
+  });
 });

@@ -670,4 +670,64 @@ describe("device discovery manager", () => {
       "192.168.1.9",
     ]);
   });
+
+  // HARD12-019: two devices leaving the factory share the same hostname
+  // (e.g. "c64u"); when both have unique ids and the candidate's unique id
+  // does not match the saved device's, the hostname/address matchers must
+  // not retarget the saved entry. A new saved device must be created instead.
+  it("creates a new saved device when a candidate shares a hostname but a different unique id", async () => {
+    const { getSavedDevicesSnapshot } = await import("@/lib/savedDevices/store");
+    const { persistDiscoveredDevice } = await import("@/lib/deviceDiscovery/discoveryManager");
+
+    // Seed an existing saved device with hostname "c64u" and unique id "AAAAAAAA"
+    const existing = persistDiscoveredDevice(
+      {
+        id: "id:aaaaaaaa",
+        address: "192.168.1.20",
+        host: null,
+        httpPort: 80,
+        source: ["lan-scan"],
+        product: "C64 Ultimate",
+        firmwareVersion: "1.1.0",
+        fpgaVersion: "122",
+        coreVersion: "1.49",
+        hostname: "c64u",
+        uniqueId: "AAAAAAAA",
+        requiresPassword: false,
+        alreadySavedDeviceId: null,
+        confidence: "verified",
+        lastSeenAt: "2026-06-21T00:00:00.000Z",
+      },
+      { select: false },
+    );
+
+    // A second device, same hostname, different unique id, different address
+    const incoming = persistDiscoveredDevice(
+      {
+        id: "id:bbbbbbbb",
+        address: "192.168.1.21",
+        host: null,
+        httpPort: 80,
+        source: ["lan-scan"],
+        product: "C64 Ultimate",
+        firmwareVersion: "1.1.0",
+        fpgaVersion: "122",
+        coreVersion: "1.49",
+        hostname: "c64u",
+        uniqueId: "BBBBBBBB",
+        requiresPassword: false,
+        alreadySavedDeviceId: null,
+        confidence: "verified",
+        lastSeenAt: "2026-06-21T00:00:00.000Z",
+      },
+      { select: false },
+    );
+
+    expect(incoming.deviceId).not.toBe(existing.deviceId);
+    const snapshot = getSavedDevicesSnapshot();
+    const firstSaved = snapshot.devices.find((device) => device.id === existing.deviceId);
+    const secondSaved = snapshot.devices.find((device) => device.id === incoming.deviceId);
+    expect(firstSaved).toMatchObject({ host: "192.168.1.20", lastKnownUniqueId: "AAAAAAAA" });
+    expect(secondSaved).toMatchObject({ host: "192.168.1.21", lastKnownUniqueId: "BBBBBBBB" });
+  });
 });

@@ -282,6 +282,27 @@ describe("useStreamData", () => {
     );
   });
 
+  // HARD12-016: when startStream throws because the firmware returned a
+  // 200-with-`errors[]`, the handler must NOT toast success. The shared
+  // assertActionAccepted helper surfaces the firmware rejection as a thrown
+  // error so this is covered end-to-end by the same handler.
+  it("handleStreamStart does not toast success when startStream rejects with firmware errors", async () => {
+    withStreamConfig();
+    mockStartStream.mockRejectedValueOnce(new Error("Firmware rejected stream video start: invalid endpoint"));
+    const { result } = renderHook(() =>
+      useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
+    );
+
+    await act(async () => {
+      await result.current.handleStreamStart("vic");
+    });
+
+    expect(mockToast).not.toHaveBeenCalledWith({ title: "VIC start command sent" });
+    expect(mockReportUserError).toHaveBeenCalledWith(
+      expect.objectContaining({ operation: "STREAM_START", title: "Stream start failed" }),
+    );
+  });
+
   // 11. handleStreamCommit with valid endpoint calls updateConfigValue
   it("handleStreamCommit with valid endpoint calls updateConfigValue", async () => {
     withStreamConfig("192.168.1.10", "11000");

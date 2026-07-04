@@ -52,6 +52,14 @@ export type DeviceSafetyConfig = {
   drivesCooldownMs: number;
   ftpListCooldownMs: number;
   telnetConnectCooldownMs: number;
+  // HARD12-017: minimum interval between consecutive POST /v1/machine:input
+  // sends (the remote joystick/keyboard relay). Deliberately its own, looser
+  // entry rather than reusing configsCooldownMs/restMaxConcurrency: the
+  // endpoint is purpose-built for low-latency, high-frequency input (~15ms
+  // end to end on a LAN) and tolerates materially more load than the other
+  // REST endpoints, which is why RELAXED removes the throttle entirely
+  // instead of just loosening it.
+  machineInputCooldownMs: number;
   backoffBaseMs: number;
   backoffMaxMs: number;
   backoffFactor: number;
@@ -71,6 +79,7 @@ const CONFIGS_COOLDOWN_MS_KEY = "c64u_device_safety_configs_cooldown_ms";
 const DRIVES_COOLDOWN_MS_KEY = "c64u_device_safety_drives_cooldown_ms";
 const FTP_LIST_COOLDOWN_MS_KEY = "c64u_device_safety_ftp_list_cooldown_ms";
 const TELNET_CONNECT_COOLDOWN_MS_KEY = "c64u_device_safety_telnet_connect_cooldown_ms";
+const MACHINE_INPUT_COOLDOWN_MS_KEY = "c64u_device_safety_machine_input_cooldown_ms";
 const BACKOFF_BASE_MS_KEY = "c64u_device_safety_backoff_base_ms";
 const BACKOFF_MAX_MS_KEY = "c64u_device_safety_backoff_max_ms";
 const BACKOFF_FACTOR_KEY = "c64u_device_safety_backoff_factor";
@@ -92,6 +101,10 @@ const MODE_DEFAULTS: Record<ConcreteDeviceSafetyMode, Omit<DeviceSafetyConfig, "
     drivesCooldownMs: 200,
     ftpListCooldownMs: 100,
     telnetConnectCooldownMs: 100,
+    // "As many as the user can press" - machine:input is purpose-built for
+    // low-latency, high-frequency relay and does not need the throttle other
+    // endpoints do.
+    machineInputCooldownMs: 0,
     backoffBaseMs: 100,
     backoffMaxMs: 1500,
     backoffFactor: 1.5,
@@ -109,6 +122,9 @@ const MODE_DEFAULTS: Record<ConcreteDeviceSafetyMode, Omit<DeviceSafetyConfig, "
     drivesCooldownMs: 500,
     ftpListCooldownMs: 300,
     telnetConnectCooldownMs: 300,
+    // Default: up to 10 interactions/sec (100ms between consecutive
+    // joystick-move/type events relayed to the device).
+    machineInputCooldownMs: 100,
     backoffBaseMs: 200,
     backoffMaxMs: 3000,
     backoffFactor: 1.8,
@@ -126,6 +142,11 @@ const MODE_DEFAULTS: Record<ConcreteDeviceSafetyMode, Omit<DeviceSafetyConfig, "
     drivesCooldownMs: 1000,
     ftpListCooldownMs: 800,
     telnetConnectCooldownMs: 800,
+    // Still looser than the other CONSERVATIVE cooldowns: even on the least-
+    // trusted firmware, machine:input tolerates more load than config/drive
+    // writes, so it keeps a real (if reduced) rate rather than matching the
+    // heavier per-request endpoints.
+    machineInputCooldownMs: 200,
     backoffBaseMs: 300,
     backoffMaxMs: 6000,
     backoffFactor: 2,
@@ -143,6 +164,7 @@ const MODE_DEFAULTS: Record<ConcreteDeviceSafetyMode, Omit<DeviceSafetyConfig, "
     drivesCooldownMs: 300,
     ftpListCooldownMs: 200,
     telnetConnectCooldownMs: 200,
+    machineInputCooldownMs: 100,
     backoffBaseMs: 200,
     backoffMaxMs: 1200,
     backoffFactor: 1.4,
@@ -330,6 +352,7 @@ export const resetDeviceSafetyOverrides = () => {
     DRIVES_COOLDOWN_MS_KEY,
     FTP_LIST_COOLDOWN_MS_KEY,
     TELNET_CONNECT_COOLDOWN_MS_KEY,
+    MACHINE_INPUT_COOLDOWN_MS_KEY,
     BACKOFF_BASE_MS_KEY,
     BACKOFF_MAX_MS_KEY,
     BACKOFF_FACTOR_KEY,
@@ -375,6 +398,12 @@ export const loadDeviceSafetyConfig = (): DeviceSafetyConfig => {
       0,
       10000,
       50,
+    ),
+    machineInputCooldownMs: clampNumber(
+      resolveOverride(MACHINE_INPUT_COOLDOWN_MS_KEY, defaults.machineInputCooldownMs),
+      0,
+      2000,
+      10,
     ),
     backoffBaseMs: clampNumber(resolveOverride(BACKOFF_BASE_MS_KEY, defaults.backoffBaseMs), 0, 10000, 50),
     backoffMaxMs: clampNumber(resolveOverride(BACKOFF_MAX_MS_KEY, defaults.backoffMaxMs), 0, 20000, 50),
@@ -441,6 +470,9 @@ export const saveFtpListCooldownMs = (value: number) =>
 export const saveTelnetConnectCooldownMs = (value: number) =>
   saveNumberOverride(TELNET_CONNECT_COOLDOWN_MS_KEY, clampNumber(value, 0, 10000, 50));
 
+export const saveMachineInputCooldownMs = (value: number) =>
+  saveNumberOverride(MACHINE_INPUT_COOLDOWN_MS_KEY, clampNumber(value, 0, 2000, 10));
+
 export const saveBackoffBaseMs = (value: number) =>
   saveNumberOverride(BACKOFF_BASE_MS_KEY, clampNumber(value, 0, 10000, 50));
 
@@ -471,6 +503,7 @@ export const DEVICE_SAFETY_SETTING_KEYS = {
   DRIVES_COOLDOWN_MS_KEY,
   FTP_LIST_COOLDOWN_MS_KEY,
   TELNET_CONNECT_COOLDOWN_MS_KEY,
+  MACHINE_INPUT_COOLDOWN_MS_KEY,
   BACKOFF_BASE_MS_KEY,
   BACKOFF_MAX_MS_KEY,
   BACKOFF_FACTOR_KEY,

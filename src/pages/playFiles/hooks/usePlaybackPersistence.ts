@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PlayableEntry, PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from "../types";
 import {
   PLAYBACK_SESSION_KEY,
@@ -47,6 +47,9 @@ interface UsePlaybackPersistenceProps {
   shuffleEnabled?: boolean;
   shuffleSeed?: number | null;
   repeatEnabled?: boolean;
+  setShuffleEnabled?: (value: boolean) => void;
+  setShuffleSeed?: (value: number | null) => void;
+  setRepeatEnabled?: (value: boolean) => void;
   activePlaylistQuery?: string | null;
   setActivePlaylistQuery?: (value: string) => void;
 
@@ -102,6 +105,9 @@ export function usePlaybackPersistence({
   shuffleEnabled = false,
   shuffleSeed = null,
   repeatEnabled = false,
+  setShuffleEnabled,
+  setShuffleSeed,
+  setRepeatEnabled,
   activePlaylistQuery = null,
   setActivePlaylistQuery,
   resolvedDeviceId,
@@ -205,6 +211,28 @@ export function usePlaybackPersistence({
     return legacySourceId || null;
   };
 
+  const applyRestoredTraversalState = useCallback(
+    (session: Pick<PlaylistSessionRecord, "shuffleEnabled" | "repeatEnabled" | "randomSeed"> | null) => {
+      if (!session) return;
+      if (
+        typeof session.shuffleEnabled === "boolean" &&
+        setShuffleEnabled &&
+        shuffleEnabled !== session.shuffleEnabled
+      ) {
+        setShuffleEnabled(session.shuffleEnabled);
+      }
+      if (typeof session.repeatEnabled === "boolean" && setRepeatEnabled && repeatEnabled !== session.repeatEnabled) {
+        setRepeatEnabled(session.repeatEnabled);
+      }
+      const restoredSeed =
+        typeof session.randomSeed === "number" && Number.isFinite(session.randomSeed) ? session.randomSeed : null;
+      if (setShuffleSeed && shuffleSeed !== restoredSeed) {
+        setShuffleSeed(restoredSeed);
+      }
+    },
+    [repeatEnabled, setRepeatEnabled, setShuffleEnabled, setShuffleSeed, shuffleEnabled, shuffleSeed],
+  );
+
   const hydrateFromRepository = async () => {
     const playlistItems = await playlistRepository.getPlaylistItems(playlistStorageKey);
     if (!playlistItems.length) {
@@ -213,6 +241,7 @@ export function usePlaybackPersistence({
         items: [] as PlaylistItem[],
         index: -1,
         activeQuery: session?.activeQuery ?? null,
+        session,
       };
     }
     const trackIds = playlistItems.map((item) => item.trackId);
@@ -257,6 +286,7 @@ export function usePlaybackPersistence({
       items: hydrated.items,
       index: restoredIndex,
       activeQuery: session?.activeQuery ?? null,
+      session,
     };
   };
 
@@ -322,6 +352,7 @@ export function usePlaybackPersistence({
 
         if (!candidates.length) {
           const repositoryRestored = await hydrateFromRepository();
+          applyRestoredTraversalState(repositoryRestored.session);
           if (setActivePlaylistQuery && repositoryRestored.activeQuery !== null) {
             setActivePlaylistQuery(repositoryRestored.activeQuery);
           }
@@ -376,6 +407,7 @@ export function usePlaybackPersistence({
     localSourceTreeUris,
     buildPlaylistItem,
     setActivePlaylistQuery,
+    applyRestoredTraversalState,
   ]);
 
   // Apply Session Restore (after Playlist Restore)
@@ -418,6 +450,11 @@ export function usePlaybackPersistence({
         ageMs: now - Date.parse(pending.updatedAt),
       });
     }
+    applyRestoredTraversalState({
+      shuffleEnabled: pending.shuffleEnabled ?? shuffleEnabled,
+      repeatEnabled: pending.repeatEnabled ?? repeatEnabled,
+      randomSeed: pending.randomSeed ?? shuffleSeed,
+    });
     setCurrentIndex(matchedIndex);
     setElapsedMs(Math.max(0, pending.elapsedMs));
     setPlayedMs(Math.max(0, pending.playedMs));
@@ -459,7 +496,14 @@ export function usePlaybackPersistence({
     }
     pendingPlaybackRestoreRef.current = null;
     sessionRestoreSettledRef.current = true;
-  }, [playlist, playlistStorageKey, restoreVersion, setTrackInstanceId, setAutoAdvanceDueAtMs]); // Depends on playlist being set
+  }, [
+    applyRestoredTraversalState,
+    playlist,
+    playlistStorageKey,
+    restoreVersion,
+    setAutoAdvanceDueAtMs,
+    setTrackInstanceId,
+  ]); // Depends on playlist being set
 
   // Persist Playlist
   useEffect(() => {
@@ -559,6 +603,9 @@ export function usePlaybackPersistence({
       playedMs,
       durationMs,
       autoAdvanceDueAtMs,
+      shuffleEnabled,
+      repeatEnabled,
+      randomSeed: shuffleSeed,
       updatedAt: new Date().toISOString(),
     };
     try {
@@ -580,6 +627,9 @@ export function usePlaybackPersistence({
     playedMs,
     playlist,
     playlistStorageKey,
+    repeatEnabled,
     restoreVersion,
+    shuffleEnabled,
+    shuffleSeed,
   ]);
 }

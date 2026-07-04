@@ -41,7 +41,8 @@ scope only without violating `REVIEW.md`.
 
 1. Start with `README.md` for overview, local build steps, and Android notes.
 2. Read `REVIEW.md` for the quality bar every change is held to (hazards, severity, verification).
-3. REST API details live in `docs/c64/c64u-openapi.yaml`.
+3. REST API details live in the per-device specs: `docs/c64/devices/u64e/3.15alpha/u64e-openapi.yaml`
+   for C64U/U64/U64E2 and `docs/c64/devices/u2/3.14a/u2-openapi.yaml` for U2.
 4. Consult `docs/c64/c64u-telnet.yaml` before any Telnet-related change; treat it as the Telnet menu/source-of-truth reference.
 5. Read the UX design in `docs/ux-guidelines.md` before any UX work.
 6. Read `docs/testing/maestro.md` before authoring or editing any Maestro flows.
@@ -181,7 +182,9 @@ At completion, summarize:
 
 - **Quality bar / review standards**: `REVIEW.md` (repo root)
 - **Entry index**: `.github/copilot-instructions.md`
-- **REST API docs**: `docs/c64/c64u-openapi.yaml`
+- **REST API docs**: `docs/c64/devices/u64e/3.15alpha/u64e-openapi.yaml` for C64U/U64/U64E2
+  and `docs/c64/devices/u2/3.14a/u2-openapi.yaml` for U2. Gate U64-family-only surfaces such as
+  Streams and `machine:input` on runtime capabilities; U2 has no Streams/Input/poweroff.
 - **Telnet menu reference**: `docs/c64/c64u-telnet.yaml` (consult before Telnet-related code or test changes)
 - **CTA inventory & keypad map**: `docs/cta-inventory.md` (authoritative per-page list of every interactive control and its keypad/D-pad/T9 reachability; keep current — see "CTA inventory upkeep")
 - **App entry**: `src/main.tsx`, `src/App.tsx`

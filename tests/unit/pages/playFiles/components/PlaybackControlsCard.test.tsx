@@ -92,6 +92,19 @@ describe("PlaybackControlsCard", () => {
     vi.useRealTimers();
   });
 
+  // HARD12-017
+  it("renders the openControllerAction slot when provided, and nothing when omitted", () => {
+    const { rerender } = render(<PlaybackControlsCard {...buildProps()} />);
+    expect(screen.queryByTestId("open-controller-slot")).not.toBeInTheDocument();
+
+    rerender(
+      <PlaybackControlsCard
+        {...buildProps({ openControllerAction: <button data-testid="open-controller-slot">Open Controller</button> })}
+      />,
+    );
+    expect(screen.getByTestId("open-controller-slot")).toBeInTheDocument();
+  });
+
   it("keeps track metadata and transport controls stacked full-width", () => {
     render(
       <PlaybackControlsCard

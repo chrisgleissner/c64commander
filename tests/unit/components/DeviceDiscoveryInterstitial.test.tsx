@@ -24,6 +24,7 @@ const probeDeviceReachability = vi.fn(async () => ({
   deviceInfo: { product: "Ultimate 64 Elite", hostname: "u64", unique_id: "38C1BA" },
   error: null,
 }));
+const setSavedDeviceSwitchProbeWindow = vi.fn();
 const addSavedDevice = vi.fn();
 const updateSavedDevice = vi.fn();
 const reportUserError = vi.fn();
@@ -51,6 +52,7 @@ vi.mock("@/hooks/useSavedDeviceSwitching", () => ({
 
 vi.mock("@/lib/connection/connectionManager", () => ({
   probeDeviceReachability: (...args: unknown[]) => probeDeviceReachability(...args),
+  setSavedDeviceSwitchProbeWindow: (...args: unknown[]) => setSavedDeviceSwitchProbeWindow(...args),
 }));
 
 vi.mock("@/lib/deviceDiscovery/discoveryManager", () => ({
@@ -382,7 +384,7 @@ describe("DeviceDiscoveryInterstitial", () => {
 
     await waitFor(() => {
       expect(persistDiscoveredDevice).toHaveBeenCalledWith(discoveryState.candidates[0], {
-        select: true,
+        select: false,
         passwordPresent: false,
       });
       expect(switchSavedDevice).toHaveBeenCalledWith("saved-device");
@@ -409,7 +411,7 @@ describe("DeviceDiscoveryInterstitial", () => {
 
     await waitFor(() => {
       expect(persistDiscoveredDevice).toHaveBeenCalledWith(discoveryState.candidates[0], {
-        select: true,
+        select: false,
         passwordPresent: true,
       });
       expect(setPasswordForDevice).toHaveBeenCalledWith("saved-device", "secret");
@@ -429,7 +431,7 @@ describe("DeviceDiscoveryInterstitial", () => {
 
     await waitFor(() => {
       expect(persistDiscoveredDevice).toHaveBeenCalledWith(discoveryState.candidates[0], {
-        select: true,
+        select: false,
         passwordPresent: false,
       });
     });

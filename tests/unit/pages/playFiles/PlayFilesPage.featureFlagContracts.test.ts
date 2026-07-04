@@ -105,10 +105,18 @@ describe("PlayFilesPage feature-flag contracts", () => {
     );
   });
 
-  it("keeps previous enabled at the first track when repeat is active", () => {
-    expect(playFilesPageSource).toContain("const hasPrev = hasPlaylist && (currentIndex > 0 || repeatEnabled);");
+  it("derives transport enablement from the same traversal helpers used by playback", () => {
     expect(playFilesPageSource).toContain(
-      "const hasNext = hasPlaylist && (currentIndex < playlist.length - 1 || repeatEnabled);",
+      "const hasPrev = canAdvancePrevious(playlist, currentIndex, repeatEnabled, shuffleEnabled, shuffleSeed);",
+    );
+    expect(playFilesPageSource).toContain(
+      "const hasNext = canAdvanceNext(playlist, currentIndex, repeatEnabled, shuffleEnabled, shuffleSeed);",
+    );
+  });
+
+  it("does not overwrite playItem's resolved subsong playlist entry with the stripped switch item", () => {
+    expect(playFilesPageSource).not.toMatch(
+      /await playItem\(nextItem,[\s\S]{0,160}setPlaylist\(\(prev\) => prev\.map\(/,
     );
   });
 

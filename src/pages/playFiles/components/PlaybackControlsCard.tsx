@@ -48,6 +48,8 @@ export type PlaybackControlsCardProps = {
   reshuffleActive: boolean;
   reshuffleDisabled: boolean;
   shuffleSeed: number | null;
+  /** HARD12-017: one-tap entry to the remote input sheet, shown while playing. */
+  openControllerAction?: ReactNode;
 };
 
 const PLAY_TRANSPORT_FOCUS_ORDER = {
@@ -93,6 +95,7 @@ export const PlaybackControlsCard = ({
   reshuffleActive,
   reshuffleDisabled,
   shuffleSeed,
+  openControllerAction,
 }: PlaybackControlsCardProps) => {
   const previousFocusRef = useFocusItem<HTMLButtonElement>({
     id: "play-transport-previous",
@@ -216,6 +219,7 @@ export const PlaybackControlsCard = ({
           </div>
         </div>
         {volumeControls}
+        {openControllerAction}
         <div className="flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-2 text-xs">
             <Checkbox

@@ -329,4 +329,59 @@ describe("deviceSafetySettings AUTO mode", () => {
     expect(() => safety.saveDeviceSafetyMode("AUTO")).not.toThrow();
     unsubscribe();
   });
+
+  // HARD12-017: machine:input gets its own, looser cooldown entry - the
+  // endpoint is purpose-built for low-latency, high-frequency relay and
+  // tolerates materially more load than the other REST endpoints.
+  describe("machineInputCooldownMs", () => {
+    it("removes the throttle entirely under RELAXED ('as many as the user can press')", async () => {
+      const { safety } = await loadModules();
+      safety.saveDeviceSafetyMode("RELAXED");
+      expect(safety.loadDeviceSafetyConfig().machineInputCooldownMs).toBe(0);
+    });
+
+    it("defaults to 100ms (10 interactions/sec) under BALANCED", async () => {
+      const { safety } = await loadModules();
+      safety.saveDeviceSafetyMode("BALANCED");
+      expect(safety.loadDeviceSafetyConfig().machineInputCooldownMs).toBe(100);
+    });
+
+    it("still allows a real (if reduced) rate under CONSERVATIVE, unlike the fully-serialized REST/FTP concurrency", async () => {
+      const { safety } = await loadModules();
+      safety.saveDeviceSafetyMode("CONSERVATIVE");
+      const config = safety.loadDeviceSafetyConfig();
+      expect(config.machineInputCooldownMs).toBe(200);
+      expect(config.machineInputCooldownMs).toBeLessThan(config.configsCooldownMs);
+    });
+
+    it("persists and clamps a user override, and clears it on reset", async () => {
+      const { safety } = await loadModules();
+      safety.saveDeviceSafetyMode("BALANCED");
+
+      safety.saveMachineInputCooldownMs(9999); // above the 2000ms clamp ceiling
+      expect(safety.loadDeviceSafetyConfig().machineInputCooldownMs).toBe(2000);
+
+      safety.saveMachineInputCooldownMs(-50); // below the 0ms floor
+      expect(safety.loadDeviceSafetyConfig().machineInputCooldownMs).toBe(0);
+
+      safety.saveMachineInputCooldownMs(150);
+      expect(safety.loadDeviceSafetyConfig().machineInputCooldownMs).toBe(150);
+
+      safety.resetDeviceSafetyOverrides();
+      expect(safety.loadDeviceSafetyConfig().machineInputCooldownMs).toBe(100);
+    });
+
+    it("broadcasts a device-safety-updated event when the override changes", async () => {
+      const { safety } = await loadModules();
+      const listener = vi.fn();
+      const unsubscribe = safety.subscribeDeviceSafetyUpdates(listener);
+
+      safety.saveMachineInputCooldownMs(120);
+
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({ key: safety.DEVICE_SAFETY_SETTING_KEYS.MACHINE_INPUT_COOLDOWN_MS_KEY, value: 120 }),
+      );
+      unsubscribe();
+    });
+  });
 });

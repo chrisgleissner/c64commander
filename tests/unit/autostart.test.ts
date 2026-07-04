@@ -43,8 +43,12 @@ describe("autostart", () => {
     await vi.runAllTimersAsync();
     await task;
 
-    expect(api.writeMemory).toHaveBeenCalledWith("0277", AUTOSTART_SEQUENCE);
-    expect(api.writeMemory).toHaveBeenCalledWith("00C6", new Uint8Array([AUTOSTART_SEQUENCE.length]));
+    const firstChunk = AUTOSTART_SEQUENCE.slice(0, 10);
+    const secondChunk = AUTOSTART_SEQUENCE.slice(10);
+    expect(api.writeMemory).toHaveBeenCalledWith("0277", firstChunk);
+    expect(api.writeMemory).toHaveBeenCalledWith("00C6", new Uint8Array([firstChunk.length]));
+    expect(api.writeMemory).toHaveBeenCalledWith("0277", secondChunk);
+    expect(api.writeMemory).toHaveBeenCalledWith("00C6", new Uint8Array([secondChunk.length]));
   });
 
   it("throws when keyboard buffer stays busy", async () => {
@@ -72,7 +76,8 @@ describe("autostart", () => {
     await vi.runAllTimersAsync();
     await task;
 
-    expect(api.writeMemory).toHaveBeenCalledWith("0277", AUTOSTART_SEQUENCE);
+    const firstChunk = AUTOSTART_SEQUENCE.slice(0, 10);
+    expect(api.writeMemory).toHaveBeenCalledWith("0277", firstChunk);
   });
 
   it("treats empty readMemory response as buffer-length zero via nullish coalescing", async () => {
@@ -89,6 +94,73 @@ describe("autostart", () => {
     await vi.runAllTimersAsync();
     await task;
 
-    expect(api.writeMemory).toHaveBeenCalledWith("0277", AUTOSTART_SEQUENCE);
+    const firstChunk = AUTOSTART_SEQUENCE.slice(0, 10);
+    expect(api.writeMemory).toHaveBeenCalledWith("0277", firstChunk);
+  });
+
+  it("HARD12-008: chunks the kernal autostart payload so no single write to $0277 exceeds the 10-byte keyboard buffer for bus 8", async () => {
+    const api = createApiMock();
+    api.readMemory.mockResolvedValue(new Uint8Array([0]));
+    api.writeMemory.mockResolvedValue({ errors: [] });
+
+    const sequence = buildAutostartSequence(8);
+    expect(sequence.length).toBeGreaterThan(10);
+
+    const task = injectAutostart(api as any, sequence, { pollIntervalMs: 10, maxAttempts: 5 });
+    await vi.runAllTimersAsync();
+    await task;
+
+    const writeBufferCalls = api.writeMemory.mock.calls.filter(([address]) => address === "0277");
+    expect(writeBufferCalls.length).toBeGreaterThan(1);
+    for (const [, payload] of writeBufferCalls) {
+      expect((payload as Uint8Array).length).toBeLessThanOrEqual(10);
+    }
+
+    const lengthCalls = api.writeMemory.mock.calls.filter(([address]) => address === "00C6");
+    for (const [, payload] of lengthCalls) {
+      expect((payload as Uint8Array)[0]).toBeLessThanOrEqual(10);
+    }
+  });
+
+  it("HARD12-008: chunks the two-digit-bus payload so no single write to $0277 exceeds 10 bytes for bus 10", async () => {
+    const api = createApiMock();
+    api.readMemory.mockResolvedValue(new Uint8Array([0]));
+    api.writeMemory.mockResolvedValue({ errors: [] });
+
+    const sequence = buildAutostartSequence(10);
+    expect(sequence.length).toBeGreaterThan(10);
+
+    const task = injectAutostart(api as any, sequence, { pollIntervalMs: 10, maxAttempts: 5 });
+    await vi.runAllTimersAsync();
+    await task;
+
+    const writeBufferCalls = api.writeMemory.mock.calls.filter(([address]) => address === "0277");
+    expect(writeBufferCalls.length).toBeGreaterThan(1);
+    for (const [, payload] of writeBufferCalls) {
+      expect((payload as Uint8Array).length).toBeLessThanOrEqual(10);
+    }
+  });
+
+  it("HARD12-008: waits for the keyboard buffer to drain between chunks before writing the next one", async () => {
+    const api = createApiMock();
+    // First two reads return busy (non-zero), the rest return empty.
+    let callCount = 0;
+    api.readMemory.mockImplementation(async () => {
+      callCount += 1;
+      return new Uint8Array([callCount <= 2 ? 5 : 0]);
+    });
+    api.writeMemory.mockResolvedValue({ errors: [] });
+
+    const sequence = buildAutostartSequence(10);
+    const task = injectAutostart(api as any, sequence, { pollIntervalMs: 10, maxAttempts: 5 });
+    await vi.runAllTimersAsync();
+    await task;
+
+    // Two chunks × (read busy twice + write) → at least two writes.
+    const writeBufferCalls = api.writeMemory.mock.calls.filter(([address]) => address === "0277");
+    expect(writeBufferCalls.length).toBeGreaterThanOrEqual(2);
+    for (const [, payload] of writeBufferCalls) {
+      expect((payload as Uint8Array).length).toBeLessThanOrEqual(10);
+    }
   });
 });

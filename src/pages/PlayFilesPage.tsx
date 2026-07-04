@@ -20,7 +20,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Gamepad2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { RemoteInputSheet } from "@/components/remoteInput/RemoteInputSheet";
 import { PlaybackConfigSheet } from "@/pages/playFiles/components/PlaybackConfigSheet";
 import {
   AddItemsProgressOverlay,
@@ -100,6 +102,7 @@ import { useImportNavigationGuards } from "@/pages/playFiles/hooks/useImportNavi
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import { usePlaybackResumeTriggers } from "@/pages/playFiles/hooks/usePlaybackResumeTriggers";
 import { useResolvedPlaybackDeviceId } from "@/pages/playFiles/hooks/useResolvedPlaybackDeviceId";
+import { getSelectedSavedDevice } from "@/lib/savedDevices/store";
 import { useArchiveClientSettings } from "@/pages/playFiles/hooks/useArchiveClientSettings";
 import { useDebouncedValue } from "@/pages/playFiles/hooks/useDebouncedValue";
 import { useQueryFilteredPlaylist } from "@/pages/playFiles/hooks/useQueryFilteredPlaylist";
@@ -135,6 +138,8 @@ import {
   buildPlaylistStorageKey,
   buildPlaylistItemId,
   buildSubsongSwitchItem,
+  canAdvanceNext,
+  canAdvancePrevious,
   shouldDetachPlaybackOnSavedDeviceSwitch,
   applyDurationOverrideToPlaylist,
   clampDurationSeconds,
@@ -195,6 +200,7 @@ export default function PlayFilesPage() {
     shuffleEnabled,
     setShuffleEnabled,
     shuffleSeed,
+    setShuffleSeed,
     repeatEnabled,
     setRepeatEnabled,
     playlistTypeFilters,
@@ -281,6 +287,8 @@ export default function PlayFilesPage() {
   const backgroundExecutionEnabled = isBackgroundExecutionEnabled(featureFlags);
   const { archiveConfig, commoserveEnabled } = useArchiveClientSettings();
   const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
+  const { value: remoteInputEnabled } = useFeatureFlag("remote_input_enabled");
+  const [remoteInputSheetOpen, setRemoteInputSheetOpen] = useState(false);
 
   const {
     volumeSliderPreviewIntervalMs,
@@ -304,7 +312,7 @@ export default function PlayFilesPage() {
     handleToggleMute,
     resumingFromPauseRef,
     ensureUnmuted,
-  } = usePlayFilesVolumeBindings({ isPlaying, isPaused });
+  } = usePlayFilesVolumeBindings({ isPlaying, isPaused, resolvedDeviceId: getSelectedSavedDevice()?.id ?? null });
   const volumeIndex = volumeState.index;
   const volumeMuted = volumeState.muted;
 
@@ -433,6 +441,7 @@ export default function PlayFilesPage() {
     handlePauseResume,
     handleNext,
     handlePrevious,
+    playlistEnded,
     playlistItemDuration,
   } = usePlaybackController({
     playlist,
@@ -566,6 +575,7 @@ export default function PlayFilesPage() {
         backgroundExecutionActive: backgroundExecutionActiveRef.current,
         isPlaying,
         isPaused,
+        playlistEnded,
       })
     ) {
       backgroundExecutionActiveRef.current = true;
@@ -594,6 +604,7 @@ export default function PlayFilesPage() {
         backgroundExecutionActive: backgroundExecutionActiveRef.current,
         isPlaying,
         isPaused,
+        playlistEnded,
       })
     ) {
       return;
@@ -1405,7 +1416,6 @@ export default function PlayFilesPage() {
       try {
         cancelAutoAdvance();
         await playItem(nextItem, { playlistIndex: currentIndex });
-        setPlaylist((prev) => prev.map((item, index) => (index === currentIndex ? nextItem : item)));
       } catch (error) {
         // reportUserError no-ops when playItem already reported/marked the
         // error handled internally, so this only surfaces genuinely
@@ -1438,8 +1448,10 @@ export default function PlayFilesPage() {
   const hasPlaylist = playlist.length > 0;
   const canTransport = hasPlaylist && !isPlaylistLoading;
   const canPause = isPlaying;
-  const hasPrev = hasPlaylist && (currentIndex > 0 || repeatEnabled);
-  const hasNext = hasPlaylist && (currentIndex < playlist.length - 1 || repeatEnabled);
+  // HARD12-005: Next/Prev enablement must reflect the shuffle-aware traversal
+  // (what tapping them will do), not the linear playlist position.
+  const hasPrev = canAdvancePrevious(playlist, currentIndex, repeatEnabled, shuffleEnabled, shuffleSeed);
+  const hasNext = canAdvanceNext(playlist, currentIndex, repeatEnabled, shuffleEnabled, shuffleSeed);
 
   const togglePlaylistTypeFilter = (category: PlayFileCategory) => {
     setPlaylistTypeFilters((prev) =>
@@ -1538,6 +1550,9 @@ export default function PlayFilesPage() {
     setDurationMs,
     autoAdvanceDueAtMs,
     setCurrentSubsongCount,
+    setShuffleEnabled,
+    setShuffleSeed,
+    setRepeatEnabled,
     shuffleEnabled,
     shuffleSeed,
     repeatEnabled,
@@ -1849,6 +1864,19 @@ export default function PlayFilesPage() {
                 reshuffleActive={reshuffleActive}
                 reshuffleDisabled={!shuffleEnabled || playlist.length < 2}
                 shuffleSeed={shuffleSeed}
+                openControllerAction={
+                  remoteInputEnabled && isPlaying ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="self-start"
+                      data-testid="play-open-controller"
+                      onClick={() => setRemoteInputSheetOpen(true)}
+                    >
+                      <Gamepad2 className="mr-1.5 h-4 w-4" /> Open Controller
+                    </Button>
+                  ) : undefined
+                }
               />
               <PlaybackSettingsPanel
                 durationSliderMax={DURATION_SLIDER_STEPS}
@@ -2055,6 +2083,10 @@ export default function PlayFilesPage() {
             onRediscover={(item) => void handleRediscoverConfig(item)}
             onUpdateOverrides={updatePlaylistItemOverrides}
           />
+
+          {remoteInputEnabled ? (
+            <RemoteInputSheet open={remoteInputSheetOpen} onOpenChange={setRemoteInputSheetOpen} />
+          ) : null}
 
           <AlertDialog
             open={Boolean(pendingConfigChange)}

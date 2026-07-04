@@ -1443,6 +1443,50 @@ describe("connectionManager", () => {
     expect(getConnectionSnapshot().deviceInfo?.product).toBe("Ultimate 64 Elite");
   });
 
+  it("does not stamp a late device identity whose unique id differs from the selected device during a switch (HARD12-011)", async () => {
+    const { getConnectionSnapshot, initializeConnectionManager, noteReachable, setSavedDeviceSwitchProbeWindow } =
+      await import("../../../src/lib/connection/connectionManager");
+    const { addSavedDevice, selectSavedDevice, getSavedDevicesSnapshot, getSelectedSavedDeviceProductFamilySync } =
+      await import("../../../src/lib/savedDevices/store");
+
+    addSavedDevice({
+      id: "hard12-011-new-device",
+      name: "New Lab",
+      host: "shared-host",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "shared-host",
+      lastKnownUniqueId: "NEW-UID",
+      hasPassword: false,
+    });
+    selectSavedDevice("hard12-011-new-device");
+    localStorage.setItem(DEVICE_HOST_KEY, "shared-host");
+    // initializeConnectionManager resets the snapshot state to "UNKNOWN" so
+    // noteReachable skips its promotion path and only attempts the identity stamp.
+    await initializeConnectionManager();
+
+    // Open the saved-device switch window (selection flipped, runtime config not
+    // yet applied): a late /v1/info from the PREVIOUS device (unique id OLD-UID)
+    // arrives over the still-active host.
+    setSavedDeviceSwitchProbeWindow(true);
+    noteReachable("shared-host", "rest", {
+      product: "C64 Ultimate",
+      firmware_version: "1.1.0",
+      hostname: "old-c64",
+      unique_id: "OLD-UID",
+      errors: [],
+    });
+    setSavedDeviceSwitchProbeWindow(false);
+
+    // The connection snapshot DID receive the deviceInfo (the event was processed),
+    // but the selected saved device's identity must NOT be overwritten by it.
+    expect(getConnectionSnapshot().deviceInfo?.product).toBe("C64 Ultimate");
+    expect(getSavedDevicesSnapshot().verifiedByDeviceId["hard12-011-new-device"]?.product).toBeUndefined();
+    expect(getSelectedSavedDeviceProductFamilySync()).toBe("U64E");
+  });
+
   it("dismissDemoInterstitial handles sessionStorage.setItem throwing", async () => {
     const { dismissDemoInterstitial, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");

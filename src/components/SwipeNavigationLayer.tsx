@@ -462,6 +462,18 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
           // Render idle inactive slots as placeholders so selectors only see the
           // active page. During transitions we still mount adjacent pages unless
           // deterministic probe mode is enabled.
+          //
+          // HARD12-022: this full mid-transition mount of the departing (and
+          // arriving) page is real and load-bearing today — the swipe preview
+          // renders actual page content, not a static snapshot, so replacing it
+          // with a placeholder-during-transition is a visible-UX change, not a
+          // pure bugfix. Deliberately deferred as a separate, measured
+          // perf/UX task rather than bundled into hardening; the mitigation
+          // shipped instead is testability (see
+          // SwipeNavigationLayer.test.tsx's HARD12-022 mount/unmount test) plus
+          // per-effect defenses in the pages that hold state across this
+          // overlap (BUG-040 wake lock, HARD12-006 volume session, HARD12-020
+          // machine-execution state).
           if (renderPlaceholderOnly) {
             return (
               <div

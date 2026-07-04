@@ -11,11 +11,14 @@ import {
   clearPassword,
   getCachedPassword,
   getPassword,
+  getPasswordForDevice,
+  migrateLegacyDefaultPassword,
+  primeStoredPassword,
   resetStoredPasswordCache,
   setPassword,
 } from "@/lib/secureStorage";
 import { SecureStorage } from "@/lib/native/secureStorage";
-import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
+import { addSavedDevice, getSavedDevicesSnapshot, selectSavedDevice } from "@/lib/savedDevices/store";
 
 const HAS_PASSWORD_KEY = "c64u_has_password";
 
@@ -114,5 +117,167 @@ describe("secureStorage", () => {
     const value = await getPassword();
     expect(value).toBeNull();
     expect(SecureStorage.getPassword).toHaveBeenCalledOnce();
+  });
+
+  // HARD12-012: getPasswordForDevice must NOT silently migrate the legacy
+  // password into the requested device's entry. The old behaviour copied
+  // device A's secret into B's entry on first read, transmitting A's password
+  // to host B.
+  it("does not silently migrate the legacy password into the requested device's entry", async () => {
+    localStorage.setItem(HAS_PASSWORD_KEY, "1");
+    addSavedDevice({
+      id: "device-b",
+      name: "B",
+      host: "192.168.1.20",
+      type: "C64U",
+      typeSource: "INFERRED",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "C64U",
+      lastKnownHostname: null,
+      lastKnownUniqueId: null,
+      hasPassword: false,
+    });
+    vi.mocked(SecureStorage.getPassword).mockResolvedValueOnce({
+      value: JSON.stringify({
+        version: 1,
+        legacyDefaultPassword: "device-a-secret",
+        passwordsByDeviceId: {},
+      }),
+    });
+
+    const resolved = await getPasswordForDevice("device-b");
+
+    // Critical assertion: the legacy password must never be returned for a
+    // device that has no entry of its own — that would transmit device A's
+    // secret to device B's host.
+    expect(resolved).toBeNull();
+    // ...and it must not flip device B's hasPassword flag based on A's secret.
+    expect(getSavedDevicesSnapshot().devices.find((device) => device.id === "device-b")?.hasPassword).toBe(false);
+    // No migration write happened either.
+    const writeCalls = vi.mocked(SecureStorage.setPassword).mock.calls;
+    expect(writeCalls.length).toBe(0);
+  });
+
+  // HARD12-012: a once-only migration moves the legacy default password into
+  // the currently-selected device's entry on first secure-storage load and
+  // clears the legacy field. The original device keeps its password; the
+  // legacy field cannot recur.
+  it("migrateLegacyDefaultPassword moves the legacy password into the selected device once and clears it", async () => {
+    localStorage.setItem(HAS_PASSWORD_KEY, "1");
+    addSavedDevice({
+      id: "device-a",
+      name: "A",
+      host: "192.168.1.10",
+      type: "C64U",
+      typeSource: "INFERRED",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "C64U",
+      lastKnownHostname: null,
+      lastKnownUniqueId: null,
+      hasPassword: false,
+    });
+    selectSavedDevice("device-a");
+    vi.mocked(SecureStorage.getPassword).mockResolvedValueOnce({
+      value: JSON.stringify({
+        version: 1,
+        legacyDefaultPassword: "device-a-secret",
+        passwordsByDeviceId: {},
+      }),
+    });
+
+    await migrateLegacyDefaultPassword();
+
+    const persisted = JSON.parse(vi.mocked(SecureStorage.setPassword).mock.calls[0]?.[0]?.value ?? "null") as {
+      legacyDefaultPassword: string | null;
+      passwordsByDeviceId: Record<string, string>;
+    };
+    expect(persisted.legacyDefaultPassword).toBeNull();
+    expect(persisted.passwordsByDeviceId["device-a"]).toBe("device-a-secret");
+
+    // Second invocation is idempotent: nothing else to migrate.
+    vi.mocked(SecureStorage.setPassword).mockClear();
+    await migrateLegacyDefaultPassword();
+    expect(vi.mocked(SecureStorage.setPassword)).not.toHaveBeenCalled();
+  });
+
+  // HARD12-012: the once-only migration must not clobber a device that
+  // already has its own password entry. The legacy field is discarded in
+  // that case so the cross-device bleed cannot recur.
+  it("migrateLegacyDefaultPassword drops the legacy password when the selected device already has its own entry", async () => {
+    localStorage.setItem(HAS_PASSWORD_KEY, "1");
+    addSavedDevice({
+      id: "device-a",
+      name: "A",
+      host: "192.168.1.10",
+      type: "C64U",
+      typeSource: "INFERRED",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "C64U",
+      lastKnownHostname: null,
+      lastKnownUniqueId: null,
+      hasPassword: true,
+    });
+    selectSavedDevice("device-a");
+    vi.mocked(SecureStorage.getPassword).mockResolvedValueOnce({
+      value: JSON.stringify({
+        version: 1,
+        legacyDefaultPassword: "STALE-LEGACY",
+        passwordsByDeviceId: { "device-a": "device-a-real-secret" },
+      }),
+    });
+
+    await migrateLegacyDefaultPassword();
+
+    const persisted = JSON.parse(vi.mocked(SecureStorage.setPassword).mock.calls[0]?.[0]?.value ?? "null") as {
+      legacyDefaultPassword: string | null;
+      passwordsByDeviceId: Record<string, string>;
+    };
+    expect(persisted.legacyDefaultPassword).toBeNull();
+    expect(persisted.passwordsByDeviceId["device-a"]).toBe("device-a-real-secret");
+  });
+
+  // HARD12-012: primeStoredPassword (the secure-storage bootstrap entry point)
+  // runs the migration. Without this wiring the migration would never fire.
+  it("primeStoredPassword runs the legacy migration on first load", async () => {
+    localStorage.setItem(HAS_PASSWORD_KEY, "1");
+    addSavedDevice({
+      id: "device-a",
+      name: "A",
+      host: "192.168.1.10",
+      type: "C64U",
+      typeSource: "INFERRED",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "C64U",
+      lastKnownHostname: null,
+      lastKnownUniqueId: null,
+      hasPassword: false,
+    });
+    selectSavedDevice("device-a");
+    vi.mocked(SecureStorage.getPassword).mockResolvedValueOnce({
+      value: JSON.stringify({
+        version: 1,
+        legacyDefaultPassword: "device-a-secret",
+        passwordsByDeviceId: {},
+      }),
+    });
+
+    await primeStoredPassword();
+
+    const writeCalls = vi.mocked(SecureStorage.setPassword).mock.calls;
+    expect(writeCalls.length).toBeGreaterThanOrEqual(1);
+    const persisted = JSON.parse(writeCalls[0]?.[0]?.value ?? "null") as {
+      legacyDefaultPassword: string | null;
+      passwordsByDeviceId: Record<string, string>;
+    };
+    expect(persisted.legacyDefaultPassword).toBeNull();
+    expect(persisted.passwordsByDeviceId["device-a"]).toBe("device-a-secret");
   });
 });

@@ -36,6 +36,8 @@ import {
   generateShuffleSeed,
   resolveNextPlaylistIndex,
   resolvePreviousPlaylistIndex,
+  canAdvanceNext,
+  canAdvancePrevious,
   DURATION_MIN_SECONDS,
   DURATION_MAX_SECONDS,
 } from "@/pages/playFiles/playFilesUtils";
@@ -649,6 +651,49 @@ describe("playFilesUtils", () => {
         const firstIndex = playlist.findIndex((item) => item.id === order[0]);
 
         expect(resolvePreviousPlaylistIndex(playlist, firstIndex, false, true, seed)).toBe(firstIndex);
+      });
+    });
+
+    describe("transport enablement", () => {
+      it("enables next when the linear-last item is mid-shuffle-order", () => {
+        const seed = 1234;
+        const order = seededShuffleIds(
+          playlist.map((item) => item.id),
+          seed,
+        );
+        const linearLast = playlist[playlist.length - 1];
+        const linearLastPosition = order.indexOf(linearLast.id);
+        expect(linearLastPosition).toBeGreaterThanOrEqual(0);
+        if (linearLastPosition === order.length - 1) {
+          throw new Error("fixture seed puts the linear-last item at the shuffle end");
+        }
+
+        expect(canAdvanceNext(playlist, playlist.length - 1, false, true, seed)).toBe(true);
+      });
+
+      it("enables previous when the linear-first item is mid-shuffle-order", () => {
+        const seed = 1234;
+        const order = seededShuffleIds(
+          playlist.map((item) => item.id),
+          seed,
+        );
+        const linearFirstPosition = order.indexOf(playlist[0].id);
+        expect(linearFirstPosition).toBeGreaterThan(0);
+
+        expect(canAdvancePrevious(playlist, 0, false, true, seed)).toBe(true);
+      });
+
+      it("disables next and previous at genuine non-repeating shuffle-order boundaries", () => {
+        const seed = 1234;
+        const order = seededShuffleIds(
+          playlist.map((item) => item.id),
+          seed,
+        );
+        const firstIndex = playlist.findIndex((item) => item.id === order[0]);
+        const lastIndex = playlist.findIndex((item) => item.id === order[order.length - 1]);
+
+        expect(canAdvancePrevious(playlist, firstIndex, false, true, seed)).toBe(false);
+        expect(canAdvanceNext(playlist, lastIndex, false, true, seed)).toBe(false);
       });
     });
   });

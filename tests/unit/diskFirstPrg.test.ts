@@ -158,7 +158,29 @@ const createDiskImage = (prg: Uint8Array, name = "TEST") => {
   const startTrack = 1;
   const startSector = 0;
   writeDirectoryEntry(image, startTrack, startSector, name);
-  writePrgSector(image, startTrack, startSector, prg);
+  if (prg.length <= 254) {
+    writePrgSector(image, startTrack, startSector, prg);
+  } else {
+    // HARD12-009 regression: chain the PRG across sectors when it exceeds
+    // the single-sector capacity (254 bytes). Each chain sector holds up to
+    // 254 bytes; the last sector uses the final-sector format (nextTrack=0,
+    // byte[1] = used byte count).
+    let remaining = prg;
+    let track = startTrack;
+    let sector = startSector;
+    while (remaining.length > 254) {
+      const chunk = remaining.slice(0, 254);
+      remaining = remaining.slice(254);
+      // advance to next sector; track 1 has 21 sectors per track.
+      const nextSector = sector + 1;
+      const nextTrack = nextSector >= 21 ? track + 1 : track;
+      const finalSector = nextSector >= 21 ? 0 : nextSector;
+      writePrgSectorWithNext(image, track, sector, chunk, nextTrack, finalSector);
+      track = nextTrack;
+      sector = finalSector;
+    }
+    writePrgSector(image, track, sector, remaining);
+  }
   return image;
 };
 
@@ -211,6 +233,43 @@ describe("diskFirstPrg DMA loader", () => {
     expect(vi.mocked(injectAutostart)).toHaveBeenCalledTimes(1);
     const command = vi.mocked(injectAutostart).mock.calls[0][1] as Uint8Array;
     expect(bytesToString(command)).toContain("RUN");
+  });
+
+  // HARD12-009: a tokenised BASIC program whose line count exceeds the scanner's
+  // step budget must still be classified as BASIC so the DMA injector issues
+  // RUN rather than SYS-into-the-header. Without this guard the over-budget
+  // path returned false and the program mis-executed.
+  it("DMA-loads BASIC programs exceeding the scanner step budget as BASIC and issues RUN", async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    // Each "line" is 7 bytes: [nextPtr lo, nextPtr hi, lineNo lo, lineNo hi,
+    // body byte, body byte, 0x00 terminator]. Build 2001 minimal lines so the
+    // scanner trips MAX_BASIC_SCAN_STEPS=2000 and exits the loop.
+    const lines: number[] = [];
+    const totalLines = 2001;
+    for (let i = 0; i < totalLines; i += 1) {
+      // The last line terminates with nextPtr=0; the rest point at the next line.
+      const isLast = i === totalLines - 1;
+      const lineNextPtr = isLast ? 0 : 0x0801 + 7 * (i + 1);
+      const lineNo = (i + 1) * 10;
+      lines.push(lineNextPtr & 0xff, (lineNextPtr >> 8) & 0xff, lineNo & 0xff, (lineNo >> 8) & 0xff);
+      lines.push(0xfe, 0xfe, 0x00);
+    }
+    const body = new Uint8Array(lines);
+    const prg = new Uint8Array(body.length + 2);
+    prg[0] = 0x01;
+    prg[1] = 0x08;
+    prg.set(body, 2);
+    const image = createDiskImage(prg, "LONG");
+
+    const result = await loadFirstDiskPrgViaDma(api as any, image, "d64");
+
+    expect(result.isBasic).toBe(true);
+    expect(vi.mocked(injectAutostart)).toHaveBeenCalledTimes(1);
+    const command = vi.mocked(injectAutostart).mock.calls[0][1] as Uint8Array;
+    expect(bytesToString(command)).toContain("RUN");
+    expect(bytesToString(command)).not.toContain("SYS");
   });
 
   it("DMA-loads non-BASIC programs and issues SYS", async () => {

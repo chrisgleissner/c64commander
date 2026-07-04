@@ -79,6 +79,9 @@ const useHarness = (playlistStorageKey: string, options?: { startEmpty?: boolean
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
   const [autoAdvanceDueAtMs] = useState<number | null>(null);
   const [activePlaylistQuery, setActivePlaylistQuery] = useState("");
+  const [shuffleEnabled, setShuffleEnabled] = useState(false);
+  const [shuffleSeed, setShuffleSeed] = useState<number | null>(null);
+  const [repeatEnabled, setRepeatEnabled] = useState(false);
   const playedClockRef = useRef({ hydrate: vi.fn() });
   const trackStartedAtRef = useRef<number | null>(null);
   const trackInstanceIdRef = useRef(0);
@@ -102,6 +105,12 @@ const useHarness = (playlistStorageKey: string, options?: { startEmpty?: boolean
     autoAdvanceDueAtMs,
     setCurrentSubsongCount: vi.fn(),
     activePlaylistQuery,
+    shuffleEnabled,
+    setShuffleEnabled,
+    shuffleSeed,
+    setShuffleSeed,
+    repeatEnabled,
+    setRepeatEnabled,
     resolvedDeviceId: "device-1",
     playlistStorageKey,
     setActivePlaylistQuery,
@@ -128,6 +137,9 @@ const useHarness = (playlistStorageKey: string, options?: { startEmpty?: boolean
     playlist,
     isPlaying,
     elapsedMs,
+    shuffleEnabled,
+    shuffleSeed,
+    repeatEnabled,
     setCurrentIndex,
     setActivePlaylistQuery,
   };
@@ -304,6 +316,55 @@ describe("usePlaybackPersistence repository session persistence", () => {
 
     await waitFor(() => {
       expect(result.current.activePlaylistQuery).toBe("demo");
+    });
+  });
+
+  it("restores shuffle repeat and seed from repository session state before playback restore", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    repository.getSession.mockResolvedValueOnce({
+      playlistId: playlistStorageKey,
+      currentPlaylistItemId: null,
+      isPlaying: false,
+      isPaused: false,
+      elapsedMs: 0,
+      playedMs: 0,
+      shuffleEnabled: true,
+      repeatEnabled: true,
+      randomSeed: 123456,
+      randomCursor: null,
+      activeQuery: "",
+      updatedAt: "2026-04-03T20:00:00.000Z",
+    });
+
+    const { result } = renderHook(() => useHarness(playlistStorageKey));
+
+    await waitFor(() => {
+      expect(result.current.shuffleEnabled).toBe(true);
+      expect(result.current.repeatEnabled).toBe(true);
+      expect(result.current.shuffleSeed).toBe(123456);
+    });
+  });
+
+  it("leaves traversal toggles unchanged when a legacy repository session has no shuffle fields", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    repository.getSession.mockResolvedValueOnce({
+      playlistId: playlistStorageKey,
+      currentPlaylistItemId: null,
+      isPlaying: false,
+      isPaused: false,
+      elapsedMs: 0,
+      playedMs: 0,
+      randomCursor: null,
+      activeQuery: "",
+      updatedAt: "2026-04-03T20:00:00.000Z",
+    } as never);
+
+    const { result } = renderHook(() => useHarness(playlistStorageKey));
+
+    await waitFor(() => {
+      expect(result.current.shuffleEnabled).toBe(false);
+      expect(result.current.repeatEnabled).toBe(false);
+      expect(result.current.shuffleSeed).toBeNull();
     });
   });
 });

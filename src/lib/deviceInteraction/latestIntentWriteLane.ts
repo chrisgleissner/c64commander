@@ -98,8 +98,18 @@ export const createLatestIntentWriteLane = <T>(params: {
           }
           const err = error as Error;
           settledVersion = Math.max(settledVersion, job.version);
-          resolveUpTo(job.version - 1);
-          rejectUpTo(job.version, err);
+          // HARD12-010: in merge-semantics lanes every waiter ≤ job.version had
+          // its value folded into this failed run, so all of them must reject
+          // (the previous resolveUpTo(job.version - 1) silently resolved the
+          // pre-merge waiters as success even though their values were part
+          // of the failed batch). Replace-semantics lanes keep the historical
+          // behaviour — superseded waiters never had their write attempted.
+          if (merge) {
+            rejectUpTo(job.version, err);
+          } else {
+            resolveUpTo(job.version - 1);
+            rejectUpTo(job.version, err);
+          }
         }
       }
     })().finally(() => {

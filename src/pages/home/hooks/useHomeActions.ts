@@ -6,13 +6,21 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef, useSyncExternalStore } from "react";
 import { getC64API } from "@/lib/c64api";
 import { useC64Connection, useC64MachineControl, useC64Drives } from "@/hooks/useC64Connection";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
 import { addErrorLog } from "@/lib/logging";
 import { useActionTrace } from "@/hooks/useActionTrace";
+import { getSelectedSavedDevice } from "@/lib/savedDevices/store";
+import {
+  getMachineExecutionSnapshot,
+  restorePauseMuteFromPersistedSnapshot,
+  setMachineExecutionPaused,
+  setMachineExecutionRunning,
+  subscribeMachineExecution,
+} from "@/lib/deviceInteraction/machineExecutionStore";
 import { clearRamAndReboot, loadMemoryRanges } from "@/lib/machine/ramOperations";
 import { selectRamDumpFolder } from "@/lib/machine/ramDumpStorage";
 import { loadRamDumpFolderConfig, type RamDumpFolderConfig } from "@/lib/config/ramDumpFolderStore";
@@ -37,7 +45,21 @@ export function useHomeActions() {
   const machineTaskInFlightRef = useRef<string | null>(null);
   const [machineTaskId, setMachineTaskId] = useState<string | null>(null);
   const [powerOffDialogOpen, setPowerOffDialogOpen] = useState(false);
-  const [machineExecutionState, setMachineExecutionState] = useState<"running" | "paused" | "unknown">("running");
+  // HARD12-020: read from the shared machine-execution store (written by both
+  // Play and Home) instead of page-local state that always reset to "running"
+  // on mount and desynced from a pause applied via Play.
+  const machineExecutionState = useSyncExternalStore(
+    subscribeMachineExecution,
+    getMachineExecutionSnapshot,
+    getMachineExecutionSnapshot,
+  ).state;
+  const setMachineExecutionState = useCallback((next: "running" | "paused" | "unknown") => {
+    if (next === "paused") {
+      setMachineExecutionPaused();
+    } else {
+      setMachineExecutionRunning();
+    }
+  }, []);
   const [pauseResumePending, setPauseResumePending] = useState(false);
 
   const [ramDumpFolder, setRamDumpFolder] = useState<RamDumpFolderConfig | null>(() => loadRamDumpFolderConfig());
@@ -143,12 +165,19 @@ export function useHomeActions() {
   const handlePauseResume = trace(async function handlePauseResume() {
     if (!status.isConnected || machineTaskId !== null || pauseResumePending) return;
     const targetState = machineExecutionState === "running" ? "paused" : "running";
+    // Read before setMachineExecutionState clears it below — a pause taken in
+    // Play (possibly now an unmounted placeholder) may have muted the SID
+    // mixer and left a snapshot only Home's resume can now restore.
+    const pauseMutePending = getMachineExecutionSnapshot().pauseMutePending;
     setPauseResumePending(true);
     try {
       if (targetState === "paused") {
         await controls.pause.mutateAsync();
       } else {
         await controls.resume.mutateAsync();
+        if (pauseMutePending) {
+          await restorePauseMuteFromPersistedSnapshot(api, getSelectedSavedDevice()?.id ?? null);
+        }
       }
       setMachineExecutionState(targetState);
       toast({

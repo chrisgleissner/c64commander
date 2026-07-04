@@ -8,7 +8,18 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { RotateCcw, Save, RefreshCw, Power, Trash2, Upload, Download, FolderOpen, AlertCircle } from "lucide-react";
+import {
+  RotateCcw,
+  Save,
+  RefreshCw,
+  Power,
+  Trash2,
+  Upload,
+  Download,
+  FolderOpen,
+  AlertCircle,
+  Gamepad2,
+} from "lucide-react";
 import { variant } from "@/generated/variant";
 import { useC64ConfigItems, useC64Connection } from "@/hooks/useC64Connection";
 import { useActionTrace } from "@/hooks/useActionTrace";
@@ -47,6 +58,7 @@ import { persistConfigSnapshotFile, pickConfigSnapshotFile } from "@/lib/config/
 import { SaveRamDialog } from "./home/dialogs/SaveRamDialog";
 import { RestoreSnapshotDialog } from "./home/dialogs/RestoreSnapshotDialog";
 import { SnapshotManagerDialog } from "./home/dialogs/SnapshotManagerDialog";
+import { RemoteInputSheet } from "@/components/remoteInput/RemoteInputSheet";
 import { ReuProgressDialog } from "./home/dialogs/ReuProgressDialog";
 import { ClearFlashDialog } from "./home/dialogs/ClearFlashDialog";
 import { useSnapshotStore } from "@/lib/snapshot/snapshotStore";
@@ -216,6 +228,7 @@ function HomePageContent() {
   const [saveRamDialogOpen, setSaveRamDialogOpen] = useState(false);
   const [clearFlashDialogOpen, setClearFlashDialogOpen] = useState(false);
   const [snapshotManagerOpen, setSnapshotManagerOpen] = useState(false);
+  const [remoteInputSheetOpen, setRemoteInputSheetOpen] = useState(false);
   const [restoreTarget, setRestoreTarget] = useState<RestorableSnapshotEntry | null>(null);
   const [reuProgress, setReuProgress] = useState<ReuProgressState | null>(null);
   const [reuTaskPending, setReuTaskPending] = useState(false);
@@ -246,6 +259,7 @@ function HomePageContent() {
     openContextLens();
   };
   const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
+  const { value: remoteInputEnabled } = useFeatureFlag("remote_input_enabled");
   const { value: reuSnapshotEnabled } = useFeatureFlag("home_telnet_reu_snapshot_enabled");
   const { value: ramSnapshotsEnabled } = useFeatureFlag("ram_snapshots_enabled");
   const { value: homeTelnetConfigActionsEnabled } = useFeatureFlag("home_telnet_config_actions_enabled");
@@ -649,6 +663,17 @@ function HomePageContent() {
   const clearRamRebootVisible =
     homeTelnetClearRamRebootEnabled && telnet.isAvailable && clearRamRebootSupport?.status !== "unsupported";
   const machineExtraActions = [
+    ...(remoteInputEnabled
+      ? [
+          {
+            id: "openRemoteInput",
+            label: "Remote Control",
+            icon: Gamepad2,
+            onSelect: () => setRemoteInputSheetOpen(true),
+            disabled: !isActive,
+          },
+        ]
+      : []),
     ...(clearRamRebootVisible
       ? [
           {
@@ -1858,6 +1883,10 @@ function HomePageContent() {
         telnetBusy={telnet.isBusy}
         telnetSaveReuDisabledReason={saveReuDisabledReason}
       />
+
+      {remoteInputEnabled ? (
+        <RemoteInputSheet open={remoteInputSheetOpen} onOpenChange={setRemoteInputSheetOpen} />
+      ) : null}
 
       <SnapshotManagerDialog
         open={snapshotManagerOpen}

@@ -433,8 +433,50 @@ class MockC64UServer(
                       path == "/v1/machine:poweroff"
       ) {
         state.resetKeyboardBuffer()
+        state.releaseAllMachineInput()
       }
       return okResponse()
+    }
+
+    // HARD12-017: REST keyboard/joystick relay (u64e-openapi.yaml v3.15-alpha).
+    if (path == "/v1/machine:input" && request.method == "GET") {
+      return jsonResponse(200, buildMachineInputStatePayload())
+    }
+
+    if (path == "/v1/machine:input" && request.method == "POST") {
+      val body = String(request.body, StandardCharsets.UTF_8)
+      val events = try {
+        JSONObject(body).optJSONArray("events") ?: return errorResponse(400, "Missing events")
+      } catch (error: Exception) {
+        return errorResponse(400, error.message ?: "Invalid JSON payload")
+      }
+      if (events.length() < 1 || events.length() > 64) {
+        return errorResponse(400, "events must contain 1-64 items")
+      }
+      for (index in 0 until events.length()) {
+        val event = events.optJSONObject(index) ?: return errorResponse(400, "Invalid event at index $index")
+        when (event.optString("kind")) {
+          "release_all" -> state.releaseAllMachineInput()
+          "keyboard" -> {
+            val inputs = event.optJSONArray("inputs") ?: return errorResponse(400, "Missing keyboard inputs")
+            if (inputs.length() < 1 || inputs.length() > 8) {
+              return errorResponse(400, "keyboard inputs must contain 1-8 items")
+            }
+            applyMachineInputTransition(state.machineInputKeyboard, inputs, event.optString("transition"))
+          }
+          "joystick" -> {
+            val port = event.optInt("port", -1)
+            val joystickState = state.machineInputJoysticks[port] ?: return errorResponse(400, "Invalid port $port")
+            val inputs = event.optJSONArray("inputs") ?: return errorResponse(400, "Missing joystick inputs")
+            if (inputs.length() < 1 || inputs.length() > 7) {
+              return errorResponse(400, "joystick inputs must contain 1-7 items")
+            }
+            applyMachineInputTransition(joystickState, inputs, event.optString("transition"))
+          }
+          else -> return errorResponse(400, "Unknown event kind at index $index")
+        }
+      }
+      return jsonResponse(200, buildMachineInputStatePayload())
     }
 
     if (path == "/v1/machine:writemem" && (request.method == "PUT" || request.method == "POST")) {
@@ -672,6 +714,34 @@ class MockC64UServer(
       details.presets?.let { detailsObj.put("presets", JSONArray(it)) }
       payload.put("details", detailsObj)
     }
+    return payload
+  }
+
+  // HARD12-017: `press` adds, `release` removes, `tap` is momentary (never persisted).
+  private fun applyMachineInputTransition(held: MutableSet<String>, inputs: JSONArray, transition: String) {
+    val names = (0 until inputs.length()).map { inputs.optString(it) }
+    when (transition) {
+      "press" -> held.addAll(names)
+      "release" -> held.removeAll(names.toSet())
+      "tap" -> Unit
+      else -> Unit
+    }
+  }
+
+  private fun buildMachineInputStatePayload(): JSONObject {
+    val payload = JSONObject()
+    val keyboard = JSONObject()
+    keyboard.put("inputs", JSONArray(state.machineInputKeyboard.toList()))
+    payload.put("keyboard", keyboard)
+    val joysticks = JSONArray()
+    state.machineInputJoysticks.toSortedMap().forEach { (port, inputs) ->
+      val joystick = JSONObject()
+      joystick.put("port", port)
+      joystick.put("inputs", JSONArray(inputs.toList()))
+      joysticks.put(joystick)
+    }
+    payload.put("joysticks", joysticks)
+    payload.put("errors", JSONArray())
     return payload
   }
 

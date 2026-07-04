@@ -349,4 +349,46 @@ describe("settingsTransfer", () => {
       expect(snapshot.featureFlags).toEqual({ hvsc_enabled: false });
     });
   });
+
+  describe("HARD12-002: import preserves existing hidden/developer-only flag overrides", () => {
+    it("preserves a previously-set hidden override when importing a payload without that flag (developer mode off)", async () => {
+      setDeveloperModeEnabled(false);
+      // First, seed a hidden/developer-only flag via developer mode (the only
+      // way to set it without developer mode would be the very behaviour under
+      // test).
+      setDeveloperModeEnabled(true);
+      await importSettingsJson(JSON.stringify(buildImportPayload({ background_execution_enabled: false })));
+      setDeveloperModeEnabled(false);
+
+      // Now import a clean payload that omits the hidden flag entirely.
+      const result = await importSettingsJson(JSON.stringify(buildImportPayload({ hvsc_enabled: false })));
+      expect(result.ok).toBe(true);
+
+      const snapshot = await exportSettingsSnapshot();
+      // The hidden override must survive the import — it is not in the
+      // payload, but the user cannot re-enable it without developer mode.
+      // hvsc_enabled:false is non-default so it also persists.
+      expect(snapshot.featureFlags).toEqual({
+        background_execution_enabled: false,
+        hvsc_enabled: false,
+      });
+    });
+
+    it("still allows an import payload to override a previously-set hidden override when developer mode is on", async () => {
+      setDeveloperModeEnabled(true);
+      await importSettingsJson(JSON.stringify(buildImportPayload({ background_execution_enabled: false })));
+
+      // Developer mode keeps the historical full-replace semantics.
+      const result = await importSettingsJson(
+        JSON.stringify(buildImportPayload({ background_execution_enabled: true })),
+      );
+      expect(result.ok).toBe(true);
+
+      // background_execution_enabled:true matches the compiled default, so
+      // no override is stored. The key point: import with dev mode on flipped
+      // the previous false→true successfully.
+      const snapshot = await exportSettingsSnapshot();
+      expect(snapshot.featureFlags).toEqual({});
+    });
+  });
 });

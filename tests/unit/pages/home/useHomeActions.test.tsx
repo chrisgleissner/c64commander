@@ -130,6 +130,38 @@ vi.mock("@/lib/snapshot/currentPlaybackSnapshotLabel", () => ({
   getCurrentPlaybackSnapshotLabel: (...args: unknown[]) => getCurrentPlaybackSnapshotLabelMock(...args),
 }));
 
+// HARD12-020: Home's pause/resume must read/write the shared machine-execution
+// store (written by both Play and Home) instead of page-local state that
+// always assumed "running" on mount. This fake models the store's real
+// subscribe/getSnapshot/setters contract closely enough for useSyncExternalStore.
+type FakeMachineExecutionSnapshot = { state: "running" | "paused"; pauseMutePending: boolean };
+let machineExecutionSnapshot: FakeMachineExecutionSnapshot = { state: "running", pauseMutePending: false };
+const machineExecutionListeners = new Set<() => void>();
+const setMachineExecutionPausedMock = vi.fn((options?: { pauseMutePending?: boolean }) => {
+  machineExecutionSnapshot = { state: "paused", pauseMutePending: Boolean(options?.pauseMutePending) };
+  machineExecutionListeners.forEach((listener) => listener());
+});
+const setMachineExecutionRunningMock = vi.fn(() => {
+  machineExecutionSnapshot = { state: "running", pauseMutePending: false };
+  machineExecutionListeners.forEach((listener) => listener());
+});
+const restorePauseMuteFromPersistedSnapshotMock = vi.fn(async () => true);
+
+vi.mock("@/lib/deviceInteraction/machineExecutionStore", () => ({
+  getMachineExecutionSnapshot: () => machineExecutionSnapshot,
+  subscribeMachineExecution: (listener: () => void) => {
+    machineExecutionListeners.add(listener);
+    return () => machineExecutionListeners.delete(listener);
+  },
+  setMachineExecutionPaused: (options?: { pauseMutePending?: boolean }) => setMachineExecutionPausedMock(options),
+  setMachineExecutionRunning: () => setMachineExecutionRunningMock(),
+  restorePauseMuteFromPersistedSnapshot: (...args: unknown[]) => restorePauseMuteFromPersistedSnapshotMock(...args),
+}));
+
+vi.mock("@/lib/savedDevices/store", () => ({
+  getSelectedSavedDevice: () => ({ id: "device-a" }),
+}));
+
 import { useHomeActions } from "@/pages/home/hooks/useHomeActions";
 import type { SnapshotStorageEntry } from "@/lib/snapshot/snapshotTypes";
 import { CpuRestoreUnsupportedError } from "@/lib/snapshot/cpu/restoreCart";
@@ -137,6 +169,8 @@ import { CpuRestoreUnsupportedError } from "@/lib/snapshot/cpu/restoreCart";
 describe("useHomeActions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    machineExecutionSnapshot = { state: "running", pauseMutePending: false };
+    restorePauseMuteFromPersistedSnapshotMock.mockResolvedValue(true);
     statusState.isConnected = true;
     drivesState.value = null;
     pauseMutateAsyncMock.mockResolvedValue(undefined);
@@ -673,5 +707,48 @@ describe("useHomeActions", () => {
         description: expect.stringContaining("automatically reset"),
       }),
     );
+  });
+
+  // HARD12-020: Home previously assumed "running" on every mount via
+  // page-local useState, desyncing from a pause applied via Play (which may
+  // now be an unmounted placeholder). Home must read its initial pause label
+  // from the shared machine-execution store instead.
+  it("reads the initial pause state from the shared machine-execution store (HARD12-020)", () => {
+    machineExecutionSnapshot = { state: "paused", pauseMutePending: false };
+
+    const { result } = renderHook(() => useHomeActions());
+
+    expect(result.current.machineExecutionState).toBe("paused");
+  });
+
+  // HARD12-020: Play's pause path may capture a SID pause-mute snapshot that
+  // only Home's resume can restore (Play may be an unmounted placeholder when
+  // the user resumes from Home). Resuming from Home must restore that
+  // snapshot when the shared store reports one is pending, and must not do
+  // so when no mute is pending.
+  it("restores the pause-mute snapshot when resuming with a pending pause-mute flag (HARD12-020)", async () => {
+    machineExecutionSnapshot = { state: "paused", pauseMutePending: true };
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handlePauseResume();
+    });
+
+    expect(resumeMutateAsyncMock).toHaveBeenCalledTimes(1);
+    expect(restorePauseMuteFromPersistedSnapshotMock).toHaveBeenCalledWith(apiMock, "device-a");
+    expect(setMachineExecutionRunningMock).toHaveBeenCalledTimes(1);
+    expect(result.current.machineExecutionState).toBe("running");
+  });
+
+  it("does not attempt a pause-mute restore when resuming with no pending pause-mute flag (HARD12-020)", async () => {
+    machineExecutionSnapshot = { state: "paused", pauseMutePending: false };
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handlePauseResume();
+    });
+
+    expect(resumeMutateAsyncMock).toHaveBeenCalledTimes(1);
+    expect(restorePauseMuteFromPersistedSnapshotMock).not.toHaveBeenCalled();
   });
 });

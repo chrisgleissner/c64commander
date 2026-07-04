@@ -8,6 +8,7 @@
 
 import { addErrorLog, addLog } from "@/lib/logging";
 import { buildBinaryFingerprint } from "@/lib/binaryFingerprint";
+import { loadDebugLoggingEnabled } from "@/lib/config/appSettings";
 import type { C64API } from "@/lib/c64api";
 import { createArchiveClient } from "@/lib/archive/client";
 import { getCachedArchiveDiskBlob, setCachedArchiveDiskBlob } from "@/lib/archive/archiveDiskCache";
@@ -141,6 +142,20 @@ export const buildDiskMountType = (path: string) => {
 };
 
 const logResolvedLocalDiskBytes = (disk: DiskEntry, source: string, bytes: Uint8Array) => {
+  if (!loadDebugLoggingEnabled()) {
+    // HARD12-013: skip the expensive full-image FNV-1a hash when debug
+    // logging is off — the fingerprint is purely diagnostic and was the only
+    // reason we walked the whole byte array.
+    addLog("debug", "Local disk bytes resolved", {
+      path: disk.path,
+      location: disk.location,
+      sourceId: disk.sourceId ?? null,
+      localUri: disk.localUri ?? null,
+      localTreeUri: disk.localTreeUri ?? null,
+      resolutionSource: source,
+    });
+    return;
+  }
   addLog("debug", "Local disk bytes resolved", {
     path: disk.path,
     location: disk.location,
@@ -246,9 +261,13 @@ export const resolveLocalDiskBlob = async (
     if (runtimeFile.size > MAX_LOCAL_DISK_IMAGE_BYTES) {
       throw new Error(`Local disk runtime file is too large to mount (${runtimeFile.size} bytes).`);
     }
-    const bytes = new Uint8Array(await runtimeFile.arrayBuffer());
-    throwIfAborted(signal, "Local disk runtime file read");
-    logResolvedLocalDiskBytes(disk, "runtime-file", bytes);
+    // HARD12-013: the diagnostic log is the only consumer of the bytes; when
+    // debug logging is disabled skip the extra arrayBuffer() read entirely.
+    if (loadDebugLoggingEnabled()) {
+      const bytes = new Uint8Array(await runtimeFile.arrayBuffer());
+      throwIfAborted(signal, "Local disk runtime file read");
+      logResolvedLocalDiskBytes(disk, "runtime-file", bytes);
+    }
     return runtimeFile;
   }
   if (disk.localUri) {

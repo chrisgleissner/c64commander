@@ -429,6 +429,27 @@ const rememberSelectedSavedDeviceIdentity = (deviceInfo: DeviceInfo | null | und
 
   const hostname = deviceInfo?.hostname?.trim() || null;
   const uniqueId = deviceInfo?.unique_id?.trim() || null;
+
+  // HARD12-011: during a saved-device switch the selection has flipped to the new
+  // device while the runtime API config still targets the previous one, so an
+  // in-flight /v1/info from the old device can arrive and restamp the new
+  // selection's identity. While that window is open, reject deviceInfo whose
+  // unique id does not match the selected device (the new device's own id). The
+  // guard is scoped to the window so it never blocks a legitimate identity
+  // refresh or a switch's own post-config verification.
+  if (
+    savedDeviceSwitchProbeWindow &&
+    uniqueId &&
+    selectedDevice.lastKnownUniqueId &&
+    uniqueId !== selectedDevice.lastKnownUniqueId
+  ) {
+    addLog("debug", "Ignoring device identity from a different device during a saved-device switch", {
+      arrivingUniqueId: uniqueId,
+      selectedUniqueId: selectedDevice.lastKnownUniqueId,
+    });
+    return;
+  }
+
   const savedDevices = getSavedDevicesSnapshot();
   const summary = savedDevices.summaries[selectedDevice.id];
   const runtimeVerified = savedDevices.verifiedByDeviceId[selectedDevice.id] ?? null;
@@ -449,6 +470,14 @@ const rememberSelectedSavedDeviceIdentity = (deviceInfo: DeviceInfo | null | und
     unique_id: uniqueId,
     firmware_version: deviceInfo?.firmware_version ?? null,
   });
+};
+
+// HARD12-011: true only between selectSavedDevice and applyC64APIRuntimeConfig
+// during executeSavedDeviceSwitch — the window in which a late /v1/info from the
+// previous device could otherwise restamp the newly selected device.
+let savedDeviceSwitchProbeWindow = false;
+export const setSavedDeviceSwitchProbeWindow = (open: boolean) => {
+  savedDeviceSwitchProbeWindow = open;
 };
 
 const setSnapshot = (patch: Partial<ConnectionSnapshot>) => {

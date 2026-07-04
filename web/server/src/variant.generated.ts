@@ -117,6 +117,11 @@ export const webServerVariantConfig = {
         enabled: true,
         visible_to_user: true,
       },
+      remote_input_enabled: {
+        developer_only: true,
+        enabled: false,
+        visible_to_user: false,
+      },
     },
     id: "c64commander",
     platform: {

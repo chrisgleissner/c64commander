@@ -39,6 +39,11 @@ import { reduceVolumeState, type VolumeAction } from "../volumeState";
 import { extractAudioMixerItems, parseVolumeOption, type AudioMixerItem } from "../playFilesUtils";
 import { resolvePlaybackSyncDecision, type PlaybackSyncIntent, type PlaybackSyncState } from "../playbackMixerSync";
 import { resolveMutedSyncIndex, resolveMostCommonIndex, shouldHoldManualMuteSync } from "../volumeSync";
+import {
+  discardPlaybackSnapshot,
+  hydratePlaybackSnapshot,
+  persistPlaybackSnapshot,
+} from "../playbackSessionPersistence";
 
 type SidMuteSnapshot = {
   volumes: Record<string, string | number>;
@@ -58,6 +63,11 @@ interface UseVolumeOverrideProps {
   isPlaying: boolean;
   isPaused: boolean;
   previewIntervalMs?: number;
+  // HARD12-006: the snapshot is persisted to sessionStorage keyed by the
+  // current device id so a remount of Play (tab-away → return) re-owns the
+  // same capture it had at unmount time. Pass `null` to disable persistence
+  // (e.g. in tests).
+  resolvedDeviceId?: string | null;
 }
 
 type EnsureUnmutedOptions = {
@@ -125,7 +135,7 @@ export const resolveUnmuteFallbackIndexForSteps = ({
   return safeFallback(preferredIndex ?? currentIndex);
 };
 
-export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProps) {
+export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: UseVolumeOverrideProps) {
   const { status } = useC64Connection();
   const updateConfigBatch = useC64UpdateConfigBatch();
 
@@ -213,6 +223,61 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   const pauseMuteSnapshotRef = useRef<SidMuteSnapshot | null>(null);
   const volumeSessionSnapshotRef = useRef<Record<string, string | number> | null>(null);
   const volumeSessionActiveRef = useRef(false);
+
+  // HARD12-006: rehydrate the volume-session snapshot from sessionStorage on
+  // mount so a Play remount after tab-away keeps ownership of the same
+  // captured snapshot. The rehydrate is value-equality bailed (we only assign
+  // when the ref is empty) so subsequent re-renders do not loop per the
+  // AGENTS React-safety rule.
+  useEffect(() => {
+    if (!resolvedDeviceId) return;
+    if (
+      volumeSessionSnapshotRef.current !== null ||
+      manualMuteSnapshotRef.current !== null ||
+      pauseMuteSnapshotRef.current !== null
+    ) {
+      return;
+    }
+    const persisted = hydratePlaybackSnapshot(resolvedDeviceId);
+    if (!persisted) return;
+    if (persisted.volumeSnapshot) {
+      volumeSessionSnapshotRef.current = persisted.volumeSnapshot;
+    }
+    if (persisted.volumeActive) {
+      volumeSessionActiveRef.current = true;
+    }
+    if (persisted.manualMuteSnapshot && persisted.manualMuteEnablement) {
+      manualMuteSnapshotRef.current = {
+        volumes: persisted.manualMuteSnapshot,
+        enablement: persisted.manualMuteEnablement,
+      };
+    }
+    if (persisted.pauseMuteSnapshot && persisted.pauseMuteEnablement) {
+      pauseMuteSnapshotRef.current = {
+        volumes: persisted.pauseMuteSnapshot,
+        enablement: persisted.pauseMuteEnablement,
+      };
+    }
+  }, [resolvedDeviceId]);
+
+  // HARD12-006: persist the volume-session snapshot whenever playback
+  // transitions or the device id changes so a subsequent remount re-owns the
+  // same captured values. The snapshots themselves live in refs (no React
+  // re-render on mutation); the persist effect runs on every isPlaying/
+  // isPaused edge which is the moment Stop/handleTabAway would otherwise
+  // need the snapshot.
+  useEffect(() => {
+    if (!resolvedDeviceId) return;
+    persistPlaybackSnapshot({
+      deviceId: resolvedDeviceId,
+      volumeSnapshot: volumeSessionSnapshotRef.current ?? {},
+      volumeActive: volumeSessionActiveRef.current,
+      manualMuteSnapshot: manualMuteSnapshotRef.current?.volumes ?? null,
+      manualMuteEnablement: manualMuteSnapshotRef.current?.enablement ?? null,
+      pauseMuteSnapshot: pauseMuteSnapshotRef.current?.volumes ?? null,
+      pauseMuteEnablement: pauseMuteSnapshotRef.current?.enablement ?? null,
+    });
+  }, [isPlaying, isPaused, resolvedDeviceId]);
   const previousVolumeIndexRef = useRef<number | null>(null);
   const mutedDraftVolumeIndexRef = useRef<number | null>(null);
   const volumeUpdateTimerRef = useRef<number | null>(null);
@@ -776,6 +841,10 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       pauseMuteSnapshotRef.current = null;
       pausingFromPauseRef.current = false;
       resumingFromPauseRef.current = false;
+      // HARD12-006: drop the persisted envelope too so a saved-device switch
+      // never rehydrates another device's captured snapshot back into the
+      // next device's refs.
+      discardPlaybackSnapshot(resolvedDeviceId ?? undefined);
       dispatchTrackedVolume({ type: "reset", index: defaultVolumeIndex });
       volumeUiTargetRef.current = null;
       addLog("info", "Volume session discarded without device write", { reason });

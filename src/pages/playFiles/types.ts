@@ -126,5 +126,8 @@ export type StoredPlaybackSession = {
   playedMs: number;
   durationMs?: number;
   autoAdvanceDueAtMs?: number | null;
+  shuffleEnabled?: boolean;
+  repeatEnabled?: boolean;
+  randomSeed?: number | null;
   updatedAt: string;
 };

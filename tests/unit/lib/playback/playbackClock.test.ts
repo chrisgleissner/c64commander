@@ -27,6 +27,15 @@ describe("PlaybackClock", () => {
     expect(clock.current(start + 1500)).toBe(1500);
   });
 
+  it("accumulates played time across track starts unless reset is requested", () => {
+    clock.start(1000);
+    clock.pause(2500);
+    expect(clock.current(3000)).toBe(1500);
+
+    clock.start(3000);
+    expect(clock.current(3600)).toBe(2100);
+  });
+
   it("resets baseMs on restart if requested", () => {
     clock.start(1000);
     clock.pause(2000); // baseMs = 1000

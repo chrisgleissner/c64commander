@@ -22,6 +22,7 @@ const {
 
 vi.mock("@/lib/connection/connectionManager", () => ({
   verifyCurrentConnectionTarget: mockVerifyCurrentConnectionTarget,
+  setSavedDeviceSwitchProbeWindow: vi.fn(),
 }));
 
 vi.mock("@/lib/ftp/ftpConfig", () => ({

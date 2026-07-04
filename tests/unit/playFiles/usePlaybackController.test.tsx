@@ -285,6 +285,66 @@ describe("usePlaybackController", () => {
     expect(nextPlaylist?.[0]?.durationMs).toBe(45_000);
   });
 
+  it("persists the re-resolved duration and new song number for a subsong playback start", async () => {
+    const file = {
+      name: "demo.sid",
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    } as unknown as File;
+    const playlist = [
+      createPlaylistItem({
+        category: "sid",
+        label: "demo.sid",
+        path: "/MUSIC/demo.sid",
+        request: {
+          source: "local",
+          path: "/MUSIC/demo.sid",
+          file,
+          songNr: 2,
+        },
+        durationMs: undefined,
+        subsongCount: undefined,
+      }),
+    ];
+    const setPlaylist = vi.fn();
+    const { result } = renderPlaybackController(playlist, { setPlaylist });
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    const playlistUpdaters = setPlaylist.mock.calls
+      .map(([value]) => value)
+      .filter((value): value is (items: PlaylistItem[]) => PlaylistItem[] => typeof value === "function");
+    const playlistUpdater = playlistUpdaters[playlistUpdaters.length - 1];
+    expect(playlistUpdater).toBeDefined();
+    const nextPlaylist = playlistUpdater?.(playlist);
+    expect(nextPlaylist?.[0]).toMatchObject({
+      durationMs: 45_000,
+      subsongCount: 3,
+      request: expect.objectContaining({
+        songNr: 2,
+        durationMs: 45_000,
+      }),
+    });
+  });
+
+  it("starts a new track without resetting the cumulative played clock", async () => {
+    const playlist = [createPlaylistItem()];
+    const playedClockRef = {
+      current: {
+        start: vi.fn(),
+        stop: vi.fn(),
+        pause: vi.fn(),
+        resume: vi.fn(),
+        reset: vi.fn(),
+        current: vi.fn().mockReturnValue(12_000),
+      },
+    };
+    const { result } = renderPlaybackController(playlist, { playedClockRef });
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    expect(playedClockRef.current.start).toHaveBeenCalledWith(expect.any(Number));
+  });
+
   it("does not update track timeline or playlist metadata when launch fails", async () => {
     const playlist = [createPlaylistItem()];
     const setPlaylist = vi.fn();

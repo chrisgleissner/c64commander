@@ -35,6 +35,9 @@ overrides:
   lighting_studio_enabled:
     enabled: false
     visible_to_user: false
+  remote_input_enabled:
+    enabled: false
+    visible_to_user: false
   home_telnet_reu_snapshot_enabled:
     enabled: false
     visible_to_user: false

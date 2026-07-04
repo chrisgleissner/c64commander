@@ -31,6 +31,14 @@ const mocks = vi.hoisted(() => ({
     settings: 0,
     docs: 0,
   },
+  unmountCounts: {
+    home: 0,
+    play: 0,
+    disks: 0,
+    config: 0,
+    settings: 0,
+    docs: 0,
+  },
 }));
 
 let currentProfile: "compact" | "medium" = "medium";
@@ -79,6 +87,9 @@ vi.mock("@/pages/PlayFilesPage", () => ({
   default: function PlayFilesPageMock() {
     React.useEffect(() => {
       mocks.mountCounts.play += 1;
+      return () => {
+        mocks.unmountCounts.play += 1;
+      };
     }, []);
     return <div>Play Page</div>;
   },
@@ -87,6 +98,9 @@ vi.mock("@/pages/DisksPage", () => ({
   default: function DisksPageMock() {
     React.useEffect(() => {
       mocks.mountCounts.disks += 1;
+      return () => {
+        mocks.unmountCounts.disks += 1;
+      };
     }, []);
     return <div>Disks Page</div>;
   },
@@ -181,6 +195,9 @@ describe("SwipeNavigationLayer", () => {
     localStorage.clear();
     Object.keys(mocks.mountCounts).forEach((key) => {
       mocks.mountCounts[key as keyof typeof mocks.mountCounts] = 0;
+    });
+    Object.keys(mocks.unmountCounts).forEach((key) => {
+      mocks.unmountCounts[key as keyof typeof mocks.unmountCounts] = 0;
     });
     mocks.addLog.mockReset();
     document.documentElement.dataset.c64MotionMode = "standard";
@@ -545,5 +562,47 @@ describe("SwipeNavigationLayer", () => {
 
     expect(await screen.findByTestId("swipe-navigation-container")).toHaveAttribute("data-interstitial-active", "true");
     expect(screen.getByTestId("swipe-navigation-container")).toHaveAttribute("inert", "");
+  });
+
+  // HARD12-022: every tab transition (probes off, i.e. the real production
+  // path) keeps the departing page's real component mounted for the whole
+  // "transitioning" phase - it is only placeholder-rendered once the runway
+  // settles back to idle. This is the mechanism the finding is about: a page
+  // holding a stateful effect (background-execution wake lock, the playback
+  // volume-override session, the shared machine-execution store) is NOT
+  // guaranteed a hard unmount at the moment the user navigates away - it must
+  // defend itself against surviving the whole transition, then unmounting
+  // exactly once when the transition finally settles. This test makes that
+  // mount/unmount boundary observable so future changes to the transition
+  // rendering cannot silently start double-mounting or skipping the unmount.
+  it("keeps the departing page mounted for the full transition, then unmounts it exactly once on settle (HARD12-022)", async () => {
+    renderLayer("/play", undefined, false, true);
+    const runway = await screen.findByTestId("swipe-navigation-runway");
+    expect(mocks.mountCounts.play).toBe(1);
+    expect(mocks.unmountCounts.play).toBe(0);
+
+    act(() => {
+      capturedCallbacks?.onCommit(1, { dx: -120, dy: 0, velocityX: -1 });
+    });
+    expect(runway).toHaveAttribute("data-runway-phase", "transitioning");
+
+    // Mid-transition: the departing Play page is still fully mounted with
+    // real content, not a placeholder - the transient overlap HARD12-022
+    // flags. Its own dedicated regressions (BUG-040 wake lock, HARD12-006
+    // volume session, HARD12-020 machine-execution state) rely on this
+    // overlap not silently unmounting them early.
+    expect(screen.getByText("Play Page")).toBeInTheDocument();
+    expect(mocks.unmountCounts.play).toBe(0);
+    expect(mocks.mountCounts.disks).toBe(1);
+
+    fireEvent.transitionEnd(runway, { target: runway });
+
+    // Settling to idle placeholder-renders the now-inactive Play slot,
+    // unmounting its real content exactly once - not zero (leaked) and not
+    // more than once (a double-teardown that would double-run cleanup).
+    expect(screen.queryByText("Play Page")).not.toBeInTheDocument();
+    expect(mocks.unmountCounts.play).toBe(1);
+    expect(mocks.mountCounts.disks).toBe(1);
+    expect(mocks.unmountCounts.disks).toBe(0);
   });
 });

@@ -14,6 +14,7 @@ import java.net.URL
 import java.util.Arrays
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -279,6 +280,217 @@ class MockC64UServerTest {
     val response = JSONObject(body)
     val data = response.getJSONArray("data")
     assertEquals(0, data.getInt(0))
+    server.stop()
+  }
+
+  private fun postMachineInput(baseUrl: String, events: JSONArray): HttpURLConnection {
+    val connection = URL("$baseUrl/v1/machine:input").openConnection() as HttpURLConnection
+    connection.requestMethod = "POST"
+    connection.doOutput = true
+    val payload = JSONObject().apply { put("events", events) }
+    connection.outputStream.use { it.write(payload.toString().toByteArray()) }
+    return connection
+  }
+
+  private fun getMachineInputState(baseUrl: String): JSONObject {
+    val connection = URL("$baseUrl/v1/machine:input").openConnection() as HttpURLConnection
+    connection.requestMethod = "GET"
+    val body = JSONObject(readBody(connection))
+    connection.disconnect()
+    return body
+  }
+
+  // HARD12-017
+  @Test
+  fun machineInputStartsWithNoHeldKeyboardOrJoystickInputs() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    val server = MockC64UServer(state)
+    server.start()
+    waitForServer(server)
+
+    val body = getMachineInputState(server.baseUrl)
+    assertEquals(0, body.getJSONObject("keyboard").getJSONArray("inputs").length())
+    assertEquals(2, body.getJSONArray("joysticks").length())
+    assertEquals(0, body.getJSONArray("joysticks").getJSONObject(0).getJSONArray("inputs").length())
+
+    server.stop()
+  }
+
+  @Test
+  fun machineInputPressThenReleaseTracksHeldJoystickInputs() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    val server = MockC64UServer(state)
+    server.start()
+    waitForServer(server)
+
+    val pressEvents =
+            JSONArray()
+                    .put(
+                            JSONObject().apply {
+                              put("kind", "joystick")
+                              put("port", 2)
+                              put("inputs", JSONArray().put("up").put("fire"))
+                              put("transition", "press")
+                            }
+                    )
+    val pressConnection = postMachineInput(server.baseUrl, pressEvents)
+    assertEquals(200, pressConnection.responseCode)
+    pressConnection.disconnect()
+
+    val afterPress = getMachineInputState(server.baseUrl)
+    val port2AfterPress =
+            (0 until afterPress.getJSONArray("joysticks").length())
+                    .map { afterPress.getJSONArray("joysticks").getJSONObject(it) }
+                    .first { it.getInt("port") == 2 }
+                    .getJSONArray("inputs")
+    assertEquals(2, port2AfterPress.length())
+
+    val releaseEvents =
+            JSONArray()
+                    .put(
+                            JSONObject().apply {
+                              put("kind", "joystick")
+                              put("port", 2)
+                              put("inputs", JSONArray().put("up"))
+                              put("transition", "release")
+                            }
+                    )
+    val releaseConnection = postMachineInput(server.baseUrl, releaseEvents)
+    assertEquals(200, releaseConnection.responseCode)
+    releaseConnection.disconnect()
+
+    val afterRelease = getMachineInputState(server.baseUrl)
+    val port2AfterRelease =
+            (0 until afterRelease.getJSONArray("joysticks").length())
+                    .map { afterRelease.getJSONArray("joysticks").getJSONObject(it) }
+                    .first { it.getInt("port") == 2 }
+                    .getJSONArray("inputs")
+    assertEquals(listOf("fire"), (0 until port2AfterRelease.length()).map { port2AfterRelease.getString(it) })
+
+    server.stop()
+  }
+
+  @Test
+  fun machineInputReleaseAllClearsKeyboardAndBothJoysticks() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    val server = MockC64UServer(state)
+    server.start()
+    waitForServer(server)
+
+    val setupEvents =
+            JSONArray()
+                    .put(
+                            JSONObject().apply {
+                              put("kind", "keyboard")
+                              put("inputs", JSONArray().put("a"))
+                              put("transition", "press")
+                            }
+                    )
+                    .put(
+                            JSONObject().apply {
+                              put("kind", "joystick")
+                              put("port", 1)
+                              put("inputs", JSONArray().put("left"))
+                              put("transition", "press")
+                            }
+                    )
+    postMachineInput(server.baseUrl, setupEvents).also {
+      assertEquals(200, it.responseCode)
+      it.disconnect()
+    }
+
+    val releaseAll = JSONArray().put(JSONObject().apply { put("kind", "release_all") })
+    postMachineInput(server.baseUrl, releaseAll).also {
+      assertEquals(200, it.responseCode)
+      it.disconnect()
+    }
+
+    val after = getMachineInputState(server.baseUrl)
+    assertEquals(0, after.getJSONObject("keyboard").getJSONArray("inputs").length())
+    for (index in 0 until after.getJSONArray("joysticks").length()) {
+      assertEquals(0, after.getJSONArray("joysticks").getJSONObject(index).getJSONArray("inputs").length())
+    }
+
+    server.stop()
+  }
+
+  @Test
+  fun machineInputRejectsAnEmptyOrOversizedEventBatch() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    val server = MockC64UServer(state)
+    server.start()
+    waitForServer(server)
+
+    val emptyConnection = postMachineInput(server.baseUrl, JSONArray())
+    assertEquals(400, emptyConnection.responseCode)
+    emptyConnection.disconnect()
+
+    val oversized = JSONArray()
+    repeat(65) { oversized.put(JSONObject().apply { put("kind", "release_all") }) }
+    val oversizedConnection = postMachineInput(server.baseUrl, oversized)
+    assertEquals(400, oversizedConnection.responseCode)
+    oversizedConnection.disconnect()
+
+    server.stop()
+  }
+
+  @Test
+  fun machineInputRejectsAnInvalidJoystickPort() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    val server = MockC64UServer(state)
+    server.start()
+    waitForServer(server)
+
+    val events =
+            JSONArray()
+                    .put(
+                            JSONObject().apply {
+                              put("kind", "joystick")
+                              put("port", 3)
+                              put("inputs", JSONArray().put("up"))
+                              put("transition", "press")
+                            }
+                    )
+    val connection = postMachineInput(server.baseUrl, events)
+    assertEquals(400, connection.responseCode)
+    connection.disconnect()
+
+    server.stop()
+  }
+
+  @Test
+  fun machineResetClearsHeldMachineInput() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    val server = MockC64UServer(state)
+    server.start()
+    waitForServer(server)
+
+    val press =
+            JSONArray()
+                    .put(
+                            JSONObject().apply {
+                              put("kind", "joystick")
+                              put("port", 2)
+                              put("inputs", JSONArray().put("fire"))
+                              put("transition", "press")
+                            }
+                    )
+    postMachineInput(server.baseUrl, press).also {
+      assertEquals(200, it.responseCode)
+      it.disconnect()
+    }
+
+    val resetConnection =
+            URL("${server.baseUrl}/v1/machine:reset").openConnection() as HttpURLConnection
+    resetConnection.requestMethod = "PUT"
+    assertEquals(200, resetConnection.responseCode)
+    resetConnection.disconnect()
+
+    val after = getMachineInputState(server.baseUrl)
+    for (index in 0 until after.getJSONArray("joysticks").length()) {
+      assertEquals(0, after.getJSONArray("joysticks").getJSONObject(index).getJSONArray("inputs").length())
+    }
+
     server.stop()
   }
 

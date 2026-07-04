@@ -26,6 +26,27 @@ vi.mock("@/hooks/useConnectionState", () => ({
   useConnectionState: mocks.useConnectionState,
 }));
 
+const featureFlagOverrides = vi.hoisted(() => new Map<string, boolean>());
+
+vi.mock("@/hooks/useFeatureFlags", async () => {
+  const actual = await vi.importActual<object>("@/hooks/useFeatureFlags");
+  return {
+    ...actual,
+    useFeatureFlag: (id: string) => {
+      const override = featureFlagOverrides.get(id);
+      const enabled = override ?? id === "lighting_studio_enabled";
+      return {
+        value: enabled,
+        isLoaded: true,
+        setValue: vi.fn(),
+        resolution: { id, value: enabled, visible: false, editable: false, developerOnly: true },
+        visible: false,
+        editable: false,
+      };
+    },
+  };
+});
+
 vi.mock("@/lib/c64api", async () => {
   const actual = await vi.importActual<object>("@/lib/c64api");
   return {
@@ -983,5 +1004,27 @@ describe("LightingStudioProvider", () => {
 
     expect(screen.getByTestId("connection-sentinel")).toHaveTextContent("connecting");
     expect(screen.getByTestId("profile-modified")).toHaveTextContent("true");
+  });
+
+  it("HARD12-004: skips lighting queries and config-batch writes when the feature flag is off", async () => {
+    featureFlagOverrides.set("lighting_studio_enabled", false);
+    try {
+      mocks.useC64ConfigItems.mockClear();
+      mocks.updateConfigBatch.mockClear();
+      renderProvider("/");
+
+      // Give effects a tick to settle and confirm the provider made no calls
+      // (no LED strip query with enabled=true, no keyboard query, no config
+      // batch write).
+      await waitFor(() => {
+        const ledCallEnabled = mocks.useC64ConfigItems.mock.calls.some(
+          ([category, _items, enabled]) => category === "LED Strip Settings" && enabled === true,
+        );
+        expect(ledCallEnabled).toBe(false);
+      });
+      expect(mocks.updateConfigBatch).not.toHaveBeenCalled();
+    } finally {
+      featureFlagOverrides.delete("lighting_studio_enabled");
+    }
   });
 });

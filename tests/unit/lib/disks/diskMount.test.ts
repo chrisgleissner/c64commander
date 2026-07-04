@@ -31,6 +31,11 @@ vi.mock("@/lib/sourceNavigation/localSourcesStore", () => ({
   requireLocalSourceEntries: vi.fn(() => []),
 }));
 
+vi.mock("@/lib/config/appSettings", () => ({
+  loadDebugLoggingEnabled: vi.fn(() => false),
+  saveDebugLoggingEnabled: vi.fn(),
+}));
+
 const { mockFetchUltimateOriginBlob, mockIsOriginOnSelectedDevice } = vi.hoisted(() => ({
   mockFetchUltimateOriginBlob: vi.fn(async () => new Blob([new Uint8Array([1, 2, 3])])),
   mockIsOriginOnSelectedDevice: vi.fn(() => true),
@@ -175,6 +180,28 @@ describe("diskMount", () => {
         location: "local",
       } as any);
       expect(blob).toBe(runtimeFile);
+    });
+
+    it("HARD12-013: does not call arrayBuffer() on the runtime file when debug logging is disabled", async () => {
+      // The runtimeFile branch must not materialise the bytes purely to feed
+      // the diagnostic fingerprint log when debug logging is off.
+      const { loadDebugLoggingEnabled } = await import("@/lib/config/appSettings");
+      vi.mocked(loadDebugLoggingEnabled).mockReturnValue(false);
+      const arrayBufferSpy = vi.fn();
+      const runtimeFile = new File(["runtime"], "runtime.d64");
+      Object.defineProperty(runtimeFile, "arrayBuffer", {
+        configurable: true,
+        value: arrayBufferSpy,
+      });
+      vi.mocked(loadLocalSources).mockReturnValue([{ id: "src1" } as any]);
+      vi.mocked(getLocalSourceRuntimeFile).mockReturnValue(runtimeFile as any);
+
+      const blob = await resolveLocalDiskBlob({
+        path: "/test.d64",
+        location: "local",
+      } as any);
+      expect(blob).toBe(runtimeFile);
+      expect(arrayBufferSpy).not.toHaveBeenCalled();
     });
 
     it("resolves from source entries in entries mode", async () => {

@@ -375,3 +375,33 @@ export const resolvePreviousPlaylistIndex = (
   const resolvedIndex = resolveIndexForId(playlist, order[prevPosition]);
   return resolvedIndex >= 0 ? resolvedIndex : 0;
 };
+
+// HARD12-005: derive Next/Prev enablement from the shuffle-order-aware
+// resolvers so the transport buttons reflect what tapping them will actually
+// do. The old linear-position test wrongly disabled Next/Prev at the
+// linear-last/first track while shuffle traversal still had tracks left.
+export const canAdvanceNext = (
+  playlist: PlaylistItem[],
+  currentIndex: number,
+  repeatEnabled: boolean,
+  shuffleEnabled: boolean,
+  shuffleSeed: number | null,
+) => resolveNextPlaylistIndex(playlist, currentIndex, repeatEnabled, shuffleEnabled, shuffleSeed) !== null;
+
+export const canAdvancePrevious = (
+  playlist: PlaylistItem[],
+  currentIndex: number,
+  repeatEnabled: boolean,
+  shuffleEnabled: boolean,
+  shuffleSeed: number | null,
+) => {
+  if (!playlist.length) return false;
+  if (!shuffleEnabled || shuffleSeed === null) {
+    return currentIndex > 0 || repeatEnabled;
+  }
+  const order = seededShuffleIds(
+    playlist.map((item) => item.id),
+    shuffleSeed,
+  );
+  return resolveShuffleOrderPosition(playlist, currentIndex, order) > 0 || repeatEnabled;
+};

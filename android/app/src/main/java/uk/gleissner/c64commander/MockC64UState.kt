@@ -64,6 +64,16 @@ class MockC64UState private constructor(
   var debugRegister: String = "00"
   val memory: MutableMap<Int, Int> = mutableMapOf()
 
+  // HARD12-017: REST-injected keyboard/joystick relay state (GET/POST
+  // /v1/machine:input). `tap` transitions are momentary and never persist here.
+  val machineInputKeyboard: MutableSet<String> = mutableSetOf()
+  val machineInputJoysticks: MutableMap<Int, MutableSet<String>> = mutableMapOf(1 to mutableSetOf(), 2 to mutableSetOf())
+
+  fun releaseAllMachineInput() {
+    machineInputKeyboard.clear()
+    machineInputJoysticks.values.forEach { it.clear() }
+  }
+
   init {
     initializeVideoDefaults()
     resetKeyboardBuffer()

@@ -19,6 +19,7 @@ export type FeatureFlagId =
   | "demo_mode_enabled"
   | "background_execution_enabled"
   | "lighting_studio_enabled"
+  | "remote_input_enabled"
   | "ram_snapshots_enabled"
   | "home_telnet_reu_snapshot_enabled"
   | "home_telnet_config_actions_enabled"
@@ -104,6 +105,15 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     group: "experimental",
     title: "Lighting Studio",
     description: "Enable Lighting Studio entry points and dialog access.",
+  },
+  {
+    id: "remote_input_enabled",
+    enabled: false,
+    visible_to_user: false,
+    developer_only: true,
+    group: "experimental",
+    title: "Remote Input",
+    description: "Enable the remote keyboard/joystick input sheet (couch remote for the C64).",
   },
   {
     id: "ram_snapshots_enabled",

@@ -11,6 +11,7 @@ import { useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { getC64API } from "@/lib/c64api";
 import { useC64ConfigItems, useC64Connection, VISIBLE_C64_QUERY_OPTIONS } from "@/hooks/useC64Connection";
+import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { getActiveBaseUrl, updateHasChanges } from "@/lib/config/appConfigStore";
 import { buildErrorLogDetails, addLog } from "@/lib/logging";
@@ -271,7 +272,13 @@ export function LightingStudioProvider({ children }: { children: React.ReactNode
   const lightingQueryItems = studioOpen || contextLensOpen ? LIGHTING_CATEGORY_ITEMS : LIGHTING_SUMMARY_ITEMS;
   const routeNeedsLightingSummary =
     location.pathname === "/" || location.pathname.startsWith("/play") || location.pathname.startsWith("/disks");
-  const lightingSummaryEnabled = routeNeedsLightingSummary || studioOpen || contextLensOpen;
+  // HARD12-004: gate the entire Lighting Studio provider on the
+  // `lighting_studio_enabled` feature flag (developer_only / visible_to_user:
+  // false). While off, no lighting queries fire, no apply writes run, and the
+  // circadian interval is skipped. Keeps the disabled feature invisible to
+  // release builds and to the device even when the provider is mounted.
+  const { value: featureFlagEnabled } = useFeatureFlag("lighting_studio_enabled");
+  const lightingSummaryEnabled = featureFlagEnabled && (routeNeedsLightingSummary || studioOpen || contextLensOpen);
   const summaryQueryOptions = React.useMemo(() => ({ ...VISIBLE_C64_QUERY_OPTIONS, skipEnrichment: true }), []);
 
   const { data: caseLightingCategory } = useC64ConfigItems(
@@ -497,12 +504,13 @@ export function LightingStudioProvider({ children }: { children: React.ReactNode
   }, [circadianState]);
 
   React.useEffect(() => {
+    if (!featureFlagEnabled) return;
     if (!studioState.automation.circadian.enabled) return;
     const timer = window.setInterval(() => {
       setStudioState((current) => ({ ...current }));
     }, 60_000);
     return () => window.clearInterval(timer);
-  }, [studioState.automation.circadian.enabled]);
+  }, [featureFlagEnabled, studioState.automation.circadian.enabled]);
 
   const quietLaunchActive =
     studioState.automation.quietLaunch.enabled &&
@@ -540,6 +548,7 @@ export function LightingStudioProvider({ children }: { children: React.ReactNode
   const resolvedSignature = React.useMemo(() => JSON.stringify(resolved.resolvedState), [resolved.resolvedState]);
 
   React.useEffect(() => {
+    if (!featureFlagEnabled) return;
     if (!status.isConnected) return;
     if (resolvedSignature === lastAppliedSignatureRef.current) return;
     const payload: Record<string, Record<string, string | number>> = {};
@@ -581,7 +590,15 @@ export function LightingStudioProvider({ children }: { children: React.ReactNode
           buildErrorLogDetails(error as Error),
         );
       });
-  }, [capabilities, queryClient, rawDeviceState, resolved.resolvedState, resolvedSignature, status.isConnected]);
+  }, [
+    capabilities,
+    featureFlagEnabled,
+    queryClient,
+    rawDeviceState,
+    resolved.resolvedState,
+    resolvedSignature,
+    status.isConnected,
+  ]);
 
   const setActiveProfileId = React.useCallback((profileId: string | null) => {
     setStudioState((current) => ({ ...current, activeProfileId: profileId }));

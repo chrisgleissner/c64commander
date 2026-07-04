@@ -101,14 +101,14 @@ Counts are the number of discoverable interactive elements in the page scope
 (excludes the device system bars; includes the 6 persistent TabBar tabs and the
 persistent status badge that appear on every page).
 
-| Page     | Route       |    CTAs | Notes                                                                                                                                    |
-| -------- | ----------- | ------: | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Home     | `/`         |     113 | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots.                                    |
-| Settings | `/settings` | 77 (+2) | Connection, devices, display (+2 native Android full-screen toggles), feature flags, network/cache, notifications, dev-mode, build info. |
-| Play     | `/play`     |      32 | Transport, volume, playback flags, playlist, type filters, HVSC.                                                                         |
-| Config   | `/config`   |      30 | Search + 22 config-category accordions (each expands to config-item rows).                                                               |
-| Disks    | `/disks`    |      28 | Drive A/B/Soft-IEC controls, disk library.                                                                                               |
-| Docs     | `/docs`     |      18 | 8 doc-section toggles + 3 external links.                                                                                                |
+| Page     | Route       |     CTAs | Notes                                                                                                                                                                                             |
+| -------- | ----------- | -------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Home     | `/`         | 113 (+1) | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots. `+1` Remote Control tile behind `remote_input_enabled` (developer_only; hidden by default). |
+| Settings | `/settings` |  77 (+2) | Connection, devices, display (+2 native Android full-screen toggles), feature flags, network/cache, notifications, dev-mode, build info.                                                          |
+| Play     | `/play`     |  32 (+1) | Transport, volume, playback flags, playlist, type filters, HVSC. `+1` Open Controller button, shown only while playing, behind `remote_input_enabled`.                                            |
+| Config   | `/config`   |       30 | Search + 22 config-category accordions (each expands to config-item rows).                                                                                                                        |
+| Disks    | `/disks`    |       28 | Drive A/B/Soft-IEC controls, disk library.                                                                                                                                                        |
+| Docs     | `/docs`     |       18 | 8 doc-section toggles + 3 external links.                                                                                                                                                         |
 
 **Persistent on every page (counted within each page above):**
 
@@ -153,6 +153,7 @@ not-connected / empty / single-device).
     - Save custom — button — `save-ram-custom-confirm` — R✅ I✅
   - Load RAM — button — `home-load-ram` — R✅ I✅ _(flag)_
   - Power Off — button (danger) — R✅ I✅ (confirm dialog)
+  - Remote Control — button — `home-machine-inline-openRemoteInput` — R✅ I✅ _(flag `remote_input_enabled`, developer_only; hidden by default)_ — opens the **Remote Input sheet** (§5)
   - RAM dump folder — button (`...`) — `ram-dump-folder-trigger` — R✅ I✅
 - **Quick Config → CPU & RAM** (`home-cpu-summary`)
   - Turbo Control — select — `home-cpu-turbo-control` — R✅ I✅ (verified: opens Off/Manual/C64U Turbo Registers/TurboEnable Bit)
@@ -212,7 +213,7 @@ not-connected / empty / single-device).
 
 ### 4.2 Play (`/play`)
 
-- Transport: Previous / Play / Pause / Next — button — `playlist-prev|play|pause|next` — R✅ I✅ `[disabled: no playlist loaded]`
+- Transport: Previous / Play / Pause / Next — button — `playlist-prev|play|pause|next` — R✅ I✅ `[disabled: no playlist loaded, playlist loading, or no previous/next item in the current repeat/shuffle traversal]`
 - Mute — button — `volume-mute` — R✅ I✅ `[disabled]`
 - Volume — slider — R✅ I✅ `[disabled]`
 - Recurse / Shuffle / Repeat — checkbox — `playback-recurse|shuffle|repeat` — R✅ I✅
@@ -224,6 +225,7 @@ not-connected / empty / single-device).
 - Type filters: SID / MOD / PRG / CRT / Disk — checkbox — `playlist-type-*` — R✅ I✅
 - Select all — button — `playlist-list-toggle-select-all` — R✅ I✅
 - HVSC: Download / Ingest / Reindex / Reset — button — R✅ I✅ _(flag `hvsc_enabled`)_
+- Open Controller — button — `play-open-controller` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying`)_ — opens the **Remote Input sheet** (§5)
 
 ### 4.3 Disks (`/disks`)
 
@@ -324,6 +326,72 @@ manual host/IP — text input — `startup-manual-device-host-input` — R✅ I�
 Open Settings — button — `startup-device-discovery-open-settings` — R✅ I✅ ;
 Not now / Close — buttons — `startup-device-discovery-dismiss`,
 `startup-device-discovery-close` — R✅ I✅.
+
+**Remote Input sheet** (`remote-input-sheet`, HARD12-017, behind
+`remote_input_enabled` — developer_only, hidden by default; opened from Home's
+"Remote Control" tile or Play's "Open Controller" button): a Radix
+`[role=dialog]` sheet, so it is a normal keypad-navigable overlay scope like any
+other (Up/Down/OK, Back closes) — **except** while **Joystick** output mode is
+selected, physical D-pad/T9 digit key presses are read directly by the sheet to
+drive the joystick relay instead of moving focus (the app's global keypad
+navigation already excludes any key event targeted inside an open
+`[role=dialog]`, so this is a scoped reinterpretation, not a new capture
+mechanism). Touch and the on-screen keyboard/quick-keys buttons remain
+ordinary focus-ring CTAs in both output modes.
+
+- Output mode toggle: Joystick / Type — buttons — `remote-input-mode-joystick`,
+  `remote-input-mode-type` — R✅ I✅ ; Joystick disabled with an inline hint on
+  devices/firmware without `machine:input` (kernal-fallback tier)
+- Connection indicator — status text — `remote-input-connection-indicator` —
+  not interactive
+- **Joystick mode:**
+  - Port swap — switch (one-tap toggle, same directness as Autofire) —
+    `remote-input-port-switch` — R✅ I✅ (default Port 2; label shows the
+    current port)
+  - Movement style toggle: Stick / D-Pad / Swipe — buttons —
+    `remote-input-movement-style-{stick,dpad,swipe}` — R✅ I✅ (default Stick;
+    switching style never itself releases a held direction)
+  - **Stick style** — relative thumbstick — pointer-only zone —
+    `remote-input-stick-zone` — touch only (see below for the physical
+    equivalent)
+  - **D-Pad style** (`remote-input-virtual-dpad`) — discrete 8-way
+    tap-and-hold buttons — `remote-input-dpad-{up,down,left,right,up-left,
+up-right,down-left,down-right}` — R✅ I✅ (touch only)
+  - **Swipe style** (`remote-input-swipe-pad`) — a large flick surface; a
+    fast directional swipe sends a brief tap (auto-releases) rather than a
+    sustained hold — touch only
+  - Fire — button (press-and-hold) — `remote-input-fire-button` — R✅ I✅
+  - Autofire — switch — `remote-input-autofire-switch` — R✅ I✅
+  - **Physical D-pad / regular keyboard cursor keys / T9, while Joystick mode
+    is active** (not focus-ring CTAs — raw relay, works regardless of the
+    selected touch movement style above): hardware D-pad Up/Down/Left/Right
+    and a regular keyboard's Arrow keys (same underlying semantic-action
+    keymap) → joystick direction; keypad 2/4/6/8 → direction (1/3/7/9 →
+    diagonals); keypad 5/0 or D-pad center/select → fire. Held while the
+    physical key is held; released on key-up.
+- **Type mode — on-screen C64 keyboard** (`remote-input-on-screen-keyboard`,
+  the primary Type surface; full physical layout) — buttons
+  `remote-input-key-<name>` (e.g. `remote-input-key-a`,
+  `remote-input-key-return`) — R✅ I✅ for every key, incl. the dual-legend
+  cursor keys (`remote-input-key-cursor_left_right`,
+  `remote-input-key-cursor_up_down`)
+  - Sticky SHIFT — button (latch/toggle) — `remote-input-key-shift` — R✅ I✅
+  - Sticky CTRL / C= (Commodore) — buttons — `remote-input-key-ctrl`,
+    `remote-input-key-commodore` — R✅ I✅ `[disabled: kernal-fallback tier —
+no PETSCII/keyboard-buffer equivalent for these modifiers]`
+  - RUN/STOP, RESTORE — buttons — `remote-input-key-run-stop`,
+    `remote-input-key-restore` — R✅ I✅ `[RESTORE unavailable on the
+kernal-fallback tier — no keyboard-buffer byte; still shown, no-ops]`
+  - F1 / F3 / F5 / F7 — buttons — `remote-input-key-f{1,3,5,7}` — R✅ I✅
+- **Always visible in both modes — quick-keys bar**
+  (`remote-input-quick-keys-bar`): SPACE, RETURN, RUN/STOP, F1/F3/F5/F7, cursor
+  Up/Down/Left/Right — buttons — `remote-input-key-{space,return,run-stop,f1,f3,f5,f7,cursor-up,cursor-down,cursor-left,cursor-right}`
+  — R✅ I✅
+- **Safety** — Release All (panic button) — button (destructive) —
+  `remote-input-panic-button` — R✅ I✅ — releases every held/latched input
+  regardless of tracked state
+- Exit — button — `remote-input-exit-button` — R✅ I✅ ; Android Back also
+  exits (closes the sheet and releases all held inputs)
 
 **Keypad Quick Menu** (`keypad-quick-menu`, opened by the Menu key when the
 focused item has no context menu): a keypad-navigable list of jump-to-page (×6),

@@ -34,8 +34,10 @@
  *   for that, so it stays a heuristic).
  */
 
+import { addLog, buildErrorLogDetails } from "@/lib/logging";
 import { resolveCanonicalProductFamilyCode } from "@/lib/savedDevices/store";
 import type { ProductFamilyCode } from "@/lib/savedDevices/store";
+import type { MachineInputStateResponse } from "@/lib/c64api";
 
 /**
  * How a derived capability value was decided:
@@ -63,6 +65,8 @@ export type DeviceCapabilities = {
   supportsMenuInput: boolean;
   /** Home power-cycle action. */
   supportsPowerCycle: boolean;
+  /** REST keyboard/joystick relay (`GET/POST /v1/machine:input`). */
+  supportsMachineInput: boolean;
   /** Provenance of `supportsStreaming` (rest-config override vs family default). */
   streamingSource: CapabilitySource;
 };
@@ -138,6 +142,7 @@ export const deriveDeviceCapabilities = (input: DeviceCapabilityInput = {}): Dev
     // `core_version` signal, never a family list. Cartridges (no core_version) are
     // correctly excluded; all U64-family computers (incl. plain U64/Elite) included.
     supportsPowerCycle: restReachable && isIntegratedComputer,
+    supportsMachineInput: false,
     streamingSource,
   };
 };
@@ -146,6 +151,110 @@ export const deriveDeviceCapabilities = (input: DeviceCapabilityInput = {}): Dev
 export const supportsStreaming = (capabilities: DeviceCapabilities): boolean => capabilities.supportsStreaming;
 export const supportsMenuInput = (capabilities: DeviceCapabilities): boolean => capabilities.supportsMenuInput;
 export const supportsPowerCycle = (capabilities: DeviceCapabilities): boolean => capabilities.supportsPowerCycle;
+export const supportsMachineInput = (capabilities: DeviceCapabilities): boolean => capabilities.supportsMachineInput;
+
+export type MachineInputCapabilityStatus =
+  "available" | "unsupported-family" | "hardware-unavailable" | "auth-required" | "missing" | "error";
+
+export type MachineInputCapabilityProbeResult = {
+  supportsMachineInput: boolean;
+  status: MachineInputCapabilityStatus;
+  httpStatus: number | null;
+  cacheKey: string;
+  checkedAtMs: number;
+};
+
+type MachineInputProbeApi = {
+  getMachineInputState: (options?: {
+    timeoutMs?: number;
+    __c64uIntent?: "system";
+    __c64uExpectedFailure?: boolean;
+    __c64uSuppressAuthChallenge?: boolean;
+  }) => Promise<MachineInputStateResponse>;
+};
+
+type MachineInputProbeInput = {
+  api: MachineInputProbeApi;
+  deviceId?: string | null;
+  firmwareVersion?: string | null;
+  coreVersion?: string | null;
+};
+
+const machineInputProbeCache = new Map<string, MachineInputCapabilityProbeResult>();
+
+const buildMachineInputProbeCacheKey = (input: Omit<MachineInputProbeInput, "api">) =>
+  [
+    input.deviceId?.trim() || "unknown-device",
+    input.firmwareVersion?.trim() || "unknown-fw",
+    input.coreVersion?.trim() || "no-core",
+  ].join("|");
+
+const getRestHttpStatus = (error: unknown): number | null => {
+  const status = (error as { c64uHttpStatus?: unknown })?.c64uHttpStatus;
+  return typeof status === "number" && Number.isFinite(status) ? status : null;
+};
+
+const buildMachineInputProbeResult = (
+  status: MachineInputCapabilityStatus,
+  cacheKey: string,
+  httpStatus: number | null = null,
+): MachineInputCapabilityProbeResult =>
+  Object.freeze({
+    supportsMachineInput: status === "available",
+    status,
+    httpStatus,
+    cacheKey,
+    checkedAtMs: Date.now(),
+  });
+
+const resolveMachineInputStatusFromHttp = (httpStatus: number | null): MachineInputCapabilityStatus => {
+  if (httpStatus === 501) return "hardware-unavailable";
+  if (httpStatus === 403) return "auth-required";
+  if (httpStatus === 404 || httpStatus === 405) return "missing";
+  return "error";
+};
+
+export const clearMachineInputCapabilityCacheForTests = () => {
+  machineInputProbeCache.clear();
+};
+
+export const probeMachineInputCapability = async (
+  input: MachineInputProbeInput,
+): Promise<MachineInputCapabilityProbeResult> => {
+  const cacheKey = buildMachineInputProbeCacheKey(input);
+  const cached = machineInputProbeCache.get(cacheKey);
+  if (cached) return cached;
+  if (!trimOrNull(input.coreVersion)) {
+    const result = buildMachineInputProbeResult("unsupported-family", cacheKey);
+    machineInputProbeCache.set(cacheKey, result);
+    return result;
+  }
+  try {
+    await input.api.getMachineInputState({
+      timeoutMs: 1500,
+      __c64uIntent: "system",
+      __c64uExpectedFailure: true,
+      __c64uSuppressAuthChallenge: true,
+    });
+    const result = buildMachineInputProbeResult("available", cacheKey, 200);
+    machineInputProbeCache.set(cacheKey, result);
+    return result;
+  } catch (error) {
+    const normalizedError = error instanceof Error ? error : new Error(String(error));
+    const httpStatus = getRestHttpStatus(normalizedError);
+    addLog(
+      "warn",
+      "Machine input capability probe failed",
+      buildErrorLogDetails(normalizedError, {
+        cacheKey,
+        httpStatus,
+      }),
+    );
+    const result = buildMachineInputProbeResult(resolveMachineInputStatusFromHttp(httpStatus), cacheKey, httpStatus);
+    machineInputProbeCache.set(cacheKey, result);
+    return result;
+  }
+};
 
 /**
  * Read-only signal: does this config payload advertise video/audio stream targets?

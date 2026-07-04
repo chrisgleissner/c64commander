@@ -70,6 +70,14 @@ features:
     title: Lighting Studio
     description: Enable Lighting Studio entry points and dialog access.
 
+  - id: remote_input_enabled
+    enabled: false
+    visible_to_user: false
+    developer_only: true
+    group: experimental
+    title: Remote Input
+    description: Enable the remote keyboard/joystick input sheet (couch remote for the C64).
+
   - id: ram_snapshots_enabled
     enabled: true
     visible_to_user: true

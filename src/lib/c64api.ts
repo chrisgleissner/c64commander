@@ -722,6 +722,114 @@ export interface VersionInfo {
   errors: string[];
 }
 
+export type MachineInputStateResponse = {
+  keyboard: {
+    inputs: string[];
+  };
+  joysticks: Array<{
+    port: 1 | 2;
+    inputs: string[];
+  }>;
+  errors: string[];
+};
+
+// HARD12-017: the u64e-openapi.yaml v3.15-alpha `machine:input` schema
+// (KeyboardInput/JoystickInput enums, InputBatch/*Event shapes). U64-family +
+// machine:input-capable firmware only.
+export type JoystickInputName = "up" | "down" | "left" | "right" | "fire" | "fire2" | "fire3";
+
+export type KeyboardInputName =
+  | "inst_del"
+  | "return"
+  | "cursor_left_right"
+  | "f7"
+  | "f1"
+  | "f3"
+  | "f5"
+  | "cursor_up_down"
+  | "0"
+  | "1"
+  | "2"
+  | "3"
+  | "4"
+  | "5"
+  | "6"
+  | "7"
+  | "8"
+  | "9"
+  | "a"
+  | "b"
+  | "c"
+  | "d"
+  | "e"
+  | "f"
+  | "g"
+  | "h"
+  | "i"
+  | "j"
+  | "k"
+  | "l"
+  | "m"
+  | "n"
+  | "o"
+  | "p"
+  | "q"
+  | "r"
+  | "s"
+  | "t"
+  | "u"
+  | "v"
+  | "w"
+  | "x"
+  | "y"
+  | "z"
+  | "left_shift"
+  | "right_shift"
+  | "plus"
+  | "minus"
+  | "period"
+  | "colon"
+  | "at"
+  | "comma"
+  | "pound"
+  | "star"
+  | "semicolon"
+  | "clr_home"
+  | "equals"
+  | "arrow_up"
+  | "slash"
+  | "arrow_left"
+  | "ctrl"
+  | "space"
+  | "commodore"
+  | "run_stop"
+  | "restore";
+
+export type MachineInputTransition = "press" | "release" | "tap";
+
+export type MachineInputKeyboardEvent = {
+  kind: "keyboard";
+  inputs: KeyboardInputName[];
+  transition: MachineInputTransition;
+};
+
+export type MachineInputJoystickEvent = {
+  kind: "joystick";
+  port: 1 | 2;
+  inputs: JoystickInputName[];
+  transition: MachineInputTransition;
+};
+
+export type MachineInputReleaseAllEvent = {
+  kind: "release_all";
+};
+
+export type MachineInputEvent = MachineInputKeyboardEvent | MachineInputJoystickEvent | MachineInputReleaseAllEvent;
+
+export type MachineInputBatch = {
+  events: MachineInputEvent[];
+};
+
 export interface ConfigCategory {
   [itemName: string]:
     | {
@@ -765,6 +873,7 @@ type C64ReadRequestOptions = RequestInit & {
   __c64uExpectedFailure?: boolean;
   __c64uSkipItemEnrichment?: boolean;
   __c64uSkipSuccessBodyInspection?: boolean;
+  __c64uInspectSkippedSuccessBody?: boolean;
   /**
    * Suppress the global "network password required" popup for this call. Set on
    * background connection/discovery probes (which have their own password UX);
@@ -1215,6 +1324,16 @@ export class C64API {
     throw new Error(`Firmware rejected drive ${drive.toUpperCase()} ${operation}: ${firmwareErrors.join("; ")}`);
   }
 
+  private assertActionAccepted(response: { errors?: string[] }, operation: string) {
+    const firmwareErrors = Array.isArray(response.errors)
+      ? response.errors.filter((entry) => entry.trim().length > 0)
+      : [];
+    if (firmwareErrors.length === 0) {
+      return;
+    }
+    throw new Error(`Firmware rejected ${operation}: ${firmwareErrors.join("; ")}`);
+  }
+
   private getReadRequestBudgetValue<T>(key: string, nowMs: number): T | null {
     this.pruneReadRequestBudget(nowMs);
     const cached = this.readRequestBudget.get(key);
@@ -1282,6 +1401,7 @@ export class C64API {
     const expectedMissing = Boolean(options.__c64uExpectedMissing);
     const expectedFailureOption = Boolean(options.__c64uExpectedFailure);
     const skipSuccessBodyInspection = Boolean(options.__c64uSkipSuccessBodyInspection);
+    const inspectSkippedSuccessBody = Boolean(options.__c64uInspectSkippedSuccessBody);
     // Background connection/discovery probes (intent "system") manage their own
     // password UX, so they never raise the global Forbidden popup; every other
     // call does, covering info/config/drives/runners/play/health-check uniformly.
@@ -1298,6 +1418,7 @@ export class C64API {
     delete (requestOptions as { __c64uExpectedMissing?: boolean }).__c64uExpectedMissing;
     delete (requestOptions as { __c64uExpectedFailure?: boolean }).__c64uExpectedFailure;
     delete (requestOptions as { __c64uSkipSuccessBodyInspection?: boolean }).__c64uSkipSuccessBodyInspection;
+    delete (requestOptions as { __c64uInspectSkippedSuccessBody?: boolean }).__c64uInspectSkippedSuccessBody;
     delete (requestOptions as { __c64uSuppressAuthChallenge?: boolean }).__c64uSuppressAuthChallenge;
     delete (requestOptions as { timeoutMs?: number }).timeoutMs;
 
@@ -1483,6 +1604,11 @@ export class C64API {
                   }
 
                   if (skipSuccessBodyInspection) {
+                    const responseContentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+                    const parsedBody =
+                      inspectSkippedSuccessBody && responseContentType.includes("application/json")
+                        ? await this.parseResponseJson<T>(response, path)
+                        : null;
                     noteRestReachable(url, requestDeviceHost);
                     this.clearAuthChallengeOnSuccess();
                     recordRestResponse(action, {
@@ -1490,9 +1616,9 @@ export class C64API {
                       path,
                       url,
                       status: response.status,
-                      headers: collectTraceHeaders(response.headers),
-                      body: null,
-                      payloadPreview: null,
+                      headers: responseTrace.headers,
+                      body: responseTrace.body ?? parsedBody,
+                      payloadPreview: responseTrace.payloadPreview,
                       durationMs,
                       error: null,
                     });
@@ -1500,7 +1626,7 @@ export class C64API {
                     if (!DEDUPEABLE_READ_METHODS.has(method)) {
                       this.resetRequestReadState();
                     }
-                    return { errors: [] } as T;
+                    return parsedBody ?? ({ errors: [] } as T);
                   }
 
                   const parsedBody = await this.parseResponseJson<T>(response, path);
@@ -2221,19 +2347,48 @@ export class C64API {
     });
   }
 
-  async startStream(stream: string, ip: string): Promise<{ errors: string[] }> {
-    return this.request(`/v1/streams/${encodeURIComponent(stream)}:start?ip=${encodeURIComponent(ip)}`, {
-      method: "PUT",
+  async getMachineInputState(options: C64ReadRequestOptions = {}): Promise<MachineInputStateResponse> {
+    const response = await this.request<MachineInputStateResponse>("/v1/machine:input", {
       timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
+      ...options,
     });
+    this.assertActionAccepted(response, "machine input state read");
+    return response;
+  }
+
+  // HARD12-017: relay keyboard/joystick events to the C64 (U64-family + machine:input
+  // firmware only; gated by deviceCapabilities.supportsMachineInput before use).
+  async sendMachineInputBatch(batch: MachineInputBatch): Promise<MachineInputStateResponse> {
+    const response = await this.request<MachineInputStateResponse>("/v1/machine:input", {
+      method: "POST",
+      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
+      body: JSON.stringify(batch),
+    });
+    this.assertActionAccepted(response, "machine input event batch");
+    return response;
+  }
+
+  async startStream(stream: string, ip: string): Promise<{ errors: string[] }> {
+    const response = await this.request<{ errors: string[] }>(
+      `/v1/streams/${encodeURIComponent(stream)}:start?ip=${encodeURIComponent(ip)}`,
+      {
+        method: "PUT",
+        timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
+      },
+    );
+    this.assertActionAccepted(response, `stream ${stream} start`);
+    return response;
   }
 
   async stopStream(stream: string): Promise<{ errors: string[] }> {
-    return this.request(`/v1/streams/${encodeURIComponent(stream)}:stop`, {
+    const response = await this.request<{ errors: string[] }>(`/v1/streams/${encodeURIComponent(stream)}:stop`, {
       method: "PUT",
       timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
       __c64uSkipSuccessBodyInspection: true,
+      __c64uInspectSkippedSuccessBody: true,
     });
+    this.assertActionAccepted(response, `stream ${stream} stop`);
+    return response;
   }
 
   async readMemory(address: string, length = 1, options: C64ReadRequestOptions = {}): Promise<Uint8Array> {
@@ -2488,10 +2643,12 @@ export class C64API {
       proxyHostHeader: headers["X-C64U-Host"] ?? null,
       hasPasswordHeader: Boolean(headers["X-Password"]),
     });
-    return this.request(path, {
+    const response = await this.request<{ errors: string[] }>(path, {
       method: "PUT",
       timeoutMs: PLAYBACK_REQUEST_TIMEOUT_MS,
     });
+    this.assertActionAccepted(response, "SID playback");
+    return response;
   }
 
   async playSidUpload(
@@ -2559,9 +2716,11 @@ export class C64API {
           throw error;
         }
 
-        return this.parseResponseJson(response, path, {
+        const parsed = await this.parseResponseJson<{ errors: string[] }>(response, path, {
           allowNonJsonSuccess: true,
         });
+        this.assertActionAccepted(parsed, "SID upload playback");
+        return parsed;
       } catch (error) {
         const err = error as Error;
         lastError = err;
@@ -2591,10 +2750,12 @@ export class C64API {
   }
 
   async playMod(file: string): Promise<{ errors: string[] }> {
-    return this.request(`/v1/runners:modplay?file=${encodeURIComponent(file)}`, {
+    const response = await this.request<{ errors: string[] }>(`/v1/runners:modplay?file=${encodeURIComponent(file)}`, {
       method: "PUT",
       timeoutMs: PLAYBACK_REQUEST_TIMEOUT_MS,
     });
+    this.assertActionAccepted(response, "MOD playback");
+    return response;
   }
 
   async playModUpload(
@@ -2643,16 +2804,20 @@ export class C64API {
       throw error;
     }
 
-    return this.parseResponseJson(response, path, {
+    const parsed = await this.parseResponseJson<{ errors: string[] }>(response, path, {
       allowNonJsonSuccess: true,
     });
+    this.assertActionAccepted(parsed, "MOD upload playback");
+    return parsed;
   }
 
   async runPrg(file: string): Promise<{ errors: string[] }> {
-    return this.request(`/v1/runners:run_prg?file=${encodeURIComponent(file)}`, {
+    const response = await this.request<{ errors: string[] }>(`/v1/runners:run_prg?file=${encodeURIComponent(file)}`, {
       method: "PUT",
       timeoutMs: PLAYBACK_REQUEST_TIMEOUT_MS,
     });
+    this.assertActionAccepted(response, "PRG run");
+    return response;
   }
 
   async runPrgUpload(
@@ -2701,16 +2866,20 @@ export class C64API {
       throw error;
     }
 
-    return this.parseResponseJson(response, path, {
+    const parsed = await this.parseResponseJson<{ errors: string[] }>(response, path, {
       allowNonJsonSuccess: true,
     });
+    this.assertActionAccepted(parsed, "PRG upload run");
+    return parsed;
   }
 
   async loadPrg(file: string): Promise<{ errors: string[] }> {
-    return this.request(`/v1/runners:load_prg?file=${encodeURIComponent(file)}`, {
+    const response = await this.request<{ errors: string[] }>(`/v1/runners:load_prg?file=${encodeURIComponent(file)}`, {
       method: "PUT",
       timeoutMs: PLAYBACK_REQUEST_TIMEOUT_MS,
     });
+    this.assertActionAccepted(response, "PRG load");
+    return response;
   }
 
   async loadPrgUpload(
@@ -2759,16 +2928,20 @@ export class C64API {
       throw error;
     }
 
-    return this.parseResponseJson(response, path, {
+    const parsed = await this.parseResponseJson<{ errors: string[] }>(response, path, {
       allowNonJsonSuccess: true,
     });
+    this.assertActionAccepted(parsed, "PRG upload load");
+    return parsed;
   }
 
   async runCartridge(file: string): Promise<{ errors: string[] }> {
-    return this.request(`/v1/runners:run_crt?file=${encodeURIComponent(file)}`, {
+    const response = await this.request<{ errors: string[] }>(`/v1/runners:run_crt?file=${encodeURIComponent(file)}`, {
       method: "PUT",
       timeoutMs: PLAYBACK_REQUEST_TIMEOUT_MS,
     });
+    this.assertActionAccepted(response, "CRT run");
+    return response;
   }
 
   async runCartridgeUpload(
@@ -2818,9 +2991,11 @@ export class C64API {
       throw error;
     }
 
-    return this.parseResponseJson(response, path, {
+    const parsed = await this.parseResponseJson<{ errors: string[] }>(response, path, {
       allowNonJsonSuccess: true,
     });
+    this.assertActionAccepted(parsed, "CRT upload run");
+    return parsed;
   }
 }
 

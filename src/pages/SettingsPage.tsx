@@ -135,6 +135,7 @@ import {
   saveConfigsCooldownMs,
   saveDrivesCooldownMs,
   saveFtpListCooldownMs,
+  saveMachineInputCooldownMs,
   saveBackoffBaseMs,
   saveBackoffMaxMs,
   saveBackoffFactor,
@@ -340,6 +341,9 @@ export default function SettingsPage() {
   const [configsCooldownInput, setConfigsCooldownInput] = useState(String(deviceSafetyConfig.configsCooldownMs));
   const [drivesCooldownInput, setDrivesCooldownInput] = useState(String(deviceSafetyConfig.drivesCooldownMs));
   const [ftpCooldownInput, setFtpCooldownInput] = useState(String(deviceSafetyConfig.ftpListCooldownMs));
+  const [machineInputCooldownInput, setMachineInputCooldownInput] = useState(
+    String(deviceSafetyConfig.machineInputCooldownMs),
+  );
   const [backoffBaseInput, setBackoffBaseInput] = useState(String(deviceSafetyConfig.backoffBaseMs));
   const [backoffMaxInput, setBackoffMaxInput] = useState(String(deviceSafetyConfig.backoffMaxMs));
   const [backoffFactorInput, setBackoffFactorInput] = useState(String(deviceSafetyConfig.backoffFactor));
@@ -569,6 +573,7 @@ export default function SettingsPage() {
     setConfigsCooldownInput(String(next.configsCooldownMs));
     setDrivesCooldownInput(String(next.drivesCooldownMs));
     setFtpCooldownInput(String(next.ftpListCooldownMs));
+    setMachineInputCooldownInput(String(next.machineInputCooldownMs));
     setBackoffBaseInput(String(next.backoffBaseMs));
     setBackoffMaxInput(String(next.backoffMaxMs));
     setBackoffFactorInput(String(next.backoffFactor));
@@ -2401,6 +2406,29 @@ export default function SettingsPage() {
                         ftpCooldownInput,
                         saveFtpListCooldownMs,
                         deviceSafetyConfig.ftpListCooldownMs,
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="machine-input-cooldown" className="text-sm">
+                    Machine input cooldown (ms)
+                  </Label>
+                  <Input
+                    id="machine-input-cooldown"
+                    data-testid="device-safety-machine-input-cooldown"
+                    type="number"
+                    min={0}
+                    max={2000}
+                    step={10}
+                    value={machineInputCooldownInput}
+                    onChange={(event) => setMachineInputCooldownInput(event.target.value)}
+                    onBlur={() =>
+                      commitDeviceSafetyNumber(
+                        machineInputCooldownInput,
+                        saveMachineInputCooldownMs,
+                        deviceSafetyConfig.machineInputCooldownMs,
                       )
                     }
                   />

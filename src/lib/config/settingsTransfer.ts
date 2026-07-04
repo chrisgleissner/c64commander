@@ -363,6 +363,21 @@ export const importSettingsJson = async (raw: string): Promise<{ ok: true } | { 
   saveDiscoveryProbeIntervalMs(safeSafety.discoveryProbeIntervalMs);
   saveAllowUserOverrideCircuit(Boolean(safeSafety.allowUserOverrideCircuit));
   await featureFlagManager.load();
+  // HARD12-002: preserve existing hidden/developer-only flag overrides when
+  // importing outside developer mode. Otherwise `replaceOverrides` would clear
+  // every flag not in the imported payload — including hidden ones the user
+  // cannot re-enable without developer mode. Within developer mode, import
+  // keeps its full replace semantics.
+  if (!getDeveloperModeEnabled()) {
+    const existing = featureFlagManager.getExplicitOverrides();
+    const preserved: Partial<Record<FeatureFlagId, boolean>> = {};
+    for (const [id, value] of Object.entries(existing)) {
+      if (!isFeatureFlagStandardUserToggleable(id as FeatureFlagId)) {
+        preserved[id as FeatureFlagId] = value;
+      }
+    }
+    importedFeatureFlags = { ...preserved, ...importedFeatureFlags };
+  }
   await featureFlagManager.replaceOverrides(importedFeatureFlags);
 
   return { ok: true };

@@ -262,4 +262,56 @@ describe("createLatestIntentWriteLane", () => {
     await expect(second).resolves.toBeUndefined();
     expect(writes[1]).toEqual({ sid1_volume: 15, sid1_pan: 8 });
   });
+
+  it("HARD12-010: rejects both folded-in waiters when a merge-lane run fails with no superseding job", async () => {
+    // Without merge, the previous waiter (v1) was silently resolved as a
+    // success — its value had been merged into the failing v2 batch, so
+    // resolveUpTo(v1) lied. The merge lane must now reject every waiter
+    // whose value was folded into the failed batch.
+    let allowRuns = false;
+    const lane = createLatestIntentWriteLane<Record<string, number>>({
+      beforeRun: async () => {
+        while (!allowRuns) {
+          await Promise.resolve();
+        }
+      },
+      run: async () => {
+        throw new Error("device rejected merged write");
+      },
+      merge: (previous, next) => ({ ...previous, ...next }),
+    });
+
+    const volumeWrite = lane.schedule({ sid1_volume: 15 });
+    const panWrite = lane.schedule({ sid1_pan: 8 });
+    allowRuns = true;
+
+    await expect(volumeWrite).rejects.toThrow("device rejected merged write");
+    await expect(panWrite).rejects.toThrow("device rejected merged write");
+  });
+
+  it("HARD12-010: keeps resolve-superseded-as-success for non-merge lanes when the final write fails", async () => {
+    // Sanity check that the change is scoped to merge lanes — replace-
+    // semantics lanes must keep their historical behaviour where superseded
+    // waiters were never sent and therefore resolve as success.
+    let allowRuns = false;
+    const lane = createLatestIntentWriteLane<number>({
+      beforeRun: async () => {
+        while (!allowRuns) {
+          await Promise.resolve();
+        }
+      },
+      run: async (value) => {
+        if (value === 2) {
+          throw new Error("final write failed");
+        }
+      },
+    });
+
+    const superseded = lane.schedule(1);
+    const final = lane.schedule(2);
+    allowRuns = true;
+
+    await expect(superseded).resolves.toBeUndefined();
+    await expect(final).rejects.toThrow("final write failed");
+  });
 });

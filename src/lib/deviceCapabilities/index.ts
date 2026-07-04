@@ -9,6 +9,9 @@
 export {
   deriveDeviceCapabilities,
   detectStreamingFromConfig,
+  clearMachineInputCapabilityCacheForTests,
+  probeMachineInputCapability,
+  supportsMachineInput,
   supportsMenuInput,
   supportsPowerCycle,
   supportsStreaming,
@@ -18,4 +21,6 @@ export type {
   DeviceCapabilities,
   DeviceCapabilityInput,
   DeviceFamily,
+  MachineInputCapabilityProbeResult,
+  MachineInputCapabilityStatus,
 } from "@/lib/deviceCapabilities/capabilityModel";
