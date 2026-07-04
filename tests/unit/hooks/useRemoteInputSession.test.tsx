@@ -36,6 +36,11 @@ vi.mock("@/lib/remoteInput/machineInputThrottle", () => ({
 
 import { useRemoteInputSession } from "@/hooks/useRemoteInputSession";
 import { resetKernalFallbackInjectionQueueForTests } from "@/lib/remoteInput/kernalFallbackInjector";
+import {
+  hasActiveInputRelease,
+  releaseActiveRemoteInput,
+  resetActiveInputReleaseForTests,
+} from "@/lib/remoteInput/activeInputRelease";
 
 const flushMicrotasks = async () => {
   for (let i = 0; i < 4; i += 1) await Promise.resolve();
@@ -48,6 +53,7 @@ describe("useRemoteInputSession", () => {
     injectAutostartMock.mockClear();
     addErrorLogMock.mockClear();
     resetKernalFallbackInjectionQueueForTests();
+    resetActiveInputReleaseForTests();
   });
 
   afterEach(() => {
@@ -264,6 +270,41 @@ describe("useRemoteInputSession", () => {
   it("does not send a release_all on unmount when nothing was held", async () => {
     const { unmount } = renderHook(() => useRemoteInputSession({ tier: "full" }));
     unmount();
+    expect(sendMachineInputBatchMock).not.toHaveBeenCalled();
+  });
+
+  it("registers itself as the active input release while mounted and unregisters on unmount (HARD13-001 residual E1)", () => {
+    expect(hasActiveInputRelease()).toBe(false);
+    const { unmount } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+    expect(hasActiveInputRelease()).toBe(true);
+
+    unmount();
+    expect(hasActiveInputRelease()).toBe(false);
+  });
+
+  it("releases a relayed press via the active-input-release registry, awaited by a device switch (HARD13-001 residual E1)", async () => {
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+    act(() => result.current.setHeldJoystickInputs(new Set(["up"])));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(40);
+    });
+    sendMachineInputBatchMock.mockClear();
+
+    await act(async () => {
+      await releaseActiveRemoteInput();
+    });
+
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({ events: [{ kind: "release_all" }] });
+    expect(result.current.heldJoystickInputs.size).toBe(0);
+  });
+
+  it("is a no-op via the active-input-release registry when nothing was relayed (HARD13-001 residual E1)", async () => {
+    renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+    await act(async () => {
+      await releaseActiveRemoteInput();
+    });
+
     expect(sendMachineInputBatchMock).not.toHaveBeenCalled();
   });
 

@@ -31,6 +31,7 @@ import type { SpecialKeyboardKey } from "@/lib/remoteInput/specialKeyMapping";
 import { specialKeyToKeyboardInputEvent, specialKeyToPetscii } from "@/lib/remoteInput/specialKeyMapping";
 import { waitForMachineInputThrottle } from "@/lib/remoteInput/machineInputThrottle";
 import { enqueueKernalFallbackInjection } from "@/lib/remoteInput/kernalFallbackInjector";
+import { registerActiveInputRelease, unregisterActiveInputRelease } from "@/lib/remoteInput/activeInputRelease";
 
 export type RemoteInputOutputMode = "joystick" | "type";
 export type RemoteInputConnectionStatus = "idle" | "sending" | "error";
@@ -403,6 +404,37 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
           });
       }
     };
+  }, []);
+
+  // HARD13-001 residual (E1): registers this session as the one that can
+  // release a relayed input on demand, awaited by a saved-device switch
+  // BEFORE it retargets the API - otherwise the switch's eventual release-all
+  // hits the NEW device while the OLD one keeps the input pressed. Reads and
+  // mutates only refs/the stable state setter, so registering once on mount
+  // (empty deps) is safe - the callback always sees the latest values.
+  useEffect(() => {
+    const releaseNow = async (): Promise<void> => {
+      if (lastSentHeldSetRef.current.size === 0) return;
+      if (flushTimerRef.current !== null) {
+        window.clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
+      pendingHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
+      lastSentHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
+      pendingTypedEventsRef.current = [];
+      setHeldJoystickInputsState(EMPTY_HELD_JOYSTICK_INPUTS);
+      sendGenerationRef.current += 1;
+      await getC64API()
+        .sendMachineInputBatch({ events: buildReleaseAllEvent() })
+        .catch((error) => {
+          addErrorLog(
+            "Remote input pre-switch release-all failed",
+            buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), {}),
+          );
+        });
+    };
+    registerActiveInputRelease(releaseNow);
+    return () => unregisterActiveInputRelease(releaseNow);
   }, []);
 
   return {

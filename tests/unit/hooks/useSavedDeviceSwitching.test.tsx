@@ -300,6 +300,108 @@ describe("useSavedDeviceSwitching", () => {
     expect(metrics.getSavedDeviceSwitchMetricsSnapshot().attempts).toHaveLength(0);
   });
 
+  it("awaits a registered active-input release before retargeting the API config (HARD13-001 residual E1)", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    const c64api = await import("@/lib/c64api");
+    const activeInputRelease = await import("@/lib/remoteInput/activeInputRelease");
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    store.updateSavedDevice(initialDeviceId, {
+      name: "Office U64",
+      host: "c64u",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      hasPassword: false,
+    });
+    store.addSavedDevice({
+      id: "device-backup",
+      name: "Backup Lab",
+      host: "backup-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      hasPassword: false,
+    });
+    mockVerifyCurrentConnectionTarget.mockResolvedValueOnce({
+      ok: true,
+      deviceInfo: { product: "U64E", hostname: "backup-lab", unique_id: "UID-BACKUP" },
+    });
+
+    const before = c64api.getC64APIConfigSnapshot();
+    const releaseDeferred = createDeferred<void>();
+    const releaseSpy = vi.fn(() => releaseDeferred.promise);
+    activeInputRelease.registerActiveInputRelease(releaseSpy);
+
+    try {
+      const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+      const { result } = renderHook(() => useSavedDeviceSwitching(), {
+        wrapper: createWrapper("/play"),
+      });
+
+      let switchPromise!: Promise<unknown>;
+      act(() => {
+        switchPromise = result.current("device-backup");
+      });
+
+      expect(releaseSpy).toHaveBeenCalledTimes(1);
+      // The API config must still target the OLD device while the release
+      // to the old device is still in flight - the switch must not retarget
+      // ahead of it.
+      expect(c64api.getC64APIConfigSnapshot()).toMatchObject({ deviceHost: before.deviceHost });
+
+      releaseDeferred.resolve();
+      await act(async () => {
+        await switchPromise;
+      });
+
+      expect(c64api.getC64APIConfigSnapshot()).toMatchObject({ deviceHost: "backup-c64:8080" });
+    } finally {
+      activeInputRelease.unregisterActiveInputRelease(releaseSpy);
+    }
+  });
+
+  it("does not await anything when no Remote Input session is mounted (no unnecessary suspension)", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    const activeInputRelease = await import("@/lib/remoteInput/activeInputRelease");
+    expect(activeInputRelease.hasActiveInputRelease()).toBe(false);
+
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    store.updateSavedDevice(initialDeviceId, {
+      name: "Office U64",
+      host: "c64u",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      hasPassword: false,
+    });
+    store.addSavedDevice({
+      id: "device-backup",
+      name: "Backup Lab",
+      host: "backup-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      hasPassword: false,
+    });
+    mockVerifyCurrentConnectionTarget.mockResolvedValueOnce({
+      ok: true,
+      deviceInfo: { product: "U64E", hostname: "backup-lab", unique_id: "UID-BACKUP" },
+    });
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), {
+      wrapper: createWrapper("/play"),
+    });
+
+    // With nothing registered, verifyCurrentConnectionTarget is reached
+    // synchronously within this act() - proves no unconditional suspension
+    // was introduced for the common (no session mounted) case.
+    act(() => {
+      void result.current("device-backup");
+    });
+    expect(mockVerifyCurrentConnectionTarget).toHaveBeenCalledTimes(1);
+  });
+
   it("invalidates C64 queries when saved-device verification reports offline", async () => {
     const store = await import("@/lib/savedDevices/store");
     store.addSavedDevice({

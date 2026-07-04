@@ -37,6 +37,7 @@ import {
 import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 import { clearToastsOnDeviceSwitch } from "@/lib/uiErrors";
 import { setHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
+import { hasActiveInputRelease, releaseActiveRemoteInput } from "@/lib/remoteInput/activeInputRelease";
 
 let activeSavedDeviceSwitch: { deviceId: string; promise: Promise<unknown> } | null = null;
 
@@ -50,6 +51,18 @@ export function useSavedDeviceSwitching() {
       const device = getSavedDeviceById(deviceId);
       if (!device) {
         throw new Error(`Unknown saved device: ${deviceId}`);
+      }
+
+      // HARD13-001 residual (E1): release any Remote Input held on the OLD
+      // device FIRST, while `getC64API()` still targets it - otherwise the
+      // eventual release-all fires against the NEW device and the old one
+      // keeps the input pressed. Internally caught and time-bounded (see
+      // activeInputRelease.ts), so a dead old device cannot stall the switch;
+      // this is the one deliberately fail-safe step allowed ahead of the
+      // HARD12-003 password resolve below. Skip the await entirely when no
+      // session is mounted - nothing to release, no reason to suspend.
+      if (hasActiveInputRelease()) {
+        await releaseActiveRemoteInput();
       }
 
       // HARD12-003: resolve the password (the only fallible step before the API
