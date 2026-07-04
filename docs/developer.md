@@ -5,7 +5,7 @@ This guide covers development workflows for C64 Commander contributors.
 ## Prerequisites
 
 - Node.js 24 LTS and npm 10+
-- JDK 17 (for Android builds)
+- JDK 21 (for Android builds)
 - Android SDK (for device builds)
 - git
 
