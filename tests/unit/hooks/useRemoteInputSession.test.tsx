@@ -454,7 +454,7 @@ describe("useRemoteInputSession", () => {
     });
     sendMachineInputBatchMock.mockClear();
 
-    sendMachineInputBatchMock.mockRejectedValue(new Error("device unreachable"));
+    sendMachineInputBatchMock.mockRejectedValueOnce(new Error("device unreachable"));
     act(() => result.current.releaseAll());
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
