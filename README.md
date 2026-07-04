@@ -115,7 +115,7 @@ Operational dashboard: machine controls, quick actions, light effects, drives, p
 
 ### Remote Input
 
-Use your phone as a second-screen controller for the C64, with joystick and keyboard input relayed over your network. Open it from **Remote Input** on **Home**, or from **Play** while a machine is running.
+Turn your phone into a wireless controller for the C64 — an on-screen joystick and keyboard relayed to the machine over your network. Open it from the **Remote Input** quick action on **Home**, or the **Remote Input** button on **Play** while something is running.
 
 Remote Input includes:
 
@@ -124,7 +124,7 @@ Remote Input includes:
 
 Joystick support requires an Ultimate 64 with firmware 3.15 or above. Due to hardware limitations, it does not work on U2.
 
-#### Joystick Tab
+#### Joystick Control
 
 The following shows the Joystick tab in standard and Game mode.
 
@@ -135,7 +135,7 @@ The following shows the Joystick tab in standard and Game mode.
   </tr>
 </table>
 
-#### Keys Tab
+#### Keyboard Control
 
 The following shows the Keys tab using various display profiles, from small to large.
 

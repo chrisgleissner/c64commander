@@ -397,6 +397,76 @@ describe("useRemoteInputSession", () => {
     expect(addErrorLogMock).toHaveBeenCalledWith("Remote input batch send failed", expect.any(Object));
   });
 
+  it("recovers a possibly-applied failed batch with one release_all (HARD15-007)", async () => {
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+    act(() => result.current.setHeldJoystickInputs(new Set(["up"])));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(40);
+    });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({
+      events: [{ kind: "joystick", port: 2, inputs: ["up"], transition: "press" }],
+    });
+    sendMachineInputBatchMock.mockClear();
+
+    sendMachineInputBatchMock.mockRejectedValueOnce(new Error("timeout"));
+    act(() => result.current.setHeldJoystickInputs(new Set(["up", "right"])));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(40);
+      await flushMicrotasks();
+    });
+
+    // The failed batch may have actually landed on the device - a single
+    // recovery release_all must follow, exactly once.
+    expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(2);
+    expect(sendMachineInputBatchMock).toHaveBeenLastCalledWith({ events: [{ kind: "release_all" }] });
+    sendMachineInputBatchMock.mockClear();
+
+    // The user's own subsequent release must not need to reach the device
+    // again - the recovery release_all already got there.
+    act(() => result.current.setHeldJoystickInputs(new Set()));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(40);
+    });
+    expect(sendMachineInputBatchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not send a release_all when a typed-only batch fails with nothing relayed (HARD15-007 guard)", async () => {
+    sendMachineInputBatchMock.mockRejectedValueOnce(new Error("timeout"));
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+    act(() => result.current.sendChar("a"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(40);
+      await flushMicrotasks();
+    });
+
+    expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(1);
+    expect(result.current.connectionStatus).toBe("error");
+  });
+
+  it("does not loop when the recovery release_all's own batch fails (single-shot, no retry)", async () => {
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+    act(() => result.current.setHeldJoystickInputs(new Set(["up"])));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(40);
+    });
+    sendMachineInputBatchMock.mockClear();
+
+    sendMachineInputBatchMock.mockRejectedValue(new Error("device unreachable"));
+    act(() => result.current.releaseAll());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+      await flushMicrotasks();
+    });
+
+    // releaseAll's own release_all batch failed - the recovery guard must
+    // recognize it as already-a-release-all and not chase it with another.
+    expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(1);
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({ events: [{ kind: "release_all" }] });
+  });
+
   it("releases held joystick inputs when the tier drops below full support", async () => {
     const { result, rerender } = renderHook(
       ({ tier }: { tier: "full" | "kernal-fallback" }) => useRemoteInputSession({ tier }),

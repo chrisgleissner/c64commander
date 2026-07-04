@@ -266,6 +266,75 @@ describe("useRemoteInputSession chaos/stress (real device-safeguard throttle)", 
     expect(lastEvents.find((e) => e.transition === "press")?.inputs).toEqual(["down"]);
   }, 5000);
 
+  it("does not strand a relayed press on the old port when a port swap lands inside the release-coalesce window (HARD15-004)", async () => {
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+    act(() => result.current.setHeldJoystickInputs(new Set(["right"])));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(40);
+    });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({
+      events: [{ kind: "joystick", port: 2, inputs: ["right"], transition: "press" }],
+    });
+
+    act(() => result.current.setHeldJoystickInputs(new Set()));
+    // Before the 40ms release-coalesce flush fires, swap ports - the
+    // HARD15-004 strand window.
+    act(() => result.current.setPort(1));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+
+    const heldByPort = new Map<number, Set<string>>();
+    for (const call of sendMachineInputBatchMock.mock.calls) {
+      for (const event of call[0].events as Array<{
+        kind?: string;
+        port?: number;
+        transition?: string;
+        inputs?: string[];
+      }>) {
+        if (event.kind === "release_all") {
+          heldByPort.clear();
+          continue;
+        }
+        if (event.kind !== "joystick" || event.port === undefined) continue;
+        const held = heldByPort.get(event.port) ?? new Set<string>();
+        if (event.transition === "press") event.inputs?.forEach((input) => held.add(input));
+        if (event.transition === "release") event.inputs?.forEach((input) => held.delete(input));
+        heldByPort.set(event.port, held);
+      }
+    }
+    expect(heldByPort.get(2)?.size ?? 0).toBe(0);
+  }, 5000);
+
+  it("sends a release_all when a tier downgrade lands inside the release-coalesce window (HARD15-004)", async () => {
+    const { result, rerender } = renderHook(
+      ({ tier }: { tier: "full" | "kernal-fallback" }) => useRemoteInputSession({ tier }),
+      { initialProps: { tier: "full" } },
+    );
+
+    act(() => result.current.setHeldJoystickInputs(new Set(["right"])));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(40);
+    });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({
+      events: [{ kind: "joystick", port: 2, inputs: ["right"], transition: "press" }],
+    });
+
+    act(() => result.current.setHeldJoystickInputs(new Set()));
+    // Before the 40ms release-coalesce flush fires, the tier downgrades - the
+    // local UI state already reads empty, so only lastSentHeldSetRef still
+    // signals that a release is owed (HARD15-004).
+    rerender({ tier: "kernal-fallback" });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({ events: [{ kind: "release_all" }] });
+  }, 5000);
+
   it("recovers cleanly after a send fails mid-chaos, without ever throwing out of the hook", async () => {
     sendMachineInputBatchMock.mockRejectedValueOnce(new Error("transient device error"));
     const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
