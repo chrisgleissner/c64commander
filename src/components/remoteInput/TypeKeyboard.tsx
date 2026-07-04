@@ -98,6 +98,10 @@ export const TypeKeyboard = ({
   const cursorSizePx = measured.width > 0 ? Math.max(132, Math.min(210, Math.round(measured.width * 0.44))) : 150;
   const gridKeyHeightPx = profile === "compact" ? 40 : 38;
   const deckKeyHeightPx = 42;
+  // The expanded layout packs ~18 keys per row, so its labels get a smaller
+  // font; the deck profiles have roomier keys. Labels never wrap (nowrap), so
+  // long ones stay on one line instead of breaking into "RES/TOR/E".
+  const keyFontPx = profile === "expanded" ? 11 : 13;
 
   const toggleModifier = (modifier: StickyModifier) => {
     vibrateTap(8);
@@ -149,7 +153,7 @@ export const TypeKeyboard = ({
         size="sm"
         variant={toneVariant(def.tone, latched)}
         className={cn(
-          "min-w-0 px-1.5",
+          "min-w-0 overflow-hidden px-1",
           options.grow ? "flex-1" : undefined,
           options.fill ? "h-full w-full flex-1" : undefined,
           toneButtonClass(def.tone, latched),
@@ -168,7 +172,18 @@ export const TypeKeyboard = ({
         onClick={() => dispatch(def)}
       >
         <span className="flex flex-col items-center leading-none">
-          <span style={{ whiteSpace: "pre-line", fontWeight: 600 }}>{label}</span>
+          <span
+            style={{
+              // Explicit two-line labels (e.g. "RUN\nSTOP") keep their break;
+              // everything else stays on one line rather than wrapping.
+              whiteSpace: label.includes("\n") ? "pre-line" : "nowrap",
+              fontSize: keyFontPx,
+              fontWeight: 600,
+              lineHeight: 1.05,
+            }}
+          >
+            {label}
+          </span>
           {showSecondary ? (
             <span className="text-[0.6rem] font-normal text-muted-foreground" aria-hidden="true">
               {def.secondary}
@@ -188,7 +203,9 @@ export const TypeKeyboard = ({
   return (
     <div
       ref={containerRef}
-      className={cn("flex h-full min-h-0 w-full flex-col gap-2", className)}
+      // px-1 keeps the leftmost/rightmost keys off the sheet edge so their
+      // labels are never clipped (the sheet body itself is edge-to-edge).
+      className={cn("flex h-full min-h-0 w-full flex-col gap-2 px-1", className)}
       data-testid="remote-input-type-keyboard"
       data-profile={profile}
     >

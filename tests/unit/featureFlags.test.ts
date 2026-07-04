@@ -79,7 +79,7 @@ describe("featureFlags persistence and logging", () => {
     expect(Boolean(keypad?.visible_to_user) && !keypad?.developer_only).toBe(true);
   });
 
-  it("ships the Remote Control (couch remote) as a user-visible, default-on stable flag", () => {
+  it("ships the Couch Remote as a user-visible, default-on stable flag", () => {
     // The couch remote is on by default and no longer hidden behind developer
     // mode; joystick relay is gated at runtime on machine:input support, not by
     // this flag. Users can still turn the whole surface off from Settings.

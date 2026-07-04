@@ -239,8 +239,9 @@ const functionKey = (n: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8): KeyDef => {
 const RUN_STOP: KeyDef = {
   id: "run_stop",
   testId: "remote-input-key-run-stop",
-  label: "RUN/STOP",
-  compactLabel: "RUN\nSTOP",
+  // Rendered on two lines everywhere: "RUN/STOP" is too wide for a single-column
+  // key in the dense expanded row, and the stacked form reads cleanly in the deck.
+  label: "RUN\nSTOP",
   ariaLabel: "Run Stop",
   action: { kind: "special", key: "run_stop" },
   tone: "caution",
@@ -249,8 +250,9 @@ const RUN_STOP: KeyDef = {
 const RESTORE: KeyDef = {
   id: "restore",
   testId: "remote-input-key-restore",
-  label: "RESTORE",
-  compactLabel: "REST",
+  // Abbreviated to "REST" in every profile (accessible label stays "Restore")
+  // so it fits a narrow key without wrapping; the caution styling makes it stand out.
+  label: "REST",
   ariaLabel: "Restore",
   action: { kind: "special", key: "restore" },
   tone: "danger",

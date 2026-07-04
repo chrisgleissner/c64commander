@@ -667,7 +667,7 @@ function HomePageContent() {
       ? [
           {
             id: "openRemoteInput",
-            label: "Remote Control",
+            label: "Couch Remote",
             icon: Gamepad2,
             onSelect: () => setRemoteInputSheetOpen(true),
             disabled: !isActive,

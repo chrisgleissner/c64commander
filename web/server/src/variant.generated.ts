@@ -118,9 +118,9 @@ export const webServerVariantConfig = {
         visible_to_user: true,
       },
       remote_input_enabled: {
-        developer_only: true,
-        enabled: false,
-        visible_to_user: false,
+        developer_only: false,
+        enabled: true,
+        visible_to_user: true,
       },
     },
     id: "c64commander",

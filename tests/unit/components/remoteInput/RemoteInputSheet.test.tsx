@@ -10,7 +10,10 @@ import { useState } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const tierState = { tier: "full" as "full" | "kernal-fallback" | "auth-required" };
+const tierState = {
+  tier: "full" as "full" | "kernal-fallback" | "auth-required",
+  loading: false,
+};
 
 const setOutputModeMock = vi.fn();
 const setHeldJoystickInputsMock = vi.fn();
@@ -63,6 +66,7 @@ import { RemoteInputSheet } from "@/components/remoteInput/RemoteInputSheet";
 describe("RemoteInputSheet", () => {
   beforeEach(() => {
     tierState.tier = "full";
+    tierState.loading = false;
     initialSessionOutputMode = "joystick";
     vi.clearAllMocks();
   });
@@ -262,6 +266,34 @@ describe("RemoteInputSheet", () => {
 
       expect(screen.queryByTestId("remote-input-size-stepper")).not.toBeInTheDocument();
       expect(screen.queryByTestId("remote-input-quick-keys-bar")).not.toBeInTheDocument();
+    });
+
+    // Smart default: a keyboard-only device (no machine:input support) should
+    // open straight into Type mode once the capability probe has settled, rather
+    // than presenting a disabled Joystick tab.
+    it("defaults to Type mode after the probe settles on a keyboard-only device", () => {
+      tierState.tier = "kernal-fallback";
+      tierState.loading = true; // probe in flight when the sheet opens
+      const { rerender } = render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+
+      // Still probing → do not switch yet.
+      expect(setOutputModeMock).not.toHaveBeenCalled();
+
+      // Probe resolves to a tier without joystick support → auto-switch to Type.
+      tierState.loading = false;
+      rerender(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      expect(setOutputModeMock).toHaveBeenCalledWith("type");
+    });
+
+    it("never bounces a full-tier device off Joystick during the capability probe", () => {
+      tierState.tier = "full";
+      tierState.loading = true;
+      const { rerender } = render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+
+      tierState.loading = false;
+      rerender(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+
+      expect(setOutputModeMock).not.toHaveBeenCalledWith("type");
     });
   });
 

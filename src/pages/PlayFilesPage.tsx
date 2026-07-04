@@ -1873,7 +1873,7 @@ export default function PlayFilesPage() {
                       data-testid="play-open-controller"
                       onClick={() => setRemoteInputSheetOpen(true)}
                     >
-                      <Gamepad2 className="mr-1.5 h-4 w-4" /> Open Controller
+                      <Gamepad2 className="mr-1.5 h-4 w-4" /> Couch Remote
                     </Button>
                   ) : undefined
                 }

@@ -75,12 +75,12 @@ features:
     visible_to_user: true
     developer_only: false
     group: stable
-    title: Remote Control
+    title: Couch Remote
     description: >-
-      Show the on-screen Remote Control (couch remote) for typing and joystick
-      input. Joystick relay is enabled automatically only when the connected
-      device's REST API supports the machine:input endpoint; otherwise keyboard
-      control is offered on its own.
+      Show the on-screen Couch Remote for typing and joystick input. Joystick
+      relay is enabled automatically only when the connected device's REST API
+      supports the machine:input endpoint; otherwise keyboard control is offered
+      on its own.
 
   - id: ram_snapshots_enabled
     enabled: true

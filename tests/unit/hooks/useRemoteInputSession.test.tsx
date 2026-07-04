@@ -275,6 +275,27 @@ describe("useRemoteInputSession", () => {
     expect(injectAutostartMock).toHaveBeenCalledWith(expect.anything(), new Uint8Array([0x85]));
   });
 
+  it("dispatches the high-value shifted keys (CLR/INS/F2) as a single atomic tap chord", async () => {
+    // These carry their own Shift inside one `tap` event, so the device presses
+    // and releases both keys together — no separate Shift press, no stuck Shift.
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+    const cases: Array<["clr" | "ins" | "f2", string[]]> = [
+      ["clr", ["clr_home", "left_shift"]],
+      ["ins", ["inst_del", "left_shift"]],
+      ["f2", ["f1", "left_shift"]],
+    ];
+    for (const [key, inputs] of cases) {
+      sendMachineInputBatchMock.mockClear();
+      act(() => result.current.sendSpecialKey(key));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40);
+      });
+      expect(sendMachineInputBatchMock).toHaveBeenCalledWith({
+        events: [{ kind: "keyboard", inputs, transition: "tap" }],
+      });
+    }
+  });
+
   it("drops RUN/STOP and RESTORE on the kernal-fallback tier (no kernal-buffer equivalent)", async () => {
     const { result } = renderHook(() => useRemoteInputSession({ tier: "kernal-fallback" }));
 
