@@ -33,7 +33,11 @@ import { useRemoteInputSession, type RemoteInputOutputMode } from "@/hooks/useRe
 import { resolveInputProfile } from "@/lib/input/profiles";
 import { resolveSemanticAction } from "@/lib/input/keyEvent";
 import { dpadActionToJoystickInputs, t9KeyToJoystickInputs } from "@/lib/remoteInput/joystickDigitalMapping";
-import { remoteInputSupportsJoystick, REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT } from "@/lib/remoteInput/capabilityTier";
+import {
+  remoteInputSupportsJoystick,
+  REMOTE_INPUT_AUTH_REQUIRED_HINT,
+  REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT,
+} from "@/lib/remoteInput/capabilityTier";
 import {
   DEFAULT_REMOTE_INPUT_CONTROL_SIZE,
   loadRemoteInputControlSize,
@@ -69,6 +73,11 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   const { tier, loading: tierLoading, resolved } = useRemoteInputCapabilityTier(open);
   const session = useRemoteInputSession({ tier });
   const joystickAvailable = remoteInputSupportsJoystick(tier);
+  // Lead F3: auth-required needs the same password Type mode's fallback
+  // injection would also need, so the generic "Type mode still works" hint
+  // is wrong on this tier specifically.
+  const joystickUnavailableHint =
+    tier === "auth-required" ? REMOTE_INPUT_AUTH_REQUIRED_HINT : REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT;
   const heldPhysicalKeysRef = useRef<Set<string>>(new Set());
   const previousPhysicalInputsRef = useRef<Set<JoystickInputName>>(new Set());
   const [controlSize, setControlSize] = useState<RemoteInputControlSize>(DEFAULT_REMOTE_INPUT_CONTROL_SIZE);
@@ -107,7 +116,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     currentPhysicalInputs.forEach((input) => next.add(input));
     previousPhysicalInputsRef.current = currentPhysicalInputs;
     session.setHeldJoystickInputs(next);
-  }, [session]);
+  }, [session.heldJoystickInputs, session.setHeldJoystickInputs]);
 
   // Physical T9/D-pad raw capture (Joystick mode only): while focus is inside
   // this sheet ([role=dialog]), the app's global keypad-navigation handler
@@ -183,7 +192,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
       }
       onOpenChange(nextOpen);
     },
-    [onOpenChange, session],
+    [onOpenChange, session.releaseAll],
   );
 
   const handleOutputModeChange = (mode: RemoteInputOutputMode) => {
@@ -272,7 +281,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                   variant={session.outputMode === "joystick" ? "default" : "secondary"}
                   data-testid="remote-input-mode-joystick"
                   disabled={!joystickAvailable}
-                  title={!joystickAvailable ? REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT : undefined}
+                  title={!joystickAvailable ? joystickUnavailableHint : undefined}
                   onClick={() => handleOutputModeChange("joystick")}
                 >
                   <Gamepad2 className="mr-1.5 h-4 w-4" /> Joystick
@@ -295,7 +304,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
 
           {!immersive && !joystickAvailable && session.outputMode === "joystick" ? (
             <p className="flex items-center justify-center gap-1.5 text-center text-sm text-muted-foreground">
-              <AlertTriangle className="h-4 w-4" /> {REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT}
+              <AlertTriangle className="h-4 w-4" /> {joystickUnavailableHint}
             </p>
           ) : null}
 
@@ -308,7 +317,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
               autofireEnabled={session.autofireEnabled}
               onAutofireEnabledChange={session.setAutofireEnabled}
               disabled={!joystickAvailable}
-              disabledHint={REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT}
+              disabledHint={joystickUnavailableHint}
               scale={scale}
               immersive={immersive}
             />

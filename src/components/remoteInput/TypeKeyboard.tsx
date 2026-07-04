@@ -16,6 +16,7 @@ import { getKeyboardLayout, type KeyDef, type KeyTone, type StickyModifier } fro
 import type { KeyboardInputName } from "@/lib/c64api";
 import type { CursorDirection } from "@/lib/remoteInput/cursorKeyMapping";
 import type { SpecialKeyboardKey } from "@/lib/remoteInput/specialKeyMapping";
+import { REMOTE_INPUT_AUTH_REQUIRED_HINT } from "@/lib/remoteInput/capabilityTier";
 
 export type TypeKeyboardTier = "full" | "kernal-fallback" | "auth-required";
 
@@ -102,6 +103,26 @@ export const TypeKeyboard = ({
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  // Lead F3: the fallback keyboard-buffer injection needs the same
+  // authenticated REST calls the capability probe already failed with
+  // 403 on - every key here would silently fail per keystroke, so show why
+  // instead of a keyboard that looks live but cannot send anything.
+  if (tier === "auth-required") {
+    return (
+      <div
+        className={cn(
+          "flex h-full min-h-0 w-full flex-col items-center justify-center gap-2 px-4 text-center",
+          className,
+        )}
+        data-testid="remote-input-type-keyboard"
+      >
+        <p className="text-sm text-muted-foreground" data-testid="remote-input-auth-required-hint">
+          {REMOTE_INPUT_AUTH_REQUIRED_HINT}
+        </p>
+      </div>
+    );
+  }
 
   const profile = profileOverride ?? resolveKeyboardProfile(measured.width, measured.height);
   const layout = getKeyboardLayout(profile);

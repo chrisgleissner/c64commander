@@ -101,6 +101,17 @@ describe("RemoteInputSheet", () => {
     expect(screen.getAllByText(/machine:input support/i).length).toBeGreaterThan(0);
   });
 
+  // Lead F3: the generic "Type mode still works" hint is wrong on this tier -
+  // the fallback injection needs the same password the probe already failed
+  // without, so a distinct, accurate hint must be shown instead.
+  it("shows the auth-required-specific hint (not the generic 'Type mode still works' one) on the auth-required tier", () => {
+    tierState.tier = "auth-required";
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+    expect(screen.getByTestId("remote-input-mode-joystick")).toBeDisabled();
+    expect(screen.getAllByText(/password/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/type mode still works/i)).not.toBeInTheDocument();
+  });
+
   it("calls releaseAll when the panic button is pressed", () => {
     render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
     fireEvent.click(screen.getByTestId("remote-input-panic-button"));

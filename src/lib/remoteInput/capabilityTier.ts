@@ -40,3 +40,14 @@ export const remoteInputSupportsJoystick = (tier: RemoteInputTier): boolean => t
 
 export const REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT =
   "Joystick relay requires Ultimate firmware with machine:input support. Type mode still works.";
+
+/**
+ * Lead F3: the fallback keyboard-buffer injection (`injectAutostart`) issues
+ * the same authenticated REST calls the `machine:input` probe used to
+ * determine `auth-required` in the first place - it needs the identical
+ * password, so it fails per keystroke just like the probe did. The generic
+ * hint above ("Type mode still works") is actively wrong on this tier; use
+ * this one instead wherever `tier === "auth-required"`.
+ */
+export const REMOTE_INPUT_AUTH_REQUIRED_HINT =
+  "This device needs its password entered in Settings before Remote Input can send anything - Joystick and Type both need it.";

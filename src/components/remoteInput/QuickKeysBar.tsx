@@ -34,6 +34,14 @@ export const QuickKeysBar = ({ onChar, onCursor, onSpecialKey, tier, scale = 1, 
   const keyStyle = { height: Math.round(40 * safeScale), fontSize: Math.round(13 * safeScale) };
   const iconStyle = { width: Math.round(40 * safeScale), height: Math.round(40 * safeScale) };
   const iconPx = Math.round(18 * safeScale);
+  // Lead F3: every one of these keys routes through the kernal-fallback
+  // injection on a non-full tier, which needs the exact same authenticated
+  // REST calls the capability probe already failed with 403 on - unlike
+  // RUN/STOP (gated below on the broader `tier !== "full"`, since it has no
+  // fallback equivalent at all), these keys DO work on kernal-fallback, just
+  // not on auth-required specifically.
+  const authRequiredHint = "This device's password must be entered in Settings first";
+  const disabledOnAuthRequired = tier === "auth-required";
 
   const tapChar = (char: string) => {
     vibrateTap(10);
@@ -58,6 +66,8 @@ export const QuickKeysBar = ({ onChar, onCursor, onSpecialKey, tier, scale = 1, 
         variant="secondary"
         style={keyStyle}
         data-testid="remote-input-key-space"
+        disabled={disabledOnAuthRequired}
+        title={disabledOnAuthRequired ? authRequiredHint : undefined}
         onClick={() => tapChar(" ")}
       >
         SPACE
@@ -67,6 +77,8 @@ export const QuickKeysBar = ({ onChar, onCursor, onSpecialKey, tier, scale = 1, 
         variant="secondary"
         style={keyStyle}
         data-testid="remote-input-key-return"
+        disabled={disabledOnAuthRequired}
+        title={disabledOnAuthRequired ? authRequiredHint : undefined}
         onClick={() => tapChar("\n")}
       >
         RETURN
@@ -89,6 +101,8 @@ export const QuickKeysBar = ({ onChar, onCursor, onSpecialKey, tier, scale = 1, 
           variant="secondary"
           style={keyStyle}
           data-testid={`remote-input-key-${key}`}
+          disabled={disabledOnAuthRequired}
+          title={disabledOnAuthRequired ? authRequiredHint : undefined}
           onClick={() => tapSpecial(key)}
         >
           {key.toUpperCase()}
@@ -100,6 +114,8 @@ export const QuickKeysBar = ({ onChar, onCursor, onSpecialKey, tier, scale = 1, 
           variant="secondary"
           style={iconStyle}
           data-testid="remote-input-key-cursor-up"
+          disabled={disabledOnAuthRequired}
+          title={disabledOnAuthRequired ? authRequiredHint : undefined}
           onClick={() => tapCursor("up")}
         >
           <ArrowUp style={{ width: iconPx, height: iconPx }} />
@@ -109,6 +125,8 @@ export const QuickKeysBar = ({ onChar, onCursor, onSpecialKey, tier, scale = 1, 
           variant="secondary"
           style={iconStyle}
           data-testid="remote-input-key-cursor-down"
+          disabled={disabledOnAuthRequired}
+          title={disabledOnAuthRequired ? authRequiredHint : undefined}
           onClick={() => tapCursor("down")}
         >
           <ArrowDown style={{ width: iconPx, height: iconPx }} />
@@ -118,6 +136,8 @@ export const QuickKeysBar = ({ onChar, onCursor, onSpecialKey, tier, scale = 1, 
           variant="secondary"
           style={iconStyle}
           data-testid="remote-input-key-cursor-left"
+          disabled={disabledOnAuthRequired}
+          title={disabledOnAuthRequired ? authRequiredHint : undefined}
           onClick={() => tapCursor("left")}
         >
           <ArrowLeft style={{ width: iconPx, height: iconPx }} />
@@ -127,6 +147,8 @@ export const QuickKeysBar = ({ onChar, onCursor, onSpecialKey, tier, scale = 1, 
           variant="secondary"
           style={iconStyle}
           data-testid="remote-input-key-cursor-right"
+          disabled={disabledOnAuthRequired}
+          title={disabledOnAuthRequired ? authRequiredHint : undefined}
           onClick={() => tapCursor("right")}
         >
           <ArrowRight style={{ width: iconPx, height: iconPx }} />

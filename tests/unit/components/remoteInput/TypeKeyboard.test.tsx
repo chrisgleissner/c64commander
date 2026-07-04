@@ -282,5 +282,16 @@ describe("TypeKeyboard", () => {
       }
       expect(screen.getByTestId("remote-input-modifier-unavailable-hint")).toBeInTheDocument();
     });
+
+    // Lead F3: the fallback injection needs the same authenticated REST calls
+    // the capability probe already failed with 403 on, so every ordinary key
+    // would silently fail - show why instead of a live-looking keyboard.
+    it("shows a password-required hint instead of the interactive keyboard on the auth-required tier", () => {
+      renderKeyboard("medium", "auth-required");
+
+      expect(screen.getByTestId("remote-input-auth-required-hint")).toHaveTextContent(/password/i);
+      expect(screen.queryByTestId("remote-input-key-a")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("remote-input-keyboard-deck")).not.toBeInTheDocument();
+    });
   });
 });
