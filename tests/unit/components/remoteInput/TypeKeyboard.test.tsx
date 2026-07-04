@@ -51,6 +51,7 @@ const HIGH_VALUE_TEST_IDS = [
   "remote-input-key-commodore",
   "remote-input-key-ctrl",
   "remote-input-key-shift",
+  "remote-input-key-shift-lock",
 ];
 
 describe("TypeKeyboard", () => {
@@ -74,6 +75,14 @@ describe("TypeKeyboard", () => {
       renderKeyboard("expanded");
       expect(screen.queryByTestId("remote-input-keyboard-deck")).toBeNull();
       expect(screen.getByTestId("remote-input-keyboard-grid")).toBeInTheDocument();
+    });
+
+    it("renders the expanded function keys inside their own bounded box", () => {
+      renderKeyboard("expanded");
+      const box = screen.getByTestId("remote-input-keyboard-function");
+      for (const f of ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8"]) {
+        expect(within(box).getByTestId(`remote-input-key-${f}`)).toBeInTheDocument();
+      }
     });
 
     it("defaults to medium when the content box has not been measured (no override)", () => {
@@ -203,11 +212,16 @@ describe("TypeKeyboard", () => {
       fireEvent.click(screen.getByTestId("remote-input-key-cursor-left"));
       expect(h.onCursor).toHaveBeenCalledWith("left");
 
-      expect(screen.getByTestId("remote-input-key-arrow_left")).toHaveAttribute(
-        "aria-label",
-        "C64 arrow left character key",
-      );
-      expect(screen.getByTestId("remote-input-key-cursor-left")).toHaveAttribute("aria-label", "Cursor left");
+      const arrowLeft = screen.getByTestId("remote-input-key-arrow_left");
+      expect(arrowLeft).toHaveAttribute("aria-label", "C64 left-arrow character key");
+      // Visible label is the authentic printed glyph, never "ARW".
+      expect(arrowLeft.textContent).toBe("←");
+      expect(arrowLeft.textContent).not.toMatch(/ARW/i);
+      // The cursor key is an icon (no "CUR" text) and stays distinct.
+      const cursorLeft = screen.getByTestId("remote-input-key-cursor-left");
+      expect(cursorLeft).toHaveAttribute("aria-label", "Cursor left");
+      expect(cursorLeft.textContent ?? "").not.toMatch(/CUR/i);
+      expect(cursorLeft.querySelector("svg")).toBeTruthy();
     });
   });
 
@@ -251,7 +265,9 @@ describe("TypeKeyboard", () => {
       const restore = screen.getByTestId("remote-input-key-restore");
       expect(restore.textContent).toContain("REST");
       expect(restore).toHaveAttribute("aria-label", "Restore");
-      expect(screen.getByTestId("remote-input-key-commodore")).toHaveAttribute("aria-label", "Commodore");
+      const commodore = screen.getByTestId("remote-input-key-commodore");
+      expect(commodore.textContent).toContain("C=");
+      expect(commodore).toHaveAttribute("aria-label", "Commodore key");
     });
   });
 

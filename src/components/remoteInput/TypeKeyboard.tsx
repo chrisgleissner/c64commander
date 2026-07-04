@@ -32,6 +32,13 @@ export type TypeKeyboardProps = {
 
 const FULL_TIER_HINT = "Requires Ultimate firmware with machine:input support";
 
+/** Splits a list into fixed-size groups (used to lay the F-keys out two per row). */
+const chunk = <T,>(items: readonly T[], size: number): T[][] => {
+  const rows: T[][] = [];
+  for (let index = 0; index < items.length; index += size) rows.push(items.slice(index, index + size));
+  return rows;
+};
+
 const toneButtonClass = (tone: KeyTone | undefined, latched: boolean): string => {
   switch (tone) {
     case "danger":
@@ -56,15 +63,16 @@ const toneVariant = (tone: KeyTone | undefined, latched: boolean): "default" | "
 };
 
 /**
- * The profile-aware Type-tab keyboard. One declarative layout model
+ * The profile-aware Keys-tab keyboard. One declarative layout model
  * (`keyboardLayout`) drives three renderings — compact/medium as a pinned
  * high-value deck (cursor pad + immediate/edit/function/system groups) above a
  * scrollable alphanumeric grid, expanded as the physical C64 rows — and one
  * shared `dispatch` routes EVERY key through the same session handlers, so no
  * behaviour is duplicated per profile. SHIFT/CBM/CTRL latch on tap and apply
- * to the next ordinary key, then auto-clear; the high-value shifted operations
- * (CLR, INS, CUR↑/←, F2/4/6/8) are atomic one-tap actions that never depend on
- * a latch and never leave a modifier stuck.
+ * to the next ordinary key, then auto-clear (SHIFT LOCK latches persistently);
+ * the high-value shifted operations (CLR, INS, the cursor keys, F2/4/6/8) are
+ * atomic one-tap actions that never depend on a latch and never leave a modifier
+ * stuck.
  */
 export const TypeKeyboard = ({
   onChar,
@@ -78,6 +86,9 @@ export const TypeKeyboard = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [measured, setMeasured] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
   const [activeModifiers, setActiveModifiers] = useState<ReadonlySet<StickyModifier>>(new Set());
+  // SHIFT LOCK: a persistent shift, separate from the one-shot `activeModifiers`
+  // latch so it survives key presses (and mode/keyboard remounts reset it).
+  const [shiftLocked, setShiftLocked] = useState(false);
 
   // Measure the available Type-tab content box and derive the profile from it
   // (width AND height), so the layout adapts to real space rather than a device
@@ -113,6 +124,11 @@ export const TypeKeyboard = ({
     });
   };
 
+  const toggleShiftLock = () => {
+    vibrateTap(8);
+    setShiftLocked((locked) => !locked);
+  };
+
   // The single shared dispatch path for every key in every profile.
   const dispatch = (def: KeyDef) => {
     const action = def.action;
@@ -120,14 +136,22 @@ export const TypeKeyboard = ({
       toggleModifier(action.modifier);
       return;
     }
+    if (action.kind === "shift_lock") {
+      toggleShiftLock();
+      return;
+    }
     vibrateTap(10);
     switch (action.kind) {
       case "char":
         onChar(action.char);
         break;
-      case "key":
-        onKey([...action.inputs, ...activeModifiers]);
+      case "key": {
+        // One-shot latches plus the persistent SHIFT LOCK, deduped by the Set.
+        const modifiers = new Set<StickyModifier>(activeModifiers);
+        if (shiftLocked) modifiers.add("left_shift");
+        onKey([...action.inputs, ...modifiers]);
         break;
+      }
       case "cursor":
         onCursor(action.direction);
         break;
@@ -136,16 +160,24 @@ export const TypeKeyboard = ({
         break;
     }
     // Any ordinary key consumes a one-shot modifier latch, so SHIFT/CBM/CTRL
-    // apply to exactly the next key and never stick.
+    // apply to exactly the next key and never stick. SHIFT LOCK is intentionally
+    // NOT cleared here — it persists until the user toggles it off.
     if (activeModifiers.size > 0) setActiveModifiers(new Set());
   };
 
   const renderKey = (def: KeyDef, options: { heightPx?: number; grow?: boolean; fill?: boolean } = {}) => {
     const isModifier = def.action.kind === "modifier";
-    const latched = isModifier && activeModifiers.has((def.action as { modifier: StickyModifier }).modifier);
+    const isShiftLock = def.action.kind === "shift_lock";
+    const latched =
+      (isModifier && activeModifiers.has((def.action as { modifier: StickyModifier }).modifier)) ||
+      (isShiftLock && shiftLocked);
     const disabled = def.requiresFullTier === true && tier !== "full";
     const label = profile === "compact" && def.compactLabel ? def.compactLabel : def.label;
-    const showSecondary = profile !== "compact" && Boolean(def.secondary);
+    const Icon = def.icon;
+    const iconPx = Math.max(15, Math.round(keyFontPx * 1.35));
+    // Shifted legend printed ABOVE the main label (smaller, fainter) like a real
+    // C64 keycap. Hidden on compact, and never shown on pictographic keys.
+    const showSecondary = profile !== "compact" && Boolean(def.secondary) && !Icon;
 
     return (
       <Button
@@ -166,30 +198,34 @@ export const TypeKeyboard = ({
         data-testid={def.testId}
         data-key-height={options.fill ? undefined : (options.heightPx ?? deckKeyHeightPx)}
         aria-label={def.ariaLabel}
-        aria-pressed={isModifier ? latched : undefined}
+        aria-pressed={isModifier || isShiftLock ? latched : undefined}
         disabled={disabled}
         title={disabled ? FULL_TIER_HINT : undefined}
         onClick={() => dispatch(def)}
       >
-        <span className="flex flex-col items-center leading-none">
-          <span
-            style={{
-              // Explicit two-line labels (e.g. "RUN\nSTOP") keep their break;
-              // everything else stays on one line rather than wrapping.
-              whiteSpace: label.includes("\n") ? "pre-line" : "nowrap",
-              fontSize: keyFontPx,
-              fontWeight: 600,
-              lineHeight: 1.05,
-            }}
-          >
-            {label}
-          </span>
-          {showSecondary ? (
-            <span className="text-[0.6rem] font-normal text-muted-foreground" aria-hidden="true">
-              {def.secondary}
+        {Icon ? (
+          <Icon style={{ width: iconPx, height: iconPx }} />
+        ) : (
+          <span className="flex flex-col items-center leading-none">
+            {showSecondary ? (
+              <span className="text-[0.6rem] font-normal leading-none text-muted-foreground" aria-hidden="true">
+                {def.secondary}
+              </span>
+            ) : null}
+            <span
+              style={{
+                // Explicit two-line labels (e.g. "RUN\nSTOP") keep their break;
+                // everything else stays on one line rather than wrapping.
+                whiteSpace: label.includes("\n") ? "pre-line" : "nowrap",
+                fontSize: keyFontPx,
+                fontWeight: 600,
+                lineHeight: 1.05,
+              }}
+            >
+              {label}
             </span>
-          ) : null}
-        </span>
+          </span>
+        )}
       </Button>
     );
   };
@@ -198,7 +234,7 @@ export const TypeKeyboard = ({
     tier !== "full" &&
     (layout.kind === "deck"
       ? [...layout.system].some((k) => k.requiresFullTier)
-      : layout.rows.flat().some((k) => k.requiresFullTier));
+      : [...layout.rows.flat(), ...layout.functionKeys].some((k) => k.requiresFullTier));
 
   return (
     <div
@@ -248,9 +284,11 @@ export const TypeKeyboard = ({
 
           <div className="border-t border-border" role="separator" />
 
-          {/* Only the alphanumeric / symbol grid scrolls. */}
+          {/* Only the alphanumeric / symbol grid scrolls. The bottom padding keeps
+              the last row clear of the persistent bottom action bar so every key
+              stays comfortably reachable on small screens. */}
           <div
-            className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain pr-0.5"
+            className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain pb-6 pr-0.5"
             data-testid="remote-input-keyboard-grid"
           >
             {layout.grid.map((row, rowIndex) => (
@@ -261,16 +299,34 @@ export const TypeKeyboard = ({
           </div>
         </>
       ) : (
-        // Expanded: the physical C64 rows rendered as closely as practical.
+        // Expanded: the physical C64 rows on the left; F1–F8 as a bounded box on
+        // the right (shared X origin, uniform width/height) rather than tacked on
+        // to the ragged ends of the main rows. The pb-6 keeps the last row clear
+        // of the bottom action bar.
         <div
-          className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain"
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6"
           data-testid="remote-input-keyboard-grid"
         >
-          {layout.rows.map((row, rowIndex) => (
-            <div key={rowIndex} className="flex gap-1">
-              {row.map((def) => renderKey(def, { heightPx: gridKeyHeightPx, grow: true }))}
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1 space-y-1">
+              {layout.rows.map((row, rowIndex) => (
+                <div key={rowIndex} className="flex gap-1">
+                  {row.map((def) => renderKey(def, { heightPx: gridKeyHeightPx, grow: true }))}
+                </div>
+              ))}
             </div>
-          ))}
+            <div
+              className="flex shrink-0 flex-col gap-1"
+              style={{ width: 112 }}
+              data-testid="remote-input-keyboard-function"
+            >
+              {chunk(layout.functionKeys, 2).map((pair, rowIndex) => (
+                <div key={rowIndex} className="flex gap-1">
+                  {pair.map((def) => renderKey(def, { heightPx: gridKeyHeightPx, grow: true }))}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 

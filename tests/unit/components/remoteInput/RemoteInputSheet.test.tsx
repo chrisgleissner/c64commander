@@ -71,7 +71,7 @@ describe("RemoteInputSheet", () => {
     vi.clearAllMocks();
   });
 
-  it("switches output mode when the Type button is pressed", () => {
+  it("switches output mode when the Keys button is pressed", () => {
     render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
     fireEvent.click(screen.getByTestId("remote-input-mode-type"));
     expect(setOutputModeMock).toHaveBeenCalledWith("type");
@@ -294,6 +294,94 @@ describe("RemoteInputSheet", () => {
       rerender(<RemoteInputSheet open onOpenChange={vi.fn()} />);
 
       expect(setOutputModeMock).not.toHaveBeenCalledWith("type");
+    });
+  });
+
+  describe("HARD14 naming, tab order, and key-label polish", () => {
+    it("titles the modal 'Remote Input' with no 'Couch remote' descriptor", () => {
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      expect(screen.getByText("Remote Input")).toBeInTheDocument();
+      expect(screen.queryByText(/couch/i)).not.toBeInTheDocument();
+    });
+
+    it("orders the mode tabs Joystick then Keys, and never labels a tab 'Type'", () => {
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      const joystick = screen.getByTestId("remote-input-mode-joystick");
+      const keys = screen.getByTestId("remote-input-mode-type");
+      expect(joystick).toHaveTextContent("Joystick");
+      expect(keys).toHaveTextContent("Keys");
+      expect(keys.textContent).not.toMatch(/Type/);
+      expect(screen.queryByRole("button", { name: /^Type$/ })).not.toBeInTheDocument();
+      // Visual order: Joystick precedes Keys in the DOM.
+      expect(joystick.compareDocumentPosition(keys) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it("labels the footer dismiss action 'Close' (distinct from 'Exit game mode')", () => {
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      expect(screen.getByTestId("remote-input-exit-button")).toHaveTextContent("Close");
+    });
+
+    it("shows the Commodore key as 'C=' and the cursor keys as arrows (no 'CUR' text)", () => {
+      initialSessionOutputMode = "type";
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      expect(screen.getByTestId("remote-input-key-commodore")).toHaveTextContent("C=");
+      const cursorUp = screen.getByTestId("remote-input-key-cursor-up");
+      expect(cursorUp.textContent ?? "").not.toMatch(/CUR/i);
+      // Rendered as an icon, not text.
+      expect(cursorUp.querySelector("svg")).toBeTruthy();
+    });
+
+    it("prints the shifted secondary legend above the main label on number keys", () => {
+      initialSessionOutputMode = "type";
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      // Secondary "!" comes first in DOM order (rendered on top), then the digit "1".
+      expect(screen.getByTestId("remote-input-key-1").textContent).toBe("!1");
+    });
+  });
+
+  describe("SHIFT LOCK (persistent shift toggle)", () => {
+    it("latches shift persistently across multiple keys until toggled off", () => {
+      initialSessionOutputMode = "type";
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+
+      const shiftLock = screen.getByTestId("remote-input-key-shift-lock");
+      expect(shiftLock).toHaveTextContent(/SHIFT\s*LOCK/);
+      fireEvent.click(shiftLock);
+      expect(shiftLock).toHaveAttribute("aria-pressed", "true");
+
+      // Every subsequent key carries left_shift — and the lock does NOT clear.
+      fireEvent.click(screen.getByTestId("remote-input-key-a"));
+      expect(sendKeyboardInputsMock).toHaveBeenLastCalledWith(["a", "left_shift"]);
+      fireEvent.click(screen.getByTestId("remote-input-key-b"));
+      expect(sendKeyboardInputsMock).toHaveBeenLastCalledWith(["b", "left_shift"]);
+
+      // Toggling it off returns to unshifted output.
+      fireEvent.click(shiftLock);
+      expect(shiftLock).toHaveAttribute("aria-pressed", "false");
+      fireEvent.click(screen.getByTestId("remote-input-key-a"));
+      expect(sendKeyboardInputsMock).toHaveBeenLastCalledWith(["a"]);
+    });
+
+    it("is distinct from the one-shot SHIFT, which still auto-clears after one key", () => {
+      initialSessionOutputMode = "type";
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+
+      fireEvent.click(screen.getByTestId("remote-input-key-shift"));
+      fireEvent.click(screen.getByTestId("remote-input-key-a"));
+      expect(sendKeyboardInputsMock).toHaveBeenLastCalledWith(["a", "left_shift"]);
+      // One-shot SHIFT cleared — the next key is unshifted.
+      fireEvent.click(screen.getByTestId("remote-input-key-a"));
+      expect(sendKeyboardInputsMock).toHaveBeenLastCalledWith(["a"]);
+    });
+
+    it("does not emit any transport call by itself when toggled", () => {
+      initialSessionOutputMode = "type";
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+
+      fireEvent.click(screen.getByTestId("remote-input-key-shift-lock"));
+      expect(sendKeyboardInputsMock).not.toHaveBeenCalled();
+      expect(sendCharMock).not.toHaveBeenCalled();
+      expect(sendSpecialKeyMock).not.toHaveBeenCalled();
     });
   });
 

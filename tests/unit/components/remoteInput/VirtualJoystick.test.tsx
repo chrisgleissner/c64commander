@@ -349,6 +349,36 @@ describe("VirtualJoystick", () => {
       expect(onHeldInputsChangeMock).not.toHaveBeenCalled();
     });
 
+    it("hides the movement-style selector in game mode so it is a focused control surface", () => {
+      const { rerender } = render(
+        <VirtualJoystick
+          port={2}
+          onSetPort={setPortMock}
+          heldInputs={EMPTY_HELD_JOYSTICK_INPUTS as never}
+          onHeldInputsChange={onHeldInputsChangeMock}
+          autofireEnabled={false}
+          onAutofireEnabledChange={setAutofireEnabledChangeMock}
+        />,
+      );
+      expect(screen.getByTestId("remote-input-movement-style-toggle")).toBeInTheDocument();
+
+      rerender(
+        <VirtualJoystick
+          port={2}
+          onSetPort={setPortMock}
+          heldInputs={EMPTY_HELD_JOYSTICK_INPUTS as never}
+          onHeldInputsChange={onHeldInputsChangeMock}
+          autofireEnabled={false}
+          onAutofireEnabledChange={setAutofireEnabledChangeMock}
+          immersive
+        />,
+      );
+      // The secondary input-style setting is gone, but the essentials remain.
+      expect(screen.queryByTestId("remote-input-movement-style-toggle")).not.toBeInTheDocument();
+      expect(screen.getByTestId("remote-input-stick-zone")).toBeInTheDocument();
+      expect(screen.getByTestId("remote-input-fire-button")).toBeInTheDocument();
+    });
+
     it("does not allow switching style while disabled", () => {
       render(
         <VirtualJoystick

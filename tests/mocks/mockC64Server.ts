@@ -406,7 +406,7 @@ export async function createMockC64Server(
     }
 
     // machine:input REST relay (keyboard/joystick). A 200 here makes the app
-    // resolve the "full" capability tier so the Couch Remote joystick relay and
+    // resolve the "full" capability tier so the Remote Input joystick relay and
     // the full on-screen keyboard are enabled.
     if (parsed.pathname === "/v1/machine:input" && (method === "GET" || method === "POST" || method === "PUT")) {
       return sendJson(200, {

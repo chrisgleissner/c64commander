@@ -112,8 +112,8 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     visible_to_user: true,
     developer_only: false,
     group: "stable",
-    title: "Couch Remote",
-    description: "Show the on-screen Couch Remote for typing and joystick input. Joystick relay is enabled automatically only when the connected device's REST API supports the machine:input endpoint; otherwise keyboard control is offered on its own.",
+    title: "Remote Input",
+    description: "Show the Remote Input overlay — a second-screen joystick and keyboard for the C64. Joystick relay is enabled automatically only when the connected device's REST API supports the machine:input endpoint; otherwise keyboard control is offered on its own.",
   },
   {
     id: "ram_snapshots_enabled",

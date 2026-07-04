@@ -58,7 +58,8 @@ export type RemoteInputSheetProps = {
 const PHYSICAL_INPUT_KEYMAP = resolveInputProfile("keypad");
 
 /**
- * HARD12-017 v1 / HARD13 ergonomics: the "couch remote for your C64" sheet.
+ * HARD12-017 v1 / HARD13 ergonomics: the "Remote Input" sheet — a second-screen
+ * joystick and keyboard for the C64.
  * Thin shell over the tested pure mappings (`@/lib/remoteInput/*`) and the
  * coalesced transport (`useRemoteInputSession`). Controls scale with a persisted
  * size preference and an immersive gaming mode strips everything but the
@@ -235,7 +236,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
       <AppSheetContent data-testid="remote-input-sheet" onKeyDown={handlePhysicalKeyDown} onKeyUp={handlePhysicalKeyUp}>
         <AppSheetHeader>
           <AppSheetTitle className="flex items-center gap-2">
-            Couch Remote
+            Remote Input
             <span
               className="flex items-center gap-1 text-xs font-normal text-muted-foreground"
               data-testid="remote-input-connection-indicator"
@@ -273,7 +274,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                   data-testid="remote-input-mode-type"
                   onClick={() => handleOutputModeChange("type")}
                 >
-                  <KeyboardIcon className="mr-1.5 h-4 w-4" /> Type
+                  <KeyboardIcon className="mr-1.5 h-4 w-4" /> Keys
                 </Button>
               </div>
             )}
@@ -336,13 +337,15 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
           >
             Release All
           </Button>
+          {/* "Close" (dismiss the modal), kept distinct from the "Exit game mode"
+              toggle in the header so the two are never ambiguous. */}
           <Button
             size="sm"
             variant="secondary"
             data-testid="remote-input-exit-button"
             onClick={() => handleOpenChange(false)}
           >
-            Exit
+            Close
           </Button>
         </AppSheetFooter>
       </AppSheetContent>

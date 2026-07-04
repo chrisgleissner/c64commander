@@ -33,7 +33,7 @@ export const CursorPad = ({ onCursor, sizePx }: CursorPadProps) => {
     key: direction,
     testId: CURSOR_KEY_META[direction].testId,
     ariaLabel: CURSOR_KEY_META[direction].ariaLabel,
-    label: CURSOR_KEY_META[direction].label,
+    icon: CURSOR_KEY_META[direction].icon,
     gridArea: GRID_AREA[direction],
     onActivate: () => {
       vibrateTap(10);

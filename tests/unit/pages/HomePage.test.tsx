@@ -1166,7 +1166,7 @@ describe("HomePage SID status", () => {
 
   it("renders exactly seven machine controls with one pause-resume control", async () => {
     featureFlagsRef.current.home_telnet_reu_snapshot_enabled = false;
-    // remote_input_enabled is default-on in the real registry (couch remote is no
+    // remote_input_enabled is default-on in the real registry (Remote Input is no
     // longer developer-only); force it off here so the Remote Control overflow
     // action doesn't perturb this machine-controls count.
     featureFlagsRef.current.remote_input_enabled = false;

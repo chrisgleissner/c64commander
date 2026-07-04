@@ -36,7 +36,7 @@ export type VirtualJoystickProps = {
 type MovementStyle = "stick" | "dpad" | "swipe";
 
 const MOVEMENT_STYLES: ReadonlyArray<{ id: MovementStyle; label: string; icon: typeof Gamepad2 }> = [
-  { id: "stick", label: "Stick", icon: Gamepad2 },
+  { id: "stick", label: "Analog", icon: Gamepad2 },
   { id: "dpad", label: "D-Pad", icon: Hand },
   { id: "swipe", label: "Swipe", icon: MoveDiagonal },
 ];
@@ -231,22 +231,29 @@ export const VirtualJoystick = ({
 
       {/* Occasional toggles live in a top row, away from the constant-use action
           zone below, so mid-game thumbs never accidentally flip the port or
-          autofire. The port swap is further separated by a divider. */}
+          autofire. The port swap is further separated by a divider. Game mode is
+          a focused control surface: the movement-style selector (a secondary
+          setting picked before play) is hidden so only autofire/port ride along
+          the stick and FIRE. */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5" data-testid="remote-input-movement-style-toggle">
-          {MOVEMENT_STYLES.map(({ id, label, icon: Icon }) => (
-            <Button
-              key={id}
-              size="sm"
-              variant={movementStyle === id ? "default" : "secondary"}
-              disabled={disabled}
-              data-testid={`remote-input-movement-style-${id}`}
-              onClick={() => setMovementStyle(id)}
-            >
-              <Icon className="mr-1.5 h-4 w-4" /> {label}
-            </Button>
-          ))}
-        </div>
+        {immersive ? (
+          <span aria-hidden="true" />
+        ) : (
+          <div className="flex items-center gap-1.5" data-testid="remote-input-movement-style-toggle">
+            {MOVEMENT_STYLES.map(({ id, label, icon: Icon }) => (
+              <Button
+                key={id}
+                size="sm"
+                variant={movementStyle === id ? "default" : "secondary"}
+                disabled={disabled}
+                data-testid={`remote-input-movement-style-${id}`}
+                onClick={() => setMovementStyle(id)}
+              >
+                <Icon className="mr-1.5 h-4 w-4" /> {label}
+              </Button>
+            ))}
+          </div>
+        )}
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 text-sm" data-testid="remote-input-autofire-toggle">
             <Switch
@@ -275,10 +282,12 @@ export const VirtualJoystick = ({
       </div>
 
       {/* Action zone: big directional control + big FIRE. In immersive mode the
-          two are anchored to the bottom corners for no-look thumb reach. */}
+          two are anchored to the bottom corners for no-look thumb reach, held a
+          clear gap (bottom-8) above the persistent Release All / Close bar so a
+          firing thumb never strays onto those buttons. */}
       <div className={cn("flex items-end justify-between gap-4", immersive && "relative min-h-0 flex-1")}>
-        <div className={cn(immersive && "absolute bottom-1 left-1")}>{movementControl}</div>
-        <div className={cn("flex items-center", immersive && "absolute bottom-1 right-1")}>{fireButton}</div>
+        <div className={cn(immersive && "absolute bottom-8 left-1")}>{movementControl}</div>
+        <div className={cn("flex items-center", immersive && "absolute bottom-8 right-1")}>{fireButton}</div>
       </div>
     </div>
   );

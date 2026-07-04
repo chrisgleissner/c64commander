@@ -6,10 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import type { ComponentType, CSSProperties } from "react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp } from "lucide-react";
 import type { KeyboardInputName } from "@/lib/c64api";
 import type { CursorDirection } from "@/lib/remoteInput/cursorKeyMapping";
 import type { SpecialKeyboardKey } from "@/lib/remoteInput/specialKeyMapping";
 import type { KeyboardProfile } from "@/lib/remoteInput/keyboardProfile";
+
+/** A pictographic key glyph (e.g. a lucide arrow) rendered in place of a text label. */
+export type KeyIcon = ComponentType<{ className?: string; style?: CSSProperties }>;
 
 /**
  * The Type-tab keyboard as declarative data. Every profile (compact / medium /
@@ -31,14 +36,17 @@ export type StickyModifier = "left_shift" | "commodore" | "ctrl";
  * - `cursor`   → `sendCursor` (keyboard cursor movement, NOT joystick)
  * - `special`  → `sendSpecialKey` (named/atomic keys: F1–F8, HOME/CLR, DEL/INS,
  *                RUN/STOP, RESTORE — including the atomic shifted halves)
- * - `modifier` → toggles a local sticky latch (no transport call by itself)
+ * - `modifier`   → toggles a local one-shot sticky latch (no transport call by itself)
+ * - `shift_lock` → toggles a PERSISTENT shift: left_shift is appended to every
+ *                  subsequent `key` chord until toggled off (no auto-clear)
  */
 export type KeyAction =
   | { kind: "char"; char: string }
   | { kind: "key"; inputs: KeyboardInputName[] }
   | { kind: "cursor"; direction: CursorDirection }
   | { kind: "special"; key: SpecialKeyboardKey }
-  | { kind: "modifier"; modifier: StickyModifier };
+  | { kind: "modifier"; modifier: StickyModifier }
+  | { kind: "shift_lock" };
 
 /** Visual/semantic tone — drives styling and caution treatment, never behaviour. */
 export type KeyTone = "default" | "action" | "edit" | "function" | "modifier" | "caution" | "danger";
@@ -50,6 +58,12 @@ export type KeyDef = {
   testId: string;
   /** Primary visual label. */
   label: string;
+  /**
+   * Optional pictographic glyph rendered INSTEAD of the text label (e.g. the
+   * cursor arrows). The text `label` stays as a fallback and the `ariaLabel`
+   * remains the source of truth for assistive tech.
+   */
+  icon?: KeyIcon;
   /** Shorter label used on compact where width is scarce (falls back to `label`). */
   compactLabel?: string;
   /** Shifted-symbol legend shown as a small secondary keycap glyph, where readable. */
@@ -83,18 +97,29 @@ export type KeyboardDeckLayout = {
 export type KeyboardRowLayout = {
   kind: "rows";
   rows: KeyDef[][];
+  /**
+   * F1–F8 rendered as a bounded right-hand box (uniform width/height, shared X
+   * origin), mirroring the physical C64's separate function-key cluster instead
+   * of being appended to the ragged ends of the main rows.
+   */
+  functionKeys: KeyDef[];
 };
 
 export type KeyboardLayout = KeyboardDeckLayout | KeyboardRowLayout;
 
 // --- Shared metadata --------------------------------------------------------
 
-/** Accessible + visual labels for the keyboard cursor keys, shared by the CursorPad and the expanded rows. */
-export const CURSOR_KEY_META: Record<CursorDirection, { label: string; ariaLabel: string; testId: string }> = {
-  up: { label: "CUR↑", ariaLabel: "Cursor up", testId: "remote-input-key-cursor-up" },
-  down: { label: "CUR↓", ariaLabel: "Cursor down", testId: "remote-input-key-cursor-down" },
-  left: { label: "CUR←", ariaLabel: "Cursor left", testId: "remote-input-key-cursor-left" },
-  right: { label: "CUR→", ariaLabel: "Cursor right", testId: "remote-input-key-cursor-right" },
+/**
+ * Icon + accessible label for the keyboard cursor keys, shared by the CursorPad
+ * and the expanded rows. Cursor keys render as clean lucide arrows (never "CUR"
+ * text); their cross/D-pad arrangement plus the arrows make it clear they are
+ * cursor controls, and the accessible label stays fully descriptive.
+ */
+export const CURSOR_KEY_META: Record<CursorDirection, { icon: KeyIcon; ariaLabel: string; testId: string }> = {
+  up: { icon: ArrowUp, ariaLabel: "Cursor up", testId: "remote-input-key-cursor-up" },
+  down: { icon: ArrowDown, ariaLabel: "Cursor down", testId: "remote-input-key-cursor-down" },
+  left: { icon: ArrowLeft, ariaLabel: "Cursor left", testId: "remote-input-key-cursor-left" },
+  right: { icon: ArrowRight, ariaLabel: "Cursor right", testId: "remote-input-key-cursor-right" },
 };
 
 // --- Key builders -----------------------------------------------------------
@@ -144,28 +169,32 @@ const sym = (name: keyof typeof SYMBOLS): KeyDef => {
   };
 };
 
-// C64 character-arrow keys — deliberately labelled "ARW" (not a bare arrow) so
-// they can never be confused with the CURSOR movement keys ("CUR"), which look
-// similar. Distinct keys, distinct actions, distinct accessible labels.
+// C64 character-arrow keys — labelled with the glyphs actually printed on the
+// physical C64 keyboard ("←" left of "1", "↑" up by RESTORE). They stay distinct
+// from the CURSOR movement keys by placement (these sit inline in the character
+// grid) and rendering (the cursor keys use lucide arrow ICONS in a cross, these
+// are text glyphs); their accessible labels spell out the difference explicitly.
 const ARROW_LEFT: KeyDef = {
   id: "arrow_left",
   testId: "remote-input-key-arrow_left",
-  label: "ARW←",
-  ariaLabel: "C64 arrow left character key",
+  label: "←",
+  ariaLabel: "C64 left-arrow character key",
   action: { kind: "key", inputs: ["arrow_left"] },
 };
 const ARROW_UP: KeyDef = {
   id: "arrow_up",
   testId: "remote-input-key-arrow_up",
-  label: "ARW↑",
-  ariaLabel: "C64 arrow up character key",
+  label: "↑",
+  ariaLabel: "C64 up-arrow character key",
   action: { kind: "key", inputs: ["arrow_up"] },
 };
 
 const cursorKey = (direction: CursorDirection): KeyDef => ({
   id: `cursor-${direction}`,
   testId: CURSOR_KEY_META[direction].testId,
-  label: CURSOR_KEY_META[direction].label,
+  // Rendered as the icon; the text label is only a fallback for icon-less contexts.
+  label: CURSOR_KEY_META[direction].ariaLabel,
+  icon: CURSOR_KEY_META[direction].icon,
   ariaLabel: CURSOR_KEY_META[direction].ariaLabel,
   action: { kind: "cursor", direction },
   tone: "default",
@@ -250,9 +279,9 @@ const RUN_STOP: KeyDef = {
 const RESTORE: KeyDef = {
   id: "restore",
   testId: "remote-input-key-restore",
-  // Abbreviated to "REST" in every profile (accessible label stays "Restore")
+  // Abbreviated to "REST." in every profile (accessible label stays "Restore")
   // so it fits a narrow key without wrapping; the caution styling makes it stand out.
-  label: "REST",
+  label: "REST.",
   ariaLabel: "Restore",
   action: { kind: "special", key: "restore" },
   tone: "danger",
@@ -261,8 +290,10 @@ const RESTORE: KeyDef = {
 const COMMODORE: KeyDef = {
   id: "commodore",
   testId: "remote-input-key-commodore",
+  // No Commodore logo asset exists in the app's icon set, so the universally
+  // recognised "C=" ASCII rendering of the key face is used as the visible label.
   label: "C=",
-  ariaLabel: "Commodore",
+  ariaLabel: "Commodore key",
   action: { kind: "modifier", modifier: "commodore" },
   tone: "modifier",
   requiresFullTier: true,
@@ -291,6 +322,18 @@ const SHIFT_RIGHT: KeyDef = {
   id: "shift-right",
   testId: "remote-input-key-shift-right",
   ariaLabel: "Shift (right)",
+};
+// SHIFT LOCK — a persistent shift toggle, ideal on touch devices where holding
+// SHIFT is awkward. Unlike the one-shot SHIFT it stays latched, applying
+// left_shift to every subsequent key until tapped again. Placed to the right of
+// RUN/STOP. Two-line face ("SHIFT" over "LOCK") mirrors the physical keycap.
+const SHIFT_LOCK: KeyDef = {
+  id: "shift-lock",
+  testId: "remote-input-key-shift-lock",
+  label: "SHIFT\nLOCK",
+  ariaLabel: "Shift lock",
+  action: { kind: "shift_lock" },
+  tone: "modifier",
 };
 
 // Secondary legends for the number row (authentic C64 shifted symbols).
@@ -321,7 +364,7 @@ const FUNCTION_GROUP: KeyDef[] = [
   functionKey(7),
   functionKey(8),
 ];
-const SYSTEM_GROUP: KeyDef[] = [RUN_STOP, RESTORE, COMMODORE, CTRL, SHIFT];
+const SYSTEM_GROUP: KeyDef[] = [RUN_STOP, SHIFT_LOCK, RESTORE, COMMODORE, CTRL, SHIFT];
 
 // --- Profile layouts --------------------------------------------------------
 
@@ -367,8 +410,6 @@ const EXPANDED_ROWS: KeyDef[][] = [
     CLR,
     DEL,
     INS,
-    functionKey(1),
-    functionKey(2),
   ],
   [
     CTRL,
@@ -386,11 +427,10 @@ const EXPANDED_ROWS: KeyDef[][] = [
     sym("star"),
     ARROW_UP,
     RESTORE,
-    functionKey(3),
-    functionKey(4),
   ],
   [
     RUN_STOP,
+    SHIFT_LOCK,
     letter("a"),
     letter("s"),
     letter("d"),
@@ -404,8 +444,6 @@ const EXPANDED_ROWS: KeyDef[][] = [
     sym("semicolon"),
     sym("equals"),
     { ...RETURN, span: 1 },
-    functionKey(5),
-    functionKey(6),
   ],
   [
     COMMODORE,
@@ -425,8 +463,6 @@ const EXPANDED_ROWS: KeyDef[][] = [
     cursorKey("down"),
     cursorKey("left"),
     cursorKey("right"),
-    functionKey(7),
-    functionKey(8),
   ],
   [{ ...SPACE, span: 1 }],
 ];
@@ -452,7 +488,7 @@ export const getKeyboardLayout = (profile: KeyboardProfile): KeyboardLayout => {
         grid: MEDIUM_GRID,
       };
     case "expanded":
-      return { kind: "rows", rows: EXPANDED_ROWS };
+      return { kind: "rows", rows: EXPANDED_ROWS, functionKeys: FUNCTION_GROUP };
   }
 };
 
@@ -460,7 +496,7 @@ export const getKeyboardLayout = (profile: KeyboardProfile): KeyboardLayout => {
 export const flattenLayoutKeys = (layout: KeyboardLayout): KeyDef[] =>
   layout.kind === "deck"
     ? [...layout.immediate, ...layout.edit, ...layout.functionKeys, ...layout.system, ...layout.grid.flat()]
-    : layout.rows.flat();
+    : [...layout.rows.flat(), ...layout.functionKeys];
 
 /** The four cursor directions in stable order — used to build the CursorPad and expanded cursor keys. */
 export const CURSOR_DIRECTIONS: readonly CursorDirection[] = ["up", "down", "left", "right"];

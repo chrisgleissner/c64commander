@@ -8,7 +8,7 @@
 
 /**
  * HARD13 remote-control ergonomics: the joystick/fire controls must be usable
- * without looking at the screen (couch/handheld play) and forgiving of big
+ * without looking at the screen (second-screen/handheld play) and forgiving of big
  * fingers on tiny screens. The control size is a persisted user preference so a
  * chosen size survives across sessions and devices.
  */

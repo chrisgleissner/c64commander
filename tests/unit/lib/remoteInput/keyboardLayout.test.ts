@@ -44,6 +44,7 @@ const REQUIRED_NON_CURSOR_TEST_IDS = [
   "remote-input-key-commodore",
   "remote-input-key-ctrl",
   "remote-input-key-shift",
+  "remote-input-key-shift-lock",
 ];
 
 const collectKeys = (layout: KeyboardLayout): KeyDef[] => flattenLayoutKeys(layout);
@@ -76,8 +77,41 @@ describe("getKeyboardLayout", () => {
     expect(arrowLeft?.action).toEqual({ kind: "key", inputs: ["arrow_left"] });
     expect(cursorLeft?.action).toEqual({ kind: "cursor", direction: "left" });
     // …and unambiguous accessible labels.
-    expect(arrowLeft?.ariaLabel).toMatch(/arrow left character key/i);
+    expect(arrowLeft?.ariaLabel).toMatch(/left-arrow character key/i);
     expect(cursorLeft?.ariaLabel).toMatch(/cursor left/i);
+    // The C64 character-arrow keys use the authentic printed glyphs (never "ARW"),
+    // while the cursor keys render as icons (no "CUR" text).
+    expect(arrowLeft?.label).toBe("←");
+    expect(arrowUp?.label).toBe("↑");
+    expect(arrowLeft?.label).not.toMatch(/ARW/i);
+    (["up", "down", "left", "right"] as const).forEach((direction) => {
+      // A renderable lucide icon component (never a "CUR…" text label).
+      expect(CURSOR_KEY_META[direction].icon, `cursor ${direction} icon`).toBeTruthy();
+      expect(CURSOR_KEY_META[direction]).not.toHaveProperty("label");
+    });
+  });
+
+  it("adds a persistent SHIFT LOCK key (distinct from the one-shot SHIFT) in every profile", () => {
+    for (const profile of PROFILES) {
+      const keys = collectKeys(getKeyboardLayout(profile));
+      const shiftLock = keys.find((k) => k.testId === "remote-input-key-shift-lock");
+      expect(shiftLock, `${profile} shift lock`).toBeDefined();
+      expect(shiftLock?.action).toEqual({ kind: "shift_lock" });
+      // It is not tier-gated (works wherever the one-shot SHIFT does).
+      expect(shiftLock?.requiresFullTier).toBeFalsy();
+      expect(shiftLock?.ariaLabel).toMatch(/shift lock/i);
+    }
+  });
+
+  it("renders the expanded function keys as a dedicated bounded box, not inside the main rows", () => {
+    const layout = getKeyboardLayout("expanded");
+    if (layout.kind !== "rows") throw new Error("expanded layout must be row-based");
+    const fKeyIds = ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8"].map((f) => `remote-input-key-${f}`);
+    const inRows = new Set(layout.rows.flat().map((k) => k.testId));
+    // No function key is tacked onto the ragged end of a main row…
+    fKeyIds.forEach((id) => expect(inRows.has(id), `${id} leaked into main rows`).toBe(false));
+    // …they live in the dedicated, ordered function-key box instead.
+    expect(layout.functionKeys.map((k) => k.testId)).toEqual(fKeyIds);
   });
 
   it("dispatches the atomic shifted operations through the shared special-key path", () => {
