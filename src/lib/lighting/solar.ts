@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import SunCalc from "suncalc";
+import * as SunCalc from "suncalc";
 import { findLightingCity } from "@/lib/lighting/cityDataset";
 import type { LightingCircadianPeriod } from "@/lib/lighting/types";
 
@@ -47,7 +47,7 @@ const clampProgress = (value: number) => {
   return Math.min(1, Math.max(0, value));
 };
 
-const isValidDate = (value: Date | undefined) => Boolean(value && Number.isFinite(value.getTime()));
+const isValidDate = (value: Date | null | undefined) => Boolean(value && Number.isFinite(value.getTime()));
 
 export const resolveSolarLocation = (input: SolarLocationInput): SolarResolvedLocation => {
   if ("city" in input) {
