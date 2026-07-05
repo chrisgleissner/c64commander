@@ -150,8 +150,9 @@ describe("QuickKeysBar", () => {
     fireEvent.click(screen.getByTestId("remote-input-key-commodore"));
     expect(handlers.onKey).toHaveBeenCalledWith(["commodore"]);
     fireEvent.click(screen.getByTestId("remote-input-key-shift-left"));
-    fireEvent.click(screen.getByTestId("remote-input-key-shift-right"));
     expect(handlers.onKey).toHaveBeenCalledWith(["left_shift"]);
+    fireEvent.click(screen.getByTestId("remote-input-key-shift-right"));
+    expect(handlers.onKey).toHaveBeenCalledWith(["right_shift"]);
     expect(handlers.onKey).toHaveBeenCalledTimes(4);
   });
 

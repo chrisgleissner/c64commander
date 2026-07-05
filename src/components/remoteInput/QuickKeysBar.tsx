@@ -253,7 +253,9 @@ export const QuickKeysBar = ({
           label: "SHIFT",
           tone: "shift",
           ariaLabel: "Right shift",
-          onPress: () => tapKey(["left_shift"]),
+          // Sends the distinct right_shift wire code (both C64 shift keys drive
+          // the same matrix line, but the label says "right", so match it).
+          onPress: () => tapKey(["right_shift"]),
           disabled: disabledNoFull,
           hint: UNAVAILABLE_HINT,
         })}
