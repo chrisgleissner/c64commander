@@ -24,14 +24,17 @@ export const toneButtonClass = (tone: KeyTone | undefined, latched = false): str
       // mode so the label stays legible (the theme's `destructive` is too dark).
       return "border-2 border-red-500 text-red-600 dark:border-red-400 dark:text-red-300 font-semibold";
     case "caution":
-      // RUN/STOP — shape (dashed border) + colour.
-      return "border-2 border-dashed border-amber-500 text-amber-600 dark:border-amber-400 dark:text-amber-300";
+      // RUN/STOP — shape (solid double border, like RESTORE's "danger" tone)
+      // + colour, using the theme's own warning token instead of a one-off
+      // dashed/raw-amber treatment.
+      return "border-2 border-warning text-warning font-semibold";
     case "shift":
-      // SHIFT / SHIFT LOCK — their own high-visibility violet, distinct from the
-      // C=/CTRL modifiers; a ring marks the latched (active) state.
+      // SHIFT / SHIFT LOCK — the app's primary blue (same token the rest of
+      // the UI uses for emphasis), distinct from the plain C=/CTRL modifiers
+      // via an always-on border/fill; a ring marks the latched (active) state.
       return cn(
-        "border-2 border-violet-500 bg-violet-500/10 text-violet-700 dark:border-violet-400 dark:text-violet-200 font-bold",
-        latched && "ring-2 ring-violet-500",
+        "border-2 border-primary bg-primary/10 text-primary font-bold",
+        latched && "ring-2 ring-primary",
       );
     case "character":
       // Ordinary typing keys (0-9, A-Z) — a calm sky tint that sets them apart

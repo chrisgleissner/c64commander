@@ -46,7 +46,7 @@ const chunk = <T,>(items: readonly T[], size: number): T[][] => {
 
 const toneVariant = (tone: KeyTone | undefined, latched: boolean): "default" | "secondary" | "outline" => {
   if (tone === "modifier") return latched ? "default" : "secondary";
-  // SHIFT/SHIFT-LOCK keep a light base so their violet colour reads; the latch
+  // SHIFT/SHIFT-LOCK keep a light base so their primary colour reads; the latch
   // ring (toneButtonClass) marks the active state.
   if (tone === "shift" || tone === "character" || tone === "function-primary") return "outline";
   if (tone === "action" || tone === "edit" || tone === "function" || tone === "caution" || tone === "danger") {

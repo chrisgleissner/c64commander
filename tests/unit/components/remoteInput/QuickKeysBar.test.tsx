@@ -178,9 +178,9 @@ describe("QuickKeysBar", () => {
   it("carries the shared caution affordance on RUN/STOP and keeps it clear of RETURN (HARD16-006)", () => {
     render(<QuickKeysBar {...makeHandlers()} tier="full" />);
     const runStop = screen.getByTestId("remote-input-key-run-stop");
-    // Caution affordance: shape (dashed border) + colour, matching the Keys tab.
-    expect(runStop.className).toContain("border-dashed");
-    expect(runStop.className).toContain("border-amber-500");
+    // Caution affordance: shape (solid double border) + colour, matching the Keys tab.
+    expect(runStop.className).toContain("border-2");
+    expect(runStop.className).toContain("border-warning");
     // RUN/STOP and RETURN share the top row but are never adjacent — CTRL and
     // SPACE sit between them, so a wide RETURN tap can never halt the program.
     const returnKey = screen.getByTestId("remote-input-key-return");
@@ -188,10 +188,10 @@ describe("QuickKeysBar", () => {
     expect(runStop.nextElementSibling).not.toBe(returnKey);
   });
 
-  it("colours both SHIFT keys with the shared violet shift treatment", () => {
+  it("colours both SHIFT keys with the shared primary shift treatment", () => {
     render(<QuickKeysBar {...makeHandlers()} tier="full" />);
     for (const id of ["remote-input-key-shift-left", "remote-input-key-shift-right"]) {
-      expect(screen.getByTestId(id).className, id).toMatch(/violet/);
+      expect(screen.getByTestId(id).className, id).toMatch(/border-primary/);
     }
   });
 });

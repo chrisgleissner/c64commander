@@ -125,9 +125,9 @@ export const QuickKeysBar = ({
 
   return (
     <div className={cn("flex flex-col gap-1.5", className)} data-testid="remote-input-quick-keys-bar">
-      {/* Row 1: RUN/STOP · CTRL · SPACE · RETURN. RUN/STOP keeps the dashed-amber
-          caution treatment (shape + colour, never colour alone) it has on the
-          Keys tab so a mistap can never look ordinary. */}
+      {/* Row 1: RUN/STOP · CTRL · SPACE · RETURN. RUN/STOP keeps the double-border
+          warning-token caution treatment (shape + colour, never colour alone)
+          it has on the Keys tab so a mistap can never look ordinary. */}
       <div className="flex gap-1.5">
         {keyBtn({
           testId: "remote-input-key-run-stop",
@@ -223,7 +223,7 @@ export const QuickKeysBar = ({
       </div>
 
       {/* Row 5: the physical bottom row — C= · SHIFT · SPACE · SHIFT. Both SHIFTs
-          carry the same violet treatment as everywhere else. */}
+          carry the same primary-token treatment as everywhere else. */}
       <div className="flex gap-1.5">
         {keyBtn({
           testId: "remote-input-key-commodore",
