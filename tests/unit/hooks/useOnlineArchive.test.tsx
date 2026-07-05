@@ -138,6 +138,60 @@ describe("useOnlineArchive", () => {
     second.unmount();
   });
 
+  it("does not create an unhandled rejection when a mount aborts before the shared preset refresh settles (HARD9-080)", async () => {
+    // Regression: the shared refresh promise's own .catch rethrew whenever
+    // ANY subscriber's controller had aborted (e.g. the dialog was closed
+    // while the 10s preset fetch was still in flight), rejecting the
+    // SHARED promise - every mount's un-caught `.then().finally()` consumer
+    // chain then rejected unhandled, and presetRefreshStatus never reached
+    // "settled". A real getPresets() call would itself fail (e.g. with an
+    // AbortError) once its own request is torn down mid-flight, so this
+    // simulates that with a rejection rather than a successful resolve.
+    let rejectGetPresets!: (reason: unknown) => void;
+    const deferred = new Promise<Array<{ type: string; description: string; values: never[] }>>((_, reject) => {
+      rejectGetPresets = reject;
+    });
+    const client = {
+      getPresets: vi.fn().mockReturnValue(deferred),
+      search: vi.fn(),
+      getEntries: vi.fn(),
+      getBinaryUrl: vi.fn(),
+      downloadBinary: vi.fn(),
+      getResolvedConfig: vi.fn(),
+    };
+    const spy = vi.spyOn(archiveClient, "createArchiveClient").mockReturnValue(client as never);
+
+    const unhandledRejections: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown) => unhandledRejections.push(reason);
+    process.on("unhandledRejection", onUnhandledRejection);
+
+    try {
+      const { unmount } = renderHook(() => useOnlineArchive(buildDefaultArchiveClientConfig()));
+      // Unmount (aborting this mount's controller) BEFORE the shared refresh settles.
+      unmount();
+
+      rejectGetPresets(new DOMException("Aborted", "AbortError"));
+      await flushArchivePresetRefresh();
+      // A real macrotask tick, giving Node's unhandled-rejection detection a
+      // chance to fire before asserting on it.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(unhandledRejections).toEqual([]);
+
+      // The shared promise must have settled correctly (not stuck
+      // "pending") so a subsequent mount for the same config reuses the
+      // cached result instead of re-fetching.
+      const second = renderHook(() => useOnlineArchive(buildDefaultArchiveClientConfig()));
+      await waitFor(() => expect(second.result.current.presetsLoading).toBe(false));
+      expect(client.getPresets).toHaveBeenCalledTimes(1);
+      second.unmount();
+    } finally {
+      process.off("unhandledRejection", onUnhandledRejection);
+    }
+
+    spy.mockRestore();
+  });
+
   it("keeps the seeded presets visible until the background refresh completes", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-29T12:00:00Z"));

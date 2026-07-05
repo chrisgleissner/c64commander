@@ -178,6 +178,12 @@ export const resetHvscLibraryData = async (): Promise<void> => {
     ingestionState: "idle",
     ingestionError: null,
     ingestionSummary: null,
+    // Per-version "update already applied" records from the previous install
+    // must not survive a reset - updateHvscState keeps the existing
+    // `updates` map when the patch omits it, so without this every
+    // incremental update would be skipped forever on reinstall ("Update N
+    // already applied"), permanently stuck at the baseline. See HARD9-014.
+    updates: {},
   });
   saveHvscStatusSummary(getDefaultHvscStatusSummary());
   resetHvscProgressSummaryStage();
@@ -232,6 +238,12 @@ export const buildIngestionFailureMessage = (failedSongs: number, totalSongs: nu
  * Shared helper: apply the canonical success state.  Both native and non-native paths
  * must call this so the `ingestionSummary` shape and `ingestionState` = 'ready' contract
  * are enforced at the facade boundary.
+ *
+ * Refuses to overwrite a cancelled state: cancellation is checked cooperatively at each
+ * stage boundary elsewhere in the pipeline, but the gap between the last check and this
+ * call (deletion loop, directory promotion, songlengths reload, finalize) is where a
+ * late-arriving cancel could otherwise still flip "Cancelled" back to "ready". See
+ * HARD9-084.
  */
 export const applyIngestionSuccess = ({
   plan,
@@ -241,6 +253,8 @@ export const applyIngestionSuccess = ({
   ingestedSongs,
   failedSongs,
   failedPaths,
+  cancelToken,
+  cancelTokens,
 }: {
   plan: { type: "baseline" | "update"; version: number };
   baselineInstalled: number | null;
@@ -249,7 +263,10 @@ export const applyIngestionSuccess = ({
   ingestedSongs: number;
   failedSongs: number;
   failedPaths: string[];
+  cancelToken: string;
+  cancelTokens: Map<string, { cancelled: boolean }>;
 }) => {
+  ensureNotCancelledWith(cancelTokens, cancelToken, (patch) => updateHvscState(patch as Partial<HvscState>));
   updateHvscState({
     installedBaselineVersion: baselineInstalled,
     installedVersion: plan.version,
@@ -264,6 +281,12 @@ export const applyIngestionSuccess = ({
       completedAt: new Date().toISOString(),
       archiveName,
     },
+    // A fresh baseline install invalidates any "update already applied"
+    // records from whatever library was there before - those version
+    // numbers were layered on top of the OLD baseline. Without this, a
+    // direct baseline reinstall (not preceded by an explicit reset) hits
+    // the same permanently-stuck-skipping-updates bug as HARD9-014.
+    ...(plan.type === "baseline" ? { updates: {} } : {}),
   });
 };
 
@@ -495,11 +518,19 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
     );
   }
   pipeline.transition("EXTRACTED");
+  ensureNotCancelledLocal();
 
   pipeline.transition("INGESTING", { deletionCount: deletions.length });
   const deletionFailures: string[] = [];
   if (deletions.length) {
     for (const path of deletions) {
+      // Extraction is the only stage that checked cancellation (inside onEntry);
+      // everything after it - this deletion loop (up to thousands of round-trips
+      // on a large update), directory promotion, songlengths reload, and
+      // finalize - used to run unconditionally to completion even after cancel,
+      // so "Cancelled" in the UI coexisted with an ingest still mutating the
+      // library. See HARD9-084.
+      ensureNotCancelledLocal();
       try {
         await deleteLibraryFile(path);
         browseIndex.deleteSong(path);
@@ -531,10 +562,39 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
     );
   }
 
+  ensureNotCancelledLocal();
   if (plan.type === "baseline") {
     await promoteLibraryStagingDir();
   }
 
+  ensureNotCancelledLocal();
+  // Persist browseIndex (fileName/sidMetadata/trackSubsongs parsed during
+  // extraction) *before* the songlengths reload below, so the songlengths
+  // projection sync - which now merges durations onto whatever is already
+  // persisted rather than overwriting it wholesale - is the last write and
+  // ends up with both duration data and the freshly-parsed metadata. Doing
+  // this the other way around (as before) let the songlengths reload persist
+  // durations first, only for this finalize() to immediately clobber them
+  // with a duration-less snapshot. See HARD9-046.
+  const indexBuildPerfScope = beginHvscPerfScope("ingest:index-build", {
+    archiveName,
+    archiveType: plan.type,
+    archiveVersion: plan.version,
+  });
+  let indexBuildPerfError: Error | null = null;
+  try {
+    await browseIndex.finalize();
+  } catch (error) {
+    indexBuildPerfError = error as Error;
+    throw error;
+  } finally {
+    endHvscPerfScope(
+      indexBuildPerfScope,
+      indexBuildPerfError ? { outcome: "error", errorMessage: indexBuildPerfError.message } : { outcome: "success" },
+    );
+  }
+
+  ensureNotCancelledLocal();
   resetSonglengthsCache();
   const songlengthsPerfScope = beginHvscPerfScope("ingest:songlengths", {
     archiveName,
@@ -579,24 +639,6 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
     });
   }
 
-  const indexBuildPerfScope = beginHvscPerfScope("ingest:index-build", {
-    archiveName,
-    archiveType: plan.type,
-    archiveVersion: plan.version,
-  });
-  let indexBuildPerfError: Error | null = null;
-  try {
-    await browseIndex.finalize();
-  } catch (error) {
-    indexBuildPerfError = error as Error;
-    throw error;
-  } finally {
-    endHvscPerfScope(
-      indexBuildPerfScope,
-      indexBuildPerfError ? { outcome: "error", errorMessage: indexBuildPerfError.message } : { outcome: "success" },
-    );
-  }
-
   applyIngestionSuccess({
     plan,
     baselineInstalled,
@@ -605,6 +647,8 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
     ingestedSongs: ingestionSummary.ingestedSongs,
     failedSongs: ingestionSummary.failedSongs,
     failedPaths: ingestionSummary.failedPaths,
+    cancelToken,
+    cancelTokens,
   });
   if (plan.type === "update") {
     markUpdateApplied(plan.version, "success");
@@ -771,6 +815,8 @@ const ingestArchivePathNative = async (options: {
       ingestedSongs: result.songsIngested,
       failedSongs: result.failedSongs,
       failedPaths: result.failedPaths,
+      cancelToken,
+      cancelTokens: runtimeState.cancelTokens,
     });
 
     if (plan.type === "update") {

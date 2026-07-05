@@ -8,6 +8,8 @@
 
 import {
   buildPlaylistItemId,
+  buildSubsongSwitchItem,
+  shouldDetachPlaybackOnSavedDeviceSwitch,
   applyDurationOverrideToPlaylist,
   formatTime,
   formatBytes,
@@ -28,6 +30,14 @@ import {
   parseModifiedAt,
   extractAudioMixerItems,
   shuffleArray,
+  isPlaybackSessionRestoreStale,
+  SESSION_RESTORE_STALE_MS,
+  seededShuffleIds,
+  generateShuffleSeed,
+  resolveNextPlaylistIndex,
+  resolvePreviousPlaylistIndex,
+  canAdvanceNext,
+  canAdvancePrevious,
   DURATION_MIN_SECONDS,
   DURATION_MAX_SECONDS,
 } from "@/pages/playFiles/playFilesUtils";
@@ -186,7 +196,11 @@ describe("playFilesUtils", () => {
   });
 
   describe("applyDurationOverrideToPlaylist", () => {
-    const createPlaylistItem = (id: string, durationMs: number | undefined): PlaylistItem => ({
+    const createPlaylistItem = (
+      id: string,
+      durationMs: number | undefined,
+      durationSource?: "default" | null,
+    ): PlaylistItem => ({
       id,
       request: {
         source: "ultimate",
@@ -196,6 +210,7 @@ describe("playFilesUtils", () => {
       label: id,
       path: `/${id}.sid`,
       durationMs,
+      durationSource,
       sourceId: null,
       sizeBytes: null,
       modifiedAt: null,
@@ -209,21 +224,198 @@ describe("playFilesUtils", () => {
       subsongCount: null,
     });
 
-    it("updates every playlist item's duration", () => {
-      const first = createPlaylistItem("first", 180_000);
-      const second = createPlaylistItem("second", 90_000);
-      const playlist = [first, second];
+    it("fills unresolved items and tags them as default-sourced", () => {
+      const unresolved = createPlaylistItem("unresolved", undefined);
+      const playlist = [unresolved];
 
       const updated = applyDurationOverrideToPlaylist(playlist, 12_000);
 
-      expect(updated[0]).toEqual({ ...first, durationMs: 12_000 });
-      expect(updated[1]).toEqual({ ...second, durationMs: 12_000 });
+      expect(updated[0]).toEqual({ ...unresolved, durationMs: 12_000, durationSource: "default" });
     });
 
-    it("returns the original playlist when every duration already matches", () => {
-      const playlist = [createPlaylistItem("first", 12_000), createPlaylistItem("second", 12_000)];
+    it("keeps updating an item that was previously default-sourced", () => {
+      const previouslyDefaulted = createPlaylistItem("defaulted", 90_000, "default");
+      const playlist = [previouslyDefaulted];
+
+      const updated = applyDurationOverrideToPlaylist(playlist, 12_000);
+
+      expect(updated[0]).toEqual({ ...previouslyDefaulted, durationMs: 12_000, durationSource: "default" });
+    });
+
+    it("never clobbers an item whose duration was resolved from metadata", () => {
+      const resolved = createPlaylistItem("resolved", 180_000);
+      const playlist = [resolved];
+
+      const updated = applyDurationOverrideToPlaylist(playlist, 12_000);
+
+      expect(updated).toBe(playlist);
+      expect(updated[0]).toBe(resolved);
+    });
+
+    it("only updates unresolved/default items in a mixed playlist, leaving resolved items untouched", () => {
+      const resolved = createPlaylistItem("resolved", 180_000);
+      const unresolved = createPlaylistItem("unresolved", undefined);
+      const playlist = [resolved, unresolved];
+
+      const updated = applyDurationOverrideToPlaylist(playlist, 12_000);
+
+      expect(updated[0]).toBe(resolved);
+      expect(updated[1]).toEqual({ ...unresolved, durationMs: 12_000, durationSource: "default" });
+    });
+
+    it("returns the original playlist when every eligible duration already matches", () => {
+      const playlist = [createPlaylistItem("resolved", 12_000), createPlaylistItem("defaulted", 12_000, "default")];
 
       expect(applyDurationOverrideToPlaylist(playlist, 12_000)).toBe(playlist);
+    });
+  });
+
+  describe("shouldDetachPlaybackOnSavedDeviceSwitch (HARD11-002)", () => {
+    it("does not detach on the initial observation (component mount)", () => {
+      expect(
+        shouldDetachPlaybackOnSavedDeviceSwitch({
+          previousDeviceId: null,
+          nextDeviceId: "device-a",
+          isPlaying: true,
+          isPaused: false,
+        }),
+      ).toBe(false);
+    });
+
+    it("does not detach when re-selecting the same device", () => {
+      expect(
+        shouldDetachPlaybackOnSavedDeviceSwitch({
+          previousDeviceId: "device-a",
+          nextDeviceId: "device-a",
+          isPlaying: true,
+          isPaused: false,
+        }),
+      ).toBe(false);
+    });
+
+    it("does not detach on a real device change while nothing is playing", () => {
+      expect(
+        shouldDetachPlaybackOnSavedDeviceSwitch({
+          previousDeviceId: "device-a",
+          nextDeviceId: "device-b",
+          isPlaying: false,
+          isPaused: false,
+        }),
+      ).toBe(false);
+    });
+
+    it("detaches on a real device change while playing", () => {
+      expect(
+        shouldDetachPlaybackOnSavedDeviceSwitch({
+          previousDeviceId: "device-a",
+          nextDeviceId: "device-b",
+          isPlaying: true,
+          isPaused: false,
+        }),
+      ).toBe(true);
+    });
+
+    it("detaches on a real device change while paused", () => {
+      expect(
+        shouldDetachPlaybackOnSavedDeviceSwitch({
+          previousDeviceId: "device-a",
+          nextDeviceId: "device-b",
+          isPlaying: false,
+          isPaused: true,
+        }),
+      ).toBe(true);
+    });
+  });
+
+  describe("buildSubsongSwitchItem (HARD11-004)", () => {
+    const createSubsongItem = (overrides: Partial<PlaylistItem> = {}): PlaylistItem => ({
+      id: "demo",
+      request: { source: "ultimate", path: "/MUSICIANS/Test/demo.sid", songNr: 1 },
+      category: "sid",
+      label: "demo.sid",
+      path: "/MUSICIANS/Test/demo.sid",
+      durationMs: 30_000,
+      durationSource: null,
+      subsongCount: 3,
+      sourceId: null,
+      sizeBytes: null,
+      modifiedAt: null,
+      addedAt: null,
+      status: "ready",
+      unavailableReason: null,
+      ...overrides,
+    });
+
+    it("strips a resolved duration so playItem re-resolves it for the new subsong", () => {
+      const item = createSubsongItem({ durationMs: 30_000, durationSource: null });
+
+      const next = buildSubsongSwitchItem(item, 3, 3);
+
+      expect(next.request.songNr).toBe(3);
+      expect(next.durationMs).toBeUndefined();
+      expect(next.durationSource).toBeNull();
+    });
+
+    it("preserves a manual default-duration override across a subsong switch", () => {
+      const item = createSubsongItem({ durationMs: 60_000, durationSource: "default" });
+
+      const next = buildSubsongSwitchItem(item, 2, 3);
+
+      expect(next.request.songNr).toBe(2);
+      expect(next.durationMs).toBe(60_000);
+      expect(next.durationSource).toBe("default");
+    });
+
+    it("clamps the requested songNr to the known subsong count", () => {
+      const item = createSubsongItem();
+
+      expect(buildSubsongSwitchItem(item, 99, 3).request.songNr).toBe(3);
+      expect(buildSubsongSwitchItem(item, 0, 3).request.songNr).toBe(1);
+      expect(buildSubsongSwitchItem(item, -5, 3).request.songNr).toBe(1);
+    });
+
+    it("clamps to at least 1 when the subsong count is unknown", () => {
+      const item = createSubsongItem();
+
+      expect(buildSubsongSwitchItem(item, 0, null).request.songNr).toBe(1);
+      expect(buildSubsongSwitchItem(item, 7, null).request.songNr).toBe(7);
+    });
+
+    it("does not mutate the original item", () => {
+      const item = createSubsongItem();
+      const before = { ...item, request: { ...item.request } };
+
+      buildSubsongSwitchItem(item, 2, 3);
+
+      expect(item).toEqual(before);
+    });
+  });
+
+  describe("isPlaybackSessionRestoreStale", () => {
+    it("is not stale just under the threshold", () => {
+      const now = 10_000_000;
+      const updatedAt = new Date(now - SESSION_RESTORE_STALE_MS + 1).toISOString();
+      expect(isPlaybackSessionRestoreStale(updatedAt, now)).toBe(false);
+    });
+
+    it("is stale once past the threshold", () => {
+      const now = 10_000_000;
+      const updatedAt = new Date(now - SESSION_RESTORE_STALE_MS - 1).toISOString();
+      expect(isPlaybackSessionRestoreStale(updatedAt, now)).toBe(true);
+    });
+
+    it("honors a custom staleAfterMs override", () => {
+      const now = 10_000_000;
+      const updatedAt = new Date(now - 1_000).toISOString();
+      expect(isPlaybackSessionRestoreStale(updatedAt, now, 500)).toBe(true);
+      expect(isPlaybackSessionRestoreStale(updatedAt, now, 5_000)).toBe(false);
+    });
+
+    it("treats a missing or unparseable timestamp as stale", () => {
+      const now = 10_000_000;
+      expect(isPlaybackSessionRestoreStale(null, now)).toBe(true);
+      expect(isPlaybackSessionRestoreStale(undefined, now)).toBe(true);
+      expect(isPlaybackSessionRestoreStale("not-a-date", now)).toBe(true);
     });
   });
 
@@ -319,6 +511,190 @@ describe("playFilesUtils", () => {
 
     it("shuffles single element", () => {
       expect(shuffleArray([1])).toEqual([1]);
+    });
+  });
+
+  describe("shuffle playback order (HARD9-007)", () => {
+    const shuffleItem = (id: string): PlaylistItem => ({
+      id,
+      request: { source: "ultimate", path: `/${id}.sid` },
+      category: "sid",
+      label: id,
+      path: `/${id}.sid`,
+    });
+    const playlist = [shuffleItem("a"), shuffleItem("b"), shuffleItem("c"), shuffleItem("d"), shuffleItem("e")];
+
+    describe("generateShuffleSeed", () => {
+      it("returns an integer within the 32-bit unsigned range", () => {
+        const seed = generateShuffleSeed();
+        expect(Number.isInteger(seed)).toBe(true);
+        expect(seed).toBeGreaterThanOrEqual(0);
+        expect(seed).toBeLessThan(0x100000000);
+      });
+    });
+
+    describe("seededShuffleIds", () => {
+      it("is deterministic for the same ids and seed", () => {
+        const ids = playlist.map((item) => item.id);
+        expect(seededShuffleIds(ids, 42)).toEqual(seededShuffleIds(ids, 42));
+      });
+
+      it("does not mutate the input array", () => {
+        const ids = playlist.map((item) => item.id);
+        const copy = [...ids];
+        seededShuffleIds(ids, 42);
+        expect(ids).toEqual(copy);
+      });
+
+      it("returns a permutation of the input ids", () => {
+        const ids = playlist.map((item) => item.id);
+        const order = seededShuffleIds(ids, 7);
+        expect([...order].sort()).toEqual([...ids].sort());
+      });
+
+      it("produces a different order for a different seed (statistically, for this fixture)", () => {
+        const ids = playlist.map((item) => item.id);
+        expect(seededShuffleIds(ids, 1)).not.toEqual(seededShuffleIds(ids, 2));
+      });
+    });
+
+    describe("resolveNextPlaylistIndex", () => {
+      it("falls back to linear traversal when shuffle is disabled", () => {
+        expect(resolveNextPlaylistIndex(playlist, 0, false, false, null)).toBe(1);
+      });
+
+      it("falls back to linear traversal when shuffle is enabled but no seed exists yet", () => {
+        expect(resolveNextPlaylistIndex(playlist, 0, false, true, null)).toBe(1);
+      });
+
+      it("returns null at the end of a non-repeating linear playlist", () => {
+        expect(resolveNextPlaylistIndex(playlist, playlist.length - 1, false, false, null)).toBeNull();
+      });
+
+      it("wraps to the start of a repeating linear playlist", () => {
+        expect(resolveNextPlaylistIndex(playlist, playlist.length - 1, true, false, null)).toBe(0);
+      });
+
+      it("walks the seeded shuffle order instead of the curated array order", () => {
+        const seed = 1234;
+        const order = seededShuffleIds(
+          playlist.map((item) => item.id),
+          seed,
+        );
+        const startIndex = playlist.findIndex((item) => item.id === order[0]);
+        const expectedNextIndex = playlist.findIndex((item) => item.id === order[1]);
+
+        expect(resolveNextPlaylistIndex(playlist, startIndex, false, true, seed)).toBe(expectedNextIndex);
+      });
+
+      it("returns null at the end of a non-repeating shuffle order", () => {
+        const seed = 1234;
+        const order = seededShuffleIds(
+          playlist.map((item) => item.id),
+          seed,
+        );
+        const lastIndex = playlist.findIndex((item) => item.id === order[order.length - 1]);
+
+        expect(resolveNextPlaylistIndex(playlist, lastIndex, false, true, seed)).toBeNull();
+      });
+
+      it("wraps to the start of a repeating shuffle order", () => {
+        const seed = 1234;
+        const order = seededShuffleIds(
+          playlist.map((item) => item.id),
+          seed,
+        );
+        const lastIndex = playlist.findIndex((item) => item.id === order[order.length - 1]);
+        const firstIndex = playlist.findIndex((item) => item.id === order[0]);
+
+        expect(resolveNextPlaylistIndex(playlist, lastIndex, true, true, seed)).toBe(firstIndex);
+      });
+
+      it("never reorders the curated playlist array it is given", () => {
+        const before = [...playlist];
+        resolveNextPlaylistIndex(playlist, 0, false, true, 999);
+        expect(playlist).toEqual(before);
+      });
+    });
+
+    describe("resolvePreviousPlaylistIndex", () => {
+      it("falls back to linear traversal when shuffle is disabled", () => {
+        expect(resolvePreviousPlaylistIndex(playlist, 2, false, false, null)).toBe(1);
+      });
+
+      it("clamps to the start of a non-repeating linear playlist", () => {
+        expect(resolvePreviousPlaylistIndex(playlist, 0, false, false, null)).toBe(0);
+      });
+
+      it("wraps to the end of a repeating linear playlist", () => {
+        expect(resolvePreviousPlaylistIndex(playlist, 0, true, false, null)).toBe(playlist.length - 1);
+      });
+
+      it("walks the seeded shuffle order backward instead of the curated array order", () => {
+        const seed = 1234;
+        const order = seededShuffleIds(
+          playlist.map((item) => item.id),
+          seed,
+        );
+        const startIndex = playlist.findIndex((item) => item.id === order[1]);
+        const expectedPrevIndex = playlist.findIndex((item) => item.id === order[0]);
+
+        expect(resolvePreviousPlaylistIndex(playlist, startIndex, false, true, seed)).toBe(expectedPrevIndex);
+      });
+
+      it("clamps to the start of a non-repeating shuffle order", () => {
+        const seed = 1234;
+        const order = seededShuffleIds(
+          playlist.map((item) => item.id),
+          seed,
+        );
+        const firstIndex = playlist.findIndex((item) => item.id === order[0]);
+
+        expect(resolvePreviousPlaylistIndex(playlist, firstIndex, false, true, seed)).toBe(firstIndex);
+      });
+    });
+
+    describe("transport enablement", () => {
+      it("enables next when the linear-last item is mid-shuffle-order", () => {
+        const seed = 1234;
+        const order = seededShuffleIds(
+          playlist.map((item) => item.id),
+          seed,
+        );
+        const linearLast = playlist[playlist.length - 1];
+        const linearLastPosition = order.indexOf(linearLast.id);
+        expect(linearLastPosition).toBeGreaterThanOrEqual(0);
+        if (linearLastPosition === order.length - 1) {
+          throw new Error("fixture seed puts the linear-last item at the shuffle end");
+        }
+
+        expect(canAdvanceNext(playlist, playlist.length - 1, false, true, seed)).toBe(true);
+      });
+
+      it("enables previous when the linear-first item is mid-shuffle-order", () => {
+        const seed = 1234;
+        const order = seededShuffleIds(
+          playlist.map((item) => item.id),
+          seed,
+        );
+        const linearFirstPosition = order.indexOf(playlist[0].id);
+        expect(linearFirstPosition).toBeGreaterThan(0);
+
+        expect(canAdvancePrevious(playlist, 0, false, true, seed)).toBe(true);
+      });
+
+      it("disables next and previous at genuine non-repeating shuffle-order boundaries", () => {
+        const seed = 1234;
+        const order = seededShuffleIds(
+          playlist.map((item) => item.id),
+          seed,
+        );
+        const firstIndex = playlist.findIndex((item) => item.id === order[0]);
+        const lastIndex = playlist.findIndex((item) => item.id === order[order.length - 1]);
+
+        expect(canAdvancePrevious(playlist, firstIndex, false, true, seed)).toBe(false);
+        expect(canAdvanceNext(playlist, lastIndex, false, true, seed)).toBe(false);
+      });
     });
   });
 });

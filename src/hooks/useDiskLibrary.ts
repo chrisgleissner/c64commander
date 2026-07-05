@@ -47,14 +47,34 @@ export type DiskLibrary = {
   getDiskById: (diskId: string) => DiskEntry | undefined;
 };
 
+// disks is bundled with the uniqueId it was loaded for and updated
+// atomically (single setState call). Without this, a separate `disks`
+// state read by the save effect lags the load effect's setDisks by one
+// render: on a uniqueId change, both effects fire in the same commit, so
+// the save effect would still see the PREVIOUS device's disks paired with
+// the NEW uniqueId and persist that stale/wrong pairing (usually corrected
+// a render later, but a fast unmount or app kill in that window wipes or
+// cross-contaminates the library). Reading libraryState.uniqueId lets the
+// save effect detect and skip exactly that transitional render. See
+// HARD9-048.
+type DiskLibraryState = { uniqueId: string | null; disks: DiskEntry[] };
+
 export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
-  const [disks, setDisks] = useState<DiskEntry[]>([]);
+  const [libraryState, setLibraryState] = useState<DiskLibraryState>({ uniqueId: null, disks: [] });
   const [runtimeFiles, setRuntimeFiles] = useState<Record<string, File>>({});
   const [filter, setFilter] = useState("");
+  const disks = libraryState.disks;
+
+  const setDisks = useCallback((updater: DiskEntry[] | ((prev: DiskEntry[]) => DiskEntry[])) => {
+    setLibraryState((prev) => ({
+      uniqueId: prev.uniqueId,
+      disks: typeof updater === "function" ? (updater as (prev: DiskEntry[]) => DiskEntry[])(prev.disks) : updater,
+    }));
+  }, []);
 
   useEffect(() => {
     if (!uniqueId) {
-      setDisks([]);
+      setLibraryState({ uniqueId: null, disks: [] });
       setRuntimeFiles({});
       return;
     }
@@ -64,14 +84,15 @@ export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
       importedAt: disk.importedAt || new Date().toISOString(),
       importOrder: disk.importOrder ?? null,
     }));
-    setDisks(normalized);
+    setLibraryState({ uniqueId, disks: normalized });
     setRuntimeFiles({});
   }, [uniqueId]);
 
   useEffect(() => {
     if (!uniqueId) return;
-    saveDiskLibrary(uniqueId, { disks });
-  }, [disks, uniqueId]);
+    if (libraryState.uniqueId !== uniqueId) return;
+    saveDiskLibrary(uniqueId, { disks: libraryState.disks });
+  }, [libraryState, uniqueId]);
 
   const addDisks = useCallback(
     (entries: DiskEntry[], runtime: Record<string, File> = {}, options?: AddDisksOptions) => {

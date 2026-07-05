@@ -34,7 +34,13 @@ import type { TelnetActionSupport } from "@/lib/telnet/telnetCapabilityDiscovery
 
 import { buildBusIdOptions, buildTypeOptions } from "@/lib/drives/driveDevices";
 import { readItemOptions, buildConfigKey } from "../utils/HomeConfigUtils";
-import { DISK_BUS_ID_DEFAULTS, PHYSICAL_DRIVE_TYPE_DEFAULTS } from "../constants";
+import { DISK_BUS_ID_DEFAULTS } from "../constants";
+import {
+  buildOptionDomainKey,
+  useDeviceConfigOptionDomains,
+  type DeviceConfigDomain,
+  type DeviceConfigItemRef,
+} from "../hooks/useDeviceConfigOptionDomains";
 
 const resolveDriveStatusRaw = (value?: string | null) => {
   const message = value?.trim() ?? "";
@@ -126,6 +132,28 @@ export function DriveManager({
     driveSummaryItems,
     drivesByClass,
   } = useDriveData(isConnected);
+
+  // Bus-ID ranges and drive-type choices are interrogated from the concrete device (cached
+  // per-firmware): each drive's Bus ID is a numeric min/max range (e.g. Soft IEC accepts 8-30,
+  // not just 8-11), and Drive Type is a device enum — neither is assumed from a hard-coded list.
+  const optionDomainRefs = useMemo<DeviceConfigItemRef[]>(
+    () =>
+      DRIVE_CONTROL_SPECS.flatMap((spec) => {
+        const refs: DeviceConfigItemRef[] = [{ category: spec.category, item: spec.busItem }];
+        if (spec.typeItem) refs.push({ category: spec.category, item: spec.typeItem });
+        return refs;
+      }),
+    [],
+  );
+  const optionDomains = useDeviceConfigOptionDomains("home-drives", optionDomainRefs, isConnected);
+  const resolveBusIdDefaults = (domain: DeviceConfigDomain | undefined): number[] => {
+    if (domain?.min !== undefined && domain.max !== undefined && domain.max >= domain.min) {
+      return Array.from({ length: domain.max - domain.min + 1 }, (_, index) => domain.min! + index);
+    }
+    // HARD16-011 doctrine exception: numeric IEC bus range, low divergence risk;
+    // the current value is merged in and the device min/max wins once resolved.
+    return [...DISK_BUS_ID_DEFAULTS];
+  };
 
   const [mountTarget, setMountTarget] = useState<{
     spec: DriveControlSpec;
@@ -281,7 +309,8 @@ export function DriveManager({
           const busFallback =
             device?.busId ?? (spec.class === "PHYSICAL_DRIVE_A" ? 8 : spec.class === "PHYSICAL_DRIVE_B" ? 9 : 11);
           const busValue = Number(resolveConfigValue(payload, spec.category, spec.busItem, busFallback));
-          const busOptions = buildBusIdOptions(DISK_BUS_ID_DEFAULTS, Number.isFinite(busValue) ? busValue : null);
+          const busDefaults = resolveBusIdDefaults(optionDomains[buildOptionDomainKey(spec.category, spec.busItem)]);
+          const busOptions = buildBusIdOptions(busDefaults, Number.isFinite(busValue) ? busValue : null);
 
           const typeValue = spec.typeItem
             ? String(resolveConfigValue(payload, spec.category, spec.typeItem, device?.type ?? "1541"))
@@ -290,9 +319,22 @@ export function DriveManager({
           const rawTypeOptions = spec.typeItem
             ? readItemOptions(payload, spec.category, spec.typeItem).map((value) => String(value))
             : [];
+          const domainTypeOptions = spec.typeItem
+            ? optionDomains[buildOptionDomainKey(spec.category, spec.typeItem)]?.options
+            : undefined;
 
+          // HARD16-011: Drive Type is a model-diverging string enum, so when the
+          // device has not reported its values, fall back to the current value
+          // only (buildTypeOptions merges typeValue) — never a fabricated list.
           const typeOptions = spec.typeItem
-            ? buildTypeOptions(rawTypeOptions.length ? rawTypeOptions : PHYSICAL_DRIVE_TYPE_DEFAULTS, typeValue)
+            ? buildTypeOptions(
+                rawTypeOptions.length
+                  ? rawTypeOptions
+                  : domainTypeOptions && domainTypeOptions.length
+                    ? domainTypeOptions
+                    : [],
+                typeValue,
+              )
             : [typeValue];
 
           const isSoftIec = spec.class === "SOFT_IEC_DRIVE";

@@ -520,6 +520,7 @@ vi.mock("@/hooks/useC64Connection", () => ({
   useC64Connection: () => ({
     status: statusPayloadRef.current,
   }),
+  useConnectionRoutingEpoch: () => 0,
   useC64Drives: () => ({
     data: drivesPayloadRef.current,
     refetch: vi.fn().mockImplementation(() => queryClientMockRef.current.fetchQuery()),
@@ -1165,6 +1166,10 @@ describe("HomePage SID status", () => {
 
   it("renders exactly seven machine controls with one pause-resume control", async () => {
     featureFlagsRef.current.home_telnet_reu_snapshot_enabled = false;
+    // remote_input_enabled is default-on in the real registry (Remote Input is no
+    // longer developer-only); force it off here so the Remote Control overflow
+    // action doesn't perturb this machine-controls count.
+    featureFlagsRef.current.remote_input_enabled = false;
     // Integrated computer (core_version present) → Power Off is part of the quick actions.
     statusPayloadRef.current.deviceInfo = {
       product: "Ultimate 64 Elite",

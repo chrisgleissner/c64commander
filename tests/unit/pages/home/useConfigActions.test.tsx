@@ -9,6 +9,9 @@ const toastMock = vi.fn();
 const reportUserErrorMock = vi.fn();
 const buildConfigKeyMock = vi.fn((category: string, itemName: string) => `${category}:${itemName}`);
 const readItemValueMock = vi.fn();
+const updateHasChangesMock = vi.fn();
+const getActiveBaseUrlMock = vi.fn(() => "http://c64u");
+const routingEpochRef = vi.hoisted(() => ({ current: 0 }));
 
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({
@@ -45,6 +48,15 @@ vi.mock("@/lib/uiErrors", () => ({
   reportUserError: (...args: unknown[]) => reportUserErrorMock(...args),
 }));
 
+vi.mock("@/lib/config/appConfigStore", () => ({
+  getActiveBaseUrl: (...args: unknown[]) => getActiveBaseUrlMock(...args),
+  updateHasChanges: (...args: unknown[]) => updateHasChangesMock(...args),
+}));
+
+vi.mock("@/hooks/useC64Connection", () => ({
+  useConnectionRoutingEpoch: () => routingEpochRef.current,
+}));
+
 import { useConfigActions } from "@/pages/home/hooks/useConfigActions";
 
 describe("useConfigActions", () => {
@@ -53,6 +65,43 @@ describe("useConfigActions", () => {
     setConfigValueMock.mockResolvedValue(undefined);
     getDrivesMock.mockResolvedValue({});
     readItemValueMock.mockReturnValue(undefined);
+    routingEpochRef.current = 0;
+  });
+
+  it("clears every optimistic pin when the connection routing epoch changes (HARD9-052)", async () => {
+    // Regression: a device switch or reconnect bumps routingEpoch and
+    // re-keys every config query against the new device. A pin from the
+    // previous device can never echo back from a different device -
+    // ConfigBrowserPage already clears all pins on this signal (BUG-033);
+    // Home's store had no equivalent, so the row would stay latched (and
+    // disabled) on the new device forever.
+    const { result, rerender } = renderHook(() => useConfigActions());
+
+    await act(async () => {
+      await result.current.updateConfigValue("Video", "Mode", "NTSC", "HOME_CONFIG_UPDATE", "Updated");
+    });
+    expect(result.current.configWritePending).toEqual({ "Video:Mode": true });
+
+    routingEpochRef.current = 1;
+    rerender();
+
+    expect(result.current.configWritePending).toEqual({});
+    expect(result.current.configOverrides).toEqual({});
+  });
+
+  it("marks the app config as changed on a successful write so Revert Changes becomes enabled (HARD9-051)", async () => {
+    // Regression: this hook called api.setConfigValue directly, bypassing
+    // useC64SetConfig/useC64UpdateConfigBatch (which both call
+    // updateHasChanges on success). Video Mode, Turbo Control, SID address,
+    // UltiSID filter, and lighting selects on Home never enabled "Revert
+    // Changes" as a result.
+    const { result } = renderHook(() => useConfigActions());
+
+    await act(async () => {
+      await result.current.updateConfigValue("Video", "Mode", "NTSC", "HOME_CONFIG_UPDATE", "Updated");
+    });
+
+    expect(updateHasChangesMock).toHaveBeenCalledWith("http://c64u", true);
   });
 
   it("updates config, invalidates matching queries, and refreshes drives when requested", async () => {

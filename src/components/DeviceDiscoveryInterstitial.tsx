@@ -164,8 +164,12 @@ export function DeviceDiscoveryInterstitial() {
     }
     setBusyCandidateId(candidate.id);
     try {
+      // HARD12-003: persist without selecting, then store the password (a native
+      // keystore write that can throw) BEFORE switching. switchSavedDevice selects
+      // and verifies the device anyway, so a keystore failure here cannot strand a
+      // half-selected device — the user stays on their current device.
       const persisted = persistDiscoveredDevice(candidate, {
-        select: true,
+        select: false,
         passwordPresent: Boolean(password),
       });
       if (password) {

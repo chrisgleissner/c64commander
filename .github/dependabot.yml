@@ -77,17 +77,13 @@ updates:
     patterns:
       - "*"
     ignore:
-      # kotlinx-coroutines-test 1.9+ resolves Kotlin 2.2 stdlib metadata, but the
-      # Android build is still compiled with Kotlin 1.9.x. Keep this pinned until
-      # the toolchain is upgraded intentionally.
-      - dependency-name: org.jetbrains.kotlinx:kotlinx-coroutines-test
       # The Gradle wrapper (gradle-wrapper.properties distributionUrl) must move in
-      # lockstep with the Android Gradle Plugin. Gradle 9.6 broke AGP 8.13.2 with
-      # "Failed to apply plugin 'com.android.internal.application' > Failed to create
-      # service '...AndroidProblemReporterProvider'" (the internal Problems API
-      # changed). Wrapper upgrades are therefore opt-in: bump
-      # android/gradle/wrapper/gradle-wrapper.properties by hand together with
-      # com.android.tools.build:gradle so the pairing gets dedicated CI + review.
+      # lockstep with the Android Gradle Plugin — AGP major versions change
+      # internal Gradle-facing APIs (e.g. AGP 9's Problems API), so an unpaired
+      # Gradle bump can break the Android build. Wrapper upgrades are therefore
+      # opt-in: bump android/gradle/wrapper/gradle-wrapper.properties by hand
+      # together with com.android.tools.build:gradle so the pairing gets
+      # dedicated CI + review.
       - dependency-name: gradle
       - dependency-name: "*"
         update-types:

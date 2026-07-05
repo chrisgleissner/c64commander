@@ -26,6 +26,14 @@ export type CpuSnapshotData = {
   blocks: Uint8Array[];
   cpu: CpuState;
   captureMethod: "rli" | "isn";
+  /**
+   * Set when resumeAfterCapture failed after a successful capture - the
+   * snapshot itself is valid, but the C64 may still be frozen with the IRQ
+   * vector pointed at the capture handler. Callers must surface this (not
+   * just log it) so the user can offer a manual recovery path (Restore /
+   * power-cycle) instead of seeing a bare "snapshot saved". See HARD9-035.
+   */
+  resumeError: Error | null;
 };
 
 /** Reads the full 64 KiB image (paused) — injected so this module stays unit-testable. */
@@ -62,6 +70,8 @@ const sliceImage = (image: Uint8Array): { ranges: MemoryRange[]; blocks: Uint8Ar
  */
 export const captureCpuSnapshotData = async (api: CaptureCpuApi, dumpFullRam: RamDumper): Promise<CpuSnapshotData> => {
   const capture = await captureCpuState(api);
+  let resumeError: Error | null = null;
+  let sliced: { ranges: MemoryRange[]; blocks: Uint8Array[] };
   try {
     const image = await dumpFullRam();
     if (image.length !== 0x10000) {
@@ -71,25 +81,28 @@ export const captureCpuSnapshotData = async (api: CaptureCpuApi, dumpFullRam: Ra
     // (the safe region + the hooked IRQ vector), so the stored RAM is the
     // program's, not our handler's.
     for (const overlay of capture.overlays) applyOverlay(image, overlay);
-
-    return {
-      ...sliceImage(image),
-      cpu: capture.cpu,
-      captureMethod: capture.method,
-    };
+    sliced = sliceImage(image);
   } finally {
     // Always try to resume the program transparently, even if the dump failed.
     // A failure here can leave the C64 frozen with the IRQ vector repointed at
     // our handler, so it must be surfaced (not swallowed) so the UI can offer a
-    // manual recovery path (Restore / power-cycle).
+    // manual recovery path (Restore / power-cycle). See HARD9-035.
     await resumeAfterCapture(api, capture).catch((error) => {
+      resumeError = error as Error;
       addErrorLog("Failed to resume program after CPU snapshot capture", {
-        error: (error as Error).message,
+        error: resumeError.message,
         method: capture.method,
         vectorAddr: capture.vectorAddr,
       });
     });
   }
+
+  return {
+    ...sliced,
+    cpu: capture.cpu,
+    captureMethod: capture.method,
+    resumeError,
+  };
 };
 
 /** Builds v2 snapshot metadata for a captured CPU snapshot. */

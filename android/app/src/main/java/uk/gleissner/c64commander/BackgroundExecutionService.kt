@@ -107,31 +107,30 @@ class BackgroundExecutionService : Service() {
                 activeService.applyDueAtUpdate(dueAtMs)
                 return
             }
-            if (dueAtMs == null) {
-                val pendingGeneration = startPendingGeneration
-                if (pendingGeneration != null) {
-                    val intent = Intent(context, BackgroundExecutionService::class.java)
-                    intent.action = ACTION_UPDATE_DUE_AT
-                    intent.putExtra(EXTRA_COMMAND_GENERATION, pendingGeneration)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        context.startForegroundService(intent)
-                    } else {
-                        context.startService(intent)
-                    }
-                    return
-                }
+            // No running instance: only forward the update if a start() is genuinely
+            // still in flight (startPendingGeneration), carrying that SAME captured
+            // generation so onStartCommand accepts it once the service comes up.
+            // Never start a fresh service from here — a due timer without an active
+            // session (e.g. this update raced a stop()) has no consumer, and unlike a
+            // start()-triggered intent, using the current (post-stop) commandGeneration
+            // would pass the staleness check and resurrect a phantom foreground
+            // service + wake lock (HARD9-041).
+            val pendingGeneration = startPendingGeneration
+            if (pendingGeneration == null) {
                 AppLogger.debug(
                         context,
                         TAG,
-                        "Not running — ignoring dueAt clear request",
+                        "Not running — ignoring dueAt ${if (dueAtMs == null) "clear" else "update"} request",
                         "BackgroundExecutionService"
                 )
                 return
             }
             val intent = Intent(context, BackgroundExecutionService::class.java)
             intent.action = ACTION_UPDATE_DUE_AT
-            intent.putExtra(EXTRA_DUE_AT_MS, dueAtMs)
-            intent.putExtra(EXTRA_COMMAND_GENERATION, commandGeneration)
+            if (dueAtMs != null) {
+                intent.putExtra(EXTRA_DUE_AT_MS, dueAtMs)
+            }
+            intent.putExtra(EXTRA_COMMAND_GENERATION, pendingGeneration)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {
@@ -175,7 +174,7 @@ class BackgroundExecutionService : Service() {
                     "Ignoring sticky restart without command; JS must explicitly re-register background execution",
                     "BackgroundExecutionService"
             )
-            stopSelf(startId)
+            satisfyForegroundContractAndStop(startId)
             return START_NOT_STICKY
         }
         val action = intent.action
@@ -187,7 +186,7 @@ class BackgroundExecutionService : Service() {
                     "Ignoring stale background execution command (intentGeneration=$intentGeneration, currentGeneration=$commandGeneration)",
                     "BackgroundExecutionService"
             )
-            stopSelf(startId)
+            satisfyForegroundContractAndStop(startId)
             return START_NOT_STICKY
         }
         if (startPendingGeneration == intentGeneration) {
@@ -250,6 +249,32 @@ class BackgroundExecutionService : Service() {
         handler.post { updateDueAtInternal(nextDueAtMs) }
     }
 
+    /**
+     * Every start() / updateDueAt() call reaches us via startForegroundService() on O+, which
+     * obligates the service to call startForeground() promptly regardless of which onStartCommand
+     * branch handles it. The stale-generation and null-intent (sticky restart) branches used to
+     * stopSelf() without ever doing so, risking a RemoteServiceException crash (HARD9-042). Satisfy
+     * the contract with a throwaway notification, then immediately tear it back down — but only
+     * when the service isn't already legitimately in the foreground under a newer generation;
+     * otherwise this would tear down that still-active notification out from under it.
+     */
+    private fun satisfyForegroundContractAndStop(startId: Int) {
+        if (!isRunning) {
+            startForeground(NOTIFICATION_ID, buildNotification())
+            stopForegroundCompat()
+        }
+        stopSelf(startId)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun stopForegroundCompat() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            stopForeground(true)
+        }
+    }
+
     private fun buildNotification(): Notification {
         val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
         val pendingIntent =
@@ -261,7 +286,7 @@ class BackgroundExecutionService : Service() {
                 )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("C64 Commander")
+                .setContentTitle(getString(R.string.app_name))
                 .setContentText("Playback active")
                 .setSmallIcon(android.R.drawable.ic_media_play)
                 .setOngoing(true)

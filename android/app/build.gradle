@@ -1,5 +1,4 @@
 apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
 apply plugin: 'jacoco'
 
 import groovy.json.JsonSlurper
@@ -173,16 +172,12 @@ def selectedAndroidManifest = backgroundExecutionEnabled
 logger.lifecycle("Manifest for variant ${androidApplicationId}: ${selectedAndroidManifest} (backgroundExecution=${backgroundExecutionEnabled})")
 
 android {
-    namespace "uk.gleissner.c64commander"
-    compileSdk rootProject.ext.compileSdkVersion
+    namespace = "uk.gleissner.c64commander"
+    compileSdk = rootProject.ext.compileSdkVersion
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = '17'
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
     }
 
     packagingOptions {
@@ -202,7 +197,7 @@ android {
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
-            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
         logger.lifecycle("Resolved versionCode=${versionCode}, versionName=${versionName}")
     }
@@ -273,7 +268,7 @@ android {
             minifyEnabled true
             shrinkResources false
             matchingFallbacks = ['debug']
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         release {
             minifyEnabled true
@@ -281,23 +276,17 @@ android {
             ndk {
                 abiFilters "armeabi-v7a", "arm64-v8a"
             }
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
         }
     }
 
-    applicationVariants.all { variant ->
-        variant.outputs.all { output ->
-            if (!output.hasProperty('outputFileName')) return
-            def versionNameValue = variant.versionName ?: resolveAppVersionName()
-            def suffix = variant.buildType.name == 'debug' ? '-debug' : ''
-            if (output.outputFileName?.toString()?.endsWith('.apk')) {
-                output.outputFileName = "${androidArtifactBasename}-${versionNameValue}${suffix}.apk"
-            }
-        }
-    }
     testOptions {
         unitTests.returnDefaultValues = true
+        // Required for Robolectric to resolve app resource ids (R.string.*, etc.)
+        // at test runtime; without it, Resources.getString() throws
+        // NotFoundException even for resources that compile fine.
+        unitTests.includeAndroidResources = true
         unitTests.all {
             jacoco {
                 enabled = true
@@ -310,6 +299,19 @@ android {
                     'com.sun.*',
                 ]
             }
+        }
+    }
+}
+
+// AGP 9: applicationVariants (removed) replaced by the Variant API.
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.outputs.forEach { output ->
+            def currentName = output.outputFileName.orNull
+            if (currentName == null || !currentName.endsWith('.apk')) return
+            def versionNameValue = resolveAppVersionName()
+            def suffix = variant.buildType == 'debug' ? '-debug' : ''
+            output.outputFileName.set("${androidArtifactBasename}-${versionNameValue}${suffix}.apk")
         }
     }
 }
@@ -383,9 +385,7 @@ dependencies {
     testImplementation "org.mockito:mockito-core:5.23.0"
     testImplementation "androidx.test:core:1.7.0"
     testImplementation "androidx.test.ext:junit:1.3.0"
-    // kotlinx-coroutines-test 1.9+ resolves Kotlin 2.2 metadata, which is
-    // incompatible with the Android Kotlin 1.9.x toolchain configured here.
-    testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1"
+    testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
 }

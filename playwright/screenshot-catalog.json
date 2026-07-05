@@ -19,7 +19,8 @@
     "printers",
     "user-interface",
     "built-in-drive-a",
-    "built-in-drive-b"
+    "built-in-drive-b",
+    "advanced-rest-only"
   ],
   "home": [
     "system-info-to-ports",

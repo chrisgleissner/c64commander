@@ -19,6 +19,7 @@ export type FeatureFlagId =
   | "demo_mode_enabled"
   | "background_execution_enabled"
   | "lighting_studio_enabled"
+  | "remote_input_enabled"
   | "ram_snapshots_enabled"
   | "home_telnet_reu_snapshot_enabled"
   | "home_telnet_config_actions_enabled"
@@ -104,6 +105,15 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     group: "experimental",
     title: "Lighting Studio",
     description: "Enable Lighting Studio entry points and dialog access.",
+  },
+  {
+    id: "remote_input_enabled",
+    enabled: true,
+    visible_to_user: true,
+    developer_only: false,
+    group: "stable",
+    title: "Remote Input",
+    description: "Show the Remote Input overlay — a second-screen joystick and keyboard for the C64. Joystick relay is enabled automatically only when the connected device's REST API supports the machine:input endpoint; otherwise keyboard control is offered on its own.",
   },
   {
     id: "ram_snapshots_enabled",

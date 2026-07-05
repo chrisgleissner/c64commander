@@ -255,7 +255,13 @@ const looksLikeTokenisedBasic = (prg: Uint8Array) => {
 
   while (true) {
     steps += 1;
-    if (steps > MAX_BASIC_SCAN_STEPS) return false;
+    // HARD12-009: when the scanner overflows the step budget the previous code
+    // returned `false` and the DMA injector SYSed into the program header, even
+    // though most BASIC programs with >2000 lines would have been correctly
+    // classified. Treat an over-budget scan as BASIC so a tokenised-BASIC
+    // program with a standard stub still RUNs. Non-BASIC content still fails
+    // the structural checks below.
+    if (steps > MAX_BASIC_SCAN_STEPS) return true;
     if (i + 4 > data.length) return false;
     const nextPtr = data[i] | (data[i + 1] << 8);
     const lineNo = data[i + 2] | (data[i + 3] << 8);

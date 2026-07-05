@@ -120,6 +120,7 @@ export class FtpClientWeb implements FtpClientPlugin {
   async listDirectoryRecursive(_options: FtpRecursiveListOptions): Promise<{
     entries: FtpEntry[];
     partialFailures?: { path: string; message: string }[];
+    timedOut?: boolean;
   }> {
     throw new Error("FTP bridge recursive listing is unavailable on web.");
   }

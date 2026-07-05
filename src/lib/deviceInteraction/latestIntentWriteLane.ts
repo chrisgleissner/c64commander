@@ -23,8 +23,20 @@ export type LatestIntentWriteLane<T> = {
 export const createLatestIntentWriteLane = <T>(params: {
   beforeRun?: () => Promise<void>;
   run: (value: T) => Promise<void>;
+  /**
+   * Combines a still-pending job's value with a newly scheduled one. Defaults to
+   * replacing the pending value outright (the pre-existing behavior). Callers whose
+   * T represents independently-addressable items (e.g. a config-item map) should
+   * supply a merge - e.g. `(previous, next) => ({...previous, ...next})` - so that
+   * scheduling a write for one item while another item's write is still pending
+   * combines both into a single run() instead of silently discarding the first.
+   * Without this, resolveUpTo() still resolves the discarded job's waiter as a
+   * success once the *replacing* job's run() succeeds, even though that item's
+   * write was never sent. See HARD9-016.
+   */
+  merge?: (previous: T, next: T) => T;
 }): LatestIntentWriteLane<T> => {
-  const { beforeRun, run } = params;
+  const { beforeRun, run, merge } = params;
 
   let activePromise: Promise<void> | null = null;
   let latestJob: PendingJob<T> | null = null;
@@ -62,6 +74,16 @@ export const createLatestIntentWriteLane = <T>(params: {
           }
           const nextLatest = latestJob as PendingJob<T> | null;
           if (nextLatest && nextLatest.version > job.version) {
+            // job was taken out of latestJob (line 70) before beforeRun()
+            // suspended, so a job scheduled while job was waiting there
+            // never went through schedule()'s own merge - it only ever saw
+            // an empty latestJob. Merge job's value into the superseding job
+            // here instead, or job's write is silently dropped even though
+            // resolveUpTo() below still resolves its waiter as a success.
+            // See HARD9-016.
+            if (merge) {
+              latestJob = { version: nextLatest.version, value: merge(job.value, nextLatest.value) };
+            }
             continue;
           }
           await run(job.value);
@@ -69,12 +91,25 @@ export const createLatestIntentWriteLane = <T>(params: {
           resolveUpTo(settledVersion);
         } catch (error) {
           if (latestJob) {
+            if (merge) {
+              latestJob = { version: latestJob.version, value: merge(job.value, latestJob.value) };
+            }
             continue;
           }
           const err = error as Error;
           settledVersion = Math.max(settledVersion, job.version);
-          resolveUpTo(job.version - 1);
-          rejectUpTo(job.version, err);
+          // HARD12-010: in merge-semantics lanes every waiter ≤ job.version had
+          // its value folded into this failed run, so all of them must reject
+          // (the previous resolveUpTo(job.version - 1) silently resolved the
+          // pre-merge waiters as success even though their values were part
+          // of the failed batch). Replace-semantics lanes keep the historical
+          // behaviour — superseded waiters never had their write attempted.
+          if (merge) {
+            rejectUpTo(job.version, err);
+          } else {
+            resolveUpTo(job.version - 1);
+            rejectUpTo(job.version, err);
+          }
         }
       }
     })().finally(() => {
@@ -92,7 +127,7 @@ export const createLatestIntentWriteLane = <T>(params: {
       const version = nextVersion;
       latestJob = {
         version,
-        value,
+        value: merge && latestJob ? merge(latestJob.value, value) : value,
       };
       return new Promise<void>((resolve, reject) => {
         const entries = waiters.get(version) ?? [];

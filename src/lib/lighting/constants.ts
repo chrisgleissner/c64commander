@@ -14,8 +14,6 @@ import type {
   LightingSourceBucket,
   LightingSurface,
 } from "@/lib/lighting/types";
-import { LED_FIXED_COLORS } from "@/lib/config/ledColors";
-
 export const LIGHTING_SURFACE_TO_CATEGORY: Record<LightingSurface, LightingCategoryName> = {
   case: "LED Strip Settings",
   keyboard: "Keyboard Lighting",
@@ -31,12 +29,10 @@ export const LIGHTING_SUMMARY_ITEMS = [
   "Color tint",
 ] as const;
 
-export const LIGHTING_HOME_MODE_OPTIONS = ["Off", "Fixed Color", "SID Music", "Rainbow"] as const;
-export const LIGHTING_HOME_AUTO_SID_OPTIONS = ["Disabled", "Enabled"] as const;
-export const LIGHTING_HOME_PATTERN_OPTIONS = ["SingleColor", "Outward", "Circular"] as const;
-export const LIGHTING_HOME_FIXED_COLOR_OPTIONS = LED_FIXED_COLORS.map((color) => color.name);
-export const LIGHTING_HOME_SID_SELECT_OPTIONS = ["SID 1", "SID 2"] as const;
-export const LIGHTING_HOME_TINT_OPTIONS = ["Pure", "Warm", "Whisper", "Pastel", "Bright"] as const;
+// LED strip enum choices (Mode / Pattern / SID Select / tint / Fixed Color names) are read from
+// the concrete device per-firmware (see useDeviceConfigOptionDomains) — they diverge across models
+// and firmware, so no hard-coded option list lives here. Only the numeric intensity bounds, which
+// serve purely as a pre-read fallback for the slider, remain.
 export const LIGHTING_HOME_INTENSITY_RANGE = {
   min: 0,
   max: 31,

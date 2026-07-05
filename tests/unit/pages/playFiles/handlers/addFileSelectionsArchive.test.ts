@@ -701,10 +701,10 @@ describe("addFileSelections archive source handler", () => {
     const result = await promise;
 
     expect(result).toBe(true);
-    expect(localSource.listFilesRecursive).toHaveBeenCalledWith(
-      "/folder",
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
-    );
+    // HARD12-014: a non-recursive add must NOT call listFilesRecursive for
+    // songlengths discovery — that defeats the user's "don't recurse" choice
+    // and on a load-fragile c64u FTP service can stall the whole control plane.
+    expect(localSource.listFilesRecursive).not.toHaveBeenCalled();
     expect(deps.buildPlaylistItem).toHaveBeenCalledWith(
       expect.objectContaining({
         source: "local",

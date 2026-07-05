@@ -353,6 +353,18 @@ describe("useC64Connection", () => {
     await waitFor(() => expect(updateHasChangesMock).toHaveBeenCalled());
   });
 
+  it("invalidates c64-config-items/c64-config-item on setConfig success so Home reflects it (HARD9-017)", async () => {
+    const { wrapper, client } = createWrapper();
+    const invalidateSpy = vi.spyOn(client, "invalidateQueries");
+    const { result } = renderHook(() => useC64SetConfig(), { wrapper });
+
+    result.current.mutate({ category: "Audio", item: "Volume", value: "0 dB" });
+    await waitFor(() => expect(updateHasChangesMock).toHaveBeenCalled());
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-config-items", "Audio"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-config-item", "Audio"] });
+  });
+
   it("fetches all config and tolerates failures", async () => {
     const { wrapper } = createWrapper();
     mockApi.getCategories.mockResolvedValue({
@@ -380,6 +392,18 @@ describe("useC64Connection", () => {
 
     result.current.mutate({ category: "Audio", updates: { Volume: "0 dB" } });
     await waitFor(() => expect(updateHasChangesMock).toHaveBeenCalled());
+  });
+
+  it("invalidates c64-config-items/c64-config-item on batch success so Home reflects it (HARD9-017)", async () => {
+    const { wrapper, client } = createWrapper();
+    const invalidateSpy = vi.spyOn(client, "invalidateQueries");
+    const { result } = renderHook(() => useC64UpdateConfigBatch(), { wrapper });
+
+    result.current.mutate({ category: "Audio", updates: { Volume: "0 dB" } });
+    await waitFor(() => expect(updateHasChangesMock).toHaveBeenCalled());
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-config-items", "Audio"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-config-item", "Audio"] });
   });
 
   it("fetches a config item when enabled", async () => {

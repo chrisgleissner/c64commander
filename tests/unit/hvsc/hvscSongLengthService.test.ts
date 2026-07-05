@@ -24,20 +24,25 @@ vi.mock("@/lib/logging", () => ({
 }));
 
 const browseIndexMocks = vi.hoisted(() => ({
-  buildHvscBrowseIndexFromSonglengthSnapshot: vi.fn((snapshot) => ({
+  loadHvscBrowseIndexSnapshot: vi.fn(async () => null),
+  mergeSonglengthDurationsIntoBrowseIndex: vi.fn((baseSnapshot, snapshot) => ({
     schemaVersion: 2,
     updatedAt: new Date().toISOString(),
-    songs: Object.fromEntries(
-      Array.from(snapshot.pathToSeconds.entries()).map(([path, durations]) => [
-        path,
-        {
-          virtualPath: path,
-          fileName: path.split("/").pop() ?? path,
-          durationSeconds: durations[0] ?? null,
-          durationsSeconds: durations,
-        },
-      ]),
-    ),
+    songs: {
+      ...(baseSnapshot?.songs ?? {}),
+      ...Object.fromEntries(
+        Array.from((snapshot.pathToSeconds as Map<string, number[]>).entries()).map(([path, durations]) => [
+          path,
+          {
+            ...(baseSnapshot?.songs?.[path] ?? {}),
+            virtualPath: path,
+            fileName: path.split("/").pop() ?? path,
+            durationSeconds: durations[0] ?? null,
+            durationsSeconds: durations,
+          },
+        ]),
+      ),
+    },
     folders: { "/": { path: "/", folders: [], songs: Array.from(snapshot.pathToSeconds.keys()) } },
   })),
   saveHvscBrowseIndexSnapshot: vi.fn(async () => undefined),

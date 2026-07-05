@@ -403,6 +403,45 @@ class FtpClientPluginTest {
   }
 
   @Test
+  fun listDirectoryRecursiveReportsTimedOutOnDataChannelTimeout() {
+    // Regression (HARD9-078): the response field was "timed_out" (snake_case)
+    // while the JS side reads/declares nothing but camelCase fields, so this
+    // "the walk aborted early" signal was never actually surfaced anywhere.
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    `when`(ftpClient.listFiles("/")).thenThrow(SocketTimeoutException("data channel timed out"))
+    `when`(ftpClient.isConnected).thenReturn(true)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("secret")
+    `when`(call.getString("path")).thenReturn("/")
+    `when`(call.getInt("maxDepth")).thenReturn(8)
+    `when`(call.getInt("maxEntries")).thenReturn(5000)
+
+    var resolved: JSObject? = null
+    doAnswer { invocation ->
+              resolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(any())
+
+    plugin.listDirectoryRecursive(call)
+
+    assertEquals(true, resolved?.getBoolean("timedOut"))
+    val failures = resolved?.getJSONArray("partialFailures")
+    assertNotNull(failures)
+    assertEquals(1, failures?.length())
+  }
+
+  @Test
   fun listDirectorySkipsDotEntries() {
     val plugin = FtpClientPlugin()
     plugin.runTask = { runnable -> runnable.run() }
@@ -483,6 +522,128 @@ class FtpClientPluginTest {
     }
     val sizeValue = resolved?.optInt("sizeBytes", -1) ?: -1
     assertEquals(payload.toByteArray().size, sizeValue)
+  }
+
+  @Test
+  fun readFileRejectsDeclaredOversizeBeforeConnecting() {
+    // HARD9-044: a caller-declared totalBytes above the cap is rejected before
+    // ever opening a connection, avoiding a wasted connect+login round trip.
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    plugin.maxReadFileBytes = 100L
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getString("path")).thenReturn("/big.dnp")
+    `when`(call.getInt("totalBytes")).thenReturn(200)
+
+    var rejectedMessage: String? = null
+    doAnswer { invocation ->
+              rejectedMessage = invocation.getArgument(0) as String?
+              null
+            }
+            .`when`(call)
+            .reject(any<String>())
+
+    plugin.readFile(call)
+
+    assertNotNull(rejectedMessage)
+    assertTrue(rejectedMessage!!.contains("maximum readable size"))
+    verify(ftpClient, never()).connect(any<String>(), org.mockito.ArgumentMatchers.anyInt())
+  }
+
+  @Test
+  fun readFileRejectsWhenActualTransferExceedsSizeCapWithoutDeclaredTotalBytes() {
+    // HARD9-044: the incremental guard must catch an oversized transfer even
+    // when totalBytes was never supplied (or under-declared) by the caller -
+    // it can't rely solely on a possibly-absent/wrong upfront size hint.
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    plugin.maxReadFileBytes = 10L
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+    val payload = "THIS PAYLOAD IS DEFINITELY MORE THAN TEN BYTES LONG"
+
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    `when`(ftpClient.retrieveFileStream(eq("/big.dnp")))
+            .thenReturn(java.io.ByteArrayInputStream(payload.toByteArray(Charsets.UTF_8)))
+    `when`(ftpClient.isConnected).thenReturn(true)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("secret")
+    `when`(call.getString("path")).thenReturn("/big.dnp")
+
+    var rejectedMessage: String? = null
+    doAnswer { invocation ->
+              rejectedMessage = invocation.getArgument(0) as String?
+              null
+            }
+            .`when`(call)
+            .reject(any(String::class.java), any(Exception::class.java))
+
+    plugin.readFile(call)
+
+    assertNotNull(rejectedMessage)
+    assertTrue(rejectedMessage!!.contains("maximum readable size"))
+  }
+
+  @Test
+  fun cancelReadAfterCompletionDoesNotSpuriouslyAbortAReusedRequestId() {
+    // Regression (HARD9-073): a cancelRead() arriving after readFile()
+    // already finished (routine when it races natural completion on
+    // navigate-away) used to re-add the requestId to cancelledReads with
+    // nothing left to ever remove it - so a later read reusing that same
+    // requestId (the JS-side counter resets on WebView reload while this
+    // plugin instance survives) instantly and spuriously rejected.
+    val payload = "HELLO"
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    `when`(ftpClient.retrieveFileStream(eq("/songlengths.md5")))
+            .thenReturn(java.io.ByteArrayInputStream(payload.toByteArray(Charsets.UTF_8)))
+    `when`(ftpClient.completePendingCommand()).thenReturn(true)
+    `when`(ftpClient.isConnected).thenReturn(true)
+
+    val readCall = mock(PluginCall::class.java)
+    `when`(readCall.getString("host")).thenReturn("127.0.0.1")
+    `when`(readCall.getInt("port")).thenReturn(21)
+    `when`(readCall.getString("username")).thenReturn("user")
+    `when`(readCall.getString("password")).thenReturn("secret")
+    `when`(readCall.getString("path")).thenReturn("/songlengths.md5")
+    `when`(readCall.getString("requestId")).thenReturn("ftp-read-reused")
+
+    // First read completes fully before any cancel arrives.
+    plugin.readFile(readCall)
+    verify(readCall).resolve(any())
+
+    // A cancelRead for the same id arrives late, after completion.
+    val cancelCall = mock(PluginCall::class.java)
+    `when`(cancelCall.getString("requestId")).thenReturn("ftp-read-reused")
+    plugin.cancelRead(cancelCall)
+    verify(cancelCall).resolve()
+
+    // The id is reused for a brand-new read; it must not be spuriously
+    // rejected by the stale late-cancel mark.
+    val reusedCall = mock(PluginCall::class.java)
+    `when`(reusedCall.getString("host")).thenReturn("127.0.0.1")
+    `when`(reusedCall.getInt("port")).thenReturn(21)
+    `when`(reusedCall.getString("username")).thenReturn("user")
+    `when`(reusedCall.getString("password")).thenReturn("secret")
+    `when`(reusedCall.getString("path")).thenReturn("/songlengths.md5")
+    `when`(reusedCall.getString("requestId")).thenReturn("ftp-read-reused")
+
+    plugin.readFile(reusedCall)
+
+    verify(reusedCall).resolve(any())
+    verify(reusedCall, never()).reject(eq("FTP read aborted"))
   }
 
   @Test
@@ -811,6 +972,35 @@ class FtpClientPluginTest {
     ordered.verify(ftpClient).setDefaultTimeout(1500)
     ordered.verify(ftpClient).connect("127.0.0.1", 21)
     ordered.verify(ftpClient).setSoTimeout(4321)
+  }
+
+  @Test
+  fun listDirectoryEnablesUtf8AutodetectionBeforeConnecting() {
+    // Regression (HARD9-070): commons-net defaults to ISO-8859-1 on the
+    // control channel with no UTF-8 autodetection - a USB stick with
+    // non-ASCII filenames lists as mojibake and a subsequent RETR of the
+    // re-encoded name 550s. autodetectUTF8 must be set before connect().
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    `when`(ftpClient.listFiles("/")).thenReturn(emptyArray())
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("secret")
+    `when`(call.getString("path")).thenReturn("/")
+
+    plugin.listDirectory(call)
+
+    val ordered = inOrder(ftpClient)
+    ordered.verify(ftpClient).setAutodetectUTF8(true)
+    ordered.verify(ftpClient).connect("127.0.0.1", 21)
   }
 
   @Test

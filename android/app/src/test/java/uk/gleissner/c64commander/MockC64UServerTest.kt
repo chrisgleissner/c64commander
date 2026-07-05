@@ -14,6 +14,7 @@ import java.net.URL
 import java.util.Arrays
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -282,6 +283,217 @@ class MockC64UServerTest {
     server.stop()
   }
 
+  private fun postMachineInput(baseUrl: String, events: JSONArray): HttpURLConnection {
+    val connection = URL("$baseUrl/v1/machine:input").openConnection() as HttpURLConnection
+    connection.requestMethod = "POST"
+    connection.doOutput = true
+    val payload = JSONObject().apply { put("events", events) }
+    connection.outputStream.use { it.write(payload.toString().toByteArray()) }
+    return connection
+  }
+
+  private fun getMachineInputState(baseUrl: String): JSONObject {
+    val connection = URL("$baseUrl/v1/machine:input").openConnection() as HttpURLConnection
+    connection.requestMethod = "GET"
+    val body = JSONObject(readBody(connection))
+    connection.disconnect()
+    return body
+  }
+
+  // HARD12-017
+  @Test
+  fun machineInputStartsWithNoHeldKeyboardOrJoystickInputs() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    val server = MockC64UServer(state)
+    server.start()
+    waitForServer(server)
+
+    val body = getMachineInputState(server.baseUrl)
+    assertEquals(0, body.getJSONObject("keyboard").getJSONArray("inputs").length())
+    assertEquals(2, body.getJSONArray("joysticks").length())
+    assertEquals(0, body.getJSONArray("joysticks").getJSONObject(0).getJSONArray("inputs").length())
+
+    server.stop()
+  }
+
+  @Test
+  fun machineInputPressThenReleaseTracksHeldJoystickInputs() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    val server = MockC64UServer(state)
+    server.start()
+    waitForServer(server)
+
+    val pressEvents =
+            JSONArray()
+                    .put(
+                            JSONObject().apply {
+                              put("kind", "joystick")
+                              put("port", 2)
+                              put("inputs", JSONArray().put("up").put("fire"))
+                              put("transition", "press")
+                            }
+                    )
+    val pressConnection = postMachineInput(server.baseUrl, pressEvents)
+    assertEquals(200, pressConnection.responseCode)
+    pressConnection.disconnect()
+
+    val afterPress = getMachineInputState(server.baseUrl)
+    val port2AfterPress =
+            (0 until afterPress.getJSONArray("joysticks").length())
+                    .map { afterPress.getJSONArray("joysticks").getJSONObject(it) }
+                    .first { it.getInt("port") == 2 }
+                    .getJSONArray("inputs")
+    assertEquals(2, port2AfterPress.length())
+
+    val releaseEvents =
+            JSONArray()
+                    .put(
+                            JSONObject().apply {
+                              put("kind", "joystick")
+                              put("port", 2)
+                              put("inputs", JSONArray().put("up"))
+                              put("transition", "release")
+                            }
+                    )
+    val releaseConnection = postMachineInput(server.baseUrl, releaseEvents)
+    assertEquals(200, releaseConnection.responseCode)
+    releaseConnection.disconnect()
+
+    val afterRelease = getMachineInputState(server.baseUrl)
+    val port2AfterRelease =
+            (0 until afterRelease.getJSONArray("joysticks").length())
+                    .map { afterRelease.getJSONArray("joysticks").getJSONObject(it) }
+                    .first { it.getInt("port") == 2 }
+                    .getJSONArray("inputs")
+    assertEquals(listOf("fire"), (0 until port2AfterRelease.length()).map { port2AfterRelease.getString(it) })
+
+    server.stop()
+  }
+
+  @Test
+  fun machineInputReleaseAllClearsKeyboardAndBothJoysticks() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    val server = MockC64UServer(state)
+    server.start()
+    waitForServer(server)
+
+    val setupEvents =
+            JSONArray()
+                    .put(
+                            JSONObject().apply {
+                              put("kind", "keyboard")
+                              put("inputs", JSONArray().put("a"))
+                              put("transition", "press")
+                            }
+                    )
+                    .put(
+                            JSONObject().apply {
+                              put("kind", "joystick")
+                              put("port", 1)
+                              put("inputs", JSONArray().put("left"))
+                              put("transition", "press")
+                            }
+                    )
+    postMachineInput(server.baseUrl, setupEvents).also {
+      assertEquals(200, it.responseCode)
+      it.disconnect()
+    }
+
+    val releaseAll = JSONArray().put(JSONObject().apply { put("kind", "release_all") })
+    postMachineInput(server.baseUrl, releaseAll).also {
+      assertEquals(200, it.responseCode)
+      it.disconnect()
+    }
+
+    val after = getMachineInputState(server.baseUrl)
+    assertEquals(0, after.getJSONObject("keyboard").getJSONArray("inputs").length())
+    for (index in 0 until after.getJSONArray("joysticks").length()) {
+      assertEquals(0, after.getJSONArray("joysticks").getJSONObject(index).getJSONArray("inputs").length())
+    }
+
+    server.stop()
+  }
+
+  @Test
+  fun machineInputRejectsAnEmptyOrOversizedEventBatch() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    val server = MockC64UServer(state)
+    server.start()
+    waitForServer(server)
+
+    val emptyConnection = postMachineInput(server.baseUrl, JSONArray())
+    assertEquals(400, emptyConnection.responseCode)
+    emptyConnection.disconnect()
+
+    val oversized = JSONArray()
+    repeat(65) { oversized.put(JSONObject().apply { put("kind", "release_all") }) }
+    val oversizedConnection = postMachineInput(server.baseUrl, oversized)
+    assertEquals(400, oversizedConnection.responseCode)
+    oversizedConnection.disconnect()
+
+    server.stop()
+  }
+
+  @Test
+  fun machineInputRejectsAnInvalidJoystickPort() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    val server = MockC64UServer(state)
+    server.start()
+    waitForServer(server)
+
+    val events =
+            JSONArray()
+                    .put(
+                            JSONObject().apply {
+                              put("kind", "joystick")
+                              put("port", 3)
+                              put("inputs", JSONArray().put("up"))
+                              put("transition", "press")
+                            }
+                    )
+    val connection = postMachineInput(server.baseUrl, events)
+    assertEquals(400, connection.responseCode)
+    connection.disconnect()
+
+    server.stop()
+  }
+
+  @Test
+  fun machineResetClearsHeldMachineInput() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    val server = MockC64UServer(state)
+    server.start()
+    waitForServer(server)
+
+    val press =
+            JSONArray()
+                    .put(
+                            JSONObject().apply {
+                              put("kind", "joystick")
+                              put("port", 2)
+                              put("inputs", JSONArray().put("fire"))
+                              put("transition", "press")
+                            }
+                    )
+    postMachineInput(server.baseUrl, press).also {
+      assertEquals(200, it.responseCode)
+      it.disconnect()
+    }
+
+    val resetConnection =
+            URL("${server.baseUrl}/v1/machine:reset").openConnection() as HttpURLConnection
+    resetConnection.requestMethod = "PUT"
+    assertEquals(200, resetConnection.responseCode)
+    resetConnection.disconnect()
+
+    val after = getMachineInputState(server.baseUrl)
+    for (index in 0 until after.getJSONArray("joysticks").length()) {
+      assertEquals(0, after.getJSONArray("joysticks").getJSONObject(index).getJSONArray("inputs").length())
+    }
+
+    server.stop()
+  }
+
   @Test
   fun mockC64UServerCanBeInstantiated() {
     val config = JSONObject()
@@ -379,5 +591,179 @@ class MockC64UServerTest {
             "Expected serialized handling to take at least 160 ms, got $elapsedMs ms",
             elapsedMs >= 160
     )
+  }
+
+  private fun newBareServer(): MockC64UServer {
+    val state =
+            MockC64UState.fromPayload(
+                    JSONObject().apply {
+                      put("general", JSONObject().apply { put("baseUrl", "http://localhost") })
+                    }
+            )
+    return MockC64UServer(state)
+  }
+
+  private fun sendRawRequestAndReadStatus(port: Int, rawRequest: String): String? {
+    Socket("127.0.0.1", port).use { socket ->
+      socket.soTimeout = 5_000
+      socket.getOutputStream().apply {
+        write(rawRequest.toByteArray())
+        flush()
+      }
+      return socket.getInputStream().bufferedReader().readLine()
+    }
+  }
+
+  @Test
+  fun oversizedContentLengthIsRejectedWithoutAllocating() {
+    val server = newBareServer()
+    server.start()
+    waitForServer(server)
+
+    // A 2 GB Content-Length: honouring it would allocate ByteArray(2_000_000_000)
+    // and OutOfMemoryError the process (HARD10-003 H1). The parser must reject it
+    // before reading any body.
+    val statusLine =
+            sendRawRequestAndReadStatus(
+                    server.port,
+                    "POST /v1/configs HTTP/1.1\r\nHost: localhost\r\nContent-Length: 2000000000\r\n\r\n",
+            )
+
+    assertNotNull(statusLine)
+    assertTrue("Expected 413, got: $statusLine", statusLine!!.contains("413"))
+    server.stop()
+  }
+
+  @Test
+  fun overlongHeaderLineIsRejected() {
+    val server = newBareServer()
+    server.start()
+    waitForServer(server)
+
+    // A single header line far exceeding the 8 KB cap must not grow the read
+    // buffer without bound (HARD10-003 H2).
+    val hugeValue = "x".repeat(20_000)
+    val statusLine =
+            sendRawRequestAndReadStatus(
+                    server.port,
+                    "GET /v1/info HTTP/1.1\r\nX-Huge: $hugeValue\r\n\r\n",
+            )
+
+    assertNotNull(statusLine)
+    assertTrue("Expected 413, got: $statusLine", statusLine!!.contains("413"))
+    server.stop()
+  }
+
+  @Test
+  fun tooManyHeaderLinesRejected() {
+    val server = newBareServer()
+    server.start()
+    waitForServer(server)
+
+    // 100 header lines exceeds the 64-header cap (HARD10-003 H2).
+    val builder = StringBuilder("GET /v1/info HTTP/1.1\r\n")
+    repeat(100) { index -> builder.append("X-H$index: v\r\n") }
+    builder.append("\r\n")
+    val statusLine = sendRawRequestAndReadStatus(server.port, builder.toString())
+
+    assertNotNull(statusLine)
+    assertTrue("Expected 413, got: $statusLine", statusLine!!.contains("413"))
+    server.stop()
+  }
+
+  @Test
+  fun idleConnectionIsReleasedBySocketReadTimeout() {
+    val server = newBareServer()
+    // Without a read timeout a client that connects and sends nothing parks a
+    // worker forever (HARD10-003 H3). A short injectable timeout proves the worker
+    // is released and the connection closed within a bounded window.
+    server.socketReadTimeoutMs = 200
+    server.start()
+    waitForServer(server)
+
+    Socket("127.0.0.1", server.port).use { socket ->
+      socket.soTimeout = 3_000
+      val firstByte = socket.getInputStream().read()
+      assertEquals("Expected the server to close the idle connection (EOF)", -1, firstByte)
+    }
+    server.stop()
+  }
+
+  @Test
+  fun writememBodyExceedingCapIsRejected() {
+    val server = newBareServer()
+    server.start()
+    waitForServer(server)
+
+    // 70 000 bytes is under the 1 MB Content-Length cap but over the 64 KB
+    // writemem cap, so it must be rejected rather than written into the map
+    // (HARD10-003 H7).
+    val connection =
+            URL("${server.baseUrl}/v1/machine:writemem?address=0000").openConnection() as
+                    HttpURLConnection
+    connection.requestMethod = "POST"
+    connection.doOutput = true
+    connection.setRequestProperty("Content-Type", "application/octet-stream")
+    connection.outputStream.use { it.write(ByteArray(70_000)) }
+
+    assertEquals(413, connection.responseCode)
+    connection.disconnect()
+    server.stop()
+  }
+
+  @Test
+  fun requestsRequireMatchingTokenWhenConfigured() {
+    val state =
+            MockC64UState.fromPayload(
+                    JSONObject().apply {
+                      put("general", JSONObject().apply { put("baseUrl", "http://localhost") })
+                    }
+            )
+    val server = MockC64UServer(state, MockTimingProfile.defaultProfile(), "sekrit-token")
+    server.start()
+    waitForServer(server)
+
+    // No token -> 401 (HARD10-005).
+    val noToken = URL("${server.baseUrl}/v1/info").openConnection() as HttpURLConnection
+    noToken.requestMethod = "GET"
+    assertEquals(401, noToken.responseCode)
+    noToken.disconnect()
+
+    // Wrong token -> 401.
+    val wrongToken = URL("${server.baseUrl}/v1/info").openConnection() as HttpURLConnection
+    wrongToken.requestMethod = "GET"
+    wrongToken.setRequestProperty("X-Mock-Token", "nope")
+    assertEquals(401, wrongToken.responseCode)
+    wrongToken.disconnect()
+
+    // Correct token -> 200.
+    val withToken = URL("${server.baseUrl}/v1/info").openConnection() as HttpURLConnection
+    withToken.requestMethod = "GET"
+    withToken.setRequestProperty("X-Mock-Token", "sekrit-token")
+    assertEquals(200, withToken.responseCode)
+    withToken.disconnect()
+
+    server.stop()
+  }
+
+  @Test
+  fun optionsPreflightIsAllowedWithoutToken() {
+    val state =
+            MockC64UState.fromPayload(
+                    JSONObject().apply {
+                      put("general", JSONObject().apply { put("baseUrl", "http://localhost") })
+                    }
+            )
+    val server = MockC64UServer(state, MockTimingProfile.defaultProfile(), "sekrit-token")
+    server.start()
+    waitForServer(server)
+
+    // Preflight must stay unauthenticated so browser CORS still works (HARD10-005).
+    val options = URL("${server.baseUrl}/v1/info").openConnection() as HttpURLConnection
+    options.requestMethod = "OPTIONS"
+    assertEquals(204, options.responseCode)
+    options.disconnect()
+
+    server.stop()
   }
 }

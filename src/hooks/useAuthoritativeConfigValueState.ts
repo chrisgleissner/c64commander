@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { resolveDeviceBoundSliderWatchdogMs } from "@/hooks/useDeviceBoundSlider";
 
 export type AuthoritativeConfigValue = string | number;
 
@@ -50,40 +51,112 @@ export function useAuthoritativeConfigValueState(options: { equals?: Authoritati
   const [entries, setEntries] = useState<Record<string, AuthoritativeConfigValueEntry>>({});
   const entriesRef = useRef(entries);
   const queuedClearsRef = useRef<Set<string>>(new Set());
+  // A pin whose write succeeded at the HTTP level but whose value never
+  // echoes back (device reboots/drops before persisting, or the
+  // reconciliation refetch never lands) would otherwise stay latched
+  // forever - resolveValue only self-clears on an exact device echo, and
+  // routing-epoch changes (see clearAll's own doc) only cover a device
+  // switch/reconnect, not a same-device write that silently never takes.
+  // Reuses the slider watchdog's timing so the two "how long do we trust an
+  // unconfirmed device write" windows stay in sync. See HARD9-052.
+  const watchdogTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   useEffect(() => {
     entriesRef.current = entries;
   }, [entries]);
 
-  const replaceEntry = useCallback((key: string, value: AuthoritativeConfigValue) => {
-    setEntries((previous) => ({
-      ...previous,
-      [key]: {
-        value,
-      },
-    }));
+  const clearWatchdogTimer = useCallback((key: string) => {
+    const timer = watchdogTimersRef.current.get(key);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      watchdogTimersRef.current.delete(key);
+    }
   }, []);
 
-  const restoreEntry = useCallback((key: string, previousEntry?: AuthoritativeConfigValueEntry) => {
-    setEntries((previous) => {
-      const next = { ...previous };
-      if (previousEntry) {
-        next[key] = previousEntry;
-      } else {
-        delete next[key];
+  const clearWatchdogTimers = useCallback((keys: Iterable<string>) => {
+    for (const key of keys) {
+      const timer = watchdogTimersRef.current.get(key);
+      if (timer !== undefined) {
+        clearTimeout(timer);
+        watchdogTimersRef.current.delete(key);
       }
-      return next;
-    });
+    }
   }, []);
 
-  const clearEntry = useCallback((key: string) => {
-    setEntries((previous) => {
-      if (!Object.prototype.hasOwnProperty.call(previous, key)) return previous;
-      const next = { ...previous };
-      delete next[key];
-      return next;
-    });
+  useEffect(() => {
+    return () => {
+      watchdogTimersRef.current.forEach((timer) => clearTimeout(timer));
+      watchdogTimersRef.current.clear();
+    };
   }, []);
+
+  const replaceEntry = useCallback(
+    (key: string, value: AuthoritativeConfigValue) => {
+      setEntries((previous) => ({
+        ...previous,
+        [key]: {
+          value,
+        },
+      }));
+      clearWatchdogTimer(key);
+      const timer = setTimeout(() => {
+        watchdogTimersRef.current.delete(key);
+        setEntries((previous) => {
+          if (!Object.prototype.hasOwnProperty.call(previous, key)) return previous;
+          const next = { ...previous };
+          delete next[key];
+          return next;
+        });
+      }, resolveDeviceBoundSliderWatchdogMs());
+      watchdogTimersRef.current.set(key, timer);
+    },
+    [clearWatchdogTimer],
+  );
+
+  const restoreEntry = useCallback(
+    (
+      key: string,
+      previousEntry: AuthoritativeConfigValueEntry | undefined,
+      expectedCurrentValue: AuthoritativeConfigValue,
+    ) => {
+      // Rapid A-then-B writes to the same item can both be in flight at once:
+      // if A fails first, its own rollback must not resurrect/clobber a pin
+      // that a newer write (B) has since taken over. Only apply the rollback
+      // if the store's current entry still equals the value THIS write
+      // pinned - otherwise a newer write is now in charge of this key and
+      // its own success/failure handling owns the outcome. See HARD9-086.
+      let applied = false;
+      setEntries((previous) => {
+        const current = previous[key];
+        if (!current || current.value !== expectedCurrentValue) return previous;
+        applied = true;
+        const next = { ...previous };
+        if (previousEntry) {
+          next[key] = previousEntry;
+        } else {
+          delete next[key];
+        }
+        return next;
+      });
+      if (applied) {
+        clearWatchdogTimer(key);
+      }
+    },
+    [clearWatchdogTimer],
+  );
+
+  const clearEntry = useCallback(
+    (key: string) => {
+      clearWatchdogTimer(key);
+      setEntries((previous) => {
+        if (!Object.prototype.hasOwnProperty.call(previous, key)) return previous;
+        const next = { ...previous };
+        delete next[key];
+        return next;
+      });
+    },
+    [clearWatchdogTimer],
+  );
 
   // Drop every optimistic override so the next render reveals the authoritative
   // device value. Used when the user explicitly re-syncs from the device
@@ -92,22 +165,29 @@ export function useAuthoritativeConfigValueState(options: { equals?: Authoritati
   // out-of-band to something else — would otherwise stay latched until unmount
   // (BUG-033), since resolveValue only self-clears on an exact device echo.
   const clearAll = useCallback(() => {
-    setEntries((previous) => (Object.keys(previous).length === 0 ? previous : {}));
-  }, []);
+    setEntries((previous) => {
+      clearWatchdogTimers(Object.keys(previous));
+      return Object.keys(previous).length === 0 ? previous : {};
+    });
+  }, [clearWatchdogTimers]);
 
   // Drop only the optimistic overrides whose key starts with `prefix`. Used when the
   // store is shared across the whole Config page (canonical `category::item` keys) so a
   // per-category Refresh/Reset clears ONLY that category's pins, never a pending write in
   // another expanded section (the scoped sibling of `clearAll`, same BUG-033 rationale).
-  const clearMatching = useCallback((prefix: string) => {
-    setEntries((previous) => {
-      const keys = Object.keys(previous).filter((key) => key.startsWith(prefix));
-      if (keys.length === 0) return previous;
-      const next = { ...previous };
-      for (const key of keys) delete next[key];
-      return next;
-    });
-  }, []);
+  const clearMatching = useCallback(
+    (prefix: string) => {
+      setEntries((previous) => {
+        const keys = Object.keys(previous).filter((key) => key.startsWith(prefix));
+        if (keys.length === 0) return previous;
+        clearWatchdogTimers(keys);
+        const next = { ...previous };
+        for (const key of keys) delete next[key];
+        return next;
+      });
+    },
+    [clearWatchdogTimers],
+  );
 
   const scheduleClearEntry = useCallback(
     (key: string) => {

@@ -182,20 +182,32 @@ export const GlobalDiagnosticsOverlay = () => {
     [navigate, routePanel, setDialogOpen],
   );
 
+  // Only subscribe (and only refresh) while the overlay is actually open: it
+  // is always mounted, so unconditional listeners here copied the full
+  // logs/error-logs/trace-events stores on every single log line and trace
+  // event append, even while nothing was visible to show it. Seed a fresh
+  // snapshot on open, since these are not kept live while closed and could
+  // otherwise show a stale snapshot from before the last close. See
+  // HARD9-021.
   useEffect(() => {
+    if (!overlayOpen) return;
+    setLogs(getLogs());
+    setErrorLogs(getErrorLogs());
     const handler = () => {
       setLogs(getLogs());
       setErrorLogs(getErrorLogs());
     };
     window.addEventListener("c64u-logs-updated", handler);
     return () => window.removeEventListener("c64u-logs-updated", handler);
-  }, []);
+  }, [overlayOpen]);
 
   useEffect(() => {
+    if (!overlayOpen) return;
+    setTraceEvents(getTraceEvents());
     const handler = () => setTraceEvents(getTraceEvents());
     window.addEventListener("c64u-traces-updated", handler);
     return () => window.removeEventListener("c64u-traces-updated", handler);
-  }, []);
+  }, [overlayOpen]);
 
   useEffect(() => {
     const handleRequest = (event: Event) => {
@@ -242,15 +254,25 @@ export const GlobalDiagnosticsOverlay = () => {
   }, [finishPendingDiagnosticsOpenAction]);
 
   useEffect(() => {
+    // The app never scrolls the window - pages scroll inside the active
+    // page's .page-shell (marked [data-page-scroll-container="true"]).
+    // window.scrollY is always 0, so saving/restoring it was a no-op; any
+    // path resetting the page-shell's own scrollTop while this full-screen
+    // sheet is open (page remount in a swipe slot, Radix scroll lock, the
+    // route-driven navigate("/settings") on close) lost the user's scroll
+    // position with nothing to restore it. See HARD9-027.
+    const getActiveScrollContainer = () =>
+      document.querySelector<HTMLElement>('[data-slot-active="true"] [data-page-scroll-container="true"]');
     if (overlayOpen) {
-      scrollRestoreRef.current = window.scrollY;
+      scrollRestoreRef.current = getActiveScrollContainer()?.scrollTop ?? null;
       return;
     }
     const restoreY = scrollRestoreRef.current;
     if (restoreY === null) return;
     scrollRestoreRef.current = null;
     window.requestAnimationFrame(() => {
-      window.scrollTo(0, restoreY);
+      const container = getActiveScrollContainer();
+      if (container) container.scrollTop = restoreY;
     });
   }, [overlayOpen]);
 

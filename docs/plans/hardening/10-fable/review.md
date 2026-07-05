@@ -1,0 +1,250 @@
+# Hardening 10 — Fable Carry-Forward Review & Fix Plan
+
+- **Date:** 2026-07-02
+- **Branch / base commit:** `fix/hardening` @ `9e7b5d7e`
+- **Predecessor:** `docs/plans/hardening/9-fable/review.md` (95 findings HARD9-001..095; 92 fully fixed, 2
+  partial, 1 open). This round picks up **only what round 9 left unfinished plus what its own resolutions
+  newly exposed** — it is not a fresh full-app sweep.
+- **Method:** five parallel deep code-mapping passes over the current working tree (not the round-9
+  `afb6ea72` snapshot), each re-verifying the residual against live code with `file:line` anchors before
+  it was written up. No new speculative bug-hunting; every finding below is either a documented round-9
+  carry-forward or a concrete defect surfaced while auditing a round-9 partial fix (the mock **HTTP**
+  server, which round 9 never touched).
+- **What this round is NOT:** the transport, playback-state, diagnostics, config-write, and FTP-client
+  subsystems were exhaustively hardened in round 9 and are treated as settled here. Known-intentional
+  designs excluded by round 9 remain excluded (native CapacitorHttp routing with timeouts = BUG-066;
+  HTTP keep-alive despite the firmware TCP wedge; PUT-not-POST single config writes; wake-lock
+  adoption-on-remount = BUG-025/040; songlengths post-ingestion `force` reload; snapshot restore
+  skipping CIA timer/TOD/ICR registers; config page rendering all live REST categories; routing-epoch
+  query keys; `demo_mode_enabled` being a real shipped user-facing feature, not a debug-only toggle).
+
+## How to use this document
+
+Findings carry stable IDs `HARD10-NNN`. Each has the same label vocabulary as round 9
+(Severity / Dimensions / Confidence / Effort), a **Files** list at `9e7b5d7e`, the failure scenario, the
+evidence trail, and a **Fix plan** (more prescriptive than round 9's "fix sketch", because the terrain is
+already mapped). Line numbers will drift — anchor on the quoted identifiers. Follow the same project rule
+round 9 did: **fix production code, don't bend tests**; if a test disagrees, ask whether the new behavior
+makes sense for a *user* before touching it. Several findings here deliberately *will* require migrating
+contract tests that pin the current (defective or about-to-move) shape — those are called out per finding.
+
+Severity semantics are unchanged from round 9 (`P0` app-wedge no-recovery; `P1` common-condition
+user-visible loss/delay/damage; `P2` narrower races/latency; `P3` robustness/polish). Effort: S (≤ ~1h +
+test), M (multi-file), L (design change).
+
+---
+
+## Index of findings
+
+| ID | Title | Area | Sev | Dimensions | Conf | Effort | Origin | Status |
+|---|---|---|---|---|---|---|---|---|
+| HARD10-001 | Auto-advance dies when the user navigates away from the Play page | playback | P2 | correctness, ux | high | L | HARD9-031 (was OPEN) | DEFERRED (own PR — HIL-gated) |
+| HARD10-002 | CommoServe-imported disks lose their bytes and cannot be re-mounted | disks | P1 | data-loss, ux, correctness | high | M | HARD9-011 (was PARTIAL) | FIXED (6a4e7f79) |
+| HARD10-003 | Mock C64U **HTTP** server: unbounded reads, no socket timeout, unbounded thread pool | native | P2 | robustness, security | high | M | HARD9-071 (HTTP side un-audited) | FIXED (d14246f9) |
+| HARD10-004 | Mock FTP **command** socket has no read timeout; both mock pools unbounded | native | P3 | robustness, security | high | S | HARD9-071 (beyond round-9 data-socket fix) | FIXED (039e85ca) |
+| HARD10-005 | Mock C64U loopback surface is unauthenticated (blank FTP password, no HTTP token) | native | P3 | security | high | M | HARD9-071 (open product/security question) | FIXED (b8d8a2e4) |
+| HARD10-006 | Saved-device password persisted before switch verification runs | settings | P3 | correctness, data-loss | medium | M | HARD9-004 (documented residual) | WON'T FIX (accepted residual) |
+| HARD10-007 | No AUTH-distinct connection badge state; wrong password reads as generic OFFLINE | settings | P3 | ux, correctness | high | S | HARD9-028/001 (documented residual) | FIXED (76391854) |
+| HARD10-008 | Eager `?raw` asset import in c64PreviewLayout trips Playwright Node collection | state | P3 | robustness | high | S | HARD9-095 (discovered, out of scope) | FIXED (2557d8f6) |
+| HARD10-009 | IndexedDB `track:*` records are never garbage-collected (unbounded row growth) | playback | P3 | performance, robustness | high | S | HARD9-034 (documented residual) | FIXED (6035c9cd) |
+| HARD10-010 | `HvscIngestion.queryAllSongs` is exposed native surface with zero callers | native | P3 | robustness | high | S | HARD9-075 (documented residual) | FIXED (cbb06f73) |
+
+Two round-9 items are **intentionally not re-opened** here because they were closed correctly, not deferred:
+the round-9 partial-fix rationale for *not* gating `MockC64UPlugin` behind `BuildConfig.DEBUG` (it would
+disable a real shipped feature) is re-confirmed by this round's audit and folded into HARD10-005's design
+instead. HARD9-004's *pre-persist reachability gate* already blocks the HIL-observed wrong-password case;
+HARD10-006 addresses only the narrower residual race the gate cannot close.
+
+---
+
+## Resolutions (round-10 execution, on `fix/hardening` / PR #299)
+
+Hashes are the commits as they landed on `fix/hardening` (agent-authored work was cherry-picked, so hashes
+differ from the worktree originals). 8 of 10 findings fixed + tested; 2 deliberately not implemented this
+round (rationale below), consistent with this document's own "decide-first / own-PR" framing.
+
+- **HARD10-002 — FIXED (`6a4e7f79`).** Added `archiveRef` to `DiskEntry`, populated at the CommoServe import
+  site, and a re-download branch in `resolveLocalDiskBlob` backed by a sibling LRU (`archiveDiskCache.ts`),
+  mirroring the shipped playlist re-download pattern. Threads `archiveConfigs` through the mount path; legacy
+  entries without `archiveRef` keep the accurate round-9 error. +8 disk tests.
+- **HARD10-003 — FIXED (`d14246f9`).** `MockC64UServer` HTTP: `Content-Length`/header-line/header-count caps
+  (reject >1 MB / >8 KB / >64), per-socket read timeout, bounded thread pool, `catch (Throwable)` so an
+  OOM/`Error` can't take the process, `writemem` capped. Raw-socket/Robolectric tests per guard.
+- **HARD10-004 — FIXED (`039e85ca`).** `MockFtpServer` command-socket read timeout + bounded pool; new
+  `MockC64UPlugin.handleOnDestroy()` stops both servers on teardown. (F4 PASV hijack: LOW/loopback-only,
+  documented not-fixed.)
+- **HARD10-005 — FIXED (`b8d8a2e4`).** Per-boot `SecureRandom` token threaded to both servers and returned
+  additively: HTTP requires `X-Mock-Token` (OPTIONS exempt) via the single `buildAuthHeaders` funnel; FTP
+  requires the token as its password via the single `ftpClient` funnel; token cleared on every routing
+  change so it never leaks to a real device. Native-only enforcement (web/E2E mock returns no token), so CI
+  is unaffected. Zero demo-mode UX change. `BuildConfig.DEBUG` gating still deliberately avoided.
+- **HARD10-007 — FIXED (`76391854`).** Distinct `Auth` `ConnectivityState` derived from
+  `lastProbeError === "Password required"`, scoped to the badge; "Password required" label + badge-tap
+  re-probe that re-raises the prompt. +Auth derive/contract tests.
+- **HARD10-008 — FIXED (`2557d8f6`).** Inlined the layout grid, removing the eager `?raw` import (the only
+  one in `src/`); a drift-guard test asserts the inline stays byte-identical to the retained asset.
+- **HARD10-009 — FIXED (`6035c9cd`).** Global `getAllKeys` orphan-track sweep, debounced after replaces,
+  deleting `track:*` records referenced by no playlist across all playlists; a shared track survives while
+  any playlist still references it. +cross-playlist GC test.
+- **HARD10-010 — FIXED (`cbb06f73`).** Removed the dead `queryAllSongs` surface (TS wrapper + interface +
+  result type, Kotlin `@PluginMethod` + its test) — zero callers.
+- **HARD10-001 — DEFERRED to its own PR (HIL-gated).** The fix genuinely requires the architectural hoist:
+  only the JS `backgroundAutoSkipDue` listener and the web 1s timer die on navigation, but `handleNext("auto")`
+  needs playlist state + device launch that live in the 1529-line page-scoped `usePlaybackController`. Per
+  this document's Fix plan it is "own PR, phased commits, HIL sign-off; do not batch," and it "cannot be
+  verified by unit tests alone." Forcing an un-HIL-verifiable rewrite of the core playback engine into a
+  merge-targeted PR would trade merge-readiness for regression risk in the exact subsystem round 9 spent the
+  most effort stabilizing. Left OPEN in code (unchanged from round 9's HARD9-031 decision); a `PlaybackProvider`
+  above the swipe runway is the follow-up.
+- **HARD10-006 — WON'T FIX (accepted residual, documented).** The pre-persist reachability gate (HARD9-004)
+  already probes with the candidate password and blocks wrong passwords, so only a *just-verified-correct*
+  password is ever persisted. The remaining "persist before switch-verify" window is a same-millisecond
+  device-side password change — and no ordering can stop a saved password going stale if the device password
+  changes right after a save, so the residual is effectively inherent, not a corruption vector. The
+  candidate-config refactor would restructure the saved-device switch state machine (optimistic-select UX +
+  per-deviceId verification bookkeeping — high blast radius on critical auth) for ~zero real-world benefit,
+  and a compensating rollback-on-verify-failure would corrupt a *good* password on a transient network blip.
+  Accepting the residual is the smallest safe outcome.
+
+---
+
+## P1 — High
+
+### HARD10-002 — CommoServe-imported disks lose their bytes on navigate-away/restart and cannot be re-mounted
+- **Area:** disks · **Severity:** P1 · **Dimensions:** data-loss, ux-responsiveness, correctness · **Confidence:** high · **Effort:** M · **Status:** FIXED (6a4e7f79)
+- **Origin:** HARD9-011 shipped a PARTIAL fix (`63347046`): an accurate "re-import from CommoServe" error via `DiskEntry.sourceKind`. The underlying data loss was left open for a dedicated design pass. This is that pass.
+- **Files:** `src/components/disks/HomeDiskManager.tsx:1110-1183` (import site), `src/lib/disks/diskTypes.ts:16-41,86-126` (`DiskEntry` + factory), `src/lib/disks/diskMount.ts:150-319` (`resolveLocalDiskBlob`), `src/hooks/useDiskLibrary.ts:64,75-89,114-121` (runtime files, per-device reset), `src/lib/archive/types.ts:66-72` (`ArchivePlaylistReference`), `src/pages/playFiles/hooks/usePlaybackController.ts:513-557,607-624` (playlist re-download precedent), `src/lib/archive/archivePlaybackCache.ts` (LRU re-download cache).
+- **Failure scenario:** A disk imported from CommoServe holds its bytes only as a `File` in the `useDiskLibrary` React state (`runtimeFiles`, keyed by disk id), while the persisted `DiskEntry` carries `location: "local"`, `sourceId` (the archive source id), `sourceKind: "commoserve"`, and no `localUri`. On device switch or app restart the load effect resets `runtimeFiles` to `{}` (`useDiskLibrary.ts:88`); the library still lists the disk, but Mount now fails with the round-9 "re-import from CommoServe" message because nothing ever persisted the bytes. The user's imported disk is a dead tombstone until they manually re-import.
+- **Evidence:** At the import site (`HomeDiskManager.tsx:1122-1150`) the code already has `resultId`, `category`, `diskEntry.id`, and `diskEntry.path` in scope from `archiveClient.getEntries(...)` / `downloadBinary(resultId, category, diskEntry.id, diskEntry.path)`, **but discards all four** — only `sourceId` survives onto the `DiskEntry`. `resolveLocalDiskBlob` (`diskMount.ts:300-311`) resolves a `sourceId`-bearing disk *only* through the matching persisted local source (HARD9-068); CommoServe is not a local source, so it falls straight to `throwUnresolvedLocalDiskError` (`diskMount.ts:287-298`).
+- **The precedent that makes this low-risk:** the **playlist** subsystem already solved exactly this problem and ships it tested. Playlist items persist an `ArchivePlaylistReference = { sourceId, resultId, category, entryId, entryPath }` (`archive/types.ts:66-72`, populated at `addFileSelections.ts:488-500`) and **re-download on demand** via `resolveCommoServeRuntimeRequest` (`usePlaybackController.ts:513-557`) → `createArchiveClient(config).downloadBinary(...)`, backed by an in-memory LRU cache (`archivePlaybackCache.ts`: 100-entry cap, 10-min TTL, key `sourceId:resultId:category:entryId`). The CommoServe REST URL `/leet/search/bin/{id}/{category}/{index}` is deterministic and URL-stable (`archive/client.ts:331-333`), and abort/timeout are already hardened (HARD9-079 native `raceAgainstAbort`, HARD9-080 shared-promise safety).
+- **Fix plan (option B — re-download; recommended over byte-persistence):**
+  1. Add `archiveRef?: ArchivePlaylistReference` to `DiskEntry` (`diskTypes.ts`) and thread it through `createDiskEntry`. Populate it at the import site (`HomeDiskManager.tsx:1140`) from the four values already in scope. Keep `sourceKind` as the fast discriminator.
+  2. Add an `archiveRef` re-download branch to `resolveLocalDiskBlob` **before** `throwUnresolvedLocalDiskError`: when `runtimeFile` is absent but `disk.archiveRef` is present, resolve the archive config and `downloadBinary(...)`, reusing `archivePlaybackCache` (extract the cache so both disks and playback share one LRU, or instantiate a sibling). Respect the existing `signal` option `resolveLocalDiskBlob` already accepts (`diskMount.ts:33-35`) and the 64 MB `MAX_LOCAL_DISK_IMAGE_BYTES` cap (`diskMount.ts:25`).
+  3. Pass `archiveConfigs` down the mount path — today `HomeDiskManager.handleMountDisk` (`:606-620`) passes only `runtimeFile`. It already computes `archiveConfigs` (`:329-331`); thread it into `mountDiskToDrive`/`resolveLocalDiskBlob`.
+  4. Keep the round-9 `sourceKind === "commoserve"` error as the terminal fallback for disks that have **no** `archiveRef` (legacy entries imported before this fix) — the message stays accurate for them.
+  5. Update `throwUnresolvedLocalDiskError` message-selection test (`tests/unit/lib/disks/diskMount.test.ts:161`) so it still asserts the re-import message for the no-`archiveRef` case, and add a new test proving an `archiveRef` disk re-downloads on mount after `runtimeFiles` is cleared.
+- **Why not option A (persist bytes):** IndexedDB blob storage is proven (playlist repo) and the snapshot store's 100-entry evict-with-notice pattern (HARD9-069) is a ready precedent, but persisting bytes adds a new storage lifecycle (write on import, delete on `removeDisk` at `useDiskLibrary.ts:114-121`, web quota pressure, and the native 5 MB `MAX_BRIDGE_READ_BYTES` bridge ceiling for multi-MB `.dnp`). Option B reuses an already-tested code path and stores nothing new. Recommend B; note A as the fallback if a product requirement emerges for offline-after-import mounting (re-download needs the network).
+- **Product decision to confirm:** on a stale re-download failure (device offline), the current plan surfaces the existing user-facing error and leaves the entry listed. That matches playback's behavior. If product wants silent eviction of un-redownloadable disks instead, that's a small add — flag before implementing.
+- **Resolution (b32c385d):** Implemented option B (re-download) exactly as planned. `DiskEntry` now carries `archiveRef?: ArchivePlaylistReference` (`diskTypes.ts`), threaded through `createDiskEntry` and populated at the CommoServe import site (`HomeDiskManager.tsx`) from the four archive coordinates already in scope (`sourceId`, `resultId`, `category`/`entryId`/`entryPath`) that round 9 discarded. `resolveLocalDiskBlob` (`diskMount.ts`) gained an `archiveRef` re-download branch that runs *before* the local-source scan/throw (a CommoServe disk's `sourceId` never resolves via `loadLocalSources()` and would otherwise dead-end at the HARD9-068 sourceId guard): it resolves the archive config, `createArchiveClient(config).downloadBinary(...)`, honours the existing `signal` and the 64 MB `MAX_LOCAL_DISK_IMAGE_BYTES` cap, and caches the resulting `Blob` in a new sibling LRU `archiveDiskCache.ts` (100-entry / 10-min, sharing `buildArchivePlaybackCacheKey` with the playback cache — a separate map because playback caches a `LocalPlayFile` while mounting needs the raw image `Blob`). `archiveConfigs` is threaded from `HomeDiskManager.handleMountDisk` → `mountDiskToDrive` → `resolveLocalDiskBlob` via a new option field; the Play-page (`playbackRouter.ts`) and Home drive-manager (`DriveManager.tsx`) callers build fresh `DiskEntry`s with no `archiveRef`, so they were left untouched and keep working. Legacy entries imported before this fix have no `archiveRef` and still hit the round-9 `sourceKind === "commoserve"` re-import error in `throwUnresolvedLocalDiskError` (kept as the terminal fallback). On a re-download failure (device offline / missing config) the error propagates to the existing user-facing mount error and the entry stays listed, matching playback. Tests: `diskMount.test.ts` keeps the HARD9-011 no-`archiveRef` assertion and adds re-download coverage (blob resolves, `downloadBinary` args, cache reuse, 64 MB cap, aborted signal, missing config, full `mountDiskToDrive` upload path); `HomeDiskManager.dialogs.test.tsx` asserts `archiveRef` is persisted on import and threaded into the mount call; `diskTypes.test.ts` covers the factory default + passthrough. `npm run typecheck`, `npx eslint src tests --quiet`, and `npx vitest run tests/unit/lib/disks tests/unit/diskTypes.test.ts tests/unit/components/disks tests/unit/archive` (19 files / 230 tests) all green.
+
+---
+
+## P2 — Medium
+
+### HARD10-001 — Auto-advance dies when the user navigates away from the Play page
+- **Area:** playback · **Severity:** P2 · **Dimensions:** correctness, ux-responsiveness · **Confidence:** high · **Effort:** L · **Status:** DEFERRED (own PR — HIL-gated)
+- **Origin:** HARD9-031, deliberately left OPEN in round 9 as an architectural change too large for a same-session hardening fix. This is the dedicated follow-up round 9 recommended.
+- **Files:** `src/components/SwipeNavigationLayer.tsx:29,63,82-89,460-479` (Play is a swipe slot, unmounted when inactive), `src/pages/PlayFilesPage.tsx:1163-1268` (1s timeline interval + `syncPlaybackTimeline` + `onBackgroundAutoSkipDue` listener), `src/pages/PlayFilesPage.tsx:325-368,487-497` (guard refs, `handleNextRef`, `playbackStateRef`), `src/pages/playFiles/hooks/usePlaybackController.ts:1396-1484` (`handleNext`, guard gating), `src/pages/playFiles/hooks/usePlaylistManager.ts` (93-line pure state hook), `src/pages/playFiles/hooks/usePlaybackPersistence.ts:382-462,540-584` (restore/persist incl. `autoAdvanceDueAtMs`), `src/lib/native/backgroundExecution.ts:51-53` (`onBackgroundAutoSkipDue`, sole subscriber is PlayFilesPage), `src/lib/native/backgroundExecutionManager.ts:20,41-73` (module-level wake-lock refcount — already page-independent), `src/App.tsx:264-311` (provider tree).
+- **Failure scenario:** Playback is running; the user navigates to another in-app tab. Because `PlayFilesPage` is a `lazy()` swipe slot rendered as an empty placeholder when inactive (`SwipeNavigationLayer.tsx:460-479`), the page **unmounts**: the web 1s timer (`PlayFilesPage.tsx:1190-1195`) and the native `onBackgroundAutoSkipDue` listener (`:1199-1268`) are torn down. The wake lock, FGS, and native watchdog are deliberately kept alive (BUG-040), so when the track's duration elapses on Android the service fires `backgroundAutoSkipDue` into a void (no JS subscriber), and on web there is no timer at all. Music stops at end of track; the playlist stalls until the user returns to Play (where the overdue guard lurches forward on the first tick).
+- **Evidence:** Grep confirms `PlayFilesPage.tsx:1205` is the **only** subscriber to `onBackgroundAutoSkipDue`; the unmount teardown at `:1262-1267` removes it. The page even documents the gap at `:1316`: `syncPlaybackDecisionFromTrace(null, "Play page unmounted; playback state is no longer directly observable")`. No test — unit, E2E, or Maestro — exercises in-app navigation away from Play during playback and asserts auto-advance still fires (`.maestro/edge-auto-advance-lock.yaml` only turns the screen off; the page stays mounted).
+- **The good news (scoping the blast radius):** the hard part is already lifted. The wake lock/FGS refcount lives at module scope (`backgroundExecutionManager.ts`), and the native `Handler` watchdog + broadcast survive the page (`BackgroundExecutionService.kt:465-524`). Only **two** things die with the page: (a) the JS `backgroundAutoSkipDue` listener, and (b) the web 1s timer. The session (including `autoAdvanceDueAtMs`) already persists on a device-independent key through sessionStorage + the IndexedDB repository. `usePlaylistManager` is a 93-line pure `useState` hook with zero page-UI coupling — it lifts almost verbatim.
+- **The hard part:** `handleNext("auto")` lives in the 1529-line `usePlaybackController`, which takes ~50 props and transitively depends on volume bindings, songlengths, HVSC, local-sources/archive resolution, and a **page-rendered dialog** (`setUnavailableConfigPrompt`, controller `:411-422`). Hoisting "just the auto-advance engine" drags this in. Shared mutable refs (`autoAdvanceGuardRef`, `trackStartedAtRef`, `playedClockRef`, `trackInstanceIdRef`) are page-created and threaded into all three hooks; `syncPlaybackTimeline` closes over page `isPlaying/isPaused/currentIndex` and calls page `setElapsedMs/setPlayedMs`.
+- **Fix plan (phased — do NOT attempt as one commit):**
+  - **Phase 1 (structural prep, no behavior change):** move `usePlaylistManager` state and the shared playback refs into a new `PlaybackProvider` mounted in `App.tsx` **above** `SwipeNavigationLayer` (follow the `LightingStudioProvider`/`RefreshControlProvider` context pattern at `App.tsx:264-311`). `PlayFilesPage` consumes them via context instead of owning them. Validate: full playback suite green, no runtime change.
+  - **Phase 2 (re-home the engine):** move the auto-advance guard, the due-time reconciliation (`syncPlaybackTimeline`'s overdue branch → `handleNext("auto")`), the web 1s timer, and the `onBackgroundAutoSkipDue` subscription into the provider so they run regardless of which tab is mounted. This requires either splitting `handleNext("auto")` out of `usePlaybackController` (a minimal "advance to next index + launch" path that the provider can call) or moving the controller itself into the provider. The `setUnavailableConfigPrompt` dialog dependency must be handled — either the provider exposes prompt state the currently-mounted page renders, or auto-advance defers the prompt to next Play mount.
+  - **Phase 3 (verify on real navigation):** the module-store + `useSyncExternalStore` idiom already used by `playbackTraceStore.ts` is the model for exposing provider state to the page. This finding **cannot be verified by unit tests alone** — add a Maestro/HIL flow (extend `edge-auto-advance-lock.yaml`) that plays a track, navigates to another tab, waits past the track duration, and asserts exactly one auto-advance fired.
+  - **Migrate contract tests:** `tests/unit/pages/playFiles/PlayFilesPage.autoAdvanceWiring.test.ts` and the `backgroundAutoSkipListener`/`backgroundExecutionLifecycle` tests pin the current in-page source shape and will fail by design once the engine moves. Rewrite them against the provider.
+- **Risk:** this touches the core playback engine, which round 9 made numerous careful fixes to (HARD9-005/006/007/029/030/033/063/064). Do it in its own PR with the phased commits above and HIL sign-off; do not batch it with anything else.
+
+### HARD10-003 — Mock C64U HTTP server: unbounded reads, no socket timeout, unbounded thread pool
+- **Area:** native · **Severity:** P2 · **Dimensions:** robustness, security · **Confidence:** high · **Effort:** M · **Status:** FIXED (d14246f9)
+- **Origin:** HARD9-071 fixed two concrete bugs in `MockFtpServer.kt` but explicitly **did not audit `MockC64UServer.kt` (the HTTP side)**. This audit found the HTTP server repeats the exact unbounded-read / no-timeout / unbounded-thread-pool DoS class that round 9 fixed only on the FTP *data* path.
+- **Files:** `android/app/src/main/java/uk/gleissner/c64commander/MockC64UServer.kt:52-53,108-139,158-166,168-171,179-205,376-389`
+- **Failure scenario:** While demo mode is active, `MockC64UServer` listens on an ephemeral loopback port reachable by any app on the device. (H1) `handleRequest` reads `Content-Length` with no cap (`:168`) and allocates `ByteArray(contentLength)` (`:196-205`) — a client sending `Content-Length: 2000000000` forces a ~2 GB allocation; `OutOfMemoryError` is an `Error`, not an `Exception`, so the `catch (error: Exception)` in `handleClient` (`:132-136`) does not catch it and the app process dies. (H2) `readLine` (`:179-194`) accumulates into a `ByteArrayOutputStream` until `\n` with no length cap, and the header loop (`:158-166`) caps neither header length nor count — an endless header line grows heap unbounded, same OOM outcome with no large `Content-Length` needed. (H3) `handleClient` (`:108-139`) never sets `client.soTimeout`, so a client that connects and sends nothing parks a worker forever; (H4) combined with `connectionExecutor = Executors.newCachedThreadPool()` (`:52`, unbounded), many idle connections exhaust threads/memory (slowloris).
+- **Evidence:** round 9 fixed precisely this bug class for the FTP PASV data socket (`MockFtpServer.kt:277` `soTimeout`); the HTTP accept/read path never received the equivalent. `writemem` (`:376-389`) also writes an uncapped number of bytes into the in-memory map (H7), bounded in practice only by the (uncapped) body size.
+- **Fix plan:** mirror the round-9 FTP hardening onto the HTTP path — (1) cap `Content-Length` (reject > a small bound, e.g. 1 MB, which is far above any real mock request); (2) bound `readLine` accumulation and header count/size; (3) set `client.soTimeout` on every accepted connection; (4) replace `newCachedThreadPool` with a bounded pool (or keep cached but rely on soTimeout + a max in-flight guard). Add `try { ... } catch (t: Throwable)` around the per-connection body so an OOM on one worker cannot escalate. Cap `writemem` length. These are self-contained Kotlin changes with Robolectric/raw-`ServerSocket` test coverage (the codebase already tests `MockFtpServer` this way — `src/test/.../MockFtpServerTest.kt`).
+
+---
+
+## P3 — Robustness / polish
+
+### HARD10-004 — Mock FTP command socket has no read timeout; both mock pools are unbounded
+- **Area:** native · **Severity:** P3 · **Dimensions:** robustness, security · **Confidence:** high · **Effort:** S · **Status:** FIXED (039e85ca)
+- **Origin:** HARD9-071 bounded the FTP **data** socket accept; the **command** socket and the thread pools were not addressed.
+- **Files:** `android/app/src/main/java/uk/gleissner/c64commander/MockFtpServer.kt:38,101-126,261-289`, `android/app/src/main/java/uk/gleissner/c64commander/MockC64UPlugin.kt` (no `handleOnDestroy`)
+- **Failure scenario:** (F2) `handleClient` (`:101-126`) sets no `socket.soTimeout`; the command loop blocks on `reader.readLine()` (`:109`), so a client that connects to the command port and sends nothing parks a worker thread indefinitely. (F3) combined with `executor = Executors.newCachedThreadPool()` (`:38`, unbounded) this is a thread-exhaustion DoS symmetric to HARD10-003's H3/H4. (F4, lower) `openPassive` (`:261-269`) opens a transient `ServerSocket(0,1,127.0.0.1)` whose first connector wins — another loopback app can race the real client for the data connection (read-only demo data, short-lived, so Low). Separately, `MockC64UPlugin` has no `handleOnDestroy`, so both servers keep running if the app is backgrounded while demo mode is active (stopped only via JS `stopServer` paths in `connectionManager.ts`).
+- **Fix plan:** set `socket.soTimeout` on the accepted command socket (reuse the round-9 injectable-timeout pattern from the data path); bound the executor; add a plugin `handleOnDestroy` that stops both servers. F4 is optional — a 1-backlog transient port on loopback is low risk; note it and defer unless HARD10-005's token work makes a fix free.
+
+### HARD10-005 — Mock C64U loopback surface is unauthenticated (blank FTP password, no HTTP token)
+- **Area:** native · **Severity:** P3 · **Dimensions:** security · **Confidence:** high · **Effort:** M · **Status:** FIXED (b8d8a2e4)
+- **Origin:** HARD9-071's explicitly-deferred product/security question: "should demo mode's local server surface be authenticated, or demo mode redesigned to not need an unauthenticated loopback server?" Round 9 correctly declined to gate `MockC64UPlugin` behind `BuildConfig.DEBUG` (that disables a real shipped feature). This finding proposes the authentication path instead, which this audit confirmed is threadable with **zero UX change**.
+- **Files:** `android/app/src/main/java/uk/gleissner/c64commander/MockC64UServer.kt:67-70,637-643` (bind + wildcard CORS), `android/app/src/main/java/uk/gleissner/c64commander/MockFtpServer.kt:163-171` (blank-password login), `android/app/src/main/java/uk/gleissner/c64commander/MockC64UState.kt:200-203` (`getNetworkPassword` default empty), `android/app/src/main/java/uk/gleissner/c64commander/MockC64UPlugin.kt:25-65` (`startServer` return map), `src/lib/native/mockC64u.ts:12-23` (JS bridge), `src/lib/mock/mockServer.ts:24-49`, `src/lib/connection/connectionManager.ts:861-865` (runtime config apply), `src/lib/config/feature-flags.yaml:49-55`.
+- **Failure scenario:** In stock demo mode the FTP server accepts *any* login: `PASS` succeeds when `password.isNullOrBlank() || argument == password` (`MockFtpServer.kt:163-171`) and the injected password is the device network password, which defaults to `""` (`MockC64UState.kt:200-203`, `docs/c64/c64u-config.yaml:1580`). Any other app on the device can `LIST`/`RETR` the demo FTP tree unauthenticated. The HTTP server has no auth at all and emits `Access-Control-Allow-Origin: *` on every response including preflight (`MockC64UServer.kt:637-643`), so any reachable web origin can read it. Impact is bounded to bundled demo assets (no real user data), hence P3 — but it is a genuinely open, unauthenticated loopback surface reachable by any co-resident app.
+- **Fix plan (per-boot token — no UX change; the return object is a plain additive map):**
+  1. In `MockC64UPlugin.startServer`, generate a random per-start token/secret. Return it as new fields alongside the existing `baseUrl`/`port`/`ftpPort`.
+  2. HTTP: require the token on `MockC64UServer` (e.g. an `X-Mock-Token` header — CORS already allow-lists custom headers at `:641`, and `C64API` already attaches `X-Password`, so one internal header is invisible to the user). Tighten CORS from `*` to the token check (or keep `*` but require the token — the token is the real barrier).
+  3. FTP: inject the random secret into `MockFtpServer` instead of the empty network password (`MockC64UPlugin.kt:51-52` already injects a password), return it, and have the JS FTP client use it (thread it via the same channel as `setRuntimeFtpPortOverride` in `connectionManager.ts:861-865`). This closes the blank-password bypass.
+  4. The WebView is the only intended client (`mockC64u.web.ts:11-35` throws on web; there is no JS `/v1/*` mock), so all clients go through the bridge and can carry the token. No demo-mode UX changes.
+- **Alternative (larger, addresses the question at its root):** move the deterministic, self-contained mock logic (`mockConfig.ts` / `MockC64UState` / `MockC64UServer`) into an in-process JS fetch interceptor serving `/v1/*` plus a virtual FTP tree, eliminating the loopback socket surface entirely. This is a materially larger change; recommend the token approach for this round and note the interceptor as the long-term redesign if the loopback surface must go away completely.
+
+### HARD10-006 — Saved-device password persisted before switch verification runs
+- **Area:** settings · **Severity:** P3 · **Dimensions:** correctness, data-loss · **Confidence:** medium · **Effort:** M · **Status:** WON'T FIX (accepted residual)
+- **Origin:** HARD9-004's documented residual: "persist the password only after verification succeeds" was not implemented. The round-9 pre-persist reachability gate already blocks the HIL-observed wrong-password case; this is the narrower same-millisecond race.
+- **Files:** `src/pages/SettingsPage.tsx:638-738` (`handleSaveConnection` order: persist at 695-713, verify at 714), `src/pages/SettingsPage.tsx:849-856` (discovered-device confirm, same shape), `src/components/DeviceDiscoveryInterstitial.tsx:167-174,242-286` (two more persist→verify sites), `src/hooks/useSavedDeviceSwitching.ts:42-168` (`executeSavedDeviceSwitch(deviceId)` reads persisted state), `src/lib/savedDevices/store.ts:734-737,892-913,950,985,1077` (record read + optimistic select + verification bookkeeping).
+- **Failure scenario:** `handleSaveConnection` persists the password (`setPasswordForDevice`, `:697`), the saved-device record (`updateSavedDevice`, `:704`), and runtime config (`:713`) **before** calling `switchSavedDevice` (`:714`), whose verification (`executeSavedDeviceSwitch`) re-reads the record and password from persisted storage. If the device's password changes on the device in the window between the pre-persist reachability probe (`:671`) and the post-persist verify, a bad credential is briefly persisted. This is a much narrower race than the HIL case round 9 fixed — the pre-persist gate at `:671` already probes with the candidate password and blocks wrong passwords — but the persist-before-verify ordering remains.
+- **Evidence:** `executeSavedDeviceSwitch` takes only a `deviceId` (`useSavedDeviceSwitching.ts:46`) and reads the record (`:49`), password (`:95`), and mutates the persisted selection (`:76`) all before verifying (`:104`). So persistence must currently precede the switch.
+- **Fix plan:** restructure `executeSavedDeviceSwitch` to accept an optional **candidate config** (`{ id, host, httpPort, ftpPort, telnetPort, hasPassword, password }`) so it can verify against the candidate before any persisted write. Callers that switch to an already-saved device (SettingsPage select/delete-next, `UnifiedHealthBadge` switcher, `DeviceSwitchLabPage`) keep the id-only path; the four create-then-switch callers (SettingsPage save + discovered-confirm, `DeviceDiscoveryInterstitial` candidate + manual) pass a candidate.
+- **Seams that make this genuinely hard (weigh before committing):** (1) the optimistic `selectSavedDevice` at `useSavedDeviceSwitching.ts:76` persists the selection *before* verify and is load-bearing UX (badge shows "verifying" immediately); a test pins the synchronous flip (`useSavedDeviceSwitching.test.tsx:174`). (2) `startSavedDeviceVerification`/`completeSavedDeviceVerification`/`failSavedDeviceVerification` all write the persisted store keyed by deviceId during the switch, so the device must exist in the store for bookkeeping to work — a true verify-before-persist needs these to accept a transient candidate too. (3) the single-flight coalescing key is the deviceId. **Recommendation:** given the pre-persist gate already covers the realistic case and this residual is a same-millisecond theoretical race, this is a **judgment call** — either do the candidate-config refactor properly (M effort, migrate the two switch-hook test files) or formally accept the residual and downgrade to a documented won't-fix. Do not attempt a half-refactor that leaves the bookkeeping reading persisted state.
+
+### HARD10-007 — No AUTH-distinct connection badge state; wrong password reads as generic OFFLINE
+- **Area:** settings · **Severity:** P3 · **Dimensions:** ux-responsiveness, correctness · **Confidence:** high · **Effort:** S · **Status:** FIXED (76391854)
+- **Origin:** HARD9-001/028's documented residual: auth failure now raises the `notifyAuthRequired` dialog and records a `"Password required"` probe error, but the **persistent badge** still shows generic OFFLINE.
+- **Files:** `src/hooks/useHealthState.ts:174-190` (holds the full snapshot incl. `lastProbeError`, uses only `.state`), `src/lib/diagnostics/healthModel.ts:18,34-48,77-156,218-231,528-533` (`ConnectivityState` union + label/rollup), `src/components/UnifiedHealthBadge.tsx:346-408,479,541-546` (badge render + offline-tap reconnect), `src/lib/connection/connectionManager.ts:71,78,212-218` (`lastProbeError` = `"Password required"`), `src/lib/auth/authChallenge.ts:122-159` (dialog store).
+- **Failure scenario:** After a 401/403, `handleWindowExpiry` skips the LAN rescan (`connectionManager.ts:1077-1080`) but still `transitionToOfflineNoDemo` (`:1086`), so an auth failure resolves to the same `OFFLINE_NO_DEMO`/`"Offline"` badge as a dead host. The badge shows "Offline ◌ Device not reachable" and a tap fires `discoverConnection("manual")` (`UnifiedHealthBadge.tsx:479`) — a reconnect that will just 403 again — rather than raising the password dialog. The detection exists; only the durable surface doesn't reflect it.
+- **Evidence:** `useHealthState.ts:175` already destructures the full `ConnectionSnapshot` (which includes `lastProbeError`, `connectionManager.ts:71`) but `deriveConnectivityState` (`:190`) is called with only `.state`. The `"Password required"` marker is recorded at `connectionManager.ts:216`, right next to the `.state` the badge already consumes.
+- **Fix plan (the cheap seam):** add an `"Auth"` (or `"Password required"`) member to `ConnectivityState` (`healthModel.ts:18`); pass `connectionSnapshot.lastProbeError` into `deriveConnectivityState` and return the new member when `state === "OFFLINE_NO_DEMO" && lastProbeError === "Password required"`. Add its label to `getBadgeConnectivityLabel`/`getBadgeLeadingLabel`/`getBadgeTextContract` and map it in `rollUpHealth` (reuse `Unavailable` health with an auth-specific connectivity label + glyph in `UnifiedHealthBadge.tsx:307-329`). Change the badge tap while auth-required to raise `notifyAuthRequired`/open the password dialog instead of `discoverConnection`. No new plumbing reaches the badge — `lastProbeError` is already on the snapshot the hook holds. Existing Offline tests (`UnifiedHealthBadge.test.tsx:394-399,469-487`) don't set `lastProbeError`, so they stay green; add new assertions for the auth path.
+- **Avoid the invasive alternative:** adding a new `ConnectionState` member (`OFFLINE_AUTH_REQUIRED`) ripples through `deviceStateStore`, `useC64Connection`, and every `ConnectionState` switch. The `ConnectivityState`-only derivation above achieves the same user-visible result with far less blast radius. Note that `lastProbeError` is overwritten by the next non-auth probe and cleared on recovery, so the auth badge is exactly as durable as the last probe — acceptable, since a successful probe clears it and `notifyAuthSatisfied` closes the dialog.
+
+### HARD10-008 — Eager `?raw` asset import in c64PreviewLayout trips Playwright Node collection
+- **Area:** state · **Severity:** P3 · **Dimensions:** robustness · **Confidence:** high · **Effort:** S · **Status:** FIXED (2557d8f6)
+- **Origin:** discovered during HARD9-095, explicitly logged as out-of-scope. It independently blocks Playwright `--list` collection of any spec that transitively imports `App.tsx`, which is why HARD9-095's fix could not be reproduced via `playwright test --list`.
+- **Files:** `src/lib/lighting/c64PreviewLayout.ts:1,290`, `src/assets/lighting/c64-layout.txt`, `src/vite-env.d.ts:17,22` (only `.yaml`/`.yml` `?raw` declared, not `.txt`), `src/components/lighting/LightingStudioDialog.tsx` (sole importer of the layout module).
+- **Failure scenario:** `c64PreviewLayout.ts:1` does `import previewLayoutAscii from "../../assets/lighting/c64-layout.txt?raw"` and calls `parseC64PreviewLayout(previewLayoutAscii)` at **module-evaluation time** (`:290`, top-level). Playwright's Node-based transform cannot parse Vite's `?raw` suffix, so any E2E spec that transitively imports this module (via `App.tsx` → route tree → `LightingStudioDialog`) fails at collection — the reason no spec currently imports `App.tsx` and why HARD9-095 couldn't be reproduced. This is the only eager top-level `?raw` import in `src/` (the other, `mockConfig.ts:128`, is a lazy dynamic `import()` and doesn't trip Node collection).
+- **Fix plan:** mirror HARD9-095's own lazy-read fix. Either (a) defer the `?raw` import behind a lazily-memoized getter so it isn't evaluated at module load (matching `getCoverageProbeModules()` at `App.tsx:86-109`), or (b) inline the small (1005-byte) ASCII layout as a plain string constant in the `.ts` file, removing the asset-suffix import entirely. Option (b) is simplest and removes the tripwire outright — the layout is static and tiny. After the fix, add a Playwright collection smoke that imports a module transitively pulling in `App.tsx` to prove the tripwire is gone (this also retroactively validates HARD9-095).
+
+### HARD10-009 — IndexedDB `track:*` records are never garbage-collected
+- **Area:** playback · **Severity:** P3 · **Dimensions:** performance, robustness · **Confidence:** high · **Effort:** S · **Status:** FIXED (6035c9cd)
+- **Origin:** HARD9-034's documented residual: `replacePlaylistSnapshot`/`replacePlaylistItems` delete orphaned `playlist-item:*` keys but deliberately leave `track:*` records forever (cross-playlist sharing → needs reference counting).
+- **Files:** `src/lib/playlistRepository/indexedDbRepository.ts:363-375` (`deleteStalePlaylistItems`, only ever deletes `playlist-item:*`), `:377-401,421-439` (both replace methods leave `track:*` alone with a `// HARD9-034` comment), `:405,413` (`getTracksByIds` reads), `src/lib/playlistRepository/types.ts:16-37` (`TrackRecord` — metadata only, no blobs).
+- **Failure scenario:** Every track ever added to any playlist writes a `track:{id}` record; nothing ever deletes one. Over a long-lived install with heavy playlist churn, `track:*` row count grows without bound. Each record is only a few hundred bytes of scalar metadata (`TrackRecord` has no `Blob`/base64 fields), so this is unbounded **row count**, not per-row bloat — a slow storage leak, not an immediate failure. Hence P3.
+- **Fix plan:** add a reference-counted / mark-and-sweep GC pass over `track:*` keys — after a snapshot/items replace, collect the set of `trackId`s still referenced by any surviving `playlist-item:*` across **all** playlists, and delete `track:*` records not in that set. Because tracks are shared across playlists (the reason round 9 left them), the sweep must consider every playlist, not just the one being replaced — run it opportunistically (e.g. on repository open, or debounced after replaces) rather than inside a single-playlist write. Keep it defensive: never delete a track still referenced anywhere. Add a test with two playlists sharing a track, proving the shared track survives removal from one playlist and is collected only when removed from both.
+
+### HARD10-010 — `HvscIngestion.queryAllSongs` is exposed native surface with zero callers
+- **Area:** native · **Severity:** P3 · **Dimensions:** robustness · **Confidence:** high · **Effort:** S · **Status:** FIXED (cbb06f73)
+- **Origin:** HARD9-075 hardened `queryAllSongs` (moved the ~50k-row scan off the plugin thread) but noted it has zero callers in `src/` and deliberately skipped the optional limit/offset paging for lack of a real consumer.
+- **Files:** `src/lib/native/hvscIngestion.ts:55,97-100` (interface + wrapper, both self-referential), `android/.../HvscIngestionPlugin.kt:909-943` (`@PluginMethod`), `android/.../HvscIngestionPluginTest.kt:119-140` (native test exists).
+- **Failure scenario:** none at runtime — this is a maintenance/robustness finding. `HvscIngestion.queryAllSongs` is a live `@PluginMethod` exposed to the WebView with no JS caller anywhere in `src/`. It materializes ~50k rows in one payload (mitigated but not paged by HARD9-075). As dead-but-reachable API surface it invites accidental future use of an unpaged 50k-row bridge call.
+- **Fix plan:** decide and document one of two paths — (a) **remove** the exposed wrapper and `@PluginMethod` if nothing is planned to use it (smallest surface; the native scan logic can stay for tests or be removed with it); or (b) **keep and page it** by adding the limit/offset paging HARD9-075 deferred, but only if a concrete consumer is imminent. Recommend (a) unless product has a near-term "export all HVSC songs" feature. This is a cleanup, not a bug — low priority, include only if touching the HVSC plugin anyway.
+
+---
+
+## Suggested fix order & batching
+
+Ordered by value/risk, not strictly by severity. Each batch is independently shippable.
+
+1. **Mock server hardening** (HARD10-003, 004, 005) — all in the four `android/.../Mock*.kt` files, testable together via the existing Robolectric/raw-`ServerSocket` harness. HARD10-003 (P2 DoS/OOM) first, then 004, then the 005 token work (which may make 004's F4 fix free). Self-contained, no TS blast radius. **Best first batch.**
+2. **CommoServe disk re-download** (HARD10-002) — the one P1. Reuses the proven playlist re-download pattern; touches `diskTypes`, `diskMount`, `HomeDiscManager`, and the archive cache. Confirm the stale-download-failure UX with product before implementing step 5.
+3. **Auth badge + small residuals** (HARD10-007, 008, 009, 010) — all S-effort, independent, low-risk. 007 is a clean seam; 008 removes a real CI tripwire; 009 stops a slow storage leak; 010 is optional cleanup.
+4. **Password persist-after-verify** (HARD10-006) — M effort with real seams (optimistic select, verification bookkeeping). **Decide first** whether the residual race justifies the candidate-config refactor or should be a documented won't-fix; do not half-refactor.
+5. **Playback provider hoist** (HARD10-001) — L effort, own PR, phased commits, HIL sign-off required. Do last and alone; it touches the core playback engine.
+
+## Validation (per the round-9 conventions that worked)
+
+- `npm run typecheck` (the real one: `tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit`) — **not** bare `npx tsc --noEmit`, which is a silent no-op against this repo's references-only root tsconfig (a trap round 9 hit and documented).
+- `npx eslint src tests --quiet`, targeted `npx vitest run <files>` per finding, `npm test -- --run` at checkpoints.
+- Android: `./gradlew :app:testDebugUnitTest` when native files change (mock-server batch, playback bridge). `com.sun.net.httpserver` is absent from `android.jar` — test the mock servers via raw `ServerSocket`/Robolectric as the existing `MockFtpServerTest` does.
+- HARD10-001 requires a Maestro/HIL flow (navigate-away-during-playback); it cannot be validated by unit tests alone. HARD10-008 should add a Playwright collection smoke.
+
+## Notes for the implementing session
+
+- Base is `fix/hardening` @ `9e7b5d7e`, working tree clean. Round 9's `progress.md` is the authoritative
+  ledger for what's already fixed — do not re-open a HARD9 finding without proving its resolution is
+  broken.
+- The two round-9 "partial fix" items that this round advances (HARD9-011 → HARD10-002, HARD9-071 →
+  HARD10-003/004/005) should have their **round-9 review.md rows updated** to point at the round-10
+  finding once fixed, so the audit trail stays connected across rounds.
+- Everything here is verified against the current tree, but line numbers drift — anchor on the quoted
+  identifiers, exactly as round 9 instructed.
+- If parallel/worktree agents are used again (round 9 did for its last batch), re-check commit-hash
+  self-references after any cherry-pick/rebase (round 9's 9e7b5d7e was a fix for exactly that), and
+  `git worktree list` before assuming you know every in-flight agent.

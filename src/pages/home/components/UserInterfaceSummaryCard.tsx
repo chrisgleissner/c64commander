@@ -9,12 +9,14 @@
 import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
 import { buildConfigKey, readItemOptions } from "../utils/HomeConfigUtils";
 import { resolveHomeConfigOptions } from "../constants";
+import { buildOptionDomainKey, type DeviceConfigOptionDomains } from "../hooks/useDeviceConfigOptionDomains";
 import { SummaryConfigCard, SummaryConfigControlRow } from "./SummaryConfigCard";
 
 type UserInterfaceSummaryCardProps = {
   category: string;
   config: Record<string, unknown> | undefined;
   isActive: boolean;
+  optionDomains?: DeviceConfigOptionDomains;
   selectTriggerClassName: string;
   testIdPrefix: string;
 };
@@ -23,6 +25,7 @@ export function UserInterfaceSummaryCard({
   category,
   config,
   isActive,
+  optionDomains = {},
   selectTriggerClassName,
   testIdPrefix,
 }: UserInterfaceSummaryCardProps) {
@@ -38,21 +41,18 @@ export function UserInterfaceSummaryCard({
   const colorSchemeValue = String(resolveConfigValue(config, category, "Color Scheme", unavailableLabel));
 
   const effectiveInterfaceTypeOptions = resolveHomeConfigOptions(
-    category,
-    "Interface Type",
     interfaceTypeOptions,
+    optionDomains[buildOptionDomainKey(category, "Interface Type")]?.options,
     interfaceTypeValue,
   );
   const effectiveNavigationStyleOptions = resolveHomeConfigOptions(
-    category,
-    "Navigation Style",
     navigationStyleOptions,
+    optionDomains[buildOptionDomainKey(category, "Navigation Style")]?.options,
     navigationStyleValue,
   );
   const effectiveColorSchemeOptions = resolveHomeConfigOptions(
-    category,
-    "Color Scheme",
     colorSchemeOptions,
+    optionDomains[buildOptionDomainKey(category, "Color Scheme")]?.options,
     colorSchemeValue,
   );
 

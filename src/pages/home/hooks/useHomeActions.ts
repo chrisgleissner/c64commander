@@ -6,19 +6,28 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef, useSyncExternalStore } from "react";
 import { getC64API } from "@/lib/c64api";
 import { useC64Connection, useC64MachineControl, useC64Drives } from "@/hooks/useC64Connection";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
 import { addErrorLog } from "@/lib/logging";
 import { useActionTrace } from "@/hooks/useActionTrace";
+import { getSelectedSavedDevice } from "@/lib/savedDevices/store";
+import {
+  getMachineExecutionSnapshot,
+  restorePauseMuteFromPersistedSnapshot,
+  setMachineExecutionPaused,
+  setMachineExecutionRunning,
+  subscribeMachineExecution,
+} from "@/lib/deviceInteraction/machineExecutionStore";
 import { clearRamAndReboot, loadMemoryRanges } from "@/lib/machine/ramOperations";
 import { selectRamDumpFolder } from "@/lib/machine/ramDumpStorage";
 import { loadRamDumpFolderConfig, type RamDumpFolderConfig } from "@/lib/config/ramDumpFolderStore";
 import { resetDiskDevices, resetPrinterDevice } from "@/lib/disks/resetDrives";
 import { createCpuSnapshot, createSnapshot, CpuSnapshotUnsupportedError } from "@/lib/snapshot/snapshotCreation";
 import { restoreCpuSnapshotFromDecoded } from "@/lib/snapshot/cpu/cpuSnapshot";
+import { CpuRestoreUnsupportedError } from "@/lib/snapshot/cpu/restoreCart";
 import { CpuCaptureFailedError } from "@/lib/snapshot/cpu/captureEngine";
 import { deleteSnapshotFromStore, snapshotEntryToBytes, updateSnapshotLabel } from "@/lib/snapshot/snapshotStore";
 import { decodeSnapshot } from "@/lib/snapshot/snapshotFormat";
@@ -36,7 +45,21 @@ export function useHomeActions() {
   const machineTaskInFlightRef = useRef<string | null>(null);
   const [machineTaskId, setMachineTaskId] = useState<string | null>(null);
   const [powerOffDialogOpen, setPowerOffDialogOpen] = useState(false);
-  const [machineExecutionState, setMachineExecutionState] = useState<"running" | "paused" | "unknown">("running");
+  // HARD12-020: read from the shared machine-execution store (written by both
+  // Play and Home) instead of page-local state that always reset to "running"
+  // on mount and desynced from a pause applied via Play.
+  const machineExecutionState = useSyncExternalStore(
+    subscribeMachineExecution,
+    getMachineExecutionSnapshot,
+    getMachineExecutionSnapshot,
+  ).state;
+  const setMachineExecutionState = useCallback((next: "running" | "paused" | "unknown") => {
+    if (next === "paused") {
+      setMachineExecutionPaused();
+    } else {
+      setMachineExecutionRunning();
+    }
+  }, []);
   const [pauseResumePending, setPauseResumePending] = useState(false);
 
   const [ramDumpFolder, setRamDumpFolder] = useState<RamDumpFolderConfig | null>(() => loadRamDumpFolderConfig());
@@ -142,12 +165,19 @@ export function useHomeActions() {
   const handlePauseResume = trace(async function handlePauseResume() {
     if (!status.isConnected || machineTaskId !== null || pauseResumePending) return;
     const targetState = machineExecutionState === "running" ? "paused" : "running";
+    // Read before setMachineExecutionState clears it below — a pause taken in
+    // Play (possibly now an unmounted placeholder) may have muted the SID
+    // mixer and left a snapshot only Home's resume can now restore.
+    const pauseMutePending = getMachineExecutionSnapshot().pauseMutePending;
     setPauseResumePending(true);
     try {
       if (targetState === "paused") {
         await controls.pause.mutateAsync();
       } else {
         await controls.resume.mutateAsync();
+        if (pauseMutePending) {
+          await restorePauseMuteFromPersistedSnapshot(api, getSelectedSavedDevice()?.id ?? null);
+        }
       }
       setMachineExecutionState(targetState);
       toast({
@@ -185,6 +215,17 @@ export function useHomeActions() {
           title: "Snapshot saved",
           description: result.displayTimestamp,
         });
+        // The store silently drops the oldest snapshot at the MAX_SNAPSHOTS
+        // cap - warn so the user knows a saved game state just disappeared
+        // instead of finding out only when they go looking for it later.
+        // See HARD9-069.
+        if (result.evictedSnapshotLabel) {
+          toast({
+            title: "Oldest snapshot removed",
+            description: `The library is full - "${result.evictedSnapshotLabel}" was deleted to make room.`,
+            variant: "destructive",
+          });
+        }
       },
       // runMachineTask also toasts success — we suppress that and toast inside
       // the action to include the timestamp.  Pass empty strings to avoid a
@@ -217,10 +258,31 @@ export function useHomeActions() {
           }
           throw error;
         }
-        toast({
-          title: "CPU + RAM snapshot saved",
-          description: `${result.displayTimestamp} — PC $${result.cpu.pc.toString(16).toUpperCase().padStart(4, "0")}`,
-        });
+        // The snapshot itself is valid even when resumeError is set - only
+        // the post-capture resume failed, which can leave the C64 frozen
+        // with the IRQ vector still pointed at the capture handler. Surface
+        // that (not just log it) so the user knows to Restore or reset
+        // instead of assuming playback is live again. See HARD9-035.
+        if (result.resumeError) {
+          toast({
+            title: "CPU + RAM snapshot saved — program may still be frozen",
+            description: `${result.displayTimestamp} — the machine could not resume automatically (${result.resumeError.message}). Use Restore or reset the machine.`,
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "CPU + RAM snapshot saved",
+            description: `${result.displayTimestamp} — PC $${result.cpu.pc.toString(16).toUpperCase().padStart(4, "0")}`,
+          });
+        }
+        // See HARD9-069 (handleSaveRam above has the same warning).
+        if (result.evictedSnapshotLabel) {
+          toast({
+            title: "Oldest snapshot removed",
+            description: `The library is full - "${result.evictedSnapshotLabel}" was deleted to make room.`,
+            variant: "destructive",
+          });
+        }
       },
       "",
     );
@@ -233,20 +295,48 @@ export function useHomeActions() {
       async () => {
         const bytes = snapshotEntryToBytes(snapshot);
         const decoded = decodeSnapshot(bytes);
+        const successLabel = snapshot.metadata.label ?? snapshot.metadata.created_at;
+        const loadRamOnly = async () => {
+          const ranges = decoded.ranges.map((r, i) => ({
+            start: r.start,
+            bytes: decoded.blocks[i],
+          }));
+          await loadMemoryRanges(api, ranges);
+        };
         // CPU+RAM snapshots resume at the exact PC via the uploaded-cartridge
         // path; only when the snapshot actually carries verified CPU state.
         if (decoded.metadata?.cpu_state_captured && decoded.metadata.cpu) {
-          await restoreCpuSnapshotFromDecoded(api, decoded);
+          try {
+            await restoreCpuSnapshotFromDecoded(api, decoded);
+          } catch (error) {
+            // CpuRestoreUnsupportedError is thrown before any cartridge
+            // upload (stack pointer too low, missing the $01 banking byte) -
+            // nothing on the device has been touched yet, so a RAM-only
+            // restore is always a safe fallback instead of just failing
+            // outright. Any other error means the cartridge was already
+            // uploaded and restoreCpuSnapshotFromDecoded has already
+            // attempted a recovery reset - let it propagate to the normal
+            // error-toast path below (its message already explains the
+            // recovery outcome). See HARD9-036.
+            if (!(error instanceof CpuRestoreUnsupportedError)) throw error;
+            addErrorLog("CPU restore unsupported, falling back to RAM-only restore", {
+              error: error.message,
+            });
+            await loadRamOnly();
+            toast({
+              title: "Snapshot restored (RAM only)",
+              description: `${successLabel} — exact CPU state could not be restored (${error.message})`,
+              variant: "destructive",
+            });
+            return;
+          }
+          toast({ title: "Snapshot restored", description: successLabel });
           return;
         }
-        const ranges = decoded.ranges.map((r, i) => ({
-          start: r.start,
-          bytes: decoded.blocks[i],
-        }));
-        await loadMemoryRanges(api, ranges);
+        await loadRamOnly();
+        toast({ title: "Snapshot restored", description: successLabel });
       },
-      "Snapshot restored",
-      snapshot.metadata.label ?? snapshot.metadata.created_at,
+      "",
     );
     setMachineExecutionState("running");
   });

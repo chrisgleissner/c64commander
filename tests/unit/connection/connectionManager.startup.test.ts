@@ -83,6 +83,7 @@ vi.mock("../../../src/lib/mock/mockServer", () => ({
   stopMockServer,
   getActiveMockBaseUrl: vi.fn(() => null),
   getActiveMockFtpPort: vi.fn(() => null),
+  getActiveMockToken: vi.fn(() => null),
 }));
 
 const ensureStorage = () => {

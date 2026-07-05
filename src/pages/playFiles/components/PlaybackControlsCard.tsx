@@ -47,6 +47,9 @@ export type PlaybackControlsCardProps = {
   onReshuffle: () => void;
   reshuffleActive: boolean;
   reshuffleDisabled: boolean;
+  shuffleSeed: number | null;
+  /** HARD12-017: one-tap entry to the remote input sheet, shown while playing. */
+  openControllerAction?: ReactNode;
 };
 
 const PLAY_TRANSPORT_FOCUS_ORDER = {
@@ -91,6 +94,8 @@ export const PlaybackControlsCard = ({
   onReshuffle,
   reshuffleActive,
   reshuffleDisabled,
+  shuffleSeed,
+  openControllerAction,
 }: PlaybackControlsCardProps) => {
   const previousFocusRef = useFocusItem<HTMLButtonElement>({
     id: "play-transport-previous",
@@ -214,6 +219,7 @@ export const PlaybackControlsCard = ({
           </div>
         </div>
         {volumeControls}
+        {openControllerAction}
         <div className="flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-2 text-xs">
             <Checkbox
@@ -255,6 +261,11 @@ export const PlaybackControlsCard = ({
             id="playlist-reshuffle"
             data-testid="playlist-reshuffle"
             data-active={reshuffleActive ? "true" : "false"}
+            // Non-destructive shuffle (HARD9-007) never reorders the visible
+            // playlist, so the live seed of the next/prev order layer is
+            // surfaced here as a diagnostic: a changed value proves Reshuffle
+            // re-seeded the traversal without disturbing the curated list.
+            data-shuffle-seed={shuffleSeed ?? ""}
             className={reshuffleActive ? "bg-accent text-accent-foreground" : undefined}
           >
             <Shuffle className="h-4 w-4 mr-1" />

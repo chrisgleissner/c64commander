@@ -270,12 +270,14 @@ test.describe("Settings connection management", () => {
     await snap(page, testInfo, "settings-open");
 
     const headings = await page.locator("h2").allTextContents();
+    // The standalone "Config" section was removed with the duplicate
+    // Automatic Demo Mode control (HARD9-090); the canonical control lives in
+    // the Connection card, so no separate Config heading remains.
     expect(headings).toEqual([
       "Appearance",
       "Connection",
       "Diagnostics",
       "Play and Disk",
-      "Config",
       "Stable Features",
       "Experimental Features",
       "HVSC",

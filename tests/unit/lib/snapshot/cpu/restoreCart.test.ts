@@ -23,6 +23,7 @@ class MockFirmware {
   crtUploads: Uint8Array[] = [];
   writes: WriteCall[] = [];
   readAddresses: number[] = [];
+  machineResetCalls = 0;
 
   api: RestoreCpuApi = {
     runCartridgeUpload: async (crt: Blob) => {
@@ -36,6 +37,10 @@ class MockFirmware {
     },
     writeMemoryBlock: async (address: string, data: Uint8Array) => {
       this.writes.push({ address: parseInt(address, 16), bytes: Array.from(data) });
+      return { errors: [] };
+    },
+    machineReset: async () => {
+      this.machineResetCalls += 1;
       return { errors: [] };
     },
   };
@@ -120,6 +125,10 @@ describe("restoreCpuSnapshot — refuses unsupported snapshots", () => {
       restoreCpuSnapshot(fw.api, { cpu: { ...CPU, sp: 0x05 }, ramRanges: [fullRamRange()] }, clock()),
     ).rejects.toBeInstanceOf(CpuRestoreUnsupportedError);
     expect(fw.crtUploads).toHaveLength(0); // nothing was uploaded
+    // Nothing on the device was touched yet - a recovery reset would be
+    // pointless (and disruptive to whatever was already running). See
+    // HARD9-036.
+    expect(fw.machineResetCalls).toBe(0);
   });
 
   it("refuses when the snapshot omits $01 (banking)", async () => {
@@ -128,6 +137,7 @@ describe("restoreCpuSnapshot — refuses unsupported snapshots", () => {
     await expect(restoreCpuSnapshot(fw.api, { cpu: CPU, ramRanges: [noByte01] }, clock())).rejects.toBeInstanceOf(
       CpuRestoreUnsupportedError,
     );
+    expect(fw.machineResetCalls).toBe(0);
   });
 
   it("throws (not Unsupported) when the cart never signals READY", async () => {
@@ -135,6 +145,41 @@ describe("restoreCpuSnapshot — refuses unsupported snapshots", () => {
     fw.api.readMemory = async () => new Uint8Array([0x00]); // never READY
     await expect(restoreCpuSnapshot(fw.api, { cpu: CPU, ramRanges: [fullRamRange()] }, clock())).rejects.toThrow(
       /did not reach its handshake/,
+    );
+  });
+});
+
+describe("restoreCpuSnapshot — recovery reset after a post-upload failure (HARD9-036)", () => {
+  it("attempts a machine reset and reports it in the error when the READY handshake never arrives", async () => {
+    const fw = new MockFirmware();
+    fw.api.readMemory = async () => new Uint8Array([0x00]); // never READY
+    await expect(restoreCpuSnapshot(fw.api, { cpu: CPU, ramRanges: [fullRamRange()] }, clock())).rejects.toThrow(
+      /automatically reset/,
+    );
+    expect(fw.machineResetCalls).toBe(1);
+  });
+
+  it("attempts a machine reset and reports it in the error when writemem retries are exhausted", async () => {
+    const fw = new MockFirmware();
+    fw.api.writeMemoryBlock = async () => {
+      throw new Error("connection reset by peer");
+    };
+    const error = await restoreCpuSnapshot(fw.api, { cpu: CPU, ramRanges: [fullRamRange()] }, clock()).catch(
+      (e: Error) => e,
+    );
+    expect(error.message).toContain("connection reset by peer");
+    expect(error.message).toContain("automatically reset");
+    expect(fw.machineResetCalls).toBe(1);
+  });
+
+  it("reports that manual power-cycle is needed when the recovery reset itself also fails", async () => {
+    const fw = new MockFirmware();
+    fw.api.readMemory = async () => new Uint8Array([0x00]); // never READY
+    fw.api.machineReset = async () => {
+      throw new Error("device unreachable");
+    };
+    await expect(restoreCpuSnapshot(fw.api, { cpu: CPU, ramRanges: [fullRamRange()] }, clock())).rejects.toThrow(
+      /power-cycle the machine manually/,
     );
   });
 });

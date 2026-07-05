@@ -11,11 +11,14 @@ import { motion } from "framer-motion";
 import { getC64API } from "@/lib/c64api";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { SectionHeader } from "@/components/SectionHeader";
+import { Slider } from "@/components/ui/slider";
+import { createNumericSliderDomain, useDeviceBoundSlider } from "@/hooks/useDeviceBoundSlider";
 import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
 import { useSidData } from "../hooks/useSidData";
 import { SidCard } from "../SidCard";
 import { silenceSidTargets } from "@/lib/sid/sidSilence";
 import { buildSidEnablement } from "@/lib/config/sidVolumeControl";
+import { AUDIO_MIXER_MASTER_VOLUME_ITEM } from "@/lib/config/configItems";
 import { useInteractiveConfigWrite } from "@/hooks/useInteractiveConfigWrite";
 import { addLog, buildErrorLogDetails } from "@/lib/logging";
 import {
@@ -41,14 +44,82 @@ interface AudioMixerProps {
   runMachineTask: (taskId: string, action: () => Promise<void>, title: string, desc?: string) => Promise<void>;
 }
 
+type MasterVolumeControlProps = {
+  isConnected: boolean;
+  value: number;
+  max: number;
+  centerIndex: number | null;
+  options: string[];
+  onCommit: (value: number) => Promise<void> | void;
+  resolveOptionIndex: (value: number) => number;
+  formatValue: (value: number) => string;
+};
+
+function MasterVolumeControl({
+  isConnected,
+  value,
+  max,
+  centerIndex,
+  options,
+  onCommit,
+  resolveOptionIndex,
+  formatValue,
+}: MasterVolumeControlProps) {
+  const domain = useMemo(
+    () => createNumericSliderDomain({ min: 0, max, round: (nextValue) => resolveOptionIndex(nextValue) }),
+    [max, resolveOptionIndex],
+  );
+  const slider = useDeviceBoundSlider({
+    deviceValue: value,
+    domain,
+    previewMode: "commitOnly",
+    commit: onCommit,
+  });
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-3 space-y-2" data-testid="home-sid-master-volume">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold text-primary uppercase tracking-wide">Master Vol</p>
+        <span className="text-xs text-muted-foreground" data-testid="home-sid-master-volume-value">
+          {formatValue(slider.sliderValue)}
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="w-8 shrink-0 whitespace-nowrap text-xs font-medium text-muted-foreground">Vol</span>
+        <Slider
+          value={[slider.sliderValue]}
+          min={0}
+          max={max}
+          step={SID_SLIDER_STEP}
+          onValueChange={slider.onValueChange}
+          onValueCommit={slider.onValueCommit}
+          valueFormatter={formatValue}
+          midpoint={
+            centerIndex !== null && centerIndex >= 0 ? { value: centerIndex, haptics: true, notch: true } : undefined
+          }
+          disabled={!isConnected || options.length === 0}
+          className="flex-1"
+          data-testid="home-sid-volume-master"
+        />
+      </div>
+    </div>
+  );
+}
+
 export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: AudioMixerProps) {
   const api = getC64API();
   const trace = useActionTrace("AudioMixer");
   const { configOverrides, configWritePending, updateConfigValue, resolveConfigValue } = useSharedConfigActions();
   const { write: interactiveWrite } = useInteractiveConfigWrite({ category: "Audio Mixer" });
 
-  const { sidControlEntries, sidSilenceTargets, sidAddressingCategory, ultiSidCategory, sidSocketsCategory } =
-    useSidData(isConnected, configOverrides);
+  const {
+    sidControlEntries,
+    sidSilenceTargets,
+    sidAddressingCategory,
+    ultiSidCategory,
+    sidSocketsCategory,
+    audioMixerCategory,
+  } = useSidData(isConnected, configOverrides);
 
   const ultiSidConfig = ultiSidCategory as Record<string, unknown> | undefined;
   const ultiSid1ProfileValue = String(
@@ -107,6 +178,52 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
       ]),
     [sidEnablement],
   );
+
+  const masterVolumeKey = buildConfigKey("Audio Mixer", AUDIO_MIXER_MASTER_VOLUME_ITEM);
+  const masterVolumeOverride = configOverrides[masterVolumeKey];
+  const masterVolumeValue = String(
+    masterVolumeOverride !== undefined
+      ? masterVolumeOverride
+      : resolveConfigValue(
+          audioMixerCategory as Record<string, unknown> | undefined,
+          "Audio Mixer",
+          AUDIO_MIXER_MASTER_VOLUME_ITEM,
+          "",
+        ),
+  );
+  const masterVolumeOptions = readItemOptions(
+    audioMixerCategory as Record<string, unknown> | undefined,
+    "Audio Mixer",
+    AUDIO_MIXER_MASTER_VOLUME_ITEM,
+  ).map(String);
+  const hasMasterVolume = masterVolumeOptions.length > 0;
+  const resolvedMasterVolumeOptions = masterVolumeOptions.length ? masterVolumeOptions : [masterVolumeValue];
+  const masterVolumeIndex = resolveOptionIndex(resolvedMasterVolumeOptions, masterVolumeValue);
+  const masterVolumeCenterIndex = resolveVolumeCenterIndex(resolvedMasterVolumeOptions);
+  const masterVolumeMax = Math.max(resolvedMasterVolumeOptions.length - 1, 0);
+  const masterVolumeSliderValue = clampSliderValue(masterVolumeIndex, masterVolumeMax);
+  const resolveMasterVolumeIndexValue = (value: number) =>
+    resolveSliderIndex(applySoftDetent(value, masterVolumeCenterIndex), masterVolumeMax);
+  const resolveMasterVolumeOption = (value: number) =>
+    resolvedMasterVolumeOptions[resolveMasterVolumeIndexValue(value)] ??
+    resolvedMasterVolumeOptions[0] ??
+    masterVolumeValue;
+  const masterVolumeValueFormatter = (value: number) =>
+    formatDbValue(String(resolvedMasterVolumeOptions[Math.round(value)] ?? resolvedMasterVolumeOptions[0] ?? ""));
+  const handleMasterVolumeCommit = (val: number) => {
+    const nextValue = resolveMasterVolumeOption(val);
+    return Promise.resolve(interactiveWrite({ [AUDIO_MIXER_MASTER_VOLUME_ITEM]: nextValue })).catch((error) => {
+      addLog(
+        "warn",
+        "Audio Mixer master volume commit failed",
+        buildErrorLogDetails(error as Error, {
+          itemName: AUDIO_MIXER_MASTER_VOLUME_ITEM,
+          value: nextValue,
+        }),
+      );
+      throw error;
+    });
+  };
 
   const handleSidEnableToggle = trace(async function handleSidEnableToggle(
     entry: (typeof sidControlEntries)[number],
@@ -172,6 +289,18 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
         resetTestId="home-sid-reset"
       />
       <div className="space-y-3">
+        {hasMasterVolume ? (
+          <MasterVolumeControl
+            isConnected={isConnected}
+            value={masterVolumeSliderValue}
+            max={masterVolumeMax}
+            centerIndex={masterVolumeCenterIndex}
+            options={resolvedMasterVolumeOptions}
+            onCommit={handleMasterVolumeCommit}
+            resolveOptionIndex={resolveMasterVolumeIndexValue}
+            formatValue={masterVolumeValueFormatter}
+          />
+        ) : null}
         {sidControlEntries.map((entry) => {
           const addressKey = buildConfigKey("SID Addressing", entry.addressItem);
 
@@ -491,6 +620,12 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
               volumeStep={SID_SLIDER_STEP}
               onVolumeCommit={handleVolumeCommit}
               onVolumePreview={handleVolumePreview}
+              // commitOnly (unlike pan below, which defaults to "throttled"): avoids
+              // sending a live audio-level write on every drag tick, which would
+              // otherwise cause audible level jumps/clicks while dragging. Both
+              // share the same interactiveWrite lane, which now merges pending
+              // per-item writes instead of dropping one when both fire close
+              // together - see HARD9-016.
               volumePreviewMode="commitOnly"
               volumeRound={resolveVolumeIndexValue}
               volumeValueFormatter={volumeValueFormatter}

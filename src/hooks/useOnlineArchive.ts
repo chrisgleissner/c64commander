@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createArchiveClient } from "@/lib/archive/client";
 import { executeArchiveEntry } from "@/lib/archive/execution";
 import { resolveArchiveClientConfig } from "@/lib/archive/config";
+import { addLog, buildErrorLogDetails } from "@/lib/logging";
 import type {
   ArchiveClientConfigInput,
   ArchiveClientResolvedConfig,
@@ -234,18 +235,21 @@ export const useOnlineArchive = (config: ArchiveClientConfigInput) => {
     let refreshPromise = presetRefreshPromises.get(configKey);
     if (!refreshPromise) {
       presetRefreshStatus.set(configKey, "pending");
+      // Deliberately NOT passed any individual mount's AbortSignal: this
+      // promise/request is SHARED across every mount for this configKey
+      // (concurrent dialogs, remounts), so one mount unmounting must not
+      // cancel it - or reject the shared promise - out from under the
+      // others still waiting on it. It always settles to real or
+      // cached/seeded presets, never rejects. See HARD9-080.
       refreshPromise = client
-        .getPresets({ signal: controller.signal })
+        .getPresets({})
         .then((next) => {
           const normalized = normalizePresets(next, currentYear);
           presetCache.set(configKey, normalized);
           presetRefreshStatus.set(configKey, "settled");
           return normalized;
         })
-        .catch((error) => {
-          if (controller.signal.aborted) {
-            throw error;
-          }
+        .catch(() => {
           presetCache.set(configKey, presetCache.get(configKey) ?? seededPresets);
           presetRefreshStatus.set(configKey, "settled");
           return presetCache.get(configKey) ?? seededPresets;
@@ -261,6 +265,16 @@ export const useOnlineArchive = (config: ArchiveClientConfigInput) => {
       .then((next) => {
         if (controller.signal.aborted) return;
         setPresets(next);
+      })
+      // The shared promise above never rejects, but this per-mount chain is
+      // its own separate promise (a synchronous throw inside the .then
+      // callback - e.g. setPresets or normalizePresets throwing on a
+      // malformed preset - would otherwise still surface as an unhandled
+      // rejection here specifically). See HARD9-080. Log at debug so such a
+      // future regression stays diagnosable instead of being silently
+      // discarded.
+      .catch((error) => {
+        addLog("debug", "Online archive preset refresh consumer chain error", buildErrorLogDetails(error));
       })
       .finally(() => {
         if (!controller.signal.aborted) {

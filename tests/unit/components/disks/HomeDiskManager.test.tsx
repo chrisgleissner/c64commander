@@ -98,6 +98,7 @@ const useC64DrivesMock = {
 };
 
 vi.mock("@/hooks/useC64Connection", () => ({
+  useConnectionRoutingEpoch: () => 0,
   VISIBLE_C64_QUERY_OPTIONS: {
     intent: "user",
     refetchOnMount: "always",
@@ -332,7 +333,7 @@ describe("HomeDiskManager", () => {
     fireEvent.click(driveABtn);
 
     await waitFor(() => {
-      expect(mockMountDisk).toHaveBeenCalledWith("a", "/disk2.d64", "d64", "readonly");
+      expect(mockMountDisk).toHaveBeenCalledWith("a", "/disk2.d64", "d64", "readwrite");
     });
   });
 

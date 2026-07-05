@@ -67,7 +67,14 @@ export function useInteractiveConfigWrite({
   const updateConfigBatch = useC64UpdateConfigBatch();
   const [isPending, setIsPending] = useState(false);
   const reconcileTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const writeBurstActiveRef = useRef(false);
+  // In-flight write counter, not a boolean: two overlapping write() calls on
+  // this lane (e.g. two SID sliders committed in quick succession) used to
+  // share one writeBurstActiveRef/isPending flag, so whichever call settled
+  // FIRST reset it to false while the second was still in flight - isPending
+  // read false during an active write, and a third write starting right then
+  // saw burst=false, skipping the 400ms coalescing quiet window entirely.
+  // See HARD9-087.
+  const pendingCountRef = useRef(0);
   const quietUntilRef = useRef(0);
 
   // Stable resolved query key sets for reconciliation.
@@ -101,6 +108,11 @@ export function useInteractiveConfigWrite({
         await waitForMachineTransitionsToSettle();
         await waitForInteractiveWriteQuietUntil(quietUntilRef.current);
       },
+      // This lane is shared by every control in the category (e.g. all 8 SID
+      // sliders). Merge instead of replace so committing item A's write while
+      // item B's write is still pending combines both into one batch, instead
+      // of silently discarding item B's intent. See HARD9-016.
+      merge: (previous, next) => ({ ...previous, ...next }),
       run: async (updates) => {
         const safety = loadDeviceSafetyConfig();
         const endBurst = beginInteractiveWriteBurst(safety.configsCooldownMs);
@@ -149,13 +161,14 @@ export function useInteractiveConfigWrite({
 
   const write = useCallback(
     async (updates: Record<string, string | number>) => {
+      const isBurst = pendingCountRef.current > 0;
+      pendingCountRef.current += 1;
       setIsPending(true);
-      if (writeBurstActiveRef.current) {
+      if (isBurst) {
         quietUntilRef.current = Date.now() + INTERACTIVE_WRITE_QUIET_MS;
       } else {
         quietUntilRef.current = 0;
       }
-      writeBurstActiveRef.current = true;
       addLog("debug", "Interactive config write queued", {
         category: categoryRef.current,
         updates,
@@ -177,8 +190,10 @@ export function useInteractiveConfigWrite({
         });
         throw error;
       } finally {
-        writeBurstActiveRef.current = false;
-        setIsPending(false);
+        pendingCountRef.current = Math.max(0, pendingCountRef.current - 1);
+        if (pendingCountRef.current === 0) {
+          setIsPending(false);
+        }
         scheduleReconciliation();
       }
     },

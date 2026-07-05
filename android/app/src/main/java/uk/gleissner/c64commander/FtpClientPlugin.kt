@@ -34,6 +34,12 @@ class FtpClientPlugin : Plugin() {
   private val readChunkSize = 64 * 1024
   private val readProgressIntervalBytes = 128L * 1024L
   private val readAbortedMessage = "FTP read aborted"
+  // readFile buffers the whole transfer in memory, then copies it again via
+  // toByteArray(), then Base64-encodes it (~1.33x) - peak heap for one read is
+  // ~3.3x the file's size. Without a cap, a large file (a .dnp disk pack,
+  // firmware image) drives the app into OOM. See HARD9-044.
+  // internal var so tests can shrink it instead of generating multi-MB payloads.
+  internal var maxReadFileBytes = 32L * 1024L * 1024L
   private val defaultRecursiveMaxDepth = 8
   private val defaultRecursiveMaxEntries = 5_000
   private val maxNlstMetadataProbes = 64
@@ -44,6 +50,19 @@ class FtpClientPlugin : Plugin() {
   // transfer cleanly, releasing the firmware's FTP data channel.
   private val cancelledReads = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
   private val activeReadStreams = java.util.concurrent.ConcurrentHashMap<String, java.io.InputStream>()
+  // requestIds whose readFile() has already fully finished (success,
+  // failure, or cancellation). A cancelRead() that arrives AFTER
+  // completion — routine when it races natural completion on navigate-away
+  // — would otherwise re-add the id to cancelledReads with nothing left to
+  // ever remove it: an unbounded leak, and since the JS-side requestId
+  // counter resets on WebView reload while this plugin instance survives,
+  // a reused id would then instantly (and spuriously) reject a brand-new
+  // read. readFile() reclaims its own id from this set the moment it
+  // starts, so a genuinely new read for a reused id is never blocked by a
+  // stale mark. Capped defensively so a very long session cannot grow this
+  // set without bound. See HARD9-073.
+  private val completedReads = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+  private val maxTrackedCompletedReads = 256
   private val timeoutMessagePattern = Regex("\\b(timed out|timeout)\\b", RegexOption.IGNORE_CASE)
   internal var ftpClientFactory: () -> FTPClient = { FTPClient() }
   internal var runTask: (Runnable) -> Unit = { runnable -> executor.execute(runnable) }
@@ -88,6 +107,12 @@ class FtpClientPlugin : Plugin() {
   private fun applyPreConnectTimeouts(client: FTPClient, timeoutMs: Int) {
     client.connectTimeout = timeoutMs
     client.defaultTimeout = timeoutMs
+    // commons-net defaults to ISO-8859-1 on the control channel with no UTF-8
+    // autodetection. A USB stick with non-ASCII filenames (accented scene
+    // names) lists as mojibake, and re-encoding the mangled name for a
+    // subsequent RETR 550s - visible in the listing but never fetchable. See
+    // HARD9-070.
+    client.autodetectUTF8 = true
   }
 
   private fun applyConnectedTimeouts(client: FTPClient, timeoutMs: Int) {
@@ -328,7 +353,12 @@ class FtpClientPlugin : Plugin() {
                 val result = JSObject()
                 result.put("entries", entries)
                 result.put("partialFailures", failures)
-                result.put("timed_out", timedOut)
+                // camelCase to match every other field in this response and the
+                // rest of the plugin's JS-facing contract - the JS side has no
+                // snake_case fields anywhere else, so "timed_out" was never read
+                // by either spelling and the "walk aborted early" signal was
+                // silently dropped. See HARD9-078.
+                result.put("timedOut", timedOut)
                 call.resolve(result)
               } catch (error: Exception) {
                 val message = buildFailureMessage("listDirectoryRecursive", error, connectTimeoutMs, timeoutMs)
@@ -377,11 +407,19 @@ class FtpClientPlugin : Plugin() {
     val connectTimeoutMs = resolveConnectTimeoutMs(call)
     val requestId = call.getString("requestId")?.takeIf { it.isNotBlank() }
     val totalBytes = (call.getInt("totalBytes") ?: 0).coerceAtLeast(0)
+    if (totalBytes > maxReadFileBytes) {
+      call.reject("File exceeds the maximum readable size (${maxReadFileBytes / (1024 * 1024)}MB)")
+      return
+    }
 
     runTask(
             Runnable {
               val client = ftpClientFactory()
               var stream: java.io.InputStream? = null
+              // Reclaim this id from the "already finished" set before doing
+              // anything else, so a reused requestId's new read is never
+              // blocked by a stale completion mark from its previous use.
+              if (requestId != null) completedReads.remove(requestId)
               try {
                 // Honor a cancellation requested before this read started (e.g. an
                 // already-aborted AbortSignal fired cancelRead first) instead of
@@ -434,8 +472,13 @@ class FtpClientPlugin : Plugin() {
                             throw ioError
                           }
                   if (read == -1) break
-                  output.write(buffer, 0, read)
                   bytesRead += read
+                  if (bytesRead > maxReadFileBytes) {
+                    throw java.io.IOException(
+                            "File exceeds the maximum readable size (${maxReadFileBytes / (1024 * 1024)}MB)"
+                    )
+                  }
+                  output.write(buffer, 0, read)
                   if (requestId != null && bytesRead - lastProgressAt >= readProgressIntervalBytes) {
                     lastProgressAt = bytesRead
                     emitReadProgress(requestId, bytesRead, totalBytes.toLong())
@@ -484,6 +527,8 @@ class FtpClientPlugin : Plugin() {
                 if (requestId != null) {
                   activeReadStreams.remove(requestId)
                   cancelledReads.remove(requestId)
+                  completedReads.add(requestId)
+                  if (completedReads.size > maxTrackedCompletedReads) completedReads.clear()
                 }
                 try {
                   stream?.close()
@@ -517,6 +562,13 @@ class FtpClientPlugin : Plugin() {
     val requestId = call.getString("requestId")?.takeIf { it.isNotBlank() }
     if (requestId == null) {
       call.reject("requestId is required")
+      return
+    }
+    if (completedReads.contains(requestId)) {
+      // The corresponding readFile() already finished (success, failure, or
+      // a prior cancel) - there is nothing left to cancel. No-op instead of
+      // leaving a permanent cancelledReads entry. See HARD9-073.
+      call.resolve()
       return
     }
     cancelledReads.add(requestId)

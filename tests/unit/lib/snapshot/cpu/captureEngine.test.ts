@@ -129,6 +129,35 @@ describe("captureCpuState (RLI)", () => {
     expect(fw.mem.get(0x0315)).toBe(ORIG_IRQ[1]);
     expect(fw.mem.get(0x033c)).toBe(0xa0);
   });
+
+  it("treats a late-arriving interrupt as a successful capture instead of rolling back over it (HARD9-039)", async () => {
+    const fw = new CaptureMock();
+    fw.fireOnResume = false; // the poll loop itself never observes captured=1
+    let pauseCalls = 0;
+    const realPause = fw.api.machinePause;
+    fw.api.machinePause = async () => {
+      pauseCalls += 1;
+      // The 1st machinePause() is the initial "start paused" call, before any
+      // vector is even installed - a no-op here. The 2nd is the timeout-path
+      // rollback pause; simulate the program's interrupt landing in the race
+      // window between the poll loop's last read and this pause taking
+      // effect, so the CPU is now frozen inside the handler's spin loop.
+      if (pauseCalls === 2) fw.fireIrq();
+      return realPause();
+    };
+
+    const result = await captureCpuState(fw.api, { ...clock(), captureTimeoutMs: 300 });
+
+    expect(result.cpu).toEqual({ pc: 0xc000, a: 0x11, x: 0x22, y: 0x33, sp: 0xf6, p: 0x30 });
+    // Must NOT have rolled back over the now-spinning handler: the vector and
+    // safe region should still carry the capture patch (checked via the
+    // returned overlays, which are what the caller uses to know what to
+    // restore later - if a rollback had happened they'd be wrong/stale).
+    const irqOverlay = result.overlays.find((o) => o.start === IRQ_VECTOR_0314);
+    expect(Array.from(irqOverlay!.bytes)).toEqual(ORIG_IRQ);
+    expect(fw.mem.get(0x0314)).not.toBe(ORIG_IRQ[0]); // still points at our handler
+    expect(fw.mem.get(0x033c)).not.toBe(0xa0); // safe region still carries the patch
+  });
 });
 
 describe("captureCpuState — error recovery", () => {

@@ -18,6 +18,11 @@ import {
   buildConfigKey,
 } from "../utils/HomeConfigUtils";
 import { buildBusIdOptions } from "@/lib/drives/driveDevices";
+import {
+  buildOptionDomainKey,
+  useDeviceConfigOptionDomains,
+  type DeviceConfigItemRef,
+} from "../hooks/useDeviceConfigOptionDomains";
 import { SectionHeader } from "@/components/SectionHeader";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { Button } from "@/components/ui/button";
@@ -49,6 +54,11 @@ interface PrinterManagerProps {
   getTelnetActionSupport?: (actionId: TelnetActionId) => TelnetActionSupport;
 }
 
+// The printer's IEC Bus ID is a device-reported numeric range (min/max), not a hard-coded list.
+const PRINTER_OPTION_DOMAIN_REFS: DeviceConfigItemRef[] = [
+  { category: PRINTER_CONTROL_SPEC.category, item: PRINTER_CONTROL_SPEC.busItem },
+];
+
 export function PrinterManager({
   isConnected,
   machineTaskBusy,
@@ -64,6 +74,7 @@ export function PrinterManager({
   const trace = useActionTrace("PrinterManager");
   const { updateConfigValue, resolveConfigValue, configWritePending } = useSharedConfigActions();
   const { refetchDrives, printerConfig, printerDevice } = usePrinterData(isConnected);
+  const optionDomains = useDeviceConfigOptionDomains("home-printer", PRINTER_OPTION_DOMAIN_REFS, isConnected);
 
   const printerEnabledValue = String(
     resolveConfigValue(
@@ -105,8 +116,21 @@ export function PrinterManager({
     ),
   );
 
+  const printerBusDomain =
+    optionDomains[buildOptionDomainKey(PRINTER_CONTROL_SPEC.category, PRINTER_CONTROL_SPEC.busItem)];
+  const printerBusDefaults =
+    printerBusDomain?.min !== undefined &&
+    printerBusDomain.max !== undefined &&
+    printerBusDomain.max >= printerBusDomain.min
+      ? Array.from(
+          { length: printerBusDomain.max - printerBusDomain.min + 1 },
+          (_, index) => printerBusDomain.min! + index,
+        )
+      : // HARD16-011 doctrine exception: numeric IEC bus range, low divergence
+        // risk; the current value is merged in and the device min/max wins once resolved.
+        [...PRINTER_BUS_ID_DEFAULTS];
   const printerBusOptions = buildBusIdOptions(
-    PRINTER_BUS_ID_DEFAULTS,
+    printerBusDefaults,
     Number.isFinite(printerBusValue) ? printerBusValue : null,
   );
   const printerConfigPayload = printerConfig as Record<string, unknown> | undefined;

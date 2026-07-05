@@ -13,6 +13,7 @@ export class MockC64UWeb implements MockC64UPlugin {
     baseUrl: string;
     port: number;
     ftpPort?: number;
+    token?: string;
   }> {
     const override = (
       window as Window & {
@@ -24,6 +25,7 @@ export class MockC64UWeb implements MockC64UPlugin {
       const url = new URL(override);
       const port = url.port ? Number(url.port) : 80;
       const ftpPort = (window as Window & { __c64uMockServerFtpPort?: number }).__c64uMockServerFtpPort;
+      // The web/E2E mock server does not enforce a token, so none is returned.
       return { baseUrl: override, port, ftpPort };
     }
     throw new Error("Mock C64U server is only available on native platforms.");

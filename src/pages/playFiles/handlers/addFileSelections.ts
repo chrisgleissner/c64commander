@@ -458,8 +458,20 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
               const resolvedItems = await applySonglengthsToItems(batch);
               throwIfAborted();
               appendedArchiveItems += resolvedItems.length;
+              // throwIfAborted must not run inside the updater: React may invoke it
+              // outside a normal try/catch (e.g. StrictMode double-invoke), where a
+              // thrown AbortError propagates to the nearest error boundary instead
+              // of being caught by this async function. See HARD9-033.
+              //
+              // The snapshot ref is mirrored INSIDE the updater (not after
+              // setPlaylist returns): React does not guarantee the functional
+              // updater runs synchronously at dispatch time (eager bail-out vs.
+              // deferred commit), so assigning from a post-call `next` could read
+              // a stale []; the next batch reads playlistSnapshotRef.current for
+              // its expectedCount and would under-report. The assignment is pure
+              // and idempotent (same value on a StrictMode double-invoke). See
+              // HARD10 PR review.
               setPlaylist((prev) => {
-                throwIfAborted();
                 const next = [...prev, ...resolvedItems];
                 playlistSnapshotRef.current = next;
                 return next;
@@ -559,11 +571,32 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         });
         return [...merged.values()];
       };
+      // HARD12-015: build the per-parent prefetched entry map once per parent
+      // (on first need) and cache it. Previously the map was rebuilt wholesale
+      // inside every getPrefetchedConfigEntriesByPath call (one call per file
+      // in the per-file loop), making the cumulative merge work quadratic in
+      // the per-folder file count for single-folder batch adds. The merged
+      // content is unchanged; only the rebuild cadence drops from O(calls).
       const prefetchedConfigEntriesByPath = new Map<string, SourceEntry[]>();
       const getPrefetchedConfigEntriesByPath = () => {
         selectedFilesByParent.forEach((_, path) => {
           const normalizedPath = normalizeSourcePath(path);
-          prefetchedConfigEntriesByPath.set(normalizedPath, getDirectoryEntries(path));
+          if (!prefetchedConfigEntriesByPath.has(normalizedPath)) {
+            prefetchedConfigEntriesByPath.set(normalizedPath, getDirectoryEntries(path));
+          }
+        });
+        // Also include parents that came from listingCache alone (no selected
+        // files), so discoverConfigCandidates can resolve sibling entries
+        // without round-tripping through source.listEntries again.
+        listingCache.forEach((entries, path) => {
+          const normalizedPath = normalizeSourcePath(path);
+          if (!prefetchedConfigEntriesByPath.has(normalizedPath)) {
+            const merged = new Map<string, SourceEntry>();
+            entries.forEach((entry) => {
+              if (entry.type === "file") merged.set(normalizeSourcePath(entry.path), entry);
+            });
+            prefetchedConfigEntriesByPath.set(normalizedPath, [...merged.values()]);
+          }
         });
         return prefetchedConfigEntriesByPath;
       };
@@ -626,8 +659,18 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             });
             appendedPlaylistItems += resolvedItems.length;
             const spT0 = Date.now();
+            throwIfAborted();
+            // throwIfAborted must not run inside the updater: React may invoke it
+            // outside a normal try/catch (e.g. StrictMode double-invoke), where a
+            // thrown AbortError propagates to the nearest error boundary instead
+            // of being caught by this async function. See HARD9-033.
+            //
+            // The snapshot ref is mirrored INSIDE the updater (not after
+            // setPlaylist returns): React does not guarantee the functional
+            // updater runs synchronously at dispatch time, so a post-call read
+            // could observe a stale []. The assignment is pure and idempotent.
+            // See HARD10 PR review.
             setPlaylist((prev) => {
-              throwIfAborted();
               const next = prev.length === 0 ? resolvedItems : [...prev, ...resolvedItems];
               playlistSnapshotRef.current = next;
               return next;
@@ -862,25 +905,21 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             addSonglengthsEntry(entry.path, file);
           }
         } else {
+          // HARD12-014: when the user opted out of recursion the add itself
+          // walks only one level (see listEntries branch above). The
+          // songlengths discovery must respect the same scope — search the
+          // already-cached direct children of every selected directory rather
+          // than calling listFilesRecursive (which on a load-fragile c64u FTP
+          // service can stall the whole control plane).
           const directorySelections = selections.filter((selection) => selection.type === "dir");
           for (const selection of directorySelections) {
-            try {
-              throwIfAborted();
-              const recursiveEntries = await source.listFilesRecursive(selection.path, { signal: abortSignal });
-              throwIfAborted();
-              recursiveEntries
-                .filter((entry) => entry.type === "file" && isSonglengthsFileName(entry.name))
-                .forEach((entry) => {
-                  const file = resolveSonglengthsFile(entry.path, entry.name, entry.modifiedAt, entry.sizeBytes);
-                  addSonglengthsEntry(entry.path, file);
-                });
-            } catch (error) {
-              addLog("warn", "Failed to recursively list files for songlengths discovery.", {
-                sourceId: source.id,
-                selectionPath: selection.path,
-                error: (error as Error).message,
+            const directChildren = listingCache.get(selection.path) ?? [];
+            directChildren
+              .filter((entry) => entry.type === "file" && isSonglengthsFileName(entry.name))
+              .forEach((entry) => {
+                const file = resolveSonglengthsFile(entry.path, entry.name, entry.modifiedAt, entry.sizeBytes);
+                addSonglengthsEntry(entry.path, file);
               });
-            }
           }
         }
 

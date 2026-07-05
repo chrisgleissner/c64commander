@@ -65,7 +65,7 @@ const mockApi = {} as C64API;
 beforeEach(() => {
   vi.clearAllMocks();
   ramFixture = buildRam();
-  saveSnapshotToStoreMock.mockReturnValue(undefined);
+  saveSnapshotToStoreMock.mockReturnValue({ evictedSnapshot: null });
 });
 
 // ---------------------------------------------------------------------------

@@ -42,14 +42,30 @@ data class HttpResponse(
         val body: ByteArray,
 )
 
+// Thrown while parsing a request whose declared/observed size exceeds a hard cap
+// (Content-Length, an over-long header line, or too many header lines). Surfaces
+// as a 413 to the client instead of letting the parser allocate an attacker-chosen
+// buffer or accumulate unbounded header bytes (HARD10-003 H1/H2).
+private class RequestTooLargeException : Exception()
+
 class MockC64UServer(
         private val state: MockC64UState,
         private val timingProfile: MockTimingProfile = MockTimingProfile.defaultProfile(),
+        // Per-boot random token the WebView must present as `X-Mock-Token`. When
+        // set (non-empty), every non-OPTIONS request without an exact match is
+        // rejected 401, authenticating this otherwise-open loopback surface with
+        // zero user-visible change (HARD10-005). Null/empty = unauthenticated
+        // (legacy behaviour, used by tests that don't exercise auth).
+        private val authToken: String? = null,
 ) {
   constructor(state: MockC64UState) : this(state, MockTimingProfile.defaultProfile())
 
   private val acceptExecutor = Executors.newSingleThreadExecutor()
-  private val connectionExecutor = Executors.newCachedThreadPool()
+  // Bounded (not newCachedThreadPool) so a burst of idle/slow connections cannot
+  // spawn unbounded threads and exhaust the process (HARD10-003 H4). Combined with
+  // the per-socket read timeout below, a slow-loris client is handled a bounded
+  // few at a time and each is evicted on timeout.
+  private val connectionExecutor = Executors.newFixedThreadPool(MAX_CONNECTION_THREADS)
   private val requestExecutor = Executors.newSingleThreadExecutor()
   private val sockets = Collections.synchronizedSet(mutableSetOf<Socket>())
   private var serverSocket: ServerSocket? = null
@@ -58,6 +74,24 @@ class MockC64UServer(
   @Volatile private var requestSequence = 0
   var port: Int = 0
     private set
+
+  // Bounds how long a connected client may stall between bytes before its worker
+  // is released. Without it a client that connects and sends nothing parks a
+  // worker forever (HARD10-003 H3). Injectable (matching this codebase's
+  // socketFactory/dataConnectionAcceptTimeoutMs convention) so tests can drive the
+  // timeout without waiting out the real duration.
+  internal var socketReadTimeoutMs: Int = 15_000
+
+  private companion object {
+    const val MAX_CONNECTION_THREADS = 32
+    // 1 MB: far above any legitimate mock request. The largest real body is the
+    // full 64 KB RAM image POSTed to /v1/machine:writemem; config batches are tiny.
+    const val MAX_REQUEST_BODY_BYTES = 1_048_576
+    const val MAX_HEADER_LINE_BYTES = 8_192
+    const val MAX_HEADER_COUNT = 64
+    // The C64 address space is 64 KB, so no legitimate writemem exceeds this.
+    const val MAX_WRITEMEM_BYTES = 65_536
+  }
 
   val baseUrl: String
     get() = "http://127.0.0.1:$port"
@@ -108,9 +142,10 @@ class MockC64UServer(
   private fun handleClient(socket: Socket) {
     socket.use { client ->
       try {
+        client.soTimeout = socketReadTimeoutMs
         val input = BufferedInputStream(client.getInputStream())
         val output = BufferedOutputStream(client.getOutputStream())
-        val request = readRequest(input) ?: return
+        val request = readRequest(input) ?: return@use
         val response =
                 requestExecutor
                         .submit<HttpResponse> {
@@ -129,10 +164,26 @@ class MockC64UServer(
                         .get()
         writeResponse(output, response)
         output.flush()
+      } catch (tooLarge: RequestTooLargeException) {
+        // Reject an oversized/abusive request cheaply, before its body is ever
+        // allocated (HARD10-003 H1/H2). Best-effort response; the parser has not
+        // written anything yet, so a fresh output stream is safe.
+        try {
+          val output = BufferedOutputStream(client.getOutputStream())
+          writeResponse(output, errorResponse(413, "Request entity too large"))
+          output.flush()
+        } catch (error: Exception) {
+          Log.w(logTag, "Failed to send 413 response", error)
+        }
       } catch (error: ExecutionException) {
         Log.w(logTag, "Mock request execution failed", error.cause ?: error)
       } catch (error: Exception) {
         Log.w(logTag, "Mock client handling failed", error)
+      } catch (throwable: Throwable) {
+        // Errors (e.g. OutOfMemoryError from a hostile request) are not Exceptions;
+        // without this a single connection could escalate to killing the process
+        // (HARD10-003 H4). Confine it to this connection.
+        Log.w(logTag, "Mock client handling failed (throwable)", throwable)
       }
     }
     sockets.remove(socket)
@@ -155,9 +206,12 @@ class MockC64UServer(
     val query = target.substringAfter("?", "")
     val headers = mutableMapOf<String, String>()
 
+    var headerCount = 0
     while (true) {
       val line = readLine(input) ?: break
       if (line.isEmpty()) break
+      headerCount += 1
+      if (headerCount > MAX_HEADER_COUNT) throw RequestTooLargeException()
       val idx = line.indexOf(":")
       if (idx <= 0) continue
       val name = line.substring(0, idx).trim().lowercase(Locale.ROOT)
@@ -166,6 +220,7 @@ class MockC64UServer(
     }
 
     val contentLength = headers["content-length"]?.toIntOrNull() ?: 0
+    if (contentLength > MAX_REQUEST_BODY_BYTES) throw RequestTooLargeException()
     val body =
             if (contentLength > 0) {
               readBytes(input, contentLength)
@@ -187,6 +242,9 @@ class MockC64UServer(
         break
       }
       if (byte != '\r'.code) {
+        // Bound the request line / each header line so an unterminated line cannot
+        // grow the buffer without limit (HARD10-003 H2).
+        if (buffer.size() >= MAX_HEADER_LINE_BYTES) throw RequestTooLargeException()
         buffer.write(byte)
       }
     }
@@ -222,7 +280,13 @@ class MockC64UServer(
 
   private fun handleRequest(request: HttpRequest): HttpResponse {
     if (request.method == "OPTIONS") {
+      // Preflight must stay unauthenticated so browser CORS still works; it carries
+      // no side effects and returns no device data (HARD10-005).
       return HttpResponse(204, emptyMap(), ByteArray(0))
+    }
+
+    if (!authToken.isNullOrEmpty() && request.headers["x-mock-token"] != authToken) {
+      return errorResponse(401, "Unauthorized")
     }
 
     val path = request.path
@@ -369,8 +433,50 @@ class MockC64UServer(
                       path == "/v1/machine:poweroff"
       ) {
         state.resetKeyboardBuffer()
+        state.releaseAllMachineInput()
       }
       return okResponse()
+    }
+
+    // HARD12-017: REST keyboard/joystick relay (u64e-openapi.yaml v3.15-alpha).
+    if (path == "/v1/machine:input" && request.method == "GET") {
+      return jsonResponse(200, buildMachineInputStatePayload())
+    }
+
+    if (path == "/v1/machine:input" && request.method == "POST") {
+      val body = String(request.body, StandardCharsets.UTF_8)
+      val events = try {
+        JSONObject(body).optJSONArray("events") ?: return errorResponse(400, "Missing events")
+      } catch (error: Exception) {
+        return errorResponse(400, error.message ?: "Invalid JSON payload")
+      }
+      if (events.length() < 1 || events.length() > 64) {
+        return errorResponse(400, "events must contain 1-64 items")
+      }
+      for (index in 0 until events.length()) {
+        val event = events.optJSONObject(index) ?: return errorResponse(400, "Invalid event at index $index")
+        when (event.optString("kind")) {
+          "release_all" -> state.releaseAllMachineInput()
+          "keyboard" -> {
+            val inputs = event.optJSONArray("inputs") ?: return errorResponse(400, "Missing keyboard inputs")
+            if (inputs.length() < 1 || inputs.length() > 8) {
+              return errorResponse(400, "keyboard inputs must contain 1-8 items")
+            }
+            applyMachineInputTransition(state.machineInputKeyboard, inputs, event.optString("transition"))
+          }
+          "joystick" -> {
+            val port = event.optInt("port", -1)
+            val joystickState = state.machineInputJoysticks[port] ?: return errorResponse(400, "Invalid port $port")
+            val inputs = event.optJSONArray("inputs") ?: return errorResponse(400, "Missing joystick inputs")
+            if (inputs.length() < 1 || inputs.length() > 7) {
+              return errorResponse(400, "joystick inputs must contain 1-7 items")
+            }
+            applyMachineInputTransition(joystickState, inputs, event.optString("transition"))
+          }
+          else -> return errorResponse(400, "Unknown event kind at index $index")
+        }
+      }
+      return jsonResponse(200, buildMachineInputStatePayload())
     }
 
     if (path == "/v1/machine:writemem" && (request.method == "PUT" || request.method == "POST")) {
@@ -384,6 +490,11 @@ class MockC64UServer(
               } else {
                 request.body.map { it.toInt() and 0xFF }
               }
+      // Cap consistently with the readmem cap so a writemem cannot grow the
+      // in-memory map without bound (HARD10-003 H7).
+      if (bytes.size > MAX_WRITEMEM_BYTES) {
+        return errorResponse(413, "Too many bytes")
+      }
       bytes.forEachIndexed { idx, value -> state.memory[address + idx] = value }
       return okResponse()
     }
@@ -606,6 +717,34 @@ class MockC64UServer(
     return payload
   }
 
+  // HARD12-017: `press` adds, `release` removes, `tap` is momentary (never persisted).
+  private fun applyMachineInputTransition(held: MutableSet<String>, inputs: JSONArray, transition: String) {
+    val names = (0 until inputs.length()).map { inputs.optString(it) }
+    when (transition) {
+      "press" -> held.addAll(names)
+      "release" -> held.removeAll(names.toSet())
+      "tap" -> Unit
+      else -> Unit
+    }
+  }
+
+  private fun buildMachineInputStatePayload(): JSONObject {
+    val payload = JSONObject()
+    val keyboard = JSONObject()
+    keyboard.put("inputs", JSONArray(state.machineInputKeyboard.toList()))
+    payload.put("keyboard", keyboard)
+    val joysticks = JSONArray()
+    state.machineInputJoysticks.toSortedMap().forEach { (port, inputs) ->
+      val joystick = JSONObject()
+      joystick.put("port", port)
+      joystick.put("inputs", JSONArray(inputs.toList()))
+      joysticks.put(joystick)
+    }
+    payload.put("joysticks", joysticks)
+    payload.put("errors", JSONArray())
+    return payload
+  }
+
   private fun okResponse(): HttpResponse {
     val payload = JSONObject()
     payload.put("errors", JSONArray())
@@ -630,7 +769,9 @@ class MockC64UServer(
               200 -> "OK"
               204 -> "No Content"
               400 -> "Bad Request"
+              401 -> "Unauthorized"
               404 -> "Not Found"
+              413 -> "Payload Too Large"
               else -> "Internal Server Error"
             }
     output.write("HTTP/1.1 ${response.status} $statusText\r\n".toByteArray(StandardCharsets.UTF_8))
@@ -638,7 +779,7 @@ class MockC64UServer(
             mutableMapOf(
                     "Access-Control-Allow-Origin" to "*",
                     "Access-Control-Allow-Methods" to "GET,POST,PUT,OPTIONS",
-                    "Access-Control-Allow-Headers" to "Content-Type, X-Password, X-C64U-Host",
+                    "Access-Control-Allow-Headers" to "Content-Type, X-Password, X-C64U-Host, X-Mock-Token",
                     "Connection" to "close",
             )
     headers.putAll(response.headers)

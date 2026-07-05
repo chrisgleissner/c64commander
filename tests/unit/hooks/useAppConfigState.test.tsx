@@ -17,7 +17,6 @@ const getCategories = vi.fn(async () => ({ categories: ["Audio Mixer"] }));
 const getCategory = vi.fn(async () => ({
   items: { Volume: { selected: "5" } },
 }));
-const getCachedCategory = vi.fn(() => null);
 const updateConfigBatch = vi.fn(async () => undefined);
 const getInFlightReadRequestCount = vi.fn(() => 0);
 
@@ -47,7 +46,6 @@ vi.mock("@/lib/c64api", () => ({
   getDefaultBaseUrl: () => "http://c64u",
   getC64API: () => ({
     getCategories,
-    getCachedCategory,
     getCategory,
     updateConfigBatch,
     getInFlightReadRequestCount,
@@ -85,8 +83,6 @@ describe("useAppConfigState", () => {
     getCategory.mockResolvedValue({
       items: { Volume: { selected: "5" } },
     });
-    getCachedCategory.mockReset();
-    getCachedCategory.mockReturnValue(null);
     getInFlightReadRequestCount.mockReset();
     getInFlightReadRequestCount.mockReturnValue(0);
     updateConfigBatch.mockReset();
@@ -216,6 +212,24 @@ describe("useAppConfigState", () => {
     expect(revertResult).toEqual({ status: "reverted" });
     expect(updateConfigBatch).toHaveBeenCalledTimes(1);
     expect(updateHasChanges).toHaveBeenCalledWith(expect.any(String), false);
+  });
+
+  it("revertToInitial invalidates c64-config-items/c64-config-item so Home reflects it (HARD9-017)", async () => {
+    loadInitialSnapshot.mockReturnValue({
+      savedAt: "t",
+      data: { Audio: { items: { Vol: { value: "7" } } } },
+    });
+    getCategories.mockResolvedValue({ categories: ["Audio"] });
+    getCategory.mockResolvedValue({ items: { Vol: { selected: "7" } } });
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const { result } = renderHook(() => useAppConfigState(), { wrapper });
+
+    await act(async () => {
+      await result.current.revertToInitial();
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-config-items"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-config-item"] });
   });
 
   it("revertToInitial reports verification mismatches after applying the snapshot", async () => {
@@ -715,21 +729,14 @@ describe("useAppConfigState", () => {
     );
   });
 
-  it("reuses cached category snapshots during initial capture before issuing another category request", async () => {
+  it("always reads every category fresh from the device during initial capture, never a stale cache (HARD9-018)", async () => {
+    // Regression: fetchAllConfig used to prefer api.getCachedCategory (a
+    // localStorage-persisted, no-TTL enrichment cache) over a live read.
+    // If settings changed via the C64U's own menu since the cache was
+    // populated, the captured baseline - used by Revert and Save to App -
+    // would be wrong and Revert would actively write stale values back to
+    // the device.
     getCategories.mockResolvedValue({ categories: ["LED Strip Settings", "Audio Mixer"] });
-    getCachedCategory.mockImplementation((category: string) =>
-      category === "LED Strip Settings"
-        ? ({
-            "LED Strip Settings": {
-              items: {
-                "LedStrip Mode": { selected: "Fixed Color" },
-                "Fixed Color": { selected: "Royal Blue" },
-              },
-            },
-            errors: [],
-          } as const)
-        : null,
-    );
     getCategory.mockImplementation(async (category: string) => ({
       items: {
         Name: { selected: category },
@@ -746,20 +753,18 @@ describe("useAppConfigState", () => {
       "http://c64u",
       expect.objectContaining({
         data: expect.objectContaining({
-          "LED Strip Settings": expect.objectContaining({
-            "LED Strip Settings": expect.objectContaining({
-              items: expect.objectContaining({
-                "LedStrip Mode": expect.any(Object),
-              }),
-            }),
-          }),
+          "LED Strip Settings": expect.any(Object),
           "Audio Mixer": expect.any(Object),
         }),
       }),
     );
-    expect(getCachedCategory).toHaveBeenCalledWith("LED Strip Settings");
-    expect(getCachedCategory).toHaveBeenCalledWith("Audio Mixer");
-    expect(getCategory).toHaveBeenCalledTimes(1);
+    expect(getCategory).toHaveBeenCalledTimes(2);
+    expect(getCategory).toHaveBeenCalledWith(
+      "LED Strip Settings",
+      expect.objectContaining({
+        __c64uIntent: "user",
+      }),
+    );
     expect(getCategory).toHaveBeenCalledWith(
       "Audio Mixer",
       expect.objectContaining({

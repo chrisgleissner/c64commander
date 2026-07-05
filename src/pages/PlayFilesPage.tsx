@@ -20,7 +20,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Gamepad2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { RemoteInputSheet } from "@/components/remoteInput/RemoteInputSheet";
 import { PlaybackConfigSheet } from "@/pages/playFiles/components/PlaybackConfigSheet";
 import {
   AddItemsProgressOverlay,
@@ -31,6 +33,7 @@ import { useC64ConfigItems, useC64Connection, useC64UpdateConfigBatch } from "@/
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
 import { useLocalSources } from "@/hooks/useLocalSources";
+import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
@@ -99,6 +102,7 @@ import { useImportNavigationGuards } from "@/pages/playFiles/hooks/useImportNavi
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import { usePlaybackResumeTriggers } from "@/pages/playFiles/hooks/usePlaybackResumeTriggers";
 import { useResolvedPlaybackDeviceId } from "@/pages/playFiles/hooks/useResolvedPlaybackDeviceId";
+import { getSelectedSavedDevice } from "@/lib/savedDevices/store";
 import { useArchiveClientSettings } from "@/pages/playFiles/hooks/useArchiveClientSettings";
 import { useDebouncedValue } from "@/pages/playFiles/hooks/useDebouncedValue";
 import { useQueryFilteredPlaylist } from "@/pages/playFiles/hooks/useQueryFilteredPlaylist";
@@ -110,7 +114,7 @@ import {
 } from "@/pages/playFiles/backgroundExecutionPolicy";
 import { setPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
-import { resolveVolumeSyncDecision } from "@/pages/playFiles/playbackGuards";
+import { planPlaylistItemRemoval, resolveAutoAdvanceDueAtMsOnDurationChange } from "@/pages/playFiles/playbackGuards";
 import type { PlayableEntry, PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from "@/pages/playFiles/types";
 import {
   buildConfigReferenceFromBrowserSelection,
@@ -133,6 +137,10 @@ import {
   SHARED_PLAYLIST_STORAGE_KEY,
   buildPlaylistStorageKey,
   buildPlaylistItemId,
+  buildSubsongSwitchItem,
+  canAdvanceNext,
+  canAdvancePrevious,
+  shouldDetachPlaybackOnSavedDeviceSwitch,
   applyDurationOverrideToPlaylist,
   clampDurationSeconds,
   durationSecondsToSlider,
@@ -191,6 +199,8 @@ export default function PlayFilesPage() {
     setCurrentIndex,
     shuffleEnabled,
     setShuffleEnabled,
+    shuffleSeed,
+    setShuffleSeed,
     repeatEnabled,
     setRepeatEnabled,
     playlistTypeFilters,
@@ -277,6 +287,8 @@ export default function PlayFilesPage() {
   const backgroundExecutionEnabled = isBackgroundExecutionEnabled(featureFlags);
   const { archiveConfig, commoserveEnabled } = useArchiveClientSettings();
   const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
+  const { value: remoteInputEnabled } = useFeatureFlag("remote_input_enabled");
+  const [remoteInputSheetOpen, setRemoteInputSheetOpen] = useState(false);
 
   const {
     volumeSliderPreviewIntervalMs,
@@ -287,6 +299,7 @@ export default function PlayFilesPage() {
     enabledSidVolumeItems,
     resolveEnabledSidVolumeItems,
     restoreVolumeOverrides,
+    discardVolumeSession,
     applyAudioMixerUpdates,
     pauseMuteSnapshotRef,
     pausingFromPauseRef,
@@ -299,7 +312,7 @@ export default function PlayFilesPage() {
     handleToggleMute,
     resumingFromPauseRef,
     ensureUnmuted,
-  } = usePlayFilesVolumeBindings({ isPlaying, isPaused });
+  } = usePlayFilesVolumeBindings({ isPlaying, isPaused, resolvedDeviceId: getSelectedSavedDevice()?.id ?? null });
   const volumeIndex = volumeState.index;
   const volumeMuted = volumeState.muted;
 
@@ -428,6 +441,7 @@ export default function PlayFilesPage() {
     handlePauseResume,
     handleNext,
     handlePrevious,
+    playlistEnded,
     playlistItemDuration,
   } = usePlaybackController({
     playlist,
@@ -448,6 +462,8 @@ export default function PlayFilesPage() {
     setCurrentSubsongCount,
     setTrackInstanceId,
     repeatEnabled,
+    shuffleEnabled,
+    shuffleSeed,
     localEntriesBySourceId,
     localSourceTreeUris,
     buildHvscLocalPlayFile,
@@ -493,6 +509,49 @@ export default function PlayFilesPage() {
     }
   }, [isPlaying, isPaused]);
 
+  const selectedSavedDeviceId = useSavedDevices().selectedDeviceId;
+  const playbackDeviceIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const previousDeviceId = playbackDeviceIdRef.current;
+    playbackDeviceIdRef.current = selectedSavedDeviceId;
+    if (
+      !shouldDetachPlaybackOnSavedDeviceSwitch({
+        previousDeviceId,
+        nextDeviceId: selectedSavedDeviceId,
+        isPlaying,
+        isPaused,
+      })
+    ) {
+      return;
+    }
+    // Saved devices + the always-visible health-badge switcher let a user hop
+    // devices while Play stays mounted. executeSavedDeviceSwitch already
+    // mutated the C64 API singleton in place by the time this observes the
+    // change, so transport controls/auto-advance calling getC64API() now
+    // target the NEW device: auto-advance would launch the next track (and
+    // reset/reboot for disk items) on the wrong C64, while the device that
+    // was actually playing keeps going with no reachable control. Detach
+    // locally instead - no device call (it would hit the wrong target), keep
+    // playlist/currentIndex so pressing Play again resumes on the new device.
+    // See HARD11-002.
+    cancelAutoAdvance();
+    setIsPlaying(false);
+    setIsPaused(false);
+    autoAdvanceGuardRef.current = null;
+    setAutoAdvanceDueAtMs(null);
+    trackStartedAtRef.current = null;
+    playedClockRef.current.stop(Date.now(), true);
+    setPlayedMs(0);
+    // The captured volume-override snapshot belongs to the OLD device;
+    // restoreVolumeOverrides() would write it to whatever getC64API() now
+    // resolves to (the NEW device's mixer). Discard it locally instead.
+    discardVolumeSession("saved-device-switch");
+    toast({
+      title: "Playback controls detached",
+      description: "The connected device changed while playing.",
+    });
+  }, [selectedSavedDeviceId]);
+
   useEffect(() => {
     if (playlist.length > 0) return;
     playedClockRef.current.reset();
@@ -516,6 +575,7 @@ export default function PlayFilesPage() {
         backgroundExecutionActive: backgroundExecutionActiveRef.current,
         isPlaying,
         isPaused,
+        playlistEnded,
       })
     ) {
       backgroundExecutionActiveRef.current = true;
@@ -544,6 +604,7 @@ export default function PlayFilesPage() {
         backgroundExecutionActive: backgroundExecutionActiveRef.current,
         isPlaying,
         isPaused,
+        playlistEnded,
       })
     ) {
       return;
@@ -1097,6 +1158,7 @@ export default function PlayFilesPage() {
         configPreview: entry.configPreview ?? null,
         archiveRef: entry.archiveRef ?? null,
         durationMs: entry.durationMs,
+        durationSource: entry.durationSource ?? null,
         subsongCount: entry.subsongCount,
         sourceId: resolvedSourceId,
         sizeBytes: entry.sizeBytes ?? null,
@@ -1344,18 +1406,30 @@ export default function PlayFilesPage() {
   const handleSongSelection = useCallback(
     async (nextSongNr: number) => {
       if (!currentItem || !isSongCategory(currentItem.category)) return;
-      const capped = knownSubsongCount ? Math.min(Math.max(1, nextSongNr), knownSubsongCount) : Math.max(1, nextSongNr);
-      const nextItem = {
-        ...currentItem,
-        request: { ...currentItem.request, songNr: capped },
-      };
-      setSongNrInput(String(capped));
+      // Strip the previous subsong's resolved duration so playItem re-resolves
+      // it for the new songNr; otherwise auto-advance fires at the wrong time
+      // and the stale duration persists onto the playlist item (HARD11-004).
+      const nextItem = buildSubsongSwitchItem(currentItem, nextSongNr, knownSubsongCount);
+      setSongNrInput(String(nextItem.request.songNr));
       setSongPickerOpen(false);
       setIsPlaylistLoading(true);
       try {
         cancelAutoAdvance();
         await playItem(nextItem, { playlistIndex: currentIndex });
-        setPlaylist((prev) => prev.map((item, index) => (index === currentIndex ? nextItem : item)));
+      } catch (error) {
+        // reportUserError no-ops when playItem already reported/marked the
+        // error handled internally, so this only surfaces genuinely
+        // unreported failures (e.g. a launch failure from executePlayPlan).
+        reportUserError({
+          operation: "PLAYBACK_SUBSONG_SELECT",
+          title: "Subsong switch failed",
+          description: (error as Error).message,
+          error,
+          context: {
+            item: currentItem.label,
+            songNr: nextItem.request.songNr,
+          },
+        });
       } finally {
         setIsPlaylistLoading(false);
       }
@@ -1374,8 +1448,10 @@ export default function PlayFilesPage() {
   const hasPlaylist = playlist.length > 0;
   const canTransport = hasPlaylist && !isPlaylistLoading;
   const canPause = isPlaying;
-  const hasPrev = hasPlaylist && (currentIndex > 0 || repeatEnabled);
-  const hasNext = hasPlaylist && (currentIndex < playlist.length - 1 || repeatEnabled);
+  // HARD12-005: Next/Prev enablement must reflect the shuffle-aware traversal
+  // (what tapping them will do), not the linear playlist position.
+  const hasPrev = canAdvancePrevious(playlist, currentIndex, repeatEnabled, shuffleEnabled, shuffleSeed);
+  const hasNext = canAdvanceNext(playlist, currentIndex, repeatEnabled, shuffleEnabled, shuffleSeed);
 
   const togglePlaylistTypeFilter = (category: PlayFileCategory) => {
     setPlaylistTypeFilters((prev) =>
@@ -1383,20 +1459,17 @@ export default function PlayFilesPage() {
     );
   };
 
-  const handlePlaylistSelect = useCallback(
-    (item: PlaylistItem, selected: boolean) => {
-      setSelectedPlaylistIds((prev) => {
-        const next = new Set(prev);
-        if (selected) {
-          next.add(item.id);
-        } else {
-          next.delete(item.id);
-        }
-        return next;
-      });
-    },
-    [queueBackgroundDueAtUpdate],
-  );
+  const handlePlaylistSelect = useCallback((item: PlaylistItem, selected: boolean) => {
+    setSelectedPlaylistIds((prev) => {
+      const next = new Set(prev);
+      if (selected) {
+        next.add(item.id);
+      } else {
+        next.delete(item.id);
+      }
+      return next;
+    });
+  }, []);
 
   const toggleSelectAllPlaylist = useCallback(() => {
     setSelectedPlaylistIds(allPlaylistSelected ? new Set() : new Set(playlistIds));
@@ -1432,31 +1505,27 @@ export default function PlayFilesPage() {
   const removePlaylistItemsById = useCallback(
     (ids: Set<string>) => {
       if (!ids.size) return;
-      setPlaylist((prev) => {
-        const next = prev.filter((item) => !ids.has(item.id));
-        const currentId = prev[currentIndex]?.id;
-        if (currentId && ids.has(currentId)) {
-          setIsPlaying(false);
-          setIsPaused(false);
-          setElapsedMs(0);
-          setDurationMs(undefined);
-          trackStartedAtRef.current = null;
-          autoAdvanceGuardRef.current = null;
-        }
-        setCurrentIndex((prevIndex) => {
-          if (prevIndex < 0) return prevIndex;
-          if (!currentId) return -1;
-          return next.findIndex((entry) => entry.id === currentId);
-        });
-        return next;
-      });
+      const plan = planPlaylistItemRemoval(playlist, currentIndex, ids, isPlaying, isPaused);
+      if (plan.shouldStopDevice) {
+        // Route through handleStop so the C64 actually stops instead of
+        // continuing to play a track the playlist no longer has, and so the
+        // native auto-advance watchdog due-time is cleared. handleStop
+        // performs the full teardown (resume-if-paused, device stop, volume
+        // restore, guard/due-at clear) that used to be partially and
+        // impurely duplicated as setState calls inside the setPlaylist
+        // updater below. See HARD9-030.
+        void handleStop();
+      }
+      setPlaylist(plan.next);
+      if (currentIndex >= 0) {
+        setCurrentIndex(plan.nextCurrentIndex);
+      }
       setSelectedPlaylistIds((prev) => {
         if (!prev.size) return prev;
-        const next = new Set(Array.from(prev).filter((id) => !ids.has(id)));
-        return next;
+        return new Set(Array.from(prev).filter((id) => !ids.has(id)));
       });
     },
-    [currentIndex],
+    [currentIndex, handleStop, isPaused, isPlaying, playlist],
   );
 
   const handleRemoveSelectedPlaylist = useCallback(() => {
@@ -1481,7 +1550,11 @@ export default function PlayFilesPage() {
     setDurationMs,
     autoAdvanceDueAtMs,
     setCurrentSubsongCount,
+    setShuffleEnabled,
+    setShuffleSeed,
+    setRepeatEnabled,
     shuffleEnabled,
+    shuffleSeed,
     repeatEnabled,
     activePlaylistQuery: playlistFilterText,
     setActivePlaylistQuery: restorePlaylistFilterText,
@@ -1543,6 +1616,27 @@ export default function PlayFilesPage() {
     if (debouncedDurationOverrideMs === undefined) return;
     persistDurationOverride(debouncedDurationOverrideMs);
   }, [debouncedDurationOverrideMs, persistDurationOverride]);
+
+  // Re-arm the auto-advance guard when the playing track's duration changes
+  // mid-track (slider/input), so auto-advance fires at the new duration
+  // instead of the stale one captured at track launch. No-op while paused
+  // (handlePauseResume already recomputes dueAtMs from the live durationMs
+  // on resume) and a no-op on ordinary track launches, since playItem sets
+  // trackStartedAtRef/guard.dueAtMs and durationMs together already in sync.
+  useEffect(() => {
+    const guard = autoAdvanceGuardRef.current;
+    const nextDueAtMs = resolveAutoAdvanceDueAtMsOnDurationChange({
+      isPlaying,
+      isPaused,
+      durationMs,
+      trackStartedAtMs: trackStartedAtRef.current,
+      currentDueAtMs: guard?.dueAtMs,
+    });
+    if (nextDueAtMs === null || !guard) return;
+    guard.dueAtMs = nextDueAtMs;
+    guard.autoFired = false;
+    setAutoAdvanceDueAtMs(nextDueAtMs);
+  }, [durationMs, isPaused, isPlaying, setAutoAdvanceDueAtMs]);
 
   const handleDurationSliderChange = useCallback(
     (value: number[]) => {
@@ -1624,15 +1718,23 @@ export default function PlayFilesPage() {
   const currentPlayingItemId =
     (isPlaying || isPaused) && currentIndex >= 0 ? (playlist[currentIndex]?.id ?? null) : null;
 
+  // Stable identities so usePlaylistListItems's useMemo isn't defeated by a
+  // fresh inline arrow on every 1s elapsedMs tick during playback (HARD9-032).
+  const handleAttachLocalConfigVoid = useCallback(
+    (item: PlaylistItem) => void handleAttachLocalConfig(item),
+    [handleAttachLocalConfig],
+  );
+  const handleOpenConfig = useCallback((item: PlaylistItem) => setActiveConfigItemId(item.id), []);
+
   const playlistPreviewListItems = usePlaylistListItems({
     filteredPlaylist: previewFilteredPlaylist,
     playlist,
     selectedPlaylistIds,
     isPlaylistLoading,
     handlePlaylistSelect,
-    onAttachLocalConfig: (item) => void handleAttachLocalConfig(item),
+    onAttachLocalConfig: handleAttachLocalConfigVoid,
     onAttachUltimateConfig: handleAttachUltimateConfig,
-    onOpenConfig: (item) => setActiveConfigItemId(item.id),
+    onOpenConfig: handleOpenConfig,
     onRemoveConfig: handleRemoveConfig,
     startPlaylist,
     playlistItemDuration: effectivePlaylistItemDuration,
@@ -1650,9 +1752,9 @@ export default function PlayFilesPage() {
     selectedPlaylistIds,
     isPlaylistLoading,
     handlePlaylistSelect,
-    onAttachLocalConfig: (item) => void handleAttachLocalConfig(item),
+    onAttachLocalConfig: handleAttachLocalConfigVoid,
     onAttachUltimateConfig: handleAttachUltimateConfig,
-    onOpenConfig: (item) => setActiveConfigItemId(item.id),
+    onOpenConfig: handleOpenConfig,
     onRemoveConfig: handleRemoveConfig,
     startPlaylist,
     playlistItemDuration: effectivePlaylistItemDuration,
@@ -1761,6 +1863,20 @@ export default function PlayFilesPage() {
                 onReshuffle={handleReshuffle}
                 reshuffleActive={reshuffleActive}
                 reshuffleDisabled={!shuffleEnabled || playlist.length < 2}
+                shuffleSeed={shuffleSeed}
+                openControllerAction={
+                  remoteInputEnabled && isPlaying ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="self-start"
+                      data-testid="play-open-controller"
+                      onClick={() => setRemoteInputSheetOpen(true)}
+                    >
+                      <Gamepad2 className="mr-1.5 h-4 w-4" /> Remote Input
+                    </Button>
+                  ) : undefined
+                }
               />
               <PlaybackSettingsPanel
                 durationSliderMax={DURATION_SLIDER_STEPS}
@@ -1967,6 +2083,10 @@ export default function PlayFilesPage() {
             onRediscover={(item) => void handleRediscoverConfig(item)}
             onUpdateOverrides={updatePlaylistItemOverrides}
           />
+
+          {remoteInputEnabled ? (
+            <RemoteInputSheet open={remoteInputSheetOpen} onOpenChange={setRemoteInputSheetOpen} />
+          ) : null}
 
           <AlertDialog
             open={Boolean(pendingConfigChange)}

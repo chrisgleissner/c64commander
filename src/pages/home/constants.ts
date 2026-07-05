@@ -10,72 +10,26 @@ import { SID_SOCKETS_ITEMS, SID_ADDRESSING_ITEMS } from "@/lib/config/configItem
 import { DriveDeviceClass } from "@/lib/drives/driveDevices";
 import { LIGHTING_SUMMARY_ITEMS } from "@/lib/lighting/constants";
 import { VISIBLE_C64_QUERY_OPTIONS } from "@/hooks/useC64Connection";
+import type { DeviceConfigItemRef } from "./hooks/useDeviceConfigOptionDomains";
 
-// Firmware option domains mirrored from the C64U/U64 menu payloads used by the Home summary controls.
-export const HOME_CPU_SPEED_OPTIONS = [
-  "1",
-  "2",
-  "3",
-  "4",
-  "6",
-  "8",
-  "10",
-  "12",
-  "14",
-  "16",
-  "20",
-  "24",
-  "32",
-  "40",
-  "48",
-  "64",
-] as const;
-const HOME_CONFIG_OPTION_DOMAINS = new Map<string, string[]>([
-  ["U64 Specific Settings::System Mode", ["PAL", "NTSC"]],
-  ["U64 Specific Settings::Analog Video Mode", ["CVBS + SVideo", "RGB"]],
-  [
-    "U64 Specific Settings::HDMI Scan Resolution",
-    [
-      "SD (480p/576p)",
-      "HDTV 720p50",
-      "HDTV 720p60",
-      "HDTV 1080p50",
-      "HDTV 1080p60",
-      "PC 640 x 480",
-      "PC 800 x 600",
-      "PC 1024 x 768",
-      "PC 1280 x 1024",
-    ],
-  ],
-  ["U64 Specific Settings::Digital Video Mode", ["Auto", "HDMI", "DVI"]],
-  ["U64 Specific Settings::HDMI Scan lines", ["Disabled", "Enabled"]],
-  [
-    "U64 Specific Settings::Serial Bus Mode",
-    ["All Connected", "C64 <-> Internal", "Ext. <-> Int.", "C64 <-> External"],
-  ],
-  ["U64 Specific Settings::Joystick Swapper", ["Normal", "Swapped", "WASD Port 2", "WASD Port 1"]],
-  ["U64 Specific Settings::Turbo Control", ["Off", "Manual", "C64U Turbo Registers", "TurboEnable Bit"]],
-  ["U64 Specific Settings::CPU Speed", [...HOME_CPU_SPEED_OPTIONS]],
-  ["U64 Specific Settings::Badline Timing", ["Disabled", "Enabled"]],
-  ["U64 Specific Settings::SuperCPU Detect (D0BC)", ["Disabled", "Enabled"]],
-  ["U64 Specific Settings::UserPort Power Enable", ["Disabled", "Enabled"]],
-  ["C64 and Cartridge Settings::Cartridge Preference", ["Auto", "Internal", "External", "Manual"]],
-  ["C64 and Cartridge Settings::RAM Expansion Unit", ["Disabled", "Enabled", "GeoRAM Mode"]],
-  ["C64 and Cartridge Settings::REU Size", ["128 KB", "256 KB", "512 KB", "1 MB", "2 MB", "4 MB", "8 MB", "16 MB"]],
-  ["User Interface Settings::Interface Type", ["Freeze", "Overlay on HDMI"]],
-  ["User Interface Settings::Navigation Style", ["Quick Search", "WASD Cursors"]],
-  [
-    "User Interface Settings::Color Scheme",
-    ["Commodore Blue", "Ultimate Black", "Commodore 1", "Commodore 2", "Commodore 3"],
-  ],
-]);
-
+/**
+ * Resolve the choices to render for a Home summary dropdown. Permitted values ALWAYS come from
+ * the concrete device: `liveOptions` are the enum from the (rarely-enriched) category read, and
+ * `domainOptions` are the device-reported `values` fetched per-item by
+ * {@link useDeviceConfigOptionDomains}. Only when the device has told us nothing yet do we fall
+ * back to the device's *current* value as the sole choice — we never fabricate a model-specific
+ * option list, because those diverge across hardware (e.g. "C64U Turbo Registers" vs
+ * "U64 Turbo Registers", or entirely different Color Scheme / LED pattern labels).
+ */
 export const resolveHomeConfigOptions = (
-  category: string,
-  itemName: string,
-  options: string[],
+  liveOptions: string[],
+  domainOptions: string[] | undefined,
   fallbackValue: string,
-) => (options.length ? options : (HOME_CONFIG_OPTION_DOMAINS.get(`${category}::${itemName}`) ?? [fallbackValue]));
+) => {
+  if (liveOptions.length) return liveOptions;
+  if (domainOptions && domainOptions.length) return domainOptions;
+  return fallbackValue ? [fallbackValue] : [];
+};
 
 export const HOME_SUMMARY_QUERY_OPTIONS = {
   ...VISIBLE_C64_QUERY_OPTIONS,
@@ -100,10 +54,19 @@ export const U64_HOME_ITEMS = [
 ] as const;
 export const C64_CARTRIDGE_HOME_ITEMS = ["Cartridge Preference", "RAM Expansion Unit", "REU Size"] as const;
 export const USER_INTERFACE_HOME_ITEMS = ["Interface Type", "Navigation Style", "Color Scheme"] as const;
+
+// Every Home summary dropdown whose permitted values must be interrogated from the concrete
+// device (the enum `values`), rather than assumed. Fed to useDeviceConfigOptionDomains.
+export const HOME_OPTION_DOMAIN_REFS: readonly DeviceConfigItemRef[] = [
+  ...U64_HOME_ITEMS.map((item) => ({ category: "U64 Specific Settings", item })),
+  ...C64_CARTRIDGE_HOME_ITEMS.map((item) => ({ category: "C64 and Cartridge Settings", item })),
+  ...USER_INTERFACE_HOME_ITEMS.map((item) => ({ category: "User Interface Settings", item })),
+];
 export const LIGHTING_HOME_ITEMS = LIGHTING_SUMMARY_ITEMS;
 export const LED_STRIP_HOME_ITEMS = LIGHTING_HOME_ITEMS;
 export const KEYBOARD_LIGHTING_HOME_ITEMS = LIGHTING_HOME_ITEMS;
 export const SID_AUDIO_ITEMS = [
+  "Vol Master",
   "Vol Socket 1",
   "Vol Socket 2",
   "Vol UltiSid 1",
@@ -140,9 +103,15 @@ export const HOME_SID_ADDRESSING_ITEMS = [
   "SID Socket 1 Address",
   "SID Socket 2 Address",
 ] as const;
+// HARD16-011: deliberate exception to the "never fabricate an option list"
+// doctrine (see resolveHomeConfigOptions). Bus IDs are numeric IEC device
+// numbers with near-universal ranges and low cross-model divergence risk, so a
+// pre-discovery fallback range is offered for display continuity — the current
+// device value is always merged in (buildBusIdOptions) and the device-reported
+// min/max wins once it resolves. String enums (e.g. Drive Type) get no such
+// fabricated list; they fall back to the current value only.
 export const DISK_BUS_ID_DEFAULTS = [8, 9, 10, 11];
 export const PRINTER_BUS_ID_DEFAULTS = [4, 5];
-export const PHYSICAL_DRIVE_TYPE_DEFAULTS = ["1541", "1571", "1581"];
 export const EMPTY_SELECT_VALUE = "__empty__";
 export const EMPTY_SELECT_LABEL = "Default";
 export const SID_SLIDER_DETENT_RANGE = 0.2;

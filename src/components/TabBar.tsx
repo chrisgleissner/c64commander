@@ -6,7 +6,6 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { motion } from "framer-motion";
 import { Home, Sliders, Settings, BookOpen, Play, Disc } from "lucide-react";
 import { useLocation, useNavigate, type NavigateFunction } from "react-router-dom";
 import { useInterstitialActive } from "@/components/ui/interstitial-state";
@@ -71,18 +70,20 @@ function TabBarButton({
         { title: tab.label },
         "Tab",
       )}
-      className={`tab-item touch-none ${isActive ? "active" : ""}`}
+      className={cn("tab-item touch-none relative isolate", isActive && "active")}
     >
-      <div className="relative">
-        <Icon className="h-[1.375rem] w-[1.375rem]" />
-        {isActive && (
-          <motion.div
-            layoutId="tab-indicator"
-            className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary"
-            transition={{ type: "spring", stiffness: 500, damping: 30 }}
-          />
-        )}
-      </div>
+      {/* A calm rounded highlight sitting behind the active tab's icon + label
+          (the active icon/label are already tinted `text-primary` by
+          `.tab-item.active`). Static: it just appears on the selected tab with
+          no slide animation, sized close to the button's own bounds (like the
+          tap-feedback flash) so it fully engulfs the icon + label. */}
+      {isActive && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0.5 inset-y-0.5 -z-10 rounded-xl bg-primary/15"
+        />
+      )}
+      <Icon className="h-[1.375rem] w-[1.375rem]" />
       <span className="text-[9px] font-medium leading-none">{tab.label}</span>
     </button>
   );

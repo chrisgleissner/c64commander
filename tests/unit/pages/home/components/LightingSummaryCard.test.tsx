@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LightingSummaryCard } from "@/pages/home/components/LightingSummaryCard";
 
@@ -195,7 +195,10 @@ describe("LightingSummaryCard", () => {
     expect(updateConfigValueSpy).not.toHaveBeenCalled();
   });
 
-  it("restores the resolved intensity after an interactive write failure", async () => {
+  it("keeps the dragged intensity visible (does not snap back) after a mid-drag write failure (HARD9-088)", async () => {
+    // The mocked Slider below never fires onValueCommit, so this drag never
+    // "ends" - per HARD9-088, a transient preview failure while still
+    // dragging must not snap the thumb back to the resolved device value.
     interactiveWriteSpy.mockRejectedValueOnce(new Error("intensity failed"));
     resolveConfigValueSpy.mockImplementation((_p: unknown, _c: string, itemName: string, fallback: string | number) => {
       if (itemName === "Strip Intensity") return "15";
@@ -205,17 +208,27 @@ describe("LightingSummaryCard", () => {
     render(<LightingSummaryCard {...defaultProps} />);
     fireEvent.click(screen.getByTestId("led-strip-intensity-slider-drag"));
 
-    await waitFor(() => expect(screen.getByTestId("led-strip-intensity-value")).toHaveTextContent("15"));
-    expect(addLogSpy).toHaveBeenCalledWith(
-      "warn",
-      "Lighting summary slider write failed",
-      expect.objectContaining({
-        category: "LED Strip",
-        itemName: "Strip Intensity",
-        value: 5,
-        error: "intensity failed",
-      }),
+    await waitFor(() =>
+      expect(addLogSpy).toHaveBeenCalledWith(
+        "warn",
+        "Lighting summary slider write failed",
+        expect.objectContaining({
+          category: "LED Strip",
+          itemName: "Strip Intensity",
+          value: 5,
+          error: "intensity failed",
+        }),
+      ),
     );
+    // A real macrotask tick, not another waitFor/microtask-only wait: it
+    // guarantees every microtask in the rejection chain (including the
+    // pre-fix code's own snap-back, which also completes within
+    // microtasks) has fully drained before this assertion runs. Without
+    // it, this check races the snap-back and can pass on either side of
+    // the fix. The resolved device value is "15", so the match must be
+    // exact - "15" also contains "5" as a substring.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+    expect(screen.getByTestId("led-strip-intensity-value")).toHaveTextContent(/^5$/);
   });
 
   it("ignores empty async slider payloads", () => {
@@ -301,7 +314,10 @@ describe("LightingSummaryCard", () => {
     expect(updateConfigValueSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("restores the resolved color index after an interactive write failure", async () => {
+  it("keeps the dragged color index visible (does not snap back) after a mid-drag write failure (HARD9-088)", async () => {
+    // The mocked Slider below never fires onValueCommit, so this drag never
+    // "ends" - per HARD9-088, a transient preview failure while still
+    // dragging must not snap the thumb back to the resolved device value.
     interactiveWriteSpy.mockRejectedValueOnce(new Error("color failed"));
     resolveConfigValueSpy.mockImplementation((_p: unknown, _c: string, itemName: string, fallback: string | number) => {
       if (itemName === "Fixed Color") return "Red";
@@ -328,17 +344,26 @@ describe("LightingSummaryCard", () => {
 
     fireEvent.click(screen.getByTestId("led-strip-color-slider-drag"));
 
-    await waitFor(() => expect(screen.getByTestId("led-strip-color-slider")).toHaveAttribute("data-value", "[0]"));
-    expect(addLogSpy).toHaveBeenCalledWith(
-      "warn",
-      "Lighting summary slider write failed",
-      expect.objectContaining({
-        category: "LED Strip",
-        itemName: "Fixed Color",
-        value: "Purple",
-        error: "color failed",
-      }),
+    await waitFor(() =>
+      expect(addLogSpy).toHaveBeenCalledWith(
+        "warn",
+        "Lighting summary slider write failed",
+        expect.objectContaining({
+          category: "LED Strip",
+          itemName: "Fixed Color",
+          value: "Purple",
+          error: "color failed",
+        }),
+      ),
     );
+    // A real macrotask tick, not another waitFor/microtask-only wait: it
+    // guarantees every microtask in the rejection chain (including the
+    // pre-fix code's own snap-back, which also completes within
+    // microtasks) has fully drained before this assertion runs. Without
+    // it, this check races the snap-back and can pass on either side of
+    // the fix.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+    expect(screen.getByTestId("led-strip-color-slider")).toHaveAttribute("data-value", "[5]");
   });
 
   it("shows intensity value from resolved config", () => {
@@ -350,37 +375,51 @@ describe("LightingSummaryCard", () => {
     expect(screen.getByTestId("led-strip-intensity-value")).toHaveTextContent("15");
   });
 
-  it("uses built-in fallback options when summary payloads omit structured metadata", () => {
+  it("sources dropdown options from the device's reported values and never fabricates model-specific choices", () => {
     resolveConfigValueSpy.mockImplementation((_p: unknown, _c: string, itemName: string, fallback: string | number) => {
       if (itemName === "LedStrip Mode") return "Fixed Color";
-      if (itemName === "LedStrip Pattern") return "SingleColor";
+      if (itemName === "LedStrip Pattern") return "Left to Right";
       if (itemName === "Fixed Color") return "Red";
-      if (itemName === "LedStrip SID Select") return "SID 1";
+      if (itemName === "LedStrip SID Select") return "UltiSID1-A";
       if (itemName === "Color tint") return "Pure";
       if (itemName === "Strip Intensity") return "12";
       return fallback;
     });
 
-    render(
+    // The device reports its own enum values (which diverge across models/firmware) via each
+    // item's `options`. The card must offer exactly those — not a hard-coded guess.
+    const { container } = render(
       <LightingSummaryCard
         {...defaultProps}
         config={{
           items: {
-            "LedStrip Mode": "Fixed Color",
-            "LedStrip Pattern": "SingleColor",
+            "LedStrip Mode": {
+              selected: "Fixed Color",
+              options: ["Off", "Fixed Color", "SID Music", "Rainbow", "Programmatic"],
+            },
+            "LedStrip Pattern": {
+              selected: "Left to Right",
+              options: ["SingleColor", "Left to Right", "Right to Left"],
+            },
             "Fixed Color": "Red",
-            "LedStrip SID Select": "SID 1",
-            "Color tint": "Pure",
+            "LedStrip SID Select": { selected: "UltiSID1-A", options: ["UltiSID1-A", "UltiSID1-B", "UltiSID2-A"] },
+            "Color tint": { selected: "Pure", options: ["Pure", "Bright", "Pastel", "Whisper"] },
             "Strip Intensity": "12",
           },
         }}
       />,
     );
 
-    expect(screen.getByText("Rainbow")).toBeInTheDocument();
-    expect(screen.getByText("Circular")).toBeInTheDocument();
-    expect(screen.getByText("SID 2")).toBeInTheDocument();
-    expect(screen.getByText("Warm")).toBeInTheDocument();
+    // Device-reported values are offered as choices...
+    expect(container.querySelector('[data-value="Programmatic"]')).toBeTruthy();
+    expect(container.querySelector('[data-value="Right to Left"]')).toBeTruthy();
+    expect(container.querySelector('[data-value="UltiSID1-B"]')).toBeTruthy();
+    expect(container.querySelector('[data-value="Bright"]')).toBeTruthy();
+    // ...while the previously hard-coded, device-rejected guesses never appear.
+    expect(container.querySelector('[data-value="Circular"]')).toBeFalsy();
+    expect(container.querySelector('[data-value="Outward"]')).toBeFalsy();
+    expect(container.querySelector('[data-value="SID 2"]')).toBeFalsy();
+    expect(container.querySelector('[data-value="Warm"]')).toBeFalsy();
   });
 
   it("disables selects when isActive=false", () => {

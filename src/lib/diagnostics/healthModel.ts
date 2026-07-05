@@ -15,7 +15,7 @@ import { addLog, buildErrorLogDetails } from "@/lib/logging";
 export type HealthState = "Healthy" | "Degraded" | "Unhealthy" | "Idle" | "Unavailable";
 
 // §6.8 — Connectivity states (fixed labels)
-export type ConnectivityState = "Online" | "Demo" | "Offline" | "Not yet connected" | "Checking";
+export type ConnectivityState = "Online" | "Demo" | "Offline" | "Auth" | "Not yet connected" | "Checking";
 
 export type DisplayProfile = "compact" | "medium" | "expanded";
 
@@ -40,6 +40,8 @@ export const getBadgeConnectivityLabel = (connectivity: ConnectivityState, produ
       return "DEMO";
     case "Offline":
       return "Offline";
+    case "Auth":
+      return "Password";
     case "Not yet connected":
       return "—";
     case "Checking":
@@ -112,6 +114,18 @@ export const getBadgeTextContract = (
       glyph,
       countLabel: null,
       trailingLabel: profile === "expanded" ? "Device not reachable" : null,
+    };
+  }
+
+  if (connectivity === "Auth") {
+    // Distinct from Offline: the device is reachable but rejected the password.
+    // Surface the actionable reason from medium up (tapping the badge opens the
+    // password prompt) instead of the misleading "Device not reachable".
+    return {
+      leadingLabel,
+      glyph,
+      countLabel: null,
+      trailingLabel: profile === "compact" ? null : "Password required",
     };
   }
 
@@ -215,14 +229,18 @@ export const selectPreferredBadgeHealth = (
 };
 
 // §7.2 — Map ConnectionState → ConnectivityState
-export const deriveConnectivityState = (connectionState: string): ConnectivityState => {
+// authRequired distinguishes a device that rejected the password (401/403,
+// recorded as a "Password required" probe error) from a genuinely unreachable
+// one: both settle to OFFLINE_NO_DEMO, but only the former should prompt for a
+// password rather than a reconnect. See HARD10-007 / HARD9-001.
+export const deriveConnectivityState = (connectionState: string, authRequired = false): ConnectivityState => {
   switch (connectionState) {
     case "REAL_CONNECTED":
       return "Online";
     case "DEMO_ACTIVE":
       return "Demo";
     case "OFFLINE_NO_DEMO":
-      return "Offline";
+      return authRequired ? "Auth" : "Offline";
     case "DISCOVERING":
       return "Checking";
     default:
@@ -529,8 +547,8 @@ export const rollUpHealth = (
   contributors: Record<ContributorKey, ContributorHealth>,
   connectivity: ConnectivityState,
 ): HealthState => {
-  // §7.2 — Offline overrides health to Unavailable
-  if (connectivity === "Offline") return "Unavailable";
+  // §7.2 — Offline (and its auth-rejected sub-case) override health to Unavailable
+  if (connectivity === "Offline" || connectivity === "Auth") return "Unavailable";
   // §7.5 — Not yet connected → Idle
   if (connectivity === "Not yet connected") return "Idle";
 
@@ -704,6 +722,7 @@ export const getBadgeAriaLabel = (
   product?: string | null,
   connectedDeviceLabel?: string | null,
 ): string => {
+  if (connectivity === "Auth") return "Password required";
   if (connectivity === "Offline") return "Offline, device not reachable";
   if (connectivity === "Not yet connected") return "Not yet connected";
   const connPhrase =

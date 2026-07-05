@@ -21,6 +21,7 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketTimeoutException
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 @CapacitorPlugin(name = "TelnetSocket")
 class TelnetSocketPlugin : Plugin() {
@@ -33,9 +34,15 @@ class TelnetSocketPlugin : Plugin() {
   internal var socketFactory: () -> Socket = { Socket() }
   internal var runTask: (Runnable) -> Unit = { runnable -> executor.execute(runnable) }
 
-  private var socket: Socket? = null
-  private var inputStream: InputStream? = null
-  private var outputStream: OutputStream? = null
+  // Written only on the single-thread executor, but isConnected() (below) reads
+  // them synchronously on the Capacitor plugin thread with no other synchronization -
+  // @Volatile establishes the happens-before edge so a write on the executor thread
+  // (e.g. connect() assigning `socket` right before resolving its call) is reliably
+  // visible to isConnected() on the plugin thread afterward, instead of risking a
+  // stale/torn read of a plain var across threads.
+  @Volatile private var socket: Socket? = null
+  @Volatile private var inputStream: InputStream? = null
+  @Volatile private var outputStream: OutputStream? = null
 
   @PluginMethod
   fun connect(call: PluginCall) {
@@ -275,9 +282,17 @@ class TelnetSocketPlugin : Plugin() {
   override fun handleOnDestroy() {
     // Release the worker thread + any open socket when the bridge/activity is torn down,
     // so a WebView/activity recreation does not leak the non-daemon executor thread (and
-    // the socket/streams it may still hold). shutdownNow() first interrupts a blocked read;
-    // closeSocket() then frees the descriptors.
+    // the socket/streams it may still hold). closeSocket() below runs on THIS (destroy)
+    // thread, not the executor - awaiting termination first (bounded by the same read
+    // timeout budget every queued task is already limited by) ensures any still-running
+    // connect()/send()/read() task has genuinely finished touching socket/inputStream/
+    // outputStream before this thread closes and nulls them, instead of racing it.
     executor.shutdownNow()
+    try {
+      executor.awaitTermination(defaultReadTimeoutMs.toLong() * 2, TimeUnit.MILLISECONDS)
+    } catch (_: InterruptedException) {
+      Thread.currentThread().interrupt()
+    }
     closeSocket()
     super.handleOnDestroy()
   }

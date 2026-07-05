@@ -29,11 +29,40 @@ import java.util.concurrent.Executors
 class FolderPickerPlugin : Plugin() {
   private val executor = Executors.newSingleThreadExecutor()
   private val logTag = "FolderPickerPlugin"
+  // Base64 encoding a fully-buffered file costs another ~1.33x on top of the raw
+  // bytes; without a cap, tapping a large file (a .dnp disk pack, firmware image)
+  // via SAF drives the app into OOM. 32MB keeps peak heap for a single read well
+  // within normal app budgets. See HARD9-044.
+  // internal var so tests can shrink it instead of generating multi-MB payloads.
+  internal var maxReadFileBytes = 32L * 1024L * 1024L
+  private val readChunkSize = 64 * 1024
 
   private fun toJsArray(entries: List<JSObject>): JSArray {
     val array = JSArray()
     entries.forEach { entry -> array.put(entry) }
     return array
+  }
+
+  // Reads bounded by maxReadFileBytes regardless of what (if any) size metadata
+  // the content provider reports - a declared size can be absent, wrong, or
+  // simply not queried, so the guard has to hold during the actual read, not
+  // just as an upfront check.
+  private fun readBytesWithLimit(input: java.io.InputStream): ByteArray {
+    val output = java.io.ByteArrayOutputStream(readChunkSize)
+    val buffer = ByteArray(readChunkSize)
+    var totalRead = 0L
+    while (true) {
+      val read = input.read(buffer)
+      if (read == -1) break
+      totalRead += read
+      if (totalRead > maxReadFileBytes) {
+        throw IllegalStateException(
+                "File exceeds the maximum readable size (${maxReadFileBytes / (1024 * 1024)}MB)"
+        )
+      }
+      output.write(buffer, 0, read)
+    }
+    return output.toByteArray()
   }
 
   private fun traceFields(call: PluginCall): AppLogger.TraceFields {
@@ -434,7 +463,7 @@ class FolderPickerPlugin : Plugin() {
         val input =
                 context.contentResolver.openInputStream(Uri.parse(uri))
                         ?: throw IllegalStateException("Unable to open file")
-        val bytes = input.use { it.readBytes() }
+        val bytes = input.use { readBytesWithLimit(it) }
         val encoded = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
         val result = JSObject()
         result.put("data", encoded)
@@ -474,7 +503,7 @@ class FolderPickerPlugin : Plugin() {
         val input =
                 context.contentResolver.openInputStream(documentUri)
                         ?: throw IllegalStateException("Unable to open file")
-        val bytes = input.use { it.readBytes() }
+        val bytes = input.use { readBytesWithLimit(it) }
         val encoded = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
         val result = JSObject()
         result.put("data", encoded)

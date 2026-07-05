@@ -10,9 +10,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   buildConfigEnrichmentNamespaceKey,
   clearAllConfigEnrichmentCache,
+  clearConfigEnrichmentNamespace,
+  loadConfigEnrichmentAbsentDomains,
   loadConfigEnrichmentCategory,
   loadConfigEnrichmentNamespaceForHost,
   rememberConfigEnrichmentNamespaceForHost,
+  saveConfigEnrichmentAbsentDomains,
   saveConfigEnrichmentCategory,
 } from "@/lib/c64api/configEnrichmentCache";
 
@@ -69,5 +72,32 @@ describe("configEnrichmentCache", () => {
     expect(nextNamespace).toBe(buildConfigEnrichmentNamespaceKey("shared-device", "3.14e"));
     expect(loadConfigEnrichmentNamespaceForHost("u64")).toBe(nextNamespace);
     expect(loadConfigEnrichmentCategory(oldNamespace, "LED Strip Settings")).toBeNull();
+  });
+
+  it("round-trips absent-domain sentinels per namespace (HARD16-005)", () => {
+    const namespaceKey = buildConfigEnrichmentNamespaceKey("abs-device", "1.1.0");
+    expect(loadConfigEnrichmentAbsentDomains(namespaceKey)).toEqual([]);
+
+    saveConfigEnrichmentAbsentDomains(namespaceKey, ["Cat::A", "Cat::B"]);
+    expect(loadConfigEnrichmentAbsentDomains(namespaceKey)).toEqual(["Cat::A", "Cat::B"]);
+
+    clearConfigEnrichmentNamespace(namespaceKey);
+    expect(loadConfigEnrichmentAbsentDomains(namespaceKey)).toEqual([]);
+  });
+
+  it("purges a stale namespace's absence sentinels when the same device's firmware changes (HARD16-005)", () => {
+    const oldNamespace = rememberConfigEnrichmentNamespaceForHost("u64", "abs-shared", "3.14d");
+    saveConfigEnrichmentAbsentDomains(oldNamespace, ["Cat::Gone"]);
+    expect(loadConfigEnrichmentAbsentDomains(oldNamespace)).toEqual(["Cat::Gone"]);
+
+    rememberConfigEnrichmentNamespaceForHost("u64", "abs-shared", "3.14e");
+    expect(loadConfigEnrichmentAbsentDomains(oldNamespace)).toEqual([]);
+  });
+
+  it("clears absence sentinels alongside everything else (HARD16-005)", () => {
+    const namespaceKey = buildConfigEnrichmentNamespaceKey("abs-device", "1.1.0");
+    saveConfigEnrichmentAbsentDomains(namespaceKey, ["Cat::A"]);
+    clearAllConfigEnrichmentCache();
+    expect(loadConfigEnrichmentAbsentDomains(namespaceKey)).toEqual([]);
   });
 });

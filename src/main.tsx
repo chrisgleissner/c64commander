@@ -23,7 +23,7 @@ import { applyScreenOrientationFromSettings } from "./lib/native/screenOrientati
 import { loadRemoteFonts } from "./lib/startup/fontLoading";
 import "./index.css";
 
-const scheduleAfterFirstPaint = (work: () => void) => {
+export const scheduleAfterFirstPaint = (work: () => void) => {
   if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") {
     work();
     return;
@@ -42,6 +42,15 @@ const scheduleAfterFirstPaint = (work: () => void) => {
     }
     window.setTimeout(work, 0);
   };
+  // requestAnimationFrame never fires while the document is hidden (spec-mandated
+  // throttling), so an app launched in the background (intent, restored session,
+  // screen off) would never reach runWhenIdle() at all - skip the rAF gate and go
+  // straight to it when already hidden at launch. The normal visible-launch timing
+  // (double rAF) is unchanged.
+  if (typeof document !== "undefined" && document.hidden) {
+    runWhenIdle();
+    return;
+  }
   window.requestAnimationFrame(() => {
     window.requestAnimationFrame(() => {
       runWhenIdle();

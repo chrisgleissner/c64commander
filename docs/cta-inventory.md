@@ -101,14 +101,14 @@ Counts are the number of discoverable interactive elements in the page scope
 (excludes the device system bars; includes the 6 persistent TabBar tabs and the
 persistent status badge that appear on every page).
 
-| Page     | Route       |    CTAs | Notes                                                                                                                                    |
-| -------- | ----------- | ------: | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Home     | `/`         |     112 | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots.                                    |
-| Settings | `/settings` | 77 (+2) | Connection, devices, display (+2 native Android full-screen toggles), feature flags, network/cache, notifications, dev-mode, build info. |
-| Play     | `/play`     |      32 | Transport, volume, playback flags, playlist, type filters, HVSC.                                                                         |
-| Config   | `/config`   |      30 | Search + 22 config-category accordions (each expands to config-item rows).                                                               |
-| Disks    | `/disks`    |      28 | Drive A/B/Soft-IEC controls, disk library.                                                                                               |
-| Docs     | `/docs`     |      18 | 8 doc-section toggles + 3 external links.                                                                                                |
+| Page     | Route       |     CTAs | Notes                                                                                                                                                                                             |
+| -------- | ----------- | -------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Home     | `/`         | 113 (+1) | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots. `+1` Remote Input tile behind `remote_input_enabled` (stable, enabled and user-visible by default in C64 Commander; disabled and hidden in C64U Remote per `variants/feature-flags/c64u-remote.yaml`). |
+| Settings | `/settings` |  77 (+2) | Connection, devices, display (+2 native Android full-screen toggles), feature flags, network/cache, notifications, dev-mode, build info.                                                          |
+| Play     | `/play`     |  32 (+1) | Transport, volume, playback flags, playlist, type filters, HVSC. `+1` Open Controller button, shown only while playing, behind `remote_input_enabled`.                                            |
+| Config   | `/config`   |       30 | Search + 22 config-category accordions (each expands to config-item rows).                                                                                                                        |
+| Disks    | `/disks`    |       28 | Drive A/B/Soft-IEC controls, disk library.                                                                                                                                                        |
+| Docs     | `/docs`     |       18 | 8 doc-section toggles + 3 external links.                                                                                                                                                         |
 
 **Persistent on every page (counted within each page above):**
 
@@ -153,6 +153,7 @@ not-connected / empty / single-device).
     - Save custom — button — `save-ram-custom-confirm` — R✅ I✅
   - Load RAM — button — `home-load-ram` — R✅ I✅ _(flag)_
   - Power Off — button (danger) — R✅ I✅ (confirm dialog)
+  - Remote Input — button — `home-machine-inline-openRemoteInput` — R✅ I✅ _(flag `remote_input_enabled`; stable, enabled and visible by default in C64 Commander, disabled+hidden in C64U Remote)_ — opens the **Remote Input sheet** (§5)
   - RAM dump folder — button (`...`) — `ram-dump-folder-trigger` — R✅ I✅
 - **Quick Config → CPU & RAM** (`home-cpu-summary`)
   - Turbo Control — select — `home-cpu-turbo-control` — R✅ I✅ (verified: opens Off/Manual/C64U Turbo Registers/TurboEnable Bit)
@@ -192,6 +193,7 @@ not-connected / empty / single-device).
   - Bus — select — `home-printer-bus` — R✅ I✅
 - **SID / Audio mixer** (`data-section-label="SID"`) — per socket/UltiSID:
   - Reset — button — `home-sid-reset` — R✅ I✅
+  - Master volume — slider — `home-sid-volume-master` — R✅ I✅ when the live `Vol Master` item exists.
   - Enable toggle — button — `home-sid-toggle-*` — R✅ I✅
   - Type / Address / Shaping ×N — select — `home-sid-type-*`, `home-sid-address-*`, `home-sid-shaping-*` — R✅ I✅
   - Volume, Pan — slider ×2 — R✅ I✅
@@ -211,7 +213,7 @@ not-connected / empty / single-device).
 
 ### 4.2 Play (`/play`)
 
-- Transport: Previous / Play / Pause / Next — button — `playlist-prev|play|pause|next` — R✅ I✅ `[disabled: no playlist loaded]`
+- Transport: Previous / Play / Pause / Next — button — `playlist-prev|play|pause|next` — R✅ I✅ `[disabled: no playlist loaded, playlist loading, or no previous/next item in the current repeat/shuffle traversal]`
 - Mute — button — `volume-mute` — R✅ I✅ `[disabled]`
 - Volume — slider — R✅ I✅ `[disabled]`
 - Recurse / Shuffle / Repeat — checkbox — `playback-recurse|shuffle|repeat` — R✅ I✅
@@ -223,6 +225,7 @@ not-connected / empty / single-device).
 - Type filters: SID / MOD / PRG / CRT / Disk — checkbox — `playlist-type-*` — R✅ I✅
 - Select all — button — `playlist-list-toggle-select-all` — R✅ I✅
 - HVSC: Download / Ingest / Reindex / Reset — button — R✅ I✅ _(flag `hvsc_enabled`)_
+- Open Controller — button — `play-open-controller` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying`)_ — opens the **Remote Input sheet** (§5)
 
 ### 4.3 Disks (`/disks`)
 
@@ -323,6 +326,137 @@ manual host/IP — text input — `startup-manual-device-host-input` — R✅ I�
 Open Settings — button — `startup-device-discovery-open-settings` — R✅ I✅ ;
 Not now / Close — buttons — `startup-device-discovery-dismiss`,
 `startup-device-discovery-close` — R✅ I✅.
+
+**Remote Input sheet** (`remote-input-sheet`, HARD12-017, behind
+`remote_input_enabled`; opened from Home's "Remote Input" tile or Play's "Open
+Controller" button): a Radix
+`[role=dialog]` sheet, so it is a normal keypad-navigable overlay scope like any
+other (Up/Down/OK, Back closes) — **except** while **Joystick** output mode is
+selected, physical D-pad/T9 digit key presses are read directly by the sheet to
+drive the joystick relay instead of moving focus (the app's global keypad
+navigation already excludes any key event targeted inside an open
+`[role=dialog]`, so this is a scoped reinterpretation, not a new capture
+mechanism). Touch and the on-screen keyboard/quick-keys buttons remain
+ordinary focus-ring CTAs in both output modes.
+
+- Output mode toggle: Joystick / Type — buttons — `remote-input-mode-joystick`,
+  `remote-input-mode-type` — R✅ I✅ ; Joystick disabled with an inline hint on
+  devices/firmware without `machine:input` (kernal-fallback tier); hidden in
+  Game mode
+- Connection indicator — status text — `remote-input-connection-indicator` —
+  not interactive
+- Control size stepper (Joystick mode only) — decrease/increase buttons + label
+  — `remote-input-size-decrease`, `remote-input-size-increase`,
+  `remote-input-size-label` — R✅ I✅ (M/L/XL/XXL, persisted; scales the
+  joystick action controls, not the Type-tab keyboard, which sizes itself from
+  measured space)
+- Game mode toggle (Joystick mode, joystick-capable tier only) — button —
+  `remote-input-immersive-toggle` — R✅ I✅ — enters/exits the stripped,
+  edge-anchored no-look layout; auto-exits if the tier downgrades mid-session
+- **Joystick mode:**
+  - Port swap — switch (one-tap toggle, same directness as Autofire) —
+    `remote-input-port-switch` — R✅ I✅ (default Port 2; label shows the
+    current port; docked on the left rail in both standard and Game mode)
+  - Movement style toggle: Stick / D-Pad / Swipe — buttons —
+    `remote-input-movement-style-{stick,dpad,swipe}` — R✅ I✅ (default Stick;
+    switching style never itself releases a held direction)
+  - **Stick style** — relative thumbstick — pointer-only zone —
+    `remote-input-stick-zone` — touch only (see below for the physical
+    equivalent)
+  - **D-Pad style** (`remote-input-virtual-dpad`) — discrete 8-way
+    tap-and-hold buttons — `remote-input-dpad-{up,down,left,right,up-left,
+up-right,down-left,down-right}` — R✅ I✅ (touch only)
+  - **Swipe style** (`remote-input-swipe-pad`) — a large free-drag surface;
+    dragging steers the joystick live along the drawn path (same 8-way live
+    resolution as the Stick, no fixed knob) and releases the instant the finger
+    lifts — sustained, not a one-shot tap — touch only. Shows a drag dot
+    (`remote-input-swipe-dot`) while dragging.
+  - Fire — button (press-and-hold) — `remote-input-fire-button` — R✅ I✅
+  - Autofire — switch + label — `remote-input-autofire-switch` — R✅ I✅
+    (standard horizontal Switch+label row, matching the Port toggle; in a card
+    above FIRE with the rate slider beneath, in both standard and Game mode for
+    extra thumb clearance)
+  - Autofire rate — slider — `remote-input-autofire-rate-slider` — R✅ I✅
+    (1–10/s, default 5, persisted; also settable from Settings → Play and Disk)
+  - **Physical D-pad / regular keyboard cursor keys / T9, while Joystick mode
+    is active** (not focus-ring CTAs — raw relay, works regardless of the
+    selected touch movement style above): hardware D-pad Up/Down/Left/Right
+    and a regular keyboard's Arrow keys (same underlying semantic-action
+    keymap) → joystick direction; keypad 2/4/6/8 → direction (1/3/7/9 →
+    diagonals); keypad 5/0 or D-pad center/select → fire. Held while the
+    physical key is held; released on key-up.
+- **Type mode — on-screen C64 keyboard** (`remote-input-type-keyboard`, the
+  primary Type surface) — buttons `remote-input-key-<name>` (e.g.
+  `remote-input-key-a`, `remote-input-key-return`) — R✅ I✅ for every key.
+  Compact/medium profiles render a high-value deck
+  (`remote-input-keyboard-deck`: cursor pad `remote-input-cursor-pad-group` +
+  immediate RETURN/SPACE `remote-input-keyboard-immediate`, then f 1–f 8
+  `remote-input-keyboard-function` — always two rows f 1–f 4/f 5–f 8 (compact and
+  medium) — then the larger high-value special keys directly below: CLR/HOME/INST/DEL
+  `remote-input-keyboard-edit` and the system keys `remote-input-keyboard-system`
+  split into two rows RUN/STOP·SHIFT-LOCK·RESTORE / C=·CTRL·SHIFT), then the
+  alphanumeric/symbol grid (`remote-input-keyboard-grid`), and finally a bottom
+  row `remote-input-keyboard-bottom-row` of SHIFT · wide SPACE · RETURN
+  (`remote-input-key-shift-bottom`, `remote-input-key-space-bottom`,
+  `remote-input-key-return-bottom`) so SHIFT, SPACE and RETURN each appear twice
+  (top/system + bottom). Function keys are printed lower-case with a space (`f 1`,
+  `f 3` …) exactly as on the C64 keycaps, and the odd/unshifted ones (f 1/f 3/f 5/f 7)
+  carry a slightly darker "function-primary" tint that sets them apart from the
+  shifted f 2/f 4/f 6/f 8. Ordinary typing keys 0-9/A-Z carry a distinct
+  "character" colour, SHIFT and SHIFT LOCK a distinct high-visibility "shift"
+  colour applied consistently wherever they appear. RESTORE is spelled in full on
+  compact and medium (there is room); only the dense expanded profile abbreviates
+  it to `REST.` (full "Restore" accessible label preserved). Every grid row
+  is a contiguous slice of exactly one physical C64 row (segment invariant — no
+  split QWERTY rows, no horizontal scrolling); the deck and grid share one scroll
+  container (`remote-input-keyboard-scroll`) so the whole keyboard scrolls as a
+  unit on short viewports; the expanded profile renders the physical C64 rows
+  directly in `remote-input-keyboard-grid` with the function-key cluster
+  alongside. The cursor-pad keys
+  (`remote-input-key-cursor-{up,down,left,right}`) auto-repeat while held by
+  touch (initial delay then a brisk repeat, like C64 hardware); a keypad/
+  focus-ring activation still emits a single cursor move (R✅ I✅ preserved)
+  - One-shot SHIFT / CTRL / C= (Commodore) latches — buttons —
+    `remote-input-key-shift`, `remote-input-key-ctrl`,
+    `remote-input-key-commodore` — R✅ I✅ (apply to exactly the next key,
+    then auto-clear); CTRL/C= `[disabled: kernal-fallback tier — no
+PETSCII/keyboard-buffer equivalent for these modifiers]`
+  - SHIFT LOCK — button (persistent latch, separate from the one-shot SHIFT
+    above) — `remote-input-key-shift-lock` — R✅ I✅ — stays applied to every
+    key until toggled off
+  - RUN/STOP, RESTORE, C=, CTRL — buttons — `remote-input-key-run-stop`,
+    `remote-input-key-restore`, `remote-input-key-commodore`,
+    `remote-input-key-ctrl` — R✅ I✅ `[shown but disabled on the
+kernal-fallback tier — no keyboard-buffer equivalent; a plain-language footer
+    `remote-input-modifier-unavailable-hint` and per-key tooltip explain "not
+    available on this device", with no REST/firmware jargon]`
+  - F1–F8 — buttons — `remote-input-key-f{1..8}` — R✅ I✅
+- **Standard Joystick mode only — quick-keys bar**
+  (`remote-input-quick-keys-bar`): a fixed five-row deck mirroring the physical
+  C64 clusters — **row 1** RUN/STOP · CTRL · SPACE · RETURN, **row 2** f 1 · f 2 ·
+  f 3 · f 4, **row 3** f 5 · f 6 · f 7 · f 8, **row 4** cursor ← ↑ ↓ →, **row 5**
+  C= · SHIFT · SPACE · SHIFT. RUN/STOP keeps the caution-styled dashed-amber
+  border (matching the Keys tab) and, though it shares row 1 with RETURN, CTRL and
+  SPACE always sit between them so a wide RETURN tap can never halt the program.
+  Function keys are printed lower-case (`f 1` …) with the odd ones f 1/f 3/f 5/f 7
+  tinted, and both SHIFTs carry the shared violet "shift" colour. SPACE and SHIFT
+  each appear as two distinct keys (`remote-input-key-space` /
+  `remote-input-key-space-bottom`, `remote-input-key-shift-left` /
+  `remote-input-key-shift-right`). — buttons —
+  `remote-input-key-{run-stop,ctrl,space,return,f1,f2,f3,f4,f5,f6,f7,f8,cursor-up,cursor-down,cursor-left,cursor-right,commodore,shift-left,space-bottom,shift-right}`
+  — R✅ I✅ (hidden in Game mode and Type mode). The modifier keys (RUN/STOP,
+  CTRL, C=, both SHIFTs) have no kernal-buffer equivalent so are `[disabled off
+  the full machine:input tier]`; SPACE/RETURN/f-keys/cursors also work on the
+  kernal-fallback tier and only disable on `auth-required` (password needed).
+- **Standard Joystick mode and Type mode only — footer actions**
+  - Safety — Release All (panic button) — button (destructive) —
+    `remote-input-panic-button` — R✅ I✅ — releases every held/latched input
+    regardless of tracked state
+  - Exit — button — `remote-input-exit-button` — R✅ I✅ ; Android Back also
+    exits (closes the sheet and releases all held inputs)
+- **Joystick Game mode only**: no footer actions; dismissal is via the sheet
+  header close button or the `remote-input-immersive-toggle` "Exit game mode"
+  control
 
 **Keypad Quick Menu** (`keypad-quick-menu`, opened by the Menu key when the
 focused item has no context menu): a keypad-navigable list of jump-to-page (×6),

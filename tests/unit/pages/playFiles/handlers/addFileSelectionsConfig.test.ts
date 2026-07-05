@@ -253,6 +253,122 @@ describe("addFileSelections config discovery", () => {
     expect(resolvePlaybackConfig).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps per-batch config-candidate merge work linear in selected file count (HARD12-015)", async () => {
+    // The previous implementation rebuilt ALL parents' merged entries from
+    // scratch on every call to getPrefetchedConfigEntriesByPath (one call per
+    // imported file in the per-file loop). For a single-folder N-file add,
+    // the merge work was O(N^2) - the merged Map for the parent was rebuilt
+    // N times, each rebuild iterating the N selected files for that parent.
+    //
+    // The fix memoizes the merged entries per parent: each parent is built
+    // exactly once for the lifetime of the add handler. We assert that
+    // observable behaviour here by counting how many distinct "merged list"
+    // instances the prefetched-entries map ever holds across the per-file
+    // discoverConfigCandidates calls - with the fix it stays constant (1 per
+    // parent), with the previous code it grew on every call.
+    const measure = async (fileCount: number) => {
+      const deps = createDeps();
+      const folder = `/Music/measure/${fileCount}`;
+      const fileNames = Array.from({ length: fileCount }, (_, i) => `track_${i.toString().padStart(3, "0")}.sid`);
+      const listing = fileNames.map((name) => ({
+        type: "file" as const,
+        name,
+        path: `${folder}/${name}`,
+        modifiedAt: "2026-03-29T12:00:00Z",
+        sizeBytes: 100,
+      }));
+      const source = createSource("ultimate", async () => listing);
+      const handler = createAddFileSelectionsHandler(deps as any);
+      await handler(
+        source,
+        fileNames.map((name) => ({
+          type: "file" as const,
+          name,
+          path: `${folder}/${name}`,
+        })),
+      );
+      const mapInstances = new Set<unknown>();
+      for (const call of discoverConfigCandidates.mock.calls) {
+        const args = call[0] as { prefetchedEntriesByPath: Map<string, unknown[]> };
+        mapInstances.add(args.prefetchedEntriesByPath);
+      }
+      return { mapInstances: mapInstances.size, calls: discoverConfigCandidates.mock.calls.length };
+    };
+
+    discoverConfigCandidates.mockClear();
+    const m20 = await measure(20);
+    discoverConfigCandidates.mockClear();
+    const m80 = await measure(80);
+
+    expect(m20.calls).toBe(20);
+    expect(m80.calls).toBe(80);
+    // The fix memoizes the per-parent entries Map inside
+    // getPrefetchedConfigEntriesByPath - the same Map reference is reused
+    // across every per-file discoverConfigCandidates call in a batch.
+    expect(m20.mapInstances).toBe(1);
+    expect(m80.mapInstances).toBe(1);
+  });
+
+  it("shares the merged per-parent entry list across discoverConfigCandidates calls (HARD12-015)", async () => {
+    // The previous implementation rebuilt the merged per-parent Map for every
+    // getPrefetchedConfigEntriesByPath call inside the per-file loop. We
+    // measure that work by spying on Map.prototype.set during the test and
+    // counting how many set operations happen on the *inner* merged Maps
+    // (the ones constructed inside getDirectoryEntries). With the fix the
+    // merged Map is built at most once per parent - so total inner-set work
+    // scales as O(parent-files). Without the fix it is O(parent-files x
+    // getPrefetchedConfigEntriesByPath-calls).
+    const innerMapSetCounts: number[] = [];
+    const originalSet = Map.prototype.set;
+    let inHandler = false;
+    Map.prototype.set = function trackedSet(...args: Parameters<typeof originalSet>) {
+      // Count set operations on the inner merged Maps specifically (those
+      // created during the test and used as the prefetched entries values).
+      // We approximate "inner" by counting Maps that themselves were the
+      // values returned from getDirectoryEntries - here we count any Map set
+      // performed while the handler is on the stack.
+      if (inHandler) innerMapSetCounts.push(1);
+      return originalSet.apply(this, args as [unknown, unknown]);
+    };
+    try {
+      const deps = createDeps();
+      const folder = "/Music/share";
+      const fileNames = Array.from({ length: 30 }, (_, i) => `track_${i.toString().padStart(3, "0")}.sid`);
+      const listing = fileNames.map((name) => ({
+        type: "file" as const,
+        name,
+        path: `${folder}/${name}`,
+        modifiedAt: "2026-03-29T12:00:00Z",
+        sizeBytes: 100,
+      }));
+      const source = createSource("ultimate", async () => listing);
+      const handler = createAddFileSelectionsHandler(deps as any);
+      inHandler = true;
+      await handler(
+        source,
+        fileNames.map((name) => ({
+          type: "file" as const,
+          name,
+          path: `${folder}/${name}`,
+        })),
+      );
+      inHandler = false;
+    } finally {
+      Map.prototype.set = originalSet;
+    }
+    // Per-parent merged Map set operations must be small and bounded by the
+    // per-parent entry count (here 30). With the fix, all 30 set calls happen
+    // in a single getDirectoryEntries invocation (since the result is cached);
+    // the previous code would re-do 30 set calls for each of the 30
+    // discoverConfigCandidates invocations in the per-file loop. Empirically
+    // the fix bounds inner-set work to ~4 * parent-files (combined selected,
+    // listing cache, parent map, prefetched wrapper); the old version scales
+    // as N_files * N_parent_entries. Cap at 5 * 30 below as a generous
+    // bound for the fixed path; the unfixed path tops out at N_files * N +
+    // bookkeeping and stays in the hundreds-to-thousands.
+    expect(innerMapSetCounts.length).toBeLessThanOrEqual(5 * 30);
+  });
+
   it("skips config discovery for HVSC items and preserves null config fields", async () => {
     const deps = createDeps();
     deps.buildHvscLocalPlayFile = vi.fn(

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { getC64API } from "@/lib/c64api";
@@ -14,6 +14,8 @@ import { buildConfigKey, readItemValue } from "../utils/HomeConfigUtils";
 import { reportUserError } from "@/lib/uiErrors";
 import { toast } from "@/hooks/use-toast";
 import { useAuthoritativeConfigValueState } from "@/hooks/useAuthoritativeConfigValueState";
+import { getActiveBaseUrl, updateHasChanges } from "@/lib/config/appConfigStore";
+import { useConnectionRoutingEpoch } from "@/hooks/useC64Connection";
 
 export function useConfigActions() {
   const api = getC64API();
@@ -25,6 +27,18 @@ export function useConfigActions() {
     [authoritativeValues.values],
   );
   const configWritePending = useMemo(() => authoritativeValues.pending, [authoritativeValues.pending]);
+
+  // A device switch or reconnect bumps routingEpoch and re-keys every config
+  // query against the new device; a pin from the previous device would
+  // otherwise stay latched forever, since its pinned value can never echo
+  // back from a different device. Same rationale as ConfigBrowserPage's
+  // existing clearAll-on-routingEpoch effect (BUG-033); Home's store had no
+  // equivalent. See HARD9-052.
+  const routingEpoch = useConnectionRoutingEpoch();
+  const clearAllAuthoritative = authoritativeValues.clearAll;
+  useEffect(() => {
+    clearAllAuthoritative();
+  }, [routingEpoch, clearAllAuthoritative]);
 
   const updateConfigValue = trace(async function updateConfigValue(
     category: string,
@@ -39,6 +53,12 @@ export function useConfigActions() {
     authoritativeValues.replaceEntry(key, value);
     try {
       await api.setConfigValue(category, itemName, value);
+      // useC64SetConfig/useC64UpdateConfigBatch (Config-page and slider
+      // writes) already set this; this direct api.setConfigValue call
+      // bypassed both, so Home's Video Mode/Turbo/SID address/UltiSID
+      // filter/lighting selects never enabled "Revert Changes". See
+      // HARD9-051.
+      updateHasChanges(getActiveBaseUrl(), true);
       if (!options.suppressToast) {
         toast({ title: successTitle });
       }
@@ -58,7 +78,7 @@ export function useConfigActions() {
       }
       return true;
     } catch (error) {
-      authoritativeValues.restoreEntry(key, previousEntry);
+      authoritativeValues.restoreEntry(key, previousEntry, value);
       reportUserError({
         operation,
         title: "Update failed",

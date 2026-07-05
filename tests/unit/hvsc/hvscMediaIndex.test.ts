@@ -210,6 +210,29 @@ describe("HvscMediaIndexAdapter", () => {
     expect(page.songs[0]?.fileName).toBe("a.sid");
   });
 
+  it("queryFolderPage fallback does not poison the cache with an empty rebuild (HARD9-015)", async () => {
+    const index = new JsonMediaIndex(createMemoryStorage());
+    const adapter = new HvscMediaIndexAdapter(index, async () => ({ path: "/", folders: [], songs: [] }));
+
+    // No browse snapshot yet and no entries loaded on this adapter instance
+    // (entriesSnapshot is still []) - queryFolderPage falls back to a
+    // from-scratch rebuild that sees zero entries.
+    const emptyPage = adapter.queryFolderPage({ path: "/", offset: 0, limit: 50 });
+    expect(emptyPage.totalSongs).toBe(0);
+
+    // Real data lands on the underlying index afterwards, without going
+    // through the adapter's own setEntries/scan/load (which would
+    // unconditionally rebuild the cache anyway). A pre-fix implementation
+    // would have cached the earlier empty rebuild into this.browseSnapshot,
+    // so this second call would keep serving the stale empty result forever
+    // instead of ever re-deriving it. See HARD9-015.
+    index.setEntries([{ path: "/DEMOS/a.sid", name: "a.sid", type: "sid", durationSeconds: 10 }]);
+
+    const secondPage = adapter.queryFolderPage({ path: "/DEMOS", offset: 0, limit: 50 });
+    expect(secondPage.totalSongs).toBe(1);
+    expect(secondPage.songs[0]?.fileName).toBe("a.sid");
+  });
+
   it("queryFolderPage clamps negative offset and limit", async () => {
     const listings: Record<string, HvscFolderListing> = {
       "/": {

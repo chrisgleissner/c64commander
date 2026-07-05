@@ -58,6 +58,24 @@ describe("archive execution", () => {
     expect(plan).toMatchObject({ category: "disk", path: "wizball.d64", mountType: "d64" });
   });
 
+  it("adds an extension when the existing name's dot is not a playable extension (HARD9-049)", () => {
+    // "TURBO ASSEMBLER V5.2" has a dot (from its version number), but
+    // getPlayCategory(".2") is null - byte detection must still be trusted
+    // instead of treating any dot as a valid extension already present.
+    const plan = buildArchivePlayPlan({
+      fileName: "TURBO ASSEMBLER V5.2",
+      bytes: new Uint8Array(174848),
+      contentType: "application/octet-stream",
+      url: "http://example.invalid/turbo-assembler",
+    });
+
+    expect(plan).toMatchObject({
+      category: "disk",
+      path: "TURBO ASSEMBLER V5.2.d64",
+      mountType: "d64",
+    });
+  });
+
   it("rejects unsupported archive payloads before execution", () => {
     expect(() =>
       buildArchivePlayPlan({

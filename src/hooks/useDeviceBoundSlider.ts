@@ -142,6 +142,15 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
   const previewInFlightRef = useRef(false);
   const previewGenerationRef = useRef(0);
   const lastPreviewSentAtRef = useRef<number | null>(null);
+  // Tracks whether any throttled preview was actually sent to the device
+  // during the current drag, independent of lastPreviewSentAtRef (which
+  // onValueCommit clears for throttle-timing purposes before the
+  // commit-skip check runs). Without this, dragging away and back to the
+  // pre-drag value leaves the device at the last preview's intermediate
+  // value while the commit-skip equality check (comparing against the
+  // frozen, poll-paused deviceValue) suppresses the corrective write. See
+  // HARD9-050.
+  const previewSentDuringDragRef = useRef(false);
   const lastIgnoredDeviceValueRef = useRef<string | null>(null);
   const watchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pauseTailGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -212,6 +221,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       const generation = previewGenerationRef.current;
       previewInFlightRef.current = true;
       lastPreviewSentAtRef.current = Date.now();
+      previewSentDuringDragRef.current = true;
       pendingPreviewSliderValueRef.current = null;
       addLog("debug", "Device-bound slider queued write", {
         slider: debugName,
@@ -225,7 +235,15 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
         if (previewGenerationRef.current !== generation) {
           return;
         }
-        setDraftSliderValue(null);
+        // Only clear the local draft (snapping the thumb to the device
+        // value) once the drag has ended - while still dragging, the user's
+        // finger is the source of truth, and yanking the thumb back
+        // mid-gesture on a transient preview failure reads as the app
+        // fighting the user. The error is still surfaced either way. See
+        // HARD9-088.
+        if (!isDraggingRef.current) {
+          setDraftSliderValue(null);
+        }
         onError?.(error, {
           phase: "preview",
           value: nextValue,
@@ -367,6 +385,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
     clearPauseTailGraceTimer();
     pendingPreviewSliderValueRef.current = null;
     lastPreviewSentAtRef.current = null;
+    previewSentDuringDragRef.current = false;
     releasePollingPause();
   }, [clearPauseTailGraceTimer, clearPreviewTimer, clearWatchdogTimer, releasePollingPause]);
 
@@ -462,6 +481,7 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       if (!isDraggingRef.current) {
         clearPauseTailGraceTimer();
         acquirePollingPauseIfNeeded();
+        previewSentDuringDragRef.current = false;
       }
       isDraggingRef.current = true;
       draftSliderValueRef.current = nextSliderValue;
@@ -501,7 +521,14 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       lastPreviewSentAtRef.current = null;
       draftSliderValueRef.current = null;
       setDraftSliderValue(null);
-      if (equals(deviceValue, nextValue)) {
+      const previewSentDuringDrag = previewSentDuringDragRef.current;
+      previewSentDuringDragRef.current = false;
+      // Even when the final position matches the pre-drag device value, a
+      // throttled preview may have already moved the device to an
+      // intermediate value while polling was paused (so deviceValue is
+      // stale) - skipping the commit here would strand the device there.
+      // See HARD9-050.
+      if (equals(deviceValue, nextValue) && !previewSentDuringDrag) {
         clearLatchedState();
         return;
       }

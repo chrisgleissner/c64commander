@@ -14,7 +14,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const status = { isConnected: true, isConnecting: false };
 const getCategories = vi.fn(async () => ({ categories: ["Audio Mixer"] }));
 const getCategory = vi.fn(async () => ({ items: { Volume: { selected: "5" } } }));
-const getCachedCategory = vi.fn(() => null);
 const getInFlightReadRequestCount = vi.fn(() => 0);
 
 vi.mock("@/hooks/useC64Connection", () => ({
@@ -26,7 +25,6 @@ vi.mock("@/lib/c64api", () => ({
   getC64API: () => ({
     getCategories,
     getCategory,
-    getCachedCategory,
     getInFlightReadRequestCount,
     updateConfigBatch: vi.fn(),
   }),

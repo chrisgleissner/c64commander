@@ -204,7 +204,7 @@ describe("device safety preset effects", () => {
   );
 
   it.each(Object.entries(MODE_CONFIGS))(
-    "applies %s circuit threshold and override policy to REST failures",
+    "applies %s circuit threshold and allows user REST half-open probes",
     async (_mode, modeConfig) => {
       config = modeConfig;
 
@@ -237,11 +237,8 @@ describe("device safety preset effects", () => {
       );
 
       const userHandler = vi.fn().mockResolvedValue({ ok: true });
-      if (modeConfig.allowUserOverrideCircuit) {
-        await expect(withRestInteraction(userMeta, userHandler)).resolves.toEqual({ ok: true });
-      } else {
-        await expect(withRestInteraction(userMeta, userHandler)).rejects.toThrow("Device circuit open");
-      }
+      await expect(withRestInteraction(userMeta, userHandler)).resolves.toEqual({ ok: true });
+      expect(userHandler).toHaveBeenCalledTimes(1);
     },
   );
 });

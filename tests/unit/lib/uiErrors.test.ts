@@ -14,6 +14,7 @@ import {
   clearToastsOnDeviceSwitch,
   clearConnectivityErrorToastsForHost,
   __clearDedupStateForTests,
+  isTransientConnectivityFailure,
 } from "@/lib/uiErrors";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
@@ -207,6 +208,13 @@ describe("uiErrors", () => {
     expect(addLog).not.toHaveBeenCalledWith("warn", expect.anything(), expect.anything());
   });
 
+  it.each(["Device circuit open", "Device circuit probe already in flight", "Device not ready for requests"])(
+    "classifies %s as a transient connectivity failure",
+    (message) => {
+      expect(isTransientConnectivityFailure(message)).toBe(true);
+    },
+  );
+
   describe("ERROR_POLICY §3 — background operations are S0 (log only, never toast)", () => {
     it("suppresses toast when background is true and logs with suppressedReason", () => {
       reportUserError({
@@ -320,6 +328,30 @@ describe("uiErrors", () => {
       expect(toast).toHaveBeenCalledTimes(2);
       vi.useRealTimers();
     });
+
+    it("does not slide the dedup window forever: a persistently recurring error still re-toasts ~30s after it started (HARD9-055)", () => {
+      vi.useFakeTimers();
+      vi.mocked(toast).mockReturnValue({ id: "1", dismiss: vi.fn(), update: vi.fn() });
+
+      reportUserError({ operation: "LOAD_FILE", title: "E", description: "Host unreachable", deviceHost: "u64" });
+
+      // The same error recurs every 5s, well inside the 30s window each time -
+      // under the old sliding-window bug, this reset the window on every call
+      // and the error would never re-toast.
+      for (let i = 0; i < 5; i += 1) {
+        vi.advanceTimersByTime(5_000);
+        reportUserError({ operation: "LOAD_FILE", title: "E", description: "Host unreachable", deviceHost: "u64" });
+      }
+      expect(toast).toHaveBeenCalledTimes(1);
+
+      // Total elapsed since the FIRST occurrence is now 25s + one more 6s tick
+      // pushes past the 30s window anchored to that first occurrence.
+      vi.advanceTimersByTime(6_000);
+      reportUserError({ operation: "LOAD_FILE", title: "E", description: "Host unreachable", deviceHost: "u64" });
+
+      expect(toast).toHaveBeenCalledTimes(2);
+      vi.useRealTimers();
+    });
   });
 
   describe("ERROR_POLICY §6 — stale-clear: error toast dismissed on success (H-03)", () => {
@@ -385,6 +417,33 @@ describe("uiErrors", () => {
 
       expect(connectivityDismiss).toHaveBeenCalledTimes(1);
       expect(otherDismiss).not.toHaveBeenCalled();
+    });
+
+    it("clearConnectivityErrorToastsForHost dismisses circuit and state-gate toasts for that host", () => {
+      const circuitDismiss = vi.fn();
+      const stateDismiss = vi.fn();
+      vi.mocked(toast).mockReturnValueOnce({ id: "1", dismiss: circuitDismiss, update: vi.fn() });
+      vi.mocked(toast).mockReturnValueOnce({ id: "2", dismiss: stateDismiss, update: vi.fn() });
+
+      reportUserError({
+        operation: "RESET_MACHINE",
+        title: "E",
+        description: "Reset failed",
+        error: new Error("Device circuit open"),
+        deviceHost: "u64",
+      });
+      reportUserError({
+        operation: "MOUNT_DISK",
+        title: "E",
+        description: "Mount failed",
+        error: new Error("Device not ready for requests"),
+        deviceHost: "u64",
+      });
+
+      clearConnectivityErrorToastsForHost("u64");
+
+      expect(circuitDismiss).toHaveBeenCalledTimes(1);
+      expect(stateDismiss).toHaveBeenCalledTimes(1);
     });
   });
 

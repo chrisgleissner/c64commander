@@ -1,14 +1,15 @@
 import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
+import { seededShuffleIds } from "@/pages/playFiles/playFilesUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
-import { executePlayPlan } from "@/lib/playback/playbackRouter";
+import { executePlayPlan, tryFetchUltimateSidBlob } from "@/lib/playback/playbackRouter";
 import { clearArchivePlaybackCacheForTests } from "@/lib/archive/archivePlaybackCache";
 import { getC64API } from "@/lib/c64api";
 import { reportUserError } from "@/lib/uiErrors";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
-import { getHvscDurationByMd5Seconds } from "@/lib/hvsc";
+import { getHvscDurationsByMd5Seconds } from "@/lib/hvsc";
 import { applyConfigFileReference, ensureConfigFileReferenceAccessible } from "@/lib/config/applyConfigFileReference";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 
@@ -42,6 +43,7 @@ vi.mock("@/lib/playback/playbackRouter", () => ({
 
 vi.mock("@/lib/hvsc", () => ({
   getHvscDurationByMd5Seconds: vi.fn(async () => null),
+  getHvscDurationsByMd5Seconds: vi.fn(async () => null),
 }));
 
 vi.mock("@/lib/sid/sidUtils", () => ({
@@ -97,6 +99,8 @@ const renderPlaybackController = (
     isPlaying?: boolean;
     isPaused?: boolean;
     repeatEnabled?: boolean;
+    shuffleEnabled?: boolean;
+    shuffleSeed?: number | null;
     setPlaylist?: ReturnType<typeof vi.fn>;
     setCurrentIndex?: ReturnType<typeof vi.fn>;
     setIsPlaying?: ReturnType<typeof vi.fn>;
@@ -164,6 +168,8 @@ const renderPlaybackController = (
       setDurationMs: options?.setDurationMs ?? vi.fn(),
       setCurrentSubsongCount: options?.setCurrentSubsongCount ?? vi.fn(),
       repeatEnabled: options?.repeatEnabled ?? false,
+      shuffleEnabled: options?.shuffleEnabled ?? false,
+      shuffleSeed: options?.shuffleSeed ?? null,
       localEntriesBySourceId: new Map(),
       localSourceTreeUris: new Map(),
       buildHvscLocalPlayFile: options?.buildHvscLocalPlayFile,
@@ -277,6 +283,66 @@ describe("usePlaybackController", () => {
     expect(playlistUpdater).toBeDefined();
     const nextPlaylist = playlistUpdater?.(playlist);
     expect(nextPlaylist?.[0]?.durationMs).toBe(45_000);
+  });
+
+  it("persists the re-resolved duration and new song number for a subsong playback start", async () => {
+    const file = {
+      name: "demo.sid",
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    } as unknown as File;
+    const playlist = [
+      createPlaylistItem({
+        category: "sid",
+        label: "demo.sid",
+        path: "/MUSIC/demo.sid",
+        request: {
+          source: "local",
+          path: "/MUSIC/demo.sid",
+          file,
+          songNr: 2,
+        },
+        durationMs: undefined,
+        subsongCount: undefined,
+      }),
+    ];
+    const setPlaylist = vi.fn();
+    const { result } = renderPlaybackController(playlist, { setPlaylist });
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    const playlistUpdaters = setPlaylist.mock.calls
+      .map(([value]) => value)
+      .filter((value): value is (items: PlaylistItem[]) => PlaylistItem[] => typeof value === "function");
+    const playlistUpdater = playlistUpdaters[playlistUpdaters.length - 1];
+    expect(playlistUpdater).toBeDefined();
+    const nextPlaylist = playlistUpdater?.(playlist);
+    expect(nextPlaylist?.[0]).toMatchObject({
+      durationMs: 45_000,
+      subsongCount: 3,
+      request: expect.objectContaining({
+        songNr: 2,
+        durationMs: 45_000,
+      }),
+    });
+  });
+
+  it("starts a new track without resetting the cumulative played clock", async () => {
+    const playlist = [createPlaylistItem()];
+    const playedClockRef = {
+      current: {
+        start: vi.fn(),
+        stop: vi.fn(),
+        pause: vi.fn(),
+        resume: vi.fn(),
+        reset: vi.fn(),
+        current: vi.fn().mockReturnValue(12_000),
+      },
+    };
+    const { result } = renderPlaybackController(playlist, { playedClockRef });
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    expect(playedClockRef.current.start).toHaveBeenCalledWith(expect.any(Number));
   });
 
   it("does not update track timeline or playlist metadata when launch fails", async () => {
@@ -420,6 +486,36 @@ describe("usePlaybackController", () => {
     // The device only learns the true song length when the SID is sent as a
     // REST payload with the SSL songlength attached (duration-propagation contract).
     expect((options as { skipSidSslPropagation?: boolean } | undefined)?.skipSidSslPropagation).toBeUndefined();
+  });
+
+  it("indexes the ultimate-source HVSC MD5 duration fallback by songNr (HARD11-004)", async () => {
+    vi.mocked(tryFetchUltimateSidBlob).mockResolvedValueOnce({
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(4)),
+    } as any);
+    vi.mocked(getHvscDurationsByMd5Seconds).mockResolvedValueOnce([10, 20, 30]);
+    const playlist = [
+      createPlaylistItem({
+        category: "sid",
+        label: "10_Orbyte.sid",
+        path: "/USB2/test-data/SID/10_Orbyte.sid",
+        request: {
+          source: "ultimate",
+          path: "/USB2/test-data/SID/10_Orbyte.sid",
+          songNr: 3,
+        },
+        durationMs: undefined,
+        subsongCount: 3,
+      }),
+    ];
+    const { result } = renderPlaybackController(playlist);
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ durationMs: 30_000 }),
+      expect.anything(),
+    );
   });
 
   it("reports a play start superseded by a routing change as a notice, not a destructive error", async () => {
@@ -1080,6 +1176,68 @@ describe("usePlaybackController", () => {
     );
   });
 
+  it("resumes a DMA-paused machine before playing a new track (HARD9-029)", async () => {
+    const playlist = [createPlaylistItem()];
+    const machineResume = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getC64API).mockReturnValue({ machineResume } as any);
+
+    const { result } = renderPlaybackController(playlist, { isPaused: true });
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    expect(machineResume).toHaveBeenCalled();
+  });
+
+  it("does not attempt to resume when the machine was not paused", async () => {
+    const playlist = [createPlaylistItem()];
+    const machineResume = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getC64API).mockReturnValue({ machineResume } as any);
+
+    const { result } = renderPlaybackController(playlist, { isPaused: false });
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    expect(machineResume).not.toHaveBeenCalled();
+  });
+
+  it("aborts the new-track launch and reports an error if resuming from pause fails (HARD9-029)", async () => {
+    const playlist = [createPlaylistItem()];
+    const machineResume = vi.fn().mockRejectedValue(new Error("resume failed"));
+    vi.mocked(getC64API).mockReturnValue({ machineResume } as any);
+
+    const { result } = renderPlaybackController(playlist, { isPaused: true });
+
+    await expect(result.current.playItem(playlist[0], { playlistIndex: 0 })).rejects.toThrow("resume failed");
+
+    expect(vi.mocked(reportUserError)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "PLAYBACK_RESUME",
+        title: "Resume failed",
+        description: "resume failed",
+      }),
+    );
+  });
+
+  it("clears stale pause-mute bookkeeping refs when starting a new track (HARD9-063)", async () => {
+    const playlist = [createPlaylistItem()];
+    const pauseMuteSnapshotRef = { current: { volumes: { "SID 1": "0 dB" }, enablement: {} } as any };
+    const pausingFromPauseRef = { current: true };
+    const resumingFromPauseRef = { current: true };
+
+    const { result } = renderPlaybackController(playlist, {
+      isPaused: false,
+      pauseMuteSnapshotRef,
+      pausingFromPauseRef,
+      resumingFromPauseRef,
+    });
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    expect(pauseMuteSnapshotRef.current).toBeNull();
+    expect(pausingFromPauseRef.current).toBe(false);
+    expect(resumingFromPauseRef.current).toBe(false);
+  });
+
   it("pauses without mixer writes when no enabled SID outputs are active", async () => {
     const playlist = [
       createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
@@ -1594,11 +1752,11 @@ describe("usePlaybackController", () => {
       subsongCount: 3,
       readable: true,
     });
-    expect(vi.mocked(getHvscDurationByMd5Seconds)).not.toHaveBeenCalled();
+    expect(vi.mocked(getHvscDurationsByMd5Seconds)).not.toHaveBeenCalled();
   });
 
   it("falls back to HVSC MD5 duration lookup for local SID metadata", async () => {
-    vi.mocked(getHvscDurationByMd5Seconds).mockResolvedValueOnce(99);
+    vi.mocked(getHvscDurationsByMd5Seconds).mockResolvedValueOnce([99]);
     const file = {
       name: "demo.sid",
       arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
@@ -1607,6 +1765,37 @@ describe("usePlaybackController", () => {
 
     await expect(result.current.resolveSidMetadata(file as any, null)).resolves.toEqual({
       durationMs: 99_000,
+      subsongCount: 3,
+      readable: true,
+    });
+  });
+
+  it("indexes the HVSC MD5 duration fallback by songNr instead of always using subsong 1 (HARD11-004)", async () => {
+    // durations[0] = subsong 1, durations[2] = subsong 3.
+    vi.mocked(getHvscDurationsByMd5Seconds).mockResolvedValueOnce([30, 90, 240]);
+    const file = {
+      name: "demo.sid",
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    } as unknown as File;
+    const { result } = renderPlaybackController([createPlaylistItem()]);
+
+    await expect(result.current.resolveSidMetadata(file as any, 3)).resolves.toEqual({
+      durationMs: 240_000,
+      subsongCount: 3,
+      readable: true,
+    });
+  });
+
+  it("falls back to the fallback duration when songNr is out of range for the HVSC MD5 durations array", async () => {
+    vi.mocked(getHvscDurationsByMd5Seconds).mockResolvedValueOnce([30, 90]);
+    const file = {
+      name: "demo.sid",
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    } as unknown as File;
+    const { result } = renderPlaybackController([createPlaylistItem()]);
+
+    await expect(result.current.resolveSidMetadata(file as any, 5)).resolves.toEqual({
+      durationMs: 45_000,
       subsongCount: 3,
       readable: true,
     });
@@ -2093,5 +2282,80 @@ describe("usePlaybackController", () => {
 
     expect(setCurrentIndex).toHaveBeenCalledWith(1);
     expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+  });
+
+  it("handleNext walks the shuffled order instead of the curated array order when shuffle is enabled (HARD9-007)", async () => {
+    const playlist = [
+      createPlaylistItem({ id: "item-1", label: "one.prg", path: "/PROGRAMS/one.prg" }),
+      createPlaylistItem({ id: "item-2", label: "two.prg", path: "/PROGRAMS/two.prg" }),
+      createPlaylistItem({ id: "item-3", label: "three.prg", path: "/PROGRAMS/three.prg" }),
+    ];
+    const seed = 4242;
+    const order = seededShuffleIds(
+      playlist.map((item) => item.id),
+      seed,
+    );
+    const startIndex = playlist.findIndex((item) => item.id === order[0]);
+    const expectedNextIndex = playlist.findIndex((item) => item.id === order[1]);
+    const setCurrentIndex = vi.fn();
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: startIndex,
+      isPlaying: true,
+      shuffleEnabled: true,
+      shuffleSeed: seed,
+      setCurrentIndex,
+    });
+
+    await result.current.handleNext("user");
+
+    expect(setCurrentIndex).toHaveBeenCalledWith(expectedNextIndex);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+  });
+
+  it("handlePrevious walks the shuffled order backward when shuffle is enabled (HARD9-007)", async () => {
+    const playlist = [
+      createPlaylistItem({ id: "item-1", label: "one.prg", path: "/PROGRAMS/one.prg" }),
+      createPlaylistItem({ id: "item-2", label: "two.prg", path: "/PROGRAMS/two.prg" }),
+      createPlaylistItem({ id: "item-3", label: "three.prg", path: "/PROGRAMS/three.prg" }),
+    ];
+    const seed = 4242;
+    const order = seededShuffleIds(
+      playlist.map((item) => item.id),
+      seed,
+    );
+    const startIndex = playlist.findIndex((item) => item.id === order[1]);
+    const expectedPrevIndex = playlist.findIndex((item) => item.id === order[0]);
+    const setCurrentIndex = vi.fn();
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: startIndex,
+      isPlaying: true,
+      shuffleEnabled: true,
+      shuffleSeed: seed,
+      setCurrentIndex,
+    });
+
+    await result.current.handlePrevious();
+
+    expect(setCurrentIndex).toHaveBeenCalledWith(expectedPrevIndex);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not reorder the curated playlist when shuffle-walking to the next track", async () => {
+    const playlist = [
+      createPlaylistItem({ id: "item-1", label: "one.prg", path: "/PROGRAMS/one.prg" }),
+      createPlaylistItem({ id: "item-2", label: "two.prg", path: "/PROGRAMS/two.prg" }),
+      createPlaylistItem({ id: "item-3", label: "three.prg", path: "/PROGRAMS/three.prg" }),
+    ];
+    const originalOrder = playlist.map((item) => item.id);
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: 0,
+      isPlaying: true,
+      shuffleEnabled: true,
+      shuffleSeed: 4242,
+    });
+
+    await result.current.handleNext("user");
+
+    expect(playlist.map((item) => item.id)).toEqual(originalOrder);
   });
 });

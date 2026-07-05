@@ -52,6 +52,7 @@ const buildProps = (overrides: Partial<PlaybackControlsCardProps> = {}): Playbac
   onReshuffle: vi.fn(),
   reshuffleActive: false,
   reshuffleDisabled: true,
+  shuffleSeed: null,
   ...overrides,
 });
 
@@ -89,6 +90,19 @@ describe("PlaybackControlsCard", () => {
 
     expect(screen.getByTestId("playlist-play")).not.toHaveAttribute(CTA_PERSISTENT_ACTIVE_ATTR);
     vi.useRealTimers();
+  });
+
+  // HARD12-017
+  it("renders the openControllerAction slot when provided, and nothing when omitted", () => {
+    const { rerender } = render(<PlaybackControlsCard {...buildProps()} />);
+    expect(screen.queryByTestId("open-controller-slot")).not.toBeInTheDocument();
+
+    rerender(
+      <PlaybackControlsCard
+        {...buildProps({ openControllerAction: <button data-testid="open-controller-slot">Open Controller</button> })}
+      />,
+    );
+    expect(screen.getByTestId("open-controller-slot")).toBeInTheDocument();
   });
 
   it("keeps track metadata and transport controls stacked full-width", () => {

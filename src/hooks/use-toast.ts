@@ -99,9 +99,22 @@ const addToRemoveQueue = (toastId: string) => {
 export const reducer = (state: State, action: Action): State => {
   switch (action.type) {
     case "ADD_TOAST": {
+      const next = limitToasts([action.toast, ...state.toasts]);
+      // A toast dropped straight from state by limitToasts (never open:false,
+      // never DISMISS_TOAST) must still run its dismiss side effect - e.g.
+      // uiErrors' onToastDismiss deletes the dedup-map entry that suppresses
+      // repeat toasts for the same error. Without this, an evicted toast's
+      // dedup entry lingers forever and the error can never re-toast. See
+      // HARD9-055.
+      const keptIds = new Set(next.map((toast) => toast.id));
+      state.toasts.forEach((toast) => {
+        if (!keptIds.has(toast.id)) {
+          toast.onToastDismiss?.();
+        }
+      });
       return {
         ...state,
-        toasts: limitToasts([action.toast, ...state.toasts]),
+        toasts: next,
       };
     }
 

@@ -56,6 +56,14 @@ describe("deriveConnectivityState", () => {
     expect(deriveConnectivityState("OFFLINE_NO_DEMO")).toBe("Offline");
   });
 
+  it("maps OFFLINE_NO_DEMO with a Password-required probe error → Auth (HARD10-007)", () => {
+    expect(deriveConnectivityState("OFFLINE_NO_DEMO", true)).toBe("Auth");
+    // Only the auth sub-case flips; a non-auth offline stays Offline.
+    expect(deriveConnectivityState("OFFLINE_NO_DEMO", false)).toBe("Offline");
+    // authRequired only matters for the offline state.
+    expect(deriveConnectivityState("REAL_CONNECTED", true)).toBe("Online");
+  });
+
   it("maps DISCOVERING → Checking", () => {
     expect(deriveConnectivityState("DISCOVERING")).toBe("Checking");
   });
@@ -72,6 +80,24 @@ describe("deriveConnectivityState", () => {
 // ──────────────────────────────────────────────────────────────────────────────
 // HEALTH_GLYPHS
 // ──────────────────────────────────────────────────────────────────────────────
+describe("getBadgeTextContract Auth state (HARD10-007)", () => {
+  it("labels the password-rejected device distinctly from a plain offline one", () => {
+    const expanded = getBadgeTextContract("Unavailable", "Auth", 0, "expanded", "◌");
+    expect(expanded.leadingLabel).toBe("Password");
+    expect(expanded.trailingLabel).toBe("Password required");
+
+    const medium = getBadgeTextContract("Unavailable", "Auth", 0, "medium", "◌");
+    expect(medium.trailingLabel).toBe("Password required");
+
+    const compact = getBadgeTextContract("Unavailable", "Auth", 0, "compact", "◌");
+    expect(compact.trailingLabel).toBeNull();
+
+    // Plain offline keeps its own (misleading-for-auth) wording.
+    const offline = getBadgeTextContract("Unavailable", "Offline", 0, "expanded", "◌");
+    expect(offline.trailingLabel).toBe("Device not reachable");
+  });
+});
+
 describe("HEALTH_GLYPHS", () => {
   it("has a distinct glyph for each health state", () => {
     const glyphs = Object.values(HEALTH_GLYPHS);

@@ -19,7 +19,7 @@ import {
 import { reportUserError } from "@/lib/uiErrors";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import { discoverConnection } from "@/lib/connection/connectionManager";
-import { setPasswordForDevice } from "@/lib/secureStorage";
+import { clearPasswordForDevice, getPasswordForDevice, setPasswordForDevice } from "@/lib/secureStorage";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, clearLogs, getErrorLogs, getLogs } from "@/lib/logging";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
@@ -36,8 +36,10 @@ import {
   saveHideStatusBar,
   saveHideNavigationBar,
   saveVolumeSliderPreviewIntervalMs,
+  saveNotificationDurationMs,
   APP_SETTINGS_KEYS,
 } from "@/lib/config/appSettings";
+import { applyScreenOrientationMode } from "@/lib/native/screenOrientation";
 import * as deviceSafetySettings from "@/lib/config/deviceSafetySettings";
 import { exportSettingsJson, importSettingsJson } from "@/lib/config/settingsTransfer";
 import {
@@ -511,6 +513,24 @@ vi.mock("@/lib/config/appSettings", () => ({
 
 vi.mock("@/lib/native/screenOrientation", () => ({
   applyScreenOrientationMode: vi.fn(async () => undefined),
+}));
+
+vi.mock("@/components/ui/slider", () => ({
+  // The only <Slider> on SettingsPage is the notification-duration control.
+  // Mocked as a native range input so tests can distinguish drag ticks
+  // (onValueChange -> onChange) from the drag release (onValueCommit -> onMouseUp),
+  // matching the mock convention already used for this component elsewhere.
+  Slider: ({ value, onValueChange, onValueCommit, ...props }: any) => (
+    <input
+      type="range"
+      min={props.min}
+      max={props.max}
+      step={props.step}
+      value={value?.[0] ?? 0}
+      onChange={(event) => onValueChange?.([Number((event.target as HTMLInputElement).value)])}
+      onMouseUp={(event) => onValueCommit?.([Number((event.target as HTMLInputElement).value)])}
+    />
+  ),
 }));
 
 vi.mock("@/components/archive/OnlineArchiveDialog", () => ({
@@ -1019,6 +1039,91 @@ describe("SettingsPage", () => {
     });
   });
 
+  it("never loads the real saved password into the editable field (HARD9-004)", async () => {
+    savedDevicesRef.current = {
+      ...savedDevicesRef.current,
+      devices: [{ ...savedDevicesRef.current.devices[0], hasPassword: true }],
+    };
+    vi.mocked(getPasswordForDevice).mockResolvedValue("super-secret");
+
+    renderSettingsPage();
+
+    // The field shows a locked placeholder, never the real secret, and does not
+    // fetch it from secure storage just to render.
+    const lockedField = screen.getByLabelText(/network password/i) as HTMLInputElement;
+    expect(lockedField).toBeDisabled();
+    expect(lockedField.value).not.toBe("super-secret");
+    expect(vi.mocked(getPasswordForDevice)).not.toHaveBeenCalled();
+
+    // Clicking Change reveals an empty, editable field — not the real password.
+    fireEvent.click(screen.getByRole("button", { name: /^change$/i }));
+    const editableField = screen.getByLabelText(/network password/i) as HTMLInputElement;
+    expect(editableField).not.toBeDisabled();
+    expect(editableField.value).toBe("");
+  });
+
+  it("does not persist a stray keystroke and rejects a wrong replacement password without saving it (HARD9-004)", async () => {
+    savedDevicesRef.current = {
+      ...savedDevicesRef.current,
+      devices: [{ ...savedDevicesRef.current.devices[0], hasPassword: true }],
+    };
+    mockEvaluateNewDeviceReachability.mockResolvedValue({ status: "needs-password" });
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /^change$/i }));
+    fireEvent.change(screen.getByLabelText(/network password/i), { target: { value: "wrong-password" } });
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/wrong password for this device/i)).toBeInTheDocument();
+    });
+    expect(vi.mocked(setPasswordForDevice)).not.toHaveBeenCalled();
+    expect(vi.mocked(clearPasswordForDevice)).not.toHaveBeenCalled();
+    expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
+  });
+
+  it("saving without touching an already-saved password keeps it unchanged and reuses it for verification", async () => {
+    savedDevicesRef.current = {
+      ...savedDevicesRef.current,
+      devices: [{ ...savedDevicesRef.current.devices[0], hasPassword: true }],
+    };
+    vi.mocked(getPasswordForDevice).mockResolvedValue("existing-secret");
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(mockUpdateConfig).toHaveBeenCalledWith("c64u", "existing-secret");
+      expect(mockSwitchSavedDevice).toHaveBeenCalledWith("saved-device-1");
+    });
+    expect(vi.mocked(setPasswordForDevice)).not.toHaveBeenCalled();
+    expect(vi.mocked(clearPasswordForDevice)).not.toHaveBeenCalled();
+  });
+
+  it("reports a wrong-password saved-device switch as an auth failure, not offline (HARD9-028)", async () => {
+    mockSwitchSavedDevice.mockResolvedValueOnce({
+      ok: false,
+      deviceInfo: null,
+      error: "HTTP 403: Forbidden",
+      authRequired: true,
+    });
+
+    renderSettingsPage();
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "CONNECTION_SAVE",
+          title: "Unable to save connection",
+          description: "The device rejected the password. Check the password and try again.",
+        }),
+      );
+    });
+  });
+
   it("removes badge-label authoring and persists a host-derived inferred name when the user clears the field", async () => {
     vi.mocked(discoverConnection).mockResolvedValue(undefined);
 
@@ -1252,6 +1357,22 @@ describe("SettingsPage", () => {
 
     expect(saveDemoModeEnabled).toHaveBeenCalledWith(false);
     expect(saveDebugLoggingEnabled).toHaveBeenCalledWith(false);
+  });
+
+  it("renders the Automatic Demo Mode control exactly once, not duplicated across cards (HARD9-090)", () => {
+    // Regression: the Connection card and a separate "Config" card both
+    // rendered a checkbox with the same id="demo-mode-enabled". Per the
+    // HTML spec, <label for> resolution always finds the FIRST element
+    // with a given id, so the second card's label silently activated the
+    // first card's checkbox instead of its own - a duplicate DOM id that
+    // getByRole's accessible-name matching does not surface as ambiguous.
+    featureFlagsRef.current.demo_mode_enabled = true;
+    vi.mocked(loadDemoModeEnabled).mockReturnValue(true);
+
+    const { container } = renderSettingsPage();
+
+    expect(container.querySelectorAll("#demo-mode-enabled")).toHaveLength(1);
+    expect(screen.getAllByText(/automatic demo mode/i)).toHaveLength(1);
   });
 
   it("disabling the demo-mode feature flag clears the persisted demo-mode setting", async () => {
@@ -2109,6 +2230,67 @@ describe("SettingsPage", () => {
 
       await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
     });
+  });
+});
+
+describe("SettingsPage notification duration slider", () => {
+  it("does not persist on every drag tick, only when the drag is released", () => {
+    renderSettingsPage();
+
+    // The page now has more than one slider (e.g. the autofire rate), so scope
+    // to the notification-duration slider via its own labelled row.
+    const durationRow = screen.getByText(/^Duration: /).closest("div") as HTMLElement;
+    const slider = within(durationRow).getByRole("slider");
+
+    fireEvent.change(slider, { target: { value: "4500" } });
+    fireEvent.change(slider, { target: { value: "5000" } });
+    fireEvent.change(slider, { target: { value: "5500" } });
+
+    // Local UI (the "Duration: Ns" label) tracks every drag tick immediately...
+    expect(screen.getByText(/Duration: 5\.5s/)).toBeInTheDocument();
+    // ...but nothing is written to device/localStorage mid-drag.
+    expect(saveNotificationDurationMs).not.toHaveBeenCalled();
+
+    fireEvent.mouseUp(slider);
+
+    expect(saveNotificationDurationMs).toHaveBeenCalledTimes(1);
+    expect(saveNotificationDurationMs).toHaveBeenCalledWith(5500);
+  });
+});
+
+describe("SettingsPage autofire rate slider (Issue 3b)", () => {
+  it("exposes the autofire rate slider and reflects a drag in its label and localStorage", () => {
+    renderSettingsPage();
+
+    const autofireRow = screen.getByText(/^Autofire rate: /).closest("div") as HTMLElement;
+    const slider = within(autofireRow).getByRole("slider");
+    fireEvent.change(slider, { target: { value: "8" } });
+
+    expect(screen.getByText(/Autofire rate: 8\/s/)).toBeInTheDocument();
+
+    fireEvent.mouseUp(slider);
+    expect(localStorage.getItem("c64u_remote_input_autofire_rate_hz")).toBe("8");
+  });
+});
+
+describe("SettingsPage screen orientation lock", () => {
+  it("does not re-apply the orientation lock on mount (startup already applies it)", () => {
+    renderSettingsPage();
+
+    // A transient mount (e.g. an adjacent swipe-runway slot) must not issue a
+    // redundant native ScreenOrientation.lock()/unlock() round-trip; main.tsx
+    // already applied the persisted mode at startup.
+    expect(applyScreenOrientationMode).not.toHaveBeenCalled();
+  });
+
+  it("applies the orientation lock only when the user actually changes it", () => {
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "Landscape" }));
+
+    expect(saveScreenOrientationMode).toHaveBeenCalledWith("landscape");
+    expect(applyScreenOrientationMode).toHaveBeenCalledTimes(1);
+    expect(applyScreenOrientationMode).toHaveBeenCalledWith("landscape");
   });
 });
 

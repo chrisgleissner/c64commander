@@ -247,4 +247,16 @@ describe("encodeSnapshot validation", () => {
   it("throws when ranges and blocks arrays differ in length", () => {
     expect(() => encodeSnapshot("program", TS, [{ start: 0, length: 4 }], [])).toThrow(/ranges.length/);
   });
+
+  it("throws instead of silently truncating a range whose length overflows the u16 descriptor field (HARD9-009)", () => {
+    const fullImage = new Uint8Array(0x10000);
+    expect(() => encodeSnapshot("custom", TS, [{ start: 0x0000, length: 0x10000 }], [fullImage])).toThrow(
+      /out of bounds/,
+    );
+  });
+
+  it("accepts a range at exactly the u16 length boundary", () => {
+    const block = new Uint8Array(0xffff);
+    expect(() => encodeSnapshot("custom", TS, [{ start: 0x0000, length: 0xffff }], [block])).not.toThrow();
+  });
 });

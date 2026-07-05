@@ -1,15 +1,24 @@
 package uk.gleissner.c64commander
 
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
 import com.getcapacitor.Bridge
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import java.io.File
+import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Method
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -105,7 +114,6 @@ class HvscIngestionPluginTest {
     assertTrue(resolveLatch.await(5, TimeUnit.SECONDS))
     assertTrue((payloadHolder[0]?.getLong("metadataRows") ?: -1L) >= 0L)
   }
-
   @Test
   fun emitProgressPublishesExpectedPayloadShape() {
     val method =
@@ -348,5 +356,311 @@ class HvscIngestionPluginTest {
                     String
 
     assertEquals("something entirely unrelated", result)
+  }
+
+  // ---------------------------------------------------------------------
+  // HARD9-013: withContext(Dispatchers.Main) inside a cancelled coroutine's
+  // catch block never runs its lambda, so a bare `call.reject(...)` there
+  // (as ingestHvsc's CancellationException and generic Exception catch
+  // blocks used before the fix) never reaches the JS side - the awaited
+  // ingestHvsc() promise hangs forever after cancelIngestion() is called.
+  // These two tests isolate and deterministically prove the exact
+  // coroutines mechanism the fix (withContext(NonCancellable +
+  // Dispatchers.Main)) relies on, without needing to race the real
+  // ingestion pipeline's asynchronous cancellation timing.
+  // ---------------------------------------------------------------------
+
+  @Test
+  fun withContextOnCancelledJobSkipsItsBlockWithoutNonCancellable() {
+    val delivered = CountDownLatch(1)
+    val started = CountDownLatch(1)
+    val proceed = CountDownLatch(1)
+    val completion = CountDownLatch(1)
+    val job = Job()
+    val scope = CoroutineScope(Dispatchers.IO + job)
+
+    scope.launch {
+      started.countDown()
+      proceed.await(5, TimeUnit.SECONDS) // park until the test cancels the job from outside
+      try {
+        withContext(Dispatchers.Main) { delivered.countDown() }
+      } catch (_: CancellationException) {
+        // expected: withContext threw on entry instead of running its block
+      } finally {
+        completion.countDown()
+      }
+    }
+
+    assertTrue(started.await(5, TimeUnit.SECONDS))
+    job.cancel()
+    proceed.countDown()
+
+    assertTrue(completion.await(5, TimeUnit.SECONDS))
+    assertEquals(1L, delivered.count) // never counted down - block never ran
+  }
+
+  @Test
+  fun withContextNonCancellableStillDeliversAfterJobCancellation() {
+    val delivered = CountDownLatch(1)
+    val started = CountDownLatch(1)
+    val proceed = CountDownLatch(1)
+    val completion = CountDownLatch(1)
+    val job = Job()
+    val scope = CoroutineScope(Dispatchers.IO + job)
+
+    scope.launch {
+      started.countDown()
+      proceed.await(5, TimeUnit.SECONDS)
+      try {
+        withContext(NonCancellable + Dispatchers.Main) { delivered.countDown() }
+      } finally {
+        completion.countDown()
+      }
+    }
+
+    assertTrue(started.await(5, TimeUnit.SECONDS))
+    job.cancel()
+    proceed.countDown()
+
+    // Unlike the cancelled-and-thrown-immediately path in the previous test,
+    // withContext(NonCancellable + ...) really does dispatch its block onto
+    // Dispatchers.Main - which under Robolectric queues onto the shadow main
+    // looper instead of running inline, so this thread (the JUnit runner
+    // thread, which Robolectric treats as "main") must pump it explicitly.
+    val deadline = System.currentTimeMillis() + 5000
+    while (completion.count > 0 && System.currentTimeMillis() < deadline) {
+      org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+      Thread.sleep(10)
+    }
+
+    assertTrue(completion.await(0, TimeUnit.SECONDS))
+    assertTrue(delivered.await(0, TimeUnit.SECONDS))
+  }
+
+  // ---------------------------------------------------------------------
+  // HARD9-040: a failed baseline promotion (staging -> library directory
+  // swap) could delete the last surviving copy of the user's HVSC library,
+  // and a promotion that failed but recovered could leave the DB rewrite
+  // (which used to commit before the swap) describing files that no longer
+  // matched what was actually on disk. promoteBaselineLibrary and
+  // cleanupHvscOldRootIfLibraryPresent are exercised directly via
+  // reflection, since driving this through the full ingestHvsc() pipeline
+  // needs a real 7z archive.
+  // ---------------------------------------------------------------------
+
+  private fun openHvscSongIndexTestDb(): SQLiteDatabase {
+    val db = SQLiteDatabase.create(null)
+    db.execSQL(
+            """
+        CREATE TABLE hvsc_song_index (
+          virtual_path TEXT PRIMARY KEY,
+          file_name TEXT NOT NULL,
+          songs INTEGER,
+          start_song INTEGER,
+          updated_at_ms INTEGER NOT NULL
+        )
+      """.trimIndent(),
+    )
+    return db
+  }
+
+  private fun songIndexRowCount(db: SQLiteDatabase): Int {
+    db.rawQuery("SELECT COUNT(*) FROM hvsc_song_index", null).use { cursor ->
+      cursor.moveToFirst()
+      return cursor.getInt(0)
+    }
+  }
+
+  private fun invokePromoteBaselineLibrary(
+          libraryRoot: File,
+          stagingRoot: File,
+          oldRoot: File,
+          db: SQLiteDatabase,
+  ) {
+    val method =
+            HvscIngestionPlugin::class.java.getDeclaredMethod(
+                    "promoteBaselineLibrary",
+                    File::class.java,
+                    File::class.java,
+                    File::class.java,
+                    SQLiteDatabase::class.java,
+                    List::class.java,
+                    Long::class.javaPrimitiveType,
+            )
+    method.isAccessible = true
+    try {
+      method.invoke(plugin, libraryRoot, stagingRoot, oldRoot, db, emptyList<Any>(), 1000L)
+    } catch (wrapped: InvocationTargetException) {
+      throw wrapped.targetException
+    }
+  }
+
+  @Test
+  fun promoteBaselineLibrarySwapsStagingIntoLibraryAndCommitsDb() {
+    val root = File(context.filesDir, "hvsc-promote-happy")
+    root.deleteRecursively()
+    val libraryRoot = File(root, "library").apply { mkdirs() }
+    File(libraryRoot, "old.sid").writeText("OLD")
+    val stagingRoot = File(root, "library-staging").apply { mkdirs() }
+    File(stagingRoot, "new.sid").writeText("NEW")
+    val oldRoot = File(root, "library-old")
+
+    val db = openHvscSongIndexTestDb()
+    db.execSQL(
+            "INSERT INTO hvsc_song_index (virtual_path, file_name, updated_at_ms) " +
+                    "VALUES ('/OLD/Song.sid', 'Song.sid', 0)"
+    )
+
+    try {
+      invokePromoteBaselineLibrary(libraryRoot, stagingRoot, oldRoot, db)
+
+      assertTrue(libraryRoot.exists())
+      assertTrue(File(libraryRoot, "new.sid").exists())
+      assertTrue(!File(libraryRoot, "old.sid").exists())
+      assertTrue(!stagingRoot.exists())
+      assertTrue(!oldRoot.exists())
+      assertEquals(0, songIndexRowCount(db))
+    } finally {
+      db.close()
+      root.deleteRecursively()
+    }
+  }
+
+  @Test
+  fun promoteBaselineLibraryLeavesOriginalLibraryUntouchedWhenFirstRenameFails() {
+    val root = File(context.filesDir, "hvsc-promote-first-rename-fails")
+    root.deleteRecursively()
+    val libraryRoot = File(root, "library").apply { mkdirs() }
+    File(libraryRoot, "old.sid").writeText("OLD")
+    val stagingRoot = File(root, "library-staging").apply { mkdirs() }
+    File(stagingRoot, "new.sid").writeText("NEW")
+    // A regular file already occupies the rename target: renaming a
+    // directory onto an existing non-directory reliably fails on POSIX.
+    val oldRoot = File(root, "library-old").apply { writeText("OCCUPIED") }
+
+    val db = openHvscSongIndexTestDb()
+    db.execSQL(
+            "INSERT INTO hvsc_song_index (virtual_path, file_name, updated_at_ms) " +
+                    "VALUES ('/OLD/Song.sid', 'Song.sid', 0)"
+    )
+
+    try {
+      var thrown: Throwable? = null
+      try {
+        invokePromoteBaselineLibrary(libraryRoot, stagingRoot, oldRoot, db)
+      } catch (error: Throwable) {
+        thrown = error
+      }
+
+      assertTrue(thrown is IllegalStateException)
+      assertTrue(thrown!!.message!!.contains("Failed to rename library to old"))
+      assertTrue(libraryRoot.exists())
+      assertEquals("OLD", File(libraryRoot, "old.sid").readText())
+      assertTrue(stagingRoot.exists())
+      assertEquals("NEW", File(stagingRoot, "new.sid").readText())
+      assertEquals(1, songIndexRowCount(db)) // DB never touched
+    } finally {
+      db.close()
+      root.deleteRecursively()
+    }
+  }
+
+  @Test
+  fun promoteBaselineLibraryRecoversAndLeavesDbUntouchedWhenStagingRenameFails() {
+    val root = File(context.filesDir, "hvsc-promote-second-rename-fails")
+    root.deleteRecursively()
+    val libraryRoot = File(root, "library").apply { mkdirs() }
+    File(libraryRoot, "old.sid").writeText("OLD")
+    // stagingRoot deliberately does not exist: renameTo on a non-existent
+    // source fails without ever touching libraryRoot's path, isolating the
+    // "staging -> library" rename failure from the first rename.
+    val stagingRoot = File(root, "library-staging")
+    val oldRoot = File(root, "library-old")
+
+    val db = openHvscSongIndexTestDb()
+    db.execSQL(
+            "INSERT INTO hvsc_song_index (virtual_path, file_name, updated_at_ms) " +
+                    "VALUES ('/OLD/Song.sid', 'Song.sid', 0)"
+    )
+
+    try {
+      var thrown: Throwable? = null
+      try {
+        invokePromoteBaselineLibrary(libraryRoot, stagingRoot, oldRoot, db)
+      } catch (error: Throwable) {
+        thrown = error
+      }
+
+      assertTrue(thrown is IllegalStateException)
+      assertTrue(thrown!!.message!!.contains("Failed to promote staging directory"))
+      // Recovery succeeded: the original library is back in place.
+      assertTrue(libraryRoot.exists())
+      assertEquals("OLD", File(libraryRoot, "old.sid").readText())
+      assertTrue(!oldRoot.exists())
+      // The DB rewrite runs after the swap, so a swap failure never reaches
+      // it - it still matches the recovered (old) library on disk.
+      assertEquals(1, songIndexRowCount(db))
+    } finally {
+      db.close()
+      root.deleteRecursively()
+    }
+  }
+
+  @Test
+  fun cleanupHvscOldRootIfLibraryPresentPreservesOldRootWhenLibraryMissingRegression() {
+    // This is the exact HARD9-040 data-loss scenario: a promotion failed and
+    // its own recovery also failed, so libraryRoot does not exist and
+    // oldRoot is the sole surviving copy of the user's library. Pre-fix,
+    // the cleanup that ran here was unconditional and would have deleted it.
+    val method =
+            HvscIngestionPlugin::class.java.getDeclaredMethod(
+                    "cleanupHvscOldRootIfLibraryPresent",
+                    File::class.java,
+                    File::class.java,
+            )
+    method.isAccessible = true
+
+    val root = File(context.filesDir, "hvsc-cleanup-guard-missing")
+    root.deleteRecursively()
+    val libraryRoot = File(root, "library") // deliberately does not exist
+    val oldRoot = File(root, "library-old").apply { mkdirs() }
+    File(oldRoot, "surviving.sid").writeText("LAST COPY")
+
+    try {
+      method.invoke(plugin, libraryRoot, oldRoot)
+
+      assertTrue(
+              "oldRoot must survive when libraryRoot does not exist - it may be the only copy",
+              oldRoot.exists(),
+      )
+      assertEquals("LAST COPY", File(oldRoot, "surviving.sid").readText())
+    } finally {
+      root.deleteRecursively()
+    }
+  }
+
+  @Test
+  fun cleanupHvscOldRootIfLibraryPresentDeletesOldRootWhenLibraryExists() {
+    val method =
+            HvscIngestionPlugin::class.java.getDeclaredMethod(
+                    "cleanupHvscOldRootIfLibraryPresent",
+                    File::class.java,
+                    File::class.java,
+            )
+    method.isAccessible = true
+
+    val root = File(context.filesDir, "hvsc-cleanup-guard-present")
+    root.deleteRecursively()
+    val libraryRoot = File(root, "library").apply { mkdirs() }
+    val oldRoot = File(root, "library-old").apply { mkdirs() }
+    File(oldRoot, "superseded.sid").writeText("STALE")
+
+    try {
+      method.invoke(plugin, libraryRoot, oldRoot)
+
+      assertTrue(!oldRoot.exists())
+    } finally {
+      root.deleteRecursively()
+    }
   }
 }

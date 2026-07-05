@@ -72,12 +72,23 @@ vi.mock("../../../src/lib/uiErrors", async () => {
   };
 });
 
+const notifyAuthRequired = vi.fn();
+vi.mock("../../../src/lib/auth/authChallenge", () => ({
+  notifyAuthRequired,
+  notifyAuthSatisfied: vi.fn(),
+  getAuthChallengeSnapshot: vi.fn(() => null),
+  resetAuthChallengeForTests: vi.fn(),
+  useAuthChallenge: vi.fn(() => null),
+  subscribeAuthChallenge: vi.fn(() => () => undefined),
+}));
+
 const startMockServer = vi.fn(async () => {
   throw new Error("Mock C64U server is only available on native platforms.");
 });
 const stopMockServer = vi.fn(async () => undefined);
 const getActiveMockBaseUrl = vi.fn(() => null);
 const getActiveMockFtpPort = vi.fn(() => null);
+const getActiveMockToken = vi.fn(() => null);
 const startDeviceDiscovery = vi.fn(async () => ({
   candidates: [],
   scannedHosts: 0,
@@ -91,6 +102,7 @@ vi.mock("../../../src/lib/mock/mockServer", () => ({
   stopMockServer,
   getActiveMockBaseUrl,
   getActiveMockFtpPort,
+  getActiveMockToken,
 }));
 
 vi.mock("../../../src/lib/deviceDiscovery/discoveryManager", () => ({
@@ -172,6 +184,7 @@ describe("connectionManager", () => {
       unsupported: false,
     });
     persistDiscoveredDevice.mockClear();
+    notifyAuthRequired.mockClear();
   });
 
   afterEach(() => {
@@ -891,6 +904,66 @@ describe("connectionManager", () => {
     await expect(probeOnce()).resolves.toBe(false);
   });
 
+  it("raises the password challenge when a discovery probe gets 403 (HARD9-001)", async () => {
+    const { probeOnce, getConnectionSnapshot } = await import("../../../src/lib/connection/connectionManager");
+    localStorage.setItem("c64u_device_host", "c64u");
+    localStorage.removeItem("c64u_has_password");
+
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ errors: ["forbidden"] }), {
+        status: 403,
+        statusText: "Forbidden",
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    await expect(probeOnce()).resolves.toBe(false);
+    expect(notifyAuthRequired).toHaveBeenCalledTimes(1);
+    expect(notifyAuthRequired).toHaveBeenCalledWith(expect.objectContaining({ host: "c64u" }));
+    expect(getConnectionSnapshot().lastProbeError).toBe("Password required");
+  });
+
+  it("keeps startup discovery recoverable when every probe is rejected for auth (HARD9-001)", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+    localStorage.setItem("c64u_device_host", "c64u");
+    localStorage.removeItem("c64u_has_password");
+
+    vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(600);
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ errors: ["forbidden"] }), {
+        status: 403,
+        statusText: "Forbidden",
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    await initializeConnectionManager();
+    const discovery = discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(700);
+    await discovery;
+
+    expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+    expect(getConnectionSnapshot().lastProbeError).toBe("Password required");
+    expect(notifyAuthRequired).toHaveBeenCalledWith(expect.objectContaining({ host: "c64u" }));
+  });
+
+  it("does not raise the password challenge for a non-auth HTTP failure (500)", async () => {
+    const { probeOnce } = await import("../../../src/lib/connection/connectionManager");
+    localStorage.setItem("c64u_device_host", "c64u");
+    localStorage.removeItem("c64u_has_password");
+
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ product: "C64" }), {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    await expect(probeOnce()).resolves.toBe(false);
+    expect(notifyAuthRequired).not.toHaveBeenCalled();
+  });
+
   it("handles non-JSON content type by returning null payload (healthy if response ok)", async () => {
     const { probeOnce } = await import("../../../src/lib/connection/connectionManager");
     localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
@@ -1368,6 +1441,50 @@ describe("connectionManager", () => {
 
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
     expect(getConnectionSnapshot().deviceInfo?.product).toBe("Ultimate 64 Elite");
+  });
+
+  it("does not stamp a late device identity whose unique id differs from the selected device during a switch (HARD12-011)", async () => {
+    const { getConnectionSnapshot, initializeConnectionManager, noteReachable, setSavedDeviceSwitchProbeWindow } =
+      await import("../../../src/lib/connection/connectionManager");
+    const { addSavedDevice, selectSavedDevice, getSavedDevicesSnapshot, getSelectedSavedDeviceProductFamilySync } =
+      await import("../../../src/lib/savedDevices/store");
+
+    addSavedDevice({
+      id: "hard12-011-new-device",
+      name: "New Lab",
+      host: "shared-host",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "shared-host",
+      lastKnownUniqueId: "NEW-UID",
+      hasPassword: false,
+    });
+    selectSavedDevice("hard12-011-new-device");
+    localStorage.setItem(DEVICE_HOST_KEY, "shared-host");
+    // initializeConnectionManager resets the snapshot state to "UNKNOWN" so
+    // noteReachable skips its promotion path and only attempts the identity stamp.
+    await initializeConnectionManager();
+
+    // Open the saved-device switch window (selection flipped, runtime config not
+    // yet applied): a late /v1/info from the PREVIOUS device (unique id OLD-UID)
+    // arrives over the still-active host.
+    setSavedDeviceSwitchProbeWindow(true);
+    noteReachable("shared-host", "rest", {
+      product: "C64 Ultimate",
+      firmware_version: "1.1.0",
+      hostname: "old-c64",
+      unique_id: "OLD-UID",
+      errors: [],
+    });
+    setSavedDeviceSwitchProbeWindow(false);
+
+    // The connection snapshot DID receive the deviceInfo (the event was processed),
+    // but the selected saved device's identity must NOT be overwritten by it.
+    expect(getConnectionSnapshot().deviceInfo?.product).toBe("C64 Ultimate");
+    expect(getSavedDevicesSnapshot().verifiedByDeviceId["hard12-011-new-device"]?.product).toBeUndefined();
+    expect(getSelectedSavedDeviceProductFamilySync()).toBe("U64E");
   });
 
   it("dismissDemoInterstitial handles sessionStorage.setItem throwing", async () => {

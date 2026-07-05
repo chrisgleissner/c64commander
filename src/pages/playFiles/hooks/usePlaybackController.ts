@@ -6,13 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useRef, type MutableRefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { createArchiveClient } from "@/lib/archive/client";
 import { getCachedArchivePlayback, setCachedArchivePlayback } from "@/lib/archive/archivePlaybackCache";
 import { buildArchivePlayPlan } from "@/lib/archive/execution";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { getC64API } from "@/lib/c64api";
 import { beginMachineTransition } from "@/lib/deviceInteraction/deviceActivityGate";
+import { setMachineExecutionPaused, setMachineExecutionRunning } from "@/lib/deviceInteraction/machineExecutionStore";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import {
   createMachineTransitionCoordinator,
@@ -29,7 +30,7 @@ import {
   type LocalPlayFile,
   type PlayRequest,
 } from "@/lib/playback/playbackRouter";
-import { getHvscDurationByMd5Seconds } from "@/lib/hvsc";
+import { getHvscDurationsByMd5Seconds } from "@/lib/hvsc";
 import {
   getLocalFilePath,
   isSongCategory,
@@ -48,7 +49,11 @@ import {
   isConfigReferenceUnavailableError,
 } from "@/lib/config/applyConfigFileReference";
 import { buildPlaybackConfigSignature, resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
-import type { AudioMixerItem } from "@/pages/playFiles/playFilesUtils";
+import {
+  resolveNextPlaylistIndex,
+  resolvePreviousPlaylistIndex,
+  type AudioMixerItem,
+} from "@/pages/playFiles/playFilesUtils";
 import type { VolumeAction } from "@/pages/playFiles/volumeState";
 import type { SidEnablement } from "@/lib/config/sidVolumeControl";
 
@@ -62,6 +67,20 @@ const markHandledUiError = (error: unknown) => {
 
 const isHandledUiError = (error: unknown): error is HandledUiError =>
   error instanceof Error && Boolean((error as HandledUiError).c64uHandled);
+
+/**
+ * The md5-fallback duration lookup is per-subsong (HVSC durations are indexed
+ * songNr - 1, mirroring the local songlengths backend), so a bare
+ * `getHvscDurationByMd5Seconds` call silently returns subsong 1's length for
+ * any other songNr. See HARD11-004 (related facet).
+ */
+const resolveHvscDurationSecondsForSongNr = async (md5: string, songNr?: number | null): Promise<number | null> => {
+  const durations = await getHvscDurationsByMd5Seconds(md5);
+  if (!durations?.length) return null;
+  const index = songNr && songNr > 0 ? songNr - 1 : 0;
+  if (index < 0 || index >= durations.length) return null;
+  return durations[index] ?? null;
+};
 
 type SidMuteSnapshot = {
   volumes: Record<string, string | number>;
@@ -117,6 +136,8 @@ interface UsePlaybackControllerProps {
   setTrackInstanceId: (v: number) => void;
 
   repeatEnabled: boolean;
+  shuffleEnabled: boolean;
+  shuffleSeed: number | null;
 
   // Dependencies
   localEntriesBySourceId: Map<
@@ -166,9 +187,13 @@ interface UsePlaybackControllerProps {
   ensureUnmuted: (options?: { force?: boolean; refreshItems?: boolean }) => Promise<void>;
 
   // Refs
+  // HARD12-007: the second parameter is `reset` (whether to zero the cumulative
+  // base), not `playing`. The earlier `playing: boolean` typing invited the
+  // regression where every track start passed `true`, resetting the cumulative
+  // "Remaining" clock each track.
   playedClockRef: MutableRefObject<{
-    start: (now: number, playing: boolean) => void;
-    stop: (now: number, playing: boolean) => void;
+    start: (now: number, reset?: boolean) => void;
+    stop: (now: number, reset?: boolean) => void;
     pause: (now: number) => void;
     resume: (now: number) => void;
     reset: () => void;
@@ -206,6 +231,8 @@ export function usePlaybackController({
   setDurationMs,
   setCurrentSubsongCount,
   repeatEnabled,
+  shuffleEnabled,
+  shuffleSeed,
   localEntriesBySourceId,
   localSourceTreeUris,
   buildHvscLocalPlayFile,
@@ -248,6 +275,10 @@ export function usePlaybackController({
   const currentIndexRef = useRef(currentIndex);
   const isPlayingRef = useRef(isPlaying);
   const isPausedRef = useRef(isPaused);
+  // HARD12-018: tracks that the last song in the playlist auto-ended so that
+  // background execution can stop even though `isPlaying` stays true (the Stop
+  // affordance must remain available). Reset whenever a new track starts.
+  const [playlistEnded, setPlaylistEnded] = useState(false);
   const userTransportQueueRef = useRef(Promise.resolve());
   const pendingUserSkipRef = useRef<PendingUserSkip | null>(null);
   const flushPendingUserSkipRef = useRef<() => Promise<void>>(async () => undefined);
@@ -461,7 +492,7 @@ export function usePlaybackController({
 
         const { computeSidMd5 } = await import("@/lib/sid/sidUtils");
         const md5 = await computeSidMd5(buffer);
-        const seconds = await getHvscDurationByMd5Seconds(md5);
+        const seconds = await resolveHvscDurationSecondsForSongNr(md5, songNr);
         const durationMs = seconds !== undefined && seconds !== null ? seconds * 1000 : durationFallbackMs;
         return { durationMs, subsongCount, readable: true } as const;
       } catch (error) {
@@ -487,7 +518,7 @@ export function usePlaybackController({
         const buffer = await blob.arrayBuffer();
         const { computeSidMd5 } = await import("@/lib/sid/sidUtils");
         const md5 = await computeSidMd5(buffer);
-        const seconds = await getHvscDurationByMd5Seconds(md5);
+        const seconds = await resolveHvscDurationSecondsForSongNr(md5, songNr);
         if (seconds === undefined || seconds === null) return null;
         return seconds * 1000;
       } catch (error) {
@@ -568,14 +599,26 @@ export function usePlaybackController({
     (reason: "auto-end" | "user-next-end") => {
       const now = Date.now();
       playedClockRef.current.pause(now);
-      setIsPlaying(false);
-      setIsPaused(false);
+      const currentItem = playlistRef.current[currentIndexRef.current];
+      // Song categories (sid/mod) do not self-stop: the C64 keeps the tune
+      // playing audibly past its resolved songlength. Flipping isPlaying to
+      // false here (as prg/crt/disk correctly do, since a reset would destroy
+      // their running session) would leave the device playing with no Stop
+      // affordance - the combined Play/Stop button derives its label from
+      // isPlaying. Keep isPlaying true so Stop stays reachable and issues its
+      // normal silence/reset through handleStop(). See HARD11-003.
+      const deviceStillPlaying = Boolean(currentItem && isSongCategory(currentItem.category));
+      if (!deviceStillPlaying) {
+        setIsPlaying(false);
+        setIsPaused(false);
+      }
       autoAdvanceGuardRef.current = null;
       setAutoAdvanceDueAtMs(null);
-      addLog("info", "Playlist playback ended without device stop", {
+      setPlaylistEnded(true);
+      addLog("info", "Playlist playback ended", {
         reason,
         currentIndex: currentIndexRef.current,
-        deviceAction: "none",
+        deviceAction: deviceStillPlaying ? "none-song-still-audible" : "none",
       });
     },
     [autoAdvanceGuardRef, playedClockRef, setAutoAdvanceDueAtMs, setIsPaused, setIsPlaying],
@@ -587,6 +630,16 @@ export function usePlaybackController({
       options?: { rebootBeforePlay?: boolean; playlistIndex?: number; playlistSize?: number },
     ) => {
       return enqueuePlayTransition(async () => {
+        // Starting a track (Next/Previous/row-tap) from a paused state bypasses
+        // handlePauseResume, which is the only other place these pause-mute
+        // bookkeeping refs are cleared. Left stale, pausingFromPauseRef alone
+        // permanently disables the volume device-sync effect. See HARD9-063.
+        pauseMuteSnapshotRef.current = null;
+        pausingFromPauseRef.current = false;
+        resumingFromPauseRef.current = false;
+        // HARD12-018: starting a new track invalidates any prior "playlist
+        // ended" sentinel so background execution may resume if needed.
+        setPlaylistEnded(false);
         let effectiveRequest = item.request;
         let effectivePath = item.path;
         if (effectiveRequest.source === "commoserve" && !effectiveRequest.file) {
@@ -712,6 +765,25 @@ export function usePlaybackController({
         }
         await ensureUnmuted({ refreshItems: true });
         const api = getC64API();
+        if (isPausedRef.current) {
+          // The machine is DMA-paused (frozen). Launching a new track without
+          // resuming first leaves it frozen while the UI flips to "playing" -
+          // no audio, wedged until Stop. See HARD9-029.
+          try {
+            await resumeMachineWithRetry(api);
+          } catch (error) {
+            reportUserError({
+              operation: "PLAYBACK_RESUME",
+              title: "Resume failed",
+              description: (error as Error).message,
+              error,
+              context: {
+                item: item.label,
+              },
+            });
+            throw error;
+          }
+        }
         const resolvedDurationBase = durationOverride ?? item.durationMs;
         const request: PlayRequest =
           typeof resolvedDurationBase === "number"
@@ -841,7 +913,10 @@ export function usePlaybackController({
           setVisibleCurrentIndex(options.playlistIndex);
         }
         trackStartedAtRef.current = now;
-        playedClockRef.current.start(now, true);
+        // HARD12-007: do NOT pass reset=true here — `startPlaylist`'s explicit
+        // .reset() already handles the playlist-start case, and resetting per
+        // track is the bug that made "Remaining" snap to 0 on every auto-advance.
+        playedClockRef.current.start(now);
         setPlayedMs(playedClockRef.current.current(now));
         if (typeof resolvedDuration === "number") {
           autoAdvanceGuardRef.current = {
@@ -894,6 +969,10 @@ export function usePlaybackController({
       resolveSidMetadata,
       resolveSonglengthDurationMsForPath,
       resolveUltimateSidDurationByMd5,
+      resumeMachineWithRetry,
+      pauseMuteSnapshotRef,
+      pausingFromPauseRef,
+      resumingFromPauseRef,
       setVisibleCurrentIndex,
       setCurrentSubsongCount,
       setDurationMs,
@@ -905,6 +984,7 @@ export function usePlaybackController({
       setTrackInstanceId,
       setAutoAdvanceDueAtMs,
       autoAdvanceGuardRef,
+      isPausedRef,
       playedClockRef,
       trackInstanceIdRef,
       trackStartedAtRef,
@@ -953,6 +1033,8 @@ export function usePlaybackController({
         cancelAutoAdvance();
         playedClockRef.current.reset();
         setPlayedMs(0);
+        setPlaylistEnded(false);
+        setMachineExecutionRunning();
         const resolvedItems = await applySonglengthsToItems(items);
         setPlaylist((prev) => {
           if (!prev.length) return resolvedItems;
@@ -1090,6 +1172,9 @@ export function usePlaybackController({
       lastAppliedPlaybackConfigSignatureRef.current = null;
       autoAdvanceGuardRef.current = null;
       setAutoAdvanceDueAtMs(null);
+      // HARD12-020: stopping clears any shared pause state so Home does not
+      // keep showing "paused" or attempt a stale pause-mute restore.
+      setMachineExecutionRunning();
       try {
         await restoreVolumeOverrides("stop");
       } catch (error) {
@@ -1139,6 +1224,9 @@ export function usePlaybackController({
               await resumeMachineWithRetry(api);
               await unmuteAfterMachineResume();
               setIsPaused(false);
+              // HARD12-020: publish the resumed state so Home's pause/resume
+              // control converges with Play instead of assuming "running".
+              setMachineExecutionRunning();
               const now = Date.now();
               trackStartedAtRef.current = now - elapsedMs;
               playedClockRef.current.resume(now);
@@ -1164,6 +1252,11 @@ export function usePlaybackController({
             setPlayedMs(playedClockRef.current.current(now));
             setIsPaused(true);
             setAutoAdvanceDueAtMs(null);
+            // HARD12-020: publish the paused state and whether a SID pause-mute
+            // snapshot was captured so Home can show the correct label and
+            // restore the mixer on a Home-initiated resume (Play may be an
+            // unmounted placeholder when the user resumes from Home).
+            setMachineExecutionPaused({ pauseMutePending: pauseMuteSnapshotRef.current !== null });
           } finally {
             endTransition();
           }
@@ -1229,22 +1322,22 @@ export function usePlaybackController({
         let resolvedStopAtEnd = pending.stopAtEnd;
         if (anotherTransitionAdvanced) {
           if (pending.operation === "PLAYBACK_NEXT") {
-            resolvedTargetIndex = activeIndex + 1;
-            if (resolvedTargetIndex >= activePlaylist.length) {
-              if (repeatEnabled) {
-                resolvedTargetIndex = 0;
-              } else {
-                resolvedTargetIndex = null;
-                resolvedStopAtEnd = true;
-              }
-            }
+            resolvedTargetIndex = resolveNextPlaylistIndex(
+              activePlaylist,
+              activeIndex,
+              repeatEnabled,
+              shuffleEnabled,
+              shuffleSeed,
+            );
+            resolvedStopAtEnd = resolvedTargetIndex === null;
           } else {
-            resolvedTargetIndex =
-              activeIndex > 0
-                ? activeIndex - 1
-                : repeatEnabled && activePlaylist.length > 1
-                  ? activePlaylist.length - 1
-                  : 0;
+            resolvedTargetIndex = resolvePreviousPlaylistIndex(
+              activePlaylist,
+              activeIndex,
+              repeatEnabled,
+              shuffleEnabled,
+              shuffleSeed,
+            );
             resolvedStopAtEnd = false;
           }
         }
@@ -1289,6 +1382,8 @@ export function usePlaybackController({
     playedClockRef,
     reportPlaybackStartFailure,
     repeatEnabled,
+    shuffleEnabled,
+    shuffleSeed,
     setAutoAdvanceDueAtMs,
     setIsPaused,
     setIsPlaying,
@@ -1359,16 +1454,19 @@ export function usePlaybackController({
         if (!activePlaylist.length) return;
         cancelAutoAdvance();
         const activeIndex = currentIndexRef.current;
-        let nextIndex = activeIndex + 1;
+        const nextIndex = resolveNextPlaylistIndex(
+          activePlaylist,
+          activeIndex,
+          repeatEnabled,
+          shuffleEnabled,
+          shuffleSeed,
+        );
         const now = Date.now();
         playedClockRef.current.pause(now);
         setPlayedMs(playedClockRef.current.current(now));
-        if (nextIndex >= activePlaylist.length) {
-          if (!repeatEnabled) {
-            await scheduleUserSkip(null, true, activeIndex, "PLAYBACK_NEXT", "Playback next failed");
-            return;
-          }
-          nextIndex = 0;
+        if (nextIndex === null) {
+          await scheduleUserSkip(null, true, activeIndex, "PLAYBACK_NEXT", "Playback next failed");
+          return;
         }
         setVisibleCurrentIndex(nextIndex);
         await scheduleUserSkip(nextIndex, false, activeIndex, "PLAYBACK_NEXT", "Playback next failed");
@@ -1384,17 +1482,20 @@ export function usePlaybackController({
         guard.autoFired = true;
 
         const activeIndex = currentIndexRef.current;
-        let nextIndex = activeIndex + 1;
+        const nextIndex = resolveNextPlaylistIndex(
+          activePlaylist,
+          activeIndex,
+          repeatEnabled,
+          shuffleEnabled,
+          shuffleSeed,
+        );
         const now = Date.now();
         playedClockRef.current.pause(now);
         setPlayedMs(playedClockRef.current.current(now));
         const currentItem = activePlaylist[activeIndex];
-        if (nextIndex >= activePlaylist.length) {
-          if (!repeatEnabled) {
-            finishPlaylistPlayback("auto-end");
-            return;
-          }
-          nextIndex = 0;
+        if (nextIndex === null) {
+          finishPlaylistPlayback("auto-end");
+          return;
         }
 
         const nextItem = activePlaylist[nextIndex];
@@ -1434,6 +1535,8 @@ export function usePlaybackController({
       finishPlaylistPlayback,
       playItem,
       repeatEnabled,
+      shuffleEnabled,
+      shuffleSeed,
       playedClockRef,
       scheduleUserSkip,
       setVisibleCurrentIndex,
@@ -1450,15 +1553,29 @@ export function usePlaybackController({
     const activePlaylist = playlistRef.current;
     if (!activePlaylist.length) return;
     const activeIndex = currentIndexRef.current;
-    const prevIndex =
-      activeIndex > 0 ? activeIndex - 1 : repeatEnabled && activePlaylist.length > 1 ? activePlaylist.length - 1 : 0;
+    const prevIndex = resolvePreviousPlaylistIndex(
+      activePlaylist,
+      activeIndex,
+      repeatEnabled,
+      shuffleEnabled,
+      shuffleSeed,
+    );
     cancelAutoAdvance();
     const now = Date.now();
     playedClockRef.current.pause(now);
     setPlayedMs(playedClockRef.current.current(now));
     setVisibleCurrentIndex(prevIndex);
     await scheduleUserSkip(prevIndex, false, activeIndex, "PLAYBACK_PREVIOUS", "Playback previous failed");
-  }, [cancelAutoAdvance, repeatEnabled, playedClockRef, setPlayedMs, scheduleUserSkip, setVisibleCurrentIndex]);
+  }, [
+    cancelAutoAdvance,
+    repeatEnabled,
+    shuffleEnabled,
+    shuffleSeed,
+    playedClockRef,
+    setPlayedMs,
+    scheduleUserSkip,
+    setVisibleCurrentIndex,
+  ]);
 
   const playlistItemDuration = useCallback(
     (item: PlaylistItem, index: number) => {
@@ -1476,6 +1593,7 @@ export function usePlaybackController({
     handlePauseResume,
     handleNext,
     handlePrevious,
+    playlistEnded,
     resolveSidMetadata,
     resolveUltimateSidDurationByMd5,
     playlistItemDuration,

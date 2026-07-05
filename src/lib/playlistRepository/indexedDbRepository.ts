@@ -102,7 +102,25 @@ const migrateState = (state: Record<string, unknown>): PersistedState => ({
     (state.randomSessionsByPlaylistId as Record<string, RandomPlaySession> | null | undefined) ?? {},
 });
 
-const trackKey = (trackId: string) => `track:${trackId}`;
+const TRACK_KEY_PREFIX = "track:";
+const PLAYLIST_ITEM_KEY_PREFIX = "playlist-item:";
+// Debounce window for the opportunistic orphan-track sweep. A burst of playlist
+// replaces coalesces into a single global scan instead of one scan per write.
+// See HARD10-009.
+const TRACK_GC_DEBOUNCE_MS = 5000;
+
+// Module-level so resetIndexedDbPlaylistRepositoryForTests can cancel a pending
+// sweep even though it discards the singleton instance (a stray timer would
+// otherwise fire against a torn-down fake IndexedDB in the next test).
+let pendingTrackGcTimer: ReturnType<typeof setTimeout> | null = null;
+const clearPendingTrackGc = () => {
+  if (pendingTrackGcTimer !== null) {
+    clearTimeout(pendingTrackGcTimer);
+    pendingTrackGcTimer = null;
+  }
+};
+
+const trackKey = (trackId: string) => `${TRACK_KEY_PREFIX}${trackId}`;
 const playlistItemKey = (playlistId: string, playlistItemId: string) => `playlist-item:${playlistId}:${playlistItemId}`;
 const playlistOrderKey = (playlistId: string) => `playlist-order:${playlistId}`;
 const playlistQueryIndexKey = (playlistId: string) => `playlist-query-index:${playlistId}`;
@@ -163,6 +181,94 @@ const readValues = async (keys: string[]): Promise<Map<string, unknown>> => {
 const readValue = async <T>(key: string): Promise<T | null> => {
   const values = await readValues([key]);
   return (values.get(key) as T | undefined) ?? null;
+};
+
+// Enumerates every persisted key once and returns the track:* keys whose
+// trackId is referenced by NO surviving playlist-item:* record across ANY
+// playlist. Tracks are shared across playlists (HARD9-034), so orphan detection
+// must be global, not per-playlist - which is why per-replace cleanup could not
+// remove them and they accumulated forever. Keys and item values are read in a
+// single readonly transaction for a consistent snapshot. See HARD10-009.
+const findOrphanTrackKeys = async (): Promise<string[]> => {
+  const db = await openDb();
+  try {
+    return await new Promise<string[]>((resolve, reject) => {
+      const tx = db.transaction(STORE, "readonly");
+      const store = tx.objectStore(STORE);
+      const keysRequest = store.getAllKeys();
+      keysRequest.onerror = () => reject(keysRequest.error ?? new Error("IndexedDB getAllKeys failed"));
+      keysRequest.onsuccess = () => {
+        const allKeys = (keysRequest.result as IDBValidKey[]).map((key) => String(key));
+        const trackKeys = allKeys.filter((key) => key.startsWith(TRACK_KEY_PREFIX));
+        if (!trackKeys.length) {
+          resolve([]);
+          return;
+        }
+        const itemKeys = allKeys.filter((key) => key.startsWith(PLAYLIST_ITEM_KEY_PREFIX));
+        if (!itemKeys.length) {
+          resolve(trackKeys);
+          return;
+        }
+        const referenced = new Set<string>();
+        let remaining = itemKeys.length;
+        let settled = false;
+        itemKeys.forEach((key) => {
+          const itemRequest = store.get(key);
+          itemRequest.onerror = () => {
+            if (settled) return;
+            settled = true;
+            reject(itemRequest.error ?? new Error("IndexedDB read failed"));
+          };
+          itemRequest.onsuccess = () => {
+            if (settled) return;
+            const trackId = (itemRequest.result as { trackId?: string } | undefined)?.trackId;
+            if (trackId) referenced.add(trackId);
+            remaining -= 1;
+            if (remaining === 0) {
+              settled = true;
+              resolve(trackKeys.filter((candidate) => !referenced.has(candidate.slice(TRACK_KEY_PREFIX.length))));
+            }
+          };
+        });
+      };
+    });
+  } finally {
+    db.close();
+  }
+};
+
+const deleteValues = async (keys: string[]) => {
+  if (!keys.length) return;
+  const db = await openDb();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE, "readwrite");
+      const store = tx.objectStore(STORE);
+      let remaining = keys.length;
+      let settled = false;
+
+      const rejectOnce = (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+      };
+
+      keys.forEach((key) => {
+        const request = store.delete(key);
+        request.onsuccess = () => {
+          if (settled) return;
+          remaining -= 1;
+          if (remaining === 0) {
+            settled = true;
+            resolve();
+          }
+        };
+        request.onerror = () => rejectOnce(request.error ?? new Error("IndexedDB delete failed"));
+      });
+    });
+  } finally {
+    db.close();
+  }
 };
 
 const isOpenFailure = (error: unknown) => {
@@ -316,17 +422,54 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
     await writeValues(tracks.map((track) => [trackKey(track.trackId), track]));
   }
 
+  private async readPreviousPlaylistItemIds(playlistId: string): Promise<string[]> {
+    const orders = await readValue<PlaylistOrderRecord>(playlistOrderKey(playlistId)).catch((error) => {
+      if (isOpenFailure(error)) {
+        throw error;
+      }
+      return warnReadFailureAndReturn<PlaylistOrderRecord | null>(error, null);
+    });
+    return orders?.["playlist-position"] ?? [];
+  }
+
+  private async deleteStalePlaylistItems(playlistId: string, previousIds: string[], nextIds: Set<string>) {
+    const staleKeys = previousIds.filter((id) => !nextIds.has(id)).map((id) => playlistItemKey(playlistId, id));
+    if (!staleKeys.length) return;
+    await deleteValues(staleKeys).catch((error) => {
+      addLog("warn", "Failed to delete stale playlist-item records from IndexedDB", {
+        playlistId,
+        staleCount: staleKeys.length,
+        error,
+      });
+    });
+  }
+
   async replacePlaylistSnapshot(playlistId: string, snapshot: SerializedPlaylistSnapshot): Promise<void> {
     await this.ensureInitialized();
     const sortedItems = [...snapshot.playlistItems].sort((left, right) => left.sortKey.localeCompare(right.sortKey));
     const tracksById = new Map(snapshot.tracks.map((track) => [track.trackId, track] as const));
     const { orders, queryIndex } = buildPlaylistOrders(sortedItems, tracksById);
+    const previousIds = await this.readPreviousPlaylistItemIds(playlistId);
     await writeValues([
       ...snapshot.tracks.map((track) => [trackKey(track.trackId), track] as [string, unknown]),
       ...sortedItems.map((item) => [playlistItemKey(playlistId, item.playlistItemId), item] as [string, unknown]),
       [playlistOrderKey(playlistId), orders],
       [playlistQueryIndexKey(playlistId), queryIndex],
     ]);
+    // Replacing a snapshot only puts the current items; stale playlist-item
+    // records for removed items are never overwritten by a later write and
+    // would otherwise accumulate forever. Track records cannot be cleaned up
+    // here since a trackId can legitimately be shared across playlistIds (e.g.
+    // the same file added on more than one device); deleting them on a single
+    // playlist's replace risks breaking hydration for another playlist still
+    // referencing the same track. See HARD9-034. Orphaned track records are
+    // instead swept globally by a debounced GC pass (HARD10-009).
+    await this.deleteStalePlaylistItems(
+      playlistId,
+      previousIds,
+      new Set(sortedItems.map((item) => item.playlistItemId)),
+    );
+    this.scheduleTrackGarbageCollection();
   }
 
   async getTracksByIds(trackIds: string[]): Promise<Map<string, TrackRecord>> {
@@ -352,11 +495,58 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
     const sortedItems = [...items].sort((left, right) => left.sortKey.localeCompare(right.sortKey));
     const tracksById = await this.getTracksByIds([...new Set(sortedItems.map((item) => item.trackId))]);
     const { orders, queryIndex } = buildPlaylistOrders(sortedItems, tracksById);
+    const previousIds = await this.readPreviousPlaylistItemIds(playlistId);
     await writeValues([
       ...sortedItems.map((item) => [playlistItemKey(playlistId, item.playlistItemId), item] as [string, unknown]),
       [playlistOrderKey(playlistId), orders],
       [playlistQueryIndexKey(playlistId), queryIndex],
     ]);
+    // See replacePlaylistSnapshot's comment: clean up stale playlist-item
+    // records for removed items; track records are swept globally by the
+    // debounced GC (HARD9-034 / HARD10-009).
+    await this.deleteStalePlaylistItems(
+      playlistId,
+      previousIds,
+      new Set(sortedItems.map((item) => item.playlistItemId)),
+    );
+    this.scheduleTrackGarbageCollection();
+  }
+
+  // Debounced, non-blocking sweep of track:* records no longer referenced by
+  // any playlist. Bursts of replaces coalesce into one global scan; a failure
+  // is logged and swallowed (GC must never break a write). See HARD10-009.
+  private scheduleTrackGarbageCollection() {
+    clearPendingTrackGc();
+    pendingTrackGcTimer = setTimeout(() => {
+      pendingTrackGcTimer = null;
+      void this.collectOrphanTracks().catch((error) => {
+        addLog("warn", "Track garbage collection failed", { error });
+      });
+    }, TRACK_GC_DEBOUNCE_MS);
+    // Don't keep a Node event loop (tests/SSR) alive just for the sweep; a
+    // browser timer id is a number with no unref, so this is a no-op there.
+    (pendingTrackGcTimer as unknown as { unref?: () => void })?.unref?.();
+  }
+
+  // Deletes every orphaned track:* record. Exposed (not just private) so it can
+  // be invoked deterministically in tests and, if ever needed, on demand.
+  async collectOrphanTracks(): Promise<number> {
+    await this.ensureInitialized();
+    const orphanKeys = await findOrphanTrackKeys().catch((error) => {
+      if (isOpenFailure(error)) {
+        throw error;
+      }
+      return warnReadFailureAndReturn<string[]>(error, []);
+    });
+    if (!orphanKeys.length) return 0;
+    await deleteValues(orphanKeys).catch((error) => {
+      addLog("warn", "Failed to delete orphan track records from IndexedDB", {
+        orphanCount: orphanKeys.length,
+        error,
+      });
+    });
+    addLog("debug", "Collected orphan track records from IndexedDB", { removed: orphanKeys.length });
+    return orphanKeys.length;
   }
 
   private async loadPlaylistQueryIndex(playlistId: string): Promise<PersistedPlaylistQueryIndex> {
@@ -497,6 +687,14 @@ export const getIndexedDbPlaylistDataRepository = (options: Options): PlaylistDa
   return indexedDbRepository;
 };
 
+// Test-only: run the orphan-track sweep synchronously (the production trigger
+// is debounced). Returns the number of track records removed.
+export const collectOrphanTracksForTests = (): Promise<number> =>
+  indexedDbRepository
+    ? (indexedDbRepository as IndexedDbPlaylistDataRepository).collectOrphanTracks()
+    : Promise.resolve(0);
+
 export const resetIndexedDbPlaylistRepositoryForTests = () => {
+  clearPendingTrackGc();
   indexedDbRepository = null;
 };

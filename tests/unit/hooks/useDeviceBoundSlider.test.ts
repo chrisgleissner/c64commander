@@ -215,6 +215,69 @@ describe("useDeviceBoundSlider", () => {
     expect(preview).toHaveBeenLastCalledWith(7);
   });
 
+  it("still sends the commit when the drag returns to the pre-drag value after a preview flushed (HARD9-050)", () => {
+    // Regression: a throttled preview can already move the device to an
+    // intermediate value while drives/info polling is paused (so
+    // deviceValue stays frozen at the pre-drag value). If the user then
+    // drags back to that exact pre-drag value and releases, the commit-skip
+    // equality check compared nextValue against the stale deviceValue and
+    // suppressed the corrective write entirely - stranding the device at
+    // the last preview's value.
+    const preview = vi.fn();
+    const commit = vi.fn();
+    const { result } = renderHook(() =>
+      useDeviceBoundSlider({
+        deviceValue: 50,
+        domain: createNumericSliderDomain({ min: 0, max: 100, round: Math.round }),
+        previewMode: "throttled",
+        preview,
+        commit,
+        previewThrottleMs: 200,
+      }),
+    );
+
+    act(() => {
+      result.current.onValueChange([80]);
+    });
+    expect(preview).toHaveBeenCalledWith(80);
+
+    act(() => {
+      result.current.onValueChange([50]);
+    });
+
+    act(() => {
+      result.current.onValueCommit([50]);
+    });
+
+    expect(commit).toHaveBeenCalledTimes(1);
+    expect(commit).toHaveBeenCalledWith(50);
+  });
+
+  it("skips the commit when the drag never sent a preview and returns to the pre-drag value", () => {
+    // Contrast case: commitOnly mode never flushes a preview, so returning
+    // to the exact pre-drag value legitimately needs no corrective write.
+    const commit = vi.fn();
+    const { result } = renderHook(() =>
+      useDeviceBoundSlider({
+        deviceValue: 50,
+        domain: createNumericSliderDomain({ min: 0, max: 100, round: Math.round }),
+        previewMode: "commitOnly",
+        commit,
+      }),
+    );
+
+    act(() => {
+      result.current.onValueChange([80]);
+      result.current.onValueChange([50]);
+    });
+
+    act(() => {
+      result.current.onValueCommit([50]);
+    });
+
+    expect(commit).not.toHaveBeenCalled();
+  });
+
   it("keeps local response immediate and bounds preview requests during a sustained drag", () => {
     const preview = vi.fn();
     const commit = vi.fn();
@@ -338,6 +401,41 @@ describe("useDeviceBoundSlider", () => {
     });
 
     expect(preview).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the dragged value visible after a transient preview failure mid-drag (HARD9-088)", () => {
+    // Regression: a preview failure used to unconditionally clear the local
+    // draft, snapping the thumb back to the (stale, poll-paused) device
+    // value while the user's finger was still on it - the slider visibly
+    // fought the user mid-gesture even though the drag itself was fine and
+    // the user had not let go yet.
+    const onError = vi.fn();
+    const preview = vi.fn(() => {
+      throw new Error("sync preview failure");
+    });
+    const { result } = renderHook(() =>
+      useDeviceBoundSlider({
+        deviceValue: 0,
+        domain: createNumericSliderDomain({ min: 0, max: 100, round: Math.round }),
+        previewMode: "throttled",
+        preview,
+        commit: vi.fn(),
+        onError,
+        previewThrottleMs: 200,
+      }),
+    );
+
+    act(() => {
+      result.current.onValueChange([10]);
+    });
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "sync preview failure" }),
+      expect.objectContaining({ phase: "preview", value: 10 }),
+    );
+    // Still dragging (no onValueCommit yet) - the thumb must stay put.
+    expect(result.current.sliderValue).toBe(10);
+    expect(result.current.displayValue).toBe(10);
   });
 
   it("ignores stale async preview failures after commit bumps generation", async () => {

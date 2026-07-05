@@ -42,7 +42,7 @@ export const useConfigLeafWrite = (authoritativeValues: AuthoritativeConfigValue
           error,
           context: { category, item },
         });
-        authoritativeValues.restoreEntry(key, previousEntry);
+        authoritativeValues.restoreEntry(key, previousEntry, value);
         return false;
       }
     },

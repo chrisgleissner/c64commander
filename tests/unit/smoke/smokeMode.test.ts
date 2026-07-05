@@ -128,6 +128,7 @@ describe("smokeMode", () => {
   });
 
   it("initializes from storage and persists host + logging", async () => {
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     localStorage.setItem(
       SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
@@ -150,7 +151,9 @@ describe("smokeMode", () => {
     expect(isSmokeModeEnabled()).toBe(true);
     expect(isSmokeReadOnlyEnabled()).toBe(false);
     expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("example.com");
-    expect(localStorage.getItem(SMOKE_MODE_STORAGE_KEY)).toBe("1");
+    // Config was read FROM storage, so it must not be re-persisted back to
+    // storage (HARD9-059) - only a fresh filesystem read mirrors into storage.
+    expect(localStorage.getItem(SMOKE_MODE_STORAGE_KEY)).toBeNull();
     expect(smokeDeps.buildBaseUrlFromDeviceHostMock).toHaveBeenCalledWith("example.com");
     expect(smokeDeps.getC64APIConfigSnapshotMock).toHaveBeenCalledTimes(1);
     expect(smokeDeps.updateC64APIConfigMock).toHaveBeenCalledWith("http://example.com", "smoke-secret", "example.com");
@@ -178,9 +181,14 @@ describe("smokeMode", () => {
       debugLogging: false,
     });
     expect(saveDebugLoggingEnabled).not.toHaveBeenCalled();
+    // A fresh filesystem read IS mirrored into storage - a perf cache for the
+    // next cold launch, avoiding a Filesystem round-trip (HARD9-059).
+    expect(localStorage.getItem(SMOKE_CONFIG_STORAGE_KEY)).toBe(JSON.stringify(config));
+    expect(localStorage.getItem(SMOKE_MODE_STORAGE_KEY)).toBe("1");
   });
 
   it("keeps local source initial URI from smoke config for Android picker automation", async () => {
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     localStorage.setItem(
       SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
@@ -258,6 +266,7 @@ describe("smokeMode", () => {
   });
 
   it("applies smoke feature flags through the unified manager during initialization", async () => {
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     localStorage.setItem(
       SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
@@ -276,6 +285,7 @@ describe("smokeMode", () => {
   });
 
   it("ignores unknown or invalid smoke feature flag values", async () => {
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     localStorage.setItem(
       SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
@@ -295,6 +305,7 @@ describe("smokeMode", () => {
 
   it("logs a warning when applying a smoke feature flag fails", async () => {
     vi.mocked(featureFlagManager.applyBootstrapOverride).mockRejectedValueOnce(new Error("bootstrap write failed"));
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     localStorage.setItem(
       SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
@@ -313,6 +324,7 @@ describe("smokeMode", () => {
 
   it("records smoke status on native platforms", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     localStorage.setItem(
       SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
@@ -334,6 +346,7 @@ describe("smokeMode", () => {
   });
 
   it("applies an HVSC base URL override during initialization", async () => {
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     localStorage.setItem(
       SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
@@ -350,6 +363,7 @@ describe("smokeMode", () => {
 
   it("records smoke benchmark snapshots with timings and benchmark metadata", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     localStorage.setItem(
       SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
@@ -392,6 +406,7 @@ describe("smokeMode", () => {
   });
 
   it("returns null for invalid config target", async () => {
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     localStorage.setItem(
       SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
@@ -405,6 +420,7 @@ describe("smokeMode", () => {
   });
 
   it("returns null for non-object config", async () => {
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     localStorage.setItem(SMOKE_CONFIG_STORAGE_KEY, '"not an object"');
 
     const config = await initializeSmokeMode();
@@ -412,6 +428,7 @@ describe("smokeMode", () => {
   });
 
   it("handles malformed JSON in storage gracefully", async () => {
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     localStorage.setItem(SMOKE_CONFIG_STORAGE_KEY, "{broken json");
 
     const config = await initializeSmokeMode();
@@ -420,6 +437,7 @@ describe("smokeMode", () => {
   });
 
   it("skips host persistence when host is absent", async () => {
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     localStorage.setItem(
       SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
@@ -433,6 +451,7 @@ describe("smokeMode", () => {
   });
 
   it("defaults readOnly to true when not specified", async () => {
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     localStorage.setItem(
       SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
@@ -452,6 +471,7 @@ describe("smokeMode", () => {
 
   it("skips recordSmokeStatus on non-native platform", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     localStorage.setItem(
       SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
@@ -465,6 +485,7 @@ describe("smokeMode", () => {
 
   it("logs warning when recordSmokeStatus write fails", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     localStorage.setItem(
       SMOKE_CONFIG_STORAGE_KEY,
       JSON.stringify({
@@ -498,6 +519,26 @@ describe("smokeMode", () => {
     expect(config).toBeNull();
     expect(Filesystem.stat).not.toHaveBeenCalled();
     expect(Filesystem.readFile).not.toHaveBeenCalled();
+  });
+
+  it("does not latch into smoke mode from a stray localStorage key without explicit opt-in (HARD9-059)", async () => {
+    // A key left over from any past smoke/E2E run on the same device profile
+    // must not silently and permanently enable smoke mode in a production
+    // build - the localStorage fallback needs the SAME explicit probe-context
+    // opt-in the filesystem path already requires.
+    localStorage.setItem(
+      SMOKE_CONFIG_STORAGE_KEY,
+      JSON.stringify({
+        target: "real",
+        host: "u64",
+        readOnly: false,
+      }),
+    );
+
+    const config = await initializeSmokeMode();
+
+    expect(config).toBeNull();
+    expect(isSmokeModeEnabled()).toBe(false);
   });
 
   it("logs a warning when stat fails for a non-missing reason", async () => {
@@ -593,6 +634,7 @@ describe("smokeMode", () => {
   describe("snapshot write throttle", () => {
     const initSmokeNative = async () => {
       vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+      (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
       localStorage.setItem(
         SMOKE_CONFIG_STORAGE_KEY,
         JSON.stringify({ target: "real", host: "u64", benchmarkRunId: "run-t" }),

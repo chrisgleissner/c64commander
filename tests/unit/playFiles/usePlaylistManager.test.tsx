@@ -8,8 +8,7 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { reshufflePlaylist, usePlaylistManager } from "@/pages/playFiles/hooks/usePlaylistManager";
-import * as playFilesUtils from "@/pages/playFiles/playFilesUtils";
+import { usePlaylistManager } from "@/pages/playFiles/hooks/usePlaylistManager";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
 const createPlaylistItem = (id: string): PlaylistItem => ({
@@ -38,63 +37,6 @@ describe("usePlaylistManager", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
-  });
-
-  it("reshuffles a five-item playlist while keeping the locked item at its index", () => {
-    const items = [
-      createPlaylistItem("a"),
-      createPlaylistItem("b"),
-      createPlaylistItem("c"),
-      createPlaylistItem("d"),
-      createPlaylistItem("e"),
-    ];
-    vi.spyOn(Math, "random").mockReturnValue(0);
-
-    const reshuffled = reshufflePlaylist(items, 2);
-
-    expect(reshuffled.map((item) => item.id)).not.toEqual(items.map((item) => item.id));
-    expect(reshuffled[2]?.id).toBe("c");
-  });
-
-  it("guarantees a swap for two unlocked items", () => {
-    const items = [createPlaylistItem("a"), createPlaylistItem("b")];
-    vi.spyOn(Math, "random").mockReturnValue(0);
-
-    expect(reshufflePlaylist(items, -1).map((item) => item.id)).toEqual(["b", "a"]);
-  });
-
-  it("keeps the original order when the locked item leaves only one item to reshuffle", () => {
-    const items = [createPlaylistItem("a"), createPlaylistItem("b")];
-    vi.spyOn(Math, "random").mockReturnValue(0);
-
-    expect(reshufflePlaylist(items, 0).map((item) => item.id)).toEqual(["a", "b"]);
-  });
-
-  it("swaps reshuffled neighbors when a locked-item shuffle would otherwise keep the same order", () => {
-    const items = [createPlaylistItem("a"), createPlaylistItem("b"), createPlaylistItem("c")];
-    vi.spyOn(playFilesUtils, "shuffleArray").mockImplementation((value) => [...value]);
-
-    expect(reshufflePlaylist(items, 1).map((item) => item.id)).toEqual(["c", "b", "a"]);
-  });
-
-  it("returns the same array when reshuffling a single item", () => {
-    const items = [createPlaylistItem("solo")];
-
-    expect(reshufflePlaylist(items, 0)).toBe(items);
-  });
-
-  it("reshuffles all items when no locked index is provided", () => {
-    const items = [createPlaylistItem("a"), createPlaylistItem("b"), createPlaylistItem("c")];
-    vi.spyOn(Math, "random").mockReturnValue(0);
-
-    expect(reshufflePlaylist(items, -1).map((item) => item.id)).toEqual(["b", "c", "a"]);
-  });
-
-  it("returns a different unlocked order when shuffleArray already changes the full list", () => {
-    const items = [createPlaylistItem("a"), createPlaylistItem("b"), createPlaylistItem("c")];
-    vi.spyOn(playFilesUtils, "shuffleArray").mockReturnValue([items[2], items[0], items[1]]);
-
-    expect(reshufflePlaylist(items, -1).map((item) => item.id)).toEqual(["c", "a", "b"]);
   });
 
   it("prunes selection state when playlist entries are removed", () => {
@@ -131,6 +73,25 @@ describe("usePlaylistManager", () => {
     expect(result.current.selectedPlaylistIds).toBe(selectedBefore);
   });
 
+  it("does not generate a shuffle seed while shuffle stays disabled", () => {
+    const { result } = renderHook(() => usePlaylistManager());
+
+    expect(result.current.shuffleSeed).toBeNull();
+  });
+
+  it("lazily generates a shuffle seed the first time shuffle is enabled, without touching the playlist", () => {
+    const items = [createPlaylistItem("a"), createPlaylistItem("b"), createPlaylistItem("c")];
+    const { result } = renderHook(() => usePlaylistManager());
+
+    act(() => {
+      result.current.setPlaylist(items);
+      result.current.setShuffleEnabled(true);
+    });
+
+    expect(result.current.shuffleSeed).not.toBeNull();
+    expect(result.current.playlist).toEqual(items);
+  });
+
   it("keeps handleReshuffle as a no-op when shuffle is disabled", () => {
     const items = [createPlaylistItem("a"), createPlaylistItem("b")];
     const { result } = renderHook(() => usePlaylistManager());
@@ -160,9 +121,8 @@ describe("usePlaylistManager", () => {
     expect(result.current.reshuffleActive).toBe(false);
   });
 
-  it("activates reshuffle state briefly and updates playlist order when shuffle is enabled", () => {
+  it("reshuffle activates reshuffle state and generates a new seed without reordering the curated playlist (HARD9-007)", () => {
     const items = [createPlaylistItem("a"), createPlaylistItem("b"), createPlaylistItem("c")];
-    vi.spyOn(Math, "random").mockReturnValue(0);
     const { result } = renderHook(() => usePlaylistManager());
 
     act(() => {
@@ -171,12 +131,16 @@ describe("usePlaylistManager", () => {
       result.current.setShuffleEnabled(true);
     });
 
+    const seedAfterEnable = result.current.shuffleSeed;
+
     act(() => {
       result.current.handleReshuffle();
     });
 
     expect(result.current.reshuffleActive).toBe(true);
-    expect(result.current.playlist.map((item) => item.id)).toEqual(["c", "b", "a"]);
+    // The curated playlist array is never reordered - only the shuffle seed changes.
+    expect(result.current.playlist).toBe(items);
+    expect(result.current.shuffleSeed).not.toBe(seedAfterEnable);
 
     act(() => {
       vi.advanceTimersByTime(200);
@@ -188,7 +152,6 @@ describe("usePlaylistManager", () => {
   it("clears the in-flight reshuffle timer before starting a new one", () => {
     const items = [createPlaylistItem("a"), createPlaylistItem("b"), createPlaylistItem("c")];
     const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
-    vi.spyOn(Math, "random").mockReturnValue(0);
     const { result } = renderHook(() => usePlaylistManager());
 
     act(() => {
@@ -208,7 +171,6 @@ describe("usePlaylistManager", () => {
 
   it("clears an in-flight reshuffle timer when the hook unmounts", () => {
     const items = [createPlaylistItem("a"), createPlaylistItem("b"), createPlaylistItem("c")];
-    vi.spyOn(Math, "random").mockReturnValue(0);
     const { result, unmount } = renderHook(() => usePlaylistManager());
 
     act(() => {

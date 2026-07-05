@@ -58,6 +58,7 @@ import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 import {
   createDiskEntry,
   getDiskFolderPath,
+  getDiskName,
   getLeafFolderName,
   isDiskImagePath,
   normalizeDiskPath,
@@ -94,6 +95,11 @@ import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import { ProfileSplitSection } from "@/components/layout/PageContainer";
 import { HOME_SUMMARY_QUERY_OPTIONS } from "@/pages/home/constants";
 import {
+  buildOptionDomainKey,
+  useDeviceConfigOptionDomains,
+  type DeviceConfigItemRef,
+} from "@/pages/home/hooks/useDeviceConfigOptionDomains";
+import {
   buildBusIdOptions,
   buildTypeOptions,
   normalizeDriveDevices,
@@ -106,7 +112,6 @@ import {
   DRIVE_DEFAULT_BUS_ID,
   DRIVE_DEFAULT_TYPE,
   DRIVE_KEYS,
-  DRIVE_TYPE_DEFAULTS,
   DRIVE_TYPE_ITEM,
   getCategoryConfigValue,
   getDriveConfigValue,
@@ -193,6 +198,15 @@ const FocusableDiskButton = ({
 
   return <Button ref={focusRef} disabled={disabled} {...props} />;
 };
+
+// Every drive config item whose Bus ID range / Drive Type choices must be sourced from the device.
+const DISK_MANAGER_OPTION_DOMAIN_REFS: DeviceConfigItemRef[] = [
+  { category: DRIVE_CONFIG_CATEGORY.a, item: DRIVE_BUS_ID_ITEM },
+  { category: DRIVE_CONFIG_CATEGORY.a, item: DRIVE_TYPE_ITEM },
+  { category: DRIVE_CONFIG_CATEGORY.b, item: DRIVE_BUS_ID_ITEM },
+  { category: DRIVE_CONFIG_CATEGORY.b, item: DRIVE_TYPE_ITEM },
+  { category: SOFT_IEC_CONTROL.category, item: SOFT_IEC_CONTROL.busItem },
+];
 
 export const HomeDiskManager = () => {
   const { profile } = useDisplayProfile();
@@ -304,6 +318,30 @@ export const HomeDiskManager = () => {
     HOME_SUMMARY_QUERY_OPTIONS,
   );
 
+  // Bus-ID ranges (numeric min/max — Soft IEC accepts 8-30, not just 8-11) and Drive Type choices
+  // (device enum) are interrogated from the concrete device, cached per-firmware, never hard-coded.
+  const optionDomains = useDeviceConfigOptionDomains(
+    "disks-drives",
+    DISK_MANAGER_OPTION_DOMAIN_REFS,
+    status.isConnected,
+  );
+  const busDefaultsFor = (category: string, item: string, fallback: readonly number[]): number[] => {
+    const domain = optionDomains[buildOptionDomainKey(category, item)];
+    if (domain?.min !== undefined && domain.max !== undefined && domain.max >= domain.min) {
+      return Array.from({ length: domain.max - domain.min + 1 }, (_, index) => domain.min! + index);
+    }
+    // HARD16-011 doctrine exception: numeric IEC bus range, low divergence risk;
+    // the current value is merged in and the device min/max wins once resolved.
+    return [...fallback];
+  };
+  // HARD16-011: Drive Type is a model-diverging string enum; when the device has
+  // not reported its values, offer nothing here so the current value only is
+  // shown (buildTypeOptions merges it) — never a fabricated model-specific list.
+  const typeOptionsFor = (category: string, item: string): readonly string[] => {
+    const domainOptions = optionDomains[buildOptionDomainKey(category, item)]?.options;
+    return domainOptions && domainOptions.length ? domainOptions : [];
+  };
+
   const normalizedDriveModel = useMemo(() => normalizeDriveDevices(drivesData ?? null), [drivesData]);
   const softIecDevice = normalizedDriveModel.devices.find((entry) => entry.class === SOFT_IEC_CONTROL.class) ?? null;
 
@@ -409,6 +447,28 @@ export const HomeDiskManager = () => {
       Object.keys(next).forEach((drive) => {
         const setAt = mountedByDriveSetAtRef.current[drive];
         if (typeof setAt !== "number" || drivesDataUpdatedAt < setAt) return;
+        const overrideDiskId = next[drive];
+        if (overrideDiskId) {
+          const overriddenDisk = disksById[overrideDiskId];
+          if (overriddenDisk?.location === "local") {
+            // resolveMountedDiskId's poll-based fallback only ever matches
+            // "ultimate"-location disks (it compares image_path/image_file
+            // against disk.path), so a local (uploaded-blob) disk's mount can
+            // never be re-derived from the poll once this override is gone.
+            // Clearing it as soon as any poll lands (the original design,
+            // intended for error/power overrides) made rotation and
+            // eject-before-delete stop working the instant the mount
+            // succeeded. Keep the override while the poll still shows the
+            // same uploaded filename mounted; only clear when the drive
+            // genuinely reports something else (empty or a different
+            // image). See HARD9-038.
+            const driveInfo = drivesData?.drives?.find((entry) => entry[drive])?.[drive];
+            const polledBasename = driveInfo?.image_file ? getDiskName(driveInfo.image_file) : null;
+            if (polledBasename && polledBasename === getDiskName(overriddenDisk.path)) {
+              return;
+            }
+          }
+        }
         delete next[drive];
         delete mountedByDriveSetAtRef.current[drive];
         changed = true;
@@ -589,8 +649,13 @@ export const HomeDiskManager = () => {
     setDriveMutationPending((prev) => ({ ...prev, [drive]: true }));
     try {
       const runtimeFile = diskLibrary.runtimeFiles[disk.id];
+      // Match Play's mount mode (mountDiskToDrive/mountDriveUpload both
+      // default to "readwrite") so a disk mounted from the library behaves
+      // the same as one launched via Play - games saving high scores/state
+      // to the user's own D64s must not fail with DOS 26 "WRITE PROTECT ON".
+      // See HARD9-012.
       await runDriveMutationWithSettledPolling(() =>
-        mountDiskToDrive(api, drive, disk, runtimeFile, { mode: "readonly" }),
+        mountDiskToDrive(api, drive, disk, runtimeFile, { archiveConfigs }),
       );
       if (mountCompletionGenerationRef.current[drive] !== mountGeneration) {
         addLog("debug", "Ignoring stale disk mount completion", {
@@ -1115,6 +1180,17 @@ export const HomeDiskManager = () => {
               path: normalized,
               location: "local",
               sourceId: source.id,
+              sourceKind: "commoserve",
+              // Persist the deterministic archive coordinates so the disk can be
+              // re-downloaded on mount after its in-memory runtime bytes are lost
+              // (device switch / app restart). See HARD10-002.
+              archiveRef: {
+                sourceId: source.id,
+                resultId,
+                category,
+                entryId: diskEntry.id,
+                entryPath: diskEntry.path,
+              },
               name: binary.fileName || selection.name,
               group: source.name,
               sizeBytes: binary.bytes.byteLength,
@@ -1609,8 +1685,12 @@ export const HomeDiskManager = () => {
     const driveConfigPayload = key === "a" ? driveAConfig : driveBConfig;
     const busId = resolveDriveBusId(key, driveConfigPayload, info);
     const driveType = resolveDriveType(key, driveConfigPayload, info);
-    const busOptions = buildBusIdOptions([...DRIVE_BUS_ID_DEFAULTS], busId);
-    const driveTypeOptions = buildTypeOptions([...DRIVE_TYPE_DEFAULTS], driveType);
+    const driveCategory = DRIVE_CONFIG_CATEGORY[key];
+    const busOptions = buildBusIdOptions(
+      busDefaultsFor(driveCategory, DRIVE_BUS_ID_ITEM, DRIVE_BUS_ID_DEFAULTS),
+      busId,
+    );
+    const driveTypeOptions = buildTypeOptions([...typeOptionsFor(driveCategory, DRIVE_TYPE_ITEM)], driveType);
     const powerOverride = drivePowerOverride[key];
     const powerEnabled = powerOverride ?? info?.enabled;
     const hasPowerState = typeof powerEnabled === "boolean";
@@ -1659,7 +1739,10 @@ export const HomeDiskManager = () => {
     getCategoryConfigValue(softIecConfig, SOFT_IEC_CONTROL.category, SOFT_IEC_CONTROL.busItem),
   );
   const softIecBusId = softIecConfigBusId ?? softIecDevice?.busId ?? 11;
-  const softIecBusOptions = buildBusIdOptions([...SOFT_IEC_BUS_ID_DEFAULTS], softIecBusId);
+  const softIecBusOptions = buildBusIdOptions(
+    busDefaultsFor(SOFT_IEC_CONTROL.category, SOFT_IEC_CONTROL.busItem, SOFT_IEC_BUS_ID_DEFAULTS),
+    softIecBusId,
+  );
   const softIecDefaultPath = resolveSoftIecDefaultPath(softIecConfig, softIecDevice?.partitions?.[0]?.path ?? null);
   const softIecMounted = Boolean(softIecDevice?.imageFile);
   const softIecMountedLabel = softIecDevice?.imageFile ?? "No disk mounted";
@@ -2183,9 +2266,14 @@ export const HomeDiskManager = () => {
               items={buildDiskListItems(sortedDisks, {
                 showSelection: false,
                 showMenu: false,
-                disableActions: !status.isConnected,
+                // A local-disk mount can take tens of seconds (SAF read
+                // timeout up to 45s + upload) with the sheet still open and
+                // no busy indicator otherwise - a second tap here would race
+                // a second mount against the same drive. See HARD9-037.
+                disableActions: !status.isConnected || Boolean(activeDrive && driveMutationPending[activeDrive]),
                 onMount: (entry) => {
                   if (!activeDrive) return;
+                  if (driveMutationPending[activeDrive]) return;
                   void handleMountDisk(activeDrive, entry).finally(() => setActiveDrive(null));
                 },
               })}

@@ -326,22 +326,50 @@ export const persistDiscoveredDevice = (
 ): PersistedDiscoveredDevice => {
   const savedDevices = getSavedDevicesSnapshot();
   const product = resolveCanonicalProductFamilyCode(candidate.product);
+  // HARD12-019: two devices can leave the factory sharing the same default
+  // hostname (e.g. "c64u"). When both the saved device and the candidate
+  // carry unique ids and those ids differ, the hostname/address matchers
+  // would otherwise silently retarget device A's stored credentials to the
+  // physically different device B. Refuse the match in that case — create
+  // a fresh saved device entry.
+  const matchesByUniqueId = (device: { lastKnownUniqueId?: string | null }) =>
+    candidate.uniqueId &&
+    device.lastKnownUniqueId &&
+    normalizeToken(device.lastKnownUniqueId) === normalizeToken(candidate.uniqueId);
+  const isConflictingHostnameMatch = (device: {
+    lastKnownUniqueId?: string | null;
+    host?: string;
+    lastKnownHostname?: string | null;
+  }) => {
+    if (!candidate.hostname) return false;
+    const hostnameMatchesSaved =
+      normalizeToken(device.lastKnownHostname) === normalizeToken(candidate.hostname) ||
+      normalizeToken(device.host) === normalizeToken(candidate.hostname);
+    if (!hostnameMatchesSaved) return false;
+    const savedUid = device.lastKnownUniqueId ? normalizeToken(device.lastKnownUniqueId) : null;
+    const candidateUid = candidate.uniqueId ? normalizeToken(candidate.uniqueId) : null;
+    return Boolean(savedUid && candidateUid && savedUid !== candidateUid);
+  };
+  const hostnameOrHostMatch = (device: { lastKnownHostname?: string | null; host?: string }) => {
+    if (!candidate.hostname) return false;
+    return (
+      normalizeToken(device.lastKnownHostname) === normalizeToken(candidate.hostname) ||
+      normalizeToken(device.host) === normalizeToken(candidate.hostname)
+    );
+  };
   const existingId =
     candidate.alreadySavedDeviceId ??
-    (candidate.uniqueId
-      ? (savedDevices.devices.find(
-          (device) => normalizeToken(device.lastKnownUniqueId) === normalizeToken(candidate.uniqueId),
-        )?.id ?? null)
-      : null) ??
+    (candidate.uniqueId ? (savedDevices.devices.find(matchesByUniqueId)?.id ?? null) : null) ??
     (candidate.hostname
+      ? (savedDevices.devices.find((device) => hostnameOrHostMatch(device) && !isConflictingHostnameMatch(device))
+          ?.id ?? null)
+      : null) ??
+    (candidate.address
       ? (savedDevices.devices.find(
           (device) =>
-            normalizeToken(device.lastKnownHostname) === normalizeToken(candidate.hostname) ||
-            normalizeToken(device.host) === normalizeToken(candidate.hostname),
+            normalizeToken(device.host) === normalizeToken(candidate.address) && !isConflictingHostnameMatch(device),
         )?.id ?? null)
-      : null) ??
-    savedDevices.devices.find((device) => normalizeToken(device.host) === normalizeToken(candidate.address))?.id ??
-    null;
+      : null);
   const deviceId =
     existingId ??
     ((typeof crypto !== "undefined" && "randomUUID" in crypto && crypto.randomUUID()) ||

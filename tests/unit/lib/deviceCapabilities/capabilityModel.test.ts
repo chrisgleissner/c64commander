@@ -6,14 +6,18 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  clearMachineInputCapabilityCacheForTests,
   deriveDeviceCapabilities,
   detectStreamingFromConfig,
+  probeMachineInputCapability,
+  supportsMachineInput,
   supportsMenuInput,
   supportsPowerCycle,
   supportsStreaming,
 } from "@/lib/deviceCapabilities";
+import type { MachineInputStateResponse } from "@/lib/c64api";
 
 describe("deviceCapabilities — deriveDeviceCapabilities", () => {
   it("derives C64U capabilities from core_version (streaming, menu input, power cycle)", () => {
@@ -22,6 +26,7 @@ describe("deviceCapabilities — deriveDeviceCapabilities", () => {
     expect(supportsStreaming(caps)).toBe(true);
     expect(supportsMenuInput(caps)).toBe(true);
     expect(supportsPowerCycle(caps)).toBe(true);
+    expect(supportsMachineInput(caps)).toBe(false);
     expect(caps.streamingSource).toBe("core-version");
     expect(caps.firmwareVersion).toBe("1.1.0");
     expect(caps.coreVersion).toBe("1.49");
@@ -117,6 +122,138 @@ describe("deviceCapabilities — deriveDeviceCapabilities", () => {
     expect(supportsStreaming(caps)).toBe(false);
     expect(supportsMenuInput(caps)).toBe(false);
     expect(supportsPowerCycle(caps)).toBe(false);
+  });
+});
+
+describe("deviceCapabilities — probeMachineInputCapability", () => {
+  const createApi = (handler: () => Promise<MachineInputStateResponse>) => ({
+    getMachineInputState: vi.fn(async () => handler()),
+  });
+  const httpError = (status: number) => Object.assign(new Error(`HTTP ${status}`), { c64uHttpStatus: status });
+
+  beforeEach(() => {
+    clearMachineInputCapabilityCacheForTests();
+  });
+
+  it("skips the REST probe when core_version is absent", async () => {
+    const api = createApi(async () => ({ errors: [], keyboard: { inputs: [] }, joysticks: [] }));
+
+    const result = await probeMachineInputCapability({
+      api,
+      deviceId: "u2",
+      firmwareVersion: "3.14a",
+      coreVersion: null,
+    });
+
+    expect(result.status).toBe("unsupported-family");
+    expect(result.supportsMachineInput).toBe(false);
+    expect(api.getMachineInputState).not.toHaveBeenCalled();
+  });
+
+  it("marks machine input available when the probe endpoint returns state", async () => {
+    const api = createApi(async () => ({ errors: [], keyboard: { inputs: [] }, joysticks: [] }));
+
+    const result = await probeMachineInputCapability({
+      api,
+      deviceId: "u64",
+      firmwareVersion: "3.15 alpha",
+      coreVersion: "1.4B",
+    });
+
+    expect(result.status).toBe("available");
+    expect(result.httpStatus).toBe(200);
+    expect(result.supportsMachineInput).toBe(true);
+    expect(api.getMachineInputState).toHaveBeenCalledWith({
+      timeoutMs: 1500,
+      __c64uIntent: "system",
+      __c64uExpectedFailure: true,
+      __c64uSuppressAuthChallenge: true,
+    });
+  });
+
+  it.each([
+    [501, "hardware-unavailable"],
+    [403, "auth-required"],
+    [404, "missing"],
+    [405, "missing"],
+  ] as const)("maps HTTP %s probe failures to %s", async (status, expectedStatus) => {
+    const api = createApi(async () => {
+      throw httpError(status);
+    });
+
+    const result = await probeMachineInputCapability({
+      api,
+      deviceId: `device-${status}`,
+      firmwareVersion: "3.15 alpha",
+      coreVersion: "1.4B",
+    });
+
+    expect(result.status).toBe(expectedStatus);
+    expect(result.httpStatus).toBe(status);
+    expect(result.supportsMachineInput).toBe(false);
+  });
+
+  it("caches probe results by device firmware and core version", async () => {
+    const api = createApi(async () => ({ errors: [], keyboard: { inputs: [] }, joysticks: [] }));
+    const input = {
+      api,
+      deviceId: "u64",
+      firmwareVersion: "3.15 alpha",
+      coreVersion: "1.4B",
+    };
+
+    await probeMachineInputCapability(input);
+    await probeMachineInputCapability(input);
+
+    expect(api.getMachineInputState).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not cache a transient error - a later successful probe with the same inputs resolves available (HARD15-002)", async () => {
+    let attempt = 0;
+    const api = createApi(async () => {
+      attempt += 1;
+      if (attempt === 1) throw new Error("timeout"); // no c64uHttpStatus - a network/timeout blip.
+      return { errors: [], keyboard: { inputs: [] }, joysticks: [] };
+    });
+    const input = { api, deviceId: "u64", firmwareVersion: "3.15 alpha", coreVersion: "1.4B" };
+
+    const first = await probeMachineInputCapability(input);
+    expect(first.status).toBe("error");
+
+    const second = await probeMachineInputCapability(input);
+    expect(second.status).toBe("available");
+    expect(api.getMachineInputState).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not cache auth-required - a later successful probe with the same inputs resolves available (HARD15-002)", async () => {
+    let attempt = 0;
+    const api = createApi(async () => {
+      attempt += 1;
+      if (attempt === 1) throw httpError(403);
+      return { errors: [], keyboard: { inputs: [] }, joysticks: [] };
+    });
+    const input = { api, deviceId: "u64", firmwareVersion: "3.15 alpha", coreVersion: "1.4B" };
+
+    const first = await probeMachineInputCapability(input);
+    expect(first.status).toBe("auth-required");
+
+    const second = await probeMachineInputCapability(input);
+    expect(second.status).toBe("available");
+    expect(api.getMachineInputState).toHaveBeenCalledTimes(2);
+  });
+
+  it("still caches a definitive missing result - the hot path stays request-free (HARD15-002 guard)", async () => {
+    const api = createApi(async () => {
+      throw httpError(404);
+    });
+    const input = { api, deviceId: "c64u", firmwareVersion: "1.1.0", coreVersion: "1.0.0" };
+
+    const first = await probeMachineInputCapability(input);
+    expect(first.status).toBe("missing");
+
+    const second = await probeMachineInputCapability(input);
+    expect(second.status).toBe("missing");
+    expect(api.getMachineInputState).toHaveBeenCalledTimes(1);
   });
 });
 

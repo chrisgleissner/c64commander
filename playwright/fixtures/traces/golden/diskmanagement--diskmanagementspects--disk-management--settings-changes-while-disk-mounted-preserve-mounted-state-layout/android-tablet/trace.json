@@ -3996,7 +3996,7 @@
     "origin": "system",
     "correlationId": "COR-0021",
     "data": {
-      "name": "rest.put /v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readonly",
+      "name": "rest.put /v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
       "component": null,
       "context": {
         "ui": {
@@ -4081,13 +4081,13 @@
     "correlationId": "COR-0021",
     "data": {
       "method": "PUT",
-      "url": "http://127.0.0.1:37641/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readonly",
-      "normalizedUrl": "/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican+II%2FDisk+1.d64&mode=readonly&type=d64",
+      "url": "http://127.0.0.1:37641/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
+      "normalizedUrl": "/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican+II%2FDisk+1.d64&mode=readwrite&type=d64",
       "protocol": "http",
       "hostname": "127.0.0.1",
       "port": 37641,
       "path": "/v1/drives/a:mount",
-      "query": "?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readonly",
+      "query": "?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
       "headers": {
         "Content-Type": "application/json",
         "X-C64U-Host": "127.0.0.1:37641"
@@ -4146,13 +4146,13 @@
     "correlationId": "COR-0021",
     "data": {
       "method": "PUT",
-      "normalizedUrl": "/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readonly",
+      "normalizedUrl": "/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
       "protocol": "http",
       "hostname": "127.0.0.1",
       "port": 37641,
       "path": "/v1/drives/a:mount",
-      "query": "?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readonly",
-      "url": "http://127.0.0.1:37641/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readonly",
+      "query": "?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
+      "url": "http://127.0.0.1:37641/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
       "status": 200,
       "headers": {
         "content-length": "13",

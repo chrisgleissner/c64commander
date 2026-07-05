@@ -142,10 +142,13 @@ const fetchAllConfig = async ({ mode = "user", signal }: FetchAllConfigOptions =
   const failedCategories: string[] = [];
   const readCategorySnapshot = async (category: string) => {
     throwIfAborted(signal);
-    const cached = api.getCachedCategory(category);
-    if (cached) {
-      return cached;
-    }
+    // Every caller of fetchAllConfig (initial snapshot capture, Save-to-App,
+    // revert verification) needs a ground-truth device read, not the
+    // localStorage-persisted, no-TTL enrichment cache: settings changed via
+    // the C64U's own menu since the cache was last populated would make the
+    // revert baseline wrong and actively write stale values back to the
+    // device, and revert verification would compare updateConfigBatch's own
+    // optimistic writes against themselves and always pass. See HARD9-018.
     return api.getCategory(category, requestOptions);
   };
 
@@ -415,6 +418,13 @@ export function useAppConfigState() {
 
       queryClient.invalidateQueries({ queryKey: ["c64-category"] });
       queryClient.invalidateQueries({ queryKey: ["c64-all-config"] });
+      // Home's quick-config controls (Turbo, Video Mode, RAM Expansion, SID
+      // cards, lighting) read exclusively through c64-config-items/
+      // c64-config-item, not c64-category/c64-all-config - without this,
+      // Load From App / Revert / Load From Flash all keep showing pre-load
+      // values on Home until the 30s staleTime lapses. See HARD9-017.
+      queryClient.invalidateQueries({ queryKey: ["c64-config-items"] });
+      queryClient.invalidateQueries({ queryKey: ["c64-config-item"] });
     },
     [queryClient],
   );

@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "@/hooks/use-toast";
 import { resolveUnmuteFallbackIndexForSteps, useVolumeOverride } from "@/pages/playFiles/hooks/useVolumeOverride";
 import { waitForMachineTransitionsToSettle } from "@/lib/deviceInteraction/deviceActivityGate";
@@ -9,6 +9,7 @@ import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 const mutateAsyncMock = vi.fn();
 const getConfigItemsMock = vi.fn();
 const refetchAudioMixerCategoryMock = vi.fn().mockResolvedValue(undefined);
+const refetchMasterAudioMixerCategoryMock = vi.fn().mockResolvedValue(undefined);
 const refetchSidSocketsCategoryMock = vi.fn().mockResolvedValue(undefined);
 const refetchSidAddressingCategoryMock = vi.fn().mockResolvedValue(undefined);
 
@@ -38,6 +39,27 @@ const audioMixerItemsRef = {
   current: [] as MixerItem[],
 };
 
+const audioMixerSelectionCache = {
+  source: null as MixerItem[] | null,
+  values: new Map<string, MixerItem[]>(),
+};
+
+const selectAudioMixerItems = (items: string[]) => {
+  const key = items.join("|");
+  if (audioMixerSelectionCache.source !== audioMixerItemsRef.current) {
+    audioMixerSelectionCache.source = audioMixerItemsRef.current;
+    audioMixerSelectionCache.values.clear();
+  }
+  const cachedValue = audioMixerSelectionCache.values.get(key);
+  if (cachedValue) {
+    return cachedValue;
+  }
+  const requestedItems = new Set(items);
+  const value = audioMixerItemsRef.current.filter((item) => requestedItems.has(item.name));
+  audioMixerSelectionCache.values.set(key, value);
+  return value;
+};
+
 const defaultMixerItems = (value: string): MixerItem[] => [
   {
     name: "SID 1",
@@ -58,20 +80,26 @@ vi.mock("@/hooks/useC64Connection", () => ({
     mutateAsync: mutateAsyncMock,
     isPending: false,
   }),
-  useC64ConfigItems: (category: string) => ({
-    data:
-      category === "Audio Mixer"
-        ? audioMixerItemsRef.current
-        : category === "SID Sockets Configuration"
-          ? sidSocketsCategoryRef.current
-          : sidAddressingCategoryRef.current,
-    refetch:
-      category === "Audio Mixer"
-        ? refetchAudioMixerCategoryMock
-        : category === "SID Sockets Configuration"
-          ? refetchSidSocketsCategoryMock
-          : refetchSidAddressingCategoryMock,
-  }),
+  useC64ConfigItems: (category: string, items: string[]) => {
+    const isMasterAudioMixerQuery = category === "Audio Mixer" && items.includes("Vol Master");
+    return {
+      data:
+        category === "Audio Mixer"
+          ? selectAudioMixerItems(items)
+          : category === "SID Sockets Configuration"
+            ? sidSocketsCategoryRef.current
+            : sidAddressingCategoryRef.current,
+      refetch:
+        category === "Audio Mixer"
+          ? isMasterAudioMixerQuery
+            ? refetchMasterAudioMixerCategoryMock
+            : refetchAudioMixerCategoryMock
+          : category === "SID Sockets Configuration"
+            ? refetchSidSocketsCategoryMock
+            : refetchSidAddressingCategoryMock,
+      isFetched: true,
+    };
+  },
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -95,7 +123,8 @@ vi.mock("@/lib/config/audioMixerSolo", () => ({
 }));
 
 vi.mock("@/lib/config/configItems", () => ({
-  AUDIO_MIXER_VOLUME_ITEMS: ["SID 1"],
+  AUDIO_MIXER_MASTER_VOLUME_ITEM: "Vol Master",
+  AUDIO_MIXER_VOLUME_ITEMS: ["SID 1", "SID 2"],
   SID_ADDRESSING_ITEMS: ["SID_ADDR"],
   SID_SOCKETS_ITEMS: ["SID_SOCKET"],
 }));
@@ -120,6 +149,7 @@ const buildEnabledSidVolumeUpdatesMock = vi.fn((_items: MixerItem[], _enablement
   "SID 1": target,
 }));
 const buildEnabledSidVolumeSnapshotMock = vi.fn(() => ({ "SID 1": "5" }));
+const buildEnabledSidMuteUpdatesMock = vi.fn(() => ({ "SID 1": "-42 dB" }));
 const buildSidEnablementMock = vi.fn(() => ({ sid1: true }));
 const filterEnabledSidVolumeItemsMock = vi.fn((items: MixerItem[]) => items);
 const buildSidVolumeStepsMock = vi.fn(() => [
@@ -135,7 +165,7 @@ vi.mock("@/lib/config/sidVolumeControl", () => ({
   buildSidEnablement: (...args: unknown[]) => buildSidEnablementMock(...args),
   buildSidVolumeSteps: (...args: unknown[]) => buildSidVolumeStepsMock(...args),
   filterEnabledSidVolumeItems: (...args: unknown[]) => filterEnabledSidVolumeItemsMock(...args),
-  buildEnabledSidMuteUpdates: vi.fn(() => ({ "SID 1": "-42 dB" })),
+  buildEnabledSidMuteUpdates: (...args: unknown[]) => buildEnabledSidMuteUpdatesMock(...args),
   buildEnabledSidVolumeUpdates: (...args: unknown[]) => buildEnabledSidVolumeUpdatesMock(...args),
   isSidVolumeOffValue: vi.fn((value: string | number | undefined) => value === "OFF"),
   resolveSidMutedVolumeOption: vi.fn(() => "-42 dB"),
@@ -147,6 +177,15 @@ vi.mock("@/pages/playFiles/playFilesUtils", () => ({
 }));
 
 describe("useVolumeOverride", () => {
+  afterEach(() => {
+    // Several tests vi.spyOn(Date, "now") without restoring; without this the
+    // mocked clock leaks into subsequent tests in this file and can cause
+    // order-dependent failures. restoreAllMocks only undoes vi.spyOn spies
+    // (the module-level vi.fn() mocks are re-seeded by beforeEach).
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     pollingPauseRegistry.__resetForTest();
@@ -160,6 +199,7 @@ describe("useVolumeOverride", () => {
     sidAddressingCategoryRef.current = {};
     mutateAsyncMock.mockResolvedValue(undefined);
     refetchAudioMixerCategoryMock.mockClear();
+    refetchMasterAudioMixerCategoryMock.mockClear();
     refetchSidSocketsCategoryMock.mockClear();
     refetchSidAddressingCategoryMock.mockClear();
     getConfigItemsMock.mockImplementation((category: string) => {
@@ -183,6 +223,8 @@ describe("useVolumeOverride", () => {
         "SID 1": target,
       }),
     );
+    buildEnabledSidMuteUpdatesMock.mockReset();
+    buildEnabledSidMuteUpdatesMock.mockReturnValue({ "SID 1": "-42 dB" });
     buildSidEnablementMock.mockReset();
     buildSidEnablementMock.mockReturnValue({ sid1: true });
     filterEnabledSidVolumeItemsMock.mockReset();
@@ -337,6 +379,94 @@ describe("useVolumeOverride", () => {
     );
   });
 
+  it("uses Vol Master for playback volume writes when the firmware exposes it", async () => {
+    audioMixerItemsRef.current = [
+      {
+        name: "Vol Master",
+        value: "0",
+        options: ["OFF", "-42 dB", "0", "5"],
+      },
+      {
+        name: "SID 1",
+        value: "0",
+        options: ["OFF", "-42 dB", "0", "5"],
+      },
+    ];
+    const mapTargetUpdates = (items: MixerItem[], _enablement: unknown, target: string) =>
+      Object.fromEntries(items.map((item) => [item.name, target]));
+    buildEnabledSidVolumeUpdatesMock.mockImplementation(mapTargetUpdates);
+    buildEnabledSidMutedToTargetUpdatesMock.mockImplementation(mapTargetUpdates);
+    buildEnabledSidMuteUpdatesMock.mockImplementation((items: MixerItem[]) =>
+      Object.fromEntries(items.map((item) => [item.name, "-42 dB"])),
+    );
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.enabledSidVolumeItems.map((item) => item.name)).toEqual(["Vol Master"]);
+      expect(result.current.volumeState.index).toBe(0);
+      expect(result.current.volumeState.muted).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.handleVolumeCommit(1);
+    });
+
+    expect(mutateAsyncMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: "Audio Mixer",
+        updates: { "Vol Master": "5" },
+      }),
+    );
+
+    mutateAsyncMock.mockClear();
+
+    await act(async () => {
+      await result.current.handleToggleMute();
+    });
+
+    expect(mutateAsyncMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: "Audio Mixer",
+        updates: { "Vol Master": "-42 dB" },
+      }),
+    );
+  });
+
+  it("ignores an empty Vol Master placeholder and keeps SID fallback controls enabled", async () => {
+    audioMixerItemsRef.current = [
+      {
+        name: "Vol Master",
+        value: "",
+        options: [],
+      },
+      ...defaultMixerItems("0"),
+    ];
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.enabledSidVolumeItems.map((item) => item.name)).toEqual(["SID 1"]);
+      expect(result.current.volumeSteps).toHaveLength(2);
+      expect(result.current.volumeState.muted).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.handleVolumeCommit(1);
+    });
+
+    expect(mutateAsyncMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: "Audio Mixer",
+        updates: { "SID 1": "5" },
+      }),
+    );
+  });
+
   it("falls back to discovered SID mixer items when enablement filtering excludes everything", async () => {
     audioMixerItemsRef.current = defaultMixerItems("5");
     filterEnabledSidVolumeItemsMock.mockImplementation(() => []);
@@ -430,6 +560,49 @@ describe("useVolumeOverride", () => {
       "Play volume stale pending write cleared",
       expect.objectContaining({ index: 1, muted: false }),
     );
+  });
+
+  it("clears a mismatched muted pending write once the 2500ms hold expires, matching the unmuted branch's bound (HARD9-065)", async () => {
+    let nowMs = 1_000_000;
+    vi.spyOn(Date, "now").mockImplementation(() => nowMs);
+    audioMixerItemsRef.current = defaultMixerItems("OFF");
+
+    const { result, rerender } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => expect(result.current.volumeState.muted).toBe(true));
+
+    act(() => {
+      result.current.pendingVolumeWriteRef.current = {
+        index: 999,
+        muted: true,
+        setAtMs: nowMs,
+      };
+      audioMixerItemsRef.current = defaultMixerItems("OFF");
+      rerender();
+    });
+
+    // Still within the 2500ms hold: a mismatched muted pending write must be
+    // kept, exactly like the unmuted branch already does.
+    nowMs += 1000;
+    act(() => {
+      audioMixerItemsRef.current = defaultMixerItems("OFF");
+      rerender();
+    });
+    expect(result.current.pendingVolumeWriteRef.current).not.toBeNull();
+
+    // Past the 2500ms hold, but well under the separate unconditional 5000ms
+    // hard fallback - before HARD9-065, a mismatched muted pending write
+    // deferred indefinitely here instead of clearing at the same 2500ms
+    // bound the unmuted branch already honored.
+    nowMs += 1600;
+    act(() => {
+      audioMixerItemsRef.current = defaultMixerItems("OFF");
+      rerender();
+    });
+
+    await waitFor(() => expect(result.current.pendingVolumeWriteRef.current).toBeNull());
   });
 
   it("mutes to -42 dB and restores the current slider target on unmute", async () => {
@@ -1129,6 +1302,53 @@ describe("useVolumeOverride", () => {
     );
     expect(result.current.volumeSessionActiveRef.current).toBe(false);
     expect(result.current.volumeSessionSnapshotRef.current).toBeNull();
+  });
+
+  it("discards an active volume session locally without writing anything to a device (HARD11-002)", async () => {
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    act(() => {
+      result.current.volumeSessionActiveRef.current = true;
+      result.current.volumeSessionSnapshotRef.current = { "SID 1": "0" };
+      result.current.manualMuteSnapshotRef.current = { volumes: { "SID 1": "0" }, enablement: { sid1: true } } as any;
+      result.current.pauseMuteSnapshotRef.current = { volumes: { "SID 1": "0" }, enablement: { sid1: true } } as any;
+      result.current.pausingFromPauseRef.current = true;
+      result.current.resumingFromPauseRef.current = true;
+      result.current.dispatchVolume({ type: "mute", reason: "manual" });
+    });
+    expect(result.current.volumeState.muted).toBe(true);
+
+    act(() => {
+      result.current.discardVolumeSession("saved-device-switch");
+    });
+
+    expect(mutateAsyncMock).not.toHaveBeenCalled();
+    expect(result.current.volumeSessionActiveRef.current).toBe(false);
+    expect(result.current.volumeSessionSnapshotRef.current).toBeNull();
+    expect(result.current.manualMuteSnapshotRef.current).toBeNull();
+    expect(result.current.pauseMuteSnapshotRef.current).toBeNull();
+    expect(result.current.pausingFromPauseRef.current).toBe(false);
+    expect(result.current.resumingFromPauseRef.current).toBe(false);
+    // A background device-sync effect may immediately re-dispatch a "sync"
+    // action once the mute/session bookkeeping clears - that is expected
+    // reconciliation, not part of this fix. The relevant assertion is that
+    // the manual mute state was cleared rather than left stuck "muted".
+    expect(result.current.volumeState.muted).toBe(false);
+  });
+
+  it("does nothing when discarding a volume session with nothing active", () => {
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: false, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    act(() => {
+      result.current.discardVolumeSession("no-op");
+    });
+
+    expect(mutateAsyncMock).not.toHaveBeenCalled();
+    expect(result.current.volumeSessionActiveRef.current).toBe(false);
   });
 
   it("waits for machine transitions before applying restore updates", async () => {

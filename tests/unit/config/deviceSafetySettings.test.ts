@@ -329,4 +329,59 @@ describe("deviceSafetySettings AUTO mode", () => {
     expect(() => safety.saveDeviceSafetyMode("AUTO")).not.toThrow();
     unsubscribe();
   });
+
+  // Issue 3d: machine:input safety is now non-overlap serialization (always on,
+  // regardless of mode - see machineInputThrottle), so the cooldown is an OPTIONAL
+  // extra floor that defaults to 0 (zero added delay) in every mode.
+  describe("machineInputCooldownMs", () => {
+    it("defaults to 0 (non-overlap only, no added delay) under RELAXED", async () => {
+      const { safety } = await loadModules();
+      safety.saveDeviceSafetyMode("RELAXED");
+      expect(safety.loadDeviceSafetyConfig().machineInputCooldownMs).toBe(0);
+    });
+
+    it("defaults to 0 under BALANCED (non-overlap serialization is the safety model)", async () => {
+      const { safety } = await loadModules();
+      safety.saveDeviceSafetyMode("BALANCED");
+      expect(safety.loadDeviceSafetyConfig().machineInputCooldownMs).toBe(0);
+    });
+
+    it("defaults to 0 even under CONSERVATIVE - a serialized single-request stream cannot wedge the stack", async () => {
+      const { safety } = await loadModules();
+      safety.saveDeviceSafetyMode("CONSERVATIVE");
+      const config = safety.loadDeviceSafetyConfig();
+      expect(config.machineInputCooldownMs).toBe(0);
+      expect(config.machineInputCooldownMs).toBeLessThan(config.configsCooldownMs);
+    });
+
+    it("persists and clamps a user override, and clears it on reset", async () => {
+      const { safety } = await loadModules();
+      safety.saveDeviceSafetyMode("BALANCED");
+
+      safety.saveMachineInputCooldownMs(9999); // above the 2000ms clamp ceiling
+      expect(safety.loadDeviceSafetyConfig().machineInputCooldownMs).toBe(2000);
+
+      safety.saveMachineInputCooldownMs(-50); // below the 0ms floor
+      expect(safety.loadDeviceSafetyConfig().machineInputCooldownMs).toBe(0);
+
+      safety.saveMachineInputCooldownMs(150);
+      expect(safety.loadDeviceSafetyConfig().machineInputCooldownMs).toBe(150);
+
+      safety.resetDeviceSafetyOverrides();
+      expect(safety.loadDeviceSafetyConfig().machineInputCooldownMs).toBe(0);
+    });
+
+    it("broadcasts a device-safety-updated event when the override changes", async () => {
+      const { safety } = await loadModules();
+      const listener = vi.fn();
+      const unsubscribe = safety.subscribeDeviceSafetyUpdates(listener);
+
+      safety.saveMachineInputCooldownMs(120);
+
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({ key: safety.DEVICE_SAFETY_SETTING_KEYS.MACHINE_INPUT_COOLDOWN_MS_KEY, value: 120 }),
+      );
+      unsubscribe();
+    });
+  });
 });

@@ -166,6 +166,10 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollResetFrameRef = useRef<number | null>(null);
+  // Tracks pointer-capture liveness independent of dx changing, so the
+  // drag-settle timer below can tell a stationary held pointer apart from
+  // a genuinely missed pointerup/pointercancel. See HARD9-026.
+  const pointerActiveRef = useRef(false);
   const runtimeMotionMode = readRuntimeMotionMode();
   const transitionConfig = resolveTransitionConfig(profile, runtimeMotionMode, runway.lastVelocityX);
   const resetContainerScroll = useCallback((reason: string) => {
@@ -291,20 +295,36 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     return () => clearTimeout(timer);
   }, [runway.phase, runway.targetIndex, transitionConfig.durationMs]);
 
+  // Recovers a runway stuck in "dragging" after a missed pointerup/
+  // pointercancel (some WebView/OS combinations drop it). Re-arming this on
+  // every dx change made a pointer held stationary >600ms - a normal
+  // mid-gesture pause, not a missed event - indistinguishable from the
+  // failure this timer exists to catch, snapping the runway back while the
+  // finger was still down. Keyed only on phase (not dx) so it does not
+  // restart on every pointermove, and each firing checks actual pointer
+  // liveness (fed by useSwipeGesture's onActiveChange) before resetting -
+  // if the pointer is still down, it re-checks later instead. See
+  // HARD9-026.
   useEffect(() => {
     if (runway.phase !== "dragging") return;
-    const timer = setTimeout(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const checkSettled = () => {
       const current = runwayRef.current;
       if (current.phase !== "dragging") return;
+      if (pointerActiveRef.current) {
+        timer = setTimeout(checkSettled, DRAG_SETTLE_TIMEOUT_MS);
+        return;
+      }
       addLog("debug", "[SwipeNav] drag-reset-synthesized", {
         center: TAB_ROUTES[current.centerIndex].label,
         settleAfterMs: DRAG_SETTLE_TIMEOUT_MS,
         dragOffsetPx: current.dragOffsetPx,
       });
       setRunway(buildIdleState(current.centerIndex));
-    }, DRAG_SETTLE_TIMEOUT_MS);
+    };
+    timer = setTimeout(checkSettled, DRAG_SETTLE_TIMEOUT_MS);
     return () => clearTimeout(timer);
-  }, [runway.centerIndex, runway.dragOffsetPx, runway.phase]);
+  }, [runway.phase]);
 
   const onProgress = useCallback(
     (dx: number, velocityX: number) => {
@@ -384,6 +404,9 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     onProgress,
     onCommit,
     onCancel,
+    onActiveChange: (active) => {
+      pointerActiveRef.current = active;
+    },
   });
 
   const transform = useMemo(() => {
@@ -439,6 +462,18 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
           // Render idle inactive slots as placeholders so selectors only see the
           // active page. During transitions we still mount adjacent pages unless
           // deterministic probe mode is enabled.
+          //
+          // HARD12-022: this full mid-transition mount of the departing (and
+          // arriving) page is real and load-bearing today — the swipe preview
+          // renders actual page content, not a static snapshot, so replacing it
+          // with a placeholder-during-transition is a visible-UX change, not a
+          // pure bugfix. Deliberately deferred as a separate, measured
+          // perf/UX task rather than bundled into hardening; the mitigation
+          // shipped instead is testability (see
+          // SwipeNavigationLayer.test.tsx's HARD12-022 mount/unmount test) plus
+          // per-effect defenses in the pages that hold state across this
+          // overlap (BUG-040 wake lock, HARD12-006 volume session, HARD12-020
+          // machine-execution state).
           if (renderPlaceholderOnly) {
             return (
               <div

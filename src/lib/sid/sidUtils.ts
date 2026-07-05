@@ -207,7 +207,7 @@ export const computeSidMd5 = async (data: ArrayBuffer) => {
   return computeSidMd5Internal(data);
 };
 
-export const createSslPayload = (durationMs: number) => {
+const encodeBcdDuration = (durationMs: number) => {
   if (!Number.isFinite(durationMs)) {
     throw new Error("Invalid SID duration: value must be finite milliseconds");
   }
@@ -223,6 +223,44 @@ export const createSslPayload = (durationMs: number) => {
   const seconds = totalSeconds % 60;
   const bcd = (value: number) => ((Math.floor(value / 10) & 0xf) << 4) | (value % 10);
   return new Uint8Array([bcd(minutes), bcd(seconds)]);
+};
+
+export const createSslPayload = (
+  durationMs: number,
+  options?: { songNr?: number; subsongDurationsSeconds?: ReadonlyArray<number | null | undefined> },
+) => {
+  if (!options || (options.songNr === undefined && !options.subsongDurationsSeconds)) {
+    return encodeBcdDuration(durationMs);
+  }
+
+  const songNr = options.songNr ?? 1;
+  if (!Number.isInteger(songNr) || songNr < 1) {
+    throw new Error("Invalid songNr: must be a positive integer");
+  }
+
+  // HARD12-021: the firmware reads up to 512 bytes from the SSL sidecar, where
+  // each subsong entry occupies 2 bytes (BCD minutes/seconds) and the entry
+  // for subsong N lives at offset (N-1)*2. Emit `songNr` zero-padded entries
+  // so the firmware addresses subsong N at the correct offset. When
+  // per-subsong durations are available, place the resolved duration at the
+  // songNr-1 slot; otherwise emit the active-song duration at that slot.
+  const bcd = (value: number) => ((Math.floor(value / 10) & 0xf) << 4) | (value % 10);
+  const bytes = new Uint8Array(songNr * 2);
+  const targetDurationMs = (() => {
+    const subs = options.subsongDurationsSeconds;
+    if (subs && Number.isFinite(subs[songNr - 1] as number) && (subs[songNr - 1] as number) >= 0) {
+      return Math.floor((subs[songNr - 1] as number) * 1000);
+    }
+    return durationMs;
+  })();
+  if (targetDurationMs > 0) {
+    const totalSeconds = Math.min(Math.floor(targetDurationMs / 1000), 99 * 60 + 59);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    bytes[(songNr - 1) * 2] = bcd(minutes);
+    bytes[(songNr - 1) * 2 + 1] = bcd(seconds);
+  }
+  return bytes;
 };
 
 export const base64ToUint8 = (base64: string) => {

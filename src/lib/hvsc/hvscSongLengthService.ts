@@ -8,7 +8,8 @@
 
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import {
-  buildHvscBrowseIndexFromSonglengthSnapshot,
+  loadHvscBrowseIndexSnapshot,
+  mergeSonglengthDurationsIntoBrowseIndex,
   saveHvscBrowseIndexSnapshot,
 } from "@/lib/hvsc/hvscBrowseIndexStore";
 import { loadHvscState } from "@/lib/hvsc/hvscStateStore";
@@ -261,7 +262,12 @@ const exportSonglengthSnapshot = (): InMemorySongLengthSnapshot => backend.expor
 
 const syncHvscBrowseProjection = async (trigger: "cold-start" | "config-change") => {
   const snapshot = exportSonglengthSnapshot();
-  const projection = buildHvscBrowseIndexFromSonglengthSnapshot(snapshot);
+  // Merge durations into whatever browse index is already persisted (e.g. from
+  // an ingestion that just finalized sidMetadata/trackSubsongs for every song)
+  // instead of replacing it outright - a blind rebuild-and-overwrite here wiped
+  // that metadata every time songlengths reloaded. See HARD9-046.
+  const existingSnapshot = await loadHvscBrowseIndexSnapshot();
+  const projection = mergeSonglengthDurationsIntoBrowseIndex(existingSnapshot, snapshot);
   await saveHvscBrowseIndexSnapshot(projection);
   addLog("info", "HVSC browse projection synced from Songlengths", {
     service: "hvsc-songlengths",

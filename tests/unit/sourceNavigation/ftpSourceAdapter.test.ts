@@ -100,6 +100,52 @@ describe("ftpSourceAdapter", () => {
     expect(listFtpDirectoryMock).toHaveBeenCalledTimes(2);
   });
 
+  it("clears cache for descendant paths too, not just the exact refreshed path (HARD9-082)", async () => {
+    // Regression: Refresh only invalidated the exact current path - a
+    // recursive "Add folder" from an ancestor would still resolve
+    // unrefreshed children through the (up to 10-minute-stale) cache.
+    listFtpDirectoryMock.mockResolvedValue({
+      entries: [{ type: "file", name: "track.sid", path: "/music/track.sid", size: 123, modifiedAt: "now" }],
+    });
+
+    const source = createUltimateSourceLocation();
+    await source.listEntries("/music");
+    await source.listEntries("/music/sub");
+    expect(listFtpDirectoryMock).toHaveBeenCalledTimes(2);
+
+    source.clearCacheForPath("/music");
+
+    await source.listEntries("/music");
+    await source.listEntries("/music/sub");
+    expect(listFtpDirectoryMock).toHaveBeenCalledTimes(4);
+  });
+
+  it("recursive scans always read live instead of serving stale cached children (HARD9-082)", async () => {
+    // Regression: the recursive BFS resolved every child via the same
+    // cache used by ordinary browsing (10-minute TTL) - new device-side
+    // files were missing and deleted files were still offered until the
+    // cache naturally expired.
+    listFtpDirectoryMock.mockImplementation(async ({ path }) => {
+      if (path === "/") {
+        return { entries: [{ type: "dir", name: "music", path: "/music" }] };
+      }
+      return {
+        entries: [{ type: "file", name: "track.sid", path: "/music/track.sid", size: 1, modifiedAt: "now" }],
+      };
+    });
+
+    const source = createUltimateSourceLocation();
+    // Populate the cache for "/music" via ordinary (cached) browsing first.
+    await source.listEntries("/music");
+    expect(listFtpDirectoryMock).toHaveBeenCalledTimes(1);
+
+    await source.listFilesRecursive("/");
+
+    // "/" (root) and "/music" both fetched live during the recursive walk,
+    // even though "/music" was already cached.
+    expect(listFtpDirectoryMock).toHaveBeenCalledTimes(3);
+  });
+
   it("recursively lists files across directories", async () => {
     listFtpDirectoryMock.mockImplementation(async ({ path }) => {
       if (path === "/") {
@@ -167,6 +213,24 @@ describe("ftpSourceAdapter", () => {
     expect(results.map((entry) => entry.path).sort()).toEqual(["/music/song.sid", "/root.sid"]);
     expect(results.partialFailures).toEqual([{ path: "/bad", message: "listing failed" }]);
     expect(deltas).toEqual([2]);
+  });
+
+  it("surfaces a native timedOut walk as a partial failure (HARD9-078)", async () => {
+    // Regression: the native walk bailing early on an FTP data-channel
+    // timeout must not present a silently truncated tree as a complete
+    // listing.
+    isNativePlatformMock.mockReturnValue(true);
+    listFtpDirectoryRecursiveMock.mockResolvedValue({
+      path: "/",
+      entries: [{ type: "file", name: "root.sid", path: "/root.sid", size: 5, modifiedAt: "now" }],
+      partialFailures: [],
+      timedOut: true,
+    });
+
+    const source = createUltimateSourceLocation();
+    const results = await source.listFilesRecursive("/");
+
+    expect(results.partialFailures).toEqual([{ path: "/", message: "Listing incomplete: device FTP timed out" }]);
   });
 
   it("reports incremental onProgress as files are discovered during the recursive walk", async () => {
@@ -245,6 +309,63 @@ describe("ftpSourceAdapter", () => {
         path: "/fail",
         error: expect.objectContaining({ message: "listing failed" }),
       }),
+    );
+  });
+
+  it("caps the web recursive scan at the same max depth as native, reporting truncation (HARD9-081)", async () => {
+    // Regression: the web BFS had no depth cap at all, unlike native (8
+    // levels) - a deeply nested USB folder walked the entire tree with no
+    // indication anything was cut short.
+    listFtpDirectoryMock.mockImplementation(async ({ path }) => {
+      const depth = path === "/" ? 0 : path.split("/").length - 1;
+      return {
+        entries: [
+          { type: "dir", name: `level${depth + 1}`, path: `${path === "/" ? "" : path}/level${depth + 1}` },
+          {
+            type: "file",
+            name: `file${depth}.sid`,
+            path: `${path === "/" ? "" : path}/file${depth}.sid`,
+            size: 1,
+            modifiedAt: "now",
+          },
+        ],
+      };
+    });
+
+    const source = createUltimateSourceLocation();
+    const results = await source.listFilesRecursive("/");
+
+    // Depths 0..8 (9 levels) are walked - depth 8 is the last one allowed to
+    // recurse further, so files 0..8 are collected (9 files) and the
+    // depth-9 subfolder is reported as truncated instead of walked forever.
+    expect(results.length).toBe(9);
+    expect(results.partialFailures?.some((failure) => failure.message.includes("max depth 8 reached"))).toBe(true);
+  });
+
+  it("caps the web recursive scan at the same max entries as native, reporting truncation (HARD9-081)", async () => {
+    // Regression: the web BFS had no entry-count cap at all, unlike native
+    // (5000 entries) - a broad folder scanned tens of thousands of entries
+    // with no indication anything was cut short.
+    const manyFiles = Array.from({ length: 5001 }, (_, index) => ({
+      type: "file" as const,
+      name: `song${index}.sid`,
+      path: `/song${index}.sid`,
+      size: 1,
+      modifiedAt: "now",
+    }));
+    listFtpDirectoryMock.mockImplementation(async ({ path }) => {
+      if (path === "/") {
+        return { entries: manyFiles };
+      }
+      return { entries: [] };
+    });
+
+    const source = createUltimateSourceLocation();
+    const results = await source.listFilesRecursive("/");
+
+    expect(results.length).toBe(5000);
+    expect(results.partialFailures?.some((failure) => failure.message.includes("stopped after 5000 entries"))).toBe(
+      true,
     );
   });
 

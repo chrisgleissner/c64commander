@@ -18,7 +18,7 @@ type C64QueryPrefix =
   | "c64-config-items"
   | "c64-all-config";
 
-const connectionSettingsPrefixes: ReadonlyArray<C64QueryPrefix> = [
+const allC64QueryPrefixes: ReadonlyArray<C64QueryPrefix> = [
   "c64-info",
   "c64-drives",
   "c64-categories",
@@ -112,10 +112,6 @@ export const getRouteInvalidationPrefixes = (pathname: string): ReadonlyArray<C6
   return matchedEntry?.prefixes ?? ["c64-info"];
 };
 
-export const invalidateForRouteChange = (queryClient: QueryClient, pathname: string) => {
-  invalidateByPrefix(queryClient, getRouteInvalidationPrefixes(pathname));
-};
-
 export const invalidateForVisibilityResume = (queryClient: QueryClient, pathname: string) => {
   const prefixes = getRouteInvalidationPrefixes(pathname);
   const now = Date.now();
@@ -133,6 +129,11 @@ export const invalidateForVisibilityResume = (queryClient: QueryClient, pathname
   });
 };
 
+/**
+ * Prefixes whose in-flight requests the switch CANCELS — route-scoped, because
+ * cancellation only needs to abort the queries the current route is actually
+ * observing. Invalidation, by contrast, is route-independent (HARD16-009).
+ */
 export const getSavedDeviceSwitchPrefixes = (pathname: string): ReadonlyArray<C64QueryPrefix> => {
   const normalizedPath = pathname.trim() || "/";
   const matchedEntry = savedDeviceSwitchRoutePrefixMap.find(({ routePrefix }) =>
@@ -141,14 +142,20 @@ export const getSavedDeviceSwitchPrefixes = (pathname: string): ReadonlyArray<C6
   return matchedEntry?.prefixes ?? ["c64-info"];
 };
 
-export const invalidateForSavedDeviceSwitch = (queryClient: QueryClient, pathname: string) => {
-  const prefixes = getSavedDeviceSwitchPrefixes(pathname);
-  invalidateByPrefix(queryClient, prefixes);
-  refetchActiveByPrefix(queryClient, prefixes);
+/**
+ * HARD16-009: a saved-device switch invalidates EVERY device-scoped query
+ * regardless of the current route. The old route-scoped list left `c64-drives`
+ * (which carries neither device identity nor routing epoch in its key) fresh
+ * with device A's payload after switching from `/play`. Invalidation only marks
+ * queries stale — inactive ones refetch when next observed, so the cost is bounded.
+ */
+export const invalidateForSavedDeviceSwitch = (queryClient: QueryClient) => {
+  invalidateByPrefix(queryClient, allC64QueryPrefixes);
+  refetchActiveByPrefix(queryClient, allC64QueryPrefixes);
 };
 
 export const invalidateForConnectionSettingsChange = (queryClient: QueryClient) => {
-  invalidateByPrefix(queryClient, connectionSettingsPrefixes);
+  invalidateByPrefix(queryClient, allC64QueryPrefixes);
 };
 
 export const invalidateForConnectionStateTransition = (

@@ -152,6 +152,36 @@ class FolderPickerPluginTest {
   }
 
   @Test
+  fun readFileRejectsFileExceedingMaxReadFileBytes() {
+    // HARD9-044: without a cap, readFile fully buffers the file then Base64-
+    // encodes it (~1.33x on top), driving the app into OOM for a large file.
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    setPluginBridge(plugin, context)
+    plugin.maxReadFileBytes = 10L
+
+    val file = tempFolder.newFile("big.dnp")
+    file.writeBytes(ByteArray(20) { 1 })
+    val uri = android.net.Uri.fromFile(file)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("uri")).thenReturn(uri.toString())
+
+    val latch = CountDownLatch(1)
+    var rejectedMessage: String? = null
+    doAnswer { invocation ->
+      rejectedMessage = invocation.getArgument(0) as String?
+      latch.countDown()
+      null
+    }.`when`(call).reject(anyString(), any(Exception::class.java))
+
+    plugin.readFile(call)
+
+    assertTrue(latch.await(2, TimeUnit.SECONDS))
+    assertNotNull(rejectedMessage)
+    assertTrue(rejectedMessage!!.contains("maximum readable size"))
+  }
+
+  @Test
   fun readFileLogsWhenReadFails() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     setPluginBridge(plugin, context)

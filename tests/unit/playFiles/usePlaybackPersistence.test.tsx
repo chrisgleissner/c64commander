@@ -118,6 +118,7 @@ const usePlaybackPersistenceHarness = ({
     playlist,
     currentIndex,
     isPlaying,
+    isPaused,
     elapsedMs,
     setAutoAdvanceDueAtMs: setAutoAdvanceDueAtMsRef.current,
   };
@@ -1547,6 +1548,74 @@ describe("usePlaybackPersistence", () => {
     });
 
     // For paused sessions, setAutoAdvanceDueAtMs should be called with null
+    await waitFor(() => {
+      const calls = result.current.setAutoAdvanceDueAtMs.mock.calls;
+      const nullCalls = calls.filter(([v]: [unknown]) => v === null);
+      expect(nullCalls.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  it("downgrades a stale playing session restore to paused instead of auto-advancing (HARD9-064)", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    const durationMs = 60000;
+    const staleUpdatedAt = new Date(Date.now() - 6 * 60 * 1000).toISOString(); // 6 minutes ago
+
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "hvsc",
+            path: "/MUSICIANS/Test/stale.sid",
+            name: "stale.sid",
+            sourceId: "hvsc-library",
+            addedAt: new Date().toISOString(),
+            durationMs,
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+
+    // A session that claims "isPlaying" but was last confirmed alive 6 minutes
+    // ago (well past the 5-minute staleness threshold) - e.g. the app was
+    // suspended, or the C64 was reset/power-cycled while the process was dead.
+    sessionStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({
+        playlistKey: playlistStorageKey,
+        currentItemId: "hvsc:hvsc-library:/MUSICIANS/Test/stale.sid",
+        currentIndex: 0,
+        isPlaying: true,
+        isPaused: false,
+        elapsedMs: 10000,
+        playedMs: 10000,
+        durationMs,
+        autoAdvanceDueAtMs: Date.now() - 1_000,
+        updatedAt: staleUpdatedAt,
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+    });
+
+    // Restores the position but downgrades to paused - never claims "playing"
+    // with no armed guard, so nothing auto-advances a machine the app cannot
+    // confirm is still running the restored track.
+    await waitFor(() => {
+      expect(result.current.isPlaying).toBe(true);
+      expect(result.current.isPaused).toBe(true);
+    });
+
     await waitFor(() => {
       const calls = result.current.setAutoAdvanceDueAtMs.mock.calls;
       const nullCalls = calls.filter(([v]: [unknown]) => v === null);

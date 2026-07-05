@@ -33,6 +33,10 @@ export type FtpListResult = {
 
 export type FtpRecursiveListResult = FtpListResult & {
   partialFailures: FtpRecursiveFailure[];
+  // True when the native walk bailed early because the device's FTP data
+  // channel timed out mid-walk - entries/partialFailures reflect only what
+  // was gathered before the bail, not the full tree. See HARD9-078.
+  timedOut: boolean;
 };
 
 export const FTP_CONNECT_TIMEOUT_MS = 1_500;
@@ -193,6 +197,7 @@ const executeFtpRecursiveList = async (
     const responsePayload = {
       entries: response.entries,
       partialFailures: response.partialFailures ?? [],
+      timedOut: response.timedOut ?? false,
     };
     recordFtpOperation(action, {
       operation: "list",
@@ -215,6 +220,7 @@ const executeFtpRecursiveList = async (
       path: normalizedPath,
       entries: response.entries,
       partialFailures: response.partialFailures ?? [],
+      timedOut: response.timedOut ?? false,
     };
   } catch (error) {
     const err = error as Error;
@@ -281,6 +287,15 @@ const executeFtpRead = async (
   // onProgress/signal are JS-side concerns and must not cross the native bridge
   // or land in the (serialized) trace payload.
   const { onProgress, signal, ...nativeReadOptions } = ftpOptions;
+  // A caller can abort a queued read before the native call is even
+  // attempted (e.g. cancelling a bulk import). Without this, the
+  // cancelRead() fired below races an INDEPENDENT native bridge call
+  // against readFile()'s own bridge call with no ordering guarantee - if
+  // readFile() wins that race, the full transfer runs anyway despite
+  // already being cancelled. See HARD9-083.
+  if (signal?.aborted) {
+    throw new DOMException("Aborted", "AbortError");
+  }
   const requestId =
     nativeReadOptions.requestId ?? (onProgress || signal ? `ftp-read-${(ftpReadRequestCounter += 1)}` : undefined);
 

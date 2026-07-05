@@ -130,23 +130,60 @@ vi.mock("@/lib/snapshot/currentPlaybackSnapshotLabel", () => ({
   getCurrentPlaybackSnapshotLabel: (...args: unknown[]) => getCurrentPlaybackSnapshotLabelMock(...args),
 }));
 
+// HARD12-020: Home's pause/resume must read/write the shared machine-execution
+// store (written by both Play and Home) instead of page-local state that
+// always assumed "running" on mount. This fake models the store's real
+// subscribe/getSnapshot/setters contract closely enough for useSyncExternalStore.
+type FakeMachineExecutionSnapshot = { state: "running" | "paused"; pauseMutePending: boolean };
+let machineExecutionSnapshot: FakeMachineExecutionSnapshot = { state: "running", pauseMutePending: false };
+const machineExecutionListeners = new Set<() => void>();
+const setMachineExecutionPausedMock = vi.fn((options?: { pauseMutePending?: boolean }) => {
+  machineExecutionSnapshot = { state: "paused", pauseMutePending: Boolean(options?.pauseMutePending) };
+  machineExecutionListeners.forEach((listener) => listener());
+});
+const setMachineExecutionRunningMock = vi.fn(() => {
+  machineExecutionSnapshot = { state: "running", pauseMutePending: false };
+  machineExecutionListeners.forEach((listener) => listener());
+});
+const restorePauseMuteFromPersistedSnapshotMock = vi.fn(async () => true);
+
+vi.mock("@/lib/deviceInteraction/machineExecutionStore", () => ({
+  getMachineExecutionSnapshot: () => machineExecutionSnapshot,
+  subscribeMachineExecution: (listener: () => void) => {
+    machineExecutionListeners.add(listener);
+    return () => machineExecutionListeners.delete(listener);
+  },
+  setMachineExecutionPaused: (options?: { pauseMutePending?: boolean }) => setMachineExecutionPausedMock(options),
+  setMachineExecutionRunning: () => setMachineExecutionRunningMock(),
+  restorePauseMuteFromPersistedSnapshot: (...args: unknown[]) => restorePauseMuteFromPersistedSnapshotMock(...args),
+}));
+
+vi.mock("@/lib/savedDevices/store", () => ({
+  getSelectedSavedDevice: () => ({ id: "device-a" }),
+}));
+
 import { useHomeActions } from "@/pages/home/hooks/useHomeActions";
 import type { SnapshotStorageEntry } from "@/lib/snapshot/snapshotTypes";
+import { CpuRestoreUnsupportedError } from "@/lib/snapshot/cpu/restoreCart";
 
 describe("useHomeActions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    machineExecutionSnapshot = { state: "running", pauseMutePending: false };
+    restorePauseMuteFromPersistedSnapshotMock.mockResolvedValue(true);
     statusState.isConnected = true;
     drivesState.value = null;
     pauseMutateAsyncMock.mockResolvedValue(undefined);
     resumeMutateAsyncMock.mockResolvedValue(undefined);
     powerOffMutateAsyncMock.mockResolvedValue(undefined);
     clearRamAndRebootMock.mockResolvedValue(undefined);
-    createSnapshotMock.mockResolvedValue({ displayTimestamp: "2026-01-01 12:00:00" });
+    createSnapshotMock.mockResolvedValue({ displayTimestamp: "2026-01-01 12:00:00", evictedSnapshotLabel: null });
     createCpuSnapshotMock.mockResolvedValue({
       displayTimestamp: "2026-01-01 12:00:00",
       cpu: { pc: 0xc000, a: 0, x: 0, y: 0, sp: 0xf6, p: 0x30 },
       captureMethod: "rli",
+      resumeError: null,
+      evictedSnapshotLabel: null,
     });
     restoreCpuSnapshotFromDecodedMock.mockResolvedValue({ ok: true, rtiFrameAddress: 0x01f4 });
     getCurrentPlaybackSnapshotLabelMock.mockReturnValue(undefined);
@@ -223,6 +260,37 @@ describe("useHomeActions", () => {
       contentName: undefined,
     });
     expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: "Snapshot saved" }));
+  });
+
+  it("warns when saving evicts the oldest snapshot to stay within the library cap (HARD9-069)", async () => {
+    createSnapshotMock.mockResolvedValueOnce({
+      displayTimestamp: "2026-01-01 12:00:00",
+      evictedSnapshotLabel: "Boss fight",
+    });
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handleSaveRam("program");
+    });
+
+    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: "Snapshot saved" }));
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Oldest snapshot removed",
+        description: expect.stringContaining("Boss fight"),
+        variant: "destructive",
+      }),
+    );
+  });
+
+  it("does not warn about eviction when the library is under the cap", async () => {
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handleSaveRam("program");
+    });
+
+    expect(toastMock).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Oldest snapshot removed" }));
   });
 
   it("uses the current playback item as the default snapshot comment", async () => {
@@ -418,6 +486,56 @@ describe("useHomeActions", () => {
       );
     });
 
+    it("warns when saving a CPU+RAM snapshot evicts the oldest to stay within the library cap (HARD9-069)", async () => {
+      createCpuSnapshotMock.mockResolvedValueOnce({
+        displayTimestamp: "2026-01-01 12:00:00",
+        cpu: { pc: 0xc000, a: 0, x: 0, y: 0, sp: 0xf6, p: 0x30 },
+        captureMethod: "rli",
+        resumeError: null,
+        evictedSnapshotLabel: "Old boss save",
+      });
+      const { result } = renderHook(() => useHomeActions());
+
+      await act(async () => {
+        await result.current.handleSaveCpuSnapshot();
+      });
+
+      expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: "CPU + RAM snapshot saved" }));
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Oldest snapshot removed",
+          description: expect.stringContaining("Old boss save"),
+          variant: "destructive",
+        }),
+      );
+    });
+
+    it("warns the user the machine may still be frozen when resume fails after a clean capture (HARD9-035)", async () => {
+      createCpuSnapshotMock.mockResolvedValueOnce({
+        displayTimestamp: "2026-01-01 12:00:00",
+        cpu: { pc: 0xc000, a: 0, x: 0, y: 0, sp: 0xf6, p: 0x30 },
+        captureMethod: "rli",
+        resumeError: new Error("machine resume write failed"),
+      });
+      const { result } = renderHook(() => useHomeActions());
+
+      await act(async () => {
+        await result.current.handleSaveCpuSnapshot();
+      });
+
+      // The snapshot still saved (createCpuSnapshot resolved) - this must
+      // not be reported as an operation failure, but the user still needs
+      // to know the machine likely needs a manual Restore/reset.
+      expect(reportUserErrorMock).not.toHaveBeenCalled();
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: expect.stringContaining("may still be frozen"),
+          description: expect.stringContaining("machine resume write failed"),
+          variant: "destructive",
+        }),
+      );
+    });
+
     it("degrades with an actionable message when the program protects its interrupts", async () => {
       const { CpuCaptureFailedError } = await import("@/lib/snapshot/cpu/captureEngine");
       createCpuSnapshotMock.mockRejectedValueOnce(new CpuCaptureFailedError("no rideable interrupt"));
@@ -499,5 +617,138 @@ describe("useHomeActions", () => {
     // The CPU path returns early — the RAM-range loader must not run.
     expect(loadMemoryRangesMock).not.toHaveBeenCalled();
     expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: "Snapshot restored" }));
+  });
+
+  it("falls back to a RAM-only restore when CPU restore is unsupported (HARD9-036)", async () => {
+    decodeSnapshotMock.mockReturnValue({
+      version: 2,
+      snapshotType: "program",
+      timestamp: 0,
+      ranges: [{ start: 0, length: 100 }],
+      blocks: [new Uint8Array(100)],
+      metadata: {
+        snapshot_type: "program",
+        display_ranges: [],
+        created_at: "",
+        cpu_state_captured: true,
+        cpu: { pc: 0xc000, a: 0, x: 0, y: 0, sp: 0xf6, p: 0x30, flags: {} },
+      },
+    });
+    restoreCpuSnapshotFromDecodedMock.mockRejectedValueOnce(
+      new CpuRestoreUnsupportedError("stack pointer $05 is below the safe minimum"),
+    );
+    const snapshot: SnapshotStorageEntry = {
+      id: "snap-cpu-unsupported",
+      filename: "c64-program.c64snap",
+      bytesBase64: "",
+      createdAt: "2026-01-01T12:00:00.000Z",
+      snapshotType: "program",
+      metadata: { snapshot_type: "program", display_ranges: [], created_at: "2026-01-01 12:00:00" },
+    };
+
+    const { result } = renderHook(() => useHomeActions());
+    await act(async () => {
+      await result.current.handleRestoreSnapshot(snapshot);
+    });
+
+    // CpuRestoreUnsupportedError is thrown before any cartridge upload -
+    // nothing on the device was touched, so RAM-only restore is safe.
+    expect(loadMemoryRangesMock).toHaveBeenCalledWith(apiMock, [{ start: 0, bytes: expect.any(Uint8Array) }]);
+    expect(reportUserErrorMock).not.toHaveBeenCalled();
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: expect.stringContaining("RAM only"),
+        description: expect.stringContaining("stack pointer $05"),
+        variant: "destructive",
+      }),
+    );
+  });
+
+  it("reports a post-upload CPU restore failure as an error instead of silently falling back (HARD9-036)", async () => {
+    decodeSnapshotMock.mockReturnValue({
+      version: 2,
+      snapshotType: "program",
+      timestamp: 0,
+      ranges: [{ start: 0, length: 100 }],
+      blocks: [new Uint8Array(100)],
+      metadata: {
+        snapshot_type: "program",
+        display_ranges: [],
+        created_at: "",
+        cpu_state_captured: true,
+        cpu: { pc: 0xc000, a: 0, x: 0, y: 0, sp: 0xf6, p: 0x30, flags: {} },
+      },
+    });
+    // restoreCpuSnapshotFromDecoded itself already attempts a recovery reset
+    // and augments the message before rejecting (see restoreCart.ts) - this
+    // is a plain Error, not CpuRestoreUnsupportedError, since the cartridge
+    // was already uploaded by this point.
+    restoreCpuSnapshotFromDecodedMock.mockRejectedValueOnce(
+      new Error("CPU restore: cartridge did not reach its handshake (the machine was automatically reset)"),
+    );
+    const snapshot: SnapshotStorageEntry = {
+      id: "snap-cpu-post-upload-fail",
+      filename: "c64-program.c64snap",
+      bytesBase64: "",
+      createdAt: "2026-01-01T12:00:00.000Z",
+      snapshotType: "program",
+      metadata: { snapshot_type: "program", display_ranges: [], created_at: "2026-01-01 12:00:00" },
+    };
+
+    const { result } = renderHook(() => useHomeActions());
+    await act(async () => {
+      await result.current.handleRestoreSnapshot(snapshot);
+    });
+
+    expect(loadMemoryRangesMock).not.toHaveBeenCalled();
+    expect(reportUserErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "HOME_MACHINE_LOAD_RAM",
+        description: expect.stringContaining("automatically reset"),
+      }),
+    );
+  });
+
+  // HARD12-020: Home previously assumed "running" on every mount via
+  // page-local useState, desyncing from a pause applied via Play (which may
+  // now be an unmounted placeholder). Home must read its initial pause label
+  // from the shared machine-execution store instead.
+  it("reads the initial pause state from the shared machine-execution store (HARD12-020)", () => {
+    machineExecutionSnapshot = { state: "paused", pauseMutePending: false };
+
+    const { result } = renderHook(() => useHomeActions());
+
+    expect(result.current.machineExecutionState).toBe("paused");
+  });
+
+  // HARD12-020: Play's pause path may capture a SID pause-mute snapshot that
+  // only Home's resume can restore (Play may be an unmounted placeholder when
+  // the user resumes from Home). Resuming from Home must restore that
+  // snapshot when the shared store reports one is pending, and must not do
+  // so when no mute is pending.
+  it("restores the pause-mute snapshot when resuming with a pending pause-mute flag (HARD12-020)", async () => {
+    machineExecutionSnapshot = { state: "paused", pauseMutePending: true };
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handlePauseResume();
+    });
+
+    expect(resumeMutateAsyncMock).toHaveBeenCalledTimes(1);
+    expect(restorePauseMuteFromPersistedSnapshotMock).toHaveBeenCalledWith(apiMock, "device-a");
+    expect(setMachineExecutionRunningMock).toHaveBeenCalledTimes(1);
+    expect(result.current.machineExecutionState).toBe("running");
+  });
+
+  it("does not attempt a pause-mute restore when resuming with no pending pause-mute flag (HARD12-020)", async () => {
+    machineExecutionSnapshot = { state: "paused", pauseMutePending: false };
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handlePauseResume();
+    });
+
+    expect(resumeMutateAsyncMock).toHaveBeenCalledTimes(1);
+    expect(restorePauseMuteFromPersistedSnapshotMock).not.toHaveBeenCalled();
   });
 });

@@ -41,7 +41,8 @@ scope only without violating `REVIEW.md`.
 
 1. Start with `README.md` for overview, local build steps, and Android notes.
 2. Read `REVIEW.md` for the quality bar every change is held to (hazards, severity, verification).
-3. REST API details live in `docs/c64/c64u-openapi.yaml`.
+3. REST API details live in the per-device specs: `docs/c64/devices/u64e/3.15alpha/u64e-openapi.yaml`
+   for C64U/U64/U64E2 and `docs/c64/devices/u2/3.14a/u2-openapi.yaml` for U2.
 4. Consult `docs/c64/c64u-telnet.yaml` before any Telnet-related change; treat it as the Telnet menu/source-of-truth reference.
 5. Read the UX design in `docs/ux-guidelines.md` before any UX work.
 6. Read `docs/testing/maestro.md` before authoring or editing any Maestro flows.
@@ -181,7 +182,9 @@ At completion, summarize:
 
 - **Quality bar / review standards**: `REVIEW.md` (repo root)
 - **Entry index**: `.github/copilot-instructions.md`
-- **REST API docs**: `docs/c64/c64u-openapi.yaml`
+- **REST API docs**: `docs/c64/devices/u64e/3.15alpha/u64e-openapi.yaml` for C64U/U64/U64E2
+  and `docs/c64/devices/u2/3.14a/u2-openapi.yaml` for U2. Gate U64-family-only surfaces such as
+  Streams and `machine:input` on runtime capabilities; U2 has no Streams/Input/poweroff.
 - **Telnet menu reference**: `docs/c64/c64u-telnet.yaml` (consult before Telnet-related code or test changes)
 - **CTA inventory & keypad map**: `docs/cta-inventory.md` (authoritative per-page list of every interactive control and its keypad/D-pad/T9 reachability; keep current — see "CTA inventory upkeep")
 - **App entry**: `src/main.tsx`, `src/App.tsx`
@@ -274,6 +277,40 @@ it — an over-listed control is cheaper than a missing one.
 - **Android fixtures**: `android/app/src/test/fixtures/hvsc/`
 - **Python agents**: `npm run test:agents` (pytest) with specs in `agents/tests/`; requires ≥90% branch coverage
 - **Maestro**: read `docs/testing/maestro.md` before creating or updating flows under `.maestro/`
+
+## Dependency and lockfile changes — validate with `npm ci`, never just `npm install`
+
+Changing any dependency (adding, removing, or bumping in `package.json`) can
+leave `package-lock.json` installable on **your** machine yet broken in CI.
+
+Root cause seen in practice (PR #299): `npm install` on `linux-x64` **prunes
+cross-platform OPTIONAL dependencies** from the lock — e.g. `@emnapi/core`/
+`@emnapi/runtime` (required by `@rolldown/binding-wasm32-wasi`), or
+platform-specific `sharp`/native binaries. `npm ci` on that same platform does
+**not** notice the gap, so it looks fine locally; but `npm ci` on CI's other
+platforms then fails with `Missing <pkg>@<version> from lock file`, breaking
+**every** job at the install step (Web, Android, iOS, notices, variant — all of
+them). A single-arch `npm install` is therefore an unsafe way to regenerate the lock.
+
+After **any** dependency change you MUST:
+
+- **Run `npm ci` (clean, strict install) before pushing — not just `npm install`.**
+  `npm ci` is exactly what CI runs; it is the honest gate for `package.json` ↔
+  `package-lock.json` sync. Passing `npm ci` locally is necessary but, because of
+  the pruning above, **not sufficient** — also confirm the lock still contains the
+  cross-platform optional entries a known-good lock had.
+- Keep `package.json` and `package-lock.json` in exact sync; a bump in one
+  requires the other.
+- Treat the lock as cross-platform. Never leave it hand-pruned. If `npm install`
+  drops optional entries that the last known-good lock contained, **restore them**
+  so the lock is complete for all platforms. Prefer the **smallest honest delta**
+  (only the intended bumps) over a full regeneration that reorders or prunes
+  unrelated entries.
+- Regenerate the notices (`npm run notices:check`) — dependency changes alter
+  `THIRD_PARTY_NOTICES.md`.
+- Prefer within-major bumps; hold framework-defining majors (React, Tailwind,
+  Vite, Vitest, TypeScript, Zod, react-router) for a dedicated, separately
+  validated change so a break is isolated and diagnosable.
 
 ## Release tag APKs
 

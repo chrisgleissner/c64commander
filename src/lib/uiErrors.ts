@@ -139,7 +139,7 @@ const buildErrorDetails = (error?: unknown) => {
 // instead of duplicating transient-failure pattern strings.
 export const isTransientConnectivityFailure = (message: string): boolean => {
   const normalized = message.toLowerCase();
-  return /host unreachable|service unavailable|http 503|failed to fetch|net::err|request timed out|networkerror|dns/.test(
+  return /host unreachable|service unavailable|http 503|failed to fetch|net::err|request timed out|networkerror|dns|device circuit open|device circuit probe already in flight|device not ready for (?:requests|ftp|telnet)/.test(
     normalized,
   );
 };
@@ -197,8 +197,12 @@ export const reportUserError = ({
   }
 
   // §5 dedup — same operation+host+errorClass within 30 s → count it, skip new toast.
+  // The window is anchored to the first occurrence's timestamp, not slid
+  // forward on every duplicate: a persistently recurring error must still
+  // get a fresh toast ~30s after it started, not be suppressed forever.
+  // See HARD9-055.
   if (isDuplicate && existing) {
-    dedupMap.set(dedupKey, { ...existing, count: occurrenceCount, timestamp: now });
+    dedupMap.set(dedupKey, { ...existing, count: occurrenceCount });
     return;
   }
 

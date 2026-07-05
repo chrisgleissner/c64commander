@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+export const AUDIO_MIXER_MASTER_VOLUME_ITEM = "Vol Master";
+
 export const AUDIO_MIXER_VOLUME_ITEMS = ["Vol UltiSid 1", "Vol UltiSid 2", "Vol Socket 1", "Vol Socket 2"];
 
 export const SID_SOCKETS_ITEMS = ["SID Socket 1", "SID Socket 2"];

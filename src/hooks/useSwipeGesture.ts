@@ -72,6 +72,11 @@ export type SwipeGestureCallbacks = {
   onProgress: (dx: number, velocityX: number) => void;
   onCommit: (direction: SwipeDirection, metadata: SwipeGestureMetadata) => void;
   onCancel: (metadata: SwipeGestureMetadata) => void;
+  // Fires whenever pointer capture for a gesture starts/ends, independent of
+  // dx changing. Lets a consumer's stuck-state recovery timer distinguish a
+  // stationary held pointer (dx not changing, but still legitimately down)
+  // from a genuinely missed pointerup/pointercancel. See HARD9-026.
+  onActiveChange?: (active: boolean) => void;
 };
 
 type GestureState = {
@@ -132,6 +137,7 @@ export function useSwipeGesture(
         }
       }
       stateRef.current = { ...IDLE };
+      callbacksRef.current.onActiveChange?.(false);
     },
     [containerRef],
   );
@@ -177,6 +183,7 @@ export function useSwipeGesture(
         velocityX: 0,
         intent: "undecided",
       };
+      callbacksRef.current.onActiveChange?.(true);
     },
     [containerRef],
   );
@@ -303,14 +310,22 @@ export function useSwipeGesture(
 
     container.addEventListener("pointerdown", handlePointerDown, { passive: true });
     container.addEventListener("pointermove", handlePointerMove, { passive: true });
-    container.addEventListener("pointerup", handlePointerEnd, { passive: true });
-    container.addEventListener("pointercancel", handlePointerEnd, { passive: true });
+    // pointerup/pointercancel are bound on window, not container: pointer
+    // capture is deferred until intent is confirmed "navigating" (see
+    // handlePointerDown), so a mouse drag that stays under the axis-lock
+    // threshold (or classifies "locked") has no capture yet — releasing
+    // outside the container would otherwise never reach a container-scoped
+    // listener, stranding stateRef.current.active=true and swallowing the
+    // next pointerdown. Window listeners still receive captured-pointer
+    // releases too (they bubble past the capturing element to window).
+    window.addEventListener("pointerup", handlePointerEnd, { passive: true });
+    window.addEventListener("pointercancel", handlePointerEnd, { passive: true });
 
     return () => {
       container.removeEventListener("pointerdown", handlePointerDown);
       container.removeEventListener("pointermove", handlePointerMove);
-      container.removeEventListener("pointerup", handlePointerEnd);
-      container.removeEventListener("pointercancel", handlePointerEnd);
+      window.removeEventListener("pointerup", handlePointerEnd);
+      window.removeEventListener("pointercancel", handlePointerEnd);
     };
   }, [containerRef, handlePointerDown, handlePointerEnd, handlePointerMove]);
 }

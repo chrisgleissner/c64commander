@@ -43,6 +43,12 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
+import {
+  loadAutofireRateHz,
+  saveAutofireRateHz,
+  MIN_AUTOFIRE_RATE_HZ,
+  MAX_AUTOFIRE_RATE_HZ,
+} from "@/lib/remoteInput/autofire";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
@@ -135,6 +141,7 @@ import {
   saveConfigsCooldownMs,
   saveDrivesCooldownMs,
   saveFtpListCooldownMs,
+  saveMachineInputCooldownMs,
   saveBackoffBaseMs,
   saveBackoffMaxMs,
   saveBackoffFactor,
@@ -208,13 +215,23 @@ const isValidConnectionPort = (value: string) => {
   return Number.isInteger(parsed) && parsed >= 1 && parsed <= 65535;
 };
 
-const isOfflineSwitchResult = (value: unknown): value is { ok: false; error?: string | null } =>
+const isOfflineSwitchResult = (value: unknown): value is { ok: false; error?: string | null; authRequired?: boolean } =>
   typeof value === "object" && value !== null && "ok" in value && (value as { ok?: unknown }).ok === false;
+
+// The device answered but rejected the password (HTTP 401/403) — this is not the same
+// failure as an unreachable device, and must not be reported as one (HARD9-028).
+const describeSwitchFailure = (
+  verification: { error?: string | null; authRequired?: boolean },
+  fallbackMessage: string,
+): string =>
+  verification.authRequired
+    ? "The device rejected the password. Check the password and try again."
+    : (verification.error ?? fallbackMessage);
 
 export default function SettingsPage() {
   const { profile } = useDisplayProfile();
   const navigate = useNavigate();
-  const { status, baseUrl, runtimeBaseUrl, password, deviceHost, updateConfig, refetch } = useC64Connection();
+  const { status, baseUrl, runtimeBaseUrl, deviceHost, updateConfig, refetch } = useC64Connection();
   const savedDevices = useSavedDevices();
   const switchSavedDevice = useSavedDeviceSwitching();
   const connectionSnapshot = useConnectionState();
@@ -232,9 +249,15 @@ export default function SettingsPage() {
   const buildInfo = getBuildInfo();
   const buildInfoRows = getBuildInfoRows(buildInfo);
   const settingsDocumentationLink = getSettingsDocumentationLink();
-  const passwordInputRef = useRef(password);
+  // The saved device's real password is never loaded into this ref/state (HARD9-004):
+  // both start empty and only ever hold what the user has actually typed this session.
+  const passwordInputRef = useRef("");
 
-  const [passwordInput, setPasswordInput] = useState(password);
+  const [passwordInput, setPasswordInput] = useState("");
+  // Whether the password field is showing an editable draft. Starts `true` (editable)
+  // and is corrected to match the selected device on the first effect pass below.
+  const [passwordEditing, setPasswordEditing] = useState(true);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [deviceDraft, setDeviceDraft] = useState<SavedDeviceEditorDraft>(() =>
     buildSavedDeviceEditorDraft(
       {
@@ -306,6 +329,7 @@ export default function SettingsPage() {
   const [volumeSliderPreviewIntervalMs, setVolumeSliderPreviewIntervalMs] = useState(
     loadVolumeSliderPreviewIntervalMs(),
   );
+  const [autofireRateHz, setAutofireRateHz] = useState(loadAutofireRateHz());
   const [startupDiscoveryWindowInput, setStartupDiscoveryWindowInput] = useState(
     String(loadStartupDiscoveryWindowMs() / 1000),
   );
@@ -324,6 +348,9 @@ export default function SettingsPage() {
   const [configsCooldownInput, setConfigsCooldownInput] = useState(String(deviceSafetyConfig.configsCooldownMs));
   const [drivesCooldownInput, setDrivesCooldownInput] = useState(String(deviceSafetyConfig.drivesCooldownMs));
   const [ftpCooldownInput, setFtpCooldownInput] = useState(String(deviceSafetyConfig.ftpListCooldownMs));
+  const [machineInputCooldownInput, setMachineInputCooldownInput] = useState(
+    String(deviceSafetyConfig.machineInputCooldownMs),
+  );
   const [backoffBaseInput, setBackoffBaseInput] = useState(String(deviceSafetyConfig.backoffBaseMs));
   const [backoffMaxInput, setBackoffMaxInput] = useState(String(deviceSafetyConfig.backoffMaxMs));
   const [backoffFactorInput, setBackoffFactorInput] = useState(String(deviceSafetyConfig.backoffFactor));
@@ -427,11 +454,6 @@ export default function SettingsPage() {
   }, [hvscUpdateCheckIntervalInput]);
 
   useEffect(() => {
-    passwordInputRef.current = password;
-    setPasswordInput(password);
-  }, [password]);
-
-  useEffect(() => {
     if (!selectedSavedDevice) {
       return;
     }
@@ -449,21 +471,19 @@ export default function SettingsPage() {
     selectedSavedDevice?.telnetPort,
   ]);
 
+  // The password field never loads the real secret (HARD9-004): switching the selected
+  // device (or its hasPassword flag changing after a save) just resets to an empty draft,
+  // locked/read-only when a password is already saved, directly editable otherwise. This
+  // also removes the write race from HARD9-025 — nothing here overwrites an in-progress
+  // keystroke, since no effect mirrors live connection/password state into this field.
   useEffect(() => {
     if (!selectedSavedDevice) {
       return;
     }
-    let cancelled = false;
-    void (async () => {
-      const nextPassword = selectedSavedDevice.hasPassword ? await getPasswordForDevice(selectedSavedDevice.id) : null;
-      if (!cancelled) {
-        passwordInputRef.current = nextPassword ?? "";
-        setPasswordInput(nextPassword ?? "");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    setPasswordInput("");
+    passwordInputRef.current = "";
+    setPasswordEditing(!selectedSavedDevice.hasPassword);
+    setPasswordError(null);
   }, [selectedSavedDevice?.id, selectedSavedDevice?.hasPassword]);
 
   const handleDeviceDraftChange = useCallback(
@@ -560,6 +580,7 @@ export default function SettingsPage() {
     setConfigsCooldownInput(String(next.configsCooldownMs));
     setDrivesCooldownInput(String(next.drivesCooldownMs));
     setFtpCooldownInput(String(next.ftpListCooldownMs));
+    setMachineInputCooldownInput(String(next.machineInputCooldownMs));
     setBackoffBaseInput(String(next.backoffBaseMs));
     setBackoffMaxInput(String(next.backoffMaxMs));
     setBackoffFactorInput(String(next.backoffFactor));
@@ -640,8 +661,18 @@ export default function SettingsPage() {
     if (hostError || portError || nextDeviceNameError) return;
     const nextHost = stripPortFromDeviceHost(deviceDraft.host.trim() || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
     const nextDeviceHost = buildDeviceHostWithHttpPort(nextHost, Number(deviceDraft.httpPort));
-    const trimmedPassword = passwordInputRef.current.trim();
-    const hasPassword = trimmedPassword.length > 0;
+    // The field never displays the real saved secret (HARD9-004): while `passwordEditing`
+    // is false the user hasn't touched it, so reuse the stored password unchanged instead
+    // of the empty value that's actually sitting in the (never-shown) input.
+    const isChangingPassword = passwordEditing;
+    const typedPassword = passwordInputRef.current.trim();
+    const effectivePassword = isChangingPassword
+      ? typedPassword
+      : selectedSavedDevice.hasPassword
+        ? ((await getPasswordForDevice(selectedSavedDevice.id)) ?? "")
+        : "";
+    const hasPassword = effectivePassword.length > 0;
+    setPasswordError(null);
     setIsSaving(true);
     try {
       // Pre-commit reachability gate: never persist an unreachable device. When an
@@ -650,7 +681,7 @@ export default function SettingsPage() {
       const reachability = await evaluateNewDeviceReachability({
         host: nextHost,
         deviceHost: nextDeviceHost,
-        password: hasPassword ? trimmedPassword : null,
+        password: hasPassword ? effectivePassword : null,
       });
       if (reachability.status === "unreachable") {
         if (reachability.suggestedAddress) {
@@ -664,13 +695,21 @@ export default function SettingsPage() {
         }
         return;
       }
+      if (reachability.status === "needs-password" && isChangingPassword && hasPassword) {
+        // The just-typed password was itself rejected by the device. A wrong password
+        // must never be persisted (HARD9-004) — surface it as an auth failure, not a save.
+        setPasswordError("Wrong password for this device.");
+        return;
+      }
       setReachabilitySuggestion(null);
       setStoredFtpPort(Number(deviceDraft.ftpPort));
       setStoredTelnetPort(Number(deviceDraft.telnetPort));
-      if (hasPassword) {
-        await setPasswordForDevice(selectedSavedDevice.id, trimmedPassword);
-      } else {
-        await clearPasswordForDevice(selectedSavedDevice.id);
+      if (isChangingPassword) {
+        if (hasPassword) {
+          await setPasswordForDevice(selectedSavedDevice.id, effectivePassword);
+        } else {
+          await clearPasswordForDevice(selectedSavedDevice.id);
+        }
       }
       updateSavedDevice(selectedSavedDevice.id, {
         name: deviceDraft.name,
@@ -681,14 +720,19 @@ export default function SettingsPage() {
         telnetPort: Number(deviceDraft.telnetPort),
         hasPassword,
       });
-      updateConfig(nextDeviceHost, hasPassword ? trimmedPassword : undefined);
+      updateConfig(nextDeviceHost, hasPassword ? effectivePassword : undefined);
       const verification = await switchSavedDevice(selectedSavedDevice.id);
       if (isOfflineSwitchResult(verification)) {
         throw new Error(
-          verification.error ??
+          describeSwitchFailure(
+            verification,
             `Unable to reach ${nextHost}. Check the hostname/IP address and confirm the device is powered on.`,
+          ),
         );
       }
+      setPasswordInput("");
+      passwordInputRef.current = "";
+      setPasswordEditing(!hasPassword);
       toast({ title: "Connection settings saved" });
     } catch (error) {
       reportUserError({
@@ -822,8 +866,10 @@ export default function SettingsPage() {
       const verification = await switchSavedDevice(persisted.deviceId);
       if (isOfflineSwitchResult(verification)) {
         throw new Error(
-          verification.error ??
+          describeSwitchFailure(
+            verification,
             `Unable to connect to ${persisted.host}. The device was discovered, but did not answer the follow-up connection check.`,
+          ),
         );
       }
       toast({ title: "Discovered device selected" });
@@ -887,13 +933,10 @@ export default function SettingsPage() {
     { value: "auto", label: "Auto" },
   ];
 
-  useEffect(() => {
-    void applyScreenOrientationMode(screenOrientationMode);
-  }, [screenOrientationMode]);
-
   const commitScreenOrientationMode = (mode: ScreenOrientationMode) => {
     setScreenOrientationMode(mode);
     saveScreenOrientationMode(mode);
+    void applyScreenOrientationMode(mode);
   };
 
   const commitHideStatusBar = (enabled: boolean) => {
@@ -1293,19 +1336,73 @@ export default function SettingsPage() {
                     <Lock className="h-3 w-3" />
                     Network Password
                   </Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={passwordInput}
-                    onChange={(e) => {
-                      const nextPassword = e.target.value;
-                      passwordInputRef.current = nextPassword;
-                      setPasswordInput(nextPassword);
-                    }}
-                    placeholder="Optional"
-                    className="font-sans"
-                  />
-                  <p className="text-xs text-muted-foreground">Only needed if your device uses one.</p>
+                  {selectedSavedDevice?.hasPassword && !passwordEditing ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="password"
+                        type="password"
+                        value="••••••••"
+                        readOnly
+                        disabled
+                        aria-label="Network Password saved"
+                        className="font-sans"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setPasswordError(null);
+                          setPasswordInput("");
+                          passwordInputRef.current = "";
+                          setPasswordEditing(true);
+                        }}
+                      >
+                        Change
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="password"
+                        type="password"
+                        value={passwordInput}
+                        autoFocus={Boolean(selectedSavedDevice?.hasPassword)}
+                        onChange={(e) => {
+                          const nextPassword = e.target.value;
+                          passwordInputRef.current = nextPassword;
+                          setPasswordInput(nextPassword);
+                          setPasswordError(null);
+                        }}
+                        placeholder="Optional"
+                        className="font-sans"
+                      />
+                      {selectedSavedDevice?.hasPassword ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setPasswordError(null);
+                            setPasswordInput("");
+                            passwordInputRef.current = "";
+                            setPasswordEditing(false);
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      ) : null}
+                    </div>
+                  )}
+                  {passwordError ? (
+                    <p className="text-xs text-destructive">{passwordError}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      {selectedSavedDevice?.hasPassword && !passwordEditing
+                        ? "Password saved."
+                        : "Only needed if your device uses one."}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1777,48 +1874,27 @@ export default function SettingsPage() {
                     starts. Some loaders may not like DMA.
                   </p>
                 </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm">Autofire rate: {autofireRateHz}/s</Label>
+                  <Slider
+                    min={MIN_AUTOFIRE_RATE_HZ}
+                    max={MAX_AUTOFIRE_RATE_HZ}
+                    step={1}
+                    value={[autofireRateHz]}
+                    onValueChange={([value]) => setAutofireRateHz(value)}
+                    onValueCommit={([value]) => saveAutofireRateHz(value)}
+                    aria-label="Autofire rate"
+                    data-testid="settings-autofire-rate-slider"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    How many times per second Remote Input Autofire presses FIRE while held. Also adjustable on the
+                    Remote Input joystick. Default 5/s. Range {MIN_AUTOFIRE_RATE_HZ}–{MAX_AUTOFIRE_RATE_HZ}/s.
+                  </p>
+                </div>
               </div>
             </motion.div>
           </ProfileSplitSection>
-
-          {/* 5. Config */}
-          {demoModeFeatureEnabled ? (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-card border border-border rounded-xl p-4 space-y-4"
-            >
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Cpu className="h-5 w-5 text-primary" />
-                </div>
-                <h2 className="font-medium">Config</h2>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex items-start justify-between gap-3 min-w-0">
-                  <div className="space-y-1 min-w-0">
-                    <Label htmlFor="demo-mode-enabled" className="font-medium">
-                      Automatic Demo Mode
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      Offer the built-in simulated device after real-device discovery fails.
-                    </p>
-                  </div>
-                  <Checkbox
-                    id="demo-mode-enabled"
-                    checked={demoModeEnabled}
-                    onCheckedChange={(checked) => {
-                      const enabled = checked === true;
-                      setDemoModeEnabled(enabled);
-                      saveDemoModeEnabled(enabled);
-                    }}
-                  />
-                </div>
-              </div>
-            </motion.div>
-          ) : null}
 
           {featureGroups.map((group, index) => (
             <motion.div
@@ -2361,6 +2437,29 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="space-y-2">
+                  <Label htmlFor="machine-input-cooldown" className="text-sm">
+                    Machine input cooldown (ms)
+                  </Label>
+                  <Input
+                    id="machine-input-cooldown"
+                    data-testid="device-safety-machine-input-cooldown"
+                    type="number"
+                    min={0}
+                    max={2000}
+                    step={10}
+                    value={machineInputCooldownInput}
+                    onChange={(event) => setMachineInputCooldownInput(event.target.value)}
+                    onBlur={() =>
+                      commitDeviceSafetyNumber(
+                        machineInputCooldownInput,
+                        saveMachineInputCooldownMs,
+                        deviceSafetyConfig.machineInputCooldownMs,
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="backoff-base" className="text-sm">
                     Backoff base (ms)
                   </Label>
@@ -2574,10 +2673,9 @@ export default function SettingsPage() {
                   max={NOTIFICATION_DURATION_MAX_MS}
                   step={500}
                   value={[notificationDurationMs]}
-                  onValueChange={([value]) => {
-                    setNotificationDurationMs(value);
-                    saveNotificationDurationMs(value);
-                  }}
+                  onValueChange={([value]) => setNotificationDurationMs(value)}
+                  onValueCommit={([value]) => saveNotificationDurationMs(value)}
+                  data-testid="settings-notification-duration-slider"
                 />
                 <p className="text-xs text-muted-foreground">Default 4s. Range 2–8s.</p>
               </div>

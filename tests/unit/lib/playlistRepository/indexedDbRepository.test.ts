@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getIndexedDbPlaylistDataRepository } from "@/lib/playlistRepository";
-import { resetIndexedDbPlaylistRepositoryForTests } from "@/lib/playlistRepository/indexedDbRepository";
+import {
+  collectOrphanTracksForTests,
+  resetIndexedDbPlaylistRepositoryForTests,
+} from "@/lib/playlistRepository/indexedDbRepository";
 import type { PlaylistItemRecord, TrackRecord } from "@/lib/playlistRepository";
 import { addLog } from "@/lib/logging";
 
@@ -67,6 +70,27 @@ const createFakeIndexedDb = (options: FakeIndexedDbOptions = {}) => {
             }
             ensureStore(storeName).set(key, value);
             request.result = key;
+            (request.onsuccess as (() => void) | undefined)?.();
+          });
+          return request;
+        },
+        delete: (key: string) => {
+          const request: Record<string, unknown> = {};
+          queueMicrotask(() => {
+            ensureStore(storeName).delete(key);
+            (request.onsuccess as (() => void) | undefined)?.();
+          });
+          return request;
+        },
+        getAllKeys: () => {
+          const request: Record<string, unknown> = {};
+          queueMicrotask(() => {
+            if (options.failGet) {
+              request.error = options.failGetWithoutError ? null : new Error("fake getAllKeys failure");
+              (request.onerror as (() => void) | undefined)?.();
+              return;
+            }
+            request.result = [...ensureStore(storeName).keys()];
             (request.onsuccess as (() => void) | undefined)?.();
           });
           return request;
@@ -287,6 +311,100 @@ describe("indexedDB playlist repository", () => {
 
     expect(page.totalMatchCount).toBe(1);
     expect(page.rows.map((row) => row.playlistItem.playlistItemId)).toEqual(["item-b"]);
+  });
+
+  it("deletes stale playlist-item records for items removed by a later replacePlaylistSnapshot, but keeps track records (HARD9-034)", async () => {
+    const repository = getIndexedDbPlaylistDataRepository({
+      preferDurableStorage: false,
+    });
+    const stateStore = (globalThis.indexedDB as IDBFactory & { __stores: Map<string, Map<string, unknown>> }).__stores;
+
+    await repository.replacePlaylistSnapshot?.("playlist-default", {
+      tracks: [buildTrack({ trackId: "track-a" }), buildTrack({ trackId: "track-b" })],
+      playlistItems: [buildItem("item-a", "track-a", "0001"), buildItem("item-b", "track-b", "0002")],
+    });
+
+    const storeAfterFirst = stateStore.get("state");
+    expect(storeAfterFirst?.has("playlist-item:playlist-default:item-a")).toBe(true);
+    expect(storeAfterFirst?.has("playlist-item:playlist-default:item-b")).toBe(true);
+
+    // Second replace drops item-a entirely.
+    await repository.replacePlaylistSnapshot?.("playlist-default", {
+      tracks: [buildTrack({ trackId: "track-b" })],
+      playlistItems: [buildItem("item-b", "track-b", "0001")],
+    });
+
+    const storeAfterSecond = stateStore.get("state");
+    expect(storeAfterSecond?.has("playlist-item:playlist-default:item-a")).toBe(false);
+    expect(storeAfterSecond?.has("playlist-item:playlist-default:item-b")).toBe(true);
+    // Track records are never deleted by a replace - only playlist-item keys.
+    // (Orphaned tracks are reclaimed later by the debounced GC; see below.)
+    expect(storeAfterSecond?.has("track:track-a")).toBe(true);
+    expect(storeAfterSecond?.has("track:track-b")).toBe(true);
+  });
+
+  it("garbage-collects orphaned track records while preserving cross-playlist shared tracks (HARD10-009)", async () => {
+    const repository = getIndexedDbPlaylistDataRepository({
+      preferDurableStorage: false,
+    });
+    const stateStore = (globalThis.indexedDB as IDBFactory & { __stores: Map<string, Map<string, unknown>> }).__stores;
+
+    // playlist-a references a shared track and an a-only track; playlist-b
+    // references only the shared track.
+    await repository.replacePlaylistSnapshot?.("playlist-a", {
+      tracks: [buildTrack({ trackId: "track-shared" }), buildTrack({ trackId: "track-a-only" })],
+      playlistItems: [
+        buildItem("item-shared-a", "track-shared", "0001"),
+        buildItem("item-a-only", "track-a-only", "0002"),
+      ],
+    });
+    await repository.replacePlaylistSnapshot?.("playlist-b", {
+      tracks: [buildTrack({ trackId: "track-shared" })],
+      playlistItems: [buildItem("item-shared-b", "track-shared", "0001")],
+    });
+
+    // Nothing is orphaned yet: every track is still referenced by some item.
+    expect(await collectOrphanTracksForTests()).toBe(0);
+    expect(stateStore.get("state")?.has("track:track-shared")).toBe(true);
+    expect(stateStore.get("state")?.has("track:track-a-only")).toBe(true);
+
+    // Drop track-a-only's item from playlist-a. track-a-only is now orphaned;
+    // track-shared is still used by BOTH playlists.
+    await repository.replacePlaylistSnapshot?.("playlist-a", {
+      tracks: [buildTrack({ trackId: "track-shared" })],
+      playlistItems: [buildItem("item-shared-a", "track-shared", "0001")],
+    });
+
+    expect(await collectOrphanTracksForTests()).toBe(1);
+    expect(stateStore.get("state")?.has("track:track-a-only")).toBe(false);
+    // Shared track survives because playlist-b still references it - this is the
+    // exact case that made per-playlist cleanup unsafe (HARD9-034).
+    expect(stateStore.get("state")?.has("track:track-shared")).toBe(true);
+
+    // Remove the shared track from both playlists; now it is truly orphaned.
+    await repository.replacePlaylistSnapshot?.("playlist-a", { tracks: [], playlistItems: [] });
+    await repository.replacePlaylistSnapshot?.("playlist-b", { tracks: [], playlistItems: [] });
+    expect(await collectOrphanTracksForTests()).toBe(1);
+    expect(stateStore.get("state")?.has("track:track-shared")).toBe(false);
+  });
+
+  it("deletes stale playlist-item records for items removed by a later replacePlaylistItems", async () => {
+    const repository = getIndexedDbPlaylistDataRepository({
+      preferDurableStorage: false,
+    });
+    const stateStore = (globalThis.indexedDB as IDBFactory & { __stores: Map<string, Map<string, unknown>> }).__stores;
+
+    await repository.upsertTracks([buildTrack({ trackId: "track-a" }), buildTrack({ trackId: "track-b" })]);
+    await repository.replacePlaylistItems("playlist-default", [
+      buildItem("item-a", "track-a", "0001"),
+      buildItem("item-b", "track-b", "0002"),
+    ]);
+
+    await repository.replacePlaylistItems("playlist-default", [buildItem("item-b", "track-b", "0001")]);
+
+    const store = stateStore.get("state");
+    expect(store?.has("playlist-item:playlist-default:item-a")).toBe(false);
+    expect(store?.has("playlist-item:playlist-default:item-b")).toBe(true);
   });
 
   it("rebuilds a missing persisted query index from stored playlist rows", async () => {

@@ -20,6 +20,10 @@ import org.json.JSONObject
 class MockC64UPlugin : Plugin() {
   private var server: MockC64UServer? = null
   private var ftpServer: MockFtpServer? = null
+  // Per-boot random token shared by both loopback servers; regenerated on each
+  // fresh start and returned to the WebView so it (the only intended client) can
+  // authenticate. Held so the already-running branch returns the same token.
+  private var mockToken: String? = null
   private val logTag = "MockC64UPlugin"
 
   @PluginMethod
@@ -36,6 +40,7 @@ class MockC64UPlugin : Plugin() {
         payload.put("port", server?.port ?: 0)
         payload.put("baseUrl", server?.baseUrl ?: "")
         payload.put("ftpPort", ftpServer?.port ?: 0)
+        payload.put("token", mockToken ?: "")
         call.resolve(payload)
         return
       }
@@ -43,19 +48,24 @@ class MockC64UPlugin : Plugin() {
       val preferredPort = call.getInt("preferredPort")
       val state = MockC64UState.fromPayload(config)
       val timingProfile = loadTimingProfile()
-      val nextServer = MockC64UServer(state, timingProfile)
+      val token = generateMockToken()
+      val nextServer = MockC64UServer(state, timingProfile, token)
       val port = nextServer.start(preferredPort)
       server = nextServer
+      mockToken = token
 
       val ftpRoot = prepareFtpRootDir()
-      val networkPassword = state.getNetworkPassword()
-      val nextFtpServer = MockFtpServer(ftpRoot, networkPassword)
+      // Require the same per-boot token as the FTP password instead of the mock
+      // network password (which defaults to empty and let any login in) so the
+      // FTP surface is no longer unauthenticated (HARD10-005).
+      val nextFtpServer = MockFtpServer(ftpRoot, token)
       val ftpPort = nextFtpServer.start()
       ftpServer = nextFtpServer
       val payload = JSObject()
       payload.put("port", port)
       payload.put("baseUrl", nextServer.baseUrl)
       payload.put("ftpPort", ftpPort)
+      payload.put("token", token)
       call.resolve(payload)
     } catch (error: Exception) {
       Log.e(logTag, "Failed to start mock C64U server", error)
@@ -71,12 +81,38 @@ class MockC64UPlugin : Plugin() {
       server = null
       ftpServer?.stop()
       ftpServer = null
+      mockToken = null
       call.resolve()
     } catch (error: Exception) {
       Log.e(logTag, "Failed to stop mock C64U server", error)
       AppLogger.error(context, logTag, "Failed to stop mock C64U server", "MockC64UPlugin", error)
       call.reject(error.message, error)
     }
+  }
+
+  // Without this the HTTP + FTP loopback servers keep running (and keep listening
+  // on their ports) if the app is destroyed while demo mode is active, e.g. the
+  // user backgrounds the app and the OS tears down the Activity (HARD10-004).
+  override fun handleOnDestroy() {
+    try {
+      server?.stop()
+      ftpServer?.stop()
+    } catch (error: Exception) {
+      Log.w(logTag, "Failed to stop mock C64U servers on destroy", error)
+    } finally {
+      server = null
+      ftpServer = null
+      mockToken = null
+    }
+    super.handleOnDestroy()
+  }
+
+  // 24 bytes of SecureRandom rendered as hex: unguessable per-boot bearer token
+  // for the loopback surface.
+  private fun generateMockToken(): String {
+    val bytes = ByteArray(24)
+    java.security.SecureRandom().nextBytes(bytes)
+    return bytes.joinToString("") { "%02x".format(it) }
   }
 
   private fun prepareFtpRootDir(): java.io.File {

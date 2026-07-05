@@ -70,6 +70,13 @@ const resolvePasswordForDevice = (state: PersistedPasswordState, deviceId: strin
   if (deviceId && state.passwordsByDeviceId[deviceId]) {
     return state.passwordsByDeviceId[deviceId];
   }
+  // HARD12-012: the legacy default password belongs to whichever device was
+  // selected before per-device passwords existed. It may still be resolved
+  // for that same currently-selected device (until migrateLegacyDefaultPassword
+  // moves it into that device's own entry), but it must never be handed to an
+  // explicitly-requested OTHER device — that would transmit device A's secret
+  // to device B's host.
+  if (deviceId && deviceId !== getSelectedDeviceId()) return null;
   return state.legacyDefaultPassword;
 };
 
@@ -133,17 +140,13 @@ export const getPasswordForDevice = async (deviceId: string): Promise<string | n
     return null;
   }
   const state = await loadPasswordState();
+  // HARD12-012: do NOT silently migrate the legacy password into the
+  // requested device's entry. The legacy password belongs to the device that
+  // was selected when it was stored; copying it into a different device's
+  // entry transmits device A's secret to host B. The one-time bootstrap
+  // migration runs from migrateLegacyDefaultPassword() during startup and
+  // is keyed on the device selected at upgrade time.
   const current = resolvePasswordForDevice(state, deviceId);
-  if (current && !state.passwordsByDeviceId[deviceId]) {
-    const nextState: PersistedPasswordState = {
-      ...state,
-      passwordsByDeviceId: {
-        ...state.passwordsByDeviceId,
-        [deviceId]: current,
-      },
-    };
-    await persistPasswordState(nextState);
-  }
   setSavedDevicePasswordFlag(deviceId, Boolean(current));
   return current;
 };
@@ -235,7 +238,41 @@ export const primeStoredPassword = async (): Promise<void> => {
     passwordLoaded = true;
     return;
   }
+  // HARD12-012: once-only migration of the legacy default password into the
+  // currently-selected device's entry. Idempotent: subsequent invocations are
+  // no-ops because the legacy field is cleared after the first successful run.
+  await migrateLegacyDefaultPassword();
   await getPassword();
+};
+
+// HARD12-012: when a legacy default password exists in storage, move it into
+// the currently-selected device's entry exactly once and clear the legacy
+// field. Must be idempotent and must not overwrite an existing per-device
+// entry (that would clobber the device's own password with the legacy one).
+export const migrateLegacyDefaultPassword = async (): Promise<void> => {
+  const state = await loadPasswordState();
+  if (!state.legacyDefaultPassword) return;
+  const deviceId = getSelectedDeviceId();
+  if (!deviceId) return;
+  if (state.passwordsByDeviceId[deviceId]) {
+    // Device already has its own entry — keep it, drop the legacy field so the
+    // cross-device bleed cannot recur. The legacy password is abandoned; the
+    // user must re-enter it for the originally-selected device if needed.
+    await persistPasswordState({
+      version: 1,
+      legacyDefaultPassword: null,
+      passwordsByDeviceId: state.passwordsByDeviceId,
+    });
+    return;
+  }
+  await persistPasswordState({
+    version: 1,
+    legacyDefaultPassword: null,
+    passwordsByDeviceId: {
+      ...state.passwordsByDeviceId,
+      [deviceId]: state.legacyDefaultPassword,
+    },
+  });
 };
 
 export const resetStoredPasswordCache = () => {

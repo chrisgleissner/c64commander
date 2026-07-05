@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -91,13 +91,19 @@ vi.mock("@/components/ConfigItemRow", () => ({
     value,
     rightAccessory,
     onValueChange,
+    isLoading,
   }: {
     name: string;
     value?: string | number;
     rightAccessory?: ReactNode;
     onValueChange?: (value: string) => void;
+    isLoading?: boolean;
   }) => (
-    <div data-testid={`row-${name.toLowerCase().replace(/\s+/g, "-")}`} data-value={String(value ?? "")}>
+    <div
+      data-testid={`row-${name.toLowerCase().replace(/\s+/g, "-")}`}
+      data-value={String(value ?? "")}
+      data-loading={String(Boolean(isLoading))}
+    >
       <span>{name}</span>
       <button type="button" onClick={() => onValueChange?.("updated")}>
         Update {name}
@@ -308,8 +314,12 @@ describe("ConfigBrowserPage", () => {
       isLoading: false,
     });
 
-    vi.mocked(getC64API).mockReturnValue({
-      updateConfigBatch: vi.fn().mockRejectedValue(new Error("Update failed")),
+    // Solo/unsolo routes through useC64UpdateConfigBatch (not a direct
+    // api.updateConfigBatch call), so it invalidates queries and marks
+    // hasChanges like every other config write. See HARD9-054.
+    mockUseC64UpdateConfigBatch.mockReturnValue({
+      mutateAsync: vi.fn().mockRejectedValue(new Error("Update failed")),
+      isPending: false,
     });
 
     const refetch = vi.fn();
@@ -390,8 +400,13 @@ describe("ConfigBrowserPage", () => {
       data: { categories: ["Audio Mixer"] },
       isLoading: false,
     });
+    // Solo/unsolo routes through useC64UpdateConfigBatch (not a direct
+    // api.updateConfigBatch call). See HARD9-054.
     const updateConfigBatch = vi.fn().mockResolvedValue({ errors: [] });
-    vi.mocked(getC64API).mockReturnValue({ updateConfigBatch } as any);
+    mockUseC64UpdateConfigBatch.mockReturnValue({
+      mutateAsync: updateConfigBatch,
+      isPending: false,
+    });
 
     let audioMixerItems = {
       "Vol Ultisid 1": { selected: "0 dB", options: ["OFF", "0 dB"] },
@@ -427,6 +442,90 @@ describe("ConfigBrowserPage", () => {
     expect(updateConfigBatch).not.toHaveBeenCalled();
   });
 
+  it("discards a stale audio mixer solo snapshot instead of auto-restoring it (HARD9-054)", async () => {
+    // Regression: the mount-time restore effect used to read the solo
+    // snapshot from sessionStorage unconditionally and write those old
+    // volumes back to the device, even if the snapshot was hours old (an
+    // interrupted previous session) and volumes had changed since -
+    // silently clobbering current settings on the next Config visit.
+    sessionStorage.clear();
+    const staleSavedAtMs = Date.now() - 6 * 60 * 1000; // older than the 5-minute freshness window
+    sessionStorage.setItem(
+      "c64u_audio_mixer_solo_snapshot",
+      JSON.stringify({
+        savedAtMs: staleSavedAtMs,
+        items: [{ name: "Vol Ultisid 1", value: "-6 dB", options: ["-6 dB", "0 dB"] }],
+      }),
+    );
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["Audio Mixer"] },
+      isLoading: false,
+    });
+    const mutateAsync = vi.fn().mockResolvedValue({ errors: [] });
+    mockUseC64UpdateConfigBatch.mockReturnValue({ mutateAsync, isPending: false });
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: {
+        [categoryName]: {
+          items: {
+            "Vol Ultisid 1": { selected: "0 dB", options: ["-6 dB", "0 dB"] },
+          },
+        },
+      },
+      isLoading: false,
+      refetch: vi.fn(),
+    }));
+
+    renderConfigBrowserPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
+    await screen.findByTestId("audio-mixer-solo-vol-ultisid-1");
+
+    // Give the mount-time restore effect a chance to run (it fires
+    // unconditionally on mount when not already soloed).
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mutateAsync).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem("c64u_audio_mixer_solo_snapshot")).toBeNull();
+  });
+
+  it("auto-restores a fresh audio mixer solo snapshot on mount (HARD9-054)", async () => {
+    sessionStorage.clear();
+    const freshSavedAtMs = Date.now() - 30 * 1000; // well within the freshness window
+    sessionStorage.setItem(
+      "c64u_audio_mixer_solo_snapshot",
+      JSON.stringify({
+        savedAtMs: freshSavedAtMs,
+        items: [{ name: "Vol Ultisid 1", value: "-6 dB", options: ["-6 dB", "0 dB"] }],
+      }),
+    );
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["Audio Mixer"] },
+      isLoading: false,
+    });
+    const mutateAsync = vi.fn().mockResolvedValue({ errors: [] });
+    mockUseC64UpdateConfigBatch.mockReturnValue({ mutateAsync, isPending: false });
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: {
+        [categoryName]: {
+          items: {
+            "Vol Ultisid 1": { selected: "0 dB", options: ["-6 dB", "0 dB"] },
+          },
+        },
+      },
+      isLoading: false,
+      refetch: vi.fn(),
+    }));
+
+    renderConfigBrowserPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
+    await screen.findByTestId("audio-mixer-solo-vol-ultisid-1");
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+  });
+
   it("reports config update failures", async () => {
     setupDefaultMocks();
     mockUseC64Categories.mockReturnValue({
@@ -460,6 +559,102 @@ describe("ConfigBrowserPage", () => {
         }),
       );
     });
+  });
+
+  it("does not disable unrelated rows while the shared mutation is pending for a different item (HARD9-085)", async () => {
+    // Regression: row isLoading was keyed off setConfig.isPending, the
+    // section's SHARED mutation state - while one item's PUT was in flight
+    // (spaced by the write throttle), every OTHER row in the category
+    // rendered disabled too, appearing dead until the first write settled.
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["General"] },
+      isLoading: false,
+    });
+    mockUseC64SetConfig.mockReturnValue({
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: true,
+    });
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: {
+        [categoryName]: {
+          items: {
+            "Item A": { selected: "1", options: ["1", "2"] },
+            "Item B": { selected: "3", options: ["3", "4"] },
+          },
+        },
+      },
+      isLoading: false,
+      refetch: vi.fn(),
+    }));
+
+    renderConfigBrowserPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /general/i }));
+
+    const rowA = await screen.findByTestId("row-item-a");
+    const rowB = await screen.findByTestId("row-item-b");
+    expect(rowA).toHaveAttribute("data-loading", "false");
+    expect(rowB).toHaveAttribute("data-loading", "false");
+  });
+
+  it("keeps a pending pin latched and reports the failure when Refresh's refetch does not succeed (HARD9-089)", async () => {
+    // Regression: react-query's refetch() resolves (does not throw) on
+    // failure. handleRefresh used to run its device-truth re-sync
+    // unconditionally, dropping every pending optimistic pin and re-syncing
+    // to stale cached data on a momentary refresh failure, with no
+    // indication anything went wrong.
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["General"] },
+      isLoading: false,
+    });
+    mockUseC64SetConfig.mockReturnValue({
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    });
+    const refetchError = new Error("device unreachable");
+    const refetch = vi
+      .fn()
+      .mockResolvedValue({ isSuccess: false, isError: true, error: refetchError, data: undefined });
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: {
+        [categoryName]: {
+          items: {
+            "Item A": { selected: "1", options: ["1", "2", "updated"] },
+          },
+        },
+      },
+      isLoading: false,
+      refetch,
+    }));
+
+    renderConfigBrowserPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /general/i }));
+
+    const rowA = await screen.findByTestId("row-item-a");
+    fireEvent.click(within(rowA).getByRole("button", { name: /update item a/i }));
+
+    await waitFor(() => {
+      expect(rowA).toHaveAttribute("data-value", "updated");
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: /refresh/i }));
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "CONFIG_REFRESH",
+          error: refetchError,
+        }),
+      );
+    });
+
+    // The pin must survive the failed refresh instead of reverting to the
+    // stale pre-update device value.
+    expect(rowA).toHaveAttribute("data-value", "updated");
+    expect(rowA).toHaveAttribute("data-loading", "true");
   });
 
   it("keeps the updated local value visible until the device payload catches up", async () => {

@@ -153,7 +153,7 @@ export type CreateSnapshotOptions = {
 export const createSnapshot = async (
   api: C64API,
   options: CreateSnapshotOptions,
-): Promise<{ displayTimestamp: string }> => {
+): Promise<{ displayTimestamp: string; evictedSnapshotLabel: string | null }> => {
   const { type, customRanges, label, contentName } = options;
 
   if (type === "custom" && (!customRanges || customRanges.length === 0)) {
@@ -198,7 +198,7 @@ export const createSnapshot = async (
   const filename = buildSnapshotFileName(type, now);
   const id = generateId();
 
-  saveSnapshotToStore({
+  const { evictedSnapshot } = saveSnapshotToStore({
     id,
     filename,
     bytes,
@@ -207,7 +207,12 @@ export const createSnapshot = async (
     metadata,
   });
 
-  return { displayTimestamp };
+  return {
+    displayTimestamp,
+    evictedSnapshotLabel: evictedSnapshot
+      ? (evictedSnapshot.metadata.label ?? evictedSnapshot.metadata.created_at)
+      : null,
+  };
 };
 
 /** Thrown when the connected device cannot support CPU-state snapshots. */
@@ -228,7 +233,13 @@ export class CpuSnapshotUnsupportedError extends Error {
 export const createCpuSnapshot = async (
   api: C64API,
   options: { label?: string; contentName?: string } = {},
-): Promise<{ displayTimestamp: string; cpu: CpuState; captureMethod: "rli" | "isn" }> => {
+): Promise<{
+  displayTimestamp: string;
+  cpu: CpuState;
+  captureMethod: "rli" | "isn";
+  resumeError: Error | null;
+  evictedSnapshotLabel: string | null;
+}> => {
   const capability = await detectSnapshotCapability(api);
   if (!capability.cpuSnapshotSupported) {
     throw new CpuSnapshotUnsupportedError(capability.reason ?? "this device does not support CPU snapshots");
@@ -256,7 +267,7 @@ export const createCpuSnapshot = async (
   });
 
   const bytes = encodeSnapshot("program", now, data.ranges, data.blocks, metadata);
-  saveSnapshotToStore({
+  const { evictedSnapshot } = saveSnapshotToStore({
     id: generateId(),
     filename: buildSnapshotFileName("program", now),
     bytes,
@@ -265,5 +276,13 @@ export const createCpuSnapshot = async (
     metadata,
   });
 
-  return { displayTimestamp, cpu: data.cpu, captureMethod: data.captureMethod };
+  return {
+    displayTimestamp,
+    cpu: data.cpu,
+    captureMethod: data.captureMethod,
+    resumeError: data.resumeError,
+    evictedSnapshotLabel: evictedSnapshot
+      ? (evictedSnapshot.metadata.label ?? evictedSnapshot.metadata.created_at)
+      : null,
+  };
 };

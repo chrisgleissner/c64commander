@@ -282,7 +282,7 @@ const updateConfig = () => {
   restErrorStreak = 0;
   restBackoffUntilMs = 0;
   restCircuitUntilMs = 0;
-  restUserCircuitProbeInFlight = false;
+  restUserCircuitProbePromise = null;
   ftpErrorStreak = 0;
   ftpBackoffUntilMs = 0;
   ftpCircuitUntilMs = 0;
@@ -309,7 +309,7 @@ export const resetInteractionState = (reason: string) => {
   restErrorStreak = 0;
   restBackoffUntilMs = 0;
   restCircuitUntilMs = 0;
-  restUserCircuitProbeInFlight = false;
+  restUserCircuitProbePromise = null;
   ftpErrorStreak = 0;
   ftpBackoffUntilMs = 0;
   ftpCircuitUntilMs = 0;
@@ -357,7 +357,7 @@ const telnetConnectCooldownUntil = new Map<string, number>();
 let restErrorStreak = 0;
 let restBackoffUntilMs = 0;
 let restCircuitUntilMs = 0;
-let restUserCircuitProbeInFlight = false;
+let restUserCircuitProbePromise: Promise<unknown> | null = null;
 let restInflightGeneration = 0;
 
 let ftpErrorStreak = 0;
@@ -429,7 +429,7 @@ const resetRestFailure = () => {
   restErrorStreak = 0;
   restBackoffUntilMs = 0;
   restCircuitUntilMs = 0;
-  restUserCircuitProbeInFlight = false;
+  restUserCircuitProbePromise = null;
   setCircuitOpenUntil(null);
 };
 
@@ -546,8 +546,8 @@ const shouldBlockForState = (intent: InteractionIntent, allowDuringDiscovery?: b
     return !(allowDuringDiscovery && intent === "system");
   }
   if (state === "ERROR") {
+    if ((intent === "system" || intent === "background") && allowDuringError) return false;
     if (intent === "background") return true;
-    if (intent === "system" && allowDuringError) return false;
     if (intent === "user" && snapshot.circuitOpenUntilMs && Date.now() < snapshot.circuitOpenUntilMs) return false;
     if (intent === "user" && config.allowUserOverrideCircuit) return false;
     return true;
@@ -673,9 +673,9 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
     }
   }
 
-  const now = Date.now();
-  const circuitOpen = restCircuitUntilMs > now && !meta.bypassCircuit;
-  const userHalfOpenProbe = circuitOpen && meta.intent === "user" && config.allowUserOverrideCircuit;
+  let now = Date.now();
+  let circuitOpen = restCircuitUntilMs > now && !meta.bypassCircuit;
+  let userHalfOpenProbe = circuitOpen && meta.intent === "user";
   let reservedUserHalfOpenProbe = false;
   if (circuitOpen && !userHalfOpenProbe) {
     recordDeviceGuard(meta.action, {
@@ -685,16 +685,32 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
     });
     throw new Error("Device circuit open");
   }
-  if (userHalfOpenProbe && restUserCircuitProbeInFlight) {
+  if (userHalfOpenProbe && restUserCircuitProbePromise) {
     recordDeviceGuard(meta.action, {
-      decision: "block",
+      decision: "defer",
       reason: "circuit-open",
       untilMs: restCircuitUntilMs,
     });
-    throw new Error("Device circuit probe already in flight");
+    const firstProbeSucceeded = await restUserCircuitProbePromise.then(
+      () => true,
+      () => false,
+    );
+    if (!firstProbeSucceeded) {
+      throw new Error("Device circuit open");
+    }
+    now = Date.now();
+    circuitOpen = restCircuitUntilMs > now && !meta.bypassCircuit;
+    userHalfOpenProbe = circuitOpen && meta.intent === "user";
+    if (circuitOpen && !userHalfOpenProbe) {
+      recordDeviceGuard(meta.action, {
+        decision: "block",
+        reason: "circuit-open",
+        untilMs: restCircuitUntilMs,
+      });
+      throw new Error("Device circuit open");
+    }
   }
   if (userHalfOpenProbe) {
-    restUserCircuitProbeInFlight = true;
     reservedUserHalfOpenProbe = true;
   }
   if (restCircuitUntilMs > now && meta.bypassCircuit) {
@@ -832,6 +848,10 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
       : undefined,
   });
 
+  if (reservedUserHalfOpenProbe) {
+    restUserCircuitProbePromise = scheduledPromise;
+  }
+
   if (usesSharedReadState && policy.key) {
     restInflight.set(policy.key, {
       promise: scheduledPromise as Promise<unknown>,
@@ -841,7 +861,9 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
 
   return scheduledPromise.finally(() => {
     if (reservedUserHalfOpenProbe) {
-      restUserCircuitProbeInFlight = false;
+      if (restUserCircuitProbePromise === scheduledPromise) {
+        restUserCircuitProbePromise = null;
+      }
     }
     if (usesSharedReadState && policy.key) {
       const current = restInflight.get(policy.key);

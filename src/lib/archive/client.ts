@@ -180,6 +180,14 @@ export abstract class BaseArchiveClient implements ArchiveClient {
     return `${this.resolvedConfig.baseUrl}${path}`;
   }
 
+  private raceAgainstAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const onAbort = () => reject(new DOMException("Aborted", "AbortError"));
+      signal.addEventListener("abort", onAbort, { once: true });
+      promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
+    });
+  }
+
   private async requestWithTransport(
     request: RequestInit & { url: string },
     timeoutMs: number,
@@ -187,7 +195,10 @@ export abstract class BaseArchiveClient implements ArchiveClient {
     signal?: AbortSignal,
   ): Promise<Response> {
     if (this.fetchImpl === fetch && isNativeArchiveRuntime()) {
-      const response = await CapacitorHttp.request({
+      if (signal?.aborted) {
+        throw new DOMException("Aborted", "AbortError");
+      }
+      const nativeRequestPromise = CapacitorHttp.request({
         url: request.url,
         method: request.method ?? "GET",
         headers: normalizeHeaderMap(request.headers),
@@ -195,6 +206,19 @@ export abstract class BaseArchiveClient implements ArchiveClient {
         readTimeout: timeoutMs,
         responseType,
       });
+      // CapacitorHttp.request() has no AbortSignal support - the native
+      // transfer keeps running in the background regardless of
+      // cancellation. Race it against the signal so Cancel stops the
+      // caller from WAITING immediately (instead of hanging until the up
+      // to 30s transfer completes) and drop this request's eventual
+      // result/error once it has lost the race. See HARD9-079. Log the
+      // dropped rejection at debug so a future regression (e.g. a sync
+      // throw inside raceAgainstAbort) that lets this reject stays visible
+      // in the trace instead of being silently swallowed.
+      nativeRequestPromise.catch((error) => {
+        addLog("debug", "Archive native request dropped after abort race", buildErrorLogDetails(error));
+      });
+      const response = signal ? await this.raceAgainstAbort(nativeRequestPromise, signal) : await nativeRequestPromise;
       const headers = new Headers(
         Object.entries((response.headers ?? {}) as Record<string, string>).map(([key, value]) => [key, String(value)]),
       );

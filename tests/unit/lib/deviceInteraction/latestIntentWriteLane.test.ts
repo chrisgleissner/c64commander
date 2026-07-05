@@ -116,6 +116,35 @@ describe("createLatestIntentWriteLane", () => {
     expect(maxInFlight).toBe(1);
   });
 
+  it("merges every value scheduled while an earlier job is in flight (HARD9-016)", async () => {
+    // Three overlapping schedule() calls with distinct keys, all landing
+    // while the first job is still stuck in beforeRun(): job2 and job3 must
+    // both be preserved (via schedule()'s own merge, since only one of them
+    // is ever the "next queued job" at a time), not just the last one.
+    let allowRuns = false;
+    const writes: Array<Record<string, number>> = [];
+    const lane = createLatestIntentWriteLane<Record<string, number>>({
+      beforeRun: async () => {
+        while (!allowRuns) {
+          await Promise.resolve();
+        }
+      },
+      run: async (value) => {
+        writes.push(value);
+      },
+      merge: (previous, next) => ({ ...previous, ...next }),
+    });
+
+    const volumeWrite = lane.schedule({ sid1_volume: 15 });
+    const panWrite = lane.schedule({ sid1_pan: 8 });
+    const addressWrite = lane.schedule({ sid2_volume: 3 });
+
+    allowRuns = true;
+    await Promise.all([volumeWrite, panWrite, addressWrite]);
+
+    expect(writes).toEqual([{ sid1_volume: 15, sid1_pan: 8, sid2_volume: 3 }]);
+  });
+
   it("rejects the settled write when no newer value supersedes a failure", async () => {
     const lane = createLatestIntentWriteLane<number>({
       run: async () => {
@@ -124,6 +153,59 @@ describe("createLatestIntentWriteLane", () => {
     });
 
     await expect(lane.schedule(1)).rejects.toThrow("write failed");
+  });
+
+  it("merges a still-pending value with a newly scheduled one when merge is provided (HARD9-016)", async () => {
+    // Regression: a shared lane (e.g. all 8 SID sliders behind one
+    // useInteractiveConfigWrite) replaced the pending job outright, so
+    // committing item A's write while item B's write was still pending
+    // silently discarded B - and resolveUpTo() still resolved B's waiter as
+    // a success once A's run() completed, so nobody ever saw an error.
+    let allowRuns = false;
+    const writes: Array<Record<string, number>> = [];
+    const lane = createLatestIntentWriteLane<Record<string, number>>({
+      beforeRun: async () => {
+        while (!allowRuns) {
+          await Promise.resolve();
+        }
+      },
+      run: async (value) => {
+        writes.push(value);
+      },
+      merge: (previous, next) => ({ ...previous, ...next }),
+    });
+
+    const volumeWrite = lane.schedule({ sid1_volume: 15 });
+    const panWrite = lane.schedule({ sid1_pan: 8 });
+
+    allowRuns = true;
+    await Promise.all([volumeWrite, panWrite]);
+
+    expect(writes).toEqual([{ sid1_volume: 15, sid1_pan: 8 }]);
+  });
+
+  it("lets a later merge overwrite the same key while preserving other pending keys (HARD9-016)", async () => {
+    let allowRuns = false;
+    const writes: Array<Record<string, number>> = [];
+    const lane = createLatestIntentWriteLane<Record<string, number>>({
+      beforeRun: async () => {
+        while (!allowRuns) {
+          await Promise.resolve();
+        }
+      },
+      run: async (value) => {
+        writes.push(value);
+      },
+      merge: (previous, next) => ({ ...previous, ...next }),
+    });
+
+    const first = lane.schedule({ sid1_volume: 15, sid1_pan: 8 });
+    const second = lane.schedule({ sid1_volume: 20 });
+
+    allowRuns = true;
+    await Promise.all([first, second]);
+
+    expect(writes).toEqual([{ sid1_volume: 20, sid1_pan: 8 }]);
   });
 
   it("resolves superseded waiters when only the final effective write fails", async () => {
@@ -144,6 +226,89 @@ describe("createLatestIntentWriteLane", () => {
     const superseded = lane.schedule(1);
     const final = lane.schedule(2);
 
+    allowRuns = true;
+
+    await expect(superseded).resolves.toBeUndefined();
+    await expect(final).rejects.toThrow("final write failed");
+  });
+
+  it("merges a failed job's value into the superseding job instead of discarding it (HARD9-016)", async () => {
+    const writes: Array<Record<string, number>> = [];
+    let releaseFirstRun!: () => void;
+    const firstRunReleased = new Promise<void>((resolve) => {
+      releaseFirstRun = resolve;
+    });
+    let attempt = 0;
+    const lane = createLatestIntentWriteLane<Record<string, number>>({
+      run: async (value) => {
+        attempt += 1;
+        writes.push(value);
+        if (attempt === 1) {
+          await firstRunReleased;
+          throw new Error("device rejected write");
+        }
+      },
+      merge: (previous, next) => ({ ...previous, ...next }),
+    });
+
+    // job1 is taken and its run() has already pushed its write, suspended on
+    // firstRunReleased, before job2 is scheduled - so job2 lands in
+    // latestJob while job1 is still (about to be) failing.
+    const first = lane.schedule({ sid1_volume: 15 });
+    const second = lane.schedule({ sid1_pan: 8 });
+    releaseFirstRun();
+
+    await expect(first).resolves.toBeUndefined();
+    await expect(second).resolves.toBeUndefined();
+    expect(writes[1]).toEqual({ sid1_volume: 15, sid1_pan: 8 });
+  });
+
+  it("HARD12-010: rejects both folded-in waiters when a merge-lane run fails with no superseding job", async () => {
+    // Without merge, the previous waiter (v1) was silently resolved as a
+    // success — its value had been merged into the failing v2 batch, so
+    // resolveUpTo(v1) lied. The merge lane must now reject every waiter
+    // whose value was folded into the failed batch.
+    let allowRuns = false;
+    const lane = createLatestIntentWriteLane<Record<string, number>>({
+      beforeRun: async () => {
+        while (!allowRuns) {
+          await Promise.resolve();
+        }
+      },
+      run: async () => {
+        throw new Error("device rejected merged write");
+      },
+      merge: (previous, next) => ({ ...previous, ...next }),
+    });
+
+    const volumeWrite = lane.schedule({ sid1_volume: 15 });
+    const panWrite = lane.schedule({ sid1_pan: 8 });
+    allowRuns = true;
+
+    await expect(volumeWrite).rejects.toThrow("device rejected merged write");
+    await expect(panWrite).rejects.toThrow("device rejected merged write");
+  });
+
+  it("HARD12-010: keeps resolve-superseded-as-success for non-merge lanes when the final write fails", async () => {
+    // Sanity check that the change is scoped to merge lanes — replace-
+    // semantics lanes must keep their historical behaviour where superseded
+    // waiters were never sent and therefore resolve as success.
+    let allowRuns = false;
+    const lane = createLatestIntentWriteLane<number>({
+      beforeRun: async () => {
+        while (!allowRuns) {
+          await Promise.resolve();
+        }
+      },
+      run: async (value) => {
+        if (value === 2) {
+          throw new Error("final write failed");
+        }
+      },
+    });
+
+    const superseded = lane.schedule(1);
+    const final = lane.schedule(2);
     allowRuns = true;
 
     await expect(superseded).resolves.toBeUndefined();

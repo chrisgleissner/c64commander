@@ -65,6 +65,12 @@ const ensureSnapshot = (playlistId: string) => {
 const snapshots = new Map<string, PlaylistRepositorySyncSnapshot>();
 const listeners = new Map<string, Set<() => void>>();
 const inflightCommits = new Map<string, { snapshotKey: string; promise: Promise<PlaylistCommitResult> }>();
+// Serializes actual repository writes per playlistId so a stale (earlier
+// requested) commit can never finish after and overwrite a fresher one that
+// was requested later. inflightCommits only dedupes identical snapshotKeys;
+// this chain covers the general case of two different snapshots requested in
+// quick succession. See HARD9-034.
+const commitChainTails = new Map<string, Promise<unknown>>();
 
 const buildTrackId = (
   source: string,
@@ -220,6 +226,7 @@ export const serializePlaylistToRepository = (
       sizeBytes: item.sizeBytes ?? null,
       modifiedAt: item.modifiedAt ?? null,
       defaultDurationMs: item.durationMs ?? null,
+      durationSource: item.durationSource ?? null,
       subsongCount: item.subsongCount ?? null,
       createdAt: item.addedAt ?? nowIso,
       updatedAt: nowIso,
@@ -319,59 +326,67 @@ export const commitPlaylistSnapshot = async ({
     snapshotKey,
   });
 
-  const promise = (async () => {
-    const serT0 = Date.now();
-    const serialized = withPersistenceTimestamp(canonicalSerialized, new Date().toISOString());
-    addLog("debug", "[hvsc-perf] serialize done", {
-      tracks: serialized.tracks.length,
-      items: serialized.playlistItems.length,
-      ms: Date.now() - serT0,
-    });
-    const persT0 = Date.now();
-    await persistSerializedPlaylist(repository, playlistId, serialized, trackChunkSize);
-    addLog("debug", "[hvsc-perf] persist done", { ms: Date.now() - persT0 });
-    const valT0 = Date.now();
-    const committedCount = await repository.getPlaylistItemCount(playlistId);
-    addLog("debug", "[hvsc-perf] validate done", {
-      committed: committedCount,
-      ms: Date.now() - valT0,
-    });
-    if (committedCount !== expectedCount) {
-      throw new Error(
-        `Playlist repository validation failed for ${playlistId}: expected ${expectedCount}, got ${committedCount}`,
-      );
-    }
+  // Chain the actual write onto the tail of any prior commit for this
+  // playlistId, regardless of snapshotKey, so writes execute strictly in
+  // request order. A prior failure must not break the chain for this request.
+  const previousTail = commitChainTails.get(playlistId) ?? Promise.resolve();
+  const promise = previousTail
+    .catch(() => undefined)
+    .then(() =>
+      (async () => {
+        const serT0 = Date.now();
+        const serialized = withPersistenceTimestamp(canonicalSerialized, new Date().toISOString());
+        addLog("debug", "[hvsc-perf] serialize done", {
+          tracks: serialized.tracks.length,
+          items: serialized.playlistItems.length,
+          ms: Date.now() - serT0,
+        });
+        const persT0 = Date.now();
+        await persistSerializedPlaylist(repository, playlistId, serialized, trackChunkSize);
+        addLog("debug", "[hvsc-perf] persist done", { ms: Date.now() - persT0 });
+        const valT0 = Date.now();
+        const committedCount = await repository.getPlaylistItemCount(playlistId);
+        addLog("debug", "[hvsc-perf] validate done", {
+          committed: committedCount,
+          ms: Date.now() - valT0,
+        });
+        if (committedCount !== expectedCount) {
+          throw new Error(
+            `Playlist repository validation failed for ${playlistId}: expected ${expectedCount}, got ${committedCount}`,
+          );
+        }
 
-    const nextRevision = getSnapshot(playlistId).revision + 1;
-    emitSnapshot(playlistId, {
-      phase: "READY",
-      committedCount,
-      expectedCount,
-      revision: nextRevision,
-      snapshotKey,
-      lastError: null,
-    });
-    addLog("info", "Playlist repository commit ready", {
-      playlistId,
-      expectedCount,
-      committedCount,
-      revision: nextRevision,
-      snapshotKey,
-    });
-    endHvscPerfScope(scope, {
-      outcome: "success",
-      playlistId,
-      expectedCount,
-      committedCount,
-      revision: nextRevision,
-    });
-    return {
-      committedCount,
-      expectedCount,
-      revision: nextRevision,
-      snapshotKey,
-    };
-  })()
+        const nextRevision = getSnapshot(playlistId).revision + 1;
+        emitSnapshot(playlistId, {
+          phase: "READY",
+          committedCount,
+          expectedCount,
+          revision: nextRevision,
+          snapshotKey,
+          lastError: null,
+        });
+        addLog("info", "Playlist repository commit ready", {
+          playlistId,
+          expectedCount,
+          committedCount,
+          revision: nextRevision,
+          snapshotKey,
+        });
+        endHvscPerfScope(scope, {
+          outcome: "success",
+          playlistId,
+          expectedCount,
+          committedCount,
+          revision: nextRevision,
+        });
+        return {
+          committedCount,
+          expectedCount,
+          revision: nextRevision,
+          snapshotKey,
+        };
+      })(),
+    )
     .catch((error) => {
       const err = error as Error;
       emitSnapshot(playlistId, {
@@ -405,6 +420,10 @@ export const commitPlaylistSnapshot = async ({
       }
     });
 
+  commitChainTails.set(
+    playlistId,
+    promise.catch(() => undefined),
+  );
   inflightCommits.set(playlistId, {
     snapshotKey,
     promise,
@@ -417,4 +436,5 @@ export const resetPlaylistRepositorySyncForTests = () => {
   snapshots.clear();
   listeners.clear();
   inflightCommits.clear();
+  commitChainTails.clear();
 };

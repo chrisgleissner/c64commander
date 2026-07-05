@@ -104,6 +104,7 @@ vi.mock("@/hooks/useDiskLibrary", () => ({
 }));
 
 vi.mock("@/hooks/useC64Connection", () => ({
+  useConnectionRoutingEpoch: () => 0,
   VISIBLE_C64_QUERY_OPTIONS: {
     intent: "user",
     refetchOnMount: "always",
@@ -160,9 +161,9 @@ import { mountDiskToDrive } from "@/lib/disks/diskMount";
 const expectMountDiskToDriveCall = (drive: string, diskId: string) => {
   const call = vi.mocked(mountDiskToDrive).mock.calls.at(-1);
   expect(call?.slice(0, 4)).toEqual([expect.anything(), drive, expect.objectContaining({ id: diskId }), undefined]);
-  if (call && call.length > 4) {
-    expect(call[4]).toEqual({ mode: "readonly" });
-  }
+  // The mount always carries the archive-config map so CommoServe disks can
+  // re-download their bytes on demand. See HARD10-002.
+  expect(call?.[4]).toEqual(expect.objectContaining({ archiveConfigs: expect.anything() }));
 };
 
 // --- TESTS ---
@@ -223,6 +224,45 @@ describe("HomeDiskManager Dialogs", () => {
     await waitFor(() => expectMountDiskToDriveCall("a", "1"));
   }, 10_000);
 
+  it("ignores a second mount tap to the same drive while the first mount is still pending (HARD9-037)", async () => {
+    let resolveMount: (() => void) | undefined;
+    vi.mocked(mountDiskToDrive).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveMount = () => resolve();
+        }),
+    );
+
+    render(<HomeDiskManager />);
+    fireEvent.click(screen.getByTestId("drive-mount-toggle-a"));
+
+    const clickMountAt = (index: number) => {
+      const dialogList = screen.getAllByTestId("mock-action-list")[1];
+      const buttons = within(dialogList).getAllByText("Mount");
+      fireEvent.click(buttons[index]);
+    };
+    clickMountAt(0);
+
+    await waitFor(() => expect(mountDiskToDrive).toHaveBeenCalledTimes(1));
+
+    // A second tap - same disk or another - while the first mount to Drive A
+    // hasn't settled must not race a second mount against the same drive.
+    // Re-query fresh each time: the pending mount re-renders the sheet, so a
+    // cached button reference from before the first click can go stale.
+    clickMountAt(0);
+    clickMountAt(1);
+
+    // handleMountDisk's own path to mountDiskToDrive crosses a real await
+    // (queryClient.cancelQueries) before invoking it, so an unguarded second
+    // tap wouldn't show up as an extra call synchronously - give it a real
+    // chance to land before asserting the count stayed at one.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mountDiskToDrive).toHaveBeenCalledTimes(1);
+
+    resolveMount?.();
+    await waitFor(() => expect(screen.queryByTestId("mount-disk-sheet")).not.toBeInTheDocument());
+  }, 10_000);
+
   it("lets an empty mount dialog open the Add disks picker", async () => {
     mockDiskLibrary.disks = [];
 
@@ -263,6 +303,15 @@ describe("HomeDiskManager Dialogs", () => {
             name: "archive-game.d64",
             path: "/archive-game.d64",
             sourceId: "archive-commoserve",
+            // Persisted archive coordinates enable on-demand re-download after
+            // the in-memory runtime bytes are lost. See HARD10-002.
+            archiveRef: {
+              sourceId: "archive-commoserve",
+              resultId: "123",
+              category: 42,
+              entryId: 7,
+              entryPath: "archive-game.d64",
+            },
           }),
         ],
         expect.anything(),

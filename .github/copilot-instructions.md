@@ -47,7 +47,9 @@ narrow scope but must not violate `REVIEW.md` or `AGENTS.md`.
 - **High-level context**: `README.md`
 - **Review standards / quality bar**: `REVIEW.md`
 - **Execution & validation rules**: `AGENTS.md`
-- **REST API docs**: `docs/c64/c64u-openapi.yaml`, `docs/c64/c64u-rest-api.md`
+- **REST API docs**: `docs/c64/devices/u64e/3.15alpha/u64e-openapi.yaml` for C64U/U64/U64E2
+  and `docs/c64/devices/u2/3.14a/u2-openapi.yaml` for U2; Streams and `machine:input` are
+  U64-family capabilities and must be runtime-gated.
 - **Telnet reference**: `docs/c64/c64u-telnet.yaml`
 - **UX guidance**: `docs/ux-guidelines.md`
 - **CTA / keypad inventory**: `docs/cta-inventory.md`

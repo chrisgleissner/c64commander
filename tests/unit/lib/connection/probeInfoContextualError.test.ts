@@ -40,6 +40,8 @@ vi.mock("@/lib/secureStorage", () => ({
 vi.mock("@/lib/ftp/ftpConfig", () => ({
   setRuntimeFtpPortOverride: vi.fn(),
   clearRuntimeFtpPortOverride: vi.fn(),
+  setRuntimeFtpPasswordOverride: vi.fn(),
+  clearRuntimeFtpPasswordOverride: vi.fn(),
 }));
 
 vi.mock("@/lib/mock/mockServer", () => ({
@@ -47,6 +49,7 @@ vi.mock("@/lib/mock/mockServer", () => ({
   stopMockServer: vi.fn(),
   getActiveMockBaseUrl: () => null,
   getActiveMockFtpPort: () => null,
+  getActiveMockToken: () => null,
 }));
 
 vi.mock("@/lib/config/appSettings", () => ({
@@ -85,6 +88,10 @@ vi.mock("@/lib/deviceInteraction/deviceStateStore", () => ({
 }));
 
 vi.mock("@/lib/c64api/transportErrors", () => ({
+  isAuthRequiredError: (error: unknown) => {
+    const raw = error instanceof Error ? error.message : String(error ?? "");
+    return /^HTTP\s+(401|403)\b/.test(raw);
+  },
   normalizeTransportError: (error: unknown, ctx: { host?: string }) => {
     normalizeTransportErrorSpy(error, ctx);
     const raw = error instanceof Error ? error.message : String(error ?? "");

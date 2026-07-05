@@ -182,7 +182,7 @@ const LocationProbe = () => {
   return <div data-testid="route-path">{location.pathname}</div>;
 };
 
-const renderOverlay = (initialPath = "/") => {
+const renderOverlay = (initialPath = "/", extra?: React.ReactNode) => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -195,6 +195,7 @@ const renderOverlay = (initialPath = "/") => {
       <MemoryRouter initialEntries={[initialPath]}>
         <InterstitialStateProvider>
           <LocationProbe />
+          {extra}
           <Routes>
             <Route path="*" element={<GlobalDiagnosticsOverlay />} />
           </Routes>
@@ -274,6 +275,50 @@ describe("GlobalDiagnosticsOverlay", () => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
     expect(screen.getByTestId("route-path")).toHaveTextContent("/settings");
+  });
+
+  it("restores the active page-shell's scroll position on close, not the (always-0) window scroll (HARD9-027)", async () => {
+    // Regression: the app never scrolls the window - pages scroll inside
+    // the active page's .page-shell. Saving/restoring window.scrollY was a
+    // no-op; a scroll reset while the sheet was open (page remount, scroll
+    // lock, the route-driven close navigation) had nothing to restore it.
+    consumeDiagnosticsOpenRequestMock.mockReturnValue(null);
+    const scrollProbe = (
+      <div data-slot-active="true">
+        <div data-page-scroll-container="true" data-testid="page-scroll-container" />
+      </div>
+    );
+    renderOverlay("/settings", scrollProbe);
+
+    const container = screen.getByTestId("page-scroll-container");
+    container.scrollTop = 400;
+
+    // Open the overlay now (after the scroll position is set), so the
+    // fix's on-open capture actually observes 400.
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent("c64u-diagnostics-open-request", {
+          detail: { preset: "header" },
+        }),
+      );
+    });
+    await screen.findByRole("dialog");
+    await waitFor(() => expect(appListenerState.backButtonListener).not.toBeNull());
+
+    // Something (page remount, scroll lock teardown) resets the container's
+    // scroll while the sheet is still open - this is the actual failure
+    // mode the fix restores from, not merely "closing preserves untouched
+    // scroll".
+    container.scrollTop = 0;
+
+    act(() => {
+      appListenerState.backButtonListener?.();
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    await waitFor(() => expect(container.scrollTop).toBe(400));
   });
 
   it("reports share-all failures", async () => {
@@ -475,5 +520,55 @@ describe("GlobalDiagnosticsOverlay", () => {
     });
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("does not refresh logs/traces while closed, but seeds and refreshes once opened (HARD9-021)", async () => {
+    const { getLogs, getErrorLogs } = await import("@/lib/logging");
+    const { getTraceEvents } = await import("@/lib/tracing/traceSession");
+    consumeDiagnosticsOpenRequestMock.mockReturnValue(null);
+
+    renderOverlay();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    const logsCallsWhileClosed = vi.mocked(getLogs).mock.calls.length;
+    const errorLogsCallsWhileClosed = vi.mocked(getErrorLogs).mock.calls.length;
+    const tracesCallsWhileClosed = vi.mocked(getTraceEvents).mock.calls.length;
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent("c64u-logs-updated"));
+      window.dispatchEvent(new CustomEvent("c64u-traces-updated"));
+    });
+
+    // No listener is registered while closed, so these events must not have
+    // triggered any additional store reads.
+    expect(vi.mocked(getLogs).mock.calls.length).toBe(logsCallsWhileClosed);
+    expect(vi.mocked(getErrorLogs).mock.calls.length).toBe(errorLogsCallsWhileClosed);
+    expect(vi.mocked(getTraceEvents).mock.calls.length).toBe(tracesCallsWhileClosed);
+
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent("c64u-diagnostics-open-request", {
+          detail: { preset: "header", panel: null },
+        }),
+      );
+    });
+    await screen.findByRole("dialog");
+
+    // Opening must seed a fresh snapshot.
+    expect(vi.mocked(getLogs).mock.calls.length).toBeGreaterThan(logsCallsWhileClosed);
+    expect(vi.mocked(getErrorLogs).mock.calls.length).toBeGreaterThan(errorLogsCallsWhileClosed);
+    expect(vi.mocked(getTraceEvents).mock.calls.length).toBeGreaterThan(tracesCallsWhileClosed);
+
+    const logsCallsAfterOpen = vi.mocked(getLogs).mock.calls.length;
+    const tracesCallsAfterOpen = vi.mocked(getTraceEvents).mock.calls.length;
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent("c64u-logs-updated"));
+      window.dispatchEvent(new CustomEvent("c64u-traces-updated"));
+    });
+
+    // Once open, the listeners are live and refresh on every event.
+    expect(vi.mocked(getLogs).mock.calls.length).toBeGreaterThan(logsCallsAfterOpen);
+    expect(vi.mocked(getTraceEvents).mock.calls.length).toBeGreaterThan(tracesCallsAfterOpen);
   });
 });

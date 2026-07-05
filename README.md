@@ -113,6 +113,40 @@ Operational dashboard: machine controls, quick actions, light effects, drives, p
   </tr>
 </table>
 
+### Remote Input
+
+Turn your phone into a wireless controller for the C64 — an on-screen joystick and keyboard relayed to the machine over your network. Open it from the **Remote Input** quick action on **Home**, or the **Remote Input** button on **Play** while something is running.
+
+Remote Input includes:
+
+- **Joystick** - **Analog**, **D-Pad**, and **Swipe** controls, **FIRE**, autofire, port selection, and an immersive **Game mode** that simplifies the layout.
+- **Keys** - a touchscreen C64 keyboard with direct access to common control, edit, function, and system keys.
+
+Joystick support requires an Ultimate 64 with firmware 3.15 or above. Due to hardware limitations, it does not work on U2.
+
+#### Joystick Control
+
+The following shows the Joystick tab in standard and Game mode.
+
+<table>
+  <tr>
+    <td><img src="docs/img/app/home/remote-input/01-joystick.png" alt="Remote Input Joystick tab with a large adjustable stick and fire button" width="360"/></td>
+    <td><img src="docs/img/app/home/remote-input/02-game-mode.png" alt="Remote Input Game mode with an edge-anchored stick and fire button" width="360"/></td>
+  </tr>
+</table>
+
+#### Keyboard Control
+
+The following shows the Keys tab using various display profiles, from small to large.
+
+<table>
+  <tr>
+    <td><img src="docs/img/app/home/remote-input/03-keyboard-compact.png" alt="Remote Input Keys tab on a small phone: isolated cursor pad, pinned RETURN and SPACE, and a scrollable key grid" width="240"/></td>
+    <td><img src="docs/img/app/home/remote-input/04-keyboard-medium.png" alt="Remote Input Keys tab on a phone with recognizable C64 key ordering" width="240"/></td>
+    <td><img src="docs/img/app/home/remote-input/05-keyboard-expanded.png" alt="Remote Input Keys tab on a tablet or desktop showing the full physical C64 keyboard layout with an aligned F-key box" width="360"/></td>
+  </tr>
+</table>
+
 ### Play
 
 Build playlists for programs and songs sourced from the local device, C64U storage, HVSC, or CommoServe. Supports autoplay, shuffle, repeat, subsong selection, and automatic song length discovery.

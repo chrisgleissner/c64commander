@@ -111,15 +111,106 @@ export const sliderToDurationSeconds = (value: number) => {
   return clampDurationSeconds(Math.round(seconds));
 };
 
+/**
+ * How long a persisted playback session can go un-refreshed (no active tick)
+ * before a restore is no longer trusted to resume as "playing". The persist
+ * effect only re-fires while the 1s timeline interval is running, so this
+ * measures how long the app has been backgrounded/suspended/navigated away,
+ * not how long the track itself has been playing. See HARD9-064.
+ */
+export const SESSION_RESTORE_STALE_MS = 5 * 60 * 1000;
+
+/**
+ * True when a restored "isPlaying" session was last confirmed alive too long
+ * ago to trust that the C64 is still doing what the session claims (it may
+ * have been reset/power-cycled, or the app process was suspended for hours).
+ * A missing/unparseable timestamp is treated as stale (fail safe).
+ */
+export const isPlaybackSessionRestoreStale = (
+  updatedAt: string | null | undefined,
+  nowMs: number,
+  staleAfterMs: number = SESSION_RESTORE_STALE_MS,
+): boolean => {
+  if (!updatedAt) return true;
+  const updatedAtMs = Date.parse(updatedAt);
+  if (!Number.isFinite(updatedAtMs)) return true;
+  return nowMs - updatedAtMs > staleAfterMs;
+};
+
 export const resolvePlayTargetIndex = (playlistLength: number, currentIndex: number): number | null => {
   if (playlistLength <= 0) return null;
   if (currentIndex < 0) return 0;
   return currentIndex < playlistLength ? currentIndex : 0;
 };
 
+/**
+ * Applies the "Default duration" fallback to playlist items that don't have a
+ * resolved duration (songlengths/SID header/HVSC md5 lookup), without clobbering
+ * items whose duration was actually resolved. An item is eligible if it has no
+ * duration yet, or if its current duration was itself a prior default-fallback
+ * write (durationSource: "default") — so later slider changes keep tracking
+ * un-resolved items instead of freezing at the first drag. See HARD9-005.
+ */
 export const applyDurationOverrideToPlaylist = (playlist: PlaylistItem[], durationMs: number) => {
-  const updated = playlist.map((entry) => (entry.durationMs === durationMs ? entry : { ...entry, durationMs }));
+  const updated = playlist.map((entry) => {
+    const isDefaultable =
+      entry.durationSource === "default" || entry.durationMs === undefined || entry.durationMs === null;
+    if (!isDefaultable) return entry;
+    if (entry.durationMs === durationMs && entry.durationSource === "default") return entry;
+    return { ...entry, durationMs, durationSource: "default" as const };
+  });
   return updated.some((entry, index) => entry !== playlist[index]) ? updated : playlist;
+};
+
+/**
+ * True when an observed saved-device selection change must locally detach
+ * the Play transport instead of letting it keep firing against whatever
+ * device is now selected. Saved devices + the always-visible health-badge
+ * switcher let a user hop devices while Play stays mounted;
+ * executeSavedDeviceSwitch mutates the C64 API singleton in place, so
+ * auto-advance/Stop would otherwise launch tracks or reset/reboot the NEW
+ * device while the device that was actually playing keeps going with no
+ * reachable control. `previousDeviceId === null` means this is the initial
+ * observation (component mount) - there is nothing to detach from yet.
+ * See HARD11-002.
+ */
+export const shouldDetachPlaybackOnSavedDeviceSwitch = ({
+  previousDeviceId,
+  nextDeviceId,
+  isPlaying,
+  isPaused,
+}: {
+  previousDeviceId: string | null;
+  nextDeviceId: string;
+  isPlaying: boolean;
+  isPaused: boolean;
+}): boolean => {
+  if (previousDeviceId === null || previousDeviceId === nextDeviceId) return false;
+  return isPlaying || isPaused;
+};
+
+/**
+ * Builds the playlist item for a live subsong switch (the subsong picker
+ * shown while a multi-subsong SID is playing). Songlengths are resolved
+ * per-subsong, so the previous subsong's `durationMs` must not carry over -
+ * otherwise the new subsong is cut off (or overruns) at the wrong time and
+ * the stale duration persists onto the playlist item. Clearing it lets
+ * `playItem` re-resolve the duration for the new `songNr`. A user-entered
+ * "Default duration" override (`durationSource: "default"`) is preserved
+ * since it intentionally applies to any subsong. See HARD11-004.
+ */
+export const buildSubsongSwitchItem = (
+  item: PlaylistItem,
+  nextSongNr: number,
+  knownSubsongCount: number | null,
+): PlaylistItem => {
+  const capped = knownSubsongCount ? Math.min(Math.max(1, nextSongNr), knownSubsongCount) : Math.max(1, nextSongNr);
+  const preserveManualDuration = item.durationSource === "default";
+  return {
+    ...item,
+    request: { ...item.request, songNr: capped },
+    ...(preserveManualDuration ? {} : { durationMs: undefined, durationSource: null }),
+  };
 };
 
 export const buildPlaylistItemId = ({
@@ -186,4 +277,131 @@ export const shuffleArray = <T>(items: T[]) => {
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   return shuffled;
+};
+
+/**
+ * Shuffle is implemented as a non-destructive playback-order layer: the
+ * curated playlist array is never reordered. A deterministic seed produces a
+ * shuffled traversal order over the current item ids; "next"/"previous" walk
+ * that order and resolve back to the matching index in the curated array.
+ * See HARD9-007.
+ */
+export const generateShuffleSeed = () => Math.floor(Math.random() * 0xffffffff);
+
+export const seededShuffleIds = (ids: string[], seed: number) => {
+  const shuffled = [...ids];
+  let state = seed >>> 0;
+  const nextRandom = () => {
+    state = Math.imul(1664525, state) + 1013904223;
+    return (state >>> 0) / 4294967296;
+  };
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(nextRandom() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+};
+
+const resolveShuffleOrderPosition = (playlist: PlaylistItem[], currentIndex: number, order: string[]) => {
+  const currentId = currentIndex >= 0 ? playlist[currentIndex]?.id : undefined;
+  const position = currentId ? order.indexOf(currentId) : -1;
+  return position >= 0 ? position : 0;
+};
+
+const resolveIndexForId = (playlist: PlaylistItem[], id: string | undefined) => {
+  if (id === undefined) return -1;
+  return playlist.findIndex((item) => item.id === id);
+};
+
+/**
+ * Resolves the next playlist index for both linear and shuffle traversal.
+ * Returns null when the end is reached without repeat enabled (the caller
+ * should stop instead of advancing), matching the pre-shuffle linear
+ * contract.
+ */
+export const resolveNextPlaylistIndex = (
+  playlist: PlaylistItem[],
+  currentIndex: number,
+  repeatEnabled: boolean,
+  shuffleEnabled: boolean,
+  shuffleSeed: number | null,
+): number | null => {
+  if (!playlist.length) return null;
+  if (!shuffleEnabled || shuffleSeed === null) {
+    let nextIndex = currentIndex + 1;
+    if (nextIndex >= playlist.length) {
+      if (!repeatEnabled) return null;
+      nextIndex = 0;
+    }
+    return nextIndex;
+  }
+  const order = seededShuffleIds(
+    playlist.map((item) => item.id),
+    shuffleSeed,
+  );
+  let nextPosition = resolveShuffleOrderPosition(playlist, currentIndex, order) + 1;
+  if (nextPosition >= order.length) {
+    if (!repeatEnabled) return null;
+    nextPosition = 0;
+  }
+  const resolvedIndex = resolveIndexForId(playlist, order[nextPosition]);
+  return resolvedIndex >= 0 ? resolvedIndex : null;
+};
+
+/**
+ * Resolves the previous playlist index for both linear and shuffle
+ * traversal. Always returns an index (clamps to the start of the order
+ * without repeat, restarting the current track), matching the pre-shuffle
+ * linear contract.
+ */
+export const resolvePreviousPlaylistIndex = (
+  playlist: PlaylistItem[],
+  currentIndex: number,
+  repeatEnabled: boolean,
+  shuffleEnabled: boolean,
+  shuffleSeed: number | null,
+): number => {
+  if (!playlist.length) return 0;
+  if (!shuffleEnabled || shuffleSeed === null) {
+    return currentIndex > 0 ? currentIndex - 1 : repeatEnabled && playlist.length > 1 ? playlist.length - 1 : 0;
+  }
+  const order = seededShuffleIds(
+    playlist.map((item) => item.id),
+    shuffleSeed,
+  );
+  const currentPosition = resolveShuffleOrderPosition(playlist, currentIndex, order);
+  const prevPosition =
+    currentPosition > 0 ? currentPosition - 1 : repeatEnabled && order.length > 1 ? order.length - 1 : 0;
+  const resolvedIndex = resolveIndexForId(playlist, order[prevPosition]);
+  return resolvedIndex >= 0 ? resolvedIndex : 0;
+};
+
+// HARD12-005: derive Next/Prev enablement from the shuffle-order-aware
+// resolvers so the transport buttons reflect what tapping them will actually
+// do. The old linear-position test wrongly disabled Next/Prev at the
+// linear-last/first track while shuffle traversal still had tracks left.
+export const canAdvanceNext = (
+  playlist: PlaylistItem[],
+  currentIndex: number,
+  repeatEnabled: boolean,
+  shuffleEnabled: boolean,
+  shuffleSeed: number | null,
+) => resolveNextPlaylistIndex(playlist, currentIndex, repeatEnabled, shuffleEnabled, shuffleSeed) !== null;
+
+export const canAdvancePrevious = (
+  playlist: PlaylistItem[],
+  currentIndex: number,
+  repeatEnabled: boolean,
+  shuffleEnabled: boolean,
+  shuffleSeed: number | null,
+) => {
+  if (!playlist.length) return false;
+  if (!shuffleEnabled || shuffleSeed === null) {
+    return currentIndex > 0 || repeatEnabled;
+  }
+  const order = seededShuffleIds(
+    playlist.map((item) => item.id),
+    shuffleSeed,
+  );
+  return resolveShuffleOrderPosition(playlist, currentIndex, order) > 0 || repeatEnabled;
 };

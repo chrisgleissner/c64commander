@@ -186,7 +186,16 @@ export class HvscMediaIndexAdapter implements MediaIndex {
     }
     const entries = this.entriesSnapshot.length ? this.entriesSnapshot : this.index.getAll();
     const page = createFallbackFolderPage(entries, options.path, query, offset, limit);
-    this.browseSnapshot = buildHvscBrowseIndexFromEntries(entries);
+    // Only cache the rebuild when it actually has content. Caching an empty
+    // rebuild here (e.g. entries genuinely not loaded yet on this adapter
+    // instance) would "poison" this.browseSnapshot with a truthy-but-empty
+    // snapshot that every later call - including the recursive bulk-add path,
+    // which trusts a non-null browseSnapshot without re-deriving it - would
+    // then read from instead of ever retrying once the real data loads. See
+    // HARD9-015.
+    if (entries.length > 0) {
+      this.browseSnapshot = buildHvscBrowseIndexFromEntries(entries);
+    }
     return page;
   }
 

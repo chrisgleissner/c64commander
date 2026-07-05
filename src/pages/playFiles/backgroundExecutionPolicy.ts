@@ -5,6 +5,13 @@ type BackgroundExecutionDecision = {
   backgroundExecutionActive: boolean;
   isPlaying: boolean;
   isPaused: boolean;
+  /**
+   * HARD12-018: true when the last song in the playlist auto-ended and there
+   * is no upcoming auto-advance due-time. The wake lock has no remaining job,
+   * so background execution must stop even though `isPlaying` stays true (the
+   * Stop affordance must remain available to the user).
+   */
+  playlistEnded?: boolean;
 };
 
 export const isBackgroundExecutionEnabled = ({ flags }: FeatureFlagSnapshot) =>
@@ -15,14 +22,18 @@ export const shouldStartBackgroundExecution = ({
   backgroundExecutionActive,
   isPlaying,
   isPaused,
-}: BackgroundExecutionDecision) => backgroundExecutionEnabled && isPlaying && !isPaused && !backgroundExecutionActive;
+  playlistEnded,
+}: BackgroundExecutionDecision) =>
+  backgroundExecutionEnabled && isPlaying && !isPaused && !backgroundExecutionActive && !playlistEnded;
 
 export const shouldStopBackgroundExecution = ({
   backgroundExecutionEnabled,
   backgroundExecutionActive,
   isPlaying,
   isPaused,
-}: BackgroundExecutionDecision) => backgroundExecutionActive && (!backgroundExecutionEnabled || !isPlaying || isPaused);
+  playlistEnded,
+}: BackgroundExecutionDecision) =>
+  backgroundExecutionActive && (!backgroundExecutionEnabled || !isPlaying || isPaused || Boolean(playlistEnded));
 
 export const shouldSyncBackgroundExecutionDueAt = (
   backgroundExecutionEnabled: boolean,

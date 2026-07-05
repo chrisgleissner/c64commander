@@ -229,50 +229,6 @@ describe("C64API getConfigItems", () => {
     expect(getConfigItem).not.toHaveBeenCalled();
   });
 
-  it("rebuilds a cached category snapshot from previously seen category items", () => {
-    const api = new C64API("http://127.0.0.1");
-
-    (
-      api as unknown as { rememberConfigCategoryItems: (category: string, payload: ConfigResponse) => void }
-    ).rememberConfigCategoryItems("LED Strip Settings", {
-      "LED Strip Settings": {
-        items: {
-          "LedStrip Mode": {
-            current: "Fixed Color",
-            values: ["Off", "Fixed Color", "SID Music"],
-          },
-          "Fixed Color": {
-            current: "Royal Blue",
-            values: ["Red", "Royal Blue"],
-          },
-        },
-      },
-      errors: [],
-    } as ConfigResponse);
-
-    const firstSnapshot = api.getCachedCategory("LED Strip Settings");
-    const secondSnapshot = api.getCachedCategory("LED Strip Settings");
-
-    expect(firstSnapshot).toEqual({
-      "LED Strip Settings": {
-        items: {
-          "LedStrip Mode": {
-            current: "Fixed Color",
-            values: ["Off", "Fixed Color", "SID Music"],
-          },
-          "Fixed Color": {
-            current: "Royal Blue",
-            values: ["Red", "Royal Blue"],
-          },
-        },
-      },
-      errors: [],
-    });
-    expect(secondSnapshot).toEqual(firstSnapshot);
-    expect(secondSnapshot).not.toBe(firstSnapshot);
-    expect(api.getCachedCategory("Keyboard Lighting")).toBeNull();
-  });
-
   it("enriches scalar audio mixer items so Home SID sliders receive real ranges and positions", async () => {
     const api = new C64API("http://127.0.0.1");
 
@@ -452,6 +408,57 @@ describe("C64API request identity", () => {
           String(input).includes("/v1/configs/Audio%20Mixer/Vol%20Socket%201") && init?.method === "PUT",
       );
     expect(writeCalls).toHaveLength(2);
+  });
+
+  it("chunks a large merged config-write batch into multiple bounded POSTs instead of one giant body (HARD9-053)", async () => {
+    // Regression: Loading an app profile / Revert Changes builds a payload of
+    // every writable item in every category - hundreds of items for a full
+    // config - and updateConfigBatch used to merge every non-sequential
+    // category into ONE POST /v1/configs. That handler buffers the request
+    // body into a temp file on the firmware's single-threaded embedded HTTP
+    // task; a large enough body has been verified on hardware to stall and
+    // drop the device's whole network stack.
+    const category = "Audio Mixer";
+    const itemNames = Array.from({ length: 25 }, (_, index) => `Item ${index}`);
+    const updates = Object.fromEntries(itemNames.map((name) => [name, "0 dB"]));
+    const categoryItems = Object.fromEntries(itemNames.map((name) => [name, { selected: "0 dB", options: ["0 dB"] }]));
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === "POST") {
+          return new Response(JSON.stringify({ errors: [] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        if (url.includes(`/v1/configs/${encodeURIComponent(category)}`)) {
+          return new Response(
+            JSON.stringify({ [category]: { items: categoryItems }, errors: [] } satisfies ConfigResponse),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        throw new Error(`Unexpected request in test: ${init?.method ?? "GET"} ${url}`);
+      }),
+    );
+    const api = new C64API("http://127.0.0.1");
+
+    await api.updateConfigBatch({ [category]: updates });
+
+    const postCalls = vi.mocked(globalThis.fetch).mock.calls.filter(([, init]) => init?.method === "POST");
+    // 25 items over a 20-item cap must become at least two POSTs, never one.
+    expect(postCalls.length).toBeGreaterThan(1);
+
+    let totalItemsSent = 0;
+    postCalls.forEach(([, init]) => {
+      const body = JSON.parse(String(init?.body)) as Record<string, Record<string, unknown>>;
+      const itemCount = Object.values(body).reduce((sum, items) => sum + Object.keys(items).length, 0);
+      expect(itemCount).toBeLessThanOrEqual(20);
+      totalItemsSent += itemCount;
+    });
+    // Every item still gets written - chunking must not drop any of them.
+    expect(totalItemsSent).toBe(25);
   });
 
   it("does not dedupe GET bursts when query parameters differ by address", async () => {

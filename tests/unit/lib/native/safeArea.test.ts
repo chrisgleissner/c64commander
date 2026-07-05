@@ -43,7 +43,7 @@ describe("native safe-area sync", () => {
     });
   });
 
-  it("applies rounded Android top and horizontal insets without duplicating the footer inset", async () => {
+  it("applies rounded Android top, horizontal, and bottom insets", async () => {
     isNativePlatformMock.mockReturnValue(true);
     getPlatformMock.mockReturnValue("android");
     getInsetsMock.mockResolvedValue({
@@ -59,11 +59,11 @@ describe("native safe-area sync", () => {
     expect(insets).not.toBeNull();
     expect(insets?.top).toBeCloseTo(27.533333333333335, 12);
     expect(insets?.right).toBeCloseTo(0.13333333333333333, 12);
-    expect(insets?.bottom).toBe(0);
+    expect(insets?.bottom).toBeCloseTo(6.066666666666666, 12);
     expect(insets?.left).toBeCloseTo(0.4, 12);
     expect(document.documentElement.style.getPropertyValue("--native-safe-area-inset-top")).toBe("28px");
     expect(document.documentElement.style.getPropertyValue("--native-safe-area-inset-right")).toBe("0px");
-    expect(document.documentElement.style.getPropertyValue("--native-safe-area-inset-bottom")).toBe("0px");
+    expect(document.documentElement.style.getPropertyValue("--native-safe-area-inset-bottom")).toBe("6px");
     expect(document.documentElement.style.getPropertyValue("--native-safe-area-inset-left")).toBe("0px");
   });
 
@@ -84,10 +84,10 @@ describe("native safe-area sync", () => {
     const { syncNativeSafeAreaInsets } = await import("@/lib/native/safeArea");
     const insets = await syncNativeSafeAreaInsets();
 
-    expect(insets).toEqual({ top: 2.4, right: 1.6, bottom: 0, left: 1.2 });
+    expect(insets).toEqual({ top: 2.4, right: 1.6, bottom: 5, left: 1.2 });
     expect(document.documentElement.style.getPropertyValue("--native-safe-area-inset-top")).toBe("2px");
     expect(document.documentElement.style.getPropertyValue("--native-safe-area-inset-right")).toBe("2px");
-    expect(document.documentElement.style.getPropertyValue("--native-safe-area-inset-bottom")).toBe("0px");
+    expect(document.documentElement.style.getPropertyValue("--native-safe-area-inset-bottom")).toBe("5px");
     expect(document.documentElement.style.getPropertyValue("--native-safe-area-inset-left")).toBe("1px");
   });
 

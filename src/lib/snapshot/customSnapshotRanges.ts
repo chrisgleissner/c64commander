@@ -51,6 +51,25 @@ export const parseHexAddress = (raw: string): number | null => {
   return parseInt(cleaned, 16);
 };
 
+// The .c64snap format stores each range's length in a u16 field (max 0xFFFF).
+// A full 0000-FFFF custom range is exactly 0x10000 bytes - one byte over -
+// which silently wraps to 0 on encode (DataView.setUint16 truncation), so the
+// range vanishes from the saved file with no error. Split any range over this
+// size into safe sub-ranges before it ever reaches the encoder. See HARD9-009.
+const MAX_ENCODABLE_RANGE_LENGTH = 0xffff;
+
+const splitOversizedRange = (range: MemoryRange): MemoryRange[] => {
+  if (range.length <= MAX_ENCODABLE_RANGE_LENGTH) return [range];
+  const parts: MemoryRange[] = [];
+  let offset = 0;
+  while (offset < range.length) {
+    const chunkLength = Math.min(MAX_ENCODABLE_RANGE_LENGTH, range.length - offset);
+    parts.push({ start: range.start + offset, length: chunkLength });
+    offset += chunkLength;
+  }
+  return parts;
+};
+
 export const validateCustomSnapshotRanges = (
   drafts: CustomSnapshotRangeDraft[],
 ): CustomSnapshotRangeValidationResult => {
@@ -104,9 +123,11 @@ export const validateCustomSnapshotRanges = (
 
   return {
     ok: true,
-    ranges: parsedRanges.map((range) => ({
-      start: range.start as number,
-      length: (range.end as number) - (range.start as number) + 1,
-    })),
+    ranges: parsedRanges.flatMap((range) =>
+      splitOversizedRange({
+        start: range.start as number,
+        length: (range.end as number) - (range.start as number) + 1,
+      }),
+    ),
   };
 };

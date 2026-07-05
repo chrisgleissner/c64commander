@@ -70,6 +70,18 @@ features:
     title: Lighting Studio
     description: Enable Lighting Studio entry points and dialog access.
 
+  - id: remote_input_enabled
+    enabled: true
+    visible_to_user: true
+    developer_only: false
+    group: stable
+    title: Remote Input
+    description: >-
+      Show the Remote Input overlay — a second-screen joystick and keyboard for
+      the C64. Joystick relay is enabled automatically only when the connected
+      device's REST API supports the machine:input endpoint; otherwise keyboard
+      control is offered on its own.
+
   - id: ram_snapshots_enabled
     enabled: true
     visible_to_user: true

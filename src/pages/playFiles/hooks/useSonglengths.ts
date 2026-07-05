@@ -131,10 +131,6 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
   }, []);
 
   useEffect(() => {
-    songlengthsCacheRef.current.clear();
-  }, [playlist, songlengthsFiles]);
-
-  useEffect(() => {
     if (!isAndroid || typeof localStorage === "undefined") return;
     if (songlengthsFiles.length) return;
     const raw = localStorage.getItem(persistedKey);
@@ -449,7 +445,15 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
     ) => {
       const updated: PlaylistItem[] = [];
       for (const [index, item] of items.entries()) {
-        if (item.category !== "sid") {
+        // Items with an already-resolved duration don't need re-resolution on
+        // every playlist identity change (track transition, duration-slider
+        // persist, add batch). Items whose duration only came from the
+        // Default-duration fallback (durationSource: "default") stay
+        // eligible, so a later songlengths load can still resolve them.
+        // See HARD9-008.
+        const hasResolvedDuration =
+          item.durationMs !== undefined && item.durationMs !== null && item.durationSource !== "default";
+        if (item.category !== "sid" || hasResolvedDuration) {
           updated.push(item);
         } else {
           const isLocal = item.request.source === "local";
@@ -466,7 +470,9 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
               songNr: item.request.songNr ?? null,
               options,
             });
-            updated.push(resolvedDurationMs === null ? item : { ...item, durationMs: resolvedDurationMs });
+            updated.push(
+              resolvedDurationMs === null ? item : { ...item, durationMs: resolvedDurationMs, durationSource: null },
+            );
           }
         }
         if ((index + 1) % 250 === 0) {

@@ -1060,6 +1060,31 @@ describe("deviceInteractionManager", () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
+  it("allows explicit background recovery probes to run while the device is in ERROR state", async () => {
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    deviceStateValue = "ERROR";
+
+    const action = makeAction("rest-background-error-recovery");
+    const meta = {
+      action,
+      method: "GET",
+      path: "/v1/info",
+      normalizedUrl: "http://device/v1/info",
+      intent: "background" as const,
+      baseUrl: "http://device",
+      allowDuringError: true,
+      bypassCircuit: true,
+    };
+
+    const handler = vi.fn().mockResolvedValue({ product: "Ultimate 64 Elite" });
+    const result = await withRestInteraction(meta, handler);
+    expect(result).toEqual({ product: "Ultimate 64 Elite" });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
   it("records BUSY non-user read guard as observe-only when no defer is applied", async () => {
     const { withRestInteraction, resetInteractionState } =
       await import("@/lib/deviceInteraction/deviceInteractionManager");

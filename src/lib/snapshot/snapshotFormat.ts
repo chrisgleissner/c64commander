@@ -73,6 +73,15 @@ export const encodeSnapshot = (
   if (ranges.length !== blocks.length) {
     throw new Error(`encodeSnapshot: ranges.length (${ranges.length}) !== blocks.length (${blocks.length})`);
   }
+  // Each range's length is stored in a u16 descriptor field; a length of
+  // exactly 0x10000 (the full 64 KiB image as one range) silently wraps to 0
+  // on write, vanishing from the saved file. Callers must split any such
+  // range before reaching here (see customSnapshotRanges.ts / CPU_SNAPSHOT_RANGES).
+  // See HARD9-009.
+  const oversized = ranges.find((range) => range.length > 0xffff || range.length < 1);
+  if (oversized) {
+    throw new Error(`encodeSnapshot: range length ${oversized.length} out of bounds (1-65535)`);
+  }
 
   const metadataJson = metadata ? encodeText(JSON.stringify(metadata)) : new Uint8Array(0);
   const totalDataBytes = blocks.reduce((sum, b) => sum + b.length, 0);

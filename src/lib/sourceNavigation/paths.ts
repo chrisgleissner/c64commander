@@ -7,8 +7,17 @@
  */
 
 export const normalizeSourcePath = (value: string) => {
-  if (!value) return "/";
-  const trimmed = value.replace(/\s+/g, " ").trim();
+  // Structural normalization only (leading slash, collapse duplicate "/").
+  // INTERNAL whitespace is part of the path (e.g. "My  Demos" is a legal FAT
+  // directory name with a double space) and must be preserved - collapsing it
+  // rewrites the request to a path that no longer exists (HARD9-045). We DO
+  // trim leading/trailing whitespace of the whole value, though: FAT/exFAT
+  // strip trailing spaces from names, and end whitespace on a user-entered
+  // path ("  /USB0/Games  ") is an accidental artifact that would otherwise
+  // produce a space-prefixed path that fails every lookup. A blank (or
+  // whitespace-only) value has no real path to preserve, so it maps to root.
+  const trimmed = value?.trim() ?? "";
+  if (trimmed === "") return "/";
   const leading = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
   return leading.replace(/\/+/g, "/");
 };

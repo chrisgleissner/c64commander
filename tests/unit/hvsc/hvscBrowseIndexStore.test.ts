@@ -36,7 +36,9 @@ import {
   listHvscFolderTracks,
   listSongsRecursiveFromBrowseIndex,
   loadHvscBrowseIndexSnapshot,
+  mergeSonglengthDurationsIntoBrowseIndex,
   saveHvscBrowseIndexSnapshot,
+  streamSongsRecursiveFromBrowseIndex,
   verifyHvscBrowseIndexIntegrity,
 } from "@/lib/hvsc/hvscBrowseIndexStore";
 
@@ -229,6 +231,51 @@ describe("hvscBrowseIndexStore", () => {
     expect(snapshot.folders["/MUSICIANS/H/Hubbard_Rob"].songs).toContain("/MUSICIANS/H/Hubbard_Rob/Comic_Bakery.sid");
   });
 
+  describe("mergeSonglengthDurationsIntoBrowseIndex (HARD9-046)", () => {
+    it("adds duration to an existing song without discarding its sidMetadata", () => {
+      const base = buildHvscBrowseIndexFromEntries([{ path: "/DEMOS/A/One.sid", name: "One.sid", type: "sid" }]);
+      base.songs["/DEMOS/A/One.sid"]!.sidMetadata = { name: "One", author: "Someone", released: "1991" };
+      base.songs["/DEMOS/A/One.sid"]!.trackSubsongs = [{ songNr: 1, isDefault: true }];
+
+      const merged = mergeSonglengthDurationsIntoBrowseIndex(base, {
+        pathToSeconds: new Map([["/DEMOS/A/One.sid", [90]]]),
+        md5ToSeconds: new Map(),
+      });
+
+      const song = merged.songs["/DEMOS/A/One.sid"]!;
+      expect(song.durationSeconds).toBe(90);
+      expect(song.durationsSeconds).toEqual([90]);
+      expect(song.sidMetadata).toEqual({ name: "One", author: "Someone", released: "1991" });
+      expect(song.trackSubsongs).toEqual([{ songNr: 1, isDefault: true }]);
+    });
+
+    it("adds a seeded record for a song with no existing entry", () => {
+      const merged = mergeSonglengthDurationsIntoBrowseIndex(null, {
+        pathToSeconds: new Map([["/GAMES/Zap.sid", [45]]]),
+        md5ToSeconds: new Map(),
+      });
+
+      expect(merged.songs["/GAMES/Zap.sid"]).toMatchObject({
+        fileName: "Zap.sid",
+        durationSeconds: 45,
+        metadataStatus: "seeded",
+      });
+    });
+
+    it("does not touch songs that have no songlengths entry", () => {
+      const base = buildHvscBrowseIndexFromEntries([{ path: "/DEMOS/A/One.sid", name: "One.sid", type: "sid" }]);
+      base.songs["/DEMOS/A/One.sid"]!.canonicalTitle = "One";
+
+      const merged = mergeSonglengthDurationsIntoBrowseIndex(base, {
+        pathToSeconds: new Map(),
+        md5ToSeconds: new Map(),
+      });
+
+      expect(merged.songs["/DEMOS/A/One.sid"]!.canonicalTitle).toBe("One");
+      expect(merged.songs["/DEMOS/A/One.sid"]!.durationSeconds ?? null).toBeNull();
+    });
+  });
+
   it("creates mutable browse index for baseline", async () => {
     const { createHvscBrowseIndexMutable } = await import("@/lib/hvsc/hvscBrowseIndexStore");
     vi.mocked(Filesystem.writeFile).mockResolvedValue(undefined as any);
@@ -293,6 +340,52 @@ describe("hvscBrowseIndexStore", () => {
       durationSeconds: 120,
     });
     await mutable.finalize();
+    if (typeof localStorage !== "undefined") localStorage.clear();
+  });
+
+  it("upsertSong merges onto an existing hydrated record instead of replacing it (HARD9-046)", async () => {
+    const { createHvscBrowseIndexMutable, buildHvscBrowseIndexFromEntries: build } =
+      await import("@/lib/hvsc/hvscBrowseIndexStore");
+    // Force the localStorage fallback path so the persisted result is easy to
+    // read back and assert on directly.
+    vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
+    vi.mocked(Filesystem.writeFile).mockRejectedValue(new Error("disk error"));
+    vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("no filesystem"));
+
+    const existing = build([{ path: "/DEMOS/B/Two.sid", name: "Two.sid", type: "sid" }]);
+    existing.songs["/DEMOS/B/Two.sid"] = {
+      ...existing.songs["/DEMOS/B/Two.sid"]!,
+      canonicalTitle: "Two",
+      canonicalAuthor: "Some Author",
+      released: "1990",
+      durationSeconds: 180,
+      durationsSeconds: [180],
+    };
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(BROWSE_INDEX_STORAGE_KEY, JSON.stringify(existing));
+    }
+
+    const mutable = await createHvscBrowseIndexMutable("update");
+    // A re-ingest (e.g. an HVSC update archive reprocessing the same file)
+    // only ever knows fileName/sidMetadata/trackSubsongs at extraction time -
+    // it must not wipe canonicalTitle/canonicalAuthor/released/duration that
+    // came from a prior songlengths/metadata sync.
+    mutable.upsertSong({
+      virtualPath: "/DEMOS/B/Two.sid",
+      fileName: "Two.sid",
+      sidMetadata: { name: "Two", author: "Some Author", released: "1990" },
+      trackSubsongs: [{ songNr: 1, isDefault: true }],
+    });
+    await mutable.finalize();
+
+    const persisted = JSON.parse(localStorage.getItem(BROWSE_INDEX_STORAGE_KEY)!);
+    const song = persisted.songs["/DEMOS/B/Two.sid"];
+    expect(song.canonicalTitle).toBe("Two");
+    expect(song.canonicalAuthor).toBe("Some Author");
+    expect(song.released).toBe("1990");
+    expect(song.durationSeconds).toBe(180);
+    expect(song.sidMetadata.name).toBe("Two");
+
     if (typeof localStorage !== "undefined") localStorage.clear();
   });
 
@@ -822,13 +915,35 @@ describe("listSongsRecursiveFromBrowseIndex", () => {
     expect(songs).toBeNull();
   });
 
-  it("returns null for empty snapshot (stale after native ingest clears index)", () => {
+  it("returns null for empty snapshot (stale after native ingest clears index) (HARD9-015)", () => {
     const snapshot = buildHvscBrowseIndexFromEntries([]);
 
     expect(listSongsRecursiveFromBrowseIndex(snapshot, "/DEMOS")).toBeNull();
     expect(listSongsRecursiveFromBrowseIndex(snapshot, "/GAMES")).toBeNull();
-    // Root "/" always exists in the folder map, but has 0 songs
-    expect(listSongsRecursiveFromBrowseIndex(snapshot, "/")).toEqual([]);
+    // Root "/" always exists in the folder map even for a wholly-empty
+    // snapshot (buildHvscBrowseIndexFromEntries always seeds it), so it
+    // can't be distinguished from a poisoned/incomplete index by presence
+    // alone. Root queries must also fall back, not just non-root ones -
+    // this is exactly the loophole "add all from HVSC root" hit before the
+    // fix: a poisoned-but-truthy snapshot's root always exists, so only
+    // checking "root missing" let a bulk-add from "/" silently return zero
+    // songs instead of falling back to BFS. See HARD9-015.
+    expect(listSongsRecursiveFromBrowseIndex(snapshot, "/")).toBeNull();
+  });
+
+  it("does not treat a non-empty snapshot with a single song as empty, including at root", () => {
+    // Guards the new "whole snapshot has zero songs" check added for
+    // HARD9-015 against being off-by-one / over-triggering: a snapshot with
+    // exactly one song must still resolve at root, not fall back to null.
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: "/MUSICIANS/A/Song.sid", name: "Song.sid", type: "sid" },
+    ]);
+    expect(listSongsRecursiveFromBrowseIndex(snapshot, "/")).toEqual(
+      expect.arrayContaining([expect.objectContaining({ virtualPath: "/MUSICIANS/A/Song.sid" })]),
+    );
+    expect(listSongsRecursiveFromBrowseIndex(snapshot, "/MUSICIANS")).toEqual(
+      expect.arrayContaining([expect.objectContaining({ virtualPath: "/MUSICIANS/A/Song.sid" })]),
+    );
   });
 
   it("handles deeply nested folder hierarchy", () => {
@@ -866,5 +981,38 @@ describe("listSongsRecursiveFromBrowseIndex", () => {
     const songs = listSongsRecursiveFromBrowseIndex(snapshot, "/DEMOS");
     expect(songs).toHaveLength(1);
     expect(songs![0]!.fileName).toBe("One.sid");
+  });
+
+  describe("streamSongsRecursiveFromBrowseIndex", () => {
+    it("returns null for a wholly-empty snapshot instead of streaming zero chunks (HARD9-015)", async () => {
+      const snapshot = buildHvscBrowseIndexFromEntries([]);
+      const chunks: unknown[] = [];
+
+      const result = await streamSongsRecursiveFromBrowseIndex(snapshot, "/", {
+        onChunk: (songs) => {
+          chunks.push(songs);
+        },
+      });
+
+      expect(result).toBeNull();
+      expect(chunks).toHaveLength(0);
+    });
+
+    it("streams all songs under a non-empty snapshot", async () => {
+      const snapshot = buildHvscBrowseIndexFromEntries([
+        { path: "/DEMOS/A/One.sid", name: "One.sid", type: "sid" },
+        { path: "/DEMOS/B/Two.sid", name: "Two.sid", type: "sid" },
+      ]);
+      const streamed: string[] = [];
+
+      const result = await streamSongsRecursiveFromBrowseIndex(snapshot, "/DEMOS", {
+        onChunk: (songs) => {
+          songs.forEach((song) => streamed.push(song.fileName));
+        },
+      });
+
+      expect(result).toEqual({ totalSongs: 2 });
+      expect(streamed.sort()).toEqual(["One.sid", "Two.sid"]);
+    });
   });
 });

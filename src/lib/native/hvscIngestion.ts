@@ -34,11 +34,6 @@ export type HvscNativeProgressEvent = {
   songsDeleted?: number;
 };
 
-export type HvscNativeQueryAllSongsResult = {
-  songs: Array<{ virtualPath: string; fileName: string }>;
-  totalSongs: number;
-};
-
 type HvscIngestionPlugin = {
   ingestHvsc: (options: {
     relativeArchivePath: string;
@@ -52,7 +47,6 @@ type HvscIngestionPlugin = {
   }) => Promise<HvscNativeIngestResult>;
   cancelIngestion: (options?: { traceContext?: NativeTraceContext }) => Promise<void>;
   getIngestionStats: (options?: { traceContext?: NativeTraceContext }) => Promise<{ metadataRows: number }>;
-  queryAllSongs: (options?: { traceContext?: NativeTraceContext }) => Promise<HvscNativeQueryAllSongsResult>;
   readArchiveChunk: (options: {
     relativeArchivePath: string;
     offsetBytes: number;
@@ -92,10 +86,6 @@ export const HvscIngestion = {
   readArchiveChunk: (options: { relativeArchivePath: string; offsetBytes: number; lengthBytes: number }) =>
     plugin.readArchiveChunk({
       ...options,
-      traceContext: resolveNativeTraceContext(getActiveAction()),
-    }),
-  queryAllSongs: () =>
-    plugin.queryAllSongs({
       traceContext: resolveNativeTraceContext(getActiveAction()),
     }),
   addProgressListener: (listener: (event: HvscNativeProgressEvent) => void) =>

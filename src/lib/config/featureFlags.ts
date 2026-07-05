@@ -123,6 +123,15 @@ export const isKnownFeatureFlagId = (id: string): id is FeatureFlagId =>
 const isStandardUserToggleable = (definition: FeatureFlagDefinition): boolean =>
   definition.visible_to_user && !definition.developer_only;
 
+/**
+ * True when a flag is safe for a non-developer to flip via a plain settings
+ * UI or import file (visible and not developer-only, honoring per-variant
+ * overrides). Hidden/developer-only flags gate device-touching or safety
+ * behavior that must not be flippable outside developer mode; see HARD11-001.
+ */
+export const isFeatureFlagStandardUserToggleable = (id: FeatureFlagId): boolean =>
+  isStandardUserToggleable(definitionFor(id));
+
 const computeResolution = (
   definition: FeatureFlagDefinition,
   override: boolean | undefined,

@@ -17,9 +17,13 @@ const getPasswordForDeviceMock = vi.fn();
 const getSavedDevicesSnapshotMock = vi.fn();
 const selectSavedDeviceMock = vi.fn();
 const completeSavedDeviceVerificationMock = vi.fn();
+const getSelectedSavedDeviceMock = vi.fn();
+const resolveCanonicalProductFamilyCodeMock = vi.fn();
 const applyC64APIRuntimeConfigMock = vi.fn();
 const startDeviceDiscoveryMock = vi.fn();
 const hasPersistedDeviceHostConfigMock = vi.fn();
+const setStoredFtpPortMock = vi.fn();
+const setStoredTelnetPortMock = vi.fn();
 
 vi.mock("@/lib/c64api", () => ({
   C64API: class {
@@ -47,6 +51,13 @@ vi.mock("@/lib/secureStorage", () => ({
 vi.mock("@/lib/ftp/ftpConfig", () => ({
   setRuntimeFtpPortOverride: vi.fn(),
   clearRuntimeFtpPortOverride: vi.fn(),
+  setRuntimeFtpPasswordOverride: vi.fn(),
+  clearRuntimeFtpPasswordOverride: vi.fn(),
+  setStoredFtpPort: (...args: unknown[]) => setStoredFtpPortMock(...args),
+}));
+
+vi.mock("@/lib/telnet/telnetConfig", () => ({
+  setStoredTelnetPort: (...args: unknown[]) => setStoredTelnetPortMock(...args),
 }));
 
 vi.mock("@/lib/mock/mockServer", () => ({
@@ -54,6 +65,7 @@ vi.mock("@/lib/mock/mockServer", () => ({
   stopMockServer: vi.fn().mockResolvedValue(undefined),
   getActiveMockBaseUrl: () => null,
   getActiveMockFtpPort: () => null,
+  getActiveMockToken: () => null,
 }));
 
 vi.mock("@/lib/config/appSettings", () => ({
@@ -112,8 +124,8 @@ vi.mock("@/lib/connection/reachabilityEvents", () => ({
 vi.mock("@/lib/savedDevices/store", () => ({
   completeSavedDeviceVerification: (...args: unknown[]) => completeSavedDeviceVerificationMock(...args),
   getSavedDevicesSnapshot: () => getSavedDevicesSnapshotMock(),
-  getSelectedSavedDevice: () => null,
-  resolveCanonicalProductFamilyCode: () => null,
+  getSelectedSavedDevice: () => getSelectedSavedDeviceMock(),
+  resolveCanonicalProductFamilyCode: (...args: unknown[]) => resolveCanonicalProductFamilyCodeMock(...args),
   selectSavedDevice: (...args: unknown[]) => selectSavedDeviceMock(...args),
 }));
 
@@ -156,6 +168,13 @@ beforeEach(() => {
   getInfoMock.mockResolvedValue(UNHEALTHY);
   hasPersistedDeviceHostConfigMock.mockReturnValue(false);
   getSavedDevicesSnapshotMock.mockReturnValue(snapshotWith([]));
+  // Default the identity-stamp inputs to the inert values other tests assume;
+  // the HARD16-001 test opts into a realistic stateful selection.
+  selectSavedDeviceMock.mockReset();
+  getSelectedSavedDeviceMock.mockReset();
+  getSelectedSavedDeviceMock.mockReturnValue(null);
+  resolveCanonicalProductFamilyCodeMock.mockReset();
+  resolveCanonicalProductFamilyCodeMock.mockReturnValue(null);
   startDeviceDiscoveryMock.mockResolvedValue({
     candidates: [],
     scannedHosts: 0,
@@ -238,26 +257,75 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
     expect(selectSavedDeviceMock).toHaveBeenCalledWith("secured");
   });
 
-  it("does not connect when the reachable device fails verification (lines 728-730, 1042)", async () => {
+  it("selects the reachable candidate but leaves it unverified when verification fails (HARD16-001 switch-path parity)", async () => {
     // Sweep probe -> healthy (reachable), verification probe -> unhealthy (fails).
     getInfoMock.mockResolvedValueOnce(HEALTHY).mockResolvedValueOnce(UNHEALTHY);
     getSavedDevicesSnapshotMock.mockReturnValue(
       snapshotWith([
         { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
-        { id: "flaky", host: "192.168.1.80", httpPort: 80, hasPassword: false },
+        { id: "flaky", host: "192.168.1.80", httpPort: 80, hasPassword: false, ftpPort: 21, telnetPort: 23 },
       ]),
     );
 
     await discoverConnection("startup");
     await flushAsync();
 
-    // selectSavedDevice still runs (we committed the runtime config), but the
-    // failed verification means completeSavedDeviceVerification is NOT called.
-    // verifyCurrentConnectionTarget runs its own "switch" discovery run, which
-    // supersedes the startup run, so the fallback returns false and the stale
-    // startup run unwinds (line 1042) without entering LAN discovery.
+    // Selection now moves to the candidate BEFORE verification (mirrors
+    // executeSavedDeviceSwitch), so a failed verify leaves it selected but
+    // unverified rather than rolled back.
     expect(selectSavedDeviceMock).toHaveBeenCalledWith("flaky");
     expect(completeSavedDeviceVerificationMock).not.toHaveBeenCalled();
+    // A failed verification never promotes to REAL_CONNECTED, so the runtime
+    // API is not retargeted via transitionToRealConnected.
+    expect(applyC64APIRuntimeConfigMock).not.toHaveBeenCalled();
+  });
+
+  it("stamps only the reachable device's identity, never the still-selected powered-off device (HARD16-001)", async () => {
+    const deviceA = {
+      id: "selected",
+      host: "u64",
+      httpPort: 80,
+      hasPassword: false,
+      lastKnownUniqueId: "uidA",
+      lastKnownProduct: "c64u",
+      ftpPort: 21,
+      telnetPort: 23,
+    };
+    const deviceB = {
+      id: "other",
+      host: "192.168.1.60",
+      httpPort: 80,
+      hasPassword: false,
+      lastKnownUniqueId: "uidB",
+      ftpPort: 2121,
+      telnetPort: 2323,
+    };
+    const infoB = { product: "Ultimate-64", unique_id: "uidB", firmware_version: "3.15", hostname: "u64host" };
+
+    // Selection is stateful: A is selected until selectSavedDevice flips it to B,
+    // so identity stamping sees exactly the device selected at each moment.
+    let selectedId = "selected";
+    selectSavedDeviceMock.mockImplementation((id: string) => {
+      selectedId = id;
+    });
+    getSelectedSavedDeviceMock.mockImplementation(() => (selectedId === "selected" ? deviceA : deviceB));
+    resolveCanonicalProductFamilyCodeMock.mockReturnValue("u64");
+
+    getSavedDevicesSnapshotMock.mockReturnValue(snapshotWith([deviceA, deviceB]));
+    // Sweep probe of B -> healthy; verification probe of B -> healthy.
+    getInfoMock.mockResolvedValueOnce(infoB).mockResolvedValueOnce(infoB);
+
+    await discoverConnection("startup");
+    await flushAsync();
+
+    // The corruption (fails today): verifying while A is still selected stamps
+    // B's identity onto A via setSnapshot -> rememberSelectedSavedDeviceIdentity.
+    expect(completeSavedDeviceVerificationMock).not.toHaveBeenCalledWith("selected", expect.anything());
+    // B is selected, verified, and its ports applied — the switch path's behaviour.
+    expect(selectSavedDeviceMock).toHaveBeenCalledWith("other");
+    expect(completeSavedDeviceVerificationMock).toHaveBeenCalledWith("other", infoB);
+    expect(setStoredFtpPortMock).toHaveBeenCalledWith(2121);
+    expect(setStoredTelnetPortMock).toHaveBeenCalledWith(2323);
   });
 
   it("skips the sweep and proceeds to LAN discovery when there are no other saved devices", async () => {

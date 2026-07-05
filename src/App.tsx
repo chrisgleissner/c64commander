@@ -76,16 +76,37 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 export const shouldBundleCoverageProbeModules = () =>
   import.meta.env.VITE_ENABLE_TEST_PROBES === "1" || !import.meta.env.PROD;
 
-const coverageProbeModulesAvailable = shouldBundleCoverageProbeModules();
+type CoverageProbeModules = {
+  CoverageProbePage: React.LazyExoticComponent<React.ComponentType> | null;
+  DeviceSwitchLabPage: React.LazyExoticComponent<React.ComponentType> | null;
+  TestHeartbeat: React.LazyExoticComponent<React.ComponentType> | null;
+  DeviceSwitchLabLauncher: React.LazyExoticComponent<React.ComponentType> | null;
+};
 
-const CoverageProbePage = coverageProbeModulesAvailable ? lazy(() => import("./pages/CoverageProbePage")) : null;
-const DeviceSwitchLabPage = coverageProbeModulesAvailable ? lazy(() => import("./pages/DeviceSwitchLabPage")) : null;
-const TestHeartbeat = coverageProbeModulesAvailable
-  ? lazy(async () => ({ default: (await import("@/components/TestHeartbeat")).TestHeartbeat }))
-  : null;
-const DeviceSwitchLabLauncher = coverageProbeModulesAvailable
-  ? lazy(async () => ({ default: (await import("@/components/DeviceSwitchLabLauncher")).DeviceSwitchLabLauncher }))
-  : null;
+// Computed lazily (never at module scope) and memoized so every caller gets the
+// SAME lazy() component references across renders — constructing lazy() fresh
+// each call would remount Suspense boundaries. Calling shouldBundleCoverageProbeModules()
+// at module-evaluation time (rather than from here, at first actual use) crashed
+// Playwright's Node-based `--list` collection for any spec transitively importing
+// this module, since import.meta.env isn't available under Vite's transform there.
+let cachedCoverageProbeModules: CoverageProbeModules | null = null;
+const getCoverageProbeModules = (): CoverageProbeModules => {
+  if (cachedCoverageProbeModules) return cachedCoverageProbeModules;
+  const available = shouldBundleCoverageProbeModules();
+  cachedCoverageProbeModules = {
+    CoverageProbePage: available ? lazy(() => import("./pages/CoverageProbePage")) : null,
+    DeviceSwitchLabPage: available ? lazy(() => import("./pages/DeviceSwitchLabPage")) : null,
+    TestHeartbeat: available
+      ? lazy(async () => ({ default: (await import("@/components/TestHeartbeat")).TestHeartbeat }))
+      : null,
+    DeviceSwitchLabLauncher: available
+      ? lazy(async () => ({
+          default: (await import("@/components/DeviceSwitchLabLauncher")).DeviceSwitchLabLauncher,
+        }))
+      : null,
+  };
+  return cachedCoverageProbeModules;
+};
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -137,6 +158,7 @@ export const shouldAutoLaunchDeviceSwitchLab = () => {
 
 const DeviceSwitchLabLauncherGate = ({ enabled }: { enabled: boolean }) => {
   const location = useLocation();
+  const { DeviceSwitchLabLauncher } = getCoverageProbeModules();
 
   if (!enabled || !DeviceSwitchLabLauncher) {
     return null;
@@ -241,6 +263,7 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
 
 const AppRoutes = () => {
   const coverageProbeEnabled = shouldEnableCoverageProbe();
+  const { CoverageProbePage, DeviceSwitchLabPage, TestHeartbeat } = getCoverageProbeModules();
   return (
     <BrowserRouter>
       <LightingStudioProvider>

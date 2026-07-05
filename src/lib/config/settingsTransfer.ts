@@ -42,9 +42,11 @@ import {
 import {
   FEATURE_FLAG_IDS,
   featureFlagManager,
+  isFeatureFlagStandardUserToggleable,
   isKnownFeatureFlagId,
   type FeatureFlagId,
 } from "@/lib/config/featureFlags";
+import { getDeveloperModeEnabled } from "@/lib/config/developerModeStore";
 import {
   loadDeviceSafetyConfig,
   saveAllowUserOverrideCircuit,
@@ -242,7 +244,10 @@ const validateAppSettings = (value: unknown, optionalKeys: readonly string[] = [
   return null;
 };
 
-const sanitizeFeatureFlags = (value: unknown): Partial<Record<FeatureFlagId, boolean>> | { error: string } => {
+const sanitizeFeatureFlags = (
+  value: unknown,
+  developerModeEnabled: boolean,
+): Partial<Record<FeatureFlagId, boolean>> | { error: string } => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return { error: "featureFlags must be an object." };
   }
@@ -254,6 +259,13 @@ const sanitizeFeatureFlags = (value: unknown): Partial<Record<FeatureFlagId, boo
     }
     if (typeof rawValue !== "boolean") {
       return { error: `featureFlags.${key} must be boolean.` };
+    }
+    // Hidden/developer-only flags (experimental device-touching features,
+    // or disabling background_execution_enabled) must not be silently
+    // flippable by importing a hand-edited or shared settings file outside
+    // developer mode (HARD11-001).
+    if (!developerModeEnabled && !isFeatureFlagStandardUserToggleable(key)) {
+      continue;
     }
     next[key] = rawValue;
   }
@@ -302,7 +314,7 @@ export const importSettingsJson = async (raw: string): Promise<{ ok: true } | { 
   let importedFeatureFlags: Partial<Record<FeatureFlagId, boolean>> = {};
   if (version === SETTINGS_EXPORT_VERSION) {
     try {
-      const sanitized = sanitizeFeatureFlags(payload.featureFlags);
+      const sanitized = sanitizeFeatureFlags(payload.featureFlags, getDeveloperModeEnabled());
       if ("error" in sanitized) {
         return { ok: false, error: sanitized.error };
       }
@@ -351,6 +363,21 @@ export const importSettingsJson = async (raw: string): Promise<{ ok: true } | { 
   saveDiscoveryProbeIntervalMs(safeSafety.discoveryProbeIntervalMs);
   saveAllowUserOverrideCircuit(Boolean(safeSafety.allowUserOverrideCircuit));
   await featureFlagManager.load();
+  // HARD12-002: preserve existing hidden/developer-only flag overrides when
+  // importing outside developer mode. Otherwise `replaceOverrides` would clear
+  // every flag not in the imported payload — including hidden ones the user
+  // cannot re-enable without developer mode. Within developer mode, import
+  // keeps its full replace semantics.
+  if (!getDeveloperModeEnabled()) {
+    const existing = featureFlagManager.getExplicitOverrides();
+    const preserved: Partial<Record<FeatureFlagId, boolean>> = {};
+    for (const [id, value] of Object.entries(existing)) {
+      if (!isFeatureFlagStandardUserToggleable(id as FeatureFlagId)) {
+        preserved[id as FeatureFlagId] = value;
+      }
+    }
+    importedFeatureFlags = { ...preserved, ...importedFeatureFlags };
+  }
   await featureFlagManager.replaceOverrides(importedFeatureFlags);
 
   return { ok: true };

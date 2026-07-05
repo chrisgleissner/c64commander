@@ -35,6 +35,7 @@ import org.json.JSONObject
 class DeviceDiscoveryPlugin : Plugin() {
   private val executor = Executors.newSingleThreadExecutor()
   private val logTag = "DeviceDiscoveryPlugin"
+  internal var httpConnectionFactory: (URL) -> HttpURLConnection = { url -> url.openConnection() as HttpURLConnection }
 
   internal data class DiscoveryTarget(
     val host: String,
@@ -217,9 +218,16 @@ class DeviceDiscoveryPlugin : Plugin() {
   }
 
   internal fun probeTarget(target: DiscoveryTarget, connectTimeoutMs: Int): DiscoveryCandidate? {
+    // Captured outside the try body (and disconnected in `finally` below) so
+    // an exception thrown while reading the response body - not just the
+    // explicit success/4xx paths - still releases the socket/FD. A device
+    // dropping mid-body under load previously leaked the connection on every
+    // such probe, accumulating during repeated rediscovery. See HARD9-076.
+    var openedConnection: HttpURLConnection? = null
     return try {
       val url = URL("http://${target.host}:${target.port}/v1/info")
-      val connection = url.openConnection() as HttpURLConnection
+      val connection = httpConnectionFactory(url)
+      openedConnection = connection
       connection.connectTimeout = connectTimeoutMs
       connection.readTimeout = connectTimeoutMs
       connection.requestMethod = "GET"
@@ -304,6 +312,12 @@ class DeviceDiscoveryPlugin : Plugin() {
         )
       }
       null
+    } finally {
+      // Also covers the explicit-disconnect paths above (HttpURLConnection.disconnect()
+      // is idempotent) - this is the only path that reliably runs when an exception is
+      // thrown while reading the response body, which the try body's explicit calls
+      // never reach.
+      openedConnection?.disconnect()
     }
   }
 

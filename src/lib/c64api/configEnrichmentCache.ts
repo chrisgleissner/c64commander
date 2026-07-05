@@ -10,6 +10,7 @@ import { addErrorLog, addLog } from "@/lib/logging";
 
 const CATEGORY_KEY_PREFIX = "c64u:configEnrichment:";
 const HOST_NAMESPACE_KEY_PREFIX = "c64u:configEnrichmentHost:";
+const ABSENT_DOMAIN_KEY_PREFIX = "c64u:configEnrichmentAbsent:";
 
 type CategoryCacheValue = {
   namespaceKey: string;
@@ -17,6 +18,13 @@ type CategoryCacheValue = {
   firmwareVersion: string;
   category: string;
   items: Record<string, unknown>;
+};
+
+type AbsentDomainCacheValue = {
+  namespaceKey: string;
+  uniqueId: string;
+  firmwareVersion: string;
+  keys: string[];
 };
 
 type HostNamespaceBinding = {
@@ -36,6 +44,7 @@ const getStorage = () => {
 const buildCategoryStorageKey = (namespaceKey: string, category: string) =>
   `${CATEGORY_KEY_PREFIX}${namespaceKey}|${category}`;
 const buildHostBindingKey = (host: string) => `${HOST_NAMESPACE_KEY_PREFIX}${host}`;
+const buildAbsentDomainStorageKey = (namespaceKey: string) => `${ABSENT_DOMAIN_KEY_PREFIX}${namespaceKey}`;
 
 const listKeys = (prefix: string) => {
   const storage = getStorage();
@@ -115,6 +124,12 @@ const clearNamespacesForUniqueId = (uniqueId: string, keepNamespaceKey: string) 
   });
   removeKeys(categoryKeysToDelete);
 
+  const absentKeysToDelete = listKeys(ABSENT_DOMAIN_KEY_PREFIX).filter((key) => {
+    const value = readJson<AbsentDomainCacheValue>(key);
+    return value?.uniqueId === uniqueId && value.namespaceKey !== keepNamespaceKey;
+  });
+  removeKeys(absentKeysToDelete);
+
   const hostKeysToDelete = listKeys(HOST_NAMESPACE_KEY_PREFIX).filter((key) => {
     const binding = readJson<HostNamespaceBinding>(key);
     return binding?.uniqueId === uniqueId && binding.namespaceKey !== keepNamespaceKey;
@@ -176,11 +191,37 @@ export const saveConfigEnrichmentCategory = (
   } satisfies CategoryCacheValue);
 };
 
+export const loadConfigEnrichmentAbsentDomains = (namespaceKey: string | null): string[] => {
+  if (!namespaceKey) {
+    return [];
+  }
+  const value = readJson<AbsentDomainCacheValue>(buildAbsentDomainStorageKey(namespaceKey));
+  return Array.isArray(value?.keys) ? value.keys : [];
+};
+
+export const saveConfigEnrichmentAbsentDomains = (namespaceKey: string | null, keys: string[]) => {
+  if (!namespaceKey) {
+    return;
+  }
+  const [uniqueId, firmwareVersion] = namespaceKey.split("|");
+  if (!uniqueId || !firmwareVersion) {
+    addLog("warn", "Skipping config enrichment absence write for malformed namespace", { namespaceKey });
+    return;
+  }
+  writeJson(buildAbsentDomainStorageKey(namespaceKey), {
+    namespaceKey,
+    uniqueId,
+    firmwareVersion,
+    keys,
+  } satisfies AbsentDomainCacheValue);
+};
+
 export const clearConfigEnrichmentNamespace = (namespaceKey: string | null) => {
   if (!namespaceKey) {
     return;
   }
   removeKeys(listKeys(CATEGORY_KEY_PREFIX).filter((key) => key.startsWith(`${CATEGORY_KEY_PREFIX}${namespaceKey}|`)));
+  removeKeys([buildAbsentDomainStorageKey(namespaceKey)]);
   removeKeys(
     listKeys(HOST_NAMESPACE_KEY_PREFIX).filter((key) => {
       const binding = readJson<HostNamespaceBinding>(key);
@@ -190,5 +231,9 @@ export const clearConfigEnrichmentNamespace = (namespaceKey: string | null) => {
 };
 
 export const clearAllConfigEnrichmentCache = () => {
-  removeKeys([...listKeys(CATEGORY_KEY_PREFIX), ...listKeys(HOST_NAMESPACE_KEY_PREFIX)]);
+  removeKeys([
+    ...listKeys(CATEGORY_KEY_PREFIX),
+    ...listKeys(ABSENT_DOMAIN_KEY_PREFIX),
+    ...listKeys(HOST_NAMESPACE_KEY_PREFIX),
+  ]);
 };

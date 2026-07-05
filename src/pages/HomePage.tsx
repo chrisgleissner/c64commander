@@ -8,7 +8,18 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { RotateCcw, Save, RefreshCw, Power, Trash2, Upload, Download, FolderOpen, AlertCircle } from "lucide-react";
+import {
+  RotateCcw,
+  Save,
+  RefreshCw,
+  Power,
+  Trash2,
+  Upload,
+  Download,
+  FolderOpen,
+  AlertCircle,
+  Gamepad2,
+} from "lucide-react";
 import { variant } from "@/generated/variant";
 import { useC64ConfigItems, useC64Connection } from "@/hooks/useC64Connection";
 import { useActionTrace } from "@/hooks/useActionTrace";
@@ -47,6 +58,7 @@ import { persistConfigSnapshotFile, pickConfigSnapshotFile } from "@/lib/config/
 import { SaveRamDialog } from "./home/dialogs/SaveRamDialog";
 import { RestoreSnapshotDialog } from "./home/dialogs/RestoreSnapshotDialog";
 import { SnapshotManagerDialog } from "./home/dialogs/SnapshotManagerDialog";
+import { RemoteInputSheet } from "@/components/remoteInput/RemoteInputSheet";
 import { ReuProgressDialog } from "./home/dialogs/ReuProgressDialog";
 import { ClearFlashDialog } from "./home/dialogs/ClearFlashDialog";
 import { useSnapshotStore } from "@/lib/snapshot/snapshotStore";
@@ -73,6 +85,7 @@ import { isReuSnapshotEntry } from "@/pages/home/types/restorableSnapshots";
 
 import {
   C64_CARTRIDGE_HOME_ITEMS,
+  HOME_OPTION_DOMAIN_REFS,
   HOME_SUMMARY_QUERY_OPTIONS,
   KEYBOARD_LIGHTING_HOME_ITEMS,
   LED_STRIP_HOME_ITEMS,
@@ -80,6 +93,7 @@ import {
   U64_HOME_ITEMS,
   USER_INTERFACE_HOME_ITEMS,
 } from "./home/constants";
+import { buildOptionDomainKey, useDeviceConfigOptionDomains } from "./home/hooks/useDeviceConfigOptionDomains";
 
 import { normalizeOptionToken } from "./home/utils/uiLogic";
 import { buildConfigKey, readItemOptions } from "./home/utils/HomeConfigUtils";
@@ -216,6 +230,7 @@ function HomePageContent() {
   const [saveRamDialogOpen, setSaveRamDialogOpen] = useState(false);
   const [clearFlashDialogOpen, setClearFlashDialogOpen] = useState(false);
   const [snapshotManagerOpen, setSnapshotManagerOpen] = useState(false);
+  const [remoteInputSheetOpen, setRemoteInputSheetOpen] = useState(false);
   const [restoreTarget, setRestoreTarget] = useState<RestorableSnapshotEntry | null>(null);
   const [reuProgress, setReuProgress] = useState<ReuProgressState | null>(null);
   const [reuTaskPending, setReuTaskPending] = useState(false);
@@ -246,6 +261,7 @@ function HomePageContent() {
     openContextLens();
   };
   const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
+  const { value: remoteInputEnabled } = useFeatureFlag("remote_input_enabled");
   const { value: reuSnapshotEnabled } = useFeatureFlag("home_telnet_reu_snapshot_enabled");
   const { value: ramSnapshotsEnabled } = useFeatureFlag("ram_snapshots_enabled");
   const { value: homeTelnetConfigActionsEnabled } = useFeatureFlag("home_telnet_config_actions_enabled");
@@ -649,6 +665,17 @@ function HomePageContent() {
   const clearRamRebootVisible =
     homeTelnetClearRamRebootEnabled && telnet.isAvailable && clearRamRebootSupport?.status !== "unsupported";
   const machineExtraActions = [
+    ...(remoteInputEnabled
+      ? [
+          {
+            id: "openRemoteInput",
+            label: "Remote Input",
+            icon: Gamepad2,
+            onSelect: () => setRemoteInputSheetOpen(true),
+            disabled: !isActive,
+          },
+        ]
+      : []),
     ...(clearRamRebootVisible
       ? [
           {
@@ -692,6 +719,16 @@ function HomePageContent() {
   const ledStripConfig = ledStripCategory as Record<string, unknown> | undefined;
   const userInterfaceConfig = userInterfaceCategory as Record<string, unknown> | undefined;
   const keyboardLightingConfig = keyboardLightingCategory as Record<string, unknown> | undefined;
+
+  // Permitted values for every summary dropdown are interrogated from the concrete device
+  // (cached per-firmware); we never present hard-coded, model-specific option lists.
+  const optionDomains = useDeviceConfigOptionDomains("home-summary", HOME_OPTION_DOMAIN_REFS, isActive);
+  const optionsFor = (category: string, itemName: string, liveOptions: string[], fallbackValue: string) =>
+    resolveHomeConfigOptions(
+      liveOptions,
+      optionDomains[buildOptionDomainKey(category, itemName)]?.options,
+      fallbackValue,
+    );
   const cartridgePreferenceOptions = readItemOptions(
     c64CartridgeConfig,
     "C64 and Cartridge Settings",
@@ -860,49 +897,49 @@ function HomePageContent() {
     }
   });
 
-  const effectiveVideoModeOptions = resolveHomeConfigOptions(
+  const effectiveVideoModeOptions = optionsFor(
     "U64 Specific Settings",
     "System Mode",
     videoModeOptions,
     videoModeValue,
   );
-  const effectiveAnalogVideoOptions = resolveHomeConfigOptions(
+  const effectiveAnalogVideoOptions = optionsFor(
     "U64 Specific Settings",
     "Analog Video Mode",
     analogVideoOptions,
     analogVideoValue,
   );
-  const effectiveHdmiResolutionOptions = resolveHomeConfigOptions(
+  const effectiveHdmiResolutionOptions = optionsFor(
     "U64 Specific Settings",
     "HDMI Scan Resolution",
     hdmiResolutionOptions,
     hdmiResolutionValue,
   );
-  const effectiveDigitalVideoOptions = resolveHomeConfigOptions(
+  const effectiveDigitalVideoOptions = optionsFor(
     "U64 Specific Settings",
     "Digital Video Mode",
     digitalVideoOptions,
     digitalVideoValue,
   );
-  const effectiveHdmiScanOptions = resolveHomeConfigOptions(
+  const effectiveHdmiScanOptions = optionsFor(
     "U64 Specific Settings",
     "HDMI Scan lines",
     hdmiScanOptions,
     hdmiScanValue,
   );
-  const effectiveJoystickSwapOptions = resolveHomeConfigOptions(
+  const effectiveJoystickSwapOptions = optionsFor(
     "U64 Specific Settings",
     "Joystick Swapper",
     joystickSwapOptions,
     joystickSwapValue,
   );
-  const effectiveSerialBusModeOptions = resolveHomeConfigOptions(
+  const effectiveSerialBusModeOptions = optionsFor(
     "U64 Specific Settings",
     "Serial Bus Mode",
     serialBusModeOptions,
     serialBusModeValue,
   );
-  const effectiveCartridgePreferenceOptions = resolveHomeConfigOptions(
+  const effectiveCartridgePreferenceOptions = optionsFor(
     "C64 and Cartridge Settings",
     "Cartridge Preference",
     cartridgePreferenceOptions,
@@ -921,43 +958,33 @@ function HomePageContent() {
   const digitalVideoPending = Boolean(
     configWritePending[buildConfigKey("U64 Specific Settings", "Digital Video Mode")],
   );
-  const effectiveCpuSpeedOptions = resolveHomeConfigOptions(
-    "U64 Specific Settings",
-    "CPU Speed",
-    cpuSpeedOptions,
-    cpuSpeedValue,
-  );
-  const effectiveTurboControlOptions = resolveHomeConfigOptions(
+  const effectiveCpuSpeedOptions = optionsFor("U64 Specific Settings", "CPU Speed", cpuSpeedOptions, cpuSpeedValue);
+  const effectiveTurboControlOptions = optionsFor(
     "U64 Specific Settings",
     "Turbo Control",
     turboControlOptions,
     turboControlValue,
   );
-  const effectiveBadlineTimingOptions = resolveHomeConfigOptions(
+  const effectiveBadlineTimingOptions = optionsFor(
     "U64 Specific Settings",
     "Badline Timing",
     badlineTimingOptions,
     badlineTimingValue,
   );
-  const effectiveSuperCpuDetectOptions = resolveHomeConfigOptions(
+  const effectiveSuperCpuDetectOptions = optionsFor(
     "U64 Specific Settings",
     "SuperCPU Detect (D0BC)",
     superCpuDetectOptions,
     superCpuDetectValue,
   );
-  const effectiveRamExpansionOptions = resolveHomeConfigOptions(
+  const effectiveRamExpansionOptions = optionsFor(
     "C64 and Cartridge Settings",
     "RAM Expansion Unit",
     ramExpansionOptions,
     ramExpansionValue,
   );
-  const effectiveReuSizeOptions = resolveHomeConfigOptions(
-    "C64 and Cartridge Settings",
-    "REU Size",
-    reuSizeOptions,
-    reuSizeValue,
-  );
-  const effectiveUserPortPowerOptions = resolveHomeConfigOptions(
+  const effectiveReuSizeOptions = optionsFor("C64 and Cartridge Settings", "REU Size", reuSizeOptions, reuSizeValue);
+  const effectiveUserPortPowerOptions = optionsFor(
     "U64 Specific Settings",
     "UserPort Power Enable",
     userPortPowerOptions,
@@ -1475,6 +1502,7 @@ function HomePageContent() {
                   category="User Interface Settings"
                   config={userInterfaceConfig}
                   isActive={isActive}
+                  optionDomains={optionDomains}
                   selectTriggerClassName={inlineSelectTriggerClass}
                   testIdPrefix="home-user-interface"
                 />
@@ -1858,6 +1886,10 @@ function HomePageContent() {
         telnetBusy={telnet.isBusy}
         telnetSaveReuDisabledReason={saveReuDisabledReason}
       />
+
+      {remoteInputEnabled ? (
+        <RemoteInputSheet open={remoteInputSheetOpen} onOpenChange={setRemoteInputSheetOpen} />
+      ) : null}
 
       <SnapshotManagerDialog
         open={snapshotManagerOpen}

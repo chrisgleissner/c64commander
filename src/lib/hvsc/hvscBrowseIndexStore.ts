@@ -657,6 +657,34 @@ export const buildHvscBrowseIndexFromSonglengthSnapshot = (
   };
 };
 
+/**
+ * Merges songlengths durations into an existing browse index snapshot in place,
+ * instead of replacing it with a fresh duration-only projection built purely from
+ * buildHvscBrowseIndexFromSonglengthSnapshot. A song already present in
+ * [baseSnapshot] (e.g. one that was just ingested, carrying sidMetadata and
+ * trackSubsongs parsed straight from its file) only has its duration fields
+ * updated; a song with no existing entry (e.g. songlengths ran before any
+ * ingestion has ever populated the index) is added as a seeded record, matching
+ * the previous behavior for that case. See HARD9-046.
+ */
+export const mergeSonglengthDurationsIntoBrowseIndex = (
+  baseSnapshot: HvscBrowseIndexSnapshot | null,
+  songlengthSnapshot: InMemorySongLengthSnapshot,
+): HvscBrowseIndexSnapshot => {
+  const snapshot = baseSnapshot ?? createEmptyHvscBrowseIndexSnapshot();
+  songlengthSnapshot.pathToSeconds.forEach((durationsSeconds, virtualPath) => {
+    const normalizedPath = normalizePath(virtualPath);
+    if (snapshot.songs[normalizedPath]) {
+      updateHvscBrowseSong(snapshot, normalizedPath, { durationsSeconds });
+    } else {
+      snapshot.songs[normalizedPath] = createSeededSong(normalizedPath, durationsSeconds);
+    }
+  });
+  snapshot.updatedAt = new Date().toISOString();
+  snapshot.folders = buildFoldersFromSongs(snapshot.songs);
+  return snapshot;
+};
+
 export const updateHvscBrowseSong = (
   snapshot: HvscBrowseIndexSnapshot,
   virtualPath: string,
@@ -706,10 +734,17 @@ export const createHvscBrowseIndexMutable = async (mode: "baseline" | "update") 
   return {
     upsertSong: (song: HvscBrowseIndexedSong) => {
       const normalizedPath = normalizePath(song.virtualPath);
+      // Merge onto any existing record (e.g. from a prior ingest + songlengths
+      // sync in "update" mode) instead of replacing it outright - extraction
+      // only ever knows fileName/sidMetadata/trackSubsongs, so blindly
+      // overwriting wiped previously hydrated canonicalTitle/canonicalAuthor/
+      // released/duration fields on every re-ingest. See HARD9-046.
+      const existing = snapshot.songs[normalizedPath];
       snapshot.songs[normalizedPath] = {
+        ...existing,
         virtualPath: normalizedPath,
-        fileName: song.fileName || getFileName(normalizedPath),
-        durationSeconds: song.durationSeconds ?? null,
+        fileName: song.fileName || existing?.fileName || getFileName(normalizedPath),
+        durationSeconds: song.durationSeconds ?? existing?.durationSeconds ?? null,
         sidMetadata: song.sidMetadata ?? null,
         trackSubsongs: song.trackSubsongs ?? null,
       };
@@ -792,14 +827,21 @@ export const listFolderFromBrowseIndex = (
  * Traverses the in-memory browse index without any I/O, async overhead,
  * or smoke-benchmark recording — designed for bulk playlist operations.
  *
- * Returns null when the root folder is not present in the snapshot,
- * signaling an incomplete or stale index (callers should fall back
- * to the paged BFS path).
+ * Returns null when the root folder is not present in the snapshot, or when
+ * the snapshot has zero songs anywhere, signaling an incomplete or stale
+ * index (callers should fall back to the paged BFS path). A wholly-empty
+ * snapshot is never trusted as "genuinely empty library, zero songs" -
+ * `buildHvscBrowseIndexFromEntries` always seeds a root folder row even for
+ * zero entries, so an empty root row alone doesn't distinguish "poisoned by
+ * a failed integrity rebuild before the real index loaded" from "there
+ * really are no songs". A real non-empty HVSC install never has zero songs
+ * in the whole snapshot, so this check is safe. See HARD9-015.
  */
 export const listSongsRecursiveFromBrowseIndex = (
   snapshot: HvscBrowseIndexSnapshot,
   folderPath: string,
 ): HvscBrowseIndexedSong[] | null => {
+  if (Object.keys(snapshot.songs).length === 0) return null;
   const normalizedRoot = normalizeFolderPath(folderPath);
   if (!snapshot.folders[normalizedRoot]) return null;
   const queue = [normalizedRoot];
@@ -824,6 +866,8 @@ export const listSongsRecursiveFromBrowseIndex = (
   return songs;
 };
 
+// Same "wholly-empty snapshot is never trustworthy" reasoning as
+// listSongsRecursiveFromBrowseIndex above - see HARD9-015.
 export const streamSongsRecursiveFromBrowseIndex = async (
   snapshot: HvscBrowseIndexSnapshot,
   folderPath: string,
@@ -832,6 +876,7 @@ export const streamSongsRecursiveFromBrowseIndex = async (
     onChunk: (songs: HvscBrowseIndexedSong[]) => Promise<void> | void;
   },
 ): Promise<{ totalSongs: number } | null> => {
+  if (Object.keys(snapshot.songs).length === 0) return null;
   const normalizedRoot = normalizeFolderPath(folderPath);
   if (!snapshot.folders[normalizedRoot]) return null;
 

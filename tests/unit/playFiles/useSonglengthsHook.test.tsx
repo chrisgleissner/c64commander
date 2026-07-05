@@ -213,6 +213,40 @@ describe("useSonglengths", () => {
     expect(candidates.some((path) => path.toLowerCase().includes("songlengths"))).toBe(true);
   });
 
+  it("keeps the songlengths bundle cache across playlist identity changes (HARD9-008)", async () => {
+    const reads = { count: 0 };
+    const songlengthsFile = {
+      name: "Songlengths.md5",
+      webkitRelativePath: "/DOCUMENTS/Songlengths.md5",
+      lastModified: 456,
+      arrayBuffer: async () => {
+        reads.count += 1;
+        return new TextEncoder().encode("; /MUSICIANS/demo.sid\nabc=0:30 0:45\n").buffer;
+      },
+    };
+    const extraFiles: SonglengthsFileEntry[] = [{ path: "/DOCUMENTS/Songlengths.md5", file: songlengthsFile }];
+    const playlistItem: PlaylistItem = {
+      id: "song",
+      category: "sid",
+      label: "demo.sid",
+      path: "/MUSICIANS/demo.sid",
+      request: { source: "local", path: "/MUSICIANS/demo.sid", songNr: 1 },
+    };
+    const { result, rerender } = renderUseSonglengths([playlistItem]);
+
+    const data1 = await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid", extraFiles);
+    expect(data1?.pathToSeconds.get("/MUSICIANS/demo.sid")).toEqual([30, 45]);
+    expect(reads.count).toBe(1);
+
+    // Simulate a track transition / duration persist: a brand new playlist array
+    // reference with no change to the songlengths files themselves.
+    rerender([{ ...playlistItem }]);
+
+    const data2 = await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid", extraFiles);
+    expect(data2?.pathToSeconds.get("/MUSICIANS/demo.sid")).toEqual([30, 45]);
+    expect(reads.count).toBe(1);
+  });
+
   it("loads sibling HVSC songlengths files for ultimate SID paths and resolves duration by md5", async () => {
     const songlengthsFile = {
       name: "Songlengths.md5",
@@ -281,6 +315,52 @@ describe("useSonglengths", () => {
     };
     const updated = await result.current?.applySonglengthsToItems([playlistItem]);
     expect(updated[0]?.durationMs).toBe(25_000);
+  });
+
+  it("does not re-resolve an item that already has a resolved duration", async () => {
+    const file = makeTextFile("DOCUMENTS/Songlengths.txt", "/MUSICIANS/demo.sid 0:25\n");
+    const { result } = renderUseSonglengths([]);
+
+    act(() => {
+      result.current?.handleSonglengthsInput(toFileList(file));
+    });
+
+    const playlistItem: PlaylistItem = {
+      id: "song",
+      category: "sid",
+      label: "demo.sid",
+      path: "/MUSICIANS/demo.sid",
+      request: { source: "local", path: "/MUSICIANS/demo.sid", songNr: 1 },
+      durationMs: 99_000,
+    };
+    const updated = await result.current?.applySonglengthsToItems([playlistItem]);
+
+    // Would resolve to 25_000 if reprocessed; the pre-set resolved value must survive untouched.
+    expect(updated[0]).toBe(playlistItem);
+    expect(updated[0]?.durationMs).toBe(99_000);
+  });
+
+  it("still resolves an item whose duration only came from the Default-duration fallback", async () => {
+    const file = makeTextFile("DOCUMENTS/Songlengths.txt", "/MUSICIANS/demo.sid 0:25\n");
+    const { result } = renderUseSonglengths([]);
+
+    act(() => {
+      result.current?.handleSonglengthsInput(toFileList(file));
+    });
+
+    const playlistItem: PlaylistItem = {
+      id: "song",
+      category: "sid",
+      label: "demo.sid",
+      path: "/MUSICIANS/demo.sid",
+      request: { source: "local", path: "/MUSICIANS/demo.sid", songNr: 1 },
+      durationMs: 99_000,
+      durationSource: "default",
+    };
+    const updated = await result.current?.applySonglengthsToItems([playlistItem]);
+
+    expect(updated[0]?.durationMs).toBe(25_000);
+    expect(updated[0]?.durationSource).toBeNull();
   });
 
   it("reprocesses playlist durations after selecting a new songlengths file", async () => {

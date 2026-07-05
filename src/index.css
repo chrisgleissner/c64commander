@@ -764,6 +764,13 @@ button:focus-visible,
     min-height: var(--app-tab-bar-frame-height);
     padding-bottom: var(--app-tab-bar-safe-area-bottom);
     pointer-events: none;
+    /* Paint the frame (including the safe-area padding region below the nav) with
+       the same chrome surface the nav uses (`--background`, matching the header
+       rail — see AppBar) so that under Android edge-to-edge — where the navigation
+       bar is transparent and the app draws behind it — the bottom inset blends
+       into the nav instead of exposing the brand-blue page background beneath it
+       (Issue 5). Must match the .tab-bar `bg-background` class. */
+    background-color: hsl(var(--background));
   }
 
   .tab-bar {
@@ -813,4 +820,19 @@ button:focus-visible,
   .touch-none {
     -webkit-tap-highlight-color: transparent;
   }
+}
+
+/* Remote Input is a held-control surface (FIRE, D-pad, keys, quick bar, keyboard):
+   a long-press must keep firing/repeating, never trigger the WebView's
+   text-selection, magnifier, or copy/paste callout on the button glyphs. Force
+   selection/callout off on the sheet AND every descendant (buttons, spans,
+   labels) — the sheet-level rule alone did not stop Android/iOS from selecting a
+   key's text on a long hold. `!important` beats any per-component style. */
+[data-testid="remote-input-sheet"],
+[data-testid="remote-input-sheet"] * {
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+  -webkit-tap-highlight-color: transparent !important;
 }

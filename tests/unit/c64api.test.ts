@@ -837,7 +837,7 @@ describe("c64api", () => {
     }
   });
 
-  it("retries scheduled requests at most twice after 3-second timeouts", async () => {
+  it("does not retry background requests inside the active REST handler after timeouts (HARD9-023)", async () => {
     vi.useFakeTimers();
     try {
       const fetchMock = getFetchMock();
@@ -850,19 +850,20 @@ describe("c64api", () => {
       await vi.advanceTimersByTimeAsync(2999);
       expect(fetchMock).toHaveBeenCalledTimes(1);
       await vi.advanceTimersByTimeAsync(1);
-      expect(fetchMock).toHaveBeenCalledTimes(2);
-      await vi.advanceTimersByTimeAsync(3000);
-      expect(fetchMock).toHaveBeenCalledTimes(3);
-      await vi.advanceTimersByTimeAsync(3000);
 
       await expect(pending).rejects.toThrow("Host unreachable");
-      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(addLogMock).not.toHaveBeenCalledWith(
+        "warn",
+        "C64 API retry scheduled after scheduled timeout",
+        expect.anything(),
+      );
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("does not start a scheduled retry when elapsed time already exceeds the retry guard", async () => {
+  it("classifies long background timeouts as expected without starting a retry", async () => {
     vi.useFakeTimers();
     try {
       const fetchMock = getFetchMock();
@@ -880,6 +881,7 @@ describe("c64api", () => {
 
       await expect(pending).rejects.toThrow("Host unreachable");
       expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
     } finally {
       vi.useRealTimers();
     }
@@ -1171,6 +1173,71 @@ describe("c64api", () => {
     );
   });
 
+  it("rejects stream start when firmware reports body errors on HTTP 200", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(okJsonResponse({ errors: ["stream unavailable"] }));
+
+    const api = new C64API("http://c64u");
+
+    await expect(api.startStream("audio", "192.168.1.20")).rejects.toThrow(
+      "Firmware rejected stream audio start: stream unavailable",
+    );
+  });
+
+  it("rejects stream stop when firmware reports body errors on HTTP 200 despite skipped non-json compatibility", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(okJsonResponse({ errors: ["stream not active"] }));
+
+    const api = new C64API("http://c64u");
+
+    await expect(api.stopStream("audio")).rejects.toThrow("Firmware rejected stream audio stop: stream not active");
+  });
+
+  it("reads machine input state through the REST input endpoint", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(okJsonResponse({ errors: [], keyboard: { inputs: ["a"] }, joysticks: [] }));
+
+    const api = new C64API("http://c64u");
+
+    await expect(api.getMachineInputState()).resolves.toMatchObject({
+      keyboard: { inputs: ["a"] },
+      joysticks: [],
+    });
+    expect(fetchMock).toHaveBeenCalledWith("http://c64u/v1/machine:input", expect.any(Object));
+  });
+
+  // HARD12-017
+  it("sends a machine input event batch as a POST with a JSON body", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(okJsonResponse({ errors: [], keyboard: { inputs: [] }, joysticks: [] }));
+
+    const api = new C64API("http://c64u");
+    await api.sendMachineInputBatch({
+      events: [{ kind: "joystick", port: 2, inputs: ["up", "fire"], transition: "press" }],
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://c64u/v1/machine:input",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          events: [{ kind: "joystick", port: 2, inputs: ["up", "fire"], transition: "press" }],
+        }),
+      }),
+    );
+  });
+
+  it("rejects a machine input batch when firmware reports body errors on HTTP 200", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(okJsonResponse({ errors: ["invalid batch"], keyboard: { inputs: [] }, joysticks: [] }));
+
+    const api = new C64API("http://c64u");
+
+    await expect(api.sendMachineInputBatch({ events: [{ kind: "release_all" }] })).rejects.toThrow(
+      "Firmware rejected machine input event batch: invalid batch",
+    );
+  });
+
   it("encodes joystick swap config writes with the expected category and item", async () => {
     const fetchMock = getFetchMock();
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
@@ -1453,6 +1520,42 @@ describe("c64api", () => {
     expect(headers["X-Password"]).toBe("pw");
     expect(headers["X-C64U-Host"]).toBeUndefined();
     expect(addErrorLogMock).toHaveBeenCalledWith("Drive mount upload failed", expect.any(Object));
+  });
+
+  it("throws on firmware-rejected drive mount/eject even when HTTP status is 200 (HARD9-010)", async () => {
+    const fetchMock = getFetchMock();
+    const firmwareRejected = () =>
+      new Response(JSON.stringify({ errors: ["Image not found"] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    fetchMock.mockImplementation(() => Promise.resolve(firmwareRejected()));
+
+    const api = new C64API("http://c64u");
+
+    await expect(api.mountDrive("a", "/missing.d64", "1541", "readwrite")).rejects.toThrow(
+      "Firmware rejected drive A mount: Image not found",
+    );
+    await expect(api.mountDriveUpload("a", createValidD64Blob(), "d64", "readwrite")).rejects.toThrow(
+      "Firmware rejected drive A mount: Image not found",
+    );
+    await expect(api.unmountDrive("b")).rejects.toThrow("Firmware rejected drive B eject: Image not found");
+  });
+
+  it("does not throw when the firmware errors array is present but empty or blank", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ errors: ["", "   "] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    const api = new C64API("http://c64u");
+    await expect(api.mountDrive("a", "/ok.d64", "1541", "readwrite")).resolves.toEqual({ errors: ["", "   "] });
+    await expect(api.unmountDrive("a")).resolves.toEqual({ errors: ["", "   "] });
   });
 
   it("uses fetch for binary uploads on native platforms", async () => {

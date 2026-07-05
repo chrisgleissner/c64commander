@@ -299,6 +299,28 @@ describe("App runtime wiring", () => {
     expect(mocks.useNavigationGuardBlocker).toHaveBeenCalledTimes(1);
   });
 
+  it("resolves the coverage probe route across repeated mounts (HARD9-095 memoization)", async () => {
+    // The lazy() coverage-probe components are computed on first use and cached
+    // (getCoverageProbeModules), not created fresh per render - a broken cache
+    // would call lazy() again on remount, which either still works or produces a
+    // duplicate/never-settling Suspense boundary depending on React's internals.
+    // Mounting twice with a fresh render proves the cached reference keeps
+    // resolving correctly, not just on the very first render.
+    Object.defineProperty(window, "__c64uTestProbeEnabled", {
+      configurable: true,
+      value: true,
+      writable: true,
+    });
+    window.history.pushState({}, "", "/__coverage__");
+
+    const first = render(<App />);
+    expect(await screen.findByText("Coverage Probe Page")).toBeInTheDocument();
+    first.unmount();
+
+    render(<App />);
+    expect(await screen.findByText("Coverage Probe Page")).toBeInTheDocument();
+  });
+
   it("renders NotFound for unknown routes outside the swipe navigation pages", async () => {
     window.history.pushState({}, "", "/definitely-not-a-tab");
 

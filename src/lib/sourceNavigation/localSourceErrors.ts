@@ -6,7 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export type LocalSourceListingErrorCode = "saf-listing-unavailable" | "saf-listing-invalid" | "local-entries-missing";
+export type LocalSourceListingErrorCode =
+  "saf-listing-unavailable" | "saf-listing-invalid" | "local-entries-missing" | "local-runtime-files-missing";
 
 type LocalSourceListingErrorDetails = Record<string, unknown>;
 

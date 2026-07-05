@@ -307,6 +307,26 @@ describe("ftpClient", () => {
       );
     });
 
+    it("propagates timedOut from the native bridge (HARD9-078)", async () => {
+      vi.mocked(FtpClient.listDirectoryRecursive).mockResolvedValue({
+        entries: mockEntries,
+        partialFailures: [],
+        timedOut: true,
+      } as any);
+
+      const result = await listFtpDirectoryRecursive({ ...mockListOptions, path: "/HVSC" });
+
+      expect(result.timedOut).toBe(true);
+    });
+
+    it("defaults timedOut to false when the bridge omits it", async () => {
+      vi.mocked(FtpClient.listDirectoryRecursive).mockResolvedValue({ entries: [] } as any);
+
+      const result = await listFtpDirectoryRecursive({ ...mockListOptions, path: "" });
+
+      expect(result.timedOut).toBe(false);
+    });
+
     it("uses an existing active action when available", async () => {
       const mockAction = { id: "recursive-active" };
       vi.mocked(getActiveAction).mockReturnValue(mockAction as any);
@@ -336,27 +356,47 @@ describe("ftpClient", () => {
   describe("readFtpFile edge branches", () => {
     const mockReadOptions = { ...mockListOptions, path: "/Songlengths.md5", totalBytes: 100 };
 
-    it("cancels immediately when the signal is already aborted before the read starts", async () => {
+    it("rejects immediately without ever calling native readFile when pre-aborted (HARD9-083)", async () => {
+      // Regression: firing cancelRead() and then still calling readFile()
+      // races two INDEPENDENT native bridge calls with no ordering
+      // guarantee - if readFile() won that race, the full transfer ran
+      // anyway despite already being cancelled before it ever started.
       vi.mocked(FtpClient.readFile).mockResolvedValue({ data: "QQ==", sizeBytes: 1 });
       const controller = new AbortController();
       controller.abort(); // pre-aborted
 
-      await readFtpFile({ ...mockReadOptions, onProgress: vi.fn(), signal: controller.signal } as any);
+      await expect(
+        readFtpFile({ ...mockReadOptions, onProgress: vi.fn(), signal: controller.signal } as any),
+      ).rejects.toMatchObject({ name: "AbortError" });
 
-      const readArgs = vi.mocked(FtpClient.readFile).mock.calls[0]?.[0] as any;
-      expect(FtpClient.cancelRead).toHaveBeenCalledWith({ requestId: readArgs.requestId });
+      expect(FtpClient.readFile).not.toHaveBeenCalled();
+      expect(FtpClient.cancelRead).not.toHaveBeenCalled();
     });
 
     it("logs when the native cancelRead itself rejects", async () => {
+      // Abort AFTER the read has genuinely started (not pre-aborted), so
+      // cancelRead is actually invoked and its own rejection can be
+      // observed.
       vi.mocked(FtpClient.cancelRead).mockRejectedValueOnce(new Error("cancel failed"));
-      vi.mocked(FtpClient.readFile).mockResolvedValue({ data: "QQ==", sizeBytes: 1 });
+      let resolveRead: (value: { data: string; sizeBytes: number }) => void = () => {};
+      vi.mocked(FtpClient.readFile).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveRead = resolve;
+          }),
+      );
       const controller = new AbortController();
-      controller.abort();
 
-      await readFtpFile({ ...mockReadOptions, onProgress: vi.fn(), signal: controller.signal } as any);
+      const promise = readFtpFile({ ...mockReadOptions, onProgress: vi.fn(), signal: controller.signal } as any);
+      await vi.waitFor(() => expect(FtpClient.readFile).toHaveBeenCalled());
+
+      controller.abort();
 
       // buildErrorLogDetails is automocked → second arg is undefined.
       await vi.waitFor(() => expect(addErrorLog).toHaveBeenCalledWith("FTP cancelRead failed", undefined));
+
+      resolveRead({ data: "QQ==", sizeBytes: 1 });
+      await promise;
     });
 
     it("logs when tearing down the progress listener fails", async () => {

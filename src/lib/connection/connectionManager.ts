@@ -12,6 +12,7 @@ import {
   applyC64APIConfigFromStorage,
   applyC64APIRuntimeConfig,
   buildBaseUrlFromDeviceHost,
+  getC64API,
   getC64APIConfigSnapshot,
   getDeviceHostFromBaseUrl,
   resolveDeviceHostFromStorage,
@@ -22,8 +23,21 @@ import {
   stripPortFromDeviceHost,
 } from "@/lib/c64api/hostConfig";
 import { getPassword as loadStoredPassword, getPasswordForDevice } from "@/lib/secureStorage";
-import { clearRuntimeFtpPortOverride, setRuntimeFtpPortOverride } from "@/lib/ftp/ftpConfig";
-import { getActiveMockBaseUrl, getActiveMockFtpPort, startMockServer, stopMockServer } from "@/lib/mock/mockServer";
+import {
+  clearRuntimeFtpPasswordOverride,
+  clearRuntimeFtpPortOverride,
+  setRuntimeFtpPasswordOverride,
+  setRuntimeFtpPortOverride,
+  setStoredFtpPort,
+} from "@/lib/ftp/ftpConfig";
+import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
+import {
+  getActiveMockBaseUrl,
+  getActiveMockFtpPort,
+  getActiveMockToken,
+  startMockServer,
+  stopMockServer,
+} from "@/lib/mock/mockServer";
 import {
   loadAutomaticDemoModeEnabled,
   loadDiscoveryProbeTimeoutMs,
@@ -36,7 +50,8 @@ import { addLog } from "@/lib/logging";
 import { getSmokeConfig, initializeSmokeMode, isSmokeModeEnabled, recordSmokeStatus } from "@/lib/smoke/smokeMode";
 import { resetInteractionState } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { updateDeviceConnectionState } from "@/lib/deviceInteraction/deviceStateStore";
-import { normalizeTransportError } from "@/lib/c64api/transportErrors";
+import { isAuthRequiredError, normalizeTransportError } from "@/lib/c64api/transportErrors";
+import { notifyAuthRequired } from "@/lib/auth/authChallenge";
 import { clearConnectivityErrorToastsForHost } from "@/lib/uiErrors";
 import { registerReachabilityListener, type ReachabilitySource } from "@/lib/connection/reachabilityEvents";
 import {
@@ -56,6 +71,8 @@ export type ProbeInfoResult = {
   ok: boolean;
   deviceInfo: DeviceInfo | null;
   error: string | null;
+  /** Set when the failure was a 401/403 — the device answered, it rejected the password. */
+  authRequired?: boolean;
 };
 
 export type ConnectionSnapshot = Readonly<{
@@ -72,6 +89,7 @@ export type ConnectionSnapshot = Readonly<{
 
 const STARTUP_PROBE_INTERVAL_MS = 700;
 const PROBE_REQUEST_TIMEOUT_MS = 2500;
+export const AUTH_REQUIRED_PROBE_ERROR = "Password required";
 
 const isTestProbeEnabled = () => {
   const env = import.meta.env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
@@ -175,6 +193,7 @@ const probeInfoWithConnectionConfig = async (
         ok: false,
         deviceInfo: null,
         error: message,
+        authRequired: isAuthRequiredError(error),
       };
     }
     // Contextualize raw transport failures (e.g. DNS "Unable to resolve host")
@@ -204,6 +223,16 @@ const isProbePayloadHealthy = (payload: unknown) => {
   return typeof product === "string" && product.trim().length > 0;
 };
 
+const reportAuthRequiredProbe = (config: Awaited<ReturnType<typeof loadPersistedConnectionConfig>>): void => {
+  addLog("info", "Discovery probe rejected by device; raising password challenge", {
+    deviceHost: config.deviceHost,
+  });
+  setSnapshot({ lastProbeError: AUTH_REQUIRED_PROBE_ERROR });
+  notifyAuthRequired({ host: config.deviceHost });
+};
+
+const isAuthRequiredProbeFailure = (): boolean => snapshot.lastProbeError === AUTH_REQUIRED_PROBE_ERROR;
+
 export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<boolean> {
   const config = await loadPersistedConnectionConfig();
   const timeoutMs = options.timeoutMs ?? loadDiscoveryProbeTimeoutMs();
@@ -224,7 +253,9 @@ export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: num
   } catch (error) {
     const message = (error as Error | undefined)?.message ?? "Unknown probe failure";
     const normalizedMessage = message;
-    if (!/^HTTP\s+\d+/.test(normalizedMessage)) {
+    if (isAuthRequiredError(error)) {
+      reportAuthRequiredProbe(config);
+    } else if (!/^HTTP\s+\d+/.test(normalizedMessage)) {
       const host = (() => {
         try {
           return new URL(config.baseUrl).hostname;
@@ -296,6 +327,7 @@ export async function probeInfoOnce(
         ok: false,
         deviceInfo: null,
         error: message,
+        authRequired: isAuthRequiredError(error),
       };
     }
     const failure = normalizeTransportError(error, { host: config.deviceHost });
@@ -399,6 +431,27 @@ const rememberSelectedSavedDeviceIdentity = (deviceInfo: DeviceInfo | null | und
 
   const hostname = deviceInfo?.hostname?.trim() || null;
   const uniqueId = deviceInfo?.unique_id?.trim() || null;
+
+  // HARD12-011: during a saved-device switch the selection has flipped to the new
+  // device while the runtime API config still targets the previous one, so an
+  // in-flight /v1/info from the old device can arrive and restamp the new
+  // selection's identity. While that window is open, reject deviceInfo whose
+  // unique id does not match the selected device (the new device's own id). The
+  // guard is scoped to the window so it never blocks a legitimate identity
+  // refresh or a switch's own post-config verification.
+  if (
+    savedDeviceSwitchProbeWindow &&
+    uniqueId &&
+    selectedDevice.lastKnownUniqueId &&
+    uniqueId !== selectedDevice.lastKnownUniqueId
+  ) {
+    addLog("debug", "Ignoring device identity from a different device during a saved-device switch", {
+      arrivingUniqueId: uniqueId,
+      selectedUniqueId: selectedDevice.lastKnownUniqueId,
+    });
+    return;
+  }
+
   const savedDevices = getSavedDevicesSnapshot();
   const summary = savedDevices.summaries[selectedDevice.id];
   const runtimeVerified = savedDevices.verifiedByDeviceId[selectedDevice.id] ?? null;
@@ -419,6 +472,14 @@ const rememberSelectedSavedDeviceIdentity = (deviceInfo: DeviceInfo | null | und
     unique_id: uniqueId,
     firmware_version: deviceInfo?.firmware_version ?? null,
   });
+};
+
+// HARD12-011: true only between selectSavedDevice and applyC64APIRuntimeConfig
+// during executeSavedDeviceSwitch — the window in which a late /v1/info from the
+// previous device could otherwise restamp the newly selected device.
+let savedDeviceSwitchProbeWindow = false;
+export const setSavedDeviceSwitchProbeWindow = (open: boolean) => {
+  savedDeviceSwitchProbeWindow = open;
 };
 
 const setSnapshot = (patch: Partial<ConnectionSnapshot>) => {
@@ -595,6 +656,9 @@ const stopDemoServer = async () => {
   } finally {
     demoServerStartedThisSession = false;
     clearRuntimeFtpPortOverride();
+    clearRuntimeFtpPasswordOverride();
+    // applyC64APIConfigFromStorage() re-routes to the real device and clears the
+    // mock token via applyC64APIRuntimeConfig.
     await applyC64APIConfigFromStorage();
   }
 };
@@ -721,19 +785,27 @@ const tryReachableSavedDeviceFallback = async (
     trigger,
     deviceId: reachable.device.id,
   });
-  selectSavedDevice(reachable.device.id);
-  applyC64APIRuntimeConfig(
-    buildBaseUrlFromDeviceHost(reachable.deviceHost),
-    reachable.password ?? undefined,
-    reachable.deviceHost,
-    {
-      reason: "startup-reachable-saved-device",
-    },
-  );
-  const verification = await verifyCurrentConnectionTarget({
-    deviceHost: reachable.deviceHost,
-    password: reachable.password,
-  });
+  // HARD16-001: select and apply the reachable device's identity/ports BEFORE
+  // verifying, mirroring executeSavedDeviceSwitch. verifyCurrentConnectionTarget
+  // stamps whatever device is currently selected, so verifying while the
+  // powered-off original is still selected wrote the reachable device's
+  // product/firmware/unique_id onto the wrong saved record. Opening the
+  // HARD12-011 probe window guards the selection against a late /v1/info from
+  // the previous host. On verification failure the selection stays on the
+  // candidate unverified — matching the switch path's failure semantics.
+  setSavedDeviceSwitchProbeWindow(true);
+  let verification: Awaited<ReturnType<typeof verifyCurrentConnectionTarget>>;
+  try {
+    selectSavedDevice(reachable.device.id);
+    setStoredFtpPort(reachable.device.ftpPort);
+    setStoredTelnetPort(reachable.device.telnetPort);
+    verification = await verifyCurrentConnectionTarget({
+      deviceHost: reachable.deviceHost,
+      password: reachable.password,
+    });
+  } finally {
+    setSavedDeviceSwitchProbeWindow(false);
+  }
   if (verification.ok && verification.deviceInfo) {
     completeSavedDeviceVerification(reachable.device.id, verification.deviceInfo);
     return true;
@@ -869,6 +941,12 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
     applyC64APIRuntimeConfig(activeMockUrl, undefined, mockHost);
     const activeFtpPort = getActiveMockFtpPort();
     if (activeFtpPort) setRuntimeFtpPortOverride(activeFtpPort);
+    // Authenticate the WebView to the (now token-gated) loopback mock servers.
+    // applyC64APIRuntimeConfig above cleared any prior mock token, so re-apply it
+    // here for both the HTTP (X-Mock-Token) and FTP (password) surfaces.
+    const activeToken = getActiveMockToken();
+    getC64API().setMockToken(activeToken ?? undefined);
+    setRuntimeFtpPasswordOverride(activeToken);
     addLog("info", "Demo mode using mock C64U", {
       trigger,
       baseUrl: activeMockUrl,
@@ -892,11 +970,13 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
 const transitionToSmokeMockConnected = async (trigger: DiscoveryTrigger) => {
   cancelActiveDiscovery();
   dismissDemoInterstitial();
-  const { baseUrl, ftpPort } = await startMockServer();
+  const { baseUrl, ftpPort, token } = await startMockServer();
   demoServerStartedThisSession = true;
   const mockHost = getDeviceHostFromBaseUrl(baseUrl);
   applyC64APIRuntimeConfig(baseUrl, undefined, mockHost);
   if (ftpPort) setRuntimeFtpPortOverride(ftpPort);
+  getC64API().setMockToken(token ?? undefined);
+  setRuntimeFtpPasswordOverride(token ?? null);
   setSnapshot({
     lastProbeAtMs: Date.now(),
     lastProbeSucceededAtMs: Date.now(),
@@ -1064,8 +1144,10 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
     cancelled = true;
     globalThis.clearInterval(probeTimer);
     cancelActiveDiscovery();
-    const discovered = await tryAutomaticDeviceDiscoveryFallback(trigger, discoveryRun.isCurrent);
-    if (discovered) return;
+    if (!isAuthRequiredProbeFailure()) {
+      const discovered = await tryAutomaticDeviceDiscoveryFallback(trigger, discoveryRun.isCurrent);
+      if (discovered) return;
+    }
     if (!discoveryRun.isCurrent()) return;
     setSnapshot({ lastProbeFailedAtMs: Date.now() });
     if (isDemoModeRequested()) {

@@ -200,6 +200,69 @@ class BackgroundExecutionServiceTest {
     }
 
     @Test
+    fun nullIntentStickyRestartSatisfiesForegroundContractBeforeStopping() {
+        controller.create()
+
+        service.onStartCommand(null, 0, 1)
+
+        // On O+, this dispatch may have originated from startForegroundService(); failing to
+        // call startForeground() before stopping risks a RemoteServiceException crash
+        // (HARD9-042). A throwaway notification satisfies the contract, then is torn back down —
+        // ShadowService.stopForeground(true) clears lastForegroundNotification but not
+        // lastForegroundNotificationId, so checking the id (>0 = startForeground was called)
+        // together with isForegroundStopped proves the full sequence ran.
+        val shadowService = Shadows.shadowOf(service)
+        assertTrue(
+            "Null sticky-restart dispatch must call startForeground before stopping",
+            shadowService.lastForegroundNotificationId > 0,
+        )
+        assertTrue("Foreground must be torn back down immediately", shadowService.isForegroundStopped)
+    }
+
+    @Test
+    fun staleGenerationIntentSatisfiesForegroundContractBeforeStopping() {
+        controller.create()
+        setCompanionField("commandGeneration", 5L)
+
+        val staleIntent = Intent(service, BackgroundExecutionService::class.java)
+        staleIntent.putExtra(BackgroundExecutionService.EXTRA_COMMAND_GENERATION, 3L)
+        val result = service.onStartCommand(staleIntent, 0, 1)
+
+        assertEquals(android.app.Service.START_NOT_STICKY, result)
+        val shadowService = Shadows.shadowOf(service)
+        assertTrue(
+            "Stale-generation dispatch must call startForeground before stopping (HARD9-042)",
+            shadowService.lastForegroundNotificationId > 0,
+        )
+        assertTrue("Foreground must be torn back down immediately", shadowService.isForegroundStopped)
+        assertFalse(BackgroundExecutionService.isRunning)
+    }
+
+    @Test
+    fun staleGenerationIntentWhileAlreadyRunningDoesNotTearDownActiveNotification() {
+        controller.create()
+        startService()
+        assertTrue(BackgroundExecutionService.isRunning)
+
+        val shadowService = Shadows.shadowOf(service)
+        assertNotNull("Expected the running service to already show a notification", shadowService.lastForegroundNotification)
+        assertFalse("Should not have stopped foreground yet", shadowService.isForegroundStopped)
+
+        setCompanionField("commandGeneration", 5L)
+        val staleIntent = Intent(service, BackgroundExecutionService::class.java)
+        staleIntent.putExtra(BackgroundExecutionService.EXTRA_COMMAND_GENERATION, 3L)
+        service.onStartCommand(staleIntent, 0, 2)
+
+        // A stale intent for an ALREADY-running service must not tear down the active
+        // notification out from under it - the foreground contract is already satisfied.
+        assertFalse(
+            "A stale intent for an already-running service must not stop the active foreground notification",
+            shadowService.isForegroundStopped,
+        )
+        assertTrue("Service should remain running", BackgroundExecutionService.isRunning)
+    }
+
+    @Test
     fun serviceStartInitializesMediaSessionAndAudioFocusState() {
         controller.create()
         startService()
@@ -218,6 +281,22 @@ class BackgroundExecutionServiceTest {
         assertNull("MediaSession should be released on destroy", getPrivateField("mediaSession"))
         assertNull("AudioManager reference should clear on destroy", getPrivateField("audioManager"))
         assertNull("AudioFocusRequest should clear on destroy", getPrivateField("audioFocusRequest"))
+    }
+
+    @Test
+    fun notificationTitleUsesAppNameResourceInsteadOfHardcodedBranding() {
+        controller.create()
+        startService()
+
+        val shadowService = Shadows.shadowOf(service)
+        val notification = shadowService.lastForegroundNotification
+        assertNotNull("Expected an active foreground notification", notification)
+        val title = notification?.extras?.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString()
+        assertEquals(
+            "Notification title must use the app_name resource so C64U Remote is not mis-branded as C64 Commander (HARD11-005)",
+            service.getString(R.string.app_name),
+            title,
+        )
     }
 
     @Test
@@ -242,14 +321,19 @@ class BackgroundExecutionServiceTest {
 
     @Test
     @Config(sdk = [Build.VERSION_CODES.N])
-    fun updateDueAtUsesStartServiceOnPreO() {
+    fun updateDueAtUsesStartServiceOnPreOWhenStartIsPending() {
         val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+
+        // A non-null dueAt update only forwards while a start() is genuinely
+        // pending (HARD9-041) — mirrors updateDueAtNullDuringPendingStartQueuesClearIntent.
+        BackgroundExecutionService.start(appContext)
+        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
+        assertNotNull("Expected initial start intent", shadowApp.nextStartedService)
 
         BackgroundExecutionService.updateDueAt(appContext, System.currentTimeMillis() + 10_000L)
 
-        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
         val started = shadowApp.nextStartedService
-        assertNotNull("Expected updateDueAt to start service on pre-O", started)
+        assertNotNull("Expected updateDueAt to forward via startService on pre-O while a start is pending", started)
         assertEquals(
             BackgroundExecutionService.ACTION_UPDATE_DUE_AT,
             started?.action,
@@ -265,6 +349,17 @@ class BackgroundExecutionServiceTest {
         assertFalse("Stopped service should remain stopped after clearing dueAt", BackgroundExecutionService.isRunning)
         val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
         assertNull("Expected no service start for a stopped-service dueAt clear", shadowApp.nextStartedService)
+    }
+
+    @Test
+    fun updateDueAtNonNullDoesNotStartStoppedService() {
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+
+        BackgroundExecutionService.updateDueAt(appContext, System.currentTimeMillis() + 10_000L)
+
+        assertFalse("Stopped service should remain stopped after a dueAt update (HARD9-041)", BackgroundExecutionService.isRunning)
+        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
+        assertNull("Expected no service start for a stopped-service dueAt update", shadowApp.nextStartedService)
     }
 
     @Test
@@ -295,6 +390,35 @@ class BackgroundExecutionServiceTest {
         service.onStartCommand(startIntent, 0, 1)
 
         assertFalse("Stale start intent should not leave service running", BackgroundExecutionService.isRunning)
+    }
+
+    @Test
+    fun updateDueAtNonNullAfterStopDoesNotResurrectService() {
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+
+        // Start and let the service actually come up.
+        BackgroundExecutionService.start(appContext)
+        val startIntent = Shadows.shadowOf(appContext as android.app.Application).nextStartedService
+        assertNotNull("Expected initial start intent", startIntent)
+        controller.create()
+        service.onStartCommand(startIntent, 0, 1)
+        assertTrue(BackgroundExecutionService.isRunning)
+
+        // Stop bumps commandGeneration and clears the pending-start generation.
+        BackgroundExecutionService.stop(appContext)
+        controller.destroy()
+        assertFalse(BackgroundExecutionService.isRunning)
+
+        // A queued auto-advance due update (JS's async latest-intent lane) flushes
+        // late, after the app already believes background execution is off.
+        BackgroundExecutionService.updateDueAt(appContext, System.currentTimeMillis() + 30_000L)
+
+        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
+        assertNull(
+            "A non-null dueAt update after stop must not resurrect the foreground service (HARD9-041)",
+            shadowApp.nextStartedService,
+        )
+        assertFalse(BackgroundExecutionService.isRunning)
     }
 
     @Test

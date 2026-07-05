@@ -139,40 +139,45 @@ describe("ramOperations", () => {
       expect(Array.from(reassembled)).toEqual(Array.from(bytes));
     });
 
-    it("skips only the CIA timer registers ($xx04-$xx07), writing everything else", async () => {
-      // A snapshot range covering a full CIA page must restore ports, DDR, TOD,
-      // serial, ICR and control (incl. the VIC-bank select at $DD00) but never
-      // the timer latches at $xx04-$xx07 (and their 16-byte mirrors), because the
-      // firmware returns the live counter there and writing it back corrupts the
-      // jiffy IRQ -> faster cursor blink.
+    it("skips CIA timer, TOD, and ICR registers, writing everything else (HARD9-067)", async () => {
+      // A snapshot range covering a full CIA page must restore ports, DDR,
+      // serial, and control (incl. the VIC-bank select at $DD00) but never:
+      // - the timer latches $xx04-$xx07 (firmware returns the live counter
+      //   there, writing it back as the latch corrupts the jiffy IRQ);
+      // - TOD $xx08-$xx0B (writing TOD hours stops the clock until a tenths
+      //   write restarts it - the ascending write order halts it every time);
+      // - ICR $xx0D (write-mask semantics; writing back a captured read value
+      //   re-enables interrupt sources the program had disabled).
       const cia1 = new Uint8Array(0x10);
       for (let i = 0; i < cia1.length; i += 1) cia1[i] = 0xb0 + i;
       await loadMemoryRanges(api as any, [{ start: 0xdc00, bytes: cia1 }]);
 
-      // Expect three sub-range writes: $DC00-$DC03, $DC08-$DC0F (timers skipped).
+      // Three sub-range writes: $DC00-$DC03 (ports+DDR), $DC0C (serial), $DC0E-$DC0F (control).
       const calls = api.writeMemoryBlock.mock.calls;
-      expect(calls.map((c) => c[0])).toEqual(["DC00", "DC08"]);
+      expect(calls.map((c) => c[0])).toEqual(["DC00", "DC0C", "DC0E"]);
       expect(Array.from(calls[0][1] as Uint8Array)).toEqual([0xb0, 0xb1, 0xb2, 0xb3]); // ports + DDR
-      expect(Array.from(calls[1][1] as Uint8Array)).toEqual([0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf]); // TOD..control
+      expect(Array.from(calls[1][1] as Uint8Array)).toEqual([0xbc]); // serial data register
+      expect(Array.from(calls[2][1] as Uint8Array)).toEqual([0xbe, 0xbf]); // control A/B
 
-      // No write may overlap a timer register $xx04-$xx07 in either CIA page.
+      // No write may overlap a timer, TOD, or ICR register in either CIA page.
       for (const [addr, data] of calls) {
         const start = parseInt(addr as string, 16);
         for (let i = 0; i < (data as Uint8Array).length; i += 1) {
           const a = start + i;
-          const isTimer = a >= 0xdc00 && a < 0xde00 && (a & 0x0f) >= 0x04 && (a & 0x0f) <= 0x07;
-          expect(isTimer).toBe(false);
+          const nibble = a & 0x0f;
+          const isSkipped = a >= 0xdc00 && a < 0xde00 && ((nibble >= 0x04 && nibble <= 0x0b) || nibble === 0x0d);
+          expect(isSkipped).toBe(false);
         }
       }
     });
 
-    it("writes the CIA2 VIC-bank port ($DD00/$DD01) but skips its timer latches", async () => {
+    it("writes the CIA2 VIC-bank port ($DD00/$DD01) but skips timer/TOD/ICR", async () => {
       const cia2 = new Uint8Array(0x10).fill(0xaa);
       await loadMemoryRanges(api as any, [{ start: 0xdd00, bytes: cia2 }]);
-      const addresses = api.writeMemoryBlock.mock.calls.map((c) => c[0]);
-      expect(addresses).toEqual(["DD00", "DD08"]);
-      // $DD00-$DD03 (PRA/PRB/DDRA/DDRB) written; $DD04-$DD07 skipped.
-      expect((api.writeMemoryBlock.mock.calls[0][1] as Uint8Array).length).toBe(4);
+      const calls = api.writeMemoryBlock.mock.calls;
+      expect(calls.map((c) => c[0])).toEqual(["DD00", "DD0C", "DD0E"]);
+      // $DD00-$DD03 (PRA/PRB/DDRA/DDRB) written; $DD04-$DD0B skipped.
+      expect((calls[0][1] as Uint8Array).length).toBe(4);
     });
 
     it("rejects empty snapshot ranges", async () => {

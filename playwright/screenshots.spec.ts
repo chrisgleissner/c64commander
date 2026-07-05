@@ -1681,6 +1681,73 @@ test.describe("App screenshots", () => {
   });
 
   test(
+    "capture remote-input screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      allowWarnings(testInfo, "Remote Input capability probe + relay logging during screenshots.");
+      allowVisualOverflow(testInfo, "Remote Input keyboard grid scrolls inside the sheet.");
+
+      await page.goto("/");
+      await waitForConnected(page);
+
+      const sheet = page.getByTestId("remote-input-sheet");
+      const keyboard = page.getByTestId("remote-input-type-keyboard");
+
+      await getActiveMain(page).getByTestId("home-machine-inline-openRemoteInput").click();
+      await expect(sheet).toBeVisible();
+      await page.getByTestId("remote-input-mode-type").click();
+      await expect(keyboard).toBeVisible();
+
+      const setProfile = async (width: number, height: number, override: "compact" | "medium" | "expanded") => {
+        await page.setViewportSize({ width, height });
+        await page.evaluate((o) => {
+          localStorage.setItem("c64u_display_profile_override", o);
+          window.dispatchEvent(
+            new CustomEvent("c64u-ui-preferences-changed", { detail: { displayProfileOverride: o } }),
+          );
+        }, override);
+      };
+
+      const typeShots: Array<{
+        w: number;
+        h: number;
+        profile: "compact" | "medium" | "expanded";
+        file: string;
+      }> = [
+        { w: 332, h: 680, profile: "compact", file: "home/remote-input/03-keyboard-compact.png" },
+        { w: 400, h: 780, profile: "medium", file: "home/remote-input/04-keyboard-medium.png" },
+        { w: 900, h: 820, profile: "expanded", file: "home/remote-input/05-keyboard-expanded.png" },
+      ];
+      for (const shot of typeShots) {
+        try {
+          await setProfile(shot.w, shot.h, shot.profile);
+          await expect(keyboard).toHaveAttribute("data-profile", shot.profile, { timeout: 10000 });
+          await captureScreenshot(page, testInfo, shot.file, { locator: sheet });
+          console.log(`[remote-input] captured ${shot.file}`);
+        } catch (error) {
+          const actual = await keyboard.getAttribute("data-profile").catch(() => "unknown");
+          console.warn(`[remote-input] FAILED ${shot.file} (wanted ${shot.profile}, got ${actual}):`, error);
+        }
+      }
+
+      // Refresh joystick + game-mode shots so the header reads "Remote Input".
+      try {
+        await setProfile(393, 760, "medium");
+        await page.getByTestId("remote-input-mode-joystick").click();
+        await expect(page.getByTestId("remote-input-virtual-joystick")).toBeVisible();
+        await captureScreenshot(page, testInfo, "home/remote-input/01-joystick.png", { locator: sheet });
+        console.log("[remote-input] captured 01-joystick.png");
+        await page.getByTestId("remote-input-immersive-toggle").click();
+        await captureScreenshot(page, testInfo, "home/remote-input/02-game-mode.png", { locator: sheet });
+        console.log("[remote-input] captured 02-game-mode.png");
+        await page.getByTestId("remote-input-immersive-toggle").click();
+      } catch (error) {
+        console.warn("[remote-input] joystick/game-mode capture failed:", error);
+      }
+    },
+  );
+
+  test(
     "capture home profile screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {

@@ -23,18 +23,45 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
 
+// A plain String.startsWith(root) lets a sibling directory that merely shares the
+// root's name as a string prefix (e.g. root "mock-ftp-root", sibling
+// "mock-ftp-rootX") pass containment, since the sibling's path also starts with
+// the root's path string (HARD9-071). Extracted as a top-level internal function
+// so the exact containment logic is directly unit-testable.
+internal fun isPathContainedInRoot(canonicalTargetPath: String, canonicalRootPath: String): Boolean =
+        canonicalTargetPath == canonicalRootPath || canonicalTargetPath.startsWith(canonicalRootPath + File.separator)
+
 class MockFtpServer(
   private val rootDir: File,
   private val password: String?,
 ) {
-  private val executor = Executors.newCachedThreadPool()
+  // Bounded (not newCachedThreadPool) so a burst of idle command connections
+  // cannot spawn unbounded threads and exhaust the process (HARD10-004 F3). One
+  // thread is permanently held by acceptLoop; the rest serve clients, and an idle
+  // client is evicted by commandSocketReadTimeoutMs below.
+  private val executor = Executors.newFixedThreadPool(MAX_CLIENT_THREADS)
   private val sockets = Collections.synchronizedSet(mutableSetOf<Socket>())
   private var serverSocket: ServerSocket? = null
   @Volatile private var running = false
   var port: Int = 0
     private set
+
+  // Bounds how long a PASV data connection waits for the client to actually
+  // connect. Without this, a PASV+LIST/RETR client that never connects parks
+  // the executor thread in dataServer.accept() forever (HARD9-071). Injectable
+  // (matching this codebase's socketFactory/httpConnectionFactory convention) so
+  // tests can exercise the timeout path without waiting out the real duration.
+  internal var dataConnectionAcceptTimeoutMs: Int = 10_000
+
+  // Bounds how long the command socket may stall between commands before the
+  // worker is released. Without it a client that connects and sends nothing (or
+  // stops mid-session) parks a worker forever on reader.readLine() (HARD10-004
+  // F2). Injectable so tests can drive the timeout without waiting it out.
+  internal var commandSocketReadTimeoutMs: Int = 30_000
+
   private companion object {
     const val LOG_TAG = "MockFtpServer"
+    const val MAX_CLIENT_THREADS = 16
   }
 
   fun start(preferredPort: Int? = null): Int {
@@ -83,9 +110,14 @@ class MockFtpServer(
   }
 
   private fun handleClient(socket: Socket) {
+    try {
+      socket.soTimeout = commandSocketReadTimeoutMs
+    } catch (error: Exception) {
+      Log.w(LOG_TAG, "Failed to set command socket timeout", error)
+    }
     val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
     val writer = BufferedWriter(OutputStreamWriter(socket.getOutputStream()))
-    val session = FtpSession(rootDir, password, writer)
+    val session = FtpSession(rootDir, password, writer, dataConnectionAcceptTimeoutMs)
     session.send("220 Mock C64U FTP ready")
 
     try {
@@ -113,6 +145,7 @@ class MockFtpServer(
     private val rootDir: File,
     private val password: String?,
     private val writer: BufferedWriter,
+    private val dataConnectionAcceptTimeoutMs: Int,
   ) {
     private var cwd: String = "/"
     private var loggedIn = false
@@ -257,6 +290,7 @@ class MockFtpServer(
         send("425 Use PASV first")
         return
       }
+      dataServer.soTimeout = dataConnectionAcceptTimeoutMs
       val dataSocket = dataServer.accept()
       try {
         block(dataSocket)
@@ -322,7 +356,7 @@ class MockFtpServer(
       val target = if (relative.isBlank()) rootDir else File(rootDir, relative)
       val canonicalRoot = rootDir.canonicalFile
       val canonicalTarget = target.canonicalFile
-      return if (canonicalTarget.path.startsWith(canonicalRoot.path)) canonicalTarget else null
+      return if (isPathContainedInRoot(canonicalTarget.path, canonicalRoot.path)) canonicalTarget else null
     }
 
     private fun isDirectory(path: String): Boolean {

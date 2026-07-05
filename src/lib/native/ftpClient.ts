@@ -8,6 +8,7 @@
 
 import { registerPlugin, type PluginListenerHandle } from "@capacitor/core";
 import type { NativeTraceContext } from "@/lib/native/nativeTraceContext";
+import { getRuntimeFtpPasswordOverride } from "@/lib/ftp/ftpConfig";
 
 export type FtpEntry = {
   name: string;
@@ -85,7 +86,7 @@ export type FtpClientPlugin = {
   listDirectory: (options: FtpListOptions) => Promise<{ entries: FtpEntry[] }>;
   listDirectoryRecursive: (
     options: FtpRecursiveListOptions,
-  ) => Promise<{ entries: FtpEntry[]; partialFailures?: FtpRecursiveFailure[] }>;
+  ) => Promise<{ entries: FtpEntry[]; partialFailures?: FtpRecursiveFailure[]; timedOut?: boolean }>;
   readFile: (options: FtpReadOptions) => Promise<{ data: string; sizeBytes?: number }>;
   writeFile: (options: FtpWriteOptions) => Promise<{ sizeBytes: number }>;
   pingFtp: (options: FtpPingOptions) => Promise<{ ok: boolean }>;
@@ -97,6 +98,26 @@ export type FtpClientPlugin = {
   ) => Promise<PluginListenerHandle>;
 };
 
-export const FtpClient = registerPlugin<FtpClientPlugin>("FtpClient", {
+const rawFtpClient = registerPlugin<FtpClientPlugin>("FtpClient", {
   web: () => import("./ftpClient.web").then((module) => new module.FtpClientWeb()),
 });
+
+// While demo mode is active the (now authenticated) mock FTP server requires the
+// per-boot token as the FTP password. This is the single funnel every FTP call
+// passes through, so injecting it here authenticates all callers without each
+// needing to know about the token (HARD10-005). No-op in normal operation
+// (override null): the caller's real device password flows through untouched.
+const withRuntimeFtpAuth = <T extends { password?: string }>(options: T): T => {
+  const override = getRuntimeFtpPasswordOverride();
+  return override === null ? options : { ...options, password: override };
+};
+
+export const FtpClient: FtpClientPlugin = {
+  listDirectory: (options) => rawFtpClient.listDirectory(withRuntimeFtpAuth(options)),
+  listDirectoryRecursive: (options) => rawFtpClient.listDirectoryRecursive(withRuntimeFtpAuth(options)),
+  readFile: (options) => rawFtpClient.readFile(withRuntimeFtpAuth(options)),
+  writeFile: (options) => rawFtpClient.writeFile(withRuntimeFtpAuth(options)),
+  pingFtp: (options) => rawFtpClient.pingFtp(withRuntimeFtpAuth(options)),
+  cancelRead: (options) => rawFtpClient.cancelRead(options),
+  addListener: (eventName, listenerFunc) => rawFtpClient.addListener(eventName, listenerFunc),
+};

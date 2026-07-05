@@ -8,7 +8,11 @@
 
 import { addErrorLog, addLog } from "@/lib/logging";
 import { buildBinaryFingerprint } from "@/lib/binaryFingerprint";
+import { loadDebugLoggingEnabled } from "@/lib/config/appSettings";
 import type { C64API } from "@/lib/c64api";
+import { createArchiveClient } from "@/lib/archive/client";
+import { getCachedArchiveDiskBlob, setCachedArchiveDiskBlob } from "@/lib/archive/archiveDiskCache";
+import type { ArchiveClientConfigInput, ArchivePlaylistReference } from "@/lib/archive/types";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import { getFileExtension } from "@/lib/playback/fileTypes";
 import { fetchUltimateOriginBlob, isOriginOnSelectedDevice } from "@/lib/savedDevices/deviceBoundOrigin";
@@ -32,10 +36,12 @@ const LOCAL_DISK_DECODE_YIELD_BYTES = 1024 * 1024;
 
 type ResolveLocalDiskBlobOptions = {
   signal?: AbortSignal;
+  archiveConfigs?: Record<string, ArchiveClientConfigInput>;
 };
 
 type MountDiskToDriveOptions = {
   mode?: "readwrite" | "readonly" | "unlinked";
+  archiveConfigs?: Record<string, ArchiveClientConfigInput>;
 };
 
 const createAbortError = (context: string) => {
@@ -136,6 +142,20 @@ export const buildDiskMountType = (path: string) => {
 };
 
 const logResolvedLocalDiskBytes = (disk: DiskEntry, source: string, bytes: Uint8Array) => {
+  if (!loadDebugLoggingEnabled()) {
+    // HARD12-013: skip the expensive full-image FNV-1a hash when debug
+    // logging is off — the fingerprint is purely diagnostic and was the only
+    // reason we walked the whole byte array.
+    addLog("debug", "Local disk bytes resolved", {
+      path: disk.path,
+      location: disk.location,
+      sourceId: disk.sourceId ?? null,
+      localUri: disk.localUri ?? null,
+      localTreeUri: disk.localTreeUri ?? null,
+      resolutionSource: source,
+    });
+    return;
+  }
   addLog("debug", "Local disk bytes resolved", {
     path: disk.path,
     location: disk.location,
@@ -147,12 +167,69 @@ const logResolvedLocalDiskBytes = (disk: DiskEntry, source: string, bytes: Uint8
   });
 };
 
+// A CommoServe-imported disk keeps its bytes only in the in-memory runtimeFiles
+// map, which is lost on device switch / app restart. When the runtime bytes are
+// gone but the persisted entry carries an archiveRef, re-download the image on
+// demand from the deterministic CommoServe REST URL - mirroring the tested
+// playlist re-download path (resolveCommoServeRuntimeRequest) and sharing the
+// same archive coordinates. A short-lived LRU cache absorbs repeated mounts.
+// See HARD10-002.
+const resolveArchiveDiskBlob = async (
+  disk: DiskEntry,
+  archiveRef: ArchivePlaylistReference,
+  archiveConfigs: Record<string, ArchiveClientConfigInput> | undefined,
+  signal: AbortSignal | undefined,
+): Promise<Blob> => {
+  const context = "Archive disk download";
+  throwIfAborted(signal, context);
+
+  const cachedBlob = getCachedArchiveDiskBlob(archiveRef);
+  if (cachedBlob) {
+    addLog("debug", "Local disk bytes resolved", {
+      path: disk.path,
+      location: disk.location,
+      sourceId: disk.sourceId ?? null,
+      resolutionSource: "archive-cache",
+      sizeBytes: cachedBlob.size,
+    });
+    return cachedBlob;
+  }
+
+  const config = archiveConfigs?.[archiveRef.sourceId];
+  if (!config) {
+    throw new Error(`Archive source configuration unavailable for ${archiveRef.sourceId}.`);
+  }
+
+  const client = createArchiveClient(config);
+  const binary = await client.downloadBinary(
+    archiveRef.resultId,
+    archiveRef.category,
+    archiveRef.entryId,
+    archiveRef.entryPath,
+    { signal },
+  );
+  throwIfAborted(signal, context);
+
+  if (binary.bytes.byteLength > MAX_LOCAL_DISK_IMAGE_BYTES) {
+    throw new Error(`${context} is too large to mount (${binary.bytes.byteLength} bytes).`);
+  }
+
+  const buffer = new ArrayBuffer(binary.bytes.byteLength);
+  new Uint8Array(buffer).set(binary.bytes);
+  const blob = new Blob([buffer], {
+    type: binary.contentType ?? "application/octet-stream",
+  });
+  setCachedArchiveDiskBlob(archiveRef, blob);
+  logResolvedLocalDiskBytes(disk, "archive-download", binary.bytes);
+  return blob;
+};
+
 export const resolveLocalDiskBlob = async (
   disk: DiskEntry,
   runtimeFile?: File,
   options: ResolveLocalDiskBlobOptions = {},
 ): Promise<Blob> => {
-  const { signal } = options;
+  const { signal, archiveConfigs } = options;
   const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, context: string) => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     let abortHandler: (() => void) | null = null;
@@ -184,9 +261,13 @@ export const resolveLocalDiskBlob = async (
     if (runtimeFile.size > MAX_LOCAL_DISK_IMAGE_BYTES) {
       throw new Error(`Local disk runtime file is too large to mount (${runtimeFile.size} bytes).`);
     }
-    const bytes = new Uint8Array(await runtimeFile.arrayBuffer());
-    throwIfAborted(signal, "Local disk runtime file read");
-    logResolvedLocalDiskBytes(disk, "runtime-file", bytes);
+    // HARD12-013: the diagnostic log is the only consumer of the bytes; when
+    // debug logging is disabled skip the extra arrayBuffer() read entirely.
+    if (loadDebugLoggingEnabled()) {
+      const bytes = new Uint8Array(await runtimeFile.arrayBuffer());
+      throwIfAborted(signal, "Local disk runtime file read");
+      logResolvedLocalDiskBytes(disk, "runtime-file", bytes);
+    }
     return runtimeFile;
   }
   if (disk.localUri) {
@@ -215,6 +296,14 @@ export const resolveLocalDiskBlob = async (
     return new Blob([bytes], {
       type: "application/octet-stream",
     });
+  }
+  // The runtime bytes are gone: a CommoServe disk with an archiveRef re-downloads
+  // on demand instead of dead-ending at throwUnresolvedLocalDiskError. This runs
+  // before the local-source scan/throw because a CommoServe disk carries a
+  // sourceId that never resolves via loadLocalSources() and would otherwise hit
+  // the HARD9-068 sourceId dead-end below. See HARD10-002.
+  if (disk.archiveRef) {
+    return resolveArchiveDiskBlob(disk, disk.archiveRef, archiveConfigs, signal);
   }
   const normalizedPath = normalizeSourcePath(disk.path);
   const sources = loadLocalSources();
@@ -284,12 +373,30 @@ export const resolveLocalDiskBlob = async (
     return null;
   };
 
+  const throwUnresolvedLocalDiskError = (): never => {
+    // A CommoServe-imported disk's bytes only ever live in the in-memory
+    // runtimeFiles map (React state) - navigating away or restarting loses
+    // them, and its sourceId never resolves via loadLocalSources() (CommoServe
+    // is not a persisted local source). The generic "re-add the folder"
+    // message is meaningless here since there is no folder/file to re-add.
+    // See HARD9-011.
+    if (disk.sourceKind === "commoserve") {
+      throw new Error("This disk's data is no longer available. Re-import it from CommoServe to mount it again.");
+    }
+    throw new Error("Local disk access is missing. Re-add the folder or file to refresh permissions.");
+  };
+
   if (disk.sourceId) {
     const source = sources.find((entry) => entry.id === disk.sourceId);
     if (source) {
       const blob = await resolveFromSource(source);
       if (blob) return blob;
     }
+    // A disk with a sourceId must resolve through that specific source or
+    // not at all - falling back to scanning every other local source by path
+    // risks silently mounting a different folder's same-named file (e.g. two
+    // libraries both containing /side-a.d64). See HARD9-068.
+    return throwUnresolvedLocalDiskError();
   }
 
   for (const source of sources) {
@@ -297,7 +404,7 @@ export const resolveLocalDiskBlob = async (
     if (blob) return blob;
   }
 
-  throw new Error("Local disk access is missing. Re-add the folder or file to refresh permissions.");
+  return throwUnresolvedLocalDiskError();
 };
 
 export const mountDiskToDrive = async (
@@ -333,7 +440,9 @@ export const mountDiskToDrive = async (
       return;
     }
 
-    const blob = await resolveLocalDiskBlob(disk, runtimeFile);
+    const blob = await resolveLocalDiskBlob(disk, runtimeFile, {
+      archiveConfigs: options.archiveConfigs,
+    });
     addLog("debug", "Local disk blob prepared for mount", {
       drive,
       path: disk.path,

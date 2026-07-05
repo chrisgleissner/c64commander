@@ -35,14 +35,22 @@ import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
 import { useInteractiveConfigWrite } from "@/hooks/useInteractiveConfigWrite";
 import { SummaryConfigControlRow } from "./SummaryConfigCard";
 import {
-  LIGHTING_HOME_AUTO_SID_OPTIONS,
-  LIGHTING_HOME_FIXED_COLOR_OPTIONS,
-  LIGHTING_HOME_INTENSITY_RANGE,
-  LIGHTING_HOME_MODE_OPTIONS,
-  LIGHTING_HOME_PATTERN_OPTIONS,
-  LIGHTING_HOME_SID_SELECT_OPTIONS,
-  LIGHTING_HOME_TINT_OPTIONS,
-} from "@/lib/lighting/constants";
+  buildOptionDomainKey,
+  useDeviceConfigOptionDomains,
+  type DeviceConfigItemRef,
+} from "../hooks/useDeviceConfigOptionDomains";
+import { LIGHTING_HOME_INTENSITY_RANGE } from "@/lib/lighting/constants";
+
+// Enum dropdowns whose permitted values must be interrogated from the concrete device rather
+// than assumed — the labels diverge by model/firmware (e.g. LED patterns, SID Select, tint).
+const LIGHTING_OPTION_DOMAIN_ITEMS = [
+  "LedStrip Mode",
+  "LedStrip Auto SID Mode",
+  "LedStrip Pattern",
+  "Fixed Color",
+  "LedStrip SID Select",
+  "Color tint",
+] as const;
 
 const formatLightingPatternLabel = (value: string) => {
   if (normalizeOptionToken(value) === "singlecolor") return "Single Color";
@@ -81,6 +89,20 @@ export function LightingSummaryCard({
   const resolveValue = (itemName: string, fallback: string | number) =>
     String(resolveConfigValue(config, category, itemName, fallback));
 
+  // Permitted values for the lighting enums come from the concrete device (cached per-firmware),
+  // never a hard-coded list — the labels differ across models (LED pattern names, SID Select, tint).
+  const optionDomainRefs = useMemo<DeviceConfigItemRef[]>(
+    () => LIGHTING_OPTION_DOMAIN_ITEMS.map((item) => ({ category, item })),
+    [category],
+  );
+  const optionDomains = useDeviceConfigOptionDomains(`lighting:${category}`, optionDomainRefs, isActive);
+  const resolveOptions = (itemName: string, liveOptions: string[], currentValue: string) => {
+    if (liveOptions.length) return liveOptions;
+    const domainOptions = optionDomains[buildOptionDomainKey(category, itemName)]?.options;
+    if (domainOptions && domainOptions.length) return domainOptions;
+    return currentValue && currentValue !== unavailableLabel ? [currentValue] : [];
+  };
+
   const modeOptions = readOptions("LedStrip Mode");
   const patternOptions = readOptions("LedStrip Pattern");
   const fixedColorOptions = readOptions("Fixed Color");
@@ -110,29 +132,19 @@ export function LightingSummaryCard({
   const intensityNumber = parseNumericValue(intensityValue, intensityMin);
 
   const effectiveModeOptions = modeSupported
-    ? modeOptions.length
-      ? modeOptions
-      : [...LIGHTING_HOME_MODE_OPTIONS]
+    ? resolveOptions("LedStrip Mode", modeOptions, modeValue)
     : [unavailableLabel];
   const effectivePatternOptions = patternSupported
-    ? patternOptions.length
-      ? patternOptions
-      : [...LIGHTING_HOME_PATTERN_OPTIONS]
+    ? resolveOptions("LedStrip Pattern", patternOptions, patternValue)
     : [unavailableLabel];
   const effectiveFixedColorOptions = fixedColorSupported
-    ? fixedColorOptions.length
-      ? fixedColorOptions
-      : [...LIGHTING_HOME_FIXED_COLOR_OPTIONS]
+    ? resolveOptions("Fixed Color", fixedColorOptions, fixedColorValue)
     : [unavailableLabel];
   const effectiveSidSelectOptions = sidSelectSupported
-    ? sidSelectOptions.length
-      ? sidSelectOptions
-      : [...LIGHTING_HOME_SID_SELECT_OPTIONS]
+    ? resolveOptions("LedStrip SID Select", sidSelectOptions, sidSelectValue)
     : [unavailableLabel];
   const effectiveTintOptions = tintSupported
-    ? tintOptions.length
-      ? tintOptions
-      : [...LIGHTING_HOME_TINT_OPTIONS]
+    ? resolveOptions("Color tint", tintOptions, tintValue)
     : [unavailableLabel];
 
   const modeSelectOptions = normalizeSelectOptions(effectiveModeOptions, modeValue);
@@ -140,9 +152,7 @@ export function LightingSummaryCard({
   const fixedColorSelectOptions = normalizeSelectOptions(effectiveFixedColorOptions, fixedColorValue);
   const autoSidModeSelectOptions = normalizeSelectOptions(
     autoSidModeSupported
-      ? autoSidModeOptions.length
-        ? autoSidModeOptions
-        : [...LIGHTING_HOME_AUTO_SID_OPTIONS]
+      ? resolveOptions("LedStrip Auto SID Mode", autoSidModeOptions, autoSidModeValue)
       : [unavailableLabel],
     autoSidModeValue,
   );

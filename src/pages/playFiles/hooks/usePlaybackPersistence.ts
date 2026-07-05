@@ -6,12 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PlayableEntry, PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from "../types";
 import {
   PLAYBACK_SESSION_KEY,
   PLAYLIST_STORAGE_PREFIX,
   buildPlaylistStorageKey,
+  isPlaybackSessionRestoreStale,
   isSongCategory,
   parseModifiedAt,
 } from "../playFilesUtils";
@@ -20,7 +21,7 @@ import { resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapt
 import { buildLocalPlayFileFromTree, buildLocalPlayFileFromUri } from "@/lib/playback/fileLibraryUtils";
 import type { PlaybackClock } from "@/lib/playback/playbackClock";
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 import { getPlaylistDataRepository } from "@/lib/playlistRepository";
 import type { PlaylistSessionRecord, TrackRecord } from "@/lib/playlistRepository";
 import { resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
@@ -44,7 +45,11 @@ interface UsePlaybackPersistenceProps {
   autoAdvanceDueAtMs: number | null;
   setCurrentSubsongCount: (value: number | null) => void;
   shuffleEnabled?: boolean;
+  shuffleSeed?: number | null;
   repeatEnabled?: boolean;
+  setShuffleEnabled?: (value: boolean) => void;
+  setShuffleSeed?: (value: number | null) => void;
+  setRepeatEnabled?: (value: boolean) => void;
   activePlaylistQuery?: string | null;
   setActivePlaylistQuery?: (value: string) => void;
 
@@ -98,7 +103,11 @@ export function usePlaybackPersistence({
   autoAdvanceDueAtMs,
   setCurrentSubsongCount,
   shuffleEnabled = false,
+  shuffleSeed = null,
   repeatEnabled = false,
+  setShuffleEnabled,
+  setShuffleSeed,
+  setRepeatEnabled,
   activePlaylistQuery = null,
   setActivePlaylistQuery,
   resolvedDeviceId,
@@ -155,6 +164,7 @@ export function usePlaybackPersistence({
           configOverrides: entry.configOverrides ?? null,
           archiveRef: entry.archiveRef ?? null,
           durationMs: entry.durationMs,
+          durationSource: entry.durationSource ?? null,
           songNr: entry.songNr,
           subsongCount: entry.subsongCount,
           sourceId: entry.sourceId ?? null,
@@ -201,6 +211,28 @@ export function usePlaybackPersistence({
     return legacySourceId || null;
   };
 
+  const applyRestoredTraversalState = useCallback(
+    (session: Pick<PlaylistSessionRecord, "shuffleEnabled" | "repeatEnabled" | "randomSeed"> | null) => {
+      if (!session) return;
+      if (
+        typeof session.shuffleEnabled === "boolean" &&
+        setShuffleEnabled &&
+        shuffleEnabled !== session.shuffleEnabled
+      ) {
+        setShuffleEnabled(session.shuffleEnabled);
+      }
+      if (typeof session.repeatEnabled === "boolean" && setRepeatEnabled && repeatEnabled !== session.repeatEnabled) {
+        setRepeatEnabled(session.repeatEnabled);
+      }
+      const restoredSeed =
+        typeof session.randomSeed === "number" && Number.isFinite(session.randomSeed) ? session.randomSeed : null;
+      if (setShuffleSeed && shuffleSeed !== restoredSeed) {
+        setShuffleSeed(restoredSeed);
+      }
+    },
+    [repeatEnabled, setRepeatEnabled, setShuffleEnabled, setShuffleSeed, shuffleEnabled, shuffleSeed],
+  );
+
   const hydrateFromRepository = async () => {
     const playlistItems = await playlistRepository.getPlaylistItems(playlistStorageKey);
     if (!playlistItems.length) {
@@ -209,6 +241,7 @@ export function usePlaybackPersistence({
         items: [] as PlaylistItem[],
         index: -1,
         activeQuery: session?.activeQuery ?? null,
+        session,
       };
     }
     const trackIds = playlistItems.map((item) => item.trackId);
@@ -232,6 +265,7 @@ export function usePlaybackPersistence({
             configOverrides: playlistItem.configOverrides ?? null,
             archiveRef: track.archiveRef ?? null,
             durationMs: track.defaultDurationMs ?? undefined,
+            durationSource: track.durationSource ?? null,
             songNr: playlistItem.songNr,
             subsongCount: track.subsongCount ?? undefined,
             sourceId: resolveHydratedLocalSourceId(track),
@@ -252,6 +286,7 @@ export function usePlaybackPersistence({
       items: hydrated.items,
       index: restoredIndex,
       activeQuery: session?.activeQuery ?? null,
+      session,
     };
   };
 
@@ -317,6 +352,7 @@ export function usePlaybackPersistence({
 
         if (!candidates.length) {
           const repositoryRestored = await hydrateFromRepository();
+          applyRestoredTraversalState(repositoryRestored.session);
           if (setActivePlaylistQuery && repositoryRestored.activeQuery !== null) {
             setActivePlaylistQuery(repositoryRestored.activeQuery);
           }
@@ -371,6 +407,7 @@ export function usePlaybackPersistence({
     localSourceTreeUris,
     buildPlaylistItem,
     setActivePlaylistQuery,
+    applyRestoredTraversalState,
   ]);
 
   // Apply Session Restore (after Playlist Restore)
@@ -398,18 +435,37 @@ export function usePlaybackPersistence({
       sessionRestoreSettledRef.current = true;
       return;
     }
+    const now = Date.now();
+    // A restore claiming "isPlaying" whose last confirmed-live tick is too old
+    // to trust (app suspended for a long time, or the C64 was reset/power-cycled
+    // by other means while the process was dead) is downgraded to paused instead
+    // of arming auto-advance and silently launching a new track on a machine the
+    // user did not leave running. See HARD9-064.
+    const staleActiveRestore =
+      pending.isPlaying && !pending.isPaused && isPlaybackSessionRestoreStale(pending.updatedAt, now);
+    if (staleActiveRestore) {
+      addLog("warn", "Discarded stale active playback session restore; resuming paused", {
+        playlistStorageKey,
+        updatedAt: pending.updatedAt,
+        ageMs: now - Date.parse(pending.updatedAt),
+      });
+    }
+    applyRestoredTraversalState({
+      shuffleEnabled: pending.shuffleEnabled ?? shuffleEnabled,
+      repeatEnabled: pending.repeatEnabled ?? repeatEnabled,
+      randomSeed: pending.randomSeed ?? shuffleSeed,
+    });
     setCurrentIndex(matchedIndex);
     setElapsedMs(Math.max(0, pending.elapsedMs));
     setPlayedMs(Math.max(0, pending.playedMs));
     setDurationMs(pending.durationMs);
-    setIsPlaying(pending.isPlaying);
-    setIsPaused(pending.isPaused);
+    setIsPlaying(staleActiveRestore ? true : pending.isPlaying);
+    setIsPaused(staleActiveRestore ? true : pending.isPaused);
     const restoredItem = playlist[matchedIndex];
     if (restoredItem && isSongCategory(restoredItem.category)) {
       setCurrentSubsongCount(restoredItem.subsongCount ?? null);
     }
-    const now = Date.now();
-    if (pending.isPlaying && !pending.isPaused) {
+    if (pending.isPlaying && !pending.isPaused && !staleActiveRestore) {
       trackStartedAtRef.current = now - Math.max(0, pending.elapsedMs);
       playedClockRef.current.hydrate(Math.max(0, pending.playedMs), now);
       if (typeof pending.durationMs === "number" && pending.durationMs > 0) {
@@ -440,7 +496,14 @@ export function usePlaybackPersistence({
     }
     pendingPlaybackRestoreRef.current = null;
     sessionRestoreSettledRef.current = true;
-  }, [playlist, playlistStorageKey, restoreVersion, setTrackInstanceId, setAutoAdvanceDueAtMs]); // Depends on playlist being set
+  }, [
+    applyRestoredTraversalState,
+    playlist,
+    playlistStorageKey,
+    restoreVersion,
+    setAutoAdvanceDueAtMs,
+    setTrackInstanceId,
+  ]); // Depends on playlist being set
 
   // Persist Playlist
   useEffect(() => {
@@ -490,7 +553,7 @@ export function usePlaybackPersistence({
       playedMs,
       shuffleEnabled,
       repeatEnabled,
-      randomSeed: null,
+      randomSeed: shuffleSeed,
       randomCursor: null,
       activeQuery: activePlaylistQuery,
       updatedAt: new Date().toISOString(),
@@ -514,6 +577,7 @@ export function usePlaybackPersistence({
     repeatEnabled,
     restoreVersion,
     shuffleEnabled,
+    shuffleSeed,
   ]);
 
   // Persist Session
@@ -539,6 +603,9 @@ export function usePlaybackPersistence({
       playedMs,
       durationMs,
       autoAdvanceDueAtMs,
+      shuffleEnabled,
+      repeatEnabled,
+      randomSeed: shuffleSeed,
       updatedAt: new Date().toISOString(),
     };
     try {
@@ -560,6 +627,9 @@ export function usePlaybackPersistence({
     playedMs,
     playlist,
     playlistStorageKey,
+    repeatEnabled,
     restoreVersion,
+    shuffleEnabled,
+    shuffleSeed,
   ]);
 }

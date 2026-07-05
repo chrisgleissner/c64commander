@@ -13,6 +13,7 @@ import { getTraceEvents } from "@/lib/tracing/traceSession";
 import type { TraceEvent } from "@/lib/tracing/types";
 import { getConfiguredHost } from "@/lib/connection/hostEdit";
 import { useConnectionState } from "@/hooks/useConnectionState";
+import { AUTH_REQUIRED_PROBE_ERROR } from "@/lib/connection/connectionManager";
 import { useHealthCheckState } from "@/lib/diagnostics/healthCheckState";
 import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import type { HealthCheckProbeOutcome } from "@/lib/diagnostics/healthHistory";
@@ -187,7 +188,10 @@ export function useHealthState(): OverallHealthState {
   }, []);
 
   return useMemo(() => {
-    const connectivity = deriveConnectivityState(connectionSnapshot.state);
+    const connectivity = deriveConnectivityState(
+      connectionSnapshot.state,
+      connectionSnapshot.lastProbeError === AUTH_REQUIRED_PROBE_ERROR,
+    );
     const host = getConfiguredHost();
     const hostScopedTraceEvents = filterTraceEventsForConfiguredHost(traceEvents, host);
     const latestHealthCheck = healthCheckState.latestResult;
@@ -315,6 +319,7 @@ export function useHealthState(): OverallHealthState {
     );
   }, [
     connectionSnapshot.state,
+    connectionSnapshot.lastProbeError,
     deviceInfo?.firmware_version,
     deviceInfo?.product,
     healthCheckState.latestResult,
