@@ -55,7 +55,16 @@ export type KeyAction =
  * other modifiers (C=, CTRL).
  */
 export type KeyTone =
-  "default" | "action" | "edit" | "function" | "modifier" | "shift" | "character" | "caution" | "danger";
+  | "default"
+  | "action"
+  | "edit"
+  | "function"
+  | "function-primary"
+  | "modifier"
+  | "shift"
+  | "character"
+  | "caution"
+  | "danger";
 
 export type KeyDef = {
   /** Stable id, unique within a layout (React key). */
@@ -285,10 +294,16 @@ const functionKey = (n: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8): KeyDef => {
   return {
     id: key,
     testId: `remote-input-key-${key}`,
-    label: `F${n}`,
-    ariaLabel: `F${n}`,
+    // Printed exactly as on the real C64 keycaps: a lower-case "f" and TWO
+    // spaces before the number (f  1, f  3, ...). The gap uses non-breaking
+    // spaces ( ) because ordinary spaces collapse to one under the label's
+    // `white-space: nowrap`. The odd (unshifted, front-labelled) keys get a
+    // slightly darker fill so they stand apart from the shifted f  2 / f  4 /
+    // f  6 / f  8 — see keyTone.ts `function-primary`.
+    label: `f${"\u00a0\u00a0"}${n}`,
+    ariaLabel: `f ${n}`,
     action: { kind: "special", key },
-    tone: "function",
+    tone: n % 2 === 1 ? "function-primary" : "function",
   };
 };
 

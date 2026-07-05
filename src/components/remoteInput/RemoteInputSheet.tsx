@@ -354,6 +354,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
           {!immersive && session.outputMode === "joystick" ? (
             <QuickKeysBar
               onChar={session.sendChar}
+              onKey={session.sendKeyboardInputs}
               onCursor={session.sendCursor}
               onSpecialKey={session.sendSpecialKey}
               tier={tier}

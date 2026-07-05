@@ -48,7 +48,7 @@ const toneVariant = (tone: KeyTone | undefined, latched: boolean): "default" | "
   if (tone === "modifier") return latched ? "default" : "secondary";
   // SHIFT/SHIFT-LOCK keep a light base so their violet colour reads; the latch
   // ring (toneButtonClass) marks the active state.
-  if (tone === "shift" || tone === "character") return "outline";
+  if (tone === "shift" || tone === "character" || tone === "function-primary") return "outline";
   if (tone === "action" || tone === "edit" || tone === "function" || tone === "caution" || tone === "danger") {
     return "secondary";
   }
@@ -197,10 +197,10 @@ export const TypeKeyboard = ({
       (isModifier && activeModifiers.has((def.action as { modifier: StickyModifier }).modifier)) ||
       (isShiftLock && shiftLocked);
     const disabled = keyUnavailable(def);
-    // Use the short label on the dense profiles (compact and expanded) so caps
-    // like RESTORE (-> "REST.") always fit inside the key; medium has room for
-    // the full word.
-    const label = profile !== "medium" && def.compactLabel ? def.compactLabel : def.label;
+    // Only the expanded profile packs keys tightly enough to need the short cap
+    // (RESTORE -> "REST."); compact and medium both have room for the full word,
+    // so they render `label` as-is.
+    const label = profile === "expanded" && def.compactLabel ? def.compactLabel : def.label;
     const Icon = def.icon;
     const iconPx = Math.max(15, Math.round(keyFontPx * 1.35));
     // Shifted legend printed ABOVE the main label (smaller, fainter) like a real

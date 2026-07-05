@@ -292,11 +292,21 @@ describe("TypeKeyboard", () => {
       }
     });
 
-    it("keeps the abbreviated RESTORE / C= visual labels but full accessible labels", () => {
+    it("spells RESTORE in full on compact (there is room) and only abbreviates to REST. when expanded", () => {
       renderKeyboard("compact");
-      const restore = screen.getByTestId("remote-input-key-restore");
-      expect(restore.textContent).toContain("REST");
-      expect(restore).toHaveAttribute("aria-label", "Restore");
+      const restoreCompact = screen.getByTestId("remote-input-key-restore");
+      expect(restoreCompact.textContent).toContain("RESTORE");
+      expect(restoreCompact).toHaveAttribute("aria-label", "Restore");
+      cleanup();
+      renderKeyboard("expanded");
+      const restoreExpanded = screen.getByTestId("remote-input-key-restore");
+      expect(restoreExpanded.textContent).toContain("REST.");
+      expect(restoreExpanded.textContent).not.toContain("RESTORE");
+      expect(restoreExpanded).toHaveAttribute("aria-label", "Restore");
+    });
+
+    it("keeps full accessible labels for the C= modifier regardless of profile", () => {
+      renderKeyboard("compact");
       const commodore = screen.getByTestId("remote-input-key-commodore");
       expect(commodore.textContent).toContain("C=");
       expect(commodore).toHaveAttribute("aria-label", "Commodore key");

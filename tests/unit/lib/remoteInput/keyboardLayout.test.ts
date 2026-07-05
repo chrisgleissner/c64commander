@@ -208,7 +208,20 @@ describe("getKeyboardLayout", () => {
     expect(toneOf("remote-input-key-ctrl")).toBe("modifier");
   });
 
-  it("spells RESTORE in full and abbreviates to REST. only on compact (HARD16-008)", () => {
+  it("tints the odd (unshifted) function keys f1/f3/f5/f7 apart from the shifted f2/f4/f6/f8", () => {
+    const keys = collectKeys(getKeyboardLayout("medium"));
+    const toneOf = (testId: string) => keys.find((k) => k.testId === testId)?.tone;
+    for (const n of [1, 3, 5, 7]) expect(toneOf(`remote-input-key-f${n}`)).toBe("function-primary");
+    for (const n of [2, 4, 6, 8]) expect(toneOf(`remote-input-key-f${n}`)).toBe("function");
+  });
+
+  it("prints the function keys lower-case with a space, exactly as on the C64 keycaps (f 1 … f 8)", () => {
+    const keys = collectKeys(getKeyboardLayout("medium"));
+    const labelOf = (testId: string) => keys.find((k) => k.testId === testId)?.label;
+    for (const n of [1, 2, 3, 4, 5, 6, 7, 8]) expect(labelOf(`remote-input-key-f${n}`)).toBe(`f${"\u00a0\u00a0"}${n}`);
+  });
+
+  it("spells RESTORE in full, keeping REST. only for the dense expanded layout (HARD16-008)", () => {
     const restore = collectKeys(getKeyboardLayout("expanded")).find((k) => k.testId === "remote-input-key-restore");
     expect(restore?.label).toBe("RESTORE");
     expect(restore?.compactLabel).toBe("REST.");

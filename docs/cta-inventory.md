@@ -390,18 +390,23 @@ up-right,down-left,down-right}` — R✅ I✅ (touch only)
   `remote-input-key-a`, `remote-input-key-return`) — R✅ I✅ for every key.
   Compact/medium profiles render a high-value deck
   (`remote-input-keyboard-deck`: cursor pad `remote-input-cursor-pad-group` +
-  immediate RETURN/SPACE `remote-input-keyboard-immediate`, then F1–F8
-  `remote-input-keyboard-function` — always two rows F1–F4/F5–F8 (compact and
-  medium) — then the larger high-value special keys directly below: CLR/HOME/INS/DEL
+  immediate RETURN/SPACE `remote-input-keyboard-immediate`, then f 1–f 8
+  `remote-input-keyboard-function` — always two rows f 1–f 4/f 5–f 8 (compact and
+  medium) — then the larger high-value special keys directly below: CLR/HOME/INST/DEL
   `remote-input-keyboard-edit` and the system keys `remote-input-keyboard-system`
   split into two rows RUN/STOP·SHIFT-LOCK·RESTORE / C=·CTRL·SHIFT), then the
   alphanumeric/symbol grid (`remote-input-keyboard-grid`), and finally a bottom
   row `remote-input-keyboard-bottom-row` of SHIFT · wide SPACE · RETURN
   (`remote-input-key-shift-bottom`, `remote-input-key-space-bottom`,
   `remote-input-key-return-bottom`) so SHIFT, SPACE and RETURN each appear twice
-  (top/system + bottom). Ordinary typing keys 0-9/A-Z carry a distinct
+  (top/system + bottom). Function keys are printed lower-case with a space (`f 1`,
+  `f 3` …) exactly as on the C64 keycaps, and the odd/unshifted ones (f 1/f 3/f 5/f 7)
+  carry a slightly darker "function-primary" tint that sets them apart from the
+  shifted f 2/f 4/f 6/f 8. Ordinary typing keys 0-9/A-Z carry a distinct
   "character" colour, SHIFT and SHIFT LOCK a distinct high-visibility "shift"
-  colour applied consistently wherever they appear. Every grid row
+  colour applied consistently wherever they appear. RESTORE is spelled in full on
+  compact and medium (there is room); only the dense expanded profile abbreviates
+  it to `REST.` (full "Restore" accessible label preserved). Every grid row
   is a contiguous slice of exactly one physical C64 row (segment invariant — no
   split QWERTY rows, no horizontal scrolling); the deck and grid share one scroll
   container (`remote-input-keyboard-scroll`) so the whole keyboard scrolls as a
@@ -427,11 +432,22 @@ kernal-fallback tier — no keyboard-buffer equivalent; a plain-language footer
     available on this device", with no REST/firmware jargon]`
   - F1–F8 — buttons — `remote-input-key-f{1..8}` — R✅ I✅
 - **Standard Joystick mode only — quick-keys bar**
-  (`remote-input-quick-keys-bar`): SPACE, RETURN, F1–F8, cursor
-  Up/Down/Left/Right, then RUN/STOP **last** (caution-styled dashed amber
-  border, matching the Keys tab, positioned clear of RETURN to prevent a
-  destructive mistap) — buttons — `remote-input-key-{space,return,f1,f2,f3,f4,f5,f6,f7,f8,cursor-up,cursor-down,cursor-left,cursor-right,run-stop}`
-  — R✅ I✅ (hidden in Game mode and Type mode)
+  (`remote-input-quick-keys-bar`): a fixed five-row deck mirroring the physical
+  C64 clusters — **row 1** RUN/STOP · CTRL · SPACE · RETURN, **row 2** f 1 · f 2 ·
+  f 3 · f 4, **row 3** f 5 · f 6 · f 7 · f 8, **row 4** cursor ← ↑ ↓ →, **row 5**
+  C= · SHIFT · SPACE · SHIFT. RUN/STOP keeps the caution-styled dashed-amber
+  border (matching the Keys tab) and, though it shares row 1 with RETURN, CTRL and
+  SPACE always sit between them so a wide RETURN tap can never halt the program.
+  Function keys are printed lower-case (`f 1` …) with the odd ones f 1/f 3/f 5/f 7
+  tinted, and both SHIFTs carry the shared violet "shift" colour. SPACE and SHIFT
+  each appear as two distinct keys (`remote-input-key-space` /
+  `remote-input-key-space-bottom`, `remote-input-key-shift-left` /
+  `remote-input-key-shift-right`). — buttons —
+  `remote-input-key-{run-stop,ctrl,space,return,f1,f2,f3,f4,f5,f6,f7,f8,cursor-up,cursor-down,cursor-left,cursor-right,commodore,shift-left,space-bottom,shift-right}`
+  — R✅ I✅ (hidden in Game mode and Type mode). The modifier keys (RUN/STOP,
+  CTRL, C=, both SHIFTs) have no kernal-buffer equivalent so are `[disabled off
+  the full machine:input tier]`; SPACE/RETURN/f-keys/cursors also work on the
+  kernal-fallback tier and only disable on `auth-required` (password needed).
 - **Standard Joystick mode and Type mode only — footer actions**
   - Safety — Release All (panic button) — button (destructive) —
     `remote-input-panic-button` — R✅ I✅ — releases every held/latched input
