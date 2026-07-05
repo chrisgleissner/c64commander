@@ -393,8 +393,14 @@ describe("LightingSummaryCard", () => {
         {...defaultProps}
         config={{
           items: {
-            "LedStrip Mode": { selected: "Fixed Color", options: ["Off", "Fixed Color", "SID Music", "Rainbow", "Programmatic"] },
-            "LedStrip Pattern": { selected: "Left to Right", options: ["SingleColor", "Left to Right", "Right to Left"] },
+            "LedStrip Mode": {
+              selected: "Fixed Color",
+              options: ["Off", "Fixed Color", "SID Music", "Rainbow", "Programmatic"],
+            },
+            "LedStrip Pattern": {
+              selected: "Left to Right",
+              options: ["SingleColor", "Left to Right", "Right to Left"],
+            },
             "Fixed Color": "Red",
             "LedStrip SID Select": { selected: "UltiSID1-A", options: ["UltiSID1-A", "UltiSID1-B", "UltiSID2-A"] },
             "Color tint": { selected: "Pure", options: ["Pure", "Bright", "Pastel", "Whisper"] },

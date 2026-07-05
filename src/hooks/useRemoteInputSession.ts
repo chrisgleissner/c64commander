@@ -392,15 +392,19 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
         scheduleFlush();
         return;
       }
-      void enqueueKernalFallbackInjection(getC64API(), new Uint8Array([cursorKeyToPetscii(direction)])).catch(
-        (error) => {
-          addErrorLog(
-            "Remote input kernal-fallback cursor injection failed",
-            buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { direction }),
-          );
-          setConnectionStatus("error");
-        },
-      );
+      // HARD16-003: cursor hold-repeat fires at 10/s but each fallback injection
+      // costs ~0.6 s on the c64u — drop repeats while the injector is busy so a
+      // held key stops ~one injection after release instead of draining a
+      // multi-second backlog. A dropped repeat is imperceptible; a backlog is not.
+      void enqueueKernalFallbackInjection(getC64API(), new Uint8Array([cursorKeyToPetscii(direction)]), {
+        dropIfBusy: true,
+      }).catch((error) => {
+        addErrorLog(
+          "Remote input kernal-fallback cursor injection failed",
+          buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { direction }),
+        );
+        setConnectionStatus("error");
+      });
     },
     [scheduleFlush],
   );

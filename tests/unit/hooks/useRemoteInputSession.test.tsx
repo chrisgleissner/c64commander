@@ -211,6 +211,67 @@ describe("useRemoteInputSession", () => {
     expect(injectAutostartMock).toHaveBeenNthCalledWith(2, expect.anything(), new Uint8Array([0x42]));
   });
 
+  it("bounds fallback cursor hold-repeat instead of queueing every repeat (HARD16-003)", async () => {
+    let resolveFirst!: () => void;
+    injectAutostartMock.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveFirst = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "kernal-fallback" }));
+
+    await act(async () => {
+      for (let i = 0; i < 10; i += 1) result.current.sendCursor("down");
+      await flushMicrotasks();
+    });
+    // The first repeat is in flight (held); one is queued behind it; the other 8 are dropped.
+    expect(injectAutostartMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveFirst();
+      await flushMicrotasks();
+      await flushMicrotasks();
+    });
+    // A 10-deep backlog would have drained to 10 calls here; the depth guard bounds it to 2.
+    expect(injectAutostartMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("still delivers every typed fallback character while a cursor injection is in flight (HARD16-003)", async () => {
+    let resolveFirst!: () => void;
+    injectAutostartMock.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveFirst = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "kernal-fallback" }));
+
+    await act(async () => {
+      result.current.sendCursor("down");
+      await flushMicrotasks();
+    });
+    expect(injectAutostartMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      result.current.sendChar("a");
+      result.current.sendChar("b");
+      await flushMicrotasks();
+    });
+    // Typed characters never pass dropIfBusy: they queue behind the held cursor, never drop.
+    expect(injectAutostartMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveFirst();
+      await flushMicrotasks();
+      await flushMicrotasks();
+      await flushMicrotasks();
+    });
+    expect(injectAutostartMock).toHaveBeenCalledTimes(3);
+    expect(injectAutostartMock).toHaveBeenNthCalledWith(2, expect.anything(), new Uint8Array([0x41]));
+    expect(injectAutostartMock).toHaveBeenNthCalledWith(3, expect.anything(), new Uint8Array([0x42]));
+  });
+
   it("sends a release_all event and clears the held set on releaseAll (panic button / stuck-input safety)", async () => {
     const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
     act(() => result.current.setHeldJoystickInputs(new Set(["up"])));

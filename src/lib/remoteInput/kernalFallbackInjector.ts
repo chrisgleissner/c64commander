@@ -10,6 +10,7 @@ import type { C64API } from "@/lib/c64api";
 import { injectAutostart } from "@/lib/playback/autostart";
 
 let queue: Promise<void> = Promise.resolve();
+let pendingCount = 0;
 
 /**
  * HARD15-001: serializes every kernal-fallback keyboard-buffer injection
@@ -22,13 +23,30 @@ let queue: Promise<void> = Promise.resolve();
  * injection only settles its own caller's promise: `queue` itself is always
  * replaced with a resolved continuation, so one failure can never stall or
  * poison injections queued after it.
+ *
+ * HARD16-003: each injection costs ~0.6 s serially on the c64u's CONSERVATIVE
+ * profile, but a held cursor key repeats at 10/s. `dropIfBusy` lets a lossy
+ * producer (cursor hold-repeat) skip enqueueing once one injection is in
+ * flight and one is already queued behind it (`pendingCount > 1`) — bounding
+ * the queue to two so the cursor stops moving ~one injection after release
+ * instead of draining a multi-second backlog and sustaining wedge-class REST
+ * load. Typed characters never pass `dropIfBusy` and are never dropped.
  */
-export const enqueueKernalFallbackInjection = (api: C64API, payload: Uint8Array): Promise<void> => {
+export const enqueueKernalFallbackInjection = (
+  api: C64API,
+  payload: Uint8Array,
+  options: { dropIfBusy?: boolean } = {},
+): Promise<void> => {
+  if (options.dropIfBusy && pendingCount > 1) return Promise.resolve();
+  pendingCount += 1;
   const scheduled = queue.then(() => injectAutostart(api, payload));
   queue = scheduled.catch(() => undefined);
-  return scheduled;
+  return scheduled.finally(() => {
+    pendingCount -= 1;
+  });
 };
 
 export const resetKernalFallbackInjectionQueueForTests = () => {
   queue = Promise.resolve();
+  pendingCount = 0;
 };
