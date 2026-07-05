@@ -278,6 +278,40 @@ it — an over-listed control is cheaper than a missing one.
 - **Python agents**: `npm run test:agents` (pytest) with specs in `agents/tests/`; requires ≥90% branch coverage
 - **Maestro**: read `docs/testing/maestro.md` before creating or updating flows under `.maestro/`
 
+## Dependency and lockfile changes — validate with `npm ci`, never just `npm install`
+
+Changing any dependency (adding, removing, or bumping in `package.json`) can
+leave `package-lock.json` installable on **your** machine yet broken in CI.
+
+Root cause seen in practice (PR #299): `npm install` on `linux-x64` **prunes
+cross-platform OPTIONAL dependencies** from the lock — e.g. `@emnapi/core`/
+`@emnapi/runtime` (required by `@rolldown/binding-wasm32-wasi`), or
+platform-specific `sharp`/native binaries. `npm ci` on that same platform does
+**not** notice the gap, so it looks fine locally; but `npm ci` on CI's other
+platforms then fails with `Missing <pkg>@<version> from lock file`, breaking
+**every** job at the install step (Web, Android, iOS, notices, variant — all of
+them). A single-arch `npm install` is therefore an unsafe way to regenerate the lock.
+
+After **any** dependency change you MUST:
+
+- **Run `npm ci` (clean, strict install) before pushing — not just `npm install`.**
+  `npm ci` is exactly what CI runs; it is the honest gate for `package.json` ↔
+  `package-lock.json` sync. Passing `npm ci` locally is necessary but, because of
+  the pruning above, **not sufficient** — also confirm the lock still contains the
+  cross-platform optional entries a known-good lock had.
+- Keep `package.json` and `package-lock.json` in exact sync; a bump in one
+  requires the other.
+- Treat the lock as cross-platform. Never leave it hand-pruned. If `npm install`
+  drops optional entries that the last known-good lock contained, **restore them**
+  so the lock is complete for all platforms. Prefer the **smallest honest delta**
+  (only the intended bumps) over a full regeneration that reorders or prunes
+  unrelated entries.
+- Regenerate the notices (`npm run notices:check`) — dependency changes alter
+  `THIRD_PARTY_NOTICES.md`.
+- Prefer within-major bumps; hold framework-defining majors (React, Tailwind,
+  Vite, Vitest, TypeScript, Zod, react-router) for a dedicated, separately
+  validated change so a break is isolated and diagnosable.
+
 ## Release tag APKs
 
 - CI builds a debug APK for all runs.
