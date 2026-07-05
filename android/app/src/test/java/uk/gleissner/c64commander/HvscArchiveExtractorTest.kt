@@ -1,6 +1,7 @@
 package uk.gleissner.c64commander
 
 import java.io.File
+import java.nio.file.Files
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -18,7 +19,7 @@ class HvscArchiveExtractorTest {
 
   @Test
   fun `zip extraction rejects path traversal entries`() {
-    val archive = createTempFile(prefix = "hvsc-zip-slip-", suffix = ".zip")
+    val archive = File.createTempFile("hvsc-zip-slip-", ".zip")
     ZipOutputStream(archive.outputStream()).use { zip ->
       zip.putNextEntry(ZipEntry("../escape.sid"))
       zip.write(
@@ -45,7 +46,7 @@ class HvscArchiveExtractorTest {
 
   @Test
   fun `zip extraction preserves normalized update paths and parses sid metadata`() {
-    val archive = createTempFile(prefix = "hvsc-update-", suffix = ".zip")
+    val archive = File.createTempFile("hvsc-update-", ".zip")
     ZipOutputStream(archive.outputStream()).use { zip ->
       zip.putNextEntry(ZipEntry("Update/HVSC/MUSICIANS/T/Tester/Tiny.sid"))
       zip.write(
@@ -79,7 +80,7 @@ class HvscArchiveExtractorTest {
       zip.closeEntry()
     }
 
-    val outputDir = createTempDir(prefix = "hvsc-update-out-")
+    val outputDir = Files.createTempDirectory("hvsc-update-out-").toFile()
     try {
       val result =
               extractor.extract(
@@ -109,7 +110,7 @@ class HvscArchiveExtractorTest {
 
   @Test
   fun `cancellation stops long running seven zip extraction`() {
-    val script = createTempFile(prefix = "fake-7zz-", suffix = ".sh")
+    val script = File.createTempFile("fake-7zz-", ".sh")
     script.writeText(
             "#!/usr/bin/env bash\n" +
                     "set -euo pipefail\n" +
@@ -140,9 +141,9 @@ class HvscArchiveExtractorTest {
     script.setExecutable(true)
 
     val localExtractor = DefaultHvscArchiveExtractor { script }
-    val archive = createTempFile(prefix = "fake-archive-", suffix = ".7z")
+    val archive = File.createTempFile("fake-archive-", ".7z")
     archive.writeText("placeholder")
-    val outputDir = createTempDir(prefix = "hvsc-cancel-out-")
+    val outputDir = Files.createTempDirectory("hvsc-cancel-out-").toFile()
     val cancellationToken = AtomicBoolean(false)
 
     try {
@@ -179,7 +180,7 @@ class HvscArchiveExtractorTest {
     // rejected with "HVSC ingestion already running" until the app was
     // force-stopped. This fake 7zz script's "l" branch hangs the way a
     // wedged real probe would.
-    val script = createTempFile(prefix = "fake-7zz-probe-", suffix = ".sh")
+    val script = File.createTempFile("fake-7zz-probe-", ".sh")
     script.writeText(
             "#!/usr/bin/env bash\n" +
                     "set -euo pipefail\n" +
@@ -194,7 +195,7 @@ class HvscArchiveExtractorTest {
     script.setExecutable(true)
 
     val localExtractor = DefaultHvscArchiveExtractor { script }
-    val archive = createTempFile(prefix = "fake-archive-probe-", suffix = ".7z")
+    val archive = File.createTempFile("fake-archive-probe-", ".7z")
     archive.writeText("placeholder")
     val cancellationToken = AtomicBoolean(false)
 

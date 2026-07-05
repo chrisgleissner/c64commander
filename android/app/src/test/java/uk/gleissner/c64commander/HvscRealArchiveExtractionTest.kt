@@ -1,6 +1,7 @@
 package uk.gleissner.c64commander
 
 import java.io.File
+import java.nio.file.Files
 import java.util.concurrent.atomic.AtomicBoolean
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -42,7 +43,7 @@ class HvscRealArchiveExtractionTest {
   @Test
   fun `real hvsc archive extracts 100 sid samples with valid headers`() {
     val archive = RealHvscArchiveProvider.requireArchive()
-    val outputDir = createTempDir(prefix = "hvsc-real-samples-")
+    val outputDir = Files.createTempDirectory("hvsc-real-samples-").toFile()
     val startNanos = System.nanoTime()
     val progressSamples = mutableListOf<Int>()
 
@@ -96,7 +97,7 @@ class HvscRealArchiveExtractionTest {
   @Test
   fun `real hvsc archive is rejected when memory budget is below measured requirement`() {
     val archive = RealHvscArchiveProvider.requireArchive()
-    val outputDir = createTempDir(prefix = "hvsc-real-budget-")
+    val outputDir = Files.createTempDirectory("hvsc-real-budget-").toFile()
 
     try {
       val error =

@@ -1,5 +1,6 @@
 package uk.gleissner.c64commander
 
+import java.nio.file.Files
 import java.util.concurrent.atomic.AtomicBoolean
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -29,7 +30,7 @@ class HvscSevenZipRuntimeTest {
     assertEquals("7z", profile.format)
     assertEquals("LZMA2:12", profile.methodChain)
 
-    val outputDir = createTempDir(prefix = "hvsc-runtime-")
+    val outputDir = Files.createTempDirectory("hvsc-runtime-").toFile()
     try {
       val result =
               extractor.extract(
