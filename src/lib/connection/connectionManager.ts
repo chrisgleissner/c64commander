@@ -28,7 +28,9 @@ import {
   clearRuntimeFtpPortOverride,
   setRuntimeFtpPasswordOverride,
   setRuntimeFtpPortOverride,
+  setStoredFtpPort,
 } from "@/lib/ftp/ftpConfig";
+import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 import {
   getActiveMockBaseUrl,
   getActiveMockFtpPort,
@@ -783,12 +785,28 @@ const tryReachableSavedDeviceFallback = async (
     trigger,
     deviceId: reachable.device.id,
   });
-  const verification = await verifyCurrentConnectionTarget({
-    deviceHost: reachable.deviceHost,
-    password: reachable.password,
-  });
-  if (verification.ok && verification.deviceInfo) {
+  // HARD16-001: select and apply the reachable device's identity/ports BEFORE
+  // verifying, mirroring executeSavedDeviceSwitch. verifyCurrentConnectionTarget
+  // stamps whatever device is currently selected, so verifying while the
+  // powered-off original is still selected wrote the reachable device's
+  // product/firmware/unique_id onto the wrong saved record. Opening the
+  // HARD12-011 probe window guards the selection against a late /v1/info from
+  // the previous host. On verification failure the selection stays on the
+  // candidate unverified — matching the switch path's failure semantics.
+  setSavedDeviceSwitchProbeWindow(true);
+  let verification: Awaited<ReturnType<typeof verifyCurrentConnectionTarget>>;
+  try {
     selectSavedDevice(reachable.device.id);
+    setStoredFtpPort(reachable.device.ftpPort);
+    setStoredTelnetPort(reachable.device.telnetPort);
+    verification = await verifyCurrentConnectionTarget({
+      deviceHost: reachable.deviceHost,
+      password: reachable.password,
+    });
+  } finally {
+    setSavedDeviceSwitchProbeWindow(false);
+  }
+  if (verification.ok && verification.deviceInfo) {
     completeSavedDeviceVerification(reachable.device.id, verification.deviceInfo);
     return true;
   }

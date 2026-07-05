@@ -39,6 +39,15 @@ const hasAutomaticDiscoveryResultsAwaitingSelection = () => {
   );
 };
 
+/**
+ * HARD16-002: a foreground return after a long background counts as a resume —
+ * unlike a quick blur/focus flip (tab switch, notification shade), it may have
+ * outlived the selected device's power state or crossed a Wi-Fi network. Only
+ * then do we run the full saved-device sweep + discovery via the "resume"
+ * trigger; shorter hides keep re-arming the selected-device background probe.
+ */
+const RESUME_REDISCOVERY_MIN_HIDDEN_MS = 30_000;
+
 export function ConnectionController() {
   const queryClient = useQueryClient();
   const { state } = useConnectionState();
@@ -51,6 +60,7 @@ export function ConnectionController() {
     deviceHost: string;
   } | null>(null);
   const previousStateRef = useRef(state);
+  const hiddenAtMsRef = useRef<number | null>(null);
   const [backgroundScheduleVersion, setBackgroundScheduleVersion] = useState(0);
 
   useEffect(() => {
@@ -148,11 +158,32 @@ export function ConnectionController() {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!isAppVisibleForRediscovery()) {
+        hiddenAtMsRef.current = Date.now();
         backgroundScheduleTokenRef.current += 1;
         if (backgroundTimerRef.current) {
           window.clearTimeout(backgroundTimerRef.current);
           backgroundTimerRef.current = null;
         }
+        return;
+      }
+
+      const hiddenAtMs = hiddenAtMsRef.current;
+      hiddenAtMsRef.current = null;
+      const hiddenDurationMs = hiddenAtMs === null ? 0 : Date.now() - hiddenAtMs;
+
+      // HARD16-002: a long-hidden return to an offline app runs the full resume
+      // recovery (saved-device sweep + discovery) instead of only re-arming the
+      // selected-device background probe — which can never escalate to the
+      // sweep and would leave the app offline forever while another saved
+      // device is reachable. Guarded by the same "results awaiting selection"
+      // check the background path uses, so it never churns a pending pick.
+      if (
+        hiddenDurationMs >= RESUME_REDISCOVERY_MIN_HIDDEN_MS &&
+        state === "OFFLINE_NO_DEMO" &&
+        allowBackgroundRediscovery() &&
+        !hasAutomaticDiscoveryResultsAwaitingSelection()
+      ) {
+        void discoverConnection("resume");
         return;
       }
 

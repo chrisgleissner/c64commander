@@ -497,6 +497,97 @@ describe("ConnectionController", () => {
     }
   });
 
+  it("runs resume recovery when a long-hidden offline app returns to the foreground (HARD16-002)", async () => {
+    vi.useFakeTimers();
+    try {
+      connectionState.value = "OFFLINE_NO_DEMO";
+      const queryClient = new QueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <ConnectionController />
+        </QueryClientProvider>,
+      );
+
+      setDocumentVisibility(true);
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await vi.advanceTimersByTimeAsync(31_000);
+      discoverConnectionMock.mockClear();
+
+      setDocumentVisibility(false);
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      expect(discoverConnectionMock).toHaveBeenCalledWith("resume");
+      expect(discoverConnectionMock).not.toHaveBeenCalledWith("background");
+    } finally {
+      vi.useRealTimers();
+      setDocumentVisibility(false);
+    }
+  });
+
+  it("does not run resume recovery for a short blur/focus flip (HARD16-002)", async () => {
+    vi.useFakeTimers();
+    try {
+      connectionState.value = "OFFLINE_NO_DEMO";
+      const queryClient = new QueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <ConnectionController />
+        </QueryClientProvider>,
+      );
+
+      setDocumentVisibility(true);
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await vi.advanceTimersByTimeAsync(5_000);
+      discoverConnectionMock.mockClear();
+
+      setDocumentVisibility(false);
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      expect(discoverConnectionMock).not.toHaveBeenCalledWith("resume");
+    } finally {
+      vi.useRealTimers();
+      setDocumentVisibility(false);
+    }
+  });
+
+  it("does not run resume recovery when a long-hidden app is connected (HARD16-002)", async () => {
+    vi.useFakeTimers();
+    try {
+      connectionState.value = "REAL_CONNECTED";
+      const queryClient = new QueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <ConnectionController />
+        </QueryClientProvider>,
+      );
+
+      setDocumentVisibility(true);
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await vi.advanceTimersByTimeAsync(120_000);
+      discoverConnectionMock.mockClear();
+
+      setDocumentVisibility(false);
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      expect(discoverConnectionMock).not.toHaveBeenCalledWith("resume");
+    } finally {
+      vi.useRealTimers();
+      setDocumentVisibility(false);
+    }
+  });
+
   it("does not reschedule after background rediscovery when the app becomes hidden during the probe", async () => {
     vi.useFakeTimers();
     try {
