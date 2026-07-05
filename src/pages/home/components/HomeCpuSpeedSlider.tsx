@@ -38,7 +38,7 @@ export function HomeCpuSpeedSlider({
   const { write: interactiveWrite } = useInteractiveConfigWrite({ category: "U64 Specific Settings" });
   // The permitted CPU speeds come from the device (see useDeviceConfigOptionDomains). Until the
   // device has reported them, present the current value alone rather than a guessed range.
-  const sliderOptions = cpuSpeedOptions.length ? cpuSpeedOptions : [cpuSpeedValue.trim() || " 1"];
+  const sliderOptions = cpuSpeedOptions.length ? cpuSpeedOptions : [cpuSpeedValue.trim() || "1"];
   const domain = createIndexedSliderDomain(sliderOptions);
   const resolveCpuSpeedOption = (index: number) => sliderOptions[Math.round(index)] ?? sliderOptions[0] ?? "1";
   const normalizedCpuSpeedValue = cpuSpeedValue.trim();

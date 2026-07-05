@@ -14,6 +14,15 @@ export const MAX_AUTOFIRE_RATE_HZ = 10;
 
 const AUTOFIRE_RATE_KEY = "c64u_remote_input_autofire_rate_hz";
 
+/**
+ * Broadcast when the persisted autofire rate changes so a LIVE remote-input
+ * session hot-swaps its ticking interval instead of only picking up the new
+ * rate on its next mount — a user dragging the Settings slider while the sheet
+ * is open would otherwise keep firing at the old rate until the sheet is
+ * reopened.
+ */
+export const AUTOFIRE_RATE_CHANGE_EVENT = "c64u-autofire-rate-updated";
+
 export const clampAutofireRateHz = (rateHz: number): number =>
   Math.min(MAX_AUTOFIRE_RATE_HZ, Math.max(MIN_AUTOFIRE_RATE_HZ, Math.round(rateHz)));
 
@@ -27,6 +36,9 @@ export const loadAutofireRateHz = (): number => {
 export const saveAutofireRateHz = (rateHz: number): void => {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(AUTOFIRE_RATE_KEY, String(clampAutofireRateHz(rateHz)));
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTOFIRE_RATE_CHANGE_EVENT));
+  }
 };
 
 /**

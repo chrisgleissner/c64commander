@@ -31,14 +31,6 @@ export const reset = () => req("/v1/machine:reset", { method: "PUT" }).then(() =
 /** Current input state the firmware is holding (proves app->device delivery). */
 export const getInput = async () => (await req("/v1/machine:input")).json();
 
-/** Send input directly (used only for harness SETUP, e.g. to SYS a detector). */
-export const sendInput = (events) =>
-  req("/v1/machine:input", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ events }),
-  }).then((r) => r.json());
-
 // --- C64 screen-code -> ASCII (uppercase/graphics set, codes 0..63 cover the
 // printable ASCII we type in the harness). Unmapped -> ".". ---
 export const screenCodeToChar = (code) => {
@@ -46,7 +38,34 @@ export const screenCodeToChar = (code) => {
   if (c === 0) return "@";
   if (c >= 1 && c <= 26) return String.fromCharCode(64 + c); // A-Z
   if (c === 32) return " ";
-  const punct = { 27: "[", 28: "£", 29: "]", 30: "^", 31: "<-", 33: "!", 34: '"', 35: "#", 36: "$", 37: "%", 38: "&", 39: "'", 40: "(", 41: ")", 42: "*", 43: "+", 44: ",", 45: "-", 46: ".", 47: "/", 58: ":", 59: ";", 60: "<", 61: "=", 62: ">", 63: "?" };
+  const punct = {
+    27: "[",
+    28: "£",
+    29: "]",
+    30: "^",
+    31: "<-",
+    33: "!",
+    34: '"',
+    35: "#",
+    36: "$",
+    37: "%",
+    38: "&",
+    39: "'",
+    40: "(",
+    41: ")",
+    42: "*",
+    43: "+",
+    44: ",",
+    45: "-",
+    46: ".",
+    47: "/",
+    58: ":",
+    59: ";",
+    60: "<",
+    61: "=",
+    62: ">",
+    63: "?",
+  };
   if (c >= 48 && c <= 57) return String.fromCharCode(c); // 0-9
   return punct[c] ?? ".";
 };

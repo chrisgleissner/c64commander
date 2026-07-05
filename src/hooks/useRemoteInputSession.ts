@@ -28,6 +28,7 @@ import {
 import type { HeldJoystickInputs } from "@/lib/remoteInput/joystickHeldSet";
 import {
   applyAutofirePhase,
+  AUTOFIRE_RATE_CHANGE_EVENT,
   clampAutofireRateHz,
   loadAutofireRateHz,
   saveAutofireRateHz,
@@ -344,6 +345,15 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
     }, halfPeriodMs);
     return () => window.clearInterval(timer);
   }, [autofireEnabled, autofireRateHz, scheduleFlushIn]);
+
+  // Hot-swap the rate when it changes elsewhere (Settings → Remote Input slider)
+  // so a live session's ticking interval picks up the new value immediately
+  // instead of only on its next mount.
+  useEffect(() => {
+    const handler = () => setAutofireRateHzState(loadAutofireRateHz());
+    window.addEventListener(AUTOFIRE_RATE_CHANGE_EVENT, handler);
+    return () => window.removeEventListener(AUTOFIRE_RATE_CHANGE_EVENT, handler);
+  }, []);
 
   const sendChar = useCallback(
     (char: string) => {

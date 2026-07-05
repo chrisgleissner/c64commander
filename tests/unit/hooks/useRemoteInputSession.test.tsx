@@ -35,6 +35,7 @@ vi.mock("@/lib/remoteInput/machineInputThrottle", () => ({
 }));
 
 import { useRemoteInputSession } from "@/hooks/useRemoteInputSession";
+import { saveAutofireRateHz } from "@/lib/remoteInput/autofire";
 import { resetKernalFallbackInjectionQueueForTests } from "@/lib/remoteInput/kernalFallbackInjector";
 import {
   hasActiveInputRelease,
@@ -209,6 +210,19 @@ describe("useRemoteInputSession", () => {
     await act(flushMicrotasks);
     expect(injectAutostartMock).toHaveBeenCalledTimes(2);
     expect(injectAutostartMock).toHaveBeenNthCalledWith(2, expect.anything(), new Uint8Array([0x42]));
+  });
+
+  it("hot-swaps the autofire rate when the persisted rate changes elsewhere (Settings slider, PR299)", async () => {
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+    expect(result.current.autofireRateHz).not.toBe(8);
+
+    act(() => {
+      // Simulates the Settings → Remote Input slider writing the shared preference.
+      saveAutofireRateHz(8);
+    });
+
+    expect(result.current.autofireRateHz).toBe(8);
+    localStorage.removeItem("c64u_remote_input_autofire_rate_hz");
   });
 
   it("bounds fallback cursor hold-repeat instead of queueing every repeat (HARD16-003)", async () => {
