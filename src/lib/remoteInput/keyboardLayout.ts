@@ -97,8 +97,8 @@ export type KeyboardDeckLayout = {
   system: KeyDef[];
   /** Scrollable alphanumeric / symbol grid (logical wrapping, not physical C64 rows). */
   grid: KeyDef[][];
-  /** A second full-width SPACE pinned below the grid. */
-  bottomSpace: KeyDef;
+  /** A bottom row pinned below the grid: SHIFT, a wide SPACE, and RETURN. */
+  bottomRow: KeyDef[];
 };
 
 /** Row-based layout (expanded): the physical C64 rows rendered as closely as practical. */
@@ -237,6 +237,14 @@ const SPACE_BOTTOM: KeyDef = {
   testId: "remote-input-key-space-bottom",
   ariaLabel: "Space (bottom)",
 };
+// RETURN repeated to the right of the bottom SPACE (distinct id/testid).
+const RETURN_BOTTOM: KeyDef = {
+  ...RETURN,
+  id: "return-bottom",
+  testId: "remote-input-key-return-bottom",
+  ariaLabel: "Return (bottom)",
+  span: 1,
+};
 
 // Edit keys — split from the C64's dual-function physical keys into direct keys.
 const HOME: KeyDef = {
@@ -356,6 +364,14 @@ const SHIFT_LOCK: KeyDef = {
   action: { kind: "shift_lock" },
   tone: "shift",
 };
+// A second SHIFT to the LEFT of the bottom SPACE (distinct id/testid; same
+// latch behaviour and colour as the SHIFT above the grid).
+const SHIFT_BOTTOM: KeyDef = {
+  ...SHIFT,
+  id: "shift-bottom",
+  testId: "remote-input-key-shift-bottom",
+  ariaLabel: "Shift (bottom)",
+};
 
 // Secondary legends for the number row (authentic C64 shifted symbols).
 const NUMBER_ROW_SECONDARY: Record<string, string> = {
@@ -386,6 +402,8 @@ const FUNCTION_GROUP: KeyDef[] = [
   functionKey(8),
 ];
 const SYSTEM_GROUP: KeyDef[] = [RUN_STOP, SHIFT_LOCK, RESTORE, COMMODORE, CTRL, SHIFT];
+// Bottom row: SHIFT (left) — wide SPACE — RETURN (right).
+const BOTTOM_ROW: KeyDef[] = [SHIFT_BOTTOM, SPACE_BOTTOM, RETURN_BOTTOM];
 
 // --- Profile layouts --------------------------------------------------------
 
@@ -502,7 +520,7 @@ export const getKeyboardLayout = (profile: KeyboardProfile): KeyboardLayout => {
         functionKeys: FUNCTION_GROUP,
         system: SYSTEM_GROUP,
         grid: DECK_GRID,
-        bottomSpace: SPACE_BOTTOM,
+        bottomRow: BOTTOM_ROW,
       };
     case "expanded":
       return { kind: "rows", rows: EXPANDED_ROWS, functionKeys: FUNCTION_GROUP };
@@ -518,7 +536,7 @@ export const flattenLayoutKeys = (layout: KeyboardLayout): KeyDef[] =>
         ...layout.functionKeys,
         ...layout.system,
         ...layout.grid.flat(),
-        layout.bottomSpace,
+        ...layout.bottomRow,
       ]
     : [...layout.rows.flat(), ...layout.functionKeys];
 

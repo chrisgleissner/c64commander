@@ -91,23 +91,29 @@ describe("TypeKeyboard", () => {
       expect(screen.getByTestId("remote-input-type-keyboard")).toHaveAttribute("data-profile", "medium");
     });
 
-    it("splits the function keys into two rows on compact but one row on medium", () => {
-      renderKeyboard("compact");
-      expect(screen.getByTestId("remote-input-keyboard-function").children.length).toBe(2);
-      expect(
-        within(screen.getByTestId("remote-input-keyboard-function")).getByTestId("remote-input-key-f8"),
-      ).toBeInTheDocument();
-      cleanup();
-      renderKeyboard("medium");
-      expect(screen.getByTestId("remote-input-keyboard-function").children.length).toBe(1);
-    });
+    it.each(["compact", "medium"] as const)(
+      "splits the function keys and the system keys into two rows on %s",
+      (profile) => {
+        renderKeyboard(profile);
+        expect(screen.getByTestId("remote-input-keyboard-function").children.length).toBe(2);
+        expect(
+          within(screen.getByTestId("remote-input-keyboard-function")).getByTestId("remote-input-key-f8"),
+        ).toBeInTheDocument();
+        // System keys split RUN/STOP·SHIFT-LOCK·RESTORE / C=·CTRL·SHIFT.
+        expect(screen.getByTestId("remote-input-keyboard-system").children.length).toBe(2);
+      },
+    );
 
-    it("renders a second full-width SPACE at the bottom of the deck (SPACE appears twice)", () => {
+    it("renders a SHIFT | SPACE | RETURN bottom row (SPACE/RETURN/SHIFT appear twice)", () => {
       renderKeyboard("compact");
-      const bottom = screen.getByTestId("remote-input-keyboard-bottom-space");
+      const bottom = screen.getByTestId("remote-input-keyboard-bottom-row");
+      expect(within(bottom).getByTestId("remote-input-key-shift-bottom")).toBeInTheDocument();
       expect(within(bottom).getByTestId("remote-input-key-space-bottom")).toBeInTheDocument();
-      // The top immediate SPACE is still present too.
+      expect(within(bottom).getByTestId("remote-input-key-return-bottom")).toBeInTheDocument();
+      // The top immediate SPACE/RETURN and the system SHIFT are still present too.
       expect(screen.getByTestId("remote-input-key-space")).toBeInTheDocument();
+      expect(screen.getByTestId("remote-input-key-return")).toBeInTheDocument();
+      expect(screen.getByTestId("remote-input-key-shift")).toBeInTheDocument();
     });
   });
 

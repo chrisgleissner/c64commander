@@ -391,15 +391,17 @@ up-right,down-left,down-right}` — R✅ I✅ (touch only)
   Compact/medium profiles render a high-value deck
   (`remote-input-keyboard-deck`: cursor pad `remote-input-cursor-pad-group` +
   immediate RETURN/SPACE `remote-input-keyboard-immediate`, then F1–F8
-  `remote-input-keyboard-function` — split into two rows F1–F4/F5–F8 on compact,
-  one row otherwise — then the larger high-value special keys directly below:
-  CLR/HOME/INS/DEL `remote-input-keyboard-edit` and
-  RUN/STOP/SHIFT-LOCK/RESTORE/C=/CTRL/SHIFT `remote-input-keyboard-system`),
-  then the alphanumeric/symbol grid (`remote-input-keyboard-grid`), and finally
-  a second full-width SPACE `remote-input-keyboard-bottom-space`
-  (`remote-input-key-space-bottom`) so SPACE appears twice (top beside RETURN +
-  very bottom). Ordinary typing keys 0-9/A-Z carry a distinct "character" colour,
-  SHIFT and SHIFT LOCK a distinct high-visibility "shift" colour. Every grid row
+  `remote-input-keyboard-function` — always two rows F1–F4/F5–F8 (compact and
+  medium) — then the larger high-value special keys directly below: CLR/HOME/INS/DEL
+  `remote-input-keyboard-edit` and the system keys `remote-input-keyboard-system`
+  split into two rows RUN/STOP·SHIFT-LOCK·RESTORE / C=·CTRL·SHIFT), then the
+  alphanumeric/symbol grid (`remote-input-keyboard-grid`), and finally a bottom
+  row `remote-input-keyboard-bottom-row` of SHIFT · wide SPACE · RETURN
+  (`remote-input-key-shift-bottom`, `remote-input-key-space-bottom`,
+  `remote-input-key-return-bottom`) so SHIFT, SPACE and RETURN each appear twice
+  (top/system + bottom). Ordinary typing keys 0-9/A-Z carry a distinct
+  "character" colour, SHIFT and SHIFT LOCK a distinct high-visibility "shift"
+  colour applied consistently wherever they appear. Every grid row
   is a contiguous slice of exactly one physical C64 row (segment invariant — no
   split QWERTY rows, no horizontal scrolling); the deck and grid share one scroll
   container (`remote-input-keyboard-scroll`) so the whole keyboard scrolls as a

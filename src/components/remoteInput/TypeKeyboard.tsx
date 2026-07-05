@@ -197,7 +197,10 @@ export const TypeKeyboard = ({
       (isModifier && activeModifiers.has((def.action as { modifier: StickyModifier }).modifier)) ||
       (isShiftLock && shiftLocked);
     const disabled = keyUnavailable(def);
-    const label = profile === "compact" && def.compactLabel ? def.compactLabel : def.label;
+    // Use the short label on the dense profiles (compact and expanded) so caps
+    // like RESTORE (-> "REST.") always fit inside the key; medium has room for
+    // the full word.
+    const label = profile !== "medium" && def.compactLabel ? def.compactLabel : def.label;
     const Icon = def.icon;
     const iconPx = Math.max(15, Math.round(keyFontPx * 1.35));
     // Shifted legend printed ABOVE the main label (smaller, fainter) like a real
@@ -300,21 +303,27 @@ export const TypeKeyboard = ({
                 function keys below. */}
             <div className="border-t border-border" role="separator" />
 
-            {/* Function keys — two rows on compact (F1–F4 / F5–F8), one row otherwise. */}
+            {/* Function keys — always two rows (F1–F4 / F5–F8) on compact and medium. */}
             <div className="flex flex-col gap-1" data-testid="remote-input-keyboard-function">
-              {(profile === "compact" ? chunk(layout.functionKeys, 4) : [layout.functionKeys]).map((row, rowIndex) => (
+              {chunk(layout.functionKeys, 4).map((row, rowIndex) => (
                 <div key={rowIndex} className="flex gap-1">
                   {row.map((def) => renderKey(def, { heightPx: deckKeyHeightPx, grow: true }))}
                 </div>
               ))}
             </div>
 
-            {/* High-value special keys, larger and immediately below the F-keys. */}
+            {/* High-value special keys, larger and immediately below the F-keys.
+                Edit row, then the system keys split into two rows: RUN/STOP,
+                SHIFT-LOCK, RESTORE / C=, CTRL, SHIFT. */}
             <div className="flex flex-wrap gap-1" data-testid="remote-input-keyboard-edit">
               {layout.edit.map((def) => renderKey(def, { heightPx: systemKeyHeightPx, grow: true }))}
             </div>
-            <div className="flex flex-wrap gap-1" data-testid="remote-input-keyboard-system">
-              {layout.system.map((def) => renderKey(def, { heightPx: systemKeyHeightPx, grow: true }))}
+            <div className="flex flex-col gap-1" data-testid="remote-input-keyboard-system">
+              {chunk(layout.system, 3).map((row, rowIndex) => (
+                <div key={rowIndex} className="flex gap-1">
+                  {row.map((def) => renderKey(def, { heightPx: systemKeyHeightPx, grow: true }))}
+                </div>
+              ))}
             </div>
           </div>
 
@@ -328,9 +337,15 @@ export const TypeKeyboard = ({
             ))}
           </div>
 
-          {/* Second SPACE at the very bottom of the normal keys. */}
-          <div className="flex" data-testid="remote-input-keyboard-bottom-space">
-            {renderKey(layout.bottomSpace, { heightPx: deckKeyHeightPx, grow: true })}
+          {/* Bottom row: SHIFT (left) — a wide SPACE — RETURN (right). */}
+          <div
+            className="flex items-stretch gap-1"
+            style={{ height: deckKeyHeightPx }}
+            data-testid="remote-input-keyboard-bottom-row"
+          >
+            <div className="flex flex-1">{renderKey(layout.bottomRow[0], { fill: true })}</div>
+            <div className="flex flex-[2]">{renderKey(layout.bottomRow[1], { fill: true })}</div>
+            <div className="flex flex-1">{renderKey(layout.bottomRow[2], { fill: true })}</div>
           </div>
         </div>
       ) : (

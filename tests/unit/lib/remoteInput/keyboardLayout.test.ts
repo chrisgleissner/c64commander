@@ -180,15 +180,20 @@ describe("getKeyboardLayout", () => {
     expect(legend("remote-input-key-slash")).toBe("?");
   });
 
-  it.each(["compact", "medium"] as const)("adds a second full-width SPACE at the bottom of the %s deck", (profile) => {
+  it.each(["compact", "medium"] as const)("pins a SHIFT | SPACE | RETURN bottom row below the %s grid", (profile) => {
     const layout = getKeyboardLayout(profile);
     if (layout.kind !== "deck") throw new Error(`${profile} layout must be deck-based`);
-    expect(layout.bottomSpace.testId).toBe("remote-input-key-space-bottom");
-    expect(layout.bottomSpace.action).toEqual({ kind: "char", char: " " });
-    // The top immediate SPACE is still present and distinct.
-    const topSpace = layout.immediate.find((k) => k.testId === "remote-input-key-space");
-    expect(topSpace).toBeDefined();
-    expect(layout.bottomSpace.id).not.toBe(topSpace?.id);
+    expect(layout.bottomRow.map((k) => k.testId)).toEqual([
+      "remote-input-key-shift-bottom",
+      "remote-input-key-space-bottom",
+      "remote-input-key-return-bottom",
+    ]);
+    // SPACE/RETURN repeat their top counterparts (distinct ids), SHIFT its colour.
+    expect(layout.bottomRow[1].action).toEqual({ kind: "char", char: " " });
+    expect(layout.bottomRow[2].action).toEqual({ kind: "char", char: "\n" });
+    expect(layout.bottomRow[0].tone).toBe("shift");
+    expect(layout.immediate.some((k) => k.testId === "remote-input-key-space")).toBe(true);
+    expect(layout.immediate.some((k) => k.testId === "remote-input-key-return")).toBe(true);
   });
 
   it("colours the ordinary typing keys (0-9, A-Z) with the character tone and SHIFT with the shift tone", () => {
