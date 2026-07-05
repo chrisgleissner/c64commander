@@ -282,7 +282,10 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
           </AppSheetTitle>
         </AppSheetHeader>
         <AppSheetBody className={cn("flex flex-col gap-4", (immersive || session.outputMode === "type") && "flex-1")}>
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          {/* HARD16-008: chrome rows get the app's standard horizontal gutter
+              (px-4, matching the header/footer); the joystick action zone and the
+              keyboard grid below stay edge-to-edge where every pixel counts. */}
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4">
             {immersive ? (
               <span className="text-sm font-semibold text-muted-foreground">Game mode</span>
             ) : (
@@ -314,7 +317,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
           </div>
 
           {!immersive && !joystickAvailable && session.outputMode === "joystick" ? (
-            <p className="flex items-center justify-center gap-1.5 text-center text-sm text-muted-foreground">
+            <p className="flex items-center justify-center gap-1.5 px-4 text-center text-sm text-muted-foreground">
               <AlertTriangle className="h-4 w-4" /> {joystickUnavailableHint}
             </p>
           ) : null}

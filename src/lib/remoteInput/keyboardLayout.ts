@@ -279,9 +279,11 @@ const RUN_STOP: KeyDef = {
 const RESTORE: KeyDef = {
   id: "restore",
   testId: "remote-input-key-restore",
-  // Abbreviated to "REST." in every profile (accessible label stays "Restore")
-  // so it fits a narrow key without wrapping; the caution styling makes it stand out.
-  label: "REST.",
+  // Full word where there is room (medium/expanded), abbreviated to "REST." only
+  // on compact where key width is scarce (the existing compact-label mechanism).
+  // Accessible label stays "Restore"; the caution styling makes it stand out.
+  label: "RESTORE",
+  compactLabel: "REST.",
   ariaLabel: "Restore",
   action: { kind: "special", key: "restore" },
   tone: "danger",
@@ -368,26 +370,29 @@ const SYSTEM_GROUP: KeyDef[] = [RUN_STOP, SHIFT_LOCK, RESTORE, COMMODORE, CTRL, 
 
 // --- Profile layouts --------------------------------------------------------
 
-const COMPACT_GRID: KeyDef[][] = [
+// HARD16-007 segment invariant: every rendered grid row is a CONTIGUOUS slice
+// of exactly ONE physical C64 keyboard row (order preserved), so row membership
+// is predictable at any key size — no full-row wrapping that splits QWERTY
+// mid-row, and no horizontal scrolling. The true C64 rows (minus keys already
+// extracted to the deck's edit/system/immediate/cursor groups) are:
+//   row 1: ← 1 2 3 4 5 6 7 8 9 0 + - £
+//   row 2: Q W E R T Y U I O P @ * ↑
+//   row 3: A S D F G H J K L : ; =
+//   row 4: Z X C V B N M , . /
+// Shared by compact AND medium (same model, different key sizes); expanded
+// renders the authentic full rows instead.
+const DECK_GRID: KeyDef[][] = [
   [ARROW_LEFT, num("1"), num("2"), num("3"), num("4"), num("5")],
   [num("6"), num("7"), num("8"), num("9"), digit("0")],
-  [sym("plus"), sym("minus"), sym("pound"), sym("at"), sym("star"), ARROW_UP],
+  [sym("plus"), sym("minus"), sym("pound")],
   [letter("q"), letter("w"), letter("e"), letter("r"), letter("t"), letter("y")],
   [letter("u"), letter("i"), letter("o"), letter("p")],
-  [letter("a"), letter("s"), letter("d"), letter("f"), letter("g"), letter("h")],
-  [letter("j"), letter("k"), letter("l"), sym("colon"), sym("semicolon")],
-  [letter("z"), letter("x"), letter("c"), letter("v"), letter("b"), letter("n")],
-  [letter("m"), sym("comma"), sym("period"), sym("slash"), sym("equals")],
-];
-
-const MEDIUM_GRID: KeyDef[][] = [
-  [ARROW_LEFT, num("1"), num("2"), num("3"), num("4"), num("5"), num("6"), num("7")],
-  [num("8"), num("9"), digit("0"), sym("plus"), sym("minus"), sym("pound"), sym("at"), sym("star")],
-  [letter("q"), letter("w"), letter("e"), letter("r"), letter("t"), letter("y"), letter("u"), letter("i")],
-  [letter("o"), letter("p"), ARROW_UP, letter("a"), letter("s"), letter("d"), letter("f"), letter("g")],
-  [letter("h"), letter("j"), letter("k"), letter("l"), sym("colon"), sym("semicolon"), sym("equals")],
-  [letter("z"), letter("x"), letter("c"), letter("v"), letter("b"), letter("n"), letter("m")],
-  [sym("comma"), sym("period"), sym("slash")],
+  [sym("at"), sym("star"), ARROW_UP],
+  [letter("a"), letter("s"), letter("d"), letter("f"), letter("g")],
+  [letter("h"), letter("j"), letter("k"), letter("l")],
+  [sym("colon"), sym("semicolon"), sym("equals")],
+  [letter("z"), letter("x"), letter("c"), letter("v"), letter("b")],
+  [letter("n"), letter("m"), sym("comma"), sym("period"), sym("slash")],
 ];
 
 const EXPANDED_ROWS: KeyDef[][] = [
@@ -470,14 +475,6 @@ const EXPANDED_ROWS: KeyDef[][] = [
 export const getKeyboardLayout = (profile: KeyboardProfile): KeyboardLayout => {
   switch (profile) {
     case "compact":
-      return {
-        kind: "deck",
-        immediate: IMMEDIATE_GROUP,
-        edit: EDIT_GROUP,
-        functionKeys: FUNCTION_GROUP,
-        system: SYSTEM_GROUP,
-        grid: COMPACT_GRID,
-      };
     case "medium":
       return {
         kind: "deck",
@@ -485,7 +482,7 @@ export const getKeyboardLayout = (profile: KeyboardProfile): KeyboardLayout => {
         edit: EDIT_GROUP,
         functionKeys: FUNCTION_GROUP,
         system: SYSTEM_GROUP,
-        grid: MEDIUM_GRID,
+        grid: DECK_GRID,
       };
     case "expanded":
       return { kind: "rows", rows: EXPANDED_ROWS, functionKeys: FUNCTION_GROUP };

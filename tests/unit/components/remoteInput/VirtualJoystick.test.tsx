@@ -180,6 +180,17 @@ describe("VirtualJoystick", () => {
     expect(setAutofireEnabledChangeMock).toHaveBeenCalledWith(true);
   });
 
+  it("uses the same horizontal switch+label pattern for Autofire as for Port (HARD16-008)", () => {
+    renderStick();
+    const autofireLabel = screen.getByTestId("remote-input-autofire-switch").closest("label");
+    const portLabel = screen.getByTestId("remote-input-port-switch").closest("label");
+    // Horizontal row (switch beside label), not the old stacked switch-above-label card.
+    expect(autofireLabel?.className).toContain("items-center");
+    expect(autofireLabel?.className).not.toContain("flex-col");
+    expect(portLabel?.className).toContain("items-center");
+    expect(autofireLabel).toHaveTextContent("Autofire");
+  });
+
   it("shows the disabled hint and blocks input when the joystick tier is unavailable", () => {
     render(
       <VirtualJoystick

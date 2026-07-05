@@ -240,14 +240,16 @@ export const VirtualJoystick = ({
       className="flex flex-col items-center gap-2 rounded-3xl bg-background/90 px-3 py-2 text-center text-sm shadow-lg backdrop-blur-sm"
       data-testid="remote-input-autofire-toggle"
     >
-      <label className="flex flex-col items-center gap-2">
+      {/* HARD16-008: the same horizontal Switch + label pattern as the Port
+          toggle, so the two read as siblings (the card + rate slider stay). */}
+      <label className="flex items-center gap-2 text-sm font-semibold">
         <Switch
           checked={autofireEnabled}
           onCheckedChange={onAutofireEnabledChange}
           disabled={disabled}
           data-testid="remote-input-autofire-switch"
         />
-        <span className="text-xs font-semibold uppercase tracking-wide">Autofire</span>
+        Autofire
       </label>
       <div className="flex w-24 items-center gap-1.5" data-testid="remote-input-autofire-rate">
         <Slider
@@ -289,8 +291,10 @@ export const VirtualJoystick = ({
 
       {/* Secondary settings stay away from the constant-use action zone below.
           Game mode hides the movement-style selector, keeps the port swap on the
-          left rail, and lifts Autofire onto its own control just above FIRE. */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+          left rail, and lifts Autofire onto its own control just above FIRE.
+          HARD16-008: this chrome row gets the standard gutter; the action zone
+          below stays edge-to-edge. */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4">
         {portToggle}
         {!immersive ? (
           <div className="flex items-center gap-1.5" data-testid="remote-input-movement-style-toggle">

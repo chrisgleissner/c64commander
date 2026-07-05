@@ -114,6 +114,42 @@ describe("getKeyboardLayout", () => {
     expect(layout.functionKeys.map((k) => k.testId)).toEqual(fKeyIds);
   });
 
+  // The true physical C64 rows by KeyDef id, minus the keys extracted to the
+  // deck's edit/system/immediate/cursor groups (which are EXEMPT from the grid
+  // invariant). Every deck grid row must be a contiguous slice of exactly one.
+  const C64_ROWS: readonly string[][] = [
+    ["arrow_left", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "plus", "minus", "pound"],
+    ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "at", "star", "arrow_up"],
+    ["a", "s", "d", "f", "g", "h", "j", "k", "l", "colon", "semicolon", "equals"],
+    ["z", "x", "c", "v", "b", "n", "m", "comma", "period", "slash"],
+  ];
+  const isContiguousSliceOfOneRow = (ids: string[]) =>
+    C64_ROWS.some((row) => {
+      for (let start = 0; start + ids.length <= row.length; start += 1) {
+        if (ids.every((id, offset) => row[start + offset] === id)) return true;
+      }
+      return false;
+    });
+
+  it.each(["compact", "medium"] as const)(
+    "renders every %s grid row as a contiguous slice of exactly one C64 row (HARD16-007)",
+    (profile) => {
+      const layout = getKeyboardLayout(profile);
+      if (layout.kind !== "deck") throw new Error(`${profile} layout must be deck-based`);
+      layout.grid.forEach((row, index) => {
+        const ids = row.map((key) => key.id);
+        expect(
+          isContiguousSliceOfOneRow(ids),
+          `${profile} grid row ${index} [${ids.join(", ")}] is not a contiguous slice of one C64 row`,
+        ).toBe(true);
+      });
+      // Function keys stay a dedicated block — never interleaved into the grid.
+      const fKeyIds = new Set(["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8"]);
+      const gridIds = layout.grid.flat().map((key) => key.id);
+      expect(gridIds.some((id) => fKeyIds.has(id))).toBe(false);
+    },
+  );
+
   it("dispatches the atomic shifted operations through the shared special-key path", () => {
     const keys = collectKeys(getKeyboardLayout("expanded"));
     const byId = (id: string) => keys.find((k) => k.testId === id)?.action;
@@ -142,6 +178,13 @@ describe("getKeyboardLayout", () => {
     expect(legend("remote-input-key-comma")).toBe("<");
     expect(legend("remote-input-key-period")).toBe(">");
     expect(legend("remote-input-key-slash")).toBe("?");
+  });
+
+  it("spells RESTORE in full and abbreviates to REST. only on compact (HARD16-008)", () => {
+    const restore = collectKeys(getKeyboardLayout("expanded")).find((k) => k.testId === "remote-input-key-restore");
+    expect(restore?.label).toBe("RESTORE");
+    expect(restore?.compactLabel).toBe("REST.");
+    expect(restore?.ariaLabel).toBe("Restore");
   });
 
   it("flags only the no-fallback keys as requiring the full tier", () => {

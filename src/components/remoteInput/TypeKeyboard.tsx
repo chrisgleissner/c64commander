@@ -13,6 +13,7 @@ import { vibrateTap } from "@/lib/remoteInput/haptics";
 import { CursorPad } from "@/components/remoteInput/CursorPad";
 import { resolveKeyboardProfile, type KeyboardProfile } from "@/lib/remoteInput/keyboardProfile";
 import { getKeyboardLayout, type KeyDef, type KeyTone, type StickyModifier } from "@/lib/remoteInput/keyboardLayout";
+import { toneButtonClass } from "@/lib/remoteInput/keyTone";
 import type { KeyboardInputName } from "@/lib/c64api";
 import type { CursorDirection } from "@/lib/remoteInput/cursorKeyMapping";
 import type { SpecialKeyboardKey } from "@/lib/remoteInput/specialKeyMapping";
@@ -38,21 +39,6 @@ const chunk = <T,>(items: readonly T[], size: number): T[][] => {
   const rows: T[][] = [];
   for (let index = 0; index < items.length; index += size) rows.push(items.slice(index, index + size));
   return rows;
-};
-
-const toneButtonClass = (tone: KeyTone | undefined, latched: boolean): string => {
-  switch (tone) {
-    case "danger":
-      // RESTORE — shape (double solid border) + colour, never colour alone.
-      return "border-2 border-destructive text-destructive font-semibold";
-    case "caution":
-      // RUN/STOP — shape (dashed border) + colour, kept clear of the cursor pad.
-      return "border-2 border-dashed border-amber-500 text-amber-600 dark:border-amber-400 dark:text-amber-300";
-    case "modifier":
-      return latched ? "ring-2 ring-primary" : "";
-    default:
-      return "";
-  }
 };
 
 const toneVariant = (tone: KeyTone | undefined, latched: boolean): "default" | "secondary" | "outline" => {
@@ -275,8 +261,10 @@ export const TypeKeyboard = ({
           className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pb-6 pr-0.5"
           data-testid="remote-input-keyboard-scroll"
         >
-          {/* High-value deck: cursor pad + immediate RETURN/SPACE, then the edit /
-              function / system rows. */}
+          {/* HARD16-007 scroll order: the primary controls for the 8020 come
+              first — cursor pad + immediate RETURN/SPACE, then the high-frequency
+              function row (kept high per its game/menu value) — so the character
+              grid follows immediately and the edit/system rows sink below it. */}
           <div className="flex flex-col gap-2" data-testid="remote-input-keyboard-deck">
             {/* Cursor pad (largest, visually isolated) + immediate RETURN/SPACE beside it. */}
             <div className="flex items-stretch gap-3">
@@ -297,17 +285,11 @@ export const TypeKeyboard = ({
             </div>
 
             {/* Divider: a clear boundary so a shaky cursor tap cannot reach the
-                edit / system / modifier keys below. */}
+                function keys below. */}
             <div className="border-t border-border" role="separator" />
 
-            <div className="flex flex-wrap gap-1" data-testid="remote-input-keyboard-edit">
-              {layout.edit.map((def) => renderKey(def, { heightPx: deckKeyHeightPx, grow: true }))}
-            </div>
             <div className="flex flex-wrap gap-1" data-testid="remote-input-keyboard-function">
               {layout.functionKeys.map((def) => renderKey(def, { heightPx: deckKeyHeightPx, grow: true }))}
-            </div>
-            <div className="flex flex-wrap gap-1" data-testid="remote-input-keyboard-system">
-              {layout.system.map((def) => renderKey(def, { heightPx: deckKeyHeightPx, grow: true }))}
             </div>
           </div>
 
@@ -320,17 +302,32 @@ export const TypeKeyboard = ({
               </div>
             ))}
           </div>
+
+          <div className="border-t border-border" role="separator" />
+
+          <div className="flex flex-col gap-2" data-testid="remote-input-keyboard-lower">
+            <div className="flex flex-wrap gap-1" data-testid="remote-input-keyboard-edit">
+              {layout.edit.map((def) => renderKey(def, { heightPx: deckKeyHeightPx, grow: true }))}
+            </div>
+            <div className="flex flex-wrap gap-1" data-testid="remote-input-keyboard-system">
+              {layout.system.map((def) => renderKey(def, { heightPx: deckKeyHeightPx, grow: true }))}
+            </div>
+          </div>
         </div>
       ) : (
         // Expanded: the physical C64 rows on the left; F1–F8 as a bounded box on
         // the right (shared X origin, uniform width/height) rather than tacked on
         // to the ragged ends of the main rows. The pb-6 keeps the last row clear
-        // of the bottom action bar.
+        // of the bottom action bar. HARD16-008: the flex spacers vertically CENTER
+        // the block when the sheet is taller than the keyboard needs (tablet /
+        // desktop), and collapse to zero on short viewports so the single-scroll
+        // container behaviour (a3a185e0) is preserved.
         <div
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6"
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain pb-6"
           data-testid="remote-input-keyboard-grid"
         >
-          <div className="flex items-start gap-2">
+          <div className="min-h-0 flex-1" aria-hidden="true" />
+          <div className="flex shrink-0 items-start gap-2">
             <div className="min-w-0 flex-1 space-y-1">
               {layout.rows.map((row, rowIndex) => (
                 <div key={rowIndex} className="flex gap-1">
@@ -350,6 +347,7 @@ export const TypeKeyboard = ({
               ))}
             </div>
           </div>
+          <div className="min-h-0 flex-1" aria-hidden="true" />
         </div>
       )}
 

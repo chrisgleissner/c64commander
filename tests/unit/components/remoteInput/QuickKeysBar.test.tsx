@@ -58,4 +58,22 @@ describe("QuickKeysBar", () => {
     fireEvent.click(screen.getByTestId("remote-input-key-space"));
     expect(handlers.onChar).not.toHaveBeenCalled();
   });
+
+  it("renders RUN/STOP last with the shared caution affordance, clear of RETURN (HARD16-006)", () => {
+    render(<QuickKeysBar {...makeHandlers()} tier="full" />);
+    const runStop = screen.getByTestId("remote-input-key-run-stop");
+
+    // Caution affordance: shape (dashed border) + colour, matching the Keys tab.
+    expect(runStop.className).toContain("border-dashed");
+    expect(runStop.className).toContain("border-amber-500");
+
+    // Last position: RUN/STOP follows the whole F-key / cursor cluster in DOM order,
+    // so a wide RETURN tap can never land on it.
+    const bar = screen.getByTestId("remote-input-quick-keys-bar");
+    const keyButtons = Array.from(bar.querySelectorAll("[data-testid^='remote-input-key-']"));
+    expect(keyButtons[keyButtons.length - 1]).toBe(runStop);
+
+    const cursorRight = screen.getByTestId("remote-input-key-cursor-right");
+    expect(runStop.compareDocumentPosition(cursorRight) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+  });
 });

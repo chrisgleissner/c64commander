@@ -372,9 +372,10 @@ up-right,down-left,down-right}` — R✅ I✅ (touch only)
     lifts — sustained, not a one-shot tap — touch only. Shows a drag dot
     (`remote-input-swipe-dot`) while dragging.
   - Fire — button (press-and-hold) — `remote-input-fire-button` — R✅ I✅
-  - Autofire — switch — `remote-input-autofire-switch` — R✅ I✅ (rendered in
-    a separate pill above FIRE in both standard and Game mode for extra thumb
-    clearance)
+  - Autofire — switch + label — `remote-input-autofire-switch` — R✅ I✅
+    (standard horizontal Switch+label row, matching the Port toggle; in a card
+    above FIRE with the rate slider beneath, in both standard and Game mode for
+    extra thumb clearance)
   - Autofire rate — slider — `remote-input-autofire-rate-slider` — R✅ I✅
     (1–10/s, default 5, persisted; also settable from Settings → Play and Disk)
   - **Physical D-pad / regular keyboard cursor keys / T9, while Joystick mode
@@ -389,15 +390,17 @@ up-right,down-left,down-right}` — R✅ I✅ (touch only)
   `remote-input-key-a`, `remote-input-key-return`) — R✅ I✅ for every key.
   Compact/medium profiles render a high-value deck
   (`remote-input-keyboard-deck`: cursor pad `remote-input-cursor-pad-group` +
-  immediate RETURN/SPACE `remote-input-keyboard-immediate`, then
-  CLR/HOME/INS/DEL `remote-input-keyboard-edit`, F1–F8
-  `remote-input-keyboard-function`, and RUN/STOP/RESTORE/C=/CTRL/SHIFT
-  `remote-input-keyboard-system`) above the alphanumeric/symbol grid
-  (`remote-input-keyboard-grid`), with the deck AND grid together in one scroll
-  container (`remote-input-keyboard-scroll`) so the whole keyboard scrolls as a
-  unit on short viewports; the expanded profile renders the physical C64 rows
-  directly in `remote-input-keyboard-grid` with the function-key cluster
-  alongside. The cursor-pad keys
+  immediate RETURN/SPACE `remote-input-keyboard-immediate`, then F1–F8
+  `remote-input-keyboard-function`) above the alphanumeric/symbol grid
+  (`remote-input-keyboard-grid`), then the lower rows
+  (`remote-input-keyboard-lower`: CLR/HOME/INS/DEL `remote-input-keyboard-edit`
+  and RUN/STOP/SHIFT-LOCK/RESTORE/C=/CTRL/SHIFT `remote-input-keyboard-system`).
+  Every grid row is a contiguous slice of exactly one physical C64 row (segment
+  invariant — no split QWERTY rows, no horizontal scrolling); the deck, grid,
+  and lower rows share one scroll container (`remote-input-keyboard-scroll`) so
+  the whole keyboard scrolls as a unit on short viewports; the expanded profile
+  renders the physical C64 rows directly in `remote-input-keyboard-grid` with
+  the function-key cluster alongside. The cursor-pad keys
   (`remote-input-key-cursor-{up,down,left,right}`) auto-repeat while held by
   touch (initial delay then a brisk repeat, like C64 hardware); a keypad/
   focus-ring activation still emits a single cursor move (R✅ I✅ preserved)
@@ -414,8 +417,10 @@ PETSCII/keyboard-buffer equivalent for these modifiers]`
 kernal-fallback tier — no keyboard-buffer byte; still shown, no-ops]`
   - F1 / F3 / F5 / F7 — buttons — `remote-input-key-f{1,3,5,7}` — R✅ I✅
 - **Standard Joystick mode only — quick-keys bar**
-  (`remote-input-quick-keys-bar`): SPACE, RETURN, RUN/STOP, F1/F3/F5/F7, cursor
-  Up/Down/Left/Right — buttons — `remote-input-key-{space,return,run-stop,f1,f3,f5,f7,cursor-up,cursor-down,cursor-left,cursor-right}`
+  (`remote-input-quick-keys-bar`): SPACE, RETURN, F1/F3/F5/F7, cursor
+  Up/Down/Left/Right, then RUN/STOP **last** (caution-styled dashed amber
+  border, matching the Keys tab, positioned clear of RETURN to prevent a
+  destructive mistap) — buttons — `remote-input-key-{space,return,f1,f3,f5,f7,cursor-up,cursor-down,cursor-left,cursor-right,run-stop}`
   — R✅ I✅ (hidden in Game mode and Type mode)
 - **Standard Joystick mode and Type mode only — footer actions**
   - Safety — Release All (panic button) — button (destructive) —

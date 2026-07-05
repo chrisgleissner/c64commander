@@ -10,6 +10,7 @@ import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { vibrateTap } from "@/lib/remoteInput/haptics";
+import { toneButtonClass } from "@/lib/remoteInput/keyTone";
 import type { CursorDirection } from "@/lib/remoteInput/cursorKeyMapping";
 import type { SpecialKeyboardKey } from "@/lib/remoteInput/specialKeyMapping";
 
@@ -83,17 +84,6 @@ export const QuickKeysBar = ({ onChar, onCursor, onSpecialKey, tier, scale = 1, 
       >
         RETURN
       </Button>
-      <Button
-        size="sm"
-        variant="secondary"
-        style={keyStyle}
-        data-testid="remote-input-key-run-stop"
-        disabled={tier !== "full"}
-        title={tier !== "full" ? "RUN/STOP requires machine:input firmware support" : undefined}
-        onClick={() => tapSpecial("run_stop")}
-      >
-        RUN/STOP
-      </Button>
       {(["f1", "f3", "f5", "f7"] as const).map((key) => (
         <Button
           key={key}
@@ -154,6 +144,22 @@ export const QuickKeysBar = ({ onChar, onCursor, onSpecialKey, tier, scale = 1, 
           <ArrowRight style={{ width: iconPx, height: iconPx }} />
         </Button>
       </div>
+      {/* HARD16-006: RUN/STOP carries the same caution affordance as the Keys tab
+          (dashed amber border — shape + colour, never colour alone) and sits at
+          the END of the bar, well clear of the most-tapped RETURN key so a wide
+          tap can never halt the running program by mistake. */}
+      <Button
+        size="sm"
+        variant="secondary"
+        style={keyStyle}
+        className={cn(toneButtonClass("caution"))}
+        data-testid="remote-input-key-run-stop"
+        disabled={tier !== "full"}
+        title={tier !== "full" ? "RUN/STOP requires machine:input firmware support" : undefined}
+        onClick={() => tapSpecial("run_stop")}
+      >
+        RUN/STOP
+      </Button>
     </div>
   );
 };
