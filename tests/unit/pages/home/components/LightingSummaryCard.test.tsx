@@ -375,37 +375,45 @@ describe("LightingSummaryCard", () => {
     expect(screen.getByTestId("led-strip-intensity-value")).toHaveTextContent("15");
   });
 
-  it("uses built-in fallback options when summary payloads omit structured metadata", () => {
+  it("sources dropdown options from the device's reported values and never fabricates model-specific choices", () => {
     resolveConfigValueSpy.mockImplementation((_p: unknown, _c: string, itemName: string, fallback: string | number) => {
       if (itemName === "LedStrip Mode") return "Fixed Color";
-      if (itemName === "LedStrip Pattern") return "SingleColor";
+      if (itemName === "LedStrip Pattern") return "Left to Right";
       if (itemName === "Fixed Color") return "Red";
-      if (itemName === "LedStrip SID Select") return "SID 1";
+      if (itemName === "LedStrip SID Select") return "UltiSID1-A";
       if (itemName === "Color tint") return "Pure";
       if (itemName === "Strip Intensity") return "12";
       return fallback;
     });
 
-    render(
+    // The device reports its own enum values (which diverge across models/firmware) via each
+    // item's `options`. The card must offer exactly those — not a hard-coded guess.
+    const { container } = render(
       <LightingSummaryCard
         {...defaultProps}
         config={{
           items: {
-            "LedStrip Mode": "Fixed Color",
-            "LedStrip Pattern": "SingleColor",
+            "LedStrip Mode": { selected: "Fixed Color", options: ["Off", "Fixed Color", "SID Music", "Rainbow", "Programmatic"] },
+            "LedStrip Pattern": { selected: "Left to Right", options: ["SingleColor", "Left to Right", "Right to Left"] },
             "Fixed Color": "Red",
-            "LedStrip SID Select": "SID 1",
-            "Color tint": "Pure",
+            "LedStrip SID Select": { selected: "UltiSID1-A", options: ["UltiSID1-A", "UltiSID1-B", "UltiSID2-A"] },
+            "Color tint": { selected: "Pure", options: ["Pure", "Bright", "Pastel", "Whisper"] },
             "Strip Intensity": "12",
           },
         }}
       />,
     );
 
-    expect(screen.getByText("Rainbow")).toBeInTheDocument();
-    expect(screen.getByText("Circular")).toBeInTheDocument();
-    expect(screen.getByText("SID 2")).toBeInTheDocument();
-    expect(screen.getByText("Warm")).toBeInTheDocument();
+    // Device-reported values are offered as choices...
+    expect(container.querySelector('[data-value="Programmatic"]')).toBeTruthy();
+    expect(container.querySelector('[data-value="Right to Left"]')).toBeTruthy();
+    expect(container.querySelector('[data-value="UltiSID1-B"]')).toBeTruthy();
+    expect(container.querySelector('[data-value="Bright"]')).toBeTruthy();
+    // ...while the previously hard-coded, device-rejected guesses never appear.
+    expect(container.querySelector('[data-value="Circular"]')).toBeFalsy();
+    expect(container.querySelector('[data-value="Outward"]')).toBeFalsy();
+    expect(container.querySelector('[data-value="SID 2"]')).toBeFalsy();
+    expect(container.querySelector('[data-value="Warm"]')).toBeFalsy();
   });
 
   it("disables selects when isActive=false", () => {

@@ -95,6 +95,11 @@ import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import { ProfileSplitSection } from "@/components/layout/PageContainer";
 import { HOME_SUMMARY_QUERY_OPTIONS } from "@/pages/home/constants";
 import {
+  buildOptionDomainKey,
+  useDeviceConfigOptionDomains,
+  type DeviceConfigItemRef,
+} from "@/pages/home/hooks/useDeviceConfigOptionDomains";
+import {
   buildBusIdOptions,
   buildTypeOptions,
   normalizeDriveDevices,
@@ -194,6 +199,15 @@ const FocusableDiskButton = ({
 
   return <Button ref={focusRef} disabled={disabled} {...props} />;
 };
+
+// Every drive config item whose Bus ID range / Drive Type choices must be sourced from the device.
+const DISK_MANAGER_OPTION_DOMAIN_REFS: DeviceConfigItemRef[] = [
+  { category: DRIVE_CONFIG_CATEGORY.a, item: DRIVE_BUS_ID_ITEM },
+  { category: DRIVE_CONFIG_CATEGORY.a, item: DRIVE_TYPE_ITEM },
+  { category: DRIVE_CONFIG_CATEGORY.b, item: DRIVE_BUS_ID_ITEM },
+  { category: DRIVE_CONFIG_CATEGORY.b, item: DRIVE_TYPE_ITEM },
+  { category: SOFT_IEC_CONTROL.category, item: SOFT_IEC_CONTROL.busItem },
+];
 
 export const HomeDiskManager = () => {
   const { profile } = useDisplayProfile();
@@ -304,6 +318,25 @@ export const HomeDiskManager = () => {
     status.isConnected || status.isConnecting,
     HOME_SUMMARY_QUERY_OPTIONS,
   );
+
+  // Bus-ID ranges (numeric min/max — Soft IEC accepts 8-30, not just 8-11) and Drive Type choices
+  // (device enum) are interrogated from the concrete device, cached per-firmware, never hard-coded.
+  const optionDomains = useDeviceConfigOptionDomains(
+    "disks-drives",
+    DISK_MANAGER_OPTION_DOMAIN_REFS,
+    status.isConnected,
+  );
+  const busDefaultsFor = (category: string, item: string, fallback: readonly number[]): number[] => {
+    const domain = optionDomains[buildOptionDomainKey(category, item)];
+    if (domain?.min !== undefined && domain.max !== undefined && domain.max >= domain.min) {
+      return Array.from({ length: domain.max - domain.min + 1 }, (_, index) => domain.min! + index);
+    }
+    return [...fallback];
+  };
+  const typeOptionsFor = (category: string, item: string, fallback: readonly string[]): readonly string[] => {
+    const domainOptions = optionDomains[buildOptionDomainKey(category, item)]?.options;
+    return domainOptions && domainOptions.length ? domainOptions : fallback;
+  };
 
   const normalizedDriveModel = useMemo(() => normalizeDriveDevices(drivesData ?? null), [drivesData]);
   const softIecDevice = normalizedDriveModel.devices.find((entry) => entry.class === SOFT_IEC_CONTROL.class) ?? null;
@@ -1648,8 +1681,15 @@ export const HomeDiskManager = () => {
     const driveConfigPayload = key === "a" ? driveAConfig : driveBConfig;
     const busId = resolveDriveBusId(key, driveConfigPayload, info);
     const driveType = resolveDriveType(key, driveConfigPayload, info);
-    const busOptions = buildBusIdOptions([...DRIVE_BUS_ID_DEFAULTS], busId);
-    const driveTypeOptions = buildTypeOptions([...DRIVE_TYPE_DEFAULTS], driveType);
+    const driveCategory = DRIVE_CONFIG_CATEGORY[key];
+    const busOptions = buildBusIdOptions(
+      busDefaultsFor(driveCategory, DRIVE_BUS_ID_ITEM, DRIVE_BUS_ID_DEFAULTS),
+      busId,
+    );
+    const driveTypeOptions = buildTypeOptions(
+      [...typeOptionsFor(driveCategory, DRIVE_TYPE_ITEM, DRIVE_TYPE_DEFAULTS)],
+      driveType,
+    );
     const powerOverride = drivePowerOverride[key];
     const powerEnabled = powerOverride ?? info?.enabled;
     const hasPowerState = typeof powerEnabled === "boolean";
@@ -1698,7 +1738,10 @@ export const HomeDiskManager = () => {
     getCategoryConfigValue(softIecConfig, SOFT_IEC_CONTROL.category, SOFT_IEC_CONTROL.busItem),
   );
   const softIecBusId = softIecConfigBusId ?? softIecDevice?.busId ?? 11;
-  const softIecBusOptions = buildBusIdOptions([...SOFT_IEC_BUS_ID_DEFAULTS], softIecBusId);
+  const softIecBusOptions = buildBusIdOptions(
+    busDefaultsFor(SOFT_IEC_CONTROL.category, SOFT_IEC_CONTROL.busItem, SOFT_IEC_BUS_ID_DEFAULTS),
+    softIecBusId,
+  );
   const softIecDefaultPath = resolveSoftIecDefaultPath(softIecConfig, softIecDevice?.partitions?.[0]?.path ?? null);
   const softIecMounted = Boolean(softIecDevice?.imageFile);
   const softIecMountedLabel = softIecDevice?.imageFile ?? "No disk mounted";

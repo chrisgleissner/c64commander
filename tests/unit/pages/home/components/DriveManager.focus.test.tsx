@@ -54,6 +54,7 @@ vi.mock("@/pages/home/hooks/useDriveData", () => ({
 }));
 
 vi.mock("@/hooks/useC64Connection", () => ({
+  useConnectionRoutingEpoch: () => 0,
   VISIBLE_C64_QUERY_OPTIONS: { intent: "user", refetchOnMount: "always" },
   useC64ConfigItems: () => ({ data: undefined }),
   useC64Drives: () => ({ data: { drives: [] }, refetch: vi.fn().mockResolvedValue(undefined) }),

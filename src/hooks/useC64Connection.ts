@@ -87,7 +87,7 @@ const hasDisplayableDeviceInfo = (value: DeviceInfo | null | undefined) =>
 // eventual selected device DEGRADED (BUG-061). The c64-info query inside
 // useC64Connection already gates on the connection state — extend the same gate to
 // every other device-touching query.
-const useConnectionActive = () => {
+export const useConnectionActive = () => {
   const connection = useConnectionState();
   return connection.state === "REAL_CONNECTED" || connection.state === "DEMO_ACTIVE";
 };

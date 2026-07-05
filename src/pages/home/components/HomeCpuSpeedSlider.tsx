@@ -13,7 +13,6 @@ import { useInteractiveConfigWrite } from "@/hooks/useInteractiveConfigWrite";
 import { logger } from "@/lib/diagnostics/logger";
 import { addLog, buildErrorLogDetails } from "@/lib/logging";
 import { isSmokeModeEnabled } from "@/lib/smoke/smokeMode";
-import { HOME_CPU_SPEED_OPTIONS } from "../constants";
 import { createHomeCpuSpeedSliderProbeSnapshot, formatHomeCpuSpeedSliderProbe } from "./homeCpuSpeedSliderProbe";
 import { resolveTurboControlValue } from "../utils/HomeConfigUtils";
 
@@ -37,7 +36,9 @@ export function HomeCpuSpeedSlider({
   turboControlValue,
 }: HomeCpuSpeedSliderProps) {
   const { write: interactiveWrite } = useInteractiveConfigWrite({ category: "U64 Specific Settings" });
-  const sliderOptions = cpuSpeedOptions.length ? cpuSpeedOptions : [...HOME_CPU_SPEED_OPTIONS];
+  // The permitted CPU speeds come from the device (see useDeviceConfigOptionDomains). Until the
+  // device has reported them, present the current value alone rather than a guessed range.
+  const sliderOptions = cpuSpeedOptions.length ? cpuSpeedOptions : [cpuSpeedValue.trim() || " 1"];
   const domain = createIndexedSliderDomain(sliderOptions);
   const resolveCpuSpeedOption = (index: number) => sliderOptions[Math.round(index)] ?? sliderOptions[0] ?? "1";
   const normalizedCpuSpeedValue = cpuSpeedValue.trim();

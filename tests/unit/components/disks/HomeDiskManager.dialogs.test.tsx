@@ -104,6 +104,7 @@ vi.mock("@/hooks/useDiskLibrary", () => ({
 }));
 
 vi.mock("@/hooks/useC64Connection", () => ({
+  useConnectionRoutingEpoch: () => 0,
   VISIBLE_C64_QUERY_OPTIONS: {
     intent: "user",
     refetchOnMount: "always",

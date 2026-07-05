@@ -25,6 +25,7 @@ const createMockDrive = (overrides: Record<string, unknown> = {}) => ({
 });
 
 vi.mock("@/hooks/useC64Connection", () => ({
+  useConnectionRoutingEpoch: () => 0,
   HOME_SUMMARY_QUERY_OPTIONS: { intent: "user" },
   VISIBLE_C64_QUERY_OPTIONS: { intent: "user" },
   useC64Connection: vi.fn(),
