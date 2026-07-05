@@ -67,3 +67,30 @@ export const getInputLatencyStats = (): InputLatencyStats => {
     p95Ms: percentile(values, 95),
   };
 };
+
+export type RemoteInputLatencyBridge = {
+  getSamples: () => readonly InputLatencySample[];
+  getStats: () => InputLatencyStats;
+  clear: () => void;
+};
+
+declare global {
+  interface Window {
+    __c64uRemoteInputLatency?: RemoteInputLatencyBridge;
+  }
+}
+
+/**
+ * Exposes the press-to-dispatch latency samples on `window` (read-only data,
+ * no ability to inject/tamper), the same pattern as `registerTraceBridge` -
+ * so an e2e test in a real browser can assert on ACTUAL measured latency
+ * instead of re-deriving it from network-request timestamps.
+ */
+export const registerRemoteInputLatencyBridge = (): void => {
+  if (typeof window === "undefined" || window.__c64uRemoteInputLatency) return;
+  window.__c64uRemoteInputLatency = {
+    getSamples: () => getInputLatencySamples(),
+    getStats: () => getInputLatencyStats(),
+    clear: () => clearInputLatencySamples(),
+  };
+};

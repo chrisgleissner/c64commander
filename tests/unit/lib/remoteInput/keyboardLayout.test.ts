@@ -17,12 +17,13 @@ import {
 import type { KeyboardProfile } from "@/lib/remoteInput/keyboardProfile";
 
 const PROFILES: KeyboardProfile[] = ["compact", "medium", "expanded"];
+const DECK_PROFILES: KeyboardProfile[] = ["compact", "medium"];
 
 /**
  * The direct high-value keys, minus the cursor keys, which are provided by the
  * CursorPad in the deck profiles rather than as flat KeyDefs (asserted at the
  * component level). All non-cursor high-value keys must be flat KeyDefs in
- * every profile.
+ * every deck profile (compact/medium).
  */
 const REQUIRED_NON_CURSOR_TEST_IDS = [
   "remote-input-key-return",
@@ -47,13 +48,42 @@ const REQUIRED_NON_CURSOR_TEST_IDS = [
   "remote-input-key-shift-lock",
 ];
 
+// The expanded profile mirrors a real C64 keyboard's shape: HOME/CLR,
+// DEL/INST and each F-key pair are ONE physical key (see keyboardLayout.ts's
+// CLR_HOME_MERGED etc.), so its required-keys list uses the merged ids.
+const REQUIRED_EXPANDED_TEST_IDS = [
+  "remote-input-key-return",
+  "remote-input-key-space",
+  "remote-input-key-clr-home",
+  "remote-input-key-inst-del",
+  "remote-input-key-cursor-up-down",
+  "remote-input-key-cursor-left-right",
+  "remote-input-key-f1-f2",
+  "remote-input-key-f3-f4",
+  "remote-input-key-f5-f6",
+  "remote-input-key-f7-f8",
+  "remote-input-key-run-stop",
+  "remote-input-key-restore",
+  "remote-input-key-commodore",
+  "remote-input-key-ctrl",
+  "remote-input-key-shift",
+  "remote-input-key-shift-lock",
+];
+
 const collectKeys = (layout: KeyboardLayout): KeyDef[] => flattenLayoutKeys(layout);
 
 describe("getKeyboardLayout", () => {
-  it.each(PROFILES)("exposes every non-cursor high-value key directly in the %s profile", (profile) => {
+  it.each(DECK_PROFILES)("exposes every non-cursor high-value key directly in the %s profile", (profile) => {
     const testIds = new Set(collectKeys(getKeyboardLayout(profile)).map((key) => key.testId));
     for (const required of REQUIRED_NON_CURSOR_TEST_IDS) {
       expect(testIds.has(required), `${profile} missing ${required}`).toBe(true);
+    }
+  });
+
+  it("exposes every high-value key (merged pairs included) directly in the expanded profile", () => {
+    const testIds = new Set(collectKeys(getKeyboardLayout("expanded")).map((key) => key.testId));
+    for (const required of REQUIRED_EXPANDED_TEST_IDS) {
+      expect(testIds.has(required), `expanded missing ${required}`).toBe(true);
     }
   });
 
@@ -67,25 +97,30 @@ describe("getKeyboardLayout", () => {
     const keys = collectKeys(getKeyboardLayout("expanded"));
     const arrowLeft = keys.find((k) => k.testId === "remote-input-key-arrow_left");
     const arrowUp = keys.find((k) => k.testId === "remote-input-key-arrow_up");
-    const cursorLeft = keys.find((k) => k.testId === CURSOR_KEY_META.left.testId);
-    const cursorUp = keys.find((k) => k.testId === CURSOR_KEY_META.up.testId);
+    // The expanded profile's cursor keys are merged (one physical key per
+    // axis, exactly like HOME/CLR - see CURSOR_LEFT_RIGHT_MERGED), so "cursor
+    // left" is reached via the left/right key's shifted half, not a standalone
+    // flat key - assert against the merged key's UNSHIFTED (main) direction.
+    const cursorLeftRight = keys.find((k) => k.testId === "remote-input-key-cursor-left-right");
 
     // Distinct keys…
-    expect(arrowLeft?.testId).not.toBe(cursorLeft?.testId);
-    expect(arrowUp?.testId).not.toBe(cursorUp?.testId);
+    expect(arrowLeft?.testId).not.toBe(cursorLeftRight?.testId);
     // …distinct actions (character key press vs cursor movement)…
     expect(arrowLeft?.action).toEqual({ kind: "key", inputs: ["arrow_left"] });
-    expect(cursorLeft?.action).toEqual({ kind: "cursor", direction: "left" });
+    expect(cursorLeftRight?.action).toEqual({ kind: "cursor", direction: "right" });
     // …and unambiguous accessible labels.
     expect(arrowLeft?.ariaLabel).toMatch(/left-arrow character key/i);
-    expect(cursorLeft?.ariaLabel).toMatch(/cursor left/i);
+    expect(cursorLeftRight?.ariaLabel).toMatch(/cursor right/i);
     // The C64 character-arrow keys use the authentic printed glyphs (never "ARW"),
-    // while the cursor keys render as icons (no "CUR" text).
+    // while the merged cursor key renders plain arrow glyphs too, but as a
+    // main/secondary pair rather than a single icon.
     expect(arrowLeft?.label).toBe("←");
     expect(arrowUp?.label).toBe("↑");
     expect(arrowLeft?.label).not.toMatch(/ARW/i);
+    expect(cursorLeftRight?.label).toBe("→");
+    expect(cursorLeftRight?.secondary).toBe("←");
+    // The CursorPad (compact/medium decks) still renders real icons for each direction.
     (["up", "down", "left", "right"] as const).forEach((direction) => {
-      // A renderable lucide icon component (never a "CUR…" text label).
       expect(CURSOR_KEY_META[direction].icon, `cursor ${direction} icon`).toBeTruthy();
       expect(CURSOR_KEY_META[direction]).not.toHaveProperty("label");
     });
@@ -106,7 +141,9 @@ describe("getKeyboardLayout", () => {
   it("renders the expanded function keys as a dedicated bounded box, not inside the main rows", () => {
     const layout = getKeyboardLayout("expanded");
     if (layout.kind !== "rows") throw new Error("expanded layout must be row-based");
-    const fKeyIds = ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8"].map((f) => `remote-input-key-${f}`);
+    // Each merged pair (F1/F2, F3/F4, F5/F6, F7/F8) is ONE physical key here,
+    // matching the real C64's function-key cluster.
+    const fKeyIds = ["f1-f2", "f3-f4", "f5-f6", "f7-f8"].map((f) => `remote-input-key-${f}`);
     const inRows = new Set(layout.rows.flat().map((k) => k.testId));
     // No function key is tacked onto the ragged end of a main row…
     fKeyIds.forEach((id) => expect(inRows.has(id), `${id} leaked into main rows`).toBe(false));
@@ -150,15 +187,21 @@ describe("getKeyboardLayout", () => {
     },
   );
 
-  it("dispatches the atomic shifted operations through the shared special-key path", () => {
+  it("resolves each merged expanded key's MAIN action to the unshifted special key - the shifted half is reached by holding Shift while tapping, not a separate KeyDef", () => {
     const keys = collectKeys(getKeyboardLayout("expanded"));
-    const byId = (id: string) => keys.find((k) => k.testId === id)?.action;
-    expect(byId("remote-input-key-clr")).toEqual({ kind: "special", key: "clr" });
-    expect(byId("remote-input-key-ins")).toEqual({ kind: "special", key: "ins" });
-    expect(byId("remote-input-key-f2")).toEqual({ kind: "special", key: "f2" });
-    expect(byId("remote-input-key-f4")).toEqual({ kind: "special", key: "f4" });
-    expect(byId("remote-input-key-f6")).toEqual({ kind: "special", key: "f6" });
-    expect(byId("remote-input-key-f8")).toEqual({ kind: "special", key: "f8" });
+    const byId = (id: string) => keys.find((k) => k.testId === id);
+    // Main actions are the unshifted half…
+    expect(byId("remote-input-key-clr-home")?.action).toEqual({ kind: "special", key: "home" });
+    expect(byId("remote-input-key-inst-del")?.action).toEqual({ kind: "special", key: "del" });
+    expect(byId("remote-input-key-f1-f2")?.action).toEqual({ kind: "special", key: "f1" });
+    expect(byId("remote-input-key-f3-f4")?.action).toEqual({ kind: "special", key: "f3" });
+    expect(byId("remote-input-key-f5-f6")?.action).toEqual({ kind: "special", key: "f5" });
+    expect(byId("remote-input-key-f7-f8")?.action).toEqual({ kind: "special", key: "f7" });
+    // …and the `secondary` legend documents the shifted half for the user
+    // (TypeKeyboard.test.tsx proves holding Shift while tapping reaches it).
+    expect(byId("remote-input-key-clr-home")?.secondary).toBe("CLR");
+    expect(byId("remote-input-key-inst-del")?.secondary).toBe("INST");
+    expect(byId("remote-input-key-f1-f2")?.secondary).toContain("2");
   });
 
   it("carries authentic C64 shifted secondary legends on the number and punctuation keys", () => {

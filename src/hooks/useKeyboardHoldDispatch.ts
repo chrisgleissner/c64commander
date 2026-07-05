@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { KeyboardInputName } from "@/lib/c64api";
 import type { HeldKeyboardInputs } from "@/lib/remoteInput/keyboardHeldSet";
 
@@ -62,92 +62,126 @@ export const useKeyboardHoldDispatch = (
   // Modifiers latched by a bare tap, asserted on the wire, awaiting the next
   // ordinary key's release to auto-clear. Reactive so the UI can show it.
   const [pendingLatch, setPendingLatch] = useState<ReadonlySet<KeyboardInputName>>(new Set());
+  const pendingLatchRef = useRef(pendingLatch);
+  pendingLatchRef.current = pendingLatch;
   const [shiftLocked, setShiftLocked] = useState(false);
+  const shiftLockedRef = useRef(shiftLocked);
+  shiftLockedRef.current = shiftLocked;
+  // Shadowed so pressKey/releaseKey/etc. below can be permanently stable
+  // (useCallback with an empty dep array) without lying about a dependency
+  // that a caller is free to pass a fresh instance of on every render.
+  const onChangeRef = useRef(onHeldKeyboardInputsChange);
+  onChangeRef.current = onHeldKeyboardInputsChange;
 
   // `heldRef.current` is updated immediately (not just echoed back on the next
   // render) so that two add/remove calls within the SAME handler — e.g.
   // releaseKey's own release plus a pending-latch flush — compose correctly
   // instead of the second call overwriting the first from a stale snapshot.
-  const addToHeld = (names: readonly KeyboardInputName[]) => {
+  const addToHeld = useCallback((names: readonly KeyboardInputName[]) => {
     const next = new Set(heldRef.current);
     names.forEach((name) => next.add(name));
     heldRef.current = next;
-    onHeldKeyboardInputsChange(next);
-  };
-  const removeFromHeld = (names: readonly KeyboardInputName[]) => {
+    onChangeRef.current(next);
+  }, []);
+  const removeFromHeld = useCallback((names: readonly KeyboardInputName[]) => {
     const next = new Set(heldRef.current);
     names.forEach((name) => next.delete(name));
     heldRef.current = next;
-    onHeldKeyboardInputsChange(next);
-  };
+    onChangeRef.current(next);
+  }, []);
 
   // SHIFT LOCK independently keeps `left_shift` asserted — the hold/latch
   // bookkeeping above must never release it out from under that lock.
-  const canReleaseModifier = (modifier: KeyboardInputName) => !(modifier === "left_shift" && shiftLocked);
+  const canReleaseModifier = useCallback(
+    (modifier: KeyboardInputName) => !(modifier === "left_shift" && shiftLockedRef.current),
+    [],
+  );
 
-  const noteOtherKeyPressed = () => {
+  const noteOtherKeyPressed = useCallback(() => {
     physicallyHeldRef.current.forEach((modifier) => chordedRef.current.add(modifier));
-  };
+  }, []);
 
-  const pressKey = (inputs: KeyboardInputName[]) => {
-    noteOtherKeyPressed();
-    addToHeld(inputs);
-  };
+  // Every function below is intentionally stable for the component's entire
+  // lifetime (empty/all-stable dep arrays, current values read via refs) so a
+  // memoized per-key button (React.memo) whose OWN inputs/modifier haven't
+  // changed can bail out of re-rendering when some OTHER key is pressed —
+  // real, measured latency on a Pixel 4 (~13-34ms) came from re-rendering the
+  // ENTIRE keyboard/quick-keys bar on every keystroke; a fresh function
+  // identity here for every keystroke would defeat that memoization entirely.
+  const pressKey = useCallback(
+    (inputs: KeyboardInputName[]) => {
+      noteOtherKeyPressed();
+      addToHeld(inputs);
+    },
+    [noteOtherKeyPressed, addToHeld],
+  );
 
-  const releaseKey = (inputs: KeyboardInputName[]) => {
-    removeFromHeld(inputs);
-    if (pendingLatch.size > 0) {
-      const toRelease = [...pendingLatch].filter(canReleaseModifier);
-      if (toRelease.length > 0) removeFromHeld(toRelease);
-      setPendingLatch(new Set());
-    }
-  };
+  const releaseKey = useCallback(
+    (inputs: KeyboardInputName[]) => {
+      removeFromHeld(inputs);
+      if (pendingLatchRef.current.size > 0) {
+        const toRelease = [...pendingLatchRef.current].filter(canReleaseModifier);
+        if (toRelease.length > 0) removeFromHeld(toRelease);
+        setPendingLatch(new Set());
+      }
+    },
+    [removeFromHeld, canReleaseModifier],
+  );
 
-  const pressModifier = (modifier: KeyboardInputName) => {
-    noteOtherKeyPressed();
-    physicallyHeldRef.current.add(modifier);
-    addToHeld([modifier]);
-  };
+  const pressModifier = useCallback(
+    (modifier: KeyboardInputName) => {
+      noteOtherKeyPressed();
+      physicallyHeldRef.current.add(modifier);
+      addToHeld([modifier]);
+    },
+    [noteOtherKeyPressed, addToHeld],
+  );
 
-  const releaseModifier = (modifier: KeyboardInputName) => {
-    physicallyHeldRef.current.delete(modifier);
-    if (chordedRef.current.has(modifier)) {
-      // A real chord happened while this modifier was held: release now.
-      chordedRef.current.delete(modifier);
-      if (canReleaseModifier(modifier)) removeFromHeld([modifier]);
-      return;
-    }
-    if (pendingLatch.has(modifier)) {
-      // Re-tapping an already-latched modifier cancels the latch.
-      setPendingLatch((prev) => {
-        const next = new Set(prev);
-        next.delete(modifier);
-        return next;
-      });
-      if (canReleaseModifier(modifier)) removeFromHeld([modifier]);
-      return;
-    }
-    // A bare tap with nothing chorded: keep it asserted as a one-shot latch
-    // for the next ordinary key (stays in heldKeyboardInputs already).
-    setPendingLatch((prev) => new Set(prev).add(modifier));
-  };
+  const releaseModifier = useCallback(
+    (modifier: KeyboardInputName) => {
+      physicallyHeldRef.current.delete(modifier);
+      if (chordedRef.current.has(modifier)) {
+        // A real chord happened while this modifier was held: release now.
+        chordedRef.current.delete(modifier);
+        if (canReleaseModifier(modifier)) removeFromHeld([modifier]);
+        return;
+      }
+      if (pendingLatchRef.current.has(modifier)) {
+        // Re-tapping an already-latched modifier cancels the latch.
+        setPendingLatch((prev) => {
+          const next = new Set(prev);
+          next.delete(modifier);
+          return next;
+        });
+        if (canReleaseModifier(modifier)) removeFromHeld([modifier]);
+        return;
+      }
+      // A bare tap with nothing chorded: keep it asserted as a one-shot latch
+      // for the next ordinary key (stays in heldKeyboardInputs already).
+      setPendingLatch((prev) => new Set(prev).add(modifier));
+    },
+    [canReleaseModifier, removeFromHeld],
+  );
 
-  const toggleShiftLock = () => {
+  const toggleShiftLock = useCallback(() => {
     setShiftLocked((locked) => {
       const next = !locked;
       if (next) {
         addToHeld(["left_shift"]);
-      } else if (!physicallyHeldRef.current.has("left_shift") && !pendingLatch.has("left_shift")) {
+      } else if (!physicallyHeldRef.current.has("left_shift") && !pendingLatchRef.current.has("left_shift")) {
         removeFromHeld(["left_shift"]);
       }
       return next;
     });
-  };
+  }, [addToHeld, removeFromHeld]);
 
-  const isModifierActive = (modifier: KeyboardInputName) =>
-    physicallyHeldRef.current.has(modifier) ||
-    pendingLatch.has(modifier) ||
-    (modifier === "left_shift" && shiftLocked);
+  const isModifierActive = useCallback(
+    (modifier: KeyboardInputName) =>
+      physicallyHeldRef.current.has(modifier) ||
+      pendingLatchRef.current.has(modifier) ||
+      (modifier === "left_shift" && shiftLockedRef.current),
+    [],
+  );
 
   return {
     pressKey,

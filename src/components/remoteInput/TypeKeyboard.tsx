@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { vibrateTap } from "@/lib/remoteInput/haptics";
 import { CursorPad } from "@/components/remoteInput/CursorPad";
@@ -56,6 +56,156 @@ const chunk = <T,>(items: readonly T[], size: number): T[][] => {
   return rows;
 };
 
+// Resolves an ordinary key to the matrix input(s) it presses — the same
+// vocabulary the real-hold path (holdDispatch) needs to add/remove from the
+// shared held set. Returns null for action kinds with no such resolution
+// (cursor keeps its own click-only + repeat-on-hold dispatch). Pure (no
+// closure state), so it can be called from the stable top-level hold
+// handlers below without becoming a dependency that changes every render.
+const resolveOrdinaryKeyInputs = (def: KeyDef): KeyboardInputName[] | null => {
+  switch (def.action.kind) {
+    case "char": {
+      const [event] = charToKeyboardInputEvents(def.action.char);
+      return event ? event.inputs : null;
+    }
+    case "key":
+      return def.action.inputs;
+    case "special":
+      return specialKeyToKeyboardInputEvent(def.action.key).inputs;
+    default:
+      return null;
+  }
+};
+
+// The C64's two physical cursor keys are each shared by two directions via
+// SHIFT (see cursorKeyMapping.ts): this is that same pairing, used to pick
+// the OTHER direction when SHIFT is held while tapping the expanded
+// profile's merged cursor key.
+const CURSOR_SHIFT_COMPLEMENT: Record<CursorDirection, CursorDirection> = {
+  down: "up",
+  up: "down",
+  left: "right",
+  right: "left",
+};
+
+type KeyboardKeyButtonProps = {
+  def: KeyDef;
+  variant: "default" | "secondary" | "outline";
+  toneClassName: string;
+  heightPx: number | undefined;
+  grow: boolean | undefined;
+  fill: boolean | undefined;
+  label: string;
+  showSecondary: boolean;
+  keyFontPx: number;
+  disabled: boolean;
+  latched: boolean;
+  isModifierOrShiftLock: boolean;
+  hasHoldGesture: boolean;
+  onHoldPress: (def: KeyDef) => void;
+  onHoldRelease: (def: KeyDef) => void;
+  onTap: (def: KeyDef) => void;
+};
+
+/**
+ * One physical key, split out and `React.memo`-wrapped so pressing ONE key
+ * does not force React to re-render and reconcile the other ~59 on the same
+ * keyboard. Real-hardware measurement (Pixel 4 + real U64) showed the
+ * unmemoized full re-render costing ~13-34ms of press-to-dispatch latency —
+ * for this to actually bail, every prop here must be referentially stable
+ * across an unrelated key's press: `def` is a module-level constant (see
+ * keyboardLayout.ts), the primitives compare by value, and the three
+ * callbacks are the stable top-level handlers from TypeKeyboard (never
+ * recreated) rather than a fresh closure per render.
+ */
+const KeyboardKeyButtonImpl = ({
+  def,
+  variant,
+  toneClassName,
+  heightPx,
+  grow,
+  fill,
+  label,
+  showSecondary,
+  keyFontPx,
+  disabled,
+  latched,
+  isModifierOrShiftLock,
+  hasHoldGesture,
+  onHoldPress,
+  onHoldRelease,
+  onTap,
+}: KeyboardKeyButtonProps) => {
+  const Icon = def.icon;
+  const iconPx = Math.max(15, Math.round(keyFontPx * 1.35));
+  const secondaryEl = showSecondary ? (
+    <span
+      className={cn(
+        "text-[0.6rem] font-normal leading-none text-muted-foreground",
+        def.secondaryPosition === "right" ? "ml-1" : undefined,
+      )}
+      aria-hidden="true"
+    >
+      {def.secondary}
+    </span>
+  ) : null;
+  const mainEl = (
+    <span
+      style={{
+        // Explicit two-line labels (e.g. "SHIFT\nLOCK") keep their break;
+        // everything else stays on one line rather than wrapping.
+        whiteSpace: label.includes("\n") ? "pre-line" : "nowrap",
+        fontSize: keyFontPx,
+        fontWeight: 600,
+        lineHeight: 1.05,
+      }}
+    >
+      {label}
+    </span>
+  );
+  return (
+    <KeyHoldButton
+      size="sm"
+      variant={variant}
+      className={cn("min-w-0 overflow-hidden px-1", grow ? "flex-1" : undefined, fill ? "h-full w-full flex-1" : undefined, toneClassName)}
+      style={{
+        height: heightPx,
+        minWidth: 30,
+        flexBasis: grow ? 0 : undefined,
+        // A key with span:2 (CTRL/SHIFT/RESTORE/RETURN/merged F-keys on the
+        // expanded profile) grows twice as much as an ordinary span-1
+        // sibling within the same flex row, shrinking the others to make
+        // room — see keyboardLayout.ts's KeyDef.span doc comment.
+        flexGrow: grow ? (def.span ?? 1) : undefined,
+      }}
+      data-testid={def.testId}
+      data-key-height={heightPx}
+      aria-label={def.ariaLabel}
+      aria-pressed={isModifierOrShiftLock ? latched : undefined}
+      disabled={disabled}
+      title={disabled ? UNAVAILABLE_KEY_HINT : undefined}
+      onHoldPress={hasHoldGesture ? () => onHoldPress(def) : undefined}
+      onHoldRelease={hasHoldGesture ? () => onHoldRelease(def) : undefined}
+      onTap={() => onTap(def)}
+    >
+      {Icon ? (
+        <Icon style={{ width: iconPx, height: iconPx }} />
+      ) : def.secondaryPosition === "right" ? (
+        <span className="flex flex-row items-baseline justify-center leading-none">
+          {mainEl}
+          {secondaryEl}
+        </span>
+      ) : (
+        <span className="flex flex-col items-center leading-none">
+          {secondaryEl}
+          {mainEl}
+        </span>
+      )}
+    </KeyHoldButton>
+  );
+};
+const KeyboardKeyButton = memo(KeyboardKeyButtonImpl);
+
 const toneVariant = (tone: KeyTone | undefined, latched: boolean): "default" | "secondary" | "outline" => {
   if (tone === "modifier") return latched ? "default" : "secondary";
   // SHIFT/SHIFT-LOCK keep a light base so their primary colour reads; the latch
@@ -103,6 +253,90 @@ export const TypeKeyboard = ({
   // and today's tap-then-tap one-shot convenience (see the hook's doc comment).
   const holdDispatch = useKeyboardHoldDispatch(heldKeyboardInputs, onHeldKeyboardInputsChange);
   const isFullTier = tier === "full";
+
+  // Full-tier hold/release/tap, hoisted to stable top-level callbacks (see
+  // KeyboardKeyButtonImpl's doc comment): each depends only on holdDispatch's
+  // methods, which are themselves permanently stable (useKeyboardHoldDispatch
+  // reads current state via refs), so these never change identity across a
+  // TypeKeyboard re-render. Cursor keys resolve to `null` from
+  // resolveOrdinaryKeyInputs and are handled inline via `onCursor` directly —
+  // NOT via the (unstable, kernal-fallback-only) `dispatch` — so pulling
+  // `dispatch` into these deps doesn't reintroduce an unstable identity for
+  // every ordinary key. `dispatch`'s own no-op modifier-latch clear for a
+  // cursor tap in full tier (activeModifiers is always empty there) means
+  // calling onCursor directly here is behaviourally identical. Declared
+  // before the auth-required early return below (rules-of-hooks: every hook
+  // must run unconditionally on every render).
+  const handleKeyHoldPress = useCallback(
+    (def: KeyDef) => {
+      if (def.action.kind === "modifier") {
+        vibrateTap(8);
+        holdDispatch.pressModifier(def.action.modifier);
+        return;
+      }
+      const inputs = resolveOrdinaryKeyInputs(def);
+      if (inputs) {
+        vibrateTap(10);
+        holdDispatch.pressKey(inputs);
+      }
+    },
+    [holdDispatch.pressModifier, holdDispatch.pressKey],
+  );
+
+  const handleKeyHoldRelease = useCallback(
+    (def: KeyDef) => {
+      if (def.action.kind === "modifier") {
+        holdDispatch.releaseModifier(def.action.modifier);
+        return;
+      }
+      const inputs = resolveOrdinaryKeyInputs(def);
+      if (inputs) holdDispatch.releaseKey(inputs);
+    },
+    [holdDispatch.releaseModifier, holdDispatch.releaseKey],
+  );
+
+  const handleKeyTap = useCallback(
+    (def: KeyDef) => {
+      if (def.action.kind === "modifier") {
+        vibrateTap(8);
+        holdDispatch.pressModifier(def.action.modifier);
+        holdDispatch.releaseModifier(def.action.modifier);
+        return;
+      }
+      if (def.action.kind === "shift_lock") {
+        vibrateTap(8);
+        holdDispatch.toggleShiftLock();
+        return;
+      }
+      if (def.action.kind === "cursor") {
+        vibrateTap(10);
+        // The expanded profile's merged cursor keys (CURSOR_UP_DOWN_MERGED /
+        // CURSOR_LEFT_RIGHT_MERGED) encode only the unshifted direction in
+        // their action; holding SHIFT while tapping reaches the physical
+        // key's other (shifted) direction - purely a UI-layer choice of
+        // WHICH direction to report, since onCursor/sendCursor already
+        // handles both correctly (real wire shift-composition, and a
+        // dedicated PETSCII byte per direction on the fallback tier).
+        const shiftHeld = holdDispatch.isModifierActive("left_shift");
+        onCursor(shiftHeld ? CURSOR_SHIFT_COMPLEMENT[def.action.direction] : def.action.direction);
+        return;
+      }
+      // char/key/special all resolve to a non-null chord in practice (every
+      // real KeyDef in keyboardLayout.ts maps to one) - only `cursor` (handled
+      // above) legitimately returns null here, so there is deliberately no
+      // `dispatch(def)` fallback: adding one would pull the unstable
+      // kernal-fallback `dispatch` into this callback's deps and defeat the
+      // per-key memoization for every ordinary key, to cover a branch that
+      // never actually executes.
+      const inputs = resolveOrdinaryKeyInputs(def);
+      if (inputs) {
+        vibrateTap(10);
+        holdDispatch.pressKey(inputs);
+        holdDispatch.releaseKey(inputs);
+      }
+    },
+    [holdDispatch.pressModifier, holdDispatch.releaseModifier, holdDispatch.toggleShiftLock, holdDispatch.pressKey, holdDispatch.releaseKey, onCursor],
+  );
 
   // Measure the available Type-tab content box and derive the profile from it
   // (width AND height), so the layout adapts to real space rather than a device
@@ -175,25 +409,6 @@ export const TypeKeyboard = ({
     setShiftLocked((locked) => !locked);
   };
 
-  // Resolves an ordinary key to the matrix input(s) it presses — the same
-  // vocabulary the real-hold path (holdDispatch) needs to add/remove from the
-  // shared held set. Returns null for action kinds with no such resolution
-  // (cursor keeps its own click-only + repeat-on-hold dispatch below).
-  const resolveOrdinaryKeyInputs = (def: KeyDef): KeyboardInputName[] | null => {
-    switch (def.action.kind) {
-      case "char": {
-        const [event] = charToKeyboardInputEvents(def.action.char);
-        return event ? event.inputs : null;
-      }
-      case "key":
-        return def.action.inputs;
-      case "special":
-        return specialKeyToKeyboardInputEvent(def.action.key).inputs;
-      default:
-        return null;
-    }
-  };
-
   // Kernal-fallback tier only: no held-set relay exists below full tier, so
   // this is the original one-shot-latch dispatch, untouched.
   const dispatch = (def: KeyDef) => {
@@ -244,104 +459,38 @@ export const TypeKeyboard = ({
     // (RESTORE -> "REST."); compact and medium both have room for the full word,
     // so they render `label` as-is.
     const label = profile === "expanded" && def.compactLabel ? def.compactLabel : def.label;
-    const Icon = def.icon;
-    const iconPx = Math.max(15, Math.round(keyFontPx * 1.35));
     // Shifted legend printed ABOVE the main label (smaller, fainter) like a real
     // C64 keycap. Hidden on compact, and never shown on pictographic keys.
-    const showSecondary = profile !== "compact" && Boolean(def.secondary) && !Icon;
+    const showSecondary =
+      Boolean(def.secondary) && !def.icon && (profile !== "compact" || def.secondaryAlwaysVisible === true);
 
     // Full tier: real hold for modifiers and ordinary keys alike; SHIFT LOCK
-    // stays a discrete toggle (no hold gesture); cursor keeps its own
-    // click-only dispatch (repeat-on-hold lives in the dedicated CursorPad).
-    // Below full tier there is no held-set relay, so every key falls back to
-    // the original one-shot `dispatch`.
-    let onHoldPress: (() => void) | undefined;
-    let onHoldRelease: (() => void) | undefined;
-    let onTap: () => void = () => dispatch(def);
-    if (isFullTier) {
-      if (modifier !== undefined) {
-        onHoldPress = () => {
-          vibrateTap(8);
-          holdDispatch.pressModifier(modifier);
-        };
-        onHoldRelease = () => holdDispatch.releaseModifier(modifier);
-        onTap = () => {
-          vibrateTap(8);
-          holdDispatch.pressModifier(modifier);
-          holdDispatch.releaseModifier(modifier);
-        };
-      } else if (isShiftLock) {
-        onTap = () => {
-          vibrateTap(8);
-          holdDispatch.toggleShiftLock();
-        };
-      } else {
-        const inputs = resolveOrdinaryKeyInputs(def);
-        if (inputs) {
-          onHoldPress = () => {
-            vibrateTap(10);
-            holdDispatch.pressKey(inputs);
-          };
-          onHoldRelease = () => holdDispatch.releaseKey(inputs);
-          onTap = () => {
-            vibrateTap(10);
-            holdDispatch.pressKey(inputs);
-            holdDispatch.releaseKey(inputs);
-          };
-        }
-      }
-    }
+    // and cursor keys stay tap-only (no hold gesture — cursor's repeat-on-hold
+    // lives in the dedicated CursorPad). Below full tier there is no held-set
+    // relay, so every key falls back to the original one-shot `dispatch`
+    // (intentionally NOT memo-friendly — a separate, lower-traffic tier).
+    const hasHoldGesture = isFullTier && !isShiftLock && (modifier !== undefined || resolveOrdinaryKeyInputs(def) !== null);
 
     return (
-      <KeyHoldButton
+      <KeyboardKeyButton
         key={def.id}
-        size="sm"
+        def={def}
         variant={toneVariant(def.tone, latched)}
-        className={cn(
-          "min-w-0 overflow-hidden px-1",
-          options.grow ? "flex-1" : undefined,
-          options.fill ? "h-full w-full flex-1" : undefined,
-          toneButtonClass(def.tone, latched),
-        )}
-        style={{
-          height: options.fill ? undefined : (options.heightPx ?? deckKeyHeightPx),
-          minWidth: 30,
-          flexBasis: options.grow ? 0 : undefined,
-        }}
-        data-testid={def.testId}
-        data-key-height={options.fill ? undefined : (options.heightPx ?? deckKeyHeightPx)}
-        aria-label={def.ariaLabel}
-        aria-pressed={isModifier || isShiftLock ? latched : undefined}
+        toneClassName={toneButtonClass(def.tone, latched)}
+        heightPx={options.fill ? undefined : (options.heightPx ?? deckKeyHeightPx)}
+        grow={options.grow}
+        fill={options.fill}
+        label={label}
+        showSecondary={showSecondary}
+        keyFontPx={keyFontPx}
         disabled={disabled}
-        title={disabled ? UNAVAILABLE_KEY_HINT : undefined}
-        onHoldPress={onHoldPress}
-        onHoldRelease={onHoldRelease}
-        onTap={onTap}
-      >
-        {Icon ? (
-          <Icon style={{ width: iconPx, height: iconPx }} />
-        ) : (
-          <span className="flex flex-col items-center leading-none">
-            {showSecondary ? (
-              <span className="text-[0.6rem] font-normal leading-none text-muted-foreground" aria-hidden="true">
-                {def.secondary}
-              </span>
-            ) : null}
-            <span
-              style={{
-                // Explicit two-line labels (e.g. "RUN\nSTOP") keep their break;
-                // everything else stays on one line rather than wrapping.
-                whiteSpace: label.includes("\n") ? "pre-line" : "nowrap",
-                fontSize: keyFontPx,
-                fontWeight: 600,
-                lineHeight: 1.05,
-              }}
-            >
-              {label}
-            </span>
-          </span>
-        )}
-      </KeyHoldButton>
+        latched={latched}
+        isModifierOrShiftLock={isModifier || isShiftLock}
+        hasHoldGesture={hasHoldGesture}
+        onHoldPress={isFullTier ? handleKeyHoldPress : dispatch}
+        onHoldRelease={isFullTier ? handleKeyHoldRelease : dispatch}
+        onTap={isFullTier ? handleKeyTap : dispatch}
+      />
     );
   };
 
@@ -461,9 +610,12 @@ export const TypeKeyboard = ({
               style={{ width: 112 }}
               data-testid="remote-input-keyboard-function"
             >
-              {chunk(layout.functionKeys, 2).map((pair, rowIndex) => (
-                <div key={rowIndex} className="flex gap-1">
-                  {pair.map((def) => renderKey(def, { heightPx: gridKeyHeightPx, grow: true }))}
+              {/* One merged key per row (F1/F2, F3/F4, F5/F6, F7/F8) - a single
+                  column, mirroring the real C64's physical function-key
+                  cluster and giving each key the box's full width. */}
+              {layout.functionKeys.map((def) => (
+                <div key={def.id} className="flex gap-1">
+                  {renderKey(def, { heightPx: gridKeyHeightPx, grow: true })}
                 </div>
               ))}
             </div>

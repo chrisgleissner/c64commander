@@ -81,8 +81,30 @@ export type KeyDef = {
   icon?: KeyIcon;
   /** Shorter label used on compact where width is scarce (falls back to `label`). */
   compactLabel?: string;
-  /** Shifted-symbol legend shown as a small secondary keycap glyph, where readable. */
+  /**
+   * Shifted-symbol legend shown as a small secondary keycap glyph, where
+   * readable — ALWAYS requires SHIFT held while the key is tapped to reach
+   * (the main `action` below is the unshifted function; holding SHIFT
+   * composes it into the shifted one via the ordinary hold-chord relay, no
+   * separate dispatch path needed).
+   */
   secondary?: string;
+  /**
+   * Where the (smaller) secondary legend renders relative to the main label:
+   * `"above"` (default) stacks it above, smaller — matching the digit/symbol
+   * keys' existing convention and a real C64 keycap's shifted-legend
+   * placement. `"right"` places it beside the main label instead (used only
+   * by the merged function keys, where stacking two short "f N" labels read
+   * as confusingly similar).
+   */
+  secondaryPosition?: "above" | "right";
+  /**
+   * Digit/symbol keys hide their secondary legend on the space-starved
+   * `compact` profile (existing behaviour). High-value system/edit/cursor/
+   * function keys set this so their ONLY way to discover the shifted
+   * function is never hidden.
+   */
+  secondaryAlwaysVisible?: boolean;
   /** Accessible label — always full and unambiguous, even when the visual label is abbreviated. */
   ariaLabel: string;
   action: KeyAction;
@@ -208,17 +230,6 @@ const ARROW_UP: KeyDef = {
   action: { kind: "key", inputs: ["arrow_up"] },
 };
 
-const cursorKey = (direction: CursorDirection): KeyDef => ({
-  id: `cursor-${direction}`,
-  testId: CURSOR_KEY_META[direction].testId,
-  // Rendered as the icon; the text label is only a fallback for icon-less contexts.
-  label: CURSOR_KEY_META[direction].ariaLabel,
-  icon: CURSOR_KEY_META[direction].icon,
-  ariaLabel: CURSOR_KEY_META[direction].ariaLabel,
-  action: { kind: "cursor", direction },
-  tone: "default",
-});
-
 const RETURN: KeyDef = {
   id: "return",
   testId: "remote-input-key-return",
@@ -307,12 +318,106 @@ const functionKey = (n: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8): KeyDef => {
   };
 };
 
+// --- Expanded-profile-only merged dual-function keys ------------------------
+//
+// The real C64 keyboard has ONE physical key per pair below (matrix-wise,
+// exactly as HOME/CLR and DEL/INST already model: the same raw matrix input,
+// with SHIFT held distinguishing the two functions) — only the compact/medium
+// decks render them as separate keys (room enough, and the CursorPad covers
+// cursor movement there instead). The expanded profile mirrors the real
+// keyboard's shape by rendering each pair as ONE key: tapping it sends the
+// unshifted (main) function; holding SHIFT while tapping composes the
+// shifted (secondary) function via the ordinary hold-chord relay — no new
+// dispatch path is needed for either half.
+const CLR_HOME_MERGED: KeyDef = {
+  id: "clr-home",
+  testId: "remote-input-key-clr-home",
+  label: "HOME",
+  secondary: "CLR",
+  secondaryAlwaysVisible: true,
+  ariaLabel: "Home (hold Shift for Clear)",
+  action: { kind: "special", key: "home" },
+  tone: "edit",
+};
+const INST_DEL_MERGED: KeyDef = {
+  id: "inst-del",
+  testId: "remote-input-key-inst-del",
+  label: "DEL",
+  secondary: "INST",
+  secondaryAlwaysVisible: true,
+  ariaLabel: "Delete (hold Shift for Insert)",
+  action: { kind: "special", key: "del" },
+  tone: "edit",
+};
+// The C64's cursor keys are matrix-wise exactly like HOME/CLR above: ONE key
+// per axis, unshifted = down/right, SHIFT = up/left (see cursorKeyMapping.ts).
+// Rendered as plain arrow glyphs (not the CursorPad's lucide icons) so the
+// existing smaller-secondary-above text mechanism applies uninterrupted.
+// Kept as `{kind:"cursor", direction}` (same action kind, same onCursor/
+// sendCursor path the standalone cursor keys always used - fallback-tier
+// PETSCII injection works per-direction with no shift composition needed,
+// see cursorKeyMapping.ts) rather than a raw matrix "key" input: the
+// unshifted direction is the default action, and TypeKeyboard's tap handler
+// picks the complementary (shifted) direction when SHIFT is currently
+// asserted, entirely at the UI layer - no new dispatch path required.
+const CURSOR_UP_DOWN_MERGED: KeyDef = {
+  id: "cursor-up-down",
+  testId: "remote-input-key-cursor-up-down",
+  label: "↓",
+  secondary: "↑",
+  secondaryAlwaysVisible: true,
+  ariaLabel: "Cursor down (hold Shift for up)",
+  action: { kind: "cursor", direction: "down" },
+  tone: "default",
+};
+const CURSOR_LEFT_RIGHT_MERGED: KeyDef = {
+  id: "cursor-left-right",
+  testId: "remote-input-key-cursor-left-right",
+  label: "→",
+  secondary: "←",
+  secondaryAlwaysVisible: true,
+  ariaLabel: "Cursor right (hold Shift for left)",
+  action: { kind: "cursor", direction: "right" },
+  tone: "default",
+};
+
+// Merged F-key pair (F1/F2, F3/F4, F5/F6, F7/F8): unlike the keys above, the
+// two legends sit SIDE BY SIDE (main then smaller secondary to the right) —
+// stacking two near-identical "f N" labels vertically reads as confusingly
+// similar.
+const expandedFunctionKeyPair = (main: 1 | 3 | 5 | 7): KeyDef => {
+  const mainKey = `f${main}` as SpecialKeyboardKey;
+  const secondaryN = main + 1;
+  const secondaryKey = `f${secondaryN}` as SpecialKeyboardKey;
+  return {
+    id: `${mainKey}-${secondaryKey}`,
+    testId: `remote-input-key-${mainKey}-${secondaryKey}`,
+    label: `f${"  "}${main}`,
+    secondary: `f${"  "}${secondaryN}`,
+    secondaryPosition: "right",
+    secondaryAlwaysVisible: true,
+    ariaLabel: `f ${main} (hold Shift for f ${secondaryN})`,
+    action: { kind: "special", key: mainKey },
+    tone: "function-primary",
+  };
+};
+const EXPANDED_FUNCTION_GROUP: KeyDef[] = [
+  expandedFunctionKeyPair(1),
+  expandedFunctionKeyPair(3),
+  expandedFunctionKeyPair(5),
+  expandedFunctionKeyPair(7),
+];
+
 const RUN_STOP: KeyDef = {
   id: "run_stop",
   testId: "remote-input-key-run-stop",
-  // Rendered on two lines everywhere: "RUN/STOP" is too wide for a single-column
-  // key in the dense expanded row, and the stacked form reads cleanly in the deck.
-  label: "RUN\nSTOP",
+  // STOP is the unshifted (main) function; RUN is SHIFT+RUN/STOP - a real C64
+  // shortcut that loads and runs, sent by holding SHIFT while tapping this
+  // same key (the ordinary hold-chord relay composes run_stop+left_shift on
+  // the wire; no separate dispatch path exists or is needed for "RUN").
+  label: "STOP",
+  secondary: "RUN",
+  secondaryAlwaysVisible: true,
   ariaLabel: "Run Stop",
   action: { kind: "special", key: "run_stop" },
   tone: "caution",
@@ -375,6 +480,10 @@ const SHIFT_LOCK: KeyDef = {
   id: "shift-lock",
   testId: "remote-input-key-shift-lock",
   label: "SHIFT\nLOCK",
+  // "SHIFT" no longer fits on one line in the expanded row once its neighbour
+  // RETURN doubles in width (HARD16-008-style abbreviation, same mechanism
+  // RESTORE already uses for the same dense row).
+  compactLabel: "SHFT\nLOCK",
   ariaLabel: "Shift lock",
   action: { kind: "shift_lock" },
   tone: "shift",
@@ -463,13 +572,11 @@ const EXPANDED_ROWS: KeyDef[][] = [
     sym("plus"),
     sym("minus"),
     sym("pound"),
-    HOME,
-    CLR,
-    DEL,
-    INS,
+    CLR_HOME_MERGED,
+    INST_DEL_MERGED,
   ],
   [
-    CTRL,
+    { ...CTRL, span: 2 },
     letter("q"),
     letter("w"),
     letter("e"),
@@ -483,7 +590,7 @@ const EXPANDED_ROWS: KeyDef[][] = [
     sym("at"),
     sym("star"),
     ARROW_UP,
-    RESTORE,
+    { ...RESTORE, span: 2 },
   ],
   [
     RUN_STOP,
@@ -500,11 +607,11 @@ const EXPANDED_ROWS: KeyDef[][] = [
     sym("colon"),
     sym("semicolon"),
     sym("equals"),
-    { ...RETURN, span: 1 },
+    { ...RETURN, span: 2 },
   ],
   [
     COMMODORE,
-    SHIFT,
+    { ...SHIFT, span: 2 },
     letter("z"),
     letter("x"),
     letter("c"),
@@ -515,11 +622,9 @@ const EXPANDED_ROWS: KeyDef[][] = [
     sym("comma"),
     sym("period"),
     sym("slash"),
-    SHIFT_RIGHT,
-    cursorKey("up"),
-    cursorKey("down"),
-    cursorKey("left"),
-    cursorKey("right"),
+    { ...SHIFT_RIGHT, span: 2 },
+    CURSOR_UP_DOWN_MERGED,
+    CURSOR_LEFT_RIGHT_MERGED,
   ],
   [{ ...SPACE, span: 1 }],
 ];
@@ -538,7 +643,7 @@ export const getKeyboardLayout = (profile: KeyboardProfile): KeyboardLayout => {
         bottomRow: BOTTOM_ROW,
       };
     case "expanded":
-      return { kind: "rows", rows: EXPANDED_ROWS, functionKeys: FUNCTION_GROUP };
+      return { kind: "rows", rows: EXPANDED_ROWS, functionKeys: EXPANDED_FUNCTION_GROUP };
   }
 };
 
