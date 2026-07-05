@@ -1659,16 +1659,17 @@ select_build_jdk() {
   fi
   local candidate
   for candidate in "${candidates[@]}"; do
-    if [[ -n "$candidate" && -x "$candidate/bin/java" ]]; then
+    # Require a full JDK (javac present) — a JRE-only install cannot compile.
+    if [[ -n "$candidate" && -x "$candidate/bin/javac" ]]; then
       export JAVA_HOME="$candidate"
       export PATH="$JAVA_HOME/bin:$PATH"
       return 0
     fi
   done
-  # Otherwise keep the ambient JDK only if it is already 21+.
-  if command -v java >/dev/null 2>&1; then
+  # Otherwise keep the ambient JDK only if it is already a 21+ JDK (has javac).
+  if command -v javac >/dev/null 2>&1; then
     local major
-    major="$(java -version 2>&1 | sed -n 's/.*version "\([0-9]*\).*/\1/p' | head -1)"
+    major="$(javac -version 2>&1 | sed -n 's/.*javac \([0-9]*\).*/\1/p' | head -1)"
     [[ -n "$major" && "$major" -ge 21 ]] && return 0
   fi
   echo "WARNING: no JDK 21 found; the Android build requires Java 21 (Capacitor 8)." >&2
