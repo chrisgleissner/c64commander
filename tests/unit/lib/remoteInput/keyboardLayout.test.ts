@@ -180,6 +180,29 @@ describe("getKeyboardLayout", () => {
     expect(legend("remote-input-key-slash")).toBe("?");
   });
 
+  it.each(["compact", "medium"] as const)("adds a second full-width SPACE at the bottom of the %s deck", (profile) => {
+    const layout = getKeyboardLayout(profile);
+    if (layout.kind !== "deck") throw new Error(`${profile} layout must be deck-based`);
+    expect(layout.bottomSpace.testId).toBe("remote-input-key-space-bottom");
+    expect(layout.bottomSpace.action).toEqual({ kind: "char", char: " " });
+    // The top immediate SPACE is still present and distinct.
+    const topSpace = layout.immediate.find((k) => k.testId === "remote-input-key-space");
+    expect(topSpace).toBeDefined();
+    expect(layout.bottomSpace.id).not.toBe(topSpace?.id);
+  });
+
+  it("colours the ordinary typing keys (0-9, A-Z) with the character tone and SHIFT with the shift tone", () => {
+    const keys = collectKeys(getKeyboardLayout("medium"));
+    const toneOf = (testId: string) => keys.find((k) => k.testId === testId)?.tone;
+    expect(toneOf("remote-input-key-a")).toBe("character");
+    expect(toneOf("remote-input-key-1")).toBe("character");
+    expect(toneOf("remote-input-key-shift")).toBe("shift");
+    expect(toneOf("remote-input-key-shift-lock")).toBe("shift");
+    // Symbols and system modifiers keep their own tones (not "character").
+    expect(toneOf("remote-input-key-plus")).not.toBe("character");
+    expect(toneOf("remote-input-key-ctrl")).toBe("modifier");
+  });
+
   it("spells RESTORE in full and abbreviates to REST. only on compact (HARD16-008)", () => {
     const restore = collectKeys(getKeyboardLayout("expanded")).find((k) => k.testId === "remote-input-key-restore");
     expect(restore?.label).toBe("RESTORE");

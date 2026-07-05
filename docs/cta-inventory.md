@@ -391,16 +391,21 @@ up-right,down-left,down-right}` — R✅ I✅ (touch only)
   Compact/medium profiles render a high-value deck
   (`remote-input-keyboard-deck`: cursor pad `remote-input-cursor-pad-group` +
   immediate RETURN/SPACE `remote-input-keyboard-immediate`, then F1–F8
-  `remote-input-keyboard-function`) above the alphanumeric/symbol grid
-  (`remote-input-keyboard-grid`), then the lower rows
-  (`remote-input-keyboard-lower`: CLR/HOME/INS/DEL `remote-input-keyboard-edit`
-  and RUN/STOP/SHIFT-LOCK/RESTORE/C=/CTRL/SHIFT `remote-input-keyboard-system`).
-  Every grid row is a contiguous slice of exactly one physical C64 row (segment
-  invariant — no split QWERTY rows, no horizontal scrolling); the deck, grid,
-  and lower rows share one scroll container (`remote-input-keyboard-scroll`) so
-  the whole keyboard scrolls as a unit on short viewports; the expanded profile
-  renders the physical C64 rows directly in `remote-input-keyboard-grid` with
-  the function-key cluster alongside. The cursor-pad keys
+  `remote-input-keyboard-function` — split into two rows F1–F4/F5–F8 on compact,
+  one row otherwise — then the larger high-value special keys directly below:
+  CLR/HOME/INS/DEL `remote-input-keyboard-edit` and
+  RUN/STOP/SHIFT-LOCK/RESTORE/C=/CTRL/SHIFT `remote-input-keyboard-system`),
+  then the alphanumeric/symbol grid (`remote-input-keyboard-grid`), and finally
+  a second full-width SPACE `remote-input-keyboard-bottom-space`
+  (`remote-input-key-space-bottom`) so SPACE appears twice (top beside RETURN +
+  very bottom). Ordinary typing keys 0-9/A-Z carry a distinct "character" colour,
+  SHIFT and SHIFT LOCK a distinct high-visibility "shift" colour. Every grid row
+  is a contiguous slice of exactly one physical C64 row (segment invariant — no
+  split QWERTY rows, no horizontal scrolling); the deck and grid share one scroll
+  container (`remote-input-keyboard-scroll`) so the whole keyboard scrolls as a
+  unit on short viewports; the expanded profile renders the physical C64 rows
+  directly in `remote-input-keyboard-grid` with the function-key cluster
+  alongside. The cursor-pad keys
   (`remote-input-key-cursor-{up,down,left,right}`) auto-repeat while held by
   touch (initial delay then a brisk repeat, like C64 hardware); a keypad/
   focus-ring activation still emits a single cursor move (R✅ I✅ preserved)
@@ -412,15 +417,18 @@ PETSCII/keyboard-buffer equivalent for these modifiers]`
   - SHIFT LOCK — button (persistent latch, separate from the one-shot SHIFT
     above) — `remote-input-key-shift-lock` — R✅ I✅ — stays applied to every
     key until toggled off
-  - RUN/STOP, RESTORE — buttons — `remote-input-key-run-stop`,
-    `remote-input-key-restore` — R✅ I✅ `[RESTORE unavailable on the
-kernal-fallback tier — no keyboard-buffer byte; still shown, no-ops]`
-  - F1 / F3 / F5 / F7 — buttons — `remote-input-key-f{1,3,5,7}` — R✅ I✅
+  - RUN/STOP, RESTORE, C=, CTRL — buttons — `remote-input-key-run-stop`,
+    `remote-input-key-restore`, `remote-input-key-commodore`,
+    `remote-input-key-ctrl` — R✅ I✅ `[shown but disabled on the
+kernal-fallback tier — no keyboard-buffer equivalent; a plain-language footer
+    `remote-input-modifier-unavailable-hint` and per-key tooltip explain "not
+    available on this device", with no REST/firmware jargon]`
+  - F1–F8 — buttons — `remote-input-key-f{1..8}` — R✅ I✅
 - **Standard Joystick mode only — quick-keys bar**
-  (`remote-input-quick-keys-bar`): SPACE, RETURN, F1/F3/F5/F7, cursor
+  (`remote-input-quick-keys-bar`): SPACE, RETURN, F1–F8, cursor
   Up/Down/Left/Right, then RUN/STOP **last** (caution-styled dashed amber
   border, matching the Keys tab, positioned clear of RETURN to prevent a
-  destructive mistap) — buttons — `remote-input-key-{space,return,f1,f3,f5,f7,cursor-up,cursor-down,cursor-left,cursor-right,run-stop}`
+  destructive mistap) — buttons — `remote-input-key-{space,return,f1,f2,f3,f4,f5,f6,f7,f8,cursor-up,cursor-down,cursor-left,cursor-right,run-stop}`
   — R✅ I✅ (hidden in Game mode and Type mode)
 - **Standard Joystick mode and Type mode only — footer actions**
   - Safety — Release All (panic button) — button (destructive) —

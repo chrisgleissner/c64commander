@@ -84,7 +84,7 @@ export const QuickKeysBar = ({ onChar, onCursor, onSpecialKey, tier, scale = 1, 
       >
         RETURN
       </Button>
-      {(["f1", "f3", "f5", "f7"] as const).map((key) => (
+      {(["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8"] as const).map((key) => (
         <Button
           key={key}
           size="sm"

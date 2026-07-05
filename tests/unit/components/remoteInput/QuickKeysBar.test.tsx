@@ -14,9 +14,13 @@ const KEY_TEST_IDS = [
   "remote-input-key-space",
   "remote-input-key-return",
   "remote-input-key-f1",
+  "remote-input-key-f2",
   "remote-input-key-f3",
+  "remote-input-key-f4",
   "remote-input-key-f5",
+  "remote-input-key-f6",
   "remote-input-key-f7",
+  "remote-input-key-f8",
   "remote-input-key-cursor-up",
   "remote-input-key-cursor-down",
   "remote-input-key-cursor-left",
@@ -30,6 +34,13 @@ describe("QuickKeysBar", () => {
     render(<QuickKeysBar {...makeHandlers()} tier="full" />);
     for (const id of KEY_TEST_IDS) expect(screen.getByTestId(id)).not.toBeDisabled();
     expect(screen.getByTestId("remote-input-key-run-stop")).not.toBeDisabled();
+  });
+
+  it("exposes all eight function keys F1-F8 (not just the odd ones)", () => {
+    render(<QuickKeysBar {...makeHandlers()} tier="full" />);
+    for (const n of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      expect(screen.getByTestId(`remote-input-key-f${n}`)).toBeInTheDocument();
+    }
   });
 
   it("keeps every key except RUN/STOP enabled on the kernal-fallback tier (they work via the fallback injection)", () => {

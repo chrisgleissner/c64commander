@@ -90,6 +90,25 @@ describe("TypeKeyboard", () => {
       render(<TypeKeyboard {...handlers} tier="full" />);
       expect(screen.getByTestId("remote-input-type-keyboard")).toHaveAttribute("data-profile", "medium");
     });
+
+    it("splits the function keys into two rows on compact but one row on medium", () => {
+      renderKeyboard("compact");
+      expect(screen.getByTestId("remote-input-keyboard-function").children.length).toBe(2);
+      expect(
+        within(screen.getByTestId("remote-input-keyboard-function")).getByTestId("remote-input-key-f8"),
+      ).toBeInTheDocument();
+      cleanup();
+      renderKeyboard("medium");
+      expect(screen.getByTestId("remote-input-keyboard-function").children.length).toBe(1);
+    });
+
+    it("renders a second full-width SPACE at the bottom of the deck (SPACE appears twice)", () => {
+      renderKeyboard("compact");
+      const bottom = screen.getByTestId("remote-input-keyboard-bottom-space");
+      expect(within(bottom).getByTestId("remote-input-key-space-bottom")).toBeInTheDocument();
+      // The top immediate SPACE is still present too.
+      expect(screen.getByTestId("remote-input-key-space")).toBeInTheDocument();
+    });
   });
 
   describe("high-value key visibility", () => {
@@ -279,15 +298,19 @@ describe("TypeKeyboard", () => {
   });
 
   describe("tier gating", () => {
-    it("disables only the no-fallback keys on the kernal-fallback tier and hints why", () => {
+    it("disables the no-fallback keys on the kernal-fallback tier with a non-technical explanation", () => {
       renderKeyboard("medium", "kernal-fallback");
+      // RUN/STOP, RESTORE, C=, CTRL have no kernal-buffer equivalent — shown but disabled.
       for (const id of ["run-stop", "restore", "commodore", "ctrl"]) {
         expect(screen.getByTestId(`remote-input-key-${id}`)).toBeDisabled();
       }
-      for (const id of ["clr", "home", "ins", "del", "f1", "f8"]) {
+      // Keys that DO work over the fallback stay enabled.
+      for (const id of ["clr", "home", "ins", "del", "f1", "f8", "shift", "shift-lock"]) {
         expect(screen.getByTestId(`remote-input-key-${id}`)).not.toBeDisabled();
       }
-      expect(screen.getByTestId("remote-input-modifier-unavailable-hint")).toBeInTheDocument();
+      // The explanation is present but free of REST/firmware jargon.
+      const hint = screen.getByTestId("remote-input-modifier-unavailable-hint");
+      expect(hint.textContent).not.toMatch(/machine:input|firmware/i);
     });
 
     // Lead F3: the fallback injection needs the same authenticated REST calls

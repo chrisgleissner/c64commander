@@ -97,8 +97,9 @@ describe("RemoteInputSheet", () => {
   it("disables Joystick mode and shows the unavailable hint on the kernal-fallback tier", () => {
     tierState.tier = "kernal-fallback";
     render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
-    expect(screen.getByTestId("remote-input-mode-joystick")).toBeDisabled();
-    expect(screen.getAllByText(/machine:input support/i).length).toBeGreaterThan(0);
+    const joystickToggle = screen.getByTestId("remote-input-mode-joystick");
+    expect(joystickToggle).toBeDisabled();
+    expect(joystickToggle).toHaveAttribute("title", expect.stringMatching(/joystick relay requires/i));
   });
 
   // Lead F3: the generic "Type mode still works" hint is wrong on this tier -

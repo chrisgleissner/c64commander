@@ -48,8 +48,14 @@ export type KeyAction =
   | { kind: "modifier"; modifier: StickyModifier }
   | { kind: "shift_lock" };
 
-/** Visual/semantic tone — drives styling and caution treatment, never behaviour. */
-export type KeyTone = "default" | "action" | "edit" | "function" | "modifier" | "caution" | "danger";
+/**
+ * Visual/semantic tone — drives styling and caution treatment, never behaviour.
+ * `character` colours the ordinary typing keys (0-9, A-Z); `shift` gives the
+ * SHIFT / SHIFT LOCK keys their own high-visibility colour, distinct from the
+ * other modifiers (C=, CTRL).
+ */
+export type KeyTone =
+  "default" | "action" | "edit" | "function" | "modifier" | "shift" | "character" | "caution" | "danger";
 
 export type KeyDef = {
   /** Stable id, unique within a layout (React key). */
@@ -91,6 +97,8 @@ export type KeyboardDeckLayout = {
   system: KeyDef[];
   /** Scrollable alphanumeric / symbol grid (logical wrapping, not physical C64 rows). */
   grid: KeyDef[][];
+  /** A second full-width SPACE pinned below the grid. */
+  bottomSpace: KeyDef;
 };
 
 /** Row-based layout (expanded): the physical C64 rows rendered as closely as practical. */
@@ -130,6 +138,7 @@ const letter = (c: string): KeyDef => ({
   label: c.toUpperCase(),
   ariaLabel: `Letter ${c.toUpperCase()}`,
   action: { kind: "key", inputs: [c as KeyboardInputName] },
+  tone: "character",
 });
 
 const digit = (d: string, secondary?: string): KeyDef => ({
@@ -139,6 +148,7 @@ const digit = (d: string, secondary?: string): KeyDef => ({
   secondary,
   ariaLabel: `Digit ${d}`,
   action: { kind: "key", inputs: [d as KeyboardInputName] },
+  tone: "character",
 });
 
 type SymbolSpec = { key: KeyboardInputName; label: string; ariaLabel: string; secondary?: string };
@@ -217,6 +227,15 @@ const SPACE: KeyDef = {
   action: { kind: "char", char: " " },
   tone: "action",
   span: 2,
+};
+// A second, full-width SPACE anchored at the very bottom of the deck grid — the
+// natural thumb position after typing a line, mirroring a physical keyboard.
+// Distinct id/testid from the top SPACE so both stay unique.
+const SPACE_BOTTOM: KeyDef = {
+  ...SPACE,
+  id: "space-bottom",
+  testId: "remote-input-key-space-bottom",
+  ariaLabel: "Space (bottom)",
 };
 
 // Edit keys — split from the C64's dual-function physical keys into direct keys.
@@ -315,7 +334,7 @@ const SHIFT: KeyDef = {
   label: "SHIFT",
   ariaLabel: "Shift",
   action: { kind: "modifier", modifier: "left_shift" },
-  tone: "modifier",
+  tone: "shift",
 };
 // The expanded physical layout has two Shift keys; the right one latches the
 // same sticky shift but needs its own id/testid to stay unique.
@@ -335,7 +354,7 @@ const SHIFT_LOCK: KeyDef = {
   label: "SHIFT\nLOCK",
   ariaLabel: "Shift lock",
   action: { kind: "shift_lock" },
-  tone: "modifier",
+  tone: "shift",
 };
 
 // Secondary legends for the number row (authentic C64 shifted symbols).
@@ -483,6 +502,7 @@ export const getKeyboardLayout = (profile: KeyboardProfile): KeyboardLayout => {
         functionKeys: FUNCTION_GROUP,
         system: SYSTEM_GROUP,
         grid: DECK_GRID,
+        bottomSpace: SPACE_BOTTOM,
       };
     case "expanded":
       return { kind: "rows", rows: EXPANDED_ROWS, functionKeys: FUNCTION_GROUP };
@@ -492,7 +512,14 @@ export const getKeyboardLayout = (profile: KeyboardProfile): KeyboardLayout => {
 /** Flattens a layout to the full set of {@link KeyDef}s it renders (cursor-pad keys excluded — see below). */
 export const flattenLayoutKeys = (layout: KeyboardLayout): KeyDef[] =>
   layout.kind === "deck"
-    ? [...layout.immediate, ...layout.edit, ...layout.functionKeys, ...layout.system, ...layout.grid.flat()]
+    ? [
+        ...layout.immediate,
+        ...layout.edit,
+        ...layout.functionKeys,
+        ...layout.system,
+        ...layout.grid.flat(),
+        layout.bottomSpace,
+      ]
     : [...layout.rows.flat(), ...layout.functionKeys];
 
 /** The four cursor directions in stable order — used to build the CursorPad and expanded cursor keys. */

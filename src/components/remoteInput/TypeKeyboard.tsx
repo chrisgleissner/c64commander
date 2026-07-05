@@ -32,7 +32,10 @@ export type TypeKeyboardProps = {
   className?: string;
 };
 
-const FULL_TIER_HINT = "Requires Ultimate firmware with machine:input support";
+// Plain-language reason shown when a key that needs machine:input (RUN/STOP,
+// RESTORE, C=, CTRL) is disabled — no REST/firmware jargon.
+const UNAVAILABLE_KEY_HINT = "Not available on this device";
+const UNAVAILABLE_KEYS_FOOTER = "RUN/STOP, RESTORE, C= and CTRL aren’t available on this device.";
 
 /** Splits a list into fixed-size groups (used to lay the F-keys out two per row). */
 const chunk = <T,>(items: readonly T[], size: number): T[][] => {
@@ -43,6 +46,9 @@ const chunk = <T,>(items: readonly T[], size: number): T[][] => {
 
 const toneVariant = (tone: KeyTone | undefined, latched: boolean): "default" | "secondary" | "outline" => {
   if (tone === "modifier") return latched ? "default" : "secondary";
+  // SHIFT/SHIFT-LOCK keep a light base so their violet colour reads; the latch
+  // ring (toneButtonClass) marks the active state.
+  if (tone === "shift" || tone === "character") return "outline";
   if (tone === "action" || tone === "edit" || tone === "function" || tone === "caution" || tone === "danger") {
     return "secondary";
   }
@@ -113,9 +119,21 @@ export const TypeKeyboard = ({
   const profile = profileOverride ?? resolveKeyboardProfile(measured.width, measured.height);
   const layout = getKeyboardLayout(profile);
 
+  // Keys with no kernal-fallback equivalent (RUN/STOP, RESTORE, C=, CTRL) are
+  // shown but disabled when the device lacks machine:input, with a plain-language
+  // reason (footer + per-key tooltip) rather than REST/firmware jargon.
+  const keyUnavailable = (def: KeyDef) => def.requiresFullTier === true && tier !== "full";
+  const anyKeyUnavailable =
+    tier !== "full" &&
+    (layout.kind === "deck" ? layout.system.some(keyUnavailable) : layout.rows.flat().some(keyUnavailable));
+
   const cursorSizePx = measured.width > 0 ? Math.max(132, Math.min(210, Math.round(measured.width * 0.44))) : 150;
   const gridKeyHeightPx = profile === "compact" ? 40 : 38;
   const deckKeyHeightPx = 42;
+  // The special keys (edit + system: CLR/HOME/INS/DEL, RUN-STOP/SHIFT-LOCK/
+  // RESTORE/C=/CTRL/SHIFT) render taller than the character grid so they are
+  // easy to hit and read.
+  const systemKeyHeightPx = 54;
   // The expanded layout packs ~18 keys per row, so its labels get a smaller
   // font; the deck profiles have roomier keys. Labels never wrap (nowrap), so
   // long ones stay on one line instead of breaking into "RES/TOR/E".
@@ -178,7 +196,7 @@ export const TypeKeyboard = ({
     const latched =
       (isModifier && activeModifiers.has((def.action as { modifier: StickyModifier }).modifier)) ||
       (isShiftLock && shiftLocked);
-    const disabled = def.requiresFullTier === true && tier !== "full";
+    const disabled = keyUnavailable(def);
     const label = profile === "compact" && def.compactLabel ? def.compactLabel : def.label;
     const Icon = def.icon;
     const iconPx = Math.max(15, Math.round(keyFontPx * 1.35));
@@ -207,7 +225,7 @@ export const TypeKeyboard = ({
         aria-label={def.ariaLabel}
         aria-pressed={isModifier || isShiftLock ? latched : undefined}
         disabled={disabled}
-        title={disabled ? FULL_TIER_HINT : undefined}
+        title={disabled ? UNAVAILABLE_KEY_HINT : undefined}
         onClick={() => dispatch(def)}
       >
         {Icon ? (
@@ -237,12 +255,6 @@ export const TypeKeyboard = ({
     );
   };
 
-  const anyFullTierGated =
-    tier !== "full" &&
-    (layout.kind === "deck"
-      ? [...layout.system].some((k) => k.requiresFullTier)
-      : [...layout.rows.flat(), ...layout.functionKeys].some((k) => k.requiresFullTier));
-
   return (
     <div
       ref={containerRef}
@@ -261,10 +273,10 @@ export const TypeKeyboard = ({
           className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pb-6 pr-0.5"
           data-testid="remote-input-keyboard-scroll"
         >
-          {/* HARD16-007 scroll order: the primary controls for the 8020 come
-              first — cursor pad + immediate RETURN/SPACE, then the high-frequency
-              function row (kept high per its game/menu value) — so the character
-              grid follows immediately and the edit/system rows sink below it. */}
+          {/* Scroll order for the 8020: cursor pad + immediate RETURN/SPACE, then
+              the function keys, then the high-value special keys (edit + system)
+              directly below them, then the character grid, and finally a second
+              full-width SPACE anchored at the very bottom. */}
           <div className="flex flex-col gap-2" data-testid="remote-input-keyboard-deck">
             {/* Cursor pad (largest, visually isolated) + immediate RETURN/SPACE beside it. */}
             <div className="flex items-stretch gap-3">
@@ -288,8 +300,21 @@ export const TypeKeyboard = ({
                 function keys below. */}
             <div className="border-t border-border" role="separator" />
 
-            <div className="flex flex-wrap gap-1" data-testid="remote-input-keyboard-function">
-              {layout.functionKeys.map((def) => renderKey(def, { heightPx: deckKeyHeightPx, grow: true }))}
+            {/* Function keys — two rows on compact (F1–F4 / F5–F8), one row otherwise. */}
+            <div className="flex flex-col gap-1" data-testid="remote-input-keyboard-function">
+              {(profile === "compact" ? chunk(layout.functionKeys, 4) : [layout.functionKeys]).map((row, rowIndex) => (
+                <div key={rowIndex} className="flex gap-1">
+                  {row.map((def) => renderKey(def, { heightPx: deckKeyHeightPx, grow: true }))}
+                </div>
+              ))}
+            </div>
+
+            {/* High-value special keys, larger and immediately below the F-keys. */}
+            <div className="flex flex-wrap gap-1" data-testid="remote-input-keyboard-edit">
+              {layout.edit.map((def) => renderKey(def, { heightPx: systemKeyHeightPx, grow: true }))}
+            </div>
+            <div className="flex flex-wrap gap-1" data-testid="remote-input-keyboard-system">
+              {layout.system.map((def) => renderKey(def, { heightPx: systemKeyHeightPx, grow: true }))}
             </div>
           </div>
 
@@ -303,15 +328,9 @@ export const TypeKeyboard = ({
             ))}
           </div>
 
-          <div className="border-t border-border" role="separator" />
-
-          <div className="flex flex-col gap-2" data-testid="remote-input-keyboard-lower">
-            <div className="flex flex-wrap gap-1" data-testid="remote-input-keyboard-edit">
-              {layout.edit.map((def) => renderKey(def, { heightPx: deckKeyHeightPx, grow: true }))}
-            </div>
-            <div className="flex flex-wrap gap-1" data-testid="remote-input-keyboard-system">
-              {layout.system.map((def) => renderKey(def, { heightPx: deckKeyHeightPx, grow: true }))}
-            </div>
+          {/* Second SPACE at the very bottom of the normal keys. */}
+          <div className="flex" data-testid="remote-input-keyboard-bottom-space">
+            {renderKey(layout.bottomSpace, { heightPx: deckKeyHeightPx, grow: true })}
           </div>
         </div>
       ) : (
@@ -351,12 +370,12 @@ export const TypeKeyboard = ({
         </div>
       )}
 
-      {anyFullTierGated ? (
+      {anyKeyUnavailable ? (
         <p
           className="shrink-0 text-center text-xs text-muted-foreground"
           data-testid="remote-input-modifier-unavailable-hint"
         >
-          RUN/STOP, RESTORE, CTRL and C= need Ultimate firmware with machine:input support.
+          {UNAVAILABLE_KEYS_FOOTER}
         </p>
       ) : null}
     </div>
