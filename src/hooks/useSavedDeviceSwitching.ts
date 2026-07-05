@@ -142,14 +142,14 @@ export function useSavedDeviceSwitching() {
         });
         if (verification.ok && verification.deviceInfo) {
           completeSavedDeviceVerification(deviceId, verification.deviceInfo);
-          invalidateForSavedDeviceSwitch(queryClient, location.pathname);
+          invalidateForSavedDeviceSwitch(queryClient);
           completeSavedDeviceSwitchAttempt(attemptId, {
             outcome: "success",
             verification,
           });
         } else {
           failSavedDeviceVerification(deviceId);
-          invalidateForSavedDeviceSwitch(queryClient, location.pathname);
+          invalidateForSavedDeviceSwitch(queryClient);
           completeSavedDeviceSwitchAttempt(attemptId, {
             outcome: "offline",
             verification,
@@ -157,7 +157,7 @@ export function useSavedDeviceSwitching() {
         }
         return verification;
       } catch (error) {
-        invalidateForSavedDeviceSwitch(queryClient, location.pathname);
+        invalidateForSavedDeviceSwitch(queryClient);
         completeSavedDeviceSwitchAttempt(attemptId, {
           outcome: "error",
           errorMessage: error instanceof Error ? error.message : String(error ?? "Unknown switch failure"),

@@ -8,10 +8,14 @@
 
 import { useEffect, useState } from "react";
 import { getC64API } from "@/lib/c64api";
+import { subscribeConfigEnrichmentNamespaceChange } from "@/lib/c64api/configEnrichmentNamespaceSignal";
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { useConnectionRoutingEpoch } from "@/hooks/useC64Connection";
 import { addLog } from "@/lib/logging";
 import { readItemDetails, readItemOptions } from "../utils/HomeConfigUtils";
+
+const isDefinitiveHttp404 = (error: unknown): boolean =>
+  typeof error === "object" && error !== null && (error as { c64uHttpStatus?: number }).c64uHttpStatus === 404;
 
 /**
  * A single device config item, identified by its live REST `{category, item}` coordinate.
@@ -92,7 +96,13 @@ export function useDeviceConfigOptionDomains(
   enabled: boolean,
 ): DeviceConfigOptionDomains {
   const routingEpoch = useConnectionRoutingEpoch();
+  const [namespaceEpoch, setNamespaceEpoch] = useState(0);
   const [domains, setDomains] = useState<DeviceConfigOptionDomains>(() => seedFromCache(refs));
+
+  // HARD16-004: a same-host identity flip (firmware upgrade / unit swap) changes
+  // the enrichment namespace without bumping the routing epoch, so subscribe to
+  // the flip signal to force a re-seed + re-interrogation against the new identity.
+  useEffect(() => subscribeConfigEnrichmentNamespaceChange(() => setNamespaceEpoch((previous) => previous + 1)), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -113,7 +123,9 @@ export function useDeviceConfigOptionDomains(
       for (const { category, item } of refs) {
         if (cancelled) return;
         const key = buildOptionDomainKey(category, item);
-        if (seeded[key]) continue;
+        // HARD16-005: skip items already known (a resolved domain) or definitively
+        // absent on this firmware — no repeated known-failing REST GET per mount.
+        if (seeded[key] || api.isConfigItemDomainKnownAbsent?.(category, item)) continue;
         try {
           const payload = await api.getConfigItem(category, item, { __c64uIntent: "background" });
           if (cancelled) return;
@@ -121,7 +133,13 @@ export function useDeviceConfigOptionDomains(
             readItemOptions(payload, category, item).map(String),
             readItemDetails(payload, category, item),
           );
-          if (domain) setDomains((previous) => ({ ...previous, [key]: domain }));
+          if (domain) {
+            setDomains((previous) => ({ ...previous, [key]: domain }));
+          } else {
+            // A 200 with no option domain is a definitive "this item has no
+            // constraints on this model" — remember it so it is not re-fetched.
+            api.markConfigItemDomainAbsent?.(category, item);
+          }
         } catch (error) {
           // A missing/unsupported item on this model simply yields nothing; the control then
           // presents the device's current value only, never a fabricated choice. Logged at debug
@@ -131,6 +149,10 @@ export function useDeviceConfigOptionDomains(
             item,
             error: error instanceof Error ? error.message : String(error),
           });
+          // HARD16-005: only a definitive HTTP 404 is negatively cached; a
+          // timeout/network/5xx/auth failure is transient and must be retried
+          // (never recreate the HARD15-002 poisoning class).
+          if (isDefinitiveHttp404(error)) api.markConfigItemDomainAbsent?.(category, item);
         }
       }
     })();
@@ -139,8 +161,8 @@ export function useDeviceConfigOptionDomains(
       cancelled = true;
     };
     // `scopeKey` distinguishes independent consumers; `refs` is expected stable. routingEpoch
-    // re-resolves against the newly connected device.
-  }, [enabled, routingEpoch, scopeKey, refs]);
+    // re-resolves against the newly connected device; namespaceEpoch against a same-host flip.
+  }, [enabled, routingEpoch, namespaceEpoch, scopeKey, refs]);
 
   return domains;
 }

@@ -112,7 +112,6 @@ import {
   DRIVE_DEFAULT_BUS_ID,
   DRIVE_DEFAULT_TYPE,
   DRIVE_KEYS,
-  DRIVE_TYPE_DEFAULTS,
   DRIVE_TYPE_ITEM,
   getCategoryConfigValue,
   getDriveConfigValue,
@@ -331,11 +330,16 @@ export const HomeDiskManager = () => {
     if (domain?.min !== undefined && domain.max !== undefined && domain.max >= domain.min) {
       return Array.from({ length: domain.max - domain.min + 1 }, (_, index) => domain.min! + index);
     }
+    // HARD16-011 doctrine exception: numeric IEC bus range, low divergence risk;
+    // the current value is merged in and the device min/max wins once resolved.
     return [...fallback];
   };
-  const typeOptionsFor = (category: string, item: string, fallback: readonly string[]): readonly string[] => {
+  // HARD16-011: Drive Type is a model-diverging string enum; when the device has
+  // not reported its values, offer nothing here so the current value only is
+  // shown (buildTypeOptions merges it) — never a fabricated model-specific list.
+  const typeOptionsFor = (category: string, item: string): readonly string[] => {
     const domainOptions = optionDomains[buildOptionDomainKey(category, item)]?.options;
-    return domainOptions && domainOptions.length ? domainOptions : fallback;
+    return domainOptions && domainOptions.length ? domainOptions : [];
   };
 
   const normalizedDriveModel = useMemo(() => normalizeDriveDevices(drivesData ?? null), [drivesData]);
@@ -1686,10 +1690,7 @@ export const HomeDiskManager = () => {
       busDefaultsFor(driveCategory, DRIVE_BUS_ID_ITEM, DRIVE_BUS_ID_DEFAULTS),
       busId,
     );
-    const driveTypeOptions = buildTypeOptions(
-      [...typeOptionsFor(driveCategory, DRIVE_TYPE_ITEM, DRIVE_TYPE_DEFAULTS)],
-      driveType,
-    );
+    const driveTypeOptions = buildTypeOptions([...typeOptionsFor(driveCategory, DRIVE_TYPE_ITEM)], driveType);
     const powerOverride = drivePowerOverride[key];
     const powerEnabled = powerOverride ?? info?.enabled;
     const hasPowerState = typeof powerEnabled === "boolean";

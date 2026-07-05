@@ -66,11 +66,14 @@ import {
   wait,
 } from "@/lib/c64api/requestRuntime";
 import {
+  loadConfigEnrichmentAbsentDomains,
   loadConfigEnrichmentCategory,
   loadConfigEnrichmentNamespaceForHost,
   rememberConfigEnrichmentNamespaceForHost,
+  saveConfigEnrichmentAbsentDomains,
   saveConfigEnrichmentCategory,
 } from "@/lib/c64api/configEnrichmentCache";
+import { notifyConfigEnrichmentNamespaceChange } from "@/lib/c64api/configEnrichmentNamespaceSignal";
 import { buildBinaryFingerprint } from "@/lib/binaryFingerprint";
 import { TransmissionGuard, type SupportedC64FileType, type TransmissionValidationContext } from "@/lib/fileValidation";
 import { collectTraceHeaders } from "@/lib/tracing/payloadPreview";
@@ -974,6 +977,8 @@ export class C64API {
   private readonly readRequestBudget = new Map<string, { recordedAtMs: number; value: unknown }>();
   private readonly configCategoryItemsCache = new Map<string, Record<string, unknown>>();
   private activeConfigEnrichmentNamespaceKey: string | null;
+  private absentConfigDomains = new Set<string>();
+  private absentConfigDomainsNamespaceKey: string | null = null;
   private requestGeneration = 0;
 
   constructor(baseUrl: string = DEFAULT_BASE_URL, password?: string, deviceHost: string = DEFAULT_DEVICE_HOST) {
@@ -1202,15 +1207,35 @@ export class C64API {
       return;
     }
 
+    const previousKey = this.activeConfigEnrichmentNamespaceKey;
     const nextNamespaceKey = rememberConfigEnrichmentNamespaceForHost(
       this.deviceHost,
       deviceInfo.unique_id,
       deviceInfo.firmware_version,
     );
+    if (previousKey === nextNamespaceKey) {
+      return;
+    }
     this.activeConfigEnrichmentNamespaceKey = nextNamespaceKey;
-    this.configCategoryItemsCache.forEach((items, category) => {
-      saveConfigEnrichmentCategory(nextNamespaceKey, category, items);
-    });
+
+    if (previousKey === null) {
+      // HARD16-004: an anonymous pre-identity session — the in-memory items were
+      // enriched before any identity arrived, so migrating them into the now-known
+      // namespace is their legitimate home.
+      this.configCategoryItemsCache.forEach((items, category) => {
+        saveConfigEnrichmentCategory(nextNamespaceKey, category, items);
+      });
+      return;
+    }
+
+    // HARD16-004: the identity actually changed (firmware upgrade, or a different
+    // unit behind the same hostname). The in-memory items belong to the PREVIOUS
+    // identity — copying them into the new namespace durably served the old
+    // device's enums. Drop them instead; the new identity's own data stays
+    // persisted under its own namespace and re-loads lazily. Signal mounted Home
+    // controls to re-resolve, since a same-host flip does not bump the routing epoch.
+    this.configCategoryItemsCache.clear();
+    notifyConfigEnrichmentNamespaceChange();
   }
 
   private getCachedConfigCategoryItems(category: string) {
@@ -1287,6 +1312,36 @@ export class C64API {
     const cached = cachedItems?.[item];
     if (!hasStructuredConfigMetadata(cached)) return undefined;
     return cloneBudgetValue(cached) as Record<string, unknown>;
+  }
+
+  private ensureAbsentConfigDomainsLoaded() {
+    if (this.absentConfigDomainsNamespaceKey === this.activeConfigEnrichmentNamespaceKey) return;
+    this.absentConfigDomainsNamespaceKey = this.activeConfigEnrichmentNamespaceKey;
+    this.absentConfigDomains = new Set(loadConfigEnrichmentAbsentDomains(this.activeConfigEnrichmentNamespaceKey));
+  }
+
+  /**
+   * HARD16-005: a config item that a model does not report (a definitive HTTP
+   * 404) or that answers 200 with no option domain otherwise repeats its
+   * `GET /v1/configs/{cat}/{item}` on every Home/Disks mount forever. This
+   * absence sentinel is namespaced by `uniqueId|firmware` like the positive
+   * cache, so a firmware/identity change (HARD16-004) invalidates it for free.
+   * Only definitive absences are recorded — never a timeout/network/5xx/auth
+   * failure (that would recreate the HARD15-002 poisoning class).
+   */
+  isConfigItemDomainKnownAbsent(category: string, item: string): boolean {
+    if (!category || !item) return false;
+    this.ensureAbsentConfigDomainsLoaded();
+    return this.absentConfigDomains.has(`${category}::${item}`);
+  }
+
+  markConfigItemDomainAbsent(category: string, item: string): void {
+    if (!category || !item) return;
+    this.ensureAbsentConfigDomainsLoaded();
+    const key = `${category}::${item}`;
+    if (this.absentConfigDomains.has(key)) return;
+    this.absentConfigDomains.add(key);
+    saveConfigEnrichmentAbsentDomains(this.activeConfigEnrichmentNamespaceKey, [...this.absentConfigDomains]);
   }
 
   private async ensureConfigCategoryItems(category: string, itemNames: string[]) {

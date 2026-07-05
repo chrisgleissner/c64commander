@@ -227,7 +227,7 @@ describe("useSavedDeviceSwitching", () => {
       uniqueId: "UID-BACKUP",
     });
     expect(store.getSavedDevicesSnapshot().summaries["device-backup"]?.lastResolvedAddress).toBeNull();
-    expect(mockInvalidateForSavedDeviceSwitch).toHaveBeenCalledWith(expect.any(QueryClient), "/play");
+    expect(mockInvalidateForSavedDeviceSwitch).toHaveBeenCalledWith(expect.any(QueryClient));
 
     expect(metrics.getSavedDeviceSwitchMetricsSnapshot().attempts[0]).toMatchObject({
       fromDeviceId: initialDeviceId,
@@ -428,7 +428,7 @@ describe("useSavedDeviceSwitching", () => {
       await result.current("device-offline");
     });
 
-    expect(mockInvalidateForSavedDeviceSwitch).toHaveBeenCalledWith(expect.any(QueryClient), "/play");
+    expect(mockInvalidateForSavedDeviceSwitch).toHaveBeenCalledWith(expect.any(QueryClient));
     expect(store.getSavedDeviceSwitchStatus("device-offline")).toBe("offline");
   });
 
@@ -452,7 +452,7 @@ describe("useSavedDeviceSwitching", () => {
 
     await expect(result.current("device-error")).rejects.toThrow("verification exploded");
 
-    expect(mockInvalidateForSavedDeviceSwitch).toHaveBeenCalledWith(expect.any(QueryClient), "/play");
+    expect(mockInvalidateForSavedDeviceSwitch).toHaveBeenCalledWith(expect.any(QueryClient));
   });
 
   it("clears error toasts attributed to the previous device on switch (ERROR_POLICY §6)", async () => {
@@ -981,7 +981,7 @@ describe("useSavedDeviceSwitching", () => {
 
     expect(store.getSavedDevicesSnapshot().selectedDeviceId).toBe("device-backup");
     expect(store.getSavedDeviceSwitchStatus("device-backup")).toBe("offline");
-    expect(mockInvalidateForSavedDeviceSwitch).toHaveBeenCalledWith(expect.any(QueryClient), "/config");
+    expect(mockInvalidateForSavedDeviceSwitch).toHaveBeenCalledWith(expect.any(QueryClient));
 
     expect(metrics.getSavedDeviceSwitchMetricsSnapshot().attempts[0]).toMatchObject({
       fromDeviceId: initialDeviceId,
@@ -1031,7 +1031,7 @@ describe("useSavedDeviceSwitching", () => {
       }),
     ).rejects.toThrow("Verification exploded");
 
-    expect(mockInvalidateForSavedDeviceSwitch).toHaveBeenCalledWith(expect.any(QueryClient), "/settings");
+    expect(mockInvalidateForSavedDeviceSwitch).toHaveBeenCalledWith(expect.any(QueryClient));
 
     expect(metrics.getSavedDeviceSwitchMetricsSnapshot().attempts[0]).toMatchObject({
       fromDeviceId: initialDeviceId,

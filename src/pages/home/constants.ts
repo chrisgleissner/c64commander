@@ -103,9 +103,15 @@ export const HOME_SID_ADDRESSING_ITEMS = [
   "SID Socket 1 Address",
   "SID Socket 2 Address",
 ] as const;
+// HARD16-011: deliberate exception to the "never fabricate an option list"
+// doctrine (see resolveHomeConfigOptions). Bus IDs are numeric IEC device
+// numbers with near-universal ranges and low cross-model divergence risk, so a
+// pre-discovery fallback range is offered for display continuity — the current
+// device value is always merged in (buildBusIdOptions) and the device-reported
+// min/max wins once it resolves. String enums (e.g. Drive Type) get no such
+// fabricated list; they fall back to the current value only.
 export const DISK_BUS_ID_DEFAULTS = [8, 9, 10, 11];
 export const PRINTER_BUS_ID_DEFAULTS = [4, 5];
-export const PHYSICAL_DRIVE_TYPE_DEFAULTS = ["1541", "1571", "1581"];
 export const EMPTY_SELECT_VALUE = "__empty__";
 export const EMPTY_SELECT_LABEL = "Default";
 export const SID_SLIDER_DETENT_RANGE = 0.2;

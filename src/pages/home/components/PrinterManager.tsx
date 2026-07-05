@@ -126,7 +126,9 @@ export function PrinterManager({
           { length: printerBusDomain.max - printerBusDomain.min + 1 },
           (_, index) => printerBusDomain.min! + index,
         )
-      : [...PRINTER_BUS_ID_DEFAULTS];
+      : // HARD16-011 doctrine exception: numeric IEC bus range, low divergence
+        // risk; the current value is merged in and the device min/max wins once resolved.
+        [...PRINTER_BUS_ID_DEFAULTS];
   const printerBusOptions = buildBusIdOptions(
     printerBusDefaults,
     Number.isFinite(printerBusValue) ? printerBusValue : null,

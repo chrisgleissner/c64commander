@@ -26,8 +26,10 @@ export const DRIVE_CONFIG_CATEGORY: Record<DriveKey, string> = {
 
 export const DRIVE_BUS_ID_ITEM = "Drive Bus ID";
 export const DRIVE_TYPE_ITEM = "Drive Type";
+// HARD16-011 doctrine exception: numeric IEC bus range only (low divergence
+// risk). Drive Type has NO fabricated fallback list — it is a model-diverging
+// string enum, so it falls back to the current device value only.
 export const DRIVE_BUS_ID_DEFAULTS = [8, 9, 10, 11] as const;
-export const DRIVE_TYPE_DEFAULTS = ["1541", "1571", "1581"] as const;
 export const DRIVE_DEFAULT_BUS_ID: Record<DriveKey, number> = { a: 8, b: 9 };
 export const DRIVE_DEFAULT_TYPE = "1541";
 export const SOFT_IEC_DEFAULT_PATH_ITEM = "Default Path";

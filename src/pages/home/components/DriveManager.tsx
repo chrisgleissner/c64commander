@@ -34,7 +34,7 @@ import type { TelnetActionSupport } from "@/lib/telnet/telnetCapabilityDiscovery
 
 import { buildBusIdOptions, buildTypeOptions } from "@/lib/drives/driveDevices";
 import { readItemOptions, buildConfigKey } from "../utils/HomeConfigUtils";
-import { DISK_BUS_ID_DEFAULTS, PHYSICAL_DRIVE_TYPE_DEFAULTS } from "../constants";
+import { DISK_BUS_ID_DEFAULTS } from "../constants";
 import {
   buildOptionDomainKey,
   useDeviceConfigOptionDomains,
@@ -150,6 +150,8 @@ export function DriveManager({
     if (domain?.min !== undefined && domain.max !== undefined && domain.max >= domain.min) {
       return Array.from({ length: domain.max - domain.min + 1 }, (_, index) => domain.min! + index);
     }
+    // HARD16-011 doctrine exception: numeric IEC bus range, low divergence risk;
+    // the current value is merged in and the device min/max wins once resolved.
     return [...DISK_BUS_ID_DEFAULTS];
   };
 
@@ -321,13 +323,16 @@ export function DriveManager({
             ? optionDomains[buildOptionDomainKey(spec.category, spec.typeItem)]?.options
             : undefined;
 
+          // HARD16-011: Drive Type is a model-diverging string enum, so when the
+          // device has not reported its values, fall back to the current value
+          // only (buildTypeOptions merges typeValue) — never a fabricated list.
           const typeOptions = spec.typeItem
             ? buildTypeOptions(
                 rawTypeOptions.length
                   ? rawTypeOptions
                   : domainTypeOptions && domainTypeOptions.length
                     ? domainTypeOptions
-                    : PHYSICAL_DRIVE_TYPE_DEFAULTS,
+                    : [],
                 typeValue,
               )
             : [typeValue];
