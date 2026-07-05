@@ -1648,16 +1648,32 @@ fi
 
 require_cmd npm
 
-if [[ -n "${JAVA17_HOME:-}" && -x "${JAVA17_HOME}/bin/java" ]]; then
-  export JAVA_HOME="${JAVA17_HOME}"
-  export PATH="$JAVA_HOME/bin:$PATH"
-elif [[ -x /usr/lib/jvm/java-17-openjdk-amd64/bin/java ]]; then
-  export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
-  export PATH="$JAVA_HOME/bin:$PATH"
-elif [[ -x /usr/lib/jvm/temurin-17-jdk-amd64/bin/java ]]; then
-  export JAVA_HOME="/usr/lib/jvm/temurin-17-jdk-amd64"
-  export PATH="$JAVA_HOME/bin:$PATH"
-fi
+# Capacitor 8 / AGP 9 compile the Android project with Java 21
+# (sourceCompatibility VERSION_21), so a JDK 17 pin no longer works — pick JDK 21.
+select_build_jdk() {
+  local candidates=("${JAVA21_HOME:-}" /usr/lib/jvm/java-21-openjdk-amd64 /usr/lib/jvm/temurin-21-jdk-amd64)
+  if [[ -d "$HOME/.sdkman/candidates/java" ]]; then
+    local sdk21
+    sdk21="$(ls -d "$HOME"/.sdkman/candidates/java/21* 2>/dev/null | sort -V | tail -1)"
+    [[ -n "$sdk21" ]] && candidates+=("$sdk21")
+  fi
+  local candidate
+  for candidate in "${candidates[@]}"; do
+    if [[ -n "$candidate" && -x "$candidate/bin/java" ]]; then
+      export JAVA_HOME="$candidate"
+      export PATH="$JAVA_HOME/bin:$PATH"
+      return 0
+    fi
+  done
+  # Otherwise keep the ambient JDK only if it is already 21+.
+  if command -v java >/dev/null 2>&1; then
+    local major
+    major="$(java -version 2>&1 | sed -n 's/.*version "\([0-9]*\).*/\1/p' | head -1)"
+    [[ -n "$major" && "$major" -ge 21 ]] && return 0
+  fi
+  echo "WARNING: no JDK 21 found; the Android build requires Java 21 (Capacitor 8)." >&2
+}
+select_build_jdk
 
 if command -v git >/dev/null 2>&1; then
   if [[ -z "${VITE_GIT_SHA:-}" ]]; then
