@@ -274,7 +274,7 @@ const DEL: KeyDef = {
 const INS: KeyDef = {
   id: "ins",
   testId: "remote-input-key-ins",
-  label: "INS",
+  label: "INST",
   ariaLabel: "Insert",
   action: { kind: "special", key: "ins" },
   tone: "edit",
