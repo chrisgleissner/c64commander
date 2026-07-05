@@ -344,6 +344,8 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
               onKey={session.sendKeyboardInputs}
               onCursor={session.sendCursor}
               onSpecialKey={session.sendSpecialKey}
+              heldKeyboardInputs={session.heldKeyboardInputs}
+              onHeldKeyboardInputsChange={session.setHeldKeyboardInputs}
               tier={tier}
             />
           )}
@@ -357,6 +359,8 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
               onKey={session.sendKeyboardInputs}
               onCursor={session.sendCursor}
               onSpecialKey={session.sendSpecialKey}
+              heldKeyboardInputs={session.heldKeyboardInputs}
+              onHeldKeyboardInputsChange={session.setHeldKeyboardInputs}
               tier={tier}
               scale={scale}
               className="border-t border-border pt-3"

@@ -7,13 +7,17 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { vibrateTap } from "@/lib/remoteInput/haptics";
 import { CursorPad } from "@/components/remoteInput/CursorPad";
+import { KeyHoldButton } from "@/components/remoteInput/KeyHoldButton";
 import { resolveKeyboardProfile, type KeyboardProfile } from "@/lib/remoteInput/keyboardProfile";
 import { getKeyboardLayout, type KeyDef, type KeyTone, type StickyModifier } from "@/lib/remoteInput/keyboardLayout";
 import { toneButtonClass } from "@/lib/remoteInput/keyTone";
+import { charToKeyboardInputEvents } from "@/lib/remoteInput/keyboardCharMapping";
+import { specialKeyToKeyboardInputEvent } from "@/lib/remoteInput/specialKeyMapping";
+import { useKeyboardHoldDispatch } from "@/hooks/useKeyboardHoldDispatch";
+import type { HeldKeyboardInputs } from "@/lib/remoteInput/keyboardHeldSet";
 import type { KeyboardInputName } from "@/lib/c64api";
 import type { CursorDirection } from "@/lib/remoteInput/cursorKeyMapping";
 import type { SpecialKeyboardKey } from "@/lib/remoteInput/specialKeyMapping";
@@ -27,6 +31,14 @@ export type TypeKeyboardProps = {
   onCursor: (direction: CursorDirection) => void;
   onSpecialKey: (key: SpecialKeyboardKey) => void;
   tier: TypeKeyboardTier;
+  /**
+   * Real key-hold relay (full tier only): a shared held-inputs set, diffed
+   * into press/release `machine:input` calls by the session — the same
+   * architecture the joystick already uses — so a key genuinely stays down
+   * on the C64 for as long as it is held, instead of an instant tap.
+   */
+  heldKeyboardInputs: HeldKeyboardInputs;
+  onHeldKeyboardInputsChange: (next: HeldKeyboardInputs) => void;
   /** Test/preview seam: force a profile instead of measuring the content box. */
   profile?: KeyboardProfile;
   className?: string;
@@ -73,15 +85,24 @@ export const TypeKeyboard = ({
   onCursor,
   onSpecialKey,
   tier,
+  heldKeyboardInputs,
+  onHeldKeyboardInputsChange,
   profile: profileOverride,
   className,
 }: TypeKeyboardProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [measured, setMeasured] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+  // Kernal-fallback tier only (no held-set relay exists below full tier): the
+  // original one-shot latch, applied to the next ordinary key then cleared.
   const [activeModifiers, setActiveModifiers] = useState<ReadonlySet<StickyModifier>>(new Set());
   // SHIFT LOCK: a persistent shift, separate from the one-shot `activeModifiers`
   // latch so it survives key presses (and mode/keyboard remounts reset it).
   const [shiftLocked, setShiftLocked] = useState(false);
+  // Full tier: real press/release relay, mirroring the joystick's held-set
+  // architecture. SHIFT/CTRL/C= support both a genuine physical hold-and-chord
+  // and today's tap-then-tap one-shot convenience (see the hook's doc comment).
+  const holdDispatch = useKeyboardHoldDispatch(heldKeyboardInputs, onHeldKeyboardInputsChange);
+  const isFullTier = tier === "full";
 
   // Measure the available Type-tab content box and derive the profile from it
   // (width AND height), so the layout adapts to real space rather than a device
@@ -154,7 +175,27 @@ export const TypeKeyboard = ({
     setShiftLocked((locked) => !locked);
   };
 
-  // The single shared dispatch path for every key in every profile.
+  // Resolves an ordinary key to the matrix input(s) it presses — the same
+  // vocabulary the real-hold path (holdDispatch) needs to add/remove from the
+  // shared held set. Returns null for action kinds with no such resolution
+  // (cursor keeps its own click-only + repeat-on-hold dispatch below).
+  const resolveOrdinaryKeyInputs = (def: KeyDef): KeyboardInputName[] | null => {
+    switch (def.action.kind) {
+      case "char": {
+        const [event] = charToKeyboardInputEvents(def.action.char);
+        return event ? event.inputs : null;
+      }
+      case "key":
+        return def.action.inputs;
+      case "special":
+        return specialKeyToKeyboardInputEvent(def.action.key).inputs;
+      default:
+        return null;
+    }
+  };
+
+  // Kernal-fallback tier only: no held-set relay exists below full tier, so
+  // this is the original one-shot-latch dispatch, untouched.
   const dispatch = (def: KeyDef) => {
     const action = def.action;
     if (action.kind === "modifier") {
@@ -193,9 +234,11 @@ export const TypeKeyboard = ({
   const renderKey = (def: KeyDef, options: { heightPx?: number; grow?: boolean; fill?: boolean } = {}) => {
     const isModifier = def.action.kind === "modifier";
     const isShiftLock = def.action.kind === "shift_lock";
-    const latched =
-      (isModifier && activeModifiers.has((def.action as { modifier: StickyModifier }).modifier)) ||
-      (isShiftLock && shiftLocked);
+    const modifier = isModifier ? (def.action as { modifier: StickyModifier }).modifier : undefined;
+    const latched = isFullTier
+      ? (modifier !== undefined && holdDispatch.isModifierActive(modifier)) ||
+        (isShiftLock && holdDispatch.shiftLocked)
+      : (modifier !== undefined && activeModifiers.has(modifier)) || (isShiftLock && shiftLocked);
     const disabled = keyUnavailable(def);
     // Only the expanded profile packs keys tightly enough to need the short cap
     // (RESTORE -> "REST."); compact and medium both have room for the full word,
@@ -207,8 +250,50 @@ export const TypeKeyboard = ({
     // C64 keycap. Hidden on compact, and never shown on pictographic keys.
     const showSecondary = profile !== "compact" && Boolean(def.secondary) && !Icon;
 
+    // Full tier: real hold for modifiers and ordinary keys alike; SHIFT LOCK
+    // stays a discrete toggle (no hold gesture); cursor keeps its own
+    // click-only dispatch (repeat-on-hold lives in the dedicated CursorPad).
+    // Below full tier there is no held-set relay, so every key falls back to
+    // the original one-shot `dispatch`.
+    let onHoldPress: (() => void) | undefined;
+    let onHoldRelease: (() => void) | undefined;
+    let onTap: () => void = () => dispatch(def);
+    if (isFullTier) {
+      if (modifier !== undefined) {
+        onHoldPress = () => {
+          vibrateTap(8);
+          holdDispatch.pressModifier(modifier);
+        };
+        onHoldRelease = () => holdDispatch.releaseModifier(modifier);
+        onTap = () => {
+          vibrateTap(8);
+          holdDispatch.pressModifier(modifier);
+          holdDispatch.releaseModifier(modifier);
+        };
+      } else if (isShiftLock) {
+        onTap = () => {
+          vibrateTap(8);
+          holdDispatch.toggleShiftLock();
+        };
+      } else {
+        const inputs = resolveOrdinaryKeyInputs(def);
+        if (inputs) {
+          onHoldPress = () => {
+            vibrateTap(10);
+            holdDispatch.pressKey(inputs);
+          };
+          onHoldRelease = () => holdDispatch.releaseKey(inputs);
+          onTap = () => {
+            vibrateTap(10);
+            holdDispatch.pressKey(inputs);
+            holdDispatch.releaseKey(inputs);
+          };
+        }
+      }
+    }
+
     return (
-      <Button
+      <KeyHoldButton
         key={def.id}
         size="sm"
         variant={toneVariant(def.tone, latched)}
@@ -229,7 +314,9 @@ export const TypeKeyboard = ({
         aria-pressed={isModifier || isShiftLock ? latched : undefined}
         disabled={disabled}
         title={disabled ? UNAVAILABLE_KEY_HINT : undefined}
-        onClick={() => dispatch(def)}
+        onHoldPress={onHoldPress}
+        onHoldRelease={onHoldRelease}
+        onTap={onTap}
       >
         {Icon ? (
           <Icon style={{ width: iconPx, height: iconPx }} />
@@ -254,7 +341,7 @@ export const TypeKeyboard = ({
             </span>
           </span>
         )}
-      </Button>
+      </KeyHoldButton>
     );
   };
 

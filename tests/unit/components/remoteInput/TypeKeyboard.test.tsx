@@ -6,9 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TypeKeyboard, type TypeKeyboardProps, type TypeKeyboardTier } from "@/components/remoteInput/TypeKeyboard";
+import { EMPTY_HELD_KEYBOARD_INPUTS } from "@/lib/remoteInput/keyboardHeldSet";
+import type { HeldKeyboardInputs } from "@/lib/remoteInput/keyboardHeldSet";
 import type { KeyboardProfile } from "@/lib/remoteInput/keyboardProfile";
 
 const PROFILES: KeyboardProfile[] = ["compact", "medium", "expanded"];
@@ -20,10 +23,44 @@ const makeHandlers = () => ({
   onSpecialKey: vi.fn(),
 });
 
+/** Wires a real held-keyboard-inputs state, mirroring what useRemoteInputSession provides. */
+const TypeKeyboardHarness = (
+  props: Omit<TypeKeyboardProps, "heldKeyboardInputs" | "onHeldKeyboardInputsChange"> & {
+    onHeldChange?: (next: HeldKeyboardInputs) => void;
+  },
+) => {
+  const { onHeldChange, ...rest } = props;
+  const [held, setHeld] = useState<HeldKeyboardInputs>(EMPTY_HELD_KEYBOARD_INPUTS);
+  return (
+    <TypeKeyboard
+      {...rest}
+      heldKeyboardInputs={held}
+      onHeldKeyboardInputsChange={(next) => {
+        onHeldChange?.(next);
+        setHeld(next);
+      }}
+    />
+  );
+};
+
 const renderKeyboard = (profile: KeyboardProfile, tier: TypeKeyboardTier = "full") => {
   const handlers: Pick<TypeKeyboardProps, "onChar" | "onKey" | "onCursor" | "onSpecialKey"> = makeHandlers();
-  render(<TypeKeyboard {...handlers} tier={tier} profile={profile} />);
+  render(<TypeKeyboardHarness {...handlers} tier={tier} profile={profile} />);
   return handlers as ReturnType<typeof makeHandlers>;
+};
+
+const renderKeyboardWithSnapshots = (profile: KeyboardProfile, tier: TypeKeyboardTier = "full") => {
+  const handlers: Pick<TypeKeyboardProps, "onChar" | "onKey" | "onCursor" | "onSpecialKey"> = makeHandlers();
+  const snapshots: string[][] = [];
+  render(
+    <TypeKeyboardHarness
+      {...handlers}
+      tier={tier}
+      profile={profile}
+      onHeldChange={(next) => snapshots.push([...next].sort())}
+    />,
+  );
+  return { ...(handlers as ReturnType<typeof makeHandlers>), snapshots };
 };
 
 // Every direct high-value virtual key that must exist in EVERY Type profile.
@@ -87,7 +124,7 @@ describe("TypeKeyboard", () => {
 
     it("defaults to medium when the content box has not been measured (no override)", () => {
       const handlers = makeHandlers();
-      render(<TypeKeyboard {...handlers} tier="full" />);
+      render(<TypeKeyboardHarness {...handlers} tier="full" />);
       expect(screen.getByTestId("remote-input-type-keyboard")).toHaveAttribute("data-profile", "medium");
     });
 
@@ -152,20 +189,24 @@ describe("TypeKeyboard", () => {
   });
 
   describe("shared atomic dispatch", () => {
-    it("dispatches CLR/INS and F2/F4/F6/F8 through the shared special-key handler", () => {
-      const h = renderKeyboard("expanded");
-      const cases: Array<[string, string]> = [
-        ["remote-input-key-clr", "clr"],
-        ["remote-input-key-ins", "ins"],
-        ["remote-input-key-f2", "f2"],
-        ["remote-input-key-f4", "f4"],
-        ["remote-input-key-f6", "f6"],
-        ["remote-input-key-f8", "f8"],
+    it("dispatches CLR/INS and F2/F4/F6/F8 through the held-keyboard-inputs set on the full tier", () => {
+      // Full tier relays every key via real press/release (see
+      // useKeyboardHoldDispatch), not the one-shot onSpecialKey tap prop —
+      // that prop is now reserved for the kernal-fallback tier.
+      const h = renderKeyboardWithSnapshots("expanded");
+      const cases: Array<[string, string[]]> = [
+        ["remote-input-key-clr", ["clr_home", "left_shift"]],
+        ["remote-input-key-ins", ["inst_del", "left_shift"]],
+        ["remote-input-key-f2", ["f1", "left_shift"]],
+        ["remote-input-key-f4", ["f3", "left_shift"]],
+        ["remote-input-key-f6", ["f5", "left_shift"]],
+        ["remote-input-key-f8", ["f7", "left_shift"]],
       ];
-      for (const [testId, key] of cases) {
+      for (const [testId, inputs] of cases) {
         fireEvent.click(screen.getByTestId(testId));
-        expect(h.onSpecialKey).toHaveBeenCalledWith(key);
+        expect(h.snapshots, testId).toContainEqual([...inputs].sort());
       }
+      expect(h.onSpecialKey).not.toHaveBeenCalled();
     });
 
     it("dispatches CURSOR_UP and CURSOR_LEFT as keyboard cursor movement", () => {
@@ -177,27 +218,35 @@ describe("TypeKeyboard", () => {
     });
 
     it("latches SHIFT onto the next ordinary key, then auto-clears it", () => {
-      const h = renderKeyboard("medium");
+      const h = renderKeyboardWithSnapshots("medium");
       fireEvent.click(screen.getByTestId("remote-input-key-shift"));
       expect(screen.getByTestId("remote-input-key-shift")).toHaveAttribute("aria-pressed", "true");
 
       fireEvent.click(screen.getByTestId("remote-input-key-a"));
-      expect(h.onKey).toHaveBeenLastCalledWith(["a", "left_shift"]);
+      // "a" pressed while SHIFT's latch was still asserted -> a real
+      // simultaneous chord on the wire, then both clear together.
+      expect(h.snapshots).toContainEqual(["a", "left_shift"]);
+      expect(h.snapshots.at(-1)).toEqual([]);
       expect(screen.getByTestId("remote-input-key-shift")).toHaveAttribute("aria-pressed", "false");
 
+      h.snapshots.length = 0;
       fireEvent.click(screen.getByTestId("remote-input-key-a"));
-      expect(h.onKey).toHaveBeenLastCalledWith(["a"]);
+      // SHIFT already auto-cleared: "a" now presses alone.
+      expect(h.snapshots).toContainEqual(["a"]);
+      expect(h.snapshots).not.toContainEqual(["a", "left_shift"]);
     });
 
     it("never leaves SHIFT stuck after an atomic action (no modifier leak)", () => {
-      const h = renderKeyboard("expanded");
+      const h = renderKeyboardWithSnapshots("expanded");
       fireEvent.click(screen.getByTestId("remote-input-key-shift"));
       expect(screen.getByTestId("remote-input-key-shift")).toHaveAttribute("aria-pressed", "true");
 
       // The atomic CLR ships its own Shift chord via the mapping; the UI latch
-      // must not linger afterwards, and CLR must not go through the char path.
+      // must not linger afterwards, and CLR must not go through onKey/onSpecialKey.
       fireEvent.click(screen.getByTestId("remote-input-key-clr"));
-      expect(h.onSpecialKey).toHaveBeenCalledWith("clr");
+      expect(h.snapshots).toContainEqual(["clr_home", "left_shift"]);
+      expect(h.snapshots.at(-1)).toEqual([]);
+      expect(h.onSpecialKey).not.toHaveBeenCalled();
       expect(h.onKey).not.toHaveBeenCalled();
       expect(screen.getByTestId("remote-input-key-shift")).toHaveAttribute("aria-pressed", "false");
     });
@@ -236,9 +285,9 @@ describe("TypeKeyboard", () => {
 
   describe("character-arrow vs cursor distinction", () => {
     it("keeps the C64 arrow-left character key distinct from CURSOR_LEFT", () => {
-      const h = renderKeyboard("expanded");
+      const h = renderKeyboardWithSnapshots("expanded");
       fireEvent.click(screen.getByTestId("remote-input-key-arrow_left"));
-      expect(h.onKey).toHaveBeenCalledWith(["arrow_left"]);
+      expect(h.snapshots).toContainEqual(["arrow_left"]);
       expect(h.onCursor).not.toHaveBeenCalled();
 
       fireEvent.click(screen.getByTestId("remote-input-key-cursor-left"));
