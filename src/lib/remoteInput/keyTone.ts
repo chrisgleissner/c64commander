@@ -26,8 +26,12 @@ export const toneButtonClass = (tone: KeyTone | undefined, latched = false): str
     case "caution":
       // RUN/STOP — shape (solid double border, like RESTORE's "danger" tone)
       // + colour, using the theme's own warning token instead of a one-off
-      // dashed/raw-amber treatment.
-      return "border-2 border-warning text-warning font-semibold";
+      // dashed/raw-amber treatment. Explicit amber-400/300 in dark mode so
+      // the label stays legible (the theme's dark-mode `--warning`, ~45%
+      // lightness, is too close to the secondary-variant button surface's
+      // ~20% lightness to clear WCAG contrast — same reasoning as `danger`'s
+      // dark:red-400/300 override above).
+      return "border-2 border-warning text-warning dark:border-amber-400 dark:text-amber-300 font-semibold";
     case "shift":
       // SHIFT / SHIFT LOCK — the app's primary blue (same token the rest of
       // the UI uses for emphasis), distinct from the plain C=/CTRL modifiers

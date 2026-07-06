@@ -415,7 +415,7 @@ describe("TypeKeyboard", () => {
       }
     });
 
-    it("spells RESTORE in full on compact (there is room) and only abbreviates to REST. when expanded", () => {
+    it("spells RESTORE in full on every profile (expanded is double-width now, so no abbreviation is needed)", () => {
       renderKeyboard("compact");
       const restoreCompact = screen.getByTestId("remote-input-key-restore");
       expect(restoreCompact.textContent).toContain("RESTORE");
@@ -423,8 +423,7 @@ describe("TypeKeyboard", () => {
       cleanup();
       renderKeyboard("expanded");
       const restoreExpanded = screen.getByTestId("remote-input-key-restore");
-      expect(restoreExpanded.textContent).toContain("REST.");
-      expect(restoreExpanded.textContent).not.toContain("RESTORE");
+      expect(restoreExpanded.textContent).toContain("RESTORE");
       expect(restoreExpanded).toHaveAttribute("aria-label", "Restore");
     });
 

@@ -40,8 +40,33 @@ export const KeyHoldButton = ({
             handledByPointerRef.current = true;
             onHoldPress();
           },
-          onPointerUp: () => onHoldRelease(),
-          onPointerCancel: () => onHoldRelease(),
+          onPointerUp: (event: React.PointerEvent<HTMLButtonElement>) => {
+            onHoldRelease();
+            // Normally onClick's own guard below resets the ref right after
+            // this (pointerup -> click is synchronous for a release still
+            // over the button). But pointer capture redirects pointerup/
+            // pointercancel HERE even when a finger dragged OFF the button
+            // first - and in that case the browser does not synthesize a
+            // click at all, so onClick's reset never runs, leaving the ref
+            // stuck `true` and silently swallowing the NEXT activation
+            // (including a keyboard/assistive-tech Enter/Space, which always
+            // goes through onClick). Detect that case geometrically (no
+            // click is coming if the release lands outside the button) and
+            // reset immediately instead of guessing with a timer.
+            const rect = event.currentTarget.getBoundingClientRect();
+            const releasedInsideBounds =
+              event.clientX >= rect.left &&
+              event.clientX <= rect.right &&
+              event.clientY >= rect.top &&
+              event.clientY <= rect.bottom;
+            if (!releasedInsideBounds) handledByPointerRef.current = false;
+          },
+          onPointerCancel: () => {
+            // A genuine cancel never gets a click either (same reasoning as
+            // the out-of-bounds case above).
+            handledByPointerRef.current = false;
+            onHoldRelease();
+          },
         }
       : {};
   return (

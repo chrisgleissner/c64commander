@@ -112,13 +112,13 @@ describe("getKeyboardLayout", () => {
     expect(arrowLeft?.ariaLabel).toMatch(/left-arrow character key/i);
     expect(cursorLeftRight?.ariaLabel).toMatch(/cursor right/i);
     // The C64 character-arrow keys use the authentic printed glyphs (never "ARW"),
-    // while the merged cursor key renders plain arrow glyphs too, but as a
-    // main/secondary pair rather than a single icon.
+    // while the merged cursor key mirrors the real keycap: "CRSR" in the
+    // middle with a small arrow above/below (see cursorArrows), not a label.
     expect(arrowLeft?.label).toBe("←");
     expect(arrowUp?.label).toBe("↑");
     expect(arrowLeft?.label).not.toMatch(/ARW/i);
-    expect(cursorLeftRight?.label).toBe("→");
-    expect(cursorLeftRight?.secondary).toBe("←");
+    expect(cursorLeftRight?.label).toBe("CRSR");
+    expect(cursorLeftRight?.cursorArrows).toEqual({ above: "←", below: "→" });
     // The CursorPad (compact/medium decks) still renders real icons for each direction.
     (["up", "down", "left", "right"] as const).forEach((direction) => {
       expect(CURSOR_KEY_META[direction].icon, `cursor ${direction} icon`).toBeTruthy();
@@ -264,11 +264,13 @@ describe("getKeyboardLayout", () => {
     for (const n of [1, 2, 3, 4, 5, 6, 7, 8]) expect(labelOf(`remote-input-key-f${n}`)).toBe(`f${"\u00a0\u00a0"}${n}`);
   });
 
-  it("spells RESTORE in full, keeping REST. only for the dense expanded layout (HARD16-008)", () => {
-    const restore = collectKeys(getKeyboardLayout("expanded")).find((k) => k.testId === "remote-input-key-restore");
-    expect(restore?.label).toBe("RESTORE");
-    expect(restore?.compactLabel).toBe("REST.");
-    expect(restore?.ariaLabel).toBe("Restore");
+  it("spells RESTORE in full on every profile, including the (now double-width) expanded layout", () => {
+    for (const profile of PROFILES) {
+      const restore = collectKeys(getKeyboardLayout(profile)).find((k) => k.testId === "remote-input-key-restore");
+      expect(restore?.label, profile).toBe("RESTORE");
+      expect(restore?.compactLabel, profile).toBeUndefined();
+      expect(restore?.ariaLabel, profile).toBe("Restore");
+    }
   });
 
   it("flags only the no-fallback keys as requiring the full tier", () => {

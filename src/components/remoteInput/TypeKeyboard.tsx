@@ -12,7 +12,18 @@ import { vibrateTap } from "@/lib/remoteInput/haptics";
 import { CursorPad } from "@/components/remoteInput/CursorPad";
 import { KeyHoldButton } from "@/components/remoteInput/KeyHoldButton";
 import { resolveKeyboardProfile, type KeyboardProfile } from "@/lib/remoteInput/keyboardProfile";
-import { getKeyboardLayout, type KeyDef, type KeyTone, type StickyModifier } from "@/lib/remoteInput/keyboardLayout";
+import {
+  EXPANDED_FUNCTION_GAP_UNITS,
+  EXPANDED_FUNCTION_UNITS,
+  EXPANDED_ROW_UNITS,
+  getKeyboardLayout,
+  SPACE_ROW_LEADING_SPAN,
+  SPACE_ROW_SPAN,
+  SPACE_ROW_TRAILING_SPAN,
+  type KeyDef,
+  type KeyTone,
+  type StickyModifier,
+} from "@/lib/remoteInput/keyboardLayout";
 import { toneButtonClass } from "@/lib/remoteInput/keyTone";
 import { charToKeyboardInputEvents } from "@/lib/remoteInput/keyboardCharMapping";
 import { specialKeyToKeyboardInputEvent } from "@/lib/remoteInput/specialKeyMapping";
@@ -141,21 +152,32 @@ const KeyboardKeyButtonImpl = ({
   const secondaryEl = showSecondary ? (
     <span
       className={cn(
-        "text-[0.6rem] font-normal leading-none text-muted-foreground",
-        def.secondaryPosition === "right" ? "ml-1" : undefined,
+        "text-[0.6rem] font-normal leading-none",
+        // RUN/STOP: RUN and STOP are the same caution-tier action, so the
+        // secondary legend inherits the key's own tone colour (e.g.
+        // text-warning, set on the button itself) instead of being muted.
+        // Every other secondary (digit/symbol shift-legends, the merged
+        // edit/cursor/function keys) keeps the existing muted-gray hint look.
+        def.secondaryMatchesToneColor ? undefined : "text-muted-foreground",
       )}
       aria-hidden="true"
     >
       {def.secondary}
     </span>
   ) : null;
+  const isMultiline = label.includes("\n");
   const mainEl = (
     <span
       style={{
-        // Explicit two-line labels (e.g. "SHIFT\nLOCK") keep their break;
-        // everything else stays on one line rather than wrapping.
-        whiteSpace: label.includes("\n") ? "pre-line" : "nowrap",
-        fontSize: keyFontPx,
+        // Explicit two-line labels (e.g. "SHIFT\nLOCK") keep exactly their own
+        // break and NEVER re-wrap: `pre` preserves the newline without allowing
+        // a soft wrap that would split a line mid-word on a narrow (1u) key
+        // (`pre-line` did, turning "SHFT LOCK" into a clipped "SH/T/LOC/K").
+        // Everything else stays on one line.
+        whiteSpace: isMultiline ? "pre" : "nowrap",
+        // A stacked two-line label has to fit its widest line inside a single
+        // 1u key, so it renders a step smaller than a single-glyph key.
+        fontSize: isMultiline ? Math.max(8, keyFontPx - 2) : keyFontPx,
         fontWeight: 600,
         lineHeight: 1.05,
       }}
@@ -167,7 +189,20 @@ const KeyboardKeyButtonImpl = ({
     <KeyHoldButton
       size="sm"
       variant={variant}
-      className={cn("min-w-0 overflow-hidden px-1", grow ? "flex-1" : undefined, fill ? "h-full w-full flex-1" : undefined, toneClassName)}
+      className={cn(
+        "min-w-0 overflow-hidden px-1",
+        grow ? "flex-1" : undefined,
+        // `fill` always makes the key occupy its wrapper's full WIDTH (so the
+        // wrapper's flex-grow sizing wins over the button's intrinsic text
+        // width). HEIGHT is only filled (`h-full`) when no explicit height is
+        // given — the expanded rows DO pass a fixed `heightPx`, and letting
+        // `h-full` win there is exactly what made every row size to its own
+        // content (ragged heights, F-keys collapsing to one text line). With a
+        // fixed height instead, every expanded key is identical height and
+        // top-aligned, and the F-key column lines up row-for-row.
+        fill ? (heightPx === undefined ? "h-full w-full flex-1" : "w-full flex-1") : undefined,
+        toneClassName,
+      )}
       style={{
         height: heightPx,
         minWidth: 30,
@@ -190,8 +225,24 @@ const KeyboardKeyButtonImpl = ({
     >
       {Icon ? (
         <Icon style={{ width: iconPx, height: iconPx }} />
+      ) : def.cursorArrows ? (
+        // The real C64 cursor keycap: "CRSR" in the middle (same size as
+        // every other key's label) with a very small arrow above and
+        // another below, centered and never overlapping the label.
+        <span className="flex flex-col items-center justify-center leading-none">
+          <span className="text-[0.5rem] leading-none text-muted-foreground" aria-hidden="true">
+            {def.cursorArrows.above}
+          </span>
+          {mainEl}
+          <span className="text-[0.5rem] leading-none text-muted-foreground" aria-hidden="true">
+            {def.cursorArrows.below}
+          </span>
+        </span>
       ) : def.secondaryPosition === "right" ? (
-        <span className="flex flex-row items-baseline justify-center leading-none">
+        // Gap is roughly one function-key label's width ("f 1") - tight
+        // enough to read as one key, wide enough that "f 1" and "f 2" don't
+        // read as a single run-on label.
+        <span className="flex flex-row items-baseline justify-center gap-6 leading-none">
           {mainEl}
           {secondaryEl}
         </span>
@@ -335,7 +386,14 @@ export const TypeKeyboard = ({
         holdDispatch.releaseKey(inputs);
       }
     },
-    [holdDispatch.pressModifier, holdDispatch.releaseModifier, holdDispatch.toggleShiftLock, holdDispatch.pressKey, holdDispatch.releaseKey, onCursor],
+    [
+      holdDispatch.pressModifier,
+      holdDispatch.releaseModifier,
+      holdDispatch.toggleShiftLock,
+      holdDispatch.pressKey,
+      holdDispatch.releaseKey,
+      onCursor,
+    ],
   );
 
   // Measure the available Type-tab content box and derive the profile from it
@@ -383,16 +441,40 @@ export const TypeKeyboard = ({
     (layout.kind === "deck" ? layout.system.some(keyUnavailable) : layout.rows.flat().some(keyUnavailable));
 
   const cursorSizePx = measured.width > 0 ? Math.max(132, Math.min(210, Math.round(measured.width * 0.44))) : 150;
+  // Expanded profile only: the physical C64's proportions, measured off a real
+  // unit. The main rows (a 16-unit grid), a gap, and the function-key cluster
+  // (~3u wide) sit side by side, so the content width splits as
+  // 16 : EXPANDED_FUNCTION_GAP_UNITS : EXPANDED_FUNCTION_UNITS. The function
+  // column lives in its OWN flex sibling (not a shared row), so its width and
+  // the gap to it are computed as exact pixels here rather than a `span`.
+  const CONTAINER_PADDING_PX = 8; // this container's own px-1 (4px each side)
+  const ROW_GAP_PX = 4; // Tailwind's `gap-1` (0.25rem) between keys within a row
+  const EXPANDED_TOTAL_UNITS = EXPANDED_ROW_UNITS + EXPANDED_FUNCTION_GAP_UNITS + EXPANDED_FUNCTION_UNITS;
+  const contentWidthPx = measured.width > 0 ? Math.max(0, measured.width - CONTAINER_PADDING_PX) : 0;
+  const functionBoxWidthPx =
+    contentWidthPx > 0 ? (contentWidthPx * EXPANDED_FUNCTION_UNITS) / EXPANDED_TOTAL_UNITS : 112;
+  const functionGapPx = contentWidthPx > 0 ? (contentWidthPx * EXPANDED_FUNCTION_GAP_UNITS) / EXPANDED_TOTAL_UNITS : 8;
+  const rowsColumnWidthPx = (contentWidthPx * EXPANDED_ROW_UNITS) / EXPANDED_TOTAL_UNITS;
+  // RETURN must match the combined width of the two merged CRSR keys directly
+  // beneath it, INCLUDING the gap-1 between them — a plain flex-grow span ratio
+  // can't express that extra internal gap. Row 4 (the CRSR row) has 16 keys /
+  // 15 gaps, so its unit width is (rows-column width − 15 gaps) / 16; RETURN =
+  // two of those units plus the one gap the CRSR pair straddles. Falls back to
+  // the (very close but not exact) RETURN span ratio until first measured.
+  const row4UnitWidthPx = rowsColumnWidthPx > 0 ? (rowsColumnWidthPx - 15 * ROW_GAP_PX) / EXPANDED_ROW_UNITS : 0;
+  const returnWidthPx = row4UnitWidthPx > 0 ? 2 * row4UnitWidthPx + ROW_GAP_PX : undefined;
   const gridKeyHeightPx = profile === "compact" ? 40 : 38;
   const deckKeyHeightPx = 42;
   // The special keys (edit + system: CLR/HOME/INS/DEL, RUN-STOP/SHIFT-LOCK/
   // RESTORE/C=/CTRL/SHIFT) render taller than the character grid so they are
   // easy to hit and read.
   const systemKeyHeightPx = 54;
-  // The expanded layout packs ~18 keys per row, so its labels get a smaller
-  // font; the deck profiles have roomier keys. Labels never wrap (nowrap), so
-  // long ones stay on one line instead of breaking into "RES/TOR/E".
-  const keyFontPx = profile === "expanded" ? 11 : 13;
+  // The expanded layout packs a full C64's worth of ~1u keys per row, so its
+  // labels get a smaller font; the deck profiles have roomier keys. Labels
+  // never wrap (nowrap), so long ones stay on one line instead of breaking into
+  // "RES/TOR/E". 10px keeps the widest single-key labels (RESTORE at 1.5u,
+  // RETURN at 2u) clear of the key borders at the authentic 1u key width.
+  const keyFontPx = profile === "expanded" ? 10 : 13;
 
   const toggleModifier = (modifier: StickyModifier) => {
     vibrateTap(8);
@@ -451,8 +533,7 @@ export const TypeKeyboard = ({
     const isShiftLock = def.action.kind === "shift_lock";
     const modifier = isModifier ? (def.action as { modifier: StickyModifier }).modifier : undefined;
     const latched = isFullTier
-      ? (modifier !== undefined && holdDispatch.isModifierActive(modifier)) ||
-        (isShiftLock && holdDispatch.shiftLocked)
+      ? (modifier !== undefined && holdDispatch.isModifierActive(modifier)) || (isShiftLock && holdDispatch.shiftLocked)
       : (modifier !== undefined && activeModifiers.has(modifier)) || (isShiftLock && shiftLocked);
     const disabled = keyUnavailable(def);
     // Only the expanded profile packs keys tightly enough to need the short cap
@@ -469,7 +550,8 @@ export const TypeKeyboard = ({
     // lives in the dedicated CursorPad). Below full tier there is no held-set
     // relay, so every key falls back to the original one-shot `dispatch`
     // (intentionally NOT memo-friendly — a separate, lower-traffic tier).
-    const hasHoldGesture = isFullTier && !isShiftLock && (modifier !== undefined || resolveOrdinaryKeyInputs(def) !== null);
+    const hasHoldGesture =
+      isFullTier && !isShiftLock && (modifier !== undefined || resolveOrdinaryKeyInputs(def) !== null);
 
     return (
       <KeyboardKeyButton
@@ -477,7 +559,11 @@ export const TypeKeyboard = ({
         def={def}
         variant={toneVariant(def.tone, latched)}
         toneClassName={toneButtonClass(def.tone, latched)}
-        heightPx={options.fill ? undefined : (options.heightPx ?? deckKeyHeightPx)}
+        // An explicit `heightPx` always wins, even alongside `fill` (the
+        // expanded rows rely on this for a single uniform key height). Only a
+        // `fill` with NO explicit height stretches to the wrapper (`h-full`);
+        // everything else falls back to the deck default.
+        heightPx={options.heightPx ?? (options.fill ? undefined : deckKeyHeightPx)}
         grow={options.grow}
         fill={options.fill}
         label={label}
@@ -597,25 +683,78 @@ export const TypeKeyboard = ({
           data-testid="remote-input-keyboard-grid"
         >
           <div className="min-h-0 flex-1" aria-hidden="true" />
-          <div className="flex shrink-0 items-start gap-2">
+          <div className="flex shrink-0 items-start" style={{ gap: functionGapPx }}>
             <div className="min-w-0 flex-1 space-y-1">
-              {layout.rows.map((row, rowIndex) => (
-                <div key={rowIndex} className="flex gap-1">
-                  {row.map((def) => renderKey(def, { heightPx: gridKeyHeightPx, grow: true }))}
-                </div>
-              ))}
+              {layout.rows.map((row, rowIndex) => {
+                const isSpaceRow = rowIndex === layout.rows.length - 1;
+                if (isSpaceRow) {
+                  // SPACE starts below the middle of Z and ends where "."
+                  // ends, exactly like a real C64 keyboard - the leading/
+                  // trailing <div>s are invisible spacers (not real keys)
+                  // carrying the proportional width either side (see
+                  // SPACE_ROW_*_SPAN's derivation in keyboardLayout.ts).
+                  return (
+                    <div key={rowIndex} className="flex gap-1">
+                      <div aria-hidden="true" style={{ flexGrow: SPACE_ROW_LEADING_SPAN, flexBasis: 0, minWidth: 0 }} />
+                      <div className="flex min-w-0" style={{ flexGrow: SPACE_ROW_SPAN, flexBasis: 0 }}>
+                        {renderKey(row[0], { heightPx: gridKeyHeightPx, fill: true })}
+                      </div>
+                      <div
+                        aria-hidden="true"
+                        style={{ flexGrow: SPACE_ROW_TRAILING_SPAN, flexBasis: 0, minWidth: 0 }}
+                      />
+                    </div>
+                  );
+                }
+                const isReturnRow = row[row.length - 1]?.id === "return";
+                return (
+                  <div key={rowIndex} className="flex gap-1">
+                    {row.map((def, defIndex) => (
+                      // A plain wrapper div (not the <button> itself) carries
+                      // the flex-grow sizing: the button's OWN base styling is
+                      // `inline-flex` + `white-space:nowrap`, which lets a
+                      // key's text length/weight (e.g. bold "RESTORE" vs
+                      // "CTRL") silently win over an explicit min-width and
+                      // grab more than its fair share, throwing off every
+                      // OTHER key's width in the same row (measured on real
+                      // hardware - see the RETURN/RESTORE width bug this
+                      // fixed). `fill` makes the button just occupy 100% of
+                      // this wrapper instead, sidestepping that entirely.
+                      // `flex` (not a plain block) makes the button a
+                      // block-level flex child rather than an inline-flex box
+                      // sitting in a baseline-aligned line box: without it,
+                      // keys with taller content (2-line shift legends, the
+                      // 3-line CRSR arrow stack) baseline-shift DOWN relative
+                      // to single-glyph keys, so a row's keys no longer share
+                      // one top edge. As a flex child every key top-aligns to
+                      // the row regardless of its content height.
+                      <div
+                        key={def.id}
+                        className="flex min-w-0"
+                        style={
+                          isReturnRow && defIndex === row.length - 1 && returnWidthPx !== undefined
+                            ? { flexGrow: 0, flexShrink: 0, flexBasis: returnWidthPx }
+                            : { flexGrow: def.span ?? 1, flexBasis: 0 }
+                        }
+                      >
+                        {renderKey(def, { heightPx: gridKeyHeightPx, fill: true })}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
             <div
               className="flex shrink-0 flex-col gap-1"
-              style={{ width: 112 }}
+              style={{ width: functionBoxWidthPx }}
               data-testid="remote-input-keyboard-function"
             >
               {/* One merged key per row (F1/F2, F3/F4, F5/F6, F7/F8) - a single
                   column, mirroring the real C64's physical function-key
                   cluster and giving each key the box's full width. */}
               {layout.functionKeys.map((def) => (
-                <div key={def.id} className="flex gap-1">
-                  {renderKey(def, { heightPx: gridKeyHeightPx, grow: true })}
+                <div key={def.id} className="flex min-w-0 gap-1">
+                  {renderKey(def, { heightPx: gridKeyHeightPx, fill: true })}
                 </div>
               ))}
             </div>

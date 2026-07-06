@@ -630,8 +630,19 @@ test.describe("Home interactions", () => {
     await expect(page.getByTestId("home-lighting-group")).toContainText("LED LIGHTING");
 
     const caseLight = page.getByTestId("home-led-summary");
-    const caseLightLabels = await caseLight.locator(".text-muted-foreground").allTextContents();
-    expect(caseLightLabels).toEqual(["Mode", "Music Detect", "Pattern", "Color", "Brightness", "Tint", "SID Select"]);
+    // The case-light rows are config-driven and populate asynchronously after
+    // the connection settles: "Music Detect" (LedStrip Auto SID Mode) and
+    // "SID Select" only render once their per-item config reads resolve. Under
+    // heavy parallel/coverage E2E the initial connection handoff can briefly
+    // abort those reads before they re-run, so poll for the fully-loaded label
+    // set rather than sampling once — a single read can catch the pre-requery
+    // window and miss the config-gated rows (see the "config reads aborted on
+    // connect" artifact). A genuine never-loads regression still fails here on
+    // timeout.
+    const expectedCaseLightLabels = ["Mode", "Music Detect", "Pattern", "Color", "Brightness", "Tint", "SID Select"];
+    await expect
+      .poll(() => caseLight.locator(".text-muted-foreground").allTextContents(), { timeout: 20000 })
+      .toEqual(expectedCaseLightLabels);
 
     await expect(page.getByTestId("home-keyboard-lighting-summary")).toBeVisible();
     await expect(page.getByTestId("home-keyboard-lighting-deferred")).toHaveCount(0);

@@ -105,6 +105,24 @@ export type KeyDef = {
    * function is never hidden.
    */
   secondaryAlwaysVisible?: boolean;
+  /**
+   * By default the secondary legend renders muted/gray (matching the
+   * existing digit-key convention, where the shifted symbol is a lesser
+   * "bonus" hint). RUN/STOP is different: RUN and STOP are the SAME urgency
+   * tier (both need the caution treatment to stay visible), so this opts
+   * the secondary legend into inheriting the key's own tone colour (e.g.
+   * `text-warning`) instead of being forced gray.
+   */
+  secondaryMatchesToneColor?: boolean;
+  /**
+   * The two merged expanded-profile cursor keys mirror a real C64 keycap
+   * exactly: "CRSR" printed in the middle (the ordinary `label`, same size
+   * as every other key) with a very small arrow above and another below,
+   * centered and never overlapping the label. Mutually exclusive with
+   * `secondary` — a dedicated field because this is a three-part stack
+   * (arrow / label / arrow), not the two-part secondary-legend layout.
+   */
+  cursorArrows?: { above: string; below: string };
   /** Accessible label — always full and unambiguous, even when the visual label is abbreviated. */
   ariaLabel: string;
   action: KeyAction;
@@ -307,7 +325,7 @@ const functionKey = (n: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8): KeyDef => {
     testId: `remote-input-key-${key}`,
     // Printed exactly as on the real C64 keycaps: a lower-case "f" and TWO
     // spaces before the number (f  1, f  3, ...). The gap uses non-breaking
-    // spaces ( ) because ordinary spaces collapse to one under the label's
+    // spaces (U+00A0) because ordinary spaces collapse to one under the label's
     // `white-space: nowrap`. The odd (unshifted, front-labelled) keys get a
     // slightly darker fill so they stand apart from the shifted f  2 / f  4 /
     // f  6 / f  8 — see keyTone.ts `function-primary`.
@@ -351,8 +369,10 @@ const INST_DEL_MERGED: KeyDef = {
 };
 // The C64's cursor keys are matrix-wise exactly like HOME/CLR above: ONE key
 // per axis, unshifted = down/right, SHIFT = up/left (see cursorKeyMapping.ts).
-// Rendered as plain arrow glyphs (not the CursorPad's lucide icons) so the
-// existing smaller-secondary-above text mechanism applies uninterrupted.
+// The real keycap prints "CRSR" in the middle with a small arrow above and
+// another below - `cursorArrows` reproduces that exactly (see
+// KeyboardKeyButtonImpl's dedicated render branch), not the CursorPad's
+// lucide icons or the generic secondary-legend mechanism.
 // Kept as `{kind:"cursor", direction}` (same action kind, same onCursor/
 // sendCursor path the standalone cursor keys always used - fallback-tier
 // PETSCII injection works per-direction with no shift composition needed,
@@ -363,21 +383,19 @@ const INST_DEL_MERGED: KeyDef = {
 const CURSOR_UP_DOWN_MERGED: KeyDef = {
   id: "cursor-up-down",
   testId: "remote-input-key-cursor-up-down",
-  label: "↓",
-  secondary: "↑",
-  secondaryAlwaysVisible: true,
+  label: "CRSR",
   ariaLabel: "Cursor down (hold Shift for up)",
   action: { kind: "cursor", direction: "down" },
   tone: "default",
+  cursorArrows: { above: "↑", below: "↓" },
 };
 const CURSOR_LEFT_RIGHT_MERGED: KeyDef = {
   id: "cursor-left-right",
   testId: "remote-input-key-cursor-left-right",
-  label: "→",
-  secondary: "←",
-  secondaryAlwaysVisible: true,
+  label: "CRSR",
   ariaLabel: "Cursor right (hold Shift for left)",
   action: { kind: "cursor", direction: "right" },
+  cursorArrows: { above: "←", below: "→" },
   tone: "default",
 };
 
@@ -418,6 +436,9 @@ const RUN_STOP: KeyDef = {
   label: "STOP",
   secondary: "RUN",
   secondaryAlwaysVisible: true,
+  // RUN and STOP are the same caution-tier action - both must read as the
+  // warning colour, never one coloured and the other muted gray.
+  secondaryMatchesToneColor: true,
   ariaLabel: "Run Stop",
   action: { kind: "special", key: "run_stop" },
   tone: "caution",
@@ -426,11 +447,10 @@ const RUN_STOP: KeyDef = {
 const RESTORE: KeyDef = {
   id: "restore",
   testId: "remote-input-key-restore",
-  // Full word where there is room (medium/expanded), abbreviated to "REST." only
-  // on compact where key width is scarce (the existing compact-label mechanism).
-  // Accessible label stays "Restore"; the caution styling makes it stand out.
+  // Full word everywhere, including the expanded profile: RESTORE is now
+  // double-width there (span: RESTORE_SPAN below), so it no longer needs the
+  // "REST." abbreviation the dense expanded grid used to require.
   label: "RESTORE",
-  compactLabel: "REST.",
   ariaLabel: "Restore",
   action: { kind: "special", key: "restore" },
   tone: "danger",
@@ -556,6 +576,40 @@ const DECK_GRID: KeyDef[][] = [
   [letter("n"), letter("m"), sym("comma"), sym("period"), sym("slash")],
 ];
 
+// The expanded profile reproduces a real C64 keyboard's exact geometry,
+// measured off a physical unit (breadbin). Widths are in KEY UNITS (1u = one
+// ordinary letter/number key). EVERY main row totals exactly the same
+// EXPANDED_ROW_UNITS so a `span`-N key is the SAME pixel width in whatever row
+// it appears, and the columns line up between rows:
+//   row 1: ← 1 2 3 4 5 6 7 8 9 0 + - £ HOME DEL        (16 × 1u)
+//   row 2: CTRL(1.5) Q..P @ * ↑ (13 × 1u) RESTORE(1.5) (= 16u)
+//   row 3: RUN/STOP(1) SHIFT-LOCK(1) A..L : ; = (12 × 1u) RETURN(2) (= 16u)
+//   row 4: C=(1) SHIFT(1.5) Z..M , . / (10 × 1u) SHIFT(1.5) CRSR(1) CRSR(1) (= 16u)
+// The function-key cluster and the gap to it (right of the main rows) are also
+// authentic-width; exported so TypeKeyboard.tsx sizes that separate flex
+// column with the same unit basis instead of magic pixel numbers.
+export const EXPANDED_ROW_UNITS = 16;
+export const EXPANDED_FUNCTION_UNITS = 3; // each merged f-key pair is ~3u wide on a real C64
+export const EXPANDED_FUNCTION_GAP_UNITS = 0.85; // gap between the main rows and the f-key cluster
+
+const CTRL_SPAN = 1.5;
+const RESTORE_SPAN = 1.5;
+const SHIFT_SPAN = 1.5;
+// RETURN spans 2 units. Its width is additionally nudged to the two merged
+// CRSR keys' COMBINED width (2u + the gap between them) in TypeKeyboard so its
+// left edge lands flush with the left CRSR key beneath it; this 2 is the
+// pre-measurement fallback span.
+const RETURN_SPAN = 2;
+
+// The SPACE bar starts below the middle of Z and ends where "." ends, exactly
+// like a real C64 keyboard. In the 16u row-4 grid Z occupies [2.5,3.5] (middle
+// 3.0) and "." occupies [10.5,11.5] (right edge 11.5): leading 3.0, bar 8.5,
+// trailing 4.5 (= 16u). Leading/trailing spacer <div>s (not real keys) carry
+// the width either side — see the expanded row rendering in TypeKeyboard.tsx.
+export const SPACE_ROW_LEADING_SPAN = 3;
+export const SPACE_ROW_SPAN = 8.5;
+export const SPACE_ROW_TRAILING_SPAN = 4.5;
+
 const EXPANDED_ROWS: KeyDef[][] = [
   [
     ARROW_LEFT,
@@ -576,7 +630,7 @@ const EXPANDED_ROWS: KeyDef[][] = [
     INST_DEL_MERGED,
   ],
   [
-    { ...CTRL, span: 2 },
+    { ...CTRL, span: CTRL_SPAN },
     letter("q"),
     letter("w"),
     letter("e"),
@@ -590,7 +644,7 @@ const EXPANDED_ROWS: KeyDef[][] = [
     sym("at"),
     sym("star"),
     ARROW_UP,
-    { ...RESTORE, span: 2 },
+    { ...RESTORE, span: RESTORE_SPAN },
   ],
   [
     RUN_STOP,
@@ -607,11 +661,11 @@ const EXPANDED_ROWS: KeyDef[][] = [
     sym("colon"),
     sym("semicolon"),
     sym("equals"),
-    { ...RETURN, span: 2 },
+    { ...RETURN, span: RETURN_SPAN },
   ],
   [
     COMMODORE,
-    { ...SHIFT, span: 2 },
+    { ...SHIFT, span: SHIFT_SPAN },
     letter("z"),
     letter("x"),
     letter("c"),
@@ -622,11 +676,11 @@ const EXPANDED_ROWS: KeyDef[][] = [
     sym("comma"),
     sym("period"),
     sym("slash"),
-    { ...SHIFT_RIGHT, span: 2 },
+    { ...SHIFT_RIGHT, span: SHIFT_SPAN },
     CURSOR_UP_DOWN_MERGED,
     CURSOR_LEFT_RIGHT_MERGED,
   ],
-  [{ ...SPACE, span: 1 }],
+  [{ ...SPACE, span: SPACE_ROW_SPAN }],
 ];
 
 export const getKeyboardLayout = (profile: KeyboardProfile): KeyboardLayout => {

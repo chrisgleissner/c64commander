@@ -135,6 +135,29 @@ describe("useKeyboardHoldDispatch", () => {
     expect(d.shiftLocked()).toBe(true);
   });
 
+  it("does not treat tapping a second modifier while a first is held as a real chord", () => {
+    const d = createDriver();
+    d.pressModifier("ctrl");
+    // Tap commodore while ctrl is still held down - bookkeeping only, not a
+    // real chord (a real chord is an ORDINARY key pressed while a modifier
+    // is held). Neither modifier should end up marked "chorded" by this.
+    d.pressModifier("commodore");
+    d.releaseModifier("commodore");
+    // Ending ctrl's own hold now must latch it (like any bare tap), not
+    // force an immediate release as it would if commodore's tap had
+    // wrongly chorded it.
+    d.releaseModifier("ctrl");
+    expect(d.heldNames()).toEqual(["commodore", "ctrl"]);
+    expect(d.isModifierActive("ctrl")).toBe(true);
+    expect(d.isModifierActive("commodore")).toBe(true);
+
+    // Both latches clear together on the next ordinary key, same as any
+    // other pending latch.
+    d.pressKey(["a"]);
+    d.releaseKey(["a"]);
+    expect(d.heldNames()).toEqual([]);
+  });
+
   it("supports a three-way chord: an earlier latch, a held modifier, and a pressed key", () => {
     const d = createDriver();
     d.pressModifier("left_shift");

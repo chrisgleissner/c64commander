@@ -130,11 +130,16 @@ export const useKeyboardHoldDispatch = (
 
   const pressModifier = useCallback(
     (modifier: KeyboardInputName) => {
-      noteOtherKeyPressed();
+      // Deliberately does NOT call noteOtherKeyPressed(): a real "chord" is
+      // an ORDINARY key going down while a modifier is held (see pressKey
+      // above). Tapping a SECOND modifier while a first one is held is not
+      // that - retroactively chording the first modifier here would make it
+      // release immediately on its own hold ending instead of latching,
+      // even though nothing but modifier bookkeeping happened.
       physicallyHeldRef.current.add(modifier);
       addToHeld([modifier]);
     },
-    [noteOtherKeyPressed, addToHeld],
+    [addToHeld],
   );
 
   const releaseModifier = useCallback(

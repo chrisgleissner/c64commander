@@ -174,6 +174,24 @@ describe("QuickKeysBar", () => {
     expect(snapshots).toContainEqual(["f3"]);
   });
 
+  it("holds SPACE/RETURN/f-keys via a real pointer down/up on the full tier, not just a tap-and-release", () => {
+    const handlers = makeHandlers();
+    const snapshots: string[][] = [];
+    render(
+      <QuickKeysBarHarness {...handlers} tier="full" onHeldChange={(next) => snapshots.push([...next].sort())} />,
+    );
+    const returnKey = screen.getByTestId("remote-input-key-return");
+
+    fireEvent.pointerDown(returnKey, { pointerId: 1 });
+    // Still held after press: onHeldChange must reflect it going down, not
+    // waiting for a release that hasn't happened yet.
+    expect(snapshots).toContainEqual(["return"]);
+    expect(handlers.onChar).not.toHaveBeenCalled();
+
+    fireEvent.pointerUp(returnKey, { pointerId: 1 });
+    expect(snapshots.at(-1)).toEqual([]);
+  });
+
   it("falls back to onChar/onSpecialKey on the kernal-fallback tier (no held-set relay exists below full)", () => {
     const handlers = makeHandlers();
     render(<QuickKeysBarHarness {...handlers} tier="kernal-fallback" />);
