@@ -357,4 +357,134 @@ describe("deviceInteractionManager circuit cooldown", () => {
     );
     expect(setCircuitOpenUntil).toHaveBeenCalledWith(null);
   });
+
+  it("forces an explicit probe past the ERROR state gate that blocks a normal user request", async () => {
+    const { resetInteractionState, withRestInteraction } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+    deviceStateValue = "ERROR";
+
+    const userMeta = {
+      action: makeAction("rest-error-blocked"),
+      method: "GET",
+      path: "/v1/info",
+      normalizedUrl: "http://device/v1/info",
+      intent: "user" as const,
+      baseUrl: "http://device",
+    };
+
+    // The wedge: a normal user request while the device is in ERROR (with the
+    // CONSERVATIVE default allowUserOverrideCircuit:false) is rejected before
+    // any socket opens, so an explicit health check would report "offline".
+    await expect(withRestInteraction(userMeta, vi.fn().mockResolvedValue({ ok: true }))).rejects.toThrow(
+      "Device not ready for requests",
+    );
+
+    // A user-forced probe (manual health check) overrides the state gate and
+    // reaches the handler, so the device's real state is always observable.
+    const forcedHandler = vi.fn().mockResolvedValue({ product: "C64 Ultimate" });
+    await expect(
+      withRestInteraction(
+        {
+          ...userMeta,
+          action: makeAction("rest-error-forced"),
+          forceProbe: true,
+          bypassCircuit: true,
+          bypassBackoff: true,
+          bypassCooldown: true,
+        },
+        forcedHandler,
+      ),
+    ).resolves.toEqual({ product: "C64 Ultimate" });
+    expect(forcedHandler).toHaveBeenCalledTimes(1);
+    expect(recordDeviceGuard).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "rest-error-forced" }),
+      expect.objectContaining({ decision: "override", reason: "state" }),
+    );
+  });
+
+  it("forces an explicit probe past an open REST circuit (self-healing recovery path)", async () => {
+    const { resetInteractionState, withRestInteraction } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+    deviceStateValue = "READY";
+
+    const systemMeta = {
+      action: makeAction("rest-circuit-noise"),
+      method: "GET",
+      path: "/v1/drives",
+      normalizedUrl: "http://device/v1/drives",
+      intent: "system" as const,
+      baseUrl: "http://device",
+      bypassBackoff: true,
+      bypassCache: true,
+    };
+
+    const failingHandler = vi.fn().mockRejectedValue(new Error("Network error"));
+    await expect(withRestInteraction(systemMeta, failingHandler)).rejects.toThrow("Network error");
+    await expect(withRestInteraction(systemMeta, failingHandler)).rejects.toThrow("Network error");
+
+    // Circuit now open: an ordinary system probe is refused with no socket.
+    await expect(withRestInteraction(systemMeta, vi.fn().mockResolvedValue({ ok: true }))).rejects.toThrow(
+      "Device circuit open",
+    );
+
+    // A forced probe bypasses the open circuit and reaches the wire, so an open
+    // breaker can never starve the very check that would detect recovery.
+    const forcedHandler = vi.fn().mockResolvedValue({ ok: true });
+    await expect(
+      withRestInteraction(
+        { ...systemMeta, action: makeAction("rest-circuit-forced"), forceProbe: true, bypassCircuit: true },
+        forcedHandler,
+      ),
+    ).resolves.toEqual({ ok: true });
+    expect(forcedHandler).toHaveBeenCalledTimes(1);
+  });
+
+  it("never trips the breaker from a suppress-contribution probe, however many times it fails", async () => {
+    const { resetInteractionState, withRestInteraction } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+    deviceStateValue = "READY";
+
+    // A diagnostic/health probe (device switcher, background maintenance) must
+    // NOT feed the circuit streak - this is the escalation the user hit, where a
+    // couple of health-probe blips escalated to the whole device being "offline
+    // / circuit open" until app restart.
+    const probeMeta = {
+      action: makeAction("rest-health-probe"),
+      method: "GET",
+      path: "/v1/info",
+      normalizedUrl: "http://device/v1/info",
+      intent: "system" as const,
+      baseUrl: "http://device",
+      bypassBackoff: true,
+      bypassCooldown: true,
+      bypassCache: true,
+      suppressCircuitContribution: true,
+    };
+
+    const failing = vi.fn().mockRejectedValue(new Error("Network error"));
+    // Five failures - well past the CONSERVATIVE threshold of 2. Without the
+    // suppression these would open the circuit after two.
+    for (let i = 0; i < 5; i += 1) {
+      const attempt = withRestInteraction(probeMeta, failing);
+      void attempt.catch(() => undefined);
+      await vi.runOnlyPendingTimersAsync();
+      await expect(attempt).rejects.toThrow("Network error");
+    }
+
+    // The circuit was never OPENED (opening calls it with a numeric deadline +
+    // message; a null call is just the reset), so ordinary user traffic is NOT
+    // blocked.
+    expect(setCircuitOpenUntil).not.toHaveBeenCalledWith(expect.any(Number), expect.any(String));
+    const userHandler = vi.fn().mockResolvedValue({ ok: true });
+    const userAttempt = withRestInteraction(
+      { ...probeMeta, action: makeAction("user-after"), suppressCircuitContribution: false },
+      userHandler,
+    );
+    await vi.runOnlyPendingTimersAsync();
+    await expect(userAttempt).resolves.toEqual({ ok: true });
+    expect(userHandler).toHaveBeenCalledTimes(1);
+  });
 });

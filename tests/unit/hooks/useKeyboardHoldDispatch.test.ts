@@ -59,6 +59,34 @@ describe("useKeyboardHoldDispatch", () => {
     expect(d.heldNames()).toEqual([]);
   });
 
+  it("keeps a modifier held for exactly as long as its pointer is down, then releases it", () => {
+    const d = createDriver();
+    d.pressModifier("commodore");
+    expect(d.heldNames()).toEqual(["commodore"]);
+    expect(d.isModifierActive("commodore")).toBe(true);
+    d.releaseModifier("commodore");
+    // Pure press/release: pointer up releases the modifier. No latch.
+    expect(d.heldNames()).toEqual([]);
+    expect(d.isModifierActive("commodore")).toBe(false);
+  });
+
+  it("does NOT latch a bare modifier tap onto the next key (regression: stuck C=/SHIFT broke games)", () => {
+    const d = createDriver();
+    // Tap SHIFT with nothing else pressed meanwhile.
+    d.pressModifier("left_shift");
+    d.releaseModifier("left_shift");
+    // The modifier is fully released; it must NOT stay asserted waiting to
+    // latch onto whatever is pressed next.
+    expect(d.heldNames()).toEqual([]);
+    expect(d.isModifierActive("left_shift")).toBe(false);
+
+    // A key pressed afterwards is therefore unshifted — no phantom modifier.
+    d.pressKey(["a"]);
+    expect(d.heldNames()).toEqual(["a"]);
+    d.releaseKey(["a"]);
+    expect(d.heldNames()).toEqual([]);
+  });
+
   it("produces a real simultaneous chord when a modifier is held across another key's press+release", () => {
     const d = createDriver();
     d.pressModifier("left_shift");
@@ -66,48 +94,45 @@ describe("useKeyboardHoldDispatch", () => {
     d.pressKey(["a"]);
     expect(d.heldNames()).toEqual(["a", "left_shift"]);
     d.releaseKey(["a"]);
-    // "a" released; shift was chorded (another key was pressed while it was
-    // held) so it stays down until physically released, not auto-cleared.
+    // "a" released; shift is still physically held, so it stays down until its
+    // own pointer lifts.
     expect(d.heldNames()).toEqual(["left_shift"]);
     d.releaseModifier("left_shift");
     expect(d.heldNames()).toEqual([]);
   });
 
-  it("latches a bare modifier tap onto the next key, then auto-clears it", () => {
+  it("holds C= and SHIFT together for as long as both are pressed (David's Midnight Magic flippers)", () => {
     const d = createDriver();
+    // Both flipper buttons pressed and held.
+    d.pressModifier("commodore");
     d.pressModifier("left_shift");
-    d.releaseModifier("left_shift"); // bare tap: nothing else pressed meanwhile
-    expect(d.heldNames()).toEqual(["left_shift"]);
+    expect(d.heldNames()).toEqual(["commodore", "left_shift"]);
+    expect(d.isModifierActive("commodore")).toBe(true);
     expect(d.isModifierActive("left_shift")).toBe(true);
 
-    d.pressKey(["a"]);
-    expect(d.heldNames()).toEqual(["a", "left_shift"]);
-    d.releaseKey(["a"]);
-    expect(d.heldNames()).toEqual([]);
-    expect(d.isModifierActive("left_shift")).toBe(false);
-  });
-
-  it("cancels a pending latch when the same modifier is tapped again", () => {
-    const d = createDriver();
-    d.pressModifier("left_shift");
-    d.releaseModifier("left_shift");
+    // Release one flipper: only that key is released, the other stays held.
+    d.releaseModifier("commodore");
     expect(d.heldNames()).toEqual(["left_shift"]);
+    expect(d.isModifierActive("commodore")).toBe(false);
+    expect(d.isModifierActive("left_shift")).toBe(true);
 
-    d.pressModifier("left_shift");
+    // Release the second flipper.
     d.releaseModifier("left_shift");
     expect(d.heldNames()).toEqual([]);
-    expect(d.isModifierActive("left_shift")).toBe(false);
   });
 
-  it("releases a held modifier immediately on physical release when it was let go before any chord", () => {
+  it("re-tapping a modifier never accumulates or leaves it stuck", () => {
     const d = createDriver();
-    d.pressModifier("ctrl");
-    // Released quickly with nothing pressed meanwhile: latches (matches SHIFT).
-    d.releaseModifier("ctrl");
-    expect(d.heldNames()).toEqual(["ctrl"]);
+    for (let i = 0; i < 5; i += 1) {
+      d.pressModifier("ctrl");
+      expect(d.heldNames()).toEqual(["ctrl"]);
+      d.releaseModifier("ctrl");
+      expect(d.heldNames()).toEqual([]);
+    }
+    expect(d.isModifierActive("ctrl")).toBe(false);
   });
 
-  it("SHIFT LOCK keeps left_shift asserted independently of hold/latch bookkeeping", () => {
+  it("SHIFT LOCK keeps left_shift asserted independently of press/release bookkeeping", () => {
     const d = createDriver();
     d.toggleShiftLock();
     expect(d.heldNames()).toEqual(["left_shift"]);
@@ -124,52 +149,33 @@ describe("useKeyboardHoldDispatch", () => {
     expect(d.shiftLocked()).toBe(false);
   });
 
-  it("does not let a bare SHIFT tap's auto-clear undo an active SHIFT LOCK", () => {
+  it("releasing a physically-held SHIFT does not drop the assertion while SHIFT LOCK is engaged", () => {
     const d = createDriver();
     d.toggleShiftLock();
     d.pressModifier("left_shift");
-    d.releaseModifier("left_shift"); // bare tap while locked
-    d.pressKey(["a"]);
-    d.releaseKey(["a"]); // would normally auto-clear the pending latch
+    d.releaseModifier("left_shift"); // pointer up, but the lock still holds it
     expect(d.heldNames()).toEqual(["left_shift"]);
     expect(d.shiftLocked()).toBe(true);
-  });
 
-  it("does not treat tapping a second modifier while a first is held as a real chord", () => {
-    const d = createDriver();
-    d.pressModifier("ctrl");
-    // Tap commodore while ctrl is still held down - bookkeeping only, not a
-    // real chord (a real chord is an ORDINARY key pressed while a modifier
-    // is held). Neither modifier should end up marked "chorded" by this.
-    d.pressModifier("commodore");
-    d.releaseModifier("commodore");
-    // Ending ctrl's own hold now must latch it (like any bare tap), not
-    // force an immediate release as it would if commodore's tap had
-    // wrongly chorded it.
-    d.releaseModifier("ctrl");
-    expect(d.heldNames()).toEqual(["commodore", "ctrl"]);
-    expect(d.isModifierActive("ctrl")).toBe(true);
-    expect(d.isModifierActive("commodore")).toBe(true);
-
-    // Both latches clear together on the next ordinary key, same as any
-    // other pending latch.
-    d.pressKey(["a"]);
-    d.releaseKey(["a"]);
+    // Only toggling the lock off finally releases it.
+    d.toggleShiftLock();
     expect(d.heldNames()).toEqual([]);
+    expect(d.shiftLocked()).toBe(false);
   });
 
-  it("supports a three-way chord: an earlier latch, a held modifier, and a pressed key", () => {
+  it("supports a real three-way chord of two held modifiers and an ordinary key", () => {
     const d = createDriver();
     d.pressModifier("left_shift");
-    d.releaseModifier("left_shift"); // latched, pending next key
-    d.pressModifier("ctrl"); // real hold
+    d.pressModifier("ctrl");
     expect(d.heldNames()).toEqual(["ctrl", "left_shift"]);
     d.pressKey(["a"]);
     expect(d.heldNames()).toEqual(["a", "ctrl", "left_shift"]);
     d.releaseKey(["a"]);
-    // shift's one-shot latch clears with the key; ctrl stays (still physically held).
-    expect(d.heldNames()).toEqual(["ctrl"]);
+    // Both modifiers are still physically held, so both stay down.
+    expect(d.heldNames()).toEqual(["ctrl", "left_shift"]);
     d.releaseModifier("ctrl");
+    expect(d.heldNames()).toEqual(["left_shift"]);
+    d.releaseModifier("left_shift");
     expect(d.heldNames()).toEqual([]);
   });
 });

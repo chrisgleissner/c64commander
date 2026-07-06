@@ -284,6 +284,32 @@ describe("logger", () => {
       }
     });
 
+    it("suppresses real Capacitor Filesystem rejection shapes with a trailing period", () => {
+      const uninstall = logger.installConsoleDiagnosticsBridge();
+      try {
+        console.error({
+          message: "'deleteFile' failed because file at '/hvsc/index/hvsc-browse-index-v1.json' does not exist.",
+        });
+        const errorCalls = addLog.mock.calls.filter((c) => c[0] === "error");
+        expect(errorCalls.length).toBe(0);
+      } finally {
+        uninstall();
+      }
+    });
+
+    it("suppresses real Capacitor Filesystem mkdir rejection shapes with trailing clauses", () => {
+      const uninstall = logger.installConsoleDiagnosticsBridge();
+      try {
+        console.error({
+          message: "Directory at '/hvsc/index/' already exists, cannot be overwritten.",
+        });
+        const errorCalls = addLog.mock.calls.filter((c) => c[0] === "error");
+        expect(errorCalls.length).toBe(0);
+      } finally {
+        uninstall();
+      }
+    });
+
     it("forwards mixed-arg console.error with benign filesystem message so caller context is preserved", () => {
       const uninstall = logger.installConsoleDiagnosticsBridge();
       try {
@@ -303,6 +329,27 @@ describe("logger", () => {
         console.error({ message: "Something truly unexpected" });
         const errorCalls = addLog.mock.calls.filter((c) => c[0] === "error");
         expect(errorCalls.length).toBeGreaterThan(0);
+      } finally {
+        uninstall();
+      }
+    });
+
+    it("does not suppress non-filesystem errors that merely contain a generic existence phrase (Kilo #303)", () => {
+      const uninstall = logger.installConsoleDiagnosticsBridge();
+      try {
+        // These carry "already exists" / "not found" but have no filesystem
+        // context, so the benign-FS suppression must NOT swallow them.
+        for (const message of [
+          "User already exists in DB",
+          "Key not found in keystore",
+          "Plugin 'foo' already exists, refusing to overwrite",
+          "Resource not found: https://example.com/api/thing",
+        ]) {
+          addLog.mockClear();
+          console.error({ message });
+          const errorCalls = addLog.mock.calls.filter((c) => c[0] === "error");
+          expect(errorCalls.length, message).toBeGreaterThan(0);
+        }
       } finally {
         uninstall();
       }

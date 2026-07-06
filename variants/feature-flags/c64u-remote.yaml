@@ -4,10 +4,10 @@
 # keypad-first Android devices (small screen, no Google Play Services,
 # background-restricted host).
 #
-# CommoServe, background execution, RAM snapshots, keypad input, and the most
-# important power-related Telnet actions remain enabled for this variant. HVSC
-# and the remaining Telnet-backed Home actions are visible so users can tune the
-# remote-control surface from Settings.
+# CommoServe, background execution, RAM snapshots, Remote Input, keypad input,
+# and the most important power-related Telnet actions remain enabled for this
+# variant. HVSC and the remaining Telnet-backed Home actions are visible so users
+# can tune the remote-control surface from Settings.
 #
 # Features excluded from this variant are BOTH disabled (enabled: false) AND
 # hidden from the normal-user Settings (visible_to_user: false). With
@@ -36,8 +36,9 @@ overrides:
     enabled: false
     visible_to_user: false
   remote_input_enabled:
-    enabled: false
-    visible_to_user: false
+    enabled: true
+    visible_to_user: true
+    developer_only: false
   home_telnet_reu_snapshot_enabled:
     enabled: false
     visible_to_user: false

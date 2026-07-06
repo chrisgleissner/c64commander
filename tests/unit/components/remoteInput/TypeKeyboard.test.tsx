@@ -235,13 +235,13 @@ describe("TypeKeyboard", () => {
       expect(h.onSpecialKey).not.toHaveBeenCalled();
     });
 
-    it("reaches the shifted (secondary) half of each merged expanded key by latching SHIFT first", () => {
+    it("reaches the shifted (secondary) half of each merged expanded key by HOLDING SHIFT while tapping it", () => {
       // Full tier relays every key via real press/release (see
       // useKeyboardHoldDispatch), not the one-shot onSpecialKey tap prop —
-      // that prop is now reserved for the kernal-fallback tier. Latching
-      // SHIFT (a bare tap, per useKeyboardHoldDispatch's tap-to-latch
-      // convenience) then tapping the merged key composes the SAME wire
-      // chord a real physical hold-and-chord would.
+      // that prop is now reserved for the kernal-fallback tier. There is no
+      // latch: SHIFT must be physically HELD (pointer down) while the merged
+      // key is tapped, composing the same wire chord a real hold-and-chord
+      // would, and it is released the instant SHIFT's pointer lifts.
       const h = renderKeyboardWithSnapshots("expanded");
       const cases: Array<[string, string[]]> = [
         ["remote-input-key-clr-home", ["clr_home", "left_shift"]],
@@ -251,10 +251,14 @@ describe("TypeKeyboard", () => {
         ["remote-input-key-f5-f6", ["f5", "left_shift"]],
         ["remote-input-key-f7-f8", ["f7", "left_shift"]],
       ];
+      const shift = screen.getByTestId("remote-input-key-shift");
       for (const [testId, inputs] of cases) {
-        fireEvent.click(screen.getByTestId("remote-input-key-shift"));
+        fireEvent.pointerDown(shift, { pointerId: 1 });
         fireEvent.click(screen.getByTestId(testId));
         expect(h.snapshots, testId).toContainEqual([...inputs].sort());
+        fireEvent.pointerUp(shift, { pointerId: 1 });
+        // SHIFT is released with its pointer; it never stays stuck.
+        expect(h.snapshots.at(-1), testId).toEqual([]);
       }
       expect(h.onSpecialKey).not.toHaveBeenCalled();
     });
@@ -267,58 +271,69 @@ describe("TypeKeyboard", () => {
       expect(h.onCursor).toHaveBeenCalledWith("left");
     });
 
-    it("resolves the expanded profile's merged cursor keys to the unshifted direction by default, and the shifted one while SHIFT is latched", () => {
+    it("resolves the expanded profile's merged cursor keys to the unshifted direction by default, and the shifted one while SHIFT is HELD", () => {
       const h = renderKeyboard("expanded");
       fireEvent.click(screen.getByTestId("remote-input-key-cursor-up-down"));
       expect(h.onCursor).toHaveBeenLastCalledWith("down");
       fireEvent.click(screen.getByTestId("remote-input-key-cursor-left-right"));
       expect(h.onCursor).toHaveBeenLastCalledWith("right");
 
-      // Latching SHIFT stays active across cursor taps: cursor keys bypass the
-      // ordinary held-set relay entirely (see handleKeyTap's cursor branch),
-      // so - unlike an ordinary key - tapping one does not auto-clear the
-      // one-shot latch. Both merged cursor keys reach their shifted direction
-      // from the SAME single SHIFT tap.
-      fireEvent.click(screen.getByTestId("remote-input-key-shift"));
+      // Holding SHIFT (pointer down, not released) stays active across cursor
+      // taps: cursor keys bypass the ordinary held-set relay entirely (see
+      // handleKeyTap's cursor branch) and simply read whether SHIFT is
+      // currently held. Both merged cursor keys reach their shifted direction
+      // from the SAME single held SHIFT.
+      const shift = screen.getByTestId("remote-input-key-shift");
+      fireEvent.pointerDown(shift, { pointerId: 1 });
       fireEvent.click(screen.getByTestId("remote-input-key-cursor-up-down"));
       expect(h.onCursor).toHaveBeenLastCalledWith("up");
       fireEvent.click(screen.getByTestId("remote-input-key-cursor-left-right"));
       expect(h.onCursor).toHaveBeenLastCalledWith("left");
+      fireEvent.pointerUp(shift, { pointerId: 1 });
+
+      // Once SHIFT is released, cursor taps revert to the unshifted direction.
+      fireEvent.click(screen.getByTestId("remote-input-key-cursor-up-down"));
+      expect(h.onCursor).toHaveBeenLastCalledWith("down");
     });
 
-    it("latches SHIFT onto the next ordinary key, then auto-clears it", () => {
+    it("shifts the next key only while SHIFT is HELD, and a bare SHIFT tap does not latch onto it", () => {
       const h = renderKeyboardWithSnapshots("medium");
-      fireEvent.click(screen.getByTestId("remote-input-key-shift"));
-      expect(screen.getByTestId("remote-input-key-shift")).toHaveAttribute("aria-pressed", "true");
+      const shift = screen.getByTestId("remote-input-key-shift");
 
+      // Holding SHIFT while tapping "a" composes a real simultaneous chord.
+      fireEvent.pointerDown(shift, { pointerId: 1 });
+      expect(shift).toHaveAttribute("aria-pressed", "true");
       fireEvent.click(screen.getByTestId("remote-input-key-a"));
-      // "a" pressed while SHIFT's latch was still asserted -> a real
-      // simultaneous chord on the wire, then both clear together.
       expect(h.snapshots).toContainEqual(["a", "left_shift"]);
+      fireEvent.pointerUp(shift, { pointerId: 1 });
       expect(h.snapshots.at(-1)).toEqual([]);
-      expect(screen.getByTestId("remote-input-key-shift")).toHaveAttribute("aria-pressed", "false");
+      expect(shift).toHaveAttribute("aria-pressed", "false");
 
+      // Regression: a BARE SHIFT tap must not latch onto the next key.
       h.snapshots.length = 0;
+      fireEvent.click(shift); // tap: press+release, no latch
+      expect(shift).toHaveAttribute("aria-pressed", "false");
       fireEvent.click(screen.getByTestId("remote-input-key-a"));
-      // SHIFT already auto-cleared: "a" now presses alone.
       expect(h.snapshots).toContainEqual(["a"]);
       expect(h.snapshots).not.toContainEqual(["a", "left_shift"]);
     });
 
-    it("never leaves SHIFT stuck after an atomic action (no modifier leak)", () => {
+    it("never leaves SHIFT stuck after a held chord (no modifier leak)", () => {
       const h = renderKeyboardWithSnapshots("expanded");
-      fireEvent.click(screen.getByTestId("remote-input-key-shift"));
-      expect(screen.getByTestId("remote-input-key-shift")).toHaveAttribute("aria-pressed", "true");
+      const shift = screen.getByTestId("remote-input-key-shift");
 
-      // The merged CLR/HOME key's shifted (CLR) half composes its own Shift
-      // chord via the ordinary hold-chord relay; the UI latch must not linger
-      // afterwards, and it must not go through onKey/onSpecialKey.
+      // Hold SHIFT, tap the merged CLR/HOME key to reach its shifted (CLR)
+      // half via the ordinary hold-chord relay, then release SHIFT. Nothing
+      // must linger, and it must not go through onKey/onSpecialKey.
+      fireEvent.pointerDown(shift, { pointerId: 1 });
+      expect(shift).toHaveAttribute("aria-pressed", "true");
       fireEvent.click(screen.getByTestId("remote-input-key-clr-home"));
       expect(h.snapshots).toContainEqual(["clr_home", "left_shift"]);
+      fireEvent.pointerUp(shift, { pointerId: 1 });
       expect(h.snapshots.at(-1)).toEqual([]);
       expect(h.onSpecialKey).not.toHaveBeenCalled();
       expect(h.onKey).not.toHaveBeenCalled();
-      expect(screen.getByTestId("remote-input-key-shift")).toHaveAttribute("aria-pressed", "false");
+      expect(shift).toHaveAttribute("aria-pressed", "false");
     });
   });
 

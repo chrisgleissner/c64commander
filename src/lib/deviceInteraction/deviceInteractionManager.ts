@@ -50,6 +50,22 @@ type RestRequestMeta = {
   bypassCooldown?: boolean;
   bypassBackoff?: boolean;
   bypassCircuit?: boolean;
+  /**
+   * An explicit, user-forced probe (e.g. the Diagnostics "Run health check"
+   * button). It MUST always reach the wire: it skips the device-state gate
+   * below and — via the caller ORing every bypass flag on — the circuit,
+   * backoff, cooldown, and cache. The whole point of a manual health check is
+   * to observe the device's ACTUAL current state, so no stale governor may
+   * suppress it. See withRestInteraction and c64api request().
+   */
+  forceProbe?: boolean;
+  /**
+   * This request must NOT contribute failures to the REST circuit-breaker
+   * streak. Set for diagnostic/health probes, which are observers: a probe blip
+   * must never trip the breaker that guards real user traffic (a success still
+   * resets the streak, so healthy observation keeps closing the circuit).
+   */
+  suppressCircuitContribution?: boolean;
 };
 
 type FtpRequestMeta = {
@@ -640,7 +656,18 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
       throw error;
     }
   }
-  if (shouldBlockForState(meta.intent, meta.allowDuringDiscovery, meta.allowDuringError)) {
+  if (meta.forceProbe && getDeviceStateSnapshot().state === "ERROR") {
+    // A user-forced probe (manual health check) must observe the device's real
+    // state, so it overrides the ERROR state gate instead of being rejected by
+    // it. Without this, a device stuck in ERROR (e.g. OFFLINE_NO_DEMO) can
+    // never be re-checked and the app stays wedged offline until diagnostics
+    // are cleared or a background rediscovery happens to land - the reported bug.
+    recordDeviceGuard(meta.action, {
+      decision: "override",
+      reason: "state",
+      state: getDeviceStateSnapshot().state,
+    });
+  } else if (shouldBlockForState(meta.intent, meta.allowDuringDiscovery, meta.allowDuringError)) {
     const error = new Error("Device not ready for requests");
     recordDeviceGuard(meta.action, {
       decision: "block",
@@ -816,7 +843,18 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
       return result;
     } catch (error) {
       const err = error as Error;
-      updateRestFailure(err);
+      // A diagnostic/health probe is an OBSERVER: it must never trip the circuit
+      // breaker that guards real user traffic. Otherwise a couple of transient
+      // probe blips (a config write + one readMemory retry timing out) sum past
+      // the CONSERVATIVE threshold of 2 and escalate the WHOLE device to
+      // "offline / circuit open" - which then blocks the very probes that would
+      // detect it is actually healthy, wedging the app until restart. A probe
+      // SUCCESS still calls resetRestFailure() above, so healthy observation
+      // continues to CLOSE the circuit (rapid self-healing); only the failure
+      // contribution is suppressed here.
+      if (!meta.suppressCircuitContribution) {
+        updateRestFailure(err);
+      }
       markDeviceRequestEnd({ success: false, errorMessage: err.message });
       addLog("debug", "Device request finished", {
         transport: "rest",

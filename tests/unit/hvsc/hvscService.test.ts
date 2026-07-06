@@ -17,6 +17,7 @@ const mediaIndexMocks = vi.hoisted(() => ({
     folders: { "/": { path: "/", folders: [], songs: [] } },
   })),
   clearBrowseSnapshot: vi.fn(),
+  setBrowseSnapshot: vi.fn(),
   getAll: vi.fn(() => []),
   scan: vi.fn(async () => undefined),
   queryFolderPage: vi.fn(() => ({
@@ -93,6 +94,7 @@ vi.mock("@/lib/hvsc/hvscMediaIndex", () => ({
     load: mediaIndexMocks.load,
     loadBrowseSnapshot: mediaIndexMocks.loadBrowseSnapshot,
     clearBrowseSnapshot: mediaIndexMocks.clearBrowseSnapshot,
+    setBrowseSnapshot: mediaIndexMocks.setBrowseSnapshot,
     getAll: mediaIndexMocks.getAll,
     scan: mediaIndexMocks.scan,
     queryFolderPage: mediaIndexMocks.queryFolderPage,
@@ -116,19 +118,29 @@ vi.mock("@/lib/sourceNavigation/paths", () => ({
   normalizeSourcePath: vi.fn((p: string) => p || "/"),
 }));
 
-vi.mock("@/lib/hvsc/hvscBrowseIndexStore", () => ({
-  loadHvscBrowseIndexSnapshot: vi.fn(async () => ({
-    schemaVersion: 2,
-    updatedAt: new Date().toISOString(),
-    songs: {},
-    folders: { "/": { path: "/", folders: [], songs: [] } },
-  })),
-  verifyHvscBrowseIndexIntegrity: vi.fn(async () => ({
-    isValid: true,
-    sampled: 0,
-    missingPaths: [],
-  })),
-}));
+vi.mock("@/lib/hvsc/hvscBrowseIndexStore", async () => {
+  // Metadata hydration (hvscMetadataHydrator.ts) calls the real
+  // updateHvscBrowseSong to mutate each song's status as it processes chunks;
+  // only load/save/verify are faked here, everything else is the real module.
+  const actual = await vi.importActual<typeof import("@/lib/hvsc/hvscBrowseIndexStore")>(
+    "@/lib/hvsc/hvscBrowseIndexStore",
+  );
+  return {
+    ...actual,
+    loadHvscBrowseIndexSnapshot: vi.fn(async () => ({
+      schemaVersion: 2,
+      updatedAt: new Date().toISOString(),
+      songs: {},
+      folders: { "/": { path: "/", folders: [], songs: [] } },
+    })),
+    saveHvscBrowseIndexSnapshot: vi.fn(async () => undefined),
+    verifyHvscBrowseIndexIntegrity: vi.fn(async () => ({
+      isValid: true,
+      sampled: 0,
+      missingPaths: [],
+    })),
+  };
+});
 
 const { beginHvscPerfScope, endHvscPerfScope, runWithHvscPerfScope } = vi.hoisted(() => ({
   beginHvscPerfScope: vi.fn((scope: string, metadata?: Record<string, unknown>) => ({
@@ -185,7 +197,11 @@ import {
   resetHvscLibraryData as runtimeResetHvscLibraryData,
 } from "@/lib/hvsc/hvscIngestionRuntime";
 import { resolveHvscSonglengthDuration } from "@/lib/hvsc/hvscSongLengthService";
-import { loadHvscBrowseIndexSnapshot, verifyHvscBrowseIndexIntegrity } from "@/lib/hvsc/hvscBrowseIndexStore";
+import {
+  loadHvscBrowseIndexSnapshot,
+  saveHvscBrowseIndexSnapshot,
+  verifyHvscBrowseIndexIntegrity,
+} from "@/lib/hvsc/hvscBrowseIndexStore";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import { addErrorLog } from "@/lib/logging";
 
@@ -710,6 +726,46 @@ describe("hvscService", () => {
       const p2 = ensureHvscMetadataHydration(); // hits L171 TRUE
       await Promise.all([p1, p2]);
       expect(mediaIndexMocks.loadBrowseSnapshot).toHaveBeenCalledTimes(1);
+    });
+
+    it("saves the first and final hydration chunks but throttles the ones in between", async () => {
+      // Root cause of a real-world bug: persisting to disk on every small
+      // hydration chunk turned a ~60k-song HVSC library scan into a multi-
+      // minute main-thread hog (observed as Remote Input stuck "Reconnecting"
+      // even with a fully healthy device). 17 pending songs / 8-per-chunk = 3
+      // chunks (8, 8, 1) - only the first (cold start) and the last (final-
+      // chunk guarantee) should reach disk; the middle one must be throttled.
+      const songs: Record<string, { virtualPath: string; fileName: string; metadataStatus: string }> = {};
+      for (let index = 0; index < 17; index += 1) {
+        const virtualPath = `/DEMOS/Song_${index}.sid`;
+        songs[virtualPath] = { virtualPath, fileName: `Song_${index}.sid`, metadataStatus: "seeded" };
+      }
+      mediaIndexMocks.loadBrowseSnapshot.mockResolvedValueOnce({
+        schemaVersion: 2,
+        updatedAt: new Date().toISOString(),
+        songs,
+        folders: { "/": { path: "/", folders: [], songs: [] } },
+      });
+
+      // No Date.now mocking: this test relies on real wall-clock time, which
+      // is the more robust choice here - the emitter/hydrator/throttle all
+      // read Date.now() independently and in varying counts per chunk, so
+      // pre-scripting a fixed mock-return sequence is brittle to reorder.
+      // Real chunk processing of in-memory mocks completes in low single-digit
+      // milliseconds, many orders of magnitude under the 5s throttle window,
+      // so the middle chunk is reliably (not just probabilistically) skipped.
+      await ensureHvscMetadataHydration();
+
+      // 3 calls from onSnapshotUpdated (one per chunk) + 1 final
+      // hvscIndex.setBrowseSnapshot(hydratedSnapshot) after hydration returns.
+      expect(mediaIndexMocks.setBrowseSnapshot).toHaveBeenCalledTimes(4);
+      // Only the first chunk (cold start: lastPersistedAtMs starts at 0) and
+      // the final chunk (always persists) reach disk; the middle chunk lands
+      // inside the throttle window and is skipped.
+      expect(vi.mocked(saveHvscBrowseIndexSnapshot)).toHaveBeenCalledTimes(2);
+      expect(vi.mocked(saveHvscBrowseIndexSnapshot)).toHaveBeenCalledWith(expect.anything(), {
+        foldersUnchanged: true,
+      });
     });
   });
 });

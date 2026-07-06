@@ -903,6 +903,29 @@ type C64ReadRequestOptions = RequestInit & {
   __c64uBypassBackoff?: boolean;
   __c64uBypassCircuit?: boolean;
   /**
+   * An explicit, user-forced probe (the Diagnostics "Run health check" button).
+   * Implies every bypass flag AND overrides the device-state gate, so it always
+   * reaches the wire regardless of a stale circuit/backoff/cooldown/ERROR state.
+   * Use ONLY for genuinely user-initiated checks - never for background traffic.
+   */
+  __c64uForceProbe?: boolean;
+  /**
+   * Diagnostic/health probe: record the failure for the health UI but do NOT let
+   * it contribute to the REST circuit-breaker streak (observers must never trip
+   * the breaker that guards real user traffic). See deviceInteractionManager.
+   */
+  __c64uSuppressCircuitContribution?: boolean;
+  /**
+   * A recovery/discovery/health-reachability probe that must never be STARVED by
+   * an open circuit breaker (otherwise the app can't observe the device has
+   * recovered). The gateway translates this into a circuit bypass while KEEPING
+   * the ordinary backoff/cooldown pacing (unlike `__c64uForceProbe`, which is a
+   * user-forced total override). Kept as a high-level flag so the low-level
+   * `__c64uBypassCircuit` decision stays inside this gateway (device-gateway
+   * guard) rather than leaking into callers.
+   */
+  __c64uRecoveryProbe?: boolean;
+  /**
    * HARD13: route this request through the dedicated low-latency machine-input
    * lane instead of the shared bulk-REST concurrency semaphore, so the
    * high-frequency joystick/keyboard relay is never starved behind slow polling
@@ -1487,10 +1510,19 @@ export class C64API {
     const intent = options.__c64uIntent ?? "user";
     const allowDuringDiscovery = Boolean(options.__c64uAllowDuringDiscovery);
     const allowDuringError = Boolean(options.__c64uAllowDuringError);
-    const bypassCache = Boolean(options.__c64uBypassCache);
-    const bypassCooldown = Boolean(options.__c64uBypassCooldown);
-    const bypassBackoff = Boolean(options.__c64uBypassBackoff);
-    const bypassCircuit = Boolean(options.__c64uBypassCircuit);
+    // A user-forced probe must reach the wire past EVERY governor: it implies
+    // all four bypasses here, and additionally overrides the device-state gate
+    // inside withRestInteraction (see meta.forceProbe below).
+    const forceProbe = Boolean(options.__c64uForceProbe);
+    // A recovery/health-reachability probe bypasses ONLY the circuit (so an open
+    // breaker can't hide a recovered device) while still respecting backoff and
+    // cooldown pacing - unlike forceProbe, which overrides everything.
+    const recoveryProbe = Boolean(options.__c64uRecoveryProbe);
+    const bypassCache = Boolean(options.__c64uBypassCache) || forceProbe;
+    const bypassCooldown = Boolean(options.__c64uBypassCooldown) || forceProbe;
+    const bypassBackoff = Boolean(options.__c64uBypassBackoff) || forceProbe;
+    const bypassCircuit = Boolean(options.__c64uBypassCircuit) || forceProbe || recoveryProbe;
+    const suppressCircuitContribution = Boolean(options.__c64uSuppressCircuitContribution);
     const useInputLane = Boolean(options.__c64uInputLane);
     const expectedMissing = Boolean(options.__c64uExpectedMissing);
     const expectedFailureOption = Boolean(options.__c64uExpectedFailure);
@@ -1509,6 +1541,9 @@ export class C64API {
     delete (requestOptions as { __c64uBypassCooldown?: boolean }).__c64uBypassCooldown;
     delete (requestOptions as { __c64uBypassBackoff?: boolean }).__c64uBypassBackoff;
     delete (requestOptions as { __c64uBypassCircuit?: boolean }).__c64uBypassCircuit;
+    delete (requestOptions as { __c64uForceProbe?: boolean }).__c64uForceProbe;
+    delete (requestOptions as { __c64uSuppressCircuitContribution?: boolean }).__c64uSuppressCircuitContribution;
+    delete (requestOptions as { __c64uRecoveryProbe?: boolean }).__c64uRecoveryProbe;
     delete (requestOptions as { __c64uInputLane?: boolean }).__c64uInputLane;
     delete (requestOptions as { __c64uExpectedMissing?: boolean }).__c64uExpectedMissing;
     delete (requestOptions as { __c64uExpectedFailure?: boolean }).__c64uExpectedFailure;
@@ -1569,6 +1604,8 @@ export class C64API {
             bypassCooldown,
             bypassBackoff,
             bypassCircuit,
+            forceProbe,
+            suppressCircuitContribution,
           },
           () =>
             runNativeSerialized(async () => {

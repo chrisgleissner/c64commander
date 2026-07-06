@@ -32,20 +32,22 @@ export type KeyboardHoldDispatch = {
 /**
  * Real hold/release dispatch for the on-screen keyboard, mirroring the
  * joystick's proven held-set architecture (pointer down/up -> a held-input
- * Set -> diffed press/release calls) instead of the old one-shot "tap"
- * model. An ordinary key simply stays asserted for as long as it is held.
+ * Set -> diffed press/release calls). EVERY key — ordinary or modifier —
+ * stays asserted on the wire for exactly as long as its pointer is down, and
+ * is released the instant the pointer lifts. There is deliberately NO latch:
+ * a bare tap is a genuine press-then-release (the transport collapses a
+ * same-flush press+release into a firmware `tap` so a fast tap still
+ * registers — see collapseTransientKeyboardTaps), and a hold stays held.
  *
- * Sticky modifiers (SHIFT/CTRL/C=) get a hybrid so neither existing UX nor
- * real hardware behaviour regresses:
- *  - Hold the modifier while another key goes down (a real two-finger
- *    chord) -> released the instant the modifier itself is released,
- *    exactly like a physical keyboard.
- *  - Tap the modifier alone (down+up with nothing else pressed meanwhile)
- *    -> stays asserted as a one-shot latch for the NEXT key, then auto-clears
- *    when that key is released — preserving today's single-finger
- *    tap-then-tap convenience.
- * SHIFT LOCK is independent of both: once engaged it keeps `left_shift`
- * asserted regardless of any hold/latch bookkeeping above, until toggled off.
+ * This is what makes games playable: e.g. David's Midnight Magic works its
+ * flippers by holding C= and SHIFT, which must stay asserted for exactly as
+ * long as the buttons are held and must NOT stick when merely tapped. The
+ * previous one-shot latch (a bare modifier tap staying asserted for the next
+ * key) left C=/SHIFT stuck on the device and made such games unplayable.
+ *
+ * SHIFT LOCK is the sole intentional exception: an explicit persistent toggle
+ * (like the physical SHIFT LOCK keycap) that keeps `left_shift` asserted until
+ * toggled off, regardless of the press/release bookkeeping.
  */
 export const useKeyboardHoldDispatch = (
   heldKeyboardInputs: HeldKeyboardInputs,
@@ -54,16 +56,10 @@ export const useKeyboardHoldDispatch = (
   const heldRef = useRef(heldKeyboardInputs);
   heldRef.current = heldKeyboardInputs;
 
-  // Modifiers whose pointer is currently down (a live hold in progress).
+  // Keys/modifiers whose pointer is currently down (a live hold in progress).
+  // Modifiers are tracked here purely so `isModifierActive` can light the key
+  // while it is genuinely held; releasing the pointer always releases the key.
   const physicallyHeldRef = useRef<Set<KeyboardInputName>>(new Set());
-  // Subset of the above that saw another key pressed while held — i.e. a
-  // real chord happened, so release must be immediate rather than latched.
-  const chordedRef = useRef<Set<KeyboardInputName>>(new Set());
-  // Modifiers latched by a bare tap, asserted on the wire, awaiting the next
-  // ordinary key's release to auto-clear. Reactive so the UI can show it.
-  const [pendingLatch, setPendingLatch] = useState<ReadonlySet<KeyboardInputName>>(new Set());
-  const pendingLatchRef = useRef(pendingLatch);
-  pendingLatchRef.current = pendingLatch;
   const [shiftLocked, setShiftLocked] = useState(false);
   const shiftLockedRef = useRef(shiftLocked);
   shiftLockedRef.current = shiftLocked;
@@ -74,9 +70,11 @@ export const useKeyboardHoldDispatch = (
   onChangeRef.current = onHeldKeyboardInputsChange;
 
   // `heldRef.current` is updated immediately (not just echoed back on the next
-  // render) so that two add/remove calls within the SAME handler — e.g.
-  // releaseKey's own release plus a pending-latch flush — compose correctly
-  // instead of the second call overwriting the first from a stale snapshot.
+  // render) so that two add/remove calls within the SAME handler compose
+  // correctly instead of the second overwriting the first from a stale
+  // snapshot. The transport (useRemoteInputSession) coalesces these held-set
+  // changes into batched press/release calls, so simultaneous presses ride one
+  // request and each release only clears the keys actually let go.
   const addToHeld = useCallback((names: readonly KeyboardInputName[]) => {
     const next = new Set(heldRef.current);
     names.forEach((name) => next.add(name));
@@ -90,16 +88,12 @@ export const useKeyboardHoldDispatch = (
     onChangeRef.current(next);
   }, []);
 
-  // SHIFT LOCK independently keeps `left_shift` asserted — the hold/latch
-  // bookkeeping above must never release it out from under that lock.
+  // SHIFT LOCK independently keeps `left_shift` asserted — a pointer release
+  // must never release it out from under that lock.
   const canReleaseModifier = useCallback(
     (modifier: KeyboardInputName) => !(modifier === "left_shift" && shiftLockedRef.current),
     [],
   );
-
-  const noteOtherKeyPressed = useCallback(() => {
-    physicallyHeldRef.current.forEach((modifier) => chordedRef.current.add(modifier));
-  }, []);
 
   // Every function below is intentionally stable for the component's entire
   // lifetime (empty/all-stable dep arrays, current values read via refs) so a
@@ -108,34 +102,11 @@ export const useKeyboardHoldDispatch = (
   // real, measured latency on a Pixel 4 (~13-34ms) came from re-rendering the
   // ENTIRE keyboard/quick-keys bar on every keystroke; a fresh function
   // identity here for every keystroke would defeat that memoization entirely.
-  const pressKey = useCallback(
-    (inputs: KeyboardInputName[]) => {
-      noteOtherKeyPressed();
-      addToHeld(inputs);
-    },
-    [noteOtherKeyPressed, addToHeld],
-  );
-
-  const releaseKey = useCallback(
-    (inputs: KeyboardInputName[]) => {
-      removeFromHeld(inputs);
-      if (pendingLatchRef.current.size > 0) {
-        const toRelease = [...pendingLatchRef.current].filter(canReleaseModifier);
-        if (toRelease.length > 0) removeFromHeld(toRelease);
-        setPendingLatch(new Set());
-      }
-    },
-    [removeFromHeld, canReleaseModifier],
-  );
+  const pressKey = useCallback((inputs: KeyboardInputName[]) => addToHeld(inputs), [addToHeld]);
+  const releaseKey = useCallback((inputs: KeyboardInputName[]) => removeFromHeld(inputs), [removeFromHeld]);
 
   const pressModifier = useCallback(
     (modifier: KeyboardInputName) => {
-      // Deliberately does NOT call noteOtherKeyPressed(): a real "chord" is
-      // an ORDINARY key going down while a modifier is held (see pressKey
-      // above). Tapping a SECOND modifier while a first one is held is not
-      // that - retroactively chording the first modifier here would make it
-      // release immediately on its own hold ending instead of latching,
-      // even though nothing but modifier bookkeeping happened.
       physicallyHeldRef.current.add(modifier);
       addToHeld([modifier]);
     },
@@ -144,26 +115,11 @@ export const useKeyboardHoldDispatch = (
 
   const releaseModifier = useCallback(
     (modifier: KeyboardInputName) => {
+      // Pure release: a modifier is held only while its pointer is down. No
+      // latch, no chord bookkeeping — pointer up always lets it go (unless a
+      // SHIFT LOCK is keeping left_shift asserted).
       physicallyHeldRef.current.delete(modifier);
-      if (chordedRef.current.has(modifier)) {
-        // A real chord happened while this modifier was held: release now.
-        chordedRef.current.delete(modifier);
-        if (canReleaseModifier(modifier)) removeFromHeld([modifier]);
-        return;
-      }
-      if (pendingLatchRef.current.has(modifier)) {
-        // Re-tapping an already-latched modifier cancels the latch.
-        setPendingLatch((prev) => {
-          const next = new Set(prev);
-          next.delete(modifier);
-          return next;
-        });
-        if (canReleaseModifier(modifier)) removeFromHeld([modifier]);
-        return;
-      }
-      // A bare tap with nothing chorded: keep it asserted as a one-shot latch
-      // for the next ordinary key (stays in heldKeyboardInputs already).
-      setPendingLatch((prev) => new Set(prev).add(modifier));
+      if (canReleaseModifier(modifier)) removeFromHeld([modifier]);
     },
     [canReleaseModifier, removeFromHeld],
   );
@@ -173,7 +129,7 @@ export const useKeyboardHoldDispatch = (
       const next = !locked;
       if (next) {
         addToHeld(["left_shift"]);
-      } else if (!physicallyHeldRef.current.has("left_shift") && !pendingLatchRef.current.has("left_shift")) {
+      } else if (!physicallyHeldRef.current.has("left_shift")) {
         removeFromHeld(["left_shift"]);
       }
       return next;
@@ -182,9 +138,7 @@ export const useKeyboardHoldDispatch = (
 
   const isModifierActive = useCallback(
     (modifier: KeyboardInputName) =>
-      physicallyHeldRef.current.has(modifier) ||
-      pendingLatchRef.current.has(modifier) ||
-      (modifier === "left_shift" && shiftLockedRef.current),
+      physicallyHeldRef.current.has(modifier) || (modifier === "left_shift" && shiftLockedRef.current),
     [],
   );
 

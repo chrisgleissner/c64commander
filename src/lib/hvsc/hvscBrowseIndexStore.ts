@@ -571,12 +571,24 @@ export const loadHvscBrowseIndexSnapshot = async () => {
   );
 };
 
-export const saveHvscBrowseIndexSnapshot = async (snapshot: HvscBrowseIndexSnapshot) => {
+export const saveHvscBrowseIndexSnapshot = async (
+  snapshot: HvscBrowseIndexSnapshot,
+  options: { foldersUnchanged?: boolean } = {},
+) => {
+  // Rebuilding the folder tree is O(song count) and metadata hydration calls
+  // this after every small chunk - for a real ~60k-song HVSC library that is
+  // an O(songs^2) rebuild that starves the JS main thread for minutes (the
+  // observed cause of Remote Input's "Reconnecting" and other UI hangs during
+  // a library scan). Hydration only ever edits metadata on existing entries,
+  // never adds/removes/moves a song, so its virtualPaths - and therefore the
+  // derived folder tree - never change; callers on that path may skip the
+  // rebuild and reuse the snapshot's existing folders.
+  const reuseFolders = options.foldersUnchanged && snapshot.folders && Object.keys(snapshot.folders).length > 0;
   const normalized: HvscBrowseIndexSnapshot = {
     schemaVersion: SCHEMA_VERSION,
     updatedAt: new Date().toISOString(),
     songs: snapshot.songs,
-    folders: buildFoldersFromSongs(snapshot.songs),
+    folders: reuseFolders ? snapshot.folders : buildFoldersFromSongs(snapshot.songs),
   };
   const persistFullSnapshot = shouldPersistFullSnapshot(normalized);
   if (typeof window !== "undefined") {

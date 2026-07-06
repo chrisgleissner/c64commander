@@ -205,31 +205,50 @@ describe("QuickKeysBar", () => {
     expect(handlers.onSpecialKey).toHaveBeenCalledWith("f3");
   });
 
-  it("latches the CTRL / C= / SHIFT modifiers onto the held-keyboard-inputs set on a bare tap", () => {
-    // A bare tap (no real hold, nothing else pressed meanwhile) latches the
-    // modifier onto the held set — real hold/chord behaviour is covered by
-    // useKeyboardHoldDispatch's own unit tests.
+  it("does NOT latch CTRL / C= / SHIFT on a bare tap — a tap presses then releases (regression)", () => {
+    // Regression: a bare modifier tap used to LATCH the key onto the held set
+    // (staying asserted for the next key), which left C=/SHIFT stuck on the
+    // device and made games unplayable. A tap must now be a genuine
+    // press-then-release, leaving nothing asserted.
     const handlers = makeHandlers();
-    render(<QuickKeysBarHarness {...handlers} tier="full" />);
-    fireEvent.click(screen.getByTestId("remote-input-key-ctrl"));
-    expect(screen.getByTestId("remote-input-key-ctrl")).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(screen.getByTestId("remote-input-key-ctrl")); // re-tap cancels the latch
-    expect(screen.getByTestId("remote-input-key-ctrl")).toHaveAttribute("aria-pressed", "false");
+    const snapshots: string[][] = [];
+    render(
+      <QuickKeysBarHarness {...handlers} tier="full" onHeldChange={(next) => snapshots.push([...next].sort())} />,
+    );
 
-    fireEvent.click(screen.getByTestId("remote-input-key-commodore"));
-    expect(screen.getByTestId("remote-input-key-commodore")).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(screen.getByTestId("remote-input-key-commodore"));
+    for (const testId of [
+      "remote-input-key-ctrl",
+      "remote-input-key-commodore",
+      "remote-input-key-shift-left",
+      "remote-input-key-shift-right",
+    ]) {
+      snapshots.length = 0;
+      fireEvent.click(screen.getByTestId(testId));
+      // The tap both pressed and released the modifier: the held set ends empty
+      // and the key is not left visually latched.
+      expect(snapshots.at(-1), testId).toEqual([]);
+      expect(screen.getByTestId(testId), testId).toHaveAttribute("aria-pressed", "false");
+    }
 
-    fireEvent.click(screen.getByTestId("remote-input-key-shift-left"));
-    expect(screen.getByTestId("remote-input-key-shift-left")).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(screen.getByTestId("remote-input-key-shift-left"));
+    // Full tier relays via the held-set, never the tap-event onKey prop.
+    expect(handlers.onKey).not.toHaveBeenCalled();
+  });
 
-    fireEvent.click(screen.getByTestId("remote-input-key-shift-right"));
-    expect(screen.getByTestId("remote-input-key-shift-right")).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(screen.getByTestId("remote-input-key-shift-right"));
+  it("keeps a modifier asserted for exactly as long as it is physically held (CTRL flipper-style hold)", () => {
+    const handlers = makeHandlers();
+    const snapshots: string[][] = [];
+    render(
+      <QuickKeysBarHarness {...handlers} tier="full" onHeldChange={(next) => snapshots.push([...next].sort())} />,
+    );
+    const ctrl = screen.getByTestId("remote-input-key-ctrl");
 
-    // None of this goes through the tap-event onKey prop any more (full tier
-    // relays via the held-set instead).
+    fireEvent.pointerDown(ctrl, { pointerId: 1 });
+    expect(snapshots).toContainEqual(["ctrl"]);
+    expect(ctrl).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.pointerUp(ctrl, { pointerId: 1 });
+    expect(snapshots.at(-1)).toEqual([]);
+    expect(ctrl).toHaveAttribute("aria-pressed", "false");
     expect(handlers.onKey).not.toHaveBeenCalled();
   });
 

@@ -57,7 +57,14 @@ const GLOBAL_RUN_TIMEOUT_MS = 12_000;
 const STALE_RUN_GRACE_MS = 1500;
 const PRESENTATION_ORDER: ReadonlyArray<HealthCheckProbeType> = ["REST", "FTP", "TELNET", "CONFIG", "RASTER", "JIFFY"];
 const CONFIG_PULSE_DELAY_MS = 80;
-const TELNET_HEALTH_CONNECT_TIMEOUT_MS = PROBE_TIMEOUT_MS.TELNET;
+// The Telnet probe (connect + login handshake + banner read) against a device
+// that REQUIRES auth takes ~2.3s even on a freshly started app, and once the app
+// has been used a while it can exceed the base 3s ceiling and spuriously time
+// out (which then feeds the health/circuit escalation). Give the auth path
+// generous headroom; a device known to have no auth keeps the tighter base timeout.
+const TELNET_AUTH_PROBE_TIMEOUT_MS = 5000;
+const resolveTelnetProbeTimeoutMs = (hasAuth: boolean): number =>
+  hasAuth ? TELNET_AUTH_PROBE_TIMEOUT_MS : PROBE_TIMEOUT_MS.TELNET;
 const TELNET_IDLE_TIMEOUT_MS = 120;
 const TELNET_POST_DATA_IDLE_TIMEOUT_MS = 100;
 const TELNET_LOGIN_INITIAL_TIMEOUT_MS = 1_000;
@@ -133,6 +140,12 @@ type ProbeRuntime = {
   telnetPort: number;
   password?: string;
   intent: InteractionIntent;
+  /**
+   * True only for an explicit user-initiated ("Run health check") run: its REST
+   * probes force past the circuit/backoff/cooldown/state governors so the check
+   * always reflects the device's real current state, never a stale wedge.
+   */
+  forceProbe: boolean;
 };
 
 type TelnetAuthenticationResult = {
@@ -195,6 +208,9 @@ const resolveProbeIntent = (runContext: HealthCheckRunContext): InteractionInten
 
 const buildProbeRuntime = (runContext: HealthCheckRunContext, target?: HealthCheckTarget): ProbeRuntime => {
   const intent = resolveProbeIntent(runContext);
+  // Only an explicit, user-initiated health check forces past the governors.
+  // Background maintenance and switch-device probing stay polite.
+  const forceProbe = runContext.context === "manual-diagnostics";
   if (target) {
     const deviceHost = target.deviceHost;
     return {
@@ -204,6 +220,7 @@ const buildProbeRuntime = (runContext: HealthCheckRunContext, target?: HealthChe
       telnetPort: target.telnetPort,
       password: target.password ?? undefined,
       intent,
+      forceProbe,
     };
   }
 
@@ -216,6 +233,7 @@ const buildProbeRuntime = (runContext: HealthCheckRunContext, target?: HealthChe
     telnetPort: getStoredTelnetPort(),
     password: snap.password,
     intent,
+    forceProbe,
   };
 };
 
@@ -260,6 +278,9 @@ const readMemoryProbeWithTransientRetry = async (
         signal: options.signal,
         timeoutMs: options.timeoutMs,
         __c64uIntent: runtime.intent,
+        __c64uForceProbe: runtime.forceProbe,
+        __c64uRecoveryProbe: true,
+        __c64uSuppressCircuitContribution: true,
       });
     } catch (error) {
       lastError = error;
@@ -541,6 +562,13 @@ const probeRest = async (
         __c64uIntent: runtime.intent,
         __c64uAllowDuringError: true,
         __c64uBypassCache: true,
+        __c64uForceProbe: runtime.forceProbe,
+        // The reachability read must ALWAYS hit the wire (even for a system
+        // switch-device probe) and must never trip the breaker, so it can always
+        // observe a healthy device and its success closes the circuit. The
+        // gateway translates __c64uRecoveryProbe into a circuit bypass.
+        __c64uRecoveryProbe: true,
+        __c64uSuppressCircuitContribution: true,
       }),
     );
     const hasErrors = Array.isArray(info.errors) && info.errors.length > 0;
@@ -654,6 +682,8 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
         timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
         __c64uIntent: runtime.intent,
         __c64uBypassCache: true,
+        __c64uForceProbe: runtime.forceProbe,
+        __c64uSuppressCircuitContribution: true,
       });
       const itemData = extractConfigItemData(readResp, target.category, target.item);
       if (itemData === null) {
@@ -703,6 +733,8 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
           signal,
           timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
           __c64uIntent: runtime.intent,
+          __c64uForceProbe: runtime.forceProbe,
+          __c64uSuppressCircuitContribution: true,
         });
         tempValueApplied = true;
         await waitMs(CONFIG_PULSE_DELAY_MS, signal);
@@ -712,6 +744,8 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
           timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
           __c64uIntent: runtime.intent,
           __c64uBypassCache: true,
+          __c64uForceProbe: runtime.forceProbe,
+          __c64uSuppressCircuitContribution: true,
         });
         readBackValue = parseConfigNumericValue(extractConfigItemData(readBackResp, target.category, target.item));
       } finally {
@@ -721,6 +755,8 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
               signal,
               timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
               __c64uIntent: runtime.intent,
+              __c64uForceProbe: runtime.forceProbe,
+              __c64uSuppressCircuitContribution: true,
             });
           } catch (error) {
             revertErrorMessage = error instanceof Error ? error.message : String(error ?? "Unknown revert failure");
@@ -739,6 +775,8 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
         timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
         __c64uIntent: runtime.intent,
         __c64uBypassCache: true,
+        __c64uForceProbe: runtime.forceProbe,
+        __c64uSuppressCircuitContribution: true,
       });
       const verifyValue = parseConfigNumericValue(extractConfigItemData(verifyResp, target.category, target.item));
 
@@ -1005,7 +1043,8 @@ const authenticateTelnetIfNeeded = async (
 
 const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<HealthCheckProbeRecord> => {
   const startMs = Date.now();
-  const transport = createTelnetClient({ connectTimeoutMs: TELNET_HEALTH_CONNECT_TIMEOUT_MS });
+  const connectTimeoutMs = resolveTelnetProbeTimeoutMs(Boolean(runtime.password));
+  const transport = createTelnetClient({ connectTimeoutMs });
   const traceAction = {
     correlationId: `health-check-telnet-${startMs}`,
     origin: "system" as const,
@@ -1053,7 +1092,7 @@ const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
             port: runtime.telnetPort,
             elapsedMs,
             visibleText: finalVisibleText.slice(0, 120),
-            connectTimeoutMs: TELNET_HEALTH_CONNECT_TIMEOUT_MS,
+            connectTimeoutMs,
           });
 
           const result = hasTelnetFailureMarker(finalVisibleText)
@@ -1150,6 +1189,7 @@ const runProbe = async <T>(
   probe: HealthCheckProbeType,
   execute: (signal: AbortSignal) => Promise<T>,
   normalize: (value: T) => ProbeExecution,
+  timeoutCeilingMs: number = PROBE_TIMEOUT_MS[probe],
 ): Promise<ProbeExecution> => {
   const startedAt = new Date().toISOString();
   setProbeLifecycle(
@@ -1165,7 +1205,7 @@ const runProbe = async <T>(
   );
 
   const remainingBudgetMs = Math.max(1, run.deadlineMs - Date.now());
-  const timeoutMs = Math.min(PROBE_TIMEOUT_MS[probe], remainingBudgetMs);
+  const timeoutMs = Math.min(timeoutCeilingMs, remainingBudgetMs);
 
   try {
     const value = await withTimeout(
@@ -1524,6 +1564,7 @@ export const runHealthCheckForTarget = async (
     probe: HealthCheckProbeType,
     execute: (signal: AbortSignal) => Promise<T>,
     normalize: (value: T) => ProbeExecution,
+    timeoutCeilingMs: number = PROBE_TIMEOUT_MS[probe],
   ): Promise<ProbeExecution> => {
     const startedAt = new Date().toISOString();
     setLocalProbeLifecycle(
@@ -1540,7 +1581,7 @@ export const runHealthCheckForTarget = async (
     emitProgress();
 
     const remainingBudgetMs = Math.max(1, deadlineMs - Date.now());
-    const timeoutMs = Math.min(PROBE_TIMEOUT_MS[probe], remainingBudgetMs);
+    const timeoutMs = Math.min(timeoutCeilingMs, remainingBudgetMs);
 
     try {
       const value = await withTimeout(
@@ -1619,6 +1660,7 @@ export const runHealthCheckForTarget = async (
             record,
             lifecycle: lifecycleFromRecord(record.outcome),
           }),
+          resolveTelnetProbeTimeoutMs(Boolean(runtime.password)),
         );
 
     const config = restFailed
@@ -1827,6 +1869,7 @@ export const runHealthCheck = async (
             record,
             lifecycle: lifecycleFromRecord(record.outcome),
           }),
+          resolveTelnetProbeTimeoutMs(Boolean(runtime.password)),
         );
     publishProgress({ ...(getHealthCheckStateSnapshot().liveProbes ?? {}), TELNET: telnet.record });
 

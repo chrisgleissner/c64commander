@@ -1150,4 +1150,131 @@ describe("useRemoteInputSession", () => {
       expect(sendMachineInputBatchMock).not.toHaveBeenCalled();
     });
   });
+
+  // No key ever latches (except SHIFT LOCK, which lives in useKeyboardHoldDispatch):
+  // a key is asserted on the wire for EXACTLY as long as it is held, and every
+  // transition below is verified for its precise coalesced REST timing. These
+  // are the game-play scenarios (e.g. David's Midnight Magic flippers) the latch
+  // bug broke.
+  describe("no-latch hold/release REST timing (game-play)", () => {
+    it("coalesces multiple simultaneously-pressed keys into a single press REST call", async () => {
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+      act(() => result.current.setHeldKeyboardInputs(new Set(["commodore", "left_shift"])));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(1);
+      expect(sendMachineInputBatchMock).toHaveBeenCalledWith({
+        events: [{ kind: "keyboard", inputs: ["commodore", "left_shift"], transition: "press" }],
+      });
+    });
+
+    it("collapses a short tap (press then release within one window) into a single firmware `tap` call", async () => {
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+      act(() => {
+        result.current.setHeldKeyboardInputs(new Set(["commodore"]));
+        result.current.setHeldKeyboardInputs(new Set());
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      // A same-window press+release is a real hardware-unsafe zero-gap pair, so
+      // the transport collapses it to the firmware's 60ms `tap` - one REST call.
+      expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(1);
+      expect(sendMachineInputBatchMock).toHaveBeenCalledWith({
+        events: [{ kind: "keyboard", inputs: ["commodore"], transition: "tap" }],
+      });
+    });
+
+    it("keeps a long-held key asserted: a press call now, a distinct release call only when let go", async () => {
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+      act(() => result.current.setHeldKeyboardInputs(new Set(["commodore"])));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(1);
+      expect(sendMachineInputBatchMock).toHaveBeenLastCalledWith({
+        events: [{ kind: "keyboard", inputs: ["commodore"], transition: "press" }],
+      });
+
+      // Held for real time: NOT collapsed to a tap, and no extra traffic while held.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
+      expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(1);
+
+      // Release lands in a later, separate flush -> its own release call.
+      act(() => result.current.setHeldKeyboardInputs(new Set()));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(2);
+      expect(sendMachineInputBatchMock).toHaveBeenLastCalledWith({
+        events: [{ kind: "keyboard", inputs: ["commodore"], transition: "release" }],
+      });
+    });
+
+    it("releases two keys held for different durations independently, each in its own diff (flipper timing)", async () => {
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+      // Both flippers (C= + SHIFT) pressed together and held.
+      act(() => result.current.setHeldKeyboardInputs(new Set(["commodore", "left_shift"])));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(sendMachineInputBatchMock).toHaveBeenLastCalledWith({
+        events: [{ kind: "keyboard", inputs: ["commodore", "left_shift"], transition: "press" }],
+      });
+      sendMachineInputBatchMock.mockClear();
+
+      // Let go of SHIFT first (shorter press); C= stays held. Only SHIFT is released.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(120);
+      });
+      act(() => result.current.setHeldKeyboardInputs(new Set(["commodore"])));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(sendMachineInputBatchMock).toHaveBeenLastCalledWith({
+        events: [{ kind: "keyboard", inputs: ["left_shift"], transition: "release" }],
+      });
+
+      // Let go of C= later (longer press). Only C= is released.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(120);
+      });
+      act(() => result.current.setHeldKeyboardInputs(new Set()));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(sendMachineInputBatchMock).toHaveBeenLastCalledWith({
+        events: [{ kind: "keyboard", inputs: ["commodore"], transition: "release" }],
+      });
+    });
+
+    it("rides a simultaneous joystick move and key press on ONE coalesced REST call", async () => {
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+      act(() => {
+        result.current.setHeldJoystickInputs(new Set(["up"]));
+        result.current.setHeldKeyboardInputs(new Set(["commodore"]));
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40);
+      });
+
+      expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(1);
+      expect(sendMachineInputBatchMock).toHaveBeenCalledWith({
+        events: [
+          { kind: "joystick", port: 2, inputs: ["up"], transition: "press" },
+          { kind: "keyboard", inputs: ["commodore"], transition: "press" },
+        ],
+      });
+    });
+  });
 });

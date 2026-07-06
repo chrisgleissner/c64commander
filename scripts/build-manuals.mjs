@@ -131,6 +131,7 @@ const markdownToc = [
   "First Connection",
   "Your First Tour",
   "Everyday Flows",
+  "In Depth",
   "Safe Device Use",
   "Troubleshooting",
   "Feature Reference",
@@ -287,6 +288,33 @@ const saveToFlashGuidance = (variant) =>
     variant,
   )}`;
 
+// Remote Input's Joystick tab relays over the `machine:input` REST endpoint,
+// which arrives in Commodore 64 Ultimate firmware 1.2.0 and (C64 Commander
+// only) Ultimate 64-family firmware 3.15. On anything older, or on the
+// Ultimate-II+(L) which has no such endpoint, the app falls back to Keys only.
+const remoteInputKeyboardImage = (profile) =>
+  profile === "compact"
+    ? "home/remote-input/03-keyboard-compact.png"
+    : "home/remote-input/04-keyboard-medium.png";
+
+const remoteInputFallbackExplainer =
+  "That fallback types by placing characters into the C64's KERNAL keyboard buffer. It is ideal for BASIC, where you can type commands, `LOAD`, and `RUN`, but most games read the keyboard and joystick hardware directly and will not respond to it. RUN/STOP and RESTORE are also unavailable in the fallback.";
+
+const remoteInputJoystickFirmware = (variant) =>
+  isC64uRemoteVariant(variant)
+    ? `Full Joystick relay uses the device's \`machine:input\` REST endpoint. It needs a Commodore 64 Ultimate running firmware **1.2.0** or newer. On older firmware the app automatically falls back to **Keys** only. ${remoteInputFallbackExplainer} If the device is password-protected, enter its password in Settings first, because both Joystick and Keys need it.`
+    : `Full Joystick relay uses the device's \`machine:input\` REST endpoint. It needs recent firmware: a Commodore 64 Ultimate on firmware **1.2.0** or newer, or an Ultimate 64, Ultimate 64 Elite, or Ultimate 64 Elite II on firmware **3.15** or newer. The Ultimate-II+(L) cannot relay a joystick at all: as a cartridge it cannot change the state of the C64's CIA 1 input chip, so it has no \`machine:input\` support. On the Ultimate-II+(L), and on any device running older firmware, the app automatically falls back to **Keys** only. ${remoteInputFallbackExplainer} If the device is password-protected, enter its password in Settings first, because both Joystick and Keys need it.`;
+
+const remoteInputFirmwareShort = (variant) =>
+  isC64uRemoteVariant(variant)
+    ? "Joystick needs a Commodore 64 Ultimate on firmware 1.2.0 or newer; otherwise only Keys are available."
+    : "Joystick needs firmware 1.2.0 or newer on a Commodore 64 Ultimate, or 3.15 or newer on an Ultimate 64; otherwise only Keys are available.";
+
+const remoteInputTroubleshootFirmware = (variant) =>
+  isC64uRemoteVariant(variant)
+    ? "- Confirm the Commodore 64 Ultimate is running firmware 1.2.0 or newer."
+    : "- Confirm the firmware supports it: a Commodore 64 Ultimate on 1.2.0 or newer, or an Ultimate 64 on 3.15 or newer. The Ultimate-II+(L) has no joystick relay.";
+
 const featureRows = ({ features, variant }) => {
   const rows = [
     [
@@ -324,6 +352,13 @@ const featureRows = ({ features, variant }) => {
   }
   if (includeFeature(features, "ram_snapshots_enabled")) {
     rows.push(["Save / Load RAM", "**Home > Quick Actions**", featureAvailability(features.ram_snapshots_enabled)]);
+  }
+  if (includeFeature(features, "remote_input_enabled")) {
+    rows.push([
+      "Remote Input",
+      "**Home > Quick Actions**, Play (while an item plays)",
+      `${featureAvailability(features.remote_input_enabled)} ${remoteInputFirmwareShort(variant)}`,
+    ]);
   }
   if (includeFeature(features, "home_telnet_reu_snapshot_enabled")) {
     rows.push([
@@ -649,6 +684,12 @@ export const renderManualMarkdown = ({ variant, features }) => {
       variant,
     )} when you need an explicit save.`,
     "",
+    ...(includeFeature(features, "remote_input_enabled")
+      ? [
+          "Quick Actions also holds **Remote Input**, a second-screen joystick and keyboard for the C64. It has its own walkthrough in [Remote Input](#remote-input), later in this guide.",
+          "",
+        ]
+      : []),
     "### Play",
     "",
     "Play is for building a playlist and running it.",
@@ -759,6 +800,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "The Share action packages useful evidence. Use it before restarting the app if you are investigating a recurring issue, because the most useful details are often the last few actions before a failure.",
     "",
+    "For a closer look, see [Reading Diagnostics](#reading-diagnostics) and [Sharing a Diagnostics Report](#sharing-a-diagnostics-report) in the In Depth chapter.",
+    "",
     "### Device Switching",
     "",
     isC64uRemoteVariant(variant)
@@ -768,6 +811,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
     image("Device switcher", profile, "diagnostics/switch-device/profiles/{profile}/01-picker.png"),
     "",
     "Open it from the badge long-press, `#`, or Quick Menu. Expand a row for more detail.",
+    "",
+    "See [Switching Between Devices](#switching-between-devices) in the In Depth chapter for the full story.",
     "",
     image("Device switcher expanded", profile, "diagnostics/switch-device/profiles/{profile}/02-picker-expanded.png"),
     "",
@@ -919,6 +964,125 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Preferred path: Share before restart when you are trying to preserve evidence.",
     "",
+    "## In Depth",
+    "",
+    "The tour showed you where everything lives, and the flows above are quick recipes. A few features reward a closer look. This chapter takes its time with them.",
+    "",
+    ...(includeFeature(features, "remote_input_enabled")
+      ? [
+          "### Remote Input",
+          "",
+          "Remote Input turns your phone or tablet into a second-screen controller for the C64. It is handy when you are sitting across the room from the machine, when no joystick is plugged in, or when you just want to type a command without reaching for the real keyboard.",
+          "",
+          "Open it in either of two places:",
+          "",
+          "- From **Home**, tap the **Remote Input** tile in Quick Actions.",
+          "- From **Play**, tap the **Remote Input** button that appears while an item is playing.",
+          "",
+          "Each place opens its own copy of the controller, so a key you are holding in one never leaks into the other.",
+          "",
+          image("Remote Input joystick mode", profile, "home/remote-input/01-joystick.png"),
+          "",
+          "At the top of the sheet you choose between two modes, **Joystick** and **Keys**.",
+          "",
+          "**Joystick** puts a stick and a large **FIRE** button on the screen. You can:",
+          "",
+          "- choose how the stick behaves with **Analog**, **D-Pad**, or **Swipe**;",
+          "- send the signal to **Port 1** or **Port 2** with the port toggle (most games read Port 2);",
+          "- resize the controls from S up to XXL with the **Size** stepper;",
+          "- turn on **Autofire** and set its rate from 1 to 10 presses per second (the default is 5, and you can also set it in Settings).",
+          "",
+          "A quick-keys bar along the bottom keeps RUN/STOP, SPACE, RETURN, and the cursor keys one tap away, so you can nudge a menu without leaving the joystick. For distraction-free play, tap **Game mode**: the app hides every other control and anchors the stick and FIRE button to the edges of the screen for no-look thumbs. Leave it with **Exit game mode** or your device's Back button. Both release everything you were holding.",
+          "",
+          "**Keys** shows a full Commodore 64 keyboard, including the SHIFT, CTRL, and C= modifiers, SHIFT LOCK, the function keys f1 to f8, and RESTORE. Tap a modifier once to arm it for the next key, or hold it down to chord.",
+          "",
+          image("Remote Input keyboard mode", profile, remoteInputKeyboardImage(profile)),
+          "",
+          remoteInputJoystickFirmware(variant),
+          "",
+          "Remote Input is careful never to leave a key or direction stuck on the real C64. Everything you are holding is released automatically when you close the sheet, switch mode or port, switch to another device, or send the app to the background. If a message does not reach the device, the header shows **Reconnecting…** until the next one gets through. And at any moment you can tap **Release All** to let go of every key and button at once.",
+          "",
+          "To steer a game you have just launched:",
+          "",
+          "1. On **Play**, start the game, then tap **Remote Input**.",
+          "2. Choose **Joystick** and set the port (most games use **Port 2**).",
+          "3. Pick a movement style, then play with the stick and **FIRE**.",
+          "4. Tap **Release All**, or close the sheet, when you finish.",
+          "",
+          featureAvailability(features.remote_input_enabled),
+          "",
+        ]
+      : []),
+    ...(includeFeature(features, "ram_snapshots_enabled")
+      ? [
+          "### RAM Snapshots",
+          "",
+          "A RAM snapshot is a copy of what is in your C64's memory right now, saved onto your phone or tablet so you can put it back later. It is the nearest thing the app has to a save-and-restore button for programs that have none of their own.",
+          "",
+          "Both actions live in **Home > Quick Actions**: **Save RAM** to capture, and **Load RAM** to restore. The device must be connected and not busy. The app pauses the machine for the transfer and resumes it afterwards, so a running program is not disturbed.",
+          "",
+          "When you tap **Save RAM**, the app asks which region of memory to capture:",
+          "",
+          "- **CPU + RAM Snapshot** (when the device supports it) freezes the running program and stores the full 64K of memory together with the processor's registers, so it can later resume exactly where it left off. It is best for BASIC and simple programs; fast-action games may not resume cleanly.",
+          "- **Program Snapshot** stores almost all of memory (everything but the stack). A good all-round choice.",
+          "- **Basic Snapshot** stores just the BASIC program and its variables.",
+          "- **Screen Snapshot** stores the current screen and its colours.",
+          "- **Custom Snapshot** lets you type the exact address ranges you want.",
+          "",
+          "Snapshots are kept on your phone or tablet, not on the C64. Each one is named automatically from its type and the date and time, and if something is playing its title becomes the label. You can add or change a **Comment** on any snapshot later. The app keeps up to 100 snapshots and quietly drops the oldest once that fills.",
+          "",
+          "**Load RAM** opens your snapshot library. Filter it by name or by type, then tap a snapshot to restore it. The app asks you to confirm first, because restoring overwrites the matching memory on the C64. It writes back only the bytes the snapshot holds, and it deliberately leaves the CIA timers alone so the cursor keeps its normal blink. A CPU snapshot resumes the program; if that is not possible the app restores the memory alone and tells you so. From the same library you can edit a snapshot's comment or remove ones you no longer need with the trash icon.",
+          "",
+          featureAvailability(features.ram_snapshots_enabled),
+          "",
+        ]
+      : []),
+    "### Reading Diagnostics",
+    "",
+    "Diagnostics is your window into the health of the connection and everything the app has recently done. It slides up from the bottom of the screen. Reach it by tapping the header badge, pressing `*`, choosing **Diagnostics** in Settings, or tapping any error notification.",
+    "",
+    "The panel has three parts, from top to bottom:",
+    "",
+    "- The **health header** shows the current state (Healthy, Degraded, Unhealthy, or Offline), which device it refers to, and when it was last checked. Tap **Run health check** to test the connection now. The check probes REST, FTP, and Telnet, plus three C64-specific signals (CONFIG, RASTER, and JIFFY), and reports each result with its timing and the overall latency. Expand the header to see every probe in detail.",
+    "- The **Filters** bar narrows what you see below. Filter by device, by activity type (Problems, Actions, Logs, Traces), by contributor (App, REST, FTP, Telnet), or by severity (Errors, Warnings, Info). One-tap **Errors only** and **Problems only** shortcuts are there too.",
+    "- The **Activity** list gathers problems, actions, logs, and traces together. Tap any row to expand it for the full details.",
+    "",
+    "The **⋯** menu in the corner collects extra views (Connection details, health history, latency, and the REST, FTP, and Config heat maps) alongside the Share and Clear actions. To send this information on for help, see the next section.",
+    "",
+    "### Sharing a Diagnostics Report",
+    "",
+    "When something goes wrong, the most useful evidence is usually the last handful of actions before the failure, so capture it before you clear anything or restart the app. The activity list is rebuilt fresh each time you open Diagnostics, and **Clear all** wipes it for good.",
+    "",
+    "To share a report about a recent error:",
+    "",
+    "1. Open **Diagnostics** (tap the header badge, press `*`, or tap the error notification).",
+    "2. Tap **Run health check** so the report carries a fresh connection test.",
+    "3. Use the **Errors only** or **Problems only** filter to confirm the failure is captured.",
+    "4. Open the **⋯** menu and choose **Share all** to send everything, or **Share filtered** to send only the rows you filtered to.",
+    "5. Pick an app in your device's share sheet (mail, chat, or notes) to send or save the report.",
+    "",
+    "The report is a small ZIP file holding the app's logs, traces, errors, and recent actions, along with a health snapshot and details about your app version, your device, and the active C64 (its name, host address, and firmware). It does not include your network password. It can, however, contain your device's hostname or IP address, so share it only with people you trust or with support.",
+    "",
+    "Use **Clear all** afterwards for a clean slate. It asks you to confirm, then shows **Diagnostics cleared** when done.",
+    "",
+    "### Switching Between Devices",
+    "",
+    `If you have saved more than one ${
+      isC64uRemoteVariant(variant) ? "Commodore 64 Ultimate" : "device"
+    }, the Device Switcher lets you hop between them without opening Settings.`,
+    "",
+    "Open it in any of three ways, whenever more than one device is saved:",
+    "",
+    "- **Long-press the header badge** (a short tap opens Diagnostics instead).",
+    "- Press **`#`** on a hardware keyboard or keypad.",
+    "- Choose **Switch device** in the Quick Menu.",
+    "",
+    "The switcher checks each saved device for you and refreshes every ten seconds while it is open. Each row shows the device's name, a status pill (**Selected**, **Verifying**, **Offline**, or **Mismatch**), a live health badge, and a short summary such as how many health probes passed or when the device was last seen. The device you are using is highlighted. Tap the chevron to expand a row and see every health probe in detail, which is handy for telling a sleeping device from one that is genuinely unreachable.",
+    "",
+    "Tap a device to switch to it. Before anything else the app safely lets go of any input you were holding on the old device, stops tracking its playback and pause state, retargets to the new device's address and ports, and then checks that the new device answers. While that happens the target shows a **Verifying** pill; once it responds, it becomes the active device.",
+    "",
+    "Saved devices themselves are created and edited in **Settings > Connection**, under **Saved devices**. There you can add a device, edit its **Device name**, **Hostname / IP**, and **HTTP**, **FTP**, and **Telnet** ports, set an optional **Network Password**, or delete one you no longer use. A device is saved only once it answers, so the list never fills with machines that are not really there. With a single device saved there is nothing to switch to, so the switcher stays out of your way.",
+    "",
     "## Safe Device Use",
     "",
     safeDeviceUseIntro({ appName, variant }),
@@ -959,6 +1123,18 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Some controls appear only when the connected device reports support. Others are disabled while an operation is running or when no matching item exists.",
     "",
+    ...(includeFeature(features, "remote_input_enabled")
+      ? [
+          "### Remote Input joystick is unavailable",
+          "",
+          "The **Joystick** tab appears only when the connected device supports the `machine:input` endpoint. **Keys** always works.",
+          "",
+          remoteInputTroubleshootFirmware(variant),
+          "- If the device is password-protected, enter its password in Settings; both Joystick and Keys need it.",
+          "- Otherwise the app stays in **Keys** mode and types through the C64 keyboard buffer, which suits BASIC but not most games.",
+          "",
+        ]
+      : []),
     "### Device stops answering",
     "",
     `Open Diagnostics if possible and check recent REST/FTP/Telnet activity. If HTTP, FTP, and Telnet all refuse connections while ping still works, manually power-cycle ${targetDeviceShortName(variant)}.`,

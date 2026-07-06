@@ -342,7 +342,9 @@ ordinary focus-ring CTAs in both output modes.
 - Output mode toggle: Joystick / Type — buttons — `remote-input-mode-joystick`,
   `remote-input-mode-type` — R✅ I✅ ; Joystick disabled with an inline hint on
   devices/firmware without `machine:input` (kernal-fallback tier); hidden in
-  Game mode
+  Game mode. Pinned in a non-scrolling chrome region at the top of the sheet
+  (outside the scrollable body) so it is always visible, with Release All
+  right-aligned on the same row (see below)
 - Connection indicator — status text — `remote-input-connection-indicator` —
   not interactive
 - Control size stepper (Joystick mode only) — decrease/increase buttons + label
@@ -449,15 +451,17 @@ kernal-fallback tier — no keyboard-buffer equivalent; a plain-language footer
   CTRL, C=, both SHIFTs) have no kernal-buffer equivalent so are `[disabled off
   the full machine:input tier]`; SPACE/RETURN/f-keys/cursors also work on the
   kernal-fallback tier and only disable on `auth-required` (password needed).
-- **Standard Joystick mode and Type mode only — footer actions**
+- **Standard Joystick mode and Type mode only — pinned top-right action**
   - Safety — Release All (panic button) — button (destructive) —
-    `remote-input-panic-button` — R✅ I✅ — releases every held/latched input
-    regardless of tracked state
-  - Exit — button — `remote-input-exit-button` — R✅ I✅ ; Android Back also
-    exits (closes the sheet and releases all held inputs)
-- **Joystick Game mode only**: no footer actions; dismissal is via the sheet
-  header close button or the `remote-input-immersive-toggle` "Exit game mode"
-  control
+    `remote-input-panic-button` — R✅ I✅ — releases every held input regardless
+    of tracked state; right-aligned in the pinned chrome row, to the right of
+    the Joystick/Keys toggle (moved here from the old footer)
+- **Close**: the sheet's top-right X (`remote-input-close`) is the sole Close
+  affordance (the duplicate footer Close was removed). Closing — via the X or
+  Android Back — releases all held inputs
+- **Joystick Game mode only**: Release All is intentionally hidden (no-look
+  play); dismissal is via the sheet header X or the `remote-input-immersive-toggle`
+  "Exit game mode" control, both of which release all held inputs
 
 **Keypad Quick Menu** (`keypad-quick-menu`, opened by the Menu key when the
 focused item has no context menu): a keypad-navigable list of jump-to-page (×6),

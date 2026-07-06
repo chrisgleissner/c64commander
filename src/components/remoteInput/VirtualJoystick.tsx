@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useRef, useState } from "react";
-import { Gamepad2, Hand, MoveDiagonal } from "lucide-react";
+import { AlertTriangle, Gamepad2, Hand, MoveDiagonal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
@@ -52,6 +52,11 @@ const BASE_FIRE_PX = 92;
 const IMMERSIVE_ACTION_TOP_GAP_PX = 16;
 const IMMERSIVE_ACTION_BOTTOM_OFFSET_PX = 40;
 const ACTION_CONTROL_STACK_GAP_PX = 32;
+// In game mode the Autofire toggle floats above FIRE with no surrounding chrome.
+// Give it a generous separation — sized so that even a thick thumb pressing FIRE
+// on a ~3" display stays well clear of Autofire — while keeping it low enough to
+// remain easy to reach (deliberately NOT anchored to the top of the screen).
+const IMMERSIVE_ACTION_CONTROL_STACK_GAP_PX = 104;
 
 export const VirtualJoystick = ({
   port,
@@ -284,8 +289,11 @@ export const VirtualJoystick = ({
   return (
     <div className={cn("flex flex-col gap-3", immersive && "h-full")} data-testid="remote-input-virtual-joystick">
       {disabled ? (
-        <p className="text-center text-sm text-muted-foreground" data-testid="remote-input-joystick-unavailable-hint">
-          {disabledHint}
+        <p
+          className="flex items-center justify-center gap-1.5 px-4 text-center text-sm text-muted-foreground"
+          data-testid="remote-input-joystick-unavailable-hint"
+        >
+          <AlertTriangle className="h-4 w-4" /> {disabledHint}
         </p>
       ) : null}
 
@@ -339,7 +347,14 @@ export const VirtualJoystick = ({
             immersive ? { minHeight: controlPx, bottom: IMMERSIVE_ACTION_BOTTOM_OFFSET_PX } : { minHeight: controlPx }
           }
         >
-          <div className="flex flex-col-reverse items-center" style={{ gap: ACTION_CONTROL_STACK_GAP_PX }}>
+          {/* Autofire sits above FIRE. In game mode the gap widens generously so
+              a thick thumb on a ~3" display pressing FIRE cannot accidentally
+              flip Autofire — while keeping Autofire close enough to stay easy to
+              reach (it is NOT banished to the top of the screen). */}
+          <div
+            className="flex flex-col-reverse items-center"
+            style={{ gap: immersive ? IMMERSIVE_ACTION_CONTROL_STACK_GAP_PX : ACTION_CONTROL_STACK_GAP_PX }}
+          >
             {fireButton}
             {autofireToggle}
           </div>
