@@ -132,6 +132,7 @@ The following shows the Joystick tab in standard and Game mode.
   <tr>
     <td><img src="docs/img/app/home/remote-input/01-joystick.png" alt="Remote Input Joystick tab with a large adjustable stick and fire button" width="360"/></td>
     <td><img src="docs/img/app/home/remote-input/02-game-mode.png" alt="Remote Input Game mode with an edge-anchored stick and fire button" width="360"/></td>
+    <td width="360"></td>
   </tr>
 </table>
 
