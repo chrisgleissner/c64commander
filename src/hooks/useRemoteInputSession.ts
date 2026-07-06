@@ -27,6 +27,13 @@ import {
 } from "@/lib/remoteInput/joystickHeldSet";
 import type { HeldJoystickInputs } from "@/lib/remoteInput/joystickHeldSet";
 import {
+  collapseTransientKeyboardTaps,
+  EMPTY_HELD_KEYBOARD_INPUTS,
+  heldKeyboardSetDiffToInputBatch,
+} from "@/lib/remoteInput/keyboardHeldSet";
+import type { HeldKeyboardInputs } from "@/lib/remoteInput/keyboardHeldSet";
+import { recordInputLatencySample } from "@/lib/remoteInput/inputLatency";
+import {
   applyAutofirePhase,
   AUTOFIRE_RATE_CHANGE_EVENT,
   clampAutofireRateHz,
@@ -44,6 +51,19 @@ export type RemoteInputConnectionStatus = "idle" | "sending" | "error";
 
 /** Held-set changes within this window collapse into one network call (device-safety). */
 const COALESCE_WINDOW_MS = 40;
+/**
+ * The window used for the FIRST change since the last flush (nothing else is
+ * pending yet): fires on the next tick instead of waiting out the full
+ * COALESCE_WINDOW_MS, so a single discrete press/tap reaches the wire in well
+ * under it. This does not weaken the hardware-safety story - non-overlap is
+ * enforced by machineInputThrottle's serialized queue, not by this window
+ * (see its doc comment) - it only changes how quickly the FIRST event of a
+ * burst gets flushed. A second change arriving before this near-instant
+ * flush fires still rides the same window via scheduleFlushIn's "pull
+ * earlier, never later" rule, so a genuine rapid burst (drag, fast typing)
+ * still coalesces into one call exactly as before.
+ */
+const LEADING_EDGE_WINDOW_MS = 0;
 /**
  * Issue 3c: autofire duty-cycle edges flush on their own tight window instead of
  * riding the 40ms drag debounce, so autofire stays on a regular cadence at any
@@ -65,6 +85,8 @@ export type RemoteInputSession = {
   setPort: (port: 1 | 2) => void;
   heldJoystickInputs: HeldJoystickInputs;
   setHeldJoystickInputs: (next: HeldJoystickInputs) => void;
+  heldKeyboardInputs: HeldKeyboardInputs;
+  setHeldKeyboardInputs: (next: HeldKeyboardInputs) => void;
   autofireEnabled: boolean;
   setAutofireEnabled: (enabled: boolean) => void;
   autofireRateHz: number;
@@ -91,6 +113,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
   const [outputMode, setOutputModeState] = useState<RemoteInputOutputMode>("joystick");
   const [port, setPortState] = useState<1 | 2>(2);
   const [heldJoystickInputs, setHeldJoystickInputsState] = useState<HeldJoystickInputs>(EMPTY_HELD_JOYSTICK_INPUTS);
+  const [heldKeyboardInputs, setHeldKeyboardInputsState] = useState<HeldKeyboardInputs>(EMPTY_HELD_KEYBOARD_INPUTS);
   const [autofireEnabled, setAutofireEnabled] = useState(false);
   const [autofireRateHz, setAutofireRateHzState] = useState(loadAutofireRateHz);
   const [connectionStatus, setConnectionStatus] = useState<RemoteInputConnectionStatus>("idle");
@@ -101,10 +124,33 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
   portRef.current = port;
   const lastSentHeldSetRef = useRef<HeldJoystickInputs>(EMPTY_HELD_JOYSTICK_INPUTS);
   const pendingHeldSetRef = useRef<HeldJoystickInputs>(EMPTY_HELD_JOYSTICK_INPUTS);
+  const lastSentKeyboardHeldSetRef = useRef<HeldKeyboardInputs>(EMPTY_HELD_KEYBOARD_INPUTS);
+  const pendingKeyboardHeldSetRef = useRef<HeldKeyboardInputs>(EMPTY_HELD_KEYBOARD_INPUTS);
+  /**
+   * Queued press/release events, computed against the PREVIOUS pending set at
+   * the moment of each `setHeldKeyboardInputs` call, not lazily diffed at
+   * flush time. A snapshot-diff-at-flush-time model loses a key that was
+   * pressed AND released again before the flush ever fires (net "no change"
+   * between the two snapshots) - which is routine, not rare: a fast tap's
+   * pointerdown+pointerup frequently lands in the same event-loop tick as the
+   * scheduled flush timer, and silently sending nothing for a real tap is a
+   * correctness bug, not an optimization. Queuing each call's own delta as it
+   * happens means a transient press-then-release still ships as a real
+   * press+release pair.
+   */
+  const pendingKeyboardEventsRef = useRef<MachineInputEvent[]>([]);
   const pendingTypedEventsRef = useRef<MachineInputEvent[]>([]);
   const flushTimerRef = useRef<number | null>(null);
   /** Wall-clock time the pending flush is scheduled to fire; lets an autofire edge pull it earlier. */
   const flushDueAtRef = useRef<number>(0);
+  /**
+   * Wall-clock time (`performance.now()`) the FIRST unflushed change landed
+   * since the last flush — the moment the user's gesture happened, not when
+   * the network call fires. Reset to `null` after every flush so a fresh
+   * idle-to-press gesture starts a fresh latency sample rather than measuring
+   * against a stale earlier press.
+   */
+  const pendingChangeAtRef = useRef<number | null>(null);
   /** Explicit autofire duty-cycle phase, flipped only by the dedicated interval below. */
   const autofirePhaseOnRef = useRef(true);
   // HARD13-002: bumped on every immediate (safety-critical) send. A coalesced
@@ -121,72 +167,99 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
   // safety → machine input cooldown): safety-critical releases (panic
   // button, mode/port swap, unmount) must never be delayed behind it, only
   // the ordinary interactive stream of held-set/typed events is throttled.
-  const sendEventsNow = useCallback((events: MachineInputEvent[], options: { immediate?: boolean } = {}) => {
-    if (!events.length) return;
-    const { immediate = false } = options;
-    if (immediate) sendGenerationRef.current += 1;
-    const generation = sendGenerationRef.current;
-    setConnectionStatus("sending");
-    for (const batch of chunkMachineInputEvents(events)) {
-      const dispatch = () =>
-        getC64API()
-          .sendMachineInputBatch({ events: batch })
-          .then(() => setConnectionStatus("idle"))
-          .catch((error) => {
-            addErrorLog(
-              "Remote input batch send failed",
-              buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), {
-                eventCount: batch.length,
-              }),
-            );
-            // HARD15-007: a batch failure (a timeout especially) does not
-            // guarantee the device never applied it - the RESPONSE, not the
-            // request, may be what was lost. Capture whether we owe a release
-            // before the resets below erase the only signal of it, so a
-            // timed-out-but-applied press can still be recovered instead of
-            // becoming a release the user's own subsequent release-diff can
-            // never produce (drop-coalesce reset it to the same empty state).
-            const owedRelease = lastSentHeldSetRef.current.size > 0 || batch.some((event) => event.kind === "joystick");
-            const wasReleaseAll = batch.length === 1 && batch[0].kind === "release_all";
-            // Drop-coalesce, not retry: forget what we thought was held so the
-            // next real change re-syncs cleanly instead of compounding drift.
-            lastSentHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
-            pendingHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
-            setConnectionStatus("error");
-            if (owedRelease && !wasReleaseAll) {
-              // Direct API call, not routed through sendEventsNow: idempotent
-              // and single-shot, so it cannot recurse into this same catch.
-              void getC64API()
-                .sendMachineInputBatch({ events: buildReleaseAllEvent() })
-                .catch((releaseError) => {
-                  addErrorLog(
-                    "Remote input recovery release-all after send failure failed",
-                    buildErrorLogDetails(
-                      releaseError instanceof Error ? releaseError : new Error(String(releaseError)),
-                      {},
-                    ),
-                  );
-                });
-            }
+  const sendEventsNow = useCallback(
+    (events: MachineInputEvent[], options: { immediate?: boolean; gestureAtMs?: number } = {}) => {
+      if (!events.length) return;
+      const { immediate = false, gestureAtMs } = options;
+      if (immediate) sendGenerationRef.current += 1;
+      const generation = sendGenerationRef.current;
+      setConnectionStatus("sending");
+      const batches = chunkMachineInputEvents(events);
+      batches.forEach((batch, batchIndex) => {
+        // Only the first chunk represents the user's actual gesture-to-dispatch
+        // latency; later chunks exist purely because of the batch-size cap, not
+        // a separate press, so they carry no sample.
+        const batchGestureAtMs = batchIndex === 0 ? gestureAtMs : undefined;
+        const dispatch = () => {
+          if (batchGestureAtMs !== undefined) {
+            recordInputLatencySample(performance.now() - batchGestureAtMs, performance.now());
+          }
+          return getC64API()
+            .sendMachineInputBatch({ events: batch })
+            .then(() => setConnectionStatus("idle"))
+            .catch((error) => {
+              addErrorLog(
+                "Remote input batch send failed",
+                buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), {
+                  eventCount: batch.length,
+                }),
+              );
+              // HARD15-007: a batch failure (a timeout especially) does not
+              // guarantee the device never applied it - the RESPONSE, not the
+              // request, may be what was lost. Capture whether we owe a release
+              // before the resets below erase the only signal of it, so a
+              // timed-out-but-applied press can still be recovered instead of
+              // becoming a release the user's own subsequent release-diff can
+              // never produce (drop-coalesce reset it to the same empty state).
+              // A "tap" keyboard event (char/special-key/cursor dispatch, or a
+              // kernal-fallback-tier chord) is atomic on the device and can
+              // never leave anything held — only "press"/"release" (the real
+              // hold relay) and joystick events can, so only those warrant it.
+              const owedRelease =
+                lastSentHeldSetRef.current.size > 0 ||
+                lastSentKeyboardHeldSetRef.current.size > 0 ||
+                batch.some(
+                  (event) =>
+                    event.kind === "joystick" || (event.kind === "keyboard" && event.transition !== "tap"),
+                );
+              const wasReleaseAll = batch.length === 1 && batch[0].kind === "release_all";
+              // Drop-coalesce, not retry: forget what we thought was held so the
+              // next real change re-syncs cleanly instead of compounding drift.
+              lastSentHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
+              pendingHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
+              lastSentKeyboardHeldSetRef.current = EMPTY_HELD_KEYBOARD_INPUTS;
+              pendingKeyboardHeldSetRef.current = EMPTY_HELD_KEYBOARD_INPUTS;
+              pendingKeyboardEventsRef.current = [];
+              setConnectionStatus("error");
+              if (owedRelease && !wasReleaseAll) {
+                // Direct API call, not routed through sendEventsNow: idempotent
+                // and single-shot, so it cannot recurse into this same catch.
+                void getC64API()
+                  .sendMachineInputBatch({ events: buildReleaseAllEvent() })
+                  .catch((releaseError) => {
+                    addErrorLog(
+                      "Remote input recovery release-all after send failure failed",
+                      buildErrorLogDetails(
+                        releaseError instanceof Error ? releaseError : new Error(String(releaseError)),
+                        {},
+                      ),
+                    );
+                  });
+              }
+            });
+        };
+        // Dispatch immediate (safety-critical) sends synchronously, with no
+        // serialization wait at all - only the ordinary coalesced stream is
+        // serialized so it never overlaps itself on the wire (device-safety).
+        if (immediate) {
+          void dispatch();
+        } else {
+          void runSerializedMachineInput(() => {
+            // Superseded by a later immediate release/port-swap while we waited:
+            // drop this stale press so it can't land after the release (HARD13-002).
+            if (generation !== sendGenerationRef.current) return;
+            return dispatch();
           });
-      // Dispatch immediate (safety-critical) sends synchronously, with no
-      // serialization wait at all - only the ordinary coalesced stream is
-      // serialized so it never overlaps itself on the wire (device-safety).
-      if (immediate) {
-        void dispatch();
-      } else {
-        void runSerializedMachineInput(() => {
-          // Superseded by a later immediate release/port-swap while we waited:
-          // drop this stale press so it can't land after the release (HARD13-002).
-          if (generation !== sendGenerationRef.current) return;
-          return dispatch();
-        });
-      }
-    }
-  }, []);
+        }
+      });
+    },
+    [],
+  );
 
   const flush = useCallback(() => {
     flushTimerRef.current = null;
+    const gestureAtMs = pendingChangeAtRef.current ?? undefined;
+    pendingChangeAtRef.current = null;
     const effectiveHeldSet = applyAutofirePhase(pendingHeldSetRef.current, autofireEnabled, autofirePhaseOnRef.current);
     // HARD15-004: only overwrite lastSent when this flush actually relayed a
     // held-set diff. A downgraded-tier flush (heldSetEvents === []) must not
@@ -197,13 +270,41 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       heldSetEvents = heldSetDiffToInputBatch(lastSentHeldSetRef.current, effectiveHeldSet, portRef.current);
       lastSentHeldSetRef.current = effectiveHeldSet;
     }
+    // Drains the queue built up by setHeldKeyboardInputs (see
+    // pendingKeyboardEventsRef's doc comment) rather than diffing two
+    // snapshots here, so a transient press-then-release within this window
+    // still ships instead of netting out to "no change".
+    let keyboardHeldSetEvents: MachineInputEvent[] = [];
+    if (tierRef.current === "full") {
+      // A same-chord press+release that both landed in this queue before
+      // ever reaching the wire collapses to the firmware's own `tap`
+      // mechanism (see collapseTransientKeyboardTaps's doc comment) - a
+      // literal press+release pair applies with no real delay between them
+      // and is not a reliable way to register a keypress on real hardware.
+      keyboardHeldSetEvents = collapseTransientKeyboardTaps(pendingKeyboardEventsRef.current);
+      pendingKeyboardEventsRef.current = [];
+      lastSentKeyboardHeldSetRef.current = pendingKeyboardHeldSetRef.current;
+    }
     const typedEvents = pendingTypedEventsRef.current;
     pendingTypedEventsRef.current = [];
-    sendEventsNow([...heldSetEvents, ...typedEvents]);
+    sendEventsNow([...heldSetEvents, ...keyboardHeldSetEvents, ...typedEvents], { gestureAtMs });
   }, [autofireEnabled, outputMode, sendEventsNow]);
 
   const scheduleFlushIn = useCallback(
     (windowMs: number) => {
+      // Deliberately a macrotask (setTimeout), not a microtask, even for the
+      // 0ms leading-edge case: a fast tap's pointerdown and pointerup are
+      // separate native browser tasks, so a microtask queued during
+      // pointerdown's handling runs to completion (and flushes just the
+      // press) BEFORE pointerup's task even starts - it never sees the
+      // matching release land in the same batch, so a fast tap could never
+      // collapse into the firmware's dedicated `tap` transition (see
+      // collapseTransientKeyboardTaps). A macrotask timer, even at 0ms, still
+      // waits behind whatever other tasks the browser already has queued -
+      // in practice both halves of a fast tap - so the pair batches
+      // correctly. This does cost some real render/paint time on top for a
+      // genuine hold's press specifically; that is a separate, addressable
+      // React-render-cost problem, not a reason to trade away correctness.
       const dueAt = Date.now() + windowMs;
       if (flushTimerRef.current !== null) {
         // Only ever pull the pending flush EARLIER, never push it later: an
@@ -221,7 +322,26 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
     [flush],
   );
 
-  const scheduleFlush = useCallback(() => scheduleFlushIn(COALESCE_WINDOW_MS), [scheduleFlushIn]);
+  // `fastPath` (keyboard only): fire on the leading edge of a burst instead
+  // of waiting out the full window. Joystick/autofire deliberately keep the
+  // original always-COALESCE_WINDOW_MS behaviour, which is what lets a
+  // near-simultaneous drag move and autofire edge merge into one packet
+  // (Issue 3c, see scheduleFlushIn) - a fast keyboard path would make the
+  // move's flush fire and complete before the autofire edge ever sees it as
+  // pending, splitting what should be one call into two.
+  const scheduleFlush = useCallback(
+    (options: { fastPath?: boolean } = {}) => {
+      // Stamp the gesture time only on the leading edge of a burst — a rapid
+      // second change riding the same pending flush must not push the
+      // sample's start later than the user's actual first press.
+      const isLeadingEdge = flushTimerRef.current === null;
+      pendingChangeAtRef.current ??= performance.now();
+      const windowMs = options.fastPath && isLeadingEdge ? LEADING_EDGE_WINDOW_MS : COALESCE_WINDOW_MS;
+      scheduleFlushIn(windowMs);
+    },
+    [scheduleFlushIn],
+  );
+  const scheduleKeyboardFlush = useCallback(() => scheduleFlush({ fastPath: true }), [scheduleFlush]);
 
   const releaseAll = useCallback(() => {
     if (flushTimerRef.current !== null) {
@@ -237,9 +357,12 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
     // held on the device. A non-empty last-sent set is only ever populated by
     // the full-tier relay path, so it is a reliable "we owe a release" signal
     // independent of the now-current tier.
-    const hadRelayedInputs = lastSentHeldSetRef.current.size > 0;
+    const hadRelayedInputs = lastSentHeldSetRef.current.size > 0 || lastSentKeyboardHeldSetRef.current.size > 0;
     pendingHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
     lastSentHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
+    pendingKeyboardHeldSetRef.current = EMPTY_HELD_KEYBOARD_INPUTS;
+    lastSentKeyboardHeldSetRef.current = EMPTY_HELD_KEYBOARD_INPUTS;
+    pendingKeyboardEventsRef.current = [];
     // Lead F5 (accepted, won't-fix): a typed char still sitting in the 40ms
     // coalesce window when a mode switch calls releaseAll (via setOutputMode)
     // is dropped here rather than flushed first. Confirmed by inspection;
@@ -248,6 +371,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
     // clearing path for a flush-before-clear fix.
     pendingTypedEventsRef.current = [];
     setHeldJoystickInputsState(EMPTY_HELD_JOYSTICK_INPUTS);
+    setHeldKeyboardInputsState(EMPTY_HELD_KEYBOARD_INPUTS);
     // Issue 3e: leaving the joystick overlay - sheet close, output-mode/tab
     // switch (setOutputMode calls this), unmount, tier downgrade, panic button -
     // must also STOP autofire, not merely release the held inputs. Without this
@@ -267,6 +391,18 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       scheduleFlush();
     },
     [scheduleFlush],
+  );
+
+  const setHeldKeyboardInputs = useCallback(
+    (next: HeldKeyboardInputs) => {
+      pendingKeyboardEventsRef.current.push(
+        ...heldKeyboardSetDiffToInputBatch(pendingKeyboardHeldSetRef.current, next),
+      );
+      pendingKeyboardHeldSetRef.current = next;
+      setHeldKeyboardInputsState(next);
+      scheduleKeyboardFlush();
+    },
+    [scheduleKeyboardFlush],
   );
 
   const setPort = useCallback(
@@ -359,7 +495,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
     (char: string) => {
       if (tierRef.current === "full") {
         pendingTypedEventsRef.current.push(...charToKeyboardInputEvents(char));
-        scheduleFlush();
+        scheduleKeyboardFlush();
         return;
       }
       void enqueueKernalFallbackInjection(getC64API(), stringToPetsciiBytes(char)).catch((error) => {
@@ -370,14 +506,14 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
         setConnectionStatus("error");
       });
     },
-    [scheduleFlush],
+    [scheduleKeyboardFlush],
   );
 
   const sendKeyboardInputs = useCallback(
     (inputs: KeyboardInputName[]) => {
       if (tierRef.current === "full") {
         pendingTypedEventsRef.current.push({ kind: "keyboard", inputs, transition: "tap" });
-        scheduleFlush();
+        scheduleKeyboardFlush();
         return;
       }
       // commodore/ctrl chords have no ASCII/PETSCII equivalent - unavailable on
@@ -392,14 +528,14 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
         setConnectionStatus("error");
       });
     },
-    [scheduleFlush],
+    [scheduleKeyboardFlush],
   );
 
   const sendCursor = useCallback(
     (direction: CursorDirection) => {
       if (tierRef.current === "full") {
         pendingTypedEventsRef.current.push(cursorDirectionToKeyboardInputEvent(direction));
-        scheduleFlush();
+        scheduleKeyboardFlush();
         return;
       }
       // HARD16-003: cursor hold-repeat fires at 10/s but each fallback injection
@@ -416,14 +552,14 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
         setConnectionStatus("error");
       });
     },
-    [scheduleFlush],
+    [scheduleKeyboardFlush],
   );
 
   const sendSpecialKey = useCallback(
     (key: SpecialKeyboardKey) => {
       if (tierRef.current === "full") {
         pendingTypedEventsRef.current.push(specialKeyToKeyboardInputEvent(key));
-        scheduleFlush();
+        scheduleKeyboardFlush();
         return;
       }
       const petscii = specialKeyToPetscii(key);
@@ -436,19 +572,21 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
         setConnectionStatus("error");
       });
     },
-    [scheduleFlush],
+    [scheduleKeyboardFlush],
   );
 
   // Stuck-input safety net: release everything on unmount, tab/app
-  // backgrounding, and whenever the tier stops supporting joystick relay.
-  // HARD15-004: gate on lastSentHeldSetRef too, not just local UI state - a
-  // downgrade landing inside the release-coalesce window (UI already empty,
-  // device still pressed) must not skip the release just because
-  // heldJoystickInputs happens to read empty at this instant.
+  // backgrounding, and whenever the tier stops supporting joystick/keyboard
+  // relay. HARD15-004: gate on lastSentHeldSetRef too, not just local UI
+  // state - a downgrade landing inside the release-coalesce window (UI
+  // already empty, device still pressed) must not skip the release just
+  // because heldJoystickInputs happens to read empty at this instant.
   useEffect(() => {
-    if (!remoteInputSupportsJoystick(tier) && (heldJoystickInputs.size > 0 || lastSentHeldSetRef.current.size > 0)) {
-      releaseAll();
-    }
+    const joystickNeedsRelease =
+      !remoteInputSupportsJoystick(tier) && (heldJoystickInputs.size > 0 || lastSentHeldSetRef.current.size > 0);
+    const keyboardNeedsRelease =
+      tier !== "full" && (heldKeyboardInputs.size > 0 || lastSentKeyboardHeldSetRef.current.size > 0);
+    if (joystickNeedsRelease || keyboardNeedsRelease) releaseAll();
   }, [tier]);
 
   useEffect(() => {
@@ -466,7 +604,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       // full-tier relay, so it alone signals "we owe the device a release" -
       // don't additionally gate on the current tier, which may already have
       // been downgraded (unmount triggered by a device switch / disconnect).
-      if (lastSentHeldSetRef.current.size > 0) {
+      if (lastSentHeldSetRef.current.size > 0 || lastSentKeyboardHeldSetRef.current.size > 0) {
         sendGenerationRef.current += 1;
         void getC64API()
           .sendMachineInputBatch({ events: buildReleaseAllEvent() })
@@ -488,15 +626,19 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
   // (empty deps) is safe - the callback always sees the latest values.
   useEffect(() => {
     const releaseNow = async (): Promise<void> => {
-      if (lastSentHeldSetRef.current.size === 0) return;
+      if (lastSentHeldSetRef.current.size === 0 && lastSentKeyboardHeldSetRef.current.size === 0) return;
       if (flushTimerRef.current !== null) {
         window.clearTimeout(flushTimerRef.current);
         flushTimerRef.current = null;
       }
       pendingHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
       lastSentHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
+      pendingKeyboardHeldSetRef.current = EMPTY_HELD_KEYBOARD_INPUTS;
+      lastSentKeyboardHeldSetRef.current = EMPTY_HELD_KEYBOARD_INPUTS;
+      pendingKeyboardEventsRef.current = [];
       pendingTypedEventsRef.current = [];
       setHeldJoystickInputsState(EMPTY_HELD_JOYSTICK_INPUTS);
+      setHeldKeyboardInputsState(EMPTY_HELD_KEYBOARD_INPUTS);
       sendGenerationRef.current += 1;
       await getC64API()
         .sendMachineInputBatch({ events: buildReleaseAllEvent() })
@@ -518,6 +660,8 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
     setPort,
     heldJoystickInputs,
     setHeldJoystickInputs,
+    heldKeyboardInputs,
+    setHeldKeyboardInputs,
     autofireEnabled,
     setAutofireEnabled: setAutofireEnabledSafe,
     autofireRateHz,

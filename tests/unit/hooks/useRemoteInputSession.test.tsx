@@ -82,6 +82,48 @@ describe("useRemoteInputSession", () => {
     });
   });
 
+  it("flushes a single keyboard press on the leading edge, well before the full coalesce window elapses", async () => {
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+    act(() => result.current.setHeldKeyboardInputs(new Set(["a"])));
+    // Unlike the joystick path above (fixed 40ms wait), a keyboard change on
+    // an otherwise-idle session rides LEADING_EDGE_WINDOW_MS (0ms), not
+    // COALESCE_WINDOW_MS - advancing by 0ms is enough to fire the timeout.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(1);
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({
+      events: [{ kind: "keyboard", inputs: ["a"], transition: "press" }],
+    });
+  });
+
+  it("still coalesces a second rapid keyboard change into the SAME leading-edge flush instead of splitting it into two calls", async () => {
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+    // Two changes back-to-back with no timer advance in between: the second
+    // call's own scheduleFlush sees a flush already pending (the first
+    // call's near-instant one) and, per the "pull earlier, never later"
+    // rule, must not push it out to the full 40ms window.
+    act(() => {
+      result.current.setHeldKeyboardInputs(new Set(["a"]));
+      result.current.setHeldKeyboardInputs(new Set(["a", "b"]));
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(1);
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({
+      events: [
+        { kind: "keyboard", inputs: ["a"], transition: "press" },
+        { kind: "keyboard", inputs: ["b"], transition: "press" },
+      ],
+    });
+  });
+
   it("sends only the diff between consecutive flushes, not the full held set again", async () => {
     const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
 
@@ -383,6 +425,51 @@ describe("useRemoteInputSession", () => {
     expect(sendMachineInputBatchMock).not.toHaveBeenCalled();
   });
 
+  it("cancels a still-pending flush timer instead of letting it fire after an active-input-release registry release (HARD13-001 residual E1)", async () => {
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+    // "up" is relayed and confirmed sent first, so releaseNow's own
+    // already-relayed guard passes...
+    act(() => result.current.setHeldJoystickInputs(new Set(["up"])));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(40);
+    });
+    sendMachineInputBatchMock.mockClear();
+
+    // ...then "down" is added on top, scheduling a NEW pending flush that
+    // has not fired yet when the device-switch release comes in.
+    act(() => result.current.setHeldJoystickInputs(new Set(["up", "down"])));
+
+    await act(async () => {
+      await releaseActiveRemoteInput();
+    });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(1);
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({ events: [{ kind: "release_all" }] });
+    sendMachineInputBatchMock.mockClear();
+
+    // The pending "down" flush must not ALSO fire afterwards and re-press it
+    // behind the release's back.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(40);
+    });
+    expect(sendMachineInputBatchMock).not.toHaveBeenCalled();
+  });
+
+  it("logs (not throws) when the active-input-release registry's release_all fails (HARD13-001 residual E1)", async () => {
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+    act(() => result.current.setHeldJoystickInputs(new Set(["up"])));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(40);
+    });
+    sendMachineInputBatchMock.mockClear();
+    sendMachineInputBatchMock.mockRejectedValueOnce(new Error("device offline"));
+
+    await act(async () => {
+      await releaseActiveRemoteInput();
+    });
+
+    expect(addErrorLogMock).toHaveBeenCalledWith("Remote input pre-switch release-all failed", expect.any(Object));
+  });
+
   it("logs (not throws) when the best-effort release_all on unmount fails", async () => {
     const { result, unmount } = renderHook(() => useRemoteInputSession({ tier: "full" }));
     act(() => result.current.setHeldJoystickInputs(new Set(["fire"])));
@@ -545,6 +632,34 @@ describe("useRemoteInputSession", () => {
       await vi.advanceTimersByTimeAsync(40);
     });
     expect(sendMachineInputBatchMock).not.toHaveBeenCalled();
+  });
+
+  it("logs (not throws) when the HARD15-007 recovery release_all after a send failure itself fails", async () => {
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+    act(() => result.current.setHeldJoystickInputs(new Set(["up"])));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(40);
+    });
+    sendMachineInputBatchMock.mockClear();
+
+    // The ordinary press+release_all recovery is DISTINCT from releaseAll()'s
+    // own release_all (see "does not loop..." above, which short-circuits the
+    // recovery entirely): this is a genuine ordinary send failing, so its
+    // recovery release_all is a SEPARATE call that can independently fail.
+    sendMachineInputBatchMock.mockRejectedValueOnce(new Error("timeout"));
+    sendMachineInputBatchMock.mockRejectedValueOnce(new Error("still unreachable"));
+    act(() => result.current.setHeldJoystickInputs(new Set(["up", "right"])));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(40);
+      await flushMicrotasks();
+    });
+
+    expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(2);
+    expect(addErrorLogMock).toHaveBeenCalledWith(
+      "Remote input recovery release-all after send failure failed",
+      expect.any(Object),
+    );
   });
 
   it("does not send a release_all when a typed-only batch fails with nothing relayed (HARD15-007 guard)", async () => {

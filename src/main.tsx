@@ -13,6 +13,7 @@ import { registerFetchTrace } from "./lib/tracing/fetchTrace";
 import { registerUserInteractionCapture } from "./lib/tracing/userInteractionCapture";
 import { registerTraceBridge } from "./lib/tracing/traceBridge";
 import { registerDiagnosticsTestBridge } from "./lib/diagnostics/diagnosticsTestBridge";
+import { registerRemoteInputLatencyBridge } from "./lib/remoteInput/inputLatency";
 import { markStartupBootstrapComplete } from "./lib/startup/startupMilestones";
 import { initializeRuntimeMotionMode } from "./lib/startup/runtimeMotionBudget";
 import { registerServiceWorker } from "./lib/startup/serviceWorkerRegistration";
@@ -64,6 +65,7 @@ const startDeferredStartupBootstrap = () => {
   installAsyncContextPropagation();
   registerTraceBridge();
   registerDiagnosticsTestBridge();
+  registerRemoteInputLatencyBridge();
   registerFetchTrace();
   registerUserInteractionCapture();
   markStartupBootstrapComplete();

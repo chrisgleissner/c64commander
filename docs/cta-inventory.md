@@ -435,11 +435,12 @@ kernal-fallback tier — no keyboard-buffer equivalent; a plain-language footer
   (`remote-input-quick-keys-bar`): a fixed five-row deck mirroring the physical
   C64 clusters — **row 1** RUN/STOP · CTRL · SPACE · RETURN, **row 2** f 1 · f 2 ·
   f 3 · f 4, **row 3** f 5 · f 6 · f 7 · f 8, **row 4** cursor ← ↑ ↓ →, **row 5**
-  C= · SHIFT · SPACE · SHIFT. RUN/STOP keeps the caution-styled dashed-amber
-  border (matching the Keys tab) and, though it shares row 1 with RETURN, CTRL and
-  SPACE always sit between them so a wide RETURN tap can never halt the program.
-  Function keys are printed lower-case (`f 1` …) with the odd ones f 1/f 3/f 5/f 7
-  tinted, and both SHIFTs carry the shared violet "shift" colour. SPACE and SHIFT
+  C= · SHIFT · SPACE · SHIFT. RUN/STOP keeps the caution-styled solid double
+  border in the theme's warning colour (matching the Keys tab) and, though it
+  shares row 1 with RETURN, CTRL and SPACE always sit between them so a wide
+  RETURN tap can never halt the program. Function keys are printed lower-case
+  (`f 1` …) with the odd ones f 1/f 3/f 5/f 7 tinted, and both SHIFTs carry the
+  shared primary-blue "shift" colour. SPACE and SHIFT
   each appear as two distinct keys (`remote-input-key-space` /
   `remote-input-key-space-bottom`, `remote-input-key-shift-left` /
   `remote-input-key-shift-right`). — buttons —

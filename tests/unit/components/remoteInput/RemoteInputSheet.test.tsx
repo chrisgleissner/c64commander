@@ -18,6 +18,7 @@ const tierState = {
 
 const setOutputModeMock = vi.fn();
 const setHeldJoystickInputsMock = vi.fn();
+const setHeldKeyboardInputsMock = vi.fn();
 const setPortMock = vi.fn();
 const setAutofireEnabledMock = vi.fn();
 const sendCharMock = vi.fn();
@@ -28,6 +29,7 @@ const releaseAllMock = vi.fn();
 
 let initialSessionOutputMode: "joystick" | "type" = "joystick";
 let initialSessionHeldJoystickInputs: ReadonlySet<string> = new Set();
+let initialSessionHeldKeyboardInputs: ReadonlySet<string> = new Set();
 
 vi.mock("@/hooks/useRemoteInputCapabilityTier", () => ({
   useRemoteInputCapabilityTier: () => tierState,
@@ -44,14 +46,18 @@ vi.mock("@/hooks/useRemoteInputSession", () => ({
     const [heldJoystickInputs, setHeldJoystickInputsState] = useState<ReadonlySet<string>>(
       initialSessionHeldJoystickInputs,
     );
+    const [heldKeyboardInputs, setHeldKeyboardInputsState] = useState<ReadonlySet<string>>(
+      initialSessionHeldKeyboardInputs,
+    );
     return {
       outputMode,
       setOutputMode: (mode: "joystick" | "type") => {
         if (mode === outputMode) return;
         // Mirrors the real hook's setOutputMode, which calls releaseAll()
-        // (clearing the held set) before applying the mode - the E2 test
+        // (clearing the held sets) before applying the mode - the E2 test
         // below depends on this being faithful to the real hook.
         setHeldJoystickInputsState(new Set());
+        setHeldKeyboardInputsState(new Set());
         setOutputModeState(mode);
         setOutputModeMock(mode);
       },
@@ -61,6 +67,11 @@ vi.mock("@/hooks/useRemoteInputSession", () => ({
       setHeldJoystickInputs: (next: ReadonlySet<string>) => {
         setHeldJoystickInputsState(next);
         setHeldJoystickInputsMock(next);
+      },
+      heldKeyboardInputs,
+      setHeldKeyboardInputs: (next: ReadonlySet<string>) => {
+        setHeldKeyboardInputsState(next);
+        setHeldKeyboardInputsMock(next);
       },
       autofireEnabled: false,
       setAutofireEnabled: setAutofireEnabledMock,
@@ -85,6 +96,7 @@ describe("RemoteInputSheet", () => {
     tierState.resolved = true;
     initialSessionOutputMode = "joystick";
     initialSessionHeldJoystickInputs = new Set();
+    initialSessionHeldKeyboardInputs = new Set();
     vi.clearAllMocks();
   });
 
@@ -183,28 +195,52 @@ describe("RemoteInputSheet", () => {
   });
 
   it("latches SHIFT on the on-screen keyboard, applies it to the next key, then auto-clears", () => {
+    // Full tier relays keyboard input via the held-keyboard-inputs set (real
+    // press/release), not the one-shot sendKeyboardInputs tap prop - that
+    // prop is reserved for the kernal-fallback tier.
     initialSessionOutputMode = "type";
     render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+    const snapshotsOf = (mock: typeof setHeldKeyboardInputsMock) =>
+      mock.mock.calls.map(([next]) => [...(next as ReadonlySet<string>)].sort());
 
     fireEvent.click(screen.getByTestId("remote-input-key-shift"));
     fireEvent.click(screen.getByTestId("remote-input-key-a"));
 
-    expect(sendKeyboardInputsMock).toHaveBeenCalledWith(["a", "left_shift"]);
+    expect(snapshotsOf(setHeldKeyboardInputsMock)).toContainEqual(["a", "left_shift"]);
+    expect(snapshotsOf(setHeldKeyboardInputsMock).at(-1)).toEqual([]);
+    expect(sendKeyboardInputsMock).not.toHaveBeenCalled();
 
-    sendKeyboardInputsMock.mockClear();
+    setHeldKeyboardInputsMock.mockClear();
     fireEvent.click(screen.getByTestId("remote-input-key-a"));
 
-    expect(sendKeyboardInputsMock).toHaveBeenCalledWith(["a"]);
+    expect(snapshotsOf(setHeldKeyboardInputsMock)).toContainEqual(["a"]);
+    expect(snapshotsOf(setHeldKeyboardInputsMock)).not.toContainEqual(["a", "left_shift"]);
   });
 
-  it("routes the quick-keys bar to the session's char/cursor/special-key handlers", () => {
+  it("routes the quick-keys bar's SPACE/RUN-STOP through the held-keyboard-inputs set on the full tier", () => {
+    // Full tier relays these via real press/release (see
+    // useKeyboardHoldDispatch), not the one-shot sendChar/sendSpecialKey tap
+    // props - those are reserved for the kernal-fallback tier (see the
+    // "falls back to sendChar/sendSpecialKey" test below).
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+    const snapshotsOf = (mock: typeof setHeldKeyboardInputsMock) =>
+      mock.mock.calls.map(([next]) => [...(next as ReadonlySet<string>)].sort());
+
+    fireEvent.click(screen.getAllByTestId("remote-input-key-space")[0]);
+    expect(snapshotsOf(setHeldKeyboardInputsMock)).toContainEqual(["space"]);
+    expect(sendCharMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getAllByTestId("remote-input-key-run-stop")[0]);
+    expect(snapshotsOf(setHeldKeyboardInputsMock)).toContainEqual(["run_stop"]);
+    expect(sendSpecialKeyMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to sendChar/sendSpecialKey for the quick-keys bar on the kernal-fallback tier", () => {
+    tierState.tier = "kernal-fallback";
     render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
 
     fireEvent.click(screen.getAllByTestId("remote-input-key-space")[0]);
     expect(sendCharMock).toHaveBeenCalledWith(" ");
-
-    fireEvent.click(screen.getAllByTestId("remote-input-key-run-stop")[0]);
-    expect(sendSpecialKeyMock).toHaveBeenCalledWith("run_stop");
   });
 
   // HARD13-004: RUN/STOP and RESTORE have no kernal keyboard-buffer equivalent,
@@ -423,40 +459,58 @@ describe("RemoteInputSheet", () => {
 
   describe("SHIFT LOCK (persistent shift toggle)", () => {
     it("latches shift persistently across multiple keys until toggled off", () => {
+      // Full tier relays via the held-keyboard-inputs set (real press/release),
+      // not the one-shot sendKeyboardInputs tap prop.
       initialSessionOutputMode = "type";
       render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      const snapshotsOf = (mock: typeof setHeldKeyboardInputsMock) =>
+        mock.mock.calls.map(([next]) => [...(next as ReadonlySet<string>)].sort());
 
       const shiftLock = screen.getByTestId("remote-input-key-shift-lock");
       expect(shiftLock).toHaveTextContent(/SHIFT\s*LOCK/);
       fireEvent.click(shiftLock);
       expect(shiftLock).toHaveAttribute("aria-pressed", "true");
+      expect(snapshotsOf(setHeldKeyboardInputsMock)).toContainEqual(["left_shift"]);
 
       // Every subsequent key carries left_shift — and the lock does NOT clear.
+      setHeldKeyboardInputsMock.mockClear();
       fireEvent.click(screen.getByTestId("remote-input-key-a"));
-      expect(sendKeyboardInputsMock).toHaveBeenLastCalledWith(["a", "left_shift"]);
+      expect(snapshotsOf(setHeldKeyboardInputsMock)).toContainEqual(["a", "left_shift"]);
+      expect(snapshotsOf(setHeldKeyboardInputsMock).at(-1)).toEqual(["left_shift"]); // lock survives
+
+      setHeldKeyboardInputsMock.mockClear();
       fireEvent.click(screen.getByTestId("remote-input-key-b"));
-      expect(sendKeyboardInputsMock).toHaveBeenLastCalledWith(["b", "left_shift"]);
+      expect(snapshotsOf(setHeldKeyboardInputsMock)).toContainEqual(["b", "left_shift"]);
+      expect(snapshotsOf(setHeldKeyboardInputsMock).at(-1)).toEqual(["left_shift"]);
 
       // Toggling it off returns to unshifted output.
+      setHeldKeyboardInputsMock.mockClear();
       fireEvent.click(shiftLock);
       expect(shiftLock).toHaveAttribute("aria-pressed", "false");
+      expect(snapshotsOf(setHeldKeyboardInputsMock)).toContainEqual([]);
+
+      setHeldKeyboardInputsMock.mockClear();
       fireEvent.click(screen.getByTestId("remote-input-key-a"));
-      expect(sendKeyboardInputsMock).toHaveBeenLastCalledWith(["a"]);
+      expect(snapshotsOf(setHeldKeyboardInputsMock)).toContainEqual(["a"]);
     });
 
     it("is distinct from the one-shot SHIFT, which still auto-clears after one key", () => {
       initialSessionOutputMode = "type";
       render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      const snapshotsOf = (mock: typeof setHeldKeyboardInputsMock) =>
+        mock.mock.calls.map(([next]) => [...(next as ReadonlySet<string>)].sort());
 
       fireEvent.click(screen.getByTestId("remote-input-key-shift"));
       fireEvent.click(screen.getByTestId("remote-input-key-a"));
-      expect(sendKeyboardInputsMock).toHaveBeenLastCalledWith(["a", "left_shift"]);
+      expect(snapshotsOf(setHeldKeyboardInputsMock)).toContainEqual(["a", "left_shift"]);
       // One-shot SHIFT cleared — the next key is unshifted.
+      expect(snapshotsOf(setHeldKeyboardInputsMock).at(-1)).toEqual([]);
+      setHeldKeyboardInputsMock.mockClear();
       fireEvent.click(screen.getByTestId("remote-input-key-a"));
-      expect(sendKeyboardInputsMock).toHaveBeenLastCalledWith(["a"]);
+      expect(snapshotsOf(setHeldKeyboardInputsMock)).toContainEqual(["a"]);
     });
 
-    it("does not emit any transport call by itself when toggled", () => {
+    it("never goes through the one-shot tap props when toggled (it presses left_shift on the held set instead)", () => {
       initialSessionOutputMode = "type";
       render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
 
@@ -464,6 +518,8 @@ describe("RemoteInputSheet", () => {
       expect(sendKeyboardInputsMock).not.toHaveBeenCalled();
       expect(sendCharMock).not.toHaveBeenCalled();
       expect(sendSpecialKeyMock).not.toHaveBeenCalled();
+      // Engaging the lock DOES press left_shift for real, immediately.
+      expect(setHeldKeyboardInputsMock).toHaveBeenCalledWith(new Set(["left_shift"]));
     });
   });
 
