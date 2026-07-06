@@ -263,23 +263,49 @@ describe("runHealthCheck — all-success path", () => {
     expect(result!.deviceInfo?.firmware).toBe("3.11");
   });
 
-  it("routes the manual diagnostic REST probe through the gateway without bypassing the circuit", async () => {
+  it("forces the manual diagnostic REST probe past the governors so it always hits the wire", async () => {
     setupAllProbesSuccess();
 
     await runHealthCheck();
 
+    // An explicit user health check must ALWAYS reach the device, never be
+    // suppressed by a stale circuit/backoff/cooldown/ERROR state. __c64uForceProbe
+    // implies every bypass and overrides the state gate (see c64api / manager).
     expect(mockGetInfo).toHaveBeenCalledWith(
       expect.objectContaining({
         __c64uIntent: "user",
         __c64uAllowDuringError: true,
+        __c64uForceProbe: true,
       }),
     );
+  });
+
+  it("makes the REST reachability probe bypass the circuit and never feed it (self-healing observer)", async () => {
+    setupAllProbesSuccess();
+
+    await runHealthCheck();
+
+    // The reachability read must always hit the wire (so a healthy device is
+    // observed and its success closes the circuit) and must never contribute to
+    // the breaker (so a couple of blips can't escalate the device to offline).
     expect(mockGetInfo).toHaveBeenCalledWith(
-      expect.not.objectContaining({
+      expect.objectContaining({
         __c64uBypassCircuit: true,
-        __c64uBypassBackoff: true,
-        __c64uBypassCooldown: true,
+        __c64uSuppressCircuitContribution: true,
       }),
+    );
+  });
+
+  it("does NOT force background-maintenance REST probes past the governors (they stay polite)", async () => {
+    setupAllProbesSuccess();
+
+    await runHealthCheckForTarget(
+      { deviceHost: "backup-u64:8080", ftpPort: 2021, telnetPort: 2323, password: "secret" },
+      { context: HEALTH_CHECK_CONTEXTS.backgroundMaintenance },
+    );
+
+    expect(mockGetInfo).toHaveBeenCalledWith(
+      expect.objectContaining({ __c64uIntent: "background", __c64uForceProbe: false }),
     );
   });
 
@@ -1135,7 +1161,7 @@ describe("runHealthCheck — TELNET probe", () => {
     expect(mockTelnetDisconnect).toHaveBeenCalled();
   });
 
-  it("connects TELNET with the normalized host and the ViViPi-compatible connect timeout", async () => {
+  it("gives the TELNET probe a longer connect timeout (5000ms) when the device requires auth", async () => {
     setupAllProbesSuccess();
     vi.mocked(getC64APIConfigSnapshot).mockReturnValue({
       deviceHost: "10.0.0.2:6400",
@@ -1144,8 +1170,22 @@ describe("runHealthCheck — TELNET probe", () => {
 
     await runHealthCheck();
 
-    expect(mockCreateTelnetClient).toHaveBeenCalledWith({ connectTimeoutMs: 3000 });
+    // The login handshake adds a round-trip, pushing an auth device past the
+    // base 3s ceiling; give it 5s headroom so it does not spuriously time out.
+    expect(mockCreateTelnetClient).toHaveBeenCalledWith({ connectTimeoutMs: 5000 });
     expect(mockTelnetConnect).toHaveBeenCalledWith("10.0.0.2", 23);
+  });
+
+  it("keeps the base TELNET connect timeout (3000ms) when the device has no auth", async () => {
+    setupAllProbesSuccess();
+    vi.mocked(getC64APIConfigSnapshot).mockReturnValue({
+      deviceHost: "10.0.0.2:6400",
+      password: undefined,
+    });
+
+    await runHealthCheck();
+
+    expect(mockCreateTelnetClient).toHaveBeenCalledWith({ connectTimeoutMs: 3000 });
   });
 
   it("records the TELNET health probe as TELNET diagnostics trace evidence", async () => {

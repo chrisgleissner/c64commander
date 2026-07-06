@@ -131,10 +131,12 @@ describe("RemoteInputSheet", () => {
     expect(releaseAllMock).toHaveBeenCalledTimes(1);
   });
 
-  it("releases all inputs and closes when the exit button is pressed", () => {
+  it("releases all inputs and closes via the sheet's top-right X (the sole Close affordance)", () => {
     const onOpenChange = vi.fn();
     render(<RemoteInputSheet open onOpenChange={onOpenChange} />);
-    fireEvent.click(screen.getByTestId("remote-input-exit-button"));
+    // The duplicate footer "Close" button was removed; the header X is the only
+    // Close, and closing must still release everything held on the device.
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(releaseAllMock).toHaveBeenCalledTimes(1);
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
@@ -180,11 +182,21 @@ describe("RemoteInputSheet", () => {
     expect(setHeldJoystickInputsMock).not.toHaveBeenCalled();
   });
 
-  it("drops the tab-bar bottom clearance when the footer is shown, so no dead space sits below Release All / Close", () => {
+  it("drops the tab-bar bottom clearance in normal mode so the scrollable body extends to the bottom", () => {
     render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
     const sheet = screen.getByTestId("remote-input-sheet");
     expect(sheet.className).toContain("pb-0");
     expect(sheet.className).not.toContain("app-sheet-bottom-clearance");
+  });
+
+  it("pins the Joystick/Keys toggle outside the scrollable body so it never scrolls away", () => {
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+    const toggle = screen.getByTestId("remote-input-output-mode-toggle");
+    const body = screen.getByTestId("remote-input-sheet").querySelector(".overflow-y-auto");
+    expect(body).not.toBeNull();
+    // The toggle must live OUTSIDE the scroll container (a sibling above it),
+    // so scrolling the joystick/keyboard content can never hide it.
+    expect(body?.contains(toggle)).toBe(false);
   });
 
   it("keeps the bottom clearance in game mode (no footer) so the edge-anchored controls clear the nav bar", () => {
@@ -285,21 +297,20 @@ describe("RemoteInputSheet", () => {
     expect(screen.getByTestId("remote-input-output-mode-toggle")).toBeInTheDocument();
     expect(screen.getByTestId("remote-input-quick-keys-bar")).toBeInTheDocument();
     expect(screen.getByTestId("remote-input-panic-button")).toBeInTheDocument();
-    expect(screen.getByTestId("remote-input-exit-button")).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));
 
     expect(screen.queryByTestId("remote-input-output-mode-toggle")).not.toBeInTheDocument();
     expect(screen.queryByTestId("remote-input-quick-keys-bar")).not.toBeInTheDocument();
+    // Release All is deliberately hidden in game mode (no-look play); Exit game
+    // mode and hardware Back both release input on the way out.
     expect(screen.queryByTestId("remote-input-panic-button")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("remote-input-exit-button")).not.toBeInTheDocument();
     expect(screen.getByTestId("remote-input-virtual-joystick")).toBeInTheDocument();
     expect(screen.getByTestId("remote-input-fire-button")).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));
     expect(screen.getByTestId("remote-input-output-mode-toggle")).toBeInTheDocument();
     expect(screen.getByTestId("remote-input-panic-button")).toBeInTheDocument();
-    expect(screen.getByTestId("remote-input-exit-button")).toBeInTheDocument();
   });
 
   it("offers game mode only in Joystick mode on a joystick-capable tier", () => {
@@ -339,13 +350,13 @@ describe("RemoteInputSheet", () => {
       expect(sendCursorMock).not.toHaveBeenCalled();
     });
 
-    it("keeps Release All and Exit reachable in Type mode alongside the keyboard", () => {
+    it("keeps Release All and the X close reachable in Type mode alongside the keyboard", () => {
       initialSessionOutputMode = "type";
       render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
 
       expect(screen.getByTestId("remote-input-type-keyboard")).toBeInTheDocument();
       expect(screen.getByTestId("remote-input-panic-button")).toBeInTheDocument();
-      expect(screen.getByTestId("remote-input-exit-button")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
     });
 
     it("hides the joystick-only size stepper and quick-keys bar in Type mode", () => {
@@ -437,9 +448,16 @@ describe("RemoteInputSheet", () => {
       expect(joystick.compareDocumentPosition(keys) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
-    it("labels the standard footer dismiss action 'Close' (distinct from 'Exit game mode')", () => {
+    it("places Release All in the pinned header and offers the X as the sole Close (no duplicate footer Close)", () => {
       render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
-      expect(screen.getByTestId("remote-input-exit-button")).toHaveTextContent("Close");
+      // Release All lives in the pinned chrome, to the right of the toggle.
+      const releaseAll = screen.getByTestId("remote-input-panic-button");
+      const toggle = screen.getByTestId("remote-input-output-mode-toggle");
+      expect(releaseAll).toBeInTheDocument();
+      expect(toggle.compareDocumentPosition(releaseAll) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      // Only the header X remains as a Close affordance (aria-label "Close").
+      expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+      expect(screen.queryByTestId("remote-input-exit-button")).not.toBeInTheDocument();
     });
 
     it("shows the Commodore key as 'C=' and the cursor keys as arrows (no 'CUR' text)", () => {

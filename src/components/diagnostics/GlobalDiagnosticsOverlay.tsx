@@ -415,14 +415,22 @@ export const GlobalDiagnosticsOverlay = () => {
     try {
       const result = await runHealthCheck();
       if (result) {
+        const deviceAnswered = result.overallHealth !== "Unhealthy" && result.overallHealth !== "Unavailable";
         recordRecoveryEvidence({
           kind: "health-check",
-          outcome:
-            result.overallHealth === "Unhealthy" || result.overallHealth === "Unavailable" ? "failure" : "success",
+          outcome: deviceAnswered ? "success" : "failure",
           contributor: "App",
           target: healthState.host,
           message: `Health check ${result.overallHealth}`,
         });
+        // Self-healing: an explicit health check that actually reached the
+        // device must also clear a stale "Offline" state, so the app recovers
+        // the moment the user checks instead of waiting for a background
+        // rediscovery. runHealthCheck alone does not transition connection
+        // state; discoverConnection is what clears OFFLINE_NO_DEMO.
+        if (deviceAnswered && healthState.connectivity !== "Online" && healthState.connectivity !== "Demo") {
+          void discoverConnection("manual");
+        }
       }
     } catch (error) {
       addErrorLog("Health check failed", {
@@ -438,7 +446,7 @@ export const GlobalDiagnosticsOverlay = () => {
         error,
       });
     }
-  }, [healthState.host]);
+  }, [healthState.host, healthState.connectivity]);
 
   const handleRepair = useCallback(async () => {
     setRepairRunning(true);

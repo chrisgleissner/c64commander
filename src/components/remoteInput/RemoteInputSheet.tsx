@@ -7,26 +7,11 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  Gamepad2,
-  Keyboard as KeyboardIcon,
-  Maximize2,
-  Minimize2,
-  Minus,
-  Plus,
-  Wifi,
-  WifiOff,
-} from "lucide-react";
+import { Gamepad2, Keyboard as KeyboardIcon, Maximize2, Minimize2, Minus, Plus, Wifi, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  AppSheet,
-  AppSheetBody,
-  AppSheetContent,
-  AppSheetFooter,
-  AppSheetHeader,
-  AppSheetTitle,
-} from "@/components/ui/app-surface";
+import { AppSheet, AppSheetBody, AppSheetContent, AppSheetHeader, AppSheetTitle } from "@/components/ui/app-surface";
 import { cn } from "@/lib/utils";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useRemoteInputCapabilityTier } from "@/hooks/useRemoteInputCapabilityTier";
 import { useRemoteInputSession, type RemoteInputOutputMode } from "@/hooks/useRemoteInputSession";
 import { resolveInputProfile } from "@/lib/input/profiles";
@@ -79,6 +64,12 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     tier === "auth-required" ? REMOTE_INPUT_AUTH_REQUIRED_HINT : REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT;
   const heldPhysicalKeysRef = useRef<Set<string>>(new Set());
   const previousPhysicalInputsRef = useRef<Set<JoystickInputName>>(new Set());
+  // On a compact (small) display the Joystick / Keys / Release All buttons are
+  // too wide to share one non-scrolling row, so drop the leading icons on the
+  // toggle buttons there (text-only) to reclaim the width. Wider profiles keep
+  // the icons.
+  const { profile } = useDisplayProfile();
+  const isCompactDisplay = profile === "compact";
   const [controlSize, setControlSize] = useState<RemoteInputControlSize>(DEFAULT_REMOTE_INPUT_CONTROL_SIZE);
   const [immersive, setImmersive] = useState(false);
   const scale = remoteInputControlScale(controlSize);
@@ -252,12 +243,15 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     <AppSheet open={open} onOpenChange={handleOpenChange}>
       <AppSheetContent
         data-testid="remote-input-sheet"
+        // The top-right X is now the sole Close (the duplicate footer Close was
+        // removed); give it a stable testid for keypad-reachability coverage.
+        closeTestId="remote-input-close"
         // The sheet reserves a 5rem bottom clearance (to sit above the app tab
-        // bar), but the tab bar is hidden while any sheet is open, so with the
-        // footer visible that clearance is just dead space below Release All /
-        // Close. Drop it here; the footer supplies its own safe-area padding.
-        // Immersive game mode keeps the default clearance (no footer) so its
-        // edge-anchored controls still clear the navigation bar.
+        // bar), but the tab bar is hidden while any sheet is open. In normal
+        // mode there is no footer, so drop that dead space (pb-0) and let the
+        // scrollable body own its bottom safe-area padding. Immersive game mode
+        // keeps the default clearance so its edge-anchored controls clear the
+        // navigation bar.
         className={showFooterActions ? "pb-0" : undefined}
         onKeyDown={handlePhysicalKeyDown}
         onKeyUp={handlePhysicalKeyUp}
@@ -280,15 +274,20 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
             </span>
           </AppSheetTitle>
         </AppSheetHeader>
-        <AppSheetBody className={cn("flex flex-col gap-4", (immersive || session.outputMode === "type") && "flex-1")}>
-          {/* HARD16-008: chrome rows get the app's standard horizontal gutter
-              (px-4, matching the header/footer); the joystick action zone and the
-              keyboard grid below stay edge-to-edge where every pixel counts. */}
-          <div className="flex flex-wrap items-center justify-between gap-2 px-4">
+        {/* Pinned chrome: the Joystick/Keys toggle and Release All live OUTSIDE
+            the scrollable body (shrink-0), so they never scroll away and stay
+            reachable however far the joystick/keyboard content scrolls. Release
+            All sits top-right, right-aligned past the toggle; the top-right X
+            (AppSheetContent) is the sole Close affordance. Size + Game mode ride
+            a second pinned row so the toggle+Release All row always fits one
+            line. HARD16-008: chrome keeps the standard px-4 gutter; the joystick
+            zone and keyboard grid below stay edge-to-edge. */}
+        <div className="flex shrink-0 flex-col gap-2 border-b border-border px-4 py-2">
+          <div className="flex items-center justify-between gap-2">
             {immersive ? (
               <span className="text-sm font-semibold text-muted-foreground">Game mode</span>
             ) : (
-              <div className="flex items-center gap-2" data-testid="remote-input-output-mode-toggle">
+              <div className="flex min-w-0 items-center gap-2" data-testid="remote-input-output-mode-toggle">
                 <Button
                   size="sm"
                   variant={session.outputMode === "joystick" ? "default" : "secondary"}
@@ -297,7 +296,8 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                   title={!joystickAvailable ? joystickUnavailableHint : undefined}
                   onClick={() => handleOutputModeChange("joystick")}
                 >
-                  <Gamepad2 className="mr-1.5 h-4 w-4" /> Joystick
+                  {isCompactDisplay ? null : <Gamepad2 className="mr-1.5 h-4 w-4" />}
+                  Joystick
                 </Button>
                 <Button
                   size="sm"
@@ -305,16 +305,39 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                   data-testid="remote-input-mode-type"
                   onClick={() => handleOutputModeChange("type")}
                 >
-                  <KeyboardIcon className="mr-1.5 h-4 w-4" /> Keys
+                  {isCompactDisplay ? null : <KeyboardIcon className="mr-1.5 h-4 w-4" />}
+                  Keys
                 </Button>
               </div>
             )}
-            <div className="flex items-center gap-2">
-              {session.outputMode === "joystick" ? sizeStepper : null}
+            {showFooterActions ? (
+              <Button
+                size="sm"
+                variant="destructive"
+                className="shrink-0"
+                data-testid="remote-input-panic-button"
+                onClick={() => session.releaseAll()}
+              >
+                Release All
+              </Button>
+            ) : null}
+          </div>
+          {session.outputMode === "joystick" ? (
+            <div className="flex items-center justify-between gap-2">
+              {sizeStepper}
               {immersiveToggle}
             </div>
-          </div>
-
+          ) : null}
+        </div>
+        <AppSheetBody
+          className={cn(
+            "flex flex-col gap-4",
+            // The footer is gone; give the body its own bottom safe-area
+            // clearance in normal mode. Immersive keeps the sheet's default
+            // bottom clearance instead (edge-anchored controls clear the nav bar).
+            showFooterActions && "pb-[calc(0.75rem+var(--safe-area-inset-bottom))]",
+          )}
+        >
           {session.outputMode === "joystick" ? (
             <VirtualJoystick
               port={session.port}
@@ -360,26 +383,6 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
             />
           ) : null}
         </AppSheetBody>
-        {showFooterActions ? (
-          <AppSheetFooter className="flex items-center justify-between">
-            <Button
-              size="sm"
-              variant="destructive"
-              data-testid="remote-input-panic-button"
-              onClick={() => session.releaseAll()}
-            >
-              Release All
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              data-testid="remote-input-exit-button"
-              onClick={() => handleOpenChange(false)}
-            >
-              Close
-            </Button>
-          </AppSheetFooter>
-        ) : null}
       </AppSheetContent>
     </AppSheet>
   );

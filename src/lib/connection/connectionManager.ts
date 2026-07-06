@@ -179,6 +179,12 @@ const probeInfoWithConnectionConfig = async (
       __c64uAllowDuringDiscovery: true,
       __c64uAllowDuringError: true,
       __c64uBypassCache: true,
+      // Self-healing: recovery/discovery probes must NEVER be suppressed by an
+      // open circuit breaker. Backing off from an unhealthy device is exactly
+      // what would stop us noticing it has recovered, leaving the app wedged
+      // offline. These probes carry their own timeout + rediscovery backoff, so
+      // bypassing the circuit here keeps a recovery path permanently open.
+      __c64uBypassCircuit: true,
     });
     const healthy = isProbePayloadHealthy(response);
     return {
@@ -247,6 +253,12 @@ export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: num
       __c64uAllowDuringDiscovery: true,
       __c64uAllowDuringError: true,
       __c64uBypassCache: true,
+      // Self-healing: recovery/discovery probes must NEVER be suppressed by an
+      // open circuit breaker. Backing off from an unhealthy device is exactly
+      // what would stop us noticing it has recovered, leaving the app wedged
+      // offline. These probes carry their own timeout + rediscovery backoff, so
+      // bypassing the circuit here keeps a recovery path permanently open.
+      __c64uBypassCircuit: true,
     });
     const healthy = isProbePayloadHealthy(response);
     return healthy;
@@ -314,6 +326,12 @@ export async function probeInfoOnce(
       __c64uAllowDuringDiscovery: true,
       __c64uAllowDuringError: true,
       __c64uBypassCache: true,
+      // Self-healing: recovery/discovery probes must NEVER be suppressed by an
+      // open circuit breaker. Backing off from an unhealthy device is exactly
+      // what would stop us noticing it has recovered, leaving the app wedged
+      // offline. These probes carry their own timeout + rediscovery backoff, so
+      // bypassing the circuit here keeps a recovery path permanently open.
+      __c64uBypassCircuit: true,
     });
     return {
       ok: isProbePayloadHealthy(response),

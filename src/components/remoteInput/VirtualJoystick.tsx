@@ -52,6 +52,11 @@ const BASE_FIRE_PX = 92;
 const IMMERSIVE_ACTION_TOP_GAP_PX = 16;
 const IMMERSIVE_ACTION_BOTTOM_OFFSET_PX = 40;
 const ACTION_CONTROL_STACK_GAP_PX = 32;
+// In game mode the Autofire toggle floats above FIRE with no surrounding chrome.
+// Give it a generous separation — sized so that even a thick thumb pressing FIRE
+// on a ~3" display stays well clear of Autofire — while keeping it low enough to
+// remain easy to reach (deliberately NOT anchored to the top of the screen).
+const IMMERSIVE_ACTION_CONTROL_STACK_GAP_PX = 104;
 
 export const VirtualJoystick = ({
   port,
@@ -342,7 +347,14 @@ export const VirtualJoystick = ({
             immersive ? { minHeight: controlPx, bottom: IMMERSIVE_ACTION_BOTTOM_OFFSET_PX } : { minHeight: controlPx }
           }
         >
-          <div className="flex flex-col-reverse items-center" style={{ gap: ACTION_CONTROL_STACK_GAP_PX }}>
+          {/* Autofire sits above FIRE. In game mode the gap widens generously so
+              a thick thumb on a ~3" display pressing FIRE cannot accidentally
+              flip Autofire — while keeping Autofire close enough to stay easy to
+              reach (it is NOT banished to the top of the screen). */}
+          <div
+            className="flex flex-col-reverse items-center"
+            style={{ gap: immersive ? IMMERSIVE_ACTION_CONTROL_STACK_GAP_PX : ACTION_CONTROL_STACK_GAP_PX }}
+          >
             {fireButton}
             {autofireToggle}
           </div>

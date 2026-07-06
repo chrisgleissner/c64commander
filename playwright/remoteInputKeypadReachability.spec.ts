@@ -71,7 +71,9 @@ test.describe("Remote Input keyboard-only (Tab order) reachability (Lead F1)", (
       const testId = await page.evaluate(() => document.activeElement?.getAttribute("data-testid") ?? null);
       if (testId) seenTestIds.push(testId);
       if (testId?.startsWith("remote-input-key-")) reachedAKey = true;
-      if (testId === "remote-input-exit-button") reachedClose = true;
+      // The footer Close was removed; the sheet's top-right X (testid
+      // remote-input-close) is now the sole Close affordance.
+      if (testId === "remote-input-close") reachedClose = true;
     }
 
     expect(reachedAKey, `never reached a Keys-tab key; testids seen: ${seenTestIds.join(", ")}`).toBe(true);
