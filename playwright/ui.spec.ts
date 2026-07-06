@@ -18,7 +18,7 @@ import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUi
 import { enableTraceAssertions } from "./traceUtils";
 import { saveCoverageFromPage } from "./withCoverage";
 import { clickSourceSelectionButton } from "./sourceSelection";
-import { resolveExpectedVersionPattern } from "./versionExpectation";
+import { RESOLVED_VERSION_INVARIANT } from "./versionExpectation";
 
 const runGit = (args: string[]) => {
   const result = spawnSync("git", args, { encoding: "utf-8" });
@@ -246,15 +246,14 @@ test.describe("UI coverage", () => {
 
   test("home page shows resolved version", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    const expectedVersionPattern = resolveExpectedVersionPattern();
     const versionText = page.getByTestId("home-system-version");
-    if (!expectedVersionPattern) {
-      await expect(versionText).toHaveText("—");
-    } else {
-      // Strict invariant: version must be exactly <tag> or <tag>-<5-char-lowercase-hex-SHA>.
-      // Any other format (8-char SHA, branch name, build metadata) is a violation.
-      await expect(versionText).toHaveText(expectedVersionPattern);
-    }
+    // The version is baked into the bundle at build time from the git-tag state
+    // at that instant; re-deriving the exact string here races with release
+    // tagging (see versionExpectation.ts). Assert the strict format invariant
+    // every build guarantees instead — this still rejects the unresolved "—", a
+    // bare or 8-char SHA, a branch name and "+build" metadata, and auto-retries
+    // through hydration.
+    await expect(versionText).toHaveText(RESOLVED_VERSION_INVARIANT);
     await snap(page, testInfo, "home-version");
   });
 

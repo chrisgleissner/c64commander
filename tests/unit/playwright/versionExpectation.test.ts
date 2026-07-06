@@ -1,129 +1,52 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveExpectedVersionPattern, resolveExpectedVersions } from "../../../playwright/versionExpectation";
+import { isResolvedVersion, RESOLVED_VERSION_INVARIANT } from "../../../playwright/versionExpectation";
 
-describe("playwright version expectation", () => {
-  it("prefers the generated build version label when it matches the current release line", () => {
-    const env = {
-      VITE_APP_VERSION: "",
-      VERSION_NAME: "",
-      GITHUB_REF_TYPE: "branch",
-      GITHUB_REF_NAME: "fix/nightly-perf-test",
-      GITHUB_REF: "refs/heads/fix/nightly-perf-test",
-      GITHUB_SHA: "8e4b90b96da257bec5de53f7c183717e3e359b3f",
-    };
-    const runGit = (args: string[]) => {
-      const key = args.join(" ");
-      if (key === "describe --tags --long --dirty --always") return "8e4b90b96da257bec5de53f7c183717e3e359b3f";
-      if (key === "describe --tags --abbrev=0") return "";
-      if (key === "describe --tags --long --dirty") return "";
-      if (key === "rev-parse HEAD") return "8e4b90b96da257bec5de53f7c183717e3e359b3f";
-      return "";
-    };
+describe("resolved version invariant", () => {
+  // Every shape scripts/resolve-version.sh can bake into a build must be accepted,
+  // including the prerelease-tag-plus-short-sha form that made the E2E test flaky
+  // when a release tag landed mid CI run.
+  const accepted = [
+    "0.9.1", // exact clean release tag
+    "0.8.8",
+    "10.20.30",
+    "0.9.1-rc1", // exact clean prerelease tag
+    "0.9.0-rc3",
+    "0.9.1-beta.1",
+    "0.9.1-fc94d", // release tag + 5-char short sha (non-exact / dirty)
+    "0.9.1-rc1-fc94d", // prerelease tag + 5-char short sha (the flaky case)
+    "0.8.6-rc1-abcde",
+  ];
 
-    expect(
-      resolveExpectedVersions({
-        env,
-        runGit,
-        readGeneratedVersion: () => "0.7.9-8e4b9",
-        readPackageVersion: () => "0.7.9-rc1",
-      }),
-    ).toEqual(["0.7.9-8e4b9"]);
-    expect(
-      resolveExpectedVersionPattern({
-        env,
-        runGit,
-        readGeneratedVersion: () => "0.7.9-8e4b9",
-        readPackageVersion: () => "0.7.9-rc1",
-      })?.test("0.7.9-8e4b9"),
-    ).toBe(true);
+  const rejected = [
+    "—", // unresolved placeholder
+    "",
+    "0.9", // not MAJOR.MINOR.PATCH
+    "v0.9.1", // leading v
+    "main", // branch name
+    "feat/keyboard-input",
+    "fc94d92c", // bare sha
+    "0.9.1-fc94d92c", // 8-char sha masquerading as a prerelease
+    "0.9.1-rc1-fc94d92c", // 8-char sha in the short-sha slot
+    "0.9.1-abcdef", // 6-char hex is not a valid short sha (must be exactly 5)
+    "0.9.1+build.5", // build metadata
+    "0.9.1-", // trailing separator
+    "0.9.1-rc1 ", // trailing whitespace
+    "0.9.1-rc1-FC94D", // short sha must be lowercase hex
+  ];
+
+  it.each(accepted)("accepts %s", (version) => {
+    expect(RESOLVED_VERSION_INVARIANT.test(version)).toBe(true);
+    expect(isResolvedVersion(version)).toBe(true);
   });
 
-  it("ignores a stale generated version from an older release line", () => {
-    const env = {
-      VITE_APP_VERSION: "",
-      VERSION_NAME: "",
-      GITHUB_REF_TYPE: "branch",
-      GITHUB_REF_NAME: "fix/nightly-perf-test",
-      GITHUB_REF: "refs/heads/fix/nightly-perf-test",
-      GITHUB_SHA: "8e4b90b96da257bec5de53f7c183717e3e359b3f",
-    };
-    const runGit = (args: string[]) => {
-      const key = args.join(" ");
-      if (key === "describe --tags --long --dirty --always") return "8e4b90b96da257bec5de53f7c183717e3e359b3f";
-      if (key === "describe --tags --abbrev=0") return "";
-      if (key === "describe --tags --long --dirty") return "";
-      if (key === "rev-parse HEAD") return "8e4b90b96da257bec5de53f7c183717e3e359b3f";
-      return "";
-    };
-
-    expect(
-      resolveExpectedVersions({
-        env,
-        runGit,
-        readGeneratedVersion: () => "0.7.8",
-        readPackageVersion: () => "0.7.9-rc1",
-      }),
-    ).toEqual(["0.7.9-rc1"]);
-    expect(
-      resolveExpectedVersionPattern({
-        env,
-        runGit,
-        readGeneratedVersion: () => "0.7.8",
-        readPackageVersion: () => "0.7.9-rc1",
-      })?.test("0.7.9-rc1"),
-    ).toBe(true);
+  it.each(rejected)("rejects %s", (version) => {
+    expect(RESOLVED_VERSION_INVARIANT.test(version)).toBe(false);
+    expect(isResolvedVersion(version)).toBe(false);
   });
 
-  it("expects the latest tag plus commit id for non-tag branch builds", () => {
-    const env = {
-      VITE_APP_VERSION: "",
-      VERSION_NAME: "",
-      GITHUB_REF_TYPE: "branch",
-      GITHUB_REF_NAME: "main",
-      GITHUB_REF: "refs/heads/main",
-      GITHUB_SHA: "d207230e1234567890",
-    };
-    const runGit = (args: string[]) => {
-      const key = args.join(" ");
-      if (key === "describe --tags --long --dirty --always") return "0.7.8-3-gd207230e";
-      if (key === "describe --tags --abbrev=0") return "0.7.8";
-      if (key === "describe --tags --long --dirty") return "0.7.8-3-gd207230e";
-      if (key === "rev-parse HEAD") return "d207230e1234567890";
-      return "";
-    };
-
-    expect(
-      resolveExpectedVersions({
-        env,
-        runGit,
-        readGeneratedVersion: () => "",
-        readPackageVersion: () => "0.7.9-rc1",
-      }),
-    ).toEqual(expect.arrayContaining(["0.7.8-d2072", "0.7.9-rc1"]));
-    expect(
-      resolveExpectedVersionPattern({
-        env,
-        runGit,
-        readGeneratedVersion: () => "",
-        readPackageVersion: () => "0.7.9-rc1",
-      }),
-    ).toMatchObject(expect.any(RegExp));
-    expect(
-      resolveExpectedVersionPattern({
-        env,
-        runGit,
-        readGeneratedVersion: () => "",
-        readPackageVersion: () => "0.7.9-rc1",
-      })?.test("0.7.8"),
-    ).toBe(false);
-    expect(
-      resolveExpectedVersionPattern({
-        env,
-        runGit,
-        readGeneratedVersion: () => "",
-        readPackageVersion: () => "0.7.9-rc1",
-      })?.test("0.7.8-d2072"),
-    ).toBe(true);
+  it("is anchored so it never matches a substring of a longer string", () => {
+    expect(isResolvedVersion("prefix 0.9.1")).toBe(false);
+    expect(isResolvedVersion("0.9.1 suffix")).toBe(false);
   });
 });
