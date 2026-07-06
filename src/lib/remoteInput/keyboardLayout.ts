@@ -93,11 +93,11 @@ export type KeyDef = {
    * Where the (smaller) secondary legend renders relative to the main label:
    * `"above"` (default) stacks it above, smaller — matching the digit/symbol
    * keys' existing convention and a real C64 keycap's shifted-legend
-   * placement. `"right"` places it beside the main label instead (used only
-   * by the merged function keys, where stacking two short "f N" labels read
-   * as confusingly similar).
+   * placement. `"below"` stacks it beneath the main label instead (used by the
+   * merged expanded function keys: "fN" on top, muted "fN+1" below). `"right"`
+   * places it beside the main label on the same line.
    */
-  secondaryPosition?: "above" | "right";
+  secondaryPosition?: "above" | "below" | "right";
   /**
    * Digit/symbol keys hide their secondary legend on the space-starved
    * `compact` profile (existing behaviour). High-value system/edit/cursor/
@@ -105,6 +105,14 @@ export type KeyDef = {
    * function is never hidden.
    */
   secondaryAlwaysVisible?: boolean;
+  /**
+   * Reserve the vertical space of a shifted legend even when this key HAS none,
+   * so its main label lines up with sibling keys that do. Used by "0" in the
+   * expanded number row: 1-9 each carry a shifted symbol above the digit
+   * (pushing the digit down), so without this the secondary-less "0" would sit
+   * higher than "9". No-op when a real secondary is already shown.
+   */
+  reserveSecondarySlot?: boolean;
   /**
    * By default the secondary legend renders muted/gray (matching the
    * existing digit-key convention, where the shifted symbol is a lesser
@@ -399,10 +407,11 @@ const CURSOR_LEFT_RIGHT_MERGED: KeyDef = {
   tone: "default",
 };
 
-// Merged F-key pair (F1/F2, F3/F4, F5/F6, F7/F8): unlike the keys above, the
-// two legends sit SIDE BY SIDE (main then smaller secondary to the right) —
-// stacking two near-identical "f N" labels vertically reads as confusingly
-// similar.
+// Merged F-key pair (F1/F2, F3/F4, F5/F6, F7/F8): the main label "fN" sits on
+// top with the shifted half "fN+1" stacked directly BELOW it as a small, muted
+// legend (secondaryPosition "below"). The size + muted colour make it read
+// clearly as the secondary (shift) function, and stacking keeps both inside the
+// compact half-width (1.5u) key.
 const expandedFunctionKeyPair = (main: 1 | 3 | 5 | 7): KeyDef => {
   const mainKey = `f${main}` as SpecialKeyboardKey;
   const secondaryN = main + 1;
@@ -410,9 +419,9 @@ const expandedFunctionKeyPair = (main: 1 | 3 | 5 | 7): KeyDef => {
   return {
     id: `${mainKey}-${secondaryKey}`,
     testId: `remote-input-key-${mainKey}-${secondaryKey}`,
-    label: `f${"  "}${main}`,
-    secondary: `f${"  "}${secondaryN}`,
-    secondaryPosition: "right",
+    label: `f${"    "}${main}`,
+    secondary: `f${"    "}${secondaryN}`,
+    secondaryPosition: "below",
     secondaryAlwaysVisible: true,
     ariaLabel: `f ${main} (hold Shift for f ${secondaryN})`,
     action: { kind: "special", key: mainKey },
@@ -585,11 +594,15 @@ const DECK_GRID: KeyDef[][] = [
 //   row 2: CTRL(1.5) Q..P @ * ↑ (13 × 1u) RESTORE(1.5) (= 16u)
 //   row 3: RUN/STOP(1) SHIFT-LOCK(1) A..L : ; = (12 × 1u) RETURN(2) (= 16u)
 //   row 4: C=(1) SHIFT(1.5) Z..M , . / (10 × 1u) SHIFT(1.5) CRSR(1) CRSR(1) (= 16u)
-// The function-key cluster and the gap to it (right of the main rows) are also
-// authentic-width; exported so TypeKeyboard.tsx sizes that separate flex
-// column with the same unit basis instead of magic pixel numbers.
+// The function-key cluster and the gap to it (right of the main rows) are
+// exported so TypeKeyboard.tsx sizes that separate flex column with the same
+// unit basis instead of magic pixel numbers.
 export const EXPANDED_ROW_UNITS = 16;
-export const EXPANDED_FUNCTION_UNITS = 3; // each merged f-key pair is ~3u wide on a real C64
+// A real C64's merged f-key pair is ~3u wide, but the compact remote cluster
+// renders them at half that (1.5u — same width as RESTORE) so they read as a
+// tidy secondary block rather than dominating the right edge; the two legends
+// stack (f2 small above f1) to stay inside the narrower key.
+export const EXPANDED_FUNCTION_UNITS = 1.5;
 export const EXPANDED_FUNCTION_GAP_UNITS = 0.85; // gap between the main rows and the f-key cluster
 
 const CTRL_SPAN = 1.5;
@@ -622,7 +635,9 @@ const EXPANDED_ROWS: KeyDef[][] = [
     num("7"),
     num("8"),
     num("9"),
-    digit("0"),
+    // "0" carries no shifted symbol, so reserve the legend slot to keep its
+    // digit level with 1-9 (which each sit below their shifted symbol).
+    { ...digit("0"), reserveSecondarySlot: true },
     sym("plus"),
     sym("minus"),
     sym("pound"),

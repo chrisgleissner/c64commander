@@ -53,13 +53,22 @@ export const KeyHoldButton = ({
             // goes through onClick). Detect that case geometrically (no
             // click is coming if the release lands outside the button) and
             // reset immediately instead of guessing with a timer.
+            //
+            // Only act on a release that carries REAL coordinates. A synthetic
+            // or programmatic pointerup (assistive tech, and the E2E harness's
+            // dispatchEvent) reports (0,0); since the button is never at the
+            // viewport origin, (0,0) would read as "outside" and wrongly reset
+            // the ref BEFORE the touch-synthesised click arrives, so onClick
+            // then fires a spurious extra tap. A coordinate-less release is not
+            // a drag-off, so leave the ref for onClick to clear normally.
+            const hasCoordinates = event.clientX !== 0 || event.clientY !== 0;
             const rect = event.currentTarget.getBoundingClientRect();
             const releasedInsideBounds =
               event.clientX >= rect.left &&
               event.clientX <= rect.right &&
               event.clientY >= rect.top &&
               event.clientY <= rect.bottom;
-            if (!releasedInsideBounds) handledByPointerRef.current = false;
+            if (hasCoordinates && !releasedInsideBounds) handledByPointerRef.current = false;
           },
           onPointerCancel: () => {
             // A genuine cancel never gets a click either (same reasoning as

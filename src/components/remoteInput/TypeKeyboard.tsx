@@ -164,6 +164,13 @@ const KeyboardKeyButtonImpl = ({
     >
       {def.secondary}
     </span>
+  ) : def.reserveSecondarySlot ? (
+    // No real shifted legend, but reserve its exact line height (an invisible
+    // 0.6rem line) so the main label lines up with sibling keys that do carry
+    // one — e.g. "0" dropping to sit level with "1"-"9".
+    <span className="text-[0.6rem] font-normal leading-none" aria-hidden="true" style={{ visibility: "hidden" }}>
+      {" "}
+    </span>
   ) : null;
   const isMultiline = label.includes("\n");
   const mainEl = (
@@ -238,11 +245,11 @@ const KeyboardKeyButtonImpl = ({
             {def.cursorArrows.below}
           </span>
         </span>
-      ) : def.secondaryPosition === "right" ? (
-        // Gap is roughly one function-key label's width ("f 1") - tight
-        // enough to read as one key, wide enough that "f 1" and "f 2" don't
-        // read as a single run-on label.
-        <span className="flex flex-row items-baseline justify-center gap-6 leading-none">
+      ) : def.secondaryPosition === "below" ? (
+        // Merged expanded function keys: main "fN" on top, the shifted "fN+1"
+        // stacked directly beneath it as a smaller muted legend (secondaryEl is
+        // already muted for these keys, so the shift half reads clearly).
+        <span className="flex flex-col items-center leading-none">
           {mainEl}
           {secondaryEl}
         </span>
