@@ -87,10 +87,9 @@ type Step =
  * Builds one random-but-realistic gesture sequence: only releases something
  * that is currently down, only presses something not already down (mirrors
  * real pointer/touch semantics — a finger can't press twice without lifting).
- * Every sequence ends with releasing everything still held, then one extra
- * ordinary key tap (press+release) to flush any pending one-shot latch, and
- * toggling shift lock off if it was left on — so the final held set has a
- * single well-defined expected value: empty.
+ * Every sequence ends with releasing everything still held and toggling shift
+ * lock off if it was left on — so with pure press/release semantics (no latch)
+ * the final held set has a single well-defined expected value: empty.
  */
 const buildRandomSequence = (rng: () => number, length: number): Step[] => {
   const steps: Step[] = [];
@@ -128,13 +127,12 @@ const buildRandomSequence = (rng: () => number, length: number): Step[] => {
     }
   }
 
-  // Release everything still "physically down".
+  // Release everything still "physically down". With pure press/release there
+  // is no latch to flush, so releasing every held key/modifier (and clearing
+  // shift lock) is sufficient to return to an empty held set.
   for (const key of downKeys) steps.push({ kind: "releaseKey", key: key as KeyboardInputName });
   for (const modifier of downModifiers) steps.push({ kind: "releaseModifier", modifier });
   if (shiftLocked) steps.push({ kind: "toggleShiftLock" });
-  // Flush any one-shot modifier latch left pending by a bare tap.
-  steps.push({ kind: "pressKey", key: "return" });
-  steps.push({ kind: "releaseKey", key: "return" });
 
   return steps;
 };

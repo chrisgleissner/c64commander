@@ -67,6 +67,54 @@ describe("manual generator", () => {
     expect(c64Commander).toContain("Use **Save to flash** when **Auto save config** is **Ask** or **No**");
   });
 
+  it("documents the In Depth chapter in both variants", async () => {
+    const contexts = await contextByVariant();
+    const c64uRemote = renderManualMarkdown(contexts["c64u-remote"]);
+    const c64Commander = renderManualMarkdown(contexts.c64commander);
+
+    for (const manual of [c64uRemote, c64Commander]) {
+      expect(manual).toContain("## In Depth");
+      expect(manual).toContain("### RAM Snapshots");
+      expect(manual).toContain("### Reading Diagnostics");
+      expect(manual).toContain("### Sharing a Diagnostics Report");
+      expect(manual).toContain("### Switching Between Devices");
+      // The In Depth chapter is listed in the table of contents.
+      expect(manual).toContain("- [In Depth](#in-depth)");
+      // Sharing-a-report walkthrough and the ZIP privacy note.
+      expect(manual).toContain("Share all");
+      expect(manual).toContain("Share filtered");
+      expect(manual).toContain("It does not include your network password.");
+    }
+  });
+
+  it("documents Remote Input and its firmware in both variants, with edition-correct machines", async () => {
+    const contexts = await contextByVariant();
+    const c64uRemote = renderManualMarkdown(contexts["c64u-remote"]);
+    const c64Commander = renderManualMarkdown(contexts.c64commander);
+
+    // Both editions enable Remote Input: full section, machine:input endpoint,
+    // and the Commodore 64 Ultimate firmware requirement (1.2.0).
+    for (const manual of [c64uRemote, c64Commander]) {
+      expect(manual).toContain("### Remote Input");
+      expect(manual).toContain("`machine:input`");
+      expect(manual).toContain("a Commodore 64 Ultimate");
+      expect(manual).toContain("1.2.0");
+      expect(manual).toContain("KERNAL keyboard buffer");
+    }
+
+    // C64 Commander is the broad edition: it also names the Ultimate 64 family
+    // (firmware 3.15) and explains the Ultimate-II+(L) CIA 1 hardware limit.
+    expect(c64Commander).toContain(
+      "or an Ultimate 64, Ultimate 64 Elite, or Ultimate 64 Elite II on firmware **3.15** or newer",
+    );
+    expect(c64Commander).toContain("it cannot change the state of the C64's CIA 1 input chip");
+
+    // C64U Remote is Commodore 64 Ultimate-only: no Ultimate 64 / 3.15 mentions
+    // may leak into it, even in the new Remote Input content.
+    expect(c64uRemote).not.toContain("Ultimate 64");
+    expect(c64uRemote).not.toContain("3.15");
+  });
+
   it("inlines relative screenshot references before PDF rendering", async () => {
     const manualDir = path.resolve("docs/manual/c64u-remote");
     const html = '<img alt="Home" src="../../img/app/home/profiles/compact/01-overview.png">';

@@ -194,25 +194,28 @@ describe("RemoteInputSheet", () => {
     expect(sheet.className).toContain("app-sheet-bottom-clearance");
   });
 
-  it("latches SHIFT on the on-screen keyboard, applies it to the next key, then auto-clears", () => {
+  it("shifts a key only while SHIFT is held on the on-screen keyboard, and never latches a bare tap", () => {
     // Full tier relays keyboard input via the held-keyboard-inputs set (real
     // press/release), not the one-shot sendKeyboardInputs tap prop - that
-    // prop is reserved for the kernal-fallback tier.
+    // prop is reserved for the kernal-fallback tier. There is no latch: SHIFT
+    // shifts the next key only while it is physically held.
     initialSessionOutputMode = "type";
     render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
     const snapshotsOf = (mock: typeof setHeldKeyboardInputsMock) =>
       mock.mock.calls.map(([next]) => [...(next as ReadonlySet<string>)].sort());
+    const shift = screen.getByTestId("remote-input-key-shift");
 
-    fireEvent.click(screen.getByTestId("remote-input-key-shift"));
+    fireEvent.pointerDown(shift, { pointerId: 1 });
     fireEvent.click(screen.getByTestId("remote-input-key-a"));
-
     expect(snapshotsOf(setHeldKeyboardInputsMock)).toContainEqual(["a", "left_shift"]);
+    fireEvent.pointerUp(shift, { pointerId: 1 });
     expect(snapshotsOf(setHeldKeyboardInputsMock).at(-1)).toEqual([]);
     expect(sendKeyboardInputsMock).not.toHaveBeenCalled();
 
+    // Regression: a bare SHIFT tap must NOT latch onto the next key.
     setHeldKeyboardInputsMock.mockClear();
+    fireEvent.click(shift);
     fireEvent.click(screen.getByTestId("remote-input-key-a"));
-
     expect(snapshotsOf(setHeldKeyboardInputsMock)).toContainEqual(["a"]);
     expect(snapshotsOf(setHeldKeyboardInputsMock)).not.toContainEqual(["a", "left_shift"]);
   });
@@ -494,20 +497,27 @@ describe("RemoteInputSheet", () => {
       expect(snapshotsOf(setHeldKeyboardInputsMock)).toContainEqual(["a"]);
     });
 
-    it("is distinct from the one-shot SHIFT, which still auto-clears after one key", () => {
+    it("is distinct from a plain SHIFT, which only shifts while held and never latches", () => {
       initialSessionOutputMode = "type";
       render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
       const snapshotsOf = (mock: typeof setHeldKeyboardInputsMock) =>
         mock.mock.calls.map(([next]) => [...(next as ReadonlySet<string>)].sort());
+      const shift = screen.getByTestId("remote-input-key-shift");
 
-      fireEvent.click(screen.getByTestId("remote-input-key-shift"));
+      // Held plain SHIFT shifts the key pressed while it is down, then releases.
+      fireEvent.pointerDown(shift, { pointerId: 1 });
       fireEvent.click(screen.getByTestId("remote-input-key-a"));
       expect(snapshotsOf(setHeldKeyboardInputsMock)).toContainEqual(["a", "left_shift"]);
-      // One-shot SHIFT cleared — the next key is unshifted.
+      fireEvent.pointerUp(shift, { pointerId: 1 });
       expect(snapshotsOf(setHeldKeyboardInputsMock).at(-1)).toEqual([]);
+
+      // A bare tap of plain SHIFT does not linger onto the next key (unlike the
+      // persistent SHIFT LOCK above).
       setHeldKeyboardInputsMock.mockClear();
+      fireEvent.click(shift);
       fireEvent.click(screen.getByTestId("remote-input-key-a"));
       expect(snapshotsOf(setHeldKeyboardInputsMock)).toContainEqual(["a"]);
+      expect(snapshotsOf(setHeldKeyboardInputsMock)).not.toContainEqual(["a", "left_shift"]);
     });
 
     it("never goes through the one-shot tap props when toggled (it presses left_shift on the held set instead)", () => {
