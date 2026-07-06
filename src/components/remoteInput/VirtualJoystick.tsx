@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useRef, useState } from "react";
-import { Gamepad2, Hand, MoveDiagonal } from "lucide-react";
+import { AlertTriangle, Gamepad2, Hand, MoveDiagonal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
@@ -284,8 +284,11 @@ export const VirtualJoystick = ({
   return (
     <div className={cn("flex flex-col gap-3", immersive && "h-full")} data-testid="remote-input-virtual-joystick">
       {disabled ? (
-        <p className="text-center text-sm text-muted-foreground" data-testid="remote-input-joystick-unavailable-hint">
-          {disabledHint}
+        <p
+          className="flex items-center justify-center gap-1.5 px-4 text-center text-sm text-muted-foreground"
+          data-testid="remote-input-joystick-unavailable-hint"
+        >
+          <AlertTriangle className="h-4 w-4" /> {disabledHint}
         </p>
       ) : null}
 

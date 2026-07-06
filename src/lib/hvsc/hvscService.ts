@@ -209,13 +209,28 @@ export const ensureHvscMetadataHydration = async () => {
     }
 
     const emitProgress = createProgressEmitter("hvsc-metadata-hydration");
+    // Persisting to disk is O(song count) - JSON-encoding and writing the
+    // whole compact media index, plus (absent the hydrator's own
+    // foldersUnchanged fast path) rebuilding the folder tree. Doing that
+    // after every small hydration chunk turned a real ~60k-song library scan
+    // into an O(songs^2) main-thread hog lasting many minutes (observed
+    // symptom: Remote Input stuck on "Reconnecting" and an unresponsive UI
+    // even though the device itself was perfectly healthy). The in-memory
+    // index is still updated every chunk so browsing/search see fresh
+    // metadata immediately; only the expensive disk write is throttled, and
+    // the final chunk always persists so no progress is lost on completion.
+    let lastPersistedAtMs = 0;
+    const persistIntervalMs = 5000;
     const hydratedSnapshot = await hydrateHvscMetadata({
       snapshot,
       readSong: async (virtualPath) => getHvscSong({ virtualPath }),
       emitProgress,
-      onSnapshotUpdated: async (nextSnapshot) => {
+      onSnapshotUpdated: async (nextSnapshot, isFinal) => {
         hvscIndex.setBrowseSnapshot(nextSnapshot);
-        await saveHvscBrowseIndexSnapshot(nextSnapshot);
+        const now = Date.now();
+        if (!isFinal && now - lastPersistedAtMs < persistIntervalMs) return;
+        lastPersistedAtMs = now;
+        await saveHvscBrowseIndexSnapshot(nextSnapshot, { foldersUnchanged: true });
       },
     });
     hvscIndex.setBrowseSnapshot(hydratedSnapshot);

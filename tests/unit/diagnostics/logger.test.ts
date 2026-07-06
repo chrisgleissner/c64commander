@@ -284,6 +284,32 @@ describe("logger", () => {
       }
     });
 
+    it("suppresses real Capacitor Filesystem rejection shapes with a trailing period", () => {
+      const uninstall = logger.installConsoleDiagnosticsBridge();
+      try {
+        console.error({
+          message: "'deleteFile' failed because file at '/hvsc/index/hvsc-browse-index-v1.json' does not exist.",
+        });
+        const errorCalls = addLog.mock.calls.filter((c) => c[0] === "error");
+        expect(errorCalls.length).toBe(0);
+      } finally {
+        uninstall();
+      }
+    });
+
+    it("suppresses real Capacitor Filesystem mkdir rejection shapes with trailing clauses", () => {
+      const uninstall = logger.installConsoleDiagnosticsBridge();
+      try {
+        console.error({
+          message: "Directory at '/hvsc/index/' already exists, cannot be overwritten.",
+        });
+        const errorCalls = addLog.mock.calls.filter((c) => c[0] === "error");
+        expect(errorCalls.length).toBe(0);
+      } finally {
+        uninstall();
+      }
+    });
+
     it("forwards mixed-arg console.error with benign filesystem message so caller context is preserved", () => {
       const uninstall = logger.installConsoleDiagnosticsBridge();
       try {

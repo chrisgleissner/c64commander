@@ -8,7 +8,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle,
   Gamepad2,
   Keyboard as KeyboardIcon,
   Maximize2,
@@ -315,12 +314,6 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
               {immersiveToggle}
             </div>
           </div>
-
-          {!immersive && !joystickAvailable && session.outputMode === "joystick" ? (
-            <p className="flex items-center justify-center gap-1.5 px-4 text-center text-sm text-muted-foreground">
-              <AlertTriangle className="h-4 w-4" /> {joystickUnavailableHint}
-            </p>
-          ) : null}
 
           {session.outputMode === "joystick" ? (
             <VirtualJoystick

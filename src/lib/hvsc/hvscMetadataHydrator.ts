@@ -23,7 +23,7 @@ export type HydrateHvscMetadataOptions = {
   snapshot: HvscBrowseIndexSnapshot;
   readSong: (virtualPath: string) => Promise<HvscSong | null>;
   emitProgress: (event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">) => void;
-  onSnapshotUpdated?: (snapshot: HvscBrowseIndexSnapshot) => Promise<void> | void;
+  onSnapshotUpdated?: (snapshot: HvscBrowseIndexSnapshot, isFinal: boolean) => Promise<void> | void;
 };
 
 export const hydrateHvscMetadata = async ({
@@ -100,9 +100,10 @@ export const hydrateHvscMetadata = async ({
       }
     }
 
-    await onSnapshotUpdated?.(snapshot);
+    const isFinal = processedCount >= totalCount;
+    await onSnapshotUpdated?.(snapshot, isFinal);
 
-    const statusToken = processedCount >= totalCount ? "done" : "running";
+    const statusToken = isFinal ? "done" : "running";
     emitProgress({
       stage: "sid_metadata_hydration",
       statusToken,

@@ -203,6 +203,8 @@ describe("hvscMetadataHydrator", () => {
       }),
     );
     expect(onSnapshotUpdated).toHaveBeenCalledTimes(2);
+    expect(onSnapshotUpdated).toHaveBeenNthCalledWith(1, expect.anything(), false);
+    expect(onSnapshotUpdated).toHaveBeenNthCalledWith(2, expect.anything(), true);
     expect(getHvscSongFromBrowseIndex(snapshot, "/MUSICIANS/H/Hubbard_Rob/Song_9.sid")?.metadataStatus).toBe("error");
     expect(addLog).toHaveBeenCalledWith(
       "warn",

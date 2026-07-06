@@ -478,6 +478,48 @@ describe("hvscBrowseIndexStore", () => {
     });
   });
 
+  it("reuses existing folders instead of rebuilding them when foldersUnchanged is set", async () => {
+    const { saveHvscBrowseIndexSnapshot, buildHvscBrowseIndexFromEntries: build } =
+      await import("@/lib/hvsc/hvscBrowseIndexStore");
+    const snapshot = build([{ path: "/DEMOS/A/One.sid", name: "One.sid", type: "sid" }]);
+    // Deliberately wrong vs. what a rebuild from `songs` would produce, so the
+    // assertion proves the stale value was reused verbatim, not recomputed -
+    // metadata hydration (the only caller of this fast path) never changes a
+    // song's virtualPath, so the derived folder tree is provably unchanged.
+    const staleFolders = { "/": { path: "/", folders: [], songs: [] } };
+    snapshot.folders = staleFolders as typeof snapshot.folders;
+
+    vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
+    vi.mocked(Filesystem.writeFile).mockResolvedValue(undefined as any);
+
+    await saveHvscBrowseIndexSnapshot(snapshot, { foldersUnchanged: true });
+
+    const fullSnapshotWrite = vi
+      .mocked(Filesystem.writeFile)
+      .mock.calls.find((call) => call[0]?.path === "hvsc/index/hvsc-browse-index-v1.json");
+    expect(fullSnapshotWrite).toBeDefined();
+    const written = JSON.parse(Buffer.from(fullSnapshotWrite![0].data, "base64").toString("utf-8"));
+    expect(written.folders).toEqual(staleFolders);
+  });
+
+  it("falls back to rebuilding folders when foldersUnchanged is set but folders are missing", async () => {
+    const { saveHvscBrowseIndexSnapshot, buildHvscBrowseIndexFromEntries: build } =
+      await import("@/lib/hvsc/hvscBrowseIndexStore");
+    const snapshot = build([{ path: "/DEMOS/A/One.sid", name: "One.sid", type: "sid" }]);
+    snapshot.folders = {};
+
+    vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
+    vi.mocked(Filesystem.writeFile).mockResolvedValue(undefined as any);
+
+    await saveHvscBrowseIndexSnapshot(snapshot, { foldersUnchanged: true });
+
+    const fullSnapshotWrite = vi
+      .mocked(Filesystem.writeFile)
+      .mock.calls.find((call) => call[0]?.path === "hvsc/index/hvsc-browse-index-v1.json");
+    const written = JSON.parse(Buffer.from(fullSnapshotWrite![0].data, "base64").toString("utf-8"));
+    expect(written.folders["/DEMOS/A"]).toBeDefined();
+  });
+
   it("logs stale full snapshot deletion failures when compact media index persistence succeeds", async () => {
     const { saveHvscBrowseIndexSnapshot, buildHvscBrowseIndexFromEntries: build } =
       await import("@/lib/hvsc/hvscBrowseIndexStore");

@@ -157,8 +157,17 @@ const normalizeConsoleForwardArgs = (args: unknown[]) => {
   return [normalizeConsoleMessage(args), ...args.slice(1)];
 };
 
+// Real Capacitor Filesystem plugin rejection messages don't reliably end with
+// the benign phrase - e.g. "...does not exist." (trailing period) or "...
+// already exists, cannot be overwritten." (trailing clause) - so an anchored
+// end-of-string pattern silently never matched either shape and every benign
+// file/dir existence race flooded Diagnostics as a full error (observed:
+// thousands of "deleteFile failed" / mkdir "already exists" entries during
+// HVSC metadata hydration). Match the phrase anywhere, consistent with how
+// this codebase's own per-call-site checks (isFileNotFoundError,
+// isDirectoryExistsError in hvscBrowseIndexStore.ts) already do it.
 const BENIGN_FILESYSTEM_MESSAGE_PATTERN =
-  /^(?:.+ )?(does not exist|directory exists|not found|no such file|already exists|eexist|enoent)$/i;
+  /does not exist|directory exists|not found|no such file|already exists|eexist|enoent/i;
 
 const isPlainObjectMessageShape = (value: unknown) =>
   !!value && typeof value === "object" && typeof (value as { message?: unknown }).message === "string";

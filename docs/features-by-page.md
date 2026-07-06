@@ -27,6 +27,7 @@ This document favors implemented behavior over intended behavior. Where the code
 | Coverage Probe       | `CoverageProbePage`      | `/__coverage__`                  | Test-only probe route; available only when coverage probes are enabled                                           |
 | Not Found            | `NotFound`               | `*`                              | Catch-all fallback for unknown routes                                                                            |
 | Music Player         | `MusicPlayerPage`        | Unrouted                         | Legacy SID/HVSC player component; not mounted by `src/App.tsx`                                                   |
+| Remote Input         | `RemoteInputSheet`       | Shared sheet (no route)          | Joystick/keyboard relay to the real device; independently mounted by Home and Play, not a routed page            |
 
 ## 3. Page Feature Specifications
 
@@ -176,6 +177,106 @@ Playlist and playback surface. Supports Local, C64U, and HVSC sources, mixed-sou
 | [ ]  | Transport      | Playback controls        | Play transport and auto-advance | Start item; pause/resume; wait due time         | Runner starts/stops; clock updates; next item advances once |
 | [ ]  | Volume/mute    | Slider + mute button     | Play volume state restore       | Change volume; mute/unmute; pause/resume        | Prior levels restore; no race-induced drift                 |
 | [ ]  | HVSC lifecycle | HVSC card                | Play HVSC install lifecycle     | Download; ingest; cancel/reset as allowed       | Progress/status updates; failure and reset paths surface    |
+
+### Remote Input
+
+#### Page Overview
+
+Not a routed page: a shared sheet/modal (`RemoteInputSheet`) mounted independently by both Home (`MachineControls` quick-action tile) and Play (button shown while an item is actively playing). Each mount point owns its own `useState` open flag and instantiates its own `<RemoteInputSheet>`, so Home's and Play's sheets are two independent component instances, not a shared singleton. Provides two mutually exclusive output modes - Joystick (analog/D-pad/swipe relay + FIRE/autofire) and Keys (on-screen C64 keyboard) - against the real device over `POST /v1/machine:input`, with a KERNAL-keyboard-buffer fallback when that endpoint is unsupported.
+
+Status: implemented and HIL-verified on real c64u/u64 hardware (2026-07-06); see Known/Suspected Bugs and the hardening session report below for exact findings.
+
+#### Entry Points
+
+| Entry point | Component | Trigger |
+| --- | --- | --- |
+| Home quick action | `MachineControls` -> `HomePage` (`remoteInputSheetOpen` state) | Tap "Remote Input" tile in Quick Actions |
+| Play transport | `PlayFilesPage` (`remoteInputSheetOpen` state) | Tap "Remote Input" button, shown only while a playlist item is actively playing |
+
+Both entry points render their own `RemoteInputSheet`; because each instance owns a fresh `useRemoteInputSession`, held-input state does not carry over between opening from Home vs. Play (only size/port/movement-style preferences persist, via `localStorage`). The module-level `activeInputRelease` registry still coordinates safety releases across instances (e.g. on a saved-device switch).
+
+#### UI Feature Inventory
+
+| Feature | UI Element | User Action | Behavior | Internal Wiring |
+| --- | --- | --- | --- | --- |
+| Switch output mode | Joystick / Keys toggle buttons | Tap | Calls `session.setOutputMode`, which first `releaseAll()`s the outgoing mode's held inputs (device-side) before switching | `RemoteInputSheet` -> `useRemoteInputSession.setOutputMode` |
+| Analog joystick | Draggable stick zone | Pointer down/move/up | Computes 8-way direction from drag vector via `resolveDragDirections`; diffs against last-sent held set | `VirtualJoystick` -> `resolveDragDirections` -> `session.setHeldJoystickInputs` |
+| D-Pad joystick | 4 discrete direction buttons | Pointer down/up per button | Direct press/release per button, no drag math | `VirtualDPad` -> `session.setHeldJoystickInputs` |
+| Swipe joystick | Same zone as Analog, drag-from-touchdown | Pointer down/move/up | Direction computed relative to the touch-DOWN point (not center), unlike Analog | `SwipePad` -> `session.setHeldJoystickInputs` |
+| FIRE + autofire | FIRE button, Autofire toggle + rate slider | Hold FIRE; toggle/adjust autofire | Autofire duty-cycles FIRE on a dedicated interval, independent of the coalesce window, so it survives a concurrent drag move | `VirtualJoystick` -> `session.setAutofireEnabled/RateHz` |
+| Port switch | Port 1/2 toggle | Tap | Releases held inputs on the OLD port immediately (bypasses coalesce) before switching | `VirtualJoystick` -> `session.setPort` |
+| Control size | Size stepper (S..XXL) | Tap +/- | Scales joystick/FIRE geometry; persisted via `saveRemoteInputControlSize` | `RemoteInputSheet` -> `remoteInputControlScale` |
+| Game mode | "Game mode" / "Exit game mode" button (Joystick tab only, full tier only) | Tap | Edge-anchored, maximized, no-look layout; strips mode toggle, quick-keys bar, size stepper, and Release All/Close footer (HARD13 accessibility - deliberate, tested) | `RemoteInputSheet` immersive state |
+| On-screen keyboard | `TypeKeyboard` deck/expanded layout | Tap/hold keys | Declarative layout resolved from measured container size (`resolveKeyboardProfile`), independent of the app-wide Settings display-profile setting | `TypeKeyboard` -> `useKeyboardHoldDispatch` -> `session.setHeldKeyboardInputs` |
+| Modifier keys (SHIFT/CTRL/C=) | Modifier buttons | Tap (one-shot latch) or hold (chord) | Bare tap latches for the next key then auto-clears; hold-while-chording releases with the modifier's own release; SHIFT LOCK is independent/persistent | `useKeyboardHoldDispatch` |
+| Quick keys bar | Always-visible RUN/STOP, CTRL, SPACE, RETURN, f1-f8, cursor keys | Tap/hold | Rides alongside the Joystick tab for one-tap keyboard access without leaving joystick control | `QuickKeysBar` |
+| Kernal-fallback typing | Keys tab on kernal-fallback tier | Tap character keys | Injects characters via the C64 KERNAL keyboard buffer ($0277/$00C6) instead of `machine:input`; RUN/STOP and RESTORE are disabled (no fallback equivalent) | `kernalFallbackInjector` |
+| Panic release | "Release All" button (footer, hidden in Game mode) | Tap | Immediate (non-coalesced) `release_all` device call plus full local state reset, including stopping autofire | `session.releaseAll` |
+| Physical key input | Hardware D-pad/keypad while the sheet has focus | Physical key press | Maps Android `KEYCODE_DPAD_*`/arrows to semantic joystick actions via `resolveInputProfile`/`resolveSemanticAction` | `RemoteInputSheet` `onKeyDown`/`onKeyUp` -> `dpadActionToJoystickInputs`/`t9KeyToJoystickInputs` |
+| Connection indicator | Wifi/WifiOff icon + "Reconnecting..." label in the header | Passive | Reflects `session.connectionStatus` ("sending"/"idle"/"error"); only clears back to connected on the NEXT successful send - see Known/Suspected Bugs | `RemoteInputSheet` header |
+
+#### Capability Model
+
+- `useRemoteInputCapabilityTier` probes `/v1/machine:input` once per device/session and resolves one of three tiers: `full` (200 - U64-family with `machine:input` support), `kernal-fallback` (404/405/501/unsupported-family - Type mode only, via KERNAL buffer injection), `auth-required` (403 - distinct hint, since the fallback injection needs the same password the probe already failed without).
+- Only definitive firmware answers are cached; transient/auth states are not, so a later retry (e.g. after entering a password) can upgrade the tier without a full remount.
+- `RemoteInputSheet` auto-switches `outputMode` away from `"joystick"` to `"type"` if the tier resolves to joystick-unavailable while the Joystick tab is active - the in-sheet "joystick unavailable" hint (`VirtualJoystick`'s own paragraph, single location as of 2026-07-06) is consequently only visible for at most one transient render, not a steady-state condition a user is likely to see.
+- Game mode is only offered on the `full` tier (`joystickAvailable`); it cannot be entered from a joystick-unavailable state, but a mid-session tier downgrade while already in Game mode is a documented, HIL-tested-safe edge case (Exit Game Mode + hardware Back both fully release input even then).
+
+#### Internal Wiring
+
+- `useRemoteInputSession` is the single hook owning all wire traffic: a held-set-diffing architecture (Set of currently-held joystick/keyboard inputs, diffed against `lastSentHeldSetRef`) coalesces rapid changes into a `COALESCE_WINDOW_MS` (40ms) batched `POST /v1/machine:input`, with a 0ms leading-edge fast path for keyboard taps and a dedicated 10ms autofire coalesce window.
+- A `sendGenerationRef` counter ensures an immediate safety-critical send (Release All, port swap, mode switch) can never be overtaken by a still-in-flight coalesced send that would re-assert an input the user just cleared.
+- `runSerializedMachineInput` (JS-side) plus `serializeMachineInputRequest` (native-request-lane, single in-flight slot) together guarantee the app never has two `machine:input` calls in flight, matching the Ultimate firmware's single-threaded network task; the lane is deliberately exempt from the shared bulk-REST circuit breaker/backoff/cooldown so heavy polling elsewhere can never starve it below its throughput floor.
+- A batch-send failure drop-coalesces (does not retry) local held-set state, and - if the failed batch could have left something asserted on the device - fires one recovery `release_all` call. That recovery call is best-effort: if IT also fails (e.g. a transient network blip), nothing currently retries it (see Known/Suspected Bugs).
+- Visibility-change and unmount handlers, plus the module-level `activeInputRelease` registry (invoked before a saved-device switch retargets the API), are the safety nets backing the "never leave input stuck" requirement; all were HIL-verified working (Android Back/Home/lock, sheet close mid-hold, device switch) in the 2026-07-06 session.
+
+#### Existing Test Coverage
+
+| Feature | Test Type | Test File | Coverage |
+| --- | --- | --- | --- |
+| Session state machine (coalesce, generation guards, autofire, releaseAll, port/mode switch) | Unit | `tests/unit/hooks/useRemoteInputSession.test.tsx`, `.chaos.test.tsx`, `.keyLatency.test.tsx` | Full - the chaos suite specifically covers the races this session tried and failed to reproduce concurrently via adb (two-touch port-switch-while-held, movement-style-switch-while-held) |
+| Capability tier resolution/caching | Unit | `tests/unit/hooks/useRemoteInputCapabilityTier.test.tsx`, `tests/unit/lib/remoteInput/capabilityTier.test.ts` | Full |
+| Sheet composition, mode/game-mode/tier gating, physical key routing | Unit | `tests/unit/components/remoteInput/RemoteInputSheet.test.tsx` | Full |
+| Joystick/D-Pad/Swipe/keyboard/quick-keys components | Unit | `VirtualJoystick.test.tsx`, `VirtualDPad.test.tsx`, `SwipePad.test.tsx`, `CursorPad.test.tsx`, `KeyHoldButton.test.tsx`, `TypeKeyboard.test.tsx`, `QuickKeysBar.test.tsx` | Full |
+| Held-set diffing, kernal-fallback encoding/injection, throttle/lane serialization, autofire, drag-direction math | Unit | `tests/unit/lib/remoteInput/*.test.ts` (14 files) | Full |
+| Kernal-fallback typing on real hardware, keypad reachability, key-press latency | Playwright | `playwright/remoteInputFallbackTyping.spec.ts`, `remoteInputKeypadReachability.spec.ts`, `remoteInputKeyPressLatency.spec.ts` | Partial (targeted scenarios, not full feature) |
+| Real hardware HIL (joystick relay, autofire timing, kernal-fallback injection, capability fallback, Play integration, safety-net releases) | Manual HIL (this session) | `docs/plans/hardening/<session>/hil-remote-input-review.md` | First-pass, not yet automated |
+| Maestro | - | none | Gap: no native-device smoke/edge coverage for Remote Input exists yet |
+
+#### Observed Risk Areas
+
+- Two independent `RemoteInputSheet` instances (Home, Play) each with their own session state; no cross-instance held-input visibility beyond the shared `activeInputRelease` safety-net registry.
+- `session.connectionStatus` only flips from `"error"` back to connected on the NEXT successful send; there is no independent periodic health probe, so it can visually strand at "Reconnecting..." indefinitely if the user stops interacting (see bug below).
+- Real HVSC background metadata hydration (unrelated feature) can starve the JS main thread severely enough to make Remote Input's network calls appear to fail/time out even though the device itself is fully healthy - a whole-app risk that happens to manifest most visibly here because this is the most latency-sensitive REST consumer.
+- Concurrent multi-touch gesture combinations (e.g. port switch while a direction is physically held) cannot be reliably reproduced via `adb shell input` (single virtual pointer); that coverage lives entirely in the unit chaos suite, not HIL.
+- Game mode intentionally strips all chrome including Release All; safety depends entirely on Exit Game Mode and the hardware Back button both being wired to release-on-exit, which is not visually obvious from the stripped-down UI itself.
+
+#### Known or Suspected Bugs
+
+- **[FIXED 2026-07-06]** Duplicate "joystick unavailable" hint text: `RemoteInputSheet` rendered its own copy of the hint alongside `VirtualJoystick`'s own copy. Consolidated into `VirtualJoystick` alone (the only location that stays correct across `immersive`); low real-world impact since the auto-switch-to-Keys effect makes the underlying state near-transient. Regression coverage: existing `VirtualJoystick.test.tsx` hint test; no dedicated sheet-level test is possible because the sheet never settles in the affected state.
+- **[NOT A BUG - verified deliberate]** Game mode hides the Release All button entirely (`showFooterActions = !(immersive && outputMode === "joystick")`). Initially miscategorized as a bug in this session; a pre-existing test (`"game mode hides the mode toggle and quick-keys bar, keeping only joystick controls"`) proves this is intentional HARD13 no-look-play accessibility behavior, with Exit Game Mode and hardware Back confirmed (HIL) to still fully release input. Left unchanged.
+- **[ROOT-CAUSED AND FIXED 2026-07-06, in HVSC not Remote Input]** Opening/using Remote Input during HVSC metadata hydration showed a false, non-recovering "Reconnecting..." status and unresponsive UI for minutes, with an `F3` key confirmed physically stuck held on real u64 hardware after a `release_all` recovery attempt itself failed with no retry. Root cause: `hydrateHvscMetadata` saved a full snapshot (O(song-count) folder rebuild + disk write) every 8-song chunk, an O(songs²) blowup for a real ~60k-song library that pegged the JS thread. See `hvscMetadataHydrator.ts`/`hvscService.ts`/`hvscBrowseIndexStore.ts` fixes and memory `hvsc-hydration-starved-remote-input.md`.
+- Not independently re-verified this session, carried from an earlier hardening pass: a lead-F5 "won't-fix" gap where a typed character still sitting in the 40ms coalesce window at the moment `releaseAll()` runs (e.g. a mode switch) is dropped rather than flushed first; requires two taps on different controls within 40ms, accepted as negligible risk against touching the safety-critical clearing path.
+
+#### Testability Assessment
+
+| Feature Class | Features |
+| --- | --- |
+| Deterministic | Capability tier resolution, held-set diffing, coalesce/generation-guard logic, kernal-fallback encoding, autofire duty-cycle math - all covered by the existing unit suite, including its dedicated chaos tests |
+| Timing-sensitive | Coalesce window batching, autofire interval, connection-status recovery, port/mode-switch release ordering |
+| Hardware-dependent | Actual `machine:input` wire delivery/latency, kernal-fallback KERNAL-buffer injection correctness, real capability-tier probing per firmware, Play-page playback interaction |
+| State-sensitive | Game mode entry/exit mid-tier-downgrade, device-switch safety release, Home vs. Play independent session instances |
+
+#### Required Tests
+
+| Done | Feature | UI Element | Test Name | Test Steps | Test Assertions |
+| --- | --- | --- | --- | --- | --- |
+| [x] | Joystick relay | Analog/D-Pad/Swipe/FIRE/autofire | Real-hardware joystick relay HIL | Hold each movement style + FIRE/autofire on real u64 | Correct press/release payloads, no stuck input after release (2026-07-06) |
+| [x] | Keys relay | On-screen keyboard, quick-keys, modifiers | Real-hardware keyboard relay HIL | Type characters, chord/latch SHIFT, use quick-keys | Correct chords, one-shot latch/SHIFT LOCK behave as designed |
+| [x] | Capability fallback | Joystick tab disabled state | Kernal-fallback HIL on c64u (fw lacking `machine:input`) | Confirm tier resolves `kernal-fallback`, Type mode still injects via KERNAL buffer | Injection works; RUN/STOP and RESTORE correctly disabled |
+| [x] | Play integration | Play "Remote Input" button | Play page + Remote Input HIL | Start playback; open Remote Input; hold direction/FIRE; close sheet mid-hold | Playback state coherent throughout; no stuck input after close |
+| [ ] | Automated capability/HIL regression | - | Maestro smoke for Remote Input | Open from Home and Play, exercise both tabs, Release All | First native-device automated coverage (currently a gap) |
+| [ ] | Connection-status recovery | Header Wifi/Reconnecting indicator | Independent health-probe recovery | Force a transient send failure with no further user input | Status eventually clears without requiring a new user-initiated send |
 
 ### Disks
 
@@ -634,6 +735,7 @@ Status: uncertain for active product relevance; `MusicPlayerPage.tsx` exists but
 | Configuration application                      | Home, Config, Settings                              | Home and Config both write config immediately; Home app-config snapshots persist locally; Settings changes app-wide local behavior     | Dirty-state ambiguity between device config, flash, and app snapshots                   |
 | Connection troubleshooting                     | Settings, Home app bar, Docs                        | Settings saves connection; app bar exposes retry/diagnostics; Docs explains workflow                                                   | Static docs can diverge from actual settings flow                                       |
 | HVSC lifecycle                                 | Play, Settings                                      | Settings toggles HVSC availability and mirror override; Play performs download/ingest/browse                                           | Long-running install state and mirror/config mistakes                                   |
+| Remote Input entry                             | Home, Play                                          | Each page mounts its own independent `RemoteInputSheet` instance/session; only size/port/movement-style preferences share via `localStorage` | No held-input visibility across the two instances beyond the shared release-safety registry |
 
 ## 5. Interaction With The C64 Ultimate
 
@@ -641,7 +743,7 @@ Status: uncertain for active product relevance; `MusicPlayerPage.tsx` exists but
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | Device discovery     | REST probe to `/v1/info` plus connection manager state                                                                                                                    | startup/manual/settings/background discovery                                              | Probe result can lag stored host/password changes                             |
 | Config               | REST `/v1/configs`, `/v1/configs/{category}`, `/v1/configs/{category}/{item}`, `/v1/configs:save_to_flash`, `/v1/configs:load_from_flash`, `/v1/configs:reset_to_default` | fetch categories/items, set values, save/load/reset flash                                 | UI writes are immediate; flash persistence is separate                        |
-| Machine control      | REST `/v1/machine:*`                                                                                                                                                      | reset, reboot, pause, resume, power off, menu button, memory read/write                   | Machine state is inferred; no full machine-state subscription                 |
+| Machine control      | REST `/v1/machine:*`                                                                                                                                                      | reset, reboot, pause, resume, power off, menu button, memory read/write, joystick/keyboard input relay (`machine:input`, U64-family only) | Machine state is inferred; no full machine-state subscription                 |
 | Drives               | REST `/v1/drives`, `/v1/drives/{drive}:mount`, `:remove`, `:reset`, `:on`, `:off`                                                                                         | mount/eject/reset/power and drive inspection                                              | Mounted-state optimistic overrides can diverge until refetch                  |
 | Playback runners     | REST `/v1/runners:*`                                                                                                                                                      | SID, MOD, PRG, CRT start operations                                                       | No authoritative completion endpoint for auto-advance                         |
 | Streams              | REST `/v1/streams/{stream}:start`, `:stop`                                                                                                                                | start/stop configured UDP stream targets                                                  | Stream status is request/result based, not device-pushed                      |
