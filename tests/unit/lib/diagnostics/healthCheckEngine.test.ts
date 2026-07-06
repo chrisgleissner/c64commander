@@ -290,7 +290,7 @@ describe("runHealthCheck — all-success path", () => {
     // the breaker (so a couple of blips can't escalate the device to offline).
     expect(mockGetInfo).toHaveBeenCalledWith(
       expect.objectContaining({
-        __c64uBypassCircuit: true,
+        __c64uRecoveryProbe: true,
         __c64uSuppressCircuitContribution: true,
       }),
     );

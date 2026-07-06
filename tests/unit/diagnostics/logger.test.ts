@@ -334,6 +334,27 @@ describe("logger", () => {
       }
     });
 
+    it("does not suppress non-filesystem errors that merely contain a generic existence phrase (Kilo #303)", () => {
+      const uninstall = logger.installConsoleDiagnosticsBridge();
+      try {
+        // These carry "already exists" / "not found" but have no filesystem
+        // context, so the benign-FS suppression must NOT swallow them.
+        for (const message of [
+          "User already exists in DB",
+          "Key not found in keystore",
+          "Plugin 'foo' already exists, refusing to overwrite",
+          "Resource not found: https://example.com/api/thing",
+        ]) {
+          addLog.mockClear();
+          console.error({ message });
+          const errorCalls = addLog.mock.calls.filter((c) => c[0] === "error");
+          expect(errorCalls.length, message).toBeGreaterThan(0);
+        }
+      } finally {
+        uninstall();
+      }
+    });
+
     it("handles non-string non-error non-object arguments", () => {
       const uninstall = logger.installConsoleDiagnosticsBridge();
       try {

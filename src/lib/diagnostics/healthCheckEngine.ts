@@ -279,7 +279,7 @@ const readMemoryProbeWithTransientRetry = async (
         timeoutMs: options.timeoutMs,
         __c64uIntent: runtime.intent,
         __c64uForceProbe: runtime.forceProbe,
-        __c64uBypassCircuit: true,
+        __c64uRecoveryProbe: true,
         __c64uSuppressCircuitContribution: true,
       });
     } catch (error) {
@@ -565,8 +565,9 @@ const probeRest = async (
         __c64uForceProbe: runtime.forceProbe,
         // The reachability read must ALWAYS hit the wire (even for a system
         // switch-device probe) and must never trip the breaker, so it can always
-        // observe a healthy device and its success closes the circuit.
-        __c64uBypassCircuit: true,
+        // observe a healthy device and its success closes the circuit. The
+        // gateway translates __c64uRecoveryProbe into a circuit bypass.
+        __c64uRecoveryProbe: true,
         __c64uSuppressCircuitContribution: true,
       }),
     );

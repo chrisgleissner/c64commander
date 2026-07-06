@@ -210,8 +210,9 @@ export const ensureHvscMetadataHydration = async () => {
 
     const emitProgress = createProgressEmitter("hvsc-metadata-hydration");
     // Persisting to disk is O(song count) - JSON-encoding and writing the
-    // whole compact media index, plus (absent the hydrator's own
-    // foldersUnchanged fast path) rebuilding the folder tree. Doing that
+    // whole compact media index, plus (absent the foldersUnchanged fast path in
+    // saveHvscBrowseIndexSnapshot, hvscBrowseIndexStore.ts) rebuilding the
+    // folder tree. Doing that
     // after every small hydration chunk turned a real ~60k-song library scan
     // into an O(songs^2) main-thread hog lasting many minutes (observed
     // symptom: Remote Input stuck on "Reconnecting" and an unresponsive UI
