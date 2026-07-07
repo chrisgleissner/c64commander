@@ -79,19 +79,6 @@ const PLAYBACK_RECONCILE_MIN_DELAY_MS = 50;
 const PLAYBACK_RECONCILE_MAX_DELAY_MS = 250;
 const PENDING_VOLUME_WRITE_STALE_MS = 5000;
 
-// HARD18-013 decomposes a 2-4 item Audio Mixer config write into sequential
-// single-item PUTs (unless the firmware gate allows one multi-item POST),
-// each spaced by the device safety preset's write cooldown (up to 1200ms on
-// CONSERVATIVE) plus its own round trip. A flat timeout sized for one POST
-// undercounts a multi-item mute/unmute/pause-resume batch and fires a false
-// "timed out" toast well before the (correctly) slower sequential writes
-// actually finish. Scale the ceiling with the item count instead; a
-// single-item write keeps the original 4s budget.
-const AUDIO_MIXER_WRITE_TIMEOUT_BASE_MS = 4000;
-const AUDIO_MIXER_WRITE_TIMEOUT_PER_ITEM_MS = 2500;
-const computeAudioMixerWriteTimeoutMs = (itemCount: number) =>
-  Math.max(AUDIO_MIXER_WRITE_TIMEOUT_BASE_MS, itemCount * AUDIO_MIXER_WRITE_TIMEOUT_PER_ITEM_MS);
-
 const isExposedMasterVolumeItem = (item: AudioMixerItem) =>
   item.name === AUDIO_MIXER_MASTER_VOLUME_ITEM && Array.isArray(item.options) && item.options.length > 0;
 
@@ -486,7 +473,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
               updates: write.updates,
               skipInvalidation: true,
             }),
-            computeAudioMixerWriteTimeoutMs(Object.keys(write.updates).length),
+            4000,
             `${write.context} audio mixer update`,
           );
         } finally {
@@ -535,7 +522,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
             updates,
             skipInvalidation: true,
           }),
-          computeAudioMixerWriteTimeoutMs(Object.keys(updates).length),
+          4000,
           `${context} audio mixer update`,
         );
       let pendingWrite = startAudioMixerWrite();
