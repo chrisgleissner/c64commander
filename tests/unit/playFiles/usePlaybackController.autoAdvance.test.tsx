@@ -507,3 +507,91 @@ describe("usePlaybackController machine takeover (HARD18-022/023)", () => {
     expect(result.current.autoAdvanceGuardRef.current).not.toBeNull();
   });
 });
+
+// HARD18-009 (M5): Stop pressed while a track transition (auto-advance,
+// Next/Previous, a row-tap) is mid-flight must win, not be silently
+// overridden by the queued transition's post-launch state writes once its
+// executePlayPlan resolves.
+describe("usePlaybackController Stop supersedes in-flight transitions (HARD18-009)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("Stop mid-flight supersedes the transition: isPlaying stays false and no auto-advance guard is re-armed", async () => {
+    const playlist = [createPlaylistItem("one", 1_000), createPlaylistItem("two", 1_000)];
+    const { result } = renderPlaybackHarness(playlist);
+
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    expect(result.current.isPlaying).toBe(true);
+
+    let resolveSecondLaunch!: () => void;
+    vi.mocked(executePlayPlan).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSecondLaunch = resolve;
+        }),
+    );
+    const machineResetMock = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getC64API).mockReturnValue({ machineReset: machineResetMock } as any);
+
+    let autoAdvancePromise!: Promise<void>;
+    await act(async () => {
+      autoAdvancePromise = result.current.handleNext("auto", result.current.trackInstanceIdRef.current);
+      // Let the transition enter playItem and reach the hung executePlayPlan.
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await result.current.handleStop();
+    });
+    expect(result.current.isPlaying).toBe(false);
+    expect(result.current.autoAdvanceGuardRef.current).toBeNull();
+
+    // Now the in-flight (superseded) launch reaches the device.
+    await act(async () => {
+      resolveSecondLaunch();
+      await autoAdvancePromise;
+    });
+
+    // Stop's state must still win: no re-assertion of isPlaying/auto-advance.
+    expect(result.current.isPlaying).toBe(false);
+    expect(result.current.isPaused).toBe(false);
+    expect(result.current.autoAdvanceGuardRef.current).toBeNull();
+    expect(result.current.autoAdvanceDueAtMs).toBeNull();
+    // Stop's own reset, plus a corrective follow-up reset for the launch
+    // that reached the device after being superseded.
+    expect(machineResetMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("a rapid Play right after Stop is not itself treated as superseded", async () => {
+    const playlist = [createPlaylistItem("one", 1_000), createPlaylistItem("two", 1_000)];
+    const { result } = renderPlaybackHarness(playlist);
+
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    expect(result.current.isPlaying).toBe(true);
+
+    const machineResetMock = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getC64API).mockReturnValue({ machineReset: machineResetMock } as any);
+
+    await act(async () => {
+      await result.current.handleStop();
+    });
+    expect(result.current.isPlaying).toBe(false);
+
+    await act(async () => {
+      await result.current.playItem(playlist[1], { playlistIndex: 1 });
+    });
+
+    expect(result.current.isPlaying).toBe(true);
+    expect(result.current.autoAdvanceGuardRef.current).not.toBeNull();
+  });
+});
