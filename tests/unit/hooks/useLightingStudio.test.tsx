@@ -1006,6 +1006,184 @@ describe("LightingStudioProvider", () => {
     expect(screen.getByTestId("profile-modified")).toHaveTextContent("true");
   });
 
+  it("HARD18-019: backs off after a failed apply instead of retrying on every circadian tick", async () => {
+    vi.useFakeTimers();
+    try {
+      localStorage.setItem(
+        LIGHTING_STORAGE_KEY,
+        JSON.stringify({
+          activeProfileId: "profile-1",
+          profiles: [
+            {
+              id: "profile-1",
+              name: "Base",
+              savedAt: new Date(0).toISOString(),
+              surfaces: {
+                case: { mode: "Fixed Color", color: { kind: "named", value: "Blue" }, intensity: 20, tint: "Warm" },
+              },
+            },
+          ],
+          automation: {
+            connectionSentinel: { enabled: false, mappings: {} },
+            quietLaunch: { enabled: false, profileId: null, windowMs: 45000 },
+            sourceIdentityMap: { enabled: false, mappings: {} },
+            circadian: {
+              enabled: true,
+              locationPreference: { useDeviceLocation: false, manualCoordinates: null, city: null },
+            },
+          },
+        }),
+      );
+      mocks.updateConfigBatch.mockRejectedValue(new Error("device unreachable"));
+
+      render(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <MemoryRouter initialEntries={["/play"]}>
+            <LightingStudioProvider>
+              <Consumer />
+            </LightingStudioProvider>
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(mocks.updateConfigBatch).toHaveBeenCalledTimes(1);
+
+      // One 60s circadian tick is well within the 90s backoff window - the
+      // still-failing write must not retry yet.
+      await act(async () => {
+        vi.advanceTimersByTime(60_000);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(mocks.updateConfigBatch).toHaveBeenCalledTimes(1);
+
+      // The second tick crosses the 90s backoff window - exactly one retry.
+      await act(async () => {
+        vi.advanceTimersByTime(60_000);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(mocks.updateConfigBatch).toHaveBeenCalledTimes(2);
+    } finally {
+      mocks.updateConfigBatch.mockResolvedValue({ errors: [] });
+      vi.useRealTimers();
+    }
+  });
+
+  it("HARD18-019: does not auto-apply the previous device's resolved lighting onto a newly switched device", async () => {
+    localStorage.setItem(
+      LIGHTING_STORAGE_KEY,
+      JSON.stringify({
+        activeProfileId: "profile-1",
+        profiles: [
+          {
+            id: "profile-1",
+            name: "Base",
+            savedAt: new Date(0).toISOString(),
+            surfaces: {
+              case: { mode: "Fixed Color", color: { kind: "named", value: "Green" }, intensity: 12, tint: "Pure" },
+            },
+          },
+        ],
+        automation: {
+          connectionSentinel: { enabled: false, mappings: {} },
+          quietLaunch: { enabled: false, profileId: null, windowMs: 45000 },
+          sourceIdentityMap: { enabled: false, mappings: {} },
+          circadian: {
+            enabled: false,
+            locationPreference: { useDeviceLocation: false, manualCoordinates: null, city: null },
+          },
+        },
+      }),
+    );
+
+    const statusRef = {
+      current: {
+        state: "REAL_CONNECTED",
+        isConnected: true,
+        isConnecting: false,
+        isDemo: false,
+        deviceType: "real",
+        connectionState: "connected",
+        error: null,
+        deviceInfo: { unique_id: "device-A" },
+      },
+    };
+    mocks.useC64Connection.mockImplementation(() => ({ status: statusRef.current }));
+
+    // Device A's raw lighting already matches the profile - no write needed.
+    const deviceAResponse = {
+      "LED Strip Settings": {
+        items: {
+          "LedStrip Mode": { selected: "Fixed Color", options: ["Off", "Fixed Color"] },
+          "LedStrip Pattern": { selected: "SingleColor", options: ["SingleColor"] },
+          "Fixed Color": { selected: "Green", options: ["Green", "Blue"] },
+          "Strip Intensity": { selected: 12, min: 0, max: 31 },
+          "Color tint": { selected: "Pure", options: ["Pure", "Warm"] },
+        },
+      },
+    };
+    // Device B's raw lighting differs from the profile - if the previous
+    // device's resolved state auto-applied onto it, updateConfigBatch would
+    // fire against a device the user never configured.
+    const deviceBResponse = {
+      "LED Strip Settings": {
+        items: {
+          "LedStrip Mode": { selected: "Fixed Color", options: ["Off", "Fixed Color"] },
+          "LedStrip Pattern": { selected: "SingleColor", options: ["SingleColor"] },
+          "Fixed Color": { selected: "Blue", options: ["Green", "Blue"] },
+          "Strip Intensity": { selected: 4, min: 0, max: 31 },
+          "Color tint": { selected: "Warm", options: ["Pure", "Warm"] },
+        },
+      },
+    };
+
+    const activeDeviceResponse = { current: deviceAResponse };
+    mocks.useC64ConfigItems.mockImplementation((category: string, _items: string[], enabled = true) => ({
+      data: !enabled
+        ? undefined
+        : category === "LED Strip Settings"
+          ? activeDeviceResponse.current
+          : keyboardLightingResponse,
+    }));
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const renderWithRefs = () => (
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/play"]}>
+          <LightingStudioProvider>
+            <Consumer />
+          </LightingStudioProvider>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    const view = render(renderWithRefs());
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(mocks.updateConfigBatch).not.toHaveBeenCalled();
+
+    // Switch to device B: its raw lighting now differs from the profile.
+    // Without the HARD18-019 device-identity gate, this would auto-apply
+    // the previous device's resolved lighting onto device B.
+    activeDeviceResponse.current = deviceBResponse;
+    statusRef.current = { ...statusRef.current, deviceInfo: { unique_id: "device-B" } };
+    view.rerender(renderWithRefs());
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(mocks.updateConfigBatch).not.toHaveBeenCalled();
+  });
+
   it("HARD12-004: skips lighting queries and config-batch writes when the feature flag is off", async () => {
     featureFlagOverrides.set("lighting_studio_enabled", false);
     try {
