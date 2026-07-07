@@ -139,8 +139,13 @@ const toDeviceDiscoveryTrigger = (trigger: DiscoveryTrigger): DeviceDiscoveryTri
   return "startup";
 };
 
+// HARD18-007: "manual" (the badge-tap recovery affordance) must be able to
+// escalate to the saved-device sweep and LAN scan, exactly like startup/
+// resume/settings - otherwise a device that changed IP (e.g. DHCP
+// re-assignment after the firmware-wedge power-cycle) strands the app
+// offline forever: every tap re-probes only the stale stored host.
 const shouldAttemptAutomaticDeviceDiscovery = (trigger: DiscoveryTrigger) =>
-  trigger === "startup" || trigger === "resume" || trigger === "settings";
+  trigger === "startup" || trigger === "resume" || trigger === "settings" || trigger === "manual";
 
 // Device hostnames are passed through to the platform's HTTP client verbatim.
 // The app performs no custom name resolution; DHCP-aware routers may make the
@@ -438,6 +443,11 @@ let stickyRealDeviceLock = false;
 let discoveryRunToken = 0;
 let demoModePinnedByUser = false;
 let activeManualDiscovery: { trigger: DiscoveryTrigger; promise: Promise<void> } | null = null;
+// HARD18-007: rate-limits the manual-trigger sweep+LAN-scan escalation
+// (activeManualDiscovery only coalesces taps that overlap an in-flight run,
+// not repeated taps once each one has finished failing).
+let lastManualDiscoveryFallbackAtMs = 0;
+const MANUAL_DISCOVERY_FALLBACK_COOLDOWN_MS = 15_000;
 
 const emit = () => {
   listeners.forEach((listener) => listener());
@@ -771,7 +781,9 @@ const tryReachableSavedDeviceFallback = async (
   trigger: DiscoveryTrigger,
   isCurrentRun: () => boolean,
 ): Promise<boolean> => {
-  if (trigger !== "startup" && trigger !== "resume") return false;
+  // HARD18-007: manual (badge-tap) recovery must also prefer an already-
+  // configured reachable device over a full LAN scan.
+  if (trigger !== "startup" && trigger !== "resume" && trigger !== "manual") return false;
   const savedDevices = getSavedDevicesSnapshot();
   const selectedId = savedDevices.selectedDeviceId;
   const candidates = savedDevices.devices.filter((device) => device.id !== selectedId && device.host.trim());
@@ -1101,6 +1113,21 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
         setTimeout(() => resolve(false), manualProbeTimeoutMs);
       }),
     ]);
+    if (!ok && discoveryRun.isCurrent()) {
+      // HARD18-007: the stored host may simply be stale (DHCP re-assigned
+      // the device a new address after a power-cycle) - before surfacing
+      // Offline, sweep other saved devices and fall back to a LAN scan,
+      // exactly like startup/resume/settings. Rate-limited (not on every
+      // single tap) so a user repeatedly tapping the badge while genuinely
+      // offline can't trigger a LAN-scan burst.
+      const now = Date.now();
+      if (now - lastManualDiscoveryFallbackAtMs >= MANUAL_DISCOVERY_FALLBACK_COOLDOWN_MS) {
+        lastManualDiscoveryFallbackAtMs = now;
+        const discovered = await tryAutomaticDeviceDiscoveryFallback(trigger, discoveryRun.isCurrent);
+        if (discovered) return;
+        if (!discoveryRun.isCurrent()) return;
+      }
+    }
     await handleProbeOutcome(trigger, ok, isDemoModeRequested(), discoveryRun.isCurrent);
     return;
   }
@@ -1283,6 +1310,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
 export async function initializeConnectionManager() {
   cancelActiveDiscovery();
   activeManualDiscovery = null;
+  lastManualDiscoveryFallbackAtMs = 0;
   applyFuzzModeDefaults();
   await initializeSmokeMode();
   await featureFlagManager.load();
@@ -1322,4 +1350,12 @@ export async function initializeConnectionManager() {
 export const CONNECTION_CONSTANTS = {
   STARTUP_PROBE_INTERVAL_MS,
   PROBE_REQUEST_TIMEOUT_MS,
+  MANUAL_DISCOVERY_FALLBACK_COOLDOWN_MS,
+};
+
+// Test-only: initializeConnectionManager() also clears this, but pulls in a
+// much heavier cold-start path (feature flags, smoke mode, demo server) most
+// tests of the manual-reconnect escalation don't need or mock for.
+export const resetManualDiscoveryFallbackCooldownForTests = () => {
+  lastManualDiscoveryFallbackAtMs = 0;
 };

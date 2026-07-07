@@ -138,7 +138,12 @@ vi.mock("@/lib/logging", () => ({
 }));
 
 // Import after mocks are registered.
-import { discoverConnection, getConnectionSnapshot, probeDeviceReachability } from "@/lib/connection/connectionManager";
+import {
+  discoverConnection,
+  getConnectionSnapshot,
+  probeDeviceReachability,
+  resetManualDiscoveryFallbackCooldownForTests,
+} from "@/lib/connection/connectionManager";
 
 const HEALTHY = { product: "Ultimate-64" };
 const UNHEALTHY = {};
@@ -164,6 +169,10 @@ const flushAsync = async () => {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers();
+  // The manual-reconnect escalation rate-limit (HARD18-007) is module-level
+  // state that outlives any one discoverConnection() call - reset it so one
+  // test's manual tap can't leave the next test's tap inside its cooldown.
+  resetManualDiscoveryFallbackCooldownForTests();
   // Default: the OTHER startup-probe path is short-circuited unless a test opts in.
   getInfoMock.mockResolvedValue(UNHEALTHY);
   hasPersistedDeviceHostConfigMock.mockReturnValue(false);
@@ -339,5 +348,69 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
     expect(selectSavedDeviceMock).not.toHaveBeenCalled();
     expect(startDeviceDiscoveryMock).toHaveBeenCalled();
     expect(getConnectionSnapshot().lastDiscoveryTrigger).toBe("startup");
+  });
+});
+
+// HARD18-007: the manual (badge-tap) recovery affordance previously ran
+// exactly one probe against the stored (possibly stale, e.g. DHCP
+// re-assigned after a firmware-wedge power-cycle) host and gave up straight
+// to Offline - it never reached the saved-device sweep or LAN scan that
+// startup/resume already use.
+describe("manual reconnect escalation (HARD18-007)", () => {
+  it("falls back to a reachable saved device when the stored host fails a manual probe", async () => {
+    // Primary probe of the stored/selected host -> unreachable, then the
+    // sweep probe of the other saved device -> healthy, then its
+    // verification probe -> healthy.
+    getInfoMock.mockResolvedValueOnce(UNHEALTHY).mockResolvedValueOnce(HEALTHY).mockResolvedValueOnce(HEALTHY);
+    getSavedDevicesSnapshotMock.mockReturnValue(
+      snapshotWith([
+        { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
+        { id: "other", host: "192.168.1.60", httpPort: 80, hasPassword: false },
+      ]),
+    );
+
+    await discoverConnection("manual");
+    await flushAsync();
+
+    expect(selectSavedDeviceMock).toHaveBeenCalledWith("other");
+    expect(completeSavedDeviceVerificationMock).toHaveBeenCalledWith("other", HEALTHY);
+    // The cheaper, targeted sweep found a reachable device - no need to
+    // burst a full LAN scan.
+    expect(startDeviceDiscoveryMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to a LAN scan when no other saved device is reachable either", async () => {
+    getInfoMock.mockResolvedValue(UNHEALTHY);
+    getSavedDevicesSnapshotMock.mockReturnValue(
+      snapshotWith([
+        { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
+        { id: "other", host: "192.168.1.60", httpPort: 80, hasPassword: false },
+      ]),
+    );
+
+    await discoverConnection("manual");
+    await flushAsync();
+
+    expect(startDeviceDiscoveryMock).toHaveBeenCalled();
+  });
+
+  it("does not re-trigger the sweep/scan escalation on a rapid repeated manual tap (rate-limited)", async () => {
+    getInfoMock.mockResolvedValue(UNHEALTHY);
+    getSavedDevicesSnapshotMock.mockReturnValue(
+      snapshotWith([
+        { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
+        { id: "other", host: "192.168.1.60", httpPort: 80, hasPassword: false },
+      ]),
+    );
+
+    await discoverConnection("manual");
+    await flushAsync();
+    expect(startDeviceDiscoveryMock).toHaveBeenCalledTimes(1);
+
+    startDeviceDiscoveryMock.mockClear();
+    await discoverConnection("manual");
+    await flushAsync();
+
+    expect(startDeviceDiscoveryMock).not.toHaveBeenCalled();
   });
 });
