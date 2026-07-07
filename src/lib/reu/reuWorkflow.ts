@@ -34,9 +34,16 @@ type ReuWorkflowDependencies = {
   now: () => Date;
 };
 
-const DEFAULT_WAIT_TIMEOUT_MS = 30_000;
+const DEFAULT_WAIT_TIMEOUT_MS = 45_000;
 const DEFAULT_WAIT_INTERVAL_MS = 1_000;
 const REU_DISPLAY_RANGES = ["REU image"];
+
+// HARD18-024: valid REU sizes are powers of two between 128 KB and 16 MB.
+const MIN_REU_SIZE_BYTES = 128 * 1024;
+const MAX_REU_SIZE_BYTES = 16 * 1024 * 1024;
+
+const isPlausibleReuSize = (byteLength: number) =>
+  byteLength >= MIN_REU_SIZE_BYTES && byteLength <= MAX_REU_SIZE_BYTES && (byteLength & (byteLength - 1)) === 0;
 
 type ReuWorkflowOperation = "save" | "restore";
 type ReuWorkflowTransport = "local" | "ftp" | "telnet";
@@ -164,6 +171,8 @@ export const detectUpdatedTempReuFile = (before: ReuRemoteFile[], after: ReuRemo
   return changed[0] ?? null;
 };
 
+const reuFileSignature = (file: ReuRemoteFile) => `${file.name}:${file.size ?? -1}:${file.modifiedAt ?? ""}`;
+
 export const waitForTempReuFile = async (
   before: ReuRemoteFile[],
   listRemoteTempFiles: () => Promise<ReuRemoteFile[]>,
@@ -173,6 +182,11 @@ export const waitForTempReuFile = async (
   intervalMs = DEFAULT_WAIT_INTERVAL_MS,
 ) => {
   const attempts = Math.max(1, Math.ceil(timeoutMs / intervalMs));
+  // HARD18-024: the Ultimate can still be writing /Temp when the file first
+  // appears (~30s for a 16 MB REU), so a candidate is only accepted once its
+  // size and modifiedAt are identical across two CONSECUTIVE polls - a first
+  // sighting alone previously downloaded a truncated, still-growing file.
+  let lastSignature: string | null = null;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     emitProgress(onProgress, {
       step: "waiting-for-file",
@@ -182,7 +196,13 @@ export const waitForTempReuFile = async (
     });
     const after = await listRemoteTempFiles();
     const file = detectUpdatedTempReuFile(before, after);
-    if (file) return file;
+    if (file) {
+      const signature = reuFileSignature(file);
+      if (signature === lastSignature) return file;
+      lastSignature = signature;
+    } else {
+      lastSignature = null;
+    }
     await sleep(intervalMs);
   }
   throw new Error("Timed out waiting for the new REU file in /Temp.");
@@ -247,6 +267,11 @@ export const createReuWorkflow = (overrides: Partial<ReuWorkflowDependencies> = 
         { remoteFileName: remoteFile.name, remotePath: remoteFile.path },
       );
       const bytes = await deps.readRemoteFile(remoteFile.path);
+      if (!isPlausibleReuSize(bytes.byteLength)) {
+        throw new Error(
+          `Downloaded REU snapshot has an implausible size (${bytes.byteLength} bytes); expected a power-of-two size between 128 KB and 16 MB.`,
+        );
+      }
 
       const now = deps.now();
       const localFileName = `c64-reu-${formatFileTimestamp(now)}-${remoteFile.name.replace(/[^a-zA-Z0-9._-]+/g, "-")}`;

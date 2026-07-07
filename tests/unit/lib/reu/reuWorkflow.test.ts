@@ -47,15 +47,44 @@ describe("reuWorkflow", () => {
     expect(file?.name).toBe("newer.reu");
   });
 
-  it("waits for a new REU file to appear", async () => {
+  it("waits for a new REU file to appear and become stable across two consecutive polls", async () => {
     const listRemoteTempFiles = vi
       .fn()
-      .mockResolvedValueOnce([{ name: "old.reu", path: "/Temp/old.reu", modifiedAt: "2026-03-29T10:00:00Z" }])
-      .mockResolvedValueOnce([{ name: "next.reu", path: "/Temp/next.reu", modifiedAt: "2026-03-29T10:01:00Z" }]);
+      .mockResolvedValueOnce([
+        { name: "next.reu", path: "/Temp/next.reu", modifiedAt: "2026-03-29T10:01:00Z", size: 5 },
+      ])
+      .mockResolvedValueOnce([
+        { name: "next.reu", path: "/Temp/next.reu", modifiedAt: "2026-03-29T10:01:00Z", size: 5 },
+      ]);
 
     const file = await waitForTempReuFile([], listRemoteTempFiles, vi.fn().mockResolvedValue(undefined));
 
-    expect(file.name).toBe("old.reu");
+    expect(file.name).toBe("next.reu");
+    expect(listRemoteTempFiles).toHaveBeenCalledTimes(2);
+  });
+
+  it("HARD18-024: keeps polling while the REU file is still growing, resolving only once size is stable", async () => {
+    const listRemoteTempFiles = vi
+      .fn()
+      .mockResolvedValueOnce([
+        { name: "growing.reu", path: "/Temp/growing.reu", modifiedAt: "2026-03-29T10:01:00Z", size: 1000 },
+      ])
+      .mockResolvedValueOnce([
+        { name: "growing.reu", path: "/Temp/growing.reu", modifiedAt: "2026-03-29T10:01:05Z", size: 5000 },
+      ])
+      .mockResolvedValueOnce([
+        { name: "growing.reu", path: "/Temp/growing.reu", modifiedAt: "2026-03-29T10:01:10Z", size: 16000 },
+      ])
+      .mockResolvedValueOnce([
+        { name: "growing.reu", path: "/Temp/growing.reu", modifiedAt: "2026-03-29T10:01:10Z", size: 16000 },
+      ]);
+    const sleep = vi.fn().mockResolvedValue(undefined);
+
+    const file = await waitForTempReuFile([], listRemoteTempFiles, sleep);
+
+    expect(file.size).toBe(16000);
+    expect(listRemoteTempFiles).toHaveBeenCalledTimes(4);
+    expect(sleep).toHaveBeenCalledTimes(3);
   });
 
   it("times out when no new REU file appears and reports waiting progress", async () => {
@@ -86,10 +115,13 @@ describe("reuWorkflow", () => {
         .fn()
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([
-          { name: "capture.reu", path: "/Temp/capture.reu", modifiedAt: "2026-03-29T10:01:00Z" },
+          { name: "capture.reu", path: "/Temp/capture.reu", modifiedAt: "2026-03-29T10:01:00Z", size: 131072 },
+        ])
+        .mockResolvedValueOnce([
+          { name: "capture.reu", path: "/Temp/capture.reu", modifiedAt: "2026-03-29T10:01:00Z", size: 131072 },
         ]),
       runSaveRemoteReu: vi.fn().mockResolvedValue(undefined),
-      readRemoteFile: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+      readRemoteFile: vi.fn().mockResolvedValue(new Uint8Array(131072)),
       persistLocalSnapshot,
       saveToStore,
       sleep: vi.fn().mockResolvedValue(undefined),
@@ -106,6 +138,7 @@ describe("reuWorkflow", () => {
       "preparing",
       "scanning-temp",
       "saving-reu",
+      "waiting-for-file",
       "waiting-for-file",
       "downloading",
       "persisting",
@@ -283,6 +316,28 @@ describe("reuWorkflow", () => {
         status: "error",
       }),
     );
+  });
+
+  it("HARD18-024: rejects and never persists a REU download with an implausible byte length", async () => {
+    const saveToStore = vi.fn();
+    const persistLocalSnapshot = vi.fn();
+    const stableListing = [
+      { name: "truncated.reu", path: "/Temp/truncated.reu", modifiedAt: "2026-03-29T10:01:00Z", size: 12345 },
+    ];
+    const workflow = createReuWorkflow({
+      ensureLocalSnapshotStorage: vi.fn().mockResolvedValue(undefined),
+      listRemoteTempFiles: vi.fn().mockResolvedValueOnce([]).mockResolvedValue(stableListing),
+      runSaveRemoteReu: vi.fn().mockResolvedValue(undefined),
+      readRemoteFile: vi.fn().mockResolvedValue(new Uint8Array(12345)),
+      persistLocalSnapshot,
+      saveToStore,
+      sleep: vi.fn().mockResolvedValue(undefined),
+    });
+
+    await expect(workflow.saveSnapshot()).rejects.toThrow("implausible size");
+
+    expect(persistLocalSnapshot).not.toHaveBeenCalled();
+    expect(saveToStore).not.toHaveBeenCalled();
   });
 
   it("fails cleanly when restore cannot apply the uploaded REU file over telnet", async () => {
