@@ -704,6 +704,7 @@ describe("HomePage RAM actions", () => {
           customRanges: undefined,
           label: undefined,
           contentName: undefined,
+          alreadyPaused: false,
         },
       ),
     );
