@@ -16,6 +16,8 @@ import { getC64API } from "@/lib/c64api";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
 import { mountDiskToDrive } from "@/lib/disks/diskMount";
+import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
+import { resolveFtpConnectionOptions } from "@/lib/ftp/ftpConfig";
 
 // Helpers
 const createMockDisk = (overrides: any = {}) => ({
@@ -65,6 +67,14 @@ vi.mock("@/lib/disks/diskMount", () => ({
   discardDiskWriteBack: vi.fn(),
   hasShownDiskWriteBackAdvisory: vi.fn(() => true),
   markDiskWriteBackAdvisoryShown: vi.fn(),
+}));
+vi.mock("@/lib/ftp/ftpClient", () => ({
+  listFtpDirectory: vi.fn(),
+  readFtpFile: vi.fn(),
+  writeFtpFile: vi.fn(),
+}));
+vi.mock("@/lib/ftp/ftpConfig", () => ({
+  resolveFtpConnectionOptions: vi.fn(),
 }));
 vi.mock("@/hooks/useActionTrace", () => ({
   useActionTrace: () => (fn: any) => fn,
@@ -716,6 +726,47 @@ describe("HomeDiskManager UI & Interactions", () => {
         }),
       );
     });
+  });
+
+  it("HARD18-025: buildDiskWriteBackDependencies wires the real FTP read/write callbacks used during eject write-back", async () => {
+    const { finalizeDiskWriteBack } = await import("@/lib/disks/diskMount");
+    (resolveFtpConnectionOptions as any).mockResolvedValue({
+      host: "c64u",
+      port: 21,
+      username: "user",
+      password: "secret",
+    });
+    (listFtpDirectory as any).mockResolvedValue({
+      path: "/",
+      entries: [{ type: "dir", name: "Temp", path: "/Temp" }],
+    });
+    (readFtpFile as any).mockResolvedValue({ data: btoa("disk-bytes"), sizeBytes: 10 });
+    (writeFtpFile as any).mockResolvedValue({ sizeBytes: 10 });
+    (finalizeDiskWriteBack as any).mockImplementationOnce(async (_drive: string, deps: any) => {
+      const roots = await deps.listRemoteStorageRoots();
+      const bytes = await deps.readRemoteFile("/Temp/disk.d64");
+      await deps.writeRemoteFile("/Temp/disk.d64", bytes);
+      return { attempted: true, success: true, roots };
+    });
+
+    const driveA = createMockDrive();
+    driveA.image_file = "test.d64";
+    (useC64Drives as any).mockReturnValue({
+      data: { drives: [{ a: driveA }, { b: createMockDrive() }] },
+    });
+
+    render(<HomeDiskManager />);
+
+    const ejectBtn = screen.getByRole("button", { name: "Drive A Eject disk" });
+    fireEvent.click(ejectBtn);
+
+    await waitFor(() => {
+      expect(listFtpDirectory).toHaveBeenCalledWith(expect.objectContaining({ path: "/" }));
+    });
+    expect(readFtpFile).toHaveBeenCalledWith(expect.objectContaining({ path: "/Temp/disk.d64" }));
+    expect(writeFtpFile).toHaveBeenCalledWith(
+      expect.objectContaining({ path: "/Temp/disk.d64", data: btoa("disk-bytes") }),
+    );
   });
 
   it("ignores stale mount failures after unmount", async () => {
