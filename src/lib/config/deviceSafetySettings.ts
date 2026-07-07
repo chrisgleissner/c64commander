@@ -253,6 +253,48 @@ const compareFirmware = (a: string | null | undefined, b: string): number | null
   return pa.suffix < pb.suffix ? -1 : 1;
 };
 
+// HARD18-013 (M2): interactive multi-item POST /v1/configs writes (Audio
+// Mixer volume drags, lighting sliders) ride the same tempfile-buffering
+// handler that the single-item PUT fix (2d1b28ee) only covered for one-item
+// payloads - hardware-verified to wedge the network stack. Adoption of POST
+// for multi-item payloads requires BOTH this flag and firmware at/above the
+// per-family line; until then every firmware decomposes to sequential PUTs.
+export const U64_MULTI_ITEM_POST_MIN_FIRMWARE = "3.15";
+export const C64U_MULTI_ITEM_POST_MIN_FIRMWARE = "1.2.0";
+// Set by the mandated HIL soak (30s of repeated interactive multi-item Audio
+// Mixer POSTs during playback) - see docs/plans/hardening/18-fable/plan.md F1.
+// Result (2026-07-07, u64 fw 3.15 alpha): the device wedged (all TCP + ICMP
+// unreachable, required a manual power-cycle) on the FIRST such POST, not
+// after sustained load - firmware 3.15 does NOT fix this. Stays false for
+// every firmware family until a future soak on a fixed firmware line proves
+// otherwise; do not flip this without re-running the soak on real hardware.
+export const MULTI_ITEM_CONFIG_POST_HIL_VALIDATED = false;
+
+// Pure decision logic, separated from the module constant above so the gate
+// itself (what happens once hilValidated flips to true) is directly testable
+// without needing to mock the hardcoded flag.
+export const isMultiItemConfigPostAllowed = (
+  hilValidated: boolean,
+  product: ProductFamilyCode | null,
+  firmware: string | null | undefined,
+): boolean => {
+  if (!hilValidated) return false;
+  if (product === "U64" || product === "U64E" || product === "U64E2") {
+    const cmp = compareFirmware(firmware, U64_MULTI_ITEM_POST_MIN_FIRMWARE);
+    return cmp !== null && cmp >= 0;
+  }
+  if (product === "C64U") {
+    const cmp = compareFirmware(firmware, C64U_MULTI_ITEM_POST_MIN_FIRMWARE);
+    return cmp !== null && cmp >= 0;
+  }
+  return false;
+};
+
+export const multiItemConfigPostAllowed = (
+  product: ProductFamilyCode | null,
+  firmware: string | null | undefined,
+): boolean => isMultiItemConfigPostAllowed(MULTI_ITEM_CONFIG_POST_HIL_VALIDATED, product, firmware);
+
 export const resolveAutoSafetyMode = (stored: DeviceSafetyMode, ctx: AutoResolutionContext): AutoResolution => {
   const resolved = (
     effectiveMode: ConcreteDeviceSafetyMode,

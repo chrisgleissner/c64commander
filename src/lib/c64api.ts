@@ -22,7 +22,11 @@ import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 import { getSmokeConfig, isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from "@/lib/fuzz/fuzzMode";
 import { scheduleConfigWrite } from "@/lib/config/configWriteThrottle";
-import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
+import {
+  getActiveAutoResolutionContext,
+  loadDeviceSafetyConfig,
+  multiItemConfigPostAllowed,
+} from "@/lib/config/deviceSafetySettings";
 import { FirmwareConfigWriteError } from "@/lib/config/configWriteErrors";
 import { extractConfigValue } from "@/lib/config/configValueExtractor";
 import {
@@ -260,11 +264,36 @@ const orderFirmwareSafeConfigUpdates = (
 // mid-write (BUG-010 on u64 3.14e, 2026-06-12 on c64u 1.1.0), while
 // single-item writes are reliable. Send such batches as sequential
 // single-item requests; the config write throttle spaces them out.
-const requiresSequentialItemWrites = (category: string, entries: Array<[string, string | number]>) =>
-  category === U64_SPECIFIC_SETTINGS_CATEGORY &&
-  entries.length > 1 &&
-  entries.some(([item]) => item === U64_TURBO_CONTROL_ITEM) &&
-  entries.some(([item]) => U64_CPU_SPEED_DEPENDENT_ITEMS.has(item));
+//
+// HARD18-013 (M2): interactive multi-item writes to these hot categories
+// (Audio Mixer volume/pause/resume/stop-restore; the lighting categories
+// used by the reconciler) ride the same tempfile-buffering POST handler -
+// hardware-verified to wedge the network stack even on the newest firmware
+// tested (u64 3.15 alpha: wedged on the FIRST such POST during the mandated
+// HIL soak). Small multi-item payloads to these categories decompose to
+// sequential single-item PUTs unless the firmware-gated flag permits POST.
+const INTERACTIVE_HOT_CONFIG_CATEGORIES = new Set(["Audio Mixer", "LED Strip Settings", "Keyboard Lighting"]);
+const MAX_HOT_CATEGORY_SEQUENTIAL_ITEMS = 4;
+
+const requiresSequentialItemWrites = (category: string, entries: Array<[string, string | number]>) => {
+  if (
+    category === U64_SPECIFIC_SETTINGS_CATEGORY &&
+    entries.length > 1 &&
+    entries.some(([item]) => item === U64_TURBO_CONTROL_ITEM) &&
+    entries.some(([item]) => U64_CPU_SPEED_DEPENDENT_ITEMS.has(item))
+  ) {
+    return true;
+  }
+  if (
+    INTERACTIVE_HOT_CONFIG_CATEGORIES.has(category) &&
+    entries.length > 1 &&
+    entries.length <= MAX_HOT_CATEGORY_SEQUENTIAL_ITEMS
+  ) {
+    const ctx = getActiveAutoResolutionContext();
+    return !multiItemConfigPostAllowed(ctx.activeProduct, ctx.activeFirmware);
+  }
+  return false;
+};
 
 // Loading an app profile or reverting builds a payload of every writable item in
 // every category - hundreds of items for a full config. Sending that as one
