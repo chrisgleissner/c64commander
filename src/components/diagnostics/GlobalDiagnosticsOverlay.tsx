@@ -38,7 +38,13 @@ import { clearHealthHistory, getHealthHistory } from "@/lib/diagnostics/healthHi
 import { recordRecentTarget } from "@/lib/diagnostics/recentTargets";
 import type { ConnectionActionsCallbacks } from "@/components/diagnostics/ConnectionActionsRegion";
 import type { DeviceDetailInfo } from "@/components/diagnostics/DeviceDetailView";
-import { buildBaseUrlFromDeviceHost, C64API, normalizeDeviceHost } from "@/lib/c64api";
+import { buildBaseUrlFromDeviceHost, C64API } from "@/lib/c64api";
+import {
+  buildDeviceHostWithHttpPort,
+  getDeviceHostHttpPort,
+  splitNormalizedDeviceHost,
+  stripPortFromDeviceHost,
+} from "@/lib/c64api/hostConfig";
 import { getActiveAutoResolutionContext, loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import { createActionContext, runWithActionTrace } from "@/lib/tracing/actionTrace";
 import { recordActionEnd, recordActionStart, recordRestResponse } from "@/lib/tracing/traceSession";
@@ -52,9 +58,15 @@ import {
 import { resolveDiagnosticsPanelFromPath } from "@/lib/diagnostics/diagnosticsOverlayRoutes";
 
 export const validateTarget = async (host: string, port: number) => {
-  const normalizedHost = normalizeDeviceHost(host);
+  // HARD18-027: host may already carry its own embedded port (e.g. a stored
+  // device string like "10.0.0.2:8080") - naive concatenation with `port`
+  // below would produce a malformed "host:port:port" authority. Split any
+  // embedded port out first: it wins over the passed-in `port` (which is
+  // only a fallback for bare hosts), then let buildDeviceHostWithHttpPort
+  // recompose the pair the same way the rest of the codebase does.
+  const { host: normalizedHost, httpPort: embeddedPort } = splitNormalizedDeviceHost(host);
   const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-  const deviceHost = `${normalizedHost}:${port}`;
+  const deviceHost = buildDeviceHostWithHttpPort(normalizedHost, embeddedPort ?? port);
   const api = new C64API(buildBaseUrlFromDeviceHost(deviceHost), undefined, deviceHost);
   try {
     const body = await api.getInfo({
@@ -467,28 +479,38 @@ export const GlobalDiagnosticsOverlay = () => {
 
   // §8.1 — Async retry with inline feedback (used by ConnectionActionsRegion)
   const handleRetryConnectionAsync = useCallback(async (): Promise<{ success: boolean; message: string }> => {
-    const host = getConfiguredHost();
+    const configuredHost = getConfiguredHost();
+    // HARD18-027: getConfiguredHost() can return a host with an embedded
+    // custom HTTP port (port-forwarding/reverse-proxy setups) - resolve the
+    // real port instead of hard-coding 80, which guaranteed failure for any
+    // such device.
+    const host = stripPortFromDeviceHost(configuredHost);
+    const port = getDeviceHostHttpPort(configuredHost);
     const action = createActionContext("diagnostics.retry-connection", "user", "GlobalDiagnosticsOverlay");
     try {
       return await runWithActionTrace(action, async () => {
-        const result = await validateTarget(host, 80);
+        const result = await validateTarget(host, port);
+        // HARD18-027: report the resolved host:port (not the bare host) in
+        // traces/evidence so a custom-port device's diagnostics correctly
+        // reflect the target actually probed.
+        const resolvedTarget = buildDeviceHostWithHttpPort(result.normalizedHost, port);
         recordRestResponse(action, {
           method: "GET",
           path: "/v1/info",
-          url: `${buildBaseUrlFromDeviceHost(result.normalizedHost)}/v1/info`,
+          url: `${buildBaseUrlFromDeviceHost(resolvedTarget)}/v1/info`,
           status: result.status,
           headers: {},
           body: result.body,
           payloadPreview: null,
           durationMs: result.durationMs,
-          error: result.ok ? null : new Error(result.errorMessage ?? `Connection failed to ${result.normalizedHost}`),
+          error: result.ok ? null : new Error(result.errorMessage ?? `Connection failed to ${resolvedTarget}`),
           errorMessage: result.errorMessage,
         });
         if (!result.ok) {
-          const message = `Connection failed to ${result.normalizedHost}`;
+          const message = `Connection failed to ${resolvedTarget}`;
           addErrorLog(message, {
             contributor: "REST",
-            target: result.normalizedHost,
+            target: resolvedTarget,
             endpoint: "/v1/info",
             probe: "REST",
             reason: result.errorMessage,
@@ -497,7 +519,7 @@ export const GlobalDiagnosticsOverlay = () => {
             kind: "retry-connection",
             outcome: "failure",
             contributor: "REST",
-            target: result.normalizedHost,
+            target: resolvedTarget,
             message,
           });
           throw new Error(message);
@@ -506,12 +528,12 @@ export const GlobalDiagnosticsOverlay = () => {
           kind: "retry-connection",
           outcome: "success",
           contributor: "REST",
-          target: result.normalizedHost,
-          message: `Connected to ${result.normalizedHost}`,
+          target: resolvedTarget,
+          message: `Connected to ${resolvedTarget}`,
         });
         void discoverConnection("manual");
         void handleRunHealthCheck();
-        return { success: true, message: `Connected to ${result.normalizedHost}` };
+        return { success: true, message: `Connected to ${resolvedTarget}` };
       });
     } catch (error) {
       return { success: false, message: (error as Error).message };
