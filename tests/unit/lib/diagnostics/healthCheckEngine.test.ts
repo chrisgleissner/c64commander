@@ -417,7 +417,11 @@ describe("runHealthCheck — all-success path", () => {
 });
 
 describe("runHealthCheckForTarget", () => {
-  it("allows the switch-device dialog context to run the visible config pulse and uses target ports and password", async () => {
+  // HARD18-008: the switcher shows reachability/latency for every saved
+  // device's row, not a config write round-trip. It must use the read-only
+  // probe set so opening/closing the picker never pulses LED/volume on
+  // devices the user did not select.
+  it("keeps the switch-device dialog context read-only (no config pulse) while still using target ports and password", async () => {
     setupAllProbesSuccess();
 
     const result = await runHealthCheckForTarget(
@@ -431,14 +435,8 @@ describe("runHealthCheckForTarget", () => {
     );
 
     expect(result.connectivity).toBe("Online");
-    expect(result.probes.CONFIG.outcome).toBe("Success");
-    expect(mockSetConfigValue).toHaveBeenNthCalledWith(
-      1,
-      "LED Strip Settings",
-      "Strip Intensity",
-      21,
-      expect.objectContaining({ timeoutMs: 4000 }),
-    );
+    expect(result.probes.CONFIG.outcome).toBe("Skipped");
+    expect(mockSetConfigValue).not.toHaveBeenCalled();
     expect(mockPingFtp).toHaveBeenCalledWith(
       expect.objectContaining({ host: "backup-u64", port: 2021, password: "secret" }),
     );
@@ -755,6 +753,55 @@ describe("runHealthCheck — CONFIG probe", () => {
     const result = await runHealthCheck();
     expect(result!.probes.CONFIG.outcome).toBe("Fail");
     expect(result!.probes.CONFIG.reason).toContain("Post-revert mismatch");
+  });
+
+  // HARD18-003 (M1): the revert must reach the wire on a detached, live
+  // signal even when the run itself aborts mid-probe (global deadline,
+  // superseding run, or the user leaving diagnostics) - reusing the run's
+  // own signal pre-aborted the revert request entirely, leaving the user's
+  // LED/volume setting durably changed with no failure recorded.
+  it("HARD18-003: still dispatches the revert on a live signal when the run aborts mid-probe", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+    mockGetConfigItem.mockResolvedValueOnce(ledResp); // initial read: 5 (readback is never reached)
+
+    let cancelled = false;
+    mockSetConfigValue.mockImplementationOnce(() =>
+      // Pulse write succeeds, then the run's own signal aborts before control
+      // returns to the caller - simulating a global-deadline/cancellation
+      // landing right after the write, before the readback/CONFIG_PULSE_DELAY
+      // wait. waitMs rejects immediately on an already-aborted signal, so the
+      // revert dispatches from the `finally` block on a run that is already
+      // aborted end-to-end.
+      Promise.resolve().then(() => {
+        cancelled = cancelHealthCheck("Test abort mid-CONFIG-probe");
+      }),
+    );
+    mockSetConfigValue.mockImplementation((..._args: unknown[]) => {
+      const options = _args[3] as { signal?: AbortSignal } | undefined;
+      if (options?.signal?.aborted) {
+        return Promise.reject(new Error("revert must not be dispatched with an aborted signal"));
+      }
+      return Promise.resolve(undefined);
+    });
+    mockPingFtp.mockResolvedValue({ ok: true });
+
+    const result = await runHealthCheck();
+    expect(cancelled).toBe(true);
+    expect(result).toBeNull();
+
+    expect(mockSetConfigValue).toHaveBeenCalledTimes(2);
+    const [, , revertValue, revertOptions] = mockSetConfigValue.mock.calls[1] as [
+      string,
+      string,
+      number,
+      { signal?: AbortSignal },
+    ];
+    expect(revertValue).toBe(5);
+    expect(revertOptions.signal?.aborted).not.toBe(true);
   });
 
   it("skips CONFIG when no suitable target available", async () => {

@@ -760,7 +760,9 @@ describe("UnifiedHealthBadge", () => {
       true,
       expect.objectContaining({
         context: "switch-device-dialog",
-        configPulsePolicy: "visible-config-pulse-allowed",
+        // HARD18-008: the switcher uses the read-only probe set so
+        // opening/closing the picker never pulses LED/volume on saved devices.
+        configPulsePolicy: "read-only",
       }),
       "device-office",
     );

@@ -162,9 +162,15 @@ export const HEALTH_CHECK_CONTEXTS = {
     context: "manual-diagnostics",
     configPulsePolicy: "visible-config-pulse-allowed",
   },
+  // HARD18-008: the switcher needs reachability/latency for its per-device
+  // rows, not a config write round-trip. The picker previously ran the
+  // visible CONFIG pulse (LED/volume ±16) against EVERY saved device every
+  // 10s while open, and closing it mid-cycle aborted the pulse - hitting the
+  // HARD18-003 revert-on-a-live-signal gap across potentially several
+  // devices the user never touched.
   switchDeviceDialog: {
     context: "switch-device-dialog",
-    configPulsePolicy: "visible-config-pulse-allowed",
+    configPulsePolicy: "read-only",
   },
   backgroundMaintenance: {
     context: "background-maintenance",
@@ -751,8 +757,14 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
       } finally {
         if (tempValueApplied) {
           try {
+            // HARD18-003: never reuse the run's (possibly already-aborted)
+            // signal for the revert - createTimedRequestSignal pre-aborts a
+            // request whose outer signal is already aborted, so an
+            // abort-during-probe run silently skipped the revert entirely,
+            // leaving the user's LED/volume setting durably changed. Detach
+            // the revert onto its own signal-less, timeout-bounded request so
+            // it always reaches the wire regardless of the run's own state.
             await runtime.api.setConfigValue(target.category, target.item, currentValue, {
-              signal,
               timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
               __c64uIntent: runtime.intent,
               __c64uForceProbe: runtime.forceProbe,
