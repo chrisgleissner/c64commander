@@ -38,6 +38,9 @@ import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 import { clearToastsOnDeviceSwitch } from "@/lib/uiErrors";
 import { setHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
 import { hasActiveInputRelease, releaseActiveRemoteInput } from "@/lib/remoteInput/activeInputRelease";
+import { isBackgroundExecutionActive, stopBackgroundExecution } from "@/lib/native/backgroundExecutionManager";
+import { BackgroundExecution } from "@/lib/native/backgroundExecution";
+import { toast } from "@/hooks/use-toast";
 
 let activeSavedDeviceSwitch: { deviceId: string; promise: Promise<unknown> } | null = null;
 
@@ -113,6 +116,37 @@ export function useSavedDeviceSwitching() {
         // — Home may be the only mounted page during a switch, so this is the
         // single choke point that always runs regardless of which page is up.
         resetMachineExecution();
+
+        // HARD18-011: a saved-device switch while Play is unmounted (idle
+        // placeholder) left no code path allowed to stop the foreground
+        // background-execution service or clear the native auto-advance
+        // watchdog — orphaning the wake lock until process death. This is
+        // the one choke point that always runs regardless of which page is
+        // mounted, mirroring resetMachineExecution above. Fixed here in the
+        // switch flow, not by relaxing PlayFilesPage's
+        // hasObservedActivePlaybackRef guard (BUG-040/025 stay intact).
+        if (fromDevice && isBackgroundExecutionActive()) {
+          try {
+            await stopBackgroundExecution({ source: "saved-device-switch", reason: "saved-device-switch" });
+          } catch (error) {
+            addLog("warn", "Failed to stop orphaned background execution during saved-device switch", {
+              deviceId,
+              error: error instanceof Error ? error.message : String(error ?? "Unknown stop failure"),
+            });
+          }
+          try {
+            await BackgroundExecution.setDueAtMs({ dueAtMs: null });
+          } catch (error) {
+            addLog("warn", "Failed to clear native auto-skip due-time during saved-device switch", {
+              deviceId,
+              error: error instanceof Error ? error.message : String(error ?? "Unknown due-time clear failure"),
+            });
+          }
+          toast({
+            title: "Playback controls detached",
+            description: "Background playback was stopped because the device changed.",
+          });
+        }
 
         const savedDeviceSwitchPrefixes = new Set<string>(getSavedDeviceSwitchPrefixes(location.pathname));
         void queryClient
