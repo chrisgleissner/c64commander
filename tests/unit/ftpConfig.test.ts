@@ -13,6 +13,7 @@ import {
   clearStoredFtpPort,
   getFtpBridgeUrl,
   getStoredFtpPort,
+  resolveFtpConnectionOptions,
   setFtpBridgeUrl,
   setRuntimeFtpPortOverride,
   setStoredFtpPort,
@@ -27,6 +28,24 @@ const { mockUpdateSelectedSavedDevicePorts } = vi.hoisted(() => ({
 
 vi.mock("@/lib/savedDevices/store", () => ({
   updateSelectedSavedDevicePorts: mockUpdateSelectedSavedDevicePorts,
+}));
+
+const { mockGetPassword } = vi.hoisted(() => ({
+  mockGetPassword: vi.fn(async () => "secret" as string | null),
+}));
+
+vi.mock("@/lib/secureStorage", () => ({
+  getPassword: mockGetPassword,
+}));
+
+const { mockResolveDeviceHostFromStorage, mockStripPortFromDeviceHost } = vi.hoisted(() => ({
+  mockResolveDeviceHostFromStorage: vi.fn(() => "192.168.1.50:8080"),
+  mockStripPortFromDeviceHost: vi.fn((host: string) => host.split(":")[0]),
+}));
+
+vi.mock("@/lib/c64api/hostConfig", () => ({
+  resolveDeviceHostFromStorage: mockResolveDeviceHostFromStorage,
+  stripPortFromDeviceHost: mockStripPortFromDeviceHost,
 }));
 
 describe("ftpConfig", () => {
@@ -196,5 +215,31 @@ describe("ftpConfig", () => {
     vi.stubEnv("VITE_WEB_PLATFORM", "1");
     clearFtpBridgeUrl();
     expect(getFtpBridgeUrl()).toBe("/api/ftp");
+  });
+
+  describe("resolveFtpConnectionOptions (HARD18-025)", () => {
+    it("resolves host/port/credentials for the currently selected device", async () => {
+      setStoredFtpPort(2121);
+      mockGetPassword.mockResolvedValueOnce("secret");
+
+      const options = await resolveFtpConnectionOptions();
+
+      expect(mockResolveDeviceHostFromStorage).toHaveBeenCalled();
+      expect(mockStripPortFromDeviceHost).toHaveBeenCalledWith("192.168.1.50:8080");
+      expect(options).toEqual({
+        host: "192.168.1.50",
+        port: 2121,
+        username: "user",
+        password: "secret",
+      });
+    });
+
+    it("falls back to an empty password when none is stored", async () => {
+      mockGetPassword.mockResolvedValueOnce(null);
+
+      const options = await resolveFtpConnectionOptions();
+
+      expect(options.password).toBe("");
+    });
   });
 });

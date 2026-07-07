@@ -7,6 +7,8 @@
  */
 
 import { updateSelectedSavedDevicePorts } from "@/lib/savedDevices/store";
+import { resolveDeviceHostFromStorage, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
+import { getPassword } from "@/lib/secureStorage";
 
 const FTP_PORT_KEY = "c64u_ftp_port";
 const FTP_BRIDGE_URL_KEY = "c64u_ftp_bridge_url";
@@ -131,4 +133,20 @@ export const clearFtpBridgeUrl = () => {
 
 export const FTP_DEFAULTS = {
   DEFAULT_FTP_PORT,
+};
+
+// Shared host/port/credential resolution for direct FTP client calls
+// (listFtpDirectory/readFtpFile/writeFtpFile) against the currently selected
+// device - mirrors the per-page resolveFtpOptions closures (HomePage's REU
+// and config-file workflows) so new FTP consumers (e.g. HARD18-025 disk
+// write-back) don't re-derive this by hand.
+export const resolveFtpConnectionOptions = async () => {
+  const host = stripPortFromDeviceHost(resolveDeviceHostFromStorage());
+  const password = await getPassword();
+  return {
+    host,
+    port: getStoredFtpPort(),
+    username: "user",
+    password: password ?? "",
+  };
 };

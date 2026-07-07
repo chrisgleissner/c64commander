@@ -61,6 +61,10 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 vi.mock("@/lib/disks/diskMount", () => ({
   mountDiskToDrive: vi.fn(),
+  finalizeDiskWriteBack: vi.fn().mockResolvedValue({ attempted: false }),
+  discardDiskWriteBack: vi.fn(),
+  hasShownDiskWriteBackAdvisory: vi.fn(() => true),
+  markDiskWriteBackAdvisoryShown: vi.fn(),
 }));
 vi.mock("@/hooks/useActionTrace", () => ({
   useActionTrace: () => (fn: any) => fn,
@@ -279,7 +283,17 @@ describe("HomeDiskManager UI & Interactions", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
 
     await waitFor(() => {
-      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined, { archiveConfigs: {} });
+      // HARD18-025: mountDiskToDrive is now also handed write-back FTP
+      // dependencies so writable-source disks can be materialized instead
+      // of buffer-mounted.
+      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined, {
+        archiveConfigs: {},
+        writeBack: {
+          listRemoteStorageRoots: expect.any(Function),
+          writeRemoteFile: expect.any(Function),
+          readRemoteFile: expect.any(Function),
+        },
+      });
     });
 
     fireEvent.click(screen.getByTestId("drive-reset-a"));
@@ -617,6 +631,93 @@ describe("HomeDiskManager UI & Interactions", () => {
     });
   });
 
+  it("HARD18-025: shows the write-back advisory once for a transient (unmaterialized) mount", async () => {
+    const { hasShownDiskWriteBackAdvisory, markDiskWriteBackAdvisoryShown } = await import("@/lib/disks/diskMount");
+    (hasShownDiskWriteBackAdvisory as any).mockReturnValue(false);
+    (mountDiskToDrive as any).mockResolvedValueOnce({
+      persistence: "transient",
+      writeBackTarget: { kind: "unavailable" },
+    });
+
+    const disk = createMockDisk({ id: "d1", name: "Disk 1", location: "local" });
+    (useDiskLibrary as any).mockReturnValue({
+      disks: [disk],
+      runtimeFiles: {},
+    });
+
+    render(<HomeDiskManager />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mount" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/ }));
+
+    await waitFor(() => {
+      expect(markDiskWriteBackAdvisoryShown).toHaveBeenCalled();
+      expect(toast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Changes to this disk won't be saved back" }),
+      );
+    });
+  });
+
+  it("HARD18-025: does not repeat the write-back advisory once already shown", async () => {
+    const { hasShownDiskWriteBackAdvisory, markDiskWriteBackAdvisoryShown } = await import("@/lib/disks/diskMount");
+    (hasShownDiskWriteBackAdvisory as any).mockReturnValue(true);
+    (mountDiskToDrive as any).mockResolvedValueOnce({
+      persistence: "transient",
+      writeBackTarget: { kind: "unavailable" },
+    });
+
+    const disk = createMockDisk({ id: "d1", name: "Disk 1", location: "local" });
+    (useDiskLibrary as any).mockReturnValue({
+      disks: [disk],
+      runtimeFiles: {},
+    });
+
+    render(<HomeDiskManager />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mount" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/ }));
+
+    await waitFor(() => {
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Disk mounted" }));
+    });
+    expect(markDiskWriteBackAdvisoryShown).not.toHaveBeenCalled();
+    expect(toast).not.toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Changes to this disk won't be saved back" }),
+    );
+  });
+
+  it("HARD18-025: surfaces a destructive toast when the eject write-back fails", async () => {
+    const { finalizeDiskWriteBack } = await import("@/lib/disks/diskMount");
+    (finalizeDiskWriteBack as any).mockResolvedValueOnce({
+      attempted: true,
+      success: false,
+      error: new Error("FTP read-back timed out"),
+    });
+
+    const driveA = createMockDrive();
+    driveA.image_file = "test.d64";
+    (useC64Drives as any).mockReturnValue({
+      data: { drives: [{ a: driveA }, { b: createMockDrive() }] },
+    });
+
+    render(<HomeDiskManager />);
+
+    const ejectBtn = screen.getByRole("button", { name: "Drive A Eject disk" });
+    fireEvent.click(ejectBtn);
+
+    await waitFor(() => {
+      expect(toast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Drive A ejected, but changes weren't saved",
+          description: "FTP read-back timed out",
+          variant: "destructive",
+        }),
+      );
+    });
+  });
+
   it("ignores stale mount failures after unmount", async () => {
     const disk = createMockDisk({ id: "stale-d1", name: "Disk 1" });
 
@@ -639,7 +740,17 @@ describe("HomeDiskManager UI & Interactions", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
 
     await waitFor(() => {
-      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined, { archiveConfigs: {} });
+      // HARD18-025: mountDiskToDrive is now also handed write-back FTP
+      // dependencies so writable-source disks can be materialized instead
+      // of buffer-mounted.
+      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined, {
+        archiveConfigs: {},
+        writeBack: {
+          listRemoteStorageRoots: expect.any(Function),
+          writeRemoteFile: expect.any(Function),
+          readRemoteFile: expect.any(Function),
+        },
+      });
     });
 
     view.unmount();
@@ -683,7 +794,17 @@ describe("HomeDiskManager UI & Interactions", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
 
     await waitFor(() => {
-      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined, { archiveConfigs: {} });
+      // HARD18-025: mountDiskToDrive is now also handed write-back FTP
+      // dependencies so writable-source disks can be materialized instead
+      // of buffer-mounted.
+      expect(mountDiskToDrive).toHaveBeenCalledWith(mockApi, "a", disk, undefined, {
+        archiveConfigs: {},
+        writeBack: {
+          listRemoteStorageRoots: expect.any(Function),
+          writeRemoteFile: expect.any(Function),
+          readRemoteFile: expect.any(Function),
+        },
+      });
     });
 
     view.rerender(

@@ -15,6 +15,10 @@ import { getCachedArchiveDiskBlob, setCachedArchiveDiskBlob } from "@/lib/archiv
 import type { ArchiveClientConfigInput, ArchivePlaylistReference } from "@/lib/archive/types";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import { getFileExtension } from "@/lib/playback/fileTypes";
+// Reused as-is: the sd/usb/flash-over-temp persistent-root ranking is
+// generic storage-root selection logic, not REU-specific. See HARD18-014.
+import { resolvePersistentReuStorageRoot } from "@/lib/reu/reuWorkflow";
+import { uint8ToBase64 } from "@/lib/sid/sidUtils";
 import { fetchUltimateOriginBlob, isOriginOnSelectedDevice } from "@/lib/savedDevices/deviceBoundOrigin";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import {
@@ -39,9 +43,255 @@ type ResolveLocalDiskBlobOptions = {
   archiveConfigs?: Record<string, ArchiveClientConfigInput>;
 };
 
+// HARD18-025: for local/archive disks, upload-mounts (mountDriveUpload) write
+// to a transient device-side copy the app can never read back - in-game
+// saves are silently discarded on the next mount. For writable-source disks
+// (a local library entry with a writable SAF tree handle, or an archive/
+// CommoServe blob staged in the in-memory disk cache) the fuller fix
+// materializes the image to the device filesystem (FTP upload to a work dir
+// + path-mount) so writes persist, then FTP-downloads the modified image
+// back on eject and re-persists it to that same source.
+export type DiskWriteBackTarget =
+  | { kind: "local-tree"; treeUri: string; path: string }
+  | { kind: "archive-cache"; archiveRef: ArchivePlaylistReference }
+  | { kind: "unavailable" };
+
+export type DiskMountWriteBackDependencies = {
+  listRemoteStorageRoots: () => Promise<string[]>;
+  writeRemoteFile: (path: string, bytes: Uint8Array) => Promise<void>;
+  readRemoteFile: (path: string) => Promise<Uint8Array>;
+};
+
+export type DiskMountPersistence =
+  // Ultimate-origin disk mounted by its own on-device path - writes already
+  // land on that same persistent path; no work-dir involved.
+  | "device-native"
+  // Local/archive disk materialized to a device work-dir path-mount; eject
+  // will FTP-download it back and re-persist to writeBackTarget.
+  | "materialized"
+  // Buffer-mounted (mountDriveUpload); any device-side writes are lost on
+  // the next mount. writeBackTarget explains why materialization didn't run.
+  | "transient";
+
+export type DiskMountOutcome = {
+  persistence: DiskMountPersistence;
+  writeBackTarget?: DiskWriteBackTarget;
+  workPath?: string;
+};
+
 type MountDiskToDriveOptions = {
   mode?: "readwrite" | "readonly" | "unlinked";
   archiveConfigs?: Record<string, ArchiveClientConfigInput>;
+  writeBack?: DiskMountWriteBackDependencies;
+};
+
+const DISK_WORK_DIR_NAME = "c64commander-disk-work";
+
+// resolveLocalDiskBlob's own resolution order, mirrored here to find the
+// SAME writable handle it read bytes from (not just "some source with this
+// path") - a disk with no tree-backed source has no write-back primitive.
+export const resolveDiskWriteBackTarget = (disk: DiskEntry): DiskWriteBackTarget => {
+  if (disk.location === "ultimate") {
+    // Already persistent via its own on-device path; not this mechanism's concern.
+    return { kind: "unavailable" };
+  }
+  if (disk.localTreeUri) {
+    return { kind: "local-tree", treeUri: disk.localTreeUri, path: disk.path };
+  }
+  // archiveRef is checked before sourceId, mirroring resolveLocalDiskBlob:
+  // a CommoServe disk's sourceId never resolves via loadLocalSources() (it
+  // is not a persisted local source), so checking sourceId first would
+  // always miss and fall through to "unavailable" for these disks. See
+  // HARD9-011/HARD10-002.
+  if (disk.archiveRef) {
+    return { kind: "archive-cache", archiveRef: disk.archiveRef };
+  }
+  if (disk.sourceId) {
+    const source = loadLocalSources().find((entry) => entry.id === disk.sourceId);
+    if (source?.android?.treeUri) {
+      return { kind: "local-tree", treeUri: source.android.treeUri, path: normalizeSourcePath(disk.path) };
+    }
+    return { kind: "unavailable" };
+  }
+  return { kind: "unavailable" };
+};
+
+const persistDiskWriteBack = async (target: DiskWriteBackTarget, bytes: Uint8Array): Promise<void> => {
+  if (target.kind === "local-tree") {
+    await FolderPicker.writeFileToTree({
+      treeUri: target.treeUri,
+      path: target.path,
+      data: uint8ToBase64(bytes),
+      overwrite: true,
+    });
+    return;
+  }
+  if (target.kind === "archive-cache") {
+    const buffer = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(buffer).set(bytes);
+    setCachedArchiveDiskBlob(target.archiveRef, new Blob([buffer]));
+    return;
+  }
+  throw new Error("No write-back target is available for this disk.");
+};
+
+type MaterializedDiskMount = {
+  disk: DiskEntry;
+  workPath: string;
+  writeBackTarget: DiskWriteBackTarget;
+};
+
+// Module-singleton by design (mirrors machineExecutionStore/
+// backgroundExecutionManager): drive occupancy is a device-level concept,
+// not a per-component one, and must survive HomeDiskManager remounts.
+const materializedMounts = new Map<"a" | "b", MaterializedDiskMount>();
+
+const readBackAndPersist = async (entry: MaterializedDiskMount, ftp: DiskMountWriteBackDependencies): Promise<void> => {
+  const bytes = await ftp.readRemoteFile(entry.workPath);
+  await persistDiskWriteBack(entry.writeBackTarget, bytes);
+};
+
+// A drive can be remounted directly (Play, or a second Home mount) without
+// an explicit eject in between. Finalizing (or at least discarding) any
+// stale entry here stops a later eject from misattributing a DIFFERENT
+// disk's device-side bytes back to this drive's previous occupant.
+const dropOrFinalizeStaleMaterializedMount = async (
+  drive: "a" | "b",
+  nextDisk: DiskEntry,
+  ftp: DiskMountWriteBackDependencies | undefined,
+): Promise<void> => {
+  const stale = materializedMounts.get(drive);
+  if (!stale || stale.disk.id === nextDisk.id) return;
+  materializedMounts.delete(drive);
+  if (!ftp) {
+    addLog("warn", "Dropped pending disk write-back: drive remounted by a flow without write-back support", {
+      drive,
+      path: stale.disk.path,
+      workPath: stale.workPath,
+    });
+    return;
+  }
+  try {
+    await readBackAndPersist(stale, ftp);
+  } catch (error) {
+    addErrorLog("Disk write-back failed while remounting a different disk", {
+      drive,
+      path: stale.disk.path,
+      workPath: stale.workPath,
+      error: (error as Error).message,
+    });
+  }
+};
+
+export type DiskWriteBackResult =
+  { attempted: false } | { attempted: true; success: true } | { attempted: true; success: false; error: Error };
+
+// Called on eject: FTP-downloads the materialized work-dir image back and
+// re-persists it to the source. Never throws - a failed write-back must not
+// block the eject the user already asked for; the result tells the caller
+// whether to surface a "changes may be lost" warning.
+export const finalizeDiskWriteBack = async (
+  drive: "a" | "b",
+  ftp: DiskMountWriteBackDependencies,
+): Promise<DiskWriteBackResult> => {
+  const entry = materializedMounts.get(drive);
+  if (!entry) return { attempted: false };
+  materializedMounts.delete(drive);
+  try {
+    await readBackAndPersist(entry, ftp);
+    addLog("info", "Disk write-back persisted to source", { drive, path: entry.disk.path, workPath: entry.workPath });
+    return { attempted: true, success: true };
+  } catch (error) {
+    addErrorLog("Disk write-back failed", {
+      drive,
+      path: entry.disk.path,
+      workPath: entry.workPath,
+      error: (error as Error).message,
+    });
+    return { attempted: true, success: false, error: error as Error };
+  }
+};
+
+// Called when a mounted disk is being removed from the library outright
+// (HARD18-017 delete flow) - there is no source left to write back to, so
+// drop the pending entry without spending an FTP round trip on it.
+export const discardDiskWriteBack = (drive: "a" | "b"): void => {
+  materializedMounts.delete(drive);
+};
+
+const DISK_WRITE_BACK_ADVISORY_STORAGE_KEY = "c64u_disk_writeback_advisory_shown_v1";
+
+// A residual-case, one-time notice (not per-disk) that changes to THIS mount
+// won't be saved back - shown only when materialization was unavailable or
+// failed (DiskMountOutcome.persistence === "transient"). See HARD18-025.
+export const hasShownDiskWriteBackAdvisory = (): boolean => {
+  if (typeof localStorage === "undefined") return true;
+  return localStorage.getItem(DISK_WRITE_BACK_ADVISORY_STORAGE_KEY) === "1";
+};
+
+export const markDiskWriteBackAdvisoryShown = (): void => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(DISK_WRITE_BACK_ADVISORY_STORAGE_KEY, "1");
+};
+
+// Flat file directly under the persistent root - NOT a subdirectory. The
+// native FTP plugin's writeFile only ever calls Commons Net's storeFile()
+// (FtpClientPlugin.kt); it has no MKD/mkdir capability, so a work-dir path
+// would silently never materialize on a device where that folder doesn't
+// already exist (hardware-confirmed on c64u fw 1.1.0: STOR into a
+// not-yet-created subfolder fails). Mirrors REU preload's existing flat
+// naming convention (reuWorkflow.ts's `/${folderName}/${REU_PRELOAD_FILE_NAME}`).
+const buildDiskWorkPath = (root: string, drive: "a" | "b", mountType: string) =>
+  `/${root}/${DISK_WORK_DIR_NAME}-${drive}.${mountType}`;
+
+// Deterministic, reused per-drive work filename (overwritten on every
+// materialized mount) rather than one file per mount - the FTP plugin has no
+// delete primitive, so "cleanup" means never accumulating new files, not
+// removing old ones.
+const tryMaterializeDiskMount = async (
+  api: C64API,
+  drive: "a" | "b",
+  disk: DiskEntry,
+  blob: Blob,
+  mountType: string,
+  mode: "readwrite" | "readonly" | "unlinked",
+  writeBackTarget: DiskWriteBackTarget,
+  ftp: DiskMountWriteBackDependencies,
+): Promise<string | null> => {
+  let root: string | null;
+  try {
+    root = resolvePersistentReuStorageRoot(await ftp.listRemoteStorageRoots());
+  } catch (error) {
+    addErrorLog("Disk work-dir storage root discovery failed; falling back to a transient mount", {
+      drive,
+      path: disk.path,
+      error: (error as Error).message,
+    });
+    return null;
+  }
+  if (!root) {
+    addLog("debug", "No persistent storage available for disk write-back materialization; buffer-mounting", {
+      drive,
+      path: disk.path,
+    });
+    return null;
+  }
+  const workPath = buildDiskWorkPath(root, drive, mountType);
+  try {
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    await ftp.writeRemoteFile(workPath, bytes);
+    await api.mountDrive(drive, workPath, mountType, mode);
+    materializedMounts.set(drive, { disk, workPath, writeBackTarget });
+    return workPath;
+  } catch (error) {
+    addErrorLog("Disk work-dir materialization failed; falling back to a transient mount", {
+      drive,
+      path: disk.path,
+      workPath,
+      error: (error as Error).message,
+    });
+    return null;
+  }
 };
 
 const createAbortError = (context: string) => {
@@ -413,8 +663,9 @@ export const mountDiskToDrive = async (
   disk: DiskEntry,
   runtimeFile?: File,
   options: MountDiskToDriveOptions = {},
-) => {
+): Promise<DiskMountOutcome> => {
   const mode = options.mode ?? "readwrite";
+  await dropOrFinalizeStaleMaterializedMount(drive, disk, options.writeBack);
   try {
     const mountType = buildDiskMountType(disk.path);
     if (!mountType) {
@@ -431,13 +682,15 @@ export const mountDiskToDrive = async (
     if (disk.location === "ultimate") {
       if (isOriginOnSelectedDevice(disk.origin)) {
         await api.mountDrive(drive, disk.path, mountType, mode);
+        return { persistence: "device-native" };
       } else if (disk.origin) {
         const blob = await fetchUltimateOriginBlob(disk.origin);
         await api.mountDriveUpload(drive, blob, mountType, mode, { filename: disk.origin.originPath });
+        return { persistence: "transient", writeBackTarget: { kind: "unavailable" } };
       } else {
         await api.mountDrive(drive, disk.path, mountType, mode);
+        return { persistence: "device-native" };
       }
-      return;
     }
 
     const blob = await resolveLocalDiskBlob(disk, runtimeFile, {
@@ -450,7 +703,26 @@ export const mountDiskToDrive = async (
       sourceId: disk.sourceId ?? null,
       sizeBytes: blob.size,
     });
+
+    const writeBackTarget = resolveDiskWriteBackTarget(disk);
+    if (options.writeBack && mode === "readwrite" && writeBackTarget.kind !== "unavailable") {
+      const workPath = await tryMaterializeDiskMount(
+        api,
+        drive,
+        disk,
+        blob,
+        mountType,
+        mode,
+        writeBackTarget,
+        options.writeBack,
+      );
+      if (workPath) {
+        return { persistence: "materialized", writeBackTarget, workPath };
+      }
+    }
+
     await api.mountDriveUpload(drive, blob, mountType, mode, { filename: disk.path });
+    return { persistence: "transient", writeBackTarget };
   } catch (error) {
     addErrorLog("Disk mount failed", {
       drive,

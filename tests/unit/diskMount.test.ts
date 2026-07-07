@@ -8,7 +8,14 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { C64API } from "@/lib/c64api";
-import { mountDiskToDrive, resolveLocalDiskBlob } from "@/lib/disks/diskMount";
+import {
+  mountDiskToDrive,
+  resolveLocalDiskBlob,
+  finalizeDiskWriteBack,
+  hasShownDiskWriteBackAdvisory,
+  markDiskWriteBackAdvisoryShown,
+  type DiskMountWriteBackDependencies,
+} from "@/lib/disks/diskMount";
 import { createDiskEntry } from "@/lib/disks/diskTypes";
 import { saveLocalSources, setLocalSourceRuntimeFiles } from "@/lib/sourceNavigation/localSourcesStore";
 
@@ -16,6 +23,7 @@ vi.mock("@/lib/native/folderPicker", () => ({
   FolderPicker: {
     readFile: vi.fn(),
     readFileFromTree: vi.fn(),
+    writeFileToTree: vi.fn(async () => ({ uri: "content://tree/primary%3ADisks", sizeBytes: 0 })),
   },
 }));
 
@@ -196,5 +204,72 @@ describe("mountDiskToDrive", () => {
     const blob = await resolveLocalDiskBlob(disk);
     const text = await readBlobText(blob);
     expect(text).toBe("saf-data");
+  });
+
+  describe("HARD18-025 write-back materialization", () => {
+    const buildWriteBack = (
+      overrides: Partial<DiskMountWriteBackDependencies> = {},
+    ): DiskMountWriteBackDependencies => ({
+      listRemoteStorageRoots: vi.fn(async () => ["Usb0", "Temp"]),
+      writeRemoteFile: vi.fn(async () => undefined),
+      readRemoteFile: vi.fn(async () => new Uint8Array([1, 2, 3])),
+      ...overrides,
+    });
+
+    it("path-mounts a local-library disk resolved via a real SAF tree source, then writes the eject read-back to that same source", async () => {
+      const sourceId = "source-writeback";
+      saveLocalSources([
+        {
+          id: sourceId,
+          name: "Android SAF",
+          rootName: "Android SAF",
+          rootPath: "/",
+          createdAt: new Date().toISOString(),
+          android: {
+            treeUri: "content://tree/primary%3ADisks",
+            rootName: "Disks",
+            permissionGrantedAt: new Date().toISOString(),
+          },
+        },
+      ]);
+
+      const api = {
+        mountDrive: vi.fn().mockResolvedValue(undefined),
+        mountDriveUpload: vi.fn().mockResolvedValue(undefined),
+        getBaseUrl: vi.fn().mockReturnValue("http://c64u"),
+        getDeviceHost: vi.fn().mockReturnValue("c64u"),
+      } as unknown as C64API;
+
+      const disk = createDiskEntry({
+        location: "local",
+        path: "/Local/Save Game.d64",
+        sourceId,
+      });
+      const runtimeFile = new File([new Uint8Array([1, 2, 3])], "Save Game.d64");
+      const writeBack = buildWriteBack();
+
+      const outcome = await mountDiskToDrive(api, "a", disk, runtimeFile, { writeBack });
+
+      expect(outcome.persistence).toBe("materialized");
+      expect(api.mountDriveUpload).not.toHaveBeenCalled();
+      expect(api.mountDrive).toHaveBeenCalledWith("a", "/Usb0/c64commander-disk-work-a.d64", "d64", "readwrite");
+
+      const { FolderPicker } = await import("@/lib/native/folderPicker");
+      const result = await finalizeDiskWriteBack("a", writeBack);
+
+      expect(result).toEqual({ attempted: true, success: true });
+      expect(FolderPicker.writeFileToTree).toHaveBeenCalledWith({
+        treeUri: "content://tree/primary%3ADisks",
+        path: "/Local/Save Game.d64",
+        data: btoa(String.fromCharCode(1, 2, 3)),
+        overwrite: true,
+      });
+    });
+
+    it("shows the write-back advisory only once (localStorage-backed)", () => {
+      expect(hasShownDiskWriteBackAdvisory()).toBe(false);
+      markDiskWriteBackAdvisoryShown();
+      expect(hasShownDiskWriteBackAdvisory()).toBe(true);
+    });
   });
 });

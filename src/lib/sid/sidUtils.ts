@@ -272,6 +272,14 @@ export const base64ToUint8 = (base64: string) => {
   return bytes;
 };
 
+export const uint8ToBase64 = (bytes: Uint8Array) => {
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
+};
+
 export const getSidSongCount = (buffer: ArrayBuffer) => {
   try {
     const view = new DataView(buffer);
