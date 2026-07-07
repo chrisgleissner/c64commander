@@ -23,6 +23,7 @@ import { createTelnetClient } from "@/lib/telnet/telnetClient";
 import { buildBaseUrlFromDeviceHost, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import { rollUpHealth, deriveConnectivityState } from "@/lib/diagnostics/healthModel";
 import { withTelnetInteraction } from "@/lib/deviceInteraction/deviceInteractionManager";
+import { areBackgroundReadsSuspended } from "@/lib/deviceInteraction/deviceActivityGate";
 import type { ConnectivityState, HealthState } from "@/lib/diagnostics/healthModel";
 import {
   pushHealthHistoryEntry,
@@ -682,6 +683,22 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
   const startMs = Date.now();
 
   for (const target of CONFIG_ROUNDTRIP_TARGETS) {
+    // HARD18-021: an Audio Mixer pulse races pause-mute/resume-unmute/volume
+    // commits that land inside its read-write-delay-revert window - skip it
+    // entirely while playback write activity is in flight rather than risk
+    // clobbering a concurrent user write. LED/lighting targets are unaffected
+    // and still tried first regardless.
+    if (target.category === "Audio Mixer" && areBackgroundReadsSuspended()) {
+      addLog(
+        "debug",
+        "Health check CONFIG probe: skipping Audio Mixer target while playback write activity is active",
+        {
+          category: target.category,
+          item: target.item,
+        },
+      );
+      continue;
+    }
     try {
       const readResp = await runtime.api.getConfigItem(target.category, target.item, {
         signal,
@@ -734,6 +751,7 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
       let readBackValue: number | null = null;
       let revertErrorMessage: string | null = null;
       let tempValueApplied = false;
+      let revertSkippedForExternalWrite = false;
       try {
         await runtime.api.setConfigValue(target.category, target.item, tempValue, {
           signal,
@@ -756,30 +774,84 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
         readBackValue = parseConfigNumericValue(extractConfigItemData(readBackResp, target.category, target.item));
       } finally {
         if (tempValueApplied) {
-          try {
-            // HARD18-003: never reuse the run's (possibly already-aborted)
-            // signal for the revert - createTimedRequestSignal pre-aborts a
-            // request whose outer signal is already aborted, so an
-            // abort-during-probe run silently skipped the revert entirely,
-            // leaving the user's LED/volume setting durably changed. Detach
-            // the revert onto its own signal-less, timeout-bounded request so
-            // it always reaches the wire regardless of the run's own state.
-            await runtime.api.setConfigValue(target.category, target.item, currentValue, {
-              timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
-              __c64uIntent: runtime.intent,
-              __c64uForceProbe: runtime.forceProbe,
-              __c64uSuppressCircuitContribution: true,
-            });
-          } catch (error) {
-            revertErrorMessage = error instanceof Error ? error.message : String(error ?? "Unknown revert failure");
-            addLog("warn", "Health check CONFIG probe revert failed", {
-              category: target.category,
-              item: target.item,
-              currentValue,
-              error: revertErrorMessage,
-            });
+          let shouldRevert = true;
+          // HARD18-021: our own write was confirmed present at readback time -
+          // re-read once more, right before reverting, to catch a user mixer
+          // write (pause-mute/resume-unmute/volume commit) landing in the
+          // remaining pulse window. If readBackValue itself never matched
+          // tempValue, that is a transport failure (handled below via the
+          // existing "Readback mismatch" check), not a signal to preserve
+          // someone else's value - skip this re-read entirely in that case.
+          if (readBackValue === tempValue) {
+            try {
+              const preRevertResp = await runtime.api.getConfigItem(target.category, target.item, {
+                timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
+                __c64uIntent: runtime.intent,
+                __c64uBypassCache: true,
+                __c64uForceProbe: runtime.forceProbe,
+                __c64uSuppressCircuitContribution: true,
+              });
+              const preRevertValue = parseConfigNumericValue(
+                extractConfigItemData(preRevertResp, target.category, target.item),
+              );
+              if (preRevertValue !== null && preRevertValue !== tempValue) {
+                shouldRevert = false;
+                revertSkippedForExternalWrite = true;
+                addLog(
+                  "info",
+                  "Health check CONFIG probe: external write detected inside pulse window, skipping revert",
+                  {
+                    category: target.category,
+                    item: target.item,
+                    tempValue,
+                    preRevertValue,
+                  },
+                );
+              }
+            } catch (error) {
+              addLog("debug", "Health check CONFIG probe: pre-revert re-read failed, reverting unconditionally", {
+                category: target.category,
+                item: target.item,
+                error: error instanceof Error ? error.message : String(error ?? "Unknown error"),
+              });
+            }
+          }
+          if (shouldRevert) {
+            try {
+              // HARD18-003: never reuse the run's (possibly already-aborted)
+              // signal for the revert - createTimedRequestSignal pre-aborts a
+              // request whose outer signal is already aborted, so an
+              // abort-during-probe run silently skipped the revert entirely,
+              // leaving the user's LED/volume setting durably changed. Detach
+              // the revert onto its own signal-less, timeout-bounded request so
+              // it always reaches the wire regardless of the run's own state.
+              await runtime.api.setConfigValue(target.category, target.item, currentValue, {
+                timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
+                __c64uIntent: runtime.intent,
+                __c64uForceProbe: runtime.forceProbe,
+                __c64uSuppressCircuitContribution: true,
+              });
+            } catch (error) {
+              revertErrorMessage = error instanceof Error ? error.message : String(error ?? "Unknown revert failure");
+              addLog("warn", "Health check CONFIG probe revert failed", {
+                category: target.category,
+                item: target.item,
+                currentValue,
+                error: revertErrorMessage,
+              });
+            }
           }
         }
+      }
+
+      if (revertSkippedForExternalWrite) {
+        return makeRecord(
+          "CONFIG",
+          "Skipped",
+          Date.now() - startMs,
+          "Pulse revert skipped: a concurrent write changed the value during the probe window",
+          startMs,
+        );
       }
 
       const verifyResp = await runtime.api.getConfigItem(target.category, target.item, {
