@@ -103,6 +103,28 @@ describe("ramOperations", () => {
 
       await expect(dumpFull(api as any)).rejects.toThrow("Unexpected RAM chunk length");
     });
+
+    // HARD18-015: a snapshot save must not silently resume a machine the
+    // user deliberately paused before requesting the save.
+    it("HARD18-015: does not pause or resume when alreadyPaused is set", async () => {
+      const image = await dumpRamRanges(api as any, [{ start: 0, length: FULL_RAM_SIZE_BYTES }], {
+        alreadyPaused: true,
+      }).then((r) => r.blocks[0]);
+
+      expect(image.length).toBe(FULL_RAM_SIZE_BYTES);
+      expect(api.machinePause).not.toHaveBeenCalled();
+      expect(api.machineResume).not.toHaveBeenCalled();
+    });
+
+    it("HARD18-015: does not resume on read failure when alreadyPaused is set", async () => {
+      api.readMemory.mockRejectedValue(new Error("read failed"));
+
+      await expect(
+        dumpRamRanges(api as any, [{ start: 0, length: FULL_RAM_SIZE_BYTES }], { alreadyPaused: true }),
+      ).rejects.toThrow("read failed");
+      expect(api.machinePause).not.toHaveBeenCalled();
+      expect(api.machineResume).not.toHaveBeenCalled();
+    });
   });
 
   describe("loadMemoryRanges", () => {
@@ -188,6 +210,17 @@ describe("ramOperations", () => {
       await expect(loadMemoryRanges(api as any, [{ start: 0xfffe, bytes: new Uint8Array([1, 2, 3]) }])).rejects.toThrow(
         "loadMemoryRanges: range end out of bounds",
       );
+    });
+
+    // HARD18-015: a snapshot restore must not silently resume a machine the
+    // user deliberately paused before requesting the restore.
+    it("HARD18-015: does not pause or resume when alreadyPaused is set", async () => {
+      const screenBytes = new Uint8Array([0x54, 0x45, 0x53, 0x54]);
+      await loadMemoryRanges(api as any, [{ start: 0x0400, bytes: screenBytes }], { alreadyPaused: true });
+
+      expect(api.machinePause).not.toHaveBeenCalled();
+      expect(api.machineResume).not.toHaveBeenCalled();
+      expect(api.writeMemoryBlock).toHaveBeenCalledTimes(1);
     });
   });
 

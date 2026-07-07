@@ -201,6 +201,11 @@ export function useHomeActions() {
   });
 
   const handleSaveRam = trace(async function handleSaveRam(type: SnapshotType, customRanges?: MemoryRange[]) {
+    // HARD18-015: a snapshot save must never silently resume a machine the
+    // user deliberately paused (e.g. from Play), and must never mark the
+    // machine "running" when the underlying task failed.
+    const wasPaused = getMachineExecutionSnapshot().state === "paused";
+    let succeeded = false;
     await runMachineTask(
       "save-ram",
       async () => {
@@ -210,7 +215,9 @@ export function useHomeActions() {
           customRanges,
           label: currentPlaybackLabel,
           contentName: currentPlaybackLabel,
+          alreadyPaused: wasPaused,
         });
+        succeeded = true;
         toast({
           title: "Snapshot saved",
           description: result.displayTimestamp,
@@ -232,10 +239,18 @@ export function useHomeActions() {
       // double toast; the inner toast already ran.
       "",
     );
-    setMachineExecutionState("running");
+    if (succeeded && !wasPaused) {
+      setMachineExecutionState("running");
+    }
   });
 
   const handleSaveCpuSnapshot = trace(async function handleSaveCpuSnapshot() {
+    // HARD18-015: same caller-level bug as handleSaveRam above - preserve the
+    // prior execution state and never mark "running" on failure. The CPU
+    // capture engine's own cartridge-driven pause/resume choreography is left
+    // untouched (it rides a live interrupt, a different mechanism entirely).
+    const wasPaused = getMachineExecutionSnapshot().state === "paused";
+    let succeeded = false;
     await runMachineTask(
       "save-cpu",
       async () => {
@@ -258,6 +273,7 @@ export function useHomeActions() {
           }
           throw error;
         }
+        succeeded = true;
         // The snapshot itself is valid even when resumeError is set - only
         // the post-capture resume failed, which can leave the C64 frozen
         // with the IRQ vector still pointed at the capture handler. Surface
@@ -286,10 +302,20 @@ export function useHomeActions() {
       },
       "",
     );
-    setMachineExecutionState("running");
+    if (succeeded && !wasPaused) {
+      setMachineExecutionState("running");
+    }
   });
 
   const handleRestoreSnapshot = trace(async function handleRestoreSnapshot(snapshot: SnapshotStorageEntry) {
+    // HARD18-015: a snapshot restore must not silently resume a machine the
+    // user deliberately paused, and must never mark "running" on failure.
+    const wasPaused = getMachineExecutionSnapshot().state === "paused";
+    let succeeded = false;
+    // CPU-state restores always launch the captured PC via the uploaded
+    // cartridge, which inherently runs the machine - only a RAM-only restore
+    // that honored an existing pause should keep the machine "paused".
+    let endsPaused = false;
     await runMachineTask(
       "load-ram",
       async () => {
@@ -301,7 +327,8 @@ export function useHomeActions() {
             start: r.start,
             bytes: decoded.blocks[i],
           }));
-          await loadMemoryRanges(api, ranges);
+          await loadMemoryRanges(api, ranges, { alreadyPaused: wasPaused });
+          endsPaused = wasPaused;
         };
         // CPU+RAM snapshots resume at the exact PC via the uploaded-cartridge
         // path; only when the snapshot actually carries verified CPU state.
@@ -323,6 +350,7 @@ export function useHomeActions() {
               error: error.message,
             });
             await loadRamOnly();
+            succeeded = true;
             toast({
               title: "Snapshot restored (RAM only)",
               description: `${successLabel} — exact CPU state could not be restored (${error.message})`,
@@ -330,15 +358,19 @@ export function useHomeActions() {
             });
             return;
           }
+          succeeded = true;
           toast({ title: "Snapshot restored", description: successLabel });
           return;
         }
         await loadRamOnly();
+        succeeded = true;
         toast({ title: "Snapshot restored", description: successLabel });
       },
       "",
     );
-    setMachineExecutionState("running");
+    if (succeeded && !endsPaused) {
+      setMachineExecutionState("running");
+    }
   });
 
   const handleDeleteSnapshot = (id: string) => {

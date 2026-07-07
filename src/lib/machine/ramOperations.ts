@@ -228,17 +228,30 @@ const writeRanges = async (
   }
 };
 
-const runPaused = async <T>(api: C64API, operation: string, run: () => Promise<T>): Promise<T> => {
+const runPaused = async <T>(
+  api: C64API,
+  operation: string,
+  run: () => Promise<T>,
+  options?: { alreadyPaused?: boolean },
+): Promise<T> => {
+  // HARD18-015: when the machine was already paused by the user before this
+  // operation started, never pause/resume around it - a snapshot save/restore
+  // must not silently undo a deliberate pause.
+  const alreadyPaused = options?.alreadyPaused ?? false;
   let paused = false;
   let operationError: Error | null = null;
   let resumeFailure: Error | null = null;
   let result: T | undefined;
   try {
-    await withRetry("Pause machine", () => api.machinePause());
-    paused = true;
+    if (!alreadyPaused) {
+      await withRetry("Pause machine", () => api.machinePause());
+      paused = true;
+    }
     result = await run();
-    await withRetry("Resume machine", () => api.machineResume());
-    paused = false;
+    if (!alreadyPaused) {
+      await withRetry("Resume machine", () => api.machineResume());
+      paused = false;
+    }
   } catch (error) {
     operationError = asError(error, `${operation} failed`);
   } finally {
@@ -285,28 +298,33 @@ export const dumpRamRanges = async (
   resolve:
     | MemoryRangeSpec[]
     | ((read: (address: number, length: number) => Promise<Uint8Array>) => Promise<MemoryRangeSpec[]>),
-  options?: { recoveryMode?: boolean },
+  options?: { recoveryMode?: boolean; alreadyPaused?: boolean },
 ): Promise<{ ranges: MemoryRangeSpec[]; blocks: Uint8Array[] }> => {
   await ensureLiveness(api, "Save RAM");
   const onRetry = options?.recoveryMode ? async () => recoverFromLivenessFailure(api, "Save RAM") : undefined;
-  return runPaused(api, "Save RAM", async () => {
-    const read = (address: number, length: number) =>
-      withRetry(
-        `Read RAM at $${toHexAddress(address)}`,
-        () => api.readMemory(toHexAddress(address), length),
-        DEFAULT_RETRY_ATTEMPTS,
-        onRetry,
-      );
-    const ranges = typeof resolve === "function" ? await resolve(read) : resolve;
-    const blocks: Uint8Array[] = [];
-    for (const range of ranges) {
-      if (range.start < 0 || range.length < 0 || range.start + range.length > FULL_RAM_SIZE_BYTES) {
-        throw new Error(`dumpRamRanges: range out of bounds: start=${range.start}, length=${range.length}`);
+  return runPaused(
+    api,
+    "Save RAM",
+    async () => {
+      const read = (address: number, length: number) =>
+        withRetry(
+          `Read RAM at $${toHexAddress(address)}`,
+          () => api.readMemory(toHexAddress(address), length),
+          DEFAULT_RETRY_ATTEMPTS,
+          onRetry,
+        );
+      const ranges = typeof resolve === "function" ? await resolve(read) : resolve;
+      const blocks: Uint8Array[] = [];
+      for (const range of ranges) {
+        if (range.start < 0 || range.length < 0 || range.start + range.length > FULL_RAM_SIZE_BYTES) {
+          throw new Error(`dumpRamRanges: range out of bounds: start=${range.start}, length=${range.length}`);
+        }
+        blocks.push(await readRangeBlock(api, range.start, range.length, onRetry));
       }
-      blocks.push(await readRangeBlock(api, range.start, range.length, onRetry));
-    }
-    return { ranges, blocks };
-  });
+      return { ranges, blocks };
+    },
+    { alreadyPaused: options?.alreadyPaused },
+  );
 };
 
 export const clearRamAndReboot = async (api: C64API) => {
@@ -407,7 +425,11 @@ const writeSnapshotRange = async (
  * consecutive restore. Volatile CIA timer/interrupt registers are skipped even
  * when a snapshot range happens to cover them.
  */
-export const loadMemoryRanges = async (api: C64API, ranges: Array<{ start: number; bytes: Uint8Array }>) => {
+export const loadMemoryRanges = async (
+  api: C64API,
+  ranges: Array<{ start: number; bytes: Uint8Array }>,
+  options?: { alreadyPaused?: boolean },
+) => {
   if (ranges.length === 0) {
     throw new Error("loadMemoryRanges: no ranges provided");
   }
@@ -421,9 +443,14 @@ export const loadMemoryRanges = async (api: C64API, ranges: Array<{ start: numbe
   }
   await ensureLiveness(api, "Load RAM Snapshot");
   const onRetry = async () => recoverFromLivenessFailure(api, "Load RAM Snapshot");
-  await runPaused(api, "Load RAM Snapshot", async () => {
-    for (const { start, bytes } of ranges) {
-      await writeSnapshotRange(api, start, bytes, onRetry);
-    }
-  });
+  await runPaused(
+    api,
+    "Load RAM Snapshot",
+    async () => {
+      for (const { start, bytes } of ranges) {
+        await writeSnapshotRange(api, start, bytes, onRetry);
+      }
+    },
+    { alreadyPaused: options?.alreadyPaused },
+  );
 };
