@@ -8,6 +8,7 @@
 
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { isSidVolumeName } from "@/lib/config/audioMixerSolo";
+import { AUDIO_MIXER_MASTER_VOLUME_ITEM } from "@/lib/config/configItems";
 
 export type SidVolumeItem = {
   name: string;
@@ -116,7 +117,16 @@ export const buildSidVolumeSteps = (options: string[]): SidVolumeOption[] => {
   return steps;
 };
 
-export const resolveSidMutedVolumeOption = (options?: string[]) => {
+// HARD18-018: "Vol Master" (U64 fw 3.15+) scales/mutes every audio source on
+// the device (SIDs, sockets, drives, tape, sampler), not just SID channels -
+// its own explicit "OFF" option is real silence, so it is preferred over the
+// -42 dB fallback used for per-SID items (which never carry an "OFF" this
+// function should honor as mute - see the pinned per-SID tests below).
+export const resolveSidMutedVolumeOption = (options?: string[], itemName?: string) => {
+  if (itemName === AUDIO_MIXER_MASTER_VOLUME_ITEM) {
+    const offOption = options?.find((option) => isOffOption(option));
+    if (offOption) return offOption;
+  }
   const explicitMuted = options?.find((option) => isExplicitMutedVolumeOption(option));
   if (explicitMuted) return explicitMuted;
   return "-42 dB";
@@ -148,7 +158,7 @@ export const buildEnabledSidMuteUpdates = (items: SidVolumeItem[], enablement: S
   const updates: Record<string, string | number> = {};
   const muteTargetByName = new Map<string, string | number>();
   filterEnabledSidVolumeItems(items, enablement).forEach((item) => {
-    const muteTarget = resolveSidMutedVolumeOption(item.options);
+    const muteTarget = resolveSidMutedVolumeOption(item.options, item.name);
     muteTargetByName.set(item.name, muteTarget);
     if (isSidVolumeOffValue(item.value)) {
       return;
@@ -168,7 +178,7 @@ export const buildEnabledSidMutedToTargetUpdates = (
 ) => {
   const updates: Record<string, string | number> = {};
   filterEnabledSidVolumeItems(items, enablement).forEach((item) => {
-    const muteTarget = resolveSidMutedVolumeOption(item.options);
+    const muteTarget = resolveSidMutedVolumeOption(item.options, item.name);
     if (!valuesEqual(item.value, muteTarget)) {
       return;
     }

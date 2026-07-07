@@ -167,6 +167,55 @@ describe("sid volume control helpers", () => {
     });
   });
 
+  describe("Vol Master mute target (HARD18-018)", () => {
+    const masterOptions = ["OFF", "-42 dB", "-6 dB", "0 dB", "+6 dB"];
+
+    it("prefers the explicit OFF option for Vol Master (real silence, not -42 dB)", () => {
+      expect(resolveSidMutedVolumeOption(masterOptions, "Vol Master")).toBe("OFF");
+    });
+
+    it("falls back to -42 dB for Vol Master when no OFF option is advertised", () => {
+      expect(resolveSidMutedVolumeOption(["-42 dB", "-6 dB", "0 dB"], "Vol Master")).toBe("-42 dB");
+    });
+
+    it("keeps -42 dB as the target for per-SID items even though itemName is not passed", () => {
+      // Pinned above ("prefers -42 dB..."/"uses -42 dB..."): callers that
+      // don't pass an itemName (or pass a per-SID name) must never start
+      // preferring OFF - only Vol Master does.
+      expect(resolveSidMutedVolumeOption(masterOptions, "Vol UltiSid 1")).toBe("-42 dB");
+    });
+
+    it("collapses a master-capable mute to a single Vol Master OFF write", () => {
+      const enablement: SidEnablement = { socket1: true, socket2: true, ultiSid1: true, ultiSid2: true };
+      const masterItem: SidVolumeItem[] = [{ name: "Vol Master", value: "+6 dB", options: masterOptions }];
+
+      expect(buildEnabledSidMuteUpdates(masterItem, enablement)).toEqual({ "Vol Master": "OFF" });
+    });
+
+    it("does not rewrite Vol Master when it is already OFF", () => {
+      const enablement: SidEnablement = { socket1: true, socket2: true, ultiSid1: true, ultiSid2: true };
+      const masterItem: SidVolumeItem[] = [{ name: "Vol Master", value: "OFF", options: masterOptions }];
+
+      expect(buildEnabledSidMuteUpdates(masterItem, enablement)).toEqual({});
+    });
+
+    it("restores Vol Master's prior value via the generic unmute path (no master-specific restore code needed)", () => {
+      const enablement: SidEnablement = { socket1: true, socket2: true, ultiSid1: true, ultiSid2: true };
+      const snapshot = { "Vol Master": "0 dB" };
+
+      expect(buildEnabledSidUnmuteUpdates(snapshot, enablement)).toEqual({ "Vol Master": "0 dB" });
+    });
+
+    it("restores a Vol Master value from a target-based mute-to-target update", () => {
+      const enablement: SidEnablement = { socket1: true, socket2: true, ultiSid1: true, ultiSid2: true };
+      const mutedMaster: SidVolumeItem[] = [{ name: "Vol Master", value: "OFF", options: masterOptions }];
+
+      expect(buildEnabledSidMutedToTargetUpdates(mutedMaster, enablement, "0 dB")).toEqual({
+        "Vol Master": "0 dB",
+      });
+    });
+  });
+
   it("maps enablement from flat payload values and retains unknown names", () => {
     const sockets = {
       items: {
