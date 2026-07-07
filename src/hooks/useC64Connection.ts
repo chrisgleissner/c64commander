@@ -658,6 +658,13 @@ export function useC64MachineControl() {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["c64-category"] });
         queryClient.invalidateQueries({ queryKey: ["c64-all-config"] });
+        // HARD18-010: Home/Disks/Play read exclusively through
+        // c64-config-items/c64-config-item (see HARD9-017 above on the
+        // single-item/batch mutations) - without this, a whole-config
+        // "Load from flash" left those pages showing pre-load values for
+        // up to the 30s staleTime.
+        queryClient.invalidateQueries({ queryKey: ["c64-config-items"] });
+        queryClient.invalidateQueries({ queryKey: ["c64-config-item"] });
         updateHasChanges(getActiveBaseUrl(), true);
       },
     }),
@@ -666,6 +673,13 @@ export function useC64MachineControl() {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["c64-category"] });
         queryClient.invalidateQueries({ queryKey: ["c64-all-config"] });
+        // HARD18-010: same per-item invalidation as loadConfig above, plus
+        // c64-info/c64-drives since "Reset to default" can change device
+        // identity/capability-affecting settings and drive state.
+        queryClient.invalidateQueries({ queryKey: ["c64-config-items"] });
+        queryClient.invalidateQueries({ queryKey: ["c64-config-item"] });
+        queryClient.invalidateQueries({ queryKey: ["c64-info"] });
+        queryClient.invalidateQueries({ queryKey: ["c64-drives"] });
         updateHasChanges(getActiveBaseUrl(), true);
       },
     }),

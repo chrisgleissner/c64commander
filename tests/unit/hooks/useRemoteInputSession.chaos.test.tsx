@@ -247,6 +247,73 @@ describe("useRemoteInputSession chaos/stress (real device-safeguard throttle)", 
     expect(sendMachineInputBatchMock.mock.calls.length).toBe(callsAfterUnmount);
   }, 5000);
 
+  it("HARD18-001: drops a stale queued batch computed against an abandoned model after a batch failure", async () => {
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+    // Baseline send so the throttle has a lastSentAt reference.
+    act(() => result.current.setHeldJoystickInputs(new Set(["up"])));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(40);
+    });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(1);
+
+    // Batch A ("press right") dispatches and hangs - simulating a multi-second
+    // native read timeout still in flight (the canonical flaky-c64u scenario).
+    let rejectA: ((error: Error) => void) | undefined;
+    sendMachineInputBatchMock.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectA = reject;
+        }),
+    );
+    act(() => result.current.setHeldJoystickInputs(new Set(["right"])));
+    await act(async () => {
+      // Coalesce window (40ms) plus the device-safeguard cooldown (100ms) so
+      // A's dispatch actually starts, not merely queues.
+      await vi.advanceTimersByTimeAsync(140);
+    });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(2);
+    expect(rejectA).toBeDefined();
+
+    // While A hangs, a further change flushes batch B ("fire" added to the
+    // model A was assumed to have applied) - it enqueues behind A in the
+    // serialized FIFO and is NOT yet dispatched.
+    act(() => result.current.setHeldJoystickInputs(new Set(["right", "fire"])));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(40);
+    });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(2);
+
+    // A finally times out. The catch resets the held-set model to empty AND
+    // (HARD18-001) bumps the generation so B - still queued, computed
+    // against the now-abandoned model - drops itself once its turn comes,
+    // instead of re-asserting "right"+"fire" on the device after the reset.
+    await act(async () => {
+      rejectA?.(new Error("native read timeout"));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    const callsAfterFailure = sendMachineInputBatchMock.mock.calls.length;
+
+    // Drain the FIFO fully: B must never fire.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(sendMachineInputBatchMock.mock.calls.length).toBe(callsAfterFailure);
+
+    // Reconstruct final device state from every relayed diff: fully
+    // released - only A's own recovery release-all (if any) may have
+    // landed, B must contribute nothing.
+    const finalHeld = new Set<string>();
+    for (const call of sendMachineInputBatchMock.mock.calls) {
+      for (const event of call[0].events as Array<{ kind?: string; transition?: string; inputs?: string[] }>) {
+        if (event.kind === "release_all") finalHeld.clear();
+        if (event.transition === "press") event.inputs?.forEach((input) => finalHeld.add(input));
+        if (event.transition === "release") event.inputs?.forEach((input) => finalHeld.delete(input));
+      }
+    }
+    expect(finalHeld.size).toBe(0);
+  }, 5000);
+
   it("removes the throttle entirely under a 0ms (RELAXED) cooldown, relaying as fast as the user can press", async () => {
     deviceSafetyConfigState.machineInputCooldownMs = 0;
     const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));

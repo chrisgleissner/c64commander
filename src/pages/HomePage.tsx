@@ -66,7 +66,7 @@ import { deriveRamDumpFolderDisplayPath } from "@/lib/config/ramDumpFolderStore"
 import { useReuSnapshotStore, deleteReuSnapshotFromStore, updateReuSnapshotLabel } from "@/lib/reu/reuSnapshotStore";
 import { createReuWorkflow } from "@/lib/reu/reuWorkflow";
 import { deleteReuSnapshotFile } from "@/lib/reu/reuSnapshotStorage";
-import { saveRemoteReuFromTemp, restoreRemoteReuFromTemp } from "@/lib/reu/reuTelnetWorkflow";
+import { saveRemoteReuFromTemp, restoreRemoteReu } from "@/lib/reu/reuTelnetWorkflow";
 import type { ReuProgressState, ReuRestoreMode } from "@/lib/reu/reuSnapshotTypes";
 import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
 import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
@@ -107,6 +107,8 @@ import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { useTelnetActions } from "@/hooks/useTelnetActions";
 import { TELNET_ACTIONS, type TelnetActionId } from "@/lib/telnet/telnetTypes";
 import { withTelnetInteraction } from "@/lib/deviceInteraction/deviceInteractionManager";
+import { publishMachineTakeover } from "@/lib/deviceInteraction/machineTakeoverEvent";
+import { beginMachineTransition } from "@/lib/deviceInteraction/deviceActivityGate";
 import { getActiveAction, runWithImplicitAction } from "@/lib/tracing/actionTrace";
 import {
   isDeviceControlError,
@@ -116,6 +118,13 @@ import {
 } from "@/lib/deviceControl/deviceControl";
 import { deriveDeviceCapabilities, detectStreamingFromConfig } from "@/lib/deviceCapabilities";
 import { STREAM_ITEMS } from "@/lib/config/homeStreams";
+
+// HARD18-012b: the Ultimate's entire network stack is down for the whole
+// boot duration after a real power cycle - long enough that, unsuppressed,
+// two failed polls trip the CONSERVATIVE circuit breaker (threshold 2)
+// seconds after the app told the user "Power cycled". Bounded so a device
+// that is genuinely still unreachable once this elapses still surfaces.
+const POWER_CYCLE_EXPECTED_OUTAGE_MS = 18_000;
 
 export default function HomePage() {
   return (
@@ -373,6 +382,11 @@ function HomePageContent() {
             modifiedAt: entry.modifiedAt,
           }));
       },
+      listRemoteStorageRoots: async () => {
+        const ftpOptions = await resolveFtpOptions();
+        const result = await listFtpDirectory({ ...ftpOptions, path: "/" });
+        return result.entries.filter((entry) => entry.type === "dir").map((entry) => entry.name);
+      },
       readRemoteFile: async (path) => {
         const ftpOptions = await resolveFtpOptions();
         const result = await readFtpFile({ ...ftpOptions, path });
@@ -390,8 +404,10 @@ function HomePageContent() {
         withConnectedReuTelnetSession((session, menuKey) =>
           saveRemoteReuFromTemp(session, menuKey, getRequiredTelnetTarget("saveReuMemory")),
         ),
-      runRestoreRemoteReu: (fileName, mode) =>
-        withConnectedReuTelnetSession((session, menuKey) => restoreRemoteReuFromTemp(session, menuKey, fileName, mode)),
+      runRestoreRemoteReu: (fileName, mode, folderName) =>
+        withConnectedReuTelnetSession((session, menuKey) =>
+          restoreRemoteReu(session, menuKey, fileName, mode, folderName),
+        ),
     });
 
   const withConnectedConfigTelnetSession = async <T,>(
@@ -592,7 +608,18 @@ function HomePageContent() {
       successTitle: "Power cycled",
       failureOperation: "HOME_POWER_CYCLE",
       failureTitle: "Power cycle failed",
-      onSuccess: () => setMachineExecutionState("running"),
+      // HARD18-022 (M3): stop any armed Play session in place instead of
+      // letting auto-advance relaunch content on the freshly power-cycled
+      // machine once the current track's nominal duration elapses.
+      onSuccess: () => {
+        setMachineExecutionState("running");
+        void publishMachineTakeover({ reason: "home-reset", label: "Power cycle" });
+        // HARD18-012b: arm the expected-outage window now, at the moment the
+        // boot outage actually begins - begin+immediately-end applies the
+        // cooldown starting from right now rather than leaving the
+        // transition "active" indefinitely.
+        beginMachineTransition(POWER_CYCLE_EXPECTED_OUTAGE_MS)();
+      },
     });
   };
 
@@ -603,7 +630,11 @@ function HomePageContent() {
       successTitle: "Machine rebooting",
       failureOperation: "HOME_REBOOT_CLEAR_MEMORY",
       failureTitle: "Reboot failed",
-      onSuccess: () => setMachineExecutionState("running"),
+      // HARD18-022 (M3): see handlePowerCycle above.
+      onSuccess: () => {
+        setMachineExecutionState("running");
+        void publishMachineTakeover({ reason: "home-reset", label: "Reboot (Clr Mem)" });
+      },
     });
   };
 
@@ -615,7 +646,11 @@ function HomePageContent() {
       successTitle: "Machine rebooting",
       failureOperation: "HOME_REBOOT_KEEP_MEMORY",
       failureTitle: "Reboot failed",
-      onSuccess: () => setMachineExecutionState("running"),
+      // HARD18-022 (M3): see handlePowerCycle above.
+      onSuccess: () => {
+        setMachineExecutionState("running");
+        void publishMachineTakeover({ reason: "home-reset", label: "Reboot" });
+      },
     });
   };
 

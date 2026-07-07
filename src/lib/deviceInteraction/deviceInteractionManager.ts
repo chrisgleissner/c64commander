@@ -23,6 +23,7 @@ import {
 } from "@/lib/deviceInteraction/deviceStateStore";
 import {
   areBackgroundReadsSuspended,
+  isMachineTransitionActive,
   waitForBackgroundReadsToResume,
 } from "@/lib/deviceInteraction/deviceActivityGate";
 import { isTransientConnectivityFailure } from "@/lib/uiErrors";
@@ -34,6 +35,7 @@ import {
   isReadOnlyRestMethod,
 } from "@/lib/deviceInteraction/restRequestIdentity";
 import { resetConfigWriteThrottle } from "@/lib/config/configWriteThrottle";
+import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 
 export type InteractionIntent = "user" | "system" | "background";
 
@@ -66,6 +68,16 @@ type RestRequestMeta = {
    * resets the streak, so healthy observation keeps closing the circuit).
    */
   suppressCircuitContribution?: boolean;
+  /**
+   * HARD18-005: the remote-input relay's dedicated lane. The bulk REST slot
+   * (REST_MAX_CONCURRENCY = 1) queues every request behind whatever is
+   * currently running (mount, upload, degraded read), which can freeze
+   * joystick/keyboard relay for seconds. Input-lane requests skip the bulk
+   * scheduler entirely; non-overlap on the wire is still guaranteed by the
+   * caller's serializeMachineInputRequest + machineInputThrottle, exactly the
+   * documented HARD13 safety model for this endpoint.
+   */
+  useInputLane?: boolean;
 };
 
 type FtpRequestMeta = {
@@ -571,34 +583,6 @@ const shouldBlockForState = (intent: InteractionIntent, allowDuringDiscovery?: b
   return false;
 };
 
-const applyCooldown = async (
-  key: string | null,
-  cooldownMs: number,
-  intent: InteractionIntent,
-  action: TraceActionContext,
-) => {
-  if (!key || cooldownMs <= 0) return;
-  const now = Date.now();
-  const untilMs = restCooldownUntil.get(key) ?? 0;
-  if (now >= untilMs) return;
-  const waitMs = untilMs - now;
-  recordDeviceGuard(action, {
-    decision: "defer",
-    reason: "cooldown",
-    waitMs,
-  });
-  addLog("debug", "Device safety cooldown delay applied", {
-    transport: "rest",
-    key,
-    intent,
-    waitMs,
-    cooldownMs,
-    deviceSafetyMode: config.mode,
-    effectiveDeviceSafetyMode: config.resolution?.effectiveMode ?? config.mode,
-  });
-  await sleep(waitMs);
-};
-
 const normalizeRestResourcePath = (path: string, baseUrl: string) => canonicalizeRestPath(path, baseUrl).split("?")[0];
 
 const pathsShareResourceTree = (leftPath: string, rightPath: string) =>
@@ -759,7 +743,6 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
   const policy = resolveRestPolicy(meta.method, canonicalPath, meta.baseUrl);
   const usesSharedReadState =
     isReadOnlyRestMethod(meta.method) && Boolean(policy.key) && !meta.bypassCache && !userHalfOpenProbe;
-  const defersReadWaitsInScheduler = isReadOnlyRestMethod(meta.method);
 
   if (usesSharedReadState && policy.key) {
     const cached = restCache.get(policy.key);
@@ -783,29 +766,12 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
   }
 
   const scheduleTask = async () => {
-    if (!defersReadWaitsInScheduler && !meta.bypassBackoff && !userHalfOpenProbe && restBackoffUntilMs > Date.now()) {
-      const waitMs = restBackoffUntilMs - Date.now();
-      recordDeviceGuard(meta.action, {
-        decision: "defer",
-        reason: "backoff",
-        waitMs,
-      });
-      addLog("debug", "Device safety backoff delay applied", {
-        transport: "rest",
-        method: meta.method,
-        path: canonicalPath,
-        intent: meta.intent,
-        waitMs,
-        deviceSafetyMode: config.mode,
-        effectiveDeviceSafetyMode: config.resolution?.effectiveMode ?? config.mode,
-      });
-      await sleep(waitMs);
-    }
-
-    if (!defersReadWaitsInScheduler && !meta.bypassCooldown && !userHalfOpenProbe) {
-      await applyCooldown(policy.key, policy.cooldownMs, meta.intent, meta.action);
-    }
-
+    // HARD18-006: backoff/cooldown waits are resolved by the scheduler's
+    // getReadyAtMs deferral below (for every method, not only reads) and keep
+    // the task OUT of the running slot until ready. Sleeping here would hold
+    // the exclusive slot and starve everything else queued behind it -
+    // notably a user-forced health-check probe, which must reach the wire
+    // promptly to observe the device's real state.
     if (!meta.bypassCooldown && !userHalfOpenProbe && policy.key && policy.cooldownMs > 0) {
       restCooldownUntil.set(policy.key, Date.now() + policy.cooldownMs);
     }
@@ -852,7 +818,15 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
       // SUCCESS still calls resetRestFailure() above, so healthy observation
       // continues to CLOSE the circuit (rapid self-healing); only the failure
       // contribution is suppressed here.
-      if (!meta.suppressCircuitContribution) {
+      //
+      // HARD18-012b: a deliberate machine transition the app itself just
+      // caused (armed with a long cooldown for power-cycle's full boot
+      // outage) is an EXPECTED disruption, not device degradation - polls
+      // that fail while the Ultimate is rebooting must not trip the breaker
+      // or fire offline toasts seconds after the app told the user "Power
+      // cycled". Bounded by the cooldown the caller armed, so a genuinely
+      // dead device still surfaces once the window elapses.
+      if (!meta.suppressCircuitContribution && !isMachineTransitionActive()) {
         updateRestFailure(err);
       }
       markDeviceRequestEnd({ success: false, errorMessage: err.message });
@@ -869,11 +843,16 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
     }
   };
 
-  const scheduledPromise = restScheduler.schedule<T>({
-    intent: meta.intent,
-    run: scheduleTask,
-    getReadyAtMs: defersReadWaitsInScheduler
-      ? () => {
+  // HARD18-005: the input lane must never queue behind the bulk single-slot
+  // scheduler (a mount/upload/degraded read holding the slot would otherwise
+  // freeze joystick/keyboard relay for seconds). Run it directly; non-overlap
+  // is still enforced by the caller's serializeMachineInputRequest lane.
+  const scheduledPromise = meta.useInputLane
+    ? scheduleTask()
+    : restScheduler.schedule<T>({
+        intent: meta.intent,
+        run: scheduleTask,
+        getReadyAtMs: () => {
           let readyAtMs = Date.now();
           if (!meta.bypassBackoff && !userHalfOpenProbe) {
             readyAtMs = Math.max(readyAtMs, restBackoffUntilMs);
@@ -882,9 +861,8 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
             readyAtMs = Math.max(readyAtMs, restCooldownUntil.get(policy.key) ?? 0);
           }
           return readyAtMs;
-        }
-      : undefined,
-  });
+        },
+      });
 
   if (reservedUserHalfOpenProbe) {
     restUserCircuitProbePromise = scheduledPromise;
@@ -1079,78 +1057,91 @@ export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () =>
 };
 
 export const withTelnetInteraction = async <T>(meta: TelnetRequestMeta, handler: () => Promise<T>): Promise<T> => {
-  if (isTestEnv()) {
-    markDeviceRequestStart();
-    try {
-      const result = await handler();
-      markDeviceRequestEnd({ success: true });
-      return result;
-    } catch (error) {
-      const err = error as Error;
-      markDeviceRequestEnd({ success: false, errorMessage: err.message });
-      throw error;
+  // HARD18-026 (M4): pause REST polling for the WHOLE telnet interaction, not
+  // just the discovery call site useTelnetActions already covered - this is
+  // the one central change that closes every remaining telnet call-site
+  // family (action execution, playback config-refs per track transition,
+  // REU/config workflows), which previously ran un-paused and let REST
+  // polling overlap a live telnet session on firmware documented to wedge
+  // under concurrent telnet+REST traffic. Reference-counted, so the existing
+  // discovery-path acquisition composes harmlessly with this one.
+  const pollingPause = pollingPauseRegistry.acquirePause();
+  try {
+    if (isTestEnv()) {
+      markDeviceRequestStart();
+      try {
+        const result = await handler();
+        markDeviceRequestEnd({ success: true });
+        return result;
+      } catch (error) {
+        const err = error as Error;
+        markDeviceRequestEnd({ success: false, errorMessage: err.message });
+        throw error;
+      }
     }
-  }
-  if (shouldBlockForState(meta.intent, false)) {
-    const error = new Error("Device not ready for Telnet");
-    recordDeviceGuard(meta.action, {
-      decision: "block",
-      reason: "state",
-      state: getDeviceStateSnapshot().state,
-    });
-    throw error;
-  }
-
-  const now = Date.now();
-  if (telnetCircuitUntilMs > now && !(meta.intent === "user" && config.allowUserOverrideCircuit)) {
-    recordDeviceGuard(meta.action, {
-      decision: "block",
-      reason: "circuit-open",
-      untilMs: telnetCircuitUntilMs,
-    });
-    throw new Error("Telnet circuit open");
-  }
-  if (telnetCircuitUntilMs > now && meta.intent === "user" && config.allowUserOverrideCircuit) {
-    recordDeviceGuard(meta.action, {
-      decision: "override",
-      reason: "circuit-open",
-      untilMs: telnetCircuitUntilMs,
-    });
-  }
-  const hostScope = `${(meta.host ?? "any").toLowerCase()}:${meta.port ?? 23}`;
-
-  const scheduleTask = async () => {
-    if (telnetBackoffUntilMs > Date.now()) {
-      const waitMs = telnetBackoffUntilMs - Date.now();
+    if (shouldBlockForState(meta.intent, false)) {
+      const error = new Error("Device not ready for Telnet");
       recordDeviceGuard(meta.action, {
-        decision: "defer",
-        reason: "backoff",
-        waitMs,
-      });
-      await sleep(waitMs);
-    }
-
-    await applyTelnetConnectPacing(hostScope, meta.action, meta.intent);
-    markDeviceRequestStart();
-    try {
-      const result = await handler();
-      resetTelnetFailure();
-      markDeviceRequestEnd({ success: true });
-      return result;
-    } catch (error) {
-      const err = error as Error;
-      updateTelnetFailure(err);
-      markDeviceRequestEnd({ success: false, errorMessage: err.message });
-      addErrorLog("Telnet request failed", {
-        error: err.message,
-        actionId: meta.actionId,
+        decision: "block",
+        reason: "state",
+        state: getDeviceStateSnapshot().state,
       });
       throw error;
     }
-  };
 
-  return telnetScheduler.schedule<T>({
-    intent: meta.intent,
-    run: scheduleTask,
-  });
+    const now = Date.now();
+    if (telnetCircuitUntilMs > now && !(meta.intent === "user" && config.allowUserOverrideCircuit)) {
+      recordDeviceGuard(meta.action, {
+        decision: "block",
+        reason: "circuit-open",
+        untilMs: telnetCircuitUntilMs,
+      });
+      throw new Error("Telnet circuit open");
+    }
+    if (telnetCircuitUntilMs > now && meta.intent === "user" && config.allowUserOverrideCircuit) {
+      recordDeviceGuard(meta.action, {
+        decision: "override",
+        reason: "circuit-open",
+        untilMs: telnetCircuitUntilMs,
+      });
+    }
+    const hostScope = `${(meta.host ?? "any").toLowerCase()}:${meta.port ?? 23}`;
+
+    const scheduleTask = async () => {
+      if (telnetBackoffUntilMs > Date.now()) {
+        const waitMs = telnetBackoffUntilMs - Date.now();
+        recordDeviceGuard(meta.action, {
+          decision: "defer",
+          reason: "backoff",
+          waitMs,
+        });
+        await sleep(waitMs);
+      }
+
+      await applyTelnetConnectPacing(hostScope, meta.action, meta.intent);
+      markDeviceRequestStart();
+      try {
+        const result = await handler();
+        resetTelnetFailure();
+        markDeviceRequestEnd({ success: true });
+        return result;
+      } catch (error) {
+        const err = error as Error;
+        updateTelnetFailure(err);
+        markDeviceRequestEnd({ success: false, errorMessage: err.message });
+        addErrorLog("Telnet request failed", {
+          error: err.message,
+          actionId: meta.actionId,
+        });
+        throw error;
+      }
+    };
+
+    return await telnetScheduler.schedule<T>({
+      intent: meta.intent,
+      run: scheduleTask,
+    });
+  } finally {
+    pollingPause.release();
+  }
 };

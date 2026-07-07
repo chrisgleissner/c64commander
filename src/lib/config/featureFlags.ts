@@ -138,7 +138,16 @@ const computeResolution = (
   developerMode: boolean,
 ): FeatureFlagResolution => {
   const hasOverride = typeof override === "boolean";
-  const value = hasOverride ? (override as boolean) : definition.enabled;
+  // HARD18-016: a developer-only flag is invisible and uneditable outside
+  // developer mode (see visible/editable below), so an override left behind
+  // by a prior debugging session must not keep silently diverging `value`
+  // from the definition's default with no discoverable cause. The stored
+  // override itself is untouched here (hasOverride/overrideValue still
+  // reflect it, e.g. for diagnostics) so it automatically re-applies the
+  // next time developer mode is entered - only its effect on `value` is
+  // suspended while developer mode is off.
+  const overrideApplies = hasOverride && (!definition.developer_only || developerMode);
+  const value = overrideApplies ? (override as boolean) : definition.enabled;
   const visible = developerMode ? true : definition.visible_to_user;
   const editable = developerMode ? true : isStandardUserToggleable(definition);
   return {
@@ -368,6 +377,23 @@ export class FeatureFlagManager {
   applyDeveloperMode(enabled: boolean) {
     if (this.developerMode === enabled) return;
     this.developerMode = enabled;
+    // HARD18-016: background_execution_enabled gates native background
+    // playback timing/wake-lock/auto-advance - safety-relevant enough that a
+    // debugging-session override must not merely go dormant (computeResolution
+    // above already suspends its effect while developer mode is off), ready to
+    // silently resurface on some future dev-mode re-entry. Wipe it outright on
+    // exit instead, unlike the gentler dormant treatment every other
+    // developer-only flag gets.
+    if (!enabled && this.overrides.background_execution_enabled !== undefined) {
+      // clearOverride already logs+rethrows on failure; this catch only
+      // exists to keep the wipe fire-and-forget without letting an
+      // unexpected rejection go unlogged.
+      void this.clearOverride("background_execution_enabled").catch((error) =>
+        addErrorLog("Failed to wipe developer override on dev-mode exit", {
+          error: (error as Error).message,
+        }),
+      );
+    }
     this.emitSnapshot(this.snapshot.isLoaded);
   }
 

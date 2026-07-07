@@ -8,6 +8,7 @@
 
 import { getC64API } from "@/lib/c64api";
 import { addLog } from "@/lib/logging";
+import { publishMachineTakeover } from "@/lib/deviceInteraction/machineTakeoverEvent";
 import { FileTypeDetector, validateFileBytes } from "@/lib/fileValidation";
 import { getPlayCategory } from "@/lib/playback/fileTypes";
 import { executePlayPlan, type LocalPlayFile, type PlayPlan } from "@/lib/playback/playbackRouter";
@@ -96,4 +97,8 @@ export const executeArchiveEntry = async (params: {
     action: getArchiveEntryActionLabel(params.entry.path),
   });
   await executePlayPlan(api, plan);
+  // HARD18-023 (M3): this launch reboots/mounts/runs the machine
+  // out-of-playlist; an armed Play session must stop in place rather than
+  // later auto-advancing into the next playlist track on top of this run.
+  await publishMachineTakeover({ reason: "external-launch", label: params.binary.fileName });
 };

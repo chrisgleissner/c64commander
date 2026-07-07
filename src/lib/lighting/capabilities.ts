@@ -185,19 +185,46 @@ const rgbToNamedColor = (r: number, g: number, b: number, allowed: string[]) => 
   return best?.name ?? null;
 };
 
+const colorEquals = (left: LightingColorSpec | undefined, right: LightingColorSpec | undefined) =>
+  JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+
+/**
+ * HARD18-019: a mode change ("Off" <-> a pattern) is the one transition where
+ * the firmware may reset dependent items server-side, so it forces a full
+ * resend of every item (matching the pre-delta behavior) rather than trying
+ * to reason about which dependents survived. Any other change (e.g. an
+ * intensity-only slider drag) sends only the item(s) that actually differ.
+ */
 export const buildLightingUpdatePayload = (
   capability: LightingDeviceCapability,
   state: LightingSurfaceState,
+  currentState?: LightingSurfaceState | null,
 ): Record<string, string | number> => {
   const normalized = normalizeSurfaceStateForCapability(capability, state);
   if (!normalized) return {};
+  const normalizedCurrent = currentState ? normalizeSurfaceStateForCapability(capability, currentState) : null;
+  const modeChanged = normalized.mode !== (normalizedCurrent?.mode ?? undefined);
+  const sendFull = !normalizedCurrent || modeChanged;
+
   const payload: Record<string, string | number> = {};
-  if (normalized.mode) payload["LedStrip Mode"] = normalized.mode;
-  if (normalized.pattern) payload["LedStrip Pattern"] = normalized.pattern;
-  if (typeof normalized.intensity === "number") payload["Strip Intensity"] = normalized.intensity;
-  if (capability.supportsTint && normalized.tint) payload["Color tint"] = normalized.tint;
-  if (capability.supportsSidSelect && normalized.sidSelect) payload["LedStrip SID Select"] = normalized.sidSelect;
-  if (normalized.color) {
+  if (normalized.mode && sendFull) payload["LedStrip Mode"] = normalized.mode;
+  if (normalized.pattern && (sendFull || normalized.pattern !== normalizedCurrent?.pattern)) {
+    payload["LedStrip Pattern"] = normalized.pattern;
+  }
+  if (typeof normalized.intensity === "number" && (sendFull || normalized.intensity !== normalizedCurrent?.intensity)) {
+    payload["Strip Intensity"] = normalized.intensity;
+  }
+  if (capability.supportsTint && normalized.tint && (sendFull || normalized.tint !== normalizedCurrent?.tint)) {
+    payload["Color tint"] = normalized.tint;
+  }
+  if (
+    capability.supportsSidSelect &&
+    normalized.sidSelect &&
+    (sendFull || normalized.sidSelect !== normalizedCurrent?.sidSelect)
+  ) {
+    payload["LedStrip SID Select"] = normalized.sidSelect;
+  }
+  if (normalized.color && (sendFull || !colorEquals(normalized.color, normalizedCurrent?.color))) {
     if (capability.colorEncoding === "named" && normalized.color.kind === "named") {
       payload["Fixed Color"] = normalized.color.value;
     }

@@ -162,6 +162,11 @@ vi.mock("@/lib/savedDevices/store", () => ({
   getSelectedSavedDevice: () => ({ id: "device-a" }),
 }));
 
+const publishMachineTakeoverMock = vi.fn().mockResolvedValue(undefined);
+vi.mock("@/lib/deviceInteraction/machineTakeoverEvent", () => ({
+  publishMachineTakeover: (...args: unknown[]) => publishMachineTakeoverMock(...args),
+}));
+
 import { useHomeActions } from "@/pages/home/hooks/useHomeActions";
 import type { SnapshotStorageEntry } from "@/lib/snapshot/snapshotTypes";
 import { CpuRestoreUnsupportedError } from "@/lib/snapshot/cpu/restoreCart";
@@ -258,6 +263,7 @@ describe("useHomeActions", () => {
       customRanges: undefined,
       label: undefined,
       contentName: undefined,
+      alreadyPaused: false,
     });
     expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: "Snapshot saved" }));
   });
@@ -306,6 +312,7 @@ describe("useHomeActions", () => {
       customRanges: undefined,
       label: "Katakis.d64",
       contentName: "Katakis.d64",
+      alreadyPaused: false,
     });
   });
 
@@ -331,7 +338,9 @@ describe("useHomeActions", () => {
 
     expect(snapshotEntryToBytesMock).toHaveBeenCalledWith(snapshot);
     expect(decodeSnapshotMock).toHaveBeenCalled();
-    expect(loadMemoryRangesMock).toHaveBeenCalledWith(apiMock, [{ start: 0, bytes: expect.any(Uint8Array) }]);
+    expect(loadMemoryRangesMock).toHaveBeenCalledWith(apiMock, [{ start: 0, bytes: expect.any(Uint8Array) }], {
+      alreadyPaused: false,
+    });
     expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: "Snapshot restored" }));
   });
 
@@ -395,6 +404,19 @@ describe("useHomeActions", () => {
     });
 
     expect(clearRamAndRebootMock).not.toHaveBeenCalled();
+  });
+
+  // HARD18-022 (M3): a Home reset-class action must publish a machine
+  // takeover so an armed Play session stops in place instead of later
+  // auto-advancing onto the freshly reset machine.
+  it("HARD18-022: handleRebootClearMemory publishes a machine takeover on success", async () => {
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handleRebootClearMemory();
+    });
+
+    expect(publishMachineTakeoverMock).toHaveBeenCalledWith(expect.objectContaining({ reason: "home-reset" }));
   });
 
   it("handlePauseResume returns early when disconnected (line 130)", async () => {
@@ -653,7 +675,9 @@ describe("useHomeActions", () => {
 
     // CpuRestoreUnsupportedError is thrown before any cartridge upload -
     // nothing on the device was touched, so RAM-only restore is safe.
-    expect(loadMemoryRangesMock).toHaveBeenCalledWith(apiMock, [{ start: 0, bytes: expect.any(Uint8Array) }]);
+    expect(loadMemoryRangesMock).toHaveBeenCalledWith(apiMock, [{ start: 0, bytes: expect.any(Uint8Array) }], {
+      alreadyPaused: false,
+    });
     expect(reportUserErrorMock).not.toHaveBeenCalled();
     expect(toastMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -750,5 +774,57 @@ describe("useHomeActions", () => {
 
     expect(resumeMutateAsyncMock).toHaveBeenCalledTimes(1);
     expect(restorePauseMuteFromPersistedSnapshotMock).not.toHaveBeenCalled();
+  });
+
+  // HARD18-015: saving a snapshot while the machine is user-paused (e.g. a
+  // pause taken in Play, which mutes the SID mixer and sets pauseMutePending)
+  // must not silently resume the machine nor clear the pending-mute-restore
+  // marker - the only trigger left for the mixer to ever unmute again.
+  it("HARD18-015: saving a RAM snapshot while paused does not resume the machine or clear pauseMutePending", async () => {
+    machineExecutionSnapshot = { state: "paused", pauseMutePending: true };
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handleSaveRam("program");
+    });
+
+    expect(createSnapshotMock).toHaveBeenCalledWith(apiMock, expect.objectContaining({ alreadyPaused: true }));
+    expect(setMachineExecutionRunningMock).not.toHaveBeenCalled();
+    expect(result.current.machineExecutionState).toBe("paused");
+    expect(machineExecutionSnapshot.pauseMutePending).toBe(true);
+  });
+
+  it("HARD18-015: a failed RAM snapshot save never marks the machine running", async () => {
+    createSnapshotMock.mockRejectedValueOnce(new Error("save failed"));
+    machineExecutionSnapshot = { state: "running", pauseMutePending: false };
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handleSaveRam("program");
+    });
+
+    expect(reportUserErrorMock).toHaveBeenCalled();
+    expect(setMachineExecutionRunningMock).not.toHaveBeenCalled();
+  });
+
+  it("HARD18-015: restoring a snapshot while paused keeps the machine paused", async () => {
+    machineExecutionSnapshot = { state: "paused", pauseMutePending: true };
+    const snapshot: SnapshotStorageEntry = {
+      id: "snap-paused-restore",
+      filename: "c64-program.c64snap",
+      bytesBase64: "",
+      createdAt: "2026-01-01T12:00:00.000Z",
+      snapshotType: "program",
+      metadata: { snapshot_type: "program", display_ranges: [], created_at: "2026-01-01 12:00:00" },
+    };
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handleRestoreSnapshot(snapshot);
+    });
+
+    expect(loadMemoryRangesMock).toHaveBeenCalledWith(apiMock, expect.any(Array), { alreadyPaused: true });
+    expect(setMachineExecutionRunningMock).not.toHaveBeenCalled();
+    expect(result.current.machineExecutionState).toBe("paused");
   });
 });

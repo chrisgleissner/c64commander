@@ -160,6 +160,8 @@ export const detectUpdatedTempConfigFile = (
   return changed[0] ?? null;
 };
 
+const configFileSignature = (file: ConfigRemoteFile) => `${file.name}:${file.size ?? -1}:${file.modifiedAt ?? ""}`;
+
 export const waitForTempConfigFile = async (
   before: ConfigRemoteFile[],
   listRemoteTempFiles: () => Promise<ConfigRemoteFile[]>,
@@ -169,6 +171,10 @@ export const waitForTempConfigFile = async (
   intervalMs = DEFAULT_WAIT_INTERVAL_MS,
 ) => {
   const attempts = Math.max(1, Math.ceil(timeoutMs / intervalMs));
+  // HARD18-024: mirrors the REU workflow - accept a candidate only once its
+  // size and modifiedAt are stable across two consecutive polls, so a file
+  // still being written is never downloaded mid-write.
+  let lastSignature: string | null = null;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     onProgress?.({
       step: "waiting-for-file",
@@ -178,7 +184,13 @@ export const waitForTempConfigFile = async (
     });
     const after = await listRemoteTempFiles();
     const file = detectUpdatedTempConfigFile(before, after);
-    if (file) return file;
+    if (file) {
+      const signature = configFileSignature(file);
+      if (signature === lastSignature) return file;
+      lastSignature = signature;
+    } else {
+      lastSignature = null;
+    }
     await sleep(intervalMs);
   }
   throw new Error("Timed out waiting for the new config file in /Temp.");

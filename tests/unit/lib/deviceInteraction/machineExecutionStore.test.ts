@@ -114,4 +114,40 @@ describe("machineExecutionStore", () => {
       socket1: true,
     });
   });
+
+  it("HARD18-018: restores a master-shaped pause-mute snapshot (Vol Master) with no migration needed", async () => {
+    // pauseMuteSnapshot/pauseMuteEnablement are a plain Record<string, ...>
+    // with no fixed per-SID schema - a master-collapsed snapshot restores
+    // through the exact same generic buildEnabledSidUnmuteUpdates path an
+    // old per-SID snapshot does (see the two tests above), so no dedicated
+    // master-shape handling or migration is required here.
+    persistPlaybackSnapshot({
+      deviceId: "device-1",
+      volumeSnapshot: {},
+      volumeActive: true,
+      manualMuteSnapshot: null,
+      manualMuteEnablement: null,
+      pauseMuteSnapshot: {
+        "Vol Master": "0 dB",
+      },
+      pauseMuteEnablement: {},
+    });
+    const updateConfigBatch = vi.fn().mockResolvedValue({ errors: [] });
+
+    await expect(
+      restorePauseMuteFromPersistedSnapshot(
+        {
+          updateConfigBatch,
+        },
+        "device-1",
+      ),
+    ).resolves.toBe(true);
+
+    expect(updateConfigBatch).toHaveBeenCalledWith({
+      "Audio Mixer": {
+        "Vol Master": "0 dB",
+      },
+    });
+    expect(hydratePlaybackSnapshot("device-1")?.pauseMuteSnapshot).toBeNull();
+  });
 });

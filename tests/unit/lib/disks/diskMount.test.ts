@@ -17,7 +17,21 @@ vi.mock("@/lib/native/folderPicker", () => ({
   FolderPicker: {
     readFile: vi.fn(),
     readFileFromTree: vi.fn(),
+    writeFileToTree: vi.fn(async () => ({ uri: "tree://uri", sizeBytes: 0 })),
   },
+}));
+
+const { mockResolvePersistentReuStorageRoot } = vi.hoisted(() => ({
+  mockResolvePersistentReuStorageRoot: vi.fn(
+    (names: string[]) => names.find((n) => n.toLowerCase() !== "temp") ?? null,
+  ),
+}));
+
+// HARD18-025 reuses HARD18-014's persistent-root ranking as-is; stubbed here
+// so these tests don't also need reuWorkflow.ts's full dependency graph
+// (snapshot storage/store) just to exercise a pure ranking helper.
+vi.mock("@/lib/reu/reuWorkflow", () => ({
+  resolvePersistentReuStorageRoot: mockResolvePersistentReuStorageRoot,
 }));
 
 vi.mock("@/lib/sourceNavigation/paths", () => ({
@@ -66,8 +80,16 @@ import {
   requireLocalSourceEntries,
 } from "@/lib/sourceNavigation/localSourcesStore";
 import { addErrorLog } from "@/lib/logging";
-import { buildDiskMountType, resolveLocalDiskBlob, mountDiskToDrive } from "@/lib/disks/diskMount";
-import { clearArchiveDiskCacheForTests } from "@/lib/archive/archiveDiskCache";
+import {
+  buildDiskMountType,
+  resolveLocalDiskBlob,
+  mountDiskToDrive,
+  resolveDiskWriteBackTarget,
+  finalizeDiskWriteBack,
+  discardDiskWriteBack,
+  type DiskMountWriteBackDependencies,
+} from "@/lib/disks/diskMount";
+import { getCachedArchiveDiskBlob, clearArchiveDiskCacheForTests } from "@/lib/archive/archiveDiskCache";
 
 const ARCHIVE_CONFIG = {
   id: "commoserve-1",
@@ -96,6 +118,14 @@ describe("diskMount", () => {
     vi.clearAllMocks();
     mockIsOriginOnSelectedDevice.mockReturnValue(true);
     clearArchiveDiskCacheForTests();
+    // materializedMounts is a module singleton (by design - drive occupancy
+    // outlives any one test's mountDiskToDrive call); drop any leftovers so
+    // tests don't see a prior test's pending write-back entry.
+    discardDiskWriteBack("a");
+    discardDiskWriteBack("b");
+    mockResolvePersistentReuStorageRoot.mockImplementation(
+      (names: string[]) => names.find((n) => n.toLowerCase() !== "temp") ?? null,
+    );
     mockCreateArchiveClient.mockReturnValue({ downloadBinary: mockDownloadBinary });
     mockDownloadBinary.mockResolvedValue({
       fileName: "archive-game.d64",
@@ -695,6 +725,415 @@ describe("diskMount", () => {
       });
       expect(mockApi.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d64", "readwrite", {
         filename: "/archive-game.d64",
+      });
+    });
+
+    it("HARD18-025: reports device-native persistence for an on-device ultimate mount", async () => {
+      const outcome = await mountDiskToDrive(mockApi as any, "a", {
+        path: "/disk.d64",
+        location: "ultimate",
+      } as any);
+      expect(outcome).toEqual({ persistence: "device-native" });
+    });
+
+    it("HARD18-025: reports transient/unavailable persistence for a cross-device ultimate upload", async () => {
+      mockIsOriginOnSelectedDevice.mockReturnValue(false);
+      const outcome = await mountDiskToDrive(mockApi as any, "a", {
+        path: "/disk.d64",
+        location: "ultimate",
+        origin: { sourceKind: "ultimate", originDeviceId: "device-a", originPath: "/disk.d64" },
+      } as any);
+      expect(outcome).toEqual({
+        persistence: "transient",
+        writeBackTarget: { kind: "unavailable" },
+      });
+    });
+
+    it("HARD18-025: reports device-native persistence for an ultimate disk with no origin at all (not just a same-device origin)", async () => {
+      mockIsOriginOnSelectedDevice.mockReturnValue(false);
+      const outcome = await mountDiskToDrive(mockApi as any, "a", {
+        path: "/disk.d64",
+        location: "ultimate",
+      } as any);
+      expect(mockApi.mountDrive).toHaveBeenCalledWith("a", "/disk.d64", "d64", "readwrite");
+      expect(outcome).toEqual({ persistence: "device-native" });
+    });
+
+    it("HARD18-025: reports transient persistence (no writeBack deps supplied) for a plain local buffer-mount", async () => {
+      const file = new File(["test"], "disk.d64");
+      const outcome = await mountDiskToDrive(
+        mockApi as any,
+        "b",
+        { path: "/disk.d64", location: "local" } as any,
+        file,
+      );
+      expect(outcome.persistence).toBe("transient");
+      expect(mockApi.mountDriveUpload).toHaveBeenCalled();
+    });
+  });
+
+  describe("disk write-back materialization (HARD18-025)", () => {
+    const mockApi = {
+      mountDrive: vi.fn(async () => undefined),
+      mountDriveUpload: vi.fn(async () => undefined),
+      getBaseUrl: vi.fn(() => "http://localhost"),
+      getDeviceHost: vi.fn(() => "localhost"),
+    };
+
+    const buildWriteBack = (
+      overrides: Partial<DiskMountWriteBackDependencies> = {},
+    ): DiskMountWriteBackDependencies => ({
+      listRemoteStorageRoots: vi.fn(async () => ["Usb0", "Temp"]),
+      writeRemoteFile: vi.fn(async () => undefined),
+      readRemoteFile: vi.fn(async () => new Uint8Array([9, 9, 9])),
+      ...overrides,
+    });
+
+    describe("resolveDiskWriteBackTarget", () => {
+      it("resolves a local-tree target from disk.localTreeUri", () => {
+        const target = resolveDiskWriteBackTarget({
+          path: "/game.d64",
+          location: "local",
+          localTreeUri: "tree://direct",
+        } as any);
+        expect(target).toEqual({ kind: "local-tree", treeUri: "tree://direct", path: "/game.d64" });
+      });
+
+      it("resolves a local-tree target via sourceId + source.android.treeUri", () => {
+        vi.mocked(loadLocalSources).mockReturnValue([{ id: "src1", android: { treeUri: "tree://source" } } as any]);
+        const target = resolveDiskWriteBackTarget({
+          path: "/game.d64",
+          location: "local",
+          sourceId: "src1",
+        } as any);
+        expect(target).toEqual({ kind: "local-tree", treeUri: "tree://source", path: "/game.d64" });
+      });
+
+      it("is unavailable for a sourceId source with no tree handle (entries-mode)", () => {
+        vi.mocked(loadLocalSources).mockReturnValue([{ id: "src1" } as any]);
+        const target = resolveDiskWriteBackTarget({
+          path: "/game.d64",
+          location: "local",
+          sourceId: "src1",
+        } as any);
+        expect(target).toEqual({ kind: "unavailable" });
+      });
+
+      it("resolves an archive-cache target for a commoserve/archive disk", () => {
+        const target = resolveDiskWriteBackTarget(buildArchiveDisk());
+        expect(target).toEqual({ kind: "archive-cache", archiveRef: buildArchiveDisk().archiveRef });
+      });
+
+      it("is unavailable for an ultimate-location disk (already persistent via its own path)", () => {
+        const target = resolveDiskWriteBackTarget({ path: "/game.d64", location: "ultimate" } as any);
+        expect(target).toEqual({ kind: "unavailable" });
+      });
+
+      it("is unavailable with no tree handle, sourceId, or archiveRef", () => {
+        vi.mocked(loadLocalSources).mockReturnValue([]);
+        const target = resolveDiskWriteBackTarget({ path: "/game.d64", location: "local" } as any);
+        expect(target).toEqual({ kind: "unavailable" });
+      });
+    });
+
+    describe("mountDiskToDrive materialization", () => {
+      it("path-mounts to an FTP-uploaded work dir instead of buffer-mounting", async () => {
+        const file = new File([new Uint8Array([1, 2, 3])], "game.d64");
+        const writeBack = buildWriteBack();
+
+        const outcome = await mountDiskToDrive(
+          mockApi as any,
+          "a",
+          { path: "/game.d64", location: "local", localTreeUri: "tree://direct" } as any,
+          file,
+          { writeBack },
+        );
+
+        expect(writeBack.listRemoteStorageRoots).toHaveBeenCalled();
+        expect(writeBack.writeRemoteFile).toHaveBeenCalledWith(
+          "/Usb0/c64commander-disk-work-a.d64",
+          expect.any(Uint8Array),
+        );
+        expect(mockApi.mountDrive).toHaveBeenCalledWith("a", "/Usb0/c64commander-disk-work-a.d64", "d64", "readwrite");
+        expect(mockApi.mountDriveUpload).not.toHaveBeenCalled();
+        expect(outcome).toMatchObject({
+          persistence: "materialized",
+          workPath: "/Usb0/c64commander-disk-work-a.d64",
+        });
+      });
+
+      it("falls back to a buffer-mount when no persistent storage root is available", async () => {
+        const file = new File([new Uint8Array([1, 2, 3])], "game.d64");
+        const writeBack = buildWriteBack({ listRemoteStorageRoots: vi.fn(async () => ["Temp"]) });
+
+        const outcome = await mountDiskToDrive(
+          mockApi as any,
+          "a",
+          { path: "/game.d64", location: "local", localTreeUri: "tree://direct" } as any,
+          file,
+          { writeBack },
+        );
+
+        expect(writeBack.writeRemoteFile).not.toHaveBeenCalled();
+        expect(mockApi.mountDrive).not.toHaveBeenCalled();
+        expect(mockApi.mountDriveUpload).toHaveBeenCalledWith("a", file, "d64", "readwrite", { filename: "/game.d64" });
+        expect(outcome.persistence).toBe("transient");
+      });
+
+      it("falls back to a buffer-mount when persistent storage root discovery itself throws", async () => {
+        const file = new File([new Uint8Array([1, 2, 3])], "game.d64");
+        const writeBack = buildWriteBack({
+          listRemoteStorageRoots: vi.fn(async () => Promise.reject(new Error("FTP list failed"))),
+        });
+
+        const outcome = await mountDiskToDrive(
+          mockApi as any,
+          "a",
+          { path: "/game.d64", location: "local", localTreeUri: "tree://direct" } as any,
+          file,
+          { writeBack },
+        );
+
+        expect(writeBack.writeRemoteFile).not.toHaveBeenCalled();
+        expect(mockApi.mountDrive).not.toHaveBeenCalled();
+        expect(mockApi.mountDriveUpload).toHaveBeenCalledWith("a", file, "d64", "readwrite", { filename: "/game.d64" });
+        expect(outcome.persistence).toBe("transient");
+        expect(addErrorLog).toHaveBeenCalledWith(
+          "Disk work-dir storage root discovery failed; falling back to a transient mount",
+          expect.objectContaining({ drive: "a" }),
+        );
+      });
+
+      it("falls back to a buffer-mount when the FTP upload to the work dir fails", async () => {
+        const file = new File([new Uint8Array([1, 2, 3])], "game.d64");
+        const writeBack = buildWriteBack({ writeRemoteFile: vi.fn(async () => Promise.reject(new Error("FTP down"))) });
+
+        const outcome = await mountDiskToDrive(
+          mockApi as any,
+          "a",
+          { path: "/game.d64", location: "local", localTreeUri: "tree://direct" } as any,
+          file,
+          { writeBack },
+        );
+
+        expect(mockApi.mountDrive).not.toHaveBeenCalled();
+        expect(mockApi.mountDriveUpload).toHaveBeenCalled();
+        expect(outcome.persistence).toBe("transient");
+        expect(addErrorLog).toHaveBeenCalledWith(
+          "Disk work-dir materialization failed; falling back to a transient mount",
+          expect.objectContaining({ drive: "a" }),
+        );
+      });
+
+      it("never calls listRemoteStorageRoots when the write-back target is unavailable", async () => {
+        const file = new File([new Uint8Array([1, 2, 3])], "game.d64");
+        vi.mocked(loadLocalSources).mockReturnValue([]);
+        const writeBack = buildWriteBack();
+
+        const outcome = await mountDiskToDrive(
+          mockApi as any,
+          "a",
+          { path: "/game.d64", location: "local" } as any,
+          file,
+          { writeBack },
+        );
+
+        expect(writeBack.listRemoteStorageRoots).not.toHaveBeenCalled();
+        expect(mockApi.mountDriveUpload).toHaveBeenCalled();
+        expect(outcome).toMatchObject({ persistence: "transient", writeBackTarget: { kind: "unavailable" } });
+      });
+
+      it("does not materialize a readonly mount", async () => {
+        const file = new File([new Uint8Array([1, 2, 3])], "game.d64");
+        const writeBack = buildWriteBack();
+
+        const outcome = await mountDiskToDrive(
+          mockApi as any,
+          "a",
+          { path: "/game.d64", location: "local", localTreeUri: "tree://direct" } as any,
+          file,
+          { writeBack, mode: "readonly" },
+        );
+
+        expect(writeBack.listRemoteStorageRoots).not.toHaveBeenCalled();
+        expect(mockApi.mountDriveUpload).toHaveBeenCalledWith("a", file, "d64", "readonly", { filename: "/game.d64" });
+        expect(outcome.persistence).toBe("transient");
+      });
+    });
+
+    describe("finalizeDiskWriteBack (eject)", () => {
+      it("reports attempted:false when the drive has no materialized mount", async () => {
+        const result = await finalizeDiskWriteBack("a", buildWriteBack());
+        expect(result).toEqual({ attempted: false });
+      });
+
+      it("FTP-downloads the work-dir image back and writes it to a local-tree source", async () => {
+        const file = new File([new Uint8Array([1, 2, 3])], "game.d64");
+        const writeBack = buildWriteBack({ readRemoteFile: vi.fn(async () => new Uint8Array([42, 43, 44])) });
+        await mountDiskToDrive(
+          mockApi as any,
+          "a",
+          { path: "/game.d64", location: "local", localTreeUri: "tree://direct" } as any,
+          file,
+          { writeBack },
+        );
+
+        const result = await finalizeDiskWriteBack("a", writeBack);
+
+        expect(writeBack.readRemoteFile).toHaveBeenCalledWith("/Usb0/c64commander-disk-work-a.d64");
+        expect(FolderPicker.writeFileToTree).toHaveBeenCalledWith({
+          treeUri: "tree://direct",
+          path: "/game.d64",
+          data: btoa("*+,"), // bytes [42,43,44] -> chars "*+,"
+          overwrite: true,
+        });
+        expect(result).toEqual({ attempted: true, success: true });
+
+        // The entry is consumed - a second finalize on the same drive is a no-op.
+        const second = await finalizeDiskWriteBack("a", writeBack);
+        expect(second).toEqual({ attempted: false });
+      });
+
+      it("re-persists an archive/commoserve disk's changes into the in-memory disk cache", async () => {
+        const file = new File([new Uint8Array([1, 2, 3])], "archive-game.d64");
+        const writeBack = buildWriteBack({ readRemoteFile: vi.fn(async () => new Uint8Array([7, 7, 7])) });
+        vi.mocked(loadLocalSources).mockReturnValue([]);
+        const disk = buildArchiveDisk();
+
+        await mountDiskToDrive(mockApi as any, "a", disk, file, { writeBack });
+        const result = await finalizeDiskWriteBack("a", writeBack);
+
+        expect(result).toEqual({ attempted: true, success: true });
+        const cached = getCachedArchiveDiskBlob(disk.archiveRef);
+        expect(cached).toBeInstanceOf(Blob);
+        expect(cached?.size).toBe(3);
+      });
+
+      it("reports success:false without throwing when the FTP read-back fails", async () => {
+        const file = new File([new Uint8Array([1, 2, 3])], "game.d64");
+        const writeBack = buildWriteBack();
+        await mountDiskToDrive(
+          mockApi as any,
+          "a",
+          { path: "/game.d64", location: "local", localTreeUri: "tree://direct" } as any,
+          file,
+          { writeBack },
+        );
+
+        const failingReadBack = buildWriteBack({
+          readRemoteFile: vi.fn(async () => Promise.reject(new Error("FTP timeout"))),
+        });
+        const result = await finalizeDiskWriteBack("a", failingReadBack);
+
+        expect(result.attempted).toBe(true);
+        expect((result as { success: false; error: Error }).success).toBe(false);
+        expect((result as { success: false; error: Error }).error.message).toBe("FTP timeout");
+      });
+    });
+
+    describe("discardDiskWriteBack", () => {
+      it("drops a pending materialized mount without any FTP round trip", async () => {
+        const file = new File([new Uint8Array([1, 2, 3])], "game.d64");
+        const writeBack = buildWriteBack();
+        await mountDiskToDrive(
+          mockApi as any,
+          "a",
+          { path: "/game.d64", location: "local", localTreeUri: "tree://direct" } as any,
+          file,
+          { writeBack },
+        );
+
+        discardDiskWriteBack("a");
+
+        const result = await finalizeDiskWriteBack("a", writeBack);
+        expect(result).toEqual({ attempted: false });
+        expect(writeBack.readRemoteFile).not.toHaveBeenCalled();
+      });
+    });
+
+    describe("remounting a different disk over a materialized drive", () => {
+      it("finalizes the stale entry's write-back before the new mount proceeds", async () => {
+        const firstFile = new File([new Uint8Array([1, 2, 3])], "first.d64");
+        const writeBack = buildWriteBack({ readRemoteFile: vi.fn(async () => new Uint8Array([5, 6, 7])) });
+        await mountDiskToDrive(
+          mockApi as any,
+          "a",
+          { id: "disk-first", path: "/first.d64", location: "local", localTreeUri: "tree://first" } as any,
+          firstFile,
+          { writeBack },
+        );
+
+        const secondFile = new File([new Uint8Array([4, 5, 6])], "second.d64");
+        await mountDiskToDrive(
+          mockApi as any,
+          "a",
+          { id: "disk-second", path: "/second.d64", location: "local", localTreeUri: "tree://second" } as any,
+          secondFile,
+          { writeBack },
+        );
+
+        expect(writeBack.readRemoteFile).toHaveBeenCalledWith("/Usb0/c64commander-disk-work-a.d64");
+        expect(FolderPicker.writeFileToTree).toHaveBeenCalledWith(
+          expect.objectContaining({ treeUri: "tree://first", path: "/first.d64" }),
+        );
+      });
+
+      it("logs (not throws) when the stale entry's write-back fails during a remount, and the new mount still proceeds", async () => {
+        const firstFile = new File([new Uint8Array([1, 2, 3])], "first.d64");
+        const writeBack = buildWriteBack({
+          readRemoteFile: vi.fn(async () => Promise.reject(new Error("FTP read failed"))),
+        });
+        await mountDiskToDrive(
+          mockApi as any,
+          "a",
+          { id: "disk-first", path: "/first.d64", location: "local", localTreeUri: "tree://first" } as any,
+          firstFile,
+          { writeBack },
+        );
+
+        const secondFile = new File([new Uint8Array([4, 5, 6])], "second.d64");
+        const outcome = await mountDiskToDrive(
+          mockApi as any,
+          "a",
+          { id: "disk-second", path: "/second.d64", location: "local", localTreeUri: "tree://second" } as any,
+          secondFile,
+          { writeBack },
+        );
+
+        expect(addErrorLog).toHaveBeenCalledWith(
+          "Disk write-back failed while remounting a different disk",
+          expect.objectContaining({ drive: "a", path: "/first.d64" }),
+        );
+        expect(FolderPicker.writeFileToTree).not.toHaveBeenCalledWith(
+          expect.objectContaining({ treeUri: "tree://first" }),
+        );
+        expect(outcome.persistence).toBe("materialized");
+      });
+
+      it("drops (does not misattribute) the stale entry when the new mount has no writeBack deps", async () => {
+        const firstFile = new File([new Uint8Array([1, 2, 3])], "first.d64");
+        const writeBack = buildWriteBack();
+        await mountDiskToDrive(
+          mockApi as any,
+          "a",
+          { id: "disk-first", path: "/first.d64", location: "local", localTreeUri: "tree://first" } as any,
+          firstFile,
+          { writeBack },
+        );
+
+        // Play's mountDiskToDrive call sites never pass writeBack.
+        const secondFile = new File([new Uint8Array([4, 5, 6])], "second.d64");
+        await mountDiskToDrive(
+          mockApi as any,
+          "a",
+          { id: "disk-second", path: "/second.d64", location: "local" } as any,
+          secondFile,
+        );
+
+        expect(writeBack.readRemoteFile).not.toHaveBeenCalled();
+        // The stale entry must not still be sitting there to be misread later.
+        const result = await finalizeDiskWriteBack("a", writeBack);
+        expect(result).toEqual({ attempted: false });
       });
     });
   });

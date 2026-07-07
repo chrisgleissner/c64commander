@@ -97,9 +97,11 @@ vi.mock("@/lib/diagnostics/healthCheckEngine", () => ({
       context: "background-maintenance",
       configPulsePolicy: "read-only",
     },
+    // HARD18-008: the switcher context is read-only (no CONFIG pulse) so
+    // opening/closing the picker never writes LED/volume on saved devices.
     switchDeviceDialog: {
       context: "switch-device-dialog",
-      configPulsePolicy: "visible-config-pulse-allowed",
+      configPulsePolicy: "read-only",
     },
   },
   runConnectivityProbeForTarget: mockRunConnectivityProbeForTarget,
@@ -346,7 +348,7 @@ describe("useSavedDeviceHealthChecks", () => {
     expect(result.current.byDeviceId["device-office"]?.error).toBe("Circuit open");
   });
 
-  it("allows switch-device dialog checks to use the explicit visible config pulse context", async () => {
+  it("routes switch-device dialog checks through the explicit (read-only) switcher context", async () => {
     const savedDevices = buildSavedDevices();
     renderSwitchHook(savedDevices);
 

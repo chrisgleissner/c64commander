@@ -12,6 +12,11 @@ import { addErrorLog, addLog } from "@/lib/logging";
 import { getHvscDurationsByMd5Seconds } from "@/lib/hvsc";
 import { applyConfigFileReference, ensureConfigFileReferenceAccessible } from "@/lib/config/applyConfigFileReference";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
+import {
+  buildEnabledSidMuteUpdates,
+  buildEnabledSidUnmuteUpdates,
+  buildEnabledSidVolumeSnapshot,
+} from "@/lib/config/sidVolumeControl";
 
 const mockArchiveClient = {
   downloadBinary: vi.fn(),
@@ -1174,6 +1179,70 @@ describe("usePlaybackController", () => {
         description: "pause failed",
       }),
     );
+  });
+
+  it("HARD18-018: collapses pause-mute to a single Vol Master OFF write on master-capable firmware", async () => {
+    const playlist = [
+      createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+    ];
+    const dispatchVolume = vi.fn();
+    const applyAudioMixerUpdates = vi.fn().mockResolvedValue(undefined);
+    const machinePause = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getC64API).mockReturnValue({ machinePause } as any);
+    const pauseMuteSnapshotRef = { current: null };
+    const masterItem = { name: "Vol Master", value: "0 dB", options: ["OFF", "-42 dB", "0 dB", "+6 dB"] };
+
+    // Real sidVolumeControl.ts functions, not mocks - this is the same
+    // wiring PlayFilesPage.tsx uses (useVolumeOverride's enabledSidVolumeItems
+    // is an alias for its master-aware playbackVolumeItems), proving the
+    // pause-mute chain collapses to Vol Master end-to-end rather than
+    // per-SID batches, and that the mute target is OFF, not -42 dB.
+    const { result } = renderPlaybackController(playlist, {
+      isPlaying: true,
+      isPaused: false,
+      dispatchVolume,
+      applyAudioMixerUpdates,
+      enabledSidVolumeItems: [masterItem],
+      pauseMuteSnapshotRef,
+      buildEnabledSidMuteUpdates,
+      captureSidMuteSnapshot: vi.fn((items: any[], enablement: any) => ({
+        volumes: buildEnabledSidVolumeSnapshot(items, enablement),
+        enablement,
+      })),
+    });
+
+    await result.current.handlePauseResume();
+
+    expect(machinePause).toHaveBeenCalled();
+    expect(applyAudioMixerUpdates).toHaveBeenCalledWith({ "Vol Master": "OFF" }, "Pause mute");
+    expect(pauseMuteSnapshotRef.current).toEqual({ volumes: { "Vol Master": "0 dB" }, enablement: {} });
+  });
+
+  it("HARD18-018: restores Vol Master's prior value on resume via the generic snapshot restore path", async () => {
+    const playlist = [
+      createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+    ];
+    const applyAudioMixerUpdates = vi.fn().mockResolvedValue(undefined);
+    const pauseMuteSnapshotRef = {
+      current: { volumes: { "Vol Master": "0 dB" }, enablement: {} },
+    };
+    vi.mocked(getC64API).mockReturnValue({ machineResume: vi.fn().mockResolvedValue(undefined) } as any);
+
+    const { result } = renderPlaybackController(playlist, {
+      isPlaying: true,
+      isPaused: true,
+      applyAudioMixerUpdates,
+      pauseMuteSnapshotRef,
+      enabledSidVolumeItems: [{ name: "Vol Master", value: "OFF", options: ["OFF", "-42 dB", "0 dB", "+6 dB"] }],
+      snapshotToUpdates: vi.fn((snapshot: any) =>
+        buildEnabledSidUnmuteUpdates(snapshot?.volumes, snapshot?.enablement ?? {}),
+      ),
+    });
+
+    await result.current.handlePauseResume();
+
+    expect(applyAudioMixerUpdates).toHaveBeenCalledWith({ "Vol Master": "0 dB" }, "Resume unmute");
+    expect(pauseMuteSnapshotRef.current).toBeNull();
   });
 
   it("resumes a DMA-paused machine before playing a new track (HARD9-029)", async () => {

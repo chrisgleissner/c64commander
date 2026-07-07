@@ -19,6 +19,7 @@ import {
   withTelnetInteraction,
 } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { saveDeviceSafetyMode } from "@/lib/config/deviceSafetySettings";
+import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 
 const action = {} as any;
 
@@ -378,6 +379,60 @@ describe("withRestInteraction", () => {
     }
   });
 
+  it("HARD18-005: input-lane requests bypass the bulk single-slot scheduler", async () => {
+    let releaseBulk!: () => void;
+    const bulkDone = new Promise<void>((resolve) => {
+      releaseBulk = resolve;
+    });
+    const order: string[] = [];
+
+    const bulk = withRestInteraction(
+      {
+        action,
+        method: "PUT",
+        path: "/v1/drives/a:mount",
+        normalizedUrl: "/v1/drives/a:mount",
+        intent: "user",
+        baseUrl: "http://c64u",
+      },
+      async () => {
+        order.push("bulk-start");
+        await bulkDone;
+        order.push("bulk-end");
+        return "bulk";
+      },
+    );
+
+    await Promise.resolve();
+    expect(order).toEqual(["bulk-start"]);
+
+    const inputLane = withRestInteraction(
+      {
+        action,
+        method: "POST",
+        path: "/v1/machine:input",
+        normalizedUrl: "/v1/machine:input",
+        intent: "user",
+        baseUrl: "http://c64u",
+        bypassCircuit: true,
+        bypassBackoff: true,
+        bypassCooldown: true,
+        useInputLane: true,
+      },
+      async () => {
+        order.push("input-start");
+        return "input";
+      },
+    );
+
+    await inputLane;
+    expect(order).toEqual(["bulk-start", "input-start"]);
+
+    releaseBulk();
+    await bulk;
+    expect(order).toEqual(["bulk-start", "input-start", "bulk-end"]);
+  });
+
   it("applies Device Safety Telnet connect cooldown between sessions for the same host", async () => {
     vi.useFakeTimers();
     const events: Array<{ label: string; at: number }> = [];
@@ -426,5 +481,42 @@ describe("withRestInteraction", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // HARD18-026 (M4): withTelnetInteraction must pause REST polling for the
+  // WHOLE handler duration, for any caller - not just the discovery call
+  // site useTelnetActions already covered. Config-ref playback transitions
+  // and REU/config workflow telnet sessions previously ran un-paused.
+  it("HARD18-026: withTelnetInteraction pauses REST polling for the whole handler duration", async () => {
+    expect(pollingPauseRegistry.isPollingPaused()).toBe(false);
+    let pausedDuringHandler = false;
+    let releaseHandler!: () => void;
+    const handlerDone = new Promise<void>((resolve) => {
+      releaseHandler = resolve;
+    });
+
+    const telnetPromise = withTelnetInteraction(
+      {
+        action,
+        actionId: "arbitrary-telnet-call",
+        intent: "system",
+        host: "c64u",
+        port: 23,
+      },
+      async () => {
+        pausedDuringHandler = pollingPauseRegistry.isPollingPaused();
+        await handlerDone;
+        return "ok";
+      },
+    );
+
+    await Promise.resolve();
+    expect(pausedDuringHandler).toBe(true);
+    expect(pollingPauseRegistry.isPollingPaused()).toBe(true);
+
+    releaseHandler();
+    await telnetPromise;
+
+    expect(pollingPauseRegistry.isPollingPaused()).toBe(false);
   });
 });

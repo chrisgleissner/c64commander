@@ -7,46 +7,54 @@
  */
 
 import { act, renderHook } from "@testing-library/react";
+import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import { useKeyboardHoldDispatch } from "@/hooks/useKeyboardHoldDispatch";
 import { EMPTY_HELD_KEYBOARD_INPUTS } from "@/lib/remoteInput/keyboardHeldSet";
 import type { HeldKeyboardInputs } from "@/lib/remoteInput/keyboardHeldSet";
 
-/** Drives the hook like a controlled component: each change is fed back on the next render. */
+/**
+ * Drives the hook like a controlled component. `held` is real React state
+ * owned by this SAME wrapper component (mirroring production, where it is
+ * real state one level up in useRemoteInputSession) rather than a plain JS
+ * variable manually re-fed via a separate rerender() - a held-set change and
+ * this hook's own internal state (e.g. shiftLocked) that both update in the
+ * same handler must land in the SAME commit, exactly as React's automatic
+ * batching guarantees for two `useState`s updated together in production.
+ */
 const createDriver = () => {
-  const state = { held: EMPTY_HELD_KEYBOARD_INPUTS as HeldKeyboardInputs };
-  const view = renderHook(
-    ({ held }: { held: HeldKeyboardInputs }) =>
-      useKeyboardHoldDispatch(held, (next) => {
-        state.held = next;
-      }),
-    { initialProps: { held: state.held } },
-  );
-  const sync = () => view.rerender({ held: state.held });
+  const view = renderHook(() => {
+    const [held, setHeld] = useState<HeldKeyboardInputs>(EMPTY_HELD_KEYBOARD_INPUTS);
+    const dispatch = useKeyboardHoldDispatch(held, setHeld);
+    return { held, setHeld, dispatch };
+  });
   return {
-    heldNames: () => [...state.held].sort(),
+    heldNames: () => [...view.result.current.held].sort(),
     pressKey: (inputs: string[]) => {
-      act(() => view.result.current.pressKey(inputs as never));
-      sync();
+      act(() => view.result.current.dispatch.pressKey(inputs as never));
     },
     releaseKey: (inputs: string[]) => {
-      act(() => view.result.current.releaseKey(inputs as never));
-      sync();
+      act(() => view.result.current.dispatch.releaseKey(inputs as never));
     },
     pressModifier: (modifier: "left_shift" | "ctrl" | "commodore") => {
-      act(() => view.result.current.pressModifier(modifier));
-      sync();
+      act(() => view.result.current.dispatch.pressModifier(modifier));
     },
     releaseModifier: (modifier: "left_shift" | "ctrl" | "commodore") => {
-      act(() => view.result.current.releaseModifier(modifier));
-      sync();
+      act(() => view.result.current.dispatch.releaseModifier(modifier));
     },
     toggleShiftLock: () => {
-      act(() => view.result.current.toggleShiftLock());
-      sync();
+      act(() => view.result.current.dispatch.toggleShiftLock());
     },
-    isModifierActive: (modifier: "left_shift" | "ctrl" | "commodore") => view.result.current.isModifierActive(modifier),
-    shiftLocked: () => view.result.current.shiftLocked,
+    isModifierActive: (modifier: "left_shift" | "ctrl" | "commodore") =>
+      view.result.current.dispatch.isModifierActive(modifier),
+    shiftLocked: () => view.result.current.dispatch.shiftLocked,
+    // Simulates useRemoteInputSession.releaseAll clearing the SESSION-owned
+    // held set directly (bypassing this hook's own press/release/toggle
+    // bookkeeping entirely) - the exact "held set cleared out from under the
+    // lock" scenario HARD18-002 is about.
+    simulateExternalReleaseAll: () => {
+      act(() => view.result.current.setHeld(EMPTY_HELD_KEYBOARD_INPUTS));
+    },
   };
 };
 
@@ -147,6 +155,28 @@ describe("useKeyboardHoldDispatch", () => {
     d.toggleShiftLock();
     expect(d.heldNames()).toEqual([]);
     expect(d.shiftLocked()).toBe(false);
+  });
+
+  // HARD18-002: releaseAll (panic button, backgrounding/visibilitychange,
+  // unmount, device switch) clears the SESSION's held-keyboard set directly -
+  // left_shift is genuinely released on the C64 - but this hook's own
+  // shiftLocked state had no channel to learn that, leaving the SHIFT LOCK
+  // key lit while every subsequent keypress relayed unshifted.
+  it("HARD18-002: drops a stale SHIFT LOCK when the held set is cleared out from under it externally", () => {
+    const d = createDriver();
+    d.toggleShiftLock();
+    expect(d.heldNames()).toEqual(["left_shift"]);
+    expect(d.shiftLocked()).toBe(true);
+
+    d.simulateExternalReleaseAll();
+
+    expect(d.heldNames()).toEqual([]);
+    expect(d.shiftLocked()).toBe(false);
+    expect(d.isModifierActive("left_shift")).toBe(false);
+
+    // The next keypress relays unshifted (no phantom modifier survives).
+    d.pressKey(["a"]);
+    expect(d.heldNames()).toEqual(["a"]);
   });
 
   it("releasing a physically-held SHIFT does not drop the assertion while SHIFT LOCK is engaged", () => {

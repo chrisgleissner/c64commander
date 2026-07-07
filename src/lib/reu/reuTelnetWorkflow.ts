@@ -118,13 +118,18 @@ export const saveRemoteReuFromTemp = async (
   await executor.execute("saveReuMemory");
 };
 
-export const restoreRemoteReuFromTemp = async (
+// HARD18-014: folderName is the persistent storage root the file was
+// actually uploaded to for "preload-on-startup" (never "Temp" - see
+// resolvePersistentReuStorageRoot); "load-into-reu" keeps navigating to
+// "Temp" as before.
+export const restoreRemoteReu = async (
   session: TelnetSessionApi,
   menuKey: TelnetMenuKey,
   fileName: string,
   mode: ReuRestoreMode,
+  folderName: string,
 ) => {
-  await navigateToFileBrowserEntry(session, "Temp");
+  await navigateToFileBrowserEntry(session, folderName);
   await session.sendKey("ENTER");
   await readScreen(session);
   await navigateToFileBrowserEntry(session, fileName);

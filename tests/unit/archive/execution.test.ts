@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildArchivePlayPlan, executeArchiveEntry, getArchiveEntryActionLabel } from "@/lib/archive/execution";
 import { executePlayPlan } from "@/lib/playback/playbackRouter";
+import { publishMachineTakeover } from "@/lib/deviceInteraction/machineTakeoverEvent";
 
 vi.mock("@/lib/playback/playbackRouter", async () => {
   const actual = await vi.importActual<typeof import("@/lib/playback/playbackRouter")>("@/lib/playback/playbackRouter");
@@ -9,6 +10,10 @@ vi.mock("@/lib/playback/playbackRouter", async () => {
     executePlayPlan: vi.fn(),
   };
 });
+
+vi.mock("@/lib/deviceInteraction/machineTakeoverEvent", () => ({
+  publishMachineTakeover: vi.fn().mockResolvedValue(undefined),
+}));
 
 describe("archive execution", () => {
   beforeEach(() => {
@@ -107,5 +112,26 @@ describe("archive execution", () => {
         path: "joyride.prg",
       }),
     );
+  });
+
+  // HARD18-023 (M3): an out-of-playlist launch (CommoServe Run/Mount & run)
+  // must publish a machine takeover so an armed Play session stops in place
+  // instead of later auto-advancing on top of this launch.
+  it("HARD18-023: publishes a machine takeover after the launch executes", async () => {
+    await executeArchiveEntry({
+      result: { id: "100", category: 40, name: "Joyride" },
+      entry: { path: "joyride.prg", id: 0 },
+      binary: {
+        fileName: "joyride.prg",
+        bytes: new Uint8Array([0x01, 0x08, 0x60]),
+        contentType: "application/octet-stream",
+        url: "http://archive.local/joyride.prg",
+      },
+    });
+
+    expect(vi.mocked(publishMachineTakeover)).toHaveBeenCalledWith({
+      reason: "external-launch",
+      label: "joyride.prg",
+    });
   });
 });

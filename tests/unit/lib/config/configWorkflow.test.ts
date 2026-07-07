@@ -35,15 +35,41 @@ describe("configWorkflow", () => {
     expect(file).toBeNull();
   });
 
-  it("waits for a new config file to appear", async () => {
+  it("waits for a new config file to appear and become stable across two consecutive polls", async () => {
     const listRemoteTempFiles = vi
       .fn()
-      .mockResolvedValueOnce([{ name: "config.cfg", path: "/Temp/config.cfg", modifiedAt: "2026-03-29T10:00:00Z" }])
-      .mockResolvedValueOnce([{ name: "next.cfg", path: "/Temp/next.cfg", modifiedAt: "2026-03-29T10:01:00Z" }]);
+      .mockResolvedValueOnce([
+        { name: "next.cfg", path: "/Temp/next.cfg", modifiedAt: "2026-03-29T10:01:00Z", size: 5 },
+      ])
+      .mockResolvedValueOnce([
+        { name: "next.cfg", path: "/Temp/next.cfg", modifiedAt: "2026-03-29T10:01:00Z", size: 5 },
+      ]);
 
     const file = await waitForTempConfigFile([], listRemoteTempFiles, vi.fn().mockResolvedValue(undefined));
 
-    expect(file.name).toBe("config.cfg");
+    expect(file.name).toBe("next.cfg");
+    expect(listRemoteTempFiles).toHaveBeenCalledTimes(2);
+  });
+
+  it("HARD18-024: keeps polling while the config file is still being written, resolving only once size is stable", async () => {
+    const listRemoteTempFiles = vi
+      .fn()
+      .mockResolvedValueOnce([
+        { name: "growing.cfg", path: "/Temp/growing.cfg", modifiedAt: "2026-03-29T10:01:00Z", size: 10 },
+      ])
+      .mockResolvedValueOnce([
+        { name: "growing.cfg", path: "/Temp/growing.cfg", modifiedAt: "2026-03-29T10:01:05Z", size: 40 },
+      ])
+      .mockResolvedValueOnce([
+        { name: "growing.cfg", path: "/Temp/growing.cfg", modifiedAt: "2026-03-29T10:01:05Z", size: 40 },
+      ]);
+    const sleep = vi.fn().mockResolvedValue(undefined);
+
+    const file = await waitForTempConfigFile([], listRemoteTempFiles, sleep);
+
+    expect(file.size).toBe(40);
+    expect(listRemoteTempFiles).toHaveBeenCalledTimes(3);
+    expect(sleep).toHaveBeenCalledTimes(2);
   });
 
   it("times out when no new config file appears and reports waiting progress", async () => {
@@ -72,6 +98,7 @@ describe("configWorkflow", () => {
       listRemoteTempFiles: vi
         .fn()
         .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ name: "capture.cfg", path: "/Temp/capture.cfg", modifiedAt: "2026-03-29T10:01:00Z" }])
         .mockResolvedValueOnce([
           { name: "capture.cfg", path: "/Temp/capture.cfg", modifiedAt: "2026-03-29T10:01:00Z" },
         ]),
@@ -91,6 +118,7 @@ describe("configWorkflow", () => {
       "preparing",
       "scanning-temp",
       "saving-config",
+      "waiting-for-file",
       "waiting-for-file",
       "downloading",
       "persisting",
@@ -218,6 +246,7 @@ describe("configWorkflow", () => {
       listRemoteTempFiles: vi
         .fn()
         .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ name: "capture.cfg", path: "/Temp/capture.cfg", modifiedAt: "2026-01-01T00:00:00Z" }])
         .mockResolvedValueOnce([
           { name: "capture.cfg", path: "/Temp/capture.cfg", modifiedAt: "2026-01-01T00:00:00Z" },
         ]),
@@ -250,6 +279,7 @@ describe("configWorkflow", () => {
       listRemoteTempFiles: vi
         .fn()
         .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ name: "snap.cfg", path: "/Temp/snap.cfg", modifiedAt: "2026-01-01T00:00:00Z" }])
         .mockResolvedValueOnce([{ name: "snap.cfg", path: "/Temp/snap.cfg", modifiedAt: "2026-01-01T00:00:00Z" }]),
       runSaveRemoteConfig: vi.fn().mockResolvedValue(undefined),
       readRemoteFile: vi.fn().mockResolvedValue(new Uint8Array([1])),

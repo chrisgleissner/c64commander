@@ -142,6 +142,12 @@ export type CreateSnapshotOptions = {
   customRanges?: MemoryRange[];
   label?: string;
   contentName?: string;
+  /**
+   * HARD18-015: when the machine was already paused by the user before this
+   * snapshot was requested, skip the trailing machineResume() so saving a
+   * snapshot never silently undoes a deliberate pause.
+   */
+  alreadyPaused?: boolean;
 };
 
 /**
@@ -154,7 +160,7 @@ export const createSnapshot = async (
   api: C64API,
   options: CreateSnapshotOptions,
 ): Promise<{ displayTimestamp: string; evictedSnapshotLabel: string | null }> => {
-  const { type, customRanges, label, contentName } = options;
+  const { type, customRanges, label, contentName, alreadyPaused } = options;
 
   if (type === "custom" && (!customRanges || customRanges.length === 0)) {
     throw new Error("Custom snapshot requires at least one memory range.");
@@ -166,22 +172,26 @@ export const createSnapshot = async (
   // dump. A screen snapshot reads the live CIA2 VIC-bank register ($DD00) first,
   // inside the same paused session, to decide which 16 KiB bank to capture.
   let displayRanges: string[] = [];
-  const { ranges, blocks } = await dumpRamRanges(api, async (read) => {
-    let resolved: { ranges: MemoryRange[]; displayRanges: string[] };
-    if (type === "program") {
-      resolved = programRanges();
-    } else if (type === "basic") {
-      resolved = basicRanges();
-    } else if (type === "screen") {
-      const cia2Pa = (await read(CIA2_PA_ADDR, 1))[0];
-      resolved = screenRanges(cia2Pa);
-    } else {
-      const ranges = customRanges as MemoryRange[];
-      resolved = { ranges, displayRanges: ranges.map((r) => `${toHex(r.start)}-${toHex(r.start + r.length - 1)}`) };
-    }
-    displayRanges = resolved.displayRanges;
-    return resolved.ranges;
-  });
+  const { ranges, blocks } = await dumpRamRanges(
+    api,
+    async (read) => {
+      let resolved: { ranges: MemoryRange[]; displayRanges: string[] };
+      if (type === "program") {
+        resolved = programRanges();
+      } else if (type === "basic") {
+        resolved = basicRanges();
+      } else if (type === "screen") {
+        const cia2Pa = (await read(CIA2_PA_ADDR, 1))[0];
+        resolved = screenRanges(cia2Pa);
+      } else {
+        const ranges = customRanges as MemoryRange[];
+        resolved = { ranges, displayRanges: ranges.map((r) => `${toHex(r.start)}-${toHex(r.start + r.length - 1)}`) };
+      }
+      displayRanges = resolved.displayRanges;
+      return resolved.ranges;
+    },
+    { alreadyPaused },
+  );
 
   const displayTimestamp = formatDisplayTimestamp(now);
 

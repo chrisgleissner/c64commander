@@ -825,6 +825,34 @@ describe("useC64Connection", () => {
     });
   });
 
+  // HARD18-010: Home/Disks/Play read config exclusively through
+  // c64-config-items/c64-config-item (HARD9-017 doctrine), not
+  // c64-category/c64-all-config - a whole-config load/reset must invalidate
+  // those prefixes too, or those pages stay stale up to the 30s staleTime.
+  it("HARD18-010: loadConfig and resetConfig invalidate the per-item config query prefixes", async () => {
+    const { wrapper, client } = createWrapper();
+    const invalidateSpy = vi.spyOn(client, "invalidateQueries");
+    const { result } = renderHook(() => useC64MachineControl(), { wrapper });
+
+    await act(async () => {
+      await result.current.loadConfig.mutateAsync();
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-config-items"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-config-item"] });
+
+    invalidateSpy.mockClear();
+
+    await act(async () => {
+      await result.current.resetConfig.mutateAsync();
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-config-items"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-config-item"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-info"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-drives"] });
+  });
+
   it("invalidates queries after reboot delay", async () => {
     vi.useFakeTimers();
     try {

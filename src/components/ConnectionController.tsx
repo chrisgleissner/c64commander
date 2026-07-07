@@ -48,12 +48,21 @@ const hasAutomaticDiscoveryResultsAwaitingSelection = () => {
  */
 const RESUME_REDISCOVERY_MIN_HIDDEN_MS = 30_000;
 
+// HARD18-007: the plain background probe only ever re-checks the same stored
+// host - if the device changed IP (e.g. DHCP re-assignment after the
+// firmware-wedge power-cycle), it fails forever. After enough consecutive
+// failures, escalate ONCE to the "resume" trigger's saved-device sweep + LAN
+// scan (the same fallback HARD16-002 already gives a long-hidden-tab
+// return), instead of looping the same doomed probe indefinitely.
+const BACKGROUND_ESCALATE_AFTER_FAILURES = 3;
+
 export function ConnectionController() {
   const queryClient = useQueryClient();
   const { state } = useConnectionState();
   const backgroundTimerRef = useRef<number | null>(null);
   const backgroundScheduleTokenRef = useRef(0);
   const backgroundFailureCountRef = useRef(0);
+  const hasEscalatedBackgroundFailuresRef = useRef(false);
   const lastSettingsRef = useRef<{
     baseUrl: string;
     password: string;
@@ -137,11 +146,26 @@ export function ConnectionController() {
             lastProbeFailedAtMs: snapshot.lastProbeFailedAtMs,
           });
           backgroundFailureCountRef.current = nextFailureCount;
+          if (nextFailureCount === 0) hasEscalatedBackgroundFailuresRef.current = false;
           if (backgroundScheduleTokenRef.current !== scheduleToken) {
             clearTimer();
             return;
           }
           if (snapshot.state === "DEMO_ACTIVE" || snapshot.state === "OFFLINE_NO_DEMO") {
+            // HARD18-007: escalate ONCE per failure streak, fire-and-forget -
+            // the plain background schedule below keeps running regardless
+            // (as a fallback, and to naturally pick up a "resume" success via
+            // the state change this effect already depends on).
+            if (
+              snapshot.state === "OFFLINE_NO_DEMO" &&
+              nextFailureCount >= BACKGROUND_ESCALATE_AFTER_FAILURES &&
+              !hasEscalatedBackgroundFailuresRef.current &&
+              allowBackgroundRediscovery() &&
+              !hasAutomaticDiscoveryResultsAwaitingSelection()
+            ) {
+              hasEscalatedBackgroundFailuresRef.current = true;
+              void discoverConnection("resume");
+            }
             scheduleNextProbe(nextFailureCount);
           }
         });
@@ -149,6 +173,7 @@ export function ConnectionController() {
     };
 
     backgroundFailureCountRef.current = 0;
+    hasEscalatedBackgroundFailuresRef.current = false;
     clearTimer();
     scheduleNextProbe(backgroundFailureCountRef.current);
 

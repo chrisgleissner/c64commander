@@ -72,6 +72,14 @@ export const LIGHTING_CIRCADIAN_PERIOD_LABELS: Record<LightingCircadianPeriod, s
 
 export const LIGHTING_QUIET_LAUNCH_WINDOW_MS = 45_000;
 export const LIGHTING_CONNECTION_HOLD_MS = 10_000;
+// HARD18-019: a failed apply write must not retry on every render/circadian
+// tick (60s interval) - only after this backoff window has elapsed for the
+// SAME resolved signature. A genuinely new resolved state (user interaction,
+// automation change) still applies immediately regardless of this window.
+// Deliberately longer than one 60s circadian tick so a single tick can never
+// coincidentally land exactly on the retry boundary - at least one tick is
+// always skipped after a failure.
+export const LIGHTING_APPLY_RETRY_BACKOFF_MS = 90_000;
 
 export const LIGHTING_PERIOD_MODIFIERS: Record<
   LightingCircadianPeriod,

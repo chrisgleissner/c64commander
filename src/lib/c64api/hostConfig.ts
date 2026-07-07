@@ -57,7 +57,7 @@ const parsePort = (value: string): number | null => {
   return parsed;
 };
 
-const splitNormalizedDeviceHost = (deviceHost?: string) => {
+export const splitNormalizedDeviceHost = (deviceHost?: string) => {
   const normalized = normalizeDeviceHost(deviceHost);
 
   if (normalized.startsWith("[")) {

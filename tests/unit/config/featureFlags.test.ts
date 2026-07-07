@@ -154,6 +154,93 @@ describe("featureFlags", () => {
     });
   });
 
+  // HARD18-016: a developer-only flag flipped inside developer mode used to
+  // keep applying to `value` forever after developer mode was exited - with
+  // the controlling toggle now invisible and uneditable, the user had no way
+  // to see why the feature was on (or off) nor to turn it off again.
+  describe("FeatureFlagManager developer-only override lifecycle on dev-mode exit (HARD18-016)", () => {
+    let repo: InMemoryFeatureFlagRepository;
+    let manager: FeatureFlagManager;
+
+    beforeEach(() => {
+      repo = new InMemoryFeatureFlagRepository();
+      manager = new FeatureFlagManager(repo, () => true);
+    });
+
+    it("suspends a developer-only override's effect on value while developer mode is off, but keeps it dormant for the next dev-mode session", async () => {
+      await manager.load();
+      await manager.setFlag("lighting_studio_enabled", true);
+      expect(manager.getSnapshot().resolved.lighting_studio_enabled.value).toBe(true);
+
+      manager.applyDeveloperMode(false);
+      const dormant = manager.getSnapshot().resolved.lighting_studio_enabled;
+      expect(dormant.value).toBe(false);
+      expect(dormant.visible).toBe(false);
+      expect(dormant.editable).toBe(false);
+      // The stored override itself is untouched - still reported for
+      // diagnostics/export, and ready to re-apply automatically.
+      expect(dormant.hasOverride).toBe(true);
+      expect(dormant.overrideValue).toBe(true);
+      expect(repo.snapshotOverrides()).toEqual({ lighting_studio_enabled: true });
+
+      manager.applyDeveloperMode(true);
+      expect(manager.getSnapshot().resolved.lighting_studio_enabled.value).toBe(true);
+    });
+
+    it("does not suspend a standard (non developer-only) flag's override on developer-mode exit", async () => {
+      manager = new FeatureFlagManager(repo, () => false);
+      await manager.load();
+      await repo.setOverride("hvsc_enabled", false);
+      await manager.reload();
+
+      expect(manager.getSnapshot().resolved.hvsc_enabled.value).toBe(false);
+    });
+
+    it("clears the background_execution_enabled override outright on developer-mode exit instead of merely suspending it (safety-relevant)", async () => {
+      await manager.load();
+      await manager.setFlag("background_execution_enabled", false);
+      expect(repo.snapshotOverrides()).toEqual({ background_execution_enabled: false });
+
+      manager.applyDeveloperMode(false);
+      await vi.waitFor(() => expect(repo.snapshotOverrides()).toEqual({}));
+
+      const resolution = manager.getSnapshot().resolved.background_execution_enabled;
+      expect(resolution.value).toBe(true);
+      expect(resolution.hasOverride).toBe(false);
+      expect(resolution.overrideValue).toBeNull();
+
+      // Unlike the gentler dormant treatment above, re-entering developer
+      // mode does NOT resurface the old override - it was actually cleared.
+      manager.applyDeveloperMode(true);
+      expect(manager.getSnapshot().resolved.background_execution_enabled.value).toBe(true);
+    });
+
+    it("leaves the background_execution_enabled override untouched when developer mode is toggled on (only exit clears it)", async () => {
+      manager = new FeatureFlagManager(repo, () => false);
+      await repo.setOverride("background_execution_enabled", false);
+      await manager.load();
+
+      manager.applyDeveloperMode(true);
+      expect(repo.snapshotOverrides()).toEqual({ background_execution_enabled: false });
+      expect(manager.getSnapshot().resolved.background_execution_enabled.value).toBe(false);
+    });
+
+    it("logs (rather than silently swallowing) a failure to wipe the background_execution_enabled override on dev-mode exit", async () => {
+      await manager.load();
+      await manager.setFlag("background_execution_enabled", false);
+      vi.spyOn(repo, "setOverride").mockRejectedValueOnce(new Error("persistence unavailable"));
+      const { addErrorLog } = await import("@/lib/logging");
+
+      manager.applyDeveloperMode(false);
+      await vi.waitFor(() =>
+        expect(addErrorLog).toHaveBeenCalledWith(
+          "Failed to wipe developer override on dev-mode exit",
+          expect.objectContaining({ error: "persistence unavailable" }),
+        ),
+      );
+    });
+  });
+
   describe("FeatureFlagManager write path", () => {
     let repo: InMemoryFeatureFlagRepository;
     let manager: FeatureFlagManager;

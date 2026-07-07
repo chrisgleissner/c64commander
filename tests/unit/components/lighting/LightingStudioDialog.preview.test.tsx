@@ -21,7 +21,7 @@ vi.mock("@/hooks/useFeatureFlags", () => ({
 const buildCapability = () => ({
   supported: true,
   colorEncoding: "named" as const,
-  supportedModes: ["Fixed Color"],
+  supportedModes: ["Off", "Fixed Color"],
   supportedPatterns: ["SingleColor"],
   intensityRange: { min: 0, max: 31 },
   supportsTint: true,
@@ -254,5 +254,75 @@ describe("LightingStudioDialog", () => {
     expect(updatedLedStrip).toHaveAttribute("fill", "#F5F5F5");
     expect(updatedCaseOverlayRect?.getAttribute("fill")).not.toEqual(initialCaseFill);
     expect(updatedKeyboardOverlayRect?.getAttribute("fill")).not.toEqual(initialKeyboardFill);
+  });
+
+  // HARD18-020: the preview's whole purpose is to predict the physical
+  // outcome before writing to the device - these three scenarios were the
+  // ones it got wrong (case/keyboard light mixing in the key areas, and
+  // "Off" never actually rendering dark).
+  const readOverlayAlpha = (rect: Element | null | undefined) => {
+    const fill = rect?.getAttribute("fill") ?? "";
+    const match = /rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)/.exec(fill);
+    return match ? Number(match[1]) : NaN;
+  };
+
+  it("HARD18-020: keyboard-off key areas still show the case-light bleed and no keyboard color", () => {
+    mockUseDisplayProfile.mockReturnValue({ profile: "medium" });
+    const studio = buildStudioMock();
+    // The device mockup's draft state initializes from rawDeviceState (via
+    // buildStudioDraftBase), not resolved.resolvedState.
+    studio.rawDeviceState.keyboard = { ...studio.rawDeviceState.keyboard, mode: "Off" };
+    mockUseLightingStudio.mockReturnValue(studio);
+
+    render(<LightingStudioDialog />);
+
+    const bleedRect = screen.getByTestId("lighting-mockup-keyboard-case-bleed").querySelector("rect");
+    const keyboardOverlayRect = screen.getByTestId("lighting-mockup-keyboard-overlay").querySelector("rect");
+
+    // Case bleed carries the case's own color into the key area...
+    expect(bleedRect?.getAttribute("fill")).toMatch(/^rgba\(/);
+    expect(readOverlayAlpha(bleedRect)).toBeGreaterThan(0);
+    // ...while the keyboard's own overlay contributes nothing when it's off.
+    expect(readOverlayAlpha(keyboardOverlayRect)).toBe(0);
+  });
+
+  it("HARD18-020: a surface set to mode Off renders with zero overlay/glow alpha instead of the alpha floor", () => {
+    mockUseDisplayProfile.mockReturnValue({ profile: "medium" });
+    const studio = buildStudioMock();
+    studio.rawDeviceState.case = { ...studio.rawDeviceState.case, mode: "Off" };
+    mockUseLightingStudio.mockReturnValue(studio);
+
+    render(<LightingStudioDialog />);
+
+    const caseOverlayRect = screen.getByTestId("lighting-mockup-case-overlay").querySelector("rect");
+    const caseGlow = screen.getByTestId("lighting-mockup-case-glow");
+    const bleedRect = screen.getByTestId("lighting-mockup-keyboard-case-bleed").querySelector("rect");
+
+    expect(readOverlayAlpha(caseOverlayRect)).toBe(0);
+    expect(readOverlayAlpha(caseGlow)).toBe(0);
+    // The bleed into the keyboard region is derived from the case's own
+    // (now-zero) overlay alpha, so it must also go fully dark.
+    expect(readOverlayAlpha(bleedRect)).toBe(0);
+  });
+
+  it("HARD18-020: with both surfaces on, the case bleed and keyboard overlay both contribute distinct colors to the key area", () => {
+    mockUseDisplayProfile.mockReturnValue({ profile: "medium" });
+    mockUseLightingStudio.mockReturnValue(buildStudioMock());
+
+    render(<LightingStudioDialog />);
+
+    const bleedRect = screen.getByTestId("lighting-mockup-keyboard-case-bleed").querySelector("rect");
+    const keyboardOverlayRect = screen.getByTestId("lighting-mockup-keyboard-overlay").querySelector("rect");
+
+    const bleedFill = bleedRect?.getAttribute("fill") ?? "";
+    const keyboardFill = keyboardOverlayRect?.getAttribute("fill") ?? "";
+
+    // Two independently-colored, non-transparent layers stack in the key
+    // area (case bleed underneath, keyboard color screened on top) instead
+    // of a single layer overwriting the other.
+    expect(readOverlayAlpha(bleedRect)).toBeGreaterThan(0);
+    expect(readOverlayAlpha(keyboardOverlayRect)).toBeGreaterThan(0);
+    expect(bleedFill).not.toEqual(keyboardFill);
+    expect(keyboardOverlayRect).toHaveStyle({ mixBlendMode: "screen" });
   });
 });

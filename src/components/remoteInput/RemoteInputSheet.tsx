@@ -177,6 +177,14 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     (nextOpen: boolean) => {
       if (!nextOpen) {
         heldPhysicalKeysRef.current.clear();
+        // HARD18-004: mirrors the output-mode-change cleanup above - without
+        // this, a direction held while closing the sheet (Android back/X,
+        // key never released) leaves previousPhysicalInputsRef stale. The
+        // sheet stays mounted (Home/Play render it persistently), so on
+        // reopen a later touch-held input of the same name gets wrongly
+        // stripped by recomputePhysicalHeldSet's merge (it only knows to
+        // remove what it itself last added).
+        previousPhysicalInputsRef.current.clear();
         session.releaseAll();
         setImmersive(false);
       }

@@ -209,10 +209,17 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
                 lastSentHeldSetRef.current.size > 0 ||
                 lastSentKeyboardHeldSetRef.current.size > 0 ||
                 batch.some(
-                  (event) =>
-                    event.kind === "joystick" || (event.kind === "keyboard" && event.transition !== "tap"),
+                  (event) => event.kind === "joystick" || (event.kind === "keyboard" && event.transition !== "tap"),
                 );
               const wasReleaseAll = batch.length === 1 && batch[0].kind === "release_all";
+              // HARD18-001: a queued coalesced batch computed against the
+              // now-abandoned held-set model must never dispatch after this
+              // reset - bump the generation (the same supersede mechanism an
+              // immediate send already uses) so every batch still waiting on
+              // runSerializedMachineInput drops itself at its generation
+              // check instead of re-asserting a stale press once the device
+              // recovers from this failure.
+              sendGenerationRef.current += 1;
               // Drop-coalesce, not retry: forget what we thought was held so the
               // next real change re-syncs cleanly instead of compounding drift.
               lastSentHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;

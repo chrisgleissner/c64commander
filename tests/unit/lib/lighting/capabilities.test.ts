@@ -234,6 +234,74 @@ describe("lighting capabilities", () => {
     });
   });
 
+  // HARD18-019: buildLightingUpdatePayload used to always send the FULL
+  // surface state (mode, pattern, intensity, tint, SID select, color) even
+  // when only one item actually changed, sending the exact multi-item
+  // payload pattern hardware-verified to crash the c64u network stack for
+  // every preview tap or automation tick.
+  it("sends only the changed item when a baseline currentState is supplied and only intensity changed", () => {
+    const capability = normalizeLightingCapability("case", modernConfig);
+    const baseline = {
+      mode: "Fixed Color",
+      pattern: "SingleColor",
+      intensity: 12,
+      tint: "Warm",
+      sidSelect: "SID 2",
+      color: { kind: "named" as const, value: "Red" },
+    };
+    const payload = buildLightingUpdatePayload(capability, { ...baseline, intensity: 20 }, baseline);
+    expect(payload).toEqual({ "Strip Intensity": 20 });
+  });
+
+  it("sends the full surface state when mode changes, since the firmware may reset dependent items", () => {
+    const capability = normalizeLightingCapability("case", modernConfig);
+    const baseline = {
+      mode: "Off",
+      pattern: "SingleColor",
+      intensity: 12,
+      tint: "Warm",
+      sidSelect: "SID 2",
+      color: { kind: "named" as const, value: "Red" },
+    };
+    const payload = buildLightingUpdatePayload(capability, { ...baseline, mode: "Fixed Color" }, baseline);
+    expect(payload).toEqual({
+      "LedStrip Mode": "Fixed Color",
+      "LedStrip Pattern": "SingleColor",
+      "Strip Intensity": 12,
+      "Color tint": "Warm",
+      "LedStrip SID Select": "SID 2",
+      "Fixed Color": "Red",
+    });
+  });
+
+  it("sends an empty payload when nothing changed relative to the baseline", () => {
+    const capability = normalizeLightingCapability("case", modernConfig);
+    const baseline = {
+      mode: "Fixed Color",
+      pattern: "SingleColor",
+      intensity: 12,
+      tint: "Warm",
+      sidSelect: "SID 2",
+      color: { kind: "named" as const, value: "Red" },
+    };
+    expect(buildLightingUpdatePayload(capability, { ...baseline }, baseline)).toEqual({});
+  });
+
+  it("sends only the changed color when just the color differs from the baseline", () => {
+    const rgbCapability = normalizeLightingCapability("case", legacyRgbConfig);
+    const baseline = { mode: "Fixed Color", intensity: 6, color: { kind: "rgb" as const, r: 1, g: 2, b: 3 } };
+    const payload = buildLightingUpdatePayload(
+      rgbCapability,
+      { ...baseline, color: { kind: "rgb" as const, r: 9, g: 8, b: 7 } },
+      baseline,
+    );
+    expect(payload).toEqual({
+      "Fixed Color Red": 9,
+      "Fixed Color Green": 8,
+      "Fixed Color Blue": 7,
+    });
+  });
+
   it("builds rgb payloads and formats unset or rgb colors for display", () => {
     const rgbCapability = normalizeLightingCapability("case", legacyRgbConfig);
     expect(

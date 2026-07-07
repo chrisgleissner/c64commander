@@ -173,7 +173,9 @@ const setupAllProbesSuccess = () => {
   });
   mockGetConfigItem
     .mockResolvedValueOnce(ledResp) // initial read: value=5
-    .mockResolvedValueOnce(ledReadbackResp) // readback: value=6
+    .mockResolvedValueOnce(ledReadbackResp) // readback: value=21
+    // HARD18-021: pre-revert re-read - still 21, no external write to protect
+    .mockResolvedValueOnce(ledReadbackResp)
     .mockResolvedValueOnce(ledResp); // verify revert: value=5
   mockSetConfigValue.mockResolvedValue(undefined);
   mockPingFtp.mockResolvedValue({ ok: true });
@@ -417,7 +419,11 @@ describe("runHealthCheck — all-success path", () => {
 });
 
 describe("runHealthCheckForTarget", () => {
-  it("allows the switch-device dialog context to run the visible config pulse and uses target ports and password", async () => {
+  // HARD18-008: the switcher shows reachability/latency for every saved
+  // device's row, not a config write round-trip. It must use the read-only
+  // probe set so opening/closing the picker never pulses LED/volume on
+  // devices the user did not select.
+  it("keeps the switch-device dialog context read-only (no config pulse) while still using target ports and password", async () => {
     setupAllProbesSuccess();
 
     const result = await runHealthCheckForTarget(
@@ -431,14 +437,8 @@ describe("runHealthCheckForTarget", () => {
     );
 
     expect(result.connectivity).toBe("Online");
-    expect(result.probes.CONFIG.outcome).toBe("Success");
-    expect(mockSetConfigValue).toHaveBeenNthCalledWith(
-      1,
-      "LED Strip Settings",
-      "Strip Intensity",
-      21,
-      expect.objectContaining({ timeoutMs: 4000 }),
-    );
+    expect(result.probes.CONFIG.outcome).toBe("Skipped");
+    expect(mockSetConfigValue).not.toHaveBeenCalled();
     expect(mockPingFtp).toHaveBeenCalledWith(
       expect.objectContaining({ host: "backup-u64", port: 2021, password: "secret" }),
     );
@@ -744,17 +744,67 @@ describe("runHealthCheck — CONFIG probe", () => {
       if (addr === "00A2") return Promise.resolve(jiffyBytes);
       return Promise.resolve(new Uint8Array([0x42]));
     });
-    // Initial=5, readback=6 ok, verify=6 ≠ 5 → fail
+    // Initial=5, readback=21 ok, pre-revert re-read=21 (no external write), verify=21 ≠ 5 → fail
     mockGetConfigItem
       .mockResolvedValueOnce(ledResp) // initial: 5
-      .mockResolvedValueOnce(ledReadbackResp) // readback: 6 ok
-      .mockResolvedValueOnce(ledReadbackResp); // verify: 6 ≠ 5
+      .mockResolvedValueOnce(ledReadbackResp) // readback: 21 ok
+      .mockResolvedValueOnce(ledReadbackResp) // HARD18-021: pre-revert re-read, still 21
+      .mockResolvedValueOnce(ledReadbackResp); // verify: 21 ≠ 5
     mockSetConfigValue.mockResolvedValue(undefined);
     mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
     expect(result!.probes.CONFIG.outcome).toBe("Fail");
     expect(result!.probes.CONFIG.reason).toContain("Post-revert mismatch");
+  });
+
+  // HARD18-003 (M1): the revert must reach the wire on a detached, live
+  // signal even when the run itself aborts mid-probe (global deadline,
+  // superseding run, or the user leaving diagnostics) - reusing the run's
+  // own signal pre-aborted the revert request entirely, leaving the user's
+  // LED/volume setting durably changed with no failure recorded.
+  it("HARD18-003: still dispatches the revert on a live signal when the run aborts mid-probe", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+    mockGetConfigItem.mockResolvedValueOnce(ledResp); // initial read: 5 (readback is never reached)
+
+    let cancelled = false;
+    mockSetConfigValue.mockImplementationOnce(() =>
+      // Pulse write succeeds, then the run's own signal aborts before control
+      // returns to the caller - simulating a global-deadline/cancellation
+      // landing right after the write, before the readback/CONFIG_PULSE_DELAY
+      // wait. waitMs rejects immediately on an already-aborted signal, so the
+      // revert dispatches from the `finally` block on a run that is already
+      // aborted end-to-end.
+      Promise.resolve().then(() => {
+        cancelled = cancelHealthCheck("Test abort mid-CONFIG-probe");
+      }),
+    );
+    mockSetConfigValue.mockImplementation((..._args: unknown[]) => {
+      const options = _args[3] as { signal?: AbortSignal } | undefined;
+      if (options?.signal?.aborted) {
+        return Promise.reject(new Error("revert must not be dispatched with an aborted signal"));
+      }
+      return Promise.resolve(undefined);
+    });
+    mockPingFtp.mockResolvedValue({ ok: true });
+
+    const result = await runHealthCheck();
+    expect(cancelled).toBe(true);
+    expect(result).toBeNull();
+
+    expect(mockSetConfigValue).toHaveBeenCalledTimes(2);
+    const [, , revertValue, revertOptions] = mockSetConfigValue.mock.calls[1] as [
+      string,
+      string,
+      number,
+      { signal?: AbortSignal },
+    ];
+    expect(revertValue).toBe(5);
+    expect(revertOptions.signal?.aborted).not.toBe(true);
   });
 
   it("skips CONFIG when no suitable target available", async () => {
@@ -787,6 +837,8 @@ describe("runHealthCheck — CONFIG probe", () => {
     mockGetConfigItem
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce(keyboardResp)
+      .mockResolvedValueOnce(keyboardReadback)
+      // HARD18-021: pre-revert re-read, still 24 (no external write)
       .mockResolvedValueOnce(keyboardReadback)
       .mockResolvedValueOnce(keyboardResp);
     mockSetConfigValue.mockResolvedValue(undefined);
@@ -833,6 +885,8 @@ describe("runHealthCheck — CONFIG probe", () => {
     mockGetConfigItem
       .mockResolvedValueOnce(currentResp)
       .mockResolvedValueOnce(currentReadbackResp)
+      // HARD18-021: pre-revert re-read, still 29 (no external write)
+      .mockResolvedValueOnce(currentReadbackResp)
       .mockResolvedValueOnce(currentResp);
     mockSetConfigValue.mockResolvedValue(undefined);
     mockPingFtp.mockResolvedValue({ ok: true });
@@ -847,6 +901,78 @@ describe("runHealthCheck — CONFIG probe", () => {
       29,
       expect.objectContaining({ timeoutMs: 4000 }),
     );
+  });
+
+  // HARD18-021: a pause-mute/resume-unmute/volume commit landing inside the
+  // pulse's read-write-delay-revert window was previously clobbered by an
+  // unconditional revert to the pre-pulse value. probeConfig now re-reads
+  // immediately before reverting and skips the revert entirely when someone
+  // else's write is discovered there.
+  it("HARD18-021: skips the revert when an external write lands inside the pulse window, preserving it", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+    const initialResp = { "LED Strip Settings": { "Strip Intensity": { selected: 5 } } };
+    const pulseReadbackResp = { "LED Strip Settings": { "Strip Intensity": { selected: 21 } } };
+    // Simulates a concurrent user mixer write landing after our own pulse
+    // write was confirmed present but before the revert would have fired.
+    const externalWriteResp = { "LED Strip Settings": { "Strip Intensity": { selected: 9 } } };
+    let ledReads = 0;
+    mockGetConfigItem.mockImplementation((category: string) => {
+      if (category !== "LED Strip Settings") return Promise.resolve({});
+      ledReads += 1;
+      if (ledReads === 1) return Promise.resolve(initialResp);
+      if (ledReads === 2) return Promise.resolve(pulseReadbackResp);
+      return Promise.resolve(externalWriteResp);
+    });
+    mockSetConfigValue.mockResolvedValue(undefined);
+    mockPingFtp.mockResolvedValue({ ok: true });
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.CONFIG.outcome).toBe("Skipped");
+    expect(result!.probes.CONFIG.reason).toContain("concurrent write");
+    // Only the original pulse write happens - the revert must never fire,
+    // so the external writer's value (9) survives untouched.
+    expect(mockSetConfigValue).toHaveBeenCalledTimes(1);
+    expect(mockSetConfigValue).toHaveBeenCalledWith(
+      "LED Strip Settings",
+      "Strip Intensity",
+      21,
+      expect.objectContaining({ timeoutMs: 4000 }),
+    );
+  });
+
+  it("HARD18-021: skips Audio Mixer targets entirely while a playback write burst is active", async () => {
+    const { beginPlaybackWriteBurst } = await import("@/lib/deviceInteraction/deviceActivityGate");
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+    // LED/Keyboard targets are unavailable so the loop would otherwise fall
+    // through to the Audio Mixer targets - which must never be read at all
+    // while a write burst is active.
+    mockGetConfigItem.mockImplementation((category: string) => {
+      if (category === "Audio Mixer") {
+        return Promise.reject(new Error("Audio Mixer must not be read while a playback write burst is active"));
+      }
+      return Promise.resolve({});
+    });
+    mockSetConfigValue.mockResolvedValue(undefined);
+    mockPingFtp.mockResolvedValue({ ok: true });
+
+    const endBurst = beginPlaybackWriteBurst();
+    try {
+      const result = await runHealthCheck();
+      expect(result!.probes.CONFIG.outcome).toBe("Skipped");
+      expect(result!.probes.CONFIG.reason).toContain("No suitable config roundtrip target available");
+      expect(mockSetConfigValue).not.toHaveBeenCalled();
+    } finally {
+      endBurst();
+    }
   });
 });
 
@@ -890,6 +1016,7 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
     mockGetConfigItem
       .mockResolvedValueOnce(directNumResp)
       .mockResolvedValueOnce(directNumReadbackResp)
+      .mockResolvedValueOnce(directNumReadbackResp) // HARD18-021: pre-revert re-read
       .mockResolvedValueOnce(directNumResp);
     mockSetConfigValue.mockResolvedValue(undefined);
     mockPingFtp.mockResolvedValue({ ok: true });
@@ -910,6 +1037,7 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
     mockGetConfigItem
       .mockResolvedValueOnce(strResp)
       .mockResolvedValueOnce(strReadbackResp)
+      .mockResolvedValueOnce(strReadbackResp) // HARD18-021: pre-revert re-read
       .mockResolvedValueOnce(strResp);
     mockSetConfigValue.mockResolvedValue(undefined);
     mockPingFtp.mockResolvedValue({ ok: true });
@@ -943,6 +1071,7 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
     mockGetConfigItem
       .mockResolvedValueOnce(numericWithMismatchedOptions)
       .mockResolvedValueOnce(numericReadback)
+      .mockResolvedValueOnce(numericReadback) // HARD18-021: pre-revert re-read
       .mockResolvedValueOnce(numericWithMismatchedOptions);
     mockSetConfigValue.mockResolvedValue(undefined);
     mockPingFtp.mockResolvedValue({ ok: true });
@@ -971,6 +1100,7 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
     mockGetConfigItem
       .mockResolvedValueOnce(maxResp)
       .mockResolvedValueOnce(maxReadbackResp)
+      .mockResolvedValueOnce(maxReadbackResp) // HARD18-021: pre-revert re-read
       .mockResolvedValueOnce(maxResp);
     mockSetConfigValue.mockResolvedValue(undefined);
     mockPingFtp.mockResolvedValue({ ok: true });
@@ -988,6 +1118,7 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
     mockGetConfigItem
       .mockResolvedValueOnce(ledResp)
       .mockResolvedValueOnce(ledReadbackResp)
+      .mockResolvedValueOnce(ledReadbackResp) // HARD18-021: pre-revert re-read, confirms revert should proceed
       .mockResolvedValueOnce(ledResp);
     mockSetConfigValue.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("Revert failed"));
     mockPingFtp.mockResolvedValue({ ok: true });
@@ -996,6 +1127,41 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
 
     expect(result!.probes.CONFIG.outcome).toBe("Fail");
     expect(result!.probes.CONFIG.reason).toContain("Failed to restore original value");
+  });
+
+  it("HARD18-021: still reverts unconditionally when the pre-revert re-read itself throws", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+    mockGetConfigItem
+      .mockResolvedValueOnce(ledResp)
+      .mockResolvedValueOnce(ledReadbackResp)
+      .mockRejectedValueOnce(new Error("re-read failed")) // HARD18-021: pre-revert re-read throws
+      .mockResolvedValueOnce(ledResp);
+    mockSetConfigValue.mockResolvedValueOnce(undefined).mockResolvedValueOnce(undefined);
+    mockPingFtp.mockResolvedValue({ ok: true });
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.CONFIG.outcome).toBe("Success");
+    expect(addLog).toHaveBeenCalledWith(
+      "debug",
+      "Health check CONFIG probe: pre-revert re-read failed, reverting unconditionally",
+      expect.objectContaining({
+        category: "LED Strip Settings",
+        item: "Strip Intensity",
+        error: "re-read failed",
+      }),
+    );
+    expect(mockSetConfigValue).toHaveBeenNthCalledWith(
+      2,
+      "LED Strip Settings",
+      "Strip Intensity",
+      5,
+      expect.objectContaining({ timeoutMs: 4000 }),
+    );
   });
 });
 
@@ -1323,6 +1489,7 @@ describe("runHealthCheck — CONFIG probe with items-wrapper format", () => {
     mockGetConfigItem
       .mockResolvedValueOnce(itemsResp)
       .mockResolvedValueOnce(itemsReadback)
+      .mockResolvedValueOnce(itemsReadback) // HARD18-021: pre-revert re-read
       .mockResolvedValueOnce(itemsResp);
     mockSetConfigValue.mockResolvedValue(undefined);
     mockPingFtp.mockResolvedValue({ ok: true });
@@ -1362,6 +1529,7 @@ describe("runHealthCheck — CONFIG probe with items-wrapper format", () => {
     mockGetConfigItem
       .mockResolvedValueOnce(audioResp)
       .mockResolvedValueOnce(audioReadback)
+      .mockResolvedValueOnce(audioReadback) // HARD18-021: pre-revert re-read
       .mockResolvedValueOnce(audioResp);
     mockSetConfigValue.mockResolvedValue(undefined);
     mockPingFtp.mockResolvedValue({ ok: true });
@@ -1408,6 +1576,9 @@ describe("runHealthCheck — CONFIG probe with items-wrapper format", () => {
         audioMixerReads += 1;
         if (audioMixerReads === 1) return Promise.resolve(audioResp);
         if (audioMixerReads === 2) return Promise.resolve(audioReadback);
+        // HARD18-021: pre-revert re-read (call 3) - still at the pulsed
+        // value, confirming no external write to protect.
+        if (audioMixerReads === 3) return Promise.resolve(audioReadback);
         return Promise.resolve(audioResp);
       }
       return Promise.resolve({});
@@ -1472,6 +1643,9 @@ describe("runHealthCheck — CONFIG probe with items-wrapper format", () => {
         audioMixerReads += 1;
         if (audioMixerReads === 1) return Promise.resolve(audioResp);
         if (audioMixerReads === 2) return Promise.resolve(audioReadback);
+        // HARD18-021: pre-revert re-read (call 3) - still at the pulsed
+        // value, confirming no external write to protect.
+        if (audioMixerReads === 3) return Promise.resolve(audioReadback);
         return Promise.resolve(audioResp);
       }
       return Promise.resolve({});

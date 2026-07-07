@@ -23,6 +23,10 @@ const {
   mockAddLog,
   mockClearToastsOnDeviceSwitch,
   mockSetSavedDeviceSwitchProbeWindow,
+  mockIsBackgroundExecutionActive,
+  mockStopBackgroundExecution,
+  mockSetDueAtMs,
+  mockToast,
 } = vi.hoisted(() => ({
   mockVerifyCurrentConnectionTarget: vi.fn(),
   mockSetStoredFtpPort: vi.fn(),
@@ -34,6 +38,10 @@ const {
   mockAddLog: vi.fn(),
   mockClearToastsOnDeviceSwitch: vi.fn(),
   mockSetSavedDeviceSwitchProbeWindow: vi.fn(),
+  mockIsBackgroundExecutionActive: vi.fn(() => false),
+  mockStopBackgroundExecution: vi.fn().mockResolvedValue(undefined),
+  mockSetDueAtMs: vi.fn().mockResolvedValue(undefined),
+  mockToast: vi.fn(),
 }));
 
 vi.mock("@/lib/connection/connectionManager", () => ({
@@ -86,6 +94,19 @@ vi.mock("@/lib/secureStorage", async () => {
     getPasswordForDevice: mockGetPasswordForDevice,
   };
 });
+
+vi.mock("@/lib/native/backgroundExecutionManager", () => ({
+  isBackgroundExecutionActive: mockIsBackgroundExecutionActive,
+  stopBackgroundExecution: mockStopBackgroundExecution,
+}));
+
+vi.mock("@/lib/native/backgroundExecution", () => ({
+  BackgroundExecution: { setDueAtMs: mockSetDueAtMs },
+}));
+
+vi.mock("@/hooks/use-toast", () => ({
+  toast: mockToast,
+}));
 
 const createDeferred = <T,>() => {
   let resolve!: (value: T) => void;
@@ -490,6 +511,182 @@ describe("useSavedDeviceSwitching", () => {
     });
 
     expect(mockClearToastsOnDeviceSwitch).toHaveBeenCalledWith("c64u");
+  });
+
+  // HARD18-011: a saved-device switch while Play is unmounted (idle
+  // placeholder) previously left no code path allowed to stop the
+  // foreground-service wake lock or clear the native auto-advance watchdog
+  // — orphaning both until process death. Fixed in the switch flow itself
+  // (not in PlayFilesPage's hasObservedActivePlaybackRef guard), so this is
+  // covered here rather than in the BUG-040/025 suites.
+  it("HARD18-011: stops orphaned background execution and clears the native due-time on a genuine device switch", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    store.updateSavedDevice(initialDeviceId, {
+      name: "Office C64U",
+      host: "c64u",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      hasPassword: false,
+    });
+    store.addSavedDevice({
+      id: "device-backup",
+      name: "Backup Lab",
+      host: "backup-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      hasPassword: false,
+    });
+    mockIsBackgroundExecutionActive.mockReturnValue(true);
+    mockVerifyCurrentConnectionTarget.mockResolvedValueOnce({
+      ok: true,
+      deviceInfo: { product: "U64E", hostname: "backup-lab", unique_id: "UID-BACKUP" },
+    });
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), {
+      wrapper: createWrapper("/play"),
+    });
+
+    await act(async () => {
+      await result.current("device-backup");
+    });
+
+    expect(mockStopBackgroundExecution).toHaveBeenCalledWith(
+      expect.objectContaining({ source: "saved-device-switch", reason: "saved-device-switch" }),
+    );
+    expect(mockSetDueAtMs).toHaveBeenCalledWith({ dueAtMs: null });
+    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Playback controls detached" }));
+  });
+
+  it("HARD18-011: does not touch background execution when none is active", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    store.updateSavedDevice(initialDeviceId, {
+      name: "Office C64U",
+      host: "c64u",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      hasPassword: false,
+    });
+    store.addSavedDevice({
+      id: "device-backup",
+      name: "Backup Lab",
+      host: "backup-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      hasPassword: false,
+    });
+    mockIsBackgroundExecutionActive.mockReturnValue(false);
+    mockVerifyCurrentConnectionTarget.mockResolvedValueOnce({
+      ok: true,
+      deviceInfo: { product: "U64E", hostname: "backup-lab", unique_id: "UID-BACKUP" },
+    });
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), {
+      wrapper: createWrapper("/play"),
+    });
+
+    await act(async () => {
+      await result.current("device-backup");
+    });
+
+    expect(mockStopBackgroundExecution).not.toHaveBeenCalled();
+    expect(mockSetDueAtMs).not.toHaveBeenCalled();
+  });
+
+  it("HARD18-011: logs (not throws) when stopping orphaned background execution fails, and still clears the due-time and shows the toast", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    store.updateSavedDevice(initialDeviceId, {
+      name: "Office C64U",
+      host: "c64u",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      hasPassword: false,
+    });
+    store.addSavedDevice({
+      id: "device-backup",
+      name: "Backup Lab",
+      host: "backup-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      hasPassword: false,
+    });
+    mockIsBackgroundExecutionActive.mockReturnValueOnce(true);
+    mockStopBackgroundExecution.mockRejectedValueOnce(new Error("stop failed"));
+    mockVerifyCurrentConnectionTarget.mockResolvedValueOnce({
+      ok: true,
+      deviceInfo: { product: "U64E", hostname: "backup-lab", unique_id: "UID-BACKUP" },
+    });
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), {
+      wrapper: createWrapper("/play"),
+    });
+
+    await act(async () => {
+      await result.current("device-backup");
+    });
+
+    expect(mockAddLog).toHaveBeenCalledWith(
+      "warn",
+      "Failed to stop orphaned background execution during saved-device switch",
+      expect.objectContaining({ deviceId: "device-backup", error: "stop failed" }),
+    );
+    expect(mockSetDueAtMs).toHaveBeenCalledWith({ dueAtMs: null });
+    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Playback controls detached" }));
+  });
+
+  it("HARD18-011: logs (not throws) when clearing the native auto-skip due-time fails, and still shows the toast", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    store.updateSavedDevice(initialDeviceId, {
+      name: "Office C64U",
+      host: "c64u",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      hasPassword: false,
+    });
+    store.addSavedDevice({
+      id: "device-backup",
+      name: "Backup Lab",
+      host: "backup-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      hasPassword: false,
+    });
+    mockIsBackgroundExecutionActive.mockReturnValueOnce(true);
+    mockSetDueAtMs.mockRejectedValueOnce(new Error("clear due-time failed"));
+    mockVerifyCurrentConnectionTarget.mockResolvedValueOnce({
+      ok: true,
+      deviceInfo: { product: "U64E", hostname: "backup-lab", unique_id: "UID-BACKUP" },
+    });
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), {
+      wrapper: createWrapper("/play"),
+    });
+
+    await act(async () => {
+      await result.current("device-backup");
+    });
+
+    expect(mockAddLog).toHaveBeenCalledWith(
+      "warn",
+      "Failed to clear native auto-skip due-time during saved-device switch",
+      expect.objectContaining({ deviceId: "device-backup", error: "clear due-time failed" }),
+    );
+    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Playback controls detached" }));
   });
 
   it("logs old-query cancellation failures while continuing the saved-device switch", async () => {

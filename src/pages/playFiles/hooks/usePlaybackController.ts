@@ -14,6 +14,7 @@ import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { getC64API } from "@/lib/c64api";
 import { beginMachineTransition } from "@/lib/deviceInteraction/deviceActivityGate";
 import { setMachineExecutionPaused, setMachineExecutionRunning } from "@/lib/deviceInteraction/machineExecutionStore";
+import { subscribeMachineTakeover } from "@/lib/deviceInteraction/machineTakeoverEvent";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import {
   createMachineTransitionCoordinator,
@@ -283,6 +284,14 @@ export function usePlaybackController({
   const pendingUserSkipRef = useRef<PendingUserSkip | null>(null);
   const flushPendingUserSkipRef = useRef<() => Promise<void>>(async () => undefined);
   const STOP_MACHINE_TIMEOUT_MS = 6000;
+  // HARD18-009 (M5): monotonic play-generation counter, mirroring the
+  // machineTransitionCoordinator supersede pattern. Both handleStop and
+  // playItem bump it on entry to a fresh, uniquely-owned value; whichever
+  // holds the current value when an in-flight transition's async work
+  // resolves is authoritative. Stop always bumps immediately (never queued);
+  // playItem bumps its own too, so a rapid Play right after a Stop is never
+  // mistaken for the transition the Stop just superseded.
+  const playGenerationRef = useRef(0);
 
   playlistRef.current = playlist;
   currentIndexRef.current = currentIndex;
@@ -630,6 +639,11 @@ export function usePlaybackController({
       options?: { rebootBeforePlay?: boolean; playlistIndex?: number; playlistSize?: number },
     ) => {
       return enqueuePlayTransition(async () => {
+        // HARD18-009 (M5): claim a fresh generation for this transition. If
+        // Stop (or a later Play) bumps past it while we are mid-flight, our
+        // post-launch state writes below are skipped and the launch is
+        // corrected with a follow-up reset instead.
+        const myPlayGeneration = (playGenerationRef.current += 1);
         // Starting a track (Next/Previous/row-tap) from a paused state bypasses
         // handlePauseResume, which is the only other place these pause-mute
         // bookkeeping refs are cleared. Left stale, pausingFromPauseRef alone
@@ -898,6 +912,31 @@ export function usePlaybackController({
           rebootBeforePlay: Boolean(executionOptions?.rebootBeforeMount),
         });
         await executePlayPlan(api, plan, executionOptions);
+
+        if (playGenerationRef.current !== myPlayGeneration) {
+          // HARD18-009 (M5): Stop (or a later Play) superseded this
+          // transition while the launch was in flight. The launch already
+          // reached the device (executePlayPlan resolved), so correct it
+          // with a follow-up reset instead of leaving the just-launched
+          // track running on a machine the user told to stop - and skip
+          // every state write below, which would otherwise silently
+          // re-assert isPlaying/auto-advance over Stop's own state.
+          addLog("info", "Playback launch superseded by Stop; issuing follow-up reset", {
+            itemId: item.id,
+            label: item.label,
+          });
+          try {
+            await withTimeout(api.machineReset(), STOP_MACHINE_TIMEOUT_MS, "Reset");
+          } catch (error) {
+            addErrorLog("Follow-up reset after superseded playback launch failed", {
+              itemId: item.id,
+              label: item.label,
+              error: (error as Error).message,
+            });
+          }
+          return;
+        }
+
         const now = Date.now();
         const nextTrackInstanceId = trackInstanceIdRef.current + 1;
         trackInstanceIdRef.current = nextTrackInstanceId;
@@ -988,6 +1027,8 @@ export function usePlaybackController({
       playedClockRef,
       trackInstanceIdRef,
       trackStartedAtRef,
+      playGenerationRef,
+      withTimeout,
     ],
   );
 
@@ -1134,6 +1175,11 @@ export function usePlaybackController({
   const handleStop = useCallback(
     trace(async function handleStop() {
       if (!isPlaying && !isPaused) return;
+      // HARD18-009 (M5): Stop always runs immediately (never queued behind
+      // enqueuePlayTransition) and claims the play-generation counter so any
+      // in-flight playItem transition (auto-advance, Next/Previous, a
+      // row-tap) sees itself superseded once its own async work resolves.
+      playGenerationRef.current += 1;
       const currentItem = playlist[currentIndex];
       const shouldReboot = currentItem?.category === "disk";
       try {
@@ -1205,8 +1251,37 @@ export function usePlaybackController({
       trackStartedAtRef,
       lastAppliedPlaybackConfigSignatureRef,
       autoAdvanceGuardRef,
+      playGenerationRef,
     ],
   );
+
+  // HARD18-022/023 (M3): a user-initiated whole-machine reset (Home
+  // reboot/reboot-clear-memory/power-cycle) or an out-of-playlist launch
+  // (CommoServe Run/Mount & run) resets or repurposes the C64 out from under
+  // an armed session. Stop in place - cancel auto-advance and mark the
+  // session stopped - WITHOUT issuing any further machine-control REST
+  // calls (the device was already reset by the takeover itself; adding more
+  // writes right after a reset/boot would only compound HARD18-012's
+  // boot-window churn). Keeps the playlist position; the existing
+  // isPlaying/autoAdvanceDueAtMs effects in PlayFilesPage already clear the
+  // native due-time and stop background execution reactively.
+  useEffect(() => {
+    return subscribeMachineTakeover((event) => {
+      if (!isPlayingRef.current && !isPausedRef.current) return;
+      const now = Date.now();
+      playedClockRef.current.stop(now, true);
+      setPlayedMs(0);
+      autoAdvanceGuardRef.current = null;
+      setAutoAdvanceDueAtMs(null);
+      setIsPlaying(false);
+      setIsPaused(false);
+      toast({
+        title: event.reason === "home-reset" ? "Playback stopped" : "Playlist stopped",
+        description:
+          event.reason === "home-reset" ? "The machine was reset from Home." : `You launched ${event.label}.`,
+      });
+    });
+  }, [playedClockRef, setPlayedMs, autoAdvanceGuardRef, setAutoAdvanceDueAtMs, setIsPlaying, setIsPaused]);
 
   const handlePauseResume = useCallback(
     trace(async function handlePauseResume() {

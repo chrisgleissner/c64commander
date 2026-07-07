@@ -680,6 +680,38 @@ describe("RemoteInputSheet", () => {
       expect(setHeldJoystickInputsMock).toHaveBeenLastCalledWith(new Set(["right"]));
     });
 
+    // HARD18-004: closing the sheet while a physical key is still down (e.g.
+    // Android back / the X, no keyup ever arrives) cleared heldPhysicalKeysRef
+    // but left previousPhysicalInputsRef stale. The sheet component stays
+    // mounted (Home/Play render it persistently), so on reopen a later
+    // touch-held input of the SAME name was wrongly stripped by
+    // recomputePhysicalHeldSet's merge, which only knows to remove what it
+    // itself last contributed.
+    it("HARD18-004: does not wrongly release a touch-held input after closing the sheet while a physical key was down", () => {
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      const sheet = screen.getByTestId("remote-input-sheet");
+
+      // Physical RIGHT held, then the sheet closes without a keyup.
+      fireEvent.keyDown(sheet, { code: "ArrowRight", key: "ArrowRight" });
+      fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+      // Reopen and touch-hold RIGHT via the analog stick - a genuinely new
+      // hold, unrelated to the stale physical-key bookkeeping from before
+      // the close.
+      const zone = screen.getByTestId("remote-input-stick-zone");
+      fireEvent.pointerDown(zone, { pointerId: 1, clientX: 100, clientY: 100 });
+      fireEvent.pointerMove(zone, { pointerId: 1, clientX: 140, clientY: 100 }); // right
+      expect(setHeldJoystickInputsMock).toHaveBeenLastCalledWith(new Set(["right"]));
+
+      // A NEW physical key (FIRE) merges in - the stale previousPhysicalInputsRef
+      // must not still think it owns "right" and delete it out from under the
+      // live touch hold.
+      fireEvent.keyDown(sheet, { code: "Digit5", key: "5" }); // T9 fire
+      const heldAfterFire = setHeldJoystickInputsMock.mock.calls.at(-1)?.[0] as Set<string>;
+      expect(heldAfterFire.has("right")).toBe(true);
+      expect(heldAfterFire.has("fire")).toBe(true);
+    });
+
     // HARD13 residual E2: recomputePhysicalHeldSet used to REPLACE the whole
     // held set from physical keys only, dropping a concurrently touch-held
     // input (e.g. fire held via the on-screen button) on a device with both.

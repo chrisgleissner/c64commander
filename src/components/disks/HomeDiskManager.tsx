@@ -53,7 +53,17 @@ import { getC64API } from "@/lib/c64api";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { reportUserError } from "@/lib/uiErrors";
 import { cn } from "@/lib/utils";
-import { mountDiskToDrive } from "@/lib/disks/diskMount";
+import {
+  mountDiskToDrive,
+  finalizeDiskWriteBack,
+  discardDiskWriteBack,
+  hasShownDiskWriteBackAdvisory,
+  markDiskWriteBackAdvisoryShown,
+  type DiskMountWriteBackDependencies,
+} from "@/lib/disks/diskMount";
+import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
+import { resolveFtpConnectionOptions } from "@/lib/ftp/ftpConfig";
+import { base64ToUint8, uint8ToBase64 } from "@/lib/sid/sidUtils";
 import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 import {
   createDiskEntry,
@@ -284,6 +294,27 @@ export const HomeDiskManager = () => {
       staleTime: 0,
     });
   }, [api, queryClient]);
+  // HARD18-025: fresh per-call (mirrors HomePage's createHomeReuWorkflow) so
+  // host/port/password are always resolved against the currently selected
+  // device, never captured stale in a closure.
+  const buildDiskWriteBackDependencies = useCallback((): DiskMountWriteBackDependencies => {
+    return {
+      listRemoteStorageRoots: async () => {
+        const ftpOptions = await resolveFtpConnectionOptions();
+        const result = await listFtpDirectory({ ...ftpOptions, path: "/" });
+        return result.entries.filter((entry) => entry.type === "dir").map((entry) => entry.name);
+      },
+      readRemoteFile: async (path) => {
+        const ftpOptions = await resolveFtpConnectionOptions();
+        const result = await readFtpFile({ ...ftpOptions, path });
+        return base64ToUint8(result.data);
+      },
+      writeRemoteFile: async (path, bytes) => {
+        const ftpOptions = await resolveFtpConnectionOptions();
+        await writeFtpFile({ ...ftpOptions, path, data: uint8ToBase64(bytes) });
+      },
+    };
+  }, []);
   const runDriveMutationWithSettledPolling = useCallback(
     async <T,>(operation: () => Promise<T>) => {
       const pollingPause = pollingPauseRegistry.acquirePause();
@@ -654,8 +685,11 @@ export const HomeDiskManager = () => {
       // the same as one launched via Play - games saving high scores/state
       // to the user's own D64s must not fail with DOS 26 "WRITE PROTECT ON".
       // See HARD9-012.
-      await runDriveMutationWithSettledPolling(() =>
-        mountDiskToDrive(api, drive, disk, runtimeFile, { archiveConfigs }),
+      const outcome = await runDriveMutationWithSettledPolling(() =>
+        mountDiskToDrive(api, drive, disk, runtimeFile, {
+          archiveConfigs,
+          writeBack: buildDiskWriteBackDependencies(),
+        }),
       );
       if (mountCompletionGenerationRef.current[drive] !== mountGeneration) {
         addLog("debug", "Ignoring stale disk mount completion", {
@@ -674,6 +708,16 @@ export const HomeDiskManager = () => {
         title: "Disk mounted",
         description: `${disk.name} mounted in ${buildDriveLabel(drive)}`,
       });
+      // HARD18-025: only the residual case (materialization unavailable or
+      // failed) risks silent save loss - device-native and materialized
+      // mounts persist writes, so neither needs the advisory.
+      if (outcome?.persistence === "transient" && !hasShownDiskWriteBackAdvisory()) {
+        markDiskWriteBackAdvisoryShown();
+        toast({
+          title: "Changes to this disk won't be saved back",
+          description: "This disk isn't on writable local storage, so in-game saves will be lost when it's remounted.",
+        });
+      }
     } catch (error) {
       if (mountCompletionGenerationRef.current[drive] !== mountGeneration) {
         addLog("debug", "Ignoring stale disk mount failure", {
@@ -724,13 +768,25 @@ export const HomeDiskManager = () => {
     setDriveMutationPending((prev) => ({ ...prev, [drive]: true }));
     try {
       await runDriveMutationWithSettledPolling(() => api.unmountDrive(drive));
+      // HARD18-025: read the materialized work-dir image back and re-persist
+      // it to the source now that the drive has released it. Best-effort -
+      // a failed write-back must not undo the eject the user just asked for.
+      const writeBackResult = await finalizeDiskWriteBack(drive, buildDiskWriteBackDependencies());
       mountedByDriveSetAtRef.current[drive] = Date.now();
       setMountedByDrive((prev) => ({ ...prev, [drive]: "" }));
       setDriveErrors((prev) => ({ ...prev, [drive]: "" }));
-      toast({
-        title: "Disk ejected",
-        description: `${buildDriveLabel(drive)} cleared`,
-      });
+      if (writeBackResult.attempted && !writeBackResult.success) {
+        toast({
+          title: `${buildDriveLabel(drive)} ejected, but changes weren't saved`,
+          description: writeBackResult.error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Disk ejected",
+          description: `${buildDriveLabel(drive)} cleared`,
+        });
+      }
     } catch (error) {
       setDriveErrors((prev) => ({
         ...prev,
@@ -1018,12 +1074,25 @@ export const HomeDiskManager = () => {
     const mountedDrives = DRIVE_KEYS.filter((drive) => resolveMountedDiskId(drive) === disk.id);
     if (mountedDrives.length > 0) {
       try {
-        await Promise.all(mountedDrives.map((drive) => api.unmountDrive(drive)));
+        // HARD18-017: a bare unmountDrive + deleting the override leaves
+        // resolveMountedDiskId falling through to the (not-yet-settled)
+        // polled drive state, ghost-mounting the card until the next poll
+        // lands. Reuse handleEject's body per mounted drive - settle
+        // polling through the mutation, then force the override to empty
+        // with a fresh timestamp - so the card reflects "unmounted"
+        // immediately, before the disk is removed from the library.
+        await Promise.all(
+          mountedDrives.map((drive) => runDriveMutationWithSettledPolling(() => api.unmountDrive(drive))),
+        );
+        // HARD18-025: the disk is being removed from the library outright -
+        // there is no source left to write back to, so drop any pending
+        // materialized-mount entry instead of spending an FTP round trip.
+        mountedDrives.forEach((drive) => discardDiskWriteBack(drive));
         setMountedByDrive((prev) => {
           const next = { ...prev };
           mountedDrives.forEach((drive) => {
-            delete next[drive];
-            delete mountedByDriveSetAtRef.current[drive];
+            mountedByDriveSetAtRef.current[drive] = Date.now();
+            next[drive] = "";
           });
           return next;
         });

@@ -20,6 +20,7 @@ import {
   LIGHTING_SUMMARY_ITEMS,
   LIGHTING_CONNECTION_HOLD_MS,
   LIGHTING_SURFACE_TO_CATEGORY,
+  LIGHTING_APPLY_RETRY_BACKOFF_MS,
 } from "@/lib/lighting/constants";
 import {
   buildLightingUpdatePayload,
@@ -268,6 +269,24 @@ export function LightingStudioProvider({ children }: { children: React.ReactNode
   const [quietLaunchDismissedAt, setQuietLaunchDismissedAt] = React.useState<number | null>(null);
   const lastConnectionStateRef = React.useRef(connectionSnapshot.state);
   const lastAppliedSignatureRef = React.useRef<string | null>(null);
+  // HARD18-019: records the signature of the last FAILED apply attempt and
+  // when it may be retried, so a still-failing write is not resent on every
+  // render/60s circadian tick - only once the backoff window elapses. A
+  // genuinely different resolved signature is unaffected and applies
+  // immediately.
+  const lastFailedApplyRef = React.useRef<{ signature: string; nextAttemptAtMs: number } | null>(null);
+  // HARD18-019: the failure backoff above is only recorded once the write's
+  // promise settles (asynchronously) - if the effect re-fires for the SAME
+  // signature before that (e.g. a sibling effect's state update forces
+  // another render while the first write is still in flight), nothing else
+  // stops a second concurrent duplicate write. Tracks the signature of an
+  // apply currently in flight so a re-fire for that exact signature is
+  // skipped until it settles.
+  const pendingApplySignatureRef = React.useRef<string | null>(null);
+  // HARD18-019: identifies which device the studio last resolved lighting
+  // against, so a saved-device switch does not auto-apply the PREVIOUS
+  // device's resolved state onto the newly connected one.
+  const lastAppliedDeviceIdentityRef = React.useRef<string | null>(null);
   const lastAmbientConnectionRef = React.useRef<{ state: LightingConnectionSentinelState; at: number } | null>(null);
   const lightingQueryItems = studioOpen || contextLensOpen ? LIGHTING_CATEGORY_ITEMS : LIGHTING_SUMMARY_ITEMS;
   const routeNeedsLightingSummary =
@@ -547,10 +566,42 @@ export function LightingStudioProvider({ children }: { children: React.ReactNode
 
   const resolvedSignature = React.useMemo(() => JSON.stringify(resolved.resolvedState), [resolved.resolvedState]);
 
+  // HARD18-019: a saved-device switch must not auto-apply the PREVIOUS
+  // device's resolved lighting state onto the newly connected device -
+  // adopt whatever the new device is already showing as the applied
+  // baseline instead of writing to it. Any subsequent explicit studio
+  // interaction (profile pick, automation change, preview, lock) already
+  // resets lastAppliedSignatureRef to null elsewhere and re-arms a normal
+  // apply against the new device.
+  React.useEffect(() => {
+    const nextIdentity = status.deviceInfo?.unique_id ?? null;
+    const previousIdentity = lastAppliedDeviceIdentityRef.current;
+    if (previousIdentity !== null && nextIdentity !== null && previousIdentity !== nextIdentity) {
+      lastAppliedSignatureRef.current = resolvedSignature;
+      lastFailedApplyRef.current = null;
+    }
+    lastAppliedDeviceIdentityRef.current = nextIdentity;
+  }, [status.deviceInfo?.unique_id, resolvedSignature]);
+
   React.useEffect(() => {
     if (!featureFlagEnabled) return;
     if (!status.isConnected) return;
     if (resolvedSignature === lastAppliedSignatureRef.current) return;
+    // HARD18-019: a still-failing write must not retry on every render/60s
+    // circadian tick - only once the backoff window for THIS signature has
+    // elapsed. A genuinely different resolved signature always applies
+    // immediately regardless of a pending backoff for some earlier signature.
+    const pendingFailure = lastFailedApplyRef.current;
+    if (
+      pendingFailure &&
+      pendingFailure.signature === resolvedSignature &&
+      Date.now() < pendingFailure.nextAttemptAtMs
+    ) {
+      return;
+    }
+    // HARD18-019: an apply for this exact signature is already in flight
+    // (its promise has not settled yet) - do not fire a concurrent duplicate.
+    if (pendingApplySignatureRef.current === resolvedSignature) return;
     const payload: Record<string, Record<string, string | number>> = {};
 
     (["case", "keyboard"] as const).forEach((surface) => {
@@ -558,7 +609,7 @@ export function LightingStudioProvider({ children }: { children: React.ReactNode
       const nextState = resolved.resolvedState[surface];
       const currentState = normalizeSurfaceStateForCapability(capability, rawDeviceState[surface]);
       if (!nextState || lightingStateEquals(nextState, currentState)) return;
-      const updates = buildLightingUpdatePayload(capability, nextState);
+      const updates = buildLightingUpdatePayload(capability, nextState, rawDeviceState[surface]);
       if (Object.keys(updates).length > 0) {
         payload[LIGHTING_SURFACE_TO_CATEGORY[surface]] = updates;
       }
@@ -566,13 +617,16 @@ export function LightingStudioProvider({ children }: { children: React.ReactNode
 
     if (Object.keys(payload).length === 0) {
       lastAppliedSignatureRef.current = resolvedSignature;
+      lastFailedApplyRef.current = null;
       return;
     }
 
+    pendingApplySignatureRef.current = resolvedSignature;
     void getC64API()
       .updateConfigBatch(payload)
       .then(() => {
         lastAppliedSignatureRef.current = resolvedSignature;
+        lastFailedApplyRef.current = null;
         updateHasChanges(getActiveBaseUrl(), true);
         Object.entries(payload).forEach(([category, updates]) => {
           queryClient.setQueriesData({ queryKey: ["c64-config-items", category] }, (cached) =>
@@ -584,11 +638,20 @@ export function LightingStudioProvider({ children }: { children: React.ReactNode
         });
       })
       .catch((error) => {
+        lastFailedApplyRef.current = {
+          signature: resolvedSignature,
+          nextAttemptAtMs: Date.now() + LIGHTING_APPLY_RETRY_BACKOFF_MS,
+        };
         addLog(
           "error",
           "Lighting Studio failed to apply resolved lighting state",
           buildErrorLogDetails(error as Error),
         );
+      })
+      .finally(() => {
+        if (pendingApplySignatureRef.current === resolvedSignature) {
+          pendingApplySignatureRef.current = null;
+        }
       });
   }, [
     capabilities,

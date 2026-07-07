@@ -588,6 +588,77 @@ describe("ConnectionController", () => {
     }
   });
 
+  // HARD18-007: a plain background probe only ever re-checks the same
+  // stored host, so a device that changed IP (e.g. DHCP re-assignment after
+  // the firmware-wedge power-cycle) stranded the app offline forever. After
+  // enough consecutive background failures, escalate once to the "resume"
+  // trigger's saved-device sweep + LAN scan instead of looping the same
+  // doomed probe indefinitely.
+  it("HARD18-007: escalates to resume-triggered discovery after enough consecutive background failures", async () => {
+    vi.useFakeTimers();
+    try {
+      connectionState.value = "OFFLINE_NO_DEMO";
+      let failedAtMs = 1_000;
+      discoverConnectionMock.mockImplementation(async (trigger: string) => {
+        if (trigger === "background") {
+          failedAtMs += 1;
+          connectionState.lastProbeFailedAtMs = failedAtMs;
+        }
+      });
+      const queryClient = new QueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <ConnectionController />
+        </QueryClientProvider>,
+      );
+
+      discoverConnectionMock.mockClear();
+
+      // Three consecutive background failures (60s, then 120s, then 240s
+      // backoff between them) crosses the escalation threshold.
+      await vi.advanceTimersByTimeAsync(60_000 + 120_000 + 240_000);
+
+      const triggers = discoverConnectionMock.mock.calls.map((call) => call[0]);
+      expect(triggers.filter((trigger) => trigger === "background").length).toBeGreaterThanOrEqual(3);
+      expect(triggers).toContain("resume");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not re-escalate on every subsequent background failure once already escalated this streak", async () => {
+    vi.useFakeTimers();
+    try {
+      connectionState.value = "OFFLINE_NO_DEMO";
+      let failedAtMs = 1_000;
+      discoverConnectionMock.mockImplementation(async (trigger: string) => {
+        if (trigger === "background") {
+          failedAtMs += 1;
+          connectionState.lastProbeFailedAtMs = failedAtMs;
+        }
+      });
+      const queryClient = new QueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <ConnectionController />
+        </QueryClientProvider>,
+      );
+
+      // Drain past the escalation point (3 failures), then clear and drain
+      // one more failure - it must not escalate again immediately.
+      await vi.advanceTimersByTimeAsync(60_000 + 120_000 + 240_000);
+      discoverConnectionMock.mockClear();
+
+      await vi.advanceTimersByTimeAsync(480_000);
+
+      const triggers = discoverConnectionMock.mock.calls.map((call) => call[0]);
+      expect(triggers).toContain("background");
+      expect(triggers).not.toContain("resume");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not reschedule after background rediscovery when the app becomes hidden during the probe", async () => {
     vi.useFakeTimers();
     try {
