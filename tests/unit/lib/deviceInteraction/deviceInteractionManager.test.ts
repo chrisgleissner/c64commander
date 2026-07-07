@@ -481,6 +481,94 @@ describe("deviceInteractionManager", () => {
     expect(setCircuitOpenUntil).toHaveBeenCalled();
   });
 
+  it("HARD18-006: a user-forced probe reaches the wire during active write backoff without waiting for it", async () => {
+    config = {
+      ...createConfig(),
+      backoffBaseMs: 1000,
+      backoffMaxMs: 2000,
+      backoffFactor: 2,
+      circuitBreakerThreshold: 5,
+    };
+
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    vi.useFakeTimers();
+    try {
+      const failingHandler = vi.fn().mockRejectedValue(new Error("Network timed out"));
+      await expect(
+        withRestInteraction(
+          {
+            action: makeAction("rest-backoff-prime"),
+            method: "GET",
+            path: "/v1/machine:readmem",
+            normalizedUrl: "http://device/v1/machine:readmem",
+            intent: "user",
+            baseUrl: "http://device",
+            bypassCache: true,
+          },
+          failingHandler,
+        ),
+      ).rejects.toThrow("Network timed out");
+
+      const writeStarted = vi.fn();
+      const writePromise = withRestInteraction(
+        {
+          action: makeAction("rest-write-during-backoff"),
+          method: "PUT",
+          path: "/v1/configs",
+          normalizedUrl: "http://device/v1/configs",
+          intent: "user",
+          baseUrl: "http://device",
+        },
+        async () => {
+          writeStarted();
+          return "written";
+        },
+      );
+
+      await vi.advanceTimersByTimeAsync(0);
+      expect(writeStarted).not.toHaveBeenCalled();
+
+      const probeStarted = vi.fn();
+      const probePromise = withRestInteraction(
+        {
+          action: makeAction("rest-forced-probe"),
+          method: "GET",
+          path: "/v1/info",
+          normalizedUrl: "http://device/v1/info",
+          intent: "user",
+          baseUrl: "http://device",
+          bypassCache: true,
+          bypassCooldown: true,
+          bypassBackoff: true,
+          bypassCircuit: true,
+          forceProbe: true,
+        },
+        async () => {
+          probeStarted();
+          return "probe-ok";
+        },
+      );
+
+      // The probe's dispatch and its handler invocation both happen
+      // synchronously within the call above (dedicated scheduling path),
+      // before any timer runs - assert immediately, without advancing, so a
+      // later backoff reset triggered by the probe's own success cannot mask
+      // a scheduler bug that let the deferred write slip in first.
+      expect(probeStarted).toHaveBeenCalledTimes(1);
+      expect(writeStarted).not.toHaveBeenCalled();
+      await expect(probePromise).resolves.toBe("probe-ok");
+
+      await vi.advanceTimersByTimeAsync(1000);
+      await expect(writePromise).resolves.toBe("written");
+      expect(writeStarted).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("tracks FTP failures and coalesces inflight operations without duplicate canonical logging", async () => {
     const { withFtpInteraction, resetInteractionState } =
       await import("@/lib/deviceInteraction/deviceInteractionManager");

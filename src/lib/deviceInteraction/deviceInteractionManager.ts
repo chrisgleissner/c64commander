@@ -581,34 +581,6 @@ const shouldBlockForState = (intent: InteractionIntent, allowDuringDiscovery?: b
   return false;
 };
 
-const applyCooldown = async (
-  key: string | null,
-  cooldownMs: number,
-  intent: InteractionIntent,
-  action: TraceActionContext,
-) => {
-  if (!key || cooldownMs <= 0) return;
-  const now = Date.now();
-  const untilMs = restCooldownUntil.get(key) ?? 0;
-  if (now >= untilMs) return;
-  const waitMs = untilMs - now;
-  recordDeviceGuard(action, {
-    decision: "defer",
-    reason: "cooldown",
-    waitMs,
-  });
-  addLog("debug", "Device safety cooldown delay applied", {
-    transport: "rest",
-    key,
-    intent,
-    waitMs,
-    cooldownMs,
-    deviceSafetyMode: config.mode,
-    effectiveDeviceSafetyMode: config.resolution?.effectiveMode ?? config.mode,
-  });
-  await sleep(waitMs);
-};
-
 const normalizeRestResourcePath = (path: string, baseUrl: string) => canonicalizeRestPath(path, baseUrl).split("?")[0];
 
 const pathsShareResourceTree = (leftPath: string, rightPath: string) =>
@@ -769,7 +741,6 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
   const policy = resolveRestPolicy(meta.method, canonicalPath, meta.baseUrl);
   const usesSharedReadState =
     isReadOnlyRestMethod(meta.method) && Boolean(policy.key) && !meta.bypassCache && !userHalfOpenProbe;
-  const defersReadWaitsInScheduler = isReadOnlyRestMethod(meta.method);
 
   if (usesSharedReadState && policy.key) {
     const cached = restCache.get(policy.key);
@@ -793,29 +764,12 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
   }
 
   const scheduleTask = async () => {
-    if (!defersReadWaitsInScheduler && !meta.bypassBackoff && !userHalfOpenProbe && restBackoffUntilMs > Date.now()) {
-      const waitMs = restBackoffUntilMs - Date.now();
-      recordDeviceGuard(meta.action, {
-        decision: "defer",
-        reason: "backoff",
-        waitMs,
-      });
-      addLog("debug", "Device safety backoff delay applied", {
-        transport: "rest",
-        method: meta.method,
-        path: canonicalPath,
-        intent: meta.intent,
-        waitMs,
-        deviceSafetyMode: config.mode,
-        effectiveDeviceSafetyMode: config.resolution?.effectiveMode ?? config.mode,
-      });
-      await sleep(waitMs);
-    }
-
-    if (!defersReadWaitsInScheduler && !meta.bypassCooldown && !userHalfOpenProbe) {
-      await applyCooldown(policy.key, policy.cooldownMs, meta.intent, meta.action);
-    }
-
+    // HARD18-006: backoff/cooldown waits are resolved by the scheduler's
+    // getReadyAtMs deferral below (for every method, not only reads) and keep
+    // the task OUT of the running slot until ready. Sleeping here would hold
+    // the exclusive slot and starve everything else queued behind it -
+    // notably a user-forced health-check probe, which must reach the wire
+    // promptly to observe the device's real state.
     if (!meta.bypassCooldown && !userHalfOpenProbe && policy.key && policy.cooldownMs > 0) {
       restCooldownUntil.set(policy.key, Date.now() + policy.cooldownMs);
     }
@@ -888,18 +842,16 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
     : restScheduler.schedule<T>({
         intent: meta.intent,
         run: scheduleTask,
-        getReadyAtMs: defersReadWaitsInScheduler
-          ? () => {
-              let readyAtMs = Date.now();
-              if (!meta.bypassBackoff && !userHalfOpenProbe) {
-                readyAtMs = Math.max(readyAtMs, restBackoffUntilMs);
-              }
-              if (!meta.bypassCooldown && !userHalfOpenProbe && policy.key && policy.cooldownMs > 0) {
-                readyAtMs = Math.max(readyAtMs, restCooldownUntil.get(policy.key) ?? 0);
-              }
-              return readyAtMs;
-            }
-          : undefined,
+        getReadyAtMs: () => {
+          let readyAtMs = Date.now();
+          if (!meta.bypassBackoff && !userHalfOpenProbe) {
+            readyAtMs = Math.max(readyAtMs, restBackoffUntilMs);
+          }
+          if (!meta.bypassCooldown && !userHalfOpenProbe && policy.key && policy.cooldownMs > 0) {
+            readyAtMs = Math.max(readyAtMs, restCooldownUntil.get(policy.key) ?? 0);
+          }
+          return readyAtMs;
+        },
       });
 
   if (reservedUserHalfOpenProbe) {
