@@ -21,6 +21,7 @@ import {
   setMachineExecutionRunning,
   subscribeMachineExecution,
 } from "@/lib/deviceInteraction/machineExecutionStore";
+import { publishMachineTakeover } from "@/lib/deviceInteraction/machineTakeoverEvent";
 import { clearRamAndReboot, loadMemoryRanges } from "@/lib/machine/ramOperations";
 import { selectRamDumpFolder } from "@/lib/machine/ramDumpStorage";
 import { loadRamDumpFolderConfig, type RamDumpFolderConfig } from "@/lib/config/ramDumpFolderStore";
@@ -160,6 +161,9 @@ export function useHomeActions() {
       "RAM cleared (excluding I/O region).",
     );
     setMachineExecutionState("running");
+    // HARD18-022 (M3): stop any armed Play session in place instead of
+    // letting auto-advance relaunch content on the freshly reset machine.
+    void publishMachineTakeover({ reason: "home-reset", label: "Reboot (Clr Mem)" });
   });
 
   const handlePauseResume = trace(async function handlePauseResume() {

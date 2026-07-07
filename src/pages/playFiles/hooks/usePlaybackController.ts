@@ -14,6 +14,7 @@ import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { getC64API } from "@/lib/c64api";
 import { beginMachineTransition } from "@/lib/deviceInteraction/deviceActivityGate";
 import { setMachineExecutionPaused, setMachineExecutionRunning } from "@/lib/deviceInteraction/machineExecutionStore";
+import { subscribeMachineTakeover } from "@/lib/deviceInteraction/machineTakeoverEvent";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import {
   createMachineTransitionCoordinator,
@@ -1207,6 +1208,34 @@ export function usePlaybackController({
       autoAdvanceGuardRef,
     ],
   );
+
+  // HARD18-022/023 (M3): a user-initiated whole-machine reset (Home
+  // reboot/reboot-clear-memory/power-cycle) or an out-of-playlist launch
+  // (CommoServe Run/Mount & run) resets or repurposes the C64 out from under
+  // an armed session. Stop in place - cancel auto-advance and mark the
+  // session stopped - WITHOUT issuing any further machine-control REST
+  // calls (the device was already reset by the takeover itself; adding more
+  // writes right after a reset/boot would only compound HARD18-012's
+  // boot-window churn). Keeps the playlist position; the existing
+  // isPlaying/autoAdvanceDueAtMs effects in PlayFilesPage already clear the
+  // native due-time and stop background execution reactively.
+  useEffect(() => {
+    return subscribeMachineTakeover((event) => {
+      if (!isPlayingRef.current && !isPausedRef.current) return;
+      const now = Date.now();
+      playedClockRef.current.stop(now, true);
+      setPlayedMs(0);
+      autoAdvanceGuardRef.current = null;
+      setAutoAdvanceDueAtMs(null);
+      setIsPlaying(false);
+      setIsPaused(false);
+      toast({
+        title: event.reason === "home-reset" ? "Playback stopped" : "Playlist stopped",
+        description:
+          event.reason === "home-reset" ? "The machine was reset from Home." : `You launched ${event.label}.`,
+      });
+    });
+  }, [playedClockRef, setPlayedMs, autoAdvanceGuardRef, setAutoAdvanceDueAtMs, setIsPlaying, setIsPaused]);
 
   const handlePauseResume = useCallback(
     trace(async function handlePauseResume() {

@@ -107,6 +107,7 @@ import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { useTelnetActions } from "@/hooks/useTelnetActions";
 import { TELNET_ACTIONS, type TelnetActionId } from "@/lib/telnet/telnetTypes";
 import { withTelnetInteraction } from "@/lib/deviceInteraction/deviceInteractionManager";
+import { publishMachineTakeover } from "@/lib/deviceInteraction/machineTakeoverEvent";
 import { getActiveAction, runWithImplicitAction } from "@/lib/tracing/actionTrace";
 import {
   isDeviceControlError,
@@ -599,7 +600,13 @@ function HomePageContent() {
       successTitle: "Power cycled",
       failureOperation: "HOME_POWER_CYCLE",
       failureTitle: "Power cycle failed",
-      onSuccess: () => setMachineExecutionState("running"),
+      // HARD18-022 (M3): stop any armed Play session in place instead of
+      // letting auto-advance relaunch content on the freshly power-cycled
+      // machine once the current track's nominal duration elapses.
+      onSuccess: () => {
+        setMachineExecutionState("running");
+        void publishMachineTakeover({ reason: "home-reset", label: "Power cycle" });
+      },
     });
   };
 
@@ -610,7 +617,11 @@ function HomePageContent() {
       successTitle: "Machine rebooting",
       failureOperation: "HOME_REBOOT_CLEAR_MEMORY",
       failureTitle: "Reboot failed",
-      onSuccess: () => setMachineExecutionState("running"),
+      // HARD18-022 (M3): see handlePowerCycle above.
+      onSuccess: () => {
+        setMachineExecutionState("running");
+        void publishMachineTakeover({ reason: "home-reset", label: "Reboot (Clr Mem)" });
+      },
     });
   };
 
@@ -622,7 +633,11 @@ function HomePageContent() {
       successTitle: "Machine rebooting",
       failureOperation: "HOME_REBOOT_KEEP_MEMORY",
       failureTitle: "Reboot failed",
-      onSuccess: () => setMachineExecutionState("running"),
+      // HARD18-022 (M3): see handlePowerCycle above.
+      onSuccess: () => {
+        setMachineExecutionState("running");
+        void publishMachineTakeover({ reason: "home-reset", label: "Reboot" });
+      },
     });
   };
 

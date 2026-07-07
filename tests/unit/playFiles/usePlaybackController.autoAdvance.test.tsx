@@ -419,3 +419,91 @@ describe("usePlaybackController auto advance", () => {
     );
   });
 });
+
+// HARD18-022/023 (M3): a user-initiated whole-machine reset (Home
+// reboot/reboot-clear-memory/power-cycle) or an out-of-playlist launch
+// (CommoServe Run/Mount & run) must stop an armed Play session in place
+// instead of letting auto-advance later relaunch content on the machine the
+// user reset/repurposed. publishMachineTakeover is the real module (not
+// mocked) so these tests exercise the actual subscriber wiring end to end.
+describe("usePlaybackController machine takeover (HARD18-022/023)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("stops an armed session in place on a home-reset takeover, without touching playlist position", async () => {
+    const { publishMachineTakeover } = await import("@/lib/deviceInteraction/machineTakeoverEvent");
+    const playlist = [createPlaylistItem("one", 5_000), createPlaylistItem("two", 5_000)];
+    const { result } = renderPlaybackHarness(playlist);
+
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    expect(result.current.isPlaying).toBe(true);
+    expect(result.current.autoAdvanceGuardRef.current).not.toBeNull();
+
+    await act(async () => {
+      await publishMachineTakeover({ reason: "home-reset", label: "Reboot" });
+    });
+
+    expect(result.current.isPlaying).toBe(false);
+    expect(result.current.isPaused).toBe(false);
+    expect(result.current.autoAdvanceGuardRef.current).toBeNull();
+    expect(result.current.autoAdvanceDueAtMs).toBeNull();
+    // Playlist position is preserved - a takeover stops in place, it does not
+    // advance or reset the current track.
+    expect(result.current.currentIndex).toBe(0);
+  });
+
+  it("stops an armed session in place on an external-launch takeover (e.g. CommoServe Run)", async () => {
+    const { publishMachineTakeover } = await import("@/lib/deviceInteraction/machineTakeoverEvent");
+    const playlist = [createPlaylistItem("one", 5_000), createPlaylistItem("two", 5_000)];
+    const { result } = renderPlaybackHarness(playlist);
+
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    expect(result.current.isPlaying).toBe(true);
+
+    await act(async () => {
+      await publishMachineTakeover({ reason: "external-launch", label: "game.d64" });
+    });
+
+    expect(result.current.isPlaying).toBe(false);
+    expect(result.current.autoAdvanceGuardRef.current).toBeNull();
+    expect(result.current.autoAdvanceDueAtMs).toBeNull();
+  });
+
+  it("is a no-op when no session is armed (nothing playing or paused)", async () => {
+    const { publishMachineTakeover } = await import("@/lib/deviceInteraction/machineTakeoverEvent");
+    const playlist = [createPlaylistItem("one", 5_000)];
+    const { result } = renderPlaybackHarness(playlist);
+
+    expect(result.current.isPlaying).toBe(false);
+
+    await act(async () => {
+      await publishMachineTakeover({ reason: "home-reset", label: "Reboot" });
+    });
+
+    expect(result.current.isPlaying).toBe(false);
+    expect(result.current.autoAdvanceGuardRef.current).toBeNull();
+  });
+
+  it("playItem's own reboot-before-play never publishes a takeover that stops itself", async () => {
+    const playlist = [{ ...createPlaylistItem("disk-one", 5_000), category: "disk" as const, mountType: "d64" }];
+    const { result } = renderPlaybackHarness(playlist);
+
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0, rebootBeforePlay: true });
+    });
+
+    // playItem's own reboot must not trigger the takeover subscriber and
+    // stop the very session it just started.
+    expect(result.current.isPlaying).toBe(true);
+    expect(result.current.autoAdvanceGuardRef.current).not.toBeNull();
+  });
+});

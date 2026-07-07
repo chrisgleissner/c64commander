@@ -162,6 +162,11 @@ vi.mock("@/lib/savedDevices/store", () => ({
   getSelectedSavedDevice: () => ({ id: "device-a" }),
 }));
 
+const publishMachineTakeoverMock = vi.fn().mockResolvedValue(undefined);
+vi.mock("@/lib/deviceInteraction/machineTakeoverEvent", () => ({
+  publishMachineTakeover: (...args: unknown[]) => publishMachineTakeoverMock(...args),
+}));
+
 import { useHomeActions } from "@/pages/home/hooks/useHomeActions";
 import type { SnapshotStorageEntry } from "@/lib/snapshot/snapshotTypes";
 import { CpuRestoreUnsupportedError } from "@/lib/snapshot/cpu/restoreCart";
@@ -399,6 +404,19 @@ describe("useHomeActions", () => {
     });
 
     expect(clearRamAndRebootMock).not.toHaveBeenCalled();
+  });
+
+  // HARD18-022 (M3): a Home reset-class action must publish a machine
+  // takeover so an armed Play session stops in place instead of later
+  // auto-advancing onto the freshly reset machine.
+  it("HARD18-022: handleRebootClearMemory publishes a machine takeover on success", async () => {
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handleRebootClearMemory();
+    });
+
+    expect(publishMachineTakeoverMock).toHaveBeenCalledWith(expect.objectContaining({ reason: "home-reset" }));
   });
 
   it("handlePauseResume returns early when disconnected (line 130)", async () => {
