@@ -23,6 +23,7 @@ import {
 } from "@/lib/deviceInteraction/deviceStateStore";
 import {
   areBackgroundReadsSuspended,
+  isMachineTransitionActive,
   waitForBackgroundReadsToResume,
 } from "@/lib/deviceInteraction/deviceActivityGate";
 import { isTransientConnectivityFailure } from "@/lib/uiErrors";
@@ -817,7 +818,15 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
       // SUCCESS still calls resetRestFailure() above, so healthy observation
       // continues to CLOSE the circuit (rapid self-healing); only the failure
       // contribution is suppressed here.
-      if (!meta.suppressCircuitContribution) {
+      //
+      // HARD18-012b: a deliberate machine transition the app itself just
+      // caused (armed with a long cooldown for power-cycle's full boot
+      // outage) is an EXPECTED disruption, not device degradation - polls
+      // that fail while the Ultimate is rebooting must not trip the breaker
+      // or fire offline toasts seconds after the app told the user "Power
+      // cycled". Bounded by the cooldown the caller armed, so a genuinely
+      // dead device still surfaces once the window elapses.
+      if (!meta.suppressCircuitContribution && !isMachineTransitionActive()) {
         updateRestFailure(err);
       }
       markDeviceRequestEnd({ success: false, errorMessage: err.message });

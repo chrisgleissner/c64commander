@@ -487,4 +487,67 @@ describe("deviceInteractionManager circuit cooldown", () => {
     await expect(userAttempt).resolves.toEqual({ ok: true });
     expect(userHandler).toHaveBeenCalledTimes(1);
   });
+
+  // HARD18-012b: a power-cycle success arms a bounded expected-outage window
+  // (beginMachineTransition with a long cooldown) so boot-time poll failures
+  // do not trip the breaker seconds after the app told the user "Power
+  // cycled" - the same suppression the diagnostic-probe test above proves
+  // for suppressCircuitContribution, but sourced from a deliberate machine
+  // transition instead of a per-request opt-in flag.
+  it("does not trip the breaker for ordinary REST failures while an expected machine-transition window is active", async () => {
+    const { resetInteractionState, withRestInteraction } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    const { beginMachineTransition, resetDeviceActivityGate } =
+      await import("@/lib/deviceInteraction/deviceActivityGate");
+    resetInteractionState("test");
+    resetDeviceActivityGate();
+    deviceStateValue = "READY";
+
+    // Uses "user" intent (not "system"/"background") deliberately: a
+    // read-only system/background request would additionally be routed
+    // through withRestInteraction's pre-existing areBackgroundReadsSuspended
+    // wait (HARD18-026) while the transition is active, which is a distinct
+    // mechanism from the circuit-breaker suppression this test targets.
+    // "user" isolates the one behavior under test.
+    const meta = {
+      action: makeAction("rest-power-cycle-outage"),
+      method: "GET",
+      path: "/v1/drives",
+      normalizedUrl: "http://device/v1/drives",
+      intent: "user" as const,
+      baseUrl: "http://device",
+      bypassBackoff: true,
+      bypassCooldown: true,
+      bypassCache: true,
+    };
+
+    // Arms the window starting now (begin, then immediately end applies the
+    // cooldown from this moment) - mirrors HomePage's handlePowerCycle.
+    //
+    // NOTE: uses advanceTimersByTimeAsync(0), not runOnlyPendingTimersAsync(),
+    // below. Arming the window schedules deviceActivityGate's own
+    // expiry-notification setTimeout ~18s out; "run ALL pending timers" would
+    // fire that timer too and jump fake time straight to the window's edge,
+    // defeating the very cooldown this test is proving. Advancing by 0ms still
+    // flushes the scheduler's own zero-delay queue tick without touching it.
+    beginMachineTransition(18_000)();
+
+    const failing = vi.fn().mockRejectedValue(new Error("Network error"));
+    for (let i = 0; i < 5; i += 1) {
+      const attempt = withRestInteraction(meta, failing);
+      void attempt.catch(() => undefined);
+      await vi.advanceTimersByTimeAsync(0);
+      await expect(attempt).rejects.toThrow("Network error");
+    }
+
+    // The circuit was never OPENED (opening calls it with a numeric deadline
+    // + message; a null call is just the reset), so ordinary user traffic is
+    // NOT blocked.
+    expect(setCircuitOpenUntil).not.toHaveBeenCalledWith(expect.any(Number), expect.any(String));
+    const userHandler = vi.fn().mockResolvedValue({ ok: true });
+    const userAttempt = withRestInteraction({ ...meta, action: makeAction("user-after") }, userHandler);
+    await vi.advanceTimersByTimeAsync(0);
+    await expect(userAttempt).resolves.toEqual({ ok: true });
+    expect(userHandler).toHaveBeenCalledTimes(1);
+  });
 });

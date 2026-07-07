@@ -108,6 +108,7 @@ import { useTelnetActions } from "@/hooks/useTelnetActions";
 import { TELNET_ACTIONS, type TelnetActionId } from "@/lib/telnet/telnetTypes";
 import { withTelnetInteraction } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { publishMachineTakeover } from "@/lib/deviceInteraction/machineTakeoverEvent";
+import { beginMachineTransition } from "@/lib/deviceInteraction/deviceActivityGate";
 import { getActiveAction, runWithImplicitAction } from "@/lib/tracing/actionTrace";
 import {
   isDeviceControlError,
@@ -117,6 +118,13 @@ import {
 } from "@/lib/deviceControl/deviceControl";
 import { deriveDeviceCapabilities, detectStreamingFromConfig } from "@/lib/deviceCapabilities";
 import { STREAM_ITEMS } from "@/lib/config/homeStreams";
+
+// HARD18-012b: the Ultimate's entire network stack is down for the whole
+// boot duration after a real power cycle - long enough that, unsuppressed,
+// two failed polls trip the CONSERVATIVE circuit breaker (threshold 2)
+// seconds after the app told the user "Power cycled". Bounded so a device
+// that is genuinely still unreachable once this elapses still surfaces.
+const POWER_CYCLE_EXPECTED_OUTAGE_MS = 18_000;
 
 export default function HomePage() {
   return (
@@ -606,6 +614,11 @@ function HomePageContent() {
       onSuccess: () => {
         setMachineExecutionState("running");
         void publishMachineTakeover({ reason: "home-reset", label: "Power cycle" });
+        // HARD18-012b: arm the expected-outage window now, at the moment the
+        // boot outage actually begins - begin+immediately-end applies the
+        // cooldown starting from right now rather than leaving the
+        // transition "active" indefinitely.
+        beginMachineTransition(POWER_CYCLE_EXPECTED_OUTAGE_MS)();
       },
     });
   };
