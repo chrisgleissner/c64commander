@@ -684,6 +684,91 @@ describe("useVolumeOverride", () => {
     expect(pollingPauseRegistry.isPollingPaused()).toBe(false);
   });
 
+  // HARD18-013 decomposes a 2+ item Audio Mixer write into sequential
+  // single-item PUTs (throttle-spaced), which can legitimately take longer
+  // than the flat 4000ms timeout previously applied regardless of item
+  // count - caught in CI as a false "audio mixer update timed out" toast on
+  // a two-SID mute. The timeout must scale with the item count instead.
+  it("scales the audio mixer write timeout with item count so a slower multi-item mute does not falsely time out", async () => {
+    vi.useFakeTimers();
+    try {
+      audioMixerItemsRef.current = [
+        { name: "SID 1", value: "5", options: ["OFF", "-42 dB", "0", "5"] },
+        { name: "SID 2", value: "5", options: ["OFF", "-42 dB", "0", "5"] },
+      ];
+      buildEnabledSidMuteUpdatesMock.mockImplementation((items: MixerItem[]) =>
+        Object.fromEntries(items.map((item) => [item.name, "-42 dB"])),
+      );
+
+      let resolveWrite: (() => void) | null = null;
+      mutateAsyncMock.mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveWrite = resolve;
+          }),
+      );
+
+      const { result } = renderHook(() =>
+        useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+      );
+
+      expect(result.current.volumeState.muted).toBe(false);
+
+      const togglePromise = act(async () => {
+        const pending = result.current.handleToggleMute();
+        await Promise.resolve();
+        expect(mutateAsyncMock).toHaveBeenCalledWith(
+          expect.objectContaining({ updates: { "SID 1": "-42 dB", "SID 2": "-42 dB" } }),
+        );
+        // The old flat 4000ms timeout would already have rejected by this
+        // point; the new item-scaled timeout (2 items * 2500ms = 5000ms)
+        // must not have fired yet.
+        await vi.advanceTimersByTimeAsync(4500);
+        resolveWrite?.();
+        await pending;
+      });
+
+      await togglePromise;
+      expect(result.current.volumeState.muted).toBe(true);
+      expect(addErrorLog).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still times out a genuinely hung multi-item write once its scaled budget elapses", async () => {
+    vi.useFakeTimers();
+    try {
+      audioMixerItemsRef.current = [
+        { name: "SID 1", value: "5", options: ["OFF", "-42 dB", "0", "5"] },
+        { name: "SID 2", value: "5", options: ["OFF", "-42 dB", "0", "5"] },
+      ];
+      buildEnabledSidMuteUpdatesMock.mockImplementation((items: MixerItem[]) =>
+        Object.fromEntries(items.map((item) => [item.name, "-42 dB"])),
+      );
+      mutateAsyncMock.mockImplementation(() => new Promise<void>(() => undefined));
+
+      const { result } = renderHook(() =>
+        useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+      );
+
+      expect(result.current.volumeState.muted).toBe(false);
+
+      let pending: Promise<void> | null = null;
+      await act(async () => {
+        pending = result.current.handleToggleMute();
+        pending.catch(() => undefined);
+        await Promise.resolve();
+        // Past the scaled 5000ms budget for this 2-item batch: still times out.
+        await vi.advanceTimersByTimeAsync(5100);
+      });
+
+      await expect(pending).rejects.toThrow(/timed out/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("holds the polling pause while a playback volume commit write is in flight", async () => {
     let resolveWrite: (() => void) | null = null;
     mutateAsyncMock.mockImplementation(
