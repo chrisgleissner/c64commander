@@ -1018,12 +1018,21 @@ export const HomeDiskManager = () => {
     const mountedDrives = DRIVE_KEYS.filter((drive) => resolveMountedDiskId(drive) === disk.id);
     if (mountedDrives.length > 0) {
       try {
-        await Promise.all(mountedDrives.map((drive) => api.unmountDrive(drive)));
+        // HARD18-017: a bare unmountDrive + deleting the override leaves
+        // resolveMountedDiskId falling through to the (not-yet-settled)
+        // polled drive state, ghost-mounting the card until the next poll
+        // lands. Reuse handleEject's body per mounted drive - settle
+        // polling through the mutation, then force the override to empty
+        // with a fresh timestamp - so the card reflects "unmounted"
+        // immediately, before the disk is removed from the library.
+        await Promise.all(
+          mountedDrives.map((drive) => runDriveMutationWithSettledPolling(() => api.unmountDrive(drive))),
+        );
         setMountedByDrive((prev) => {
           const next = { ...prev };
           mountedDrives.forEach((drive) => {
-            delete next[drive];
-            delete mountedByDriveSetAtRef.current[drive];
+            mountedByDriveSetAtRef.current[drive] = Date.now();
+            next[drive] = "";
           });
           return next;
         });

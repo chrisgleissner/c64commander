@@ -590,6 +590,32 @@ describe("HomeDiskManager Extended", () => {
     );
   });
 
+  // HARD18-017: a bare unmountDrive + deleting the override left
+  // resolveMountedDiskId falling through to the not-yet-settled polled
+  // drive state, ghost-mounting the drive card until the next poll landed.
+  it("HARD18-017: deleting a mounted disk shows the drive unmounted immediately, not stale until the next poll", async () => {
+    useC64DrivesMock.data = {
+      drives: [
+        { a: { bus_id: 8, enabled: true, image_file: "disk2.d64", image_path: "/" } },
+        { b: { bus_id: 9, enabled: true, image_file: "", image_path: "" } },
+      ],
+    } as any;
+
+    renderComponent();
+
+    expect(await screen.findByRole("button", { name: "Drive A Eject disk" })).toBeInTheDocument();
+
+    const item = screen.getByTestId("disk-item-ultimate/disk2.d64");
+    fireEvent.click(within(item).getByText("Remove from collection"));
+    fireEvent.click(screen.getByText("Remove"));
+
+    await waitFor(() => expect(mockUnmountDrive).toHaveBeenCalledWith("a"));
+    // The polled drive state (useC64DrivesMock.data) still reports disk2.d64
+    // mounted on Drive A - only the forced-empty override lets the card
+    // reflect "unmounted" before the next poll actually catches up.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Drive A Mount disk" })).toBeInTheDocument());
+  });
+
   it("handles drive power toggle", async () => {
     renderComponent();
     const toggleA = screen.getByTestId("drive-power-toggle-a");
