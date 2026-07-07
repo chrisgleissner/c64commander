@@ -186,6 +186,14 @@ const buildStudioDraftBase = (
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 
+// HARD18-020: the preview's whole purpose is to predict the physical
+// outcome before writing to the device - a surface set to mode "Off"
+// (hardware-verified real value) or intensity 0 must render genuinely dark
+// so the user can confirm they turned a light off, instead of the alpha
+// floors below always keeping a visible glow.
+const isSurfaceOff = (surface: LightingSurfaceState | undefined) =>
+  (surface?.mode ?? "").trim().toLowerCase() === "off" || (surface?.intensity ?? 0) <= 0;
+
 const scaleGlowAlpha = (intensity: number | undefined, max = 0.9, min = 0.18) =>
   min + (max - min) * clamp01((intensity ?? 0) / 31);
 
@@ -199,6 +207,11 @@ const LIGHTING_PREVIEW_CASE_BASE = "#BFBBAF";
 const LIGHTING_PREVIEW_KEYBOARD_BASE = "#111111";
 const LIGHTING_PREVIEW_LED_FILL = "#F5F5F5";
 const LIGHTING_PREVIEW_LED_FILL_OPACITY = 0.94;
+// HARD18-020: on the real device, ambient case light bleeds into the key
+// areas (and the key areas still catch it with keyboard lighting off) - the
+// case overlay renders across the keyboard region too, at this fraction of
+// its own alpha, before the keyboard's own overlay composites on top.
+const LIGHTING_PREVIEW_CASE_BLEED_INTO_KEYBOARD_FACTOR = 0.6;
 const LIGHTING_PREVIEW_LED_GLOW_OPACITY = 0.2;
 
 const scaleLightingAlpha = (intensity: number | undefined, min: number, max: number) =>
@@ -433,11 +446,19 @@ function LightingDeviceMockup({
   keyboardSupported: boolean;
   onSelectSurface: (surface: LightingSurface) => void;
 }) {
+  const caseOff = isSurfaceOff(draft.case);
+  // HARD18-020: a device with no keyboard-lighting capability has no
+  // draft.keyboard state at all - its key areas physically only ever show
+  // the case's ambient bleed (rendered separately below), never a
+  // "keyboard" color of their own, so keyboardOff must not fall back to the
+  // case's state the way resolveSurfaceRgb used to.
+  const keyboardOff = !keyboardSupported || isSurfaceOff(draft.keyboard);
   const caseRgb = resolveSurfaceRgb(draft.case);
-  const keyboardRgb = resolveSurfaceRgb(draft.keyboard ?? draft.case);
-  const caseGlowAlpha = scaleGlowAlpha(draft.case?.intensity, 0.78, 0.18);
-  const caseOverlayAlpha = scaleLightingAlpha(draft.case?.intensity, 0.14, 0.46);
-  const keyboardOverlayAlpha = scaleLightingAlpha(draft.keyboard?.intensity ?? draft.case?.intensity, 0.16, 0.62);
+  const keyboardRgb = resolveSurfaceRgb(draft.keyboard);
+  const caseGlowAlpha = caseOff ? 0 : scaleGlowAlpha(draft.case?.intensity, 0.78, 0.18);
+  const caseOverlayAlpha = caseOff ? 0 : scaleLightingAlpha(draft.case?.intensity, 0.14, 0.46);
+  const keyboardOverlayAlpha = keyboardOff ? 0 : scaleLightingAlpha(draft.keyboard?.intensity, 0.16, 0.62);
+  const caseBleedIntoKeyboardAlpha = caseOverlayAlpha * LIGHTING_PREVIEW_CASE_BLEED_INTO_KEYBOARD_FACTOR;
   const caseSelected = selectedSurface === "case";
   const keyboardSelected = keyboardSupported && selectedSurface === "keyboard";
   const caseStroke = caseSelected ? "rgba(255,255,255,0.88)" : "rgba(255,255,255,0.18)";
@@ -493,7 +514,14 @@ function LightingDeviceMockup({
             className="h-auto w-full overflow-visible drop-shadow-[0_28px_48px_rgba(15,23,42,0.52)]"
             aria-label="Commodore 64 lighting preview"
           >
-            <ellipse cx="500" cy="545" rx="316" ry="26" fill={toRgba(caseRgb, caseGlowAlpha * 0.36)} />
+            <ellipse
+              cx="500"
+              cy="545"
+              rx="316"
+              ry="26"
+              fill={toRgba(caseRgb, caseGlowAlpha * 0.36)}
+              data-testid="lighting-mockup-case-glow"
+            />
             <ellipse cx="500" cy="560" rx="286" ry="18" fill="rgba(15,23,42,0.35)" />
 
             <g id="c64-root" transform={LIGHTING_PREVIEW_TRANSFORM}>
@@ -545,10 +573,22 @@ function LightingDeviceMockup({
                     "keyboard-base",
                   )}
                 </g>
+                {/* HARD18-020: case light bleeds into the key areas on the real
+                    device (and remains visible there with the keyboard light
+                    off) - render the case color across the keyboard region too,
+                    independent of keyboard support/state, before the keyboard's
+                    own overlay composites on top of it. */}
+                <g data-testid="lighting-mockup-keyboard-case-bleed">
+                  {renderPreviewRects(
+                    C64_PREVIEW_LAYOUT.regions.keyboard.rects,
+                    { fill: toRgba(caseRgb, caseBleedIntoKeyboardAlpha) },
+                    "keyboard-case-bleed",
+                  )}
+                </g>
                 <g data-testid="lighting-mockup-keyboard-overlay">
                   {renderPreviewRects(
                     C64_PREVIEW_LAYOUT.regions.keyboard.rects,
-                    { fill: toRgba(keyboardRgb, keyboardOverlayAlpha) },
+                    { fill: toRgba(keyboardRgb, keyboardOverlayAlpha), style: { mixBlendMode: "screen" } },
                     "keyboard-overlay",
                   )}
                 </g>
