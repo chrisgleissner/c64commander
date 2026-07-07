@@ -66,6 +66,16 @@ type RestRequestMeta = {
    * resets the streak, so healthy observation keeps closing the circuit).
    */
   suppressCircuitContribution?: boolean;
+  /**
+   * HARD18-005: the remote-input relay's dedicated lane. The bulk REST slot
+   * (REST_MAX_CONCURRENCY = 1) queues every request behind whatever is
+   * currently running (mount, upload, degraded read), which can freeze
+   * joystick/keyboard relay for seconds. Input-lane requests skip the bulk
+   * scheduler entirely; non-overlap on the wire is still guaranteed by the
+   * caller's serializeMachineInputRequest + machineInputThrottle, exactly the
+   * documented HARD13 safety model for this endpoint.
+   */
+  useInputLane?: boolean;
 };
 
 type FtpRequestMeta = {
@@ -869,22 +879,28 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
     }
   };
 
-  const scheduledPromise = restScheduler.schedule<T>({
-    intent: meta.intent,
-    run: scheduleTask,
-    getReadyAtMs: defersReadWaitsInScheduler
-      ? () => {
-          let readyAtMs = Date.now();
-          if (!meta.bypassBackoff && !userHalfOpenProbe) {
-            readyAtMs = Math.max(readyAtMs, restBackoffUntilMs);
-          }
-          if (!meta.bypassCooldown && !userHalfOpenProbe && policy.key && policy.cooldownMs > 0) {
-            readyAtMs = Math.max(readyAtMs, restCooldownUntil.get(policy.key) ?? 0);
-          }
-          return readyAtMs;
-        }
-      : undefined,
-  });
+  // HARD18-005: the input lane must never queue behind the bulk single-slot
+  // scheduler (a mount/upload/degraded read holding the slot would otherwise
+  // freeze joystick/keyboard relay for seconds). Run it directly; non-overlap
+  // is still enforced by the caller's serializeMachineInputRequest lane.
+  const scheduledPromise = meta.useInputLane
+    ? scheduleTask()
+    : restScheduler.schedule<T>({
+        intent: meta.intent,
+        run: scheduleTask,
+        getReadyAtMs: defersReadWaitsInScheduler
+          ? () => {
+              let readyAtMs = Date.now();
+              if (!meta.bypassBackoff && !userHalfOpenProbe) {
+                readyAtMs = Math.max(readyAtMs, restBackoffUntilMs);
+              }
+              if (!meta.bypassCooldown && !userHalfOpenProbe && policy.key && policy.cooldownMs > 0) {
+                readyAtMs = Math.max(readyAtMs, restCooldownUntil.get(policy.key) ?? 0);
+              }
+              return readyAtMs;
+            }
+          : undefined,
+      });
 
   if (reservedUserHalfOpenProbe) {
     restUserCircuitProbePromise = scheduledPromise;

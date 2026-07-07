@@ -1606,6 +1606,7 @@ export class C64API {
             bypassCircuit,
             forceProbe,
             suppressCircuitContribution,
+            useInputLane,
           },
           () =>
             runNativeSerialized(async () => {

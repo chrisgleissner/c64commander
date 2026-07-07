@@ -378,6 +378,60 @@ describe("withRestInteraction", () => {
     }
   });
 
+  it("HARD18-005: input-lane requests bypass the bulk single-slot scheduler", async () => {
+    let releaseBulk!: () => void;
+    const bulkDone = new Promise<void>((resolve) => {
+      releaseBulk = resolve;
+    });
+    const order: string[] = [];
+
+    const bulk = withRestInteraction(
+      {
+        action,
+        method: "PUT",
+        path: "/v1/drives/a:mount",
+        normalizedUrl: "/v1/drives/a:mount",
+        intent: "user",
+        baseUrl: "http://c64u",
+      },
+      async () => {
+        order.push("bulk-start");
+        await bulkDone;
+        order.push("bulk-end");
+        return "bulk";
+      },
+    );
+
+    await Promise.resolve();
+    expect(order).toEqual(["bulk-start"]);
+
+    const inputLane = withRestInteraction(
+      {
+        action,
+        method: "POST",
+        path: "/v1/machine:input",
+        normalizedUrl: "/v1/machine:input",
+        intent: "user",
+        baseUrl: "http://c64u",
+        bypassCircuit: true,
+        bypassBackoff: true,
+        bypassCooldown: true,
+        useInputLane: true,
+      },
+      async () => {
+        order.push("input-start");
+        return "input";
+      },
+    );
+
+    await inputLane;
+    expect(order).toEqual(["bulk-start", "input-start"]);
+
+    releaseBulk();
+    await bulk;
+    expect(order).toEqual(["bulk-start", "input-start", "bulk-end"]);
+  });
+
   it("applies Device Safety Telnet connect cooldown between sessions for the same host", async () => {
     vi.useFakeTimers();
     const events: Array<{ label: string; at: number }> = [];
