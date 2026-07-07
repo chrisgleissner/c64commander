@@ -7,6 +7,7 @@
  */
 
 import { act, renderHook } from "@testing-library/react";
+import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import { useKeyboardHoldDispatch } from "@/hooks/useKeyboardHoldDispatch";
 import { EMPTY_HELD_KEYBOARD_INPUTS } from "@/lib/remoteInput/keyboardHeldSet";
@@ -40,39 +41,37 @@ const mulberry32 = (seed: number) => {
 const ORDINARY_KEYS: KeyboardInputName[] = ["a", "b", "c", "1", "space", "return", "f1"];
 const MODIFIERS: KeyboardInputName[] = ["left_shift", "ctrl", "commodore"];
 
+// `held` is real React state owned by this SAME wrapper component (mirroring
+// production, where it is real state one level up in useRemoteInputSession)
+// rather than a plain JS variable manually re-fed via a separate rerender() -
+// a held-set change and this hook's own internal state (e.g. shiftLocked)
+// that both update in the same handler must land in the SAME commit, exactly
+// as React's automatic batching guarantees for two `useState`s updated
+// together in production.
 const createDriver = () => {
-  const state = { held: EMPTY_HELD_KEYBOARD_INPUTS as HeldKeyboardInputs };
-  const view = renderHook(
-    ({ held }: { held: HeldKeyboardInputs }) =>
-      useKeyboardHoldDispatch(held, (next) => {
-        state.held = next;
-      }),
-    { initialProps: { held: state.held } },
-  );
-  const sync = () => view.rerender({ held: state.held });
+  const view = renderHook(() => {
+    const [held, setHeld] = useState<HeldKeyboardInputs>(EMPTY_HELD_KEYBOARD_INPUTS);
+    const dispatch = useKeyboardHoldDispatch(held, setHeld);
+    return { held, dispatch };
+  });
   return {
-    held: () => state.held,
+    held: () => view.result.current.held,
     pressKey: (inputs: KeyboardInputName[]) => {
-      act(() => view.result.current.pressKey(inputs));
-      sync();
+      act(() => view.result.current.dispatch.pressKey(inputs));
     },
     releaseKey: (inputs: KeyboardInputName[]) => {
-      act(() => view.result.current.releaseKey(inputs));
-      sync();
+      act(() => view.result.current.dispatch.releaseKey(inputs));
     },
     pressModifier: (modifier: KeyboardInputName) => {
-      act(() => view.result.current.pressModifier(modifier));
-      sync();
+      act(() => view.result.current.dispatch.pressModifier(modifier));
     },
     releaseModifier: (modifier: KeyboardInputName) => {
-      act(() => view.result.current.releaseModifier(modifier));
-      sync();
+      act(() => view.result.current.dispatch.releaseModifier(modifier));
     },
     toggleShiftLock: () => {
-      act(() => view.result.current.toggleShiftLock());
-      sync();
+      act(() => view.result.current.dispatch.toggleShiftLock());
     },
-    shiftLocked: () => view.result.current.shiftLocked,
+    shiftLocked: () => view.result.current.dispatch.shiftLocked,
   };
 };
 
@@ -97,7 +96,7 @@ const buildRandomSequence = (rng: () => number, length: number): Step[] => {
   const downModifiers = new Set<KeyboardInputName>();
   let shiftLocked = false;
 
-  const pick = <T,>(items: readonly T[]): T => items[Math.floor(rng() * items.length)];
+  const pick = <T>(items: readonly T[]): T => items[Math.floor(rng() * items.length)];
 
   for (let i = 0; i < length; i += 1) {
     const choice = rng();
@@ -148,27 +147,30 @@ describe("useKeyboardHoldDispatch fuzz coverage", () => {
       const sequence = buildRandomSequence(rng, length);
       const d = createDriver();
 
-      expect(() => {
-        for (const step of sequence) {
-          switch (step.kind) {
-            case "pressKey":
-              d.pressKey([step.key]);
-              break;
-            case "releaseKey":
-              d.releaseKey([step.key]);
-              break;
-            case "pressModifier":
-              d.pressModifier(step.modifier);
-              break;
-            case "releaseModifier":
-              d.releaseModifier(step.modifier);
-              break;
-            case "toggleShiftLock":
-              d.toggleShiftLock();
-              break;
+      expect(
+        () => {
+          for (const step of sequence) {
+            switch (step.kind) {
+              case "pressKey":
+                d.pressKey([step.key]);
+                break;
+              case "releaseKey":
+                d.releaseKey([step.key]);
+                break;
+              case "pressModifier":
+                d.pressModifier(step.modifier);
+                break;
+              case "releaseModifier":
+                d.releaseModifier(step.modifier);
+                break;
+              case "toggleShiftLock":
+                d.toggleShiftLock();
+                break;
+            }
           }
-        }
-      }, `iteration ${iteration}, sequence: ${JSON.stringify(sequence)}`).not.toThrow();
+        },
+        `iteration ${iteration}, sequence: ${JSON.stringify(sequence)}`,
+      ).not.toThrow();
 
       expect(d.held(), `iteration ${iteration} did not end empty: ${JSON.stringify(sequence)}`).toEqual(new Set());
       expect(d.shiftLocked(), `iteration ${iteration} left shift lock engaged`).toBe(false);

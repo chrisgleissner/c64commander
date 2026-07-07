@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { KeyboardInputName } from "@/lib/c64api";
 import type { HeldKeyboardInputs } from "@/lib/remoteInput/keyboardHeldSet";
 
@@ -125,15 +125,26 @@ export const useKeyboardHoldDispatch = (
   );
 
   const toggleShiftLock = useCallback(() => {
-    setShiftLocked((locked) => {
-      const next = !locked;
-      if (next) {
-        addToHeld(["left_shift"]);
-      } else if (!physicallyHeldRef.current.has("left_shift")) {
-        removeFromHeld(["left_shift"]);
-      }
-      return next;
-    });
+    // Read the current value via the ref and call addToHeld/removeFromHeld
+    // as ordinary statements here, NOT from inside setShiftLocked's own
+    // functional updater: React runs that updater during the render/
+    // reconciliation phase, and addToHeld/removeFromHeld's onChangeRef call
+    // reaches into a DIFFERENT component's state (heldKeyboardInputs is
+    // owned one level up, in useRemoteInputSession) - triggering React's
+    // "Cannot update a component while rendering a different component"
+    // escape hatch, which defers that update to its OWN extra render pass
+    // instead of batching it with this one. That one-render lag is harmless
+    // on its own, but the HARD18-002 effect below compares shiftLocked
+    // against heldKeyboardInputs and would misread the transient
+    // (shiftLocked=true, held=stale-without-left_shift) state as an
+    // external clear, immediately undoing the very toggle just requested.
+    const next = !shiftLockedRef.current;
+    setShiftLocked(next);
+    if (next) {
+      addToHeld(["left_shift"]);
+    } else if (!physicallyHeldRef.current.has("left_shift")) {
+      removeFromHeld(["left_shift"]);
+    }
   }, [addToHeld, removeFromHeld]);
 
   const isModifierActive = useCallback(
@@ -141,6 +152,22 @@ export const useKeyboardHoldDispatch = (
       physicallyHeldRef.current.has(modifier) || (modifier === "left_shift" && shiftLockedRef.current),
     [],
   );
+
+  // HARD18-002: releaseAll (panic button, backgrounding/visibilitychange,
+  // unmount, device switch) clears the SESSION's held-keyboard set and sends
+  // release_all to the device - left_shift is genuinely released on the C64 -
+  // but has no channel to reset THIS hook's own shiftLocked state, leaving
+  // the SHIFT LOCK key lit while every subsequent keypress relays unshifted.
+  // Toggling the lock on/off is the only normal-typing path that ever removes
+  // left_shift from heldKeyboardInputs while locked (and it clears shiftLocked
+  // itself in the same update, so this is a no-op there) - a held set that
+  // loses left_shift some other way while still locked can only mean it was
+  // cleared out from under the lock, so drop the stale lock to match.
+  useEffect(() => {
+    if (shiftLocked && !heldKeyboardInputs.has("left_shift")) {
+      setShiftLocked(false);
+    }
+  }, [shiftLocked, heldKeyboardInputs]);
 
   return {
     pressKey,
