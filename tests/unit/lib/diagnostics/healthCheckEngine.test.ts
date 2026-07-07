@@ -1128,6 +1128,41 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
     expect(result!.probes.CONFIG.outcome).toBe("Fail");
     expect(result!.probes.CONFIG.reason).toContain("Failed to restore original value");
   });
+
+  it("HARD18-021: still reverts unconditionally when the pre-revert re-read itself throws", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+    mockGetConfigItem
+      .mockResolvedValueOnce(ledResp)
+      .mockResolvedValueOnce(ledReadbackResp)
+      .mockRejectedValueOnce(new Error("re-read failed")) // HARD18-021: pre-revert re-read throws
+      .mockResolvedValueOnce(ledResp);
+    mockSetConfigValue.mockResolvedValueOnce(undefined).mockResolvedValueOnce(undefined);
+    mockPingFtp.mockResolvedValue({ ok: true });
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.CONFIG.outcome).toBe("Success");
+    expect(addLog).toHaveBeenCalledWith(
+      "debug",
+      "Health check CONFIG probe: pre-revert re-read failed, reverting unconditionally",
+      expect.objectContaining({
+        category: "LED Strip Settings",
+        item: "Strip Intensity",
+        error: "re-read failed",
+      }),
+    );
+    expect(mockSetConfigValue).toHaveBeenNthCalledWith(
+      2,
+      "LED Strip Settings",
+      "Strip Intensity",
+      5,
+      expect.objectContaining({ timeoutMs: 4000 }),
+    );
+  });
 });
 
 // ─── runHealthCheck — FTP probe ───────────────────────────────────────────────

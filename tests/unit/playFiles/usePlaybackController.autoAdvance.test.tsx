@@ -13,7 +13,7 @@ import { USER_TRANSPORT_COALESCE_MS, usePlaybackController } from "@/pages/playF
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { executePlayPlan } from "@/lib/playback/playbackRouter";
 import { getC64API } from "@/lib/c64api";
-import { addLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 
 vi.mock("@/lib/archive/client", () => ({
   createArchiveClient: vi.fn(),
@@ -568,6 +568,54 @@ describe("usePlaybackController Stop supersedes in-flight transitions (HARD18-00
     // Stop's own reset, plus a corrective follow-up reset for the launch
     // that reached the device after being superseded.
     expect(machineResetMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("HARD18-009: logs (rather than throwing) when the corrective follow-up reset itself fails", async () => {
+    const playlist = [createPlaylistItem("one", 1_000), createPlaylistItem("two", 1_000)];
+    const { result } = renderPlaybackHarness(playlist);
+
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    expect(result.current.isPlaying).toBe(true);
+
+    let resolveSecondLaunch!: () => void;
+    vi.mocked(executePlayPlan).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSecondLaunch = resolve;
+        }),
+    );
+    const machineResetMock = vi
+      .fn()
+      .mockResolvedValueOnce(undefined) // Stop's own reset succeeds
+      .mockRejectedValueOnce(new Error("follow-up reset failed")); // corrective reset fails
+    vi.mocked(getC64API).mockReturnValue({ machineReset: machineResetMock } as any);
+
+    let autoAdvancePromise!: Promise<void>;
+    await act(async () => {
+      autoAdvancePromise = result.current.handleNext("auto", result.current.trackInstanceIdRef.current);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await result.current.handleStop();
+    });
+
+    // Now the in-flight (superseded) launch reaches the device and its
+    // corrective follow-up reset rejects - must not throw out of the
+    // playback launch call, only log.
+    await act(async () => {
+      resolveSecondLaunch();
+      await expect(autoAdvancePromise).resolves.toBeUndefined();
+    });
+
+    expect(addErrorLog).toHaveBeenCalledWith(
+      "Follow-up reset after superseded playback launch failed",
+      expect.objectContaining({ error: "follow-up reset failed" }),
+    );
+    expect(result.current.isPlaying).toBe(false);
   });
 
   it("a rapid Play right after Stop is not itself treated as superseded", async () => {
