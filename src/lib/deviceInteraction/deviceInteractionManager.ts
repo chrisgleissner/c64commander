@@ -34,6 +34,7 @@ import {
   isReadOnlyRestMethod,
 } from "@/lib/deviceInteraction/restRequestIdentity";
 import { resetConfigWriteThrottle } from "@/lib/config/configWriteThrottle";
+import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 
 export type InteractionIntent = "user" | "system" | "background";
 
@@ -1047,78 +1048,91 @@ export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () =>
 };
 
 export const withTelnetInteraction = async <T>(meta: TelnetRequestMeta, handler: () => Promise<T>): Promise<T> => {
-  if (isTestEnv()) {
-    markDeviceRequestStart();
-    try {
-      const result = await handler();
-      markDeviceRequestEnd({ success: true });
-      return result;
-    } catch (error) {
-      const err = error as Error;
-      markDeviceRequestEnd({ success: false, errorMessage: err.message });
-      throw error;
+  // HARD18-026 (M4): pause REST polling for the WHOLE telnet interaction, not
+  // just the discovery call site useTelnetActions already covered - this is
+  // the one central change that closes every remaining telnet call-site
+  // family (action execution, playback config-refs per track transition,
+  // REU/config workflows), which previously ran un-paused and let REST
+  // polling overlap a live telnet session on firmware documented to wedge
+  // under concurrent telnet+REST traffic. Reference-counted, so the existing
+  // discovery-path acquisition composes harmlessly with this one.
+  const pollingPause = pollingPauseRegistry.acquirePause();
+  try {
+    if (isTestEnv()) {
+      markDeviceRequestStart();
+      try {
+        const result = await handler();
+        markDeviceRequestEnd({ success: true });
+        return result;
+      } catch (error) {
+        const err = error as Error;
+        markDeviceRequestEnd({ success: false, errorMessage: err.message });
+        throw error;
+      }
     }
-  }
-  if (shouldBlockForState(meta.intent, false)) {
-    const error = new Error("Device not ready for Telnet");
-    recordDeviceGuard(meta.action, {
-      decision: "block",
-      reason: "state",
-      state: getDeviceStateSnapshot().state,
-    });
-    throw error;
-  }
-
-  const now = Date.now();
-  if (telnetCircuitUntilMs > now && !(meta.intent === "user" && config.allowUserOverrideCircuit)) {
-    recordDeviceGuard(meta.action, {
-      decision: "block",
-      reason: "circuit-open",
-      untilMs: telnetCircuitUntilMs,
-    });
-    throw new Error("Telnet circuit open");
-  }
-  if (telnetCircuitUntilMs > now && meta.intent === "user" && config.allowUserOverrideCircuit) {
-    recordDeviceGuard(meta.action, {
-      decision: "override",
-      reason: "circuit-open",
-      untilMs: telnetCircuitUntilMs,
-    });
-  }
-  const hostScope = `${(meta.host ?? "any").toLowerCase()}:${meta.port ?? 23}`;
-
-  const scheduleTask = async () => {
-    if (telnetBackoffUntilMs > Date.now()) {
-      const waitMs = telnetBackoffUntilMs - Date.now();
+    if (shouldBlockForState(meta.intent, false)) {
+      const error = new Error("Device not ready for Telnet");
       recordDeviceGuard(meta.action, {
-        decision: "defer",
-        reason: "backoff",
-        waitMs,
-      });
-      await sleep(waitMs);
-    }
-
-    await applyTelnetConnectPacing(hostScope, meta.action, meta.intent);
-    markDeviceRequestStart();
-    try {
-      const result = await handler();
-      resetTelnetFailure();
-      markDeviceRequestEnd({ success: true });
-      return result;
-    } catch (error) {
-      const err = error as Error;
-      updateTelnetFailure(err);
-      markDeviceRequestEnd({ success: false, errorMessage: err.message });
-      addErrorLog("Telnet request failed", {
-        error: err.message,
-        actionId: meta.actionId,
+        decision: "block",
+        reason: "state",
+        state: getDeviceStateSnapshot().state,
       });
       throw error;
     }
-  };
 
-  return telnetScheduler.schedule<T>({
-    intent: meta.intent,
-    run: scheduleTask,
-  });
+    const now = Date.now();
+    if (telnetCircuitUntilMs > now && !(meta.intent === "user" && config.allowUserOverrideCircuit)) {
+      recordDeviceGuard(meta.action, {
+        decision: "block",
+        reason: "circuit-open",
+        untilMs: telnetCircuitUntilMs,
+      });
+      throw new Error("Telnet circuit open");
+    }
+    if (telnetCircuitUntilMs > now && meta.intent === "user" && config.allowUserOverrideCircuit) {
+      recordDeviceGuard(meta.action, {
+        decision: "override",
+        reason: "circuit-open",
+        untilMs: telnetCircuitUntilMs,
+      });
+    }
+    const hostScope = `${(meta.host ?? "any").toLowerCase()}:${meta.port ?? 23}`;
+
+    const scheduleTask = async () => {
+      if (telnetBackoffUntilMs > Date.now()) {
+        const waitMs = telnetBackoffUntilMs - Date.now();
+        recordDeviceGuard(meta.action, {
+          decision: "defer",
+          reason: "backoff",
+          waitMs,
+        });
+        await sleep(waitMs);
+      }
+
+      await applyTelnetConnectPacing(hostScope, meta.action, meta.intent);
+      markDeviceRequestStart();
+      try {
+        const result = await handler();
+        resetTelnetFailure();
+        markDeviceRequestEnd({ success: true });
+        return result;
+      } catch (error) {
+        const err = error as Error;
+        updateTelnetFailure(err);
+        markDeviceRequestEnd({ success: false, errorMessage: err.message });
+        addErrorLog("Telnet request failed", {
+          error: err.message,
+          actionId: meta.actionId,
+        });
+        throw error;
+      }
+    };
+
+    return await telnetScheduler.schedule<T>({
+      intent: meta.intent,
+      run: scheduleTask,
+    });
+  } finally {
+    pollingPause.release();
+  }
 };

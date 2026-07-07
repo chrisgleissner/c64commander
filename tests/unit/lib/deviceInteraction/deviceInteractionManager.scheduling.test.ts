@@ -19,6 +19,7 @@ import {
   withTelnetInteraction,
 } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { saveDeviceSafetyMode } from "@/lib/config/deviceSafetySettings";
+import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 
 const action = {} as any;
 
@@ -480,5 +481,42 @@ describe("withRestInteraction", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // HARD18-026 (M4): withTelnetInteraction must pause REST polling for the
+  // WHOLE handler duration, for any caller - not just the discovery call
+  // site useTelnetActions already covered. Config-ref playback transitions
+  // and REU/config workflow telnet sessions previously ran un-paused.
+  it("HARD18-026: withTelnetInteraction pauses REST polling for the whole handler duration", async () => {
+    expect(pollingPauseRegistry.isPollingPaused()).toBe(false);
+    let pausedDuringHandler = false;
+    let releaseHandler!: () => void;
+    const handlerDone = new Promise<void>((resolve) => {
+      releaseHandler = resolve;
+    });
+
+    const telnetPromise = withTelnetInteraction(
+      {
+        action,
+        actionId: "arbitrary-telnet-call",
+        intent: "system",
+        host: "c64u",
+        port: 23,
+      },
+      async () => {
+        pausedDuringHandler = pollingPauseRegistry.isPollingPaused();
+        await handlerDone;
+        return "ok";
+      },
+    );
+
+    await Promise.resolve();
+    expect(pausedDuringHandler).toBe(true);
+    expect(pollingPauseRegistry.isPollingPaused()).toBe(true);
+
+    releaseHandler();
+    await telnetPromise;
+
+    expect(pollingPauseRegistry.isPollingPaused()).toBe(false);
   });
 });
