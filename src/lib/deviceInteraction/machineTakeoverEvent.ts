@@ -38,7 +38,19 @@ export const subscribeMachineTakeover = (listener: MachineTakeoverListener): (()
 };
 
 export const publishMachineTakeover = async (event: MachineTakeoverEvent): Promise<void> => {
-  listeners.forEach((listener) => listener(event));
+  listeners.forEach((listener) => {
+    try {
+      listener(event);
+    } catch (error) {
+      // A throwing subscriber must not stop the fan-out to other subscribers
+      // or skip the unconditional orphan-stop below - see module header.
+      addErrorLog("Machine takeover listener threw", {
+        reason: event.reason,
+        label: event.label,
+        error: (error as Error).message,
+      });
+    }
+  });
   if (!isBackgroundExecutionActive()) return;
   try {
     await stopBackgroundExecution({ source: "machine-takeover", reason: event.reason });

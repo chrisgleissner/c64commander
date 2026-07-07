@@ -224,6 +224,21 @@ describe("featureFlags", () => {
       expect(repo.snapshotOverrides()).toEqual({ background_execution_enabled: false });
       expect(manager.getSnapshot().resolved.background_execution_enabled.value).toBe(false);
     });
+
+    it("logs (rather than silently swallowing) a failure to wipe the background_execution_enabled override on dev-mode exit", async () => {
+      await manager.load();
+      await manager.setFlag("background_execution_enabled", false);
+      vi.spyOn(repo, "setOverride").mockRejectedValueOnce(new Error("persistence unavailable"));
+      const { addErrorLog } = await import("@/lib/logging");
+
+      manager.applyDeveloperMode(false);
+      await vi.waitFor(() =>
+        expect(addErrorLog).toHaveBeenCalledWith(
+          "Failed to wipe developer override on dev-mode exit",
+          expect.objectContaining({ error: "persistence unavailable" }),
+        ),
+      );
+    });
   });
 
   describe("FeatureFlagManager write path", () => {

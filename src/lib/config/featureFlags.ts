@@ -385,7 +385,14 @@ export class FeatureFlagManager {
     // exit instead, unlike the gentler dormant treatment every other
     // developer-only flag gets.
     if (!enabled && this.overrides.background_execution_enabled !== undefined) {
-      void this.clearOverride("background_execution_enabled").catch(() => undefined);
+      // clearOverride already logs+rethrows on failure; this catch only
+      // exists to keep the wipe fire-and-forget without letting an
+      // unexpected rejection go unlogged.
+      void this.clearOverride("background_execution_enabled").catch((error) =>
+        addErrorLog("Failed to wipe developer override on dev-mode exit", {
+          error: (error as Error).message,
+        }),
+      );
     }
     this.emitSnapshot(this.snapshot.isLoaded);
   }
