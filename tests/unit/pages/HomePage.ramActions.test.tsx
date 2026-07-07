@@ -46,6 +46,7 @@ const {
   getCurrentPlaybackSnapshotLabelSpy,
   reuWorkflowSaveSnapshotSpy,
   reuWorkflowRestoreSnapshotSpy,
+  capturedReuWorkflowDepsRef,
   configWorkflowSaveSnapshotSpy,
   configWorkflowApplyLocalSnapshotSpy,
   pickConfigSnapshotFileSpy,
@@ -71,6 +72,7 @@ const {
   getCurrentPlaybackSnapshotLabelSpy: vi.fn(),
   reuWorkflowSaveSnapshotSpy: vi.fn(),
   reuWorkflowRestoreSnapshotSpy: vi.fn(),
+  capturedReuWorkflowDepsRef: { current: null as any },
   configWorkflowSaveSnapshotSpy: vi.fn(),
   configWorkflowApplyLocalSnapshotSpy: vi.fn(),
   pickConfigSnapshotFileSpy: vi.fn(),
@@ -332,15 +334,19 @@ vi.mock("@/lib/reu/reuSnapshotStorage", () => ({
 }));
 
 vi.mock("@/lib/reu/reuWorkflow", () => ({
-  createReuWorkflow: () => ({
-    saveSnapshot: reuWorkflowSaveSnapshotSpy,
-    restoreSnapshot: reuWorkflowRestoreSnapshotSpy,
-  }),
+  createReuWorkflow: (deps: unknown) => {
+    capturedReuWorkflowDepsRef.current = deps;
+    return {
+      saveSnapshot: reuWorkflowSaveSnapshotSpy,
+      restoreSnapshot: reuWorkflowRestoreSnapshotSpy,
+    };
+  },
 }));
 
 vi.mock("@/lib/reu/reuTelnetWorkflow", () => ({
   saveRemoteReuFromTemp: vi.fn(),
   restoreRemoteReuFromTemp: vi.fn(),
+  restoreRemoteReu: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/lib/config/configWorkflow", () => ({
@@ -768,6 +774,52 @@ describe("HomePage RAM actions", () => {
         title: "REU snapshot saved",
       }),
     );
+  });
+
+  it("createHomeReuWorkflow's listRemoteStorageRoots lists top-level FTP directories (HARD18-014)", async () => {
+    const { listFtpDirectory } = await import("@/lib/ftp/ftpClient");
+    (listFtpDirectory as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      entries: [
+        { type: "dir", name: "SD2" },
+        { type: "dir", name: "Temp" },
+        { type: "file", name: "readme.txt" },
+      ],
+    });
+
+    renderHomePage();
+    fireEvent.click(screen.getByTestId("home-machine-inline-saveReuMemory"));
+    await waitFor(() => expect(reuWorkflowSaveSnapshotSpy).toHaveBeenCalled(), { timeout: 5000 });
+
+    const deps = capturedReuWorkflowDepsRef.current;
+    expect(deps).toBeTruthy();
+    await expect(deps.listRemoteStorageRoots()).resolves.toEqual(["SD2", "Temp"]);
+    expect(listFtpDirectory).toHaveBeenCalledWith(expect.objectContaining({ path: "/" }));
+  });
+
+  it("createHomeReuWorkflow's runRestoreRemoteReu delegates to restoreRemoteReu over the REU telnet session (HARD18-014)", async () => {
+    const { restoreRemoteReu } = await import("@/lib/reu/reuTelnetWorkflow");
+    const { createTelnetSession } = await import("@/lib/telnet/telnetSession");
+    const fakeSession = { connect: vi.fn().mockResolvedValue(undefined), disconnect: vi.fn().mockResolvedValue(undefined) };
+    (createTelnetSession as ReturnType<typeof vi.fn>).mockReturnValue(fakeSession);
+    telnetState.isAvailable = true;
+
+    renderHomePage();
+    fireEvent.click(screen.getByTestId("home-machine-inline-saveReuMemory"));
+    await waitFor(() => expect(reuWorkflowSaveSnapshotSpy).toHaveBeenCalled(), { timeout: 5000 });
+
+    const deps = capturedReuWorkflowDepsRef.current;
+    expect(deps).toBeTruthy();
+    await deps.runRestoreRemoteReu("c64commander-reu-preload.reu", "preload-on-startup", "SD2");
+
+    expect(restoreRemoteReu).toHaveBeenCalledWith(
+      fakeSession,
+      expect.any(String),
+      "c64commander-reu-preload.reu",
+      "preload-on-startup",
+      "SD2",
+    );
+    expect(fakeSession.connect).toHaveBeenCalled();
+    expect(fakeSession.disconnect).toHaveBeenCalled();
   });
 
   it("shows the REU progress dialog while save is running and closes it after success", async () => {

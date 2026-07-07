@@ -749,6 +749,16 @@ describe("diskMount", () => {
       });
     });
 
+    it("HARD18-025: reports device-native persistence for an ultimate disk with no origin at all (not just a same-device origin)", async () => {
+      mockIsOriginOnSelectedDevice.mockReturnValue(false);
+      const outcome = await mountDiskToDrive(mockApi as any, "a", {
+        path: "/disk.d64",
+        location: "ultimate",
+      } as any);
+      expect(mockApi.mountDrive).toHaveBeenCalledWith("a", "/disk.d64", "d64", "readwrite");
+      expect(outcome).toEqual({ persistence: "device-native" });
+    });
+
     it("HARD18-025: reports transient persistence (no writeBack deps supplied) for a plain local buffer-mount", async () => {
       const file = new File(["test"], "disk.d64");
       const outcome = await mountDiskToDrive(
@@ -868,6 +878,30 @@ describe("diskMount", () => {
         expect(mockApi.mountDrive).not.toHaveBeenCalled();
         expect(mockApi.mountDriveUpload).toHaveBeenCalledWith("a", file, "d64", "readwrite", { filename: "/game.d64" });
         expect(outcome.persistence).toBe("transient");
+      });
+
+      it("falls back to a buffer-mount when persistent storage root discovery itself throws", async () => {
+        const file = new File([new Uint8Array([1, 2, 3])], "game.d64");
+        const writeBack = buildWriteBack({
+          listRemoteStorageRoots: vi.fn(async () => Promise.reject(new Error("FTP list failed"))),
+        });
+
+        const outcome = await mountDiskToDrive(
+          mockApi as any,
+          "a",
+          { path: "/game.d64", location: "local", localTreeUri: "tree://direct" } as any,
+          file,
+          { writeBack },
+        );
+
+        expect(writeBack.writeRemoteFile).not.toHaveBeenCalled();
+        expect(mockApi.mountDrive).not.toHaveBeenCalled();
+        expect(mockApi.mountDriveUpload).toHaveBeenCalledWith("a", file, "d64", "readwrite", { filename: "/game.d64" });
+        expect(outcome.persistence).toBe("transient");
+        expect(addErrorLog).toHaveBeenCalledWith(
+          "Disk work-dir storage root discovery failed; falling back to a transient mount",
+          expect.objectContaining({ drive: "a" }),
+        );
       });
 
       it("falls back to a buffer-mount when the FTP upload to the work dir fails", async () => {
@@ -1042,6 +1076,38 @@ describe("diskMount", () => {
         expect(FolderPicker.writeFileToTree).toHaveBeenCalledWith(
           expect.objectContaining({ treeUri: "tree://first", path: "/first.d64" }),
         );
+      });
+
+      it("logs (not throws) when the stale entry's write-back fails during a remount, and the new mount still proceeds", async () => {
+        const firstFile = new File([new Uint8Array([1, 2, 3])], "first.d64");
+        const writeBack = buildWriteBack({
+          readRemoteFile: vi.fn(async () => Promise.reject(new Error("FTP read failed"))),
+        });
+        await mountDiskToDrive(
+          mockApi as any,
+          "a",
+          { id: "disk-first", path: "/first.d64", location: "local", localTreeUri: "tree://first" } as any,
+          firstFile,
+          { writeBack },
+        );
+
+        const secondFile = new File([new Uint8Array([4, 5, 6])], "second.d64");
+        const outcome = await mountDiskToDrive(
+          mockApi as any,
+          "a",
+          { id: "disk-second", path: "/second.d64", location: "local", localTreeUri: "tree://second" } as any,
+          secondFile,
+          { writeBack },
+        );
+
+        expect(addErrorLog).toHaveBeenCalledWith(
+          "Disk write-back failed while remounting a different disk",
+          expect.objectContaining({ drive: "a", path: "/first.d64" }),
+        );
+        expect(FolderPicker.writeFileToTree).not.toHaveBeenCalledWith(
+          expect.objectContaining({ treeUri: "tree://first" }),
+        );
+        expect(outcome.persistence).toBe("materialized");
       });
 
       it("drops (does not misattribute) the stale entry when the new mount has no writeBack deps", async () => {
