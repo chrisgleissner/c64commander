@@ -14,6 +14,9 @@ export type HvscNativeIngestResult = {
   totalEntries: number;
   songsIngested: number;
   songsDeleted: number;
+  // HARD18-028: the actual deleted virtual paths - songsDeleted alone is a
+  // count and can't drive removing the stale songs from the JS browse index.
+  deletedVirtualPaths: string[];
   failedSongs: number;
   failedPaths: string[];
   songlengthFilesWritten: number;

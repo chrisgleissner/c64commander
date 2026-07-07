@@ -774,6 +774,21 @@ const ingestArchivePathNative = async (options: {
     pipeline.transition("EXTRACTED");
     pipeline.transition("INGESTING", { deletionCount: result.songsDeleted });
 
+    if (result.deletedVirtualPaths.length > 0) {
+      // HARD18-028: the native update path deletes files on disk (and their
+      // metadata DB rows) but never removed them from the JS browse-index
+      // snapshot that actually serves the Play page's HVSC browsing/search -
+      // deleted songs stayed listed/searchable forever, and moved songs
+      // appeared twice. Persisting the deletions BEFORE the songlengths
+      // reload below matters: that reload's load-merge-save round trip only
+      // ever ADDS paths, never removes them, so it must see an
+      // already-deletion-applied snapshot as its base. Mirrors the
+      // non-native ingestArchiveBuffer path's deleteSong/finalize sequence.
+      const browseIndex = await createHvscBrowseIndexMutable(plan.type);
+      result.deletedVirtualPaths.forEach((path) => browseIndex.deleteSong(path));
+      await browseIndex.finalize();
+    }
+
     resetSonglengthsCache();
     const nativeSonglengthsPerfScope = beginHvscPerfScope("ingest:songlengths", {
       archiveName,

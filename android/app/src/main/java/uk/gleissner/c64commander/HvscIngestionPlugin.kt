@@ -418,6 +418,7 @@ open class HvscIngestionPlugin : Plugin() {
           val totalEntries: Int,
           val songsIngested: Int,
           val songsDeleted: Int,
+          val deletedVirtualPaths: List<String>,
           val failedSongs: Int,
           val failedPaths: List<String>,
           val songlengthFilesWritten: Int,
@@ -595,6 +596,7 @@ open class HvscIngestionPlugin : Plugin() {
                                 totalEntries = extractionResult.totalEntries,
                                 songsIngested = extractionResult.songsIngested,
                                 songsDeleted = songsDeleted,
+                                deletedVirtualPaths = deletedVirtualPaths,
                                 failedSongs = extractionResult.failedSongs,
                                 failedPaths = extractionResult.failedPaths,
                                 songlengthFilesWritten = extractionResult.songlengthFilesWritten,
@@ -648,6 +650,12 @@ open class HvscIngestionPlugin : Plugin() {
                 val failedPaths = JSArray()
                 result.failedPaths.forEach { failedPaths.put(it) }
                 payload.put("failedPaths", failedPaths)
+                // HARD18-028: the JS browse-index snapshot that serves Play page
+                // browsing/search never learns which songs an update deleted unless
+                // it receives the actual paths (a count alone can't drive deletion).
+                val deletedVirtualPathsPayload = JSArray()
+                result.deletedVirtualPaths.forEach { deletedVirtualPathsPayload.put(it) }
+                payload.put("deletedVirtualPaths", deletedVirtualPathsPayload)
 
                 emitProgress(
                         stage = "complete",

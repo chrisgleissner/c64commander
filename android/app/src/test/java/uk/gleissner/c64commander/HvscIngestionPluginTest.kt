@@ -12,6 +12,7 @@ import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Method
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,9 +32,16 @@ import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.robolectric.RobolectricTestRunner
+import uk.gleissner.c64commander.hvsc.ArchiveProfile
+import uk.gleissner.c64commander.hvsc.ExtractionProgress
+import uk.gleissner.c64commander.hvsc.ExtractionResult
+import uk.gleissner.c64commander.hvsc.HvscArchiveExtractor
+import uk.gleissner.c64commander.hvsc.HvscArchiveMode
+import uk.gleissner.c64commander.hvsc.MemoryBudget
 
 private open class TestableHvscIngestionPlugin : HvscIngestionPlugin() {
   val progressEvents = mutableListOf<JSObject>()
+  var fakeExtractor: HvscArchiveExtractor? = null
 
   public override fun notifyListeners(eventName: String?, data: JSObject?) {
     if (eventName == "hvscProgress" && data != null) {
@@ -41,6 +49,11 @@ private open class TestableHvscIngestionPlugin : HvscIngestionPlugin() {
     }
     super.notifyListeners(eventName, data)
   }
+
+  // Lets a test drive the full ingestHvsc() coroutine pipeline (SQLite,
+  // deletion application, payload construction) with a canned extraction
+  // result instead of a real 7z/zip archive.
+  public override fun createArchiveExtractor(): HvscArchiveExtractor = fakeExtractor ?: super.createArchiveExtractor()
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -663,4 +676,128 @@ class HvscIngestionPluginTest {
       root.deleteRecursively()
     }
   }
+
+  // ---------------------------------------------------------------------
+  // HARD18-028: the native update path computed deletedVirtualPaths (via
+  // applyDeletionFiles) but never included them in the resolved payload -
+  // only a count. The JS browse-index snapshot that serves Play page
+  // browsing/search had no way to learn WHICH songs to remove, so deleted
+  // songs stayed listed/searchable forever. Driven through the full
+  // ingestHvsc() coroutine pipeline (real SQLite + real file deletion) with
+  // a fake HvscArchiveExtractor standing in for a real 7z/zip archive.
+  // ---------------------------------------------------------------------
+
+  private fun fakeExtractionResult(deletionPaths: List<String>): ExtractionResult =
+          ExtractionResult(
+                  profile =
+                          ArchiveProfile(
+                                  format = "zip",
+                                  methodChain = null,
+                                  dictionaryBytes = null,
+                                  solid = null,
+                                  blocks = null,
+                                  entryCount = 1,
+                                  fileCount = 1,
+                                  directoryCount = 0,
+                                  sidFileCount = 0,
+                                  songlengthFiles = 0,
+                                  encryptedEntries = 0,
+                                  uncompressedSizeBytes = 0L,
+                                  estimatedRequiredBytes = 0L,
+                          ),
+                  totalEntries = 1,
+                  songsIngested = 0,
+                  failedSongs = 0,
+                  failedPaths = emptyList(),
+                  songlengthFilesWritten = 0,
+                  deletionPaths = deletionPaths,
+                  extractedSongs = emptyList(),
+          )
+
+  @Test
+  fun ingestHvscUpdatePropagatesDeletedVirtualPathsIntoResolvedPayload() {
+    val deletionPaths = listOf("MUSICIANS/T/Tester/Old.sid")
+    val testablePlugin = TestableHvscIngestionPlugin()
+    injectBridge(testablePlugin, context)
+    testablePlugin.fakeExtractor = FakeHvscArchiveExtractor(fakeExtractionResult(deletionPaths))
+
+    val libraryRoot = File(context.filesDir, "hvsc/library")
+    val staleSong = File(libraryRoot, "MUSICIANS/T/Tester/Old.sid")
+    staleSong.parentFile?.mkdirs()
+    staleSong.writeText("PSID-stale-fixture")
+
+    val archiveFile = File(context.filesDir, "hvsc-cache/fake-update.7z")
+    archiveFile.parentFile?.mkdirs()
+    archiveFile.writeText("not-a-real-archive-body")
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("relativeArchivePath")).thenReturn("hvsc-cache/fake-update.7z")
+    `when`(call.getString("mode")).thenReturn("update")
+    `when`(call.getBoolean("resetLibrary", false)).thenReturn(false)
+    `when`(call.getInt("progressEvery", 250)).thenReturn(250)
+    `when`(call.getInt("dbBatchSize", 500)).thenReturn(500)
+    `when`(call.getInt("minExpectedRows", 0)).thenReturn(0)
+    `when`(call.getBoolean("debugHeapLogging", false)).thenReturn(false)
+
+    val resolveLatch = CountDownLatch(1)
+    val payloadHolder = arrayOfNulls<JSObject>(1)
+    val rejectionHolder = arrayOfNulls<String>(1)
+    doAnswer { invocation ->
+              payloadHolder[0] = invocation.getArgument(0) as JSObject
+              resolveLatch.countDown()
+              null
+            }
+            .`when`(call)
+            .resolve(any(JSObject::class.java))
+    doAnswer { invocation ->
+              rejectionHolder[0] = invocation.getArgument<String?>(0) ?: "(no message)"
+              resolveLatch.countDown()
+              null
+            }
+            .`when`(call)
+            .reject(any(String::class.java), any(Exception::class.java))
+
+    try {
+      testablePlugin.ingestHvsc(call)
+
+      // ingestHvsc runs its work on Dispatchers.IO (a real background thread)
+      // and only hops to Dispatchers.Main to call call.resolve/reject - which
+      // under Robolectric queues onto the shadow main looper instead of
+      // running inline, so this thread (the JUnit runner thread, which
+      // Robolectric treats as "main") must pump it explicitly. See the
+      // withContext(...Dispatchers.Main) tests above for the same pattern.
+      val deadline = System.currentTimeMillis() + 10_000
+      while (resolveLatch.count > 0 && System.currentTimeMillis() < deadline) {
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        Thread.sleep(10)
+      }
+
+      assertTrue(resolveLatch.await(0, TimeUnit.SECONDS))
+      assertEquals(null, rejectionHolder[0])
+      val payload = payloadHolder[0] ?: error("ingestHvsc never resolved a payload")
+
+      assertEquals(1, payload.getInt("songsDeleted"))
+      val deletedVirtualPaths = payload.getJSONArray("deletedVirtualPaths")
+      assertEquals(1, deletedVirtualPaths.length())
+      assertEquals("/MUSICIANS/T/Tester/Old.sid", deletedVirtualPaths.getString(0))
+      assertTrue("deleted file must actually be removed from disk", !staleSong.exists())
+    } finally {
+      File(context.filesDir, "hvsc").deleteRecursively()
+      File(context.filesDir, "hvsc-cache").deleteRecursively()
+    }
+  }
+}
+
+private class FakeHvscArchiveExtractor(private val result: ExtractionResult) : HvscArchiveExtractor {
+  override fun probe(archiveFile: File, mode: HvscArchiveMode, cancellationToken: AtomicBoolean): ArchiveProfile =
+          result.profile
+
+  override fun extract(
+          archiveFile: File,
+          outputDir: File,
+          mode: HvscArchiveMode,
+          cancellationToken: AtomicBoolean,
+          memoryBudget: MemoryBudget,
+          onProgress: (ExtractionProgress) -> Unit,
+  ): ExtractionResult = result
 }

@@ -50,6 +50,7 @@ const nativeHvscPlugin = vi.hoisted(() => ({
     totalEntries: 1,
     songsIngested: 1,
     songsDeleted: 0,
+    deletedVirtualPaths: [],
     failedSongs: 0,
     failedPaths: [],
     songlengthFilesWritten: 0,
@@ -1479,6 +1480,84 @@ describe("hvscIngestionRuntime", () => {
     expect(status).toBeDefined();
   });
 
+  // HARD18-028: the native plugin computes which songs an update deleted
+  // (applyDeletionFiles) but the JS browse-index snapshot serving Play page
+  // browsing/search never learned which paths to remove - only a count -
+  // so deleted songs stayed listed/searchable forever and moved songs
+  // appeared twice. deletedVirtualPaths must drive browseIndex.deleteSong,
+  // and that must persist (finalize) BEFORE the songlengths reload below,
+  // whose load-merge-save round trip only ever ADDS paths.
+  it("propagates native update deletedVirtualPaths into the browse index before the songlengths reload", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 6,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 5,
+      installedBaselineVersion: 5,
+    } as any);
+    vi.mocked(updateHvscState).mockReturnValue({
+      ingestionState: "ready",
+      ingestionError: null,
+      installedVersion: 6,
+      installedBaselineVersion: 5,
+    } as any);
+    nativeHvscPlugin.ingestHvsc.mockResolvedValueOnce({
+      totalEntries: 1,
+      songsIngested: 0,
+      songsDeleted: 2,
+      deletedVirtualPaths: ["/MUSICIANS/T/Tester/Old.sid", "/MUSICIANS/T/Tester/Moved.sid"],
+      failedSongs: 0,
+      failedPaths: [],
+      songlengthFilesWritten: 0,
+      metadataRows: 0,
+      metadataUpserts: 0,
+      metadataDeletes: 2,
+      archiveBytes: 10,
+    });
+
+    await installOrUpdateHvsc("token-native-update-deletions");
+
+    expect(browseIndexMutable.deleteSong).toHaveBeenCalledWith("/MUSICIANS/T/Tester/Old.sid");
+    expect(browseIndexMutable.deleteSong).toHaveBeenCalledWith("/MUSICIANS/T/Tester/Moved.sid");
+    expect(browseIndexMutable.finalize).toHaveBeenCalled();
+    expect(vi.mocked(browseIndexMutable.finalize).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(reloadHvscSonglengthsOnConfigChange).mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("skips the browse-index deletion round trip for a native update with no deletions", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 6,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 5,
+      installedBaselineVersion: 5,
+    } as any);
+    vi.mocked(updateHvscState).mockReturnValue({
+      ingestionState: "ready",
+      ingestionError: null,
+      installedVersion: 6,
+      installedBaselineVersion: 5,
+    } as any);
+
+    await installOrUpdateHvsc("token-native-update-no-deletions");
+
+    expect(browseIndexMutable.deleteSong).not.toHaveBeenCalled();
+    expect(browseIndexMutable.finalize).not.toHaveBeenCalled();
+  });
+
   it("native ingest with failed songs calls applyIngestionFailureAndThrow and throws", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
@@ -1497,6 +1576,7 @@ describe("hvscIngestionRuntime", () => {
       totalEntries: 100,
       songsIngested: 98,
       songsDeleted: 0,
+      deletedVirtualPaths: [],
       failedSongs: 2,
       failedPaths: ["bad1.sid", "bad2.sid"],
       songlengthFilesWritten: 0,
