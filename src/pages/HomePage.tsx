@@ -66,7 +66,7 @@ import { deriveRamDumpFolderDisplayPath } from "@/lib/config/ramDumpFolderStore"
 import { useReuSnapshotStore, deleteReuSnapshotFromStore, updateReuSnapshotLabel } from "@/lib/reu/reuSnapshotStore";
 import { createReuWorkflow } from "@/lib/reu/reuWorkflow";
 import { deleteReuSnapshotFile } from "@/lib/reu/reuSnapshotStorage";
-import { saveRemoteReuFromTemp, restoreRemoteReuFromTemp } from "@/lib/reu/reuTelnetWorkflow";
+import { saveRemoteReuFromTemp, restoreRemoteReu } from "@/lib/reu/reuTelnetWorkflow";
 import type { ReuProgressState, ReuRestoreMode } from "@/lib/reu/reuSnapshotTypes";
 import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
 import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
@@ -373,6 +373,11 @@ function HomePageContent() {
             modifiedAt: entry.modifiedAt,
           }));
       },
+      listRemoteStorageRoots: async () => {
+        const ftpOptions = await resolveFtpOptions();
+        const result = await listFtpDirectory({ ...ftpOptions, path: "/" });
+        return result.entries.filter((entry) => entry.type === "dir").map((entry) => entry.name);
+      },
       readRemoteFile: async (path) => {
         const ftpOptions = await resolveFtpOptions();
         const result = await readFtpFile({ ...ftpOptions, path });
@@ -390,8 +395,10 @@ function HomePageContent() {
         withConnectedReuTelnetSession((session, menuKey) =>
           saveRemoteReuFromTemp(session, menuKey, getRequiredTelnetTarget("saveReuMemory")),
         ),
-      runRestoreRemoteReu: (fileName, mode) =>
-        withConnectedReuTelnetSession((session, menuKey) => restoreRemoteReuFromTemp(session, menuKey, fileName, mode)),
+      runRestoreRemoteReu: (fileName, mode, folderName) =>
+        withConnectedReuTelnetSession((session, menuKey) =>
+          restoreRemoteReu(session, menuKey, fileName, mode, folderName),
+        ),
     });
 
   const withConnectedConfigTelnetSession = async <T,>(

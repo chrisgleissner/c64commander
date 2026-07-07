@@ -23,16 +23,52 @@ export type ReuRemoteFile = {
 type ReuWorkflowDependencies = {
   ensureLocalSnapshotStorage: () => Promise<void>;
   listRemoteTempFiles: () => Promise<ReuRemoteFile[]>;
+  // HARD18-014: names of the top-level FTP directories on the Ultimate, used
+  // to pick a persistent (survives power-cycle) storage root for REU
+  // preload uploads - /Temp is a RAM disk and never a valid candidate.
+  listRemoteStorageRoots: () => Promise<string[]>;
   readRemoteFile: (path: string) => Promise<Uint8Array>;
   writeRemoteFile: (path: string, bytes: Uint8Array) => Promise<void>;
   runSaveRemoteReu: () => Promise<void>;
-  runRestoreRemoteReu: (fileName: string, mode: ReuRestoreMode) => Promise<void>;
+  runRestoreRemoteReu: (fileName: string, mode: ReuRestoreMode, folderName: string) => Promise<void>;
   readLocalSnapshot: (entry: ReuSnapshotStorageEntry) => Promise<Uint8Array>;
   persistLocalSnapshot: (fileName: string, bytes: Uint8Array) => Promise<ReuSnapshotStorageEntry["storage"]>;
   saveToStore: (entry: ReuSnapshotStorageEntry) => void;
   sleep: (ms: number) => Promise<void>;
   now: () => Date;
 };
+
+// HARD18-014: /Temp is a volatile RAM disk (hardware-confirmed on both u64 and
+// c64u: contents are wiped by a real power cycle, not just a machine:reboot),
+// so a REU armed for "Preload on Startup" against /Temp can never fire after
+// the power cycle it exists for. Pick a real persistent root instead, never
+// /Temp, preferring removable storage over onboard flash.
+const NON_PERSISTENT_ROOT_NAMES = new Set(["temp"]);
+const PERSISTENT_ROOT_PREFERENCE_PREFIXES = ["sd", "usb", "flash"];
+const REU_PRELOAD_FILE_NAME = "c64commander-reu-preload.reu";
+
+const rankPersistentRootName = (name: string): number => {
+  const normalized = name.trim().toLowerCase();
+  const index = PERSISTENT_ROOT_PREFERENCE_PREFIXES.findIndex((prefix) => normalized.startsWith(prefix));
+  return index === -1 ? PERSISTENT_ROOT_PREFERENCE_PREFIXES.length : index;
+};
+
+export const resolvePersistentReuStorageRoot = (rootDirNames: string[]): string | null => {
+  const candidates = rootDirNames
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0 && !NON_PERSISTENT_ROOT_NAMES.has(name.toLowerCase()));
+  if (candidates.length === 0) return null;
+  return [...candidates].sort((left, right) => rankPersistentRootName(left) - rankPersistentRootName(right))[0];
+};
+
+export class ReuPersistentStorageUnavailableError extends Error {
+  constructor() {
+    super(
+      "No persistent storage found on the Ultimate (only the volatile /Temp folder is available) - REU preload cannot be armed.",
+    );
+    this.name = "ReuPersistentStorageUnavailableError";
+  }
+}
 
 const DEFAULT_WAIT_TIMEOUT_MS = 45_000;
 const DEFAULT_WAIT_INTERVAL_MS = 1_000;
@@ -62,6 +98,7 @@ const generateId = () =>
 const defaultDependencies: ReuWorkflowDependencies = {
   ensureLocalSnapshotStorage: async () => undefined,
   listRemoteTempFiles: async () => [],
+  listRemoteStorageRoots: async () => [],
   readRemoteFile: async () => new Uint8Array(),
   writeRemoteFile: async () => undefined,
   runSaveRemoteReu: async () => undefined,
@@ -338,15 +375,28 @@ export const createReuWorkflow = (overrides: Partial<ReuWorkflowDependencies> = 
     const reporter = createProgressReporter("restore", onProgress);
     const localFileName = snapshot.filename;
     const localPath = describeStoragePath(snapshot.storage);
-    const remoteFileName = snapshot.remoteFileName || snapshot.filename;
-    const remotePath = `/Temp/${remoteFileName}`;
-    let logContext: ReuWorkflowLogContext = { localFileName, localPath, remoteFileName, remotePath };
+    let logContext: ReuWorkflowLogContext = { localFileName, localPath };
     const emit = (state: ReuProgressState, context: ReuWorkflowLogContext = {}) => {
       logContext = { ...logContext, ...context };
       reporter.emit(state, logContext);
     };
 
     try {
+      // HARD18-014: "Preload on Startup" must never be armed against the
+      // volatile /Temp RAM disk (hardware-confirmed to be wiped by a real
+      // power cycle) - resolve a real persistent root first, and fail before
+      // any upload if none exists. "Load into REU" is a one-shot action for
+      // the current session, so it keeps using /Temp as before.
+      const folderName =
+        mode === "preload-on-startup" ? resolvePersistentReuStorageRoot(await deps.listRemoteStorageRoots()) : "Temp";
+      if (!folderName) {
+        throw new ReuPersistentStorageUnavailableError();
+      }
+      const remoteFileName =
+        mode === "preload-on-startup" ? REU_PRELOAD_FILE_NAME : snapshot.remoteFileName || snapshot.filename;
+      const remotePath = `/${folderName}/${remoteFileName}`;
+      logContext = { ...logContext, remoteFileName, remotePath };
+
       emit(
         {
           step: "reading-local",
@@ -354,17 +404,17 @@ export const createReuWorkflow = (overrides: Partial<ReuWorkflowDependencies> = 
           description: "Loading the local REU image before upload.",
           progress: 10,
         },
-        { localFileName, localPath },
+        { remoteFileName, remotePath },
       );
       const bytes = await deps.readLocalSnapshot(snapshot);
       emit(
         {
           step: "uploading",
           title: "Uploading REU snapshot",
-          description: `Uploading ${remoteFileName} to /Temp.`,
+          description: `Uploading ${remoteFileName} to /${folderName}.`,
           progress: 50,
         },
-        { localFileName, localPath, remoteFileName, remotePath },
+        { remoteFileName, remotePath },
       );
       await deps.writeRemoteFile(remotePath, bytes);
 
@@ -375,9 +425,9 @@ export const createReuWorkflow = (overrides: Partial<ReuWorkflowDependencies> = 
           description: "Selecting the uploaded file over Telnet.",
           progress: 90,
         },
-        { localFileName, localPath, remoteFileName, remotePath },
+        { remoteFileName, remotePath },
       );
-      await deps.runRestoreRemoteReu(remoteFileName, mode);
+      await deps.runRestoreRemoteReu(remoteFileName, mode, folderName);
       emit(
         {
           step: "complete",
@@ -385,7 +435,7 @@ export const createReuWorkflow = (overrides: Partial<ReuWorkflowDependencies> = 
           description: remoteFileName,
           progress: 100,
         },
-        { localFileName, localPath, remoteFileName, remotePath },
+        { remoteFileName, remotePath },
       );
       reporter.succeed("complete", { localFileName, localPath, remoteFileName, remotePath });
     } catch (error) {

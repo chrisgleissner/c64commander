@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as logging from "@/lib/logging";
-import { createReuWorkflow, detectUpdatedTempReuFile, waitForTempReuFile } from "@/lib/reu/reuWorkflow";
+import {
+  createReuWorkflow,
+  detectUpdatedTempReuFile,
+  ReuPersistentStorageUnavailableError,
+  resolvePersistentReuStorageRoot,
+  waitForTempReuFile,
+} from "@/lib/reu/reuWorkflow";
 import type { ReuSnapshotStorageEntry } from "@/lib/reu/reuSnapshotTypes";
 
 const addLogSpy = vi.spyOn(logging, "addLog").mockImplementation(() => undefined);
@@ -9,6 +15,23 @@ const addErrorLogSpy = vi.spyOn(logging, "addErrorLog").mockImplementation(() =>
 describe("reuWorkflow", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  describe("resolvePersistentReuStorageRoot (HARD18-014)", () => {
+    it("never picks Temp, even when it is the only entry", () => {
+      expect(resolvePersistentReuStorageRoot(["Temp"])).toBeNull();
+      expect(resolvePersistentReuStorageRoot([])).toBeNull();
+    });
+
+    it("prefers SD, then USB, then Flash, over other candidates", () => {
+      expect(resolvePersistentReuStorageRoot(["Temp", "Flash", "USB2", "SD"])).toBe("SD");
+      expect(resolvePersistentReuStorageRoot(["Temp", "Flash", "USB2"])).toBe("USB2");
+      expect(resolvePersistentReuStorageRoot(["Temp", "Flash"])).toBe("Flash");
+    });
+
+    it("is case-insensitive and ignores blank entries", () => {
+      expect(resolvePersistentReuStorageRoot(["temp", "  ", "usb1"])).toBe("usb1");
+    });
   });
 
   it("detects the newest changed .reu file in /Temp", () => {
@@ -178,12 +201,13 @@ describe("reuWorkflow", () => {
       readLocalSnapshot: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
       writeRemoteFile,
       runRestoreRemoteReu,
+      listRemoteStorageRoots: vi.fn().mockResolvedValue(["Temp", "USB2"]),
     });
 
     await workflow.restoreSnapshot(snapshot, "preload-on-startup", onProgress);
 
-    expect(writeRemoteFile).toHaveBeenCalledWith("/Temp/capture.reu", new Uint8Array([1, 2, 3]));
-    expect(runRestoreRemoteReu).toHaveBeenCalledWith("capture.reu", "preload-on-startup");
+    expect(writeRemoteFile).toHaveBeenCalledWith("/USB2/c64commander-reu-preload.reu", new Uint8Array([1, 2, 3]));
+    expect(runRestoreRemoteReu).toHaveBeenCalledWith("c64commander-reu-preload.reu", "preload-on-startup", "USB2");
     expect(onProgress.mock.calls.map(([state]) => state.step)).toEqual([
       "reading-local",
       "uploading",
@@ -197,9 +221,43 @@ describe("reuWorkflow", () => {
         operation: "restore",
         status: "success",
         localPath: "reu-snapshots/local.reu",
-        remotePath: "/Temp/capture.reu",
+        remotePath: "/USB2/c64commander-reu-preload.reu",
       }),
     );
+  });
+
+  it("HARD18-014: refuses to arm preload-on-startup with no persistent storage, never uploading", async () => {
+    const writeRemoteFile = vi.fn().mockResolvedValue(undefined);
+    const runRestoreRemoteReu = vi.fn().mockResolvedValue(undefined);
+    const readLocalSnapshot = vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3]));
+    const snapshot: ReuSnapshotStorageEntry = {
+      id: "reu-no-storage",
+      filename: "local.reu",
+      createdAt: "2026-03-29T10:02:00Z",
+      snapshotType: "reu",
+      sizeBytes: 3,
+      remoteFileName: "capture.reu",
+      storage: { kind: "native-data", path: "reu-snapshots/local.reu" },
+      metadata: {
+        snapshot_type: "reu",
+        display_ranges: ["REU image"],
+        created_at: "2026-03-29 10:02:00",
+      },
+    };
+    const workflow = createReuWorkflow({
+      readLocalSnapshot,
+      writeRemoteFile,
+      runRestoreRemoteReu,
+      listRemoteStorageRoots: vi.fn().mockResolvedValue(["Temp"]),
+    });
+
+    await expect(workflow.restoreSnapshot(snapshot, "preload-on-startup")).rejects.toThrow(
+      ReuPersistentStorageUnavailableError,
+    );
+
+    expect(readLocalSnapshot).not.toHaveBeenCalled();
+    expect(writeRemoteFile).not.toHaveBeenCalled();
+    expect(runRestoreRemoteReu).not.toHaveBeenCalled();
   });
 
   it("falls back to the local file name when the remote file name is blank", async () => {
@@ -229,7 +287,7 @@ describe("reuWorkflow", () => {
     await workflow.restoreSnapshot(snapshot, "load-into-reu", onProgress);
 
     expect(writeRemoteFile).toHaveBeenCalledWith("/Temp/fallback.reu", new Uint8Array([4, 5, 6]));
-    expect(runRestoreRemoteReu).toHaveBeenCalledWith("fallback.reu", "load-into-reu");
+    expect(runRestoreRemoteReu).toHaveBeenCalledWith("fallback.reu", "load-into-reu", "Temp");
     expect(onProgress).toHaveBeenLastCalledWith(
       expect.objectContaining({
         step: "complete",
