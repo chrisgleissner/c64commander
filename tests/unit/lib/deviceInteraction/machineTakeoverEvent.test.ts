@@ -73,4 +73,18 @@ describe("machineTakeoverEvent", () => {
 
     unsubscribe();
   });
+
+  it("logs (rather than throwing) when stopping the orphaned background-execution session itself fails", async () => {
+    isBackgroundExecutionActive.mockReturnValue(true);
+    stopBackgroundExecution.mockRejectedValue(new Error("stop failed"));
+
+    await expect(
+      publishMachineTakeover({ reason: "home-reset", label: "Home reset" }),
+    ).resolves.toBeUndefined();
+
+    expect(addErrorLog).toHaveBeenCalledWith(
+      "Failed to stop background execution after machine takeover",
+      expect.objectContaining({ reason: "home-reset", label: "Home reset", error: "stop failed" }),
+    );
+  });
 });
