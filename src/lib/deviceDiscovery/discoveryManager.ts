@@ -53,6 +53,7 @@ let state: DeviceDiscoveryState = Object.freeze({
   elapsedMs: null,
   error: null,
   unsupported: false,
+  acknowledged: false,
 });
 let activeDiscovery: Promise<DeviceDiscoveryResult> | null = null;
 const listeners = new Set<() => void>();
@@ -83,8 +84,24 @@ export const resetDeviceDiscoveryStateForTests = () => {
     elapsedMs: null,
     error: null,
     unsupported: false,
+    acknowledged: false,
   });
   emit();
+};
+
+/**
+ * HARD19-028: mark the current completed discovery result as dismissed by the
+ * user (the "Not now" / Open Settings actions on the startup/resume picker).
+ * Until this is called, `hasAutomaticDiscoveryResultsAwaitingSelection`-style
+ * gates keep every automatic reconnection path suspended so a pending pick is
+ * not churned; once acknowledged, background reconnection resumes for this
+ * result set. A fresh scan clears the flag, so a genuinely new result re-arms
+ * the picker.
+ */
+export const acknowledgeDeviceDiscoveryResults = () => {
+  if (state.phase !== "complete") return;
+  if (state.acknowledged) return;
+  setState({ acknowledged: true });
 };
 
 const normalizeToken = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
@@ -278,6 +295,9 @@ export async function startDeviceDiscovery(
     elapsedMs: null,
     error: null,
     unsupported: false,
+    // A new scan supersedes any previously-dismissed result: re-arm the picker
+    // gate so a genuinely new discovery is offered again (HARD19-028).
+    acknowledged: false,
   });
 
   activeDiscovery = (async () => {

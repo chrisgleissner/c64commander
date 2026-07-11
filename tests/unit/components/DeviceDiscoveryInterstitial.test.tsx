@@ -29,6 +29,7 @@ const addSavedDevice = vi.fn();
 const updateSavedDevice = vi.fn();
 const reportUserError = vi.fn();
 const toast = vi.fn();
+const acknowledgeDeviceDiscoveryResults = vi.fn();
 
 let discoveryState: DeviceDiscoveryState;
 let connectionState: { state: string };
@@ -57,6 +58,7 @@ vi.mock("@/lib/connection/connectionManager", () => ({
 
 vi.mock("@/lib/deviceDiscovery/discoveryManager", () => ({
   persistDiscoveredDevice: (...args: unknown[]) => persistDiscoveredDevice(...args),
+  acknowledgeDeviceDiscoveryResults: (...args: unknown[]) => acknowledgeDeviceDiscoveryResults(...args),
 }));
 
 vi.mock("@/lib/savedDevices/store", async (importOriginal) => {
@@ -120,10 +122,12 @@ describe("DeviceDiscoveryInterstitial", () => {
       elapsedMs: 8000,
       error: null,
       unsupported: false,
+      acknowledged: false,
     };
     connectionState = { state: "OFFLINE_NO_DEMO" };
     savedDevices = { selectedDeviceId: "device-1", devices: [] };
     persistDiscoveredDevice.mockClear();
+    acknowledgeDeviceDiscoveryResults.mockClear();
     setPasswordForDevice.mockClear();
     switchSavedDevice.mockClear();
     probeDeviceReachability.mockClear();
@@ -516,5 +520,23 @@ describe("DeviceDiscoveryInterstitial", () => {
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
 
     expect(screen.queryByText("C64 systems found")).not.toBeInTheDocument();
+  });
+
+  it("acknowledges the discovery results into the shared store when dismissed with Not now (HARD19-028)", () => {
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("startup-device-discovery-dismiss"));
+
+    // Without this, one "Not now" would leave the ConnectionController gate
+    // permanently blocking every automatic reconnection path for the session.
+    expect(acknowledgeDeviceDiscoveryResults).toHaveBeenCalledTimes(1);
+  });
+
+  it("acknowledges the discovery results when dismissed via Open Settings (HARD19-028)", () => {
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("startup-device-discovery-open-settings"));
+
+    expect(acknowledgeDeviceDiscoveryResults).toHaveBeenCalledTimes(1);
   });
 });

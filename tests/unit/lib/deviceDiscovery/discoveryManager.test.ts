@@ -128,6 +128,49 @@ describe("device discovery manager", () => {
     expect(getDeviceDiscoveryState()).toMatchObject({ phase: "idle", candidates: [], trigger: null });
   });
 
+  it("acknowledges a completed discovery result and clears the flag on the next scan (HARD19-028)", async () => {
+    discover.mockResolvedValue({
+      candidates: [
+        {
+          address: "192.168.1.13",
+          httpPort: 80,
+          source: ["lan-scan"],
+          product: "Ultimate 64 Elite",
+          hostname: "u64",
+          uniqueId: "38C1BA",
+        },
+      ],
+      scannedHosts: 254,
+      elapsedMs: 120,
+      unsupported: false,
+    });
+
+    const { getDeviceDiscoveryState, startDeviceDiscovery, acknowledgeDeviceDiscoveryResults } = await import(
+      "@/lib/deviceDiscovery/discoveryManager"
+    );
+
+    await startDeviceDiscovery({ trigger: "startup", includeLanScan: true });
+    expect(getDeviceDiscoveryState()).toMatchObject({ phase: "complete", acknowledged: false });
+
+    acknowledgeDeviceDiscoveryResults();
+    expect(getDeviceDiscoveryState().acknowledged).toBe(true);
+
+    // A fresh scan supersedes the dismissed result and re-arms the picker gate.
+    await startDeviceDiscovery({ trigger: "resume", includeLanScan: true });
+    expect(getDeviceDiscoveryState()).toMatchObject({ phase: "complete", acknowledged: false });
+  });
+
+  it("does not acknowledge when no completed discovery result is present (HARD19-028)", async () => {
+    const { getDeviceDiscoveryState, acknowledgeDeviceDiscoveryResults } = await import(
+      "@/lib/deviceDiscovery/discoveryManager"
+    );
+
+    // Idle store: nothing to acknowledge, so the flag must stay false.
+    expect(getDeviceDiscoveryState()).toMatchObject({ phase: "idle", acknowledged: false });
+    acknowledgeDeviceDiscoveryResults();
+    expect(getDeviceDiscoveryState().acknowledged).toBe(false);
+  });
+
   it("persists a discovered device as a selected saved device with verified identity", async () => {
     const { getSavedDevicesSnapshot } = await import("@/lib/savedDevices/store");
     const { persistDiscoveredDevice } = await import("@/lib/deviceDiscovery/discoveryManager");

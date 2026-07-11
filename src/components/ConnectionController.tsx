@@ -19,7 +19,7 @@ import { APP_SETTINGS_KEYS, loadBackgroundRediscoveryIntervalMs } from "@/lib/co
 import { getPassword as loadStoredPassword, hasStoredPasswordFlag } from "@/lib/secureStorage";
 import { invalidateForConnectionStateTransition } from "@/lib/query/c64QueryInvalidation";
 import { getBackgroundRediscoveryDelayMs, getNextBackgroundFailureCount } from "@/lib/query/c64PollingGovernance";
-import { getDeviceDiscoveryState } from "@/lib/deviceDiscovery/discoveryManager";
+import { getDeviceDiscoveryState, subscribeDeviceDiscovery } from "@/lib/deviceDiscovery/discoveryManager";
 
 const allowBackgroundRediscovery = () => {
   if (import.meta.env.VITE_ENABLE_TEST_PROBES !== "1") return true;
@@ -35,6 +35,11 @@ const hasAutomaticDiscoveryResultsAwaitingSelection = () => {
   return (
     discovery.phase === "complete" &&
     discovery.candidates.length > 0 &&
+    // HARD19-028: once the user dismisses the picker ("Not now" / Open Settings)
+    // the results are acknowledged and no longer suspend automatic reconnection.
+    // Without this, one dismissal permanently disabled every background probe,
+    // failure-streak escalation, and resume sweep for the session.
+    !discovery.acknowledged &&
     (discovery.trigger === "startup" || discovery.trigger === "resume")
   );
 };
@@ -71,11 +76,32 @@ export function ConnectionController() {
   const previousStateRef = useRef(state);
   const hiddenAtMsRef = useRef<number | null>(null);
   const [backgroundScheduleVersion, setBackgroundScheduleVersion] = useState(0);
+  const wasAwaitingSelectionRef = useRef(hasAutomaticDiscoveryResultsAwaitingSelection());
 
   useEffect(() => {
     void initializeConnectionManager().then(() => {
       void discoverConnection("startup");
     });
+  }, []);
+
+  // HARD19-028: the background-scheduling effect below early-returns while
+  // discovery results are awaiting selection, and only re-runs on
+  // [backgroundScheduleVersion, state]. Dismissing the picker acknowledges the
+  // results (flipping the gate) but changes neither dependency, so the probe
+  // would never resume. Subscribe to the discovery store and, when the gate
+  // transitions from blocking to open, bump the schedule version so the effect
+  // re-evaluates and re-arms the background probe. Value-equality bail: only
+  // bump on the true -> false edge, never on unrelated store emits.
+  useEffect(() => {
+    const unsubscribe = subscribeDeviceDiscovery(() => {
+      const nowAwaiting = hasAutomaticDiscoveryResultsAwaitingSelection();
+      const wasAwaiting = wasAwaitingSelectionRef.current;
+      wasAwaitingSelectionRef.current = nowAwaiting;
+      if (wasAwaiting && !nowAwaiting) {
+        setBackgroundScheduleVersion((current) => current + 1);
+      }
+    });
+    return unsubscribe;
   }, []);
 
   useEffect(() => {

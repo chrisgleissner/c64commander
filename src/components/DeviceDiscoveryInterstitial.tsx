@@ -28,7 +28,7 @@ import { useSavedDeviceSwitching } from "@/hooks/useSavedDeviceSwitching";
 import { buildDeviceHostWithHttpPort } from "@/lib/c64api/hostConfig";
 import { isAuthRequiredError } from "@/lib/c64api/transportErrors";
 import { probeDeviceReachability, type ProbeInfoResult } from "@/lib/connection/connectionManager";
-import { persistDiscoveredDevice } from "@/lib/deviceDiscovery/discoveryManager";
+import { acknowledgeDeviceDiscoveryResults, persistDiscoveredDevice } from "@/lib/deviceDiscovery/discoveryManager";
 import { formatDiscoveredDeviceSubtitle, formatDiscoveredDeviceTitle } from "@/lib/deviceDiscovery/display";
 import type { DeviceDiscoveryCandidate } from "@/lib/deviceDiscovery/types";
 import { splitSavedDeviceHostAndHttpPort } from "@/lib/savedDevices/host";
@@ -100,6 +100,11 @@ export function DeviceDiscoveryInterstitial() {
 
   const dismissCurrentDiscovery = () => {
     setDismissedKey(discoveryKey);
+    // HARD19-028: acknowledge into the shared discovery store so ConnectionController's
+    // automatic-reconnection gate stops treating these results as an unmade choice.
+    // A component-local dismissedKey alone left every background probe/resume path
+    // suspended for the rest of the session.
+    acknowledgeDeviceDiscoveryResults();
     setBusyCandidateId(null);
     setPasswordIntent(null);
     setPasswordInput("");

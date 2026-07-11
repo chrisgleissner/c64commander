@@ -199,6 +199,7 @@ const {
       elapsedMs: null,
       error: null,
       unsupported: false,
+      acknowledged: false,
     },
   },
   developerModeEnabledRef: { current: false },
