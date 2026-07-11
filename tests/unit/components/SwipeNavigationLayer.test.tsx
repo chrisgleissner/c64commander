@@ -23,6 +23,7 @@ type GestureCallbacks = {
 
 const mocks = vi.hoisted(() => ({
   addLog: vi.fn(),
+  addErrorLog: vi.fn(),
   mountCounts: {
     home: 0,
     play: 0,
@@ -69,6 +70,7 @@ vi.mock("@/hooks/useScreenActivity", () => ({
 
 vi.mock("@/lib/logging", () => ({
   addLog: mocks.addLog,
+  addErrorLog: mocks.addErrorLog,
 }));
 
 vi.mock("@/lib/i18n", () => ({
@@ -200,6 +202,7 @@ describe("SwipeNavigationLayer", () => {
       mocks.unmountCounts[key as keyof typeof mocks.unmountCounts] = 0;
     });
     mocks.addLog.mockReset();
+    mocks.addErrorLog.mockReset();
     document.documentElement.dataset.c64MotionMode = "standard";
     delete (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled;
   });
@@ -454,17 +457,26 @@ describe("SwipeNavigationLayer", () => {
     expect(screen.getByTestId("swipe-slot-docs").textContent).toBe("");
   });
 
-  it("shows the page error boundary for active page failures", async () => {
+  it("shows the shared page error boundary with a working Try again action for active page failures", async () => {
     shouldThrowDocsPage = true;
     renderLayer("/docs");
 
+    // HARD19-033: SwipeNav now renders the consolidated PageErrorBoundary, which
+    // offers a recovery action instead of telling the user to reload the app.
     expect(await screen.findByText("Something went wrong")).toBeInTheDocument();
-    expect(screen.getByText("Please try reloading the app.")).toBeInTheDocument();
-    expect(mocks.addLog).toHaveBeenCalledWith(
-      "error",
-      "[SwipeNav] page render error",
+    expect(screen.getByTestId("page-error-boundary-fallback")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.queryByText("Please try reloading the app.")).not.toBeInTheDocument();
+    expect(mocks.addErrorLog).toHaveBeenCalledWith(
+      "Page render error",
       expect.objectContaining({ message: "docs render failed" }),
     );
+
+    // Tapping Try again clears the error; once the child stops throwing it
+    // re-renders (proves the recovery path, not just the affordance).
+    shouldThrowDocsPage = false;
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("Docs Page")).toBeInTheDocument();
   });
 
   it("settles via a synthesized transition end when transitionend never fires", async () => {
