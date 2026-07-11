@@ -38,6 +38,7 @@ import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 import { clearToastsOnDeviceSwitch } from "@/lib/uiErrors";
 import { setHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
 import { hasActiveInputRelease, releaseActiveRemoteInput } from "@/lib/remoteInput/activeInputRelease";
+import { drainKernalFallbackInjectionQueue } from "@/lib/remoteInput/kernalFallbackInjector";
 import { isBackgroundExecutionActive, stopBackgroundExecution } from "@/lib/native/backgroundExecutionManager";
 import { BackgroundExecution } from "@/lib/native/backgroundExecution";
 import { toast } from "@/hooks/use-toast";
@@ -67,6 +68,12 @@ export function useSavedDeviceSwitching() {
       if (hasActiveInputRelease()) {
         await releaseActiveRemoteInput();
       }
+
+      // HARD19-017: cancel any queued/in-flight kernal-fallback keyboard-buffer
+      // injections so remaining PETSCII writes cannot land on the new device.
+      // (prepareForDeviceRetarget does this for the fallback switch path; the
+      // canonical switch keeps its own bespoke ordering, so it drains here too.)
+      drainKernalFallbackInjectionQueue();
 
       // HARD12-003: resolve the password (the only fallible step before the API
       // retarget) BEFORE any selection/port/verification mutation. A native

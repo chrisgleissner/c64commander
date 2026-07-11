@@ -8,6 +8,7 @@
 
 import { addLog } from "@/lib/logging";
 import { hasActiveInputRelease, releaseActiveRemoteInput } from "@/lib/remoteInput/activeInputRelease";
+import { drainKernalFallbackInjectionQueue } from "@/lib/remoteInput/kernalFallbackInjector";
 import { clearToastsOnDeviceSwitch } from "@/lib/uiErrors";
 import { setHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
 import { resetMachineExecution } from "@/lib/deviceInteraction/machineExecutionStore";
@@ -46,6 +47,10 @@ export async function prepareForDeviceRetarget(fromDeviceId: string | null, toDe
   if (hasActiveInputRelease()) {
     await releaseActiveRemoteInput();
   }
+
+  // 1b. HARD19-017: cancel any queued/in-flight kernal-fallback keyboard-buffer
+  //     injections so remaining PETSCII writes do not land on the new device.
+  drainKernalFallbackInjectionQueue();
 
   const fromDevice = fromDeviceId && fromDeviceId !== toDeviceId ? getSavedDeviceById(fromDeviceId) : null;
 

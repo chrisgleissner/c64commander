@@ -22,11 +22,15 @@ const mocks = vi.hoisted(() => ({
   invalidateForSavedDeviceSwitch: vi.fn(),
   toast: vi.fn(),
   addLog: vi.fn(),
+  drainKernalFallbackInjectionQueue: vi.fn(),
 }));
 
 vi.mock("@/lib/remoteInput/activeInputRelease", () => ({
   hasActiveInputRelease: mocks.hasActiveInputRelease,
   releaseActiveRemoteInput: mocks.releaseActiveRemoteInput,
+}));
+vi.mock("@/lib/remoteInput/kernalFallbackInjector", () => ({
+  drainKernalFallbackInjectionQueue: mocks.drainKernalFallbackInjectionQueue,
 }));
 vi.mock("@/lib/uiErrors", () => ({ clearToastsOnDeviceSwitch: mocks.clearToastsOnDeviceSwitch }));
 vi.mock("@/lib/diagnostics/healthCheckState", () => ({
@@ -63,6 +67,9 @@ describe("prepareForDeviceRetarget (HARD19-012)", () => {
     await prepareForDeviceRetarget("device-a", "device-b");
 
     expect(mocks.releaseActiveRemoteInput).toHaveBeenCalledTimes(1);
+    // HARD19-017: pending kernal-fallback injections are drained so PETSCII does
+    // not land on the new device.
+    expect(mocks.drainKernalFallbackInjectionQueue).toHaveBeenCalledTimes(1);
     expect(mocks.clearToastsOnDeviceSwitch).toHaveBeenCalledWith("device-a.local");
     expect(mocks.setHealthCheckStateSnapshot).toHaveBeenCalledWith({ latestResult: null });
     expect(mocks.resetMachineExecution).toHaveBeenCalledTimes(1);

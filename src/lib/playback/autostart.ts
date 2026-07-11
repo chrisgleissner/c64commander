@@ -29,6 +29,12 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export type AutostartOptions = {
   pollIntervalMs?: number;
   maxAttempts?: number;
+  /**
+   * HARD19-017: checked between each keyboard-buffer REST step. When it returns
+   * true (e.g. the API singleton was retargeted to a different device mid-loop),
+   * the injection aborts immediately so no poll/write lands on the wrong machine.
+   */
+  shouldAbort?: () => boolean;
 };
 
 const readKeyboardBufferLength = async (api: C64API) => {
@@ -62,14 +68,19 @@ export const injectAutostart = async (
 ) => {
   const pollIntervalMs = options.pollIntervalMs ?? 120;
   const maxAttempts = options.maxAttempts ?? 20;
+  const shouldAbort = options.shouldAbort;
 
   const chunks = chunkKeyboardPayload(payload);
 
   for (const chunk of chunks) {
     let chunkWritten = false;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      // HARD19-017: abort before every read/write if the API was retargeted to a
+      // different device mid-injection, so stray PETSCII never lands on device B.
+      if (shouldAbort?.()) return;
       const length = await readKeyboardBufferLength(api);
       if (length === 0) {
+        if (shouldAbort?.()) return;
         await writeKeyboardBuffer(api, chunk);
         chunkWritten = true;
         break;
