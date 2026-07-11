@@ -2346,16 +2346,34 @@ export class C64API {
     return response;
   }
 
+  // HARD19-025: the firmware reports flash-save/load and reset-to-default failures
+  // as HTTP 200 with a non-empty `errors` array (same convention as every config
+  // write). These three endpoints were the only config operations that skipped
+  // assertConfigWriteAccepted, so a failed "To flash" still toasted success and the
+  // user's tuning silently vanished on the next power-up. Assert like every other
+  // config write so a rejection reaches the error path.
   async saveConfig(options: C64ReadRequestOptions = {}): Promise<{ errors: string[] }> {
-    return scheduleConfigWrite(() => this.request("/v1/configs:save_to_flash", { method: "PUT", ...options }));
+    const response = (await scheduleConfigWrite(() =>
+      this.request("/v1/configs:save_to_flash", { method: "PUT", ...options }),
+    )) as { errors: string[] };
+    this.assertConfigWriteAccepted(response, { category: "flash-save" });
+    return response;
   }
 
   async loadConfig(options: C64ReadRequestOptions = {}): Promise<{ errors: string[] }> {
-    return scheduleConfigWrite(() => this.request("/v1/configs:load_from_flash", { method: "PUT", ...options }));
+    const response = (await scheduleConfigWrite(() =>
+      this.request("/v1/configs:load_from_flash", { method: "PUT", ...options }),
+    )) as { errors: string[] };
+    this.assertConfigWriteAccepted(response, { category: "flash-load" });
+    return response;
   }
 
   async resetConfig(options: C64ReadRequestOptions = {}): Promise<{ errors: string[] }> {
-    return scheduleConfigWrite(() => this.request("/v1/configs:reset_to_default", { method: "PUT", ...options }));
+    const response = (await scheduleConfigWrite(() =>
+      this.request("/v1/configs:reset_to_default", { method: "PUT", ...options }),
+    )) as { errors: string[] };
+    this.assertConfigWriteAccepted(response, { category: "reset-defaults" });
+    return response;
   }
 
   async updateConfigBatch(payload: Record<string, Record<string, string | number>>): Promise<{ errors: string[] }> {

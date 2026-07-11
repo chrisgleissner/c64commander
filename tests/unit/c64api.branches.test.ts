@@ -379,6 +379,22 @@ describe("c64api branches", () => {
     data: body,
   });
 
+  it("rejects flash save/load/reset when the firmware returns a non-empty errors array (HARD19-025)", async () => {
+    const fetchMock = getFetchMock();
+    const api = new C64API("http://c64u");
+
+    for (const call of [() => api.saveConfig(), () => api.loadConfig(), () => api.resetConfig()]) {
+      fetchMock.mockReset();
+      fetchMock.mockResolvedValue(okJsonResponse({ errors: ["Flash write failed"] }));
+      await expect(call()).rejects.toThrow(/Firmware rejected/);
+    }
+
+    // Sanity: an empty errors array still resolves.
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue(okJsonResponse({ errors: [] }));
+    await expect(api.saveConfig()).resolves.toEqual({ errors: [] });
+  });
+
   it("routes native direct-device REST through CapacitorHttp without changing web or proxy requests", async () => {
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(okJsonResponse());
