@@ -10,7 +10,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import type { C64API, DrivesResponse } from "@/lib/c64api";
 import { buildPlayPlan, executePlayPlan } from "@/lib/playback/playbackRouter";
 import { loadFirstDiskPrgViaDma } from "@/lib/playback/diskFirstPrg";
-import { injectAutostart } from "@/lib/playback/autostart";
+import { enqueueKeyboardBufferInjection } from "@/lib/remoteInput/kernalFallbackInjector";
 
 vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
@@ -55,6 +55,11 @@ vi.mock("@/lib/playback/autostart", () => ({
   AUTOSTART_SEQUENCE: new Uint8Array([42]),
   buildAutostartSequence: vi.fn((busId = 8) => new Uint8Array([busId])),
   injectAutostart: vi.fn(async () => undefined),
+}));
+
+// HARD19-018: disk autostart now routes through the shared keyboard-buffer queue.
+vi.mock("@/lib/remoteInput/kernalFallbackInjector", () => ({
+  enqueueKeyboardBufferInjection: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/lib/playback/diskFirstPrg", () => ({
@@ -202,7 +207,7 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
 
     expect(api.setDriveMode).toHaveBeenCalledWith("a", "1571");
     expect(api.getDrives).toHaveBeenCalledTimes(2);
-    expect(injectAutostart).toHaveBeenCalledWith(api, new Uint8Array([9]), {
+    expect(enqueueKeyboardBufferInjection).toHaveBeenCalledWith(api, new Uint8Array([9]), {
       pollIntervalMs: 140,
       maxAttempts: 20,
     });
@@ -233,11 +238,11 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
     expect(api.machineReboot).toHaveBeenCalledTimes(1);
     expect(api.mountDriveUpload).toHaveBeenCalledTimes(1);
     expect(beforeLaunch).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(injectAutostart)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalledTimes(1);
     expect(api.machineReboot.mock.invocationCallOrder[0]).toBeLessThan(beforeLaunch.mock.invocationCallOrder[0]);
     expect(api.mountDriveUpload.mock.invocationCallOrder[0]).toBeLessThan(beforeLaunch.mock.invocationCallOrder[0]);
     expect(beforeLaunch.mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(injectAutostart).mock.invocationCallOrder[0],
+      vi.mocked(enqueueKeyboardBufferInjection).mock.invocationCallOrder[0],
     );
 
     vi.useRealTimers();
