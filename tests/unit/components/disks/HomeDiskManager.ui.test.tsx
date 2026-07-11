@@ -15,7 +15,7 @@ import { useDiskLibrary } from "@/hooks/useDiskLibrary";
 import { getC64API } from "@/lib/c64api";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
-import { mountDiskToDrive, getMaterializedWorkPath } from "@/lib/disks/diskMount";
+import { mountDiskToDrive, getMaterializedWorkPath, hasShownArchiveDiskWriteBackAdvisory } from "@/lib/disks/diskMount";
 import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
 import { resolveFtpConnectionOptions } from "@/lib/ftp/ftpConfig";
 
@@ -69,6 +69,8 @@ vi.mock("@/lib/disks/diskMount", () => ({
   markDiskWriteBackAdvisoryShown: vi.fn(),
   getMaterializedWorkPath: vi.fn(() => null),
   getMaterializedDiskId: vi.fn(() => null),
+  hasShownArchiveDiskWriteBackAdvisory: vi.fn(() => true),
+  markArchiveDiskWriteBackAdvisoryShown: vi.fn(),
 }));
 vi.mock("@/lib/ftp/ftpClient", () => ({
   listFtpDirectory: vi.fn(),
@@ -434,6 +436,35 @@ describe("HomeDiskManager UI & Interactions", () => {
     await waitFor(() => {
       expect(screen.getByTestId("drive-mounted-label-a")).toHaveTextContent("No disk mounted");
     });
+  });
+
+  it("warns that archive-disk changes are kept only for the session (HARD19-014)", async () => {
+    const disk = createMockDisk({
+      id: "archive-disk",
+      name: "Archive Game",
+      path: "/archive.d64",
+      location: "local",
+    });
+    (hasShownArchiveDiskWriteBackAdvisory as any).mockReturnValue(false);
+    // The mount materializes, but only into the short-lived archive cache.
+    (mountDiskToDrive as any).mockResolvedValue({
+      persistence: "materialized",
+      writeBackTarget: { kind: "archive-cache", archiveRef: {} },
+    });
+    (useDiskLibrary as any).mockReturnValue({ disks: [disk], runtimeFiles: {}, removeDisk: mockRemoveDisk });
+    (useC64Drives as any).mockReturnValue({
+      data: { drives: [{ a: createMockDrive() }, { b: createMockDrive() }] },
+    });
+
+    render(<HomeDiskManager />);
+    fireEvent.click(screen.getByRole("button", { name: "Mount" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
+
+    await waitFor(() => {
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Changes are kept only for this session" }));
+    });
+    (hasShownArchiveDiskWriteBackAdvisory as any).mockReturnValue(true);
   });
 
   it("keeps a materialized local disk's override when the poll reports the internal work filename (HARD19-007)", async () => {

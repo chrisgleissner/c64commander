@@ -339,6 +339,24 @@ export const markDiskWriteBackAdvisoryShown = (): void => {
   localStorage.setItem(DISK_WRITE_BACK_ADVISORY_STORAGE_KEY, "1");
 };
 
+// HARD19-014 (decision D2): an archive/CommoServe disk "materializes" (so it does
+// NOT hit the transient advisory above), but its write-back only lands in a
+// 10-minute in-memory LRU (archiveDiskCache) — saves evaporate on TTL/eviction/
+// restart. Classify it as session-transient and warn once with session-scoped
+// wording. A separate one-time flag so it does not conflate with the "never saved"
+// transient advisory.
+const DISK_ARCHIVE_ADVISORY_STORAGE_KEY = "c64u_disk_archive_writeback_advisory_shown_v1";
+
+export const hasShownArchiveDiskWriteBackAdvisory = (): boolean => {
+  if (typeof localStorage === "undefined") return true;
+  return localStorage.getItem(DISK_ARCHIVE_ADVISORY_STORAGE_KEY) === "1";
+};
+
+export const markArchiveDiskWriteBackAdvisoryShown = (): void => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(DISK_ARCHIVE_ADVISORY_STORAGE_KEY, "1");
+};
+
 // Flat file directly under the persistent root - NOT a subdirectory. The
 // native FTP plugin's writeFile only ever calls Commons Net's storeFile()
 // (FtpClientPlugin.kt); it has no MKD/mkdir capability, so a work-dir path

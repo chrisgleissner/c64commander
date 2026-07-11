@@ -59,6 +59,8 @@ import {
   discardDiskWriteBack,
   hasShownDiskWriteBackAdvisory,
   markDiskWriteBackAdvisoryShown,
+  hasShownArchiveDiskWriteBackAdvisory,
+  markArchiveDiskWriteBackAdvisoryShown,
   getMaterializedWorkPath,
   getMaterializedDiskId,
   type DiskMountWriteBackDependencies,
@@ -710,6 +712,20 @@ export const HomeDiskManager = () => {
         toast({
           title: "Changes to this disk won't be saved back",
           description: "This disk isn't on writable local storage, so in-game saves will be lost when it's remounted.",
+        });
+      } else if (
+        // HARD19-014 (D2): an archive/CommoServe disk materializes but its write-back
+        // only persists to a short-lived in-memory cache, so warn (once) with
+        // session-scoped wording that its saves are not durable.
+        outcome?.persistence === "materialized" &&
+        outcome.writeBackTarget?.kind === "archive-cache" &&
+        !hasShownArchiveDiskWriteBackAdvisory()
+      ) {
+        markArchiveDiskWriteBackAdvisoryShown();
+        toast({
+          title: "Changes are kept only for this session",
+          description:
+            "This disk is from an online archive, so in-game saves are held temporarily and are lost when the app restarts or after a while. Copy it to a local folder to keep changes.",
         });
       }
     } catch (error) {

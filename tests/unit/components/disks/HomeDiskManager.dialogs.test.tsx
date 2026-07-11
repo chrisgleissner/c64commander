@@ -159,6 +159,8 @@ vi.mock("@/lib/disks/diskMount", () => ({
   mountDiskToDrive: vi.fn(),
   getMaterializedWorkPath: vi.fn(() => null),
   getMaterializedDiskId: vi.fn(() => null),
+  hasShownArchiveDiskWriteBackAdvisory: vi.fn(() => true),
+  markArchiveDiskWriteBackAdvisoryShown: vi.fn(),
 }));
 import { mountDiskToDrive } from "@/lib/disks/diskMount";
 
