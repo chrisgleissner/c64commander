@@ -101,7 +101,9 @@ export function ConnectionController() {
         setBackgroundScheduleVersion((current) => current + 1);
       }
     });
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {

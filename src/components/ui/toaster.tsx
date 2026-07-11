@@ -53,7 +53,7 @@ type ToastItemProps = {
   description?: React.ReactNode;
   action?: React.ReactElement;
   dismiss: (id?: string) => void;
-  variant?: "default" | "destructive";
+  variant?: "default" | "destructive" | null;
   [key: string]: unknown;
 };
 
