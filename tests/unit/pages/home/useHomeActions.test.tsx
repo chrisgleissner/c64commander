@@ -167,6 +167,11 @@ vi.mock("@/lib/deviceInteraction/machineTakeoverEvent", () => ({
   publishMachineTakeover: (...args: unknown[]) => publishMachineTakeoverMock(...args),
 }));
 
+const capturePauseMuteToPersistedSnapshotMock = vi.fn(async () => false);
+vi.mock("@/lib/deviceInteraction/pauseMuteCapture", () => ({
+  capturePauseMuteToPersistedSnapshot: (...args: unknown[]) => capturePauseMuteToPersistedSnapshotMock(...args),
+}));
+
 import { useHomeActions } from "@/pages/home/hooks/useHomeActions";
 import type { SnapshotStorageEntry } from "@/lib/snapshot/snapshotTypes";
 import { CpuRestoreUnsupportedError } from "@/lib/snapshot/cpu/restoreCart";
@@ -176,6 +181,7 @@ describe("useHomeActions", () => {
     vi.clearAllMocks();
     machineExecutionSnapshot = { state: "running", pauseMutePending: false };
     restorePauseMuteFromPersistedSnapshotMock.mockResolvedValue(true);
+    capturePauseMuteToPersistedSnapshotMock.mockResolvedValue(false);
     statusState.isConnected = true;
     drivesState.value = null;
     pauseMutateAsyncMock.mockResolvedValue(undefined);
@@ -249,6 +255,40 @@ describe("useHomeActions", () => {
       }),
     );
     expect(result.current.pauseResumePending).toBe(false);
+  });
+
+  it("mutes the SID mixer before pausing and records pauseMutePending (HARD19-010)", async () => {
+    capturePauseMuteToPersistedSnapshotMock.mockResolvedValue(true);
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handlePauseResume();
+    });
+
+    expect(capturePauseMuteToPersistedSnapshotMock).toHaveBeenCalledTimes(1);
+    expect(pauseMutateAsyncMock).toHaveBeenCalledTimes(1);
+    // Mute happened before the machine pause.
+    const captureOrder = capturePauseMuteToPersistedSnapshotMock.mock.invocationCallOrder[0];
+    const pauseOrder = pauseMutateAsyncMock.mock.invocationCallOrder[0];
+    expect(captureOrder).toBeLessThan(pauseOrder);
+    expect(setMachineExecutionPausedMock).toHaveBeenCalledWith({ pauseMutePending: true });
+  });
+
+  it("rolls back the SID mute when the machine pause fails (HARD19-010)", async () => {
+    capturePauseMuteToPersistedSnapshotMock.mockResolvedValue(true);
+    pauseMutateAsyncMock.mockRejectedValueOnce(new Error("pause failed"));
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handlePauseResume();
+    });
+
+    // A failed pause must not leave a running machine silent: unmute is restored.
+    expect(restorePauseMuteFromPersistedSnapshotMock).toHaveBeenCalledTimes(1);
+    expect(setMachineExecutionPausedMock).not.toHaveBeenCalled();
+    expect(reportUserErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({ operation: "HOME_MACHINE_PAUSE_RESUME" }),
+    );
   });
 
   it("saves program snapshot and shows success toast", async () => {

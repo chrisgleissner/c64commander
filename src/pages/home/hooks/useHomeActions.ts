@@ -22,6 +22,7 @@ import {
   subscribeMachineExecution,
 } from "@/lib/deviceInteraction/machineExecutionStore";
 import { publishMachineInterrupt } from "@/lib/deviceInteraction/machineInterrupt";
+import { capturePauseMuteToPersistedSnapshot } from "@/lib/deviceInteraction/pauseMuteCapture";
 import { clearRamAndReboot, loadMemoryRanges } from "@/lib/machine/ramOperations";
 import { selectRamDumpFolder } from "@/lib/machine/ramDumpStorage";
 import { loadRamDumpFolderConfig, type RamDumpFolderConfig } from "@/lib/config/ramDumpFolderStore";
@@ -177,14 +178,28 @@ export function useHomeActions() {
     setPauseResumePending(true);
     try {
       if (targetState === "paused") {
-        await controls.pause.mutateAsync();
+        const deviceId = getSelectedSavedDevice()?.id ?? null;
+        // HARD19-010: mute the SID mixer before pausing so a paused SID does not
+        // leave a sustained drone (Play's own pause path already does this).
+        // Persist a device-scoped snapshot so either page's resume can restore it.
+        const muteApplied = await capturePauseMuteToPersistedSnapshot(api, deviceId);
+        try {
+          await controls.pause.mutateAsync();
+        } catch (error) {
+          // Roll back the mute so a failed pause does not leave a running machine silent.
+          if (muteApplied) {
+            await restorePauseMuteFromPersistedSnapshot(api, deviceId);
+          }
+          throw error;
+        }
+        setMachineExecutionPaused({ pauseMutePending: muteApplied });
       } else {
         await controls.resume.mutateAsync();
         if (pauseMutePending) {
           await restorePauseMuteFromPersistedSnapshot(api, getSelectedSavedDevice()?.id ?? null);
         }
+        setMachineExecutionRunning();
       }
-      setMachineExecutionState(targetState);
       toast({
         title: targetState === "paused" ? "Machine paused" : "Machine resumed",
       });

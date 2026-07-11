@@ -115,6 +115,29 @@ export const discardPlaybackSnapshot = (deviceId?: string) => {
   }
 };
 
+// HARD19-010: persist ONLY the pause-mute snapshot (captured by Home's pause,
+// which mutes the SID mixer so a paused SID does not drone) while preserving any
+// existing playback volume-session envelope. Symmetric with clearPersistedPauseMute:
+// when Play already has a session persisted we merge into it; otherwise we create
+// a minimal envelope carrying just the pause-mute so either page's resume
+// (restorePauseMuteFromPersistedSnapshot) can restore the mixer.
+export const persistPauseMuteSnapshot = (
+  deviceId: string,
+  pauseMuteSnapshot: Record<string, string | number>,
+  pauseMuteEnablement: SidEnablement,
+) => {
+  const envelope = readEnvelope(deviceId);
+  persistPlaybackSnapshot({
+    deviceId,
+    volumeSnapshot: envelope?.volumeSnapshot ?? {},
+    volumeActive: envelope?.volumeActive ?? false,
+    manualMuteSnapshot: envelope?.manualMuteSnapshot ?? null,
+    manualMuteEnablement: envelope?.manualMuteEnablement ?? null,
+    pauseMuteSnapshot,
+    pauseMuteEnablement,
+  });
+};
+
 // HARD12-020: once the machine has resumed (from either Home or Play) the
 // captured pause-mute snapshot is no longer needed. Clearing it here (rather
 // than dropping the whole envelope) keeps the playback volume-session
