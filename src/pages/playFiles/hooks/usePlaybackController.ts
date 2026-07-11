@@ -13,7 +13,12 @@ import { buildArchivePlayPlan } from "@/lib/archive/execution";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { getC64API } from "@/lib/c64api";
 import { beginMachineTransition } from "@/lib/deviceInteraction/deviceActivityGate";
-import { setMachineExecutionPaused, setMachineExecutionRunning } from "@/lib/deviceInteraction/machineExecutionStore";
+import {
+  getMachineExecutionSnapshot,
+  setMachineExecutionPaused,
+  setMachineExecutionRunning,
+  subscribeMachineExecution,
+} from "@/lib/deviceInteraction/machineExecutionStore";
 import { subscribeMachineTakeover } from "@/lib/deviceInteraction/machineTakeoverEvent";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import {
@@ -297,6 +302,33 @@ export function usePlaybackController({
   currentIndexRef.current = currentIndex;
   isPlayingRef.current = isPlaying;
   isPausedRef.current = isPaused;
+
+  // HARD19-009: refs synced during render so the machine-execution subscription
+  // below can re-arm auto-advance on an external resume without depending on
+  // (and re-subscribing for) every elapsed/duration change.
+  const durationMsRef = useRef(durationMs);
+  durationMsRef.current = durationMs;
+  const elapsedMsRef = useRef(elapsedMs);
+  elapsedMsRef.current = elapsedMs;
+  // Set while Play performs its OWN machine-execution write so the subscription
+  // ignores it and only mirrors EXTERNAL transitions (e.g. a Home pause).
+  const playInitiatedMachineTransitionRef = useRef(false);
+
+  const writeMachineExecutionFromPlay = useCallback(
+    (next: "running" | "paused", options?: { pauseMutePending?: boolean }) => {
+      playInitiatedMachineTransitionRef.current = true;
+      try {
+        if (next === "paused") {
+          setMachineExecutionPaused(options);
+        } else {
+          setMachineExecutionRunning();
+        }
+      } finally {
+        playInitiatedMachineTransitionRef.current = false;
+      }
+    },
+    [],
+  );
 
   const withTimeout = useCallback(async <T>(promise: Promise<T>, timeoutMs: number, operation: string) => {
     let timeoutId: number | null = null;
@@ -1075,7 +1107,7 @@ export function usePlaybackController({
         playedClockRef.current.reset();
         setPlayedMs(0);
         setPlaylistEnded(false);
-        setMachineExecutionRunning();
+        writeMachineExecutionFromPlay("running");
         const resolvedItems = await applySonglengthsToItems(items);
         setPlaylist((prev) => {
           if (!prev.length) return resolvedItems;
@@ -1220,7 +1252,7 @@ export function usePlaybackController({
       setAutoAdvanceDueAtMs(null);
       // HARD12-020: stopping clears any shared pause state so Home does not
       // keep showing "paused" or attempt a stale pause-mute restore.
-      setMachineExecutionRunning();
+      writeMachineExecutionFromPlay("running");
       try {
         await restoreVolumeOverrides("stop");
       } catch (error) {
@@ -1283,6 +1315,52 @@ export function usePlaybackController({
     });
   }, [playedClockRef, setPlayedMs, autoAdvanceGuardRef, setAutoAdvanceDueAtMs, setIsPlaying, setIsPaused]);
 
+  // HARD19-009: Play writes the shared machine-execution store but never
+  // subscribed, so a pause applied from HOME (or any external source) left Play's
+  // timeline running and auto-advance armed — the next track would launch on the
+  // machine the user just paused. Subscribe and mirror EXTERNAL transitions:
+  // suspend the clock + clear the auto-advance due-time on pause, re-arm on
+  // resume. Play's own pause/resume writes are ignored via
+  // playInitiatedMachineTransitionRef; a value-equality bail (machinePaused ===
+  // isPausedRef) prevents any redundant setState (no effect re-render loop).
+  useEffect(() => {
+    return subscribeMachineExecution(() => {
+      if (playInitiatedMachineTransitionRef.current) return;
+      if (!isPlayingRef.current) return;
+      const machinePaused = getMachineExecutionSnapshot().state === "paused";
+      if (machinePaused === isPausedRef.current) return;
+      const now = Date.now();
+      if (machinePaused) {
+        playedClockRef.current.pause(now);
+        setPlayedMs(playedClockRef.current.current(now));
+        setIsPaused(true);
+        setAutoAdvanceDueAtMs(null);
+      } else {
+        setIsPaused(false);
+        const currentElapsedMs = elapsedMsRef.current;
+        trackStartedAtRef.current = now - currentElapsedMs;
+        playedClockRef.current.resume(now);
+        setPlayedMs(playedClockRef.current.current(now));
+        const currentDurationMs = durationMsRef.current;
+        if (autoAdvanceGuardRef.current && typeof currentDurationMs === "number") {
+          autoAdvanceGuardRef.current.dueAtMs = now + Math.max(0, currentDurationMs - currentElapsedMs);
+          autoAdvanceGuardRef.current.autoFired = false;
+          autoAdvanceGuardRef.current.userCancelled = false;
+          setAutoAdvanceDueAtMs(autoAdvanceGuardRef.current.dueAtMs);
+        }
+      }
+    });
+  }, [
+    playedClockRef,
+    setPlayedMs,
+    setIsPaused,
+    setAutoAdvanceDueAtMs,
+    autoAdvanceGuardRef,
+    trackStartedAtRef,
+    durationMsRef,
+    elapsedMsRef,
+  ]);
+
   const handlePauseResume = useCallback(
     trace(async function handlePauseResume() {
       if (!isPlaying) return;
@@ -1301,7 +1379,7 @@ export function usePlaybackController({
               setIsPaused(false);
               // HARD12-020: publish the resumed state so Home's pause/resume
               // control converges with Play instead of assuming "running".
-              setMachineExecutionRunning();
+              writeMachineExecutionFromPlay("running");
               const now = Date.now();
               trackStartedAtRef.current = now - elapsedMs;
               playedClockRef.current.resume(now);
@@ -1331,7 +1409,7 @@ export function usePlaybackController({
             // snapshot was captured so Home can show the correct label and
             // restore the mixer on a Home-initiated resume (Play may be an
             // unmounted placeholder when the user resumes from Home).
-            setMachineExecutionPaused({ pauseMutePending: pauseMuteSnapshotRef.current !== null });
+            writeMachineExecutionFromPlay("paused", { pauseMutePending: pauseMuteSnapshotRef.current !== null });
           } finally {
             endTransition();
           }
@@ -1554,6 +1632,12 @@ export function usePlaybackController({
         const guard = autoAdvanceGuardRef.current;
         if (!guard || guard.autoFired || guard.userCancelled) return;
         if (typeof expectedTrackInstanceId === "number" && guard.trackInstanceId !== expectedTrackInstanceId) return;
+        // HARD19-009: never auto-advance onto a machine that is currently paused
+        // (e.g. paused from Home). The store subscription normally clears the
+        // due-time on an external pause, but this also covers the native
+        // background-execution watchdog, which can fire handleNext("auto")
+        // independently of the JS timer.
+        if (getMachineExecutionSnapshot().state === "paused") return;
         guard.autoFired = true;
 
         const activeIndex = currentIndexRef.current;
