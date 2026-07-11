@@ -340,17 +340,20 @@ describe("GlobalDiagnosticsOverlay", () => {
     });
   });
 
-  it("clears diagnostics without resetting the last known health state", async () => {
+  it("clears the pinned health-check result along with the rest of diagnostics (HARD19-020)", async () => {
+    // The pinned latestResult drives the global badge; "Clear all" must reset it
+    // too, otherwise the badge keeps asserting a verdict whose supporting evidence
+    // (logs, traces, health history) the user just deleted.
     setHealthCheckStateSnapshot({
       latestResult: {
-        runId: "hc-preserved",
+        runId: "hc-cleared",
         startTimestamp: "2024-01-01T00:00:00.000Z",
         endTimestamp: "2024-01-01T00:00:01.000Z",
         totalDurationMs: 1000,
-        overallHealth: "Healthy",
+        overallHealth: "Unhealthy",
         connectivity: "Online",
         probes: {
-          REST: { probe: "REST", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
+          REST: { probe: "REST", outcome: "Fail", durationMs: 100, reason: "down", startMs: 0 },
           FTP: { probe: "FTP", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
           TELNET: { probe: "TELNET", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
           CONFIG: { probe: "CONFIG", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
@@ -369,9 +372,7 @@ describe("GlobalDiagnosticsOverlay", () => {
     fireEvent.click(within(dialog).getByTestId("diagnostics-clear-all-trigger"));
     fireEvent.click(await screen.findByTestId("diagnostics-clear-all-confirm"));
 
-    expect(getHealthCheckStateSnapshot().latestResult).toEqual(
-      expect.objectContaining({ runId: "hc-preserved", overallHealth: "Healthy" }),
-    );
+    expect(getHealthCheckStateSnapshot().latestResult).toBeNull();
   });
 
   it("opens the requested diagnostics panel from a deep-link route", async () => {
