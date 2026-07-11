@@ -19,6 +19,7 @@ import { loadDiskAutostartMode } from "@/lib/config/appSettings";
 import { getActiveAction } from "@/lib/tracing/actionTrace";
 import { recordDeviceGuard } from "@/lib/tracing/traceSession";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
+import { toast } from "@/hooks/use-toast";
 
 const { beginHvscPerfScope, endHvscPerfScope } = vi.hoisted(() => ({
   beginHvscPerfScope: vi.fn((scope: string, metadata?: Record<string, unknown>) => ({
@@ -134,7 +135,12 @@ vi.mock("@/lib/hvsc/hvscPerformance", () => ({
   endHvscPerfScope,
 }));
 
+vi.mock("@/hooks/use-toast", () => ({
+  toast: vi.fn(),
+}));
+
 beforeEach(() => {
+  vi.mocked(toast).mockClear();
   vi.mocked(enqueueKeyboardBufferInjection).mockClear();
   vi.mocked(loadFirstDiskPrgViaDma).mockClear();
   vi.mocked(mountDiskToDrive).mockClear();
@@ -551,6 +557,98 @@ describe("playbackRouter", () => {
     await vi.runAllTimersAsync();
     await task;
 
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalledWith(api, buildAutostartSequence(9), {
+      pollIntervalMs: 140,
+      maxAttempts: 20,
+    });
+    vi.useRealTimers();
+  });
+
+  it("HARD19-022: preserves a compatible drive mode (1571 reading a D64) instead of forcing 1541", async () => {
+    vi.useFakeTimers();
+    const api = {
+      ...createApiMock(),
+      getDrives: vi.fn().mockResolvedValue({
+        drives: [{ a: { enabled: true, type: "1571", bus_id: 9 } }],
+        errors: [],
+      }),
+      driveOn: vi.fn().mockResolvedValue({ errors: [] }),
+      setDriveMode: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const file = new File(["disk"], "demo.d64");
+    const plan = buildPlayPlan({ source: "local", path: "/demo.d64", file });
+    const task = executePlayPlan(api as any, plan, {
+      drive: "a",
+      rebootBeforeMount: true,
+      diskAutostartMode: "kernal",
+    });
+    await vi.runAllTimersAsync();
+    await task;
+
+    // A deliberate 1571 reads D64 natively — it must not be silently reset to 1541.
+    expect(api.setDriveMode).not.toHaveBeenCalled();
+    expect(vi.mocked(toast)).not.toHaveBeenCalled();
+    // Still uses the (unchanged) drive's bus id for autostart.
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalledWith(api, buildAutostartSequence(9), {
+      pollIntervalMs: 140,
+      maxAttempts: 20,
+    });
+    vi.useRealTimers();
+  });
+
+  it("HARD19-022: switches to a compatible mode and notifies when the current mode cannot read the image", async () => {
+    vi.useFakeTimers();
+    const api = {
+      ...createApiMock(),
+      getDrives: vi.fn().mockResolvedValue({
+        drives: [{ a: { enabled: true, type: "1541", bus_id: 9 } }],
+        errors: [],
+      }),
+      driveOn: vi.fn().mockResolvedValue({ errors: [] }),
+      setDriveMode: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const file = new File(["disk"], "demo.d81");
+    const plan = buildPlayPlan({ source: "local", path: "/demo.d81", file });
+    const task = executePlayPlan(api as any, plan, {
+      drive: "a",
+      rebootBeforeMount: true,
+      diskAutostartMode: "kernal",
+    });
+    await vi.runAllTimersAsync();
+    await task;
+
+    // A 1541 cannot read a D81 — the switch is genuinely required and surfaced.
+    expect(api.setDriveMode).toHaveBeenCalledWith("a", "1581");
+    expect(vi.mocked(toast)).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining("1581") }));
+    vi.useRealTimers();
+  });
+
+  it("HARD19-022: decides the mode from the drive's real type after enabling it (no stale-snapshot switch)", async () => {
+    vi.useFakeTimers();
+    const api = {
+      ...createApiMock(),
+      // First read (pre-enable) reports an incompatible 1581; after driveOn the
+      // drive's REAL type is a D64-compatible 1571. The mode check must use the
+      // fresh read, not the stale pre-enable snapshot, and issue no switch.
+      getDrives: vi
+        .fn()
+        .mockResolvedValueOnce({ drives: [{ a: { enabled: false, type: "1581" } }], errors: [] })
+        .mockResolvedValueOnce({ drives: [{ a: { enabled: true, type: "1571", bus_id: 9 } }], errors: [] }),
+      driveOn: vi.fn().mockResolvedValue({ errors: [] }),
+      setDriveMode: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const file = new File(["disk"], "demo.d64");
+    const plan = buildPlayPlan({ source: "local", path: "/demo.d64", file });
+    const task = executePlayPlan(api as any, plan, {
+      drive: "a",
+      rebootBeforeMount: true,
+      diskAutostartMode: "kernal",
+    });
+    await vi.runAllTimersAsync();
+    await task;
+
+    expect(api.driveOn).toHaveBeenCalledWith("a");
+    expect(api.setDriveMode).not.toHaveBeenCalled();
     expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalledWith(api, buildAutostartSequence(9), {
       pollIntervalMs: 140,
       maxAttempts: 20,

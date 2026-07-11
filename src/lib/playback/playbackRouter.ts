@@ -7,6 +7,7 @@
  */
 
 import { addErrorLog, addLog } from "@/lib/logging";
+import { toast } from "@/hooks/use-toast";
 import type { C64API } from "@/lib/c64api";
 import { getC64APIConfigSnapshot } from "@/lib/c64api";
 import { readFtpFile } from "@/lib/ftp/ftpClient";
@@ -76,6 +77,18 @@ const DISK_AUTOPLAY_DRIVE_MODE_BY_EXTENSION: Partial<Record<string, PhysicalDriv
   d71: "1571",
   d81: "1581",
 };
+
+// HARD19-022: drive modes that can READ a given image, not just the canonical
+// authoring mode. A 1571 reads D64 media natively (it is backward-compatible
+// with the 1541), so a deliberate 1571 configuration must not be silently
+// forced to 1541 just to autoplay a D64. D71 (double-sided) needs a 1571; D81
+// (3.5") needs a 1581. When the current mode is already in this set we leave it
+// alone; only an incompatible (or unknown) mode triggers a switch.
+const DISK_AUTOPLAY_COMPATIBLE_MODES_BY_EXTENSION: Partial<Record<string, PhysicalDriveMode[]>> = {
+  d64: ["1541", "1571"],
+  d71: ["1571"],
+  d81: ["1581"],
+};
 const SID_SSL_PROPAGATION_PREFLIGHT_TIMEOUT_MS = 1200;
 
 export const buildPlayPlan = (request: PlayRequest): PlayPlan => {
@@ -104,6 +117,13 @@ const getDiskAutoplayDriveMode = (path: string): PhysicalDriveMode | null => {
   return DISK_AUTOPLAY_DRIVE_MODE_BY_EXTENSION[extension] ?? null;
 };
 
+const getDiskAutoplayCompatibleModes = (path: string): PhysicalDriveMode[] | null => {
+  const extension = getFileExtension(path);
+  return DISK_AUTOPLAY_COMPATIBLE_MODES_BY_EXTENSION[extension] ?? null;
+};
+
+const DRIVE_LABEL: Record<"a" | "b", string> = { a: "A", b: "B" };
+
 const getDriveInfo = (drives: Awaited<ReturnType<C64API["getDrives"]>>, drive: "a" | "b") => {
   const entry = drives.drives.find((item) => Object.prototype.hasOwnProperty.call(item, drive));
   return entry?.[drive] ?? null;
@@ -121,18 +141,44 @@ const ensureDiskAutoplayDriveReady = async (api: C64API, drive: "a" | "b", path:
     return 8;
   }
 
+  const compatibleModes = getDiskAutoplayCompatibleModes(path);
+
   const drives = await api.getDrives();
   let driveInfo = getDriveInfo(drives, drive);
   let requiresRefresh = false;
 
   if (driveInfo?.enabled === false) {
     await api.driveOn(drive);
-    requiresRefresh = true;
+    // HARD19-022: re-read after enabling so the mode decision below uses the
+    // just-enabled drive's REAL type, not the stale pre-enable snapshot (which
+    // could force a redundant setDriveMode on a drive that already matched).
+    const enabledDrives = await api.getDrives();
+    driveInfo = getDriveInfo(enabledDrives, drive);
   }
 
-  if (driveInfo?.type !== desiredMode) {
+  // HARD19-022: only switch when the current mode cannot read the image. A
+  // deliberate 1571 reading a D64 is fine and must be preserved — forcing 1541
+  // silently destroys the user's drive configuration and resets the emulated
+  // drive for no functional gain. Unknown/missing type falls through to a
+  // switch (safe canonical default).
+  const currentMode = driveInfo?.type;
+  const modeIsCompatible =
+    currentMode !== undefined && Boolean(compatibleModes?.includes(currentMode as PhysicalDriveMode));
+  if (!modeIsCompatible) {
     await api.setDriveMode(drive, desiredMode);
     requiresRefresh = true;
+    addLog("info", "Disk autoplay switched physical drive mode", {
+      drive,
+      from: currentMode ?? null,
+      to: desiredMode,
+      path,
+    });
+    // Surface the change: a deliberate configuration was altered for this disk,
+    // so the user must be told rather than discovering it later (HARD19-022).
+    toast({
+      title: `Drive ${DRIVE_LABEL[drive]} switched to ${desiredMode}`,
+      description: "The disk needed a different drive mode to load.",
+    });
   }
 
   if (requiresRefresh) {
