@@ -15,7 +15,7 @@ import { useDiskLibrary } from "@/hooks/useDiskLibrary";
 import { getC64API } from "@/lib/c64api";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
-import { mountDiskToDrive } from "@/lib/disks/diskMount";
+import { mountDiskToDrive, getMaterializedWorkPath } from "@/lib/disks/diskMount";
 import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
 import { resolveFtpConnectionOptions } from "@/lib/ftp/ftpConfig";
 
@@ -67,6 +67,8 @@ vi.mock("@/lib/disks/diskMount", () => ({
   discardDiskWriteBack: vi.fn(),
   hasShownDiskWriteBackAdvisory: vi.fn(() => true),
   markDiskWriteBackAdvisoryShown: vi.fn(),
+  getMaterializedWorkPath: vi.fn(() => null),
+  getMaterializedDiskId: vi.fn(() => null),
 }));
 vi.mock("@/lib/ftp/ftpClient", () => ({
   listFtpDirectory: vi.fn(),
@@ -432,6 +434,54 @@ describe("HomeDiskManager UI & Interactions", () => {
     await waitFor(() => {
       expect(screen.getByTestId("drive-mounted-label-a")).toHaveTextContent("No disk mounted");
     });
+  });
+
+  it("keeps a materialized local disk's override when the poll reports the internal work filename (HARD19-007)", async () => {
+    const disk = createMockDisk({
+      id: "materialized-disk",
+      name: "Materialized Disk",
+      path: "/materialized.d64",
+      location: "local",
+    });
+    // The mount is materialized (path-mounts an internal work file).
+    (getMaterializedWorkPath as any).mockReturnValue("/Usb0/c64commander-disk-work-a.d64");
+    let drivesResult = {
+      data: { drives: [{ a: createMockDrive() }, { b: createMockDrive() }] },
+      dataUpdatedAt: 1,
+    };
+    (useDiskLibrary as any).mockReturnValue({ disks: [disk], runtimeFiles: {}, removeDisk: mockRemoveDisk });
+    (useC64Drives as any).mockImplementation(() => drivesResult);
+    (mountDiskToDrive as any).mockResolvedValue(undefined);
+
+    const view = render(<HomeDiskManager />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mount" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("drive-mounted-label-a")).toHaveTextContent("Materialized Disk");
+    });
+
+    // A poll lands reporting the internal work filename (never the disk name).
+    // The override must be kept so the card still shows the disk's name.
+    drivesResult = {
+      data: {
+        drives: [
+          { a: createMockDrive({ image_file: "c64commander-disk-work-a.d64", image_path: "/Usb0" }) },
+          { b: createMockDrive() },
+        ],
+      },
+      dataUpdatedAt: Date.now() + 1000,
+    };
+    view.rerender(<HomeDiskManager />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("drive-mounted-label-a")).toHaveTextContent("Materialized Disk");
+    });
+    expect(screen.getByTestId("drive-mounted-label-a")).not.toHaveTextContent("c64commander-disk-work");
+
+    (getMaterializedWorkPath as any).mockReturnValue(null);
   });
 
   it("clears a drive power override when fresh drive data after the toggle disagrees", async () => {

@@ -205,6 +205,13 @@ const deleteMaterializedMount = (drive: "a" | "b") => {
 export const getMaterializedWorkPath = (drive: "a" | "b"): string | null =>
   materializedMounts.get(drive)?.workPath ?? null;
 
+// HARD19-007: map a drive's materialized work file back to the disk it holds, so
+// rotation / delete-protection survive even after HomeDiskManager's optimistic
+// override was lost (e.g. a component remount) — the drives poll only ever reports
+// the internal work filename.
+export const getMaterializedDiskId = (drive: "a" | "b"): string | null =>
+  materializedMounts.get(drive)?.disk.id ?? null;
+
 export const resetMaterializedMountsForTests = () => {
   materializedMounts.clear();
   if (typeof sessionStorage !== "undefined") sessionStorage.removeItem(MATERIALIZED_MOUNTS_STORAGE_KEY);

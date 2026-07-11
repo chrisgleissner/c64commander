@@ -59,6 +59,8 @@ import {
   discardDiskWriteBack,
   hasShownDiskWriteBackAdvisory,
   markDiskWriteBackAdvisoryShown,
+  getMaterializedWorkPath,
+  getMaterializedDiskId,
   type DiskMountWriteBackDependencies,
 } from "@/lib/disks/diskMount";
 import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
@@ -495,7 +497,18 @@ export const HomeDiskManager = () => {
             // image). See HARD9-038.
             const driveInfo = drivesData?.drives?.find((entry) => entry[drive])?.[drive];
             const polledBasename = driveInfo?.image_file ? getDiskName(driveInfo.image_file) : null;
-            if (polledBasename && polledBasename === getDiskName(overriddenDisk.path)) {
+            // HARD19-007: a materialized mount path-mounts an internal work file
+            // (c64commander-disk-work-<drive>.<type>), so the poll reports the work
+            // filename, never the original disk's basename — which cleared the
+            // override on the first poll, degrading the label to the work filename
+            // and losing rotation + delete-protection. Also keep the override when
+            // the poll shows the drive's expected work file.
+            const workPath = getMaterializedWorkPath(drive as "a" | "b");
+            const workBasename = workPath ? getDiskName(workPath) : null;
+            if (
+              polledBasename &&
+              (polledBasename === getDiskName(overriddenDisk.path) || polledBasename === workBasename)
+            ) {
               return;
             }
           }
@@ -902,6 +915,14 @@ export const HomeDiskManager = () => {
     if (mountedOverride === "") return null;
     if (mountedOverride) return mountedOverride;
     if (!driveInfo?.image_file) return null;
+    // HARD19-007: a materialized mount path-mounts an internal work file, so the
+    // poll reports the work filename. Map it back to the materialized disk so
+    // rotation and delete-while-mounted protection keep working after the
+    // component's optimistic override is lost.
+    const workPath = getMaterializedWorkPath(drive);
+    if (workPath && getDiskName(driveInfo.image_file) === getDiskName(workPath)) {
+      return getMaterializedDiskId(drive);
+    }
     const fullPath = buildDrivePath(driveInfo.image_path, driveInfo.image_file);
     if (!fullPath) return null;
     const disk = diskLibrary.disks.find((entry) => entry.location === "ultimate" && entry.path === fullPath);

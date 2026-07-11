@@ -155,7 +155,11 @@ vi.mock("@/lib/c64api", () => ({
     getDeviceHost: () => "",
   }),
 }));
-vi.mock("@/lib/disks/diskMount", () => ({ mountDiskToDrive: vi.fn() }));
+vi.mock("@/lib/disks/diskMount", () => ({
+  mountDiskToDrive: vi.fn(),
+  getMaterializedWorkPath: vi.fn(() => null),
+  getMaterializedDiskId: vi.fn(() => null),
+}));
 import { mountDiskToDrive } from "@/lib/disks/diskMount";
 
 const expectMountDiskToDriveCall = (drive: string, diskId: string) => {
