@@ -27,6 +27,7 @@ import {
   type PlayFileCategory,
 } from "./fileTypes";
 import { mountDiskToDrive, resolveLocalDiskBlob } from "@/lib/disks/diskMount";
+import { buildDiskWriteBackDependencies } from "@/lib/disks/diskWriteBackDependencies";
 import { createDiskEntry } from "@/lib/disks/diskTypes";
 import {
   fetchUltimateOriginBlob,
@@ -509,6 +510,11 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
 
         const driveBusId = await ensureDiskAutoplayDriveReady(api, drive, plan.path);
 
+        // HARD19-008: mount through mountDiskToDrive with write-back deps so a
+        // pending Home-mounted disk's saves on this drive are finalized (not
+        // silently dropped) when Play mounts a different disk here.
+        const diskWriteBack = buildDiskWriteBackDependencies();
+
         let localBlob: Blob | null = null;
 
         if (plan.source === "ultimate") {
@@ -517,17 +523,22 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
             location: "ultimate",
             origin: plan.origin ?? null,
           });
-          await mountDiskToDrive(api, drive, diskEntry);
+          await mountDiskToDrive(api, drive, diskEntry, undefined, { writeBack: diskWriteBack });
         } else if (plan.file) {
           localBlob = await toBlob(plan.file);
           if (!localBlob) throw new Error("Missing local disk data.");
-          await api.mountDriveUpload(drive, localBlob, plan.mountType, "readwrite", { filename: plan.path });
+          // HARD19-008: route the local-file path through mountDiskToDrive (was a
+          // raw mountDriveUpload that bypassed the write-back bookkeeping entirely,
+          // leaving a stale materialized entry that a later eject misattributed).
+          // Pass the resolved blob as the runtime file so no extra read occurs.
+          const diskEntry = createDiskEntry({ path: plan.path, location: "local" });
+          await mountDiskToDrive(api, drive, diskEntry, localBlob as File, { writeBack: diskWriteBack });
         } else {
           const diskEntry = createDiskEntry({
             path: plan.path,
             location: "local",
           });
-          await mountDiskToDrive(api, drive, diskEntry);
+          await mountDiskToDrive(api, drive, diskEntry, undefined, { writeBack: diskWriteBack });
         }
 
         if (beforeLaunch) {

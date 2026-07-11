@@ -481,7 +481,15 @@ describe("playbackRouter", () => {
     await vi.runAllTimersAsync();
     await task;
     expect(api.machineReboot).toHaveBeenCalled();
-    expect(api.mountDriveUpload).toHaveBeenCalled();
+    // HARD19-008: the local-file path routes through mountDiskToDrive with write-back
+    // deps (was a raw mountDriveUpload that bypassed the write-back bookkeeping).
+    expect(vi.mocked(mountDiskToDrive)).toHaveBeenCalledWith(
+      api,
+      "a",
+      expect.objectContaining({ path: "/demo.d64", location: "local" }),
+      expect.anything(),
+      expect.objectContaining({ writeBack: expect.anything() }),
+    );
     expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalled();
     vi.useRealTimers();
   });
@@ -497,6 +505,9 @@ describe("playbackRouter", () => {
       api,
       "b",
       expect.objectContaining({ path: "/Usb0/DEMO.D64", location: "ultimate" }),
+      undefined,
+      // HARD19-008: write-back deps are threaded so a stale materialized mount is finalized.
+      expect.objectContaining({ writeBack: expect.anything() }),
     );
     vi.useRealTimers();
   });
@@ -703,7 +714,14 @@ describe("playbackRouter", () => {
     await task;
     expect(api.machineReset).not.toHaveBeenCalled();
     expect(api.machineReboot).not.toHaveBeenCalled();
-    expect(api.mountDriveUpload).toHaveBeenCalled();
+    // HARD19-008: local-file disks mount through mountDiskToDrive (with write-back deps).
+    expect(vi.mocked(mountDiskToDrive)).toHaveBeenCalledWith(
+      api,
+      "a",
+      expect.objectContaining({ path: "/demo.d64", location: "local" }),
+      expect.anything(),
+      expect.objectContaining({ writeBack: expect.anything() }),
+    );
     vi.useRealTimers();
   });
 

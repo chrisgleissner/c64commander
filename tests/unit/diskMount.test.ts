@@ -324,6 +324,26 @@ describe("mountDiskToDrive", () => {
       expect(writeBack.readRemoteFile).toHaveBeenCalled();
     });
 
+    it("finalizes (not drops) a stale materialized mount when a different disk is mounted with write-back deps (HARD19-008)", async () => {
+      const { writeBack } = await materializeOnDevice("device-a", "a");
+      (writeBack.readRemoteFile as ReturnType<typeof vi.fn>).mockClear();
+
+      // Play mounts a DIFFERENT disk on the same drive, now carrying write-back deps.
+      const otherDisk = createDiskEntry({ location: "local", path: "/Other.d64" });
+      const runtimeFile = new File([new Uint8Array([9])], "Other.d64");
+      const api = {
+        mountDrive: vi.fn().mockResolvedValue(undefined),
+        mountDriveUpload: vi.fn().mockResolvedValue(undefined),
+        getBaseUrl: vi.fn().mockReturnValue("http://device-a"),
+        getDeviceHost: vi.fn().mockReturnValue("device-a"),
+      } as unknown as C64API;
+
+      await mountDiskToDrive(api, "a", otherDisk, runtimeFile, { writeBack });
+
+      // The stale disk's in-game saves were written back, not silently discarded.
+      expect(writeBack.readRemoteFile).toHaveBeenCalled();
+    });
+
     it("exposes the materialized work path so the drive card can keep the disk identity (HARD19-007)", async () => {
       await materializeOnDevice("device-a", "a");
       expect(getMaterializedWorkPath("a")).toBe("/Usb0/c64commander-disk-work-a.d64");

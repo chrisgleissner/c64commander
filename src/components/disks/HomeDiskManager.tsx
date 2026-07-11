@@ -63,9 +63,7 @@ import {
   getMaterializedDiskId,
   type DiskMountWriteBackDependencies,
 } from "@/lib/disks/diskMount";
-import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
-import { resolveFtpConnectionOptions } from "@/lib/ftp/ftpConfig";
-import { base64ToUint8, uint8ToBase64 } from "@/lib/sid/sidUtils";
+import { buildDiskWriteBackDependencies } from "@/lib/disks/diskWriteBackDependencies";
 import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 import {
   createDiskEntry,
@@ -296,27 +294,10 @@ export const HomeDiskManager = () => {
       staleTime: 0,
     });
   }, [api, queryClient]);
-  // HARD18-025: fresh per-call (mirrors HomePage's createHomeReuWorkflow) so
-  // host/port/password are always resolved against the currently selected
-  // device, never captured stale in a closure.
-  const buildDiskWriteBackDependencies = useCallback((): DiskMountWriteBackDependencies => {
-    return {
-      listRemoteStorageRoots: async () => {
-        const ftpOptions = await resolveFtpConnectionOptions();
-        const result = await listFtpDirectory({ ...ftpOptions, path: "/" });
-        return result.entries.filter((entry) => entry.type === "dir").map((entry) => entry.name);
-      },
-      readRemoteFile: async (path) => {
-        const ftpOptions = await resolveFtpConnectionOptions();
-        const result = await readFtpFile({ ...ftpOptions, path });
-        return base64ToUint8(result.data);
-      },
-      writeRemoteFile: async (path, bytes) => {
-        const ftpOptions = await resolveFtpConnectionOptions();
-        await writeFtpFile({ ...ftpOptions, path, data: uint8ToBase64(bytes) });
-      },
-    };
-  }, []);
+  // HARD18-025 / HARD19-008: the FTP write-back deps are built by the shared
+  // buildDiskWriteBackDependencies (host/port/password resolved fresh per call
+  // against the currently selected device), so the Play page's executePlayPlan
+  // disk case can pass the SAME deps.
   const runDriveMutationWithSettledPolling = useCallback(
     async <T,>(operation: () => Promise<T>) => {
       const pollingPause = pollingPauseRegistry.acquirePause();
