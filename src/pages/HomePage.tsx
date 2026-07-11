@@ -107,7 +107,7 @@ import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { useTelnetActions } from "@/hooks/useTelnetActions";
 import { TELNET_ACTIONS, type TelnetActionId } from "@/lib/telnet/telnetTypes";
 import { withTelnetInteraction } from "@/lib/deviceInteraction/deviceInteractionManager";
-import { publishMachineTakeover } from "@/lib/deviceInteraction/machineTakeoverEvent";
+import { publishMachineInterrupt } from "@/lib/deviceInteraction/machineInterrupt";
 import { beginMachineTransition } from "@/lib/deviceInteraction/deviceActivityGate";
 import { getActiveAction, runWithImplicitAction } from "@/lib/tracing/actionTrace";
 import {
@@ -196,7 +196,6 @@ function HomePageContent() {
     controls,
     machineTaskId,
     machineExecutionState,
-    setMachineExecutionState,
     pauseResumePending,
     folderTaskPending,
     powerOffDialogOpen,
@@ -612,8 +611,11 @@ function HomePageContent() {
       // letting auto-advance relaunch content on the freshly power-cycled
       // machine once the current track's nominal duration elapses.
       onSuccess: () => {
-        setMachineExecutionState("running");
-        void publishMachineTakeover({ reason: "home-reset", label: "Power cycle" });
+        // HARD18-022: stop an armed Play session in place. HARD19-032:
+        // publishMachineInterrupt also restores a pending pause-mute and sets
+        // "running" synchronously, so a power-cycle-while-paused does not strand
+        // the SID mixer muted.
+        void publishMachineInterrupt({ reason: "home-reset", label: "Power cycle" });
         // HARD18-012b: arm the expected-outage window now, at the moment the
         // boot outage actually begins - begin+immediately-end applies the
         // cooldown starting from right now rather than leaving the
@@ -630,10 +632,10 @@ function HomePageContent() {
       successTitle: "Machine rebooting",
       failureOperation: "HOME_REBOOT_CLEAR_MEMORY",
       failureTitle: "Reboot failed",
-      // HARD18-022 (M3): see handlePowerCycle above.
+      // HARD18-022 (M3): see handlePowerCycle above. HARD19-032: restore a
+      // pending pause-mute via publishMachineInterrupt.
       onSuccess: () => {
-        setMachineExecutionState("running");
-        void publishMachineTakeover({ reason: "home-reset", label: "Reboot (Clr Mem)" });
+        void publishMachineInterrupt({ reason: "home-reset", label: "Reboot (Clr Mem)" });
       },
     });
   };
@@ -646,10 +648,10 @@ function HomePageContent() {
       successTitle: "Machine rebooting",
       failureOperation: "HOME_REBOOT_KEEP_MEMORY",
       failureTitle: "Reboot failed",
-      // HARD18-022 (M3): see handlePowerCycle above.
+      // HARD18-022 (M3): see handlePowerCycle above. HARD19-032: restore a
+      // pending pause-mute via publishMachineInterrupt.
       onSuccess: () => {
-        setMachineExecutionState("running");
-        void publishMachineTakeover({ reason: "home-reset", label: "Reboot" });
+        void publishMachineInterrupt({ reason: "home-reset", label: "Reboot" });
       },
     });
   };
@@ -686,14 +688,25 @@ function HomePageContent() {
       return;
     }
 
+    const resolvedMode = mode ?? "load-into-reu";
     const workflow = createHomeReuWorkflow();
-    await runReuWorkflow(
+    const reuResult = await runReuWorkflow(
       "HOME_RESTORE_REU",
       "Restore REU failed",
       mode === "preload-on-startup" ? "REU preload configured" : "REU image loaded",
-      () => workflow.restoreSnapshot(restoreTarget, mode ?? "load-into-reu", (progress) => setReuProgress(progress)),
+      () => workflow.restoreSnapshot(restoreTarget, resolvedMode, (progress) => setReuProgress(progress)),
       () => restoreTarget.metadata.content_name,
     );
+    // HARD19-011: loading a REU image into the live session repurposes the
+    // machine, so stop an armed Play session in place instead of letting
+    // auto-advance launch over it. "preload-on-startup" only configures the next
+    // boot and changes nothing now, so it does not take over the machine.
+    if (reuResult !== undefined && resolvedMode === "load-into-reu") {
+      void publishMachineInterrupt({
+        reason: "home-reset",
+        label: restoreTarget.metadata.content_name || "REU image",
+      });
+    }
   };
 
   const clearRamRebootSupport = telnet.isAvailable ? getTelnetSupport("rebootClearMemory") : null;
@@ -1170,7 +1183,6 @@ function HomePageContent() {
             status={status}
             machineTaskBusy={machineTaskBusy}
             machineExecutionState={machineExecutionState}
-            setMachineExecutionState={setMachineExecutionState}
             controls={controls}
             pauseResumePending={pauseResumePending}
             machineTaskId={machineTaskId}

@@ -361,6 +361,71 @@ describe("useHomeActions", () => {
     expect(toastMock).toHaveBeenCalledWith({ title: "Powering off..." });
   });
 
+  it("publishes the machine takeover after a successful power off (HARD19-031)", async () => {
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.confirmPowerOff();
+      await Promise.resolve();
+    });
+
+    expect(powerOffMutateAsyncMock).toHaveBeenCalledTimes(1);
+    expect(publishMachineTakeoverMock).toHaveBeenCalledWith({ reason: "home-reset", label: "Power off" });
+  });
+
+  it("does not publish the machine takeover when the power off fails (HARD19-031 success-gated)", async () => {
+    powerOffMutateAsyncMock.mockRejectedValueOnce(new Error("power off failed"));
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.confirmPowerOff();
+      await Promise.resolve();
+    });
+
+    expect(publishMachineTakeoverMock).not.toHaveBeenCalled();
+  });
+
+  it("publishes the machine takeover after a successful snapshot restore (HARD19-011)", async () => {
+    const snapshot: SnapshotStorageEntry = {
+      id: "snap-restore",
+      filename: "c64-program-20260101-120000.c64snap",
+      bytesBase64: "",
+      createdAt: "2026-01-01T12:00:00.000Z",
+      snapshotType: "program",
+      metadata: {
+        snapshot_type: "program",
+        display_ranges: ["$0000–$00FF"],
+        created_at: "2026-01-01 12:00:00",
+        label: "Boulder Dash",
+      },
+    };
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handleRestoreSnapshot(snapshot);
+      await Promise.resolve();
+    });
+
+    expect(publishMachineTakeoverMock).toHaveBeenCalledWith({ reason: "home-reset", label: "Boulder Dash" });
+  });
+
+  it("restores a pending pause-mute on a reset-family reboot so a reboot-while-paused is not left muted (HARD19-032)", async () => {
+    // The user paused SID playback from Play (muting the mixer, pauseMutePending)
+    // then reboots from Home instead of resuming.
+    machineExecutionSnapshot = { state: "paused", pauseMutePending: true };
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handleRebootClearMemory();
+      await Promise.resolve();
+    });
+
+    // A reboot always ends running, so the muted mixer must be restored rather
+    // than stranded silent; the takeover still fires.
+    expect(restorePauseMuteFromPersistedSnapshotMock).toHaveBeenCalledTimes(1);
+    expect(publishMachineTakeoverMock).toHaveBeenCalledWith({ reason: "home-reset", label: "Reboot (Clr Mem)" });
+  });
+
   it("reports folder selection failures and clears task pending flag", async () => {
     selectRamDumpFolderMock.mockRejectedValueOnce(new Error("picker unavailable"));
     const { result } = renderHook(() => useHomeActions());
