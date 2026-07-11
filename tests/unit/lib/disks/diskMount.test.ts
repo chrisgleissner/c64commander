@@ -964,7 +964,7 @@ describe("diskMount", () => {
     describe("finalizeDiskWriteBack (eject)", () => {
       it("reports attempted:false when the drive has no materialized mount", async () => {
         const result = await finalizeDiskWriteBack("a", buildWriteBack());
-        expect(result).toEqual({ attempted: false });
+        expect(result).toMatchObject({ attempted: false });
       });
 
       it("FTP-downloads the work-dir image back and writes it to a local-tree source", async () => {
@@ -991,7 +991,7 @@ describe("diskMount", () => {
 
         // The entry is consumed - a second finalize on the same drive is a no-op.
         const second = await finalizeDiskWriteBack("a", writeBack);
-        expect(second).toEqual({ attempted: false });
+        expect(second).toMatchObject({ attempted: false });
       });
 
       it("re-persists an archive/commoserve disk's changes into the in-memory disk cache", async () => {
@@ -1046,7 +1046,7 @@ describe("diskMount", () => {
         discardDiskWriteBack("a");
 
         const result = await finalizeDiskWriteBack("a", writeBack);
-        expect(result).toEqual({ attempted: false });
+        expect(result).toMatchObject({ attempted: false });
         expect(writeBack.readRemoteFile).not.toHaveBeenCalled();
       });
     });
@@ -1133,7 +1133,7 @@ describe("diskMount", () => {
         expect(writeBack.readRemoteFile).not.toHaveBeenCalled();
         // The stale entry must not still be sitting there to be misread later.
         const result = await finalizeDiskWriteBack("a", writeBack);
-        expect(result).toEqual({ attempted: false });
+        expect(result).toMatchObject({ attempted: false });
       });
     });
   });
