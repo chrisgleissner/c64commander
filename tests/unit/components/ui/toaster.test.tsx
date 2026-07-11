@@ -11,8 +11,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ── Hoisted mocks ────────────────────────────────────────────────────────────
 
-const { mockDismiss, mockToasts, mockRequestDiagnosticsOpen, mockLoadNotificationDurationMs, capturedToastHandlers } =
-  vi.hoisted(() => ({
+const {
+  mockDismiss,
+  mockToasts,
+  mockRequestDiagnosticsOpen,
+  mockLoadNotificationDurationMs,
+  capturedToastHandlers,
+  capturedToastProps,
+} = vi.hoisted(() => ({
     mockDismiss: vi.fn(),
     mockToasts: {
       value: [] as Array<{ id: string; title?: string; description?: string; action?: React.ReactElement }>,
@@ -24,6 +30,11 @@ const { mockDismiss, mockToasts, mockRequestDiagnosticsOpen, mockLoadNotificatio
       onSwipeStart: undefined as (() => void) | undefined,
       onSwipeEnd: undefined as ((e: any) => void) | undefined,
       onSwipeCancel: undefined as (() => void) | undefined,
+    },
+    // HARD19-037: record the per-root duration/variant passed to each Radix
+    // Toast so we can assert destructive toasts opt out of the notice duration.
+    capturedToastProps: {
+      value: [] as Array<{ duration?: number; variant?: string }>,
     },
   }));
 
@@ -41,19 +52,24 @@ vi.mock("@/components/ui/toast", () => ({
       onSwipeStart,
       onSwipeEnd,
       onSwipeCancel,
+      duration,
+      variant,
     }: {
       children?: React.ReactNode;
       onClick?: () => void;
       onSwipeStart?: () => void;
       onSwipeEnd?: (e: any) => void;
       onSwipeCancel?: () => void;
+      duration?: number;
+      variant?: string;
     }) => {
       capturedToastHandlers.onClick = onClick;
       capturedToastHandlers.onSwipeStart = onSwipeStart;
       capturedToastHandlers.onSwipeEnd = onSwipeEnd;
       capturedToastHandlers.onSwipeCancel = onSwipeCancel;
+      capturedToastProps.value.push({ duration, variant });
       return (
-        <div data-testid="mock-toast" onClick={onClick}>
+        <div data-testid="mock-toast" data-duration={String(duration)} data-variant={variant} onClick={onClick}>
           {children}
         </div>
       );
@@ -94,6 +110,7 @@ describe("Toaster", () => {
     capturedToastHandlers.onSwipeStart = undefined;
     capturedToastHandlers.onSwipeEnd = undefined;
     capturedToastHandlers.onSwipeCancel = undefined;
+    capturedToastProps.value = [];
   });
 
   it("renders provider and viewport when there are no toasts", () => {
@@ -174,6 +191,51 @@ describe("Toaster", () => {
     const { unmount } = render(<Toaster />);
     unmount();
     expect(removeEventListenerSpy).toHaveBeenCalledWith("c64u-app-settings-updated", expect.any(Function));
+  });
+});
+
+// HARD19-037: destructive (error) toasts must not inherit the notice duration.
+// ERROR_POLICY §4 says error toasts persist until dismissed or stale-cleared;
+// the Radix provider duration must apply to notices only.
+describe("Toaster destructive-toast persistence (HARD19-037)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockToasts.value = [];
+    capturedToastProps.value = [];
+  });
+
+  it("passes duration=Infinity to a destructive toast root so it never auto-dismisses", () => {
+    mockToasts.value = [{ id: "err-1", title: "Stop failed", variant: "destructive" } as any];
+    render(<Toaster />);
+    const captured = capturedToastProps.value.find((p) => p.variant === "destructive");
+    expect(captured).toBeDefined();
+    expect(captured?.duration).toBe(Infinity);
+  });
+
+  it("leaves a default notice toast's duration undefined so it inherits the provider duration", () => {
+    mockToasts.value = [{ id: "note-1", title: "Saved", variant: "default" } as any];
+    render(<Toaster />);
+    const captured = capturedToastProps.value.find((p) => p.variant === "default");
+    expect(captured).toBeDefined();
+    expect(captured?.duration).toBeUndefined();
+  });
+
+  it("treats a variant-less toast as a notice (inherits provider duration)", () => {
+    mockToasts.value = [{ id: "note-2", title: "Info" } as any];
+    render(<Toaster />);
+    expect(capturedToastProps.value[0]?.duration).toBeUndefined();
+  });
+
+  it("gives each toast its own duration when a destructive and a notice coexist", () => {
+    mockToasts.value = [
+      { id: "err-2", title: "Update failed", variant: "destructive" } as any,
+      { id: "note-3", title: "Queued", variant: "default" } as any,
+    ];
+    render(<Toaster />);
+    const destructive = capturedToastProps.value.find((p) => p.variant === "destructive");
+    const notice = capturedToastProps.value.find((p) => p.variant === "default");
+    expect(destructive?.duration).toBe(Infinity);
+    expect(notice?.duration).toBeUndefined();
   });
 });
 
