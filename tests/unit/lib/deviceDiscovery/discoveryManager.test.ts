@@ -145,9 +145,8 @@ describe("device discovery manager", () => {
       unsupported: false,
     });
 
-    const { getDeviceDiscoveryState, startDeviceDiscovery, acknowledgeDeviceDiscoveryResults } = await import(
-      "@/lib/deviceDiscovery/discoveryManager"
-    );
+    const { getDeviceDiscoveryState, startDeviceDiscovery, acknowledgeDeviceDiscoveryResults } =
+      await import("@/lib/deviceDiscovery/discoveryManager");
 
     await startDeviceDiscovery({ trigger: "startup", includeLanScan: true });
     expect(getDeviceDiscoveryState()).toMatchObject({ phase: "complete", acknowledged: false });
@@ -161,9 +160,8 @@ describe("device discovery manager", () => {
   });
 
   it("does not acknowledge when no completed discovery result is present (HARD19-028)", async () => {
-    const { getDeviceDiscoveryState, acknowledgeDeviceDiscoveryResults } = await import(
-      "@/lib/deviceDiscovery/discoveryManager"
-    );
+    const { getDeviceDiscoveryState, acknowledgeDeviceDiscoveryResults } =
+      await import("@/lib/deviceDiscovery/discoveryManager");
 
     // Idle store: nothing to acknowledge, so the flag must stay false.
     expect(getDeviceDiscoveryState()).toMatchObject({ phase: "idle", acknowledged: false });

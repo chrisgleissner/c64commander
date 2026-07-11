@@ -19,24 +19,24 @@ const {
   capturedToastHandlers,
   capturedToastProps,
 } = vi.hoisted(() => ({
-    mockDismiss: vi.fn(),
-    mockToasts: {
-      value: [] as Array<{ id: string; title?: string; description?: string; action?: React.ReactElement }>,
-    },
-    mockRequestDiagnosticsOpen: vi.fn(),
-    mockLoadNotificationDurationMs: vi.fn(() => 4000),
-    capturedToastHandlers: {
-      onClick: undefined as (() => void) | undefined,
-      onSwipeStart: undefined as (() => void) | undefined,
-      onSwipeEnd: undefined as ((e: any) => void) | undefined,
-      onSwipeCancel: undefined as (() => void) | undefined,
-    },
-    // HARD19-037: record the per-root duration/variant passed to each Radix
-    // Toast so we can assert destructive toasts opt out of the notice duration.
-    capturedToastProps: {
-      value: [] as Array<{ duration?: number; variant?: string }>,
-    },
-  }));
+  mockDismiss: vi.fn(),
+  mockToasts: {
+    value: [] as Array<{ id: string; title?: string; description?: string; action?: React.ReactElement }>,
+  },
+  mockRequestDiagnosticsOpen: vi.fn(),
+  mockLoadNotificationDurationMs: vi.fn(() => 4000),
+  capturedToastHandlers: {
+    onClick: undefined as (() => void) | undefined,
+    onSwipeStart: undefined as (() => void) | undefined,
+    onSwipeEnd: undefined as ((e: any) => void) | undefined,
+    onSwipeCancel: undefined as (() => void) | undefined,
+  },
+  // HARD19-037: record the per-root duration/variant passed to each Radix
+  // Toast so we can assert destructive toasts opt out of the notice duration.
+  capturedToastProps: {
+    value: [] as Array<{ duration?: number; variant?: string }>,
+  },
+}));
 
 // ── Module mocks ─────────────────────────────────────────────────────────────
 
