@@ -771,7 +771,10 @@ export const HomeDiskManager = () => {
       // HARD18-025: read the materialized work-dir image back and re-persist
       // it to the source now that the drive has released it. Best-effort -
       // a failed write-back must not undo the eject the user just asked for.
-      const writeBackResult = await finalizeDiskWriteBack(drive, buildDiskWriteBackDependencies());
+      // HARD19-005: pass the current device so a write-back only runs against the
+      // device the disk was actually materialized on — never overwriting the local
+      // source with a different device's stale work file.
+      const writeBackResult = await finalizeDiskWriteBack(drive, buildDiskWriteBackDependencies(), api.getDeviceHost());
       mountedByDriveSetAtRef.current[drive] = Date.now();
       setMountedByDrive((prev) => ({ ...prev, [drive]: "" }));
       setDriveErrors((prev) => ({ ...prev, [drive]: "" }));
@@ -779,6 +782,14 @@ export const HomeDiskManager = () => {
         toast({
           title: `${buildDriveLabel(drive)} ejected, but changes weren't saved`,
           description: writeBackResult.error.message,
+          variant: "destructive",
+        });
+      } else if (!writeBackResult.attempted && writeBackResult.reason === "device-mismatch") {
+        // HARD19-005: the disk was mounted on another device; its saves were not
+        // written back here (doing so would corrupt this device's work file).
+        toast({
+          title: `${buildDriveLabel(drive)} ejected — changes not saved here`,
+          description: "This disk was mounted on a different device. Switch back to that device to save its changes.",
           variant: "destructive",
         });
       } else {
