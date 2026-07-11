@@ -35,11 +35,16 @@ let injectionEpoch = 0;
  * the queue to two so the cursor stops moving ~one injection after release
  * instead of draining a multi-second backlog and sustaining wedge-class REST
  * load. Typed characters never pass `dropIfBusy` and are never dropped.
+ *
+ * HARD19-018: exported under the neutral name `enqueueKeyboardBufferInjection`
+ * because playback autostart (`injectDiskAutostart`, `loadFirstDiskPrgViaDma`)
+ * now routes through the SAME queue — otherwise a playlist launch's
+ * `injectAutostart` loop races a remote-input keystroke on $0277/$00C6.
  */
-export const enqueueKernalFallbackInjection = (
+export const enqueueKeyboardBufferInjection = (
   api: C64API,
   payload: Uint8Array,
-  options: { dropIfBusy?: boolean } = {},
+  options: { dropIfBusy?: boolean; pollIntervalMs?: number; maxAttempts?: number } = {},
 ): Promise<void> => {
   if (options.dropIfBusy && pendingCount > 1) return Promise.resolve();
   pendingCount += 1;
@@ -60,7 +65,11 @@ export const enqueueKernalFallbackInjection = (
       });
       return;
     }
-    return injectAutostart(api, payload, { shouldAbort: () => !isStillValid() });
+    return injectAutostart(api, payload, {
+      pollIntervalMs: options.pollIntervalMs,
+      maxAttempts: options.maxAttempts,
+      shouldAbort: () => !isStillValid(),
+    });
   });
   queue = scheduled.catch(() => undefined);
   return scheduled.finally(() => {

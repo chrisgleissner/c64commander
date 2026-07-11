@@ -17,7 +17,8 @@ import { recordDeviceGuard, recordTraceError } from "@/lib/tracing/traceSession"
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
-import { AUTOSTART_SEQUENCE, buildAutostartSequence, injectAutostart } from "./autostart";
+import { AUTOSTART_SEQUENCE, buildAutostartSequence } from "./autostart";
+import { enqueueKeyboardBufferInjection } from "@/lib/remoteInput/kernalFallbackInjector";
 import {
   formatPlayCategory,
   getFileExtension,
@@ -292,7 +293,10 @@ const injectDiskAutostart = async (api: C64API, payload: Uint8Array) => {
       await delay(baseDelayMs);
     }
     try {
-      await injectAutostart(api, payload, {
+      // HARD19-018: route through the shared keyboard-buffer queue so a disk
+      // launch's autostart loop never races a concurrent remote-input keystroke
+      // on $0277/$00C6 (both would poll $00C6==0 and write, garbling each other).
+      await enqueueKeyboardBufferInjection(api, payload, {
         pollIntervalMs: 140,
         maxAttempts: 20,
       });

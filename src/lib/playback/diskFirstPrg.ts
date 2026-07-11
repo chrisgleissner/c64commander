@@ -7,7 +7,7 @@
  */
 
 import type { C64API } from "@/lib/c64api";
-import { injectAutostart } from "./autostart";
+import { enqueueKeyboardBufferInjection } from "@/lib/remoteInput/kernalFallbackInjector";
 
 const SECTOR_SIZE = 256;
 const FILE_TYPE_MASK = 0x07;
@@ -338,11 +338,13 @@ export const loadFirstDiskPrgViaDma = async (api: C64API, diskImage: Uint8Array,
   const { loadAddress, endAddressExclusive } = await dmaLoadPrg(api, prgData);
 
   const isBasic = loadAddress === 0x0801 && looksLikeTokenisedBasic(prgData);
+  // HARD19-018: route the RUN/SYS autostart through the shared keyboard-buffer
+  // queue so it cannot race a concurrent remote-input keystroke on $0277/$00C6.
   if (isBasic) {
     await setBasicPointersAndClearVars(api, loadAddress, endAddressExclusive);
-    await injectAutostart(api, petsciiCommand("RUN"));
+    await enqueueKeyboardBufferInjection(api, petsciiCommand("RUN"));
   } else {
-    await injectAutostart(api, petsciiCommand(`SYS ${loadAddress}`));
+    await enqueueKeyboardBufferInjection(api, petsciiCommand(`SYS ${loadAddress}`));
   }
 
   return {

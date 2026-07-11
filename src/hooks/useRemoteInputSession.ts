@@ -43,7 +43,7 @@ import {
 import type { SpecialKeyboardKey } from "@/lib/remoteInput/specialKeyMapping";
 import { specialKeyToKeyboardInputEvent, specialKeyToPetscii } from "@/lib/remoteInput/specialKeyMapping";
 import { runSerializedMachineInput } from "@/lib/remoteInput/machineInputThrottle";
-import { enqueueKernalFallbackInjection } from "@/lib/remoteInput/kernalFallbackInjector";
+import { enqueueKeyboardBufferInjection } from "@/lib/remoteInput/kernalFallbackInjector";
 import { registerActiveInputRelease, unregisterActiveInputRelease } from "@/lib/remoteInput/activeInputRelease";
 
 export type RemoteInputOutputMode = "joystick" | "type";
@@ -505,7 +505,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
         scheduleKeyboardFlush();
         return;
       }
-      void enqueueKernalFallbackInjection(getC64API(), stringToPetsciiBytes(char)).catch((error) => {
+      void enqueueKeyboardBufferInjection(getC64API(), stringToPetsciiBytes(char)).catch((error) => {
         addErrorLog(
           "Remote input kernal-fallback char injection failed",
           buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { char }),
@@ -527,7 +527,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       // this tier rather than guessed; only round-trippable chords proceed.
       const char = keyboardInputsToChar(inputs);
       if (char === null) return;
-      void enqueueKernalFallbackInjection(getC64API(), stringToPetsciiBytes(char)).catch((error) => {
+      void enqueueKeyboardBufferInjection(getC64API(), stringToPetsciiBytes(char)).catch((error) => {
         addErrorLog(
           "Remote input kernal-fallback keyboard-chord injection failed",
           buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { inputs }),
@@ -549,7 +549,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       // costs ~0.6 s on the c64u — drop repeats while the injector is busy so a
       // held key stops ~one injection after release instead of draining a
       // multi-second backlog. A dropped repeat is imperceptible; a backlog is not.
-      void enqueueKernalFallbackInjection(getC64API(), new Uint8Array([cursorKeyToPetscii(direction)]), {
+      void enqueueKeyboardBufferInjection(getC64API(), new Uint8Array([cursorKeyToPetscii(direction)]), {
         dropIfBusy: true,
       }).catch((error) => {
         addErrorLog(
@@ -571,7 +571,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       }
       const petscii = specialKeyToPetscii(key);
       if (petscii === null) return; // RUN/STOP, RESTORE: no kernal-buffer equivalent on this tier.
-      void enqueueKernalFallbackInjection(getC64API(), new Uint8Array([petscii])).catch((error) => {
+      void enqueueKeyboardBufferInjection(getC64API(), new Uint8Array([petscii])).catch((error) => {
         addErrorLog(
           "Remote input kernal-fallback special-key injection failed",
           buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { key }),

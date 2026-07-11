@@ -21,7 +21,7 @@ vi.mock("@/lib/logging", () => ({
 import type { C64API } from "@/lib/c64api";
 import {
   drainKernalFallbackInjectionQueue,
-  enqueueKernalFallbackInjection,
+  enqueueKeyboardBufferInjection,
   resetKernalFallbackInjectionQueueForTests,
 } from "@/lib/remoteInput/kernalFallbackInjector";
 
@@ -57,10 +57,10 @@ describe("kernalFallbackInjector", () => {
   it("bounds dropIfBusy injections to two (one in flight + one queued) when repeats pile up (HARD16-003)", async () => {
     const resolveFirst = deferInjectAutostartOnce();
 
-    const first = enqueueKernalFallbackInjection(api, payload(1), { dropIfBusy: true });
-    const second = enqueueKernalFallbackInjection(api, payload(2), { dropIfBusy: true });
+    const first = enqueueKeyboardBufferInjection(api, payload(1), { dropIfBusy: true });
+    const second = enqueueKeyboardBufferInjection(api, payload(2), { dropIfBusy: true });
     for (let byte = 3; byte <= 6; byte += 1) {
-      void enqueueKernalFallbackInjection(api, payload(byte), { dropIfBusy: true });
+      void enqueueKeyboardBufferInjection(api, payload(byte), { dropIfBusy: true });
     }
 
     await flushMicrotasks();
@@ -77,7 +77,7 @@ describe("kernalFallbackInjector", () => {
   it("never drops injections enqueued without dropIfBusy (typed characters are always delivered)", async () => {
     const resolveFirst = deferInjectAutostartOnce();
 
-    const promises = [1, 2, 3, 4, 5].map((byte) => enqueueKernalFallbackInjection(api, payload(byte)));
+    const promises = [1, 2, 3, 4, 5].map((byte) => enqueueKeyboardBufferInjection(api, payload(byte)));
 
     await flushMicrotasks();
     expect(injectAutostartMock).toHaveBeenCalledTimes(1);
@@ -89,22 +89,22 @@ describe("kernalFallbackInjector", () => {
   });
 
   it("clears the busy guard once an injection settles so a later hold-repeat can start again (HARD16-003)", async () => {
-    await enqueueKernalFallbackInjection(api, payload(1), { dropIfBusy: true });
+    await enqueueKeyboardBufferInjection(api, payload(1), { dropIfBusy: true });
     injectAutostartMock.mockClear();
 
-    await enqueueKernalFallbackInjection(api, payload(2), { dropIfBusy: true });
+    await enqueueKeyboardBufferInjection(api, payload(2), { dropIfBusy: true });
     expect(injectAutostartMock).toHaveBeenCalledTimes(1);
   });
 
   it("keeps counting accurately after a failed injection so drops resume correctly (HARD16-003)", async () => {
     injectAutostartMock.mockRejectedValueOnce(new Error("device offline"));
-    await enqueueKernalFallbackInjection(api, payload(1), { dropIfBusy: true }).catch(() => undefined);
+    await enqueueKeyboardBufferInjection(api, payload(1), { dropIfBusy: true }).catch(() => undefined);
     injectAutostartMock.mockClear();
 
     const resolveNext = deferInjectAutostartOnce();
-    const first = enqueueKernalFallbackInjection(api, payload(2), { dropIfBusy: true });
-    const second = enqueueKernalFallbackInjection(api, payload(3), { dropIfBusy: true });
-    void enqueueKernalFallbackInjection(api, payload(4), { dropIfBusy: true });
+    const first = enqueueKeyboardBufferInjection(api, payload(2), { dropIfBusy: true });
+    const second = enqueueKeyboardBufferInjection(api, payload(3), { dropIfBusy: true });
+    void enqueueKeyboardBufferInjection(api, payload(4), { dropIfBusy: true });
 
     await flushMicrotasks();
     expect(injectAutostartMock).toHaveBeenCalledTimes(1);
@@ -117,8 +117,8 @@ describe("kernalFallbackInjector", () => {
   it("skips a queued injection whose device changed while an earlier one was in flight (HARD19-017)", async () => {
     const resolveFirst = deferInjectAutostartOnce();
 
-    const first = enqueueKernalFallbackInjection(api, payload(1));
-    const second = enqueueKernalFallbackInjection(api, payload(2));
+    const first = enqueueKeyboardBufferInjection(api, payload(1));
+    const second = enqueueKeyboardBufferInjection(api, payload(2));
 
     await flushMicrotasks();
     expect(injectAutostartMock).toHaveBeenCalledTimes(1);
@@ -144,7 +144,7 @@ describe("kernalFallbackInjector", () => {
       capturedShouldAbort = options.shouldAbort;
     });
 
-    await enqueueKernalFallbackInjection(api, payload(1));
+    await enqueueKeyboardBufferInjection(api, payload(1));
 
     expect(capturedShouldAbort).toBeTypeOf("function");
     // Same device -> keep going.
@@ -157,8 +157,8 @@ describe("kernalFallbackInjector", () => {
   it("drains queued injections so a device retarget cancels them (HARD19-017)", async () => {
     const resolveFirst = deferInjectAutostartOnce();
 
-    const first = enqueueKernalFallbackInjection(api, payload(1));
-    const second = enqueueKernalFallbackInjection(api, payload(2));
+    const first = enqueueKeyboardBufferInjection(api, payload(1));
+    const second = enqueueKeyboardBufferInjection(api, payload(2));
 
     await flushMicrotasks();
     expect(injectAutostartMock).toHaveBeenCalledTimes(1);

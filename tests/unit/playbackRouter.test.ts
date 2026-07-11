@@ -11,7 +11,8 @@ import { buildPlayPlan, executePlayPlan, tryFetchUltimateSidBlob } from "@/lib/p
 import { readFtpFile } from "@/lib/ftp/ftpClient";
 import { getC64APIConfigSnapshot } from "@/lib/c64api";
 import { addErrorLog } from "@/lib/logging";
-import { buildAutostartSequence, injectAutostart } from "@/lib/playback/autostart";
+import { buildAutostartSequence } from "@/lib/playback/autostart";
+import { enqueueKeyboardBufferInjection } from "@/lib/remoteInput/kernalFallbackInjector";
 import { loadFirstDiskPrgViaDma } from "@/lib/playback/diskFirstPrg";
 import { mountDiskToDrive, resolveLocalDiskBlob } from "@/lib/disks/diskMount";
 import { loadDiskAutostartMode } from "@/lib/config/appSettings";
@@ -97,6 +98,11 @@ vi.mock("@/lib/playback/autostart", async () => {
   };
 });
 
+// HARD19-018: disk autostart now routes through the shared keyboard-buffer queue.
+vi.mock("@/lib/remoteInput/kernalFallbackInjector", () => ({
+  enqueueKeyboardBufferInjection: vi.fn(async () => undefined),
+}));
+
 vi.mock("@/lib/playback/diskFirstPrg", () => ({
   loadFirstDiskPrgViaDma: vi.fn().mockResolvedValue({
     name: "TEST",
@@ -129,7 +135,7 @@ vi.mock("@/lib/hvsc/hvscPerformance", () => ({
 }));
 
 beforeEach(() => {
-  vi.mocked(injectAutostart).mockClear();
+  vi.mocked(enqueueKeyboardBufferInjection).mockClear();
   vi.mocked(loadFirstDiskPrgViaDma).mockClear();
   vi.mocked(mountDiskToDrive).mockClear();
   vi.mocked(resolveLocalDiskBlob).mockReset();
@@ -476,7 +482,7 @@ describe("playbackRouter", () => {
     await task;
     expect(api.machineReboot).toHaveBeenCalled();
     expect(api.mountDriveUpload).toHaveBeenCalled();
-    expect(vi.mocked(injectAutostart)).toHaveBeenCalled();
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalled();
     vi.useRealTimers();
   });
 
@@ -498,7 +504,7 @@ describe("playbackRouter", () => {
   it("retries autostart injection after mount when initial attempt fails", async () => {
     vi.useFakeTimers();
     const api = createApiMock();
-    vi.mocked(injectAutostart)
+    vi.mocked(enqueueKeyboardBufferInjection)
       .mockRejectedValueOnce(new Error("busy"))
       .mockResolvedValueOnce(undefined as any);
     const file = new File(["disk"], "demo.d64");
@@ -509,7 +515,7 @@ describe("playbackRouter", () => {
     });
     await vi.runAllTimersAsync();
     await task;
-    expect(vi.mocked(injectAutostart)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalledTimes(2);
     vi.useRealTimers();
   });
 
@@ -534,7 +540,7 @@ describe("playbackRouter", () => {
     await vi.runAllTimersAsync();
     await task;
 
-    expect(vi.mocked(injectAutostart)).toHaveBeenCalledWith(api, buildAutostartSequence(9), {
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalledWith(api, buildAutostartSequence(9), {
       pollIntervalMs: 140,
       maxAttempts: 20,
     });
@@ -561,7 +567,7 @@ describe("playbackRouter", () => {
     await vi.runAllTimersAsync();
     await task;
     expect(vi.mocked(loadFirstDiskPrgViaDma)).toHaveBeenCalled();
-    expect(vi.mocked(injectAutostart)).not.toHaveBeenCalled();
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
 
@@ -579,7 +585,7 @@ describe("playbackRouter", () => {
     await task;
     expect(vi.mocked(resolveLocalDiskBlob)).toHaveBeenCalled();
     expect(vi.mocked(loadFirstDiskPrgViaDma)).toHaveBeenCalled();
-    expect(vi.mocked(injectAutostart)).not.toHaveBeenCalled();
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
 
@@ -592,7 +598,7 @@ describe("playbackRouter", () => {
     const task = executePlayPlan(api as any, plan, { drive: "a" });
     await vi.runAllTimersAsync();
     await task;
-    expect(vi.mocked(injectAutostart)).toHaveBeenCalled();
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalled();
     vi.useRealTimers();
   });
 
@@ -842,7 +848,7 @@ describe("playbackRouter", () => {
   it("throws disk autostart failed after all retry attempts exhausted (BRDA:157,158)", async () => {
     vi.useFakeTimers();
     const api = createApiMock();
-    vi.mocked(injectAutostart).mockRejectedValue(new Error("always fails"));
+    vi.mocked(enqueueKeyboardBufferInjection).mockRejectedValue(new Error("always fails"));
     const file = new File(["disk"], "demo.d64");
     const plan = buildPlayPlan({ source: "local", path: "/demo.d64", file });
     const task = executePlayPlan(api as any, plan);
@@ -850,7 +856,7 @@ describe("playbackRouter", () => {
     const assertion = expect(task).rejects.toThrow("Disk autostart failed");
     await vi.runAllTimersAsync();
     await assertion;
-    expect(vi.mocked(injectAutostart)).toHaveBeenCalledTimes(4);
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalledTimes(4);
     vi.useRealTimers();
   });
 
