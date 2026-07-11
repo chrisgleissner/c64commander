@@ -203,7 +203,35 @@ export function useHealthState(): OverallHealthState {
       ? buildSavedDevicePrimaryLabel(selectedSavedDevice)
       : inferConnectedDeviceLabel(deviceInfo?.product);
 
-    if (latestHealthCheck) {
+    // HARD19-004 (D1): a pinned manual health-check verdict (`latestResult`) drives
+    // the badge with no staleness bound. When live trace evidence recorded AFTER
+    // the check contradicts it — a fresh successful REST response after a
+    // non-Healthy result (recovery), or fresh failures after a Healthy result
+    // (degradation) — prefer the live trace-derived rollup below so the badge
+    // self-heals instead of asserting a stale verdict indefinitely.
+    const pinnedVerdictContradictedByNewerEvidence = (() => {
+      if (!latestHealthCheck) return false;
+      const pinnedEndMs = new Date(latestHealthCheck.endTimestamp).getTime();
+      if (Number.isNaN(pinnedEndMs)) return false;
+      const newerEvents = hostScopedTraceEvents.filter((e) => new Date(e.timestamp).getTime() > pinnedEndMs);
+      if (newerEvents.length === 0) return false;
+      if (latestHealthCheck.overallHealth === "Healthy") {
+        return newerEvents.some((e) => {
+          if (e.type === "error" && e.data.isExpected !== true) return true;
+          if (e.type === "rest-response" && typeof e.data.status === "number" && e.data.status >= 400) return true;
+          if (e.type === "ftp-operation" || e.type === "telnet-operation") {
+            const hasError = typeof e.data.error === "string" && e.data.error.trim().length > 0;
+            return e.data.result === "failure" || hasError;
+          }
+          return false;
+        });
+      }
+      return newerEvents.some(
+        (e) => e.type === "rest-response" && typeof e.data.status === "number" && e.data.status < 400,
+      );
+    })();
+
+    if (latestHealthCheck && !pinnedVerdictContradictedByNewerEvidence) {
       const appFailures = [latestHealthCheck.probes.CONFIG, latestHealthCheck.probes.JIFFY].filter(
         (probe) => probe.outcome === "Fail",
       ).length;

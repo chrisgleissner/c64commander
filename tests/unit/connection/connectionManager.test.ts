@@ -276,6 +276,83 @@ describe("connectionManager", () => {
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
   });
 
+  it("clears a pinned Unhealthy health-check result on recovery to REAL_CONNECTED (HARD19-004)", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+    const { getHealthCheckStateSnapshot, setHealthCheckStateSnapshot, resetHealthCheckStateSnapshot } =
+      await import("../../../src/lib/diagnostics/healthCheckState");
+
+    resetHealthCheckStateSnapshot();
+    // A stale manual health check pinned the badge Unhealthy while the device was down.
+    setHealthCheckStateSnapshot({
+      latestResult: {
+        runId: "hc-stale",
+        startTimestamp: "2024-01-01T00:00:00.000Z",
+        endTimestamp: "2024-01-01T00:00:01.000Z",
+        totalDurationMs: 1000,
+        overallHealth: "Unhealthy",
+        connectivity: "Online",
+        probes: {} as never,
+        latency: { p50: 0, p90: 0, p99: 0 },
+      } as never,
+    });
+
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ product: "C64 Ultimate", errors: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    await initializeConnectionManager();
+    await discoverConnection("manual");
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    // The fresh REST success contradicts the stale Unhealthy verdict; it must clear.
+    expect(getHealthCheckStateSnapshot().latestResult).toBeNull();
+    resetHealthCheckStateSnapshot();
+  });
+
+  it("leaves a pinned Healthy health-check result intact on reconnect (HARD19-004 clears only Unhealthy/Unavailable)", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+    const { getHealthCheckStateSnapshot, setHealthCheckStateSnapshot, resetHealthCheckStateSnapshot } =
+      await import("../../../src/lib/diagnostics/healthCheckState");
+
+    resetHealthCheckStateSnapshot();
+    setHealthCheckStateSnapshot({
+      latestResult: {
+        runId: "hc-healthy",
+        startTimestamp: "2024-01-01T00:00:00.000Z",
+        endTimestamp: "2024-01-01T00:00:01.000Z",
+        totalDurationMs: 1000,
+        overallHealth: "Healthy",
+        connectivity: "Online",
+        probes: {} as never,
+        latency: { p50: 0, p90: 0, p99: 0 },
+      } as never,
+    });
+
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ product: "C64 Ultimate", errors: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    await initializeConnectionManager();
+    await discoverConnection("manual");
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    // A Healthy verdict is left to the useHealthState trace-evidence override, not cleared here.
+    expect(getHealthCheckStateSnapshot().latestResult).not.toBeNull();
+    resetHealthCheckStateSnapshot();
+  });
+
   it("verifyCurrentConnectionTarget enters demo when the feature flag and setting are enabled", async () => {
     const { getConnectionSnapshot, initializeConnectionManager, verifyCurrentConnectionTarget } =
       await import("../../../src/lib/connection/connectionManager");
