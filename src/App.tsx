@@ -11,6 +11,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { registerQueryClient } from "@/lib/query/queryClientRegistry";
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import React, { Suspense, lazy, useEffect, useMemo } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -116,6 +117,11 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// HARD19-012: expose the app's query client to non-React library code (the
+// prepareForDeviceRetarget hygiene helper used by the reachable-saved-device
+// fallback) so it can invalidate device-scoped caches after a device switch.
+registerQueryClient(queryClient);
 
 const RouteRefresher = () => {
   const location = useLocation();

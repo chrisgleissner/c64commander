@@ -24,6 +24,7 @@ const startDeviceDiscoveryMock = vi.fn();
 const hasPersistedDeviceHostConfigMock = vi.fn();
 const setStoredFtpPortMock = vi.fn();
 const setStoredTelnetPortMock = vi.fn();
+const prepareForDeviceRetargetMock = vi.fn(async () => {});
 
 vi.mock("@/lib/c64api", () => ({
   C64API: class {
@@ -133,6 +134,10 @@ vi.mock("@/lib/deviceDiscovery/discoveryManager", () => ({
   startDeviceDiscovery: (...args: unknown[]) => startDeviceDiscoveryMock(...args),
 }));
 
+vi.mock("@/lib/connection/deviceRetarget", () => ({
+  prepareForDeviceRetarget: (...args: unknown[]) => prepareForDeviceRetargetMock(...args),
+}));
+
 vi.mock("@/lib/logging", () => ({
   addLog: (...args: unknown[]) => addLogMock(...args),
 }));
@@ -240,6 +245,13 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
     expect(selectSavedDeviceMock).toHaveBeenCalledWith("other");
     expect(completeSavedDeviceVerificationMock).toHaveBeenCalledWith("other", HEALTHY);
     expect(startDeviceDiscoveryMock).not.toHaveBeenCalled();
+    // HARD19-012: the fallback runs the shared cross-device hygiene BEFORE
+    // re-selecting, so it cannot silently miss remote-input release / health
+    // clear / machine-execution reset / background stop / query invalidation.
+    expect(prepareForDeviceRetargetMock).toHaveBeenCalledWith("selected", "other");
+    const retargetOrder = prepareForDeviceRetargetMock.mock.invocationCallOrder[0];
+    const selectOrder = selectSavedDeviceMock.mock.invocationCallOrder[0];
+    expect(retargetOrder).toBeLessThan(selectOrder);
   });
 
   it("reads the saved password and tolerates a secure-storage failure during the sweep (lines 688-696)", async () => {
