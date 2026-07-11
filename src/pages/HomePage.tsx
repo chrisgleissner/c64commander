@@ -870,8 +870,17 @@ function HomePageContent() {
 
   const handleSaveToApp = trace(async function handleSaveToApp(name: string) {
     try {
-      await saveCurrentConfig(name);
-      toast({ title: "Saved to app", description: name });
+      const { failedCategories } = await saveCurrentConfig(name);
+      if (failedCategories.length > 0) {
+        // HARD19-023: don't claim the full setup was saved when categories were unreadable.
+        toast({
+          title: "Saved to app — some settings couldn't be read",
+          description: `Not saved: ${failedCategories.join(", ")}. Try again when the device is idle for a complete profile.`,
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Saved to app", description: name });
+      }
       setSaveDialogOpen(false);
     } catch (error) {
       reportUserError({
@@ -1134,6 +1143,24 @@ function HomePageContent() {
             mismatchCount: result.mismatchCount,
             mismatches: result.mismatches.slice(0, 5),
           },
+        });
+        return;
+      }
+
+      // HARD19-023/024: the revert succeeded, but flag partial coverage instead of
+      // claiming full verification or inventing false mismatches.
+      if (result.unverifiedCategories?.length || result.baselineIncomplete) {
+        const caveats: string[] = [];
+        if (result.unverifiedCategories?.length) {
+          caveats.push(`couldn't re-read ${result.unverifiedCategories.join(", ")} to verify`);
+        }
+        if (result.baselineIncomplete) {
+          caveats.push("the saved baseline was missing some categories, which weren't restored");
+        }
+        toast({
+          title: "Config reverted — with caveats",
+          description: `${caveats.join("; ")}.`,
+          variant: "destructive",
         });
         return;
       }

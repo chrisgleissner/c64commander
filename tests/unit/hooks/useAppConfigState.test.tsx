@@ -214,6 +214,65 @@ describe("useAppConfigState", () => {
     expect(updateHasChanges).toHaveBeenCalledWith(expect.any(String), false);
   });
 
+  it("classifies an unreadable category as unverified (not a mismatch) on revert (HARD19-024)", async () => {
+    loadInitialSnapshot.mockReturnValue({
+      savedAt: "t",
+      data: {
+        Audio: { items: { Vol: { value: "7" } } },
+        Video: { items: { Mode: { value: "PAL" } } },
+      },
+    });
+    getCategories.mockResolvedValue({ categories: ["Audio", "Video"] });
+    getCategory.mockImplementation(async (category: string) => {
+      if (category === "Video") throw new Error("read timeout");
+      return { items: { Vol: { selected: "7" } } };
+    });
+    const { result } = renderHook(() => useAppConfigState(), { wrapper });
+
+    let revertResult: any;
+    await act(async () => {
+      revertResult = await result.current.revertToInitial();
+    });
+
+    // Video could not be re-read: unverified, NOT counted as N false mismatches.
+    expect(revertResult.status).toBe("reverted");
+    expect(revertResult.unverifiedCategories).toEqual(["Video"]);
+    expect(revertResult.mismatches).toBeUndefined();
+  });
+
+  it("surfaces failedCategories from saveCurrentConfig when a category is unreadable (HARD19-023)", async () => {
+    loadInitialSnapshot.mockReturnValue(null);
+    getCategories.mockResolvedValue({ categories: ["Audio", "Video"] });
+    getCategory.mockImplementation(async (category: string) => {
+      if (category === "Video") throw new Error("read timeout");
+      return { items: { Vol: { selected: "5" } } };
+    });
+    const { result } = renderHook(() => useAppConfigState(), { wrapper });
+
+    let saveResult: any;
+    await act(async () => {
+      saveResult = await result.current.saveCurrentConfig("Partial");
+    });
+
+    expect(saveResult.failedCategories).toEqual(["Video"]);
+  });
+
+  it("re-captures a provisional (incomplete) baseline instead of freezing it (HARD19-023)", async () => {
+    // A previously-captured baseline that was incomplete.
+    loadInitialSnapshot.mockReturnValue({ savedAt: "t", data: { Audio: {} }, failedCategories: ["Video"] });
+    getCategories.mockResolvedValue({ categories: ["Audio", "Video"] });
+    getCategory.mockResolvedValue({ items: {} });
+    const { result } = renderHook(() => useAppConfigState(), { wrapper });
+
+    await act(async () => {
+      await result.current.captureInitialSnapshot();
+    });
+
+    // The provisional baseline did NOT short-circuit — a fresh capture ran.
+    expect(getCategories).toHaveBeenCalled();
+    expect(saveInitialSnapshot).toHaveBeenCalled();
+  });
+
   it("revertToInitial invalidates c64-config-items/c64-config-item so Home reflects it (HARD9-017)", async () => {
     loadInitialSnapshot.mockReturnValue({
       savedAt: "t",

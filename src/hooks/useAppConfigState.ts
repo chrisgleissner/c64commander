@@ -47,7 +47,15 @@ type ConfigRevertMismatch = {
 
 export type ConfigRevertResult =
   | { status: "missing-snapshot" }
-  | { status: "reverted" }
+  | {
+      status: "reverted";
+      // HARD19-024: categories that could not be re-read for verification (revert
+      // still succeeded — these are unverified, NOT mismatched).
+      unverifiedCategories?: string[];
+      // HARD19-023: the baseline snapshot itself was captured incompletely, so
+      // items in its missing categories were never written back.
+      baselineIncomplete?: boolean;
+    }
   | {
       status: "verification-failed";
       message: string;
@@ -112,10 +120,16 @@ const isDocumentHidden = () => typeof document !== "undefined" && document.visib
 const collectConfigRevertMismatches = (
   expected: WritableConfigPayload,
   actual: WritableConfigPayload,
+  unreadCategories: ReadonlySet<string> = new Set(),
 ): ConfigRevertMismatch[] => {
   const mismatches: ConfigRevertMismatch[] = [];
 
   for (const [category, expectedItems] of Object.entries(expected)) {
+    // HARD19-024: a category that could not be re-read during verification is
+    // UNVERIFIED, not mismatched. Counting its items as failures invents N false
+    // mismatches for a revert that actually succeeded (the verification read just
+    // timed out on a device still settling from the batch write).
+    if (unreadCategories.has(category)) continue;
     const actualItems = actual[category] ?? {};
     for (const [item, expectedValue] of Object.entries(expectedItems)) {
       const actualValue = Object.prototype.hasOwnProperty.call(actualItems, item) ? (actualItems[item] ?? null) : null;
@@ -207,7 +221,11 @@ const fetchAllConfig = async ({ mode = "user", signal }: FetchAllConfigOptions =
     throw new Error(`Failed to fetch configuration categories: ${unresolvedFailures.join(", ")}`);
   }
 
-  return configs;
+  // HARD19-023/024: surface which categories could not be read so consumers can
+  // (a) mark a snapshot provisional and retry (capture), (b) warn on save, and
+  // (c) classify unread categories as "unverified" rather than "mismatched" on
+  // revert — instead of silently accepting a partial snapshot.
+  return { configs, failedCategories: unresolvedFailures };
 };
 
 export function useAppConfigState() {
@@ -251,7 +269,10 @@ export function useAppConfigState() {
     if (!status.isConnected) {
       return null;
     }
-    if (initialSnapshot) {
+    // HARD19-023: only a COMPLETE baseline short-circuits; a provisional one
+    // (some categories unreadable at capture time) is re-attempted so the revert
+    // baseline is not frozen incomplete for the life of the install.
+    if (initialSnapshot && !initialSnapshot.failedCategories?.length) {
       return initialSnapshot;
     }
     if (captureInFlightRef.current) {
@@ -261,8 +282,12 @@ export function useAppConfigState() {
     captureInFlightRef.current = true;
     setSnapshotLoading(true);
     try {
-      const data = await fetchAllConfig({ mode: "user" });
-      const snapshot = { savedAt: new Date().toISOString(), data };
+      const { configs, failedCategories } = await fetchAllConfig({ mode: "user" });
+      const snapshot: ConfigSnapshot = {
+        savedAt: new Date().toISOString(),
+        data: configs,
+        ...(failedCategories.length ? { failedCategories } : {}),
+      };
       saveInitialSnapshot(resolvedBaseUrl, snapshot);
       setInitialSnapshot(snapshot);
       setFetchError(null);
@@ -286,7 +311,9 @@ export function useAppConfigState() {
     async (signal: AbortSignal): Promise<ConfigSnapshot | null> => {
       if (
         !status.isConnected ||
-        initialSnapshot ||
+        // HARD19-023: a provisional snapshot (has failedCategories) is re-captured
+        // on later idle windows until complete; only a complete one blocks re-capture.
+        (initialSnapshot && !initialSnapshot.failedCategories?.length) ||
         captureInFlightRef.current ||
         signal.aborted ||
         isDocumentHidden()
@@ -297,11 +324,15 @@ export function useAppConfigState() {
       captureInFlightRef.current = true;
       setSnapshotLoading(true);
       try {
-        const data = await fetchAllConfig({ mode: "background", signal });
+        const { configs, failedCategories } = await fetchAllConfig({ mode: "background", signal });
         if (signal.aborted || isDocumentHidden()) {
           throw createAbortError("Config snapshot capture was cancelled after the app left the foreground.");
         }
-        const snapshot = { savedAt: new Date().toISOString(), data };
+        const snapshot: ConfigSnapshot = {
+          savedAt: new Date().toISOString(),
+          data: configs,
+          ...(failedCategories.length ? { failedCategories } : {}),
+        };
         saveInitialSnapshot(resolvedBaseUrl, snapshot);
         setInitialSnapshot(snapshot);
         setFetchError(null);
@@ -438,8 +469,15 @@ export function useAppConfigState() {
     try {
       await applyConfigData(initialSnapshot.data);
       const expectedPayload = buildWritableConfigPayload(initialSnapshot.data);
-      const currentConfig = await fetchAllConfig({ mode: "user" });
-      const mismatches = collectConfigRevertMismatches(expectedPayload, buildWritableConfigPayload(currentConfig));
+      const { configs: currentConfig, failedCategories } = await fetchAllConfig({ mode: "user" });
+      // HARD19-024: exclude categories that couldn't be re-read from the mismatch
+      // scan so an unreadable category is not reported as N failed settings.
+      const unreadCategories = new Set(failedCategories);
+      const mismatches = collectConfigRevertMismatches(
+        expectedPayload,
+        buildWritableConfigPayload(currentConfig),
+        unreadCategories,
+      );
 
       if (mismatches.length > 0) {
         addLog("warn", "Config revert verification failed", {
@@ -460,7 +498,14 @@ export function useAppConfigState() {
       }
 
       updateHasChanges(resolvedBaseUrl, false);
-      return { status: "reverted" };
+      // HARD19-023/024: report the revert as succeeded, but flag categories that
+      // could not be re-read (unverified) or that were never in the baseline
+      // (baselineIncomplete — those items were not written back).
+      return {
+        status: "reverted",
+        ...(unreadCategories.size ? { unverifiedCategories: [...unreadCategories] } : {}),
+        ...(initialSnapshot.failedCategories?.length ? { baselineIncomplete: true } : {}),
+      };
     } finally {
       setIsApplying(false);
     }
@@ -473,12 +518,14 @@ export function useAppConfigState() {
         if (!initialSnapshot) {
           await captureInitialSnapshot();
         }
-        const data = await fetchAllConfig({ mode: "user" });
-        const entry = createAppConfigEntry(resolvedBaseUrl, name, data);
+        const { configs, failedCategories } = await fetchAllConfig({ mode: "user" });
+        const entry = createAppConfigEntry(resolvedBaseUrl, name, configs);
         const next = [entry, ...loadAppConfigs().filter((cfg) => cfg.id !== entry.id)];
         saveAppConfigs(next);
         setAppConfigs(listAppConfigs(resolvedBaseUrl));
-        return entry;
+        // HARD19-023: surface incompleteness so Save-to-App can warn instead of
+        // claiming the full device setup was saved when categories were unreadable.
+        return { entry, failedCategories };
       } finally {
         setIsSaving(false);
       }
