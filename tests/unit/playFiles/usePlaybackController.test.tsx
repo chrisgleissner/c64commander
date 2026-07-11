@@ -290,6 +290,64 @@ describe("usePlaybackController", () => {
     expect(nextPlaylist?.[0]?.durationMs).toBe(45_000);
   });
 
+  it("HARD19-021: marks a baked default-fallback duration as durationSource 'default' so it stays re-resolvable", async () => {
+    // A SID whose songlength cannot be resolved yet (mid-install / load failure):
+    // resolveSonglengthDurationMsForPath returns null and the md5 lookup returns
+    // null (tryFetchUltimateSidBlob mocked null), so the fallback 45s is baked.
+    // Without the marker, applySonglengthsToItems would treat the fallback as an
+    // authoritative songlength and never correct it once songlengths load.
+    const playlist = [
+      createPlaylistItem({
+        category: "sid",
+        label: "unresolved.sid",
+        path: "/MUSIC/unresolved.sid",
+        request: { source: "ultimate", path: "/MUSIC/unresolved.sid" },
+        durationMs: undefined,
+      }),
+    ];
+    const setPlaylist = vi.fn();
+    const { result } = renderPlaybackController(playlist, {
+      setPlaylist,
+      resolveSonglengthDurationMsForPath: vi.fn().mockResolvedValue(null),
+    });
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    const playlistUpdaters = setPlaylist.mock.calls
+      .map(([value]) => value)
+      .filter((value): value is (items: PlaylistItem[]) => PlaylistItem[] => typeof value === "function");
+    const nextPlaylist = playlistUpdaters[playlistUpdaters.length - 1]?.(playlist);
+    expect(nextPlaylist?.[0]).toMatchObject({ durationMs: 45_000, durationSource: "default" });
+  });
+
+  it("HARD19-021: leaves durationSource untouched when a genuine songlength resolves", async () => {
+    // Contrast case: a resolvable songlength must NOT be tagged "default" — that
+    // would let a later slider/songlengths pass clobber an authoritative value.
+    const playlist = [
+      createPlaylistItem({
+        category: "sid",
+        label: "resolved.sid",
+        path: "/MUSIC/resolved.sid",
+        request: { source: "ultimate", path: "/MUSIC/resolved.sid" },
+        durationMs: undefined,
+      }),
+    ];
+    const setPlaylist = vi.fn();
+    const { result } = renderPlaybackController(playlist, {
+      setPlaylist,
+      resolveSonglengthDurationMsForPath: vi.fn().mockResolvedValue(77_000),
+    });
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    const playlistUpdaters = setPlaylist.mock.calls
+      .map(([value]) => value)
+      .filter((value): value is (items: PlaylistItem[]) => PlaylistItem[] => typeof value === "function");
+    const nextPlaylist = playlistUpdaters[playlistUpdaters.length - 1]?.(playlist);
+    expect(nextPlaylist?.[0]?.durationMs).toBe(77_000);
+    expect(nextPlaylist?.[0]?.durationSource).not.toBe("default");
+  });
+
   it("persists the re-resolved duration and new song number for a subsong playback start", async () => {
     const file = {
       name: "demo.sid",

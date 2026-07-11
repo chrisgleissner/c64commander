@@ -1001,8 +1001,19 @@ export function usePlaybackController({
           autoAdvanceGuardRef.current = null;
           setAutoAdvanceDueAtMs(null);
         }
+        // HARD19-021: a written duration that came from the default fallback
+        // (nothing resolved: resolvedDurationBase === undefined) MUST carry the
+        // `durationSource: "default"` marker so applySonglengthsToItems can
+        // re-resolve it once songlengths become available. Without the marker
+        // the fallback 3:00 is indistinguishable from a genuinely resolved
+        // songlength and pins the item forever (HARD9-008 introduced the marker
+        // for exactly this reason). A genuinely resolved duration leaves the
+        // existing marker untouched (a user's manual "Default duration" slider
+        // override must survive playback).
+        const bakedFallbackDuration = resolvedDurationBase === undefined;
         if (
           resolvedDuration !== item.durationMs ||
+          (bakedFallbackDuration && item.durationSource !== "default") ||
           subsongCount !== item.subsongCount ||
           effectiveRequest !== item.request ||
           effectivePath !== item.path
@@ -1015,6 +1026,7 @@ export function usePlaybackController({
                     request,
                     path: effectivePath,
                     durationMs: resolvedDuration,
+                    ...(bakedFallbackDuration ? { durationSource: "default" as const } : {}),
                     subsongCount: subsongCount ?? entry.subsongCount,
                   }
                 : entry,
