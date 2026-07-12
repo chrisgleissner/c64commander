@@ -8,6 +8,7 @@
 
 import { addErrorLog, addLog } from "@/lib/logging";
 import { toast } from "@/hooks/use-toast";
+import { getRegisteredQueryClient } from "@/lib/query/queryClientRegistry";
 import type { C64API } from "@/lib/c64api";
 import { getC64APIConfigSnapshot } from "@/lib/c64api";
 import { readFtpFile } from "@/lib/ftp/ftpClient";
@@ -146,9 +147,14 @@ const ensureDiskAutoplayDriveReady = async (api: C64API, drive: "a" | "b", path:
   const drives = await api.getDrives();
   let driveInfo = getDriveInfo(drives, drive);
   let requiresRefresh = false;
+  // HARD19-022 (D3): whether we powered on or reconfigured the drive, so the
+  // Home/Disks drive-card query is invalidated afterwards and stops showing the
+  // stale type/enabled state until the next poll.
+  let didMutateDrive = false;
 
   if (driveInfo?.enabled === false) {
     await api.driveOn(drive);
+    didMutateDrive = true;
     // HARD19-022: re-read after enabling so the mode decision below uses the
     // just-enabled drive's REAL type, not the stale pre-enable snapshot (which
     // could force a redundant setDriveMode on a drive that already matched).
@@ -167,6 +173,7 @@ const ensureDiskAutoplayDriveReady = async (api: C64API, drive: "a" | "b", path:
   if (!modeIsCompatible) {
     await api.setDriveMode(drive, desiredMode);
     requiresRefresh = true;
+    didMutateDrive = true;
     addLog("info", "Disk autoplay switched physical drive mode", {
       drive,
       from: currentMode ?? null,
@@ -184,6 +191,13 @@ const ensureDiskAutoplayDriveReady = async (api: C64API, drive: "a" | "b", path:
   if (requiresRefresh) {
     const refreshedDrives = await api.getDrives();
     driveInfo = getDriveInfo(refreshedDrives, drive);
+  }
+
+  // HARD19-022 (D3): refresh the Home/Disks drive cards after any drive mutation
+  // so they reflect the new power/mode instead of a stale cached value. Best
+  // effort — no registered client during very early startup.
+  if (didMutateDrive) {
+    getRegisteredQueryClient()?.invalidateQueries({ queryKey: ["c64-drives"] });
   }
 
   return typeof driveInfo?.bus_id === "number" ? driveInfo.bus_id : 8;

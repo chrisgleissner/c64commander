@@ -139,8 +139,14 @@ vi.mock("@/hooks/use-toast", () => ({
   toast: vi.fn(),
 }));
 
+const mockInvalidateQueries = vi.fn();
+vi.mock("@/lib/query/queryClientRegistry", () => ({
+  getRegisteredQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
+}));
+
 beforeEach(() => {
   vi.mocked(toast).mockClear();
+  mockInvalidateQueries.mockClear();
   vi.mocked(enqueueKeyboardBufferInjection).mockClear();
   vi.mocked(loadFirstDiskPrgViaDma).mockClear();
   vi.mocked(mountDiskToDrive).mockClear();
@@ -588,6 +594,8 @@ describe("playbackRouter", () => {
     // A deliberate 1571 reads D64 natively — it must not be silently reset to 1541.
     expect(api.setDriveMode).not.toHaveBeenCalled();
     expect(vi.mocked(toast)).not.toHaveBeenCalled();
+    // No mutation → no drives-query invalidation (HARD19-022 / D3).
+    expect(mockInvalidateQueries).not.toHaveBeenCalled();
     // Still uses the (unchanged) drive's bus id for autostart.
     expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalledWith(api, buildAutostartSequence(9), {
       pollIntervalMs: 140,
@@ -620,6 +628,8 @@ describe("playbackRouter", () => {
     // A 1541 cannot read a D81 — the switch is genuinely required and surfaced.
     expect(api.setDriveMode).toHaveBeenCalledWith("a", "1581");
     expect(vi.mocked(toast)).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining("1581") }));
+    // The mutation invalidates the drive-card query so it stops showing 1541 (D3).
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ["c64-drives"] });
     vi.useRealTimers();
   });
 
@@ -649,6 +659,8 @@ describe("playbackRouter", () => {
 
     expect(api.driveOn).toHaveBeenCalledWith("a");
     expect(api.setDriveMode).not.toHaveBeenCalled();
+    // driveOn is itself a mutation → the drive-card query is still invalidated (D3).
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ["c64-drives"] });
     expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalledWith(api, buildAutostartSequence(9), {
       pollIntervalMs: 140,
       maxAttempts: 20,
