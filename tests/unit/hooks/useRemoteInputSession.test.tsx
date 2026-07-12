@@ -297,6 +297,19 @@ describe("useRemoteInputSession", () => {
     expect(result.current.connectionStatus).toBe("idle");
   });
 
+  it("HARD19-013: clears the fallback indicator when a later keyboard-chord injection succeeds", async () => {
+    injectAutostartMock.mockRejectedValueOnce(new Error("wifi blip"));
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "kernal-fallback" }));
+
+    act(() => result.current.sendKeyboardInputs(["a", "left_shift"]));
+    await act(flushMicrotasks);
+    expect(result.current.connectionStatus).toBe("error");
+
+    act(() => result.current.sendKeyboardInputs(["b", "left_shift"]));
+    await act(flushMicrotasks);
+    expect(result.current.connectionStatus).toBe("idle");
+  });
+
   it("hot-swaps the autofire rate when the persisted rate changes elsewhere (Settings slider, PR299)", async () => {
     const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
     expect(result.current.autofireRateHz).not.toBe(8);
@@ -577,6 +590,34 @@ describe("useRemoteInputSession", () => {
     );
   });
 
+  it("HARD19-013: does not clear a prior cursor error on a dropIfBusy short-circuit with no new probe", async () => {
+    injectAutostartMock.mockRejectedValueOnce(new Error("device offline"));
+    let resolveFirst!: () => void;
+    injectAutostartMock.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveFirst = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "kernal-fallback" }));
+
+    act(() => result.current.sendCursor("up"));
+    await act(flushMicrotasks);
+    expect(result.current.connectionStatus).toBe("error");
+
+    act(() => result.current.sendCursor("up"));
+    await act(flushMicrotasks);
+    act(() => result.current.sendCursor("up"));
+    await act(flushMicrotasks);
+    act(() => result.current.sendCursor("up"));
+    await act(flushMicrotasks);
+
+    expect(result.current.connectionStatus).toBe("error");
+
+    resolveFirst();
+    await act(flushMicrotasks);
+  });
+
   it("routes special keys through machine:input when full, and through the kernal fallback otherwise", async () => {
     const full = renderHook(() => useRemoteInputSession({ tier: "full" }));
     act(() => full.result.current.sendSpecialKey("f1"));
@@ -646,6 +687,19 @@ describe("useRemoteInputSession", () => {
       "Remote input kernal-fallback special-key injection failed",
       expect.any(Object),
     );
+  });
+
+  it("HARD19-013: clears the fallback indicator when a later special-key injection succeeds", async () => {
+    injectAutostartMock.mockRejectedValueOnce(new Error("device offline"));
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "kernal-fallback" }));
+
+    act(() => result.current.sendSpecialKey("f1"));
+    await act(flushMicrotasks);
+    expect(result.current.connectionStatus).toBe("error");
+
+    act(() => result.current.sendSpecialKey("f3"));
+    await act(flushMicrotasks);
+    expect(result.current.connectionStatus).toBe("idle");
   });
 
   it("drops local held-set state and reports an error status when a send fails", async () => {

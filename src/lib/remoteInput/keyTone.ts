@@ -36,10 +36,7 @@ export const toneButtonClass = (tone: KeyTone | undefined, latched = false): str
       // SHIFT / SHIFT LOCK — the app's primary blue (same token the rest of
       // the UI uses for emphasis), distinct from the plain C=/CTRL modifiers
       // via an always-on border/fill; a ring marks the latched (active) state.
-      return cn(
-        "border-2 border-primary bg-primary/10 text-primary font-bold",
-        latched && "ring-2 ring-primary",
-      );
+      return cn("border-2 border-primary bg-primary/10 text-primary font-bold", latched && "ring-2 ring-primary");
     case "character":
       // Ordinary typing keys (0-9, A-Z) — a calm sky tint that sets them apart
       // from the symbol and system keys.

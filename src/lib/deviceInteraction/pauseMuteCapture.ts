@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { extractAudioMixerItems } from "@/lib/config/audioMixerItems";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import { isSidVolumeName } from "@/lib/config/audioMixerSolo";
 import {
@@ -14,8 +15,7 @@ import {
   buildSidEnablement,
   filterEnabledSidVolumeItems,
 } from "@/lib/config/sidVolumeControl";
-import { extractAudioMixerItems } from "@/pages/playFiles/playFilesUtils";
-import { persistPauseMuteSnapshot } from "@/pages/playFiles/playbackSessionPersistence";
+import { persistPauseMuteSnapshot } from "@/lib/playback/playbackSessionPersistence";
 
 type PauseMuteCaptureApi = {
   getCategory: (category: string, options?: { __c64uIntent?: "user" }) => Promise<Record<string, unknown>>;

@@ -9,7 +9,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const persistPauseMuteSnapshotMock = vi.hoisted(() => vi.fn());
-vi.mock("@/pages/playFiles/playbackSessionPersistence", () => ({
+vi.mock("@/lib/playback/playbackSessionPersistence", () => ({
   persistPauseMuteSnapshot: persistPauseMuteSnapshotMock,
 }));
 vi.mock("@/lib/logging", () => ({

@@ -930,6 +930,7 @@ export function usePlaybackController({
             feedbackKind: "result",
             ...(typeof options?.playlistSize === "number" ? { playlistSize: options.playlistSize } : {}),
           },
+          notify: toast,
         };
         const resolvedDuration = resolvedDurationBase ?? durationFallbackMs;
         addLog("info", "Playback request started", {

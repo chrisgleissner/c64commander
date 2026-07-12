@@ -7,7 +7,6 @@
  */
 
 import { addErrorLog, addLog } from "@/lib/logging";
-import { toast } from "@/hooks/use-toast";
 import { getRegisteredQueryClient } from "@/lib/query/queryClientRegistry";
 import type { C64API } from "@/lib/c64api";
 import { getC64APIConfigSnapshot } from "@/lib/c64api";
@@ -72,6 +71,10 @@ export type PlayPlan = {
 };
 
 type PhysicalDriveMode = "1541" | "1571" | "1581";
+type PlaybackNotice = Readonly<{
+  title: string;
+  description?: string;
+}>;
 
 const DISK_AUTOPLAY_DRIVE_MODE_BY_EXTENSION: Partial<Record<string, PhysicalDriveMode>> = {
   d64: "1541",
@@ -130,7 +133,12 @@ const getDriveInfo = (drives: Awaited<ReturnType<C64API["getDrives"]>>, drive: "
   return entry?.[drive] ?? null;
 };
 
-const ensureDiskAutoplayDriveReady = async (api: C64API, drive: "a" | "b", path: string) => {
+const ensureDiskAutoplayDriveReady = async (
+  api: C64API,
+  drive: "a" | "b",
+  path: string,
+  notify?: ((notice: PlaybackNotice) => void) | null,
+) => {
   const desiredMode = getDiskAutoplayDriveMode(path);
   if (!desiredMode) return 8;
 
@@ -182,7 +190,7 @@ const ensureDiskAutoplayDriveReady = async (api: C64API, drive: "a" | "b", path:
     });
     // Surface the change: a deliberate configuration was altered for this disk,
     // so the user must be told rather than discovering it later (HARD19-022).
-    toast({
+    notify?.({
       title: `Drive ${DRIVE_LABEL[drive]} switched to ${desiredMode}`,
       description: "The disk needed a different drive mode to load.",
     });
@@ -402,6 +410,7 @@ export type PlayExecutionOptions = {
   beforeLaunch?: (() => Promise<void>) | null;
   benchmarkMetadata?: Record<string, unknown> | null;
   skipSidSslPropagation?: boolean;
+  notify?: ((notice: PlaybackNotice) => void) | null;
 };
 
 export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: PlayExecutionOptions = {}) => {
@@ -413,6 +422,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
   const diskAutostartMode = options.diskAutostartMode ?? loadDiskAutostartMode();
   const beforeLaunch = options.beforeLaunch ?? null;
   const benchmarkMetadata = options.benchmarkMetadata ?? null;
+  const notify = options.notify ?? null;
 
   try {
     const selectedDeviceCanAccessOrigin = plan.source !== "ultimate" || isOriginOnSelectedDevice(plan.origin);
@@ -568,7 +578,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
           await delay(resetDelayMs);
         }
 
-        const driveBusId = await ensureDiskAutoplayDriveReady(api, drive, plan.path);
+        const driveBusId = await ensureDiskAutoplayDriveReady(api, drive, plan.path, notify);
 
         // HARD19-008: mount through mountDiskToDrive with write-back deps so a
         // pending Home-mounted disk's saves on this drive are finalized (not

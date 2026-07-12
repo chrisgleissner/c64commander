@@ -21,6 +21,8 @@ export type DisplayProfile = "compact" | "medium" | "expanded";
 
 // §6.3 — Health indicator contributors
 export type ContributorKey = "App" | "REST" | "FTP" | "TELNET";
+const CONTROL_PLANE_KEYS = ["App", "REST"] as const satisfies readonly ContributorKey[];
+const OPTIONAL_SERVICE_KEYS = ["FTP", "TELNET"] as const satisfies readonly ContributorKey[];
 
 // §8.3 — Health glyphs (shape, color-independent)
 export const HEALTH_GLYPHS: Record<HealthState, string> = {
@@ -562,10 +564,9 @@ export const rollUpHealth = (
   // reported a REST-perfect device as whole-device Unhealthy. Reserve Unhealthy
   // for the control plane (REST, and app-level errors); an unreachable optional
   // service caps the overall result at Degraded.
-  const controlPlaneUnhealthy = contributors.REST?.state === "Unhealthy" || contributors.App?.state === "Unhealthy";
+  const controlPlaneUnhealthy = CONTROL_PLANE_KEYS.some((key) => contributors[key]?.state === "Unhealthy");
   if (controlPlaneUnhealthy) return "Unhealthy";
-  const optionalServiceUnhealthy =
-    contributors.FTP?.state === "Unhealthy" || contributors.TELNET?.state === "Unhealthy";
+  const optionalServiceUnhealthy = OPTIONAL_SERVICE_KEYS.some((key) => contributors[key]?.state === "Unhealthy");
   if (optionalServiceUnhealthy) return "Degraded";
 
   if (states.some((s) => s === "Degraded")) return "Degraded";

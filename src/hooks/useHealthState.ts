@@ -226,9 +226,16 @@ export function useHealthState(): OverallHealthState {
           return false;
         });
       }
-      return newerEvents.some(
-        (e) => e.type === "rest-response" && typeof e.data.status === "number" && e.data.status < 400,
-      );
+      return newerEvents.some((e) => {
+        if (e.type === "rest-response") {
+          return typeof e.data.status === "number" && e.data.status < 400;
+        }
+        if (e.type === "ftp-operation" || e.type === "telnet-operation") {
+          const hasError = typeof e.data.error === "string" && e.data.error.trim().length > 0;
+          return e.data.result === "success" && !hasError;
+        }
+        return false;
+      });
     })();
 
     if (latestHealthCheck && !pinnedVerdictContradictedByNewerEvidence) {
@@ -283,9 +290,10 @@ export function useHealthState(): OverallHealthState {
     // Gate trace-derived health on having seen at least one successful REST response.
     // Before the first clean response, the badge stays Idle (connecting) rather than
     // flipping to Unhealthy from early probe failures or connection-retry noise.
-    const hasFirstRestSuccess = hostScopedTraceEvents.some(
-      (e) => e.type === "rest-response" && typeof e.data.status === "number" && e.data.status < 400,
-    );
+    const hasFirstRestSuccess =
+      hostScopedTraceEvents.some(
+        (e) => e.type === "rest-response" && typeof e.data.status === "number" && e.data.status < 400,
+      ) || latestHealthCheck?.probes.REST.outcome === "Success";
 
     const idleContributors = {
       App: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },

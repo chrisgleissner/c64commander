@@ -514,6 +514,33 @@ describe("useHealthState", () => {
     expect(result.current.state).toBe("Healthy");
   });
 
+  it("prefers live trace-derived health over a stale pinned Unhealthy after a newer FTP success (HARD19-004 recovery)", () => {
+    connectionStateMock.state = "REAL_CONNECTED";
+    healthModelMocks.deriveConnectivityState.mockImplementation(() => "Online");
+    healthModelMocks.rollUpHealth.mockImplementation(() => "Healthy");
+    healthModelMocks.deriveFtpContributorHealth.mockImplementation(() => ({
+      state: "Healthy",
+      problemCount: 0,
+      totalOperations: 1,
+      failedOperations: 0,
+    }));
+    c64ConnectionMock.status.deviceInfo = { product: "Ultimate 64", firmware_version: "1.1.0" };
+    healthCheckStateMock.latestResult = {
+      runId: "hc-stale-unhealthy-ftp",
+      overallHealth: "Unhealthy",
+      endTimestamp: "2024-01-01T00:00:00.000Z",
+      deviceInfo: null,
+      probes: { ...allSuccessProbes(), FTP: { probe: "FTP", outcome: "Fail", reason: "ftp was down" } },
+    };
+    traceEventsMock.events = [
+      { type: "ftp-operation", timestamp: "2024-01-01T00:05:00.000Z", data: { result: "success", error: null } },
+    ];
+
+    const { result } = renderHook(() => useHealthState());
+
+    expect(result.current.state).toBe("Healthy");
+  });
+
   it("prefers live trace-derived health over a stale pinned Healthy after newer failures (HARD19-004 degradation)", () => {
     connectionStateMock.state = "REAL_CONNECTED";
     healthModelMocks.deriveConnectivityState.mockImplementation(() => "Online");

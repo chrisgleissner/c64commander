@@ -19,7 +19,6 @@ import { loadDiskAutostartMode } from "@/lib/config/appSettings";
 import { getActiveAction } from "@/lib/tracing/actionTrace";
 import { recordDeviceGuard } from "@/lib/tracing/traceSession";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
-import { toast } from "@/hooks/use-toast";
 
 const { beginHvscPerfScope, endHvscPerfScope } = vi.hoisted(() => ({
   beginHvscPerfScope: vi.fn((scope: string, metadata?: Record<string, unknown>) => ({
@@ -101,7 +100,7 @@ vi.mock("@/lib/playback/autostart", async () => {
 
 // HARD19-018: disk autostart now routes through the shared keyboard-buffer queue.
 vi.mock("@/lib/remoteInput/kernalFallbackInjector", () => ({
-  enqueueKeyboardBufferInjection: vi.fn(async () => undefined),
+  enqueueKeyboardBufferInjection: vi.fn(async () => ({ dropped: false })),
 }));
 
 vi.mock("@/lib/playback/diskFirstPrg", () => ({
@@ -135,17 +134,12 @@ vi.mock("@/lib/hvsc/hvscPerformance", () => ({
   endHvscPerfScope,
 }));
 
-vi.mock("@/hooks/use-toast", () => ({
-  toast: vi.fn(),
-}));
-
 const mockInvalidateQueries = vi.fn();
 vi.mock("@/lib/query/queryClientRegistry", () => ({
   getRegisteredQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
 }));
 
 beforeEach(() => {
-  vi.mocked(toast).mockClear();
   mockInvalidateQueries.mockClear();
   vi.mocked(enqueueKeyboardBufferInjection).mockClear();
   vi.mocked(loadFirstDiskPrgViaDma).mockClear();
@@ -572,6 +566,7 @@ describe("playbackRouter", () => {
 
   it("HARD19-022: preserves a compatible drive mode (1571 reading a D64) instead of forcing 1541", async () => {
     vi.useFakeTimers();
+    const notify = vi.fn();
     const api = {
       ...createApiMock(),
       getDrives: vi.fn().mockResolvedValue({
@@ -587,13 +582,14 @@ describe("playbackRouter", () => {
       drive: "a",
       rebootBeforeMount: true,
       diskAutostartMode: "kernal",
+      notify,
     });
     await vi.runAllTimersAsync();
     await task;
 
     // A deliberate 1571 reads D64 natively — it must not be silently reset to 1541.
     expect(api.setDriveMode).not.toHaveBeenCalled();
-    expect(vi.mocked(toast)).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
     // No mutation → no drives-query invalidation (HARD19-022 / D3).
     expect(mockInvalidateQueries).not.toHaveBeenCalled();
     // Still uses the (unchanged) drive's bus id for autostart.
@@ -606,6 +602,7 @@ describe("playbackRouter", () => {
 
   it("HARD19-022: switches to a compatible mode and notifies when the current mode cannot read the image", async () => {
     vi.useFakeTimers();
+    const notify = vi.fn();
     const api = {
       ...createApiMock(),
       getDrives: vi.fn().mockResolvedValue({
@@ -621,13 +618,14 @@ describe("playbackRouter", () => {
       drive: "a",
       rebootBeforeMount: true,
       diskAutostartMode: "kernal",
+      notify,
     });
     await vi.runAllTimersAsync();
     await task;
 
     // A 1541 cannot read a D81 — the switch is genuinely required and surfaced.
     expect(api.setDriveMode).toHaveBeenCalledWith("a", "1581");
-    expect(vi.mocked(toast)).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining("1581") }));
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining("1581") }));
     // The mutation invalidates the drive-card query so it stops showing 1541 (D3).
     expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ["c64-drives"] });
     vi.useRealTimers();

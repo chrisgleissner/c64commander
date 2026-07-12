@@ -10,11 +10,13 @@ import type { C64API } from "@/lib/c64api";
 import { addLog } from "@/lib/logging";
 import { injectAutostart } from "@/lib/playback/autostart";
 
-let queue: Promise<void> = Promise.resolve();
+let queue: Promise<unknown> = Promise.resolve();
 let pendingCount = 0;
 // HARD19-017: bumped whenever the queue is drained (e.g. a device retarget).
 // Each injection captures the epoch at enqueue and skips if it has since changed.
 let injectionEpoch = 0;
+
+export type KeyboardBufferInjectionResult = Readonly<{ dropped: boolean }>;
 
 /**
  * HARD15-001: serializes every kernal-fallback keyboard-buffer injection
@@ -45,8 +47,8 @@ export const enqueueKeyboardBufferInjection = (
   api: C64API,
   payload: Uint8Array,
   options: { dropIfBusy?: boolean; pollIntervalMs?: number; maxAttempts?: number } = {},
-): Promise<void> => {
-  if (options.dropIfBusy && pendingCount > 1) return Promise.resolve();
+): Promise<KeyboardBufferInjectionResult> => {
+  if (options.dropIfBusy && pendingCount > 1) return Promise.resolve({ dropped: true });
   pendingCount += 1;
   // HARD19-017: capture the device this injection was enqueued for. The API is a
   // shared singleton whose getBaseUrl() resolves per request, so a saved-device
@@ -63,13 +65,13 @@ export const enqueueKeyboardBufferInjection = (
         currentHost: api.getDeviceHost(),
         drained: enqueuedEpoch !== injectionEpoch,
       });
-      return;
+      return { dropped: false } satisfies KeyboardBufferInjectionResult;
     }
     return injectAutostart(api, payload, {
       pollIntervalMs: options.pollIntervalMs,
       maxAttempts: options.maxAttempts,
       shouldAbort: () => !isStillValid(),
-    });
+    }).then(() => ({ dropped: false }) satisfies KeyboardBufferInjectionResult);
   });
   queue = scheduled.catch(() => undefined);
   return scheduled.finally(() => {
