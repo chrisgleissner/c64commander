@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import {
   ArrowDown,
   ArrowDownLeft,
@@ -72,15 +72,42 @@ const DPAD_CELLS: ReadonlyArray<{
  * semantics (see CursorPad).
  */
 export const VirtualDPad = ({ heldInputs, onHeldInputsChange, disabled = false, sizePx = 128 }: VirtualDPadProps) => {
+  // HARD19-003: cells overlap on axes (the "up" cell and the "up-right" cell
+  // both contribute "up"), so a blind per-cell delete on release dropped a
+  // direction another finger still physically held — a released second touch
+  // freed the first finger's axis mid-game. Track which CELLS this pad currently
+  // holds and rebuild its axis contribution from their union each change,
+  // mirroring RemoteInputSheet.recomputePhysicalHeldSet: only remove inputs THIS
+  // pad contributed last time and no longer holds, so other still-pressed cells
+  // (and any other input source, e.g. a touch-held FIRE) survive untouched.
+  const pressedCellKeysRef = useRef<Set<string>>(new Set());
+  const previousContributionRef = useRef<Set<JoystickInputName>>(new Set());
+
+  const applyPressedCells = useCallback(() => {
+    const contribution = new Set<JoystickInputName>();
+    pressedCellKeysRef.current.forEach((key) => {
+      DPAD_CELLS.find((cell) => cell?.key === key)?.inputs.forEach((input) => contribution.add(input));
+    });
+    const next = new Set(heldInputs);
+    previousContributionRef.current.forEach((input) => {
+      if (!contribution.has(input)) next.delete(input);
+    });
+    contribution.forEach((input) => next.add(input));
+    previousContributionRef.current = contribution;
+    onHeldInputsChange(next);
+  }, [heldInputs, onHeldInputsChange]);
+
   const setCellHeld = useCallback(
-    (inputs: JoystickInputName[], held: boolean) => {
+    (cellKey: string, held: boolean) => {
       if (disabled) return;
-      const next = new Set(heldInputs);
-      if (held) inputs.forEach((input) => next.add(input));
-      else inputs.forEach((input) => next.delete(input));
-      onHeldInputsChange(next);
+      // A release for a cell that never registered a press (e.g. a pointer that
+      // slid on from a grid gap with no matching pointerdown) is a harmless
+      // no-op here, so it can no longer free another finger's axis.
+      if (held) pressedCellKeysRef.current.add(cellKey);
+      else pressedCellKeysRef.current.delete(cellKey);
+      applyPressedCells();
     },
-    [disabled, heldInputs, onHeldInputsChange],
+    [disabled, applyPressedCells],
   );
 
   const isCellHeld = (inputs: JoystickInputName[]) => inputs.every((input) => heldInputs.has(input));
@@ -95,8 +122,8 @@ export const VirtualDPad = ({ heldInputs, onHeldInputsChange, disabled = false, 
           gridArea: cell.gridArea,
           pressed: isCellHeld(cell.inputs),
           disabled,
-          onPressStart: () => setCellHeld(cell.inputs, true),
-          onPressEnd: () => setCellHeld(cell.inputs, false),
+          onPressStart: () => setCellHeld(cell.key, true),
+          onPressEnd: () => setCellHeld(cell.key, false),
         }
       : null,
   );

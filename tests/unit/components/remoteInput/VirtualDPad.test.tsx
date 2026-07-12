@@ -6,12 +6,29 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { useState } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { VirtualDPad } from "@/components/remoteInput/VirtualDPad";
 import { EMPTY_HELD_JOYSTICK_INPUTS } from "@/lib/remoteInput/joystickHeldSet";
+import type { HeldJoystickInputs } from "@/lib/remoteInput/joystickHeldSet";
 
 const onHeldInputsChangeMock = vi.fn();
+
+// A stateful wrapper mirroring the real parent: onHeldInputsChange feeds back
+// into heldInputs, so multi-touch sequences accumulate as they do in production.
+const StatefulDPad = ({ spy }: { spy: (next: HeldJoystickInputs) => void }) => {
+  const [held, setHeld] = useState<HeldJoystickInputs>(EMPTY_HELD_JOYSTICK_INPUTS);
+  return (
+    <VirtualDPad
+      heldInputs={held}
+      onHeldInputsChange={(next) => {
+        spy(next);
+        setHeld(next);
+      }}
+    />
+  );
+};
 
 describe("VirtualDPad", () => {
   beforeEach(() => {
@@ -72,6 +89,37 @@ describe("VirtualDPad", () => {
     fireEvent.pointerDown(cell, { pointerId: 7 });
 
     expect(setPointerCaptureMock).toHaveBeenCalledWith(7);
+  });
+
+  it("HARD19-003: a second cell's release keeps a direction the first finger still holds", () => {
+    const spy = vi.fn();
+    render(<StatefulDPad spy={spy} />);
+
+    // Finger 1 holds "up".
+    fireEvent.pointerDown(screen.getByTestId("remote-input-dpad-up"), { pointerId: 1 });
+    expect(spy).toHaveBeenLastCalledWith(new Set(["up"]));
+
+    // Finger 2 grazes the "up-right" cell...
+    fireEvent.pointerDown(screen.getByTestId("remote-input-dpad-up-right"), { pointerId: 2 });
+    expect(spy).toHaveBeenLastCalledWith(new Set(["up", "right"]));
+
+    // ...and lifts. "up" must survive because finger 1 still holds the up cell;
+    // only the diagonal's own "right" contribution is released.
+    fireEvent.pointerUp(screen.getByTestId("remote-input-dpad-up-right"), { pointerId: 2 });
+    expect(spy).toHaveBeenLastCalledWith(new Set(["up"]));
+  });
+
+  it("HARD19-003: an unmatched cell release (slid-on pointer, no prior press) frees nothing", () => {
+    const spy = vi.fn();
+    render(<StatefulDPad spy={spy} />);
+
+    fireEvent.pointerDown(screen.getByTestId("remote-input-dpad-up"), { pointerId: 1 });
+    expect(spy).toHaveBeenLastCalledWith(new Set(["up"]));
+
+    // A pointer slides onto the "up-left" cell and releases with no matching
+    // pointerdown on it — this must not delete the "up" the up cell holds.
+    fireEvent.pointerUp(screen.getByTestId("remote-input-dpad-up-left"), { pointerId: 2 });
+    expect(spy).toHaveBeenLastCalledWith(new Set(["up"]));
   });
 
   it("marks a cell pressed only when every one of its directions is held", () => {
