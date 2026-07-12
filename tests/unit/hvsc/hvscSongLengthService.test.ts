@@ -427,6 +427,32 @@ describe("hvscSongLengthService", () => {
       expect(mockFacade.reloadOnConfigChange).toHaveBeenCalledTimes(1);
       expect(saveHvscBrowseIndexSnapshot).toHaveBeenCalledTimes(1);
     });
+
+    it("HARD19-016: runs a forced reload even when a cold-start load is still in flight", async () => {
+      vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
+      vi.mocked(Filesystem.readdir).mockResolvedValue({ files: [] } as any);
+      // Hold the cold-start load open so the forced reload arrives mid-flight.
+      let resolveColdStart!: () => void;
+      vi.mocked(mockFacade.loadOnColdStart).mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveColdStart = resolve;
+          }),
+      );
+
+      const coldStart = ensureHvscSonglengthsReadyOnColdStart();
+      const forcedReload = reloadHvscSonglengthsOnConfigChange({ force: true });
+
+      // Previously the forced reload was swallowed by the in-flight load and
+      // reloadOnConfigChange was never called; it must instead be chained.
+      expect(mockFacade.reloadOnConfigChange).not.toHaveBeenCalled();
+
+      resolveColdStart();
+      await coldStart;
+      await forcedReload;
+
+      expect(mockFacade.reloadOnConfigChange).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("exportHvscSonglengthsSnapshot", () => {

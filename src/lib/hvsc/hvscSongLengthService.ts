@@ -54,6 +54,10 @@ const facade = new SongLengthServiceFacade(backend, {
 
 let hasAttemptedColdStartLoad = false;
 let activeLoad: Promise<void> | null = null;
+// HARD19-016: a single coalesced forced reload chained to run AFTER the current
+// in-flight load, so a post-ingestion force:true is never swallowed by a
+// pre-commit (un-forced) load that discovered nothing.
+let pendingForcedReload: Promise<void> | null = null;
 
 const isHvscInstalled = () => loadHvscState().installedVersion > 0;
 
@@ -276,16 +280,38 @@ const syncHvscBrowseProjection = async (trigger: "cold-start" | "config-change")
   });
 };
 
-const runLoad = async (trigger: "cold-start" | "config-change", force = false) => {
-  if (activeLoad) {
-    await activeLoad;
-    return;
-  }
+const startLoad = (trigger: "cold-start" | "config-change", force: boolean) => {
   activeLoad = loadInternal(trigger, force).finally(() => {
     activeLoad = null;
     hasAttemptedColdStartLoad = true;
   });
-  await activeLoad;
+  return activeLoad;
+};
+
+const runLoad = async (trigger: "cold-start" | "config-change", force = false) => {
+  if (activeLoad) {
+    if (!force) {
+      // An un-forced request is satisfied by whatever load is already running.
+      await activeLoad;
+      return;
+    }
+    // HARD19-016: a forced reload must actually run — the in-flight load may be
+    // a pre-commit (un-forced) discovery that loads nothing, so awaiting it and
+    // returning replays the empty result (every song stuck at the 3:00 default).
+    // Chain exactly one forced follow-up after the active load settles;
+    // concurrent forced requests coalesce onto the same pending reload.
+    if (!pendingForcedReload) {
+      pendingForcedReload = activeLoad
+        .catch(() => {})
+        .then(() => startLoad(trigger, true))
+        .finally(() => {
+          pendingForcedReload = null;
+        });
+    }
+    await pendingForcedReload;
+    return;
+  }
+  await startLoad(trigger, force);
 };
 
 export const ensureHvscSonglengthsReadyOnColdStart = async () => {
