@@ -77,6 +77,33 @@ describe("evaluateNewDeviceReachability", () => {
     expect(deps.discover).not.toHaveBeenCalled();
   });
 
+  it("HARD19-036: degrades to a plain unreachable verdict within the bound when the rescue scan never resolves", async () => {
+    vi.useFakeTimers();
+    addLog.mockClear();
+    try {
+      const deps = {
+        probe: vi.fn(async () => ({ ok: false, error: "dns", deviceInfo: null }) as never),
+        // Simulates the rescue scan queued behind an in-flight LAN scan on the
+        // native single-thread executor — it never resolves.
+        discover: vi.fn(() => new Promise<never>(() => {})),
+      };
+
+      const verdict = evaluateNewDeviceReachability({ host: "c64u", deviceHost: "c64u:80" }, deps);
+      // Let the probe settle, then advance past the rescue-scan timeout bound.
+      await vi.advanceTimersByTimeAsync(6000);
+      const result = await verdict;
+
+      expect(result).toEqual({ status: "unreachable", suggestedAddress: null, suggestedHostname: null });
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        "Reachability IP-rescue discovery timed out",
+        expect.objectContaining({ host: "c64u", timeoutMs: 6000 }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("falls back to a plain unreachable verdict when discovery throws", async () => {
     addLog.mockClear();
     const deps = {
