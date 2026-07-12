@@ -177,12 +177,15 @@ describe("TypeKeyboard", () => {
   });
 
   describe("high-value key visibility", () => {
-    it.each(["compact", "medium"] as const)("exposes every high-value direct virtual key in the %s profile", (profile) => {
-      renderKeyboard(profile);
-      for (const testId of HIGH_VALUE_TEST_IDS) {
-        expect(screen.getByTestId(testId), `${profile} missing ${testId}`).toBeInTheDocument();
-      }
-    });
+    it.each(["compact", "medium"] as const)(
+      "exposes every high-value direct virtual key in the %s profile",
+      (profile) => {
+        renderKeyboard(profile);
+        for (const testId of HIGH_VALUE_TEST_IDS) {
+          expect(screen.getByTestId(testId), `${profile} missing ${testId}`).toBeInTheDocument();
+        }
+      },
+    );
 
     it("exposes every high-value direct virtual key (merged pairs included) in the expanded profile", () => {
       renderKeyboard("expanded");
@@ -294,6 +297,29 @@ describe("TypeKeyboard", () => {
       // Once SHIFT is released, cursor taps revert to the unshifted direction.
       fireEvent.click(screen.getByTestId("remote-input-key-cursor-up-down"));
       expect(h.onCursor).toHaveBeenLastCalledWith("down");
+    });
+
+    it("HARD19-001: kernal-fallback expanded merged cursor honors a SHIFT latch (up/left reachable)", () => {
+      const h = renderKeyboard("expanded", "kernal-fallback");
+
+      // Default (no modifier) resolves to the unshifted direction.
+      fireEvent.click(screen.getByTestId("remote-input-key-cursor-up-down"));
+      expect(h.onCursor).toHaveBeenLastCalledWith("down");
+
+      // On this tier SHIFT is a one-shot LATCH (tap, not hold). Latch it, then
+      // tap the merged key — previously the latch was consumed with "down".
+      fireEvent.click(screen.getByTestId("remote-input-key-shift"));
+      fireEvent.click(screen.getByTestId("remote-input-key-cursor-up-down"));
+      expect(h.onCursor).toHaveBeenLastCalledWith("up");
+
+      // The one-shot latch is consumed: the next tap reverts to unshifted.
+      fireEvent.click(screen.getByTestId("remote-input-key-cursor-up-down"));
+      expect(h.onCursor).toHaveBeenLastCalledWith("down");
+
+      // Left is likewise reachable via the latch.
+      fireEvent.click(screen.getByTestId("remote-input-key-shift"));
+      fireEvent.click(screen.getByTestId("remote-input-key-cursor-left-right"));
+      expect(h.onCursor).toHaveBeenLastCalledWith("left");
     });
 
     it("shifts the next key only while SHIFT is HELD, and a bare SHIFT tap does not latch onto it", () => {

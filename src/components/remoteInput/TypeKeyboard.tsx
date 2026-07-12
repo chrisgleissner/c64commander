@@ -522,9 +522,16 @@ export const TypeKeyboard = ({
         onKey([...action.inputs, ...modifiers]);
         break;
       }
-      case "cursor":
-        onCursor(action.direction);
+      case "cursor": {
+        // HARD19-001: the expanded profile's merged CRSR keys encode only the
+        // unshifted direction (down/right). Honor a pending SHIFT latch / SHIFT
+        // LOCK so cursor up/left are reachable on the kernal-fallback tier too
+        // (sendCursor sends a dedicated PETSCII byte per direction). The latch is
+        // still consumed by the clear below, mirroring the full-tier handler.
+        const shiftHeld = activeModifiers.has("left_shift") || shiftLocked;
+        onCursor(shiftHeld ? CURSOR_SHIFT_COMPLEMENT[action.direction] : action.direction);
         break;
+      }
       case "special":
         onSpecialKey(action.key);
         break;
