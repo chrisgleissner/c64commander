@@ -36,6 +36,7 @@ import {
   deleteCachedArchive,
 } from "./hvscFilesystem";
 import { loadHvscState, updateHvscState, isUpdateApplied, markUpdateApplied, type HvscState } from "./hvscStateStore";
+import { invalidateHvscHydration } from "./hvscHydrationControl";
 import { getDefaultHvscStatusSummary, loadHvscStatusSummary, saveHvscStatusSummary } from "./hvscStatusStore";
 import { getHvscSonglengthsStats, reloadHvscSonglengthsOnConfigChange } from "./hvscSongLengthService";
 import { addErrorLog, addLog } from "@/lib/logging";
@@ -166,6 +167,11 @@ export const resetHvscLibraryData = async (): Promise<void> => {
   if (runtimeState.activeIngestionRunning) {
     throw new Error("Cannot reset HVSC while preparation is running");
   }
+
+  // HARD19-019: invalidate any in-flight metadata hydration BEFORE deleting the
+  // index, so a long-running hydrator stops instead of re-persisting the browse
+  // index this reset is about to clear (zombie resurrection).
+  invalidateHvscHydration();
 
   await cleanupStaleStagingDir();
   await resetLibraryRoot();
@@ -864,6 +870,10 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
     throw error;
   }
   resetHvscProgressSummaryStage();
+  // HARD19-019: an install/update supersedes any in-flight hydration of the
+  // previous library — invalidate it so a stale hydrator cannot clobber the
+  // fresh snapshot this ingestion is about to write.
+  invalidateHvscHydration();
   runtimeState.activeIngestionRunning = true;
   const ingestionId = crypto.randomUUID();
   const emitProgress = createProgressEmitter(ingestionId);
@@ -1118,6 +1128,9 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
     addErrorLog("HVSC cached ingestion blocked", { error: error.message });
     throw error;
   }
+  // HARD19-019: see installOrUpdateHvsc — invalidate stale hydration before
+  // this ingestion rewrites the browse index.
+  invalidateHvscHydration();
   runtimeState.activeIngestionRunning = true;
   const ingestionId = crypto.randomUUID();
   const emitProgress = createProgressEmitter(ingestionId);

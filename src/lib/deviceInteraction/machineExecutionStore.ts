@@ -8,7 +8,7 @@
 
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import { buildEnabledSidUnmuteUpdates } from "@/lib/config/sidVolumeControl";
-import { hydratePlaybackSnapshot, clearPersistedPauseMute } from "@/pages/playFiles/playbackSessionPersistence";
+import { clearPersistedPauseMute, hydratePlaybackSnapshot } from "@/lib/playback/playbackSessionPersistence";
 
 // HARD12-020: the C64's machine pause/resume state has no device-side read
 // endpoint, so Home and Play cannot converge by polling. Home previously

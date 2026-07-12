@@ -59,11 +59,16 @@ import {
   discardDiskWriteBack,
   hasShownDiskWriteBackAdvisory,
   markDiskWriteBackAdvisoryShown,
+  hasShownArchiveDiskWriteBackAdvisory,
+  markArchiveDiskWriteBackAdvisoryShown,
+  getMaterializedWorkPath,
+  getMaterializedDiskId,
+  saveArchiveDiskCopyToLocalFolder,
   type DiskMountWriteBackDependencies,
+  type ArchiveDiskCopyOffer,
 } from "@/lib/disks/diskMount";
-import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
-import { resolveFtpConnectionOptions } from "@/lib/ftp/ftpConfig";
-import { base64ToUint8, uint8ToBase64 } from "@/lib/sid/sidUtils";
+import { ToastAction } from "@/components/ui/toast";
+import { buildDiskWriteBackDependencies } from "@/lib/disks/diskWriteBackDependencies";
 import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 import {
   createDiskEntry,
@@ -294,27 +299,10 @@ export const HomeDiskManager = () => {
       staleTime: 0,
     });
   }, [api, queryClient]);
-  // HARD18-025: fresh per-call (mirrors HomePage's createHomeReuWorkflow) so
-  // host/port/password are always resolved against the currently selected
-  // device, never captured stale in a closure.
-  const buildDiskWriteBackDependencies = useCallback((): DiskMountWriteBackDependencies => {
-    return {
-      listRemoteStorageRoots: async () => {
-        const ftpOptions = await resolveFtpConnectionOptions();
-        const result = await listFtpDirectory({ ...ftpOptions, path: "/" });
-        return result.entries.filter((entry) => entry.type === "dir").map((entry) => entry.name);
-      },
-      readRemoteFile: async (path) => {
-        const ftpOptions = await resolveFtpConnectionOptions();
-        const result = await readFtpFile({ ...ftpOptions, path });
-        return base64ToUint8(result.data);
-      },
-      writeRemoteFile: async (path, bytes) => {
-        const ftpOptions = await resolveFtpConnectionOptions();
-        await writeFtpFile({ ...ftpOptions, path, data: uint8ToBase64(bytes) });
-      },
-    };
-  }, []);
+  // HARD18-025 / HARD19-008: the FTP write-back deps are built by the shared
+  // buildDiskWriteBackDependencies (host/port/password resolved fresh per call
+  // against the currently selected device), so the Play page's executePlayPlan
+  // disk case can pass the SAME deps.
   const runDriveMutationWithSettledPolling = useCallback(
     async <T,>(operation: () => Promise<T>) => {
       const pollingPause = pollingPauseRegistry.acquirePause();
@@ -495,7 +483,18 @@ export const HomeDiskManager = () => {
             // image). See HARD9-038.
             const driveInfo = drivesData?.drives?.find((entry) => entry[drive])?.[drive];
             const polledBasename = driveInfo?.image_file ? getDiskName(driveInfo.image_file) : null;
-            if (polledBasename && polledBasename === getDiskName(overriddenDisk.path)) {
+            // HARD19-007: a materialized mount path-mounts an internal work file
+            // (c64commander-disk-work-<drive>.<type>), so the poll reports the work
+            // filename, never the original disk's basename — which cleared the
+            // override on the first poll, degrading the label to the work filename
+            // and losing rotation + delete-protection. Also keep the override when
+            // the poll shows the drive's expected work file.
+            const workPath = getMaterializedWorkPath(drive as "a" | "b");
+            const workBasename = workPath ? getDiskName(workPath) : null;
+            if (
+              polledBasename &&
+              (polledBasename === getDiskName(overriddenDisk.path) || polledBasename === workBasename)
+            ) {
               return;
             }
           }
@@ -717,6 +716,20 @@ export const HomeDiskManager = () => {
           title: "Changes to this disk won't be saved back",
           description: "This disk isn't on writable local storage, so in-game saves will be lost when it's remounted.",
         });
+      } else if (
+        // HARD19-014 (D2): an archive/CommoServe disk materializes but its write-back
+        // only persists to a short-lived in-memory cache, so warn (once) with
+        // session-scoped wording that its saves are not durable.
+        outcome?.persistence === "materialized" &&
+        outcome.writeBackTarget?.kind === "archive-cache" &&
+        !hasShownArchiveDiskWriteBackAdvisory()
+      ) {
+        markArchiveDiskWriteBackAdvisoryShown();
+        toast({
+          title: "Changes are kept only for this session",
+          description:
+            "This disk is from an online archive, so in-game saves are held temporarily and are lost when the app restarts or after a while. Copy it to a local folder to keep changes.",
+        });
       }
     } catch (error) {
       if (mountCompletionGenerationRef.current[drive] !== mountGeneration) {
@@ -764,6 +777,32 @@ export const HomeDiskManager = () => {
     }
   });
 
+  // HARD19-014 (D2): let the user persist a durable local copy of an archive/
+  // CommoServe disk's session-only changes (offered on eject). Cancelling the
+  // folder picker is silent; a lost cache or a write failure is surfaced.
+  const handleSaveArchiveCopy = async (offer: ArchiveDiskCopyOffer) => {
+    try {
+      const result = await saveArchiveDiskCopyToLocalFolder(offer);
+      if (result.saved) {
+        toast({ title: "Saved a local copy", description: `${offer.fileName} saved to the chosen folder.` });
+      } else if (result.reason === "no-bytes") {
+        toast({
+          title: "Couldn't save a copy",
+          description: "This disk's changes are no longer available to save.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      reportUserError({
+        operation: "DISK_SAVE_LOCAL_COPY",
+        title: "Save a local copy failed",
+        description: (error as Error).message,
+        error,
+        context: { fileName: offer.fileName },
+      });
+    }
+  };
+
   const handleEject = trace(async (drive: DriveKey) => {
     setDriveMutationPending((prev) => ({ ...prev, [drive]: true }));
     try {
@@ -771,7 +810,10 @@ export const HomeDiskManager = () => {
       // HARD18-025: read the materialized work-dir image back and re-persist
       // it to the source now that the drive has released it. Best-effort -
       // a failed write-back must not undo the eject the user just asked for.
-      const writeBackResult = await finalizeDiskWriteBack(drive, buildDiskWriteBackDependencies());
+      // HARD19-005: pass the current device so a write-back only runs against the
+      // device the disk was actually materialized on — never overwriting the local
+      // source with a different device's stale work file.
+      const writeBackResult = await finalizeDiskWriteBack(drive, buildDiskWriteBackDependencies(), api.getDeviceHost());
       mountedByDriveSetAtRef.current[drive] = Date.now();
       setMountedByDrive((prev) => ({ ...prev, [drive]: "" }));
       setDriveErrors((prev) => ({ ...prev, [drive]: "" }));
@@ -781,10 +823,33 @@ export const HomeDiskManager = () => {
           description: writeBackResult.error.message,
           variant: "destructive",
         });
+      } else if (!writeBackResult.attempted && writeBackResult.reason === "device-mismatch") {
+        // HARD19-005: the disk was mounted on another device; its saves were not
+        // written back here (doing so would corrupt this device's work file).
+        toast({
+          title: `${buildDriveLabel(drive)} ejected — changes not saved here`,
+          description: "This disk was mounted on a different device. Switch back to that device to save its changes.",
+          variant: "destructive",
+        });
       } else {
+        // HARD19-014 (D2): after a successful archive/CommoServe write-back (which
+        // only lands in the session cache), offer to save a durable local copy.
+        const archiveCopyOffer =
+          writeBackResult.attempted && writeBackResult.success ? writeBackResult.archiveCopyOffer : undefined;
         toast({
           title: "Disk ejected",
-          description: `${buildDriveLabel(drive)} cleared`,
+          description: archiveCopyOffer
+            ? `${buildDriveLabel(drive)} cleared. Changes are kept only for this session — save a local copy to keep them.`
+            : `${buildDriveLabel(drive)} cleared`,
+          ...(archiveCopyOffer
+            ? {
+                action: (
+                  <ToastAction altText="Save a local copy" onClick={() => void handleSaveArchiveCopy(archiveCopyOffer)}>
+                    Save a local copy
+                  </ToastAction>
+                ),
+              }
+            : {}),
         });
       }
     } catch (error) {
@@ -891,6 +956,14 @@ export const HomeDiskManager = () => {
     if (mountedOverride === "") return null;
     if (mountedOverride) return mountedOverride;
     if (!driveInfo?.image_file) return null;
+    // HARD19-007: a materialized mount path-mounts an internal work file, so the
+    // poll reports the work filename. Map it back to the materialized disk so
+    // rotation and delete-while-mounted protection keep working after the
+    // component's optimistic override is lost.
+    const workPath = getMaterializedWorkPath(drive);
+    if (workPath && getDiskName(driveInfo.image_file) === getDiskName(workPath)) {
+      return getMaterializedDiskId(drive);
+    }
     const fullPath = buildDrivePath(driveInfo.image_path, driveInfo.image_file);
     if (!fullPath) return null;
     const disk = diskLibrary.disks.find((entry) => entry.location === "ultimate" && entry.path === fullPath);

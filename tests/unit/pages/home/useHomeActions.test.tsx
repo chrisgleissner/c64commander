@@ -167,6 +167,11 @@ vi.mock("@/lib/deviceInteraction/machineTakeoverEvent", () => ({
   publishMachineTakeover: (...args: unknown[]) => publishMachineTakeoverMock(...args),
 }));
 
+const capturePauseMuteToPersistedSnapshotMock = vi.fn(async () => false);
+vi.mock("@/lib/deviceInteraction/pauseMuteCapture", () => ({
+  capturePauseMuteToPersistedSnapshot: (...args: unknown[]) => capturePauseMuteToPersistedSnapshotMock(...args),
+}));
+
 import { useHomeActions } from "@/pages/home/hooks/useHomeActions";
 import type { SnapshotStorageEntry } from "@/lib/snapshot/snapshotTypes";
 import { CpuRestoreUnsupportedError } from "@/lib/snapshot/cpu/restoreCart";
@@ -176,6 +181,7 @@ describe("useHomeActions", () => {
     vi.clearAllMocks();
     machineExecutionSnapshot = { state: "running", pauseMutePending: false };
     restorePauseMuteFromPersistedSnapshotMock.mockResolvedValue(true);
+    capturePauseMuteToPersistedSnapshotMock.mockResolvedValue(false);
     statusState.isConnected = true;
     drivesState.value = null;
     pauseMutateAsyncMock.mockResolvedValue(undefined);
@@ -249,6 +255,40 @@ describe("useHomeActions", () => {
       }),
     );
     expect(result.current.pauseResumePending).toBe(false);
+  });
+
+  it("mutes the SID mixer before pausing and records pauseMutePending (HARD19-010)", async () => {
+    capturePauseMuteToPersistedSnapshotMock.mockResolvedValue(true);
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handlePauseResume();
+    });
+
+    expect(capturePauseMuteToPersistedSnapshotMock).toHaveBeenCalledTimes(1);
+    expect(pauseMutateAsyncMock).toHaveBeenCalledTimes(1);
+    // Mute happened before the machine pause.
+    const captureOrder = capturePauseMuteToPersistedSnapshotMock.mock.invocationCallOrder[0];
+    const pauseOrder = pauseMutateAsyncMock.mock.invocationCallOrder[0];
+    expect(captureOrder).toBeLessThan(pauseOrder);
+    expect(setMachineExecutionPausedMock).toHaveBeenCalledWith({ pauseMutePending: true });
+  });
+
+  it("rolls back the SID mute when the machine pause fails (HARD19-010)", async () => {
+    capturePauseMuteToPersistedSnapshotMock.mockResolvedValue(true);
+    pauseMutateAsyncMock.mockRejectedValueOnce(new Error("pause failed"));
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handlePauseResume();
+    });
+
+    // A failed pause must not leave a running machine silent: unmute is restored.
+    expect(restorePauseMuteFromPersistedSnapshotMock).toHaveBeenCalledTimes(1);
+    expect(setMachineExecutionPausedMock).not.toHaveBeenCalled();
+    expect(reportUserErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({ operation: "HOME_MACHINE_PAUSE_RESUME" }),
+    );
   });
 
   it("saves program snapshot and shows success toast", async () => {
@@ -359,6 +399,71 @@ describe("useHomeActions", () => {
     expect(result.current.powerOffDialogOpen).toBe(false);
     expect(powerOffMutateAsyncMock).toHaveBeenCalledTimes(1);
     expect(toastMock).toHaveBeenCalledWith({ title: "Powering off..." });
+  });
+
+  it("publishes the machine takeover after a successful power off (HARD19-031)", async () => {
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.confirmPowerOff();
+      await Promise.resolve();
+    });
+
+    expect(powerOffMutateAsyncMock).toHaveBeenCalledTimes(1);
+    expect(publishMachineTakeoverMock).toHaveBeenCalledWith({ reason: "home-reset", label: "Power off" });
+  });
+
+  it("does not publish the machine takeover when the power off fails (HARD19-031 success-gated)", async () => {
+    powerOffMutateAsyncMock.mockRejectedValueOnce(new Error("power off failed"));
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.confirmPowerOff();
+      await Promise.resolve();
+    });
+
+    expect(publishMachineTakeoverMock).not.toHaveBeenCalled();
+  });
+
+  it("publishes the machine takeover after a successful snapshot restore (HARD19-011)", async () => {
+    const snapshot: SnapshotStorageEntry = {
+      id: "snap-restore",
+      filename: "c64-program-20260101-120000.c64snap",
+      bytesBase64: "",
+      createdAt: "2026-01-01T12:00:00.000Z",
+      snapshotType: "program",
+      metadata: {
+        snapshot_type: "program",
+        display_ranges: ["$0000–$00FF"],
+        created_at: "2026-01-01 12:00:00",
+        label: "Boulder Dash",
+      },
+    };
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handleRestoreSnapshot(snapshot);
+      await Promise.resolve();
+    });
+
+    expect(publishMachineTakeoverMock).toHaveBeenCalledWith({ reason: "home-reset", label: "Boulder Dash" });
+  });
+
+  it("restores a pending pause-mute on a reset-family reboot so a reboot-while-paused is not left muted (HARD19-032)", async () => {
+    // The user paused SID playback from Play (muting the mixer, pauseMutePending)
+    // then reboots from Home instead of resuming.
+    machineExecutionSnapshot = { state: "paused", pauseMutePending: true };
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handleRebootClearMemory();
+      await Promise.resolve();
+    });
+
+    // A reboot always ends running, so the muted mixer must be restored rather
+    // than stranded silent; the takeover still fires.
+    expect(restorePauseMuteFromPersistedSnapshotMock).toHaveBeenCalledTimes(1);
+    expect(publishMachineTakeoverMock).toHaveBeenCalledWith({ reason: "home-reset", label: "Reboot (Clr Mem)" });
   });
 
   it("reports folder selection failures and clears task pending flag", async () => {

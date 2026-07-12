@@ -200,7 +200,7 @@ describe("useHvscLibrary", () => {
         }),
     );
 
-    const { unmount } = renderHook(() => useHvscLibrary());
+    const { unmount } = renderHook(() => useHvscLibrary(true));
 
     unmount();
     resolveListener?.({ remove });
@@ -214,7 +214,7 @@ describe("useHvscLibrary", () => {
     mocks.isHvscBridgeAvailableMock.mockReturnValue(false);
     mocks.isHvscIngestionBridgeAvailableMock.mockReturnValue(false);
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscAvailable).toBe(false));
     expect(result.current.hvscLibraryAvailable).toBe(false);
@@ -222,6 +222,40 @@ describe("useHvscLibrary", () => {
     expect(result.current.hvscPhase).toBe("idle");
     expect(mocks.getHvscStatusMock).not.toHaveBeenCalled();
     expect(mocks.getHvscCacheStatusMock).not.toHaveBeenCalled();
+  });
+
+  it("HARD19-026: runs no background native lifecycle when hvsc_enabled is false, even with the bridge installed", async () => {
+    // Bridge present and library installed+ready — the ONLY thing that should
+    // keep the hook dormant is the disabled flag. Previously status/recover/
+    // hydration fired regardless of the flag (minutes of native I/O).
+    mocks.isHvscBridgeAvailableMock.mockReturnValue(true);
+    mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 42, ingestionState: "ready" }));
+
+    renderHook(() => useHvscLibrary(false));
+
+    // Give the effects a couple of microtasks to (not) fire.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mocks.getHvscStatusMock).not.toHaveBeenCalled();
+    expect(mocks.recoverStaleIngestionStateMock).not.toHaveBeenCalled();
+    expect(mocks.ensureHvscMetadataHydrationMock).not.toHaveBeenCalled();
+  });
+
+  it("HARD19-026: resumes the native lifecycle when hvsc_enabled flips true (re-enable path)", async () => {
+    mocks.isHvscBridgeAvailableMock.mockReturnValue(true);
+    mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 42, ingestionState: "ready" }));
+
+    const { rerender } = renderHook(({ enabled }) => useHvscLibrary(enabled), {
+      initialProps: { enabled: false },
+    });
+    await Promise.resolve();
+    expect(mocks.getHvscStatusMock).not.toHaveBeenCalled();
+
+    rerender({ enabled: true });
+
+    await waitFor(() => expect(mocks.getHvscStatusMock).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.ensureHvscMetadataHydrationMock).toHaveBeenCalled());
   });
 
   it("marks stale in-progress summaries as interrupted when ingestion is no longer active", async () => {
@@ -234,7 +268,7 @@ describe("useHvscLibrary", () => {
     );
     mocks.getHvscStatusMock.mockResolvedValue(createStatus({ ingestionState: "idle" }));
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscStatus).toMatchObject({ ingestionState: "idle" }));
     await waitFor(() => expect(mocks.saveHvscStatusSummaryMock).toHaveBeenCalled());
@@ -249,7 +283,7 @@ describe("useHvscLibrary", () => {
   it("logs listener registration failures without crashing the hook", async () => {
     mocks.addHvscProgressListenerMock.mockRejectedValueOnce(new Error("register failed"));
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() =>
       expect(mocks.addErrorLogMock).toHaveBeenCalledWith(
@@ -268,7 +302,7 @@ describe("useHvscLibrary", () => {
       songs: [{ id: 1, virtualPath: "/MUSICIANS/A/demo.sid", fileName: "demo.sid" }],
     });
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(mocks.getHvscFolderListingMock).toHaveBeenCalledWith("/"));
     await waitFor(() => expect(result.current.selectedHvscFolder).toBe("/MUSICIANS"));
@@ -287,7 +321,7 @@ describe("useHvscLibrary", () => {
       requiredUpdates: [43],
     });
 
-    renderHook(() => useHvscLibrary());
+    renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(mocks.markHvscUpdateCheckAtMock).toHaveBeenCalledTimes(1));
     expect(mocks.checkForHvscUpdatesMock).toHaveBeenCalledTimes(1);
@@ -300,7 +334,7 @@ describe("useHvscLibrary", () => {
 
   it("reports folder loading failures", async () => {
     mocks.getHvscFolderListingMock.mockRejectedValueOnce(new Error("browse failed"));
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await act(async () => {
       await result.current.loadHvscFolder("/broken");
@@ -319,7 +353,7 @@ describe("useHvscLibrary", () => {
     mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 42 }));
     mocks.getHvscFolderListingMock.mockRejectedValueOnce(new Error("listing unavailable"));
 
-    renderHook(() => useHvscLibrary());
+    renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(mocks.getHvscFolderListingMock).toHaveBeenCalledWith("/"));
     await waitFor(() =>
@@ -336,7 +370,7 @@ describe("useHvscLibrary", () => {
     mocks.checkForHvscUpdatesMock.mockResolvedValue({ latestVersion: 5, installedVersion: 5, requiredUpdates: [] });
     mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 5 }));
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await act(async () => {
       await result.current.handleHvscInstall();
@@ -364,7 +398,7 @@ describe("useHvscLibrary", () => {
       }),
     );
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await act(async () => {
       await result.current.handleHvscInstall();
@@ -386,7 +420,7 @@ describe("useHvscLibrary", () => {
 
   it("reports install failures and exposes the inline error", async () => {
     mocks.installOrUpdateHvscMock.mockRejectedValueOnce(new Error("download failed"));
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await act(async () => {
       await result.current.handleHvscInstall();
@@ -407,7 +441,7 @@ describe("useHvscLibrary", () => {
     mocks.installOrUpdateHvscMock.mockRejectedValueOnce(
       Object.assign(new Error("native cancellation"), { code: "HVSC_CANCELLED" }),
     );
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await act(async () => {
       await result.current.handleHvscInstall();
@@ -420,7 +454,7 @@ describe("useHvscLibrary", () => {
 
   it("does not treat a cancellation-like install message as expected cancellation without a code", async () => {
     mocks.installOrUpdateHvscMock.mockRejectedValueOnce(new Error("cancelled by network peer"));
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await act(async () => {
       await result.current.handleHvscInstall();
@@ -436,7 +470,7 @@ describe("useHvscLibrary", () => {
   });
 
   it("refuses ingest when there is no cached HVSC data", async () => {
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await act(async () => {
       await result.current.handleHvscIngest();
@@ -450,7 +484,7 @@ describe("useHvscLibrary", () => {
     mocks.getHvscCacheStatusMock.mockResolvedValue({ baselineVersion: 3, updateVersions: [] });
     mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 3 }));
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
     await waitFor(() => expect(result.current.hvscCanIngest).toBe(true));
 
     await act(async () => {
@@ -467,7 +501,7 @@ describe("useHvscLibrary", () => {
   });
 
   it("starts the full install flow when HVSC is first requested without cached data", async () => {
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await act(async () => {
       await result.current.runHvscPreparation();
@@ -501,7 +535,7 @@ describe("useHvscLibrary", () => {
       }),
     );
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("ERROR"));
 
     await act(async () => {
@@ -520,7 +554,7 @@ describe("useHvscLibrary", () => {
       }),
     );
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("READY"));
 
     await act(async () => {
@@ -540,7 +574,7 @@ describe("useHvscLibrary", () => {
     );
     mocks.getHvscStatusMock.mockRejectedValueOnce(new Error("status refresh failed"));
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await act(async () => {
       await result.current.handleHvscCancel();
@@ -559,7 +593,7 @@ describe("useHvscLibrary", () => {
 
   it("reports cancel failures", async () => {
     mocks.cancelHvscInstallMock.mockRejectedValueOnce(new Error("cancel failed"));
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await act(async () => {
       await result.current.handleHvscCancel();
@@ -582,7 +616,7 @@ describe("useHvscLibrary", () => {
         lastUpdatedAt: new Date().toISOString(),
       }),
     );
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await act(async () => {
       await result.current.handleHvscReset();
@@ -604,7 +638,7 @@ describe("useHvscLibrary", () => {
   });
 
   it("derives download, extraction, and failure state from progress events", async () => {
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(progressListener).not.toBeNull());
 
@@ -672,7 +706,7 @@ describe("useHvscLibrary", () => {
       songs: [],
     });
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
     await waitFor(() => expect(result.current.hvscFolders).toHaveLength(3));
 
     act(() => {

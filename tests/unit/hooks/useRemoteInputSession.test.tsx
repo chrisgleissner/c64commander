@@ -14,7 +14,7 @@ const injectAutostartMock = vi.fn(async () => undefined);
 const addErrorLogMock = vi.fn();
 
 vi.mock("@/lib/c64api", () => ({
-  getC64API: () => ({ sendMachineInputBatch: sendMachineInputBatchMock }),
+  getC64API: () => ({ sendMachineInputBatch: sendMachineInputBatchMock, getDeviceHost: () => "test-host" }),
 }));
 
 vi.mock("@/lib/playback/autostart", () => ({
@@ -171,7 +171,11 @@ describe("useRemoteInputSession", () => {
     await act(async () => {
       fallback.result.current.sendChar("a");
     });
-    expect(injectAutostartMock).toHaveBeenCalledWith(expect.anything(), new Uint8Array([0x41]));
+    expect(injectAutostartMock).toHaveBeenCalledWith(
+      expect.anything(),
+      new Uint8Array([0x41]),
+      expect.objectContaining({ shouldAbort: expect.any(Function) }),
+    );
   });
 
   it("sends an arbitrary keyboard chord directly on the full tier, including commodore/ctrl modifiers", async () => {
@@ -198,7 +202,11 @@ describe("useRemoteInputSession", () => {
     await act(async () => {
       result.current.sendKeyboardInputs(["a", "left_shift"]);
     });
-    expect(injectAutostartMock).toHaveBeenCalledWith(expect.anything(), new Uint8Array([0x41]));
+    expect(injectAutostartMock).toHaveBeenCalledWith(
+      expect.anything(),
+      new Uint8Array([0x41]),
+      expect.objectContaining({ shouldAbort: expect.any(Function) }),
+    );
   });
 
   it("round-trips a shifted digit (the BASIC quote) through the kernal fallback char path (HARD15-003)", async () => {
@@ -206,7 +214,11 @@ describe("useRemoteInputSession", () => {
     await act(async () => {
       result.current.sendKeyboardInputs(["2", "left_shift"]);
     });
-    expect(injectAutostartMock).toHaveBeenCalledWith(expect.anything(), new Uint8Array([0x22]));
+    expect(injectAutostartMock).toHaveBeenCalledWith(
+      expect.anything(),
+      new Uint8Array([0x22]),
+      expect.objectContaining({ shouldAbort: expect.any(Function) }),
+    );
   });
 
   it("serializes concurrent kernal-fallback injections instead of racing them (HARD15-001)", async () => {
@@ -232,8 +244,18 @@ describe("useRemoteInputSession", () => {
     await act(flushMicrotasks);
 
     expect(injectAutostartMock).toHaveBeenCalledTimes(2);
-    expect(injectAutostartMock).toHaveBeenNthCalledWith(1, expect.anything(), new Uint8Array([0x41]));
-    expect(injectAutostartMock).toHaveBeenNthCalledWith(2, expect.anything(), new Uint8Array([0x42]));
+    expect(injectAutostartMock).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      new Uint8Array([0x41]),
+      expect.objectContaining({ shouldAbort: expect.any(Function) }),
+    );
+    expect(injectAutostartMock).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      new Uint8Array([0x42]),
+      expect.objectContaining({ shouldAbort: expect.any(Function) }),
+    );
   });
 
   it("keeps the kernal-fallback injection queue alive after one injection fails (HARD15-001 error isolation)", async () => {
@@ -251,7 +273,41 @@ describe("useRemoteInputSession", () => {
     act(() => result.current.sendChar("b"));
     await act(flushMicrotasks);
     expect(injectAutostartMock).toHaveBeenCalledTimes(2);
-    expect(injectAutostartMock).toHaveBeenNthCalledWith(2, expect.anything(), new Uint8Array([0x42]));
+    expect(injectAutostartMock).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      new Uint8Array([0x42]),
+      expect.objectContaining({ shouldAbort: expect.any(Function) }),
+    );
+  });
+
+  it("HARD19-013: clears the fallback 'Reconnecting' indicator once a later injection succeeds", async () => {
+    injectAutostartMock.mockRejectedValueOnce(new Error("wifi blip"));
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "kernal-fallback" }));
+
+    // One transient failure flips the indicator to error ("Reconnecting…").
+    act(() => result.current.sendChar("a"));
+    await act(flushMicrotasks);
+    expect(result.current.connectionStatus).toBe("error");
+
+    // The very next keystroke injects fine — previously nothing on the fallback
+    // tier ever set the status back, so it stayed "Reconnecting…" all session.
+    act(() => result.current.sendChar("b"));
+    await act(flushMicrotasks);
+    expect(result.current.connectionStatus).toBe("idle");
+  });
+
+  it("HARD19-013: clears the fallback indicator when a later keyboard-chord injection succeeds", async () => {
+    injectAutostartMock.mockRejectedValueOnce(new Error("wifi blip"));
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "kernal-fallback" }));
+
+    act(() => result.current.sendKeyboardInputs(["a", "left_shift"]));
+    await act(flushMicrotasks);
+    expect(result.current.connectionStatus).toBe("error");
+
+    act(() => result.current.sendKeyboardInputs(["b", "left_shift"]));
+    await act(flushMicrotasks);
+    expect(result.current.connectionStatus).toBe("idle");
   });
 
   it("hot-swaps the autofire rate when the persisted rate changes elsewhere (Settings slider, PR299)", async () => {
@@ -324,8 +380,18 @@ describe("useRemoteInputSession", () => {
       await flushMicrotasks();
     });
     expect(injectAutostartMock).toHaveBeenCalledTimes(3);
-    expect(injectAutostartMock).toHaveBeenNthCalledWith(2, expect.anything(), new Uint8Array([0x41]));
-    expect(injectAutostartMock).toHaveBeenNthCalledWith(3, expect.anything(), new Uint8Array([0x42]));
+    expect(injectAutostartMock).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      new Uint8Array([0x41]),
+      expect.objectContaining({ shouldAbort: expect.any(Function) }),
+    );
+    expect(injectAutostartMock).toHaveBeenNthCalledWith(
+      3,
+      expect.anything(),
+      new Uint8Array([0x42]),
+      expect.objectContaining({ shouldAbort: expect.any(Function) }),
+    );
   });
 
   it("sends a release_all event and clears the held set on releaseAll (panic button / stuck-input safety)", async () => {
@@ -501,7 +567,11 @@ describe("useRemoteInputSession", () => {
     await act(async () => {
       fallback.result.current.sendCursor("down");
     });
-    expect(injectAutostartMock).toHaveBeenCalledWith(expect.anything(), new Uint8Array([0x11]));
+    expect(injectAutostartMock).toHaveBeenCalledWith(
+      expect.anything(),
+      new Uint8Array([0x11]),
+      expect.objectContaining({ shouldAbort: expect.any(Function) }),
+    );
   });
 
   it("logs and reports an error status when the kernal-fallback cursor injection fails", async () => {
@@ -520,6 +590,34 @@ describe("useRemoteInputSession", () => {
     );
   });
 
+  it("HARD19-013: does not clear a prior cursor error on a dropIfBusy short-circuit with no new probe", async () => {
+    injectAutostartMock.mockRejectedValueOnce(new Error("device offline"));
+    let resolveFirst!: () => void;
+    injectAutostartMock.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveFirst = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "kernal-fallback" }));
+
+    act(() => result.current.sendCursor("up"));
+    await act(flushMicrotasks);
+    expect(result.current.connectionStatus).toBe("error");
+
+    act(() => result.current.sendCursor("up"));
+    await act(flushMicrotasks);
+    act(() => result.current.sendCursor("up"));
+    await act(flushMicrotasks);
+    act(() => result.current.sendCursor("up"));
+    await act(flushMicrotasks);
+
+    expect(result.current.connectionStatus).toBe("error");
+
+    resolveFirst();
+    await act(flushMicrotasks);
+  });
+
   it("routes special keys through machine:input when full, and through the kernal fallback otherwise", async () => {
     const full = renderHook(() => useRemoteInputSession({ tier: "full" }));
     act(() => full.result.current.sendSpecialKey("f1"));
@@ -534,7 +632,11 @@ describe("useRemoteInputSession", () => {
     await act(async () => {
       fallback.result.current.sendSpecialKey("f1");
     });
-    expect(injectAutostartMock).toHaveBeenCalledWith(expect.anything(), new Uint8Array([0x85]));
+    expect(injectAutostartMock).toHaveBeenCalledWith(
+      expect.anything(),
+      new Uint8Array([0x85]),
+      expect.objectContaining({ shouldAbort: expect.any(Function) }),
+    );
   });
 
   it("dispatches the high-value shifted keys (CLR/INS/F2) as a single atomic tap chord", async () => {
@@ -585,6 +687,19 @@ describe("useRemoteInputSession", () => {
       "Remote input kernal-fallback special-key injection failed",
       expect.any(Object),
     );
+  });
+
+  it("HARD19-013: clears the fallback indicator when a later special-key injection succeeds", async () => {
+    injectAutostartMock.mockRejectedValueOnce(new Error("device offline"));
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "kernal-fallback" }));
+
+    act(() => result.current.sendSpecialKey("f1"));
+    await act(flushMicrotasks);
+    expect(result.current.connectionStatus).toBe("error");
+
+    act(() => result.current.sendSpecialKey("f3"));
+    await act(flushMicrotasks);
+    expect(result.current.connectionStatus).toBe("idle");
   });
 
   it("drops local held-set state and reports an error status when a send fails", async () => {

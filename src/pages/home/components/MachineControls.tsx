@@ -12,6 +12,7 @@ import { RotateCcw, Power, PowerOff, Pause, Menu, Upload, Play, Download, Refres
 import { SectionHeader } from "@/components/SectionHeader";
 import { QuickActionCard } from "@/components/QuickActionCard";
 import { ProfileActionGrid } from "@/components/layout/PageContainer";
+import { publishMachineInterrupt } from "@/lib/deviceInteraction/machineInterrupt";
 import {
   MachineActionConfirmationDialog,
   type MachineActionConfirmation,
@@ -40,7 +41,6 @@ export interface MachineControlsProps {
   status: { isConnected: boolean; isConnecting: boolean };
   machineTaskBusy: boolean;
   machineExecutionState: "running" | "paused" | "unknown";
-  setMachineExecutionState: (s: "running" | "paused" | "unknown") => void;
   controls: {
     reset: { mutateAsync: () => Promise<unknown>; isPending: boolean };
     reboot: { mutateAsync: () => Promise<unknown>; isPending: boolean };
@@ -74,7 +74,6 @@ export function MachineControls({
   status,
   machineTaskBusy,
   machineExecutionState,
-  setMachineExecutionState,
   controls,
   pauseResumePending,
   machineTaskId,
@@ -164,7 +163,12 @@ export function MachineControls({
                   run: () =>
                     onAction(async () => {
                       await controls.reset.mutateAsync();
-                      setMachineExecutionState("running");
+                      // HARD19-031: publish the machine takeover so an armed
+                      // playlist stops instead of auto-advancing over the freshly
+                      // reset machine. HARD19-032: restore any pending pause-mute
+                      // so a reset-while-paused does not strand the SID mixer
+                      // muted. publishMachineInterrupt sets "running" synchronously.
+                      void publishMachineInterrupt({ reason: "home-reset", label: "Reset" });
                     }, "Machine reset"),
                   isDisabled: () => !machineGuardsRef.current.isConnected || machineGuardsRef.current.effectiveBusy,
                 })

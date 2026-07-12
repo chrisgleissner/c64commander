@@ -228,6 +228,39 @@ describe("usePlaybackController auto advance", () => {
     );
   });
 
+  it("mirrors an external (Home) pause and does not auto-advance onto the paused machine (HARD19-009)", async () => {
+    const { setMachineExecutionPaused, resetMachineExecution } =
+      await import("@/lib/deviceInteraction/machineExecutionStore");
+    resetMachineExecution();
+    const playlist = [createPlaylistItem("one", 1_000), createPlaylistItem("two", 1_000)];
+    const { result } = renderPlaybackHarness(playlist);
+
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    expect(result.current.isPlaying).toBe(true);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+
+    // Home pauses the machine — an EXTERNAL write to the shared store.
+    act(() => {
+      setMachineExecutionPaused();
+    });
+    // Play mirrors it: the timeline is suspended and the due-time cleared.
+    expect(result.current.isPaused).toBe(true);
+    expect(result.current.autoAdvanceDueAtMs).toBeNull();
+
+    vi.mocked(executePlayPlan).mockClear();
+    await act(async () => {
+      await result.current.handleNext("auto", result.current.trackInstanceIdRef.current);
+    });
+
+    // The next track must NOT launch on the paused machine.
+    expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+    expect(result.current.currentIndex).toBe(0);
+
+    resetMachineExecution();
+  });
+
   it("keeps a Stop affordance reachable when a song-category playlist ends (HARD11-003)", async () => {
     const playlist = [
       {

@@ -22,9 +22,7 @@ describe("KeyHoldButton", () => {
     const onHoldPress = vi.fn();
     const onHoldRelease = vi.fn();
     const onTap = vi.fn();
-    render(
-      <KeyHoldButton data-testid="key" onHoldPress={onHoldPress} onHoldRelease={onHoldRelease} onTap={onTap} />,
-    );
+    render(<KeyHoldButton data-testid="key" onHoldPress={onHoldPress} onHoldRelease={onHoldRelease} onTap={onTap} />);
     const button = screen.getByTestId("key");
 
     fireEvent.pointerDown(button, { pointerId: 1, ...INSIDE });
@@ -41,9 +39,7 @@ describe("KeyHoldButton", () => {
     const onHoldPress = vi.fn();
     const onHoldRelease = vi.fn();
     const onTap = vi.fn();
-    render(
-      <KeyHoldButton data-testid="key" onHoldPress={onHoldPress} onHoldRelease={onHoldRelease} onTap={onTap} />,
-    );
+    render(<KeyHoldButton data-testid="key" onHoldPress={onHoldPress} onHoldRelease={onHoldRelease} onTap={onTap} />);
     fireEvent.click(screen.getByTestId("key"));
     expect(onTap).toHaveBeenCalledTimes(1);
     expect(onHoldPress).not.toHaveBeenCalled();
@@ -64,9 +60,7 @@ describe("KeyHoldButton", () => {
     const onHoldPress = vi.fn();
     const onHoldRelease = vi.fn();
     const onTap = vi.fn();
-    render(
-      <KeyHoldButton data-testid="key" onHoldPress={onHoldPress} onHoldRelease={onHoldRelease} onTap={onTap} />,
-    );
+    render(<KeyHoldButton data-testid="key" onHoldPress={onHoldPress} onHoldRelease={onHoldRelease} onTap={onTap} />);
     const button = screen.getByTestId("key");
 
     fireEvent.pointerDown(button, { pointerId: 1, ...INSIDE });
@@ -87,9 +81,7 @@ describe("KeyHoldButton", () => {
     const onHoldPress = vi.fn();
     const onHoldRelease = vi.fn();
     const onTap = vi.fn();
-    render(
-      <KeyHoldButton data-testid="key" onHoldPress={onHoldPress} onHoldRelease={onHoldRelease} onTap={onTap} />,
-    );
+    render(<KeyHoldButton data-testid="key" onHoldPress={onHoldPress} onHoldRelease={onHoldRelease} onTap={onTap} />);
     const button = screen.getByTestId("key");
 
     fireEvent.pointerDown(button, { pointerId: 1, ...INSIDE });

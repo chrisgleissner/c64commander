@@ -11,6 +11,11 @@ import { ConfigResponse, buildBaseUrlFromDeviceHost, resolveDeviceHostFromStorag
 export type ConfigSnapshot = {
   savedAt: string;
   data: Record<string, ConfigResponse>;
+  // HARD19-023: categories that could not be read when this snapshot was
+  // captured. A non-empty list marks the snapshot as PROVISIONAL — the revert
+  // baseline is incomplete and should be re-captured on a later idle window, and
+  // revert/save must warn about the gap rather than claim full coverage.
+  failedCategories?: string[];
 };
 
 export type AppConfigEntry = {

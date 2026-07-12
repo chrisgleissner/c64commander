@@ -41,9 +41,7 @@ describe("machineTakeoverEvent", () => {
     const unsubscribeHealthy = subscribeMachineTakeover(healthy);
     isBackgroundExecutionActive.mockReturnValue(false);
 
-    await expect(
-      publishMachineTakeover({ reason: "home-reset", label: "Home reset" }),
-    ).resolves.toBeUndefined();
+    await expect(publishMachineTakeover({ reason: "home-reset", label: "Home reset" })).resolves.toBeUndefined();
 
     expect(throwing).toHaveBeenCalledTimes(1);
     expect(healthy).toHaveBeenCalledTimes(1);
@@ -78,9 +76,7 @@ describe("machineTakeoverEvent", () => {
     isBackgroundExecutionActive.mockReturnValue(true);
     stopBackgroundExecution.mockRejectedValue(new Error("stop failed"));
 
-    await expect(
-      publishMachineTakeover({ reason: "home-reset", label: "Home reset" }),
-    ).resolves.toBeUndefined();
+    await expect(publishMachineTakeover({ reason: "home-reset", label: "Home reset" })).resolves.toBeUndefined();
 
     expect(addErrorLog).toHaveBeenCalledWith(
       "Failed to stop background execution after machine takeover",

@@ -105,11 +105,9 @@ test.describe("Remote Input key-press latency and combinatorial wire coverage", 
     machineInputCalls.length = 0;
   };
 
-  const getLatencyStats = (page: Page) =>
-    page.evaluate(() => window.__c64uRemoteInputLatency?.getStats() ?? null);
+  const getLatencyStats = (page: Page) => page.evaluate(() => window.__c64uRemoteInputLatency?.getStats() ?? null);
 
-  const clearLatencySamples = (page: Page) =>
-    page.evaluate(() => window.__c64uRemoteInputLatency?.clear());
+  const clearLatencySamples = (page: Page) => page.evaluate(() => window.__c64uRemoteInputLatency?.clear());
 
   // A fast click's press and its matching release both land before the
   // leading-edge flush ever fires, so they collapse into a single firmware
@@ -187,7 +185,10 @@ test.describe("Remote Input key-press latency and combinatorial wire coverage", 
     // without awaiting in between - each dispatchEvent() call is its own
     // Playwright/CDP round trip, and awaiting sequentially reintroduces a
     // real gap a genuine fast tap would not have.
-    await Promise.all([aKey.dispatchEvent("pointerdown", pointerInit(2)), aKey.dispatchEvent("pointerup", pointerInit(2))]);
+    await Promise.all([
+      aKey.dispatchEvent("pointerdown", pointerInit(2)),
+      aKey.dispatchEvent("pointerup", pointerInit(2)),
+    ]);
     await expect.poll(() => allEvents().length, { timeout: 5000 }).toBeGreaterThanOrEqual(2);
 
     await shiftKey.dispatchEvent("pointerup", pointerInit(1));

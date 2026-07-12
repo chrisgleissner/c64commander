@@ -14,7 +14,7 @@ import { createArchiveClient } from "@/lib/archive/client";
 import { getCachedArchiveDiskBlob, setCachedArchiveDiskBlob } from "@/lib/archive/archiveDiskCache";
 import type { ArchiveClientConfigInput, ArchivePlaylistReference } from "@/lib/archive/types";
 import { FolderPicker } from "@/lib/native/folderPicker";
-import { getFileExtension } from "@/lib/playback/fileTypes";
+import { DISK_IMAGE_EXTENSIONS, getFileExtension } from "@/lib/playback/fileTypes";
 // Reused as-is: the sd/usb/flash-over-temp persistent-root ranking is
 // generic storage-root selection logic, not REU-specific. See HARD18-014.
 import { resolvePersistentReuStorageRoot } from "@/lib/reu/reuWorkflow";
@@ -29,6 +29,7 @@ import {
   type LocalSourceRecord,
 } from "@/lib/sourceNavigation/localSourcesStore";
 import type { DiskEntry } from "./diskTypes";
+import { getDiskName } from "./diskTypes";
 
 const MAX_LOCAL_DISK_IMAGE_BYTES = 64 * 1024 * 1024;
 const LOCAL_DISK_READ_TIMEOUT_BASE_MS = 8000;
@@ -139,12 +140,83 @@ type MaterializedDiskMount = {
   disk: DiskEntry;
   workPath: string;
   writeBackTarget: DiskWriteBackTarget;
+  // HARD19-005: the device this image was materialized to. The work file is a
+  // deterministic per-drive name reused on every device, so without recording
+  // the device, an eject after a saved-device switch would FTP-read a DIFFERENT
+  // device's stale work file and overwrite the user's local source with it.
+  deviceHost: string;
+};
+
+// HARD19-006: persist the map across process death so a post-restart eject can
+// still finalize in-game saves instead of silently discarding them.
+const MATERIALIZED_MOUNTS_STORAGE_KEY = "c64u.materializedDiskMounts.v1";
+
+const persistMaterializedMounts = () => {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    const serialized = Array.from(materializedMounts.entries()).map(([drive, entry]) => [drive, entry]);
+    if (serialized.length === 0) {
+      sessionStorage.removeItem(MATERIALIZED_MOUNTS_STORAGE_KEY);
+      return;
+    }
+    sessionStorage.setItem(MATERIALIZED_MOUNTS_STORAGE_KEY, JSON.stringify(serialized));
+  } catch (error) {
+    addLog("warn", "Failed to persist materialized disk mounts", { error: (error as Error).message });
+  }
+};
+
+const rehydrateMaterializedMounts = (): Map<"a" | "b", MaterializedDiskMount> => {
+  const map = new Map<"a" | "b", MaterializedDiskMount>();
+  if (typeof sessionStorage === "undefined") return map;
+  try {
+    const raw = sessionStorage.getItem(MATERIALIZED_MOUNTS_STORAGE_KEY);
+    if (!raw) return map;
+    const parsed = JSON.parse(raw) as Array<[string, MaterializedDiskMount]>;
+    for (const [drive, entry] of parsed) {
+      if ((drive === "a" || drive === "b") && entry?.disk && entry.workPath && typeof entry.deviceHost === "string") {
+        map.set(drive, entry);
+      }
+    }
+  } catch (error) {
+    addLog("warn", "Failed to rehydrate materialized disk mounts", { error: (error as Error).message });
+  }
+  return map;
 };
 
 // Module-singleton by design (mirrors machineExecutionStore/
 // backgroundExecutionManager): drive occupancy is a device-level concept,
-// not a per-component one, and must survive HomeDiskManager remounts.
-const materializedMounts = new Map<"a" | "b", MaterializedDiskMount>();
+// not a per-component one, and must survive HomeDiskManager remounts. Rehydrated
+// from sessionStorage on load so it also survives Android process death.
+const materializedMounts = rehydrateMaterializedMounts();
+
+const setMaterializedMount = (drive: "a" | "b", entry: MaterializedDiskMount) => {
+  materializedMounts.set(drive, entry);
+  persistMaterializedMounts();
+};
+
+const deleteMaterializedMount = (drive: "a" | "b") => {
+  materializedMounts.delete(drive);
+  persistMaterializedMounts();
+};
+
+// HARD19-007: the materialized work file is path-mounted, so the drives poll
+// reports the internal work filename instead of the disk's name. Expose the
+// per-drive work path so HomeDiskManager's override-keep / mounted-disk-id
+// matching can treat "still the overridden disk" for the work file too.
+export const getMaterializedWorkPath = (drive: "a" | "b"): string | null =>
+  materializedMounts.get(drive)?.workPath ?? null;
+
+// HARD19-007: map a drive's materialized work file back to the disk it holds, so
+// rotation / delete-protection survive even after HomeDiskManager's optimistic
+// override was lost (e.g. a component remount) — the drives poll only ever reports
+// the internal work filename.
+export const getMaterializedDiskId = (drive: "a" | "b"): string | null =>
+  materializedMounts.get(drive)?.disk.id ?? null;
+
+export const resetMaterializedMountsForTests = () => {
+  materializedMounts.clear();
+  if (typeof sessionStorage !== "undefined") sessionStorage.removeItem(MATERIALIZED_MOUNTS_STORAGE_KEY);
+};
 
 const readBackAndPersist = async (entry: MaterializedDiskMount, ftp: DiskMountWriteBackDependencies): Promise<void> => {
   const bytes = await ftp.readRemoteFile(entry.workPath);
@@ -159,10 +231,24 @@ const dropOrFinalizeStaleMaterializedMount = async (
   drive: "a" | "b",
   nextDisk: DiskEntry,
   ftp: DiskMountWriteBackDependencies | undefined,
+  currentDeviceHost?: string,
 ): Promise<void> => {
   const stale = materializedMounts.get(drive);
   if (!stale || stale.disk.id === nextDisk.id) return;
-  materializedMounts.delete(drive);
+  deleteMaterializedMount(drive);
+  // HARD19-005: never write the stale entry back to a different device than the
+  // one it was materialized on (the deterministic work file would be a different
+  // image). Drop without a write-back on a device mismatch.
+  if (currentDeviceHost !== undefined && stale.deviceHost !== currentDeviceHost) {
+    addLog("warn", "Dropped pending disk write-back: stale mount belongs to a different device", {
+      drive,
+      path: stale.disk.path,
+      workPath: stale.workPath,
+      materializedOn: stale.deviceHost,
+      currentDeviceHost,
+    });
+    return;
+  }
   if (!ftp) {
     addLog("warn", "Dropped pending disk write-back: drive remounted by a flow without write-back support", {
       drive,
@@ -183,24 +269,56 @@ const dropOrFinalizeStaleMaterializedMount = async (
   }
 };
 
+// HARD19-014 (D2): after a successful archive/CommoServe write-back — which only
+// lands in the short-lived in-memory cache — the eject flow can offer to save a
+// durable local copy. `archiveCopyOffer` carries what that save needs.
+export type ArchiveDiskCopyOffer = { archiveRef: ArchivePlaylistReference; fileName: string };
+
 export type DiskWriteBackResult =
-  { attempted: false } | { attempted: true; success: true } | { attempted: true; success: false; error: Error };
+  | { attempted: false; reason?: "no-entry" | "device-mismatch" }
+  | { attempted: true; success: true; archiveCopyOffer?: ArchiveDiskCopyOffer }
+  | { attempted: true; success: false; error: Error };
 
 // Called on eject: FTP-downloads the materialized work-dir image back and
 // re-persists it to the source. Never throws - a failed write-back must not
 // block the eject the user already asked for; the result tells the caller
 // whether to surface a "changes may be lost" warning.
+//
+// HARD19-005: `currentDeviceHost` is the device the eject's FTP deps target. If
+// the mount was materialized on a DIFFERENT device (a saved-device switch
+// happened between mount and eject), skip the write-back entirely: reading the
+// deterministic work file from the current device would fetch a different (or
+// stale) image and overwrite the user's local source with it. The entry is left
+// in place so ejecting after switching BACK to the original device still saves.
 export const finalizeDiskWriteBack = async (
   drive: "a" | "b",
   ftp: DiskMountWriteBackDependencies,
+  currentDeviceHost?: string,
 ): Promise<DiskWriteBackResult> => {
   const entry = materializedMounts.get(drive);
-  if (!entry) return { attempted: false };
-  materializedMounts.delete(drive);
+  if (!entry) return { attempted: false, reason: "no-entry" };
+  if (currentDeviceHost !== undefined && entry.deviceHost !== currentDeviceHost) {
+    addLog("warn", "Skipped disk write-back: mount belongs to a different device than the current one", {
+      drive,
+      path: entry.disk.path,
+      workPath: entry.workPath,
+      materializedOn: entry.deviceHost,
+      currentDeviceHost,
+    });
+    return { attempted: false, reason: "device-mismatch" };
+  }
+  // HARD19-014 (D2): capture the archive offer before the entry is deleted, so a
+  // successful archive-cache write-back (durable only for the session) can offer
+  // the user a durable "Save a local copy".
+  const archiveCopyOffer: ArchiveDiskCopyOffer | undefined =
+    entry.writeBackTarget.kind === "archive-cache"
+      ? { archiveRef: entry.writeBackTarget.archiveRef, fileName: getDiskName(entry.disk.path) }
+      : undefined;
+  deleteMaterializedMount(drive);
   try {
     await readBackAndPersist(entry, ftp);
     addLog("info", "Disk write-back persisted to source", { drive, path: entry.disk.path, workPath: entry.workPath });
-    return { attempted: true, success: true };
+    return { attempted: true, success: true, ...(archiveCopyOffer ? { archiveCopyOffer } : {}) };
   } catch (error) {
     addErrorLog("Disk write-back failed", {
       drive,
@@ -216,7 +334,41 @@ export const finalizeDiskWriteBack = async (
 // (HARD18-017 delete flow) - there is no source left to write back to, so
 // drop the pending entry without spending an FTP round trip on it.
 export const discardDiskWriteBack = (drive: "a" | "b"): void => {
-  materializedMounts.delete(drive);
+  deleteMaterializedMount(drive);
+};
+
+export type ArchiveDiskCopySaveResult =
+  { saved: true; uri: string } | { saved: false; reason: "no-bytes" | "cancelled"; error?: Error };
+
+// HARD19-014 (D2): persist a durable local copy of an archive/CommoServe disk's
+// current (session-only) bytes. The eject flow offers this so in-game saves that
+// otherwise evaporate from the 10-minute in-memory cache can be kept. Prompts the
+// user for a destination folder (SAF) and writes the file there.
+export const saveArchiveDiskCopyToLocalFolder = async (
+  offer: ArchiveDiskCopyOffer,
+): Promise<ArchiveDiskCopySaveResult> => {
+  const blob = getCachedArchiveDiskBlob(offer.archiveRef);
+  if (!blob) {
+    // The session cache already expired/evicted — nothing left to save.
+    return { saved: false, reason: "no-bytes" };
+  }
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const directory = await FolderPicker.pickDirectory({ extensions: [...DISK_IMAGE_EXTENSIONS] });
+  if (!directory.treeUri) {
+    return { saved: false, reason: "cancelled" };
+  }
+  const written = await FolderPicker.writeFileToTree({
+    treeUri: directory.treeUri,
+    path: offer.fileName,
+    data: uint8ToBase64(bytes),
+    overwrite: true,
+  });
+  addLog("info", "Archive disk copy saved to local folder", {
+    fileName: offer.fileName,
+    uri: written.uri,
+    sizeBytes: written.sizeBytes,
+  });
+  return { saved: true, uri: written.uri };
 };
 
 const DISK_WRITE_BACK_ADVISORY_STORAGE_KEY = "c64u_disk_writeback_advisory_shown_v1";
@@ -232,6 +384,24 @@ export const hasShownDiskWriteBackAdvisory = (): boolean => {
 export const markDiskWriteBackAdvisoryShown = (): void => {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(DISK_WRITE_BACK_ADVISORY_STORAGE_KEY, "1");
+};
+
+// HARD19-014 (decision D2): an archive/CommoServe disk "materializes" (so it does
+// NOT hit the transient advisory above), but its write-back only lands in a
+// 10-minute in-memory LRU (archiveDiskCache) — saves evaporate on TTL/eviction/
+// restart. Classify it as session-transient and warn once with session-scoped
+// wording. A separate one-time flag so it does not conflate with the "never saved"
+// transient advisory.
+const DISK_ARCHIVE_ADVISORY_STORAGE_KEY = "c64u_disk_archive_writeback_advisory_shown_v1";
+
+export const hasShownArchiveDiskWriteBackAdvisory = (): boolean => {
+  if (typeof localStorage === "undefined") return true;
+  return localStorage.getItem(DISK_ARCHIVE_ADVISORY_STORAGE_KEY) === "1";
+};
+
+export const markArchiveDiskWriteBackAdvisoryShown = (): void => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(DISK_ARCHIVE_ADVISORY_STORAGE_KEY, "1");
 };
 
 // Flat file directly under the persistent root - NOT a subdirectory. The
@@ -281,7 +451,7 @@ const tryMaterializeDiskMount = async (
     const bytes = new Uint8Array(await blob.arrayBuffer());
     await ftp.writeRemoteFile(workPath, bytes);
     await api.mountDrive(drive, workPath, mountType, mode);
-    materializedMounts.set(drive, { disk, workPath, writeBackTarget });
+    setMaterializedMount(drive, { disk, workPath, writeBackTarget, deviceHost: api.getDeviceHost() });
     return workPath;
   } catch (error) {
     addErrorLog("Disk work-dir materialization failed; falling back to a transient mount", {
@@ -665,7 +835,7 @@ export const mountDiskToDrive = async (
   options: MountDiskToDriveOptions = {},
 ): Promise<DiskMountOutcome> => {
   const mode = options.mode ?? "readwrite";
-  await dropOrFinalizeStaleMaterializedMount(drive, disk, options.writeBack);
+  await dropOrFinalizeStaleMaterializedMount(drive, disk, options.writeBack, api.getDeviceHost());
   try {
     const mountType = buildDiskMountType(disk.path);
     if (!mountType) {

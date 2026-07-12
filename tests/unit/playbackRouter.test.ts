@@ -11,7 +11,8 @@ import { buildPlayPlan, executePlayPlan, tryFetchUltimateSidBlob } from "@/lib/p
 import { readFtpFile } from "@/lib/ftp/ftpClient";
 import { getC64APIConfigSnapshot } from "@/lib/c64api";
 import { addErrorLog } from "@/lib/logging";
-import { buildAutostartSequence, injectAutostart } from "@/lib/playback/autostart";
+import { buildAutostartSequence } from "@/lib/playback/autostart";
+import { enqueueKeyboardBufferInjection } from "@/lib/remoteInput/kernalFallbackInjector";
 import { loadFirstDiskPrgViaDma } from "@/lib/playback/diskFirstPrg";
 import { mountDiskToDrive, resolveLocalDiskBlob } from "@/lib/disks/diskMount";
 import { loadDiskAutostartMode } from "@/lib/config/appSettings";
@@ -97,6 +98,11 @@ vi.mock("@/lib/playback/autostart", async () => {
   };
 });
 
+// HARD19-018: disk autostart now routes through the shared keyboard-buffer queue.
+vi.mock("@/lib/remoteInput/kernalFallbackInjector", () => ({
+  enqueueKeyboardBufferInjection: vi.fn(async () => ({ dropped: false })),
+}));
+
 vi.mock("@/lib/playback/diskFirstPrg", () => ({
   loadFirstDiskPrgViaDma: vi.fn().mockResolvedValue({
     name: "TEST",
@@ -128,8 +134,14 @@ vi.mock("@/lib/hvsc/hvscPerformance", () => ({
   endHvscPerfScope,
 }));
 
+const mockInvalidateQueries = vi.fn();
+vi.mock("@/lib/query/queryClientRegistry", () => ({
+  getRegisteredQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
+}));
+
 beforeEach(() => {
-  vi.mocked(injectAutostart).mockClear();
+  mockInvalidateQueries.mockClear();
+  vi.mocked(enqueueKeyboardBufferInjection).mockClear();
   vi.mocked(loadFirstDiskPrgViaDma).mockClear();
   vi.mocked(mountDiskToDrive).mockClear();
   vi.mocked(resolveLocalDiskBlob).mockReset();
@@ -475,8 +487,16 @@ describe("playbackRouter", () => {
     await vi.runAllTimersAsync();
     await task;
     expect(api.machineReboot).toHaveBeenCalled();
-    expect(api.mountDriveUpload).toHaveBeenCalled();
-    expect(vi.mocked(injectAutostart)).toHaveBeenCalled();
+    // HARD19-008: the local-file path routes through mountDiskToDrive with write-back
+    // deps (was a raw mountDriveUpload that bypassed the write-back bookkeeping).
+    expect(vi.mocked(mountDiskToDrive)).toHaveBeenCalledWith(
+      api,
+      "a",
+      expect.objectContaining({ path: "/demo.d64", location: "local" }),
+      expect.anything(),
+      expect.objectContaining({ writeBack: expect.anything() }),
+    );
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalled();
     vi.useRealTimers();
   });
 
@@ -491,6 +511,9 @@ describe("playbackRouter", () => {
       api,
       "b",
       expect.objectContaining({ path: "/Usb0/DEMO.D64", location: "ultimate" }),
+      undefined,
+      // HARD19-008: write-back deps are threaded so a stale materialized mount is finalized.
+      expect.objectContaining({ writeBack: expect.anything() }),
     );
     vi.useRealTimers();
   });
@@ -498,7 +521,7 @@ describe("playbackRouter", () => {
   it("retries autostart injection after mount when initial attempt fails", async () => {
     vi.useFakeTimers();
     const api = createApiMock();
-    vi.mocked(injectAutostart)
+    vi.mocked(enqueueKeyboardBufferInjection)
       .mockRejectedValueOnce(new Error("busy"))
       .mockResolvedValueOnce(undefined as any);
     const file = new File(["disk"], "demo.d64");
@@ -509,7 +532,7 @@ describe("playbackRouter", () => {
     });
     await vi.runAllTimersAsync();
     await task;
-    expect(vi.mocked(injectAutostart)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalledTimes(2);
     vi.useRealTimers();
   });
 
@@ -534,7 +557,109 @@ describe("playbackRouter", () => {
     await vi.runAllTimersAsync();
     await task;
 
-    expect(vi.mocked(injectAutostart)).toHaveBeenCalledWith(api, buildAutostartSequence(9), {
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalledWith(api, buildAutostartSequence(9), {
+      pollIntervalMs: 140,
+      maxAttempts: 20,
+    });
+    vi.useRealTimers();
+  });
+
+  it("HARD19-022: preserves a compatible drive mode (1571 reading a D64) instead of forcing 1541", async () => {
+    vi.useFakeTimers();
+    const notify = vi.fn();
+    const api = {
+      ...createApiMock(),
+      getDrives: vi.fn().mockResolvedValue({
+        drives: [{ a: { enabled: true, type: "1571", bus_id: 9 } }],
+        errors: [],
+      }),
+      driveOn: vi.fn().mockResolvedValue({ errors: [] }),
+      setDriveMode: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const file = new File(["disk"], "demo.d64");
+    const plan = buildPlayPlan({ source: "local", path: "/demo.d64", file });
+    const task = executePlayPlan(api as any, plan, {
+      drive: "a",
+      rebootBeforeMount: true,
+      diskAutostartMode: "kernal",
+      notify,
+    });
+    await vi.runAllTimersAsync();
+    await task;
+
+    // A deliberate 1571 reads D64 natively — it must not be silently reset to 1541.
+    expect(api.setDriveMode).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
+    // No mutation → no drives-query invalidation (HARD19-022 / D3).
+    expect(mockInvalidateQueries).not.toHaveBeenCalled();
+    // Still uses the (unchanged) drive's bus id for autostart.
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalledWith(api, buildAutostartSequence(9), {
+      pollIntervalMs: 140,
+      maxAttempts: 20,
+    });
+    vi.useRealTimers();
+  });
+
+  it("HARD19-022: switches to a compatible mode and notifies when the current mode cannot read the image", async () => {
+    vi.useFakeTimers();
+    const notify = vi.fn();
+    const api = {
+      ...createApiMock(),
+      getDrives: vi.fn().mockResolvedValue({
+        drives: [{ a: { enabled: true, type: "1541", bus_id: 9 } }],
+        errors: [],
+      }),
+      driveOn: vi.fn().mockResolvedValue({ errors: [] }),
+      setDriveMode: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const file = new File(["disk"], "demo.d81");
+    const plan = buildPlayPlan({ source: "local", path: "/demo.d81", file });
+    const task = executePlayPlan(api as any, plan, {
+      drive: "a",
+      rebootBeforeMount: true,
+      diskAutostartMode: "kernal",
+      notify,
+    });
+    await vi.runAllTimersAsync();
+    await task;
+
+    // A 1541 cannot read a D81 — the switch is genuinely required and surfaced.
+    expect(api.setDriveMode).toHaveBeenCalledWith("a", "1581");
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining("1581") }));
+    // The mutation invalidates the drive-card query so it stops showing 1541 (D3).
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ["c64-drives"] });
+    vi.useRealTimers();
+  });
+
+  it("HARD19-022: decides the mode from the drive's real type after enabling it (no stale-snapshot switch)", async () => {
+    vi.useFakeTimers();
+    const api = {
+      ...createApiMock(),
+      // First read (pre-enable) reports an incompatible 1581; after driveOn the
+      // drive's REAL type is a D64-compatible 1571. The mode check must use the
+      // fresh read, not the stale pre-enable snapshot, and issue no switch.
+      getDrives: vi
+        .fn()
+        .mockResolvedValueOnce({ drives: [{ a: { enabled: false, type: "1581" } }], errors: [] })
+        .mockResolvedValueOnce({ drives: [{ a: { enabled: true, type: "1571", bus_id: 9 } }], errors: [] }),
+      driveOn: vi.fn().mockResolvedValue({ errors: [] }),
+      setDriveMode: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const file = new File(["disk"], "demo.d64");
+    const plan = buildPlayPlan({ source: "local", path: "/demo.d64", file });
+    const task = executePlayPlan(api as any, plan, {
+      drive: "a",
+      rebootBeforeMount: true,
+      diskAutostartMode: "kernal",
+    });
+    await vi.runAllTimersAsync();
+    await task;
+
+    expect(api.driveOn).toHaveBeenCalledWith("a");
+    expect(api.setDriveMode).not.toHaveBeenCalled();
+    // driveOn is itself a mutation → the drive-card query is still invalidated (D3).
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ["c64-drives"] });
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalledWith(api, buildAutostartSequence(9), {
       pollIntervalMs: 140,
       maxAttempts: 20,
     });
@@ -561,7 +686,7 @@ describe("playbackRouter", () => {
     await vi.runAllTimersAsync();
     await task;
     expect(vi.mocked(loadFirstDiskPrgViaDma)).toHaveBeenCalled();
-    expect(vi.mocked(injectAutostart)).not.toHaveBeenCalled();
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
 
@@ -579,7 +704,7 @@ describe("playbackRouter", () => {
     await task;
     expect(vi.mocked(resolveLocalDiskBlob)).toHaveBeenCalled();
     expect(vi.mocked(loadFirstDiskPrgViaDma)).toHaveBeenCalled();
-    expect(vi.mocked(injectAutostart)).not.toHaveBeenCalled();
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
 
@@ -592,7 +717,7 @@ describe("playbackRouter", () => {
     const task = executePlayPlan(api as any, plan, { drive: "a" });
     await vi.runAllTimersAsync();
     await task;
-    expect(vi.mocked(injectAutostart)).toHaveBeenCalled();
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalled();
     vi.useRealTimers();
   });
 
@@ -697,7 +822,14 @@ describe("playbackRouter", () => {
     await task;
     expect(api.machineReset).not.toHaveBeenCalled();
     expect(api.machineReboot).not.toHaveBeenCalled();
-    expect(api.mountDriveUpload).toHaveBeenCalled();
+    // HARD19-008: local-file disks mount through mountDiskToDrive (with write-back deps).
+    expect(vi.mocked(mountDiskToDrive)).toHaveBeenCalledWith(
+      api,
+      "a",
+      expect.objectContaining({ path: "/demo.d64", location: "local" }),
+      expect.anything(),
+      expect.objectContaining({ writeBack: expect.anything() }),
+    );
     vi.useRealTimers();
   });
 
@@ -842,7 +974,7 @@ describe("playbackRouter", () => {
   it("throws disk autostart failed after all retry attempts exhausted (BRDA:157,158)", async () => {
     vi.useFakeTimers();
     const api = createApiMock();
-    vi.mocked(injectAutostart).mockRejectedValue(new Error("always fails"));
+    vi.mocked(enqueueKeyboardBufferInjection).mockRejectedValue(new Error("always fails"));
     const file = new File(["disk"], "demo.d64");
     const plan = buildPlayPlan({ source: "local", path: "/demo.d64", file });
     const task = executePlayPlan(api as any, plan);
@@ -850,7 +982,7 @@ describe("playbackRouter", () => {
     const assertion = expect(task).rejects.toThrow("Disk autostart failed");
     await vi.runAllTimersAsync();
     await assertion;
-    expect(vi.mocked(injectAutostart)).toHaveBeenCalledTimes(4);
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalledTimes(4);
     vi.useRealTimers();
   });
 

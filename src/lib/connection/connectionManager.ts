@@ -49,6 +49,8 @@ import { applyFuzzModeDefaults, getFuzzMockBaseUrl, isFuzzModeEnabled } from "@/
 import { addLog } from "@/lib/logging";
 import { getSmokeConfig, initializeSmokeMode, isSmokeModeEnabled, recordSmokeStatus } from "@/lib/smoke/smokeMode";
 import { resetInteractionState } from "@/lib/deviceInteraction/deviceInteractionManager";
+import { getHealthCheckStateSnapshot, setHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
+import { prepareForDeviceRetarget } from "@/lib/connection/deviceRetarget";
 import { updateDeviceConnectionState } from "@/lib/deviceInteraction/deviceStateStore";
 import { isAuthRequiredError, normalizeTransportError } from "@/lib/c64api/transportErrors";
 import { notifyAuthRequired } from "@/lib/auth/authChallenge";
@@ -747,6 +749,17 @@ const transitionToRealConnected = async (
   cancelActiveDiscovery();
   dismissDemoInterstitial();
   resetInteractionState("transition-real-connected");
+  // HARD19-004 (D1): reaching REAL_CONNECTED means the REST control plane just
+  // answered, which contradicts a pinned Unhealthy/Unavailable manual health-check
+  // verdict. The pinned `latestResult` otherwise drives the global badge with no
+  // staleness bound, so a device that hiccupped and recovered would show red
+  // forever. Clear it on recovery so the badge falls back to live trace-derived
+  // health. (A pinned Degraded/Healthy result is left to the trace-evidence
+  // override in useHealthState.)
+  const pinnedHealth = getHealthCheckStateSnapshot().latestResult;
+  if (pinnedHealth && (pinnedHealth.overallHealth === "Unhealthy" || pinnedHealth.overallHealth === "Unavailable")) {
+    setHealthCheckStateSnapshot({ latestResult: null });
+  }
   transitionTo("REAL_CONNECTED", trigger);
   logDiscoveryDecision("REAL_CONNECTED", trigger, { mode: "real" });
   await stopDemoServer();
@@ -818,6 +831,14 @@ const tryReachableSavedDeviceFallback = async (
     trigger,
     deviceId: reachable.device.id,
   });
+  // HARD19-012: this fallback is a second device-switch path. Run the same
+  // cross-device hygiene the canonical switch does (remote-input release, toast
+  // clear, health clear, machine-execution reset, orphaned background-execution
+  // stop, device-scoped query invalidation) BEFORE re-selecting — while the
+  // runtime API still targets the old device, so the remote-input release lands
+  // on the right host. Without this, device A's paused state, stale health
+  // verdict, and armed auto-skip watchdog leaked onto device B.
+  await prepareForDeviceRetarget(selectedId, reachable.device.id);
   // HARD16-001: select and apply the reachable device's identity/ports BEFORE
   // verifying, mirroring executeSavedDeviceSwitch. verifyCurrentConnectionTarget
   // stamps whatever device is currently selected, so verifying while the

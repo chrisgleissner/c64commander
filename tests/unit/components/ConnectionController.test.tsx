@@ -19,7 +19,11 @@ const deviceDiscoveryState = {
   phase: "idle" as "idle" | "scanning" | "complete" | "error",
   trigger: null as "startup" | "resume" | "settings" | "manual" | null,
   candidates: [] as unknown[],
+  acknowledged: false,
 };
+
+const discoverySubscribers = new Set<() => void>();
+const emitDiscoveryChange = () => discoverySubscribers.forEach((listener) => listener());
 
 const setDocumentVisibility = (hidden: boolean) => {
   Object.defineProperty(document, "hidden", {
@@ -79,6 +83,10 @@ vi.mock("@/lib/secureStorage", () => ({
 
 vi.mock("@/lib/deviceDiscovery/discoveryManager", () => ({
   getDeviceDiscoveryState: () => deviceDiscoveryState,
+  subscribeDeviceDiscovery: (listener: () => void) => {
+    discoverySubscribers.add(listener);
+    return () => discoverySubscribers.delete(listener);
+  },
 }));
 
 describe("ConnectionController", () => {
@@ -98,6 +106,8 @@ describe("ConnectionController", () => {
     deviceDiscoveryState.phase = "idle";
     deviceDiscoveryState.trigger = null;
     deviceDiscoveryState.candidates = [];
+    deviceDiscoveryState.acknowledged = false;
+    discoverySubscribers.clear();
     setDocumentVisibility(false);
   });
 
@@ -192,6 +202,71 @@ describe("ConnectionController", () => {
       discoverConnectionMock.mockClear();
       await vi.advanceTimersByTimeAsync(120_000);
 
+      expect(discoverConnectionMock).not.toHaveBeenCalledWith("background");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("resumes background rediscovery once the awaiting-selection results are acknowledged (HARD19-028)", async () => {
+    vi.useFakeTimers();
+    try {
+      connectionState.value = "OFFLINE_NO_DEMO";
+      deviceDiscoveryState.phase = "complete";
+      deviceDiscoveryState.trigger = "startup";
+      deviceDiscoveryState.candidates = [{ id: "id:38c1ba" }];
+      deviceDiscoveryState.acknowledged = false;
+      const queryClient = new QueryClient();
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <ConnectionController />
+        </QueryClientProvider>,
+      );
+
+      // While results await selection the background probe stays suspended.
+      discoverConnectionMock.mockClear();
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(discoverConnectionMock).not.toHaveBeenCalledWith("background");
+
+      // User dismisses the picker: the shared store acknowledges the results and
+      // notifies subscribers. Background rediscovery must resume without any
+      // further user action.
+      discoverConnectionMock.mockClear();
+      await act(async () => {
+        deviceDiscoveryState.acknowledged = true;
+        emitDiscoveryChange();
+      });
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(discoverConnectionMock).toHaveBeenCalledWith("background");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not bump the background schedule on unrelated discovery store emits (HARD19-028 value-equality bail)", async () => {
+    vi.useFakeTimers();
+    try {
+      connectionState.value = "OFFLINE_NO_DEMO";
+      deviceDiscoveryState.phase = "complete";
+      deviceDiscoveryState.trigger = "startup";
+      deviceDiscoveryState.candidates = [{ id: "id:38c1ba" }];
+      deviceDiscoveryState.acknowledged = false;
+      const queryClient = new QueryClient();
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <ConnectionController />
+        </QueryClientProvider>,
+      );
+
+      discoverConnectionMock.mockClear();
+      // An emit that does NOT open the gate (still awaiting selection) must not
+      // re-arm the probe — guards against a setState-per-emit loop.
+      await act(async () => {
+        emitDiscoveryChange();
+      });
+      await vi.advanceTimersByTimeAsync(120_000);
       expect(discoverConnectionMock).not.toHaveBeenCalledWith("background");
     } finally {
       vi.useRealTimers();

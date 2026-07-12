@@ -316,7 +316,9 @@ export default function PlayFilesPage() {
   const volumeIndex = volumeState.index;
   const volumeMuted = volumeState.muted;
 
-  const hvsc = useHvscLibrary();
+  // HARD19-026: pass the live hvsc_enabled gate so the hook's background native
+  // lifecycle (status/recover/hydration) stays dormant when HVSC is disabled.
+  const hvsc = useHvscLibrary(hvscControlsEnabled);
   const { hvscStatus, hvscRoot, hvscAvailable, buildHvscLocalPlayFile } = hvsc;
 
   const { localEntriesBySourceId, localSourceTreeUris } = useLocalEntries(localSources);

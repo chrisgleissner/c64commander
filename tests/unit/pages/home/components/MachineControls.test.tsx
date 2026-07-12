@@ -19,6 +19,11 @@ vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
 }));
 
+const publishMachineInterruptMock = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock("@/lib/deviceInteraction/machineInterrupt", () => ({
+  publishMachineInterrupt: (...args: unknown[]) => publishMachineInterruptMock(...args),
+}));
+
 vi.mock("framer-motion", () => ({
   motion: {
     div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
@@ -55,7 +60,6 @@ const defaultProps = {
   status: { isConnected: true, isConnecting: false },
   machineTaskBusy: false,
   machineExecutionState: "running" as const,
-  setMachineExecutionState: vi.fn(),
   controls: {
     reset: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
     reboot: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
@@ -155,7 +159,11 @@ describe("MachineControls", () => {
       expect(defaultProps.controls.reset.mutateAsync).toHaveBeenCalledTimes(1);
     });
     expect(defaultProps.onAction).toHaveBeenCalledTimes(1);
-    expect(defaultProps.setMachineExecutionState).toHaveBeenCalledWith("running");
+    // HARD19-031/032: Reset now routes through publishMachineInterrupt, which
+    // sets "running", publishes the takeover, and restores any pending pause-mute.
+    await waitFor(() => {
+      expect(publishMachineInterruptMock).toHaveBeenCalledWith({ reason: "home-reset", label: "Reset" });
+    });
   });
 
   it("does not execute confirmed Reset if current guards become disabled", () => {

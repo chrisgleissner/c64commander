@@ -160,9 +160,7 @@ describe("QuickKeysBar", () => {
   it("routes SPACE/RETURN/f-keys through the held-keyboard-inputs set on the full tier, not onChar/onSpecialKey", () => {
     const handlers = makeHandlers();
     const snapshots: string[][] = [];
-    render(
-      <QuickKeysBarHarness {...handlers} tier="full" onHeldChange={(next) => snapshots.push([...next].sort())} />,
-    );
+    render(<QuickKeysBarHarness {...handlers} tier="full" onHeldChange={(next) => snapshots.push([...next].sort())} />);
     fireEvent.click(screen.getByTestId("remote-input-key-space"));
     fireEvent.click(screen.getByTestId("remote-input-key-return"));
     fireEvent.click(screen.getByTestId("remote-input-key-f3"));
@@ -177,9 +175,7 @@ describe("QuickKeysBar", () => {
   it("holds SPACE/RETURN/f-keys via a real pointer down/up on the full tier, not just a tap-and-release", () => {
     const handlers = makeHandlers();
     const snapshots: string[][] = [];
-    render(
-      <QuickKeysBarHarness {...handlers} tier="full" onHeldChange={(next) => snapshots.push([...next].sort())} />,
-    );
+    render(<QuickKeysBarHarness {...handlers} tier="full" onHeldChange={(next) => snapshots.push([...next].sort())} />);
     const returnKey = screen.getByTestId("remote-input-key-return");
 
     fireEvent.pointerDown(returnKey, { pointerId: 1 });
@@ -212,9 +208,7 @@ describe("QuickKeysBar", () => {
     // press-then-release, leaving nothing asserted.
     const handlers = makeHandlers();
     const snapshots: string[][] = [];
-    render(
-      <QuickKeysBarHarness {...handlers} tier="full" onHeldChange={(next) => snapshots.push([...next].sort())} />,
-    );
+    render(<QuickKeysBarHarness {...handlers} tier="full" onHeldChange={(next) => snapshots.push([...next].sort())} />);
 
     for (const testId of [
       "remote-input-key-ctrl",
@@ -237,9 +231,7 @@ describe("QuickKeysBar", () => {
   it("keeps a modifier asserted for exactly as long as it is physically held (CTRL flipper-style hold)", () => {
     const handlers = makeHandlers();
     const snapshots: string[][] = [];
-    render(
-      <QuickKeysBarHarness {...handlers} tier="full" onHeldChange={(next) => snapshots.push([...next].sort())} />,
-    );
+    render(<QuickKeysBarHarness {...handlers} tier="full" onHeldChange={(next) => snapshots.push([...next].sort())} />);
     const ctrl = screen.getByTestId("remote-input-key-ctrl");
 
     fireEvent.pointerDown(ctrl, { pointerId: 1 });

@@ -359,7 +359,15 @@ export function UnifiedHealthBadge({ className }: Props) {
   const suppressClickRef = useRef(false);
 
   const canSwitchDevices = savedDevices.devices.length > 1;
-  const shouldRunSavedDeviceHealthChecks = pickerOpen && canSwitchDevices;
+  // HARD19-034 (decision D6): run saved-device health checks whenever more than
+  // one device is saved — not only while the picker is open. With the picker
+  // closed this drives the F-DIAG-1 `backgroundMaintenance` mode (selected-device
+  // only, freshness-gated, circuit-open-deferred, visibility-resume), which was
+  // previously dead code because `enabled` was false in exactly that mode. The
+  // context split is unchanged, so the picker still gets the fuller
+  // `switchDeviceDialog` behaviour when open. The hook's existing freshness /
+  // circuit gates bound the added background probe traffic.
+  const shouldRunSavedDeviceHealthChecks = canSwitchDevices;
   const {
     byDeviceId: healthByDeviceId,
     refreshAll,

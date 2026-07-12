@@ -554,33 +554,42 @@ class FolderPickerPlugin : Plugin() {
           if (!overwrite) {
             throw IllegalStateException("File already exists: $fileName")
           }
-          val existingUri =
-                  DocumentsContract.buildDocumentUriUsingTree(treeUri, existing.documentId)
-          val deleted = DocumentsContract.deleteDocument(context.contentResolver, existingUri)
-          if (!deleted) {
-            throw IllegalStateException("Unable to overwrite existing file: $fileName")
-          }
         }
 
-        val parentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, parentDocumentId)
-        val createdUri =
-                DocumentsContract.createDocument(
-                        context.contentResolver,
-                        parentUri,
-                        mimeType,
-                        fileName
-                )
-                        ?: throw IllegalStateException("Unable to create file: $fileName")
-
         val bytes = android.util.Base64.decode(dataBase64, android.util.Base64.NO_WRAP)
-        context.contentResolver.openOutputStream(createdUri, "w")?.use { output ->
+
+        // HARD19-015: overwrite IN PLACE with write-truncate ("wt") rather than
+        // delete-then-create. The previous implementation deleted the existing
+        // document before the replacement existed, so any failure after the delete
+        // (createDocument returning null, openOutputStream failing, the write
+        // throwing, or process death) destroyed the user's original file outright —
+        // the most severe data-loss shape in the app. Writing "wt" to the existing
+        // document's URI keeps the original present on any pre-write failure and,
+        // at worst, leaves a truncated-but-present file. Disk images are fixed-size,
+        // so the new content is the same length and truncation is a non-issue.
+        val targetUri =
+                if (existing != null) {
+                  DocumentsContract.buildDocumentUriUsingTree(treeUri, existing.documentId)
+                } else {
+                  val parentUri =
+                          DocumentsContract.buildDocumentUriUsingTree(treeUri, parentDocumentId)
+                  DocumentsContract.createDocument(
+                          context.contentResolver,
+                          parentUri,
+                          mimeType,
+                          fileName
+                  )
+                          ?: throw IllegalStateException("Unable to create file: $fileName")
+                }
+
+        context.contentResolver.openOutputStream(targetUri, "wt")?.use { output ->
           output.write(bytes)
           output.flush()
         }
                 ?: throw IllegalStateException("Unable to open output stream")
 
         val response = JSObject()
-        response.put("uri", createdUri.toString())
+        response.put("uri", targetUri.toString())
         response.put("sizeBytes", bytes.size)
         response.put("modifiedAt", isoTimestampNow())
         call.resolve(response)

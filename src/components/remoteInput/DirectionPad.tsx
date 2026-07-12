@@ -89,8 +89,32 @@ const DirectionPadButton = ({
         handledByPointerRef.current = true;
         cell.onPressStart();
       }}
-      onPointerUp={cell.onPressEnd}
-      onPointerCancel={cell.onPressEnd}
+      onPointerUp={(event) => {
+        cell.onPressEnd?.();
+        // HARD19-002: pointer capture redirects pointerup HERE even when the
+        // finger dragged OFF the cell first, and the browser synthesizes no
+        // click for an off-element release — so onClick's reset never runs and
+        // handledByPointerRef stays true, silently swallowing the NEXT
+        // activation (keypad/focus-ring Enter/Space, assistive tech, or the E2E
+        // synthetic click). Detect the drag-off geometrically and reset now.
+        // Only act on a release with REAL coordinates: a synthetic/programmatic
+        // pointerup reports (0,0), which would read as "outside" and wrongly
+        // reset the ref before the touch-synthesised click arrives (spurious
+        // extra tap). Mirrors KeyHoldButton's proven fix.
+        const hasCoordinates = event.clientX !== 0 || event.clientY !== 0;
+        const rect = event.currentTarget.getBoundingClientRect();
+        const releasedInsideBounds =
+          event.clientX >= rect.left &&
+          event.clientX <= rect.right &&
+          event.clientY >= rect.top &&
+          event.clientY <= rect.bottom;
+        if (hasCoordinates && !releasedInsideBounds) handledByPointerRef.current = false;
+      }}
+      onPointerCancel={() => {
+        // A genuine cancel never gets a click either.
+        handledByPointerRef.current = false;
+        cell.onPressEnd?.();
+      }}
       onClick={() => {
         if (handledByPointerRef.current) {
           handledByPointerRef.current = false;

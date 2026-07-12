@@ -10,7 +10,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import type { C64API, DrivesResponse } from "@/lib/c64api";
 import { buildPlayPlan, executePlayPlan } from "@/lib/playback/playbackRouter";
 import { loadFirstDiskPrgViaDma } from "@/lib/playback/diskFirstPrg";
-import { injectAutostart } from "@/lib/playback/autostart";
+import { mountDiskToDrive } from "@/lib/disks/diskMount";
+import { enqueueKeyboardBufferInjection } from "@/lib/remoteInput/kernalFallbackInjector";
 
 vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
@@ -55,6 +56,11 @@ vi.mock("@/lib/playback/autostart", () => ({
   AUTOSTART_SEQUENCE: new Uint8Array([42]),
   buildAutostartSequence: vi.fn((busId = 8) => new Uint8Array([busId])),
   injectAutostart: vi.fn(async () => undefined),
+}));
+
+// HARD19-018: disk autostart now routes through the shared keyboard-buffer queue.
+vi.mock("@/lib/remoteInput/kernalFallbackInjector", () => ({
+  enqueueKeyboardBufferInjection: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/lib/playback/diskFirstPrg", () => ({
@@ -106,7 +112,11 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
   });
 
   it("powers on Drive A and switches to 1541 before autoplaying a d64", async () => {
-    const api = createApi({ enabled: false, type: "1571" });
+    // HARD19-022: seed an INCOMPATIBLE starting mode (a 1581 cannot read a d64),
+    // so a switch is genuinely required. A 1571 would now be preserved (it reads
+    // d64 natively) — that compatible-mode case is covered in the sibling
+    // tests/unit/playbackRouter.test.ts.
+    const api = createApi({ enabled: false, type: "1581" });
 
     await executePlayPlan(
       api,
@@ -120,12 +130,18 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
 
     expect(api.driveOn).toHaveBeenCalledWith("a");
     expect(api.setDriveMode).toHaveBeenCalledWith("a", "1541");
-    expect(api.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d64", "readwrite", {
-      filename: "/games/demo.d64",
-    });
+    expect(vi.mocked(mountDiskToDrive)).toHaveBeenCalledWith(
+      api,
+      "a",
+      expect.objectContaining({ path: "/games/demo.d64", location: "local" }),
+      expect.anything(),
+      expect.objectContaining({ writeBack: expect.anything() }),
+    );
     expect(loadFirstDiskPrgViaDma).toHaveBeenCalled();
     expect(api.driveOn.mock.invocationCallOrder[0]).toBeLessThan(api.setDriveMode.mock.invocationCallOrder[0]);
-    expect(api.setDriveMode.mock.invocationCallOrder[0]).toBeLessThan(api.mountDriveUpload.mock.invocationCallOrder[0]);
+    expect(api.setDriveMode.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(mountDiskToDrive).mock.invocationCallOrder[0],
+    );
   });
 
   it("switches Drive A to 1571 before autoplaying a d71", async () => {
@@ -143,9 +159,13 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
 
     expect(api.driveOn).not.toHaveBeenCalled();
     expect(api.setDriveMode).toHaveBeenCalledWith("a", "1571");
-    expect(api.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d71", "readwrite", {
-      filename: "/games/demo.d71",
-    });
+    expect(vi.mocked(mountDiskToDrive)).toHaveBeenCalledWith(
+      api,
+      "a",
+      expect.objectContaining({ path: "/games/demo.d71", location: "local" }),
+      expect.anything(),
+      expect.objectContaining({ writeBack: expect.anything() }),
+    );
   });
 
   it("switches Drive A to 1581 before autoplaying a d81", async () => {
@@ -162,9 +182,13 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
     );
 
     expect(api.setDriveMode).toHaveBeenCalledWith("a", "1581");
-    expect(api.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d81", "readwrite", {
-      filename: "/games/demo.d81",
-    });
+    expect(vi.mocked(mountDiskToDrive)).toHaveBeenCalledWith(
+      api,
+      "a",
+      expect.objectContaining({ path: "/games/demo.d81", location: "local" }),
+      expect.anything(),
+      expect.objectContaining({ writeBack: expect.anything() }),
+    );
   });
 
   it("skips drive power and mode changes when Drive A is already ready", async () => {
@@ -182,9 +206,13 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
 
     expect(api.driveOn).not.toHaveBeenCalled();
     expect(api.setDriveMode).not.toHaveBeenCalled();
-    expect(api.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d64", "readwrite", {
-      filename: "/games/demo.d64",
-    });
+    expect(vi.mocked(mountDiskToDrive)).toHaveBeenCalledWith(
+      api,
+      "a",
+      expect.objectContaining({ path: "/games/demo.d64", location: "local" }),
+      expect.anything(),
+      expect.objectContaining({ writeBack: expect.anything() }),
+    );
   });
 
   it("uses refreshed drive bus metadata after changing the drive mode", async () => {
@@ -202,7 +230,7 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
 
     expect(api.setDriveMode).toHaveBeenCalledWith("a", "1571");
     expect(api.getDrives).toHaveBeenCalledTimes(2);
-    expect(injectAutostart).toHaveBeenCalledWith(api, new Uint8Array([9]), {
+    expect(enqueueKeyboardBufferInjection).toHaveBeenCalledWith(api, new Uint8Array([9]), {
       pollIntervalMs: 140,
       maxAttempts: 20,
     });
@@ -231,13 +259,15 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
     await task;
 
     expect(api.machineReboot).toHaveBeenCalledTimes(1);
-    expect(api.mountDriveUpload).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(mountDiskToDrive)).toHaveBeenCalledTimes(1);
     expect(beforeLaunch).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(injectAutostart)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalledTimes(1);
     expect(api.machineReboot.mock.invocationCallOrder[0]).toBeLessThan(beforeLaunch.mock.invocationCallOrder[0]);
-    expect(api.mountDriveUpload.mock.invocationCallOrder[0]).toBeLessThan(beforeLaunch.mock.invocationCallOrder[0]);
+    expect(vi.mocked(mountDiskToDrive).mock.invocationCallOrder[0]).toBeLessThan(
+      beforeLaunch.mock.invocationCallOrder[0],
+    );
     expect(beforeLaunch.mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(injectAutostart).mock.invocationCallOrder[0],
+      vi.mocked(enqueueKeyboardBufferInjection).mock.invocationCallOrder[0],
     );
 
     vi.useRealTimers();

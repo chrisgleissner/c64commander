@@ -518,12 +518,15 @@ describe("UnifiedHealthBadge", () => {
     expect(badge).toHaveAttribute("data-connectivity-state", "Online");
   });
 
-  it("keeps saved-device health polling disabled until the switcher opens", () => {
+  it("runs background health maintenance with the picker closed when more than one device is saved (HARD19-034)", () => {
     render(<UnifiedHealthBadge />);
 
+    // D6: background maintenance is enabled (not gated on pickerOpen) so the
+    // switch picker no longer opens cold. Context stays background-maintenance
+    // while closed; the forced refreshAll is still reserved for picker-open.
     expect(mockUseSavedDeviceHealthChecks).toHaveBeenCalledWith(
       mockState.savedDevices.devices,
-      false,
+      true,
       expect.objectContaining({
         context: "background-maintenance",
         configPulsePolicy: "read-only",
@@ -532,6 +535,23 @@ describe("UnifiedHealthBadge", () => {
     );
     expect(mockState.savedDeviceHealthChecks.refreshAll).not.toHaveBeenCalled();
     expect(screen.queryByTestId("switch-device-sheet")).toBeNull();
+  });
+
+  it("keeps background health maintenance disabled when only one device is saved (HARD19-034)", () => {
+    const originalDevices = mockState.savedDevices.devices;
+    mockState.savedDevices.devices = [originalDevices[0]];
+    try {
+      render(<UnifiedHealthBadge />);
+
+      expect(mockUseSavedDeviceHealthChecks).toHaveBeenCalledWith(
+        mockState.savedDevices.devices,
+        false,
+        expect.objectContaining({ context: "background-maintenance" }),
+        "device-office",
+      );
+    } finally {
+      mockState.savedDevices.devices = originalDevices;
+    }
   });
 
   it("opens the switch picker on long press without also opening diagnostics", async () => {

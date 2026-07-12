@@ -8,14 +8,15 @@
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { loadFirstDiskPrgViaDma } from "@/lib/playback/diskFirstPrg";
-import { injectAutostart } from "@/lib/playback/autostart";
+import { enqueueKeyboardBufferInjection } from "@/lib/remoteInput/kernalFallbackInjector";
 
 type ApiMock = {
   writeMemoryBlock: ReturnType<typeof vi.fn>;
 };
 
-vi.mock("@/lib/playback/autostart", () => ({
-  injectAutostart: vi.fn(),
+// HARD19-018: autostart now routes through the shared keyboard-buffer queue.
+vi.mock("@/lib/remoteInput/kernalFallbackInjector", () => ({
+  enqueueKeyboardBufferInjection: vi.fn(async () => undefined),
 }));
 
 const sectorsPerTrack1541 = (track: number) => {
@@ -206,7 +207,7 @@ const bytesToString = (bytes: Uint8Array) => String.fromCharCode(...Array.from(b
 
 describe("diskFirstPrg DMA loader", () => {
   beforeEach(() => {
-    vi.mocked(injectAutostart).mockReset();
+    vi.mocked(enqueueKeyboardBufferInjection).mockReset();
   });
 
   it("DMA-loads BASIC programs and issues RUN", async () => {
@@ -230,8 +231,8 @@ describe("diskFirstPrg DMA loader", () => {
     const basicPointerCall = calls.find((call) => call[0] === "002B");
     expect(basicPointerCall).toBeTruthy();
 
-    expect(vi.mocked(injectAutostart)).toHaveBeenCalledTimes(1);
-    const command = vi.mocked(injectAutostart).mock.calls[0][1] as Uint8Array;
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalledTimes(1);
+    const command = vi.mocked(enqueueKeyboardBufferInjection).mock.calls[0][1] as Uint8Array;
     expect(bytesToString(command)).toContain("RUN");
   });
 
@@ -266,8 +267,8 @@ describe("diskFirstPrg DMA loader", () => {
     const result = await loadFirstDiskPrgViaDma(api as any, image, "d64");
 
     expect(result.isBasic).toBe(true);
-    expect(vi.mocked(injectAutostart)).toHaveBeenCalledTimes(1);
-    const command = vi.mocked(injectAutostart).mock.calls[0][1] as Uint8Array;
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalledTimes(1);
+    const command = vi.mocked(enqueueKeyboardBufferInjection).mock.calls[0][1] as Uint8Array;
     expect(bytesToString(command)).toContain("RUN");
     expect(bytesToString(command)).not.toContain("SYS");
   });
@@ -283,8 +284,8 @@ describe("diskFirstPrg DMA loader", () => {
 
     expect(result.isBasic).toBe(false);
     expect(result.loadAddress).toBe(0x1000);
-    expect(vi.mocked(injectAutostart)).toHaveBeenCalledTimes(1);
-    const command = vi.mocked(injectAutostart).mock.calls[0][1] as Uint8Array;
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalledTimes(1);
+    const command = vi.mocked(enqueueKeyboardBufferInjection).mock.calls[0][1] as Uint8Array;
     expect(bytesToString(command)).toContain("SYS 4096");
   });
 
@@ -309,7 +310,7 @@ describe("diskFirstPrg DMA loader", () => {
     const result = await loadFirstDiskPrgViaDma(api as any, image, "d64");
 
     expect(result.loadAddress).toBe(0x1000);
-    expect(vi.mocked(injectAutostart)).toHaveBeenCalled();
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalled();
   });
 
   it("rejects directory listings without PRG entries", async () => {
@@ -346,7 +347,7 @@ describe("diskFirstPrg DMA loader", () => {
     const result = await loadFirstDiskPrgViaDma(api as any, image, "d71");
 
     expect(result.isBasic).toBe(false);
-    expect(vi.mocked(injectAutostart)).toHaveBeenCalled();
+    expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalled();
   });
 
   it("loads D81 images and issues RUN when program is basic", async () => {
@@ -359,7 +360,7 @@ describe("diskFirstPrg DMA loader", () => {
     const result = await loadFirstDiskPrgViaDma(api as any, image, "d81");
 
     expect(result.isBasic).toBe(true);
-    const command = vi.mocked(injectAutostart).mock.calls.at(-1)?.[1] as Uint8Array;
+    const command = vi.mocked(enqueueKeyboardBufferInjection).mock.calls.at(-1)?.[1] as Uint8Array;
     expect(bytesToString(command)).toContain("RUN");
   });
 

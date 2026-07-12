@@ -24,6 +24,11 @@ export type HydrateHvscMetadataOptions = {
   readSong: (virtualPath: string) => Promise<HvscSong | null>;
   emitProgress: (event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">) => void;
   onSnapshotUpdated?: (snapshot: HvscBrowseIndexSnapshot, isFinal: boolean) => Promise<void> | void;
+  // HARD19-019: checked at each chunk boundary. Returning false (the library was
+  // reset or a reinstall started) stops the loop BEFORE issuing more native
+  // reads or stamping survivors "error", and skips the final persist — so a
+  // stale hydrator cannot resurrect the deleted index or clobber a reinstall.
+  shouldContinue?: () => boolean;
 };
 
 export const hydrateHvscMetadata = async ({
@@ -31,6 +36,7 @@ export const hydrateHvscMetadata = async ({
   readSong,
   emitProgress,
   onSnapshotUpdated,
+  shouldContinue,
 }: HydrateHvscMetadataOptions) => {
   const candidatePaths = Object.values(snapshot.songs)
     .filter((song) => canHydrateSong(song.metadataStatus))
@@ -56,6 +62,18 @@ export const hydrateHvscMetadata = async ({
   let failedSongs = 0;
 
   for (let index = 0; index < candidatePaths.length; index += HYDRATION_CHUNK_SIZE) {
+    // HARD19-019: bail before touching the next chunk if this run was
+    // invalidated (reset/reinstall). No more native reads, no "error" stamping,
+    // and — because we return without reaching onSnapshotUpdated below — no
+    // persist of the now-stale snapshot.
+    if (shouldContinue && !shouldContinue()) {
+      addLog("info", "HVSC metadata hydration aborted (library reset or reinstall)", {
+        processedCount,
+        totalCount,
+      });
+      return snapshot;
+    }
+
     const chunk = candidatePaths.slice(index, index + HYDRATION_CHUNK_SIZE);
 
     chunk.forEach((virtualPath) => {

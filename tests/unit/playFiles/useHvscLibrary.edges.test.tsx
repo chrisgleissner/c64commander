@@ -199,7 +199,7 @@ describe("useHvscLibrary edge cases", () => {
   });
 
   it("formatHvscDuration converts milliseconds to mm:ss string", () => {
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     expect(result.current.formatHvscDuration(90000)).toBe("1:30");
     expect(result.current.formatHvscDuration(0)).toBe("0:00");
@@ -207,7 +207,7 @@ describe("useHvscLibrary edge cases", () => {
   });
 
   it("formatHvscTimestamp returns localized string for a valid ISO date", () => {
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     const ts = result.current.formatHvscTimestamp("2024-06-15T10:30:00Z");
     expect(ts).not.toBe("—");
@@ -215,7 +215,7 @@ describe("useHvscLibrary edge cases", () => {
   });
 
   it("formatHvscTimestamp returns dash for an invalid date string", () => {
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     expect(result.current.formatHvscTimestamp("not-a-date")).toBe("—");
   });
@@ -224,7 +224,7 @@ describe("useHvscLibrary edge cases", () => {
     const testData = "hello sid";
     mocks.getHvscSongMock.mockResolvedValue({ dataBase64: btoa(testData) });
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     const file = result.current.buildHvscLocalPlayFile("/MUSICIANS/Test/song.sid", "song.sid");
     expect(file.name).toBe("song.sid");
@@ -239,7 +239,7 @@ describe("useHvscLibrary edge cases", () => {
     mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 1, ingestionState: "ready" }));
     mocks.getHvscCacheStatusMock.mockRejectedValueOnce(new Error("cache fetch error"));
 
-    renderHook(() => useHvscLibrary());
+    renderHook(() => useHvscLibrary(true));
 
     await waitFor(() =>
       expect(mocks.addErrorLogMock).toHaveBeenCalledWith(
@@ -253,14 +253,14 @@ describe("useHvscLibrary edge cases", () => {
     mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 0, ingestionState: "idle" }));
     mocks.loadHvscStatusSummaryMock.mockImplementation(() => createSummary());
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscInstalled).toBe(false));
     expect(mocks.getHvscCacheStatusMock).not.toHaveBeenCalled();
   });
 
   it("progress error event with storage keywords resolves to storage failure category and label", async () => {
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(progressListener).not.toBeNull());
 
@@ -276,7 +276,7 @@ describe("useHvscLibrary edge cases", () => {
   });
 
   it("progress error event resolves to download failure category when last stage was download", async () => {
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(progressListener).not.toBeNull());
 
@@ -295,7 +295,7 @@ describe("useHvscLibrary edge cases", () => {
   });
 
   it("progress error event resolves to extraction failure category when last stage was archive_extraction", async () => {
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(progressListener).not.toBeNull());
 
@@ -315,7 +315,7 @@ describe("useHvscLibrary edge cases", () => {
   });
 
   it("progress error event resolves to unknown failure category with unrecognized context", async () => {
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(progressListener).not.toBeNull());
 
@@ -333,7 +333,7 @@ describe("useHvscLibrary edge cases", () => {
       }),
     );
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     expect(result.current.hvscSummaryFailureLabel).toBe("Extraction error");
   });
@@ -347,7 +347,7 @@ describe("useHvscLibrary edge cases", () => {
     mocks.getHvscCacheStatusMock.mockResolvedValue({ baselineVersion: 3, updateVersions: [] });
     mocks.ingestCachedHvscMock.mockRejectedValueOnce(new Error("ingest write failed"));
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscCanIngest).toBe(true));
 
@@ -385,7 +385,7 @@ describe("useHvscLibrary edge cases", () => {
       }),
     );
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscCanIngest).toBe(true));
 
@@ -404,7 +404,7 @@ describe("useHvscLibrary edge cases", () => {
   it("download progress event throttle path schedules a deferred update", async () => {
     vi.useFakeTimers();
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await act(async () => {
       await Promise.resolve();
@@ -449,7 +449,7 @@ describe("useHvscLibrary edge cases", () => {
     // Use installing state so the stale-ingestion effect exits early (activeIngestion=true)
     mocks.getHvscStatusMock.mockResolvedValue(createStatus({ ingestionState: "installing" }));
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await act(async () => {
       await Promise.resolve();

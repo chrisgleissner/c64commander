@@ -412,6 +412,12 @@ export const GlobalDiagnosticsOverlay = () => {
     clearLatencySamples();
     clearHealthHistory();
     clearRecoveryEvidence();
+    // HARD19-020: the pinned health-check result drives the global badge
+    // (useHealthState prefers latestResult), so "Clear all" must reset it too —
+    // otherwise the badge keeps asserting a verdict whose supporting evidence
+    // (logs, traces, health history) the user just deleted. Falls back to
+    // trace-derived health, which is now freshly empty → Idle until new evidence.
+    setHealthCheckStateSnapshot({ latestResult: null });
     setLogs([]);
     setErrorLogs([]);
     setTraceEvents([]);

@@ -30,6 +30,28 @@ const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
 /** A bare IPv4 literal needs no hostname→IP rescue (it IS an address). */
 export const isLikelyIpAddress = (host: string): boolean => IPV4.test(host.trim());
 
+// HARD19-036: an overall bound on the hostname→IP rescue scan. The native
+// DeviceDiscovery plugin serializes every scan on ONE executor thread, and the
+// silent rescue scan intentionally bypasses the JS single-flight — so if the
+// user hits Save while a "Discover devices" LAN scan is already running, the
+// rescue queues behind it with no queue-wait bound and freezes the Save button
+// for 20s+. Racing it to this bound degrades Save to a plain "unreachable"
+// verdict (just no IP suggestion) instead of an unexplained hang.
+const RESCUE_SCAN_TIMEOUT_MS = 6000;
+const RESCUE_SCAN_TIMEOUT = Symbol("rescue-scan-timeout");
+
+const raceRescueScan = async <T>(scan: Promise<T>): Promise<T | typeof RESCUE_SCAN_TIMEOUT> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<typeof RESCUE_SCAN_TIMEOUT>((resolve) => {
+    timer = setTimeout(() => resolve(RESCUE_SCAN_TIMEOUT), RESCUE_SCAN_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([scan, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
+
 export type EvaluateNewDeviceReachabilityDeps = {
   probe: typeof probeDeviceReachability;
   discover: typeof startDeviceDiscovery;
@@ -64,7 +86,16 @@ export const evaluateNewDeviceReachability = async (
   try {
     // `silent` keeps this rescue scan off the shared discovery store, so saving a device
     // never hijacks the Settings "Discover devices" panel or derails a user-started scan.
-    const result = await deps.discover({ trigger: "settings", includeLanScan: true, silent: true });
+    const result = await raceRescueScan(deps.discover({ trigger: "settings", includeLanScan: true, silent: true }));
+    if (result === RESCUE_SCAN_TIMEOUT) {
+      // HARD19-036: the rescue scan queued behind an in-flight discovery. Don't
+      // hold Save hostage — return a plain unreachable verdict (no suggestion).
+      addLog("warn", "Reachability IP-rescue discovery timed out", {
+        host: input.host,
+        timeoutMs: RESCUE_SCAN_TIMEOUT_MS,
+      });
+      return { status: "unreachable", suggestedAddress: null, suggestedHostname: null };
+    }
     const candidates = result.candidates ?? [];
     // Prefer an exact hostname match; otherwise, if the scan saw exactly one Ultimate,
     // it is almost certainly the device the user is trying to reach.

@@ -21,7 +21,8 @@ import {
   setMachineExecutionRunning,
   subscribeMachineExecution,
 } from "@/lib/deviceInteraction/machineExecutionStore";
-import { publishMachineTakeover } from "@/lib/deviceInteraction/machineTakeoverEvent";
+import { publishMachineInterrupt } from "@/lib/deviceInteraction/machineInterrupt";
+import { capturePauseMuteToPersistedSnapshot } from "@/lib/deviceInteraction/pauseMuteCapture";
 import { clearRamAndReboot, loadMemoryRanges } from "@/lib/machine/ramOperations";
 import { selectRamDumpFolder } from "@/lib/machine/ramDumpStorage";
 import { loadRamDumpFolderConfig, type RamDumpFolderConfig } from "@/lib/config/ramDumpFolderStore";
@@ -160,10 +161,11 @@ export function useHomeActions() {
       "Machine rebooting",
       "RAM cleared (excluding I/O region).",
     );
-    setMachineExecutionState("running");
-    // HARD18-022 (M3): stop any armed Play session in place instead of
-    // letting auto-advance relaunch content on the freshly reset machine.
-    void publishMachineTakeover({ reason: "home-reset", label: "Reboot (Clr Mem)" });
+    // HARD18-022 (M3): stop any armed Play session in place instead of letting
+    // auto-advance relaunch content on the freshly reset machine. HARD19-032:
+    // also restore a pending pause-mute so a reboot-while-paused does not strand
+    // the SID mixer muted. publishMachineInterrupt sets "running" synchronously.
+    void publishMachineInterrupt({ reason: "home-reset", label: "Reboot (Clr Mem)" });
   });
 
   const handlePauseResume = trace(async function handlePauseResume() {
@@ -176,14 +178,28 @@ export function useHomeActions() {
     setPauseResumePending(true);
     try {
       if (targetState === "paused") {
-        await controls.pause.mutateAsync();
+        const deviceId = getSelectedSavedDevice()?.id ?? null;
+        // HARD19-010: mute the SID mixer before pausing so a paused SID does not
+        // leave a sustained drone (Play's own pause path already does this).
+        // Persist a device-scoped snapshot so either page's resume can restore it.
+        const muteApplied = await capturePauseMuteToPersistedSnapshot(api, deviceId);
+        try {
+          await controls.pause.mutateAsync();
+        } catch (error) {
+          // Roll back the mute so a failed pause does not leave a running machine silent.
+          if (muteApplied) {
+            await restorePauseMuteFromPersistedSnapshot(api, deviceId);
+          }
+          throw error;
+        }
+        setMachineExecutionPaused({ pauseMutePending: muteApplied });
       } else {
         await controls.resume.mutateAsync();
         if (pauseMutePending) {
           await restorePauseMuteFromPersistedSnapshot(api, getSelectedSavedDevice()?.id ?? null);
         }
+        setMachineExecutionRunning();
       }
-      setMachineExecutionState(targetState);
       toast({
         title: targetState === "paused" ? "Machine paused" : "Machine resumed",
       });
@@ -372,8 +388,18 @@ export function useHomeActions() {
       },
       "",
     );
-    if (succeeded && !endsPaused) {
-      setMachineExecutionState("running");
+    if (succeeded) {
+      // HARD19-011: publish the machine takeover so an armed Play session stops
+      // in place instead of auto-advancing over the just-restored session.
+      // HARD19-032: restore any pending pause-mute so a restore-while-paused does
+      // not strand the SID mixer muted. `endsPaused` (a RAM-only restore that
+      // honoured an existing pause) keeps the machine paused and skips the mixer
+      // restore, but still stops the armed session.
+      void publishMachineInterrupt({
+        reason: "home-reset",
+        label: snapshot.metadata.label ?? "Snapshot restore",
+        endsPaused,
+      });
     }
   });
 
@@ -391,7 +417,18 @@ export function useHomeActions() {
 
   const confirmPowerOff = trace(async function confirmPowerOff() {
     setPowerOffDialogOpen(false);
-    await handleAction(() => controls.powerOff.mutateAsync(), "Powering off...");
+    let succeeded = false;
+    await handleAction(async () => {
+      await controls.powerOff.mutateAsync();
+      succeeded = true;
+    }, "Powering off...");
+    if (succeeded) {
+      // HARD19-031: Power Off never published a takeover, so an armed playlist
+      // kept firing auto-advance launch calls at a now-dead device (doomed REST
+      // traffic + failure evidence). Publish it (success-gated) so the Play
+      // session stops; also mark execution state + restore any pending pause-mute.
+      void publishMachineInterrupt({ reason: "home-reset", label: "Power off" });
+    }
   });
 
   // The drives poll resolves independently of the connection badge, so a reset can be

@@ -799,7 +799,10 @@ describe("HomePage RAM actions", () => {
   it("createHomeReuWorkflow's runRestoreRemoteReu delegates to restoreRemoteReu over the REU telnet session (HARD18-014)", async () => {
     const { restoreRemoteReu } = await import("@/lib/reu/reuTelnetWorkflow");
     const { createTelnetSession } = await import("@/lib/telnet/telnetSession");
-    const fakeSession = { connect: vi.fn().mockResolvedValue(undefined), disconnect: vi.fn().mockResolvedValue(undefined) };
+    const fakeSession = {
+      connect: vi.fn().mockResolvedValue(undefined),
+      disconnect: vi.fn().mockResolvedValue(undefined),
+    };
     (createTelnetSession as ReturnType<typeof vi.fn>).mockReturnValue(fakeSession);
     telnetState.isAvailable = true;
 

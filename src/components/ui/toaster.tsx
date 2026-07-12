@@ -53,11 +53,12 @@ type ToastItemProps = {
   description?: React.ReactNode;
   action?: React.ReactElement;
   dismiss: (id?: string) => void;
+  variant?: "default" | "destructive" | null;
   [key: string]: unknown;
 };
 
 // Separate component so each toast has its own swipe-tracking ref.
-function ToastItem({ id, title, description, action, dismiss, ...props }: ToastItemProps) {
+function ToastItem({ id, title, description, action, dismiss, variant, ...props }: ToastItemProps) {
   // Track whether a swipe gesture started so click does not also fire after
   // a swipe on desktop (where mouseup + click both fire after a drag).
   const swipingRef = useRef(false);
@@ -90,6 +91,14 @@ function ToastItem({ id, title, description, action, dismiss, ...props }: ToastI
     <Toast
       data-testid="app-toast"
       data-toast-id={id}
+      variant={variant}
+      // ERROR_POLICY §4: destructive (error) toasts must persist until dismissed
+      // or stale-cleared so failures stay visible and their Retry action is
+      // reachable. The Radix provider `duration` governs notices only; without
+      // this per-root override every error toast inherits the ~4s notice
+      // duration and silently auto-dismisses (HARD19-037). `undefined` on
+      // notices falls through to the provider duration.
+      duration={variant === "destructive" ? Infinity : undefined}
       {...props}
       onSwipeStart={handleSwipeStart}
       onSwipeEnd={handleSwipeEnd}

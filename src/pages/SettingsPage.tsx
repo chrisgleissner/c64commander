@@ -191,6 +191,7 @@ import { clearPasswordForDevice, getPasswordForDevice, setPasswordForDevice } fr
 import { FEATURE_FLAG_DEFINITIONS, FEATURE_FLAG_GROUPS } from "@/lib/config/featureFlags";
 import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
 import { applyScreenOrientationMode } from "@/lib/native/screenOrientation";
+import { variant } from "@/generated/variant";
 import { persistDiscoveredDevice, startDeviceDiscovery } from "@/lib/deviceDiscovery/discoveryManager";
 import { formatDiscoveredDeviceSubtitle, formatDiscoveredDeviceTitle } from "@/lib/deviceDiscovery/display";
 import type { DeviceDiscoveryCandidate } from "@/lib/deviceDiscovery/types";
@@ -1024,7 +1025,10 @@ export default function SettingsPage() {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = "c64commander-settings.json";
+        // HARD19-035: honor the variant basename (like diagnostics/trace exports)
+        // so the C64U Remote build doesn't emit the other product's filename —
+        // the only provenance signal on an otherwise variant-agnostic payload.
+        link.download = `${variant.exportedFileBasename}-settings.json`;
         link.click();
         window.setTimeout(() => URL.revokeObjectURL(url), 5000);
         toast({ title: "Settings export ready" });
@@ -1060,12 +1064,26 @@ export default function SettingsPage() {
       setBackgroundRediscoveryIntervalInput(String(loadBackgroundRediscoveryIntervalMs() / 1000));
       setProbeTimeoutInput(String(loadDiscoveryProbeTimeoutMs() / 1000));
       setDiskAutostartMode(loadDiskAutostartMode());
+      // HARD19-030: import persisted+broadcast the orientation but never applied
+      // it to the device or refreshed this selector, so the imported value was
+      // invisible until the next launch (and re-tapping the stale control would
+      // clobber it). Mirror commitScreenOrientationMode: refresh the UI and apply
+      // the native orientation now.
+      const importedScreenOrientationMode = loadScreenOrientationMode();
+      setScreenOrientationMode(importedScreenOrientationMode);
+      void applyScreenOrientationMode(importedScreenOrientationMode);
       const importedArchiveHostOverride = loadArchiveHostOverride();
       setArchiveHostOverride(importedArchiveHostOverride);
       setArchiveHostError(validateArchiveHost(importedArchiveHostOverride));
       setArchiveClientIdOverride(loadArchiveClientIdOverride());
       setArchiveUserAgentOverride(loadArchiveUserAgentOverride());
-      toast({ title: "Settings imported" });
+      // HARD19-035 (D10): a cross-variant file still imports, but surface the
+      // provenance mismatch so the user knows the settings came from another app.
+      toast(
+        result.warning
+          ? { title: "Settings imported", description: result.warning, variant: "destructive" }
+          : { title: "Settings imported" },
+      );
     } catch (error) {
       reportUserError({
         operation: "SETTINGS_IMPORT",

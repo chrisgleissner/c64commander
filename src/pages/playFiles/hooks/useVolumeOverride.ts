@@ -6,6 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { extractAudioMixerItems, type AudioMixerItem } from "@/lib/config/audioMixerItems";
+import {
+  discardPlaybackSnapshot,
+  hydratePlaybackSnapshot,
+  persistPlaybackSnapshot,
+} from "@/lib/playback/playbackSessionPersistence";
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import { useC64ConfigItems, useC64Connection, useC64UpdateConfigBatch } from "@/hooks/useC64Connection";
 import { toast } from "@/hooks/use-toast";
@@ -36,14 +42,9 @@ import {
   type SidEnablement,
 } from "@/lib/config/sidVolumeControl";
 import { reduceVolumeState, type VolumeAction } from "../volumeState";
-import { extractAudioMixerItems, parseVolumeOption, type AudioMixerItem } from "../playFilesUtils";
+import { parseVolumeOption } from "../playFilesUtils";
 import { resolvePlaybackSyncDecision, type PlaybackSyncIntent, type PlaybackSyncState } from "../playbackMixerSync";
 import { resolveMutedSyncIndex, resolveMostCommonIndex, shouldHoldManualMuteSync } from "../volumeSync";
-import {
-  discardPlaybackSnapshot,
-  hydratePlaybackSnapshot,
-  persistPlaybackSnapshot,
-} from "../playbackSessionPersistence";
 
 type SidMuteSnapshot = {
   volumes: Record<string, string | number>;

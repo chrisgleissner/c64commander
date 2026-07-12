@@ -15,6 +15,7 @@ import { useInterstitialActive } from "@/components/ui/interstitial-state";
 import { addLog } from "@/lib/logging";
 import { TAB_ROUTES, resolveSwipeTarget, tabIndexForPath } from "@/lib/navigation/tabRoutes";
 import { AppChromeModeProvider } from "@/components/layout/AppChromeContext";
+import { PageErrorBoundary } from "@/components/PageErrorBoundary";
 import { APP_SETTINGS_KEYS, loadEnableSwipeNavigation } from "@/lib/config/appSettings";
 import {
   buildRunwayPanelIndexes,
@@ -517,40 +518,4 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
       </div>
     </div>
   );
-}
-
-class PageErrorBoundary extends React.Component<{ children: React.ReactNode; active: boolean }, { hasError: boolean }> {
-  state = { hasError: false };
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidUpdate(previousProps: { children: React.ReactNode; active: boolean }) {
-    if (!previousProps.active && this.props.active && this.state.hasError) {
-      this.setState({ hasError: false });
-    }
-  }
-
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
-    addLog("error", "[SwipeNav] page render error", {
-      message: error.message,
-      stack: error.stack,
-      componentStack: info.componentStack,
-    });
-  }
-
-  render() {
-    if (!this.state.hasError) return this.props.children;
-    if (!this.props.active) return null;
-
-    return (
-      <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-6 py-10">
-        <div className="max-w-sm rounded-xl border border-border bg-card p-5 text-center shadow">
-          <p className="text-sm font-semibold text-foreground">{t("app.error.title", "Something went wrong")}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{t("app.error.retry", "Please try reloading the app.")}</p>
-        </div>
-      </div>
-    );
-  }
 }

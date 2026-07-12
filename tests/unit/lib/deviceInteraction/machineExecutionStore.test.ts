@@ -15,7 +15,7 @@ import {
   setMachineExecutionRunning,
   subscribeMachineExecution,
 } from "@/lib/deviceInteraction/machineExecutionStore";
-import { hydratePlaybackSnapshot, persistPlaybackSnapshot } from "@/pages/playFiles/playbackSessionPersistence";
+import { hydratePlaybackSnapshot, persistPlaybackSnapshot } from "@/lib/playback/playbackSessionPersistence";
 
 describe("machineExecutionStore", () => {
   beforeEach(() => {

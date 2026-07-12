@@ -13,6 +13,7 @@ This folder is the canonical location for durable repository documentation.
 - [keyboard-input.md](keyboard-input.md) - keypad / keyboard / T9 touch-free operation, the `data-key-selected` highlight, and key-event diagnostics
 - [ux-guidelines.md](ux-guidelines.md) - UX rules and page-level design constraints
 - [ux-interactions.md](ux-interactions.md) - detailed interaction inventory and coverage-oriented UX notes
+- [code-markers.md](code-markers.md) - what the `HARDxx-NNN` / `BUG-NNN` markers in code comments refer to (one-line title per referenced finding)
 
 ## C64 Ultimate protocol references
 

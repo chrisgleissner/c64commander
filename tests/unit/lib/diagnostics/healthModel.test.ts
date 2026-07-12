@@ -522,12 +522,45 @@ describe("rollUpHealth", () => {
     expect(rollUpHealth(contributors, "Online")).toBe("Unavailable");
   });
 
-  it("includes TELNET contributor failures in the overall roll-up", () => {
+  // HARD19-027 (D5): FTP and Telnet are optional c64u services; an unreachable
+  // optional service caps the overall result at Degraded rather than reporting a
+  // REST-perfect device as whole-device Unhealthy.
+  it("caps an unreachable TELNET contributor at Degraded, not whole-device Unhealthy (HARD19-027)", () => {
     const contributors = {
       App: idleContributor(),
       REST: idleContributor(),
       FTP: idleContributor(),
       TELNET: withState("Unhealthy"),
+    };
+    expect(rollUpHealth(contributors, "Online")).toBe("Degraded");
+  });
+
+  it("reports Degraded (not Unhealthy) when REST is Healthy but FTP and Telnet are unreachable (HARD19-027)", () => {
+    const contributors = {
+      App: withState("Healthy"),
+      REST: withState("Healthy"),
+      FTP: withState("Unhealthy"),
+      TELNET: withState("Unhealthy"),
+    };
+    expect(rollUpHealth(contributors, "Online")).toBe("Degraded");
+  });
+
+  it("still reports Unhealthy when the REST control plane is Unhealthy even if optional services are fine (HARD19-027)", () => {
+    const contributors = {
+      App: withState("Healthy"),
+      REST: withState("Unhealthy"),
+      FTP: withState("Healthy"),
+      TELNET: withState("Healthy"),
+    };
+    expect(rollUpHealth(contributors, "Online")).toBe("Unhealthy");
+  });
+
+  it("still reports Unhealthy when app-level errors make the App contributor Unhealthy (HARD19-027)", () => {
+    const contributors = {
+      App: withState("Unhealthy"),
+      REST: withState("Healthy"),
+      FTP: idleContributor(),
+      TELNET: idleContributor(),
     };
     expect(rollUpHealth(contributors, "Online")).toBe("Unhealthy");
   });

@@ -128,8 +128,11 @@ vi.mock("@/lib/config/sidVolumeControl", () => ({
   resolveSidMutedVolumeOption: vi.fn(() => "-42 dB"),
 }));
 
-vi.mock("@/pages/playFiles/playFilesUtils", () => ({
+vi.mock("@/lib/config/audioMixerItems", () => ({
   extractAudioMixerItems: (items: MixerItem[]) => items,
+}));
+
+vi.mock("@/pages/playFiles/playFilesUtils", () => ({
   parseVolumeOption: (value: string | number) => Number(value),
 }));
 

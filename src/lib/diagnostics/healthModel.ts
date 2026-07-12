@@ -21,6 +21,8 @@ export type DisplayProfile = "compact" | "medium" | "expanded";
 
 // §6.3 — Health indicator contributors
 export type ContributorKey = "App" | "REST" | "FTP" | "TELNET";
+const CONTROL_PLANE_KEYS = ["App", "REST"] as const satisfies readonly ContributorKey[];
+const OPTIONAL_SERVICE_KEYS = ["FTP", "TELNET"] as const satisfies readonly ContributorKey[];
 
 // §8.3 — Health glyphs (shape, color-independent)
 export const HEALTH_GLYPHS: Record<HealthState, string> = {
@@ -554,7 +556,19 @@ export const rollUpHealth = (
 
   const states = Object.values(contributors).map((c) => c.state);
   if (states.some((s) => s === "Unavailable")) return "Unavailable";
-  if (states.some((s) => s === "Unhealthy")) return "Unhealthy";
+
+  // §7.4 / D5 (HARD19-027): FTP and Telnet are OPTIONAL c64u services the user
+  // must explicitly enable; many devices run with one or both off. A probe
+  // against a disabled service returns connection-refused → the FTP/TELNET
+  // contributor becomes Unhealthy, which previously dominated the roll-up and
+  // reported a REST-perfect device as whole-device Unhealthy. Reserve Unhealthy
+  // for the control plane (REST, and app-level errors); an unreachable optional
+  // service caps the overall result at Degraded.
+  const controlPlaneUnhealthy = CONTROL_PLANE_KEYS.some((key) => contributors[key]?.state === "Unhealthy");
+  if (controlPlaneUnhealthy) return "Unhealthy";
+  const optionalServiceUnhealthy = OPTIONAL_SERVICE_KEYS.some((key) => contributors[key]?.state === "Unhealthy");
+  if (optionalServiceUnhealthy) return "Degraded";
+
   if (states.some((s) => s === "Degraded")) return "Degraded";
   if (states.some((s) => s === "Healthy")) return "Healthy";
   return "Idle";

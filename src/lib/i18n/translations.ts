@@ -16,5 +16,9 @@ export const translations: Record<SupportedLocale, Record<string, string>> = {
     "app.error.title": "Something went wrong",
     "app.error.description": "The app hit an unexpected error. Please reopen the page or try again.",
     "app.error.reload": "Reload",
+    // Button label on the page-level error boundary. Kept distinct from
+    // app.error.reload (full app reload) and app.error.description (body copy)
+    // so a future translation of one does not bleed into the others (HARD19-033).
+    "app.error.tryAgain": "Try again",
   },
 };

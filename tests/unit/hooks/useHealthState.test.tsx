@@ -477,4 +477,179 @@ describe("useHealthState", () => {
 
     expect(filteredEvents).toEqual([traceEventsMock.events[0], traceEventsMock.events[1], traceEventsMock.events[3]]);
   });
+
+  // HARD19-004 (D1): a pinned manual health-check verdict must not out-live
+  // contradicting live evidence. These exercise the trace-evidence override.
+  const allSuccessProbes = () => ({
+    CONFIG: { probe: "CONFIG", outcome: "Success", reason: null },
+    JIFFY: { probe: "JIFFY", outcome: "Success", reason: null },
+    REST: { probe: "REST", outcome: "Success", reason: null },
+    FTP: { probe: "FTP", outcome: "Success", reason: null },
+    TELNET: { probe: "TELNET", outcome: "Success", reason: null },
+  });
+
+  it("prefers live trace-derived health over a stale pinned Unhealthy after a newer REST success (HARD19-004 recovery)", () => {
+    connectionStateMock.state = "REAL_CONNECTED";
+    healthModelMocks.deriveConnectivityState.mockImplementation(() => "Online");
+    healthModelMocks.rollUpHealth.mockImplementation(() => "Healthy");
+    healthModelMocks.deriveRestContributorHealth.mockImplementation(() => ({
+      state: "Healthy",
+      problemCount: 0,
+      totalOperations: 1,
+      failedOperations: 0,
+    }));
+    c64ConnectionMock.status.deviceInfo = { product: "Ultimate 64", firmware_version: "1.1.0" };
+    healthCheckStateMock.latestResult = {
+      runId: "hc-stale-unhealthy",
+      overallHealth: "Unhealthy",
+      endTimestamp: "2024-01-01T00:00:00.000Z",
+      deviceInfo: null,
+      probes: { ...allSuccessProbes(), REST: { probe: "REST", outcome: "Fail", reason: "was down" } },
+    };
+    // A successful REST response recorded AFTER the pinned check proves recovery.
+    traceEventsMock.events = [{ type: "rest-response", timestamp: "2024-01-01T00:05:00.000Z", data: { status: 200 } }];
+
+    const { result } = renderHook(() => useHealthState());
+
+    expect(result.current.state).toBe("Healthy");
+  });
+
+  it("prefers live trace-derived health over a stale pinned Unhealthy after a newer FTP success (HARD19-004 recovery)", () => {
+    connectionStateMock.state = "REAL_CONNECTED";
+    healthModelMocks.deriveConnectivityState.mockImplementation(() => "Online");
+    healthModelMocks.rollUpHealth.mockImplementation(() => "Healthy");
+    healthModelMocks.deriveFtpContributorHealth.mockImplementation(() => ({
+      state: "Healthy",
+      problemCount: 0,
+      totalOperations: 1,
+      failedOperations: 0,
+    }));
+    c64ConnectionMock.status.deviceInfo = { product: "Ultimate 64", firmware_version: "1.1.0" };
+    healthCheckStateMock.latestResult = {
+      runId: "hc-stale-unhealthy-ftp",
+      overallHealth: "Unhealthy",
+      endTimestamp: "2024-01-01T00:00:00.000Z",
+      deviceInfo: null,
+      probes: { ...allSuccessProbes(), FTP: { probe: "FTP", outcome: "Fail", reason: "ftp was down" } },
+    };
+    traceEventsMock.events = [
+      { type: "ftp-operation", timestamp: "2024-01-01T00:05:00.000Z", data: { result: "success", error: null } },
+    ];
+
+    const { result } = renderHook(() => useHealthState());
+
+    expect(result.current.state).toBe("Healthy");
+  });
+
+  it("prefers live trace-derived health over a stale pinned Unhealthy after a newer TELNET success (HARD19-004 recovery)", () => {
+    connectionStateMock.state = "REAL_CONNECTED";
+    healthModelMocks.deriveConnectivityState.mockImplementation(() => "Online");
+    healthModelMocks.rollUpHealth.mockImplementation(() => "Healthy");
+    healthModelMocks.deriveTelnetContributorHealth.mockImplementation(() => ({
+      state: "Healthy",
+      problemCount: 0,
+      totalOperations: 1,
+      failedOperations: 0,
+    }));
+    c64ConnectionMock.status.deviceInfo = { product: "Ultimate 64", firmware_version: "1.1.0" };
+    healthCheckStateMock.latestResult = {
+      runId: "hc-stale-unhealthy-telnet",
+      overallHealth: "Unhealthy",
+      endTimestamp: "2024-01-01T00:00:00.000Z",
+      deviceInfo: null,
+      probes: { ...allSuccessProbes(), TELNET: { probe: "TELNET", outcome: "Fail", reason: "telnet was down" } },
+    };
+    traceEventsMock.events = [
+      { type: "telnet-operation", timestamp: "2024-01-01T00:05:00.000Z", data: { result: "success", error: "" } },
+    ];
+
+    const { result } = renderHook(() => useHealthState());
+
+    expect(result.current.state).toBe("Healthy");
+  });
+
+  it("prefers live trace-derived health over a stale pinned Healthy after newer failures (HARD19-004 degradation)", () => {
+    connectionStateMock.state = "REAL_CONNECTED";
+    healthModelMocks.deriveConnectivityState.mockImplementation(() => "Online");
+    healthModelMocks.rollUpHealth.mockImplementation(() => "Unhealthy");
+    healthModelMocks.deriveRestContributorHealth.mockImplementation(() => ({
+      state: "Unhealthy",
+      problemCount: 2,
+      totalOperations: 3,
+      failedOperations: 2,
+    }));
+    c64ConnectionMock.status.deviceInfo = { product: "Ultimate 64", firmware_version: "1.1.0" };
+    healthCheckStateMock.latestResult = {
+      runId: "hc-stale-healthy",
+      overallHealth: "Healthy",
+      endTimestamp: "2024-01-01T00:00:00.000Z",
+      deviceInfo: { product: "Ultimate 64" },
+      probes: allSuccessProbes(),
+    };
+    traceEventsMock.events = [
+      { type: "rest-response", timestamp: "2024-01-01T00:00:05.000Z", data: { status: 200 } },
+      // A newer failing response contradicts the pinned Healthy verdict.
+      { type: "rest-response", timestamp: "2024-01-01T00:05:00.000Z", data: { status: 503 } },
+    ];
+
+    const { result } = renderHook(() => useHealthState());
+
+    expect(result.current.state).toBe("Unhealthy");
+  });
+
+  it("keeps the pinned verdict when no live evidence is newer than the health check (HARD19-004)", () => {
+    connectionStateMock.state = "REAL_CONNECTED";
+    healthModelMocks.deriveConnectivityState.mockImplementation(() => "Online");
+    // If the override wrongly fired we'd get this trace-derived Healthy instead.
+    healthModelMocks.rollUpHealth.mockImplementation(() => "Healthy");
+    healthCheckStateMock.latestResult = {
+      runId: "hc-pinned-unhealthy",
+      overallHealth: "Unhealthy",
+      endTimestamp: "2024-01-01T00:05:00.000Z",
+      deviceInfo: null,
+      probes: { ...allSuccessProbes(), REST: { probe: "REST", outcome: "Fail", reason: "down" } },
+    };
+    // Only OLDER evidence (before the pinned check) — must not override.
+    traceEventsMock.events = [{ type: "rest-response", timestamp: "2024-01-01T00:00:00.000Z", data: { status: 200 } }];
+
+    const { result } = renderHook(() => useHealthState());
+
+    expect(result.current.state).toBe("Unhealthy");
+  });
+
+  it("keeps the pinned verdict when the health-check timestamp is invalid", () => {
+    healthCheckStateMock.latestResult = {
+      runId: "hc-invalid-date",
+      overallHealth: "Unhealthy",
+      endTimestamp: "not-a-date",
+      deviceInfo: null,
+      probes: { ...allSuccessProbes(), REST: { probe: "REST", outcome: "Fail", reason: "down" } },
+    };
+    traceEventsMock.events = [{ type: "rest-response", timestamp: "2024-01-01T00:05:00.000Z", data: { status: 200 } }];
+
+    const { result } = renderHook(() => useHealthState());
+
+    expect(result.current.state).toBe("Unhealthy");
+  });
+
+  it("uses a successful manual REST probe as the first success even before trace events arrive", () => {
+    healthModelMocks.rollUpHealth.mockImplementation(() => "Healthy");
+    healthModelMocks.deriveRestContributorHealth.mockImplementation(() => ({
+      state: "Healthy",
+      problemCount: 0,
+      totalOperations: 1,
+      failedOperations: 0,
+    }));
+    healthCheckStateMock.latestResult = {
+      runId: "hc-rest-success-only",
+      overallHealth: "Healthy",
+      endTimestamp: "2024-01-01T00:00:00.000Z",
+      deviceInfo: null,
+      probes: allSuccessProbes(),
+    };
+
+    const { result } = renderHook(() => useHealthState());
+
+    expect(result.current.state).toBe("Healthy");
+  });
 });

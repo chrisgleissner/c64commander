@@ -40,6 +40,11 @@ export type DeviceDiscoveryState = {
   elapsedMs: number | null;
   error: string | null;
   unsupported: boolean;
+  // HARD19-028: the user dismissed this completed discovery result ("Not now" /
+  // Open Settings). Reset to false whenever a fresh scan starts, so background
+  // reconnection resumes for this result set but a *new* result re-arms the
+  // picker gate.
+  acknowledged: boolean;
 };
 
 export type DeviceDiscoveryResult = {
