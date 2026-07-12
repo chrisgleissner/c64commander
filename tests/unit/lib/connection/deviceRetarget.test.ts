@@ -137,4 +137,15 @@ describe("prepareForDeviceRetarget (HARD19-012)", () => {
     expect(mocks.invalidateForSavedDeviceSwitch).toHaveBeenCalledTimes(1);
     expect(mocks.addLog).toHaveBeenCalled();
   });
+
+  it("still toasts and completes hygiene when clearing the native due-time rejects", async () => {
+    mocks.setDueAtMs.mockRejectedValueOnce(new Error("due-time clear failed"));
+
+    await expect(prepareForDeviceRetarget("device-a", "device-b")).resolves.toBeUndefined();
+
+    expect(mocks.stopBackgroundExecution).toHaveBeenCalledTimes(1);
+    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Playback controls detached" }));
+    expect(mocks.invalidateForSavedDeviceSwitch).toHaveBeenCalledTimes(1);
+    expect(mocks.addLog).toHaveBeenCalled();
+  });
 });
