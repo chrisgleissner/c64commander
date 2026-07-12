@@ -21,7 +21,12 @@ import {
   loadStartupDiscoveryWindowMs,
   loadVolumeSliderPreviewIntervalMs,
 } from "@/lib/config/appSettings";
-import { loadDeviceSafetyConfig, saveDeviceSafetyMode } from "@/lib/config/deviceSafetySettings";
+import {
+  loadDeviceSafetyConfig,
+  saveDeviceSafetyMode,
+  saveMachineInputCooldownMs,
+  saveRestMaxConcurrency,
+} from "@/lib/config/deviceSafetySettings";
 import { featureFlagManager } from "@/lib/config/featureFlags";
 import { setDeveloperModeEnabled } from "@/lib/config/developerModeStore";
 import { exportSettingsSnapshot, importSettingsJson, SETTINGS_EXPORT_VERSION } from "@/lib/config/settingsTransfer";
@@ -201,6 +206,42 @@ describe("settingsTransfer", () => {
     const result = await importSettingsJson(JSON.stringify(snapshot));
     expect(result.ok).toBe(true);
     expect(loadDeviceSafetyConfig().mode).toBe("AUTO");
+  });
+
+  it("HARD19-029: round-trips restMaxConcurrency and machineInputCooldownMs (previously dropped on both ends)", async () => {
+    // 4 is above every mode default (RELAXED=3 is the max), so it can only come
+    // from a restored override, not the fresh-install default — a real proof the
+    // value transferred rather than coincidentally matching a default.
+    saveRestMaxConcurrency(4);
+    saveMachineInputCooldownMs(120);
+
+    const snapshot = await exportSettingsSnapshot();
+    // Both tuned safety values must appear in the export payload.
+    expect(snapshot.deviceSafety.restMaxConcurrency).toBe(4);
+    expect(snapshot.deviceSafety.machineInputCooldownMs).toBe(120);
+
+    // Simulate a fresh install (defaults): neither tuned value survives a clear.
+    localStorage.clear();
+    expect(loadDeviceSafetyConfig().restMaxConcurrency).not.toBe(4);
+    expect(loadDeviceSafetyConfig().machineInputCooldownMs).toBe(0);
+
+    const result = await importSettingsJson(JSON.stringify(snapshot));
+    expect(result.ok).toBe(true);
+    const restored = loadDeviceSafetyConfig();
+    expect(restored.restMaxConcurrency).toBe(4);
+    expect(restored.machineInputCooldownMs).toBe(120);
+  });
+
+  it("HARD19-029: applies an imported machineInputCooldownMs instead of rejecting the file as unknown-key", async () => {
+    const base = buildImportPayload({});
+    const payload = {
+      ...base,
+      deviceSafety: { ...base.deviceSafety, machineInputCooldownMs: 150 },
+    };
+
+    const result = await importSettingsJson(JSON.stringify(payload));
+    expect(result.ok).toBe(true);
+    expect(loadDeviceSafetyConfig().machineInputCooldownMs).toBe(150);
   });
 
   it("rejects invalid JSON payloads", async () => {

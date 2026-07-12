@@ -67,6 +67,8 @@ vi.mock("@/lib/config/deviceSafetySettings", () => ({
 
   saveDeviceSafetyMode: vi.fn(),
   saveFtpMaxConcurrency: vi.fn(),
+  saveRestMaxConcurrency: vi.fn(),
+  saveMachineInputCooldownMs: vi.fn(),
   saveInfoCacheMs: vi.fn(),
   saveConfigsCacheMs: vi.fn(),
   saveConfigsCooldownMs: vi.fn(),

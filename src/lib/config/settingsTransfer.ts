@@ -63,6 +63,8 @@ import {
   saveFtpListCooldownMs,
   saveFtpMaxConcurrency,
   saveInfoCacheMs,
+  saveMachineInputCooldownMs,
+  saveRestMaxConcurrency,
   saveTelnetConnectCooldownMs,
   type DeviceSafetyMode,
 } from "@/lib/config/deviceSafetySettings";
@@ -95,6 +97,12 @@ export type SettingsExportPayload = {
   deviceSafety: {
     mode: DeviceSafetyMode;
     ftpMaxConcurrency: number;
+    // HARD19-029: both are user-tuned Device Safety rows (restMaxConcurrency
+    // protects wedge-prone firmware) and must survive export/import. Treated as
+    // optional on import (DEVICE_SAFETY_OPTIONAL_IMPORT_KEYS) so pre-19 files
+    // that lack them still import.
+    restMaxConcurrency: number;
+    machineInputCooldownMs: number;
     infoCacheMs: number;
     configsCacheMs: number;
     configsCooldownMs: number;
@@ -153,7 +161,11 @@ const DEVICE_SAFETY_KEYS = [
   "allowUserOverrideCircuit",
 ] as const;
 
-const DEVICE_SAFETY_OPTIONAL_IMPORT_KEYS = ["restMaxConcurrency", "telnetConnectCooldownMs"] as const;
+const DEVICE_SAFETY_OPTIONAL_IMPORT_KEYS = [
+  "restMaxConcurrency",
+  "machineInputCooldownMs",
+  "telnetConnectCooldownMs",
+] as const;
 
 const hasRequiredKeysAllowOptional = (
   value: Record<string, unknown>,
@@ -200,6 +212,8 @@ export const exportSettingsSnapshot = async (): Promise<SettingsExportPayload> =
     deviceSafety: {
       mode: safety.mode,
       ftpMaxConcurrency: safety.ftpMaxConcurrency,
+      restMaxConcurrency: safety.restMaxConcurrency,
+      machineInputCooldownMs: safety.machineInputCooldownMs,
       infoCacheMs: safety.infoCacheMs,
       configsCacheMs: safety.configsCacheMs,
       configsCooldownMs: safety.configsCooldownMs,
@@ -349,6 +363,10 @@ export const importSettingsJson = async (raw: string): Promise<{ ok: true } | { 
   saveDeviceSafetyMode(safeSafety.mode);
   const safetyDefaults = loadDeviceSafetyConfig();
   saveFtpMaxConcurrency(safeSafety.ftpMaxConcurrency);
+  // HARD19-029: apply the two optional Device Safety values (clamping save
+  // functions guard bad input); fall back to defaults for pre-19 files.
+  saveRestMaxConcurrency(safeSafety.restMaxConcurrency ?? safetyDefaults.restMaxConcurrency);
+  saveMachineInputCooldownMs(safeSafety.machineInputCooldownMs ?? safetyDefaults.machineInputCooldownMs);
   saveInfoCacheMs(safeSafety.infoCacheMs);
   saveConfigsCacheMs(safeSafety.configsCacheMs);
   saveConfigsCooldownMs(safeSafety.configsCooldownMs);

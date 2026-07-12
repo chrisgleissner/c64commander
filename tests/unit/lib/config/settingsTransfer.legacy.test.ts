@@ -19,10 +19,15 @@ describe("settingsTransfer", () => {
     await featureFlagManager.replaceOverrides({});
   });
 
-  it("exports device safety without the removed REST concurrency override", async () => {
+  it("HARD19-029: exports the live REST concurrency override (it was wrongly dropped before)", async () => {
+    // restMaxConcurrency is a real, user-editable Device Safety row consumed at
+    // runtime (c64api serializes native REST by it), so it MUST be exported.
+    // The prior "removed override" behaviour silently lost a user's device-load
+    // protection on every settings transfer; HARD19-029 restores it.
     const snapshot = await exportSettingsSnapshot();
 
-    expect(snapshot.deviceSafety).not.toHaveProperty("restMaxConcurrency");
+    expect(snapshot.deviceSafety).toHaveProperty("restMaxConcurrency");
+    expect(typeof snapshot.deviceSafety.restMaxConcurrency).toBe("number");
     expect(snapshot.featureFlags).toEqual({});
     expect(snapshot.appSettings.volumeSliderPreviewIntervalMs).toBe(200);
   });
@@ -68,6 +73,8 @@ describe("settingsTransfer", () => {
     expect(result).toEqual({ ok: true });
     expect(loadDeviceSafetyConfig()).toMatchObject({
       mode: "CONSERVATIVE",
+      // HARD19-029: an imported restMaxConcurrency is now applied, not discarded.
+      restMaxConcurrency: 4,
       ftpMaxConcurrency: 2,
       allowUserOverrideCircuit: false,
     });
