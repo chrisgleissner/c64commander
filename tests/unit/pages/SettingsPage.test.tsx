@@ -42,6 +42,7 @@ import {
 import { applyScreenOrientationMode } from "@/lib/native/screenOrientation";
 import * as deviceSafetySettings from "@/lib/config/deviceSafetySettings";
 import { exportSettingsJson, importSettingsJson } from "@/lib/config/settingsTransfer";
+import { variant } from "@/generated/variant";
 import {
   loadConfigWriteIntervalMs,
   loadDemoModeEnabled,
@@ -1951,6 +1952,34 @@ describe("SettingsPage", () => {
       expect(createObjectURL).toHaveBeenCalled();
       expect(toast).toHaveBeenCalledWith({ title: "Settings export ready" });
     });
+    createElementSpy.mockRestore();
+  });
+
+  it("HARD19-035: names the settings export after the variant basename", async () => {
+    const createObjectURL = vi.fn(() => "blob:settings");
+    const revokeObjectURL = vi.fn();
+    let exportedAnchor: HTMLAnchorElement | null = null;
+    const originalCreateElement = document.createElement.bind(document);
+    const createElementSpy = vi.spyOn(document, "createElement").mockImplementation((tagName: string) => {
+      const element = originalCreateElement(tagName);
+      if (tagName.toLowerCase() === "a") {
+        (element as HTMLAnchorElement).click = vi.fn();
+        exportedAnchor = element as HTMLAnchorElement;
+      }
+      return element;
+    });
+    Object.defineProperty(URL, "createObjectURL", { value: createObjectURL, configurable: true });
+    Object.defineProperty(URL, "revokeObjectURL", { value: revokeObjectURL, configurable: true });
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /export settings/i }));
+
+    await waitFor(() => expect(exportSettingsJson).toHaveBeenCalled());
+    // Filename must derive from the variant basename (like diagnostics/trace
+    // exports), never the hardcoded "c64commander-settings.json".
+    expect(exportedAnchor).not.toBeNull();
+    expect(exportedAnchor!.download).toBe(`${variant.exportedFileBasename}-settings.json`);
     createElementSpy.mockRestore();
   });
 
