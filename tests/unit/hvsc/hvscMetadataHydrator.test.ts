@@ -157,6 +157,45 @@ describe("hvscMetadataHydrator", () => {
     );
   });
 
+  it("HARD19-019: stops at the chunk boundary when shouldContinue turns false, stamping no survivors 'error'", async () => {
+    // 16 songs = 2 chunks of 8. Allow the first chunk, then abort.
+    const paths = Array.from({ length: 16 }, (_, index) => `/DEMOS/Song_${String(index).padStart(2, "0")}.sid`);
+    const snapshot = buildHvscBrowseIndexFromSonglengthSnapshot({
+      pathToSeconds: new Map(paths.map((path) => [path, [60]])),
+      md5ToSeconds: new Map(),
+    });
+    const readSong = vi.fn(async (virtualPath: string) => ({
+      id: 1,
+      virtualPath,
+      fileName: "x.sid",
+      dataBase64: createSidBase64(),
+    }));
+    let checks = 0;
+    const shouldContinue = () => {
+      checks += 1;
+      return checks === 1; // proceed for chunk 0, abort before chunk 1
+    };
+    const onSnapshotUpdated = vi.fn();
+
+    await hydrateHvscMetadata({ snapshot, readSong, emitProgress: vi.fn(), onSnapshotUpdated, shouldContinue });
+
+    // Only the first chunk ran; the loop bailed before reading chunk 2.
+    expect(readSong).toHaveBeenCalledTimes(8);
+    // The remaining 8 songs are NOT stamped "error" (which would permanently
+    // exclude them from a future re-hydration).
+    const erroredAfterAbort = paths
+      .slice(8)
+      .filter((path) => getHvscSongFromBrowseIndex(snapshot, path)?.metadataStatus === "error");
+    expect(erroredAfterAbort).toHaveLength(0);
+    // Only chunk 0 persisted; the aborted chunk did not.
+    expect(onSnapshotUpdated).toHaveBeenCalledTimes(1);
+    expect(addLog).toHaveBeenCalledWith(
+      "info",
+      "HVSC metadata hydration aborted (library reset or reinstall)",
+      expect.anything(),
+    );
+  });
+
   it("emits running progress across multiple chunks and logs thrown read failures", async () => {
     const snapshot = buildHvscBrowseIndexFromSonglengthSnapshot({
       pathToSeconds: new Map(

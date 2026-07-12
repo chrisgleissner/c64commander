@@ -194,6 +194,7 @@ import {
 import {
   getHvscStatus as getRuntimeStatus,
   getHvscFolderListing as getRuntimeFolderListing,
+  getHvscSong as runtimeGetHvscSong,
   resetHvscLibraryData as runtimeResetHvscLibraryData,
 } from "@/lib/hvsc/hvscIngestionRuntime";
 import { resolveHvscSonglengthDuration } from "@/lib/hvsc/hvscSongLengthService";
@@ -204,6 +205,7 @@ import {
 } from "@/lib/hvsc/hvscBrowseIndexStore";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import { addErrorLog } from "@/lib/logging";
+import { invalidateHvscHydration, __resetHvscHydrationGenerationForTests } from "@/lib/hvsc/hvscHydrationControl";
 
 describe("hvscService", () => {
   beforeEach(() => {
@@ -766,6 +768,50 @@ describe("hvscService", () => {
       expect(vi.mocked(saveHvscBrowseIndexSnapshot)).toHaveBeenCalledWith(expect.anything(), {
         foldersUnchanged: true,
       });
+    });
+
+    it("HARD19-019: a reset mid-hydration stops the loop and never persists the stale index", async () => {
+      __resetHvscHydrationGenerationForTests();
+      // 24 pending songs / 8-per-chunk = 3 chunks. Invalidate the hydration
+      // generation (as a "Reset HVSC" would) during the first chunk.
+      const songs: Record<string, { virtualPath: string; fileName: string; metadataStatus: string }> = {};
+      for (let index = 0; index < 24; index += 1) {
+        const virtualPath = `/DEMOS/Song_${index}.sid`;
+        songs[virtualPath] = { virtualPath, fileName: `Song_${index}.sid`, metadataStatus: "seeded" };
+      }
+      mediaIndexMocks.loadBrowseSnapshot.mockResolvedValueOnce({
+        schemaVersion: 2,
+        updatedAt: new Date().toISOString(),
+        songs,
+        folders: { "/": { path: "/", folders: [], songs: [] } },
+      });
+
+      let reads = 0;
+      vi.mocked(runtimeGetHvscSong).mockImplementation(async ({ virtualPath }: { virtualPath?: string }) => {
+        reads += 1;
+        // The user taps "Reset HVSC" mid-chunk.
+        if (reads === 8) invalidateHvscHydration();
+        return {
+          id: reads,
+          virtualPath: virtualPath ?? "",
+          fileName: "x.sid",
+          durationSeconds: null,
+          durationsSeconds: null,
+          subsongCount: null,
+          md5: null,
+          dataBase64: "AA==",
+        };
+      });
+
+      await ensureHvscMetadataHydration();
+
+      // The loop bailed at the chunk boundary after the reset: only the first
+      // 8 songs were ever read (no tens-of-thousands doomed native reads).
+      expect(reads).toBe(8);
+      // The stale snapshot is never written back to disk (no index resurrection)
+      // and the in-memory index is never re-installed.
+      expect(vi.mocked(saveHvscBrowseIndexSnapshot)).not.toHaveBeenCalled();
+      expect(mediaIndexMocks.setBrowseSnapshot).not.toHaveBeenCalled();
     });
   });
 });

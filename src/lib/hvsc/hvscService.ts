@@ -45,6 +45,7 @@ import {
 } from "./hvscIngestionRuntime";
 import { ensureHvscSonglengthsReadyOnColdStart, resolveHvscSonglengthDuration } from "./hvscSongLengthService";
 import { hydrateHvscMetadata } from "./hvscMetadataHydrator";
+import { getHvscHydrationGeneration } from "./hvscHydrationControl";
 
 export type HvscProgressListener = (event: HvscProgressEvent) => void;
 
@@ -195,9 +196,19 @@ export const ensureHvscMetadataHydration = async () => {
   }
 
   hvscMetadataHydrationPromise = (async () => {
+    // HARD19-019: capture the hydration generation for this run. A reset or
+    // reinstall bumps it; every persist below and the loop's shouldContinue()
+    // are guarded against it, so a stale run cannot resurrect a deleted index or
+    // clobber a fresh reinstall.
+    const runGeneration = getHvscHydrationGeneration();
+    const isCurrentGeneration = () => getHvscHydrationGeneration() === runGeneration;
+
     await ensureHvscSonglengthsReadyOnColdStart();
     const snapshot = await hvscIndex.loadBrowseSnapshot();
     if (!snapshot) {
+      return;
+    }
+    if (!isCurrentGeneration()) {
       return;
     }
 
@@ -226,7 +237,11 @@ export const ensureHvscMetadataHydration = async () => {
       snapshot,
       readSong: async (virtualPath) => getHvscSong({ virtualPath }),
       emitProgress,
+      shouldContinue: isCurrentGeneration,
       onSnapshotUpdated: async (nextSnapshot, isFinal) => {
+        // HARD19-019: if a reset/reinstall raced in, do NOT touch the in-memory
+        // index or write to disk — that is exactly the resurrection/clobber.
+        if (!isCurrentGeneration()) return;
         hvscIndex.setBrowseSnapshot(nextSnapshot);
         const now = Date.now();
         if (!isFinal && now - lastPersistedAtMs < persistIntervalMs) return;
@@ -234,7 +249,9 @@ export const ensureHvscMetadataHydration = async () => {
         await saveHvscBrowseIndexSnapshot(nextSnapshot, { foldersUnchanged: true });
       },
     });
-    hvscIndex.setBrowseSnapshot(hydratedSnapshot);
+    if (isCurrentGeneration()) {
+      hvscIndex.setBrowseSnapshot(hydratedSnapshot);
+    }
   })()
     .catch((error) => {
       const emitProgress = createProgressEmitter("hvsc-metadata-hydration");
