@@ -127,7 +127,16 @@ const HVSC_EXTRACTION_STAGES = new Set([
 
 const HVSC_READY_MESSAGE = "Ready to use: Add items -> HVSC.";
 
-export const useHvscLibrary = (): HvscLibraryState => {
+/**
+ * @param hvscEnabled the resolved `hvsc_enabled` feature flag
+ *   (`shouldShowHvscControls(featureFlags)`). HARD19-026: the hook's background
+ *   lifecycle (status/recover/hydration) must respect this flag, not just
+ *   native-bridge presence — otherwise a user who installed HVSC then disabled
+ *   it (a supported flow, default-off on C64U Remote) still runs minutes of
+ *   native I/O per Play visit, recreating the HVSC-starvation load that knocks
+ *   Remote Input offline. Callers MUST pass the live flag so re-enabling resumes.
+ */
+export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
   const [hvscStatus, setHvscStatus] = useState<HvscStatus | null>(null);
   const [hvscStatusSummary, setHvscStatusSummary] = useState<HvscStatusSummary>(() => loadHvscStatusSummary());
   const [hvscLoading, setHvscLoading] = useState(false);
@@ -250,14 +259,17 @@ export const useHvscLibrary = (): HvscLibraryState => {
   }, []);
 
   useEffect(() => {
+    if (!hvscEnabled) return;
     recoverStaleIngestionState();
-  }, []);
+  }, [hvscEnabled]);
 
   useEffect(() => {
+    if (!hvscEnabled) return;
     refreshHvscStatus();
-  }, [refreshHvscStatus]);
+  }, [hvscEnabled, refreshHvscStatus]);
 
   useEffect(() => {
+    if (!hvscEnabled) return;
     if (!hvscStatus?.installedVersion) return;
     if (hvscStatus.ingestionState !== "ready") return;
     void ensureHvscMetadataHydration().catch((error) => {
@@ -265,7 +277,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
         error: (error as Error).message,
       });
     });
-  }, [hvscStatus?.ingestionState, hvscStatus?.installedVersion]);
+  }, [hvscEnabled, hvscStatus?.ingestionState, hvscStatus?.installedVersion]);
 
   const refreshHvscCacheStatus = useCallback(() => {
     if (!isHvscBridgeAvailable()) return;

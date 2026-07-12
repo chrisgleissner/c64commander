@@ -199,7 +199,7 @@ describe("useHvscLibrary progress coverage", () => {
   });
 
   it("forwards download progress events into the derived UI state", async () => {
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(progressListener).not.toBeNull());
 
@@ -237,7 +237,7 @@ describe("useHvscLibrary progress coverage", () => {
     );
     mocks.getHvscStatusMock.mockResolvedValue(createStatus({ ingestionState: "installing" }));
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscActionLabel).toBe("HVSC operation still running…"));
     expect(result.current.hvscDownloadStatus).toBe("in-progress");
@@ -264,7 +264,7 @@ describe("useHvscLibrary progress coverage", () => {
       .mockResolvedValueOnce(createStatus())
       .mockResolvedValueOnce(createStatus({ installedVersion: 85 }));
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
     await waitFor(() => expect(progressListener).not.toBeNull());
 
     act(() => {
@@ -310,7 +310,7 @@ describe("useHvscLibrary progress coverage", () => {
   it("surfaces metadata hydration progress in the shared HVSC state", async () => {
     mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 85, ingestionState: "ready" }));
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(progressListener).not.toBeNull());
 
@@ -330,7 +330,7 @@ describe("useHvscLibrary progress coverage", () => {
   });
 
   it("keeps active indexing preparation progress below 100 until completion", async () => {
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(progressListener).not.toBeNull());
 
@@ -360,7 +360,7 @@ describe("useHvscLibrary progress coverage", () => {
       .mockResolvedValueOnce(createStatus())
       .mockResolvedValueOnce(createStatus({ installedVersion: 85 }));
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
     await waitFor(() => expect(progressListener).not.toBeNull());
 
     act(() => {
@@ -393,7 +393,7 @@ describe("useHvscLibrary progress coverage", () => {
 
   it("resets to idle on cancel and ignores throttled progress that arrives afterwards", async () => {
     vi.useFakeTimers();
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await act(async () => {
       await Promise.resolve();
@@ -466,7 +466,7 @@ describe("useHvscLibrary progress coverage", () => {
       .mockResolvedValueOnce(createStatus({ installedVersion: 84 }))
       .mockResolvedValueOnce(createStatus({ installedVersion: 85 }));
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     act(() => {
       void result.current.handleHvscInstall();
@@ -484,7 +484,7 @@ describe("useHvscLibrary progress coverage", () => {
   });
 
   it("recovers stale ingestion state on mount", async () => {
-    renderHook(() => useHvscLibrary());
+    renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(mocks.recoverStaleIngestionStateMock).toHaveBeenCalledTimes(1));
   });

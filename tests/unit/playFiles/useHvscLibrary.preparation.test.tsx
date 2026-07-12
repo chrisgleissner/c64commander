@@ -215,7 +215,7 @@ describe("useHvscLibrary preparation state coverage", () => {
       }),
     );
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("DOWNLOADING"));
     expect(result.current.hvscPreparationProgressPercent).toBe(50);
@@ -225,7 +225,7 @@ describe("useHvscLibrary preparation state coverage", () => {
     mocks.isHvscBridgeAvailableMock.mockReturnValue(false);
     mocks.isHvscIngestionBridgeAvailableMock.mockReturnValue(false);
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("NOT_PRESENT"));
     expect(result.current.hvscPreparationProgressPercent).toBeNull();
@@ -246,7 +246,7 @@ describe("useHvscLibrary preparation state coverage", () => {
       }),
     );
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("DOWNLOADING"));
     expect(result.current.hvscPreparationThroughputLabel).toMatch(/MB\/s/);
@@ -267,7 +267,7 @@ describe("useHvscLibrary preparation state coverage", () => {
       }),
     );
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("DOWNLOADING"));
     expect(result.current.hvscPreparationThroughputLabel).toBe("20 MB/s");
@@ -287,7 +287,7 @@ describe("useHvscLibrary preparation state coverage", () => {
       }),
     );
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("DOWNLOADING"));
     expect(result.current.hvscPreparationThroughputLabel).toBeNull();
@@ -305,7 +305,7 @@ describe("useHvscLibrary preparation state coverage", () => {
       }),
     );
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("INGESTING"));
     expect(result.current.hvscPreparationProgressPercent).toBe(75);
@@ -325,7 +325,7 @@ describe("useHvscLibrary preparation state coverage", () => {
       }),
     );
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("INGESTING"));
     expect(result.current.hvscPreparationProgressPercent).toBe(20);
@@ -343,7 +343,7 @@ describe("useHvscLibrary preparation state coverage", () => {
       }),
     );
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("INGESTING"));
     const label = result.current.hvscPreparationThroughputLabel;
@@ -365,7 +365,7 @@ describe("useHvscLibrary preparation state coverage", () => {
       }),
     );
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("INGESTING"));
     const label = result.current.hvscPreparationThroughputLabel;
@@ -385,7 +385,7 @@ describe("useHvscLibrary preparation state coverage", () => {
       }),
     );
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("INGESTING"));
     expect(result.current.hvscPreparationThroughputLabel).toBeNull();
@@ -394,7 +394,7 @@ describe("useHvscLibrary preparation state coverage", () => {
   it("runHvscPreparation is a no-op when state is READY", async () => {
     mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 85, ingestionState: "ready" }));
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("READY"));
 
@@ -419,7 +419,7 @@ describe("useHvscLibrary preparation state coverage", () => {
       }),
     );
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("DOWNLOADED"));
 
@@ -447,7 +447,7 @@ describe("useHvscLibrary preparation state coverage", () => {
       }),
     );
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => {
       expect(result.current.hvscPreparationState).toBe("ERROR");
@@ -480,13 +480,13 @@ describe("useHvscLibrary preparation state coverage", () => {
     mocks.getHvscStatusMock.mockResolvedValue(createStatus());
     mocks.getHvscCacheStatusMock.mockResolvedValue({ baselineVersion: 84, updateVersions: [] });
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscCanIngest).toBe(true));
   });
 
   it("runHvscPreparation calls handleHvscInstall when state is NOT_PRESENT", async () => {
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("NOT_PRESENT"));
 
@@ -501,7 +501,7 @@ describe("useHvscLibrary preparation state coverage", () => {
     mocks.isHvscBridgeAvailableMock.mockReturnValue(false);
     mocks.isHvscIngestionBridgeAvailableMock.mockReturnValue(false);
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("NOT_PRESENT"));
 
@@ -526,7 +526,7 @@ describe("useHvscLibrary preparation state coverage", () => {
       }),
     );
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("DOWNLOADING"));
     expect(result.current.hvscDownloadStatus).toBe("in-progress");
@@ -545,7 +545,7 @@ describe("useHvscLibrary preparation state coverage", () => {
       }),
     );
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("INGESTING"));
     expect(result.current.hvscExtractionStatus).toBe("in-progress");
@@ -554,7 +554,7 @@ describe("useHvscLibrary preparation state coverage", () => {
   it("logs preparation state transition on state change", async () => {
     mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 85, ingestionState: "ready" }));
 
-    renderHook(() => useHvscLibrary());
+    renderHook(() => useHvscLibrary(true));
 
     await waitFor(() =>
       expect(mocks.addLogMock).toHaveBeenCalledWith(
@@ -572,7 +572,7 @@ describe("useHvscLibrary preparation state coverage", () => {
       }),
     );
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPhase).toBe("index"));
   });
@@ -589,7 +589,7 @@ describe("useHvscLibrary preparation state coverage", () => {
       .mockResolvedValueOnce(createStatus())
       .mockResolvedValueOnce(createStatus({ installedVersion: 85 }));
 
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(progressListener).not.toBeNull());
 
@@ -618,7 +618,7 @@ describe("useHvscLibrary preparation state coverage", () => {
   });
 
   it("derives download progress percent from progress event when download status in-progress via event", async () => {
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(progressListener).not.toBeNull());
 
@@ -638,7 +638,7 @@ describe("useHvscLibrary preparation state coverage", () => {
   });
 
   it("derives INGESTING progress from metadata percent when progress event sets metadata in-progress summary", async () => {
-    const { result } = renderHook(() => useHvscLibrary());
+    const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(progressListener).not.toBeNull());
 
