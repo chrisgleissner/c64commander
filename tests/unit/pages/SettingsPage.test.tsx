@@ -1974,6 +1974,29 @@ describe("SettingsPage", () => {
     });
   });
 
+  it("HARD19-030: applies and reflects an imported screen orientation without a relaunch", async () => {
+    vi.mocked(importSettingsJson).mockResolvedValue({ ok: true });
+    const file = new File(['{"version":1}'], "settings.json", { type: "application/json" });
+    Object.defineProperty(file, "text", { value: vi.fn(async () => '{"version":1}') });
+
+    renderSettingsPage();
+
+    // The imported file's persisted orientation is landscape (UI default is portrait).
+    vi.mocked(loadScreenOrientationMode).mockReturnValue("landscape");
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: buildFileList(file) } });
+
+    await waitFor(() => {
+      // Device is rotated immediately, not deferred to the next app launch.
+      expect(applyScreenOrientationMode).toHaveBeenCalledWith("landscape");
+    });
+    // The Settings selector reflects the imported value (Landscape now active).
+    const orientation = screen.getByTestId("settings-screen-orientation-mode");
+    const landscapeButton = within(orientation).getByRole("button", { name: "Landscape" });
+    expect(landscapeButton.className).toContain("bg-primary");
+  });
+
   it("reports import validation errors", async () => {
     vi.mocked(importSettingsJson).mockResolvedValue({
       ok: false,

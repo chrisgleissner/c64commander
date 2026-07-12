@@ -1060,6 +1060,14 @@ export default function SettingsPage() {
       setBackgroundRediscoveryIntervalInput(String(loadBackgroundRediscoveryIntervalMs() / 1000));
       setProbeTimeoutInput(String(loadDiscoveryProbeTimeoutMs() / 1000));
       setDiskAutostartMode(loadDiskAutostartMode());
+      // HARD19-030: import persisted+broadcast the orientation but never applied
+      // it to the device or refreshed this selector, so the imported value was
+      // invisible until the next launch (and re-tapping the stale control would
+      // clobber it). Mirror commitScreenOrientationMode: refresh the UI and apply
+      // the native orientation now.
+      const importedScreenOrientationMode = loadScreenOrientationMode();
+      setScreenOrientationMode(importedScreenOrientationMode);
+      void applyScreenOrientationMode(importedScreenOrientationMode);
       const importedArchiveHostOverride = loadArchiveHostOverride();
       setArchiveHostOverride(importedArchiveHostOverride);
       setArchiveHostError(validateArchiveHost(importedArchiveHostOverride));
