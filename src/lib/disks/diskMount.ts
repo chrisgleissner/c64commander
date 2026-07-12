@@ -14,7 +14,7 @@ import { createArchiveClient } from "@/lib/archive/client";
 import { getCachedArchiveDiskBlob, setCachedArchiveDiskBlob } from "@/lib/archive/archiveDiskCache";
 import type { ArchiveClientConfigInput, ArchivePlaylistReference } from "@/lib/archive/types";
 import { FolderPicker } from "@/lib/native/folderPicker";
-import { getFileExtension } from "@/lib/playback/fileTypes";
+import { DISK_IMAGE_EXTENSIONS, getFileExtension } from "@/lib/playback/fileTypes";
 // Reused as-is: the sd/usb/flash-over-temp persistent-root ranking is
 // generic storage-root selection logic, not REU-specific. See HARD18-014.
 import { resolvePersistentReuStorageRoot } from "@/lib/reu/reuWorkflow";
@@ -29,6 +29,7 @@ import {
   type LocalSourceRecord,
 } from "@/lib/sourceNavigation/localSourcesStore";
 import type { DiskEntry } from "./diskTypes";
+import { getDiskName } from "./diskTypes";
 
 const MAX_LOCAL_DISK_IMAGE_BYTES = 64 * 1024 * 1024;
 const LOCAL_DISK_READ_TIMEOUT_BASE_MS = 8000;
@@ -268,9 +269,14 @@ const dropOrFinalizeStaleMaterializedMount = async (
   }
 };
 
+// HARD19-014 (D2): after a successful archive/CommoServe write-back — which only
+// lands in the short-lived in-memory cache — the eject flow can offer to save a
+// durable local copy. `archiveCopyOffer` carries what that save needs.
+export type ArchiveDiskCopyOffer = { archiveRef: ArchivePlaylistReference; fileName: string };
+
 export type DiskWriteBackResult =
   | { attempted: false; reason?: "no-entry" | "device-mismatch" }
-  | { attempted: true; success: true }
+  | { attempted: true; success: true; archiveCopyOffer?: ArchiveDiskCopyOffer }
   | { attempted: true; success: false; error: Error };
 
 // Called on eject: FTP-downloads the materialized work-dir image back and
@@ -301,11 +307,18 @@ export const finalizeDiskWriteBack = async (
     });
     return { attempted: false, reason: "device-mismatch" };
   }
+  // HARD19-014 (D2): capture the archive offer before the entry is deleted, so a
+  // successful archive-cache write-back (durable only for the session) can offer
+  // the user a durable "Save a local copy".
+  const archiveCopyOffer: ArchiveDiskCopyOffer | undefined =
+    entry.writeBackTarget.kind === "archive-cache"
+      ? { archiveRef: entry.writeBackTarget.archiveRef, fileName: getDiskName(entry.disk.path) }
+      : undefined;
   deleteMaterializedMount(drive);
   try {
     await readBackAndPersist(entry, ftp);
     addLog("info", "Disk write-back persisted to source", { drive, path: entry.disk.path, workPath: entry.workPath });
-    return { attempted: true, success: true };
+    return { attempted: true, success: true, ...(archiveCopyOffer ? { archiveCopyOffer } : {}) };
   } catch (error) {
     addErrorLog("Disk write-back failed", {
       drive,
@@ -322,6 +335,40 @@ export const finalizeDiskWriteBack = async (
 // drop the pending entry without spending an FTP round trip on it.
 export const discardDiskWriteBack = (drive: "a" | "b"): void => {
   deleteMaterializedMount(drive);
+};
+
+export type ArchiveDiskCopySaveResult =
+  { saved: true; uri: string } | { saved: false; reason: "no-bytes" | "cancelled"; error?: Error };
+
+// HARD19-014 (D2): persist a durable local copy of an archive/CommoServe disk's
+// current (session-only) bytes. The eject flow offers this so in-game saves that
+// otherwise evaporate from the 10-minute in-memory cache can be kept. Prompts the
+// user for a destination folder (SAF) and writes the file there.
+export const saveArchiveDiskCopyToLocalFolder = async (
+  offer: ArchiveDiskCopyOffer,
+): Promise<ArchiveDiskCopySaveResult> => {
+  const blob = getCachedArchiveDiskBlob(offer.archiveRef);
+  if (!blob) {
+    // The session cache already expired/evicted — nothing left to save.
+    return { saved: false, reason: "no-bytes" };
+  }
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const directory = await FolderPicker.pickDirectory({ extensions: [...DISK_IMAGE_EXTENSIONS] });
+  if (!directory.treeUri) {
+    return { saved: false, reason: "cancelled" };
+  }
+  const written = await FolderPicker.writeFileToTree({
+    treeUri: directory.treeUri,
+    path: offer.fileName,
+    data: uint8ToBase64(bytes),
+    overwrite: true,
+  });
+  addLog("info", "Archive disk copy saved to local folder", {
+    fileName: offer.fileName,
+    uri: written.uri,
+    sizeBytes: written.sizeBytes,
+  });
+  return { saved: true, uri: written.uri };
 };
 
 const DISK_WRITE_BACK_ADVISORY_STORAGE_KEY = "c64u_disk_writeback_advisory_shown_v1";

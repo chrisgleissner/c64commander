@@ -63,8 +63,11 @@ import {
   markArchiveDiskWriteBackAdvisoryShown,
   getMaterializedWorkPath,
   getMaterializedDiskId,
+  saveArchiveDiskCopyToLocalFolder,
   type DiskMountWriteBackDependencies,
+  type ArchiveDiskCopyOffer,
 } from "@/lib/disks/diskMount";
+import { ToastAction } from "@/components/ui/toast";
 import { buildDiskWriteBackDependencies } from "@/lib/disks/diskWriteBackDependencies";
 import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 import {
@@ -774,6 +777,32 @@ export const HomeDiskManager = () => {
     }
   });
 
+  // HARD19-014 (D2): let the user persist a durable local copy of an archive/
+  // CommoServe disk's session-only changes (offered on eject). Cancelling the
+  // folder picker is silent; a lost cache or a write failure is surfaced.
+  const handleSaveArchiveCopy = async (offer: ArchiveDiskCopyOffer) => {
+    try {
+      const result = await saveArchiveDiskCopyToLocalFolder(offer);
+      if (result.saved) {
+        toast({ title: "Saved a local copy", description: `${offer.fileName} saved to the chosen folder.` });
+      } else if (result.reason === "no-bytes") {
+        toast({
+          title: "Couldn't save a copy",
+          description: "This disk's changes are no longer available to save.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      reportUserError({
+        operation: "DISK_SAVE_LOCAL_COPY",
+        title: "Save a local copy failed",
+        description: (error as Error).message,
+        error,
+        context: { fileName: offer.fileName },
+      });
+    }
+  };
+
   const handleEject = trace(async (drive: DriveKey) => {
     setDriveMutationPending((prev) => ({ ...prev, [drive]: true }));
     try {
@@ -803,9 +832,24 @@ export const HomeDiskManager = () => {
           variant: "destructive",
         });
       } else {
+        // HARD19-014 (D2): after a successful archive/CommoServe write-back (which
+        // only lands in the session cache), offer to save a durable local copy.
+        const archiveCopyOffer =
+          writeBackResult.attempted && writeBackResult.success ? writeBackResult.archiveCopyOffer : undefined;
         toast({
           title: "Disk ejected",
-          description: `${buildDriveLabel(drive)} cleared`,
+          description: archiveCopyOffer
+            ? `${buildDriveLabel(drive)} cleared. Changes are kept only for this session — save a local copy to keep them.`
+            : `${buildDriveLabel(drive)} cleared`,
+          ...(archiveCopyOffer
+            ? {
+                action: (
+                  <ToastAction altText="Save a local copy" onClick={() => void handleSaveArchiveCopy(archiveCopyOffer)}>
+                    Save a local copy
+                  </ToastAction>
+                ),
+              }
+            : {}),
         });
       }
     } catch (error) {

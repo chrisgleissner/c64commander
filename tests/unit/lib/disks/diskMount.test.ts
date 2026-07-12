@@ -18,6 +18,7 @@ vi.mock("@/lib/native/folderPicker", () => ({
     readFile: vi.fn(),
     readFileFromTree: vi.fn(),
     writeFileToTree: vi.fn(async () => ({ uri: "tree://uri", sizeBytes: 0 })),
+    pickDirectory: vi.fn(async () => ({ treeUri: "tree://picked" })),
   },
 }));
 
@@ -87,9 +88,14 @@ import {
   resolveDiskWriteBackTarget,
   finalizeDiskWriteBack,
   discardDiskWriteBack,
+  saveArchiveDiskCopyToLocalFolder,
   type DiskMountWriteBackDependencies,
 } from "@/lib/disks/diskMount";
-import { getCachedArchiveDiskBlob, clearArchiveDiskCacheForTests } from "@/lib/archive/archiveDiskCache";
+import {
+  getCachedArchiveDiskBlob,
+  setCachedArchiveDiskBlob,
+  clearArchiveDiskCacheForTests,
+} from "@/lib/archive/archiveDiskCache";
 
 const ARCHIVE_CONFIG = {
   id: "commoserve-1",
@@ -1003,10 +1009,31 @@ describe("diskMount", () => {
         await mountDiskToDrive(mockApi as any, "a", disk, file, { writeBack });
         const result = await finalizeDiskWriteBack("a", writeBack);
 
-        expect(result).toEqual({ attempted: true, success: true });
+        // HARD19-014 (D2): archive-cache write-back offers a durable local copy.
+        expect(result).toMatchObject({
+          attempted: true,
+          success: true,
+          archiveCopyOffer: { archiveRef: disk.archiveRef, fileName: "archive-game.d64" },
+        });
         const cached = getCachedArchiveDiskBlob(disk.archiveRef);
         expect(cached).toBeInstanceOf(Blob);
         expect(cached?.size).toBe(3);
+      });
+
+      it("HARD19-014 (D2): does NOT offer an archive copy for a plain local-tree write-back", async () => {
+        const file = new File([new Uint8Array([1, 2, 3])], "game.d64");
+        const writeBack = buildWriteBack({ readRemoteFile: vi.fn(async () => new Uint8Array([1, 2, 3])) });
+        await mountDiskToDrive(
+          mockApi as any,
+          "a",
+          { path: "/game.d64", location: "local", localTreeUri: "tree://direct" } as any,
+          file,
+          { writeBack },
+        );
+
+        const result = await finalizeDiskWriteBack("a", writeBack);
+        expect(result).toEqual({ attempted: true, success: true });
+        expect((result as { archiveCopyOffer?: unknown }).archiveCopyOffer).toBeUndefined();
       });
 
       it("reports success:false without throwing when the FTP read-back fails", async () => {
@@ -1048,6 +1075,43 @@ describe("diskMount", () => {
         const result = await finalizeDiskWriteBack("a", writeBack);
         expect(result).toMatchObject({ attempted: false });
         expect(writeBack.readRemoteFile).not.toHaveBeenCalled();
+      });
+    });
+
+    describe("saveArchiveDiskCopyToLocalFolder (HARD19-014 / D2)", () => {
+      it("writes the cached archive bytes to a user-picked folder and reports the URI", async () => {
+        const { archiveRef } = buildArchiveDisk();
+        setCachedArchiveDiskBlob(archiveRef, new Blob([new Uint8Array([42, 43, 44])]));
+        vi.mocked(FolderPicker.writeFileToTree).mockResolvedValueOnce({ uri: "tree://saved/game.d64", sizeBytes: 3 });
+
+        const result = await saveArchiveDiskCopyToLocalFolder({ archiveRef, fileName: "game.d64" });
+
+        expect(FolderPicker.pickDirectory).toHaveBeenCalled();
+        expect(FolderPicker.writeFileToTree).toHaveBeenCalledWith({
+          treeUri: "tree://picked",
+          path: "game.d64",
+          data: btoa("*+,"), // [42,43,44]
+          overwrite: true,
+        });
+        expect(result).toEqual({ saved: true, uri: "tree://saved/game.d64" });
+      });
+
+      it("reports 'no-bytes' when the session cache has already dropped the disk", async () => {
+        const { archiveRef } = buildArchiveDisk();
+        // cache cleared in beforeEach — nothing to save
+        const result = await saveArchiveDiskCopyToLocalFolder({ archiveRef, fileName: "game.d64" });
+        expect(result).toEqual({ saved: false, reason: "no-bytes" });
+        expect(FolderPicker.pickDirectory).not.toHaveBeenCalled();
+      });
+
+      it("reports 'cancelled' when the user dismisses the folder picker", async () => {
+        const { archiveRef } = buildArchiveDisk();
+        setCachedArchiveDiskBlob(archiveRef, new Blob([new Uint8Array([1])]));
+        vi.mocked(FolderPicker.pickDirectory).mockResolvedValueOnce({});
+
+        const result = await saveArchiveDiskCopyToLocalFolder({ archiveRef, fileName: "game.d64" });
+        expect(result).toEqual({ saved: false, reason: "cancelled" });
+        expect(FolderPicker.writeFileToTree).not.toHaveBeenCalled();
       });
     });
 

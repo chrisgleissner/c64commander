@@ -71,6 +71,7 @@ vi.mock("@/lib/disks/diskMount", () => ({
   getMaterializedDiskId: vi.fn(() => null),
   hasShownArchiveDiskWriteBackAdvisory: vi.fn(() => true),
   markArchiveDiskWriteBackAdvisoryShown: vi.fn(),
+  saveArchiveDiskCopyToLocalFolder: vi.fn().mockResolvedValue({ saved: true, uri: "tree://saved/game.d64" }),
 }));
 vi.mock("@/lib/ftp/ftpClient", () => ({
   listFtpDirectory: vi.fn(),
@@ -807,6 +808,32 @@ describe("HomeDiskManager UI & Interactions", () => {
         }),
       );
     });
+  });
+
+  it("HARD19-014 (D2): offers 'Save a local copy' on eject of an archive-cache disk", async () => {
+    const { finalizeDiskWriteBack, saveArchiveDiskCopyToLocalFolder } = await import("@/lib/disks/diskMount");
+    const offer = { archiveRef: { sourceId: "commoserve-1" } as any, fileName: "game.d64" };
+    (finalizeDiskWriteBack as any).mockResolvedValueOnce({ attempted: true, success: true, archiveCopyOffer: offer });
+
+    const driveA = createMockDrive();
+    driveA.image_file = "game.d64";
+    (useC64Drives as any).mockReturnValue({ data: { drives: [{ a: driveA }, { b: createMockDrive() }] } });
+
+    render(<HomeDiskManager />);
+    fireEvent.click(screen.getByRole("button", { name: "Drive A Eject disk" }));
+
+    // The eject toast carries a "Save a local copy" action.
+    let action: any;
+    await waitFor(() => {
+      const call = (toast as any).mock.calls.find(([arg]: [any]) => arg?.title === "Disk ejected" && arg?.action);
+      expect(call).toBeTruthy();
+      action = call[0].action;
+    });
+
+    // Invoking the action saves the copy and confirms with a toast.
+    await action.props.onClick();
+    expect(saveArchiveDiskCopyToLocalFolder).toHaveBeenCalledWith(offer);
+    await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Saved a local copy" })));
   });
 
   it("HARD18-025: buildDiskWriteBackDependencies wires the real FTP read/write callbacks used during eject write-back", async () => {
