@@ -1077,7 +1077,13 @@ export default function SettingsPage() {
       setArchiveHostError(validateArchiveHost(importedArchiveHostOverride));
       setArchiveClientIdOverride(loadArchiveClientIdOverride());
       setArchiveUserAgentOverride(loadArchiveUserAgentOverride());
-      toast({ title: "Settings imported" });
+      // HARD19-035 (D10): a cross-variant file still imports, but surface the
+      // provenance mismatch so the user knows the settings came from another app.
+      toast(
+        result.warning
+          ? { title: "Settings imported", description: result.warning, variant: "destructive" }
+          : { title: "Settings imported" },
+      );
     } catch (error) {
       reportUserError({
         operation: "SETTINGS_IMPORT",

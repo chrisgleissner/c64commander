@@ -2003,6 +2003,30 @@ describe("SettingsPage", () => {
     });
   });
 
+  it("HARD19-035 (D10): surfaces the cross-variant import warning as a destructive toast", async () => {
+    vi.mocked(importSettingsJson).mockResolvedValue({
+      ok: true,
+      warning: "These settings were exported from a different app variant (c64u-remote).",
+    });
+    const file = new File(['{"version":2}'], "settings.json", { type: "application/json" });
+    Object.defineProperty(file, "text", { value: vi.fn(async () => '{"version":2}') });
+
+    renderSettingsPage();
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: buildFileList(file) } });
+
+    await waitFor(() => {
+      expect(toast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Settings imported",
+          description: expect.stringContaining("different app variant"),
+          variant: "destructive",
+        }),
+      );
+    });
+  });
+
   it("HARD19-030: applies and reflects an imported screen orientation without a relaunch", async () => {
     vi.mocked(importSettingsJson).mockResolvedValue({ ok: true });
     const file = new File(['{"version":1}'], "settings.json", { type: "application/json" });

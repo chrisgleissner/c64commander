@@ -47,6 +47,7 @@ import {
   type FeatureFlagId,
 } from "@/lib/config/featureFlags";
 import { getDeveloperModeEnabled } from "@/lib/config/developerModeStore";
+import { variant } from "@/generated/variant";
 import {
   loadDeviceSafetyConfig,
   saveAllowUserOverrideCircuit,
@@ -92,6 +93,11 @@ type LegacySettingsAppSettingsPayload = SettingsAppSettingsPayload & {
 
 export type SettingsExportPayload = {
   version: typeof SETTINGS_EXPORT_VERSION;
+  // HARD19-035 (D10): the product variant that produced this export. Import warns
+  // (does not block) when it differs from the running variant, so a user who runs
+  // both side-by-side variants doesn't silently apply the other's tuning. Optional
+  // on import — pre-035 files omit it and import without a warning.
+  variantId: string;
   appSettings: SettingsAppSettingsPayload;
   featureFlags: Partial<Record<FeatureFlagId, boolean>>;
   deviceSafety: {
@@ -194,6 +200,7 @@ export const exportSettingsSnapshot = async (): Promise<SettingsExportPayload> =
   const safety = loadDeviceSafetyConfig();
   return {
     version: SETTINGS_EXPORT_VERSION,
+    variantId: variant.id, // HARD19-035 (D10): provenance stamp for cross-variant import warnings.
     appSettings: {
       debugLoggingEnabled: loadDebugLoggingEnabled(),
       configWriteIntervalMs: loadConfigWriteIntervalMs(),
@@ -304,7 +311,9 @@ const validateDeviceSafety = (value: unknown) => {
   return null;
 };
 
-export const importSettingsJson = async (raw: string): Promise<{ ok: true } | { ok: false; error: string }> => {
+export const importSettingsJson = async (
+  raw: string,
+): Promise<{ ok: true; warning?: string } | { ok: false; error: string }> => {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -397,6 +406,18 @@ export const importSettingsJson = async (raw: string): Promise<{ ok: true } | { 
     importedFeatureFlags = { ...preserved, ...importedFeatureFlags };
   }
   await featureFlagManager.replaceOverrides(importedFeatureFlags);
+
+  // HARD19-035 (D10): warn (do not block) when the file came from a different
+  // product variant — its device-safety tuning / feature flags were applied, but
+  // the user should know the file wasn't produced by this app. Pre-035 files omit
+  // variantId and import silently.
+  const importedVariantId = payload.variantId;
+  if (typeof importedVariantId === "string" && importedVariantId !== variant.id) {
+    return {
+      ok: true,
+      warning: `These settings were exported from a different app variant (${importedVariantId}). They were imported, but some values may not match this app.`,
+    };
+  }
 
   return { ok: true };
 };

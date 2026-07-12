@@ -208,6 +208,33 @@ describe("settingsTransfer", () => {
     expect(loadDeviceSafetyConfig().mode).toBe("AUTO");
   });
 
+  it("HARD19-035 (D10): stamps variantId in the export and imports a same-variant file with no warning", async () => {
+    const snapshot = await exportSettingsSnapshot();
+    expect(typeof snapshot.variantId).toBe("string");
+    expect(snapshot.variantId.length).toBeGreaterThan(0);
+
+    const result = await importSettingsJson(JSON.stringify(snapshot));
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("HARD19-035 (D10): imports a cross-variant file but returns a non-blocking warning", async () => {
+    const snapshot = await exportSettingsSnapshot();
+    const foreign = { ...snapshot, variantId: "some-other-variant" };
+
+    const result = await importSettingsJson(JSON.stringify(foreign));
+    expect(result.ok).toBe(true);
+    expect((result as { warning?: string }).warning).toMatch(/different app variant/i);
+  });
+
+  it("HARD19-035 (D10): a pre-035 file with no variantId imports silently", async () => {
+    const snapshot = await exportSettingsSnapshot();
+    const withoutVariant: Record<string, unknown> = { ...snapshot };
+    delete withoutVariant.variantId;
+
+    const result = await importSettingsJson(JSON.stringify(withoutVariant));
+    expect(result).toEqual({ ok: true });
+  });
+
   it("HARD19-029: round-trips restMaxConcurrency and machineInputCooldownMs (previously dropped on both ends)", async () => {
     // 4 is above every mode default (RELAXED=3 is the max), so it can only come
     // from a restored override, not the fresh-install default — a real proof the
