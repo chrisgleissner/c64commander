@@ -505,13 +505,17 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
         scheduleKeyboardFlush();
         return;
       }
-      void enqueueKeyboardBufferInjection(getC64API(), stringToPetsciiBytes(char)).catch((error) => {
-        addErrorLog(
-          "Remote input kernal-fallback char injection failed",
-          buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { char }),
-        );
-        setConnectionStatus("error");
-      });
+      void enqueueKeyboardBufferInjection(getC64API(), stringToPetsciiBytes(char))
+        // HARD19-013: clear a prior transient "error" on success — the fallback
+        // tier otherwise never leaves "Reconnecting…" once one injection failed.
+        .then(() => setConnectionStatus("idle"))
+        .catch((error) => {
+          addErrorLog(
+            "Remote input kernal-fallback char injection failed",
+            buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { char }),
+          );
+          setConnectionStatus("error");
+        });
     },
     [scheduleKeyboardFlush],
   );
@@ -527,13 +531,15 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       // this tier rather than guessed; only round-trippable chords proceed.
       const char = keyboardInputsToChar(inputs);
       if (char === null) return;
-      void enqueueKeyboardBufferInjection(getC64API(), stringToPetsciiBytes(char)).catch((error) => {
-        addErrorLog(
-          "Remote input kernal-fallback keyboard-chord injection failed",
-          buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { inputs }),
-        );
-        setConnectionStatus("error");
-      });
+      void enqueueKeyboardBufferInjection(getC64API(), stringToPetsciiBytes(char))
+        .then(() => setConnectionStatus("idle")) // HARD19-013: self-heal the indicator on success.
+        .catch((error) => {
+          addErrorLog(
+            "Remote input kernal-fallback keyboard-chord injection failed",
+            buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { inputs }),
+          );
+          setConnectionStatus("error");
+        });
     },
     [scheduleKeyboardFlush],
   );
@@ -551,13 +557,15 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       // multi-second backlog. A dropped repeat is imperceptible; a backlog is not.
       void enqueueKeyboardBufferInjection(getC64API(), new Uint8Array([cursorKeyToPetscii(direction)]), {
         dropIfBusy: true,
-      }).catch((error) => {
-        addErrorLog(
-          "Remote input kernal-fallback cursor injection failed",
-          buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { direction }),
-        );
-        setConnectionStatus("error");
-      });
+      })
+        .then(() => setConnectionStatus("idle")) // HARD19-013: self-heal the indicator on success.
+        .catch((error) => {
+          addErrorLog(
+            "Remote input kernal-fallback cursor injection failed",
+            buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { direction }),
+          );
+          setConnectionStatus("error");
+        });
     },
     [scheduleKeyboardFlush],
   );
@@ -571,13 +579,15 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       }
       const petscii = specialKeyToPetscii(key);
       if (petscii === null) return; // RUN/STOP, RESTORE: no kernal-buffer equivalent on this tier.
-      void enqueueKeyboardBufferInjection(getC64API(), new Uint8Array([petscii])).catch((error) => {
-        addErrorLog(
-          "Remote input kernal-fallback special-key injection failed",
-          buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { key }),
-        );
-        setConnectionStatus("error");
-      });
+      void enqueueKeyboardBufferInjection(getC64API(), new Uint8Array([petscii]))
+        .then(() => setConnectionStatus("idle")) // HARD19-013: self-heal the indicator on success.
+        .catch((error) => {
+          addErrorLog(
+            "Remote input kernal-fallback special-key injection failed",
+            buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { key }),
+          );
+          setConnectionStatus("error");
+        });
     },
     [scheduleKeyboardFlush],
   );

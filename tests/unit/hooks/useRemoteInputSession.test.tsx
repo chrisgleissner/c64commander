@@ -281,6 +281,22 @@ describe("useRemoteInputSession", () => {
     );
   });
 
+  it("HARD19-013: clears the fallback 'Reconnecting' indicator once a later injection succeeds", async () => {
+    injectAutostartMock.mockRejectedValueOnce(new Error("wifi blip"));
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "kernal-fallback" }));
+
+    // One transient failure flips the indicator to error ("Reconnecting…").
+    act(() => result.current.sendChar("a"));
+    await act(flushMicrotasks);
+    expect(result.current.connectionStatus).toBe("error");
+
+    // The very next keystroke injects fine — previously nothing on the fallback
+    // tier ever set the status back, so it stayed "Reconnecting…" all session.
+    act(() => result.current.sendChar("b"));
+    await act(flushMicrotasks);
+    expect(result.current.connectionStatus).toBe("idle");
+  });
+
   it("hot-swaps the autofire rate when the persisted rate changes elsewhere (Settings slider, PR299)", async () => {
     const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
     expect(result.current.autofireRateHz).not.toBe(8);
