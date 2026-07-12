@@ -112,7 +112,11 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
   });
 
   it("powers on Drive A and switches to 1541 before autoplaying a d64", async () => {
-    const api = createApi({ enabled: false, type: "1571" });
+    // HARD19-022: seed an INCOMPATIBLE starting mode (a 1581 cannot read a d64),
+    // so a switch is genuinely required. A 1571 would now be preserved (it reads
+    // d64 natively) — that compatible-mode case is covered in the sibling
+    // tests/unit/playbackRouter.test.ts.
+    const api = createApi({ enabled: false, type: "1581" });
 
     await executePlayPlan(
       api,
