@@ -171,6 +171,7 @@ resolve_process_pid() {
 
 main_seen_once=0
 main_disappeared=0
+main_restart_count=0
 running=1
 run_start_ts="$(date -u +%s)"
 sample_rows=0
@@ -226,10 +227,23 @@ while (( running == 1 )); do
     missing_streak[$role]=0
 
     if [[ -z "${prev_pid[$role]:-}" ]]; then
-      log_event "process_appeared" "$process_name:event" "$pid" "process detected"
+      if [[ "$role" == "main" && "$main_disappeared" == "1" ]]; then
+        # The app was intentionally stopped and relaunched (e.g. Maestro's
+        # `launchApp: stopApp: true` between flow files), and the process has
+        # since come back. This is expected test-harness churn, not a crash,
+        # so downgrade the earlier disappearance rather than failing the gate.
+        log_event "process_recovered" "$process_name:event" "$pid" "process reappeared after gap"
+        main_disappeared=0
+        main_restart_count=$(( main_restart_count + 1 ))
+      else
+        log_event "process_appeared" "$process_name:event" "$pid" "process detected"
+      fi
     elif [[ "${prev_pid[$role]}" != "$pid" ]]; then
       log_event "process_restarted" "$process_name:event" "$pid" "previous_pid=${prev_pid[$role]}"
       unset "prev_proc_jiffies[$role]"
+      if [[ "$role" == "main" ]]; then
+        main_restart_count=$(( main_restart_count + 1 ))
+      fi
     fi
 
     prev_pid[$role]="$pid"
@@ -298,7 +312,7 @@ while (( running == 1 )); do
 done
 
 run_end_ts="$(date -u +%s)"
-log_event "monitor_stopped" "$PACKAGE_NAME" "" "main_seen_once=$main_seen_once main_disappeared=$main_disappeared"
+log_event "monitor_stopped" "$PACKAGE_NAME" "" "main_seen_once=$main_seen_once main_disappeared=$main_disappeared main_restart_count=$main_restart_count"
 
 cat > "$META_PATH" <<EOF
 {
@@ -315,7 +329,8 @@ cat > "$META_PATH" <<EOF
   "start_timestamp": ${run_start_ts},
   "end_timestamp": ${run_end_ts},
   "main_seen_once": ${main_seen_once},
-  "main_disappeared": ${main_disappeared}
+  "main_disappeared": ${main_disappeared},
+  "main_restart_count": ${main_restart_count}
 }
 EOF
 
