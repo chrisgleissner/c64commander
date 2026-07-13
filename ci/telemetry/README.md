@@ -43,7 +43,8 @@ Script: `ci/telemetry/android/monitor_android.sh`
 - CPU uses `/proc/<pid>/stat` deltas over `/proc/stat` with CPU core scaling
 - RSS and threads from `/proc/<pid>/status`
 - PSS from `dumpsys meminfo <pid>` on a throttled interval (`TELEMETRY_ANDROID_PSS_INTERVAL_SEC`, default `3`) while emitting 1-second samples with cached PSS values to reduce monitor overhead
-- Emits process lifecycle events (appeared/restarted/disappeared/recovered)
+- Emits process lifecycle events (appeared/restarted/disappeared for main and
+  renderer; `recovered` is main-only, see below)
 
 The CI harness runs all required Maestro flows (`smoke-launch.yaml`,
 `smoke-hvsc.yaml`, ...) as a single `maestro test` invocation, and each flow's
@@ -54,10 +55,12 @@ monitor cannot bracket "test-harness relaunch" vs. "mid-flow crash" via an
 external active/complete signal — there's no shell-level boundary between
 flows to hang a flag on. Instead it classifies a main-process gap by whether
 the process comes back: a disappearance immediately followed by a
-`process_recovered` event (pid changed, monitor keeps running) is treated as
-expected relaunch churn, not a failure. Only a disappearance that is still
-unresolved when the monitor stops — the process never reappears — fails the
-gate (`main_disappeared=1` at exit, `EXPECT_MAIN_PID=1`, exit code 3).
+`process_recovered` event for the main role (the process is running again;
+the OS may or may not reuse the old pid, so this is not a pid comparison) is
+treated as expected relaunch churn, not a failure. Only a disappearance that
+is still unresolved when the monitor stops — the process never reappears —
+fails the gate (`main_disappeared=1` at exit, `EXPECT_MAIN_PID=1`, exit code
+3).
 
 ## iOS monitor
 
