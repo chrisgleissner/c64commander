@@ -44,7 +44,7 @@ describe("manual generator", () => {
     expect(c64uRemote).toContain("entries such as `c64u` and `192.168.1.64`");
     expect(c64uRemote).not.toContain("entries such as `c64u`, `u64`");
     expect(c64uRemote).toContain(
-      "| Device Safety | **Settings > Device Safety** | Use Conservative as the normal starting point for C64U Remote. |",
+      "| Device Safety | **Settings > Device Safety** | Leave it on Auto (recommended); Auto keeps a Commodore 64 Ultimate on Conservative until its firmware is known safe. See Device Safety Modes. |",
     );
     expect(c64uRemote).toContain("set **Auto save config** to **Yes**");
     expect(c64uRemote).toContain("at **C= + RESTORE > User interface > Auto save config**");
@@ -55,9 +55,8 @@ describe("manual generator", () => {
     );
     expect(c64Commander).toContain("Enter a hostname such as `c64u`, `u64`, or `u2`");
     expect(c64Commander).toContain(
-      "Use Balanced for Ultimate 64-family devices when they run firmware newer than 3.15",
+      "Leave it on Auto (recommended); Auto uses Conservative for a Commodore 64 Ultimate, and Balanced for an Ultimate 64-family device on firmware newer than 3.15. See Device Safety Modes.",
     );
-    expect(c64Commander).toContain("Otherwise use Conservative.");
     expect(c64Commander).toContain(
       "C64 Commander mirrors that menu in Config as **User interface > Auto save config**.",
     );
@@ -85,6 +84,54 @@ describe("manual generator", () => {
       expect(manual).toContain("Share filtered");
       expect(manual).toContain("It does not include your network password.");
     }
+  });
+
+  it("documents the always-present feature areas and reference appendices in both variants", async () => {
+    const contexts = await contextByVariant();
+    const c64uRemote = renderManualMarkdown(contexts["c64u-remote"]);
+    const c64Commander = renderManualMarkdown(contexts.c64commander);
+
+    for (const manual of [c64uRemote, c64Commander]) {
+      // In Depth gained device-feature walkthroughs beyond Remote Input / RAM.
+      expect(manual).toContain("### Drives and Disk Images");
+      expect(manual).toContain("### The SID Audio Mixer");
+      expect(manual).toContain("### Video, Audio, and Debug Streams");
+      expect(manual).toContain("### The Virtual Printer");
+      expect(manual).toContain("### File Sources");
+      expect(manual).toContain("### Configuration and Saving");
+
+      // Appendices is a top-level chapter; its references are subchapters (H3).
+      expect(manual).toContain("## Appendices");
+      expect(manual).toContain("- [Appendices](#appendices)");
+      expect(manual).toContain("### Feature Reference");
+      expect(manual).toContain("### Network Ports and Services");
+      expect(manual).toContain("### Device Safety Modes");
+      expect(manual).toContain("### Drive Types and Disk Formats");
+      expect(manual).toContain("### Snapshot Types and Memory Ranges");
+      expect(manual).toContain("### Health Check Probes");
+      // Appendix subsections are nested under Appendices in the contents list.
+      expect(manual).toContain("  - [Feature Reference](#feature-reference)");
+      // Snapshot memory map carries real address ranges.
+      expect(manual).toContain("$002B–$0038, $0801–$9FFF");
+      // The recommended Device Safety mode is named.
+      expect(manual).toContain("| Auto | Chosen for you |");
+      // The health check's visible LED heartbeat is documented.
+      expect(manual).toContain("pulse once");
+    }
+
+    // Balanced firmware guidance is edition-specific: C64U Remote names only the
+    // Commodore 64 Ultimate 1.2.0 line; the broad edition also names the 3.15 line.
+    expect(c64uRemote).toContain("| Balanced | Up to 2 | A Commodore 64 Ultimate on firmware 1.2.0 or newer. |");
+    expect(c64Commander).toContain(
+      "| Balanced | Up to 2 | A Commodore 64 Ultimate on firmware 1.2.0 or newer, or an Ultimate 64-family device on 3.15 or newer. |",
+    );
+
+    // C64U Remote must not leak broad-edition machines into the new content.
+    expect(c64uRemote).not.toContain("Ultimate 64");
+    expect(c64uRemote).not.toContain("Ultimate-II");
+    expect(c64uRemote).not.toContain("Ultimate-family");
+    expect(c64uRemote).not.toContain("3.15");
+    expect(c64uRemote).not.toContain("3.14e");
   });
 
   it("documents Remote Input and its firmware in both variants, with edition-correct machines", async () => {

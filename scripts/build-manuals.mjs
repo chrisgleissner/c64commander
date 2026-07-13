@@ -41,86 +41,191 @@ const slugify = (value) => {
   return count === 0 ? base : `${base}-${count + 1}`;
 };
 
+// One accent hue per top-level chapter. Shown in the running header, the chapter
+// heading, and that chapter's Table of Contents entries, so the colour tells you
+// at a glance which part of the manual you are in. Chosen for legibility on the
+// warm off-white page and to echo a friendly retro palette.
+const CHAPTER_COLORS = [
+  "#2a6f97", // 1 blue
+  "#1f7a6d", // 2 teal
+  "#6d597a", // 3 muted purple
+  "#b5651d", // 4 ochre
+  "#8a6a3b", // 5 bronze
+  "#40655e", // 6 slate green
+  "#9c4722", // 7 burnt orange
+  "#a4243b", // 8 crimson
+  "#34568b", // 9 indigo
+];
+
+const chapterAccent = (chapter) => CHAPTER_COLORS[(Math.max(chapter, 1) - 1) % CHAPTER_COLORS.length];
+
+// Walks every H2/H3/H4, assigning a hierarchical number (1, 1.1, 1.1.1) and the
+// index of the top-level chapter it belongs to. The Table of Contents is skipped
+// so it never consumes a chapter number.
 const buildToc = (markdown) => {
   slugCounts.clear();
-  return markdown
-    .split("\n")
-    .flatMap((line) => {
-      const match = /^(#{2,3})\s+(.+)$/.exec(line);
-      if (!match) return [];
-      const title = stripMarkdown(match[2]);
-      if (title === "Table of Contents") return [];
-      return [{ depth: match[1].length, title, id: slugify(match[2]) }];
-    })
-    .filter((entry) => entry.depth === 2 || entry.depth === 3);
-};
-
-const addHeadingIds = (html, toc) => {
-  let headingIndex = 0;
-  return html.replace(/<h([23])>(.*?)<\/h\1>/g, (full, depth, content) => {
-    const entry = toc[headingIndex];
-    headingIndex += 1;
-    if (!entry) return full;
-    return `<h${depth} id="${entry.id}">${content}</h${depth}>`;
+  const counters = [0, 0, 0]; // depth 2, 3, 4
+  return markdown.split("\n").flatMap((line) => {
+    const match = /^(#{2,4})\s+(.+)$/.exec(line);
+    if (!match) return [];
+    const title = stripMarkdown(match[2]);
+    if (title === "Table of Contents") return [];
+    const depth = match[1].length;
+    const idx = depth - 2;
+    counters[idx] += 1;
+    for (let i = idx + 1; i < counters.length; i += 1) counters[i] = 0;
+    return [
+      {
+        depth,
+        title,
+        id: slugify(match[2]),
+        number: counters.slice(0, idx + 1).join("."),
+        chapter: counters[0],
+      },
+    ];
   });
 };
 
+// Stamps each body heading with its anchor id, its hierarchical number, and the
+// accent colour of its chapter (as a CSS variable), so headings, running headers,
+// and the ToC share one colour and numbering system. The number is baked into the
+// text (not a CSS counter) so it survives Paged.js pagination unchanged.
+const addHeadingIds = (html, toc) => {
+  let headingIndex = 0;
+  return html.replace(/<h([234])>(.*?)<\/h\1>/g, (full, depth, content) => {
+    const entry = toc[headingIndex];
+    headingIndex += 1;
+    if (!entry) return full;
+    return `<h${depth} id="${entry.id}" data-chapter="${entry.chapter}" style="--accent:${chapterAccent(
+      entry.chapter,
+    )}"><span class="secnum">${entry.number}</span> ${content}</h${depth}>`;
+  });
+};
+
+// Print CSS built on the CSS Paged Media model (rendered by the vendored Paged.js
+// polyfill, since headless Chromium alone supports neither running headers nor
+// Table-of-Contents page numbers). Named strings carry the current chapter into
+// the page header; target-counter fills the ToC page numbers; a per-page CSS
+// variable (--accent, set by a Paged.js handler) colours the header.
 const pdfCss = `
-  @page { size: A4; margin: 18mm 15mm 20mm; }
+  @page {
+    size: A4;
+    margin: 24mm 16mm 18mm;
+    @top-left {
+      content: string(chapter);
+      font: 600 8.5pt "Inter", "Segoe UI", Arial, sans-serif;
+      color: var(--accent, #6b6257);
+      border-bottom: 0.75pt solid var(--accent, #ded8ce);
+      padding-bottom: 2mm;
+      width: 100%;
+      vertical-align: bottom;
+    }
+    @bottom-left { content: string(doctitle); font: 8pt "Inter", sans-serif; color: #9a9084; }
+    @bottom-right { content: counter(page); font: 8pt "Inter", sans-serif; color: #6b6257; }
+  }
+  @page cover {
+    margin: 0;
+    @top-left { content: none; border: 0; }
+    @bottom-left { content: none; }
+    @bottom-right { content: none; }
+  }
+  @page toc {
+    @top-left { content: "Table of Contents"; color: #6b6257; border-bottom: 0.75pt solid #ded8ce; }
+  }
+
   * { box-sizing: border-box; }
   body {
     color: #1c1b18;
-    font: 11pt/1.55 "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font: 10.5pt/1.52 "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     margin: 0;
   }
+
   .cover {
-    break-after: page;
+    page: cover;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    min-height: 245mm;
+    align-items: center;
+    height: 100vh;
     text-align: center;
+    padding: 0 22mm;
   }
-  .cover h1 { border: 0; font-size: 34pt; margin: 0 0 8mm; }
-  .cover p { color: #555047; font-size: 15pt; margin: 0; }
-  .toc {
-    border: 1px solid #ded8ce;
-    border-radius: 8px;
-    break-after: page;
-    padding: 12mm;
+  .cover .eyebrow {
+    color: #8a8177;
+    font-size: 10pt;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    margin: 0 0 6mm;
   }
-  .toc h2 { margin-top: 0; }
-  .toc ol { margin: 0; padding-left: 18px; }
-  .toc li { margin: 3px 0; }
-  .toc .depth-3 { font-size: 10pt; margin-left: 18px; }
-  h1, h2, h3 { color: #15130f; line-height: 1.18; }
-  h1 { font-size: 24pt; margin: 0 0 6mm; }
-  h2 {
-    border-bottom: 1px solid #ded8ce;
-    font-size: 17pt;
-    margin: 12mm 0 4mm;
+  .cover h1 { border: 0; font-size: 40pt; margin: 0 0 6mm; color: #15130f; string-set: doctitle content(text); }
+  .cover p { color: #555047; font-size: 14pt; margin: 0; max-width: 130mm; }
+  .cover .rule { width: 42mm; height: 3pt; border-radius: 2pt; background: #2a6f97; margin: 9mm 0 0; }
+  .cover img { border: 1px solid #d8d0c5; border-radius: 8px; margin: 12mm 0 0; max-height: 95mm; max-width: 78mm; }
+
+  .toc { page: toc; break-after: page; }
+  .toc h2 { border: 0; margin: 0 0 7mm; font-size: 24pt; color: #15130f; }
+  .toc ol { list-style: none; margin: 0; padding: 0; }
+  .toc li { margin: 0; break-inside: avoid; }
+  .toc a { display: flex; align-items: baseline; color: #1c1b18; text-decoration: none; }
+  .toc a .tnum { color: var(--accent, #245f9e); font-weight: 700; margin-right: 3mm; flex: 0 0 auto; }
+  .toc a .ttl { flex: 0 0 auto; }
+  .toc a .leaderdots { flex: 1 1 auto; margin: 0 2mm; border-bottom: 0.75pt dotted #cabfae; transform: translateY(-1mm); }
+  .toc a::after {
+    content: target-counter(attr(href), page);
+    color: #8a8177;
+    font-variant-numeric: tabular-nums;
+    flex: 0 0 auto;
+  }
+  .toc .depth-2 {
+    font-weight: 700;
+    font-size: 12.5pt;
+    margin-top: 5mm;
+    border-left: 3pt solid var(--accent, #245f9e);
+    padding-left: 3mm;
+  }
+  .toc .depth-2 a { color: var(--accent, #15130f); }
+  .toc .depth-3 { font-size: 10pt; margin: 0.6mm 0 0.6mm 14mm; }
+  .toc .depth-3 a .tnum { font-weight: 600; }
+
+  main h1 { display: none; }
+  h2, h3, h4 { line-height: 1.18; break-after: avoid; }
+  .secnum { font-weight: 700; font-variant-numeric: tabular-nums; }
+  main h2 {
+    break-before: page;
+    string-set: chapter content(text);
+    color: var(--accent, #15130f);
+    border-bottom: 2pt solid var(--accent, #ded8ce);
+    font-size: 19pt;
+    margin: 0 0 5mm;
     padding-bottom: 2mm;
   }
-  h3 { font-size: 13pt; margin: 7mm 0 2mm; }
-  p, ul, ol, table { margin: 0 0 4mm; }
+  main h2 .secnum { opacity: 0.6; margin-right: 1mm; }
+  main h3 { font-size: 13.5pt; margin: 7mm 0 2mm; color: #15130f; }
+  main h3 .secnum { color: var(--accent, #245f9e); margin-right: 1mm; }
+  main h4 { font-size: 11.5pt; margin: 5mm 0 1.5mm; color: #2a2620; }
+  main h4 .secnum { color: var(--accent, #245f9e); margin-right: 1mm; }
+  p, ul, ol, table { margin: 0 0 3.5mm; }
   li { margin: 1.2mm 0; }
   a { color: #245f9e; text-decoration: none; }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { border: 1px solid #ded8ce; padding: 5px 7px; vertical-align: top; }
+  strong { color: #15130f; }
+  table { border-collapse: collapse; width: 100%; font-size: 9.5pt; }
+  tr { break-inside: avoid; }
+  th, td { border: 0.75pt solid #ded8ce; padding: 4px 7px; vertical-align: top; text-align: left; }
   th { background: #f4f0e8; font-weight: 700; }
   img {
     border: 1px solid #d8d0c5;
-    border-radius: 8px;
+    border-radius: 6px;
     display: block;
-    margin: 5mm auto 7mm;
-    max-height: 145mm;
-    max-width: 92mm;
+    margin: 4mm auto 6mm;
+    max-height: 128mm;
+    max-width: 86mm;
     object-fit: contain;
   }
   code {
     background: #f4f0e8;
     border-radius: 4px;
     font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.9em;
     padding: 1px 4px;
   }
 `;
@@ -134,11 +239,36 @@ const markdownToc = [
   "In Depth",
   "Safe Device Use",
   "Troubleshooting",
-  "Feature Reference",
-  "Keyboard and Directional Input Reference",
-  "File and Source Reference",
-  "Status and Safety Reference",
+  {
+    title: "Appendices",
+    children: [
+      "Feature Reference",
+      "Keyboard and Directional Input Reference",
+      "File and Source Reference",
+      "Network Ports and Services",
+      "Device Safety Modes",
+      "Drive Types and Disk Formats",
+      "Snapshot Types and Memory Ranges",
+      "Health Check Probes",
+      "Status and Safety Reference",
+    ],
+  },
 ];
+
+const anchorFor = (title) =>
+  title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+
+const renderMarkdownToc = (entries) =>
+  entries.flatMap((entry) => {
+    if (typeof entry === "string") return [`- [${entry}](#${anchorFor(entry)})`];
+    return [
+      `- [${entry.title}](#${anchorFor(entry.title)})`,
+      ...entry.children.map((child) => `  - [${child}](#${anchorFor(child)})`),
+    ];
+  });
 
 const profileImage = (profile, imagePath) => `../../img/app/${imagePath.replace("{profile}", profile)}`;
 
@@ -244,10 +374,19 @@ const supportedMachinesSection = ({ appName, variant }) =>
         "The app may call the device-file source **C64U** in lists and pickers. In that place, read it as storage on the connected Ultimate-family device, reached through FTP.",
       ];
 
+// Balanced becomes safe once the firmware carries the network-stability fixes.
+// On a Commodore 64 Ultimate that is firmware 1.2.0 or newer (the 1.x line);
+// 3.14e does NOT carry them. The broad edition also covers the Ultimate 64
+// family, whose fixes arrive in 3.15.
+const balancedFirmwareNote = (variant) =>
+  isC64uRemoteVariant(variant)
+    ? "A Commodore 64 Ultimate on firmware 1.2.0 or newer."
+    : "A Commodore 64 Ultimate on firmware 1.2.0 or newer, or an Ultimate 64-family device on 3.15 or newer.";
+
 const deviceSafetyGuidance = (variant) =>
   isC64uRemoteVariant(variant)
-    ? "Use Conservative as the normal starting point for C64U Remote."
-    : "Use Balanced for Ultimate 64-family devices when they run firmware newer than 3.15, where the relevant fixes are available from nightly builds. Otherwise use Conservative.";
+    ? "Leave it on Auto (recommended); Auto keeps a Commodore 64 Ultimate on Conservative until its firmware is known safe. See Device Safety Modes."
+    : "Leave it on Auto (recommended); Auto uses Conservative for a Commodore 64 Ultimate, and Balanced for an Ultimate 64-family device on firmware newer than 3.15. See Device Safety Modes.";
 
 const safeDeviceUseIntro = ({ appName, variant }) =>
   `${appName} uses normal REST, FTP, and Telnet requests, but ${targetDeviceShortName(
@@ -258,15 +397,14 @@ const safeDeviceUseHabits = (variant) =>
   isC64uRemoteVariant(variant)
     ? [
         "- avoid repeating the same command while the device is already busy;",
-        "- use Device Safety presets instead of raising concurrency aggressively;",
-        "- keep Conservative selected until your Commodore 64 Ultimate and network have proved steady;",
+        "- leave Device Safety on Auto, and only raise concurrency once the device and network have proved steady;",
+        "- drop to Conservative for a first setup, Wi-Fi, or firmware you do not yet trust;",
         "- power-cycle the Commodore 64 Ultimate if all TCP services stop responding while ping still works.",
       ]
     : [
         "- avoid repeating the same command while the device is already busy;",
-        "- use Device Safety presets instead of raising concurrency aggressively;",
-        "- choose Balanced only for Ultimate 64-family firmware newer than 3.15;",
-        "- choose Conservative for older firmware, unknown firmware, Wi-Fi, or a first setup;",
+        "- leave Device Safety on Auto, and only raise concurrency once the device and network have proved steady;",
+        "- drop to Conservative for older or unknown firmware, Wi-Fi, or a first setup;",
         "- power-cycle the target device if all TCP services stop responding while ping still works.",
       ];
 
@@ -495,11 +633,11 @@ const renderKeyboardReference = ({ features, variant }) => {
   if (!includeFeature(features, "keypad_input_enabled")) return "";
 
   const sections = [
-    "## Keyboard and Directional Input Reference",
+    "### Keyboard and Directional Input Reference",
     "",
     `${featureAvailability(features.keypad_input_enabled)} Directional navigation works with D-pad keys, arrow keys, and compatible hardware keyboards.`,
     "",
-    "### Directional Pad",
+    "#### Directional Pad",
     "",
     table(
       ["Key", "What it does"],
@@ -514,7 +652,7 @@ const renderKeyboardReference = ({ features, variant }) => {
     "",
     "The rule is simple: **OK goes in, Back comes out**.",
     "",
-    "### Number Keys",
+    "#### Number Keys",
     "",
     "Outside text fields, number keys jump to pages:",
     "",
@@ -530,7 +668,7 @@ const renderKeyboardReference = ({ features, variant }) => {
       ],
     ),
     "",
-    "### Star and Pound",
+    "#### Star and Pound",
     "",
     table(
       ["Key", "Outside text fields", "Inside text fields"],
@@ -554,7 +692,7 @@ const renderKeyboardReference = ({ features, variant }) => {
   if (variant.runtime.defaultT9InputEnabled) {
     sections.push(
       "",
-      "### T9 Text Entry",
+      "#### T9 Text Entry",
       "",
       "Use T9 in text fields such as hostnames and filters.",
       "",
@@ -570,7 +708,7 @@ const renderKeyboardReference = ({ features, variant }) => {
 
   sections.push(
     "",
-    "### Quick Menu",
+    "#### Quick Menu",
     "",
     "Press Menu when no focused control has its own menu. The Quick Menu offers page jumps, Diagnostics, and Device Switcher when more than one device is saved.",
   );
@@ -606,13 +744,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "## Table of Contents",
     "",
-    ...markdownToc.map(
-      (section) =>
-        `- [${section}](#${section
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, "")})`,
-    ),
+    ...renderMarkdownToc(markdownToc),
     "",
     "## Welcome",
     "",
@@ -770,7 +902,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     image("Settings overview", profile, "settings/profiles/{profile}/01-overview.png"),
     "",
-    "Connection settings live here, along with display profile, full-screen behavior, diagnostics options, feature toggles, archive settings, notifications, and Device Safety.",
+    "Connection and saved devices live here, along with Appearance (display profile, theme, full-screen, and screen orientation), Notifications, Diagnostics options, Device Safety and network timing, Play and Disk behavior, the HVSC and Online Archive sources, feature toggles, Settings transfer, and an About panel. **Settings transfer** exports every app preference to a file you can import onto another phone or tablet, so a second device starts up already configured.",
     "",
     "If the device is hard to reach, start in **Connection**. If it is reachable but fragile, start in **Device Safety**.",
     "",
@@ -989,10 +1121,10 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           "- choose how the stick behaves with **Analog**, **D-Pad**, or **Swipe**;",
           "- send the signal to **Port 1** or **Port 2** with the port toggle (most games read Port 2);",
-          "- resize the controls from S up to XXL with the **Size** stepper;",
+          "- resize the controls from M up to XXL with the **Size** stepper (L by default);",
           "- turn on **Autofire** and set its rate from 1 to 10 presses per second (the default is 5, and you can also set it in Settings).",
           "",
-          "A quick-keys bar along the bottom keeps RUN/STOP, SPACE, RETURN, and the cursor keys one tap away, so you can nudge a menu without leaving the joystick. For distraction-free play, tap **Game mode**: the app hides every other control and anchors the stick and FIRE button to the edges of the screen for no-look thumbs. Leave it with **Exit game mode** or your device's Back button. Both release everything you were holding.",
+          "A companion quick-keys bar beside the joystick keeps the keys you reach for mid-game one tap away — RUN/STOP, SPACE, RETURN, the function keys f1 to f8, the cursor keys, and the CTRL, C=, and SHIFT modifiers — so you can nudge a menu or answer a prompt without leaving the joystick. For distraction-free play, tap **Game mode**: the app hides every other control and anchors the stick and FIRE button to the edges of the screen for no-look thumbs. Leave it with **Exit game mode** or your device's Back button. Both release everything you were holding.",
           "",
           "**Keys** shows a full Commodore 64 keyboard, including the SHIFT, CTRL, and C= modifiers, SHIFT LOCK, the function keys f1 to f8, and RESTORE. Tap a modifier once to arm it for the next key, or hold it down to chord.",
           "",
@@ -1037,6 +1169,55 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
         ]
       : []),
+    "### Drives and Disk Images",
+    "",
+    `${appName} gives your C64 up to two disk drives, and the **Disks** page drives both. Each drive card is a small control panel of its own.`,
+    "",
+    "Turn a drive on or off with its power control — a drive must be **on** before it can mount anything. Give it a **bus ID** (8, 9, 10, or 11) so software can find it; the first drive is usually 8. Set its **type** to match the image you are loading — a 1541 for D64 and G64 disks, a 1571 for D71, or a 1581 for D81 — and use **Reset** to restart just the drive's own processor, the gentlest way to recover a confused drive without disturbing the C64.",
+    "",
+    `Mounting is the heart of the page. Choose a disk from your collection, choose the drive, and mount it; **Eject** empties the drive again. A disk that already lives on ${targetDeviceShortName(
+      variant,
+    )} mounts in place, while a **Local** or archive disk is copied across first — and anything a program writes back to it is saved to your original when you eject, so high scores and saved games survive.`,
+    "",
+    "For a title that spans several disks, drop the related images into one **group**. Grouped disks add **rotate** controls to the drive card, so when a program asks for the next disk you can swap without hunting through the collection. A drive can also read loose files straight from a folder on the device through its **Soft IEC** path, which suits large collections that are not packed into disk images.",
+    "",
+    "### The SID Audio Mixer",
+    "",
+    "The C64's sound comes from its SID chip, and the Ultimate can host more than one. **Home > SID / Audio mixer** is a live mixing desk: a **master volume** for everything, and, for each SID the device reports, that chip's own **volume** and **stereo position**. Slide one SID toward the left speaker and another toward the right for true stereo, or pull one down to let the other lead. Changes are heard at once, and the same controls appear in **Config > Audio Mixer** if you prefer the full tree.",
+    "",
+    "### Video, Audio, and Debug Streams",
+    "",
+    "The Ultimate can send what your C64 is doing out across the network. **Home > Streams** exposes three feeds — **VIC** (the live video picture), **Audio** (the SID output), and **Debug** (a low-level trace for developers). Point a feed at a destination address, press **Start**, and the device streams it there; **Stop** ends it. The Streams card appears only when the connected device advertises streaming support.",
+    "",
+    "### The Virtual Printer",
+    "",
+    "A C64 once talked to a Commodore printer over the serial bus; the Ultimate emulates one so you never need the vintage hardware. **Home > Printer** picks the **emulation** (such as Commodore MPS), sets the printer's **bus ID**, and manages its output: **Flush** commits what has been printed so far, **Eject** finishes the page, and **Reset** clears the emulated printer.",
+    "",
+    "### File Sources",
+    "",
+    "Everything you play or mount comes from a **source**, and each source keeps to its own picker so a wrong turn never lands you somewhere unexpected.",
+    "",
+    "- **Local** — files and folders on the phone or tablet running the app.",
+    `- **C64U** — files on ${targetDeviceShortName(variant)}, reached over FTP.`,
+    ...(includeFeature(features, "hvsc_enabled")
+      ? [
+          "- **HVSC** — the High Voltage SID Collection, the definitive archive of C64 music. Prepare it once from **Settings > HVSC**; afterwards the app checks for updates on its own, and browsing shows song durations and subsongs.",
+        ]
+      : []),
+    ...(includeFeature(features, "commoserve_enabled")
+      ? [
+          "- **CommoServe** — an online archive you search by name, pulling disks and programs straight into a playlist or disk collection. Set its address in **Settings > Online Archive**.",
+        ]
+      : []),
+    "",
+    "### Configuration and Saving",
+    "",
+    "Two ideas make the configuration tree easy to live with: where a change goes, and how to keep it.",
+    "",
+    "Every change — on Home, on Disks, or in Config — is sent to the running device at once and takes effect immediately. But the device holds two copies of its settings: the **live** ones it is using now, and a **flash** copy it reloads at power-on. A change is live instantly; it survives a reboot or power cycle only once it reaches flash.",
+    "",
+    "You manage that from **Home > Config actions**. **Save to flash** writes the current live settings to flash now — reach for it when **Auto save config** is Ask or No. The app can also keep named **configuration snapshots** on the phone or tablet, separate from the device's flash: save the current setup, then load it back later to restore a whole configuration at once.",
+    "",
     "### Reading Diagnostics",
     "",
     "Diagnostics is your window into the health of the connection and everything the app has recently done. It slides up from the bottom of the screen. Reach it by tapping the header badge, pressing `*`, choosing **Diagnostics** in Settings, or tapping any error notification.",
@@ -1044,6 +1225,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "The panel has three parts, from top to bottom:",
     "",
     "- The **health header** shows the current state (Healthy, Degraded, Unhealthy, or Offline), which device it refers to, and when it was last checked. Tap **Run health check** to test the connection now. The check probes REST, FTP, and Telnet, plus three C64-specific signals (CONFIG, RASTER, and JIFFY), and reports each result with its timing and the overall latency. Expand the header to see every probe in detail.",
+    "",
+    "The CONFIG probe does more than read: it nudges a live setting by a hair, reads it back to confirm the device really applied the change, then restores the original value. On a device with an LED strip — the case light or the keyboard LEDs — you will see the lights **pulse once** as it runs, a tiny visible heartbeat that tells you the connection is alive at a glance.",
     "- The **Filters** bar narrows what you see below. Filter by device, by activity type (Problems, Actions, Logs, Traces), by contributor (App, REST, FTP, Telnet), or by severity (Errors, Warnings, Info). One-tap **Errors only** and **Problems only** shortcuts are there too.",
     "- The **Activity** list gathers problems, actions, logs, and traces together. Tap any row to expand it for the full details.",
     "",
@@ -1090,6 +1273,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "Good habits:",
     "",
     ...safeDeviceUseHabits(variant),
+    "",
+    "**Device Safety** in Settings governs how hard the app pushes the device. Its five modes trade speed for caution by capping how many requests run at once and pacing them, and they also tune caching, cooldowns, and backoff. **Auto** is recommended: it picks the right mode from the connected device and its firmware. The full list is in [Device Safety Modes](#device-safety-modes).",
     "",
     "The CPU speed setting can briefly drop the network while the device applies a clock change. Wait for the app to reconnect.",
     "",
@@ -1139,7 +1324,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     `Open Diagnostics if possible and check recent REST/FTP/Telnet activity. If HTTP, FTP, and Telnet all refuse connections while ping still works, manually power-cycle ${targetDeviceShortName(variant)}.`,
     "",
-    "## Feature Reference",
+    "## Appendices",
+    "",
+    "The rest of this guide is reference material for when you want the exact answer. Skim the tour to get going, then come back here for the specifics.",
+    "",
+    "### Feature Reference",
     "",
     "Preferred locations are marked first.",
     "",
@@ -1147,13 +1336,102 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     renderKeyboardReference({ features, variant }),
     "",
-    "## File and Source Reference",
+    "### File and Source Reference",
     "",
     table(["Source", "Used in", "Meaning"], sourceRows({ features, variant })),
     "",
     "Supported playback/import types include SID, MOD, PRG, CRT, D64, G64, D71, G71, and D81. Disk collection workflows focus on disk images: D64, G64, D71, G71, and D81.",
     "",
-    "## Status and Safety Reference",
+    table(
+      ["Format", "Kind", "Notes"],
+      [
+        ["SID", "Music", "One or more subsongs; durations shown when songlength data is available."],
+        ["MOD", "Music", "Amiga-style tracker module."],
+        ["PRG", "Program", "A single loadable program."],
+        ["CRT", "Cartridge", "Cartridge image; started as if you inserted a cartridge."],
+        ["D64, G64", "Disk", "1541 single-sided disk image."],
+        ["D71, G71", "Disk", "1571 double-sided disk image."],
+        ["D81", "Disk", "1581 3.5-inch disk image."],
+      ],
+    ),
+    "",
+    "### Network Ports and Services",
+    "",
+    "These are the defaults the app expects. Change them per device in **Settings > Connection** if yours differ.",
+    "",
+    table(
+      ["Service", "Default port", "Used for"],
+      [
+        ["Web Remote Control (REST)", "80", "Control, status, and configuration — required."],
+        ["FTP File Service", "21", "Browsing and transferring files, playlists, and disks."],
+        ["Telnet Remote Menu", "23", "Advanced menu-backed actions, when those are enabled."],
+      ],
+    ),
+    "",
+    "### Device Safety Modes",
+    "",
+    "Set the mode in **Settings > Device Safety**. Higher concurrency is faster but pushes the device harder; the presets also tune caching, cooldowns, and backoff.",
+    "",
+    table(
+      ["Mode", "Requests at once", "Use it when"],
+      [
+        ["Auto", "Chosen for you", "Always a safe default — picks Conservative or Balanced from the device and its firmware. Recommended."],
+        ["Relaxed", "Up to 3", "The device and network are proven fast and stable, and you accept higher risk."],
+        ["Balanced", "Up to 2", balancedFirmwareNote(variant)],
+        ["Conservative", "1 (serialized)", "A first setup, Wi-Fi, or firmware you do not yet trust. Maximum safety."],
+        ["Troubleshooting", "1 (serialized)", "You are chasing a problem and want extra debug logging."],
+      ],
+    ),
+    "",
+    "### Drive Types and Disk Formats",
+    "",
+    "Set a drive's type on the **Disks** page to match the image you are mounting.",
+    "",
+    table(
+      ["Drive type", "Disk images", "Description"],
+      [
+        ["1541", "D64, G64", "The classic single-sided 5.25-inch drive."],
+        ["1571", "D71, G71", "Double-sided 5.25-inch drive."],
+        ["1581", "D81", "High-capacity 3.5-inch drive."],
+      ],
+    ),
+    "",
+    "### Snapshot Types and Memory Ranges",
+    "",
+    "**Save RAM** offers these capture types. The app keeps up to 100 snapshots on your phone or tablet and drops the oldest once that fills.",
+    "",
+    table(
+      ["Snapshot", "Captures", "Memory range"],
+      [
+        [
+          "CPU + RAM",
+          "Full memory plus the CPU registers; can resume where it left off (when the device supports it).",
+          "$0000–$FFFF + registers",
+        ],
+        ["Program", "Almost all of memory, skipping the stack. A good all-round choice.", "$0000–$00FF, $0200–$FFFF"],
+        ["Basic", "The BASIC program and its variables.", "$002B–$0038, $0801–$9FFF"],
+        ["Screen", "The current screen and its colours.", "VIC bank, $D000–$D02E, $D800–$DBFF, $DD00–$DD01"],
+        ["Custom", "Exactly the address ranges you type.", "User-defined"],
+      ],
+    ),
+    "",
+    "### Health Check Probes",
+    "",
+    "Run a health check from **Diagnostics** to test the connection. Each probe reports its own result and timing.",
+    "",
+    table(
+      ["Probe", "What it checks"],
+      [
+        ["REST", "The Web Remote Control service answers."],
+        ["FTP", "The FTP file service answers."],
+        ["Telnet", "The Telnet menu service answers."],
+        ["CONFIG", "Writes a live setting, reads it back, and restores it — proving the device applies changes. A device with an LED strip pulses once as it runs."],
+        ["RASTER", "The VIC-II raster line is available — the video chip is running."],
+        ["JIFFY", "The KERNAL jiffy clock is ticking, which also reports the machine's uptime."],
+      ],
+    ),
+    "",
+    "### Status and Safety Reference",
     "",
     table(
       ["Signal", "Meaning", "Best next step"],
@@ -1197,19 +1475,48 @@ export const renderManualMarkdown = ({ variant, features }) => {
     .trimEnd()}\n`;
 };
 
+const pagedPolyfillPath = path.join(scriptDir, "vendor/pagedjs/paged.polyfill.min.js");
+
 const renderPdf = async ({ markdownFile, pdfFile, manualDir, title, subtitle }) => {
   const markdown = await readText(markdownFile);
-  const printableMarkdown = markdown.replace(/\n## Table of Contents\n[\s\S]*?(?=\n## )/, "\n");
+  // Everything before the first real chapter is the title block (title, subtitle,
+  // launch image) and the in-app contents list. The PDF replaces both with a cover
+  // and a page-numbered Table of Contents, so drop them from the flowing body.
+  const firstSectionIdx = markdown.search(/\n## (?!Table of Contents)/);
+  const preamble = firstSectionIdx >= 0 ? markdown.slice(0, firstSectionIdx) : "";
+  const bodyMarkdown = firstSectionIdx >= 0 ? markdown.slice(firstSectionIdx) : markdown;
   const toc = buildToc(markdown);
   marked.setOptions({ gfm: true });
-  const body = await inlineImageSources(addHeadingIds(await marked.parse(printableMarkdown), toc), manualDir);
+  const body = await inlineImageSources(addHeadingIds(await marked.parse(bodyMarkdown), toc), manualDir);
+
+  const productName = title.replace(/\s+Manual$/, "");
+  const launchMatch = /!\[([^\]]*)]\(([^)]+)\)/.exec(preamble);
+  const coverImage = launchMatch
+    ? `<img alt="${launchMatch[1]}" src="${await dataUriForImage(launchMatch[2], manualDir)}">`
+    : "";
+  const coverHtml = `
+    <section class="cover">
+      <p class="eyebrow">User Manual</p>
+      <h1>${productName}</h1>
+      <p>${subtitle}</p>
+      <div class="rule"></div>
+      ${coverImage}
+    </section>`;
+
   const tocHtml = `
     <nav class="toc">
       <h2>Table of Contents</h2>
       <ol>${toc
-        .map((entry) => `<li class="depth-${entry.depth}"><a href="#${entry.id}">${entry.title}</a></li>`)
+        .filter((entry) => entry.depth === 2 || entry.depth === 3)
+        .map(
+          (entry) =>
+            `<li class="depth-${entry.depth}" style="--accent:${chapterAccent(entry.chapter)}"><a href="#${
+              entry.id
+            }"><span class="tnum">${entry.number}</span><span class="ttl">${entry.title}</span><span class="leaderdots"></span></a></li>`,
+        )
         .join("")}</ol>
     </nav>`;
+
   const html = `<!doctype html>
     <html>
       <head>
@@ -1218,10 +1525,7 @@ const renderPdf = async ({ markdownFile, pdfFile, manualDir, title, subtitle }) 
         <style>${pdfCss}</style>
       </head>
       <body>
-        <section class="cover">
-          <h1>${title}</h1>
-          <p>${subtitle}</p>
-        </section>
+        ${coverHtml}
         ${tocHtml}
         <main>${body}</main>
       </body>
@@ -1230,15 +1534,38 @@ const renderPdf = async ({ markdownFile, pdfFile, manualDir, title, subtitle }) 
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "networkidle" });
+    await page.setContent(html, { waitUntil: "load" });
+    // Paged.js paginates the DOM and renders CSS Paged Media features (running
+    // headers, target-counter page numbers) that headless Chromium lacks. A
+    // handler tints each page's running header with its chapter's accent colour.
+    await page.evaluate(() => {
+      window.PagedConfig = { auto: false };
+    });
+    await page.addScriptTag({ path: pagedPolyfillPath });
+    await page.evaluate(async () => {
+      const Paged = window.Paged;
+      class ChapterAccentHandler extends Paged.Handler {
+        constructor(chunker, polisher, caller) {
+          super(chunker, polisher, caller);
+          this.lastAccent = "";
+        }
+        afterPageLayout(pageElement) {
+          const content = pageElement.querySelector(".pagedjs_page_content");
+          const heading = content ? content.querySelector("[data-chapter]") : null;
+          if (heading) {
+            const accent = getComputedStyle(heading).getPropertyValue("--accent").trim();
+            if (accent) this.lastAccent = accent;
+          }
+          if (this.lastAccent) pageElement.style.setProperty("--accent", this.lastAccent);
+        }
+      }
+      Paged.registerHandlers(ChapterAccentHandler);
+      await window.PagedPolyfill.preview();
+    });
     await page.pdf({
       path: pdfFile,
-      format: "A4",
       printBackground: true,
       preferCSSPageSize: true,
-      displayHeaderFooter: true,
-      headerTemplate: "<span></span>",
-      footerTemplate: `<div style="font: 8px sans-serif; color: #777; width: 100%; padding: 0 15mm; text-align: right;">${title} · <span class="pageNumber"></span>/<span class="totalPages"></span></div>`,
     });
   } finally {
     await browser.close();

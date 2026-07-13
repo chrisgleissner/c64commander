@@ -14,10 +14,16 @@ Connect, control, play, mount, and diagnose a Commodore 64 Ultimate.
 - [In Depth](#in-depth)
 - [Safe Device Use](#safe-device-use)
 - [Troubleshooting](#troubleshooting)
-- [Feature Reference](#feature-reference)
-- [Keyboard and Directional Input Reference](#keyboard-and-directional-input-reference)
-- [File and Source Reference](#file-and-source-reference)
-- [Status and Safety Reference](#status-and-safety-reference)
+- [Appendices](#appendices)
+  - [Feature Reference](#feature-reference)
+  - [Keyboard and Directional Input Reference](#keyboard-and-directional-input-reference)
+  - [File and Source Reference](#file-and-source-reference)
+  - [Network Ports and Services](#network-ports-and-services)
+  - [Device Safety Modes](#device-safety-modes)
+  - [Drive Types and Disk Formats](#drive-types-and-disk-formats)
+  - [Snapshot Types and Memory Ranges](#snapshot-types-and-memory-ranges)
+  - [Health Check Probes](#health-check-probes)
+  - [Status and Safety Reference](#status-and-safety-reference)
 
 ## Welcome
 
@@ -167,7 +173,7 @@ Settings controls app behavior and saved connection details.
 
 ![Settings overview](../../img/app/settings/profiles/compact/01-overview.png)
 
-Connection settings live here, along with display profile, full-screen behavior, diagnostics options, feature toggles, archive settings, notifications, and Device Safety.
+Connection and saved devices live here, along with Appearance (display profile, theme, full-screen, and screen orientation), Notifications, Diagnostics options, Device Safety and network timing, Play and Disk behavior, the HVSC and Online Archive sources, feature toggles, Settings transfer, and an About panel. **Settings transfer** exports every app preference to a file you can import onto another phone or tablet, so a second device starts up already configured.
 
 If the device is hard to reach, start in **Connection**. If it is reachable but fragile, start in **Device Safety**.
 
@@ -380,10 +386,10 @@ At the top of the sheet you choose between two modes, **Joystick** and **Keys**.
 
 - choose how the stick behaves with **Analog**, **D-Pad**, or **Swipe**;
 - send the signal to **Port 1** or **Port 2** with the port toggle (most games read Port 2);
-- resize the controls from S up to XXL with the **Size** stepper;
+- resize the controls from M up to XXL with the **Size** stepper (L by default);
 - turn on **Autofire** and set its rate from 1 to 10 presses per second (the default is 5, and you can also set it in Settings).
 
-A quick-keys bar along the bottom keeps RUN/STOP, SPACE, RETURN, and the cursor keys one tap away, so you can nudge a menu without leaving the joystick. For distraction-free play, tap **Game mode**: the app hides every other control and anchors the stick and FIRE button to the edges of the screen for no-look thumbs. Leave it with **Exit game mode** or your device's Back button. Both release everything you were holding.
+A companion quick-keys bar beside the joystick keeps the keys you reach for mid-game one tap away — RUN/STOP, SPACE, RETURN, the function keys f1 to f8, the cursor keys, and the CTRL, C=, and SHIFT modifiers — so you can nudge a menu or answer a prompt without leaving the joystick. For distraction-free play, tap **Game mode**: the app hides every other control and anchors the stick and FIRE button to the edges of the screen for no-look thumbs. Leave it with **Exit game mode** or your device's Back button. Both release everything you were holding.
 
 **Keys** shows a full Commodore 64 keyboard, including the SHIFT, CTRL, and C= modifiers, SHIFT LOCK, the function keys f1 to f8, and RESTORE. Tap a modifier once to arm it for the next key, or hold it down to chord.
 
@@ -422,6 +428,45 @@ Snapshots are kept on your phone or tablet, not on the C64. Each one is named au
 
 On by default. You can change it in Settings > Stable Features.
 
+### Drives and Disk Images
+
+C64U Remote gives your C64 up to two disk drives, and the **Disks** page drives both. Each drive card is a small control panel of its own.
+
+Turn a drive on or off with its power control — a drive must be **on** before it can mount anything. Give it a **bus ID** (8, 9, 10, or 11) so software can find it; the first drive is usually 8. Set its **type** to match the image you are loading — a 1541 for D64 and G64 disks, a 1571 for D71, or a 1581 for D81 — and use **Reset** to restart just the drive's own processor, the gentlest way to recover a confused drive without disturbing the C64.
+
+Mounting is the heart of the page. Choose a disk from your collection, choose the drive, and mount it; **Eject** empties the drive again. A disk that already lives on the Commodore 64 Ultimate mounts in place, while a **Local** or archive disk is copied across first — and anything a program writes back to it is saved to your original when you eject, so high scores and saved games survive.
+
+For a title that spans several disks, drop the related images into one **group**. Grouped disks add **rotate** controls to the drive card, so when a program asks for the next disk you can swap without hunting through the collection. A drive can also read loose files straight from a folder on the device through its **Soft IEC** path, which suits large collections that are not packed into disk images.
+
+### The SID Audio Mixer
+
+The C64's sound comes from its SID chip, and the Ultimate can host more than one. **Home > SID / Audio mixer** is a live mixing desk: a **master volume** for everything, and, for each SID the device reports, that chip's own **volume** and **stereo position**. Slide one SID toward the left speaker and another toward the right for true stereo, or pull one down to let the other lead. Changes are heard at once, and the same controls appear in **Config > Audio Mixer** if you prefer the full tree.
+
+### Video, Audio, and Debug Streams
+
+The Ultimate can send what your C64 is doing out across the network. **Home > Streams** exposes three feeds — **VIC** (the live video picture), **Audio** (the SID output), and **Debug** (a low-level trace for developers). Point a feed at a destination address, press **Start**, and the device streams it there; **Stop** ends it. The Streams card appears only when the connected device advertises streaming support.
+
+### The Virtual Printer
+
+A C64 once talked to a Commodore printer over the serial bus; the Ultimate emulates one so you never need the vintage hardware. **Home > Printer** picks the **emulation** (such as Commodore MPS), sets the printer's **bus ID**, and manages its output: **Flush** commits what has been printed so far, **Eject** finishes the page, and **Reset** clears the emulated printer.
+
+### File Sources
+
+Everything you play or mount comes from a **source**, and each source keeps to its own picker so a wrong turn never lands you somewhere unexpected.
+
+- **Local** — files and folders on the phone or tablet running the app.
+- **C64U** — files on the Commodore 64 Ultimate, reached over FTP.
+- **HVSC** — the High Voltage SID Collection, the definitive archive of C64 music. Prepare it once from **Settings > HVSC**; afterwards the app checks for updates on its own, and browsing shows song durations and subsongs.
+- **CommoServe** — an online archive you search by name, pulling disks and programs straight into a playlist or disk collection. Set its address in **Settings > Online Archive**.
+
+### Configuration and Saving
+
+Two ideas make the configuration tree easy to live with: where a change goes, and how to keep it.
+
+Every change — on Home, on Disks, or in Config — is sent to the running device at once and takes effect immediately. But the device holds two copies of its settings: the **live** ones it is using now, and a **flash** copy it reloads at power-on. A change is live instantly; it survives a reboot or power cycle only once it reaches flash.
+
+You manage that from **Home > Config actions**. **Save to flash** writes the current live settings to flash now — reach for it when **Auto save config** is Ask or No. The app can also keep named **configuration snapshots** on the phone or tablet, separate from the device's flash: save the current setup, then load it back later to restore a whole configuration at once.
+
 ### Reading Diagnostics
 
 Diagnostics is your window into the health of the connection and everything the app has recently done. It slides up from the bottom of the screen. Reach it by tapping the header badge, pressing `*`, choosing **Diagnostics** in Settings, or tapping any error notification.
@@ -429,6 +474,8 @@ Diagnostics is your window into the health of the connection and everything the 
 The panel has three parts, from top to bottom:
 
 - The **health header** shows the current state (Healthy, Degraded, Unhealthy, or Offline), which device it refers to, and when it was last checked. Tap **Run health check** to test the connection now. The check probes REST, FTP, and Telnet, plus three C64-specific signals (CONFIG, RASTER, and JIFFY), and reports each result with its timing and the overall latency. Expand the header to see every probe in detail.
+
+The CONFIG probe does more than read: it nudges a live setting by a hair, reads it back to confirm the device really applied the change, then restores the original value. On a device with an LED strip — the case light or the keyboard LEDs — you will see the lights **pulse once** as it runs, a tiny visible heartbeat that tells you the connection is alive at a glance.
 - The **Filters** bar narrows what you see below. Filter by device, by activity type (Problems, Actions, Logs, Traces), by contributor (App, REST, FTP, Telnet), or by severity (Errors, Warnings, Info). One-tap **Errors only** and **Problems only** shortcuts are there too.
 - The **Activity** list gathers problems, actions, logs, and traces together. Tap any row to expand it for the full details.
 
@@ -473,9 +520,11 @@ C64U Remote uses normal REST, FTP, and Telnet requests, but the Commodore 64 Ult
 Good habits:
 
 - avoid repeating the same command while the device is already busy;
-- use Device Safety presets instead of raising concurrency aggressively;
-- keep Conservative selected until your Commodore 64 Ultimate and network have proved steady;
+- leave Device Safety on Auto, and only raise concurrency once the device and network have proved steady;
+- drop to Conservative for a first setup, Wi-Fi, or firmware you do not yet trust;
 - power-cycle the Commodore 64 Ultimate if all TCP services stop responding while ping still works.
+
+**Device Safety** in Settings governs how hard the app pushes the device. Its five modes trade speed for caution by capping how many requests run at once and pacing them, and they also tune caching, cooldowns, and backoff. **Auto** is recommended: it picks the right mode from the connected device and its firmware. The full list is in [Device Safety Modes](#device-safety-modes).
 
 The CPU speed setting can briefly drop the network while the device applies a clock change. Wait for the app to reconnect.
 
@@ -521,7 +570,11 @@ The **Joystick** tab appears only when the connected device supports the `machin
 
 Open Diagnostics if possible and check recent REST/FTP/Telnet activity. If HTTP, FTP, and Telnet all refuse connections while ping still works, manually power-cycle the Commodore 64 Ultimate.
 
-## Feature Reference
+## Appendices
+
+The rest of this guide is reference material for when you want the exact answer. Skim the tour to get going, then come back here for the specifics.
+
+### Feature Reference
 
 Preferred locations are marked first.
 
@@ -557,16 +610,16 @@ Preferred locations are marked first.
 | CommoServe | **Play > Add items**, Disks > Add disks, Settings > Online Archive | On by default. You can change it in Settings > Stable Features. |
 | Background playback scheduling | **Play**, Android app permissions | On by default. You can change it in Settings > Experimental Features. |
 | Display profile and theme | **Settings > Appearance** | Compact screenshots in this manual match this guide's presentation. |
-| Device Safety | **Settings > Device Safety** | Use Conservative as the normal starting point for C64U Remote. |
+| Device Safety | **Settings > Device Safety** | Leave it on Auto (recommended); Auto keeps a Commodore 64 Ultimate on Conservative until its firmware is known safe. See Device Safety Modes. |
 | Diagnostics | **Header badge / `*`**, Settings > Diagnostics | Badge is preferred for fast access. |
 | Logs, traces, errors, health checks | **Diagnostics** | Use filters and Share for support. |
 | Built-in help | **Docs** | Good for quick reminders inside the app. |
 
-## Keyboard and Directional Input Reference
+### Keyboard and Directional Input Reference
 
 On by default. You can change it in Settings > Experimental Features. Directional navigation works with D-pad keys, arrow keys, and compatible hardware keyboards.
 
-### Directional Pad
+#### Directional Pad
 
 | Key | What it does |
 | --- | --- |
@@ -578,7 +631,7 @@ On by default. You can change it in Settings > Experimental Features. Directiona
 
 The rule is simple: **OK goes in, Back comes out**.
 
-### Number Keys
+#### Number Keys
 
 Outside text fields, number keys jump to pages:
 
@@ -591,14 +644,14 @@ Outside text fields, number keys jump to pages:
 | 5 | Settings |
 | 6 | Docs |
 
-### Star and Pound
+#### Star and Pound
 
 | Key | Outside text fields | Inside text fields |
 | --- | --- | --- |
 | `*` | Open Diagnostics | Cycle separators such as `.`, `:`, `-`, `_`, `/` in host fields |
 | `#` | Open Device Switcher | Toggle T9 mode |
 
-### T9 Text Entry
+#### T9 Text Entry
 
 Use T9 in text fields such as hostnames and filters.
 
@@ -610,11 +663,11 @@ Use T9 in text fields such as hostnames and filters.
 
 For hostnames, this makes entries such as `c64u` and `192.168.1.64` practical without a touchscreen.
 
-### Quick Menu
+#### Quick Menu
 
 Press Menu when no focused control has its own menu. The Quick Menu offers page jumps, Diagnostics, and Device Switcher when more than one device is saved.
 
-## File and Source Reference
+### File and Source Reference
 
 | Source | Used in | Meaning |
 | --- | --- | --- |
@@ -625,7 +678,74 @@ Press Menu when no focused control has its own menu. The Quick Menu offers page 
 
 Supported playback/import types include SID, MOD, PRG, CRT, D64, G64, D71, G71, and D81. Disk collection workflows focus on disk images: D64, G64, D71, G71, and D81.
 
-## Status and Safety Reference
+| Format | Kind | Notes |
+| --- | --- | --- |
+| SID | Music | One or more subsongs; durations shown when songlength data is available. |
+| MOD | Music | Amiga-style tracker module. |
+| PRG | Program | A single loadable program. |
+| CRT | Cartridge | Cartridge image; started as if you inserted a cartridge. |
+| D64, G64 | Disk | 1541 single-sided disk image. |
+| D71, G71 | Disk | 1571 double-sided disk image. |
+| D81 | Disk | 1581 3.5-inch disk image. |
+
+### Network Ports and Services
+
+These are the defaults the app expects. Change them per device in **Settings > Connection** if yours differ.
+
+| Service | Default port | Used for |
+| --- | --- | --- |
+| Web Remote Control (REST) | 80 | Control, status, and configuration — required. |
+| FTP File Service | 21 | Browsing and transferring files, playlists, and disks. |
+| Telnet Remote Menu | 23 | Advanced menu-backed actions, when those are enabled. |
+
+### Device Safety Modes
+
+Set the mode in **Settings > Device Safety**. Higher concurrency is faster but pushes the device harder; the presets also tune caching, cooldowns, and backoff.
+
+| Mode | Requests at once | Use it when |
+| --- | --- | --- |
+| Auto | Chosen for you | Always a safe default — picks Conservative or Balanced from the device and its firmware. Recommended. |
+| Relaxed | Up to 3 | The device and network are proven fast and stable, and you accept higher risk. |
+| Balanced | Up to 2 | A Commodore 64 Ultimate on firmware 1.2.0 or newer. |
+| Conservative | 1 (serialized) | A first setup, Wi-Fi, or firmware you do not yet trust. Maximum safety. |
+| Troubleshooting | 1 (serialized) | You are chasing a problem and want extra debug logging. |
+
+### Drive Types and Disk Formats
+
+Set a drive's type on the **Disks** page to match the image you are mounting.
+
+| Drive type | Disk images | Description |
+| --- | --- | --- |
+| 1541 | D64, G64 | The classic single-sided 5.25-inch drive. |
+| 1571 | D71, G71 | Double-sided 5.25-inch drive. |
+| 1581 | D81 | High-capacity 3.5-inch drive. |
+
+### Snapshot Types and Memory Ranges
+
+**Save RAM** offers these capture types. The app keeps up to 100 snapshots on your phone or tablet and drops the oldest once that fills.
+
+| Snapshot | Captures | Memory range |
+| --- | --- | --- |
+| CPU + RAM | Full memory plus the CPU registers; can resume where it left off (when the device supports it). | $0000–$FFFF + registers |
+| Program | Almost all of memory, skipping the stack. A good all-round choice. | $0000–$00FF, $0200–$FFFF |
+| Basic | The BASIC program and its variables. | $002B–$0038, $0801–$9FFF |
+| Screen | The current screen and its colours. | VIC bank, $D000–$D02E, $D800–$DBFF, $DD00–$DD01 |
+| Custom | Exactly the address ranges you type. | User-defined |
+
+### Health Check Probes
+
+Run a health check from **Diagnostics** to test the connection. Each probe reports its own result and timing.
+
+| Probe | What it checks |
+| --- | --- |
+| REST | The Web Remote Control service answers. |
+| FTP | The FTP file service answers. |
+| Telnet | The Telnet menu service answers. |
+| CONFIG | Writes a live setting, reads it back, and restores it — proving the device applies changes. A device with an LED strip pulses once as it runs. |
+| RASTER | The VIC-II raster line is available — the video chip is running. |
+| JIFFY | The KERNAL jiffy clock is ticking, which also reports the machine's uptime. |
+
+### Status and Safety Reference
 
 | Signal | Meaning | Best next step |
 | --- | --- | --- |
