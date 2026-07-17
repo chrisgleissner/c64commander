@@ -5,6 +5,7 @@ All times 2026-06-24 unless noted.
 ## Session bughunt-20260625T164637Z (HEAD b86877f4) — FRESH RUN ON FIXED BUILD
 
 ### Setup (16:46–17:48Z)
+
 - `git status`: clean. branch test/full-cta-coverage. HEAD b86877f43589.
 - Read handover8, bug-hunt-ledger, bug-hunt-report, PLANS, S1 defect.
 - **Hardware probe**: Pixel 4 `9B081FFAZ001WX` connected. c64u `http://c64u/` = **HTTP 200 in 0.147s (UP/HEALTHY)** — the handover8 blocker (c64u down) is CLEARED.
@@ -16,6 +17,7 @@ All times 2026-06-24 unless noted.
 - Launched HEAD build, proved c64u-green baseline (device c64u, fw 1.1.0, Drive A ON/no-disk/OK), CDP forward (pid-scoped tcp:9333).
 
 ### S1 ROOT CAUSE + FIX (17:5x–18:2xZ) — USER-DIRECTED ("find out why and fix it / prevent it")
+
 - **Reproduced the catastrophic c64u wedge** on unfixed b8687: idle 42s → Drive A mount (Boulder Dash 2.d64, readonly) → device returned HTTP 404 (file EXISTS per FTP) → within ~90s c64u web stack went HTTP 000 (ping 0% loss). **User confirmed it did NOT self-heal — they power-cycled it.**
 - User context: long-standing (months), some C64 Commander activity drops c64u into network degradation needing manual restart. NOT a recent regression.
 - **Root cause** (evidence + code + docs/agentic/C64U_INCIDENTS.md #64-cont/#84/original-S1): Android okhttp-backed `HttpURLConnection` reuses a pooled idle TCP socket the c64u embedded server dropped → first post-idle request → `Connection reset`/bogus 404 → device REST stack hard-hangs. Signal = `wasIdle:true` (42k/47k/197k ms), not request content. `git diff cf84d..HEAD c64api.ts` = mount request byte-identical (only timeout + the ineffective JS Connection:close).
@@ -27,6 +29,7 @@ All times 2026-06-24 unless noted.
 - Drive A left clean (No disk mounted / OK / healthy).
 
 ### Breadth bug hunt + cleanup (18:2x–18:3xZ, fixed build)
+
 - CDP error collector injected into SPA; **6-route keypad sweep (digits 1–6) → 0 JS errors/exceptions** (Home 164/Play 63/Disks 80/Config 42/Settings 109/Docs 40 interactive els).
 - Keypad: `*`→Diagnostics (Back dismiss), `#`→Device Switcher (u64+c64u ONLINE, Back, no accidental switch). Diagnostics password redaction PASS (no `pwd` in body).
 - **S4 found:** AbortError → unhandledrejection on Diagnostics/Switcher dismiss (2×). Defect filed.
@@ -35,11 +38,10 @@ All times 2026-06-24 unless noted.
 - Lifecycle: cold relaunch → clean reconnect; background→foreground → clean reconnect, c64u healthy (resume-after-idle path now safe). Orientation rotate skipped (landscape trap).
 - Perf: mount 780ms, eject 147ms, nav <1.5s, relaunch ~4s.
 - **Lint gate:** found pre-existing prettier drift in 2 committed files (UnifiedHealthBadge.tsx, DriveManager.tsx) — my c64api.ts passes. Reformatted (whitespace-only); full `npm run lint` + `tsc` now PASS.
-- Cleanup: Drive A clean, display Auto, c64u connected/healthy, c64u readback image_file='' errors:[]. Reports written: bug-hunt-report.md, cleanup-report-bughunt.md, defects/S1-ROOTCAUSE-*.md, defects/S4-*.md; ledger + PLANS updated.
+- Cleanup: Drive A clean, display Auto, c64u connected/healthy, c64u readback image_file='' errors:[]. Reports written: bug-hunt-report.md, cleanup-report-bughunt.md, defects/S1-ROOTCAUSE-_.md, defects/S4-_.md; ledger + PLANS updated.
 - No commit made (commit only on request). Working tree dirty with the fix + QA docs.
 
 ---
-
 
 ## Handover 7 continuation — 2026-06-25T12:23:41Z
 
@@ -243,7 +245,7 @@ All times 2026-06-24 unless noted.
   - Gate 6 coverage: 14/16 PASS.
   - Gate 6.5 coverage: 11/12 PASS.
   - Gate 7 result: 3/3 PASS.
-  These remain stale because they target SHA `41b0d368ca06`.
+    These remain stale because they target SHA `41b0d368ca06`.
 
 ---
 
@@ -279,7 +281,7 @@ All times 2026-06-23 (local). Prior task content for this file is in git history
   - Prior report "did not modify repo-root PLANS.md/WORKLOG.md" — TRUE: both tracked,
     last touched at `6bfb766a` (previous feature), no working-tree diff. Updated here.
   - "Advanced fallback dissolved" — FALSIFIED as stated: it is not dissolved by design,
-    it is *populated by speculative category defaults* so it renders empty on C64U. See P2.
+    it is _populated by speculative category defaults_ so it renders empty on C64U. See P2.
 - Baseline gates: `menu-mapping:check` OK (179 items, 16 menu-only). Targeted suite
   (7 files / 47 tests) green.
 
@@ -297,6 +299,7 @@ Matrix rows all covered; extended the routing assertions in P2.
 
 Evidence gathered from `c64u-menu.yaml` (label/structure authority) + `c64u-config.yaml`
 (REST schema):
+
 - `c64u-menu.yaml` has NO Tape page, NO `C64U Model`, NO SoftIEC/Data-Streams page
   (only Audio Mixer "Vol/Pan tape *" volume rows mention "tape").
 - `intentionallyUnmapped` leftovers reach routing: `C64U Model`, SoftIEC (`IEC Drive`,
@@ -330,6 +333,7 @@ Sources checked: `c64u-config.yaml` (REST schema), `c64u-3.14`/`u64e-*` configs,
 `menuValueFormatters.ts`, `ConfigItemRow.tsx`, `normalizeConfigItem.ts`, association YAML.
 
 Verified from the firmware REST schema `format` field (printf-style):
+
 - `Disk swap delay` (Drive A/B): `min:1 max:10 format:"%d00 ms"` → display `value*100 ms`
   (1→"100 ms" … 10→"1000 ms").
 - `Loop Delay` (Modem Settings): `min:1 max:20 format:"%d0 ms"` → display `value*10 ms`
@@ -378,6 +382,7 @@ separator robustness reviewed (see findings).
 ## P7 — E2E / screenshots / HIL
 
 E2E impact of the P2 routing change (audited every spec):
+
 - `demoConfig.spec.ts` — encoded the old "junk drawer dissolved" behavior
   (`config-advanced-fallback` count 0). The demo config is `docs/c64/c64u-config.yaml`,
   which DOES contain the now-residual categories (C64U Model, SoftIEC, Tape Settings,
@@ -396,6 +401,7 @@ E2E impact of the P2 routing change (audited every spec):
   catalog is a blob-diff tracker, not a fixed required list, so a new capture does not fail it.
 
 HIL (real hardware on the local network, 2026-06-23):
+
 - **Ultimate 64 Elite — REACHABLE, no auth.** `http://u64` → `/v1/info` product
   "Ultimate 64 Elite", firmware 3.14e, fpga 122, hostname u64. `GET /v1/configs` returns 19
   live categories incl. the U64e-only `Clock Settings`, SoftIEC, Tape, Data Streams, U64
@@ -420,7 +426,7 @@ HIL (real hardware on the local network, 2026-06-23):
     (PAL)"** (NOT mis-homed on Built-in drive A), **DATA STREAMS** (Stream VIC/Audio to …).
   - **Unknown-category invariant proven on real hardware:** the live C64U exposes 22
     categories incl. **"ARMSID in Socket 1" / "ARMSID in Socket 2"** — categories present in
-    NO fixture/association (the fixture has "ARMSID" only as a SID-socket *option value*).
+    NO fixture/association (the fixture has "ARMSID" only as a SID-socket _option value_).
     Both surface automatically in the Advanced section, fully rendered + editable (Fundamental
     Mode / 6581 Filter Strength / 8580 Filt Freq sliders + selects) with humanized labels.
     This also disproves the prior "junk drawer fully dissolved" claim: even a fixture-matching
@@ -458,6 +464,7 @@ HTTP so CDP Network/resource-timing can't see the requests):
   it**, so every session re-fetches all (firmware-static) options.
 
 Baseline (cold, before fix):
+
 - Modems 7988 ms (worst), ~0.8 s typical · Printers 821 ms (one run timed out at 20 s / failed
   to render) · User interface 880 ms · warm re-expand (React-Query cache) 492 ms.
 
@@ -468,6 +475,7 @@ miss (which repopulates it). The device-fresh value still comes from the categor
 eliminates the per-item HTTP storm on every session after the options are first cached.
 
 After fix (fresh app launch = empty React-Query cache; options from persistent cache):
+
 - **Modems 223 ms · Printers 277 ms · User interface 348 ms** — all rows + interactive
   controls rendered, 0 loading (impossible without the cache: there is no time for 16 HTTP
   round-trips). ~3–4× faster typical and the multi-second / timeout outliers are gone (no
@@ -732,6 +740,7 @@ Role: Principal Android QA Engineer — exhaustive bug hunt. Artifact root:
 ## 2026-06-25T15:30–16:15Z — FIX + on-device verification (all identified issues)
 
 User authorized product-code fixes + on-device verification. Root-caused via 2 agents, then implemented:
+
 - `src/lib/c64api.ts`: MOUNT_REQUEST_TIMEOUT_MS=8000 for mountDrive/unmountDrive (was 1500ms interactive default → false "Host unreachable" on slow-but-OK mounts). [S2 Fix A + C3]
 - `src/components/disks/HomeDiskManager.tsx`: driveErrorsSetAtRef + stamping effect + poll-reconciliation clear block (stale per-drive error clears on next successful poll); gated Disks drive status on status.isConnected. [S2 Fix B + C1]
 - `src/pages/home/components/DriveManager.tsx`: gated Home drive status on isConnected → "Not available" when disconnected. [C1]
@@ -741,6 +750,7 @@ Gates: typecheck PASS; full unit suite 643 files / 7458 tests PASS; `npm run lin
 Build: APK SHA-256 5c6625f7c42f4c8b73e6be8d13b563ec602be24df7a8e84a346c94eba168aca7 (vs old 462bfa15…), installed on Pixel 4.
 
 On-device verification (Pixel 4 → c64u; u64 fallback during a c64u dropout):
+
 - S2 Fix A: mount/eject cycles clean, no false "Host unreachable" (old build 2/5).
 - S2 Fix B: deterministic — wifi-drop during mount set drive-status-a="Unable to resolve host" while drive-status-b="OK"; on wifi restore, drive-status-a self-cleared to "OK" on next poll WITHOUT navigation. (verify-wifidrop-failed/verify-fixB-recovered)
 - C1: OFFLINE launch → Home home-drive-status-a="Not available"; Disks drive-status-message-a/b="Not available". (verify-c1-disks-offline)
@@ -755,6 +765,7 @@ Wrote fix-report.md; updated S2 defect (FIXED+VERIFIED), bug-hunt-ledger. App le
 All times 2026-06-26 UTC.
 
 ### Setup + baseline (06:28–06:36Z)
+
 - git: branch test/full-cta-coverage-2, HEAD fe212a59 (PR #295: RAM snapshot restore fix + full CTA coverage tests). Working tree: only prompt4.md untracked.
 - Confirmed `http.keepAlive=false` REVERTED — no keepAlive override in android/app/src/main/. S1 = firmware defect (see PLANS.md framing).
 - Hardware probe: Pixel 4 `9B081FFAZ001WX` connected (USB). c64u 192.168.1.167 ICMP 1.1ms; u64 192.168.1.13 ICMP 0.5ms.
@@ -772,6 +783,7 @@ All times 2026-06-26 UTC.
 - OBSERVATION (verify later, not yet a bug): c64u shown "Already saved" immediately after a CLEAN install (uninstall wiped data). Either the app seeds a default c64u device or discovery mislabels. To verify in Settings → saved devices.
 
 ### Play flow + SID-add finding (06:36–07:00Z)
+
 - Play page loaded clean (badge HEALTHY). Add items → source chooser shows 4 sources: Local, C64U, HVSC, CommoServe (+Cancel).
 - C64U source browse: root (Flash/SD/Temp/USB2) → /USB2 → /USB2/test-data → /USB2/test-data/SID. All directory listings rendered, badge HEALTHY. (Used FTP infra readback to locate fixtures: /USB2/test-data/{SID,prg,d64,mod,crt} — small files incl 10_Orbyte.sid 1584B.)
 - Selected 3 SIDs (10_Orbyte, 12th_Sector_Music, 1982) via selection circles (row-center tap does NOT select; circle at x~95 does). "3 selected" → Add to playlist.
@@ -780,14 +792,16 @@ All times 2026-06-26 UTC.
 - DECISION POINT: c64u FTP is firmware-wedged + device degraded. Clean high-value-flow proof (disk mount/eject reliability S1, locked-screen auto-advance, source browse/import, filtering) needs a FRESH healthy c64u (physical power-cycle). Pivoting to app-local testing; asking user re power-cycle.
 
 ### USER REDIRECT (07:1x–07:3xZ) — songlengths fix reshaped + app fixes
+
 - User power-cycled c64u (FTP restored: listing 226 in 0.57s, HTTP 200). Directive: "learn from this outage and avoid it in future; don't make a habit of power-cycles."
 - Subagent code analysis confirmed TWO fixable app defects (distinct from firmware FTP wedge):
-  - FIX(b) health-poll self-halt: useC64Connection.ts refetchInterval returns `false` on a *time-based* (non-reactive) condition → React Query tears the interval down permanently → badge stuck UNHEALTHY ~13min until navigation. **FIXED**: moved time-based coalescing into queryFn (return cached when recent success), refetchInterval now only returns false on *reactive* state (screenActive/diagnosticsSuppression/pollingPaused). typecheck clean; related tests green.
+  - FIX(b) health-poll self-halt: useC64Connection.ts refetchInterval returns `false` on a _time-based_ (non-reactive) condition → React Query tears the interval down permanently → badge stuck UNHEALTHY ~13min until navigation. **FIXED**: moved time-based coalescing into queryFn (return cached when recent success), refetchInterval now only returns false on _reactive_ state (screenActive/diagnosticsSuppression/pollingPaused). typecheck clean; related tests green.
   - FIX(a) songlengths-on-SID-add: blocking/unbounded/uncancellable FTP read of a multi-MB songlengths.md5 that times out (8s idle soTimeout) and wedges the firmware FTP. v1 = 1MiB size-gate (committed in WT).
 - **USER FEEDBACK reshapes FIX(a)**: songlengths.md5 is ~5MiB (→6MiB in 10y); a 1MiB cap makes C64U songlengths discovery infeasible — NOT acceptable. Required instead: (1) **6 MiB cap**, (2) **no timeouts** (let the read complete), (3) **much clearer progress reports** during the read, (4) **user abort**. The 8s idle-timeout truncating the transfer is likely what wedged the FTP data channel; letting it complete (or aborting cleanly) avoids that.
 - Plan: native FtpClientPlugin.kt chunked streaming read with byte-progress events + cancellation + generous/disabled idle timeout; thread requestId/onProgress/signal/timeoutMs through src/lib/native/ftpClient.ts + src/lib/ftp/ftpClient.ts; addFileSelections buildUltimateSonglengthsFile uses them with 6MiB cap; surface progress + abort in the Play scan status. Kotlin + JS tests. Then build/install/HIL-read the real 5MiB songlengths on the fresh c64u (abort-ready).
 
 ### Fix verification + WEDGE 2 diagnosis + cascade-cut (07:3x–08:5xZ)
+
 - Built+installed 0.9.0-rc1-fe212 (fix-a v2 + fix-b). tsc clean; 140 JS tests + Kotlin FtpClientPluginTest green.
 - Re-ran SID-add HIL (3 SIDs /USB2/test-data/SID) to verify fix-a: read started with timeoutMs:0/totalBytes:5151881 (logcat); badge stayed HEALTHY ~76s (vs prior 8s error); one real duration resolved (12th_Sector=03:11 → read path works). BUT device then fully wedged (HTTP+FTP 000, ICMP alive) → user power-cycled (#2).
 - **WEDGE 2 ROOT CAUSE (logcat wedge2-evidence/full-logcat.log):** wedge onset was in the songlengths DISCOVERY directory-listing scan, BEFORE the read — 9× SocketTimeoutException on listings 08:46:11→08:47:08, each cycling LIST→MLSD→NLST (3 PASV connections/folder, internal cascade unpaced by the 800ms inter-call cooldown). Folders are small (16/98/1 entries) so NOT size; it's rapid FTP connect/PASV churn (issue #364). The no-timeout READ was not the trigger.
@@ -797,6 +811,7 @@ All times 2026-06-26 UTC.
 - Device left: app connected to c64u, HEALTHY, Home, empty playlist (fresh install), Drive A no-disk.
 
 ### Safe-CTA error sweep (09:1x–09:3xZ) — exercise CTAs + capture errors per user mandate
+
 - CDP error listener (cta-sweep-errors.jsonl), clean baseline. Exercised interactive CTAs on safe surfaces (no FTP bursts, no destructive Power Off/Reboot):
   - Play: Mute/Recurse/Shuffle/Repeat toggles (states flip correctly), Reshuffle, volume slider (0→-42dB applies), default-duration slider, type-filter chips. No Radix slider double-handling bug.
   - Config: category nav (Turbo boost); Turbo control dropdown opens with options (no blank-Select bug); config WRITE via PUT (Manual→Off→Manual) applied + device stayed HEALTHY (LED-crash class fixed) + restored.
@@ -804,3 +819,52 @@ All times 2026-06-26 UTC.
 - **Result: 0 console errors, 0 logcat app errors across the entire sweep.** App is clean for the exercised safe interactive CTA surface.
 - NOT covered (continuing program / risky): full ~1000-CTA exhaustive matrix; FTP-heavy CTAs (Add items/Add disks/C64U browse — wedge risk); complex stateful flows (mount/eject reliability, locked-screen auto-advance, disk swap, filtering edge cases); negative-path connect; every config row; variant (C64U Remote) checks. See handover9.md.
 - Honest status: 3 real bugs fixed + verified this session; broad safe-CTA surface clean; firmware FTP wedge = external/unfixable-in-app (trigger reduced). NOT a BUGFREE-PROVEN certification (exhaustive matrix incomplete).
+
+## #142 (2026-07-17, Claude/Opus) — Config interactive-write family on c64u — STARTUP
+
+- Branch fix/hardening4 HEAD 8fb53a71, tree clean. Source 0.9.2-8fb53; installed APK 0.9.2-rc1-8d512 (8d5127b9).
+- APK identity: git diff 8d5127b9..HEAD touches NO src/ or android/app/src/ (docs/manuals/CI-telemetry/manual-tooling/radix-dep-bumps only) → product-equivalent → current-build claim without rebuild.
+- Peers discovered callable: droidmind, c64scope, c64bridge, mobile-mcp. Hardware: c64u HEALTHY (HTTP 200 0.009s), u64 up (2.7s).
+- REST baseline snapshots: Audio Mixer all Vol=0 dB/drives OFF (audio-mixer-baseline.json); Drive A Type=1541 (no restore needed, contra #84 note); SoftIEC Drive=Disabled.
+- Family: /config Audio Mixer interactive writes. Capacity >=40% → min 8/target 12-20 actions.
+
+## #143 (2026-07-17, Codex) — c64u Settings recovery and Audio Mixer SOLO pack
+
+- Identity: `fix/hardening4` at `8fb53a71`, source `0.9.2-8fb53`; Pixel 4 `9B081FFAZ001WX` package `0.9.2-rc1-8d512`. The installed commit has no `src` or `android/app/src` delta to HEAD, so it is product-equivalent for this HIL pack.
+- Hardware: c64u `192.168.1.167`, C64 Ultimate fw `1.2.0`, fpga `122`, core `1.4D`, id `5D4E12`. Direct `/v1/info` was HTTP 200 before and after; the final response has `errors: []`.
+- Capacity/action accounting: Codex at 65% weekly capacity. Fourteen meaningful droidmind product actions covered Settings select/save/refresh, Diagnostics health/export, Config navigation/Audio Mixer expand, SOLO enable/restore, and safe dialog exits.
+
+| Batch   | Product action                                    | Result                                                                                                            | Evidence                                                                            |
+| ------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| A143-01 | Select saved c64u and Save & Connect              | Initial app request failed during Pixel Wi-Fi 5 GHz→2.4 GHz roaming; subsequent app `/v1/info` recovered.         | First diagnostics export records transient `ConnectException` followed by HTTP 200. |
+| A143-02 | Refresh connection, then Run health check         | Recovered to connected c64u / Healthy / 0 problems, but the host input retained an old unreachable error.         | BUG-075; `iter143/diagnostics/...1731-10Z.zip`.                                     |
+| A143-03 | Diagnostics Share all, cancel chooser             | Export created and pullable; no share target selected.                                                            | `iter143/diagnostics/c64commander-diagnostics-all-2026-07-17-1731-10Z.zip`.         |
+| A143-04 | Config → Audio Mixer → SOLO UltiSID 1 enable      | One successful `POST /v1/configs` (HTTP 200, 70 ms); group body muted the other three channels.                   | Post-SOLO export action trace.                                                      |
+| A143-05 | SOLO UltiSID 1 disable / restore                  | One restore POST (HTTP 200, 197 ms); all four group values returned to `0 dB`; follow-on item GETs were HTTP 200. | `iter143/diagnostics/unzipped-post-solo/actions-2026-07-17-1736-47Z.json`.          |
+| A143-06 | Post-action Diagnostics Share all, cancel chooser | Export says Healthy/Online, problemCount 0; periodic `/v1/info` polls stayed HTTP 200 (35–51 ms).                 | `iter143/diagnostics/c64commander-diagnostics-all-2026-07-17-1736-47Z.zip`.         |
+
+- Safety decision: stopped further Audio Mixer writes. SOLO intentionally uses a multi-field group POST and broad read-back fan-out; after the preceding recovery it was safer to preserve the restored baseline than add slider/select/reset traffic.
+- Diagnostics review: no app crash/ANR surfaced in this pack. An initial-export unhandled-rejection record was associated with an earlier u64 failure window and was not reproduced here, so it remains observation-only.
+- Final package-filtered logcat: the only new error-level WebView entry was `Capacitor/Console [object Object]` immediately after the intentionally canceled Android Share chooser returned `Share canceled`; c64u HTTP polling continued with 200 responses. It is expected cancel-path logging, not a crash or device failure.
+- Artifacts: `docs/agentic/artifacts/iter143/` (UI screenshots, direct info JSON, two pulled Diagnostics ZIPs, expanded post-SOLO JSON).
+- Completion deploy: the existing latest APK `android/app/build/outputs/apk/debug/c64commander-0.9.2-rc1-8d512-debug.apk` installed successfully at 18:42:11. Droidmind relaunched it; Home showed `Connected to c64u, system healthy`, app `0.9.2-rc1-8d512`, device c64u, firmware 1.2.0.
+- Verdict: **DEFECT_OPEN** for BUG-075. No source changes, tests, or build ran; the existing product-equivalent APK was reinstalled and validated on Pixel 4.
+
+## #144 (2026-07-17, kilo) — BUG-075 narrow fix + HIL
+
+- Identity: `fix/hardening4` at `8fb53a71`, source `0.9.2-8fb53`. Rebuilt debug APK `android/app/build/outputs/apk/debug/c64commander-0.9.2-8fb53-debug.apk` and installed on Pixel 4 `9B081FFAZ001WX`; `get_app_info` confirms package `0.9.2-8fb53` matches HEAD source. No identity drift.
+- Hardware: c64u `192.168.1.167`, C64 Ultimate fw `1.2.0`. Direct `/v1/info` HTTP 200 before and after the pack.
+- Capacity/action accounting: kilo usable. Three product actions met the >=40% band (intentionally narrow: bogus-host Save, Refresh, restore-Save). droidmind supplied UI evidence; mobile-mcp and c64scope were not required for this fix.
+
+| Batch   | Product action                                       | Result                                                                                                                                                                                | Evidence                                                         |
+| ------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| A144-01 | Settings: type bogus `192.168.1.250`, Save & Connect | Inline `We couldn’t reach "192.168.1.250"…` error shown; `switchSavedDevice` not called.                                                                                              | `iter144/screenshots/01-bug075-error-shown.png`.                 |
+| A144-02 | Refresh connection (no field edit)                   | Error cleared; "Connected to http://192.168.1.167" header stayed healthy; field still shows `192.168.1.250` (correct — only the validation is cleared, the draft is not auto-edited). | `iter144/screenshots/02-bug075-error-cleared-after-refresh.png`. |
+| A144-03 | Restore correct `192.168.1.167`, Save & Connect      | Save success path re-confirmed clean state; error did not reappear.                                                                                                                   | `iter144/screenshots/03-bug075-save-success.png`.                |
+
+- Source change: `src/pages/SettingsPage.tsx` — `handleSaveConnection` clears `hostnameError` after a confirmed successful `switchSavedDevice` (line 737). `handleRefreshConnection` clears both `hostnameError` and `reachabilitySuggestion` after `discoverConnection("manual")` resolves (line 822-823). Clear is gated on **confirmed reachability**, not on draft edits.
+- Regression: new test `clears a previously-set unreachable-host error once manual refresh recovers the device (BUG-075)` in `tests/unit/pages/SettingsPage.test.tsx` fails before the Refresh-path fix and passes after it. Full SettingsPage suite 92/92; full Vitest suite 8648/8648 across 707 files (~224s). `npm run lint` clean. `tsc --noEmit` clean.
+- Safety decision: no c64u writes; only host-field keystrokes and Read/Save/Connect buttons. c64u `evaluateNewDeviceReachability` and `discoverConnection` are read-only on the device.
+- Logcat: `adb logcat -d -t 200` clean of `FATAL`/`ANR`/`StrictMode`/`crash`/`exception` from `uk.gleissner.c64commander`. Only system noise (LOWI, AconfigPackage).
+- Docs: `docs/agentic/BUGS_FOUND.md` (BUG-075 status → FIXED + current-build Pixel-HIL validated #144), `docs/agentic/STATE_DIGEST.md` (#144 entry), `docs/agentic/CTA_LEDGER.md` (BUG-075 row → EXERCISED_CLEAN_FIXED).
+- Verdict: **FIXED + current-build Pixel-HIL validated** for BUG-075.

@@ -731,6 +731,10 @@ export default function SettingsPage() {
           ),
         );
       }
+      // A confirmed successful save+switch is authoritative: clear any stale
+      // unreachable-host validation so the editable field no longer contradicts
+      // the healthy connected state. (BUG-075)
+      setHostnameError(null);
       setPasswordInput("");
       passwordInputRef.current = "";
       setPasswordEditing(!hasPassword);
@@ -812,6 +816,11 @@ export default function SettingsPage() {
     setConnectionRefreshInFlight(true);
     try {
       await discoverConnection("manual");
+      // A successful manual refresh confirms the device is reachable now. Clear
+      // any stale unreachable-host validation so the field no longer contradicts
+      // the recovered header state. (BUG-075)
+      setHostnameError(null);
+      setReachabilitySuggestion(null);
     } catch (error) {
       reportUserError({
         operation: "CONNECTION_REFRESH",

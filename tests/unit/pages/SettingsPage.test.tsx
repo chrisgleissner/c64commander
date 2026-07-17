@@ -714,6 +714,37 @@ describe("SettingsPage", () => {
     expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
   }, 15000);
 
+  it("clears a previously-set unreachable-host error once manual refresh recovers the device (BUG-075)", async () => {
+    // First, put the page into a stale-unreachable state by failing Save & Connect.
+    mockEvaluateNewDeviceReachability.mockResolvedValueOnce({
+      status: "unreachable",
+      suggestedAddress: null,
+      suggestedHostname: null,
+    });
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/couldn’t reach.*enter its IP address/i)).toBeInTheDocument();
+    });
+    expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
+
+    // Now the device is reachable again. The user recovers via Refresh (not another save).
+    // The successful refresh must clear the stale inline hostname error.
+    vi.mocked(discoverConnection).mockResolvedValueOnce(undefined);
+
+    fireEvent.click(screen.getByLabelText("Refresh connection"));
+
+    await waitFor(() => {
+      expect(discoverConnection).toHaveBeenCalledWith("manual");
+    });
+    await waitFor(() => {
+      expect(screen.queryByText(/couldn’t reach.*enter its IP address/i)).not.toBeInTheDocument();
+    });
+  }, 15000);
+
   it("gates overlapping manual refresh clicks while discovery is in flight", async () => {
     let resolveRefresh!: () => void;
     vi.mocked(discoverConnection).mockImplementation(

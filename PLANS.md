@@ -38,6 +38,7 @@ gracefully (accurate degraded badge, no crash, no false OK, no stale optimistic 
 
 **Phase F — fixes implemented + verified.** THREE app fixes landed this session (working tree,
 uncommitted, on the cascade-cut build `0.9.0-rc1-fe212` SHA 56ec881f, installed + connected):
+
 1. **Health-poll self-halt** (`src/hooks/useC64Connection.ts`): refetchInterval no longer returns
    a time-based `false` (which permanently tore down React Query's interval → badge stuck UNHEALTHY
    ~13 min); coalescing moved into queryFn. Verified: typecheck + JS tests green; on-device health
@@ -128,3 +129,46 @@ state is the section above; earlier sessions follow newest-first.
 Gates: scope:check PASS, lint+tsc PASS, Kotlin MainActivityTest PASS, APK build OK. Working tree dirty with the fix (uncommitted; no commit requested). Device left clean/healthy.
 
 Prior discovery baseline (515e2 run): 290 CTAs — Home 106, Play 24, Disks 40, Config 28, Settings 74, Docs 18.
+
+## Ralph loop iteration #142 (2026-07-17, Claude/Opus)
+
+- Branch `fix/hardening4`, HEAD `8fb53a71` "Improved manual", working tree CLEAN at startup.
+- Source label `0.9.2-8fb53`. Installed APK `0.9.2-rc1-8d512` (commit `8d5127b9`, ancestor of HEAD).
+  `git diff 8d5127b9..HEAD -- src/ android/app/src/` = EMPTY → no Android product-code delta;
+  delta is docs/manuals, CI telemetry scripts, manual-build tooling, radix caret dep bumps only.
+  **Installed APK is product-equivalent to HEAD for the Android app** → current-build claim valid
+  without rebuild (recorded per PIXEL 4 BUILD identity rule).
+- Peers: droidmind callable (product driver), c64scope callable, c64bridge callable, mobile-mcp callable.
+- Hardware: **c64u HEALTHY** (192.168.1.167, `/v1/info` HTTP 200 in 0.009s). u64 up but slow (2.7s).
+  c64u is primary target and available → exercise a c64u-safe interactive family.
+- Capacity checkpoint: Ralph Robin claude usable (5h 64% left, weekly 66%) → >=40% band: min 8 / target 12-20 actions.
+- Previous verdict (#141, stale digest branch): BUG-074 FIXED on u64; c64u follow-up pending.
+- Selected probe family: **Config interactive-write family on c64u** (/config Audio Mixer:
+  SOLO toggle [DISCOVERED, never exercised], slider drag + short-drag re-test [BUG DEFECT_OPEN],
+  Refresh regression, a select/dropdown write with REST read-back, adversarial route-change-return).
+  Advances DISCOVERED/DEFECT_OPEN ledger rows on now-healthy primary hardware.
+- Stop criteria: exhaust visible SAFE_TO_EXERCISE Audio Mixer controls (each multi-rep), >=1 adversarial
+  transition, mandatory logcat + Diagnostics-export sweep, restore mixer to 0 dB baseline, then hand off.
+- Baseline for restore: docs/agentic/artifacts/iter142/audio-mixer-baseline.json (all Vol 0 dB / drives OFF).
+- Primary TODO: exercise Audio Mixer SOLO + slider commit + one select write on c64u with REST read-back.
+
+## Ralph loop iteration #143 (2026-07-17, Codex) — c64u recovery and constrained Audio Mixer SOLO probe
+
+- Codex capacity is usable (weekly 65%); the >=40% action target applied. droidmind drove 14 meaningful product actions; mobile-mcp supplied read-only UI evidence.
+- Identity: branch `fix/hardening4`, HEAD `8fb53a71`, source `0.9.2-8fb53`; installed `0.9.2-rc1-8d512` is product-equivalent (`git diff 8d5127b9..HEAD -- src android/app/src` empty).
+- c64u (`192.168.1.167`, C64 Ultimate fw 1.2.0) is healthy after the pack. Final direct `/v1/info` was HTTP 200 with no errors; final Diagnostics export is Healthy/Online, problemCount 0.
+- Found **BUG-075**: after a transient Pixel Wi-Fi roam, Settings retained a red host-unreachable error even after app HTTP success, Refresh, and health check established Connected/Healthy state.
+- Audio Mixer SOLO enable/restore was completed. Each state made one successful four-field `POST /v1/configs`; restore returned all affected channels to `0 dB`, then broad category read-back GETs ran.
+- Safety stop: do not widen Audio Mixer writes in this loop. The group POST/fan-out is disproportionate immediately after recovery; device state is restored. This does not claim a cure for the firmware TCP-wedge defect.
+- Next: fix and regression-test BUG-075 in `SettingsPage`, build/deploy, and repeat the Pixel failure-to-recovery path.
+
+## Ralph loop iteration #144 (2026-07-17, kilo) — BUG-075 narrow fix + HIL
+
+- One coherent CTA family: Settings recovery state. kilo capacity is usable; the >=40% action target applied. Three product actions met the band (intentionally narrow: bogus-host Save, Refresh, restore-Save). droidmind supplied the UI evidence; mobile-mcp and c64scope were not required.
+- Identity: branch `fix/hardening4`, HEAD `8fb53a71`, source `0.9.2-8fb53`. Rebuilt debug APK `android/app/build/outputs/apk/debug/c64commander-0.9.2-8fb53-debug.apk` and installed on Pixel 4 `9B081FFAZ001WX`; `get_app_info` confirms version `0.9.2-8fb53` matches HEAD source. No identity drift.
+- c64u (`192.168.1.167`, C64 Ultimate fw 1.2.0) stayed reachable throughout; direct `/v1/info` HTTP 200 before and after the pack.
+- Fix in `src/pages/SettingsPage.tsx`: `handleSaveConnection` clears `hostnameError` after a confirmed successful `switchSavedDevice` (line 737). `handleRefreshConnection` clears both `hostnameError` and `reachabilitySuggestion` after `discoverConnection("manual")` resolves (line 822-823). Clear is gated on **confirmed reachability**, not on draft edits, so the stale state only goes away when the device is verifiably reachable again.
+- Regression test `clears a previously-set unreachable-host error once manual refresh recovers the device (BUG-075)` in `tests/unit/pages/SettingsPage.test.tsx` fails before the Refresh-path fix and passes after it. Full SettingsPage suite 92/92; full Vitest suite 8648/8648 across 707 files (~224s). `npm run lint` clean. `tsc --noEmit` clean.
+- Pixel HIL on the same device: bogus `192.168.1.250` host → Save & Connect produced the inline `couldn’t reach` error (screenshot `iter144/screenshots/01-bug075-error-shown.png`). Refresh (no field edit) cleared the error while "Connected to http://192.168.1.167" header stayed healthy (`02-bug075-error-cleared-after-refresh.png`). Restored correct host and Save & Connect — error stayed cleared (`03-bug075-save-success.png`). `adb logcat -d -t 200` clean of app-level `FATAL`/`ANR`/`StrictMode`/`crash`/`exception`.
+- Docs updated: `docs/agentic/BUGS_FOUND.md` (BUG-075 status → FIXED + current-build Pixel-HIL validated #144), `docs/agentic/STATE_DIGEST.md` (#144 entry), `docs/agentic/CTA_LEDGER.md` (BUG-075 row → EXERCISED_CLEAN_FIXED).
+- Verdict: **FIXED + current-build Pixel-HIL validated** for BUG-075. Next: resume remaining Audio Mixer controls in a separate fresh pack; do not propose another BUG-075 pass.
