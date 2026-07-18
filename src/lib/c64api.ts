@@ -79,7 +79,7 @@ import { TransmissionGuard, type SupportedC64FileType, type TransmissionValidati
 import { collectTraceHeaders } from "@/lib/tracing/payloadPreview";
 import { notifyReachable } from "@/lib/connection/reachabilityEvents";
 import { getLifecycleState } from "@/lib/appLifecycle";
-import { CapacitorHttp } from "@capacitor/core";
+import { requestC64NativeHttp } from "@/lib/native/c64Http";
 
 // A request that fails with a generic network/timeout class while the app is
 // in the background is almost always the WebView/Capacitor pausing the request
@@ -416,13 +416,15 @@ const capacitorHttpDeviceFetch = async (
   url: string,
   init: { method?: string; headers?: Record<string, string>; body?: BodyInit | null },
   timeoutMs: number,
+  requestId: string,
+  correlationId: string,
   responseType: "json" | "arraybuffer" = "json",
 ): Promise<Response> => {
   const method = (init.method || "GET").toUpperCase();
   const headers = init.headers ?? {};
   let native: { status: number; headers?: Record<string, string>; data?: unknown };
   try {
-    native = await CapacitorHttp.request({
+    native = await requestC64NativeHttp({
       url,
       method,
       headers,
@@ -430,6 +432,8 @@ const capacitorHttpDeviceFetch = async (
       connectTimeout: timeoutMs,
       readTimeout: timeoutMs,
       responseType,
+      requestId,
+      correlationId,
     });
   } catch (error) {
     // Normalize to the shape the patched WebFetch produces on a transport error so the
@@ -1688,7 +1692,13 @@ export class C64API {
                     isNativePlatform() && !baseUrl.includes(WEB_PROXY_PATH) && !isLocalProxy(baseUrl);
                   const response = await awaitPromiseWithAbortSignal(
                     useNativeDeviceTransport
-                      ? capacitorHttpDeviceFetch(url, { method, headers, body: requestOptions.body }, requestTimeoutMs)
+                      ? capacitorHttpDeviceFetch(
+                          url,
+                          { method, headers, body: requestOptions.body },
+                          requestTimeoutMs,
+                          requestId,
+                          action.correlationId,
+                        )
                       : fetchWithSignalCompatibility(
                           url,
                           {
@@ -1883,13 +1893,21 @@ export class C64API {
                       rawError: rawMessage,
                       errorDetail: isDnsFailure(rawMessage) ? "DNS lookup failed" : undefined,
                     });
-                    // Always log as error so the entry is captured when the diagnostics
-                    // overlay is open (warn is suppressed by the overlay). The transient
-                    // flag distinguishes recoverable network blips from genuine defects.
-                    addErrorLog(
-                      "C64 API request failed",
-                      isTransientFailure ? { ...failureDetails, transient: true } : failureDetails,
-                    );
+                    // BUG-078: transient failures (idle/device-switch blips, classic
+                    // c64u firmware TCP wedge signatures) are real and recovered from by
+                    // the caller/engine. Logging them at error severity produces a confusing
+                    // "Healthy + red error entries" state because the badge already recovered
+                    // via the same retry path. Demote transient failures to warn so the
+                    // Activity feed shows a recoverable amber entry instead of a red one.
+                    // Non-transient failures (HTTP 4xx/5xx, JSON parse, etc.) still log at
+                    // error severity because they indicate a real defect, not a blip. The
+                    // `transient` flag is preserved on the details so the Problems tab and
+                    // exported diagnostics ZIP keep the full diagnostic record.
+                    if (isTransientFailure) {
+                      addLog("warn", "C64 API request failed", { ...failureDetails, transient: true });
+                    } else {
+                      addErrorLog("C64 API request failed", failureDetails);
+                    }
                     console.info(
                       "C64U_HTTP_FAILURE",
                       JSON.stringify({
@@ -2043,6 +2061,8 @@ export class C64API {
                     url,
                     { method, headers: options.headers as Record<string, string> | undefined },
                     timeoutMs ?? CONTROL_REQUEST_TIMEOUT_MS,
+                    requestId,
+                    action.correlationId,
                     "arraybuffer",
                   )
                 : fetchWithSignalCompatibility(

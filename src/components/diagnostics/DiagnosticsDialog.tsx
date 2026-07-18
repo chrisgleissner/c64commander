@@ -1144,7 +1144,7 @@ export function DiagnosticsDialog({
           title: buildActionTitle(summary),
           detail: buildActionDetail(summary),
           contributor: getActionContributor(summary),
-          severity: resolveActionSeverity(summary.outcome),
+          severity: resolveActionSeverity(summary.outcome, summary.effects),
           timestamp,
           timestampMs: resolveTimestampMs(timestamp),
           device,

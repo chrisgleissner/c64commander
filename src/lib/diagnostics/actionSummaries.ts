@@ -83,10 +83,13 @@ export type TelnetEffect = {
   error?: string;
 };
 
+export type ErrorEffectSeverity = "error" | "warn";
+
 export type ErrorEffect = {
   type: "ERROR";
   label: string;
   message: string;
+  severity: ErrorEffectSeverity;
 };
 
 export type ActionSummaryEffect = RestEffect | FtpEffect | TelnetEffect | ErrorEffect;
@@ -243,6 +246,19 @@ const resolveSummaryDevice = (
   return null;
 };
 
+const resolveErrorSeverity = (
+  event: TraceEvent | undefined,
+  actionEnd: TraceEvent | undefined,
+): ErrorEffectSeverity => {
+  const fromEvent = readString(event?.data?.failureClass);
+  if (fromEvent === "network-transient") return "warn";
+  if (fromEvent === "user-cancellation") return "warn";
+  const endFailureClass = readString(actionEnd?.data?.failureClass);
+  if (endFailureClass === "network-transient") return "warn";
+  if (endFailureClass === "user-cancellation") return "warn";
+  return "error";
+};
+
 const resolveErrorEffects = (errorEvents: TraceEvent[], actionEnd: TraceEvent | undefined): ErrorEffect[] => {
   const effects: ErrorEffect[] = [];
   const seenMessages = new Set<string>();
@@ -254,6 +270,7 @@ const resolveErrorEffects = (errorEvents: TraceEvent[], actionEnd: TraceEvent | 
         type: "ERROR",
         label: "error",
         message,
+        severity: resolveErrorSeverity(event, actionEnd),
       });
       seenMessages.add(message);
     }
@@ -266,6 +283,7 @@ const resolveErrorEffects = (errorEvents: TraceEvent[], actionEnd: TraceEvent | 
         type: "ERROR",
         label: "action-end error",
         message: endError,
+        severity: resolveErrorSeverity(undefined, actionEnd),
       });
     }
     return effects;
@@ -277,6 +295,7 @@ const resolveErrorEffects = (errorEvents: TraceEvent[], actionEnd: TraceEvent | 
         type: "ERROR",
         label: "action-end error",
         message: "action ended with error",
+        severity: resolveErrorSeverity(undefined, actionEnd),
       });
     }
   }

@@ -19,6 +19,20 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: "http",
   },
+  android: {
+    // SECURITY (BUG-076): Capacitor's native Bridge logs every plugin call's
+    // full argument payload at VERBOSE under the "Capacitor" tag
+    // (Bridge.callPluginMethod → "callback: ..., methodData: {...}"). Because
+    // every device REST call goes through CapacitorHttp.request, that payload
+    // contains the request headers — including the "X-Password" credential —
+    // which then lands in logcat on any debuggable/testing APK (default
+    // loggingBehavior "debug" logs whenever the build is debuggable). Setting
+    // "none" disables Capacitor's native Logger in every build (debug and
+    // release), so no credential-bearing header is ever written to logcat.
+    // App-side observability is unaffected: the in-app Diagnostics subsystem
+    // and the WebView DevTools (CDP) console remain the debugging surfaces.
+    loggingBehavior: "none",
+  },
   plugins: {
     // CAPACITOR_HTTP_EXEMPTION
     //

@@ -127,6 +127,7 @@ open class MainActivity : BridgeActivity() {
     ensureCapacitorPluginAssetPath()
     prewarmMimeMap()
     registerPlugin(BackgroundExecutionPlugin::class.java)
+    registerPlugin(C64HttpPlugin::class.java)
     registerPlugin(DeviceDiscoveryPlugin::class.java)
     registerPlugin(DiagnosticsBridgePlugin::class.java)
     registerPlugin(FolderPickerPlugin::class.java)

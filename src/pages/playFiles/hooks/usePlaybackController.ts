@@ -639,7 +639,11 @@ export function usePlaybackController({
   const finishPlaylistPlayback = useCallback(
     (reason: "auto-end" | "user-next-end") => {
       const now = Date.now();
+      const completedElapsedMs = durationMs ?? playedClockRef.current.current(now);
       playedClockRef.current.pause(now);
+      setPlayedMs(playedClockRef.current.current(now));
+      setElapsedMs(completedElapsedMs);
+      trackStartedAtRef.current = null;
       const currentItem = playlistRef.current[currentIndexRef.current];
       // Song categories (sid/mod) do not self-stop: the C64 keeps the tune
       // playing audibly past its resolved songlength. Flipping isPlaying to
@@ -662,7 +666,17 @@ export function usePlaybackController({
         deviceAction: deviceStillPlaying ? "none-song-still-audible" : "none",
       });
     },
-    [autoAdvanceGuardRef, playedClockRef, setAutoAdvanceDueAtMs, setIsPaused, setIsPlaying],
+    [
+      autoAdvanceGuardRef,
+      durationMs,
+      playedClockRef,
+      setAutoAdvanceDueAtMs,
+      setElapsedMs,
+      setIsPaused,
+      setIsPlaying,
+      setPlayedMs,
+      trackStartedAtRef,
+    ],
   );
 
   const playItem = useCallback(

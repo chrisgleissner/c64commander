@@ -437,11 +437,16 @@ describe("c64api utility functions - targeted branch coverage", () => {
       fm.mockRejectedValue(new TypeError("getaddrinfo ENOTFOUND c64u"));
 
       addErrorLogMock.mockClear();
+      addLogMock.mockClear();
       const api = new C64API("http://c64u");
       await expect(api.getInfo()).rejects.toThrow();
-      expect(addErrorLogMock).toHaveBeenCalledWith(
+      // BUG-078: DNS failure is transient; demoted to warn so the Activity feed
+      // shows a recoverable amber entry instead of a red one.
+      expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
+      expect(addLogMock).toHaveBeenCalledWith(
+        "warn",
         "C64 API request failed",
-        expect.objectContaining({ errorDetail: "DNS lookup failed" }),
+        expect.objectContaining({ errorDetail: "DNS lookup failed", transient: true }),
       );
     });
 
@@ -536,7 +541,14 @@ describe("c64api utility functions - targeted branch coverage", () => {
       const api = new C64API("http://c64u", undefined, "c64u");
 
       await expect(api.getInfo({ __c64uBypassCache: true })).rejects.toThrow("Host unreachable");
-      expect(addErrorLogMock).toHaveBeenCalledWith("C64 API request failed", expect.anything());
+      // BUG-078: Failed-to-fetch is transient; demoted to warn so the Activity
+      // feed does not show a red error entry while the badge stays Healthy.
+      expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
+      expect(addLogMock).toHaveBeenCalledWith(
+        "warn",
+        "C64 API request failed",
+        expect.objectContaining({ transient: true }),
+      );
     });
   });
 

@@ -20,6 +20,7 @@ import {
   formatActionSummaryOrigin,
   formatTriggerDisplay,
 } from "@/lib/diagnostics/actionSummaryDisplay";
+import { resolveActionSeverity } from "@/lib/diagnostics/diagnosticsSeverity";
 
 type Props = {
   summary: ActionSummary;
@@ -93,6 +94,7 @@ export const ActionExpandedContent = ({ summary, deviceLabel = null }: Props) =>
   const inferredProduct = restEffects.find((effect) => effect.product)?.product ?? null;
   const verifiedDeviceLabel = formatDiagnosticsVerifiedDeviceLabel(summary.device);
   const displayDeviceLabel = deviceLabel ?? summary.device?.savedDeviceNameSnapshot ?? null;
+  const errorSeverity = resolveActionSeverity(summary.outcome, summary.effects);
 
   return (
     <div className="space-y-3 text-xs">
@@ -111,7 +113,14 @@ export const ActionExpandedContent = ({ summary, deviceLabel = null }: Props) =>
           </span>
         ) : null}
         {summary.errorMessage ? (
-          <span className="text-diagnostics-error break-words">error: {summary.errorMessage}</span>
+          <span
+            className={
+              errorSeverity === "warn" ? "text-diagnostics-warn break-words" : "text-diagnostics-error break-words"
+            }
+          >
+            {errorSeverity === "warn" ? "warn: " : "error: "}
+            {summary.errorMessage}
+          </span>
         ) : null}
       </div>
 
@@ -133,7 +142,12 @@ export const ActionExpandedContent = ({ summary, deviceLabel = null }: Props) =>
                 {effect.status !== null && effect.status !== undefined ? effect.status : "unknown"}
                 {effect.durationMs !== null ? ` · ${effect.durationMs}ms` : ""}
               </p>
-              {effect.error ? <p className="text-diagnostics-error">error: {effect.error}</p> : null}
+              {effect.error ? (
+                <p className={errorSeverity === "warn" ? "text-diagnostics-warn" : "text-diagnostics-error"}>
+                  {errorSeverity === "warn" ? "warn: " : "error: "}
+                  {effect.error}
+                </p>
+              ) : null}
               <div className="mt-2 space-y-2">
                 <HeaderBlock label="Request headers" headers={effect.requestHeaders} />
                 <JsonBlock label="Request payload" value={effect.requestBody} />
@@ -222,7 +236,13 @@ export const ActionExpandedContent = ({ summary, deviceLabel = null }: Props) =>
               data-testid={`action-error-effect-${summary.correlationId}-${index}`}
               className="rounded-md border border-border/70 p-2"
             >
-              <p className="text-diagnostics-error">{effect.message}</p>
+              <p
+                className={effect.severity === "warn" ? "text-diagnostics-warn" : "text-diagnostics-error"}
+                data-severity={effect.severity}
+              >
+                {effect.severity === "warn" ? "warn: " : ""}
+                {effect.message}
+              </p>
             </div>
           ))}
         </div>

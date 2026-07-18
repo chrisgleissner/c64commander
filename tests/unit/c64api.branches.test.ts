@@ -678,8 +678,9 @@ describe("c64api branches", () => {
 
       const api = new C64API("http://c64u");
       const pending = api.getInfo({ __c64uIntent: "background", __c64uBypassCache: true });
+      const rejection = expect(pending).rejects.toThrow("Host unreachable");
       await vi.advanceTimersByTimeAsync(3000);
-      await expect(pending).rejects.toThrow("Host unreachable");
+      await rejection;
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(recordRestResponseMock).toHaveBeenCalledWith(
         expect.anything(),
@@ -2083,7 +2084,88 @@ describe("c64api branches", () => {
           expect.objectContaining({ expectedFailure: false }),
         );
         expect(recordTraceErrorMock).toHaveBeenCalled();
+        // BUG-078: Failed-to-fetch is a transient network failure (recovered
+        // from by the engine's retry path). It must NOT promote to error
+        // severity in the Activity feed because that produces a confusing
+        // "Healthy + red error" state when the next probe succeeds. Demoted
+        // to warn instead.
+        expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
+        expect(addLogMock).toHaveBeenCalledWith(
+          "warn",
+          "C64 API request failed",
+          expect.objectContaining({ transient: true }),
+        );
+      } finally {
+        if (originalDescriptor) {
+          Object.defineProperty(globalThis, "document", originalDescriptor);
+        } else {
+          Reflect.deleteProperty(globalThis, "document");
+        }
+      }
+    });
+
+    it("BUG-078: demotes transient C64 API request failures to warn, not error", async () => {
+      const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, "document");
+      Object.defineProperty(globalThis, "document", {
+        configurable: true,
+        value: { hidden: false, visibilityState: "visible", hasFocus: () => true },
+      });
+      try {
+        const fetchMock = getFetchMock();
+        // Failed-to-fetch is the canonical transient classification used in
+        // health-check transport recovery and matches the c64u firmware TCP
+        // wedge signature.
+        fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+        const api = new C64API("http://c64u");
+        await expect(api.getInfo()).rejects.toThrow();
+
+        // The error-level Activity feed entry must be absent so the in-app
+        // Problems tab does not show a red "C64 API request failed" while
+        // the badge remains Healthy. The transient flag survives on the
+        // details so exported diagnostics still carry the diagnostic record.
+        const errorCallWithMessage = addErrorLogMock.mock.calls.find(([msg]) => msg === "C64 API request failed");
+        expect(errorCallWithMessage).toBeUndefined();
+        expect(addLogMock).toHaveBeenCalledWith(
+          "warn",
+          "C64 API request failed",
+          expect.objectContaining({ transient: true }),
+        );
+      } finally {
+        if (originalDescriptor) {
+          Object.defineProperty(globalThis, "document", originalDescriptor);
+        } else {
+          Reflect.deleteProperty(globalThis, "document");
+        }
+      }
+    });
+
+    it("BUG-078: keeps non-transient C64 API request failures at error severity", async () => {
+      const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, "document");
+      Object.defineProperty(globalThis, "document", {
+        configurable: true,
+        value: { hidden: false, visibilityState: "visible", hasFocus: () => true },
+      });
+      try {
+        const fetchMock = getFetchMock();
+        // A 500 with an errors:[] body is non-transient (server reachable,
+        // real failure). Must stay at error severity so the Problems tab
+        // surfaces a real defect, not a recoverable blip.
+        fetchMock.mockResolvedValue({
+          ok: false,
+          status: 500,
+          statusText: "Internal Server Error",
+          text: () => Promise.resolve('{"errors":["device fault"]}'),
+          headers: new Headers(),
+        });
+        const api = new C64API("http://c64u");
+        await expect(api.getInfo()).rejects.toThrow();
+
         expect(addErrorLogMock).toHaveBeenCalledWith("C64 API request failed", expect.anything());
+        // No demotion to warn for non-transient failures.
+        const warnCallWithMessage = addLogMock.mock.calls.find(
+          ([level, msg]) => level === "warn" && msg === "C64 API request failed",
+        );
+        expect(warnCallWithMessage).toBeUndefined();
       } finally {
         if (originalDescriptor) {
           Object.defineProperty(globalThis, "document", originalDescriptor);

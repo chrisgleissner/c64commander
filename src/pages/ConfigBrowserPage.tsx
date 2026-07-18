@@ -258,6 +258,7 @@ function CategorySection({
 
   const itemsRef = useRef<ConfigListItem[]>(items);
   const soloItemRef = useRef<string | null>(soloState.soloItem);
+  const refetchRef = useRef(refetch);
 
   useEffect(() => {
     itemsRef.current = items;
@@ -266,6 +267,10 @@ function CategorySection({
   useEffect(() => {
     soloItemRef.current = soloState.soloItem;
   }, [soloState.soloItem]);
+
+  useEffect(() => {
+    refetchRef.current = refetch;
+  }, [refetch]);
 
   const dhcpStatus = useMemo(() => {
     if (categoryName !== "Ethernet Settings" && categoryName !== "WiFi settings") return null;
@@ -418,6 +423,17 @@ function CategorySection({
               error: (error as Error).message,
             });
           }
+          resyncPendingRef.current = true;
+          try {
+            const refreshed = await refetchRef.current();
+            const fresh = extractConfigItems(refreshed?.data, categoryName);
+            if (fresh.length) {
+              syncAudioConfiguredItems(fresh);
+              soloSnapshotRef.current = fresh;
+            }
+          } finally {
+            resyncPendingRef.current = false;
+          }
         }
       } catch (error) {
         reportUserError({
@@ -434,7 +450,7 @@ function CategorySection({
     },
     // audioConfiguredRef is intentionally omitted from deps: refs have stable identity
     // and audioConfiguredRef.current is read at call time, not at dependency capture time.
-    [isAudioMixer, categoryName, reportUserError, updateAudioMixerBatch],
+    [isAudioMixer, categoryName, reportUserError, syncAudioConfiguredItems, updateAudioMixerBatch],
   );
 
   useEffect(() => {

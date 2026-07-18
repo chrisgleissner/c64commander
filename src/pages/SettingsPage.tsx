@@ -158,7 +158,7 @@ import { getStoredFtpPort, setStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { FolderPicker, type SafPersistedUri } from "@/lib/native/folderPicker";
 import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
-import { discoverConnection } from "@/lib/connection/connectionManager";
+import { discoverConnection, getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { evaluateNewDeviceReachability } from "@/lib/connection/addDeviceReachability";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { useDeviceDiscovery } from "@/hooks/useDeviceDiscovery";
@@ -731,9 +731,6 @@ export default function SettingsPage() {
           ),
         );
       }
-      // A confirmed successful save+switch is authoritative: clear any stale
-      // unreachable-host validation so the editable field no longer contradicts
-      // the healthy connected state. (BUG-075)
       setHostnameError(null);
       setPasswordInput("");
       passwordInputRef.current = "";
@@ -816,11 +813,10 @@ export default function SettingsPage() {
     setConnectionRefreshInFlight(true);
     try {
       await discoverConnection("manual");
-      // A successful manual refresh confirms the device is reachable now. Clear
-      // any stale unreachable-host validation so the field no longer contradicts
-      // the recovered header state. (BUG-075)
-      setHostnameError(null);
-      setReachabilitySuggestion(null);
+      if (getConnectionSnapshot().state === "REAL_CONNECTED") {
+        setHostnameError(null);
+        setReachabilitySuggestion(null);
+      }
     } catch (error) {
       reportUserError({
         operation: "CONNECTION_REFRESH",

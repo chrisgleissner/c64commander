@@ -165,10 +165,12 @@ const renderPlaybackHarness = (initialPlaylist: PlaylistItem[], options?: { repe
       isPlaying,
       isPaused,
       durationMs,
+      elapsedMs,
       currentSubsongCount,
       trackInstanceId,
       autoAdvanceDueAtMs,
       autoAdvanceGuardRef,
+      trackStartedAtRef,
       trackInstanceIdRef,
       cancelAutoAdvance,
     };
@@ -286,6 +288,8 @@ describe("usePlaybackController auto advance", () => {
     expect(result.current.isPlaying).toBe(true);
     expect(result.current.isPaused).toBe(false);
     expect(result.current.autoAdvanceGuardRef.current).toBeNull();
+    expect(result.current.elapsedMs).toBe(1_000);
+    expect(result.current.trackStartedAtRef.current).toBeNull();
     expect(vi.mocked(addLog)).toHaveBeenCalledWith(
       "info",
       "Playlist playback ended",

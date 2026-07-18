@@ -18,7 +18,7 @@ import {
 } from "@/hooks/useFocusNavigation";
 import { reportUserError } from "@/lib/uiErrors";
 import { FolderPicker } from "@/lib/native/folderPicker";
-import { discoverConnection } from "@/lib/connection/connectionManager";
+import { discoverConnection, getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { clearPasswordForDevice, getPasswordForDevice, setPasswordForDevice } from "@/lib/secureStorage";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, clearLogs, getErrorLogs, getLogs } from "@/lib/logging";
@@ -97,6 +97,7 @@ const {
   mockEvaluateNewDeviceReachability,
   mockStartDeviceDiscovery,
   mockPersistDiscoveredDevice,
+  mockGetConnectionSnapshot,
   connectionPayloadRef,
   connectionStateRef,
   deviceDiscoveryStateRef,
@@ -127,6 +128,7 @@ const {
     httpPort: candidate.httpPort,
     deviceHost: candidate.httpPort === 80 ? candidate.address : `${candidate.address}:${candidate.httpPort}`,
   })),
+  mockGetConnectionSnapshot: vi.fn(() => ({ state: "REAL_CONNECTED" })),
   featureFlagsRef: {
     current: {
       hvsc_enabled: true,
@@ -413,6 +415,7 @@ vi.mock("@/lib/native/safUtils", () => ({
 vi.mock("@/lib/connection/connectionManager", () => ({
   discoverConnection: vi.fn(),
   dismissDemoInterstitial: vi.fn(),
+  getConnectionSnapshot: mockGetConnectionSnapshot,
 }));
 
 vi.mock("@/lib/connection/addDeviceReachability", () => ({
@@ -603,6 +606,7 @@ beforeEach(() => {
     lastProbeSucceededAtMs: null,
     lastProbeFailedAtMs: null,
   };
+  mockGetConnectionSnapshot.mockReturnValue({ state: "REAL_CONNECTED" });
   deviceDiscoveryStateRef.current = {
     phase: "idle",
     trigger: null,
@@ -715,7 +719,6 @@ describe("SettingsPage", () => {
   }, 15000);
 
   it("clears a previously-set unreachable-host error once manual refresh recovers the device (BUG-075)", async () => {
-    // First, put the page into a stale-unreachable state by failing Save & Connect.
     mockEvaluateNewDeviceReachability.mockResolvedValueOnce({
       status: "unreachable",
       suggestedAddress: null,
@@ -731,8 +734,6 @@ describe("SettingsPage", () => {
     });
     expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
 
-    // Now the device is reachable again. The user recovers via Refresh (not another save).
-    // The successful refresh must clear the stale inline hostname error.
     vi.mocked(discoverConnection).mockResolvedValueOnce(undefined);
 
     fireEvent.click(screen.getByLabelText("Refresh connection"));
@@ -743,6 +744,29 @@ describe("SettingsPage", () => {
     await waitFor(() => {
       expect(screen.queryByText(/couldn’t reach.*enter its IP address/i)).not.toBeInTheDocument();
     });
+  }, 15000);
+
+  it("BUG-075 retains an unreachable-host error when manual refresh finishes offline", async () => {
+    mockEvaluateNewDeviceReachability.mockResolvedValueOnce({
+      status: "unreachable",
+      suggestedAddress: null,
+      suggestedHostname: null,
+    });
+    mockGetConnectionSnapshot.mockReturnValue({ state: "OFFLINE_NO_DEMO" });
+
+    renderSettingsPage();
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/couldn’t reach.*enter its IP address/i)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByLabelText("Refresh connection"));
+
+    await waitFor(() => {
+      expect(discoverConnection).toHaveBeenCalledWith("manual");
+    });
+    expect(screen.getByText(/couldn’t reach.*enter its IP address/i)).toBeInTheDocument();
   }, 15000);
 
   it("gates overlapping manual refresh clicks while discovery is in flight", async () => {
