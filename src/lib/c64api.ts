@@ -79,7 +79,7 @@ import { TransmissionGuard, type SupportedC64FileType, type TransmissionValidati
 import { collectTraceHeaders } from "@/lib/tracing/payloadPreview";
 import { notifyReachable } from "@/lib/connection/reachabilityEvents";
 import { getLifecycleState } from "@/lib/appLifecycle";
-import { requestC64NativeHttp } from "@/lib/native/c64Http";
+import { CapacitorHttp } from "@capacitor/core";
 
 // A request that fails with a generic network/timeout class while the app is
 // in the background is almost always the WebView/Capacitor pausing the request
@@ -416,15 +416,13 @@ const capacitorHttpDeviceFetch = async (
   url: string,
   init: { method?: string; headers?: Record<string, string>; body?: BodyInit | null },
   timeoutMs: number,
-  requestId: string,
-  correlationId: string,
   responseType: "json" | "arraybuffer" = "json",
 ): Promise<Response> => {
   const method = (init.method || "GET").toUpperCase();
   const headers = init.headers ?? {};
   let native: { status: number; headers?: Record<string, string>; data?: unknown };
   try {
-    native = await requestC64NativeHttp({
+    native = await CapacitorHttp.request({
       url,
       method,
       headers,
@@ -432,8 +430,6 @@ const capacitorHttpDeviceFetch = async (
       connectTimeout: timeoutMs,
       readTimeout: timeoutMs,
       responseType,
-      requestId,
-      correlationId,
     });
   } catch (error) {
     // Normalize to the shape the patched WebFetch produces on a transport error so the
@@ -1692,13 +1688,7 @@ export class C64API {
                     isNativePlatform() && !baseUrl.includes(WEB_PROXY_PATH) && !isLocalProxy(baseUrl);
                   const response = await awaitPromiseWithAbortSignal(
                     useNativeDeviceTransport
-                      ? capacitorHttpDeviceFetch(
-                          url,
-                          { method, headers, body: requestOptions.body },
-                          requestTimeoutMs,
-                          requestId,
-                          action.correlationId,
-                        )
+                      ? capacitorHttpDeviceFetch(url, { method, headers, body: requestOptions.body }, requestTimeoutMs)
                       : fetchWithSignalCompatibility(
                           url,
                           {
@@ -2061,8 +2051,6 @@ export class C64API {
                     url,
                     { method, headers: options.headers as Record<string, string> | undefined },
                     timeoutMs ?? CONTROL_REQUEST_TIMEOUT_MS,
-                    requestId,
-                    action.correlationId,
                     "arraybuffer",
                   )
                 : fetchWithSignalCompatibility(

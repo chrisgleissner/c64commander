@@ -7,9 +7,8 @@
  */
 
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { CapacitorHttp } from "@capacitor/core";
 import { C64API } from "@/lib/c64api";
-
-const { c64HttpRequest } = vi.hoisted(() => ({ c64HttpRequest: vi.fn() }));
 
 vi.mock("@capacitor/core", () => ({
   CapacitorHttp: {
@@ -19,7 +18,7 @@ vi.mock("@capacitor/core", () => ({
     getPlatform: vi.fn(() => "android"),
     isNativePlatform: vi.fn(() => true),
   },
-  registerPlugin: vi.fn(() => ({ request: c64HttpRequest })),
+  registerPlugin: vi.fn(() => ({})),
 }));
 
 // Non-local host so the request takes the native direct-device transport branch
@@ -38,7 +37,7 @@ describe("C64API native device transport (BUG-066: reboot stale-connection recov
   );
 
   beforeEach(() => {
-    c64HttpRequest.mockReset();
+    vi.mocked(CapacitorHttp.request).mockReset();
     fetchSpy.mockClear();
     global.fetch = fetchSpy as unknown as typeof fetch;
     (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
@@ -49,8 +48,8 @@ describe("C64API native device transport (BUG-066: reboot stale-connection recov
     delete (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__;
   });
 
-  it("routes native device GET through the native C64 HTTP bridge with correlation-safe metadata and timeouts", async () => {
-    c64HttpRequest.mockResolvedValue({
+  it("routes native device GET through CapacitorHttp.request with a native connect/read timeout", async () => {
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({
       status: 200,
       headers: { "Content-Type": "application/json" },
       data: infoPayload,
@@ -64,23 +63,23 @@ describe("C64API native device transport (BUG-066: reboot stale-connection recov
     // The whole point of the fix: a real native timeout is set so a dead pooled
     // connection fails fast and OkHttp evicts it (the patched window.fetch sets none).
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(c64HttpRequest).toHaveBeenCalledTimes(1);
-    const call = c64HttpRequest.mock.calls[0][0];
+    expect(CapacitorHttp.request).toHaveBeenCalledTimes(1);
+    const call = vi.mocked(CapacitorHttp.request).mock.calls[0][0];
     expect(String(call.url)).toContain("/v1/info");
     expect(call.method).toBe("GET");
     expect(call.connectTimeout).toBe(1500);
     expect(call.readTimeout).toBe(1500);
-    expect(call.requestId).toMatch(/^c64req-/);
-    expect(call.correlationId).toMatch(/^COR-/);
   });
 
   it("fails fast on a native socket timeout, then recovers on the next request (fresh connection)", async () => {
-    c64HttpRequest.mockRejectedValueOnce(new Error("Read timed out")).mockResolvedValue({
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-      data: infoPayload,
-      url: `${DEVICE_BASE}/v1/info`,
-    } as never);
+    vi.mocked(CapacitorHttp.request)
+      .mockRejectedValueOnce(new Error("Read timed out"))
+      .mockResolvedValue({
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+        data: infoPayload,
+        url: `${DEVICE_BASE}/v1/info`,
+      } as never);
 
     const api = new C64API(DEVICE_BASE, undefined, "192.168.1.50");
 
@@ -93,14 +92,14 @@ describe("C64API native device transport (BUG-066: reboot stale-connection recov
     // Next probe opens a fresh connection and succeeds: the app recovers on its own.
     const info = await api.getInfo({ timeoutMs: 1500, __c64uIntent: "system", __c64uBypassCache: true } as never);
     expect(info.firmware_version).toBe("1.1.0");
-    expect(c64HttpRequest).toHaveBeenCalledTimes(2);
+    expect(CapacitorHttp.request).toHaveBeenCalledTimes(2);
   });
 
   const toBase64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
 
   it("reads memory over the native arraybuffer transport with byte fidelity and a native timeout", async () => {
     const bytes = new Uint8Array([0x00, 0x01, 0x7f, 0x80, 0xff, 0x42]);
-    c64HttpRequest.mockResolvedValue({
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({
       status: 200,
       headers: { "content-type": "application/octet-stream" },
       data: toBase64(bytes),
@@ -112,7 +111,7 @@ describe("C64API native device transport (BUG-066: reboot stale-connection recov
 
     expect(Array.from(result)).toEqual(Array.from(bytes));
     expect(fetchSpy).not.toHaveBeenCalled();
-    const call = c64HttpRequest.mock.calls[0][0];
+    const call = vi.mocked(CapacitorHttp.request).mock.calls[0][0];
     expect(call.method).toBe("GET");
     expect(call.responseType).toBe("arraybuffer");
     expect(call.connectTimeout).toBe(1500);
@@ -121,7 +120,7 @@ describe("C64API native device transport (BUG-066: reboot stale-connection recov
 
   it("handles readMemory's JSON fallback over the native transport", async () => {
     const bytes = new Uint8Array([0x10, 0x20, 0x30]);
-    c64HttpRequest.mockResolvedValue({
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({
       status: 200,
       headers: { "content-type": "application/json" },
       data: { data: toBase64(bytes) },
@@ -134,7 +133,7 @@ describe("C64API native device transport (BUG-066: reboot stale-connection recov
   });
 
   it("readMemory fails fast on a native socket timeout (does not hang)", async () => {
-    c64HttpRequest.mockRejectedValue(new Error("Read timed out"));
+    vi.mocked(CapacitorHttp.request).mockRejectedValue(new Error("Read timed out"));
     const api = new C64API(DEVICE_BASE, undefined, "192.168.1.50");
     await expect(api.readMemory("0400", 4, { timeoutMs: 1500, __c64uIntent: "system" } as never)).rejects.toThrow();
   });
@@ -145,7 +144,7 @@ describe("C64API native device transport (BUG-066: reboot stale-connection recov
     const api = new C64API(DEVICE_BASE, undefined, "192.168.1.50");
     await api.writeMemoryBlock("0400", new Uint8Array([1, 2, 3]), { __c64uIntent: "system" } as never);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(c64HttpRequest).not.toHaveBeenCalled();
+    expect(CapacitorHttp.request).not.toHaveBeenCalled();
   });
 
   it("still uses standard fetch on web (non-native) platforms", async () => {
@@ -156,6 +155,6 @@ describe("C64API native device transport (BUG-066: reboot stale-connection recov
     await api.getInfo({ timeoutMs: 1500, __c64uIntent: "system", __c64uBypassCache: true } as never);
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(c64HttpRequest).not.toHaveBeenCalled();
+    expect(CapacitorHttp.request).not.toHaveBeenCalled();
   });
 });
