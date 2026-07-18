@@ -131,6 +131,7 @@
     --diag-system: 210 25% 50%;
     --diag-rest: 265 30% 55%;
     --diag-ftp: 35 45% 48%;
+    --diag-warn: 32 80% 45%;
     --diag-error: 0 55% 50%;
 
     /* Sidebar */
@@ -198,6 +199,7 @@
     --diag-system: 210 30% 60%;
     --diag-rest: 265 35% 62%;
     --diag-ftp: 35 50% 55%;
+    --diag-warn: 38 90% 55%;
     --diag-error: 0 60% 60%;
 
     /* Sidebar dark */

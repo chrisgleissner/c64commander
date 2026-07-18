@@ -929,6 +929,60 @@ describe("DiagnosticsDialog", () => {
     expect(screen.queryByTestId("evidence-detail-action-action-1")).toBeNull();
   });
 
+  it("BUG-078 renders recovered transient trace and action rows as warnings", () => {
+    setViewportWidth(600);
+
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Actions", "Traces"]),
+      logs: [],
+      errorLogs: [],
+      traceEvents: [
+        {
+          id: "transient-trace",
+          timestamp: new Date(Date.now() - 2_000).toISOString(),
+          relativeMs: 0,
+          type: "error",
+          origin: "user",
+          correlationId: "transient-action",
+          data: {
+            message: "Failed to fetch",
+            failureClass: "network-transient",
+          },
+        },
+      ],
+      actionSummaries: [
+        {
+          correlationId: "transient-action",
+          actionName: "GET /v1/info",
+          origin: "user",
+          originalOrigin: "user",
+          startTimestamp: new Date(Date.now() - 2_500).toISOString(),
+          endTimestamp: new Date(Date.now() - 2_000).toISOString(),
+          durationMs: 500,
+          outcome: "error",
+          startRelativeMs: 0,
+          errorMessage: "Failed to fetch",
+          effects: [
+            {
+              type: "ERROR",
+              label: "error",
+              message: "Failed to fetch",
+              severity: "warn",
+            },
+          ],
+        },
+      ],
+    });
+
+    const actionRow = screen.getByTestId("evidence-row-action-transient-action");
+    const traceRow = screen.getByTestId("evidence-row-trace-transient-trace");
+    expect(within(actionRow).getByLabelText("warn")).toBeVisible();
+    expect(within(traceRow).getByLabelText("warn")).toBeVisible();
+
+    fireEvent.click(actionRow);
+    expect(screen.getByTestId("evidence-detail-action-transient-action")).toHaveTextContent("warn: Failed to fetch");
+  });
+
   it("shows TELNET request and response detail in expanded action rows", () => {
     setViewportWidth(600);
 

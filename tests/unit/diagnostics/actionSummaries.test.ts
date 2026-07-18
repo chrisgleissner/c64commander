@@ -1338,4 +1338,113 @@ describe("buildActionSummaries", () => {
 
     expect(buildActionSummaries(traces)).toEqual([]);
   });
+
+  it("BUG-078 round 2 — classifies network-transient error events with severity=warn", () => {
+    const traces: TraceEvent[] = [
+      buildTrace({
+        id: "E1",
+        type: "action-start",
+        correlationId: "C1",
+        relativeMs: 0,
+        data: { name: "request" },
+      }),
+      buildTrace({
+        id: "E2",
+        type: "error",
+        correlationId: "C1",
+        relativeMs: 50,
+        data: {
+          message: "Failed to fetch",
+          name: "TypeError",
+          failureClass: "network-transient",
+          isExpected: false,
+          errorCategory: "network",
+          errorType: "TypeError",
+        },
+      }),
+      buildTrace({
+        id: "E3",
+        type: "action-end",
+        correlationId: "C1",
+        relativeMs: 100,
+        data: { status: "error", error: "Failed to fetch" },
+      }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    const errorEffects = (summary.effects ?? []).filter((effect) => effect.type === "ERROR");
+    expect(errorEffects.length).toBeGreaterThanOrEqual(1);
+    const seen = errorEffects.find((effect) => effect.message === "Failed to fetch");
+    expect(seen).toBeDefined();
+    expect(seen?.severity).toBe("warn");
+  });
+
+  it("BUG-078 round 2 — keeps severity=error for non-transient action-end failures", () => {
+    const traces: TraceEvent[] = [
+      buildTrace({
+        id: "E1",
+        type: "action-start",
+        correlationId: "C1",
+        relativeMs: 0,
+        data: { name: "request" },
+      }),
+      buildTrace({
+        id: "E2",
+        type: "error",
+        correlationId: "C1",
+        relativeMs: 50,
+        data: {
+          message: "Server returned 500",
+          name: "Error",
+          failureClass: "unknown",
+          isExpected: false,
+          errorCategory: "unknown",
+          errorType: "Error",
+        },
+      }),
+      buildTrace({
+        id: "E3",
+        type: "action-end",
+        correlationId: "C1",
+        relativeMs: 100,
+        data: { status: "error", error: "Server returned 500" },
+      }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    const errorEffects = (summary.effects ?? []).filter((effect) => effect.type === "ERROR");
+    expect(errorEffects.length).toBeGreaterThanOrEqual(1);
+    const seen = errorEffects.find((effect) => effect.message === "Server returned 500");
+    expect(seen).toBeDefined();
+    expect(seen?.severity).toBe("error");
+  });
+
+  it("BUG-078 round 2 — demotes to warn when action-end carries failureClass even without an error event", () => {
+    const traces: TraceEvent[] = [
+      buildTrace({
+        id: "E1",
+        type: "action-start",
+        correlationId: "C1",
+        relativeMs: 0,
+        data: { name: "request" },
+      }),
+      buildTrace({
+        id: "E2",
+        type: "action-end",
+        correlationId: "C1",
+        relativeMs: 100,
+        data: {
+          status: "error",
+          error: "Network request failed",
+          failureClass: "network-transient",
+        },
+      }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    const errorEffects = (summary.effects ?? []).filter((effect) => effect.type === "ERROR");
+    expect(errorEffects).toHaveLength(1);
+    expect(errorEffects[0]).toMatchObject({
+      severity: "warn",
+      label: "action-end error",
+      message: "Network request failed",
+    });
+  });
 });

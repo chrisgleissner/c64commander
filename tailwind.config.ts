@@ -81,6 +81,7 @@ export default {
           system: "hsl(var(--diag-system))",
           rest: "hsl(var(--diag-rest))",
           ftp: "hsl(var(--diag-ftp))",
+          warn: "hsl(var(--diag-warn))",
           error: "hsl(var(--diag-error))",
         },
         sidebar: {

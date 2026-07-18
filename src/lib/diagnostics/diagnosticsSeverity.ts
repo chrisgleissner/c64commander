@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { ActionSummaryOutcome } from "@/lib/diagnostics/actionSummaries";
+import type { ActionSummaryEffect, ActionSummaryOutcome } from "@/lib/diagnostics/actionSummaries";
 import type { LogLevel } from "@/lib/logging";
 import type { TraceEvent } from "@/lib/tracing/types";
 
@@ -40,14 +40,27 @@ export const getDiagnosticsColorClassForDisplaySeverity = (severity: Diagnostics
 
 export const resolveLogSeverity = (level: LogLevel): DiagnosticsSeverity => level;
 
-export const resolveTraceSeverity = (event: Pick<TraceEvent, "type">): DiagnosticsSeverity =>
-  event.type === "error" ? "error" : "info";
+const isWarningFailureClass = (failureClass: unknown) =>
+  failureClass === "network-transient" || failureClass === "user-cancellation";
 
-export const resolveActionSeverity = (outcome: ActionSummaryOutcome): DiagnosticsSeverity => {
+export const resolveTraceSeverity = (event: Pick<TraceEvent, "type" | "data">): DiagnosticsSeverity => {
+  if (event.type !== "error") return "info";
+  return isWarningFailureClass(event.data?.failureClass) ? "warn" : "error";
+};
+
+const hasOnlyWarningErrorEffects = (effects: ActionSummaryEffect[] | undefined) => {
+  const errorEffects = effects?.filter((effect) => effect.type === "ERROR") ?? [];
+  return errorEffects.length > 0 && errorEffects.every((effect) => effect.severity === "warn");
+};
+
+export const resolveActionSeverity = (
+  outcome: ActionSummaryOutcome,
+  effects?: ActionSummaryEffect[],
+): DiagnosticsSeverity => {
   switch (outcome) {
     case "error":
     case "failed":
-      return "error";
+      return hasOnlyWarningErrorEffects(effects) ? "warn" : "error";
     case "blocked":
     case "timeout":
     case "in_progress":

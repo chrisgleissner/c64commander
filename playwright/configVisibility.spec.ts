@@ -9,7 +9,7 @@
 import { test, expect } from "@playwright/test";
 import type { Locator, Page, TestInfo } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
-import { seedUiMocks, uiFixtures } from "./uiMocks";
+import { dismissStartupDiscoveryDialog, seedUiMocks, uiFixtures } from "./uiMocks";
 import {
   allowWarnings,
   assertNoUiIssues,
@@ -201,6 +201,7 @@ test.describe("Config visibility across modes", () => {
 
     server.setReachable(true);
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
+    await dismissStartupDiscoveryDialog(page);
     await clickWithoutNavigationWait(page, page.getByRole("button", { name: /Save & Connect|Save connection/i }));
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 15000 });
 

@@ -57,8 +57,23 @@ describe("diagnosticsSeverity", () => {
     expect(resolveActionSeverity("unknown" as Parameters<typeof resolveActionSeverity>[0])).toBe("info");
   });
 
+  it("BUG-078 keeps recovered transient action failures at warning severity", () => {
+    expect(
+      resolveActionSeverity("error", [
+        {
+          type: "ERROR",
+          label: "error",
+          message: "Failed to fetch",
+          severity: "warn",
+        },
+      ]),
+    ).toBe("warn");
+  });
+
   it("maps trace errors to error severity and others to info", () => {
     expect(resolveTraceSeverity({ type: "error" })).toBe("error");
+    expect(resolveTraceSeverity({ type: "error", data: { failureClass: "network-transient" } })).toBe("warn");
+    expect(resolveTraceSeverity({ type: "error", data: { failureClass: "user-cancellation" } })).toBe("warn");
     expect(resolveTraceSeverity({ type: "rest-request" })).toBe("info");
   });
 });

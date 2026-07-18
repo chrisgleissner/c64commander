@@ -7,8 +7,8 @@
  */
 
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { C64API } from "@/lib/c64api";
 import { CapacitorHttp } from "@capacitor/core";
+import { C64API } from "@/lib/c64api";
 
 vi.mock("@capacitor/core", () => ({
   CapacitorHttp: {

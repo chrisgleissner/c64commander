@@ -158,7 +158,7 @@ import { getStoredFtpPort, setStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { FolderPicker, type SafPersistedUri } from "@/lib/native/folderPicker";
 import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
-import { discoverConnection } from "@/lib/connection/connectionManager";
+import { discoverConnection, getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { evaluateNewDeviceReachability } from "@/lib/connection/addDeviceReachability";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { useDeviceDiscovery } from "@/hooks/useDeviceDiscovery";
@@ -731,6 +731,7 @@ export default function SettingsPage() {
           ),
         );
       }
+      setHostnameError(null);
       setPasswordInput("");
       passwordInputRef.current = "";
       setPasswordEditing(!hasPassword);
@@ -812,6 +813,10 @@ export default function SettingsPage() {
     setConnectionRefreshInFlight(true);
     try {
       await discoverConnection("manual");
+      if (getConnectionSnapshot().state === "REAL_CONNECTED") {
+        setHostnameError(null);
+        setReachabilitySuggestion(null);
+      }
     } catch (error) {
       reportUserError({
         operation: "CONNECTION_REFRESH",

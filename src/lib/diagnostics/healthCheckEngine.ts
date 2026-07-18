@@ -53,7 +53,6 @@ const PROBE_TIMEOUT_MS: Record<HealthCheckProbeType, number> = {
   RASTER: 1500,
   JIFFY: 1500,
 };
-
 const GLOBAL_RUN_TIMEOUT_MS = 12_000;
 const STALE_RUN_GRACE_MS = 1500;
 const PRESENTATION_ORDER: ReadonlyArray<HealthCheckProbeType> = ["REST", "FTP", "TELNET", "CONFIG", "RASTER", "JIFFY"];
@@ -570,10 +569,8 @@ const probeRest = async (
         __c64uAllowDuringError: true,
         __c64uBypassCache: true,
         __c64uForceProbe: runtime.forceProbe,
-        // The reachability read must ALWAYS hit the wire (even for a system
-        // switch-device probe) and must never trip the breaker, so it can always
-        // observe a healthy device and its success closes the circuit. The
-        // gateway translates __c64uRecoveryProbe into a circuit bypass.
+        // A reachability probe must hit the wire and bypass the circuit so a
+        // fresh success can close a stale failure state.
         __c64uRecoveryProbe: true,
         __c64uSuppressCircuitContribution: true,
       }),
@@ -1721,6 +1718,7 @@ export const runHealthCheckForTarget = async (
         lifecycle: lifecycleFromRecord(record.outcome),
         deviceInfo,
       }),
+      PROBE_TIMEOUT_MS.REST,
     );
     const restFailed = rest.lifecycle === "FAILED" || rest.lifecycle === "TIMEOUT";
 
@@ -1925,6 +1923,7 @@ export const runHealthCheck = async (
         lifecycle: lifecycleFromRecord(record.outcome),
         deviceInfo,
       }),
+      PROBE_TIMEOUT_MS.REST,
     );
     publishProgress({ ...(getHealthCheckStateSnapshot().liveProbes ?? {}), REST: rest.record });
 

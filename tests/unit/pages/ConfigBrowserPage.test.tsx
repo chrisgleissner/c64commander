@@ -442,6 +442,73 @@ describe("ConfigBrowserPage", () => {
     expect(updateConfigBatch).not.toHaveBeenCalled();
   });
 
+  it("reconciles restored Audio Mixer values from the post-Solo device read-back", async () => {
+    sessionStorage.clear();
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["Audio Mixer"] },
+      isLoading: false,
+    });
+    let displayedItems = {
+      "Vol Ultisid 1": { selected: "0 dB", options: ["OFF", "0 dB"] },
+      "Vol Ultisid 2": { selected: "0 dB", options: ["OFF", "0 dB"] },
+    };
+    const restoredItems = {
+      "Vol Ultisid 1": { selected: "0 dB", options: ["OFF", "0 dB"] },
+      "Vol Ultisid 2": { selected: "0 dB", options: ["OFF", "0 dB"] },
+    };
+    const staleSoloItems = {
+      "Vol Ultisid 1": { selected: "0 dB", options: ["OFF", "0 dB"] },
+      "Vol Ultisid 2": { selected: "OFF", options: ["OFF", "0 dB"] },
+    };
+    const updateConfigBatch = vi.fn().mockImplementation(async () => {
+      if (updateConfigBatch.mock.calls.length === 1) {
+        displayedItems = staleSoloItems;
+      }
+      return { errors: [] };
+    });
+    mockUseC64UpdateConfigBatch.mockReturnValue({
+      mutateAsync: updateConfigBatch,
+      isPending: false,
+    });
+    const refetch = vi.fn().mockImplementation(async () => {
+      displayedItems = restoredItems;
+      return {
+        data: { "Audio Mixer": { items: restoredItems } },
+        isSuccess: true,
+      };
+    });
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: {
+        [categoryName]: {
+          items: displayedItems,
+        },
+      },
+      isLoading: false,
+      refetch,
+    }));
+
+    const initialRender = renderConfigBrowserPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
+    const soloSwitch = await screen.findByTestId("audio-mixer-solo-vol-ultisid-1");
+    fireEvent.click(soloSwitch);
+    await waitFor(() => expect(updateConfigBatch).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(soloSwitch);
+
+    await waitFor(() => {
+      expect(updateConfigBatch).toHaveBeenCalledTimes(2);
+      expect(refetch).toHaveBeenCalled();
+    });
+
+    initialRender.unmount();
+    renderConfigBrowserPage();
+    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
+
+    expect(await screen.findByTestId("row-vol-ultisid-2")).toHaveAttribute("data-value", "0 dB");
+  });
+
   it("discards a stale audio mixer solo snapshot instead of auto-restoring it (HARD9-054)", async () => {
     // Regression: the mount-time restore effect used to read the solo
     // snapshot from sessionStorage unconditionally and write those old
