@@ -569,6 +569,8 @@ const probeRest = async (
         __c64uAllowDuringError: true,
         __c64uBypassCache: true,
         __c64uForceProbe: runtime.forceProbe,
+        // A reachability probe must hit the wire and bypass the circuit so a
+        // fresh success can close a stale failure state.
         __c64uRecoveryProbe: true,
         __c64uSuppressCircuitContribution: true,
       }),

@@ -675,7 +675,6 @@ export function usePlaybackController({
       setIsPaused,
       setIsPlaying,
       setPlayedMs,
-      trackStartedAtRef,
     ],
   );
 
