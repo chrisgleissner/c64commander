@@ -59,6 +59,13 @@ const recoverConnectionFromDiagnostics = async (page: Page, indicator: Locator) 
   await expect(diagnostics).toBeHidden({ timeout: 10000 });
 };
 
+const dismissDiscoveryDialog = async (page: Page) => {
+  const dismiss = page.getByRole("button", { name: "Not now" });
+  if (await dismiss.isVisible().catch(() => false)) {
+    await clickWithoutNavigationWait(page, dismiss);
+  }
+};
+
 const waitForConnectivityReady = async (page: Page) => {
   const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
   await expect(indicator).toBeVisible({ timeout: 15000 });
@@ -201,6 +208,7 @@ test.describe("Config visibility across modes", () => {
 
     server.setReachable(true);
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
+    await dismissDiscoveryDialog(page);
     await clickWithoutNavigationWait(page, page.getByRole("button", { name: /Save & Connect|Save connection/i }));
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 15000 });
 
