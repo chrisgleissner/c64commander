@@ -819,18 +819,46 @@ describe("hvscDownload", () => {
       expect(vi.mocked(deleteCachedArchive)).toHaveBeenCalledWith("hvsc-baseline-84.7z");
     });
 
-    it("native download: passes when written size meets 99% threshold", async () => {
+    it("native download: rejects a final size that differs from the expected content length", async () => {
       vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         headers: { get: (name: string) => (name === "content-length" ? "1000000" : null) },
       });
       vi.mocked(Filesystem.downloadFile).mockResolvedValue({} as any);
-      // 990001 bytes is just above 99% of 1,000,000
       vi.mocked(Filesystem.stat).mockResolvedValue({ size: 990001, type: "file" } as any);
 
-      const result = await downloadArchive(makeOptions());
-      expect(result).toBeNull();
+      await expect(downloadArchive(makeOptions())).rejects.toThrow("HVSC archive is corrupt or truncated");
+    });
+
+    it("HARD20-008: waits for a cancelled native transfer before retrying the same archive path", async () => {
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: { get: (name: string) => (name === "content-length" ? "1000" : null) },
+      });
+      vi.mocked(Filesystem.stat).mockResolvedValue({ size: 1000, type: "file" } as any);
+      let settleFirst: (() => void) | null = null;
+      vi.mocked(Filesystem.downloadFile)
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              settleFirst = () => resolve({} as any);
+            }),
+        )
+        .mockResolvedValueOnce({} as any);
+      const tokens = new Map([["token-1", { cancelled: false }]]);
+
+      const first = downloadArchive(makeOptions({ cancelTokens: tokens }));
+      await expect.poll(() => vi.mocked(Filesystem.downloadFile).mock.calls.length).toBe(1);
+      tokens.get("token-1")!.cancelled = true;
+      const retry = downloadArchive(makeOptions({ cancelTokens: new Map([["token-1", { cancelled: false }]]) }));
+      expect(Filesystem.downloadFile).toHaveBeenCalledTimes(1);
+
+      settleFirst?.();
+      await expect(first).rejects.toThrow("HVSC update cancelled");
+      await expect(retry).resolves.toBeNull();
+      expect(Filesystem.downloadFile).toHaveBeenCalledTimes(2);
     });
 
     it("native download: subscribes to filesystem progress events and removes the listener", async () => {

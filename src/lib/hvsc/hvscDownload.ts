@@ -24,6 +24,24 @@ import { beginHvscPerfScope, endHvscPerfScope } from "./hvscPerformance";
 import { createHvscCancellationError } from "./hvscCancellation";
 
 const HVSC_NATIVE_ARCHIVE_READ_CHUNK_BYTES = 512 * 1024;
+const nativeArchiveDownloads = new Map<string, Promise<unknown>>();
+const cancelledNativeArchivePaths = new Set<string>();
+
+const waitForNativeArchiveDownload = async (archivePath: string) => {
+  const pending = nativeArchiveDownloads.get(archivePath);
+  if (!pending) return;
+  // HARD20-008: a retry must not delete or overwrite a path while a cancelled
+  // native transfer may still be writing it.
+  try {
+    await pending;
+  } catch (error) {
+    addLog("warn", "Cancelled HVSC native download settled with an error", {
+      archivePath,
+      error: (error as Error).message,
+    });
+  }
+  cancelledNativeArchivePaths.delete(archivePath);
+};
 
 // ── Utility helpers ──────────────────────────────────────────────
 
@@ -576,6 +594,7 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
       archiveName,
       percent: 0,
     });
+    await waitForNativeArchiveDownload(archivePath);
     await deleteCachedArchive(archivePath);
     addLog("info", "HVSC download started", { archiveName, url: downloadUrl });
     const downloadHeapBefore = readHeapUsageBytes();
@@ -589,6 +608,10 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
       let totalBytes = totalBytesHint ?? null;
       let pollErrorLogged = false;
       const pollSize = async () => {
+        if (cancelTokens.get(cancelToken)?.cancelled) {
+          cancelledNativeArchivePaths.add(archivePath);
+          return;
+        }
         try {
           const stat = await Filesystem.stat({
             directory: Directory.Data,
@@ -623,11 +646,19 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
             }
           });
         }
-        await Filesystem.downloadFile({
+        const nativeDownload = Filesystem.downloadFile({
           url: downloadUrl,
           directory: Directory.Data,
           path: `${cacheDir}/${archivePath}`,
         });
+        nativeArchiveDownloads.set(archivePath, nativeDownload);
+        try {
+          await nativeDownload;
+        } finally {
+          if (nativeArchiveDownloads.get(archivePath) === nativeDownload) {
+            nativeArchiveDownloads.delete(archivePath);
+          }
+        }
         ensureNotCancelled();
       } catch (error) {
         await deleteCachedArchive(archivePath);
@@ -666,10 +697,10 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
           error: (statError as Error).message,
         });
       }
-      if (totalBytesHint && nativeDownloadedSize !== null && nativeDownloadedSize < totalBytesHint * 0.99) {
+      if (totalBytesHint && nativeDownloadedSize !== null && nativeDownloadedSize !== totalBytesHint) {
         await deleteCachedArchive(archivePath);
         throw new Error(
-          `HVSC archive is corrupt or truncated: native download for "${archiveName}" wrote ${nativeDownloadedSize} bytes, expected ~${totalBytesHint}. Please re-download.`,
+          `HVSC archive is corrupt or truncated: native download for "${archiveName}" wrote ${nativeDownloadedSize} bytes, expected ${totalBytesHint}. Please re-download.`,
         );
       }
     } else {
@@ -747,6 +778,10 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
       const checksumMd5 = downloadedBufferForMarker
         ? computeArchiveChecksumMd5(downloadedBufferForMarker)
         : await computeCachedArchiveChecksumMd5(archivePath, stat.size ?? null);
+      if (!checksumMd5) {
+        await deleteCachedArchive(archivePath);
+        throw new Error(`HVSC archive checksum validation failed for "${archiveName}". Please re-download.`);
+      }
       await writeCachedArchiveMarker(archivePath, {
         version: plan.version,
         type: plan.type,
