@@ -195,6 +195,18 @@ describe("TypeKeyboard", () => {
     });
   });
 
+  describe("shared shifted chords", () => {
+    it("HARD20-002: retains SHIFT LOCK after tapping F2", () => {
+      const h = renderKeyboardWithSnapshots("medium");
+
+      fireEvent.click(screen.getByTestId("remote-input-key-shift-lock"));
+      fireEvent.click(screen.getByTestId("remote-input-key-f2"));
+
+      expect(h.snapshots.at(-1)).toEqual(["left_shift"]);
+      expect(screen.getByTestId("remote-input-key-shift-lock")).toHaveAttribute("aria-pressed", "true");
+    });
+  });
+
   describe("compact deck + grid scrolling", () => {
     it("scrolls the whole keyboard (deck + grid) in one container so no key is stranded off-screen", () => {
       renderKeyboard("compact");

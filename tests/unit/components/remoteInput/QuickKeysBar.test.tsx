@@ -244,6 +244,21 @@ describe("QuickKeysBar", () => {
     expect(handlers.onKey).not.toHaveBeenCalled();
   });
 
+  it("HARD20-002: retains a held SHIFT while the shifted F2 chord is tapped", () => {
+    const snapshots: string[][] = [];
+    render(
+      <QuickKeysBarHarness {...makeHandlers()} tier="full" onHeldChange={(next) => snapshots.push([...next].sort())} />,
+    );
+    const shift = screen.getByTestId("remote-input-key-shift-left");
+
+    fireEvent.pointerDown(shift, { pointerId: 1 });
+    fireEvent.click(screen.getByTestId("remote-input-key-f2"));
+    expect(snapshots.at(-1)).toEqual(["left_shift"]);
+
+    fireEvent.pointerUp(shift, { pointerId: 1 });
+    expect(snapshots.at(-1)).toEqual([]);
+  });
+
   it("does not fire any handler when a disabled key is clicked (auth-required)", () => {
     const handlers = makeHandlers();
     render(<QuickKeysBarHarness {...handlers} tier="auth-required" />);

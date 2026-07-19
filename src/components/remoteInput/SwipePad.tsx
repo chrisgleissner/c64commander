@@ -59,7 +59,8 @@ export const SwipePad = ({ heldInputs, onHeldInputsChange, disabled = false, siz
 
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
-      if (disabled) return;
+      // HARD20-001: keep the original drag authoritative until it ends.
+      if (disabled || activePointerIdRef.current !== null) return;
       const zone = zoneRef.current;
       if (zone) capturePointerBestEffort(zone, event.pointerId, "swipe pad");
       activePointerIdRef.current = event.pointerId;
@@ -85,13 +86,18 @@ export const SwipePad = ({ heldInputs, onHeldInputsChange, disabled = false, siz
     [applyDirections],
   );
 
-  const release = useCallback(() => {
-    activePointerIdRef.current = null;
-    originRef.current = null;
-    setDragging(false);
-    setDotOffset({ x: 0, y: 0 });
-    applyDirections([]);
-  }, [applyDirections]);
+  const release = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      // HARD20-001: a stray pointer-up/cancel must not release another drag.
+      if (event.pointerId !== activePointerIdRef.current) return;
+      activePointerIdRef.current = null;
+      originRef.current = null;
+      setDragging(false);
+      setDotOffset({ x: 0, y: 0 });
+      applyDirections([]);
+    },
+    [applyDirections],
+  );
 
   return (
     <div

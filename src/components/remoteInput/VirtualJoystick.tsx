@@ -101,7 +101,8 @@ export const VirtualJoystick = ({
 
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
-      if (disabled) return;
+      // HARD20-001: a second touch must not replace an in-progress stick drag.
+      if (disabled || activePointerIdRef.current !== null) return;
       const zone = stickZoneRef.current;
       if (!zone) return;
       capturePointerBestEffort(zone, event.pointerId, "stick");
@@ -127,12 +128,17 @@ export const VirtualJoystick = ({
     [applyDirections],
   );
 
-  const releaseStick = useCallback(() => {
-    activePointerIdRef.current = null;
-    originRef.current = null;
-    setStickOffset({ x: 0, y: 0 });
-    applyDirections([]);
-  }, [applyDirections]);
+  const releaseStick = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      // HARD20-001: only the captured pointer can release its directions.
+      if (event.pointerId !== activePointerIdRef.current) return;
+      activePointerIdRef.current = null;
+      originRef.current = null;
+      setStickOffset({ x: 0, y: 0 });
+      applyDirections([]);
+    },
+    [applyDirections],
+  );
 
   // HARD15-005: switching movement style unmounts the outgoing control before
   // its own pointer-up can fire, so a held direction would otherwise stay

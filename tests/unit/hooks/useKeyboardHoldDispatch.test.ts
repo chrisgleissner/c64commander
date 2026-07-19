@@ -157,6 +157,46 @@ describe("useKeyboardHoldDispatch", () => {
     expect(d.shiftLocked()).toBe(false);
   });
 
+  it("HARD20-002: keeps SHIFT LOCK asserted while an atomic shifted tap comes and goes", () => {
+    const d = createDriver();
+    d.toggleShiftLock();
+    d.pressKey(["f1", "left_shift"]);
+    d.releaseKey(["f1", "left_shift"]);
+
+    expect(d.heldNames()).toEqual(["left_shift"]);
+    expect(d.shiftLocked()).toBe(true);
+  });
+
+  it("HARD20-002: keeps a physically held modifier asserted across an atomic shifted tap", () => {
+    const d = createDriver();
+    d.pressModifier("left_shift");
+    d.pressKey(["f1", "left_shift"]);
+    d.releaseKey(["f1", "left_shift"]);
+
+    expect(d.heldNames()).toEqual(["left_shift"]);
+    d.releaseModifier("left_shift");
+    expect(d.heldNames()).toEqual([]);
+  });
+
+  it("HARD20-002: preserves the shared shift contribution until every held shifted chord releases", () => {
+    const d = createDriver();
+    d.pressKey(["inst_del", "left_shift"]);
+    d.pressKey(["f1", "left_shift"]);
+    d.releaseKey(["inst_del", "left_shift"]);
+
+    expect(d.heldNames()).toEqual(["f1", "left_shift"]);
+    d.releaseKey(["f1", "left_shift"]);
+    expect(d.heldNames()).toEqual([]);
+  });
+
+  it("HARD20-002: leaves no contribution behind after a plain shifted-key tap", () => {
+    const d = createDriver();
+    d.pressKey(["f1", "left_shift"]);
+    d.releaseKey(["f1", "left_shift"]);
+
+    expect(d.heldNames()).toEqual([]);
+  });
+
   // HARD18-002: releaseAll (panic button, backgrounding/visibilitychange,
   // unmount, device switch) clears the SESSION's held-keyboard set directly -
   // left_shift is genuinely released on the C64 - but this hook's own
