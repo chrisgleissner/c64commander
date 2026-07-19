@@ -308,7 +308,14 @@ class TelnetSocketPluginTest {
 
   @Test
   fun readReturnsPayloadAndAppliesRequestedTimeout() {
-    val socket = FakeSocket(input = TrackingInputStream(payload = "READY\r\n".toByteArray()))
+    // The SequencedInputStream's null tail throws SocketTimeoutException,
+    // simulating an idle-but-live peer (data read, then timeout). A plain
+    // TrackingInputStream would return -1 after the payload, which is EOF
+    // (HARD20-006) and must reject — not the scenario this test exercises.
+    val socket =
+            FakeSocket(
+                    input = SequencedInputStream(listOf("READY\r\n".toByteArray(), null))
+            )
     plugin.socketFactory = { socket }
 
     val connectCall = mock(PluginCall::class.java)
@@ -330,6 +337,88 @@ class TelnetSocketPluginTest {
     val decoded = String(Base64.decode(resolved?.getString("data"), Base64.DEFAULT))
     assertEquals("READY\r\n", decoded)
     assertEquals(1_250, socket.soTimeoutValue)
+  }
+
+  @Test
+  fun readRejectsWithConnectionClosedOnImmediateEofAndMarksSocketDead() {
+    // HARD20-006: read() == -1 is EOF (peer closed), not a benign empty
+    // timeout read. The plugin must reject with a distinct connection-closed
+    // message and close the socket so isConnected() reports false afterward.
+    val socket = FakeSocket(input = TrackingInputStream(payload = byteArrayOf()))
+    plugin.socketFactory = { socket }
+
+    val connectCall = mock(PluginCall::class.java)
+    `when`(connectCall.getString("host")).thenReturn("c64u")
+    plugin.connect(connectCall)
+
+    val readCall = mock(PluginCall::class.java)
+    `when`(readCall.getInt("timeoutMs")).thenReturn(50)
+    plugin.read(readCall)
+
+    val messageCaptor = org.mockito.ArgumentCaptor.forClass(String::class.java)
+    verify(readCall).reject(messageCaptor.capture(), any(Exception::class.java))
+    assertTrue(
+            "HARD20-006: EOF must reject with a distinct connection-closed message",
+            messageCaptor.value?.contains("Connection closed", ignoreCase = true) == true,
+    )
+
+    val stateCall = mock(PluginCall::class.java)
+    var state: JSObject? = null
+    doAnswer { invocation ->
+              state = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(stateCall)
+            .resolve(any())
+    plugin.isConnected(stateCall)
+
+    assertFalse(
+            "HARD20-006: isConnected must report false after EOF closes the socket",
+            state?.getBool("connected") == true,
+    )
+  }
+
+  @Test
+  fun readRejectsWithConnectionClosedOnMidStreamEofAndMarksSocketDead() {
+    // HARD20-006: EOF after a partial read must still surface as a closed
+    // connection rather than returning a truncated payload silently. Uses a
+    // ByteArrayInputStream so the -1 EOF at buffer exhaustion is the JDK's
+    // own semantics, not a custom stream's.
+    val socket =
+            FakeSocket(
+                    input = java.io.ByteArrayInputStream("PARTIAL\r\n".toByteArray()),
+            )
+    plugin.socketFactory = { socket }
+
+    val connectCall = mock(PluginCall::class.java)
+    `when`(connectCall.getString("host")).thenReturn("c64u")
+    plugin.connect(connectCall)
+
+    val readCall = mock(PluginCall::class.java)
+    `when`(readCall.getInt("timeoutMs")).thenReturn(50)
+    plugin.read(readCall)
+
+    val messageCaptor = org.mockito.ArgumentCaptor.forClass(String::class.java)
+    verify(readCall).reject(messageCaptor.capture(), any(Exception::class.java))
+    assertTrue(
+            "HARD20-006: mid-stream EOF must reject with a distinct connection-closed message",
+            messageCaptor.value?.contains("Connection closed", ignoreCase = true) == true,
+    )
+
+    val stateCall = mock(PluginCall::class.java)
+    var state: JSObject? = null
+    doAnswer { invocation ->
+              state = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(stateCall)
+            .resolve(any())
+    plugin.isConnected(stateCall)
+
+    assertFalse(
+            "HARD20-006: isConnected must report false after mid-stream EOF",
+            state?.getBool("connected") == true,
+    )
   }
 
   @Test

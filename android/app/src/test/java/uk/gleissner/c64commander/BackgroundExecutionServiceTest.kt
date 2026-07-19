@@ -150,10 +150,25 @@ class BackgroundExecutionServiceTest {
     }
 
     @Test
-    fun companionStartIgnoresWhenAlreadyRunning() {
+    fun companionStartSendsFreshIntentEvenWhenAlreadyRunning() {
+        // HARD20-007: the old `if (isRunning) return` fast path swallowed a
+        // start racing asynchronous stop destruction. start() now always
+        // sends a fresh-generation intent; onStartCommand's staleness check
+        // makes the genuinely-already-running case safe.
         setIsRunning(true)
-        // Should not throw or crash
-        BackgroundExecutionService.start(service)
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+
+        BackgroundExecutionService.start(appContext)
+
+        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
+        val startIntent = shadowApp.nextStartedService
+        assertNotNull(
+            "HARD20-007: start() must send a fresh intent even when isRunning is true",
+            startIntent,
+        )
+        assertEquals(BackgroundExecutionService::class.java.name, startIntent?.component?.className)
+        val generation = startIntent?.getLongExtra(BackgroundExecutionService.EXTRA_COMMAND_GENERATION, 0L) ?: 0L
+        assertTrue("HARD20-007: racing start must carry a fresh generation", generation > 0L)
         assertTrue(BackgroundExecutionService.isRunning)
     }
 
@@ -390,6 +405,71 @@ class BackgroundExecutionServiceTest {
         service.onStartCommand(startIntent, 0, 1)
 
         assertFalse("Stale start intent should not leave service running", BackgroundExecutionService.isRunning)
+    }
+
+    @Test
+    fun startRacingStopDestructionRestoresRunningServiceWithWakeLock() {
+        // HARD20-007: stop() resolves before onDestroy flips isRunning=false,
+        // so a start() issued in that window used to see isRunning=true and
+        // return early (the old `if (isRunning) return` fast path). The
+        // subsequent destroy then left the session with no foreground service
+        // and no wake lock. The fix always sends a fresh-generation start
+        // intent; this test reproduces the race and verifies the service ends
+        // up RUNNING with a wake lock held.
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+
+        // Bring the service up under a real start intent.
+        BackgroundExecutionService.start(appContext)
+        val initialStart = Shadows.shadowOf(appContext as android.app.Application).nextStartedService
+        assertNotNull("Expected initial start intent", initialStart)
+        controller.create()
+        service.onStartCommand(initialStart, 0, 1)
+        assertTrue("Service should be running after initial start", BackgroundExecutionService.isRunning)
+
+        // stop() queues onDestroy; start() races it BEFORE the looper runs the
+        // destroy. Both companion calls resolve synchronously, but onDestroy
+        // only fires when we drive controller.destroy() below.
+        BackgroundExecutionService.stop(appContext)
+        BackgroundExecutionService.start(appContext)
+        val racingStart = Shadows.shadowOf(appContext as android.app.Application).nextStartedService
+        assertNotNull(
+            "HARD20-007: start() racing stop destruction must send a fresh intent",
+            racingStart,
+        )
+        val racingGeneration = racingStart?.getLongExtra(BackgroundExecutionService.EXTRA_COMMAND_GENERATION, 0L) ?: 0L
+        assertTrue(
+            "HARD20-007: racing start must carry a fresh generation",
+            racingGeneration > 0L,
+        )
+
+        // Now the async destroy processes. The old code would leave isRunning
+        // false here with no intent to bring the service back (the racing
+        // start was swallowed by the isRunning fast path).
+        controller.destroy()
+        assertFalse("Destroy should have torn down the old service", BackgroundExecutionService.isRunning)
+
+        // The racing start intent must restart the service and acquire a fresh
+        // wake lock — the exact invariant the race used to lose.
+        controller = Robolectric.buildService(BackgroundExecutionService::class.java)
+        service = controller.get()
+        controller.create()
+        service.onStartCommand(racingStart, 0, 2)
+        assertTrue(
+            "HARD20-007: racing start must leave the service running after destroy processes",
+            BackgroundExecutionService.isRunning,
+        )
+
+        val wakeLockField = BackgroundExecutionService::class.java.getDeclaredField("wakeLock")
+        wakeLockField.isAccessible = true
+        val wakeLock = wakeLockField.get(service) as? android.os.PowerManager.WakeLock
+        assertNotNull(
+            "HARD20-007: racing start must acquire a wake lock",
+            wakeLock,
+        )
+        assertTrue(
+            "HARD20-007: racing start's wake lock must be held",
+            wakeLock?.isHeld == true,
+        )
     }
 
     @Test
