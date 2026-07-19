@@ -1116,6 +1116,22 @@ describe("diskMount", () => {
     });
 
     describe("remounting a different disk over a materialized drive", () => {
+      it("HARD20-005: finalizes changed work-file bytes before remounting the same disk", async () => {
+        const originalBytes = new Uint8Array([1, 2, 3]);
+        const changedBytes = new Uint8Array([7, 8, 9]);
+        const writeBack = buildWriteBack({ readRemoteFile: vi.fn(async () => changedBytes) });
+        const disk = { id: "disk-first", path: "/first.d64", location: "local", localTreeUri: "tree://first" } as any;
+
+        await mountDiskToDrive(mockApi as any, "a", disk, new File([originalBytes], "first.d64"), { writeBack });
+        await mountDiskToDrive(mockApi as any, "a", disk, new File([originalBytes], "first.d64"), { writeBack });
+
+        expect(writeBack.readRemoteFile).toHaveBeenCalledWith("/Usb0/c64commander-disk-work-a.d64");
+        expect(FolderPicker.writeFileToTree).toHaveBeenCalledWith(
+          expect.objectContaining({ treeUri: "tree://first", path: "/first.d64", data: "BwgJ" }),
+        );
+        expect(writeBack.writeRemoteFile).toHaveBeenLastCalledWith("/Usb0/c64commander-disk-work-a.d64", changedBytes);
+      });
+
       it("finalizes the stale entry's write-back before the new mount proceeds", async () => {
         const firstFile = new File([new Uint8Array([1, 2, 3])], "first.d64");
         const writeBack = buildWriteBack({ readRemoteFile: vi.fn(async () => new Uint8Array([5, 6, 7])) });
@@ -1165,7 +1181,7 @@ describe("diskMount", () => {
         );
 
         expect(addErrorLog).toHaveBeenCalledWith(
-          "Disk write-back failed while remounting a different disk",
+          "Disk write-back failed while remounting a disk",
           expect.objectContaining({ drive: "a", path: "/first.d64" }),
         );
         expect(FolderPicker.writeFileToTree).not.toHaveBeenCalledWith(

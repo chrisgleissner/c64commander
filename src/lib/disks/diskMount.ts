@@ -218,9 +218,13 @@ export const resetMaterializedMountsForTests = () => {
   if (typeof sessionStorage !== "undefined") sessionStorage.removeItem(MATERIALIZED_MOUNTS_STORAGE_KEY);
 };
 
-const readBackAndPersist = async (entry: MaterializedDiskMount, ftp: DiskMountWriteBackDependencies): Promise<void> => {
+const readBackAndPersist = async (
+  entry: MaterializedDiskMount,
+  ftp: DiskMountWriteBackDependencies,
+): Promise<Uint8Array> => {
   const bytes = await ftp.readRemoteFile(entry.workPath);
   await persistDiskWriteBack(entry.writeBackTarget, bytes);
+  return bytes;
 };
 
 // A drive can be remounted directly (Play, or a second Home mount) without
@@ -232,9 +236,10 @@ const dropOrFinalizeStaleMaterializedMount = async (
   nextDisk: DiskEntry,
   ftp: DiskMountWriteBackDependencies | undefined,
   currentDeviceHost?: string,
-): Promise<void> => {
+): Promise<Uint8Array | null> => {
   const stale = materializedMounts.get(drive);
-  if (!stale || stale.disk.id === nextDisk.id) return;
+  if (!stale) return null;
+  const remountingSameDisk = stale.disk.id === nextDisk.id;
   deleteMaterializedMount(drive);
   // HARD19-005: never write the stale entry back to a different device than the
   // one it was materialized on (the deterministic work file would be a different
@@ -247,7 +252,7 @@ const dropOrFinalizeStaleMaterializedMount = async (
       materializedOn: stale.deviceHost,
       currentDeviceHost,
     });
-    return;
+    return null;
   }
   if (!ftp) {
     addLog("warn", "Dropped pending disk write-back: drive remounted by a flow without write-back support", {
@@ -255,18 +260,22 @@ const dropOrFinalizeStaleMaterializedMount = async (
       path: stale.disk.path,
       workPath: stale.workPath,
     });
-    return;
+    return null;
   }
   try {
-    await readBackAndPersist(stale, ftp);
+    const bytes = await readBackAndPersist(stale, ftp);
+    // HARD20-005: upload the just-finalized work-file bytes on a same-disk
+    // replay, even when its caller still holds a stale runtime File.
+    return remountingSameDisk ? bytes : null;
   } catch (error) {
-    addErrorLog("Disk write-back failed while remounting a different disk", {
+    addErrorLog("Disk write-back failed while remounting a disk", {
       drive,
       path: stale.disk.path,
       workPath: stale.workPath,
       error: (error as Error).message,
     });
   }
+  return null;
 };
 
 // HARD19-014 (D2): after a successful archive/CommoServe write-back — which only
@@ -835,7 +844,12 @@ export const mountDiskToDrive = async (
   options: MountDiskToDriveOptions = {},
 ): Promise<DiskMountOutcome> => {
   const mode = options.mode ?? "readwrite";
-  await dropOrFinalizeStaleMaterializedMount(drive, disk, options.writeBack, api.getDeviceHost());
+  const finalizedSameDiskBytes = await dropOrFinalizeStaleMaterializedMount(
+    drive,
+    disk,
+    options.writeBack,
+    api.getDeviceHost(),
+  );
   try {
     const mountType = buildDiskMountType(disk.path);
     if (!mountType) {
@@ -863,9 +877,10 @@ export const mountDiskToDrive = async (
       }
     }
 
-    const blob = await resolveLocalDiskBlob(disk, runtimeFile, {
-      archiveConfigs: options.archiveConfigs,
-    });
+    const blob =
+      finalizedSameDiskBytes === null
+        ? await resolveLocalDiskBlob(disk, runtimeFile, { archiveConfigs: options.archiveConfigs })
+        : new Blob([finalizedSameDiskBytes]);
     addLog("debug", "Local disk blob prepared for mount", {
       drive,
       path: disk.path,
