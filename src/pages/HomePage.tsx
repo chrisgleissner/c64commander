@@ -108,6 +108,7 @@ import { useTelnetActions } from "@/hooks/useTelnetActions";
 import { TELNET_ACTIONS, type TelnetActionId } from "@/lib/telnet/telnetTypes";
 import { withTelnetInteraction } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { publishMachineInterrupt } from "@/lib/deviceInteraction/machineInterrupt";
+import { setMachineExecutionPaused, setMachineExecutionRunning } from "@/lib/deviceInteraction/machineExecutionStore";
 import { beginMachineTransition } from "@/lib/deviceInteraction/deviceActivityGate";
 import { getActiveAction, runWithImplicitAction } from "@/lib/tracing/actionTrace";
 import {
@@ -664,6 +665,15 @@ function HomePageContent() {
       successTitle: (result) => (result.menuOpen ? "Menu opened" : "Menu closed"),
       failureOperation: "HOME_MENU_TOGGLE",
       failureTitle: "Menu toggle failed",
+      onSuccess: (result) => {
+        // HARD20-009: the Ultimate menu freezes the running machine, so mirror
+        // that temporary state into Play's existing pause-timeline contract.
+        if (result.menuOpen) {
+          setMachineExecutionPaused();
+        } else {
+          setMachineExecutionRunning();
+        }
+      },
     });
   };
 

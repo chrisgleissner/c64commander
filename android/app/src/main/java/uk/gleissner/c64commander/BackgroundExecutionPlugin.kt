@@ -40,7 +40,8 @@ open class BackgroundExecutionPlugin : Plugin() {
                     val payload = JSObject()
                     payload.put("dueAtMs", dueAtMs)
                     payload.put("firedAtMs", firedAtMs)
-                    notifyListeners("backgroundAutoSkipDue", payload)
+                    // HARD20-010: preserve a due event while Play is unmounted on tab navigation.
+                    notifyListeners("backgroundAutoSkipDue", payload, true)
                 }
             }
 

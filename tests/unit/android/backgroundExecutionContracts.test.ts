@@ -43,4 +43,17 @@ describe("Android background execution contracts", () => {
     expect(backgroundPluginSource).toContain("isAutoSkipReceiverRegistered = true");
     expect(backgroundPluginSource).toContain("isAutoSkipReceiverRegistered = false");
   });
+
+  it("HARD20-010: retains an auto-skip event until Play remounts a listener", () => {
+    expect(backgroundPluginSource).toContain('notifyListeners("backgroundAutoSkipDue", payload, true)');
+  });
+
+  it("HARD20-007: always issues a fresh generation for start so stop-to-start cannot be swallowed", () => {
+    const startBody = backgroundServiceSource.slice(
+      backgroundServiceSource.indexOf("fun start(context: Context)"),
+      backgroundServiceSource.indexOf("fun stop(context: Context)"),
+    );
+    expect(startBody).toContain("val generation = nextCommandGeneration()");
+    expect(startBody).not.toContain("if (isRunning)");
+  });
 });
