@@ -604,6 +604,31 @@ describe("deviceInteractionManager", () => {
     expect(addErrorLog).not.toHaveBeenCalledWith("FTP request failed", expect.any(Object));
   });
 
+  it("HARD20-003: dispatches each same-path write instead of coalescing different payloads", async () => {
+    const { withFtpInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+    const meta = {
+      action: makeAction("ftp-write"),
+      operation: "write",
+      path: "/Temp/image.d64",
+      intent: "system" as const,
+    };
+    let releaseFirst: (() => void) | null = null;
+    const firstHandler = vi.fn(() => new Promise<string>((resolve) => (releaseFirst = () => resolve("first"))));
+    const secondHandler = vi.fn(async () => "second");
+
+    const first = withFtpInteraction(meta, firstHandler);
+    const second = withFtpInteraction(meta, secondHandler);
+    await expect.poll(() => firstHandler).toHaveBeenCalledTimes(1);
+    expect(secondHandler).not.toHaveBeenCalled();
+    releaseFirst?.();
+
+    await expect(first).resolves.toBe("first");
+    await expect(second).resolves.toBe("second");
+    expect(secondHandler).toHaveBeenCalledTimes(1);
+  });
+
   it("retries a transient FTP connect timeout once and resolves with one scheduled operation", async () => {
     vi.useFakeTimers();
     const { withFtpInteraction, resetInteractionState, FTP_TRANSIENT_RETRY_DELAY_MS } =

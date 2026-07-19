@@ -126,7 +126,8 @@ export function createTelnetClient(options?: CreateTelnetClientOptions): TelnetT
           return new Uint8Array(0);
         }
         connected = false;
-        throw new TelnetError(`Read failed: ${msg}`, "DISCONNECTED");
+        const code = /connection closed/i.test(msg) ? "CONNECTION_CLOSED" : "DISCONNECTED";
+        throw new TelnetError(`Read failed: ${msg}`, code);
       }
     },
 

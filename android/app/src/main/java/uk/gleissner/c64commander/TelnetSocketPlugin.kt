@@ -209,7 +209,12 @@ class TelnetSocketPlugin : Plugin() {
               } catch (_: SocketTimeoutException) {
                 0
               }
-      if (firstRead <= 0) {
+      if (firstRead == -1) {
+        // HARD20-006: EOF is a dead peer, not a harmless empty timeout read.
+        closeSocket()
+        throw IllegalStateException("Connection closed")
+      }
+      if (firstRead == 0) {
         return ByteArray(0)
       }
       output.write(buffer, 0, firstRead)
@@ -228,7 +233,11 @@ class TelnetSocketPlugin : Plugin() {
                 } catch (_: SocketTimeoutException) {
                   break
                 }
-        if (nextRead <= 0) {
+        if (nextRead == -1) {
+          closeSocket()
+          throw IllegalStateException("Connection closed")
+        }
+        if (nextRead == 0) {
           break
         }
         output.write(buffer, 0, nextRead)
@@ -236,7 +245,7 @@ class TelnetSocketPlugin : Plugin() {
 
       return output.toByteArray()
     } finally {
-      sock.soTimeout = boundedTimeoutMs
+      if (!sock.isClosed) sock.soTimeout = boundedTimeoutMs
     }
   }
 

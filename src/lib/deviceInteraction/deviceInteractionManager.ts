@@ -95,6 +95,8 @@ type FtpRequestMeta = {
   port?: number;
 };
 
+const COALESCABLE_FTP_OPERATIONS = new Set(["list", "list-recursive", "read", "ping"]);
+
 type TelnetRequestMeta = {
   action: TraceActionContext;
   actionId: string;
@@ -986,7 +988,10 @@ export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () =>
   // share inflight/cooldown state. Falls back to "any" when host is missing.
   const hostScope = `${(meta.host ?? "any").toLowerCase()}:${meta.port ?? 21}`;
   const key = `${hostScope}|${meta.operation}:${meta.path}`;
-  const inflight = ftpInflight.get(key);
+  // HARD20-003: only idempotent reads may share another call's result; a
+  // same-path write can carry different bytes and must run in sequence.
+  const canCoalesce = COALESCABLE_FTP_OPERATIONS.has(meta.operation);
+  const inflight = canCoalesce ? ftpInflight.get(key) : undefined;
   if (inflight) {
     recordDeviceGuard(meta.action, {
       decision: "coalesce",
@@ -1048,11 +1053,11 @@ export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () =>
     run: scheduleTask,
   });
 
-  ftpInflight.set(key, scheduledPromise as Promise<unknown>);
+  if (canCoalesce) ftpInflight.set(key, scheduledPromise as Promise<unknown>);
   try {
     return await scheduledPromise;
   } finally {
-    ftpInflight.delete(key);
+    if (canCoalesce) ftpInflight.delete(key);
   }
 };
 

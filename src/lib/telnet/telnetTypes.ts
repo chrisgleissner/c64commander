@@ -349,6 +349,7 @@ export type TelnetErrorCode =
   | "CONNECTION_FAILED"
   | "AUTH_FAILED"
   | "TIMEOUT"
+  | "CONNECTION_CLOSED"
   | "MENU_NOT_FOUND"
   | "ITEM_NOT_FOUND"
   | "DESYNC"
