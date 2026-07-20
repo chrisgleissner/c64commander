@@ -955,21 +955,28 @@ describe("hvscDownload", () => {
       );
       vi.mocked(Filesystem.stat).mockResolvedValue({ size: 500, type: "file" } as any);
 
-      const tokens = new Map([["token-1", { cancelled: false }]]);
-      const promise = downloadArchive(makeOptions({ cancelTokens: tokens }));
-      // Let the 400ms progress-poll interval fire at least once for real, confirming
-      // pollSize is actually reachable before we assert the cancellation guard.
-      await expect.poll(() => vi.mocked(Filesystem.stat).mock.calls.length, { timeout: 5000 }).toBeGreaterThan(0);
-      const statCallsBeforeCancel = vi.mocked(Filesystem.stat).mock.calls.length;
+      vi.useFakeTimers();
+      let promise: ReturnType<typeof downloadArchive>;
+      try {
+        const tokens = new Map([["token-1", { cancelled: false }]]);
+        promise = downloadArchive(makeOptions({ cancelTokens: tokens }));
+        // Advance past the 400ms progress-poll interval once, confirming
+        // pollSize is actually reachable before we assert the cancellation guard.
+        await vi.advanceTimersByTimeAsync(400);
+        const statCallsBeforeCancel = vi.mocked(Filesystem.stat).mock.calls.length;
+        expect(statCallsBeforeCancel).toBeGreaterThan(0);
 
-      tokens.get("token-1")!.cancelled = true;
-      await new Promise((resolve) => setTimeout(resolve, 450));
+        tokens.get("token-1")!.cancelled = true;
+        await vi.advanceTimersByTimeAsync(400);
 
-      expect(Filesystem.stat).toHaveBeenCalledTimes(statCallsBeforeCancel);
+        expect(Filesystem.stat).toHaveBeenCalledTimes(statCallsBeforeCancel);
+      } finally {
+        vi.useRealTimers();
+      }
 
       settleDownload?.();
-      await expect(promise).rejects.toThrow("HVSC update cancelled");
-    }, 10000);
+      await expect(promise!).rejects.toThrow("HVSC update cancelled");
+    });
 
     it("native download: subscribes to filesystem progress events and removes the listener", async () => {
       vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
