@@ -12,6 +12,10 @@ import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import HomePage from "../../../src/pages/HomePage";
 import { clearRamDumpFolderConfig, saveRamDumpFolderConfig } from "../../../src/lib/config/ramDumpFolderStore";
 import * as ramDumpStorage from "../../../src/lib/machine/ramDumpStorage";
+import {
+  getMachineExecutionSnapshot,
+  resetMachineExecution,
+} from "../../../src/lib/deviceInteraction/machineExecutionStore";
 
 const featureFlagsRef = vi.hoisted(() => ({
   current: {
@@ -628,6 +632,7 @@ vi.mock("@/hooks/useInteractiveConfigWrite", () => ({
 }));
 
 beforeEach(() => {
+  resetMachineExecution();
   toastSpy.mockReset();
   reportUserErrorSpy.mockReset();
   featureFlagsRef.current = {
@@ -1134,6 +1139,20 @@ describe("HomePage SID status", () => {
         endpoint: "PUT /v1/machine:menu_button",
       },
     });
+  });
+
+  it("HARD20-009: mirrors a successful menu open and close into the Play pause timeline", async () => {
+    deviceControlPayloadRef.current.toggleMenu = vi
+      .fn()
+      .mockResolvedValueOnce({ menuOpen: true })
+      .mockResolvedValueOnce({ menuOpen: false });
+    renderHomePage();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Menu$/ }));
+    await waitFor(() => expect(getMachineExecutionSnapshot().state).toBe("paused"));
+
+    fireEvent.click(screen.getByRole("button", { name: /^Menu$/ }));
+    await waitFor(() => expect(getMachineExecutionSnapshot().state).toBe("running"));
   });
 
   it("requires explicit confirmation before power off", async () => {

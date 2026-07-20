@@ -126,6 +126,23 @@ describe("VirtualJoystick", () => {
     expect(onHeldInputsChangeMock).toHaveBeenCalledWith(new Set());
   });
 
+  it("HARD20-001: ignores a second pointer and releases only the active stick drag", () => {
+    render(<LivingJoystick />);
+    const zone = screen.getByTestId("remote-input-stick-zone");
+    setupZoneGeometry(zone);
+
+    fireEvent.pointerDown(zone, { pointerId: 1, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(zone, { pointerId: 1, clientX: 160, clientY: 100 });
+    fireEvent.pointerDown(zone, { pointerId: 2, clientX: 20, clientY: 20 });
+    fireEvent.pointerUp(zone, { pointerId: 2 });
+    expect(screen.getByTestId("remote-input-stick-thumb")).toHaveAttribute("data-pressed", "true");
+
+    fireEvent.pointerMove(zone, { pointerId: 1, clientX: 100, clientY: 40 });
+    expect(screen.getByTestId("remote-input-stick-thumb").getAttribute("style")).toMatch(/-60px/);
+    fireEvent.pointerCancel(zone, { pointerId: 1 });
+    expect(screen.getByTestId("remote-input-stick-thumb")).toHaveAttribute("data-pressed", "false");
+  });
+
   it("holds fire while the fire button is pressed and releases it on pointer up", () => {
     renderStick();
     const fireButton = screen.getByTestId("remote-input-fire-button");

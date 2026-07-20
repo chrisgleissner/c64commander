@@ -288,6 +288,14 @@ export function usePlaybackController({
   const userTransportQueueRef = useRef(Promise.resolve());
   const pendingUserSkipRef = useRef<PendingUserSkip | null>(null);
   const flushPendingUserSkipRef = useRef<() => Promise<void>>(async () => undefined);
+  const cancelPendingUserSkip = useCallback(() => {
+    const pending = pendingUserSkipRef.current;
+    if (!pending) return;
+    // HARD20-004: stopping, taking over, or pausing supersedes a queued user skip.
+    if (pending.timer !== null) window.clearTimeout(pending.timer);
+    pendingUserSkipRef.current = null;
+    pending.resolvers.forEach(({ resolve }) => resolve());
+  }, []);
   const STOP_MACHINE_TIMEOUT_MS = 6000;
   // HARD18-009 (M5): monotonic play-generation counter, mirroring the
   // machineTransitionCoordinator supersede pattern. Both handleStop and
@@ -1238,6 +1246,7 @@ export function usePlaybackController({
       // in-flight playItem transition (auto-advance, Next/Previous, a
       // row-tap) sees itself superseded once its own async work resolves.
       playGenerationRef.current += 1;
+      cancelPendingUserSkip();
       const currentItem = playlist[currentIndex];
       const shouldReboot = currentItem?.category === "disk";
       try {
@@ -1310,6 +1319,7 @@ export function usePlaybackController({
       lastAppliedPlaybackConfigSignatureRef,
       autoAdvanceGuardRef,
       playGenerationRef,
+      cancelPendingUserSkip,
     ],
   );
 
@@ -1326,6 +1336,7 @@ export function usePlaybackController({
   useEffect(() => {
     return subscribeMachineTakeover((event) => {
       if (!isPlayingRef.current && !isPausedRef.current) return;
+      cancelPendingUserSkip();
       const now = Date.now();
       playedClockRef.current.stop(now, true);
       setPlayedMs(0);
@@ -1339,7 +1350,15 @@ export function usePlaybackController({
           event.reason === "home-reset" ? "The machine was reset from Home." : `You launched ${event.label}.`,
       });
     });
-  }, [playedClockRef, setPlayedMs, autoAdvanceGuardRef, setAutoAdvanceDueAtMs, setIsPlaying, setIsPaused]);
+  }, [
+    playedClockRef,
+    setPlayedMs,
+    autoAdvanceGuardRef,
+    setAutoAdvanceDueAtMs,
+    setIsPlaying,
+    setIsPaused,
+    cancelPendingUserSkip,
+  ]);
 
   // HARD19-009: Play writes the shared machine-execution store but never
   // subscribed, so a pause applied from HOME (or any external source) left Play's
@@ -1393,6 +1412,7 @@ export function usePlaybackController({
       const pollingPauseHandle = pollingPauseRegistry.acquirePause();
       try {
         const target = isPaused ? "running" : "paused";
+        if (target === "paused") cancelPendingUserSkip();
         await machineTransitionCoordinatorRef.current.request(target, async () => {
           const endTransition = beginMachineTransition();
           const api = getC64API();
@@ -1477,6 +1497,7 @@ export function usePlaybackController({
       setIsPaused,
       trackStartedAtRef,
       autoAdvanceGuardRef,
+      cancelPendingUserSkip,
     ],
   );
 
@@ -1491,7 +1512,7 @@ export function usePlaybackController({
     try {
       await enqueueUserTransport(async () => {
         const activePlaylist = playlistRef.current;
-        if (!activePlaylist.length) return;
+        if (!activePlaylist.length || (!isPlayingRef.current && !isPausedRef.current)) return;
         const activeIndex = currentIndexRef.current;
         const anotherTransitionAdvanced =
           activeIndex !== pending.originIndex &&

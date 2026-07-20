@@ -80,7 +80,7 @@ import {
   getLocalSourceRuntimeFile,
   requireLocalSourceEntries,
 } from "@/lib/sourceNavigation/localSourcesStore";
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 import {
   buildDiskMountType,
   resolveLocalDiskBlob,
@@ -1116,6 +1116,22 @@ describe("diskMount", () => {
     });
 
     describe("remounting a different disk over a materialized drive", () => {
+      it("HARD20-005: finalizes changed work-file bytes before remounting the same disk", async () => {
+        const originalBytes = new Uint8Array([1, 2, 3]);
+        const changedBytes = new Uint8Array([7, 8, 9]);
+        const writeBack = buildWriteBack({ readRemoteFile: vi.fn(async () => changedBytes) });
+        const disk = { id: "disk-first", path: "/first.d64", location: "local", localTreeUri: "tree://first" } as any;
+
+        await mountDiskToDrive(mockApi as any, "a", disk, new File([originalBytes], "first.d64"), { writeBack });
+        await mountDiskToDrive(mockApi as any, "a", disk, new File([originalBytes], "first.d64"), { writeBack });
+
+        expect(writeBack.readRemoteFile).toHaveBeenCalledWith("/Usb0/c64commander-disk-work-a.d64");
+        expect(FolderPicker.writeFileToTree).toHaveBeenCalledWith(
+          expect.objectContaining({ treeUri: "tree://first", path: "/first.d64", data: "BwgJ" }),
+        );
+        expect(writeBack.writeRemoteFile).toHaveBeenLastCalledWith("/Usb0/c64commander-disk-work-a.d64", changedBytes);
+      });
+
       it("finalizes the stale entry's write-back before the new mount proceeds", async () => {
         const firstFile = new File([new Uint8Array([1, 2, 3])], "first.d64");
         const writeBack = buildWriteBack({ readRemoteFile: vi.fn(async () => new Uint8Array([5, 6, 7])) });
@@ -1165,13 +1181,42 @@ describe("diskMount", () => {
         );
 
         expect(addErrorLog).toHaveBeenCalledWith(
-          "Disk write-back failed while remounting a different disk",
+          "Disk write-back failed while remounting a disk",
           expect.objectContaining({ drive: "a", path: "/first.d64" }),
         );
         expect(FolderPicker.writeFileToTree).not.toHaveBeenCalledWith(
           expect.objectContaining({ treeUri: "tree://first" }),
         );
         expect(outcome.persistence).toBe("materialized");
+      });
+
+      it("HARD19-005: drops the stale entry without a write-back when remounted on a different device", async () => {
+        const firstFile = new File([new Uint8Array([1, 2, 3])], "first.d64");
+        const writeBack = buildWriteBack();
+        await mountDiskToDrive(
+          mockApi as any,
+          "a",
+          { id: "disk-first", path: "/first.d64", location: "local", localTreeUri: "tree://first" } as any,
+          firstFile,
+          { writeBack },
+        );
+
+        const otherDeviceApi = { ...mockApi, getDeviceHost: vi.fn(() => "other-device") };
+        const secondFile = new File([new Uint8Array([4, 5, 6])], "second.d64");
+        await mountDiskToDrive(
+          otherDeviceApi as any,
+          "a",
+          { id: "disk-second", path: "/second.d64", location: "local", localTreeUri: "tree://second" } as any,
+          secondFile,
+          { writeBack },
+        );
+
+        expect(writeBack.readRemoteFile).not.toHaveBeenCalled();
+        expect(addLog).toHaveBeenCalledWith(
+          "warn",
+          "Dropped pending disk write-back: stale mount belongs to a different device",
+          expect.objectContaining({ drive: "a", path: "/first.d64", currentDeviceHost: "other-device" }),
+        );
       });
 
       it("drops (does not misattribute) the stale entry when the new mount has no writeBack deps", async () => {

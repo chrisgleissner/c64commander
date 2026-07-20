@@ -147,6 +147,15 @@ describe("createTelnetClient", () => {
       await expect(client.read(500)).rejects.toThrow(TelnetError);
       expect(client.isConnected()).toBe(false);
     });
+
+    it("HARD20-006: maps native peer EOF to a distinct closed-connection error", async () => {
+      mockRead.mockRejectedValue(new Error("Read failed: Connection closed"));
+      const client = createTelnetClient();
+      await client.connect("localhost", 23);
+
+      await expect(client.read(500)).rejects.toMatchObject({ code: "CONNECTION_CLOSED" });
+      expect(client.isConnected()).toBe(false);
+    });
   });
 
   describe("mock transport", () => {

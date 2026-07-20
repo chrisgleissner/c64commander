@@ -85,6 +85,23 @@ describe("SwipePad (live drag)", () => {
     expect(onHeldInputsChangeMock).toHaveBeenLastCalledWith(new Set());
   });
 
+  it("HARD20-001: ignores a second pointer and only cancels the active swipe drag", () => {
+    render(<LivingSwipePad />);
+    const pad = screen.getByTestId("remote-input-swipe-pad");
+
+    fireEvent.pointerDown(pad, { pointerId: 1, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(pad, { pointerId: 1, clientX: 170, clientY: 100 });
+    fireEvent.pointerDown(pad, { pointerId: 2, clientX: 20, clientY: 20 });
+    fireEvent.pointerUp(pad, { pointerId: 2 });
+    expect(pad).toHaveAttribute("data-dragging", "true");
+    expect(onHeldInputsChangeMock).toHaveBeenLastCalledWith(new Set(["right"]));
+
+    fireEvent.pointerMove(pad, { pointerId: 1, clientX: 100, clientY: 30 });
+    expect(onHeldInputsChangeMock).toHaveBeenLastCalledWith(new Set(["up"]));
+    fireEvent.pointerCancel(pad, { pointerId: 1 });
+    expect(onHeldInputsChangeMock).toHaveBeenLastCalledWith(new Set());
+  });
+
   it("does not clobber a direction already held via another input method", () => {
     render(<LivingSwipePad initialHeld={new Set(["fire"]) as HeldJoystickInputs} />);
     const pad = screen.getByTestId("remote-input-swipe-pad");

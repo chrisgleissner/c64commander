@@ -35,6 +35,12 @@ private open class TestableBackgroundExecutionPlugin : BackgroundExecutionPlugin
     public override fun notifyListeners(eventName: String?, data: JSObject?) {
         notifyListenersCalls.add(Pair(eventName, data))
     }
+
+    // HARD20-010: production now calls the retainUntilConsumed overload directly, which
+    // bypasses the 2-arg override above (static overload resolution) unless also captured here.
+    public override fun notifyListeners(eventName: String?, data: JSObject?, retainUntilConsumed: Boolean) {
+        notifyListenersCalls.add(Pair(eventName, data))
+    }
 }
 
 @RunWith(RobolectricTestRunner::class)

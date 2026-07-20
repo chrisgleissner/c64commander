@@ -60,6 +60,7 @@ export const useKeyboardHoldDispatch = (
   // Modifiers are tracked here purely so `isModifierActive` can light the key
   // while it is genuinely held; releasing the pointer always releases the key.
   const physicallyHeldRef = useRef<Set<KeyboardInputName>>(new Set());
+  const heldContributionsRef = useRef<Map<KeyboardInputName, number>>(new Map());
   const [shiftLocked, setShiftLocked] = useState(false);
   const shiftLockedRef = useRef(shiftLocked);
   shiftLockedRef.current = shiftLocked;
@@ -77,23 +78,29 @@ export const useKeyboardHoldDispatch = (
   // request and each release only clears the keys actually let go.
   const addToHeld = useCallback((names: readonly KeyboardInputName[]) => {
     const next = new Set(heldRef.current);
-    names.forEach((name) => next.add(name));
+    names.forEach((name) => {
+      // HARD20-002: shifted chords, physical modifiers, and SHIFT LOCK may
+      // independently contribute the same matrix input.
+      heldContributionsRef.current.set(name, (heldContributionsRef.current.get(name) ?? 0) + 1);
+      next.add(name);
+    });
     heldRef.current = next;
     onChangeRef.current(next);
   }, []);
   const removeFromHeld = useCallback((names: readonly KeyboardInputName[]) => {
     const next = new Set(heldRef.current);
-    names.forEach((name) => next.delete(name));
+    names.forEach((name) => {
+      const nextContributionCount = (heldContributionsRef.current.get(name) ?? 0) - 1;
+      if (nextContributionCount > 0) {
+        heldContributionsRef.current.set(name, nextContributionCount);
+      } else {
+        heldContributionsRef.current.delete(name);
+        next.delete(name);
+      }
+    });
     heldRef.current = next;
     onChangeRef.current(next);
   }, []);
-
-  // SHIFT LOCK independently keeps `left_shift` asserted — a pointer release
-  // must never release it out from under that lock.
-  const canReleaseModifier = useCallback(
-    (modifier: KeyboardInputName) => !(modifier === "left_shift" && shiftLockedRef.current),
-    [],
-  );
 
   // Every function below is intentionally stable for the component's entire
   // lifetime (empty/all-stable dep arrays, current values read via refs) so a
@@ -116,12 +123,12 @@ export const useKeyboardHoldDispatch = (
   const releaseModifier = useCallback(
     (modifier: KeyboardInputName) => {
       // Pure release: a modifier is held only while its pointer is down. No
-      // latch, no chord bookkeeping — pointer up always lets it go (unless a
-      // SHIFT LOCK is keeping left_shift asserted).
+      // latch. Contribution tracking preserves any independent SHIFT LOCK or
+      // shifted-chord reference.
       physicallyHeldRef.current.delete(modifier);
-      if (canReleaseModifier(modifier)) removeFromHeld([modifier]);
+      removeFromHeld([modifier]);
     },
-    [canReleaseModifier, removeFromHeld],
+    [removeFromHeld],
   );
 
   const toggleShiftLock = useCallback(() => {
@@ -142,7 +149,7 @@ export const useKeyboardHoldDispatch = (
     setShiftLocked(next);
     if (next) {
       addToHeld(["left_shift"]);
-    } else if (!physicallyHeldRef.current.has("left_shift")) {
+    } else {
       removeFromHeld(["left_shift"]);
     }
   }, [addToHeld, removeFromHeld]);

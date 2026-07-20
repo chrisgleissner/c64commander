@@ -1,4 +1,4 @@
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import { seededShuffleIds } from "@/pages/playFiles/playFilesUtils";
@@ -1591,6 +1591,30 @@ describe("usePlaybackController", () => {
     expect(trackStartedAtRef.current).toBeNull();
     expect(autoAdvanceGuardRef.current).toBeNull();
     expect(setAutoAdvanceDueAtMs).toHaveBeenCalledWith(null);
+  });
+
+  it("HARD20-004: cancels a queued user skip when Stop wins the transport race", async () => {
+    vi.useFakeTimers();
+    try {
+      const playlist = [
+        createPlaylistItem({ id: "item-1", path: "/PROGRAMS/one.prg" }),
+        createPlaylistItem({ id: "item-2", path: "/PROGRAMS/two.prg" }),
+      ];
+      const machineReset = vi.fn().mockResolvedValue(undefined);
+      const setIsPlaying = vi.fn();
+      vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+      const { result } = renderPlaybackController(playlist, { isPlaying: true, setIsPlaying });
+
+      void result.current.handleNext("user");
+      await result.current.handleStop();
+      await act(async () => vi.advanceTimersByTimeAsync(120));
+
+      expect(machineReset).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+      expect(setIsPlaying).toHaveBeenCalledWith(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("stops auto-advance at the end of the playlist when repeat is disabled", async () => {

@@ -66,15 +66,8 @@ class BackgroundExecutionService : Service() {
         }
 
         fun start(context: Context) {
-            if (isRunning) {
-                AppLogger.debug(
-                        context,
-                        TAG,
-                        "Already running — ignoring start request",
-                        "BackgroundExecutionService"
-                )
-                return
-            }
+            // HARD20-007: a start racing asynchronous stop destruction must
+            // carry a fresh generation rather than being swallowed by isRunning.
             val generation = nextCommandGeneration()
             startPendingGeneration = generation
             val intent = Intent(context, BackgroundExecutionService::class.java)

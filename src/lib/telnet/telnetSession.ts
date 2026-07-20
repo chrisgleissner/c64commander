@@ -251,6 +251,13 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
           // Read timeout — treat as frame boundary
           break;
         }
+        if (error instanceof TelnetError && error.code === "CONNECTION_CLOSED") {
+          // HARD20-006: EOF invalidates authentication; reuse the normal
+          // reconnect path instead of turning a dead peer into an empty screen.
+          authenticated = false;
+          await ensureConnected();
+          continue;
+        }
         throw error;
       }
     }
