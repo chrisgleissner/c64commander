@@ -880,7 +880,7 @@ export const mountDiskToDrive = async (
     const blob =
       finalizedSameDiskBytes === null
         ? await resolveLocalDiskBlob(disk, runtimeFile, { archiveConfigs: options.archiveConfigs })
-        : new Blob([finalizedSameDiskBytes]);
+        : new Blob([new Uint8Array(finalizedSameDiskBytes)]);
     addLog("debug", "Local disk blob prepared for mount", {
       drive,
       path: disk.path,
