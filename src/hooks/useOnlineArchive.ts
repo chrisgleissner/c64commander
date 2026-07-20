@@ -196,8 +196,25 @@ export const useOnlineArchive = (config: ArchiveClientConfigInput) => {
   const [state, setState] = useState<OnlineArchiveState>({ phase: "idle" });
   const requestVersionRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
+  // Mirrors the current phase so the (stable) cancel below can gate on it
+  // without a stale closure or re-creating on every state change.
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   const cancel = useCallback(() => {
+    // HARD21-003: the `executing` phase is a committed device launch
+    // (executeArchiveEntry → executePlayPlan reboots/mounts/runs the machine and
+    // publishMachineTakeover stops any armed playlist) that the archive execute
+    // stage cannot honor a cancel for — the abort signal is only wired into the
+    // preceding download stage, never into executeArchiveEntry. Cancelling here
+    // used to abort the controller and revert the UI to `entries` as if nothing
+    // happened, while the device still rebooted/mounted/ran (UI/device
+    // divergence, and it never stopped the launch). Treat `executing` as
+    // non-cancellable: leave the controller and state untouched so the launch
+    // completes and execute() transitions the UI back to `entries` honestly when
+    // it resolves. A half-applied reboot/mount is its own hazard, so we
+    // deliberately do NOT thread the signal into the launch stage.
+    if (stateRef.current.phase === "executing") return;
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     setState((current) => {
@@ -207,7 +224,8 @@ export const useOnlineArchive = (config: ArchiveClientConfigInput) => {
       if (current.phase === "loadingEntries") {
         return { phase: "results", params: current.params, results: current.results };
       }
-      if (current.phase === "downloading" || current.phase === "executing") {
+      if (current.phase === "downloading") {
+        // (executing is handled by the non-cancellable early return above.)
         return {
           phase: "entries",
           params: current.params,
