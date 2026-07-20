@@ -263,6 +263,81 @@ describe("usePlaybackController auto advance", () => {
     resetMachineExecution();
   });
 
+  // HARD21-004: opening then closing the Home Ultimate menu must NOT resume a
+  // playback the user deliberately paused. The menu freeze and a user pause used
+  // to funnel through one sourceless flag, so an unconditional menu-close resume
+  // clobbered the user pause — re-arming auto-advance against the user's intent.
+  it("HARD21-004: menu open+close does not resume a user-initiated pause (pausedBy play)", async () => {
+    const { setMachineExecutionPaused, resumeMachineExecutionIfPausedBy, getMachineExecutionSnapshot, resetMachineExecution } =
+      await import("@/lib/deviceInteraction/machineExecutionStore");
+    resetMachineExecution();
+    const playlist = [createPlaylistItem("one", 1_000), createPlaylistItem("two", 1_000)];
+    const { result } = renderPlaybackHarness(playlist);
+
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    expect(result.current.isPlaying).toBe(true);
+
+    // User pauses from Play (source "play"). Play mirrors it: paused, due-time cleared.
+    act(() => {
+      setMachineExecutionPaused({ pausedBy: "play" });
+    });
+    expect(result.current.isPaused).toBe(true);
+    expect(result.current.autoAdvanceDueAtMs).toBeNull();
+
+    // Simulate the exact HomePage menu handler: on open, only pause if running
+    // (already paused → no-op, source stays "play"); on close, gated resume.
+    act(() => {
+      if (getMachineExecutionSnapshot().state === "running") {
+        setMachineExecutionPaused({ pausedBy: "menu" });
+      }
+    });
+    act(() => {
+      resumeMachineExecutionIfPausedBy("menu");
+    });
+
+    // The user's pause must survive untouched — no resume, no re-armed advance.
+    expect(result.current.isPaused).toBe(true);
+    expect(result.current.autoAdvanceDueAtMs).toBeNull();
+
+    resetMachineExecution();
+  });
+
+  // HARD21-004 guard: the correct was-playing behavior must be preserved — menu
+  // open pauses the timeline, menu close resumes it (this is the HARD20-009
+  // contract the source tag must not break).
+  it("HARD21-004: menu open pauses and menu close resumes a was-playing timeline", async () => {
+    const { setMachineExecutionPaused, resumeMachineExecutionIfPausedBy, getMachineExecutionSnapshot, resetMachineExecution } =
+      await import("@/lib/deviceInteraction/machineExecutionStore");
+    resetMachineExecution();
+    const playlist = [createPlaylistItem("one", 1_000), createPlaylistItem("two", 1_000)];
+    const { result } = renderPlaybackHarness(playlist);
+
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    expect(result.current.isPlaying).toBe(true);
+    expect(result.current.isPaused).toBe(false);
+
+    // Menu open on a running machine → pause (source "menu").
+    act(() => {
+      if (getMachineExecutionSnapshot().state === "running") {
+        setMachineExecutionPaused({ pausedBy: "menu" });
+      }
+    });
+    expect(result.current.isPaused).toBe(true);
+    expect(result.current.autoAdvanceDueAtMs).toBeNull();
+
+    // Menu close → resume the menu-induced pause.
+    act(() => {
+      resumeMachineExecutionIfPausedBy("menu");
+    });
+    expect(result.current.isPaused).toBe(false);
+
+    resetMachineExecution();
+  });
+
   it("keeps a Stop affordance reachable when a song-category playlist ends (HARD11-003)", async () => {
     const playlist = [
       {

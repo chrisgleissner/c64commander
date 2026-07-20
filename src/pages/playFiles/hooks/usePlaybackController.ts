@@ -327,7 +327,10 @@ export function usePlaybackController({
       playInitiatedMachineTransitionRef.current = true;
       try {
         if (next === "paused") {
-          setMachineExecutionPaused(options);
+          // HARD21-004: tag Play's own pause with source "play" so opening then
+          // closing the Home Ultimate menu never resumes a pause the user set
+          // from Play (the menu-close resume only re-runs a pausedBy === "menu").
+          setMachineExecutionPaused({ ...options, pausedBy: "play" });
         } else {
           setMachineExecutionRunning();
         }

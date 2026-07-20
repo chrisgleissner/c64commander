@@ -11,6 +11,7 @@ import {
   getMachineExecutionSnapshot,
   resetMachineExecution,
   restorePauseMuteFromPersistedSnapshot,
+  resumeMachineExecutionIfPausedBy,
   setMachineExecutionPaused,
   setMachineExecutionRunning,
   subscribeMachineExecution,
@@ -33,16 +34,58 @@ describe("machineExecutionStore", () => {
     expect(getMachineExecutionSnapshot()).toEqual({
       state: "paused",
       pauseMutePending: true,
+      // HARD21-004: an unsourced pause defaults to "user" (a menu close must not resume it).
+      pausedBy: "user",
     });
 
     setMachineExecutionRunning();
     expect(getMachineExecutionSnapshot()).toEqual({
       state: "running",
       pauseMutePending: false,
+      pausedBy: null,
     });
 
     expect(listener).toHaveBeenCalledTimes(2);
     unsubscribe();
+  });
+
+  // HARD21-004: closing the Home Ultimate menu resumes ONLY a pause the menu
+  // itself induced. A user pause (Play or Home) carries a different source and
+  // must survive an open+close of the menu.
+  describe("HARD21-004: source-gated resume (resumeMachineExecutionIfPausedBy)", () => {
+    it("resumes a menu-induced pause on menu close", () => {
+      setMachineExecutionPaused({ pausedBy: "menu" });
+      expect(getMachineExecutionSnapshot().state).toBe("paused");
+
+      resumeMachineExecutionIfPausedBy("menu");
+      expect(getMachineExecutionSnapshot().state).toBe("running");
+      expect(getMachineExecutionSnapshot().pausedBy).toBeNull();
+    });
+
+    it("does NOT resume a user pause when the menu closes (survives open+close)", () => {
+      setMachineExecutionPaused({ pausedBy: "user" });
+      // Menu open is a no-op because the machine is already paused (HomePage
+      // only pauses if state === "running"), so the source stays "user".
+      resumeMachineExecutionIfPausedBy("menu");
+      expect(getMachineExecutionSnapshot().state).toBe("paused");
+      expect(getMachineExecutionSnapshot().pausedBy).toBe("user");
+    });
+
+    it("does NOT resume a Play pause when the menu closes", () => {
+      setMachineExecutionPaused({ pausedBy: "play" });
+      resumeMachineExecutionIfPausedBy("menu");
+      expect(getMachineExecutionSnapshot().state).toBe("paused");
+      expect(getMachineExecutionSnapshot().pausedBy).toBe("play");
+    });
+
+    it("is a no-op when the machine is already running", () => {
+      const listener = vi.fn();
+      const unsubscribe = subscribeMachineExecution(listener);
+      resumeMachineExecutionIfPausedBy("menu");
+      expect(getMachineExecutionSnapshot().state).toBe("running");
+      expect(listener).not.toHaveBeenCalled();
+      unsubscribe();
+    });
   });
 
   it("restores the persisted pause-mute snapshot through Audio Mixer updates and clears it on success", async () => {
