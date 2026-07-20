@@ -198,7 +198,10 @@ const materializedMounts = rehydrateMaterializedMounts();
 // device-scoped key, so ejecting after switching BACK to that device can still
 // finalize it. Only ever populated in that specific cross-device collision.
 const ORPHANED_MOUNTS_STORAGE_KEY = "c64u.materializedDiskMounts.orphaned.v1";
-const orphanKey = (deviceHost: string, drive: "a" | "b") => `${deviceHost} ${drive}`;
+// Composite Map key for a parked (device, drive) pair. JSON-encoded so an
+// arbitrary deviceHost (including an IPv6 address with colons) can never
+// collide or need an invisible/ambiguous separator.
+const orphanKey = (deviceHost: string, drive: "a" | "b") => JSON.stringify([deviceHost, drive]);
 
 const persistOrphanedMounts = (map: Map<string, MaterializedDiskMount>) => {
   if (typeof sessionStorage === "undefined") return;
