@@ -23,7 +23,9 @@ vi.mock("@/lib/logging", () => ({
 }));
 
 import {
+  computeResolution,
   FEATURE_FLAG_IDS,
+  FeatureFlagDefinition,
   FeatureFlagId,
   FeatureFlagManager,
   InMemoryFeatureFlagRepository,
@@ -535,6 +537,59 @@ describe("featureFlags", () => {
         expect(isFeatureFlagStandardUserToggleable("background_execution_enabled")).toBe(false);
         expect(isFeatureFlagStandardUserToggleable("lighting_studio_enabled")).toBe(false);
       });
+    });
+  });
+
+  // HARD21-005: a variant that excludes a feature via `visible_to_user: false`
+  // (but NOT `developer_only`) relied on the resolver to suppress any persisted
+  // override. The old gate only suppressed overrides for `developer_only` flags,
+  // so a stale/imported override silently re-enabled the excluded feature —
+  // active AND with no Settings row to turn it off. The resolver now gates a
+  // stored override on standard-toggleability (or developer mode).
+  describe("HARD21-005: override gating for excluded (hidden, non-developer_only) variant flags", () => {
+    const makeDefinition = (overrides: Partial<FeatureFlagDefinition>): FeatureFlagDefinition => ({
+      id: "demo_mode_enabled",
+      enabled: false,
+      visible_to_user: true,
+      developer_only: false,
+      group: "experimental",
+      title: "Test flag",
+      description: "Synthetic flag for override-gating tests.",
+      ...overrides,
+    });
+
+    it("suppresses a stored override for an excluded (visible_to_user:false, non-developer_only) flag outside developer mode", () => {
+      const definition = makeDefinition({ enabled: false, visible_to_user: false, developer_only: false });
+      // Pre-fix: the override applied (resolved true) because the gate only
+      // checked `!developer_only`; the excluded feature silently re-activated.
+      const resolution = computeResolution(definition, true, false);
+      expect(resolution.value).toBe(false);
+      // The override is still recorded (for diagnostics / dev-mode re-entry).
+      expect(resolution.hasOverride).toBe(true);
+      expect(resolution.overrideValue).toBe(true);
+      // And it stays hidden, so a standard user could never toggle it back off.
+      expect(resolution.visible).toBe(false);
+      expect(resolution.editable).toBe(false);
+    });
+
+    it("still applies a stored override for a standard (visible, non-developer_only) flag", () => {
+      const definition = makeDefinition({ enabled: false, visible_to_user: true, developer_only: false });
+      expect(computeResolution(definition, true, false).value).toBe(true);
+    });
+
+    it("still applies a stored override for a developer_only flag WHEN developer mode is on", () => {
+      const definition = makeDefinition({ enabled: false, visible_to_user: false, developer_only: true });
+      expect(computeResolution(definition, true, true).value).toBe(true);
+    });
+
+    it("still suppresses a developer_only override when developer mode is off (HARD18-016 preserved)", () => {
+      const definition = makeDefinition({ enabled: false, visible_to_user: false, developer_only: true });
+      expect(computeResolution(definition, true, false).value).toBe(false);
+    });
+
+    it("applies the excluded flag's override once developer mode is on (a developer can still flip it)", () => {
+      const definition = makeDefinition({ enabled: false, visible_to_user: false, developer_only: false });
+      expect(computeResolution(definition, true, true).value).toBe(true);
     });
   });
 });
