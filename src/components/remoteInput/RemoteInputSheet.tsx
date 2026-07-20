@@ -154,19 +154,20 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   // HARD21-006: the mode-change and sheet-close cleanups above cover their
   // triggers, but releaseAll (panic button, backgrounding/visibilitychange) also
   // clears the session's shared joystick held set while THIS component stays
-  // mounted — and had no channel into these physical refs. A direction held via
-  // a physical keypad/controller key when Release All fires (or the OS eats the
+  // mounted — and had no channel into these physical refs. A direction held via a
+  // physical keypad/controller key when Release All fires (or the OS eats the
   // keyup on background) stayed recorded, so returning and pressing a new
   // direction re-asserted the old one (phantom-held / SOCD), and
   // recomputePhysicalHeldSet's merge would wrongly strip a same-named input a
-  // later touch hold contributed. An empty shared held set proves nothing is
-  // genuinely held, so reset both refs to match — mirroring the VirtualDPad
-  // reset. Pure ref clears only (no setHeldJoystickInputs/setState).
+  // later touch hold contributed. Reset both refs on the EXPLICIT releaseAllEpoch
+  // signal — NOT on an empty shared set: a physical and a touch/analog source can
+  // hold the same direction, so releasing one can momentarily empty the set while
+  // a physical key is still down, and clearing then would drop that live hold.
+  // Clearing already-empty refs on mount is a harmless no-op. Pure ref clears.
   useEffect(() => {
-    if (session.heldJoystickInputs.size > 0) return;
-    if (heldPhysicalKeysRef.current.size > 0) heldPhysicalKeysRef.current.clear();
-    if (previousPhysicalInputsRef.current.size > 0) previousPhysicalInputsRef.current.clear();
-  }, [session.heldJoystickInputs]);
+    heldPhysicalKeysRef.current.clear();
+    previousPhysicalInputsRef.current.clear();
+  }, [session.releaseAllEpoch]);
 
   // Immersive mode is joystick-only; drop out of it if joystick relay becomes
   // unavailable (tier downgrade) so the user is never stranded in a stripped
@@ -377,6 +378,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
               disabledHint={joystickUnavailableHint}
               scale={scale}
               immersive={immersive}
+              releaseAllEpoch={session.releaseAllEpoch}
             />
           ) : (
             <TypeKeyboard
@@ -387,6 +389,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
               onSpecialKey={session.sendSpecialKey}
               heldKeyboardInputs={session.heldKeyboardInputs}
               onHeldKeyboardInputsChange={session.setHeldKeyboardInputs}
+              releaseAllEpoch={session.releaseAllEpoch}
               tier={tier}
             />
           )}
@@ -402,6 +405,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
               onSpecialKey={session.sendSpecialKey}
               heldKeyboardInputs={session.heldKeyboardInputs}
               onHeldKeyboardInputsChange={session.setHeldKeyboardInputs}
+              releaseAllEpoch={session.releaseAllEpoch}
               tier={tier}
               scale={scale}
               className="border-t border-border pt-3"

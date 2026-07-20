@@ -49,15 +49,20 @@ vi.mock("@/hooks/useRemoteInputSession", () => ({
     const [heldKeyboardInputs, setHeldKeyboardInputsState] = useState<ReadonlySet<string>>(
       initialSessionHeldKeyboardInputs,
     );
+    // Mirrors useRemoteInputSession.releaseAllEpoch: bumped by releaseAll (and the
+    // setOutputMode that internally calls it) so the sheet resets its physical-key
+    // refs on the EXPLICIT signal, not on an empty shared set.
+    const [releaseAllEpoch, setReleaseAllEpoch] = useState(0);
     return {
       outputMode,
       setOutputMode: (mode: "joystick" | "type") => {
         if (mode === outputMode) return;
         // Mirrors the real hook's setOutputMode, which calls releaseAll()
-        // (clearing the held sets) before applying the mode - the E2 test
-        // below depends on this being faithful to the real hook.
+        // (clearing the held sets + bumping the epoch) before applying the mode -
+        // the E2 test below depends on this being faithful to the real hook.
         setHeldJoystickInputsState(new Set());
         setHeldKeyboardInputsState(new Set());
+        setReleaseAllEpoch((epoch) => epoch + 1);
         setOutputModeState(mode);
         setOutputModeMock(mode);
       },
@@ -82,15 +87,17 @@ vi.mock("@/hooks/useRemoteInputSession", () => ({
       sendKeyboardInputs: sendKeyboardInputsMock,
       sendCursor: sendCursorMock,
       sendSpecialKey: sendSpecialKeyMock,
-      // Mirrors the real hook's releaseAll, which clears BOTH held sets before
-      // sending release_all (the panic button / backgrounding path). Faithful
-      // clearing is what lets the HARD21-006 test exercise the sheet's effect
-      // that resets its physical-key refs when the shared set empties.
+      // Mirrors the real hook's releaseAll, which clears BOTH held sets AND bumps
+      // releaseAllEpoch (the panic button / backgrounding path). The epoch bump is
+      // what lets the HARD21-006 test exercise the sheet's effect that resets its
+      // physical-key refs on an explicit release-all.
       releaseAll: () => {
         setHeldJoystickInputsState(new Set());
         setHeldKeyboardInputsState(new Set());
+        setReleaseAllEpoch((epoch) => epoch + 1);
         releaseAllMock();
       },
+      releaseAllEpoch,
     };
   },
 }));
