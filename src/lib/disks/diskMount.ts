@@ -239,13 +239,20 @@ const dropOrFinalizeStaleMaterializedMount = async (
 ): Promise<Uint8Array | null> => {
   const stale = materializedMounts.get(drive);
   if (!stale) return null;
-  const remountingSameDisk = stale.disk.id === nextDisk.id;
-  deleteMaterializedMount(drive);
   // HARD19-005: never write the stale entry back to a different device than the
   // one it was materialized on (the deterministic work file would be a different
-  // image). Drop without a write-back on a device mismatch.
+  // image). Skip the write-back on a device mismatch.
+  // HARD21-002: this mismatch check MUST run BEFORE deleteMaterializedMount, and
+  // must LEAVE the entry in place (not delete) — mirroring finalizeDiskWriteBack.
+  // The previous ordering deleted the entry first and only then returned null on
+  // mismatch, silently destroying the OTHER device's pending write-back: a
+  // same-drive remount on device B wiped device A's materialized entry, so
+  // ejecting after switching BACK to A saved nothing (in-game saves lost). The
+  // nextDisk about to occupy this drive on device B is unrelated to device A's
+  // work file, so leaving A's entry is safe — a later mount ON device A
+  // finalizes it correctly.
   if (currentDeviceHost !== undefined && stale.deviceHost !== currentDeviceHost) {
-    addLog("warn", "Dropped pending disk write-back: stale mount belongs to a different device", {
+    addLog("warn", "Skipped pending disk write-back: stale mount belongs to a different device", {
       drive,
       path: stale.disk.path,
       workPath: stale.workPath,
@@ -254,6 +261,8 @@ const dropOrFinalizeStaleMaterializedMount = async (
     });
     return null;
   }
+  const remountingSameDisk = stale.disk.id === nextDisk.id;
+  deleteMaterializedMount(drive);
   if (!ftp) {
     addLog("warn", "Dropped pending disk write-back: drive remounted by a flow without write-back support", {
       drive,

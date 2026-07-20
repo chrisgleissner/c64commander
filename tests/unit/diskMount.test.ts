@@ -324,6 +324,35 @@ describe("mountDiskToDrive", () => {
       expect(writeBack.readRemoteFile).toHaveBeenCalled();
     });
 
+    it("HARD21-002: a same-drive remount on a DIFFERENT device leaves the original device's write-back entry intact, so ejecting after switching back still saves", async () => {
+      // Device A: materialize drive a — in-game saves accumulate in its work file.
+      const { writeBack } = await materializeOnDevice("device-a", "a");
+      expect(getMaterializedWorkPath("a")).toBe("/Usb0/c64commander-disk-work-a.d64");
+      (writeBack.readRemoteFile as ReturnType<typeof vi.fn>).mockClear();
+
+      // Switch to device B and mount ANY (here device-native) disk to the SAME
+      // drive. The mismatched stale entry must be LEFT IN PLACE, not deleted.
+      const apiB = {
+        mountDrive: vi.fn().mockResolvedValue(undefined),
+        mountDriveUpload: vi.fn().mockResolvedValue(undefined),
+        getBaseUrl: vi.fn().mockReturnValue("http://device-b"),
+        getDeviceHost: vi.fn().mockReturnValue("device-b"),
+      } as unknown as C64API;
+      const deviceBDisk = createDiskEntry({ location: "ultimate", path: "/Usb0/OtherGame.d64" });
+      await mountDiskToDrive(apiB, "a", deviceBDisk);
+
+      // Pre-fix: dropOrFinalizeStaleMaterializedMount deleted the entry BEFORE the
+      // device-mismatch check, so this read null and the saves were unrecoverable.
+      expect(getMaterializedWorkPath("a")).toBe("/Usb0/c64commander-disk-work-a.d64");
+      // The other device's work file was never read/overwritten during the remount.
+      expect(writeBack.readRemoteFile).not.toHaveBeenCalled();
+
+      // Switch back to device A and eject → the preserved entry writes back saves.
+      const result = await finalizeDiskWriteBack("a", writeBack, "device-a");
+      expect(result).toEqual({ attempted: true, success: true });
+      expect(writeBack.readRemoteFile).toHaveBeenCalled();
+    });
+
     it("finalizes (not drops) a stale materialized mount when a different disk is mounted with write-back deps (HARD19-008)", async () => {
       const { writeBack } = await materializeOnDevice("device-a", "a");
       (writeBack.readRemoteFile as ReturnType<typeof vi.fn>).mockClear();
