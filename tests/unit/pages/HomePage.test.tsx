@@ -15,6 +15,7 @@ import * as ramDumpStorage from "../../../src/lib/machine/ramDumpStorage";
 import {
   getMachineExecutionSnapshot,
   resetMachineExecution,
+  setMachineExecutionPaused,
 } from "../../../src/lib/deviceInteraction/machineExecutionStore";
 
 const featureFlagsRef = vi.hoisted(() => ({
@@ -1153,6 +1154,30 @@ describe("HomePage SID status", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^Menu$/ }));
     await waitFor(() => expect(getMachineExecutionSnapshot().state).toBe("running"));
+  });
+
+  it("HARD21-004: opening then closing the menu does not resume a user-initiated pause", async () => {
+    // The user has already paused playback (from Play) before touching the menu.
+    setMachineExecutionPaused({ pausedBy: "play" });
+    deviceControlPayloadRef.current.toggleMenu = vi
+      .fn()
+      .mockResolvedValueOnce({ menuOpen: true })
+      .mockResolvedValueOnce({ menuOpen: false });
+    renderHomePage();
+
+    // Open the menu: the machine is already paused, so the handler must NOT
+    // overwrite the pause source to "menu".
+    fireEvent.click(screen.getByRole("button", { name: /^Menu$/ }));
+    await waitFor(() => expect(deviceControlPayloadRef.current.toggleMenu).toHaveBeenCalledTimes(1));
+    expect(getMachineExecutionSnapshot().state).toBe("paused");
+    expect(getMachineExecutionSnapshot().pausedBy).toBe("play");
+
+    // Close the menu: the gated resume must be a no-op (pausedBy is not "menu"),
+    // so the user's pause survives (pre-fix: an unconditional resume ran it).
+    fireEvent.click(screen.getByRole("button", { name: /^Menu$/ }));
+    await waitFor(() => expect(deviceControlPayloadRef.current.toggleMenu).toHaveBeenCalledTimes(2));
+    expect(getMachineExecutionSnapshot().state).toBe("paused");
+    expect(getMachineExecutionSnapshot().pausedBy).toBe("play");
   });
 
   it("requires explicit confirmation before power off", async () => {

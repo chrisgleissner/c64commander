@@ -25,8 +25,11 @@ import type { HeldKeyboardInputs } from "@/lib/remoteInput/keyboardHeldSet";
 const createDriver = () => {
   const view = renderHook(() => {
     const [held, setHeld] = useState<HeldKeyboardInputs>(EMPTY_HELD_KEYBOARD_INPUTS);
-    const dispatch = useKeyboardHoldDispatch(held, setHeld);
-    return { held, setHeld, dispatch };
+    // Mirrors useRemoteInputSession.releaseAllEpoch: bumped by releaseAll so the
+    // hook resets its contribution refs on the EXPLICIT signal, not an empty set.
+    const [releaseAllEpoch, setReleaseAllEpoch] = useState(0);
+    const dispatch = useKeyboardHoldDispatch(held, setHeld, releaseAllEpoch);
+    return { held, setHeld, setReleaseAllEpoch, dispatch };
   });
   return {
     heldNames: () => [...view.result.current.held].sort(),
@@ -53,6 +56,16 @@ const createDriver = () => {
     // bookkeeping entirely) - the exact "held set cleared out from under the
     // lock" scenario HARD18-002 is about.
     simulateExternalReleaseAll: () => {
+      // Real releaseAll BOTH clears the shared set AND bumps releaseAllEpoch.
+      act(() => {
+        view.result.current.setHeld(EMPTY_HELD_KEYBOARD_INPUTS);
+        view.result.current.setReleaseAllEpoch((epoch) => epoch + 1);
+      });
+    },
+    // Clears the shared set WITHOUT a releaseAll — models a concurrent
+    // multi-source release that momentarily empties the set while a genuine
+    // hold remains (must NOT reset this hook's contribution refs).
+    simulateExternalSetEmptiedWithoutReleaseAll: () => {
       act(() => view.result.current.setHeld(EMPTY_HELD_KEYBOARD_INPUTS));
     },
   };
@@ -217,6 +230,64 @@ describe("useKeyboardHoldDispatch", () => {
     // The next keypress relays unshifted (no phantom modifier survives).
     d.pressKey(["a"]);
     expect(d.heldNames()).toEqual(["a"]);
+  });
+
+  // HARD21-001: releaseAll clears the shared held set directly, bypassing this
+  // hook's contribution-count map. Before the fix the orphaned count for
+  // left_shift left the NEXT SHIFT LOCK on/off cycle unable to reach 0, so
+  // left_shift stuck asserted (held) with the lock UI reading off — every
+  // keystroke silently relayed shifted.
+  it("HARD21-001: a SHIFT LOCK cycle after an external releaseAll fully releases left_shift", () => {
+    const d = createDriver();
+    d.toggleShiftLock();
+    expect(d.heldNames()).toEqual(["left_shift"]);
+
+    d.simulateExternalReleaseAll();
+    expect(d.heldNames()).toEqual([]);
+    expect(d.shiftLocked()).toBe(false);
+
+    // A fresh SHIFT LOCK on then off must leave nothing held (pre-fix: the
+    // orphaned contribution count kept left_shift asserted here).
+    d.toggleShiftLock();
+    expect(d.heldNames()).toEqual(["left_shift"]);
+    d.toggleShiftLock();
+    expect(d.heldNames()).toEqual([]);
+    expect(d.isModifierActive("left_shift")).toBe(false);
+  });
+
+  // HARD21-001: same leak on the physical-modifier path — a held SHIFT at
+  // releaseAll time orphaned its count, so the next press+release left it stuck.
+  it("HARD21-001: a modifier press+release after an external releaseAll releases cleanly", () => {
+    const d = createDriver();
+    d.pressModifier("left_shift");
+    expect(d.heldNames()).toEqual(["left_shift"]);
+
+    d.simulateExternalReleaseAll();
+    expect(d.heldNames()).toEqual([]);
+
+    d.pressModifier("left_shift");
+    expect(d.heldNames()).toEqual(["left_shift"]);
+    d.releaseModifier("left_shift");
+    expect(d.heldNames()).toEqual([]);
+    expect(d.isModifierActive("left_shift")).toBe(false);
+  });
+
+  // HARD21-001 (Kilo review): the reset must key on the EXPLICIT releaseAll
+  // signal, not on the shared set merely reading empty. Another keyboard surface
+  // (e.g. the QuickKeysBar hook) sharing the same held set can remove its own
+  // left_shift contribution and momentarily empty the set while THIS hook still
+  // physically holds left_shift — resetting then would drop the live hold.
+  it("HARD21-001: keeps a live physical hold when the set empties WITHOUT a releaseAll", () => {
+    const d = createDriver();
+    d.pressModifier("left_shift"); // physical pointer still down
+    expect(d.isModifierActive("left_shift")).toBe(true);
+
+    // A concurrent source empties the shared set — but NO releaseAll happened.
+    d.simulateExternalSetEmptiedWithoutReleaseAll();
+
+    // The physical hold is still down, so it stays tracked (an imprecise
+    // size===0 reset would have wrongly cleared it and reported inactive).
+    expect(d.isModifierActive("left_shift")).toBe(true);
   });
 
   it("releasing a physically-held SHIFT does not drop the assertion while SHIFT LOCK is engaged", () => {

@@ -50,6 +50,8 @@ export type TypeKeyboardProps = {
    */
   heldKeyboardInputs: HeldKeyboardInputs;
   onHeldKeyboardInputsChange: (next: HeldKeyboardInputs) => void;
+  /** HARD21-001: session release-all epoch, forwarded to the hold hook's reset. */
+  releaseAllEpoch?: number;
   /** Test/preview seam: force a profile instead of measuring the content box. */
   profile?: KeyboardProfile;
   className?: string;
@@ -295,6 +297,7 @@ export const TypeKeyboard = ({
   tier,
   heldKeyboardInputs,
   onHeldKeyboardInputsChange,
+  releaseAllEpoch,
   profile: profileOverride,
   className,
 }: TypeKeyboardProps) => {
@@ -309,7 +312,7 @@ export const TypeKeyboard = ({
   // Full tier: real press/release relay, mirroring the joystick's held-set
   // architecture. SHIFT/CTRL/C= support both a genuine physical hold-and-chord
   // and today's tap-then-tap one-shot convenience (see the hook's doc comment).
-  const holdDispatch = useKeyboardHoldDispatch(heldKeyboardInputs, onHeldKeyboardInputsChange);
+  const holdDispatch = useKeyboardHoldDispatch(heldKeyboardInputs, onHeldKeyboardInputsChange, releaseAllEpoch);
   const isFullTier = tier === "full";
 
   // Full-tier hold/release/tap, hoisted to stable top-level callbacks (see

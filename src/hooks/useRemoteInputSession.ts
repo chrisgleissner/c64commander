@@ -97,6 +97,13 @@ export type RemoteInputSession = {
   sendCursor: (direction: CursorDirection) => void;
   sendSpecialKey: (key: SpecialKeyboardKey) => void;
   releaseAll: () => void;
+  // HARD21-006: a monotonically increasing counter bumped on every releaseAll
+  // (panic, backgrounding, mode switch, sheet close, unmount, tier downgrade).
+  // Child input surfaces (VirtualDPad, physical-key tracking, the keyboard
+  // hold hook) reset their own contribution/pressed-cell refs when THIS changes
+  // — an EXPLICIT release-all signal, not the imprecise "shared set reads empty"
+  // (which a concurrent multi-source release can hit while a pointer is live).
+  releaseAllEpoch: number;
 };
 
 /**
@@ -117,6 +124,9 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
   const [autofireEnabled, setAutofireEnabled] = useState(false);
   const [autofireRateHz, setAutofireRateHzState] = useState(loadAutofireRateHz);
   const [connectionStatus, setConnectionStatus] = useState<RemoteInputConnectionStatus>("idle");
+  // HARD21-006: bumped inside releaseAll so child surfaces can reset on the
+  // explicit release-all event rather than inferring it from an empty held set.
+  const [releaseAllEpoch, setReleaseAllEpoch] = useState(0);
 
   const tierRef = useRef(tier);
   tierRef.current = tier;
@@ -379,6 +389,10 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
     pendingTypedEventsRef.current = [];
     setHeldJoystickInputsState(EMPTY_HELD_JOYSTICK_INPUTS);
     setHeldKeyboardInputsState(EMPTY_HELD_KEYBOARD_INPUTS);
+    // HARD21-006: signal the explicit release-all to child input surfaces so
+    // they reset their own contribution/pressed-cell refs (which the parent
+    // cannot reach) — see releaseAllEpoch's doc on the interface.
+    setReleaseAllEpoch((epoch) => epoch + 1);
     // Issue 3e: leaving the joystick overlay - sheet close, output-mode/tab
     // switch (setOutputMode calls this), unmount, tier downgrade, panic button -
     // must also STOP autofire, not merely release the held inputs. Without this
@@ -695,5 +709,6 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
     sendCursor,
     sendSpecialKey,
     releaseAll,
+    releaseAllEpoch,
   };
 };

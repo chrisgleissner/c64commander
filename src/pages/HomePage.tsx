@@ -108,7 +108,11 @@ import { useTelnetActions } from "@/hooks/useTelnetActions";
 import { TELNET_ACTIONS, type TelnetActionId } from "@/lib/telnet/telnetTypes";
 import { withTelnetInteraction } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { publishMachineInterrupt } from "@/lib/deviceInteraction/machineInterrupt";
-import { setMachineExecutionPaused, setMachineExecutionRunning } from "@/lib/deviceInteraction/machineExecutionStore";
+import {
+  getMachineExecutionSnapshot,
+  resumeMachineExecutionIfPausedBy,
+  setMachineExecutionPaused,
+} from "@/lib/deviceInteraction/machineExecutionStore";
 import { beginMachineTransition } from "@/lib/deviceInteraction/deviceActivityGate";
 import { getActiveAction, runWithImplicitAction } from "@/lib/tracing/actionTrace";
 import {
@@ -668,10 +672,17 @@ function HomePageContent() {
       onSuccess: (result) => {
         // HARD20-009: the Ultimate menu freezes the running machine, so mirror
         // that temporary state into Play's existing pause-timeline contract.
+        // HARD21-004: tag the menu freeze with source "menu" and resume ONLY a
+        // menu-induced pause on close — never a pause the user set from Play or
+        // Home (those carry a different source). On open, only pause if the
+        // machine is actually running, so an existing user pause keeps its own
+        // source (never overwrite it to "menu"), leaving it untouched on close.
         if (result.menuOpen) {
-          setMachineExecutionPaused();
+          if (getMachineExecutionSnapshot().state === "running") {
+            setMachineExecutionPaused({ pausedBy: "menu" });
+          }
         } else {
-          setMachineExecutionRunning();
+          resumeMachineExecutionIfPausedBy("menu");
         }
       },
     });

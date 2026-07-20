@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   ArrowDown,
   ArrowDownLeft,
@@ -27,6 +27,11 @@ export type VirtualDPadProps = {
   disabled?: boolean;
   /** Overall square size of the 3x3 pad, in px (defaults to the compact 128px). */
   sizePx?: number;
+  /**
+   * HARD21-006: the session's release-all epoch (useRemoteInputSession.
+   * releaseAllEpoch). When it changes, this pad resets its pressed-cell refs.
+   */
+  releaseAllEpoch?: number;
 };
 
 const DPAD_CELLS: ReadonlyArray<{
@@ -71,7 +76,13 @@ const DPAD_CELLS: ReadonlyArray<{
  * visual to keyboard cursor taps instead — the two never share action
  * semantics (see CursorPad).
  */
-export const VirtualDPad = ({ heldInputs, onHeldInputsChange, disabled = false, sizePx = 128 }: VirtualDPadProps) => {
+export const VirtualDPad = ({
+  heldInputs,
+  onHeldInputsChange,
+  disabled = false,
+  sizePx = 128,
+  releaseAllEpoch,
+}: VirtualDPadProps) => {
   // HARD19-003: cells overlap on axes (the "up" cell and the "up-right" cell
   // both contribute "up"), so a blind per-cell delete on release dropped a
   // direction another finger still physically held — a released second touch
@@ -109,6 +120,24 @@ export const VirtualDPad = ({ heldInputs, onHeldInputsChange, disabled = false, 
     },
     [disabled, applyPressedCells],
   );
+
+  // HARD21-006: releaseAll (panic button, sheet close, backgrounding, mode
+  // switch) clears the SESSION's shared joystick held set directly, but has no
+  // channel into this pad's own pressed-cell/contribution refs. If the user taps
+  // Release All while a cell's pointer is still down (no pointerup/pointercancel),
+  // pressedCellKeysRef/previousContributionRef keep the stale cell — and the next
+  // cell press rebuilds the contribution as the UNION with the phantom-held one,
+  // re-asserting a direction panic just cleared (SOCD / stuck direction mid-game).
+  // Reset both refs on the EXPLICIT releaseAllEpoch signal — NOT on an empty
+  // shared set: a physical key and a D-pad cell can hold the SAME direction, so
+  // releasing the physical source can momentarily empty the shared set while this
+  // pad's pointer is still down; clearing then would drop the live hold (it could
+  // no longer recover on the next press). Clearing already-empty refs on mount is
+  // a harmless no-op. Pure ref clears only (no onHeldInputsChange/setState).
+  useEffect(() => {
+    pressedCellKeysRef.current.clear();
+    previousContributionRef.current.clear();
+  }, [releaseAllEpoch]);
 
   const isCellHeld = (inputs: JoystickInputName[]) => inputs.every((input) => heldInputs.has(input));
 

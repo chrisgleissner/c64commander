@@ -34,6 +34,8 @@ export type QuickKeysBarProps = {
    */
   heldKeyboardInputs: HeldKeyboardInputs;
   onHeldKeyboardInputsChange: (next: HeldKeyboardInputs) => void;
+  /** HARD21-001: session release-all epoch, forwarded to the hold hook's reset. */
+  releaseAllEpoch?: number;
   tier: "full" | "kernal-fallback" | "auth-required";
   /** Control-size multiplier (shared remote-control size preference). */
   scale?: number;
@@ -158,6 +160,7 @@ export const QuickKeysBar = ({
   onSpecialKey,
   heldKeyboardInputs,
   onHeldKeyboardInputsChange,
+  releaseAllEpoch,
   tier,
   scale = 1,
   className,
@@ -184,7 +187,7 @@ export const QuickKeysBar = ({
   // architecture and TypeKeyboard's Keys-tab dispatch: a key genuinely stays
   // down on the C64 for as long as it is held, and SHIFT/CTRL/C= support both
   // a physical hold-and-chord and a tap-then-tap one-shot latch.
-  const holdDispatch = useKeyboardHoldDispatch(heldKeyboardInputs, onHeldKeyboardInputsChange);
+  const holdDispatch = useKeyboardHoldDispatch(heldKeyboardInputs, onHeldKeyboardInputsChange, releaseAllEpoch);
 
   const tapChar = useCallback(
     (char: string) => {

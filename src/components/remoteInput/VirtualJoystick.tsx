@@ -36,6 +36,8 @@ export type VirtualJoystickProps = {
   scale?: number;
   /** Immersive/gaming layout: edge-anchored, maximized, no-look thumb reach. */
   immersive?: boolean;
+  /** HARD21-006: session release-all epoch, forwarded to the D-pad's ref reset. */
+  releaseAllEpoch?: number;
 };
 
 type MovementStyle = "stick" | "dpad" | "swipe";
@@ -71,6 +73,7 @@ export const VirtualJoystick = ({
   disabledHint,
   scale = 1,
   immersive = false,
+  releaseAllEpoch,
 }: VirtualJoystickProps) => {
   const stickZoneRef = useRef<HTMLDivElement | null>(null);
   const originRef = useRef<{ x: number; y: number } | null>(null);
@@ -217,6 +220,7 @@ export const VirtualJoystick = ({
         onHeldInputsChange={onHeldInputsChange}
         disabled={disabled}
         sizePx={controlPx}
+        releaseAllEpoch={releaseAllEpoch}
       />
     ) : (
       <SwipePad

@@ -132,7 +132,11 @@ const isStandardUserToggleable = (definition: FeatureFlagDefinition): boolean =>
 export const isFeatureFlagStandardUserToggleable = (id: FeatureFlagId): boolean =>
   isStandardUserToggleable(definitionFor(id));
 
-const computeResolution = (
+// Exported for the HARD21-005 regression test: the excluded-variant shape
+// (`visible_to_user: false, developer_only: false`) exists only in a variant
+// registry, so the resolver logic is verified directly against a synthetic
+// definition rather than a default-build flag.
+export const computeResolution = (
   definition: FeatureFlagDefinition,
   override: boolean | undefined,
   developerMode: boolean,
@@ -146,7 +150,17 @@ const computeResolution = (
   // reflect it, e.g. for diagnostics) so it automatically re-applies the
   // next time developer mode is entered - only its effect on `value` is
   // suspended while developer mode is off.
-  const overrideApplies = hasOverride && (!definition.developer_only || developerMode);
+  // HARD21-005: the same suppression must cover ANY flag that is not
+  // standard-user-toggleable, not only `developer_only` ones. A variant that
+  // excludes a feature with `visible_to_user: false` (but NOT `developer_only`,
+  // e.g. C64U-Remote's demo_mode/lighting_studio) relied on that to be
+  // un-re-enableable, but the old `!developer_only` gate let a persisted/stale
+  // override (dev-mode import, or a cross-release visibility flip) silently
+  // re-activate the excluded feature with no Settings row to turn it off. Gate
+  // on standard-toggleability instead, matching isFeatureFlagStandardUserToggleable
+  // and the variant's documented guarantee; developer mode still applies every
+  // override via the explicit branch below.
+  const overrideApplies = hasOverride && (developerMode || isStandardUserToggleable(definition));
   const value = overrideApplies ? (override as boolean) : definition.enabled;
   const visible = developerMode ? true : definition.visible_to_user;
   const editable = developerMode ? true : isStandardUserToggleable(definition);

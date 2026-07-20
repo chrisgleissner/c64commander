@@ -17,16 +17,38 @@ const onHeldInputsChangeMock = vi.fn();
 
 // A stateful wrapper mirroring the real parent: onHeldInputsChange feeds back
 // into heldInputs, so multi-touch sequences accumulate as they do in production.
+// "external-release-all" mirrors useRemoteInputSession.releaseAll: it BOTH clears
+// the SESSION-owned held set AND bumps releaseAllEpoch (panic / backgrounding).
+// "external-empty-no-releaseall" only clears the set (no epoch bump) — a
+// concurrent multi-source release that momentarily empties it while a pointer is
+// still down; the pad must NOT reset its refs then.
 const StatefulDPad = ({ spy }: { spy: (next: HeldJoystickInputs) => void }) => {
   const [held, setHeld] = useState<HeldJoystickInputs>(EMPTY_HELD_JOYSTICK_INPUTS);
+  const [releaseAllEpoch, setReleaseAllEpoch] = useState(0);
   return (
-    <VirtualDPad
-      heldInputs={held}
-      onHeldInputsChange={(next) => {
-        spy(next);
-        setHeld(next);
-      }}
-    />
+    <>
+      <button
+        type="button"
+        data-testid="external-release-all"
+        onClick={() => {
+          setHeld(EMPTY_HELD_JOYSTICK_INPUTS);
+          setReleaseAllEpoch((epoch) => epoch + 1);
+        }}
+      />
+      <button
+        type="button"
+        data-testid="external-empty-no-releaseall"
+        onClick={() => setHeld(EMPTY_HELD_JOYSTICK_INPUTS)}
+      />
+      <VirtualDPad
+        heldInputs={held}
+        onHeldInputsChange={(next) => {
+          spy(next);
+          setHeld(next);
+        }}
+        releaseAllEpoch={releaseAllEpoch}
+      />
+    </>
   );
 };
 
@@ -120,6 +142,55 @@ describe("VirtualDPad", () => {
     // pointerdown on it — this must not delete the "up" the up cell holds.
     fireEvent.pointerUp(screen.getByTestId("remote-input-dpad-up-left"), { pointerId: 2 });
     expect(spy).toHaveBeenLastCalledWith(new Set(["up"]));
+  });
+
+  // HARD21-006: tapping Release All (panic) while a cell's pointer is still down
+  // clears the session's shared held set but not the pad's pressed-cell refs.
+  // Before the fix, pressing a NEW cell afterwards rebuilt the contribution as
+  // the UNION with the still-recorded old cell, re-asserting the direction panic
+  // just cleared (SOCD / phantom-held). The reset effect drops the stale refs
+  // when the shared set empties, so only the new direction is asserted.
+  it("HARD21-006: a new cell press after Release-All (held pointer) asserts only the new direction", () => {
+    const spy = vi.fn();
+    render(<StatefulDPad spy={spy} />);
+
+    // Hold "up" — pointer stays DOWN (no pointerup), as when the user reaches
+    // for the panic button with a different finger mid-game.
+    fireEvent.pointerDown(screen.getByTestId("remote-input-dpad-up"), { pointerId: 1 });
+    expect(spy).toHaveBeenLastCalledWith(new Set(["up"]));
+
+    // Panic: the session clears the shared held set out from under the pad.
+    // (This updates the parent's held state directly; the pad's onChange spy is
+    // not called by it, so spy's last value is asserted after the next press.)
+    fireEvent.click(screen.getByTestId("external-release-all"));
+    spy.mockClear();
+
+    // Still holding, the user presses "right". Pre-fix this yielded {up, right}.
+    fireEvent.pointerDown(screen.getByTestId("remote-input-dpad-right"), { pointerId: 2 });
+    expect(spy).toHaveBeenLastCalledWith(new Set(["right"]));
+  });
+
+  // HARD21-006 (Kilo review): the reset must key on the EXPLICIT releaseAll
+  // signal, not on the shared set reading empty. A physical key and a D-pad cell
+  // can hold the SAME direction; releasing the physical source empties the shared
+  // set while the cell pointer is still down — but WITHOUT a releaseAll. The pad
+  // must NOT clear its refs then, so the still-held cell recovers on the next
+  // press instead of being silently dropped.
+  it("HARD21-006: keeps a live pressed cell when the set empties WITHOUT a releaseAll (recovers on next press)", () => {
+    const spy = vi.fn();
+    render(<StatefulDPad spy={spy} />);
+
+    // Hold "up" — pointer stays DOWN.
+    fireEvent.pointerDown(screen.getByTestId("remote-input-dpad-up"), { pointerId: 1 });
+    expect(spy).toHaveBeenLastCalledWith(new Set(["up"]));
+
+    // A concurrent source empties the shared set, but NO releaseAll happened.
+    fireEvent.click(screen.getByTestId("external-empty-no-releaseall"));
+    spy.mockClear();
+
+    // Pressing "right" must recover the still-held "up" (union), NOT drop it.
+    fireEvent.pointerDown(screen.getByTestId("remote-input-dpad-right"), { pointerId: 2 });
+    expect(spy).toHaveBeenLastCalledWith(new Set(["up", "right"]));
   });
 
   it("marks a cell pressed only when every one of its directions is held", () => {

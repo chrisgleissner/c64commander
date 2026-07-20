@@ -511,6 +511,81 @@ describe("useOnlineArchive", () => {
     spy.mockRestore();
   });
 
+  it("HARD21-003: Cancel during the executing phase is a no-op (a committed device launch cannot be cancelled)", async () => {
+    // executeArchiveEntry (the reboot/mount/run + machine takeover) is slow and
+    // uncancellable — the abort signal is only wired into the download stage.
+    let resolveExecute!: () => void;
+    const executeDeferred = new Promise<void>((resolve) => {
+      resolveExecute = resolve;
+    });
+    const executeSpy = vi.spyOn(archiveExecution, "executeArchiveEntry").mockReturnValue(executeDeferred);
+    const client = {
+      getPresets: vi.fn().mockResolvedValue([]),
+      search: vi.fn(),
+      getEntries: vi.fn(),
+      getBinaryUrl: vi.fn(),
+      downloadBinary: vi.fn().mockResolvedValue({
+        fileName: "joyride.prg",
+        bytes: new Uint8Array([1, 8, 96]),
+        contentType: "application/octet-stream",
+        url: "http://archive.local/joyride.prg",
+      }),
+      getResolvedConfig: vi.fn().mockReturnValue({
+        id: "archive-commoserve",
+        name: "CommoServe",
+        headers: { "Client-Id": "Commodore", "User-Agent": "Assembly Query" },
+        enabled: true,
+        host: "archive.local",
+        clientId: "Commodore",
+        userAgent: "Assembly Query",
+        baseUrl: "http://archive.local",
+      }),
+    };
+    const spy = vi.spyOn(archiveClient, "createArchiveClient").mockReturnValue(client as never);
+
+    const { result } = renderHook(() => useOnlineArchive(buildDefaultArchiveClientConfig()));
+    await waitFor(() => expect(result.current.presetsLoading).toBe(false));
+
+    let executePromise!: Promise<void>;
+    act(() => {
+      executePromise = result.current.execute(
+        { name: "joyride", category: "apps" },
+        { id: "100", category: 40, name: "Joyride" },
+        [{ id: "100", category: 40, name: "Joyride" }],
+        { id: 0, path: "joyride.prg" },
+        [{ id: 0, path: "joyride.prg" }],
+      );
+    });
+
+    // The download resolves and we land in the uncancellable executing phase.
+    await waitFor(() => expect(result.current.state.phase).toBe("executing"));
+
+    // Cancel here must NOT revert the UI — pre-fix it flipped to `entries` while
+    // the device kept rebooting/mounting/running (UI/device divergence).
+    act(() => {
+      result.current.cancel();
+    });
+    expect(result.current.state.phase).toBe("executing");
+
+    // The launch was never aborted; once it completes the UI honestly returns to
+    // entries via execute()'s own transition.
+    await act(async () => {
+      resolveExecute();
+      await executePromise;
+    });
+    expect(executeSpy).toHaveBeenCalled();
+    expect(result.current.state).toEqual({
+      phase: "entries",
+      params: { name: "joyride", category: "apps" },
+      result: { id: "100", category: 40, name: "Joyride" },
+      results: [{ id: "100", category: 40, name: "Joyride" }],
+      entries: [{ id: 0, path: "joyride.prg" }],
+    });
+
+    executeSpy.mockRestore();
+    spy.mockRestore();
+  });
+
   it("returns to entries after a successful archive execution", async () => {
     const executeSpy = vi.spyOn(archiveExecution, "executeArchiveEntry").mockResolvedValue(undefined);
     const client = {

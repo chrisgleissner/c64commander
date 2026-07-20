@@ -23,9 +23,20 @@ import { clearPersistedPauseMute, hydratePlaybackSnapshot } from "@/lib/playback
 
 export type MachineExecutionState = "running" | "paused";
 
+// HARD21-004: who put the machine into "paused". The Ultimate menu freezes the
+// running machine, so opening it mirrors a transient pause into this store and
+// closing it resumes — but a user Pause (from Play or Home) funnels through the
+// SAME single flag, so an unconditional menu-close resume used to clobber a
+// pause the user deliberately set. Tagging the pause source lets the menu-close
+// resume ignore any pause it did not itself induce. "user" is the default for
+// callers that do not name a source (e.g. Home's Pause button), so they are
+// never treated as menu-resumable.
+export type MachineExecutionPauseSource = "user" | "play" | "menu";
+
 export type MachineExecutionSnapshot = Readonly<{
   state: MachineExecutionState;
   pauseMutePending: boolean;
+  pausedBy: MachineExecutionPauseSource | null;
 }>;
 
 type ResumeUnmuteApi = {
@@ -35,7 +46,8 @@ type ResumeUnmuteApi = {
 const initialState: MachineExecutionState = "running";
 let state: MachineExecutionState = initialState;
 let pauseMutePending = false;
-let snapshot: MachineExecutionSnapshot = Object.freeze({ state, pauseMutePending });
+let pausedBy: MachineExecutionPauseSource | null = null;
+let snapshot: MachineExecutionSnapshot = Object.freeze({ state, pauseMutePending, pausedBy });
 
 const listeners = new Set<() => void>();
 
@@ -44,7 +56,7 @@ const emit = () => {
 };
 
 const commit = () => {
-  snapshot = Object.freeze({ state, pauseMutePending });
+  snapshot = Object.freeze({ state, pauseMutePending, pausedBy });
   emit();
 };
 
@@ -57,21 +69,42 @@ export const subscribeMachineExecution = (listener: () => void): (() => void) =>
   };
 };
 
-export const setMachineExecutionPaused = (options: { pauseMutePending?: boolean } = {}): void => {
+export const setMachineExecutionPaused = (
+  options: { pauseMutePending?: boolean; pausedBy?: MachineExecutionPauseSource } = {},
+): void => {
   state = "paused";
   pauseMutePending = Boolean(options.pauseMutePending);
+  // HARD21-004: default to "user" so any caller that does not name a source
+  // (Home's Pause button) is a user pause the menu-close resume must not touch.
+  pausedBy = options.pausedBy ?? "user";
   commit();
 };
 
 export const setMachineExecutionRunning = (): void => {
   state = "running";
   pauseMutePending = false;
+  pausedBy = null;
+  commit();
+};
+
+// HARD21-004: source-gated resume. Closing the Home Ultimate menu must resume
+// ONLY a pause the menu itself induced (`pausedBy === "menu"`); a user pause
+// from Play ("play") or Home ("user") must survive an open+close of the menu, so
+// this is a no-op unless the current pause matches `source`. Hard interrupts
+// (publishMachineInterrupt, resetMachineExecution) deliberately keep using the
+// unconditional setMachineExecutionRunning above and never route through here.
+export const resumeMachineExecutionIfPausedBy = (source: MachineExecutionPauseSource): void => {
+  if (state !== "paused" || pausedBy !== source) return;
+  state = "running";
+  pauseMutePending = false;
+  pausedBy = null;
   commit();
 };
 
 export const resetMachineExecution = (): void => {
   state = initialState;
   pauseMutePending = false;
+  pausedBy = null;
   commit();
 };
 

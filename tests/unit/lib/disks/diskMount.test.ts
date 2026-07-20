@@ -1190,7 +1190,15 @@ describe("diskMount", () => {
         expect(outcome.persistence).toBe("materialized");
       });
 
-      it("HARD19-005: drops the stale entry without a write-back when remounted on a different device", async () => {
+      // HARD21-002: a same-drive remount on a DIFFERENT device must SKIP the stale
+      // entry via the device-mismatch guard WITHOUT deleting it first (mirroring
+      // finalizeDiskWriteBack). The prior version asserted the entry was "Dropped"
+      // (deleted before the mismatch check ran) — the very in-game-save data-loss
+      // bug. It must never trigger a cross-device write-back, and now logs "Skipped".
+      // (The survive-then-save-on-switch-back consequence is proven separately in
+      // tests/unit/diskMount.test.ts, where the device-B mount is device-native and
+      // therefore does not materialize a replacement entry over drive "a".)
+      it("HARD21-002: skips (does not delete-then-cross-device-write-back) the stale entry when remounted on a different device", async () => {
         const firstFile = new File([new Uint8Array([1, 2, 3])], "first.d64");
         const writeBack = buildWriteBack();
         await mountDiskToDrive(
@@ -1211,10 +1219,12 @@ describe("diskMount", () => {
           { writeBack },
         );
 
+        // No cross-device write-back during the mismatched remount, and the stale
+        // entry is SKIPPED (not dropped) — note the "Skipped" wording (was "Dropped").
         expect(writeBack.readRemoteFile).not.toHaveBeenCalled();
         expect(addLog).toHaveBeenCalledWith(
           "warn",
-          "Dropped pending disk write-back: stale mount belongs to a different device",
+          "Skipped pending disk write-back: stale mount belongs to a different device",
           expect.objectContaining({ drive: "a", path: "/first.d64", currentDeviceHost: "other-device" }),
         );
       });

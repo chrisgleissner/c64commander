@@ -49,15 +49,20 @@ vi.mock("@/hooks/useRemoteInputSession", () => ({
     const [heldKeyboardInputs, setHeldKeyboardInputsState] = useState<ReadonlySet<string>>(
       initialSessionHeldKeyboardInputs,
     );
+    // Mirrors useRemoteInputSession.releaseAllEpoch: bumped by releaseAll (and the
+    // setOutputMode that internally calls it) so the sheet resets its physical-key
+    // refs on the EXPLICIT signal, not on an empty shared set.
+    const [releaseAllEpoch, setReleaseAllEpoch] = useState(0);
     return {
       outputMode,
       setOutputMode: (mode: "joystick" | "type") => {
         if (mode === outputMode) return;
         // Mirrors the real hook's setOutputMode, which calls releaseAll()
-        // (clearing the held sets) before applying the mode - the E2 test
-        // below depends on this being faithful to the real hook.
+        // (clearing the held sets + bumping the epoch) before applying the mode -
+        // the E2 test below depends on this being faithful to the real hook.
         setHeldJoystickInputsState(new Set());
         setHeldKeyboardInputsState(new Set());
+        setReleaseAllEpoch((epoch) => epoch + 1);
         setOutputModeState(mode);
         setOutputModeMock(mode);
       },
@@ -82,7 +87,17 @@ vi.mock("@/hooks/useRemoteInputSession", () => ({
       sendKeyboardInputs: sendKeyboardInputsMock,
       sendCursor: sendCursorMock,
       sendSpecialKey: sendSpecialKeyMock,
-      releaseAll: releaseAllMock,
+      // Mirrors the real hook's releaseAll, which clears BOTH held sets AND bumps
+      // releaseAllEpoch (the panic button / backgrounding path). The epoch bump is
+      // what lets the HARD21-006 test exercise the sheet's effect that resets its
+      // physical-key refs on an explicit release-all.
+      releaseAll: () => {
+        setHeldJoystickInputsState(new Set());
+        setHeldKeyboardInputsState(new Set());
+        setReleaseAllEpoch((epoch) => epoch + 1);
+        releaseAllMock();
+      },
+      releaseAllEpoch,
     };
   },
 }));
@@ -729,6 +744,30 @@ describe("RemoteInputSheet", () => {
 
       fireEvent.keyUp(sheet, { code: "ArrowUp", key: "ArrowUp" });
       expect(setHeldJoystickInputsMock).toHaveBeenLastCalledWith(new Set(["fire"]));
+    });
+
+    // HARD21-006: the mode-change (line 149) and sheet-close (HARD18-004)
+    // cleanups reset the physical-key refs on their triggers, but Release All
+    // (panic) and backgrounding clear the session's shared held set while the
+    // sheet stays mounted and DID NOT touch these refs. Holding a physical
+    // direction, tapping Release All, then pressing a NEW direction used to
+    // resurrect the panic-cleared direction as phantom-held alongside it.
+    it("HARD21-006: does not resurrect a physical direction held across Release All (panic)", () => {
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      const sheet = screen.getByTestId("remote-input-sheet");
+
+      // Physical UP held (no keyup — the user reaches for panic with another hand).
+      fireEvent.keyDown(sheet, { code: "ArrowUp", key: "ArrowUp" });
+      expect(setHeldJoystickInputsMock).toHaveBeenLastCalledWith(new Set(["up"]));
+
+      // Panic clears the session's shared held set out from under the sheet.
+      fireEvent.click(screen.getByTestId("remote-input-panic-button"));
+      expect(releaseAllMock).toHaveBeenCalledTimes(1);
+      setHeldJoystickInputsMock.mockClear();
+
+      // A NEW direction must assert ONLY itself (pre-fix: {up, right}).
+      fireEvent.keyDown(sheet, { code: "ArrowRight", key: "ArrowRight" });
+      expect(setHeldJoystickInputsMock).toHaveBeenLastCalledWith(new Set(["right"]));
     });
 
     it("a key that maps to no joystick or semantic action at all is ignored without side effects", () => {

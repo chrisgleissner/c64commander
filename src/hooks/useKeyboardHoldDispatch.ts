@@ -52,6 +52,12 @@ export type KeyboardHoldDispatch = {
 export const useKeyboardHoldDispatch = (
   heldKeyboardInputs: HeldKeyboardInputs,
   onHeldKeyboardInputsChange: (next: HeldKeyboardInputs) => void,
+  // HARD21-001: a monotonically increasing release-all signal from the session
+  // (see useRemoteInputSession.releaseAllEpoch). When it changes, this hook's
+  // own contribution/physically-held refs are reset to match the cleared shared
+  // set. Passed by every real caller; optional only so the hook stays usable in
+  // isolation.
+  releaseAllEpoch?: number,
 ): KeyboardHoldDispatch => {
   const heldRef = useRef(heldKeyboardInputs);
   heldRef.current = heldKeyboardInputs;
@@ -175,6 +181,26 @@ export const useKeyboardHoldDispatch = (
       setShiftLocked(false);
     }
   }, [shiftLocked, heldKeyboardInputs]);
+
+  // HARD21-001: releaseAll (panic button, backgrounding/visibilitychange, device
+  // switch, mode switch) clears the SESSION's shared held-keyboard set DIRECTLY,
+  // bypassing removeFromHeld — so this hook's own contribution-count map
+  // (heldContributionsRef) and physically-held set are never decremented and keep
+  // a stale count for whatever was held at releaseAll time. That orphaned count is
+  // permanently off-by-one: the next SHIFT LOCK on/off (or modifier press/release)
+  // cycle can never bring it back to 0, so removeFromHeld never drops the input
+  // from the held set — it sticks asserted on the C64 while the UI reads it as off
+  // (the HARD18-002 effect above only heals shiftLocked, not the count map).
+  // Reset both refs on the EXPLICIT releaseAllEpoch signal — NOT on an empty
+  // shared set: a concurrent multi-source release (e.g. the QuickKeysBar hook and
+  // this one both contributing left_shift, one releasing) can momentarily empty
+  // the set while a genuine hold remains, and clearing then would strand the live
+  // hold. Clearing already-empty refs on the initial mount is a harmless no-op.
+  // Pure ref clears only — NO onChangeRef/setState — so no effect re-render loop.
+  useEffect(() => {
+    heldContributionsRef.current.clear();
+    physicallyHeldRef.current.clear();
+  }, [releaseAllEpoch]);
 
   return {
     pressKey,
