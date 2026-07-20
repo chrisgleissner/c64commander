@@ -25,7 +25,12 @@ import { createHvscCancellationError } from "./hvscCancellation";
 
 const HVSC_NATIVE_ARCHIVE_READ_CHUNK_BYTES = 512 * 1024;
 const nativeArchiveDownloads = new Map<string, Promise<unknown>>();
-const cancelledNativeArchivePaths = new Set<string>();
+
+// Test-only: module-level state otherwise leaks a pending promise across
+// Vitest workers if a test fails before its native download settles.
+export const __resetNativeDownloadStateForTests = () => {
+  nativeArchiveDownloads.clear();
+};
 
 const waitForNativeArchiveDownload = async (archivePath: string) => {
   const pending = nativeArchiveDownloads.get(archivePath);
@@ -40,7 +45,6 @@ const waitForNativeArchiveDownload = async (archivePath: string) => {
       error: (error as Error).message,
     });
   }
-  cancelledNativeArchivePaths.delete(archivePath);
 };
 
 // ── Utility helpers ──────────────────────────────────────────────
@@ -609,7 +613,6 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
       let pollErrorLogged = false;
       const pollSize = async () => {
         if (cancelTokens.get(cancelToken)?.cancelled) {
-          cancelledNativeArchivePaths.add(archivePath);
           return;
         }
         try {

@@ -81,6 +81,7 @@ import {
   resolveCachedArchive,
   getCacheStatusInternal,
   computeArchiveChecksumMd5,
+  __resetNativeDownloadStateForTests,
 } from "@/lib/hvsc/hvscDownload";
 import { Filesystem } from "@capacitor/filesystem";
 import { Capacitor } from "@capacitor/core";
@@ -667,6 +668,7 @@ describe("hvscDownload", () => {
     beforeEach(() => {
       vi.clearAllMocks();
       globalThis.fetch = vi.fn();
+      __resetNativeDownloadStateForTests();
     });
 
     it("streams download progress and writes archive", async () => {
