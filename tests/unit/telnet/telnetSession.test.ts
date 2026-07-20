@@ -291,5 +291,33 @@ describe("createTelnetSession", () => {
       await expect(session.connect("localhost", 23)).resolves.toBeUndefined();
       await expect(session.readScreen(100)).rejects.toMatchObject({ code: "DISCONNECTED" });
     });
+
+    it("HARD20-006: reconnects (instead of throwing) when the transport reports CONNECTION_CLOSED mid-read", async () => {
+      let connected = false;
+      const transport = {
+        connect: vi.fn().mockImplementation(async () => {
+          connected = true;
+        }),
+        disconnect: vi.fn().mockImplementation(async () => {
+          connected = false;
+        }),
+        send: vi.fn().mockResolvedValue(undefined),
+        read: vi
+          .fn()
+          .mockResolvedValueOnce(new Uint8Array(0)) // initial connect's auth-check read
+          .mockRejectedValueOnce(new TelnetError("peer closed the connection", "CONNECTION_CLOSED"))
+          .mockResolvedValueOnce(new Uint8Array(0)) // reconnect's auth-check read
+          .mockResolvedValue(new Uint8Array(0)), // subsequent empty reads drain the read loop
+        isConnected: vi.fn().mockImplementation(() => connected),
+      };
+      const session = createTelnetSession(transport);
+
+      await expect(session.connect("localhost", 23)).resolves.toBeUndefined();
+      const screen = await session.readScreen(100);
+
+      expect(screen.width).toBe(60);
+      expect(transport.connect).toHaveBeenCalledTimes(2);
+      expect(session.isConnected()).toBe(true);
+    });
   });
 });

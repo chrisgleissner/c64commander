@@ -80,7 +80,7 @@ import {
   getLocalSourceRuntimeFile,
   requireLocalSourceEntries,
 } from "@/lib/sourceNavigation/localSourcesStore";
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 import {
   buildDiskMountType,
   resolveLocalDiskBlob,
@@ -1188,6 +1188,35 @@ describe("diskMount", () => {
           expect.objectContaining({ treeUri: "tree://first" }),
         );
         expect(outcome.persistence).toBe("materialized");
+      });
+
+      it("HARD19-005: drops the stale entry without a write-back when remounted on a different device", async () => {
+        const firstFile = new File([new Uint8Array([1, 2, 3])], "first.d64");
+        const writeBack = buildWriteBack();
+        await mountDiskToDrive(
+          mockApi as any,
+          "a",
+          { id: "disk-first", path: "/first.d64", location: "local", localTreeUri: "tree://first" } as any,
+          firstFile,
+          { writeBack },
+        );
+
+        const otherDeviceApi = { ...mockApi, getDeviceHost: vi.fn(() => "other-device") };
+        const secondFile = new File([new Uint8Array([4, 5, 6])], "second.d64");
+        await mountDiskToDrive(
+          otherDeviceApi as any,
+          "a",
+          { id: "disk-second", path: "/second.d64", location: "local", localTreeUri: "tree://second" } as any,
+          secondFile,
+          { writeBack },
+        );
+
+        expect(writeBack.readRemoteFile).not.toHaveBeenCalled();
+        expect(addLog).toHaveBeenCalledWith(
+          "warn",
+          "Dropped pending disk write-back: stale mount belongs to a different device",
+          expect.objectContaining({ drive: "a", path: "/first.d64", currentDeviceHost: "other-device" }),
+        );
       });
 
       it("drops (does not misattribute) the stale entry when the new mount has no writeBack deps", async () => {

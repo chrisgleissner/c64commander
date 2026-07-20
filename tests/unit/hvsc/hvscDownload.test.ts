@@ -88,6 +88,7 @@ import { Capacitor } from "@capacitor/core";
 
 import { addLog } from "@/lib/logging";
 import { HvscIngestion } from "@/lib/native/hvscIngestion";
+import SparkMD5 from "spark-md5";
 
 describe("hvscDownload", () => {
   beforeEach(() => {
@@ -710,6 +711,48 @@ describe("hvscDownload", () => {
       expect(inMemory).toBeNull();
     });
 
+    it("deletes the cached archive and downgrades to a null-checksum marker when checksum computation yields no digest", async () => {
+      vi.mocked(Filesystem.stat).mockResolvedValue({ size: 6 } as any);
+      (globalThis.fetch as any).mockResolvedValue({
+        ok: true,
+        headers: { get: () => "6" },
+        body: {
+          getReader: () => {
+            const chunks = [new Uint8Array([1, 2, 3, 4, 5, 6])];
+            let index = 0;
+            return {
+              read: async () => {
+                if (index >= chunks.length) return { done: true, value: undefined };
+                const value = chunks[index];
+                index += 1;
+                return { done: false, value };
+              },
+            };
+          },
+        },
+      });
+      vi.spyOn(SparkMD5.ArrayBuffer, "hash").mockReturnValueOnce("");
+
+      // A missing digest doesn't fail the download outright — it's caught by the
+      // surrounding marker-write try/catch and downgrades to a null-checksum marker.
+      await expect(downloadArchive(makeOptions())).resolves.toBeNull();
+
+      const { deleteCachedArchive, writeCachedArchiveMarker } = await import("@/lib/hvsc/hvscFilesystem");
+      expect(vi.mocked(deleteCachedArchive)).toHaveBeenCalledWith("hvsc-baseline-84.7z");
+      expect(vi.mocked(writeCachedArchiveMarker)).toHaveBeenCalledWith(
+        "hvsc-baseline-84.7z",
+        expect.objectContaining({ checksumMd5: null }),
+      );
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        "Failed to write HVSC cache marker",
+        expect.objectContaining({
+          archivePath: "hvsc-baseline-84.7z",
+          error: 'HVSC archive checksum validation failed for "hvsc-baseline-84.7z". Please re-download.',
+        }),
+      );
+    });
+
     it("retains in-memory buffer when requested", async () => {
       (globalThis.fetch as any).mockResolvedValue({
         ok: true,
@@ -862,6 +905,71 @@ describe("hvscDownload", () => {
       await expect(retry).resolves.toBeNull();
       expect(Filesystem.downloadFile).toHaveBeenCalledTimes(2);
     });
+
+    it("HARD20-008: logs (not throws) when the cancelled native transfer it waited on settles with an error", async () => {
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: { get: (name: string) => (name === "content-length" ? "1000" : null) },
+      });
+      vi.mocked(Filesystem.stat).mockResolvedValue({ size: 1000, type: "file" } as any);
+      let rejectFirst: ((error: Error) => void) | null = null;
+      vi.mocked(Filesystem.downloadFile)
+        .mockImplementationOnce(
+          () =>
+            new Promise((_resolve, reject) => {
+              rejectFirst = reject;
+            }),
+        )
+        .mockResolvedValueOnce({} as any);
+      const tokens = new Map([["token-1", { cancelled: false }]]);
+
+      const first = downloadArchive(makeOptions({ cancelTokens: tokens }));
+      await expect.poll(() => vi.mocked(Filesystem.downloadFile).mock.calls.length).toBe(1);
+      tokens.get("token-1")!.cancelled = true;
+      const retry = downloadArchive(makeOptions({ cancelTokens: new Map([["token-1", { cancelled: false }]]) }));
+
+      rejectFirst?.(new Error("native transfer aborted"));
+      await expect(first).rejects.toThrow();
+      await expect(retry).resolves.toBeNull();
+
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        "Cancelled HVSC native download settled with an error",
+        expect.objectContaining({ archivePath: "hvsc-baseline-84.7z", error: "native transfer aborted" }),
+      );
+    });
+
+    it("skips further progress stat polls once the download was cancelled mid-flight", async () => {
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: { get: (name: string) => (name === "content-length" ? "1000" : null) },
+      });
+      let settleDownload: (() => void) | null = null;
+      vi.mocked(Filesystem.downloadFile).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            settleDownload = () => resolve({} as any);
+          }),
+      );
+      vi.mocked(Filesystem.stat).mockResolvedValue({ size: 500, type: "file" } as any);
+
+      const tokens = new Map([["token-1", { cancelled: false }]]);
+      const promise = downloadArchive(makeOptions({ cancelTokens: tokens }));
+      // Let the 400ms progress-poll interval fire at least once for real, confirming
+      // pollSize is actually reachable before we assert the cancellation guard.
+      await expect.poll(() => vi.mocked(Filesystem.stat).mock.calls.length, { timeout: 5000 }).toBeGreaterThan(0);
+      const statCallsBeforeCancel = vi.mocked(Filesystem.stat).mock.calls.length;
+
+      tokens.get("token-1")!.cancelled = true;
+      await new Promise((resolve) => setTimeout(resolve, 450));
+
+      expect(Filesystem.stat).toHaveBeenCalledTimes(statCallsBeforeCancel);
+
+      settleDownload?.();
+      await expect(promise).rejects.toThrow("HVSC update cancelled");
+    }, 10000);
 
     it("native download: subscribes to filesystem progress events and removes the listener", async () => {
       vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
