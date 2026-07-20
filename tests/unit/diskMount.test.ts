@@ -353,6 +353,29 @@ describe("mountDiskToDrive", () => {
       expect(writeBack.readRemoteFile).toHaveBeenCalled();
     });
 
+    it("HARD21-002: a LOCAL writable remount to the same drive on another device PARKS (not loses) the first device's write-back — both devices' saves survive", async () => {
+      // Device A materializes its own local disk to drive a — saves accumulate.
+      const a = await materializeOnDevice("device-a", "a");
+      // Device B materializes ITS OWN local writable disk to the SAME drive. This
+      // reuses the drive-only slot (overwriting it), but must PARK device A's
+      // pending write-back under a device-scoped key rather than discard it.
+      const b = await materializeOnDevice("device-b", "a");
+      (a.writeBack.readRemoteFile as ReturnType<typeof vi.fn>).mockClear();
+      (b.writeBack.readRemoteFile as ReturnType<typeof vi.fn>).mockClear();
+
+      // Switch back to device A and eject → device A's PARKED saves are finalized
+      // (pre-fix the drive slot held device B's entry and A's saves were lost).
+      const resultA = await finalizeDiskWriteBack("a", a.writeBack, "device-a");
+      expect(resultA).toMatchObject({ attempted: true, success: true });
+      expect(a.writeBack.readRemoteFile).toHaveBeenCalled();
+
+      // Device B's own entry still finalizes when ejecting on device B — its saves
+      // are not sacrificed to preserve device A's.
+      const resultB = await finalizeDiskWriteBack("a", b.writeBack, "device-b");
+      expect(resultB).toMatchObject({ attempted: true, success: true });
+      expect(b.writeBack.readRemoteFile).toHaveBeenCalled();
+    });
+
     it("finalizes (not drops) a stale materialized mount when a different disk is mounted with write-back deps (HARD19-008)", async () => {
       const { writeBack } = await materializeOnDevice("device-a", "a");
       (writeBack.readRemoteFile as ReturnType<typeof vi.fn>).mockClear();
