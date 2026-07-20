@@ -252,6 +252,11 @@ test.describe("Home interactions", () => {
     await machineControls.getByRole("button", { name: "Reboot", exact: true }).click();
     await confirmMachineAction(page, "Reboot");
     await machineControls.getByRole("button", { name: "Menu", exact: true }).click();
+    // HARD20-009: opening the menu mirrors machine-execution paused state onto
+    // Home's own Pause/Resume control (the C64 core really is suspended while the
+    // Ultimate menu is open), so close it again before exercising Pause/Resume
+    // independently below.
+    await machineControls.getByRole("button", { name: "Menu", exact: true }).click();
 
     await machineControls.getByRole("button", { name: "Pause", exact: true }).click();
     const resumeButton = machineControls.getByRole("button", { name: "Resume", exact: true });
