@@ -176,6 +176,25 @@ export const useKeyboardHoldDispatch = (
     }
   }, [shiftLocked, heldKeyboardInputs]);
 
+  // HARD21-001: releaseAll (panic button, backgrounding/visibilitychange,
+  // device switch, mode switch) clears the SESSION's shared held-keyboard set
+  // DIRECTLY, bypassing removeFromHeld — so this hook's own contribution-count
+  // map (heldContributionsRef) and physically-held set are never decremented and
+  // keep a stale count for whatever was held at releaseAll time. That orphaned
+  // count is permanently off-by-one: the next SHIFT LOCK on/off (or modifier
+  // press/release) cycle can never bring it back to 0, so removeFromHeld never
+  // drops the input from the held set — it sticks asserted on the C64 while the
+  // UI reads it as off (the HARD18-002 effect above only heals shiftLocked, not
+  // the count map). An empty shared held set is proof no key/modifier is
+  // genuinely held (a live hold keeps the set non-empty), so reset both refs to
+  // match. Pure ref clears only — NO onChangeRef/setState here — so this cannot
+  // strand a real hold and cannot cause an effect re-render loop.
+  useEffect(() => {
+    if (heldKeyboardInputs.size > 0) return;
+    if (heldContributionsRef.current.size > 0) heldContributionsRef.current.clear();
+    if (physicallyHeldRef.current.size > 0) physicallyHeldRef.current.clear();
+  }, [heldKeyboardInputs]);
+
   return {
     pressKey,
     releaseKey,

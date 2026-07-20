@@ -151,6 +151,23 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     previousPhysicalInputsRef.current.clear();
   }, [session.outputMode]);
 
+  // HARD21-006: the mode-change and sheet-close cleanups above cover their
+  // triggers, but releaseAll (panic button, backgrounding/visibilitychange) also
+  // clears the session's shared joystick held set while THIS component stays
+  // mounted — and had no channel into these physical refs. A direction held via
+  // a physical keypad/controller key when Release All fires (or the OS eats the
+  // keyup on background) stayed recorded, so returning and pressing a new
+  // direction re-asserted the old one (phantom-held / SOCD), and
+  // recomputePhysicalHeldSet's merge would wrongly strip a same-named input a
+  // later touch hold contributed. An empty shared held set proves nothing is
+  // genuinely held, so reset both refs to match — mirroring the VirtualDPad
+  // reset. Pure ref clears only (no setHeldJoystickInputs/setState).
+  useEffect(() => {
+    if (session.heldJoystickInputs.size > 0) return;
+    if (heldPhysicalKeysRef.current.size > 0) heldPhysicalKeysRef.current.clear();
+    if (previousPhysicalInputsRef.current.size > 0) previousPhysicalInputsRef.current.clear();
+  }, [session.heldJoystickInputs]);
+
   // Immersive mode is joystick-only; drop out of it if joystick relay becomes
   // unavailable (tier downgrade) so the user is never stranded in a stripped
   // layout that can't do anything.

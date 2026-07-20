@@ -17,16 +17,26 @@ const onHeldInputsChangeMock = vi.fn();
 
 // A stateful wrapper mirroring the real parent: onHeldInputsChange feeds back
 // into heldInputs, so multi-touch sequences accumulate as they do in production.
+// The "external-release-all" button mirrors useRemoteInputSession.releaseAll
+// clearing the SESSION-owned held set directly (bypassing the pad's own
+// press/release bookkeeping) — the panic-button / backgrounding scenario.
 const StatefulDPad = ({ spy }: { spy: (next: HeldJoystickInputs) => void }) => {
   const [held, setHeld] = useState<HeldJoystickInputs>(EMPTY_HELD_JOYSTICK_INPUTS);
   return (
-    <VirtualDPad
-      heldInputs={held}
-      onHeldInputsChange={(next) => {
-        spy(next);
-        setHeld(next);
-      }}
-    />
+    <>
+      <button
+        type="button"
+        data-testid="external-release-all"
+        onClick={() => setHeld(EMPTY_HELD_JOYSTICK_INPUTS)}
+      />
+      <VirtualDPad
+        heldInputs={held}
+        onHeldInputsChange={(next) => {
+          spy(next);
+          setHeld(next);
+        }}
+      />
+    </>
   );
 };
 
@@ -120,6 +130,32 @@ describe("VirtualDPad", () => {
     // pointerdown on it — this must not delete the "up" the up cell holds.
     fireEvent.pointerUp(screen.getByTestId("remote-input-dpad-up-left"), { pointerId: 2 });
     expect(spy).toHaveBeenLastCalledWith(new Set(["up"]));
+  });
+
+  // HARD21-006: tapping Release All (panic) while a cell's pointer is still down
+  // clears the session's shared held set but not the pad's pressed-cell refs.
+  // Before the fix, pressing a NEW cell afterwards rebuilt the contribution as
+  // the UNION with the still-recorded old cell, re-asserting the direction panic
+  // just cleared (SOCD / phantom-held). The reset effect drops the stale refs
+  // when the shared set empties, so only the new direction is asserted.
+  it("HARD21-006: a new cell press after Release-All (held pointer) asserts only the new direction", () => {
+    const spy = vi.fn();
+    render(<StatefulDPad spy={spy} />);
+
+    // Hold "up" — pointer stays DOWN (no pointerup), as when the user reaches
+    // for the panic button with a different finger mid-game.
+    fireEvent.pointerDown(screen.getByTestId("remote-input-dpad-up"), { pointerId: 1 });
+    expect(spy).toHaveBeenLastCalledWith(new Set(["up"]));
+
+    // Panic: the session clears the shared held set out from under the pad.
+    // (This updates the parent's held state directly; the pad's onChange spy is
+    // not called by it, so spy's last value is asserted after the next press.)
+    fireEvent.click(screen.getByTestId("external-release-all"));
+    spy.mockClear();
+
+    // Still holding, the user presses "right". Pre-fix this yielded {up, right}.
+    fireEvent.pointerDown(screen.getByTestId("remote-input-dpad-right"), { pointerId: 2 });
+    expect(spy).toHaveBeenLastCalledWith(new Set(["right"]));
   });
 
   it("marks a cell pressed only when every one of its directions is held", () => {

@@ -219,6 +219,46 @@ describe("useKeyboardHoldDispatch", () => {
     expect(d.heldNames()).toEqual(["a"]);
   });
 
+  // HARD21-001: releaseAll clears the shared held set directly, bypassing this
+  // hook's contribution-count map. Before the fix the orphaned count for
+  // left_shift left the NEXT SHIFT LOCK on/off cycle unable to reach 0, so
+  // left_shift stuck asserted (held) with the lock UI reading off — every
+  // keystroke silently relayed shifted.
+  it("HARD21-001: a SHIFT LOCK cycle after an external releaseAll fully releases left_shift", () => {
+    const d = createDriver();
+    d.toggleShiftLock();
+    expect(d.heldNames()).toEqual(["left_shift"]);
+
+    d.simulateExternalReleaseAll();
+    expect(d.heldNames()).toEqual([]);
+    expect(d.shiftLocked()).toBe(false);
+
+    // A fresh SHIFT LOCK on then off must leave nothing held (pre-fix: the
+    // orphaned contribution count kept left_shift asserted here).
+    d.toggleShiftLock();
+    expect(d.heldNames()).toEqual(["left_shift"]);
+    d.toggleShiftLock();
+    expect(d.heldNames()).toEqual([]);
+    expect(d.isModifierActive("left_shift")).toBe(false);
+  });
+
+  // HARD21-001: same leak on the physical-modifier path — a held SHIFT at
+  // releaseAll time orphaned its count, so the next press+release left it stuck.
+  it("HARD21-001: a modifier press+release after an external releaseAll releases cleanly", () => {
+    const d = createDriver();
+    d.pressModifier("left_shift");
+    expect(d.heldNames()).toEqual(["left_shift"]);
+
+    d.simulateExternalReleaseAll();
+    expect(d.heldNames()).toEqual([]);
+
+    d.pressModifier("left_shift");
+    expect(d.heldNames()).toEqual(["left_shift"]);
+    d.releaseModifier("left_shift");
+    expect(d.heldNames()).toEqual([]);
+    expect(d.isModifierActive("left_shift")).toBe(false);
+  });
+
   it("releasing a physically-held SHIFT does not drop the assertion while SHIFT LOCK is engaged", () => {
     const d = createDriver();
     d.toggleShiftLock();

@@ -82,7 +82,15 @@ vi.mock("@/hooks/useRemoteInputSession", () => ({
       sendKeyboardInputs: sendKeyboardInputsMock,
       sendCursor: sendCursorMock,
       sendSpecialKey: sendSpecialKeyMock,
-      releaseAll: releaseAllMock,
+      // Mirrors the real hook's releaseAll, which clears BOTH held sets before
+      // sending release_all (the panic button / backgrounding path). Faithful
+      // clearing is what lets the HARD21-006 test exercise the sheet's effect
+      // that resets its physical-key refs when the shared set empties.
+      releaseAll: () => {
+        setHeldJoystickInputsState(new Set());
+        setHeldKeyboardInputsState(new Set());
+        releaseAllMock();
+      },
     };
   },
 }));
@@ -729,6 +737,30 @@ describe("RemoteInputSheet", () => {
 
       fireEvent.keyUp(sheet, { code: "ArrowUp", key: "ArrowUp" });
       expect(setHeldJoystickInputsMock).toHaveBeenLastCalledWith(new Set(["fire"]));
+    });
+
+    // HARD21-006: the mode-change (line 149) and sheet-close (HARD18-004)
+    // cleanups reset the physical-key refs on their triggers, but Release All
+    // (panic) and backgrounding clear the session's shared held set while the
+    // sheet stays mounted and DID NOT touch these refs. Holding a physical
+    // direction, tapping Release All, then pressing a NEW direction used to
+    // resurrect the panic-cleared direction as phantom-held alongside it.
+    it("HARD21-006: does not resurrect a physical direction held across Release All (panic)", () => {
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      const sheet = screen.getByTestId("remote-input-sheet");
+
+      // Physical UP held (no keyup — the user reaches for panic with another hand).
+      fireEvent.keyDown(sheet, { code: "ArrowUp", key: "ArrowUp" });
+      expect(setHeldJoystickInputsMock).toHaveBeenLastCalledWith(new Set(["up"]));
+
+      // Panic clears the session's shared held set out from under the sheet.
+      fireEvent.click(screen.getByTestId("remote-input-panic-button"));
+      expect(releaseAllMock).toHaveBeenCalledTimes(1);
+      setHeldJoystickInputsMock.mockClear();
+
+      // A NEW direction must assert ONLY itself (pre-fix: {up, right}).
+      fireEvent.keyDown(sheet, { code: "ArrowRight", key: "ArrowRight" });
+      expect(setHeldJoystickInputsMock).toHaveBeenLastCalledWith(new Set(["right"]));
     });
 
     it("a key that maps to no joystick or semantic action at all is ignored without side effects", () => {

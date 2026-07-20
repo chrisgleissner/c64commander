@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   ArrowDown,
   ArrowDownLeft,
@@ -109,6 +109,23 @@ export const VirtualDPad = ({ heldInputs, onHeldInputsChange, disabled = false, 
     },
     [disabled, applyPressedCells],
   );
+
+  // HARD21-006: releaseAll (panic button, sheet close, backgrounding, mode
+  // switch) clears the SESSION's shared joystick held set directly, but has no
+  // channel into this pad's own pressed-cell/contribution refs. If the user
+  // taps Release All while a cell's pointer is still down (no pointerup/
+  // pointercancel), pressedCellKeysRef/previousContributionRef keep the stale
+  // cell — and the next cell press rebuilds the contribution as the UNION with
+  // the phantom-held one, re-asserting a direction panic just cleared (SOCD /
+  // stuck direction mid-game). Same structural gap as HARD21-001 on the joystick
+  // surface. An empty shared held set is proof no direction is genuinely held, so
+  // reset both refs to match. Pure ref clears only (no onHeldInputsChange /
+  // setState), so this cannot strand a live hold or cause a re-render loop.
+  useEffect(() => {
+    if (heldInputs.size > 0) return;
+    if (pressedCellKeysRef.current.size > 0) pressedCellKeysRef.current.clear();
+    if (previousContributionRef.current.size > 0) previousContributionRef.current.clear();
+  }, [heldInputs]);
 
   const isCellHeld = (inputs: JoystickInputName[]) => inputs.every((input) => heldInputs.has(input));
 
