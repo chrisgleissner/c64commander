@@ -41,11 +41,11 @@ Start with the walkthrough if you are new to the app. Use the reference sections
 
 ### Your C64 Ultimate
 
-C64U Remote is made for controlling a Commodore 64 Ultimate on your local network.
+C64U Remote is made for controlling a Commodore 64 Ultimate on your local network. It runs on the Commodore Callback 8020 — the compact, keypad-first phone it was designed for — which this guide simply calls your phone.
 
-Connection has three parts: the app device, the Commodore 64 Ultimate, and the local network between them.
+Connection has three parts: your phone, the Commodore 64 Ultimate, and the local network between them.
 
-Put the device running the app and the Commodore 64 Ultimate on the same Wi-Fi or wired LAN. Then open **Network Services & Timezone** on the target device.
+Put your phone and the Commodore 64 Ultimate on the same Wi-Fi or wired LAN. Then open **Network Services & Timezone** on the target device.
 
 ![C64 Ultimate Network Services & Timezone menu](../../img/setup/enable_services.png)
 
@@ -173,7 +173,7 @@ Settings controls app behavior and saved connection details.
 
 ![Settings overview](../../img/app/settings/profiles/compact/01-overview.png)
 
-Connection and saved devices live here, along with Appearance (display profile, theme, full-screen, and screen orientation), Notifications, Diagnostics options, Device Safety and network timing, Play and Disk behavior, the HVSC and Online Archive sources, feature toggles, Settings transfer, and an About panel. **Settings transfer** exports every app preference to a file you can import onto another phone or tablet, so a second device starts up already configured.
+Connection and saved devices live here, along with Appearance (display profile, theme, full-screen, and screen orientation), Notifications, Diagnostics options, Device Safety and network timing, Play and Disk behavior, the HVSC and Online Archive sources, feature toggles, Settings transfer, and an About panel. **Settings transfer** exports every app preference to a file you can import onto another phone, so a second device starts up already configured.
 
 If the device is hard to reach, start in **Connection**. If it is reachable but fragile, start in **Device Safety**.
 
@@ -255,7 +255,7 @@ Preferred path: Home Quick Actions. Use Diagnostics only if the device does not 
 4. Select files or folders.
 5. Confirm and press Play.
 
-Preferred path: Play. Use C64U source for files already on the target device; use Local for files on the Android device.
+Preferred path: Play. Use C64U source for files already on the target device; use Local for files on your phone.
 
 ### Build a Playlist from Folders
 
@@ -369,7 +369,7 @@ The tour showed you where everything lives, and the flows above are quick recipe
 
 ### Remote Input
 
-Remote Input turns your phone or tablet into a second-screen controller for the C64. It is handy when you are sitting across the room from the machine, when no joystick is plugged in, or when you just want to type a command without reaching for the real keyboard.
+Remote Input turns your phone into a second-screen controller for the C64. It is handy when you are sitting across the room from the machine, when no joystick is plugged in, or when you just want to type a command without reaching for the real keyboard.
 
 Open it in either of two places:
 
@@ -410,7 +410,7 @@ On by default. You can change it in Settings > Stable Features.
 
 ### RAM Snapshots
 
-A RAM snapshot is a copy of what is in your C64's memory right now, saved onto your phone or tablet so you can put it back later. It is the nearest thing the app has to a save-and-restore button for programs that have none of their own.
+A RAM snapshot is a copy of what is in your C64's memory right now, saved onto your phone so you can put it back later. It is the nearest thing the app has to a save-and-restore button for programs that have none of their own.
 
 Both actions live in **Home > Quick Actions**: **Save RAM** to capture, and **Load RAM** to restore. The device must be connected and not busy. The app pauses the machine for the transfer and resumes it afterwards, so a running program is not disturbed.
 
@@ -422,7 +422,7 @@ When you tap **Save RAM**, the app asks which region of memory to capture:
 - **Screen Snapshot** stores the current screen and its colours.
 - **Custom Snapshot** lets you type the exact address ranges you want.
 
-Snapshots are kept on your phone or tablet, not on the C64. Each one is named automatically from its type and the date and time, and if something is playing its title becomes the label. You can add or change a **Comment** on any snapshot later. The app keeps up to 100 snapshots and quietly drops the oldest once that fills.
+Snapshots are kept on your phone, not on the C64. Each one is named automatically from its type and the date and time, and if something is playing its title becomes the label. You can add or change a **Comment** on any snapshot later. The app keeps up to 100 snapshots and quietly drops the oldest once that fills.
 
 **Load RAM** opens your snapshot library. Filter it by name or by type, then tap a snapshot to restore it. The app asks you to confirm first, because restoring overwrites the matching memory on the C64. It writes back only the bytes the snapshot holds, and it deliberately leaves the CIA timers alone so the cursor keeps its normal blink. A CPU snapshot resumes the program; if that is not possible the app restores the memory alone and tells you so. From the same library you can edit a snapshot's comment or remove ones you no longer need with the trash icon.
 
@@ -454,7 +454,7 @@ A C64 once talked to a Commodore printer over the serial bus; the Ultimate emula
 
 Everything you play or mount comes from a **source**, and each source keeps to its own picker so a wrong turn never lands you somewhere unexpected.
 
-- **Local** — files and folders on the phone or tablet running the app.
+- **Local** — files and folders on the phone running the app.
 - **C64U** — files on the Commodore 64 Ultimate, reached over FTP.
 - **HVSC** — the High Voltage SID Collection, the definitive archive of C64 music. Prepare it once from **Settings > HVSC**; afterwards the app checks for updates on its own, and browsing shows song durations and subsongs.
 - **CommoServe** — an online archive you search by name, pulling disks and programs straight into a playlist or disk collection. Set its address in **Settings > Online Archive**.
@@ -465,7 +465,7 @@ Two ideas make the configuration tree easy to live with: where a change goes, an
 
 Every change — on Home, on Disks, or in Config — is sent to the running device at once and takes effect immediately. But the device holds two copies of its settings: the **live** ones it is using now, and a **flash** copy it reloads at power-on. A change is live instantly; it survives a reboot or power cycle only once it reaches flash.
 
-You manage that from **Home > Config actions**. **Save to flash** writes the current live settings to flash now — reach for it when **Auto save config** is Ask or No. The app can also keep named **configuration snapshots** on the phone or tablet, separate from the device's flash: save the current setup, then load it back later to restore a whole configuration at once.
+You manage that from **Home > Config actions**. **Save to flash** writes the current live settings to flash now — reach for it when **Auto save config** is Ask or No. The app can also keep named **configuration snapshots** on the phone, separate from the device's flash: save the current setup, then load it back later to restore a whole configuration at once.
 
 ### Reading Diagnostics
 
@@ -671,7 +671,7 @@ Press Menu when no focused control has its own menu. The Quick Menu offers page 
 
 | Source | Used in | Meaning |
 | --- | --- | --- |
-| Local | Play, Disks | Files and folders available to the Android device running the app. |
+| Local | Play, Disks | Files and folders available to your phone running the app. |
 | C64U | Play, Disks | Files on the Commodore 64 Ultimate through FTP. |
 | HVSC | Play | Optional. Enable it in Settings > Stable Features. SID library browsing after preparation. |
 | CommoServe | Play, Disks | On by default. You can change it in Settings > Stable Features. Online archive search. |
@@ -722,7 +722,7 @@ Set a drive's type on the **Disks** page to match the image you are mounting.
 
 ### Snapshot Types and Memory Ranges
 
-**Save RAM** offers these capture types. The app keeps up to 100 snapshots on your phone or tablet and drops the oldest once that fills.
+**Save RAM** offers these capture types. The app keeps up to 100 snapshots on your phone and drops the oldest once that fills.
 
 | Snapshot | Captures | Memory range |
 | --- | --- | --- |

@@ -347,6 +347,18 @@ const includeFeature = (features, id) => Boolean(features[id]?.isMentionable);
 
 const isC64uRemoteVariant = (variant) => variant.id === "c64u-remote";
 
+// The device that runs the app. C64U Remote is an Android-only variant built for
+// the Commodore Callback 8020 — a compact, keypad-first phone — so its manual
+// always speaks of a "phone" (the Callback 8020 name is established once, in
+// Before You Start, then left implicit). The broad C64 Commander edition also
+// runs on tablets, so it keeps the wider "phone or tablet" phrasing unchanged.
+const appDeviceName = (variant) => (isC64uRemoteVariant(variant) ? "phone" : "phone or tablet");
+
+// Subject noun for the app-host device, e.g. "on your phone" vs "on the Android
+// device". Kept phone-specific for C64U Remote and byte-identical for the broad
+// edition.
+const appDeviceSubject = (variant) => (isC64uRemoteVariant(variant) ? "your phone" : "the Android device");
+
 const targetDeviceDescription = (variant) =>
   isC64uRemoteVariant(variant)
     ? "a Commodore 64 Ultimate"
@@ -365,7 +377,11 @@ const t9HostnameExamples = (variant) =>
 
 const supportedMachinesSection = ({ appName, variant }) =>
   isC64uRemoteVariant(variant)
-    ? ["### Your C64 Ultimate", "", `${appName} is made for controlling a Commodore 64 Ultimate on your local network.`]
+    ? [
+        "### Your C64 Ultimate",
+        "",
+        `${appName} is made for controlling a Commodore 64 Ultimate on your local network. It runs on the Commodore Callback 8020 — the compact, keypad-first phone it was designed for — which this guide simply calls your phone.`,
+      ]
     : [
         "### Supported Machines",
         "",
@@ -603,7 +619,7 @@ const featureRows = ({ features, variant }) => {
 
 const sourceRows = ({ features, variant }) => {
   const rows = [
-    ["Local", "Play, Disks", "Files and folders available to the Android device running the app."],
+    ["Local", "Play, Disks", `Files and folders available to ${appDeviceSubject(variant)} running the app.`],
     [
       "C64U",
       "Play, Disks",
@@ -762,9 +778,13 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     ...supportedMachinesSection({ appName, variant }),
     "",
-    `Connection has three parts: the app device, ${targetDeviceShortName(variant)}, and the local network between them.`,
+    `Connection has three parts: ${
+      isC64uRemoteVariant(variant) ? "your phone" : "the app device"
+    }, ${targetDeviceShortName(variant)}, and the local network between them.`,
     "",
-    `Put the device running the app and ${targetDeviceShortName(variant)} on the same Wi-Fi or wired LAN. Then open **Network Services & Timezone** on the target device.`,
+    `Put ${
+      isC64uRemoteVariant(variant) ? "your phone" : "the device running the app"
+    } and ${targetDeviceShortName(variant)} on the same Wi-Fi or wired LAN. Then open **Network Services & Timezone** on the target device.`,
     "",
     docsImage("C64 Ultimate Network Services & Timezone menu", "setup/enable_services.png"),
     "",
@@ -902,7 +922,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     image("Settings overview", profile, "settings/profiles/{profile}/01-overview.png"),
     "",
-    "Connection and saved devices live here, along with Appearance (display profile, theme, full-screen, and screen orientation), Notifications, Diagnostics options, Device Safety and network timing, Play and Disk behavior, the HVSC and Online Archive sources, feature toggles, Settings transfer, and an About panel. **Settings transfer** exports every app preference to a file you can import onto another phone or tablet, so a second device starts up already configured.",
+    `Connection and saved devices live here, along with Appearance (display profile, theme, full-screen, and screen orientation), Notifications, Diagnostics options, Device Safety and network timing, Play and Disk behavior, the HVSC and Online Archive sources, feature toggles, Settings transfer, and an About panel. **Settings transfer** exports every app preference to a file you can import onto another ${appDeviceName(
+      variant,
+    )}, so a second device starts up already configured.`,
     "",
     "If the device is hard to reach, start in **Connection**. If it is reachable but fragile, start in **Device Safety**.",
     "",
@@ -986,7 +1008,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "4. Select files or folders.",
     "5. Confirm and press Play.",
     "",
-    "Preferred path: Play. Use C64U source for files already on the target device; use Local for files on the Android device.",
+    `Preferred path: Play. Use C64U source for files already on the target device; use Local for files on ${appDeviceSubject(
+      variant,
+    )}.`,
     "",
     "### Build a Playlist from Folders",
     "",
@@ -1104,7 +1128,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
       ? [
           "### Remote Input",
           "",
-          "Remote Input turns your phone or tablet into a second-screen controller for the C64. It is handy when you are sitting across the room from the machine, when no joystick is plugged in, or when you just want to type a command without reaching for the real keyboard.",
+          `Remote Input turns your ${appDeviceName(
+            variant,
+          )} into a second-screen controller for the C64. It is handy when you are sitting across the room from the machine, when no joystick is plugged in, or when you just want to type a command without reaching for the real keyboard.`,
           "",
           "Open it in either of two places:",
           "",
@@ -1149,7 +1175,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
       ? [
           "### RAM Snapshots",
           "",
-          "A RAM snapshot is a copy of what is in your C64's memory right now, saved onto your phone or tablet so you can put it back later. It is the nearest thing the app has to a save-and-restore button for programs that have none of their own.",
+          `A RAM snapshot is a copy of what is in your C64's memory right now, saved onto your ${appDeviceName(
+            variant,
+          )} so you can put it back later. It is the nearest thing the app has to a save-and-restore button for programs that have none of their own.`,
           "",
           "Both actions live in **Home > Quick Actions**: **Save RAM** to capture, and **Load RAM** to restore. The device must be connected and not busy. The app pauses the machine for the transfer and resumes it afterwards, so a running program is not disturbed.",
           "",
@@ -1161,7 +1189,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "- **Screen Snapshot** stores the current screen and its colours.",
           "- **Custom Snapshot** lets you type the exact address ranges you want.",
           "",
-          "Snapshots are kept on your phone or tablet, not on the C64. Each one is named automatically from its type and the date and time, and if something is playing its title becomes the label. You can add or change a **Comment** on any snapshot later. The app keeps up to 100 snapshots and quietly drops the oldest once that fills.",
+          `Snapshots are kept on your ${appDeviceName(
+            variant,
+          )}, not on the C64. Each one is named automatically from its type and the date and time, and if something is playing its title becomes the label. You can add or change a **Comment** on any snapshot later. The app keeps up to 100 snapshots and quietly drops the oldest once that fills.`,
           "",
           "**Load RAM** opens your snapshot library. Filter it by name or by type, then tap a snapshot to restore it. The app asks you to confirm first, because restoring overwrites the matching memory on the C64. It writes back only the bytes the snapshot holds, and it deliberately leaves the CIA timers alone so the cursor keeps its normal blink. A CPU snapshot resumes the program; if that is not possible the app restores the memory alone and tells you so. From the same library you can edit a snapshot's comment or remove ones you no longer need with the trash icon.",
           "",
@@ -1197,7 +1227,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Everything you play or mount comes from a **source**, and each source keeps to its own picker so a wrong turn never lands you somewhere unexpected.",
     "",
-    "- **Local** — files and folders on the phone or tablet running the app.",
+    `- **Local** — files and folders on the ${appDeviceName(variant)} running the app.`,
     `- **C64U** — files on ${targetDeviceShortName(variant)}, reached over FTP.`,
     ...(includeFeature(features, "hvsc_enabled")
       ? [
@@ -1216,7 +1246,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Every change — on Home, on Disks, or in Config — is sent to the running device at once and takes effect immediately. But the device holds two copies of its settings: the **live** ones it is using now, and a **flash** copy it reloads at power-on. A change is live instantly; it survives a reboot or power cycle only once it reaches flash.",
     "",
-    "You manage that from **Home > Config actions**. **Save to flash** writes the current live settings to flash now — reach for it when **Auto save config** is Ask or No. The app can also keep named **configuration snapshots** on the phone or tablet, separate from the device's flash: save the current setup, then load it back later to restore a whole configuration at once.",
+    `You manage that from **Home > Config actions**. **Save to flash** writes the current live settings to flash now — reach for it when **Auto save config** is Ask or No. The app can also keep named **configuration snapshots** on the ${appDeviceName(
+      variant,
+    )}, separate from the device's flash: save the current setup, then load it back later to restore a whole configuration at once.`,
     "",
     "### Reading Diagnostics",
     "",
@@ -1398,7 +1430,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "### Snapshot Types and Memory Ranges",
     "",
-    "**Save RAM** offers these capture types. The app keeps up to 100 snapshots on your phone or tablet and drops the oldest once that fills.",
+    `**Save RAM** offers these capture types. The app keeps up to 100 snapshots on your ${appDeviceName(
+      variant,
+    )} and drops the oldest once that fills.`,
     "",
     table(
       ["Snapshot", "Captures", "Memory range"],

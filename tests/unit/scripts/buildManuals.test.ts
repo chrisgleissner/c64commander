@@ -15,7 +15,14 @@ describe("manual generator", () => {
 
     expect(c64uRemote).toContain("# C64U Remote Manual");
     expect(c64uRemote).not.toContain("# C64 Commander Manual");
-    expect(c64uRemote).not.toContain("Callback 8020");
+    // C64U Remote targets the Commodore Callback 8020 phone: the name is
+    // established once, and the manual must never speak of a tablet.
+    expect(c64uRemote).toContain("Commodore Callback 8020");
+    expect(c64uRemote).not.toMatch(/tablet/i);
+    // The broad C64 Commander edition also runs on tablets and never names the
+    // Callback 8020, so its wider phrasing stays intact.
+    expect(c64Commander).toContain("phone or tablet");
+    expect(c64Commander).not.toContain("Callback 8020");
     expect(c64uRemote).toContain("profiles/compact/04-app-ready.png");
     expect(c64uRemote).toContain("HVSC preparation");
     expect(c64uRemote).toContain("Optional. Enable it in Settings > Stable Features.");
