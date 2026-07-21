@@ -412,7 +412,14 @@ test.describe("Home interactions", () => {
       );
 
       const powerCycle = page.getByTestId("home-power-cycle");
-      await expect(powerCycle).toBeEnabled();
+      // Demo mode populates the device identity (product + core_version) asynchronously
+      // via the mock /v1/info query that runs after the DEMO_ACTIVE transition, so the
+      // Telnet-gated power-cycle control only renders once that identity settles. Wait
+      // for it to appear explicitly (mirroring the real-device sibling test's visibility
+      // wait) with a generous timeout instead of racing the default 10s enabled-timeout,
+      // which flakes under heavy CI contention (e.g. concurrent branch + tag workflows).
+      await expect(powerCycle).toBeVisible({ timeout: 30000 });
+      await expect(powerCycle).toBeEnabled({ timeout: 15000 });
       await powerCycle.click();
       await confirmMachineAction(page, "Power Cycle");
 
