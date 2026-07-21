@@ -219,3 +219,9 @@ LESSONS.md
 test-data
 U64_INCIDENTS.md
 .claude/ralph-loop.local.md
+
+# Claude Code local state: deny-by-default. Machine-local settings, locks,
+# worktrees, and any future secret-bearing files under .claude/ must never be
+# committed by accident. Only the reusable, shareable skills/ directory is tracked.
+.claude/*
+!.claude/skills/
