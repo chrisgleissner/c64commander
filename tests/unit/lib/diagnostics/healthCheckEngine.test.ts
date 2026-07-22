@@ -136,6 +136,7 @@ import {
 import { clearHealthHistory } from "@/lib/diagnostics/healthHistory";
 import { getHealthCheckStateSnapshot, resetHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
 import { getTraceEvents, resetTraceSession } from "@/lib/tracing/traceSession";
+import { TelnetError } from "@/lib/telnet/telnetTypes";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -423,7 +424,15 @@ describe("runHealthCheckForTarget", () => {
   // device's row, not a config write round-trip. It must use the read-only
   // probe set so opening/closing the picker never pulses LED/volume on
   // devices the user did not select.
-  it("keeps the switch-device dialog context read-only (no config pulse) while still using target ports and password", async () => {
+  //
+  // It must ALSO skip the Telnet probe: every telnet connect opens a full
+  // firmware UI session on the device, and the c64u/u64 telnet listener caps
+  // concurrent sessions at 4 with no idle timeout to reap a client that drops
+  // off the network. Probing telnet per-device every ~10s while the picker is
+  // open is the app's largest source of automatic telnet-session churn and
+  // half-open-leak exposure. REST/FTP still give the switcher its reachability
+  // signal; telnet is only verified on an explicit manual diagnostics run.
+  it("keeps the switch-device dialog read-only and skips the Telnet probe while still using target ports and password", async () => {
     setupAllProbesSuccess();
 
     const result = await runHealthCheckForTarget(
@@ -442,6 +451,26 @@ describe("runHealthCheckForTarget", () => {
     expect(mockPingFtp).toHaveBeenCalledWith(
       expect.objectContaining({ host: "backup-u64", port: 2021, password: "secret" }),
     );
+    // Telnet is NOT probed in the switcher — no firmware session is opened.
+    expect(result.probes.TELNET.outcome).toBe("Skipped");
+    expect(result.probes.TELNET.reason).toContain("does not probe Telnet");
+    expect(mockTelnetConnect).not.toHaveBeenCalled();
+  });
+
+  it("still probes Telnet on an explicit manual diagnostics target run", async () => {
+    setupAllProbesSuccess();
+
+    const result = await runHealthCheckForTarget(
+      {
+        deviceHost: "backup-u64:8080",
+        ftpPort: 2021,
+        telnetPort: 2323,
+        password: "secret",
+      },
+      { context: HEALTH_CHECK_CONTEXTS.manualDiagnostics },
+    );
+
+    expect(result.probes.TELNET.outcome).toBe("Success");
     expect(mockTelnetConnect).toHaveBeenCalledWith("backup-u64", 2323);
   });
 
@@ -1242,6 +1271,66 @@ describe("runHealthCheck — TELNET probe", () => {
     const result = await runHealthCheck();
 
     expect(result!.probes.TELNET.outcome).toBe("Success");
+  });
+
+  // The firmware telnet listener (socket_gui.cc) caps concurrent sessions at 4
+  // and, once full, answers "Too many connections, try again later." then closes.
+  // That is a device-BUSY signal (telnet reachable, no slot), not a failure — it
+  // must never flip the badge to Degraded or raise a diagnostics problem.
+  it("treats a 'Too many connections' busy notice as a benign Skip and keeps the run Healthy", async () => {
+    setupAllProbesSuccess();
+    queueTelnetReads("Too many connections, try again later.\r\n", new Uint8Array(0));
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.TELNET.outcome).toBe("Skipped");
+    expect(result!.probes.TELNET.reason).toContain("too many connections");
+    expect(result!.overallHealth).toBe("Healthy");
+    // A benign busy Skip is recorded as a reachable success in the trace, so the
+    // TELNET contributor is never degraded and no telnet "failure" event is logged.
+    const telnetTrace = getTraceEvents().find((event) => event.type === "telnet-operation");
+    expect(telnetTrace?.data.result).toBe("success");
+    expect(telnetTrace?.data.error).toBeNull();
+  });
+
+  // The c64u sends its banner and immediately closes the socket; the follow-up
+  // read then rejects with CONNECTION_CLOSED. The banner we already read must be
+  // preserved and classified, not thrown away as a probe failure.
+  it("preserves the banner and succeeds when the peer closes the socket right after sending it", async () => {
+    setupAllProbesSuccess();
+    mockTelnetRead.mockReset();
+    mockTelnetRead
+      .mockResolvedValueOnce(encodeTelnetText("Ultimate-II+ V3.11 - C64 Ultimate"))
+      .mockRejectedValue(new TelnetError("Read failed: Connection closed", "CONNECTION_CLOSED"));
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.TELNET.outcome).toBe("Success");
+  });
+
+  // After the transport observes the close it rejects the NEXT read with a
+  // "Not connected" (DISCONNECTED) error; a busy notice already in hand must
+  // still classify as a benign Skip rather than a failure.
+  it("classifies a busy notice as a Skip even when the follow-up read rejects with 'Not connected'", async () => {
+    setupAllProbesSuccess();
+    mockTelnetRead.mockReset();
+    mockTelnetRead
+      .mockResolvedValueOnce(encodeTelnetText("Too many connections, try again later.\r\n"))
+      .mockRejectedValue(new TelnetError("Not connected", "DISCONNECTED"));
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.TELNET.outcome).toBe("Skipped");
+    expect(result!.overallHealth).toBe("Healthy");
+  });
+
+  it("still fails TELNET when the banner carries a genuine failure marker", async () => {
+    setupAllProbesSuccess();
+    queueTelnetReads("Login incorrect", new Uint8Array(0));
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.TELNET.outcome).toBe("Fail");
   });
 
   it("fails TELNET when the probe returns no visible output", async () => {

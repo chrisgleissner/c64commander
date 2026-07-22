@@ -107,10 +107,12 @@ export type HealthCheckTarget = {
 export type HealthCheckTargetRunMode = "full" | "passive";
 export type HealthCheckContext = "manual-diagnostics" | "switch-device-dialog" | "background-maintenance";
 export type HealthCheckConfigPulsePolicy = "visible-config-pulse-allowed" | "read-only";
+export type HealthCheckTelnetProbePolicy = "probe" | "skip";
 
 export type HealthCheckRunContext = {
   context: HealthCheckContext;
   configPulsePolicy: HealthCheckConfigPulsePolicy;
+  telnetProbePolicy: HealthCheckTelnetProbePolicy;
 };
 
 export type HealthCheckProgressSnapshot = {
@@ -161,6 +163,7 @@ export const HEALTH_CHECK_CONTEXTS = {
   manualDiagnostics: {
     context: "manual-diagnostics",
     configPulsePolicy: "visible-config-pulse-allowed",
+    telnetProbePolicy: "probe",
   },
   // HARD18-008: the switcher needs reachability/latency for its per-device
   // rows, not a config write round-trip. The picker previously ran the
@@ -168,13 +171,24 @@ export const HEALTH_CHECK_CONTEXTS = {
   // 10s while open, and closing it mid-cycle aborted the pulse - hitting the
   // HARD18-003 revert-on-a-live-signal gap across potentially several
   // devices the user never touched.
+  //
+  // telnetProbePolicy "skip": every telnet connect spins up a full firmware UI
+  // session on the device, and the c64u/u64 telnet listener caps concurrent
+  // sessions at 4 with no idle timeout to reap a client that drops off the
+  // network (see telnet-too-many-connections firmware wedge). Probing telnet
+  // per-device every ~10s while the picker is open is the app's largest source
+  // of automatic telnet-session churn and half-open-leak exposure for marginal
+  // signal (REST already proves reachability). Reserve the telnet probe for an
+  // explicit manual diagnostics run; the switcher shows REST/FTP reachability.
   switchDeviceDialog: {
     context: "switch-device-dialog",
     configPulsePolicy: "read-only",
+    telnetProbePolicy: "skip",
   },
   backgroundMaintenance: {
     context: "background-maintenance",
     configPulsePolicy: "read-only",
+    telnetProbePolicy: "skip",
   },
 } as const satisfies Record<string, HealthCheckRunContext>;
 
@@ -940,6 +954,16 @@ const probeFtp = async (runtime: ProbeRuntime): Promise<HealthCheckProbeRecord> 
 };
 
 const TELNET_FAILURE_MARKERS = ["incorrect", "failed", "denied", "invalid"] as const;
+// The c64u/u64 telnet listener (firmware socket_gui.cc) caps concurrent sessions
+// at TELNET_MAX_SESSIONS (4) and, once full, answers every new connection with
+// "Too many connections, try again later." then closes. That is a device-BUSY
+// signal, not a health failure: the telnet server is demonstrably alive and
+// reachable, it just has no free session slot (typically because earlier sessions
+// were orphaned by a half-open network drop and the firmware has no per-session
+// idle timeout to reap them). Treating it as a hard probe failure spuriously
+// flips the badge to Degraded and logs a "Telnet request failed" problem against
+// a device REST/FTP prove is healthy. Detect it and record a benign Skip instead.
+const TELNET_BUSY_MARKERS = ["too many connections", "try again later"] as const;
 const TELNET_PASSWORD_PROMPT = "password:";
 const TELNET_AUTH_ENTER = "\r\n";
 const TELNET_IAC = 255;
@@ -957,6 +981,26 @@ const hasMeaningfulTelnetOutput = (value: string): boolean => /[a-z0-9]/i.test(v
 const hasTelnetFailureMarker = (value: string): boolean => {
   const normalized = value.trim().toLowerCase();
   return TELNET_FAILURE_MARKERS.some((marker) => normalized.includes(marker));
+};
+
+const hasTelnetBusyMarker = (value: string): boolean => {
+  const normalized = value.trim().toLowerCase();
+  return TELNET_BUSY_MARKERS.some((marker) => normalized.includes(marker));
+};
+
+// A peer-initiated close (FIN/RST) is a normal end-of-stream for our read loop,
+// not an error: the c64u telnet server routinely sends its banner (or the
+// "Too many connections" notice) and immediately closes the socket. Once the
+// native transport has seen the close it also rejects the NEXT read with a
+// "Not connected" (DISCONNECTED) error. Both must be treated as end-of-stream so
+// the text we already collected is classified normally, instead of the close
+// propagating out of the probe as a hard failure (Degraded badge + spurious
+// "Telnet request failed" problem for a device that answered us).
+const isBenignTelnetClose = (error: unknown): boolean => {
+  const code = (error as { code?: string } | undefined)?.code;
+  if (code === "CONNECTION_CLOSED" || code === "DISCONNECTED") return true;
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /connection closed|not connected|disconnected|socket got closed|connection reset|econnreset/i.test(message);
 };
 
 const createAbortError = () => new DOMException("Aborted", "AbortError");
@@ -1053,7 +1097,20 @@ const readTelnetVisibleText = async (
       throw createAbortError();
     }
 
-    const payload = await transport.read(sawData ? quietTimeoutMs : initialTimeoutMs);
+    let payload: Uint8Array;
+    try {
+      payload = await transport.read(sawData ? quietTimeoutMs : initialTimeoutMs);
+    } catch (error) {
+      // Peer closed the socket (FIN/RST) — normal end-of-stream. Stop reading and
+      // hand back whatever visible text we already collected so the caller can
+      // classify it, rather than turning a graceful device close into a probe
+      // failure. A genuine transport fault (timeout is already swallowed to an
+      // empty read inside the transport) still propagates.
+      if (isBenignTelnetClose(error)) {
+        break;
+      }
+      throw error;
+    }
     if (payload.length === 0) {
       emptyReads += 1;
       continue;
@@ -1176,11 +1233,19 @@ const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
             connectTimeoutMs,
           });
 
-          const result = hasTelnetFailureMarker(finalVisibleText)
-            ? makeRecord("TELNET", "Fail", elapsedMs, "telnet failure marker present", startMs)
-            : hasMeaningfulTelnetOutput(finalVisibleText)
-              ? makeRecord("TELNET", "Success", elapsedMs, null, startMs)
-              : makeRecord("TELNET", "Fail", elapsedMs, "No telnet response", startMs);
+          const result = hasTelnetBusyMarker(finalVisibleText)
+            ? makeRecord(
+                "TELNET",
+                "Skipped",
+                elapsedMs,
+                "Telnet server busy (too many connections) — device reachable, no free session slot",
+                startMs,
+              )
+            : hasTelnetFailureMarker(finalVisibleText)
+              ? makeRecord("TELNET", "Fail", elapsedMs, "telnet failure marker present", startMs)
+              : hasMeaningfulTelnetOutput(finalVisibleText)
+                ? makeRecord("TELNET", "Success", elapsedMs, null, startMs)
+                : makeRecord("TELNET", "Fail", elapsedMs, "No telnet response", startMs);
 
           recordTelnetOperation(traceAction, {
             actionId: "health-check",
@@ -1189,8 +1254,11 @@ const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
             hostname: runtime.host,
             port: runtime.telnetPort,
             durationMs: elapsedMs,
-            result: result.outcome === "Success" ? "success" : "failure",
-            error: result.reason ? new Error(result.reason) : null,
+            // Only a genuine Fail counts against the TELNET contributor; a benign
+            // "device busy" Skip is recorded as a reachable success so it never
+            // degrades the badge or surfaces as a diagnostics problem.
+            result: result.outcome === "Fail" ? "failure" : "success",
+            error: result.outcome === "Fail" && result.reason ? new Error(result.reason) : null,
             requestPayload: {
               steps: [
                 { type: "connect", host: runtime.host, port: runtime.telnetPort },
@@ -1735,15 +1803,20 @@ export const runHealthCheckForTarget = async (
 
     const telnet = restFailed
       ? setLocalSkippedProbe("TELNET", "Skipped: REST probe failed")
-      : await runLocalProbe(
-          "TELNET",
-          (signal) => probeTelnet(signal, runtime),
-          (record) => ({
-            record,
-            lifecycle: lifecycleFromRecord(record.outcome),
-          }),
-          resolveTelnetProbeTimeoutMs(Boolean(runtime.password)),
-        );
+      : runContext.telnetProbePolicy === "skip"
+        ? setLocalSkippedProbe(
+            "TELNET",
+            `Skipped: ${runContext.context} does not probe Telnet (reduces device session churn)`,
+          )
+        : await runLocalProbe(
+            "TELNET",
+            (signal) => probeTelnet(signal, runtime),
+            (record) => ({
+              record,
+              lifecycle: lifecycleFromRecord(record.outcome),
+            }),
+            resolveTelnetProbeTimeoutMs(Boolean(runtime.password)),
+          );
 
     const config = restFailed
       ? setLocalSkippedProbe("CONFIG", "Skipped: REST probe failed")
