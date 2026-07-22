@@ -150,6 +150,16 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
         if (!item.onRowClick) return;
         if (item.isDimmed || item.disableActions) return;
         if (event.defaultPrevented) return;
+        // Only a click on the row's own background counts as a row activation.
+        // Clicks originating from a nested interactive control (the item-actions
+        // kebab trigger, the selection checkbox, the Play/secondary buttons, or
+        // any menu/input element) must NOT fall through to the row's play handler.
+        // HARD23-007: a touch tap of the item-actions kebab reached this handler
+        // (the trigger only stopsPropagation and the row bailed solely on
+        // defaultPrevented), resuming playback + unmuting from a paused session.
+        if ((event.target as HTMLElement).closest('button,[role="menu"],[role="menuitem"],input,[data-slot]')) {
+          return;
+        }
         item.onRowClick();
       }}
       data-testid={rowTestId}

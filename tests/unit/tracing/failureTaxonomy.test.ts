@@ -94,6 +94,19 @@ describe("failureTaxonomy", () => {
     expect(result.failureClass).toBe("metadata-absent");
   });
 
+  it("classifies SAF picker cancel as cancelled category (HARD23-006 / HARD23-002 linchpin)", () => {
+    // The Android SAF file/folder picker throws "File selection canceled" /
+    // "Folder selection canceled" on user back-out. Both the songlengths file
+    // picker (PlayFilesPage, HARD23-006) and the local-folder picker
+    // (ItemSelectionDialog, HARD23-002) swallow the error only when
+    // category === "cancelled". Lock that mapping so a taxonomy change can't
+    // silently reintroduce the false-positive red "selection failed" toast.
+    expect(classifyError(new Error("File selection canceled")).category).toBe("cancelled");
+    expect(classifyError(new Error("Folder selection canceled")).category).toBe("cancelled");
+    // A genuine permission failure must still surface (not swallowed).
+    expect(classifyError(new Error("Songlengths file access was not granted.")).category).not.toBe("cancelled");
+  });
+
   it("classifies storage read error as io-read-failure (line 138 FALSE branch)", () => {
     // isStorageError("filesystem error reading config") = true (has "filesystem")
     // isWriteError("filesystem error reading config") = false (no write keywords)

@@ -5,6 +5,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ItemSelectionDialog, type SourceGroup } from "@/components/itemSelection/ItemSelectionDialog";
 import { LEGAL_NOTICE } from "@/components/archive/OnlineArchiveDialog";
 import { DisplayProfileProvider, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
+import { reportUserError } from "@/lib/uiErrors";
+
+vi.mock("@/lib/uiErrors", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/uiErrors")>();
+  return { ...actual, reportUserError: vi.fn() };
+});
 
 vi.mock("@/lib/sourceNavigation/useSourceNavigator", () => ({
   useSourceNavigator: () => ({
@@ -325,6 +331,69 @@ describe("ItemSelectionDialog display profiles", () => {
     fireEvent.click(localButton);
     await waitFor(() => {
       expect(onAddLocalSource).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("does not report an error when the folder picker is cancelled (HARD23-002)", async () => {
+    localStorage.clear();
+    vi.mocked(reportUserError).mockClear();
+    // The native SAF folder picker throws this exact message on user back-out.
+    const onAddLocalSource = vi.fn().mockRejectedValue(new Error("Folder selection canceled"));
+
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Mount Disk"
+          confirmLabel="Mount"
+          sourceGroups={sourceGroups}
+          onAddLocalSource={onAddLocalSource}
+          onConfirm={async () => true}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    const localButton = screen.getByTestId("import-option-local");
+    fireEvent.click(localButton);
+
+    await waitFor(() => {
+      expect(onAddLocalSource).toHaveBeenCalledTimes(1);
+    });
+    // A benign user cancellation must not surface as a false-positive error
+    // toast / error-level diagnostics entry, and the button must re-enable.
+    await waitFor(() => {
+      expect(localButton).not.toBeDisabled();
+    });
+    expect(reportUserError).not.toHaveBeenCalled();
+  });
+
+  it("still reports a genuine folder-add failure (HARD23-002)", async () => {
+    localStorage.clear();
+    vi.mocked(reportUserError).mockClear();
+    const onAddLocalSource = vi.fn().mockRejectedValue(new Error("SAF write failed: disk full"));
+
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Mount Disk"
+          confirmLabel="Mount"
+          sourceGroups={sourceGroups}
+          onAddLocalSource={onAddLocalSource}
+          onConfirm={async () => true}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("import-option-local"));
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledTimes(1);
+    });
+    expect(vi.mocked(reportUserError).mock.calls[0][0]).toMatchObject({
+      operation: "LOCAL_FOLDER_PICK",
     });
   });
 

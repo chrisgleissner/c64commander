@@ -48,7 +48,16 @@ export const SOFT_IEC_CONTROL = {
 export const buildDrivePath = (path?: string | null, file?: string | null) => {
   if (!file) return null;
   const base = normalizeDiskPath(path || "/");
-  return base.endsWith("/") ? `${base}${file}` : `${base}/${file}`;
+  const joined = base.endsWith("/") ? `${base}${file}` : `${base}/${file}`;
+  // The c64u /v1/drives poll returns the full absolute path in `image_file`
+  // with an empty `image_path`, so a naive join produces a double leading
+  // slash ("//USB2/Games/x.d64") that never === the library disk's
+  // normalizeDiskPath()-normalized `path`. That mismatch made
+  // resolveMountedDiskId's poll fallback return null once the optimistic mount
+  // override cleared, silently dropping rotation controls, the group label, and
+  // delete-while-mounted protection for C64U path-mounted disks. Normalize the
+  // result so it matches the stored disk path. See HARD23-001.
+  return normalizeDiskPath(joined);
 };
 
 export const normalizeDirectoryPath = (value: string) => {

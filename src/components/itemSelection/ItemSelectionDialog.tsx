@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { cn } from "@/lib/utils";
 import { reportUserError } from "@/lib/uiErrors";
+import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import type { SourceEntry, SelectedItem, SourceLocation } from "@/lib/sourceNavigation/types";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import type { AddItemsProgressState } from "./AddItemsProgressOverlay";
@@ -331,6 +332,15 @@ export const ItemSelectionDialog = ({
     } catch (error) {
       setPendingLocalSource(false);
       setPendingLocalSourceId(null);
+      // A user dismissing the SAF folder picker (Android back-out) throws
+      // "Folder selection canceled". That is an expected, benign outcome, not
+      // an application error. Routing it through reportUserError logged it at
+      // error severity and raised a persistent destructive (red) toast for a
+      // normal cancel — a false-positive foreground error. Swallow expected
+      // user-cancellations; only surface genuine failures. See HARD23-002.
+      if (classifyError(error).category === "cancelled") {
+        return;
+      }
       reportUserError({
         operation: "LOCAL_FOLDER_PICK",
         title: "Unable to add folder",

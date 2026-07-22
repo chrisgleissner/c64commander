@@ -41,6 +41,7 @@ import { reportUserError } from "@/lib/uiErrors";
 import { getC64API } from "@/lib/c64api";
 import { createLatestIntentWriteLane, type LatestIntentWriteLane } from "@/lib/deviceInteraction/latestIntentWriteLane";
 import type { TraceSourceKind } from "@/lib/tracing/types";
+import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { discoverConnection, getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { getParentPath } from "@/lib/playback/localFileBrowser";
 import { type PlayRequest } from "@/lib/playback/playbackRouter";
@@ -1908,6 +1909,19 @@ export default function PlayFilesPage() {
                       modifiedAt: result.modifiedAt ?? null,
                     });
                   } catch (error) {
+                    // A user dismissing the SAF file picker (Android back-out)
+                    // throws "File selection canceled". That is an expected,
+                    // benign outcome, not an application error. Routing it
+                    // through reportUserError logged it at error severity and
+                    // raised a persistent destructive (red) toast for a normal
+                    // cancel — a false-positive foreground error. Swallow
+                    // expected user-cancellations; the genuine "access was not
+                    // granted" throw above is not classified "cancelled" and so
+                    // still surfaces. Mirrors the local-folder-picker fix. See
+                    // HARD23-006 (sibling of HARD23-002).
+                    if (classifyError(error).category === "cancelled") {
+                      return;
+                    }
                     reportUserError({
                       operation: "SONGLENGTHS_PICK",
                       title: "Songlengths file selection failed",

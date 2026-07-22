@@ -444,6 +444,58 @@ describe("SelectableActionList view-all wrapping", () => {
     expect(onRowClick).not.toHaveBeenCalled();
   });
 
+  it("does not activate the row (HARD23-007) when a nested control is tapped, only for a background tap", () => {
+    // Regression: a touch tap of the item-actions kebab used to fall through to
+    // the row's onRowClick (=startPlaylist), resuming playback + unmuting from a
+    // paused session. The row now activates only for genuine background clicks.
+    const onRowClick = vi.fn();
+    const onAction = vi.fn();
+    const onSelectToggle = vi.fn();
+    const items: ActionListItem[] = [
+      {
+        id: "track-1",
+        title: "Track One",
+        selected: false,
+        actionLabel: "Play",
+        onAction,
+        onRowClick,
+        onSelectToggle,
+        menuItems: [{ type: "action", label: "Details", onSelect: vi.fn() }],
+      },
+    ];
+    render(
+      <SelectableActionList
+        title="Playlist"
+        items={items}
+        emptyLabel="Empty"
+        selectedCount={0}
+        allSelected={false}
+        onToggleSelectAll={vi.fn()}
+        maxVisible={10}
+        rowTestId="row"
+      />,
+    );
+    const row = screen.getByTestId("row");
+
+    // Item-actions kebab tap must not start row activation.
+    fireEvent.click(within(row).getByRole("button", { name: "Item actions" }));
+    expect(onRowClick).not.toHaveBeenCalled();
+    expect(onAction).not.toHaveBeenCalled();
+
+    // Selection checkbox tap must not start row activation.
+    fireEvent.click(within(row).getByRole("checkbox", { name: "Select Track One" }));
+    expect(onRowClick).not.toHaveBeenCalled();
+
+    // The explicit Play button triggers only onAction, never the row handler.
+    fireEvent.click(within(row).getByRole("button", { name: "Play Track One" }));
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(onRowClick).not.toHaveBeenCalled();
+
+    // A genuine background tap on the row still activates it.
+    fireEvent.click(row);
+    expect(onRowClick).toHaveBeenCalledTimes(1);
+  });
+
   it("hides checkbox when showSelection is false", () => {
     const items: ActionListItem[] = [
       {

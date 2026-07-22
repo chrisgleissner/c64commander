@@ -27,6 +27,12 @@ describe("HomeDiskManagerSupport", () => {
     expect(buildDrivePath("/USB0", "disk.d64")).toBe("/USB0/disk.d64");
     expect(buildDrivePath("/USB0/", "disk.d64")).toBe("/USB0/disk.d64");
     expect(buildDrivePath("/USB0", null)).toBeNull();
+    // HARD23-001: the c64u drive poll returns the full absolute path in
+    // `image_file` with an empty `image_path`; the joined result must not carry
+    // a double leading slash, or resolveMountedDiskId's poll fallback stops
+    // matching the library disk (rotation/group/delete-protection break).
+    expect(buildDrivePath("", "/USB2/Games/3D_Pinball.d64")).toBe("/USB2/Games/3D_Pinball.d64");
+    expect(buildDrivePath(null, "/USB2/Games/3D_Pinball.d64")).toBe("/USB2/Games/3D_Pinball.d64");
   });
 
   it("renders the location icon for local and ultimate disks", () => {

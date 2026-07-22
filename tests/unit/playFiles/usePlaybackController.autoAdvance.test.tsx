@@ -263,6 +263,48 @@ describe("usePlaybackController auto advance", () => {
     resetMachineExecution();
   });
 
+  // HARD23-004: playItem is the shared launch primitive for Play, Next,
+  // Previous, and auto-advance. A user Next/Previous skip reaches the device
+  // ONLY through playItem (startPlaylist/resume assert the shared
+  // machine-execution store "running", but a bare skip does not go through
+  // them). When the store reads "paused" (a restored/paused queue, or
+  // pause-then-Next) playItem used to launch audio while leaving the store
+  // "paused" — which mislabelled Home's Pause/Resume control AND permanently
+  // gated handleNext("auto") (see the HARD19-009 gate above), so every track
+  // overran its songlength forever. playItem must assert "running" on launch.
+  it("HARD23-004: playItem asserts machine-execution 'running' when launching from a paused session so auto-advance is not gated", async () => {
+    const { setMachineExecutionPaused, getMachineExecutionSnapshot, resetMachineExecution } =
+      await import("@/lib/deviceInteraction/machineExecutionStore");
+    resetMachineExecution();
+    const playlist = [createPlaylistItem("one", 1_000), createPlaylistItem("two", 1_000)];
+    const { result } = renderPlaybackHarness(playlist);
+
+    // A restored/paused session (or pause-then-skip): the shared store reads "paused".
+    act(() => {
+      setMachineExecutionPaused({ pausedBy: "play" });
+    });
+    expect(getMachineExecutionSnapshot().state).toBe("paused");
+
+    // The skip launches the next track through playItem.
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    expect(result.current.isPlaying).toBe(true);
+    // The store must now reflect the audio that is actually playing.
+    expect(getMachineExecutionSnapshot().state).toBe("running");
+
+    // With the store correctly "running", an auto-advance is no longer gated by
+    // the HARD19-009 machine-paused guard — the next track launches.
+    vi.mocked(executePlayPlan).mockClear();
+    await act(async () => {
+      await result.current.handleNext("auto", result.current.trackInstanceIdRef.current);
+    });
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+    expect(result.current.currentIndex).toBe(1);
+
+    resetMachineExecution();
+  });
+
   // HARD21-004: opening then closing the Home Ultimate menu must NOT resume a
   // playback the user deliberately paused. The menu freeze and a user pause used
   // to funnel through one sourceless flag, so an unconditional menu-close resume
