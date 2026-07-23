@@ -110,6 +110,18 @@ import {
   saveDebugLoggingEnabled,
   saveDiskAutostartMode,
   saveVolumeSliderPreviewIntervalMs,
+  loadSearchInsideDisks,
+  saveSearchInsideDisks,
+  loadBootMenuAnswerEnabled,
+  saveBootMenuAnswerEnabled,
+  loadBootMenuKey,
+  saveBootMenuKey,
+  loadBootSettleMs,
+  saveBootSettleMs,
+  BOOT_MENU_KEYS,
+  BOOT_SETTLE_MIN_MS,
+  BOOT_SETTLE_MAX_MS,
+  type BootMenuKey,
   loadNotificationVisibility,
   saveNotificationVisibility,
   loadNotificationDurationMs,
@@ -327,6 +339,11 @@ export default function SettingsPage() {
   const [configWriteIntervalMs, setConfigWriteIntervalMs] = useState(loadConfigWriteIntervalMs());
   const [demoModeEnabled, setDemoModeEnabled] = useState(loadDemoModeEnabled());
   const [diskAutostartMode, setDiskAutostartMode] = useState<DiskAutostartMode>(loadDiskAutostartMode());
+  // Content Explorer: In-Image Search (C) + Launch Safety boot-menu answer (B).
+  const [searchInsideDisks, setSearchInsideDisks] = useState(loadSearchInsideDisks);
+  const [bootMenuAnswerEnabled, setBootMenuAnswerEnabled] = useState(loadBootMenuAnswerEnabled);
+  const [bootMenuKey, setBootMenuKey] = useState<BootMenuKey>(loadBootMenuKey);
+  const [bootSettleMs, setBootSettleMs] = useState<number>(loadBootSettleMs);
   const [volumeSliderPreviewIntervalMs, setVolumeSliderPreviewIntervalMs] = useState(
     loadVolumeSliderPreviewIntervalMs(),
   );
@@ -1897,6 +1914,104 @@ export default function SettingsPage() {
                     starts. Some loaders may not like DMA.
                   </p>
                 </div>
+
+                {flags.in_image_search_enabled && (
+                  <div className="flex items-start justify-between gap-3 min-w-0">
+                    <div className="min-w-0">
+                      <Label htmlFor="settings-search-inside-disks" className="font-medium">
+                        Search inside disk images
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        When searching media, also match the programs inside .d64/.d71/.d81 images, not just their
+                        filenames.
+                      </p>
+                    </div>
+                    <Checkbox
+                      id="settings-search-inside-disks"
+                      data-testid="settings-search-inside-disks"
+                      checked={searchInsideDisks}
+                      onCheckedChange={(checked) => {
+                        const next = checked === true;
+                        setSearchInsideDisks(next);
+                        saveSearchInsideDisks(next);
+                      }}
+                    />
+                  </div>
+                )}
+
+                {flags.launch_safety_enabled && (
+                  <div className="space-y-3 rounded-md border border-border p-3">
+                    <div className="flex items-start justify-between gap-3 min-w-0">
+                      <div className="min-w-0">
+                        <Label htmlFor="settings-boot-menu-answer" className="font-medium">
+                          Answer cartridge boot menu after reset
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Advanced. For machines running a cartridge that shows a boot menu on reset: press a key after
+                          a Mount &amp; Load reset so the typed LOAD is not swallowed by the menu. Leave off unless you
+                          run such a cartridge.
+                        </p>
+                      </div>
+                      <Checkbox
+                        id="settings-boot-menu-answer"
+                        data-testid="settings-boot-menu-answer"
+                        checked={bootMenuAnswerEnabled}
+                        onCheckedChange={(checked) => {
+                          const next = checked === true;
+                          setBootMenuAnswerEnabled(next);
+                          saveBootMenuAnswerEnabled(next);
+                        }}
+                      />
+                    </div>
+                    {bootMenuAnswerEnabled && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="settings-boot-menu-key" className="text-sm">
+                            Menu key
+                          </Label>
+                          <Select
+                            value={bootMenuKey}
+                            onValueChange={(value) => {
+                              const key = value as BootMenuKey;
+                              setBootMenuKey(key);
+                              saveBootMenuKey(key);
+                            }}
+                          >
+                            <SelectTrigger id="settings-boot-menu-key" data-testid="settings-boot-menu-key">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {BOOT_MENU_KEYS.map((key) => (
+                                <SelectItem key={key} value={key}>
+                                  {key}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="settings-boot-settle" className="text-sm">
+                            Boot settle (ms)
+                          </Label>
+                          <Input
+                            id="settings-boot-settle"
+                            data-testid="settings-boot-settle"
+                            inputMode="numeric"
+                            value={String(bootSettleMs)}
+                            min={BOOT_SETTLE_MIN_MS}
+                            max={BOOT_SETTLE_MAX_MS}
+                            onChange={(event) => setBootSettleMs(Number(event.target.value) || 0)}
+                            onBlur={() => {
+                              const clamped = Math.min(BOOT_SETTLE_MAX_MS, Math.max(BOOT_SETTLE_MIN_MS, bootSettleMs));
+                              setBootSettleMs(clamped);
+                              saveBootSettleMs(clamped);
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label className="text-sm">Autofire rate: {autofireRateHz}/s</Label>

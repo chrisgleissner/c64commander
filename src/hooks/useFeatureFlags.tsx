@@ -72,3 +72,15 @@ export const useFeatureFlag = (id: FeatureFlagId) => {
 };
 
 export const getFeatureFlagValue = (flags: FeatureFlags, id: FeatureFlagId) => flags[id];
+
+/**
+ * Provider-free flag reader: subscribes directly to the feature-flag manager
+ * singleton so a component can read a flag reactively without being wrapped in
+ * FeatureFlagsProvider (used by widely-reused components rendered standalone in
+ * tests). Returns just the boolean value.
+ */
+export const useFeatureFlagValue = (id: FeatureFlagId): boolean => {
+  const [snapshot, setSnapshot] = useState<FeatureFlagSnapshot>(() => featureFlagManager.getSnapshot());
+  useEffect(() => featureFlagManager.subscribe(setSnapshot), []);
+  return Boolean(snapshot.flags[id]);
+};

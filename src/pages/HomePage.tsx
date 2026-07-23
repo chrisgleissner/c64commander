@@ -31,6 +31,8 @@ import { SystemInfo } from "./home/components/SystemInfo";
 import { MachineControls } from "./home/components/MachineControls";
 import { AudioMixer } from "./home/components/AudioMixer";
 import { StreamStatus } from "./home/components/StreamStatus";
+import { AudioMirrorPanel } from "@/components/streams/AudioMirrorPanel";
+import { VideoMirrorPanel } from "@/components/streams/VideoMirrorPanel";
 import { DriveManager } from "./home/components/DriveManager";
 import { HomeCpuSpeedSlider } from "./home/components/HomeCpuSpeedSlider";
 import { PrinterManager } from "./home/components/PrinterManager";
@@ -282,6 +284,8 @@ function HomePageContent() {
   const { value: homeTelnetPrinterActionsEnabled } = useFeatureFlag("home_telnet_printer_actions_enabled");
   const { value: homeTelnetPowerCycleEnabled } = useFeatureFlag("home_telnet_power_cycle_enabled");
   const { value: homeTelnetClearRamRebootEnabled } = useFeatureFlag("home_telnet_clear_ram_reboot_enabled");
+  const { value: audioMirrorEnabled } = useFeatureFlag("audio_mirror_enabled");
+  const { value: videoMirrorEnabled } = useFeatureFlag("video_mirror_enabled");
   const deviceControlBusy = deviceControlActionId !== null;
   const machineTaskBusy = machineTaskId !== null || pauseResumePending || deviceControlBusy || reuTaskPending;
   const allSnapshots: RestorableSnapshotEntry[] = [...snapshots, ...(reuSnapshotEnabled ? reuSnapshots : [])].sort(
@@ -1761,6 +1765,18 @@ function HomePageContent() {
           <AudioMixer isConnected={isActive} machineTaskBusy={machineTaskBusy} runMachineTask={runMachineTask} />
 
           {deviceCapabilities.supportsStreaming ? <StreamStatus isConnected={isActive} /> : null}
+
+          {audioMirrorEnabled && deviceCapabilities.supportsStreaming ? (
+            <div className="mt-3">
+              <AudioMirrorPanel />
+            </div>
+          ) : null}
+
+          {videoMirrorEnabled && deviceCapabilities.supportsStreaming ? (
+            <div className="mt-3">
+              <VideoMirrorPanel />
+            </div>
+          ) : null}
 
           {/* Config Actions */}
           {/*
