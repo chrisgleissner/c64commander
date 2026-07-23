@@ -37,6 +37,22 @@ describe("streamReceiver — bridge derivation & socket factory", () => {
     expect(receiver.destination).toMatch(/:11000$/);
   });
 
+  it("uses the configured port in the stream destination", () => {
+    const video = new WebSocketStreamReceiver({
+      name: "video",
+      bridgeUrl: "ws://host:8788",
+      port: 21000,
+      socketFactory: (url) => new MockSocket(url),
+    });
+    expect(video.destination).toBe("host:21000");
+    const audioDefault = new WebSocketStreamReceiver({
+      name: "audio",
+      bridgeUrl: "ws://host:8788",
+      socketFactory: (url) => new MockSocket(url),
+    });
+    expect(audioDefault.destination).toBe("host:11001");
+  });
+
   it("falls back to localhost when the bridge URL is unparseable", () => {
     const receiver = new WebSocketStreamReceiver({
       name: "audio",

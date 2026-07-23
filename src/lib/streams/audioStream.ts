@@ -16,7 +16,12 @@
  * without per-packet overhead. seq gaps feed a dropped-packet health counter.
  */
 
-export const AUDIO_SAMPLE_RATE = 47983;
+// Exact fractional rates derived from the colour subcarrier (source of truth:
+// c64stream c64-protocol.h). The device is PAL by default; NTSC drifts ~43 Hz.
+export const AUDIO_SAMPLE_RATE_PAL = 47982.8869047619;
+export const AUDIO_SAMPLE_RATE_NTSC = 47940.3408482143;
+/** Default (PAL). Video-format detection can override for NTSC. */
+export const AUDIO_SAMPLE_RATE = AUDIO_SAMPLE_RATE_PAL;
 export const AUDIO_SEQ_BYTES = 2;
 export const AUDIO_STEREO_FRAME_BYTES = 4; // 2 channels * 2 bytes
 export const AUDIO_FRAMES_PER_PACKET = 192;

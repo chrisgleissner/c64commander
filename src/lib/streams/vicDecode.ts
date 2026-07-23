@@ -16,28 +16,42 @@
  */
 
 export const VIC_FRAME_WIDTH = 384;
-export const VIC_FRAME_HEIGHT = 272;
+export const VIC_PAL_HEIGHT = 272;
+export const VIC_NTSC_HEIGHT = 240;
+/** Frame storage is always PAL-sized (272 lines); NTSC (240) is a subset. */
+export const VIC_FRAME_HEIGHT = VIC_PAL_HEIGHT;
 export const VIC_BYTES_PER_FRAME = (VIC_FRAME_WIDTH * VIC_FRAME_HEIGHT) / 2; // 52224
 export const VIC_PIXELS_PER_FRAME = VIC_FRAME_WIDTH * VIC_FRAME_HEIGHT;
 
-/** 16-entry VIC palette (RGB), matching the device's stream palette. */
+/**
+ * Clamp a packet-derived frame height into the valid [NTSC, PAL] range, matching
+ * c64stream's c64_clamp_frame_height so a stray height can't overflow the buffer.
+ */
+export const clampFrameHeight = (height: number): number =>
+  height < VIC_NTSC_HEIGHT ? VIC_NTSC_HEIGHT : height > VIC_PAL_HEIGHT ? VIC_PAL_HEIGHT : height;
+
+/**
+ * 16-entry VIC palette (RGB) — the "C64 Ultimate Default Palette" the device
+ * streams (source of truth: c64stream `data/palettes/default.vpl`), so in-app
+ * video matches what the machine and OBS/c64stream render.
+ */
 export const VIC_PALETTE_RGB: ReadonlyArray<readonly [number, number, number]> = [
-  [0x00, 0x00, 0x00],
-  [0xff, 0xff, 0xff],
-  [0x68, 0x37, 0x2b],
-  [0x70, 0xa4, 0xb2],
-  [0x6f, 0x3d, 0x86],
-  [0x58, 0x8d, 0x43],
-  [0x35, 0x28, 0x79],
-  [0xb8, 0xc7, 0x6f],
-  [0x6f, 0x4f, 0x25],
-  [0x43, 0x39, 0x00],
-  [0x9a, 0x67, 0x59],
-  [0x44, 0x44, 0x44],
-  [0x6c, 0x6c, 0x6c],
-  [0x9a, 0xd2, 0x84],
-  [0x6c, 0x5e, 0xb5],
-  [0x95, 0x95, 0x95],
+  [0x00, 0x00, 0x00], // Black
+  [0xf7, 0xf7, 0xf7], // White
+  [0x8d, 0x2f, 0x34], // Red
+  [0x6a, 0xd4, 0xcd], // Cyan
+  [0x98, 0x35, 0xa4], // Purple
+  [0x4c, 0xb4, 0x42], // Green
+  [0x2c, 0x29, 0xb1], // Blue
+  [0xef, 0xef, 0x5d], // Yellow
+  [0x98, 0x4e, 0x20], // Orange
+  [0x5b, 0x38, 0x00], // Brown
+  [0xd1, 0x67, 0x6d], // Pink
+  [0x4a, 0x4a, 0x4a], // Dark grey
+  [0x7b, 0x7b, 0x7b], // Medium grey
+  [0x9f, 0xef, 0x93], // Light green
+  [0x6d, 0x6a, 0xef], // Light blue
+  [0xb2, 0xb2, 0xb2], // Light grey
 ];
 
 const toHex2 = (value: number) => value.toString(16).padStart(2, "0");

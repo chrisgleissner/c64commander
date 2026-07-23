@@ -21,6 +21,25 @@
 > manual (matching the `lighting_studio` convention); the manual documents Audio Mirror only.
 > The web path consumes a UDP→WebSocket bridge (`streamReceiver.web` seam); the native UDP
 > receiver plugin is the remaining follow-up (`UnsupportedStreamReceiver` fallback until then).
+>
+> **Reconciled with c64stream (the authoritative native reference).** After reviewing
+> `github.com/chrisgleissner/c64stream` (`src/network/c64-protocol.h`, `src/video/c64-video.c`),
+> the wire-format details were corrected against it:
+> - **Palette** now uses the device-accurate "C64 Ultimate Default Palette"
+>   (`c64stream data/palettes/default.vpl`), not the plan's §4 generic VIC-II table, so in-app
+>   video matches the machine / OBS. White is `#F7F7F7`, red `#8D2F34`, etc.
+> - **PAL/NTSC** are both handled: frame height is derived from the last packet
+>   (`line + lines_per_packet`) and clamped to `[240, 272]`; the canvas re-sizes to 272 (PAL) or
+>   240 (NTSC). Exact audio rates are PAL `47982.8869 Hz` / NTSC `47940.3408 Hz` (was a rounded
+>   47983). Audio-only mode assumes PAL (no video packets to detect from).
+> - **Packet validation** matches c64stream: width 384, **4 lines/packet, 4 bpp** (was
+>   `linesPerPacket != 0`).
+> - **Ports** stay the real defaults **11000 (video) / 11001 (audio)** and are now
+>   **configurable** in Settings (`c64u_stream_video_port` / `_audio_port`) — c64stream's
+>   21000/21001 are test-only.
+> Deliberately NOT ported from c64stream (kept simple for an in-app monitor, not an OBS-grade
+> pipeline): the network jitter buffer, audio concealment/gap-fill, GPU CRT effects, and
+> file recording (the plan's optional §5 recording remains a follow-up).
 
 > Goal: hear and (optionally) see the running machine inside the app. The device
 > exposes **two independent streams** — audio and video — so we mirror them

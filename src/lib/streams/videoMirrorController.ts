@@ -38,8 +38,11 @@ export interface VideoMirrorDeps {
   startStream: (name: "video", destination: string) => Promise<unknown>;
   stopStream: (name: "video") => Promise<unknown>;
   onChange: (snapshot: VideoMirrorSnapshot) => void;
-  /** Frame sink: receives a full 52224-byte VIC frame for every RENDERED frame. */
-  renderFrame?: (frame: Uint8Array) => void;
+  /**
+   * Frame sink: receives a full 52224-byte VIC frame plus the detected frame
+   * height (PAL 272 / NTSC 240) for every RENDERED frame.
+   */
+  renderFrame?: (frame: Uint8Array, height: number) => void;
   /** Render every Nth assembled frame (default 1 = every frame). */
   frameThrottle?: number;
   /** Injectable clock for the rolling fps window (defaults to Date.now). */
@@ -104,7 +107,7 @@ export class VideoMirrorController {
       this.frameTick += 1;
       let fps = this.snapshot.fps;
       if (this.frameTick % this.throttle === 0) {
-        this.deps.renderFrame?.(frame);
+        this.deps.renderFrame?.(frame, this.assembler.frameHeight);
         fps = this.recordRenderedFrame();
       }
       this.update({ fps, droppedPackets: this.assembler.stats.droppedPackets });

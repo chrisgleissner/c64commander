@@ -37,8 +37,10 @@ export interface StreamReceiverOptions {
   name: StreamName;
   /** WebSocket bridge base URL, e.g. "ws://host:8788". Defaults to the app origin. */
   bridgeUrl?: string;
-  /** The host:port the device should stream to (defaults to the bridge host + default port). */
+  /** The host:port the device should stream to (defaults to the bridge host + `port`). */
   destination?: string;
+  /** UDP port the device streams to / the bridge binds (defaults 11000 video / 11001 audio). */
+  port?: number;
   /** Injectable WebSocket constructor for tests. */
   socketFactory?: (url: string) => WebSocketLike;
 }
@@ -73,8 +75,9 @@ export class WebSocketStreamReceiver implements StreamReceiver {
 
   constructor(options: StreamReceiverOptions) {
     const bridge = options.bridgeUrl ?? deriveBridgeUrl();
+    const port = options.port ?? defaultPortFor(options.name);
     const url = `${bridge.replace(/\/+$/, "")}/streams/${options.name}`;
-    this.destination = options.destination ?? `${bridgeHost(bridge)}:${defaultPortFor(options.name)}`;
+    this.destination = options.destination ?? `${bridgeHost(bridge)}:${port}`;
     const factory = options.socketFactory ?? defaultSocketFactory;
     this.socket = factory(url);
     this.socket.binaryType = "arraybuffer";

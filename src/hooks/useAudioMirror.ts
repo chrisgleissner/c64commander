@@ -8,6 +8,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getC64API } from "@/lib/c64api";
+import { loadStreamAudioPort } from "@/lib/config/appSettings";
+import { createStreamReceiver } from "@/lib/streams/streamReceiver";
 import {
   AudioMirrorController,
   type AudioMirrorSnapshot,
@@ -33,7 +35,9 @@ export const useAudioMirror = (options: UseAudioMirrorOptions = {}) => {
         startStream: (name, destination) => api.startStream(name, destination),
         stopStream: (name) => api.stopStream(name),
         onChange: setSnapshot,
-        createReceiver: options.createReceiver,
+        // Inject the configured audio port unless a test supplies its own receiver.
+        createReceiver:
+          options.createReceiver ?? ((opts) => createStreamReceiver({ ...opts, port: loadStreamAudioPort() })),
         createPlayer: options.createPlayer,
       });
     }

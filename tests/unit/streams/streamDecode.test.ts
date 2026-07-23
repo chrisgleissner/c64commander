@@ -11,6 +11,7 @@ import {
   VIC_BYTES_PER_FRAME,
   VIC_PALETTE_RGB,
   buildPaletteLUT,
+  clampFrameHeight,
   decodeVicFrameInto,
   decodeVicFrameToRGBA,
   isLittleEndian,
@@ -24,10 +25,10 @@ import { AudioMirrorPlayer, nextStartTime } from "@/lib/streams/audioPlayer";
 describe("vicDecode", () => {
   it("decodes a known frame to the expected RGBA (low nibble = left, high = right)", () => {
     const frame = new Uint8Array(VIC_BYTES_PER_FRAME);
-    frame[0] = 0x21; // left = 1 (white), right = 2 (brown)
+    frame[0] = 0x21; // left = 1 (white), right = 2 (red)
     const rgba = decodeVicFrameToRGBA(frame);
-    expect(Array.from(rgba.slice(0, 4))).toEqual([0xff, 0xff, 0xff, 0xff]); // white
-    expect(Array.from(rgba.slice(4, 8))).toEqual([0x68, 0x37, 0x2b, 0xff]); // brown
+    expect(Array.from(rgba.slice(0, 4))).toEqual([0xf7, 0xf7, 0xf7, 0xff]); // white (C64U default)
+    expect(Array.from(rgba.slice(4, 8))).toEqual([0x8d, 0x2f, 0x34, 0xff]); // red
   });
 
   it("LUT decode reproduces the palette bytes for the current platform endianness", () => {
@@ -45,16 +46,16 @@ describe("vicDecode", () => {
 
   it("big-endian LUT lays out RRGGBBAA", () => {
     const lut = buildPaletteLUT(false);
-    // palette 1 = white -> 0xffffffff
-    expect(lut[1] >>> 0).toBe(0xffffffff);
-    // palette 2 = 68 37 2b -> 0x68372bff
-    expect(lut[2] >>> 0).toBe(0x68372bff);
+    // palette 1 = white (F7F7F7) -> 0xf7f7f7ff
+    expect(lut[1] >>> 0).toBe(0xf7f7f7ff);
+    // palette 2 = 8D2F34 -> 0x8d2f34ff
+    expect(lut[2] >>> 0).toBe(0x8d2f34ff);
   });
 
   it("paletteHex and isLittleEndian behave", () => {
-    expect(paletteHex(1)).toBe("#ffffff");
-    expect(paletteHex(2)).toBe("#68372b");
-    expect(paletteHex(17)).toBe("#ffffff"); // wraps
+    expect(paletteHex(1)).toBe("#f7f7f7");
+    expect(paletteHex(2)).toBe("#8d2f34");
+    expect(paletteHex(17)).toBe("#f7f7f7"); // wraps
     expect(typeof isLittleEndian()).toBe("boolean");
   });
 
@@ -65,6 +66,13 @@ describe("vicDecode", () => {
     expect(sampleBorderColorIndex(frame)).toBe(6);
     expect(sampleBorderColorIndex(new Uint8Array(0))).toBe(0);
   });
+
+  it("clamps a frame height into the [NTSC, PAL] range", () => {
+    expect(clampFrameHeight(272)).toBe(272);
+    expect(clampFrameHeight(240)).toBe(240);
+    expect(clampFrameHeight(300)).toBe(272); // above PAL -> PAL
+    expect(clampFrameHeight(100)).toBe(240); // below NTSC -> NTSC
+  });
 });
 
 const buildVicPacket = (opts: {
@@ -74,6 +82,7 @@ const buildVicPacket = (opts: {
   lastLine?: boolean;
   width?: number;
   linesPerPacket?: number;
+  bpp?: number;
   payload: Uint8Array;
 }) => {
   const packet = new Uint8Array(VIC_HEADER_BYTES + opts.payload.length);
@@ -82,8 +91,8 @@ const buildVicPacket = (opts: {
   view.setUint16(2, opts.frame ?? 0, true);
   view.setUint16(4, (opts.line & 0x7fff) | (opts.lastLine ? 0x8000 : 0), true);
   view.setUint16(6, opts.width ?? 384, true);
-  packet[8] = opts.linesPerPacket ?? 1;
-  packet[9] = 4;
+  packet[8] = opts.linesPerPacket ?? 4;
+  packet[9] = opts.bpp ?? 4;
   view.setUint16(10, 0, true);
   packet.set(opts.payload, VIC_HEADER_BYTES);
   return packet;
@@ -93,7 +102,7 @@ describe("vicStream", () => {
   it("parses a header including the last-line flag", () => {
     const packet = buildVicPacket({ seq: 5, line: 10, lastLine: true, payload: new Uint8Array(VIC_BYTES_PER_LINE) });
     const header = parseVicHeader(packet);
-    expect(header).toMatchObject({ seq: 5, line: 10, lastLine: true, width: 384, linesPerPacket: 1 });
+    expect(header).toMatchObject({ seq: 5, line: 10, lastLine: true, width: 384, linesPerPacket: 4, bpp: 4 });
   });
 
   it("returns null for a short datagram", () => {
@@ -126,6 +135,28 @@ describe("vicStream", () => {
     );
     expect(frame).not.toBeNull();
     expect(assembler.stats.ignored).toBe(3);
+  });
+
+  it("ignores packets whose bits-per-pixel is not 4 (c64stream validation)", () => {
+    const assembler = new VicStreamAssembler();
+    expect(
+      assembler.ingest(buildVicPacket({ line: 0, bpp: 8, payload: new Uint8Array(VIC_BYTES_PER_LINE) })),
+    ).toBeNull();
+    expect(assembler.stats.ignored).toBe(1);
+  });
+
+  it("reports the detected PAL vs NTSC frame height from the last packet", () => {
+    const pal = new VicStreamAssembler();
+    // last packet at line 268 -> 268 + 4 = 272 (PAL)
+    pal.ingest(buildVicPacket({ line: 268, lastLine: true, payload: new Uint8Array(VIC_BYTES_PER_LINE) }));
+    expect(pal.frameHeight).toBe(272);
+
+    const ntsc = new VicStreamAssembler();
+    // last packet at line 236 -> 236 + 4 = 240 (NTSC)
+    ntsc.ingest(buildVicPacket({ line: 236, lastLine: true, payload: new Uint8Array(VIC_BYTES_PER_LINE) }));
+    expect(ntsc.frameHeight).toBe(240);
+    ntsc.reset();
+    expect(ntsc.frameHeight).toBe(272);
   });
 
   it("counts dropped packets from seq gaps and resets", () => {

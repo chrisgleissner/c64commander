@@ -47,7 +47,7 @@ const videoPacket = (opts: { seq: number; frame?: number; line?: number; lastLin
   view.setUint16(2, frame & 0xffff, true); // frame
   view.setUint16(4, (line & 0x7fff) | (lastLine ? VIC_LAST_LINE_FLAG : 0), true); // lineRaw
   view.setUint16(6, VIC_FRAME_WIDTH, true); // width = 384
-  packet[8] = 1; // linesPerPacket
+  packet[8] = 4; // linesPerPacket
   packet[9] = 4; // bpp
   view.setUint16(10, 0, true); // enc
   // payload left as zeroes (a valid all-black line)

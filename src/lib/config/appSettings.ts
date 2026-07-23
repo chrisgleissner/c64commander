@@ -31,6 +31,8 @@ const BOOT_MENU_ANSWER_ENABLED_KEY = "c64u_boot_menu_answer_enabled";
 const BOOT_MENU_KEY_KEY = "c64u_boot_menu_key";
 const BOOT_SETTLE_MS_KEY = "c64u_boot_settle_ms";
 const SEARCH_INSIDE_DISKS_KEY = "c64u_search_inside_disks";
+const STREAM_VIDEO_PORT_KEY = "c64u_stream_video_port";
+const STREAM_AUDIO_PORT_KEY = "c64u_stream_audio_port";
 
 export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 200;
 export type NotificationVisibility = "errors-only" | "all";
@@ -307,6 +309,37 @@ export const saveSearchInsideDisks = (enabled: boolean) => {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(SEARCH_INSIDE_DISKS_KEY, enabled ? "1" : "0");
   broadcast(SEARCH_INSIDE_DISKS_KEY, enabled);
+};
+
+// Live Mirror (Content Explorer D/E): UDP ports the device streams to and the
+// receiver/bridge binds. Defaults 11000 (video) / 11001 (audio); configurable
+// because deployments (or a c64stream instance on 21000/21001) may need others.
+export const DEFAULT_STREAM_VIDEO_PORT = 11000;
+export const DEFAULT_STREAM_AUDIO_PORT = 11001;
+
+const clampPort = (value: number, fallback: number) => {
+  if (Number.isNaN(value)) return fallback;
+  return Math.min(65535, Math.max(1, Math.round(value)));
+};
+
+export const loadStreamVideoPort = () =>
+  clampPort(readNumber(STREAM_VIDEO_PORT_KEY, DEFAULT_STREAM_VIDEO_PORT), DEFAULT_STREAM_VIDEO_PORT);
+
+export const saveStreamVideoPort = (value: number) => {
+  if (typeof localStorage === "undefined") return;
+  const clamped = clampPort(value, DEFAULT_STREAM_VIDEO_PORT);
+  localStorage.setItem(STREAM_VIDEO_PORT_KEY, String(clamped));
+  broadcast(STREAM_VIDEO_PORT_KEY, clamped);
+};
+
+export const loadStreamAudioPort = () =>
+  clampPort(readNumber(STREAM_AUDIO_PORT_KEY, DEFAULT_STREAM_AUDIO_PORT), DEFAULT_STREAM_AUDIO_PORT);
+
+export const saveStreamAudioPort = (value: number) => {
+  if (typeof localStorage === "undefined") return;
+  const clamped = clampPort(value, DEFAULT_STREAM_AUDIO_PORT);
+  localStorage.setItem(STREAM_AUDIO_PORT_KEY, String(clamped));
+  broadcast(STREAM_AUDIO_PORT_KEY, clamped);
 };
 
 export const loadNotificationVisibility = (): NotificationVisibility => {

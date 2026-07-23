@@ -17,11 +17,14 @@
  * last-line flag is seen (~68 packets/frame).
  */
 
-import { VIC_BYTES_PER_FRAME, VIC_FRAME_WIDTH } from "./vicDecode";
+import { VIC_BYTES_PER_FRAME, VIC_FRAME_WIDTH, VIC_PAL_HEIGHT, clampFrameHeight } from "./vicDecode";
 
 export const VIC_HEADER_BYTES = 12;
 export const VIC_BYTES_PER_LINE = VIC_FRAME_WIDTH / 2; // 192
 export const VIC_LAST_LINE_FLAG = 0x8000;
+/** The device always sends 4 lines per packet, 4 bits per pixel (c64stream). */
+export const VIC_LINES_PER_PACKET = 4;
+export const VIC_BITS_PER_PIXEL = 4;
 
 export interface VicPacketHeader {
   seq: number;
@@ -68,6 +71,8 @@ export interface VicStreamStats {
 export class VicStreamAssembler {
   private readonly frame = new Uint8Array(VIC_BYTES_PER_FRAME);
   private lastSeq: number | null = null;
+  /** Height reported by the most recent completed frame — PAL 272 / NTSC 240. */
+  frameHeight: number = VIC_PAL_HEIGHT;
   readonly stats: VicStreamStats = { packets: 0, ignored: 0, frames: 0, droppedPackets: 0 };
 
   ingest(packet: Uint8Array): Uint8Array | null {
@@ -84,10 +89,15 @@ export class VicStreamAssembler {
     }
     this.lastSeq = header.seq;
 
-    // Guard: only accept full-width, non-empty line groups.
-    if (header.width !== VIC_FRAME_WIDTH || header.linesPerPacket === 0) {
+    // Guard: match c64stream's format validation exactly (width 384, 4 lines/packet,
+    // 4 bits/pixel). Anything else is a malformed/foreign packet.
+    if (
+      header.width !== VIC_FRAME_WIDTH ||
+      header.linesPerPacket !== VIC_LINES_PER_PACKET ||
+      header.bpp !== VIC_BITS_PER_PIXEL
+    ) {
       this.stats.ignored += 1;
-      return header.lastLine ? this.completeFrame() : null;
+      return header.lastLine ? this.completeFrame(header) : null;
     }
 
     const writeOffset = header.line * VIC_BYTES_PER_LINE;
@@ -98,10 +108,12 @@ export class VicStreamAssembler {
       if (count > 0) this.frame.set(payload.subarray(0, count), writeOffset);
     }
 
-    return header.lastLine ? this.completeFrame() : null;
+    return header.lastLine ? this.completeFrame(header) : null;
   }
 
-  private completeFrame(): Uint8Array {
+  private completeFrame(header: VicPacketHeader): Uint8Array {
+    // c64stream derives the frame height from the last packet: line + linesPerPacket.
+    this.frameHeight = clampFrameHeight(header.line + (header.linesPerPacket || VIC_LINES_PER_PACKET));
     this.stats.frames += 1;
     return this.frame.slice();
   }
@@ -109,6 +121,7 @@ export class VicStreamAssembler {
   reset(): void {
     this.frame.fill(0);
     this.lastSeq = null;
+    this.frameHeight = VIC_PAL_HEIGHT;
     this.stats.packets = 0;
     this.stats.ignored = 0;
     this.stats.frames = 0;

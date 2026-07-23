@@ -8,12 +8,14 @@
 
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { getC64API } from "@/lib/c64api";
+import { loadStreamVideoPort } from "@/lib/config/appSettings";
+import { createStreamReceiver } from "@/lib/streams/streamReceiver";
 import {
   VideoMirrorController,
   type VideoMirrorSnapshot,
   type VideoMirrorDeps,
 } from "@/lib/streams/videoMirrorController";
-import { buildPaletteLUT, decodeVicFrameInto, VIC_FRAME_WIDTH, VIC_FRAME_HEIGHT } from "@/lib/streams/vicDecode";
+import { buildPaletteLUT, decodeVicFrameInto, VIC_FRAME_WIDTH, VIC_PAL_HEIGHT } from "@/lib/streams/vicDecode";
 
 const INITIAL: VideoMirrorSnapshot = { state: "off", fps: 0, droppedPackets: 0, error: null };
 
@@ -43,11 +45,12 @@ export const useVideoMirror = (options: UseVideoMirrorOptions = {}) => {
   const lutRef = useRef<Uint32Array | null>(null);
   const imageDataRef = useRef<ImageData | null>(null);
   const pixelsRef = useRef<Uint32Array | null>(null);
+  const heightRef = useRef<number>(0);
 
   const { canvasRef, renderFrame: renderFrameOverride } = options;
 
   const renderFrame = useCallback(
-    (frame: Uint8Array) => {
+    (frame: Uint8Array, height: number = VIC_PAL_HEIGHT) => {
       if (renderFrameOverride) {
         renderFrameOverride(frame);
         return;
@@ -58,9 +61,13 @@ export const useVideoMirror = (options: UseVideoMirrorOptions = {}) => {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       if (!lutRef.current) lutRef.current = buildPaletteLUT();
-      if (!imageDataRef.current || !pixelsRef.current) {
-        imageDataRef.current = ctx.createImageData(VIC_FRAME_WIDTH, VIC_FRAME_HEIGHT);
+      // (Re)allocate the ImageData when the detected format height changes (PAL 272 /
+      // NTSC 240) so an NTSC frame isn't stretched into a PAL-sized surface.
+      if (!imageDataRef.current || !pixelsRef.current || heightRef.current !== height) {
+        canvas.height = height;
+        imageDataRef.current = ctx.createImageData(VIC_FRAME_WIDTH, height);
         pixelsRef.current = new Uint32Array(imageDataRef.current.data.buffer);
+        heightRef.current = height;
       }
       decodeVicFrameInto(frame, pixelsRef.current, lutRef.current);
       ctx.putImageData(imageDataRef.current, 0, 0);
@@ -79,8 +86,10 @@ export const useVideoMirror = (options: UseVideoMirrorOptions = {}) => {
         startStream: (name, destination) => api.startStream(name, destination),
         stopStream: (name) => api.stopStream(name),
         onChange: setSnapshot,
-        createReceiver: options.createReceiver,
-        renderFrame: (frame) => renderFrameRef.current(frame),
+        // Inject the configured video port unless a test supplies its own receiver.
+        createReceiver:
+          options.createReceiver ?? ((opts) => createStreamReceiver({ ...opts, port: loadStreamVideoPort() })),
+        renderFrame: (frame, height) => renderFrameRef.current(frame, height),
         frameThrottle: options.frameThrottle,
         now: options.now,
       });

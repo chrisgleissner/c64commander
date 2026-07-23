@@ -122,6 +122,10 @@ import {
   BOOT_SETTLE_MIN_MS,
   BOOT_SETTLE_MAX_MS,
   type BootMenuKey,
+  loadStreamVideoPort,
+  saveStreamVideoPort,
+  loadStreamAudioPort,
+  saveStreamAudioPort,
   loadNotificationVisibility,
   saveNotificationVisibility,
   loadNotificationDurationMs,
@@ -344,6 +348,9 @@ export default function SettingsPage() {
   const [bootMenuAnswerEnabled, setBootMenuAnswerEnabled] = useState(loadBootMenuAnswerEnabled);
   const [bootMenuKey, setBootMenuKey] = useState<BootMenuKey>(loadBootMenuKey);
   const [bootSettleMs, setBootSettleMs] = useState<number>(loadBootSettleMs);
+  // Live Mirror (D/E) transport ports — configurable (defaults 11000/11001).
+  const [streamVideoPort, setStreamVideoPort] = useState<number>(loadStreamVideoPort);
+  const [streamAudioPort, setStreamAudioPort] = useState<number>(loadStreamAudioPort);
   const [volumeSliderPreviewIntervalMs, setVolumeSliderPreviewIntervalMs] = useState(
     loadVolumeSliderPreviewIntervalMs(),
   );
@@ -2010,6 +2017,47 @@ export default function SettingsPage() {
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {(flags.audio_mirror_enabled || flags.video_mirror_enabled) && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="settings-stream-video-port" className="text-sm">
+                        Video stream port
+                      </Label>
+                      <Input
+                        id="settings-stream-video-port"
+                        data-testid="settings-stream-video-port"
+                        inputMode="numeric"
+                        value={String(streamVideoPort)}
+                        onChange={(event) => setStreamVideoPort(Number(event.target.value) || 0)}
+                        onBlur={() => {
+                          saveStreamVideoPort(streamVideoPort);
+                          setStreamVideoPort(loadStreamVideoPort());
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="settings-stream-audio-port" className="text-sm">
+                        Audio stream port
+                      </Label>
+                      <Input
+                        id="settings-stream-audio-port"
+                        data-testid="settings-stream-audio-port"
+                        inputMode="numeric"
+                        value={String(streamAudioPort)}
+                        onChange={(event) => setStreamAudioPort(Number(event.target.value) || 0)}
+                        onBlur={() => {
+                          saveStreamAudioPort(streamAudioPort);
+                          setStreamAudioPort(loadStreamAudioPort());
+                        }}
+                      />
+                    </div>
+                    <p className="col-span-2 text-xs text-muted-foreground">
+                      UDP ports the device streams Audio/Video Mirror to. Defaults 11000 / 11001; change only if a port
+                      is already in use.
+                    </p>
                   </div>
                 )}
 
