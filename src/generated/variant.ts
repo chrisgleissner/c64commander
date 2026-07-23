@@ -52,6 +52,11 @@ export const variantConfig = {
     displayNamePascalCase: "C64commander",
     exportedFileBasename: "c64commander",
     featureFlags: {
+      audio_mirror_enabled: {
+        developer_only: false,
+        enabled: false,
+        visible_to_user: true,
+      },
       background_execution_enabled: {
         developer_only: true,
         enabled: true,
@@ -63,6 +68,11 @@ export const variantConfig = {
         visible_to_user: true,
       },
       demo_mode_enabled: {
+        developer_only: false,
+        enabled: false,
+        visible_to_user: true,
+      },
+      disk_explorer_enabled: {
         developer_only: false,
         enabled: false,
         visible_to_user: true,
@@ -102,7 +112,17 @@ export const variantConfig = {
         enabled: true,
         visible_to_user: true,
       },
+      in_image_search_enabled: {
+        developer_only: false,
+        enabled: false,
+        visible_to_user: true,
+      },
       keypad_input_enabled: {
+        developer_only: false,
+        enabled: true,
+        visible_to_user: true,
+      },
+      launch_safety_enabled: {
         developer_only: false,
         enabled: true,
         visible_to_user: true,
@@ -111,6 +131,11 @@ export const variantConfig = {
         developer_only: true,
         enabled: false,
         visible_to_user: false,
+      },
+      new_disk_enabled: {
+        developer_only: false,
+        enabled: false,
+        visible_to_user: true,
       },
       ram_snapshots_enabled: {
         developer_only: false,
@@ -121,6 +146,11 @@ export const variantConfig = {
         developer_only: false,
         enabled: true,
         visible_to_user: true,
+      },
+      video_mirror_enabled: {
+        developer_only: true,
+        enabled: false,
+        visible_to_user: false,
       },
     },
     id: "c64commander",

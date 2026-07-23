@@ -27,6 +27,9 @@ const ARCHIVE_CLIENT_ID_OVERRIDE_KEY = "c64u_archive_client_id_override";
 const ARCHIVE_USER_AGENT_OVERRIDE_KEY = "c64u_archive_user_agent_override";
 const HIDE_STATUS_BAR_KEY = "c64u_full_screen_hide_status_bar";
 const HIDE_NAVIGATION_BAR_KEY = "c64u_full_screen_hide_navigation_bar";
+const BOOT_MENU_ANSWER_ENABLED_KEY = "c64u_boot_menu_answer_enabled";
+const BOOT_MENU_KEY_KEY = "c64u_boot_menu_key";
+const BOOT_SETTLE_MS_KEY = "c64u_boot_settle_ms";
 
 export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 200;
 export type NotificationVisibility = "errors-only" | "all";
@@ -230,6 +233,68 @@ export const saveVolumeSliderPreviewIntervalMs = (value: number) => {
 };
 
 export const clampVolumeSliderPreviewIntervalMs = (value: number) => clampVolumeSliderPreviewIntervalMsInternal(value);
+
+// Launch Safety — optional boot-menu answer (Content Explorer capability B).
+// Off by default; only helps machines running a cartridge that shows a boot menu
+// on reset, where a Mount & Load's typed LOAD would otherwise be swallowed.
+export type BootMenuKey = "F1" | "F2" | "F3" | "F4" | "F5" | "F6" | "F7" | "F8" | "RETURN" | "SPACE";
+export const BOOT_MENU_KEYS: readonly BootMenuKey[] = [
+  "F1",
+  "F2",
+  "F3",
+  "F4",
+  "F5",
+  "F6",
+  "F7",
+  "F8",
+  "RETURN",
+  "SPACE",
+];
+export const DEFAULT_BOOT_MENU_ANSWER_ENABLED = false;
+export const DEFAULT_BOOT_MENU_KEY: BootMenuKey = "F7";
+export const DEFAULT_BOOT_SETTLE_MS = 2800;
+export const BOOT_SETTLE_MIN_MS = 1000;
+export const BOOT_SETTLE_MAX_MS = 8000;
+
+const normalizeBootMenuKey = (value: unknown): BootMenuKey =>
+  BOOT_MENU_KEYS.includes(value as BootMenuKey) ? (value as BootMenuKey) : DEFAULT_BOOT_MENU_KEY;
+
+const clampBootSettleMsInternal = (value: number) => {
+  if (Number.isNaN(value)) return DEFAULT_BOOT_SETTLE_MS;
+  return Math.min(BOOT_SETTLE_MAX_MS, Math.max(BOOT_SETTLE_MIN_MS, Math.round(value / 100) * 100));
+};
+
+export const loadBootMenuAnswerEnabled = () =>
+  readBoolean(BOOT_MENU_ANSWER_ENABLED_KEY, DEFAULT_BOOT_MENU_ANSWER_ENABLED);
+
+export const saveBootMenuAnswerEnabled = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(BOOT_MENU_ANSWER_ENABLED_KEY, enabled ? "1" : "0");
+  broadcast(BOOT_MENU_ANSWER_ENABLED_KEY, enabled);
+};
+
+export const loadBootMenuKey = (): BootMenuKey => {
+  if (typeof localStorage === "undefined") return DEFAULT_BOOT_MENU_KEY;
+  return normalizeBootMenuKey(localStorage.getItem(BOOT_MENU_KEY_KEY));
+};
+
+export const saveBootMenuKey = (value: BootMenuKey) => {
+  if (typeof localStorage === "undefined") return;
+  const normalized = normalizeBootMenuKey(value);
+  localStorage.setItem(BOOT_MENU_KEY_KEY, normalized);
+  broadcast(BOOT_MENU_KEY_KEY, normalized);
+};
+
+export const loadBootSettleMs = () => clampBootSettleMsInternal(readNumber(BOOT_SETTLE_MS_KEY, DEFAULT_BOOT_SETTLE_MS));
+
+export const saveBootSettleMs = (value: number) => {
+  if (typeof localStorage === "undefined") return;
+  const clamped = clampBootSettleMsInternal(value);
+  localStorage.setItem(BOOT_SETTLE_MS_KEY, String(clamped));
+  broadcast(BOOT_SETTLE_MS_KEY, clamped);
+};
+
+export const clampBootSettleMs = (value: number) => clampBootSettleMsInternal(value);
 
 export const loadNotificationVisibility = (): NotificationVisibility => {
   if (typeof localStorage === "undefined") return DEFAULT_NOTIFICATION_VISIBILITY;
