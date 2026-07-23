@@ -1,6 +1,6 @@
 # Content Explorer — Master Plan
 
-**Status:** Draft / planning
+**Status:** Implemented — all six capabilities shipped behind independent feature flags. Launch Safety is stable/on-by-default; Disk Explorer, In-Image Search, Audio Mirror, and New Disk are experimental/off-by-default; Video Mirror is developer-only/off-by-default. Each deep-dive carries an As-built note (including any deviation).
 **Scope:** A coherent, feature-flagged initiative that adds six additive capabilities.
 **Owner:** TBD
 

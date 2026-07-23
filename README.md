@@ -19,6 +19,12 @@ Control and manage a Commodore 64 Ultimate from Android, iOS, or a self-hosted w
 - **Configuration**: Browse and edit the full C64 Ultimate configuration tree.
 - **Diagnostics**: Inspect activity logs, traces, latency, and connection health across App, REST, FTP, and Telnet activity.
 - **Device Switcher**: Switch between devices and run parallel health checks.
+- **Content Explorer**: An additive, feature-flagged set of tools, each toggled independently in **Settings**:
+  - **Disk Explorer**: Open a disk image to see the programs inside it and Run, Load, or Mount & Load any single one (only closed PRG files can launch directly).
+  - **Launch Safety**: Automatically parks a configured cartridge around direct launches so a freezer cartridge can't hijack a Run into its menu; optional boot-menu answer after a Mount & Load reset.
+  - **In-image search**: Search finds programs inside `.d64`/`.d71`/`.d81` images, shown as disk → program.
+  - **New disk**: Create a formatted blank D64/D71/D81/DNP image on the device.
+  - **Live mirror** *(experimental)*: Receive and play the running machine's audio in-app, with a more demanding, off-by-default video mirror.
 
 ## Getting Started
 

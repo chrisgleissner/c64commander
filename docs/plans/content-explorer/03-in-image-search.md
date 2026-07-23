@@ -2,8 +2,17 @@
 
 **Capability C** of the [Content Explorer](./overview.md) initiative.
 **Feature flag:** `in_image_search_enabled`
-**Status:** Draft / planning
+**Status:** Implemented behind `in_image_search_enabled` (experimental, off by default).
 **Depends on:** capability A (`diskImage.listDirectory`).
+
+> **As-built (shipped).** `src/lib/media-index/inImageSearch.ts` implements media index v2:
+> `MediaEntryV2` with a `container`, `migrateSnapshotToV2` (lossless v1 load), `toChildEntry`,
+> `hasFreshChildren` / `replaceChildren` (supersede on `path + size + mtime`),
+> `reconcileChildren`, and `searchMediaEntries` (case-insensitive, multi-word AND; child
+> entries excluded when the toggle is off). Children use the compound path `<diskPath>#<index>`
+> as planned. The **Search inside disk images** toggle ships in **Settings → Play and disk
+> behaviour**; hits render as **DISK → PROGRAM** and reuse Disk Explorer's Run / Load.
+> Matches the plan; a child's `sizeBytes` is derived as `blocks × 254`.
 
 > Goal: find a program that only exists *inside* a `.d64` / `.d71` / `.d81`, then
 > act on it directly. Search should descend into disk images, not stop at their

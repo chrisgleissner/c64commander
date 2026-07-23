@@ -2,7 +2,20 @@
 
 **Capability B** of the [Content Explorer](./overview.md) initiative.
 **Feature flag:** `launch_safety_enabled`
-**Status:** Draft / planning
+**Status:** Implemented behind `launch_safety_enabled` (stable, on by default).
+
+> **As-built (shipped).** `src/lib/playback/launchSafety.ts` ships `withCartridgeParked`
+> (reads the live `C64 and Cartridge Settings / Cartridge` value, parks it to empty for
+> the launch, restores it in a `finally`; a no-op when the flag is off, the read fails,
+> or the value is empty/`None`, and a failed park or restore never fails the launch) plus
+> `bootSettle` + `pressKeyWithRetry` for the optional boot-menu answer. The direct-memory
+> play plans are wrapped and `crt` is exempt, as planned.
+>
+> **Deviation from §5 (Settings location).** The advanced control shipped in **Settings →
+> Play and disk behaviour** as **Answer cartridge boot menu after reset** (key picker +
+> boot-settle ms), not under a new "Device Safety → Compatibility" subsection. Cartridge
+> parking has no dedicated on/off beyond the `launch_safety_enabled` feature toggle — it
+> is fully automatic and invisible, exactly as intended.
 
 > Two related correctness behaviours for launching software:
 > 1. **Cartridge parking** — stop a configured freezer cartridge from hijacking a

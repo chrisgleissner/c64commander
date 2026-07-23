@@ -2,7 +2,25 @@
 
 **Capabilities D and E** of the [Content Explorer](./overview.md) initiative.
 **Feature flags:** `audio_mirror_enabled`, `video_mirror_enabled`
-**Status:** Draft / planning
+**Status:** Audio Mirror implemented behind `audio_mirror_enabled` (experimental, off by default); Video Mirror behind `video_mirror_enabled` (developer-only, off by default).
+
+> **As-built (shipped).** The receive-and-play stack landed as planned:
+> `src/lib/streams/vicDecode.ts` (4bpp→RGBA palette LUT), `vicStream.ts` / `audioStream.ts`
+> (de-packetize), `audioPlayer.ts` (WebAudio scheduling), `streamReceiver.ts` (platform
+> receiver seam), and `audioMirrorController.ts` / `videoMirrorController.ts`, with the
+> `useAudioMirror` / `useVideoMirror` hooks and the `AudioMirrorPanel` / `VideoMirrorPanel`
+> components (Listen/Stop, Off/Connecting/Live/Error state, dropped-packet and fps
+> readouts). `audio_mirror_enabled` is user-visible; `video_mirror_enabled` stays
+> developer-only pending the native UDP receiver plugin.
+>
+> **Surface.** Both mirror panels are mounted on **Home**, below the existing streams
+> section, each behind its own flag and `deviceCapabilities.supportsStreaming`: `AudioMirrorPanel`
+> (Listen/Stop, Off/Connecting/Live state, dropped-packet health) under `audio_mirror_enabled`,
+> and `VideoMirrorPanel` (native-res canvas, frame-throttle, fps) under `video_mirror_enabled`.
+> Because Video Mirror is developer-only it is intentionally absent from the generated user
+> manual (matching the `lighting_studio` convention); the manual documents Audio Mirror only.
+> The web path consumes a UDP→WebSocket bridge (`streamReceiver.web` seam); the native UDP
+> receiver plugin is the remaining follow-up (`UnsupportedStreamReceiver` fallback until then).
 
 > Goal: hear and (optionally) see the running machine inside the app. The device
 > exposes **two independent streams** — audio and video — so we mirror them

@@ -2,7 +2,16 @@
 
 **Capability F** of the [Content Explorer](./overview.md) initiative.
 **Feature flag:** `new_disk_enabled`
-**Status:** Draft / planning
+**Status:** Implemented behind `new_disk_enabled` (experimental, off by default).
+
+> **As-built (shipped).** `src/lib/disks/createDisk.ts` ships `buildCreateDiskPlan` — a pure,
+> unit-testable URL/param builder (rejects the virtual `/`, rejects a path in the name,
+> clamps the label to 16 chars, D64 tracks 35–41 default 35, DNP tracks 1–255 required,
+> appends the extension, percent-encodes path and query with `%20`) — and `c64api.createDisk`
+> calls it. The **New disk** action on the **Disks** page opens
+> `src/components/disks/NewDiskDialog.tsx` (Type D64/D71/D81/DNP, file name, disk label ≤16,
+> tracks for D64/DNP, storage folder defaulting to `/USB0`); its **Create & mount** button
+> creates the image and mounts it. Matches the plan.
 
 > Goal: create a formatted blank image on the device, so a user can make a fresh
 > disk to save to without leaving the app.

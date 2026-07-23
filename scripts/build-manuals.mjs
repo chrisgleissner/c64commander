@@ -551,6 +551,34 @@ const featureRows = ({ features, variant }) => {
     ["App-stored config snapshots", "**Home > Config actions**", "Local app snapshots, separate from device flash."],
   );
 
+  if (includeFeature(features, "disk_explorer_enabled")) {
+    rows.push([
+      "Disk Explorer (launch a program inside a disk)",
+      "**Disks > disk menu > Open (Disk Explorer)**",
+      featureAvailability(features.disk_explorer_enabled),
+    ]);
+  }
+  if (includeFeature(features, "new_disk_enabled")) {
+    rows.push(["Create a blank disk", "**Disks > New disk**", featureAvailability(features.new_disk_enabled)]);
+  }
+  if (includeFeature(features, "in_image_search_enabled")) {
+    rows.push([
+      "Search inside disk images",
+      "**Settings > Play and disk behavior**",
+      featureAvailability(features.in_image_search_enabled),
+    ]);
+  }
+  if (includeFeature(features, "launch_safety_enabled")) {
+    rows.push([
+      "Launch Safety (cartridge parking)",
+      "Automatic; boot-menu answer in **Settings > Play and disk behavior**",
+      featureAvailability(features.launch_safety_enabled),
+    ]);
+  }
+  if (includeFeature(features, "audio_mirror_enabled")) {
+    rows.push(["Audio Mirror", "**Settings > Experimental Features**", featureAvailability(features.audio_mirror_enabled)]);
+  }
+
   if (includeFeature(features, "home_telnet_config_actions_enabled")) {
     rows.push([
       "Advanced config file actions",
@@ -1211,6 +1239,78 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "For a title that spans several disks, drop the related images into one **group**. Grouped disks add **rotate** controls to the drive card, so when a program asks for the next disk you can swap without hunting through the collection. A drive can also read loose files straight from a folder on the device through its **Soft IEC** path, which suits large collections that are not packed into disk images.",
     "",
+    ...(includeFeature(features, "disk_explorer_enabled") ||
+    includeFeature(features, "launch_safety_enabled") ||
+    includeFeature(features, "in_image_search_enabled") ||
+    includeFeature(features, "new_disk_enabled") ||
+    includeFeature(features, "audio_mirror_enabled")
+      ? [
+          "### Content Explorer",
+          "",
+          "Content Explorer is a set of additive tools for working with the programs *inside* disk images, launching them safely, and hearing the running machine. Each part is optional and independent — turn on only the ones you want in **Settings**, and the rest stay out of the way.",
+          "",
+          ...(includeFeature(features, "disk_explorer_enabled")
+            ? [
+                "#### Looking Inside a Disk",
+                "",
+                "Mounting a disk image gives you the whole disk. Disk Explorer instead looks *inside* one so you can pick a single program to launch. On **Disks**, open a disk image's menu and choose **Open (Disk Explorer)…**; the app lists every file on the disk, each with its type, its size in blocks, and — for a program — its load address.",
+                "",
+                "Each launchable file offers three actions:",
+                "",
+                "- **Run** loads the program into the C64's memory and starts it.",
+                "- **Load** loads it into memory without starting it — handy for monitors and development.",
+                "- **Mount & Load** mounts the whole disk, resets the machine, waits for BASIC, then types the LOAD and RUN for you — the right choice for titles that load in several stages.",
+                "",
+                'Only a proper **PRG** program can be launched directly. Other file types show a short note explaining why they cannot, and an unclosed "splat" file — one that was never finished being written — cannot be launched either.',
+                "",
+                featureAvailability(features.disk_explorer_enabled),
+                "",
+              ]
+            : []),
+          ...(includeFeature(features, "launch_safety_enabled")
+            ? [
+                "#### Launch Safety",
+                "",
+                "Some setups have a freezer cartridge (Action Replay / Retro Replay style) configured. On those, launching a program directly can occasionally reset into the cartridge's own menu instead — which looks exactly like the app misbehaving. Launch Safety prevents that: around every direct launch it briefly *parks* the configured cartridge, then restores it afterwards. It never writes to the device's saved (flash) settings, so a power cycle always brings the cartridge back, and when no cartridge is configured it does nothing at all. This happens automatically; there is no per-launch control.",
+                "",
+                "One advanced option sits in **Settings**, under Play and disk behaviour: **Answer cartridge boot menu after reset**. It is off by default and helps only one narrow case — a cartridge that shows a boot menu when the machine resets, which could otherwise swallow the LOAD that Mount & Load types. Turn it on to choose the **menu key** (F1–F8, RETURN, or SPACE) and a **boot settle** time; the app then presses that key after a Mount & Load reset to clear the menu first. Leave it off unless you run such a cartridge.",
+                "",
+                featureAvailability(features.launch_safety_enabled),
+                "",
+              ]
+            : []),
+          ...(includeFeature(features, "in_image_search_enabled")
+            ? [
+                "#### Searching Inside Disk Images",
+                "",
+                "By default, searching your media matches disk images by their file name. Turn on **Search inside disk images** — in **Settings**, under Play and disk behaviour — and search also reaches the programs *inside* your `.d64`, `.d71`, and `.d81` images. A match found inside a disk is shown as **DISK → PROGRAM**, so you can see exactly which disk holds the program you want, then Run or Load it just like any other.",
+                "",
+                featureAvailability(features.in_image_search_enabled),
+                "",
+              ]
+            : []),
+          ...(includeFeature(features, "new_disk_enabled")
+            ? [
+                "#### Creating a Blank Disk",
+                "",
+                "Need a fresh disk to save to? On **Disks**, choose **New disk** to format a blank image on the device. Pick the **type** — D64 (1541), D71 (1571), D81 (1581), or DNP (CMD native) — give it a **file name**, and set a **disk label** of up to 16 characters (it defaults to the file name). A D64 lets you choose the number of **tracks** (35 to 41, usually 35); a DNP requires a track count (1 to 255); D71 and D81 need none. Finally pick a real **storage folder** on the device, such as USB0 — the top-level `/` is only a virtual list of drives and cannot hold files. The app creates the image and mounts it ready to write to.",
+                "",
+                featureAvailability(features.new_disk_enabled),
+                "",
+              ]
+            : []),
+          ...(includeFeature(features, "audio_mirror_enabled")
+            ? [
+                "#### Hearing the Running Machine",
+                "",
+                "The Ultimate can stream the sound your C64 is making across the network, and Audio Mirror plays it back inside the app so you can listen without wiring up speakers. Its control is a single **Listen** button that starts receiving the stream and becomes **Stop**; a small badge beside it shows the connection as **Off**, **Connecting…**, or **Live**, and notes any dropped packets while a stream runs. Audio Mirror is light enough to run on modest hardware. It is an early, experimental capability, so it stays off until you enable it. A companion video mirror — drawing the C64's picture in the app — is far more demanding and remains an advanced option, off by default on constrained hardware.",
+                "",
+                featureAvailability(features.audio_mirror_enabled),
+                "",
+              ]
+            : []),
+        ]
+      : []),
     "### The SID Audio Mixer",
     "",
     "The C64's sound comes from its SID chip, and the Ultimate can host more than one. **Home > SID / Audio mixer** is a live mixing desk: a **master volume** for everything, and, for each SID the device reports, that chip's own **volume** and **stereo position**. Slide one SID toward the left speaker and another toward the right for true stereo, or pull one down to let the other lead. Changes are heard at once, and the same controls appear in **Config > Audio Mixer** if you prefer the full tree.",

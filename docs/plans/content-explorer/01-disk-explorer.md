@@ -2,7 +2,26 @@
 
 **Capability A** of the [Content Explorer](./overview.md) initiative.
 **Feature flag:** `disk_explorer_enabled`
-**Status:** Draft / planning
+**Status:** Implemented behind `disk_explorer_enabled` (experimental, off by default).
+
+> **As-built (shipped).** The reusable primitives moved to `src/lib/disks/diskImage.ts`
+> (`layoutForType`, `readSector`, `readChain`, `listDirectory`); `diskFirstPrg.ts`
+> delegates to them with its behaviour and tests unchanged. Launching lives in
+> `src/lib/playback/diskLaunch.ts` (Run / Load / Mount & Load); the React binding is
+> `src/hooks/useDiskExplorer.ts` and the UI is `src/components/disks/DiskContentsDialog.tsx`,
+> reached from the Disks page via each disk's **Open (Disk Explorer)…** menu item.
+> `listDirectory` reads all eight directory entries per sector as planned (§2). Each row
+> shows the file type, block count, and a `$hhhh` load address for closed PRGs; non-PRG
+> and unclosed ("splat") entries are shown with their launch actions disabled and a reason.
+>
+> **Deviation from §3 (final-sector byte count).** `readChain` intentionally keeps the
+> proven `diskFirstPrg` extraction semantics — **byte 1 is the used-byte count, and a
+> byte 1 of 0 (or any value outside 1–254) means a full 254-byte sector** — rather than
+> the §3 `slice(2, byte1 + 1)` reinterpretation. The proposed rule contradicts the
+> hardware-proven first-PRG launch path and its 31 passing tests (notably the
+> `byte1 == 0` full-sector guard), and the practical difference is at most a single
+> trailing pad byte, so extraction stays byte-identical across the whole app. See the
+> header comment in `diskImage.ts`.
 
 > Goal: open any `.d64` / `.d71` / `.d81` and act on an *individual* program
 > inside it — **Run**, **Load**, or **Mount & Load** — without mounting the disk
