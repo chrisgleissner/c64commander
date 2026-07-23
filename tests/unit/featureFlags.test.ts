@@ -71,12 +71,34 @@ describe("featureFlags persistence and logging", () => {
       home_telnet_clear_ram_reboot_enabled: "experimental",
       keypad_input_enabled: "experimental",
       launch_safety_enabled: "stable",
-      disk_explorer_enabled: "experimental",
+      disk_explorer_enabled: "stable",
       in_image_search_enabled: "experimental",
       audio_mirror_enabled: "experimental",
       video_mirror_enabled: "experimental",
-      new_disk_enabled: "experimental",
+      new_disk_enabled: "stable",
     });
+  });
+
+  it("ships Disk Explorer and New disk on by default for any user (Content Explorer)", () => {
+    for (const id of ["disk_explorer_enabled", "new_disk_enabled"]) {
+      const flag = FEATURE_FLAG_DEFINITIONS.find((definition) => definition.id === id);
+      expect(flag, id).toBeDefined();
+      expect(flag?.enabled, id).toBe(true);
+      expect(flag?.visible_to_user, id).toBe(true);
+      expect(flag?.developer_only, id).toBe(false);
+    }
+  });
+
+  it("keeps the A/V mirror user-toggleable but off by default until the stream transport ships", () => {
+    for (const id of ["audio_mirror_enabled", "video_mirror_enabled"]) {
+      const flag = FEATURE_FLAG_DEFINITIONS.find((definition) => definition.id === id);
+      expect(flag, id).toBeDefined();
+      // Any user can turn it on (not developer-gated) …
+      expect(flag?.visible_to_user, id).toBe(true);
+      expect(flag?.developer_only, id).toBe(false);
+      // … but it stays off by default: the phone app has no stream receiver yet.
+      expect(flag?.enabled, id).toBe(false);
+    }
   });
 
   it("ships keyboard and keypad navigation as a user-visible, default-on experimental flag", () => {

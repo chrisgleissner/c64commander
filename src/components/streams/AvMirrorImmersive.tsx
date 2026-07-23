@@ -22,6 +22,7 @@ import { useAvMirror, useAvMirrorCanvas } from "@/hooks/useAvMirror";
 import { useMirrorViewport } from "@/hooks/useMirrorViewport";
 import { viewportRect } from "@/lib/streams/mirrorViewport";
 import type { AvMirrorSession } from "@/lib/streams/avMirrorSession";
+import { addLog } from "@/lib/logging";
 import { AvMirrorMinimap } from "./AvMirrorMinimap";
 
 /** view-lock modes: physical input either drives the C64 or adjusts the mirror view. */
@@ -52,8 +53,10 @@ const ZOOM_STEP = 1.5;
 const haptic = () => {
   try {
     (navigator as Navigator & { vibrate?: (p: number) => boolean }).vibrate?.(12);
-  } catch {
-    /* haptics unavailable */
+  } catch (error) {
+    addLog("debug", "A/V mirror: haptic feedback unavailable (ignored)", {
+      error: (error as Error)?.message ?? String(error),
+    });
   }
 };
 

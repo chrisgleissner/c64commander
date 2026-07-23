@@ -74,7 +74,7 @@ export const variantConfig = {
       },
       disk_explorer_enabled: {
         developer_only: false,
-        enabled: false,
+        enabled: true,
         visible_to_user: true,
       },
       home_telnet_clear_ram_reboot_enabled: {
@@ -134,7 +134,7 @@ export const variantConfig = {
       },
       new_disk_enabled: {
         developer_only: false,
-        enabled: false,
+        enabled: true,
         visible_to_user: true,
       },
       ram_snapshots_enabled: {
@@ -148,9 +148,9 @@ export const variantConfig = {
         visible_to_user: true,
       },
       video_mirror_enabled: {
-        developer_only: true,
+        developer_only: false,
         enabled: false,
-        visible_to_user: false,
+        visible_to_user: true,
       },
     },
     id: "c64commander",
