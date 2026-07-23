@@ -1647,6 +1647,15 @@ test.describe("App screenshots", () => {
   });
 
   test("capture home screenshots", { tag: "@screenshots" }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    // Enable the (flag-gated, additive) A/V mirror so the Live View card renders on the Home
+    // dashboard overview + as its own section thumbnail — it is a shipped Home feature and must be
+    // visible in the Home screenshots, not only in the dedicated Content Explorer captures.
+    await page.addInitScript(() => {
+      for (const flag of ["audio_mirror_enabled", "video_mirror_enabled"]) {
+        localStorage.setItem(`c64u_feature_flag:${flag}`, "1");
+        sessionStorage.setItem(`c64u_feature_flag:${flag}`, "1");
+      }
+    });
     // Override the zero timings from beforeEach so the launch sequence runs at normal speed.
     // addInitScript scripts run in registration order on each goto, so this second registration wins.
     await page.addInitScript(() => {
@@ -1751,6 +1760,13 @@ test.describe("App screenshots", () => {
     "capture home profile screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      // Enable the A/V mirror so the Live View card appears in the manual's Home overview too.
+      await page.addInitScript(() => {
+        for (const flag of ["audio_mirror_enabled", "video_mirror_enabled"]) {
+          localStorage.setItem(`c64u_feature_flag:${flag}`, "1");
+          sessionStorage.setItem(`c64u_feature_flag:${flag}`, "1");
+        }
+      });
       for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
         await page.goto("/");
         await waitForConnected(page);

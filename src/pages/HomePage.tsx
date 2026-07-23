@@ -1258,7 +1258,9 @@ function HomePageContent() {
           />
 
           {(audioMirrorEnabled || videoMirrorEnabled) && deviceCapabilities.supportsStreaming ? (
-            <LiveViewCard audioEnabled={audioMirrorEnabled} videoEnabled={videoMirrorEnabled} />
+            <div data-section-label="Live View">
+              <LiveViewCard audioEnabled={audioMirrorEnabled} videoEnabled={videoMirrorEnabled} />
+            </div>
           ) : null}
 
           <motion.div
