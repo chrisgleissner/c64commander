@@ -67,7 +67,16 @@ export interface WebSocketLike {
 export const DEFAULT_VIDEO_PORT = 11000;
 export const DEFAULT_AUDIO_PORT = 11001;
 
+/**
+ * The firmware's default (and reliable) stream destinations are **multicast** — a unicast
+ * `streams:start` fails with "Network Host Resolve Error" because the device streams from its
+ * wired port and cannot ARP-resolve a Wi-Fi client. The receiver joins the group instead
+ * (matching the device's `Stream VIC/Audio to` config defaults).
+ */
+export const MULTICAST_GROUP: Record<StreamName, string> = { video: "239.0.1.64", audio: "239.0.1.65" };
+
 const defaultPortFor = (name: StreamName) => (name === "audio" ? DEFAULT_AUDIO_PORT : DEFAULT_VIDEO_PORT);
+const multicastDestination = (name: StreamName, port: number) => `${MULTICAST_GROUP[name]}:${port}`;
 
 const toUint8 = (data: unknown): Uint8Array | null => {
   if (data instanceof ArrayBuffer) return new Uint8Array(data);
@@ -87,7 +96,8 @@ export class WebSocketStreamReceiver implements StreamReceiver {
     const bridge = options.bridgeUrl ?? deriveBridgeUrl();
     const port = options.port ?? defaultPortFor(options.name);
     const url = `${bridge.replace(/\/+$/, "")}/streams/${options.name}`;
-    this.destination = options.destination ?? `${bridgeHost(bridge)}:${port}`;
+    // Tell the device to stream to the multicast group; the web server's bridge joins it.
+    this.destination = options.destination ?? multicastDestination(options.name, port);
     const factory = options.socketFactory ?? defaultSocketFactory;
     this.socket = factory(url);
     this.socket.binaryType = "arraybuffer";
@@ -140,15 +150,16 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
   constructor(options: StreamReceiverOptions) {
     this.name = options.name;
     const port = options.port ?? defaultPortFor(options.name);
+    const group = MULTICAST_GROUP[options.name];
+    // Destination is the multicast group (known up front); the device streams there.
+    this.destination = options.destination ?? multicastDestination(options.name, port);
     this.listener = StreamUdp.addListener("datagram", (event) => {
       if (event.name !== this.name || !this.datagramHandler) return;
       this.datagramHandler(base64ToBytes(event.data));
     });
-    this.readyPromise = StreamUdp.bind({ name: this.name, port })
-      .then((result) => {
-        if (this.closed) return;
-        this.destination = options.destination ?? `${result.localIp}:${result.port}`;
-        this.stateHandler?.("open");
+    this.readyPromise = StreamUdp.bind({ name: this.name, port, group })
+      .then(() => {
+        if (!this.closed) this.stateHandler?.("open");
       })
       .catch((error) => {
         this.stateHandler?.("error");
@@ -191,14 +202,6 @@ const deriveBridgeUrl = (): string => {
   if (typeof location === "undefined") return "ws://localhost:8788";
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   return `${proto}//${location.host}`;
-};
-
-const bridgeHost = (bridgeUrl: string): string => {
-  try {
-    return new URL(bridgeUrl).hostname;
-  } catch {
-    return "localhost";
-  }
 };
 
 const defaultSocketFactory = (url: string): WebSocketLike => {

@@ -8,6 +8,8 @@
 
 package uk.gleissner.c64commander
 
+import android.content.Context
+import android.net.wifi.WifiManager
 import android.util.Base64
 import android.util.Log
 import com.getcapacitor.JSObject
@@ -18,7 +20,9 @@ import com.getcapacitor.annotation.CapacitorPlugin
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.Inet4Address
+import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.MulticastSocket
 import java.net.NetworkInterface
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -28,14 +32,19 @@ import java.util.concurrent.Executors
  * VIC video / audio as UDP datagrams; a WebView cannot open a UDP socket, so this plugin
  * binds the two ports natively and forwards each datagram to the JS layer as a base64
  * `datagram` event ({ name, data }). It is the native counterpart of the web server's
- * UDP -> WebSocket bridge. `bind` returns the phone's site-local IPv4 so the app can tell
- * the device where to stream.
+ * UDP -> WebSocket bridge.
+ *
+ * The firmware's default (and reliable) stream destination is **multicast** — unicast
+ * `streams:start` returns "Network Host Resolve Error" because the device streams from its
+ * wired port and cannot ARP-resolve a Wi-Fi phone. So `bind` joins the multicast group and
+ * holds a Wi-Fi `MulticastLock` (without it, the Wi-Fi driver filters multicast).
  */
 @CapacitorPlugin(name = "StreamUdp")
 class StreamUdpPlugin : Plugin() {
   private val sockets = ConcurrentHashMap<String, DatagramSocket>()
   private val executor = Executors.newCachedThreadPool()
   private val logTag = "StreamUdpPlugin"
+  private var multicastLock: WifiManager.MulticastLock? = null
 
   /** Test seam: how a received datagram is delivered to JS (default: a `datagram` event). */
   internal var emitDatagram: (String, String) -> Unit = { name, data ->
@@ -57,12 +66,24 @@ class StreamUdpPlugin : Plugin() {
       call.reject("port is required")
       return
     }
+    val group = call.getString("group") // multicast group, e.g. 239.0.1.64; null = plain unicast
     try {
       closeSocket(name)
-      val socket = DatagramSocket(null).apply {
-        reuseAddress = true
-        bind(InetSocketAddress(port))
-      }
+      val socket: DatagramSocket =
+        if (group != null) {
+          acquireMulticastLock()
+          MulticastSocket(null).apply {
+            reuseAddress = true
+            bind(InetSocketAddress(port))
+            val netIf = siteLocalInterface()
+            joinGroup(InetSocketAddress(InetAddress.getByName(group), port), netIf)
+          }
+        } else {
+          DatagramSocket(null).apply {
+            reuseAddress = true
+            bind(InetSocketAddress(port))
+          }
+        }
       sockets[name] = socket
       executor.execute { receiveLoop(name, socket) }
       val result = JSObject()
@@ -70,7 +91,7 @@ class StreamUdpPlugin : Plugin() {
       result.put("port", socket.localPort)
       call.resolve(result)
     } catch (error: Exception) {
-      Log.w(logTag, "bind failed for $name:$port", error)
+      Log.w(logTag, "bind failed for $name:$port (group=$group)", error)
       call.reject("bind failed: ${error.message}", error)
     }
   }
@@ -110,6 +131,45 @@ class StreamUdpPlugin : Plugin() {
         Log.d(logTag, "socket close for $name ignored", error)
       }
     }
+    if (sockets.isEmpty()) releaseMulticastLock()
+  }
+
+  private fun acquireMulticastLock() {
+    if (multicastLock?.isHeld == true) return
+    try {
+      val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+      multicastLock =
+        wifi?.createMulticastLock("c64commander-avmirror")?.apply {
+          setReferenceCounted(false)
+          acquire()
+        }
+    } catch (error: Exception) {
+      Log.w(logTag, "MulticastLock acquire failed", error)
+    }
+  }
+
+  private fun releaseMulticastLock() {
+    try {
+      multicastLock?.let { if (it.isHeld) it.release() }
+    } catch (error: Exception) {
+      Log.d(logTag, "MulticastLock release ignored", error)
+    }
+    multicastLock = null
+  }
+
+  /** The active site-local IPv4 interface (Wi-Fi), used to join multicast on the right NIC. */
+  private fun siteLocalInterface(): NetworkInterface? {
+    try {
+      for (intf in NetworkInterface.getNetworkInterfaces()) {
+        if (!intf.isUp || intf.isLoopback || !intf.supportsMulticast()) continue
+        for (addr in intf.inetAddresses) {
+          if (!addr.isLoopbackAddress && addr is Inet4Address && addr.isSiteLocalAddress) return intf
+        }
+      }
+    } catch (error: Exception) {
+      Log.d(logTag, "multicast interface lookup failed", error)
+    }
+    return null
   }
 
   private fun siteLocalIpv4(): String? {
@@ -138,6 +198,7 @@ class StreamUdpPlugin : Plugin() {
       }
     }
     sockets.clear()
+    releaseMulticastLock()
     executor.shutdownNow()
   }
 }

@@ -37,29 +37,29 @@ describe("streamReceiver — bridge derivation & socket factory", () => {
     expect(receiver.destination).toMatch(/:11000$/);
   });
 
-  it("uses the configured port in the stream destination", () => {
+  it("tells the device to stream to the multicast group at the configured port", () => {
     const video = new WebSocketStreamReceiver({
       name: "video",
       bridgeUrl: "ws://host:8788",
       port: 21000,
       socketFactory: (url) => new MockSocket(url),
     });
-    expect(video.destination).toBe("host:21000");
+    expect(video.destination).toBe("239.0.1.64:21000");
     const audioDefault = new WebSocketStreamReceiver({
       name: "audio",
       bridgeUrl: "ws://host:8788",
       socketFactory: (url) => new MockSocket(url),
     });
-    expect(audioDefault.destination).toBe("host:11001");
+    expect(audioDefault.destination).toBe("239.0.1.65:11001");
   });
 
-  it("falls back to localhost when the bridge URL is unparseable", () => {
+  it("uses the multicast destination regardless of the bridge URL", () => {
     const receiver = new WebSocketStreamReceiver({
       name: "audio",
       bridgeUrl: "::not-a-url::",
       socketFactory: (url) => new MockSocket(url),
     });
-    expect(receiver.destination).toBe("localhost:11001");
+    expect(receiver.destination).toBe("239.0.1.65:11001");
   });
 
   it("forwards typed-array datagrams too", () => {

@@ -25,7 +25,8 @@ export interface StreamUdpDatagramEvent {
  * the web/Docker build receives streams through the server's UDP -> WebSocket bridge instead.
  */
 export interface StreamUdpPlugin {
-  bind(options: { name: string; port: number }): Promise<StreamUdpBindResult>;
+  /** `group` (optional) joins a multicast group on the bound port. */
+  bind(options: { name: string; port: number; group?: string }): Promise<StreamUdpBindResult>;
   close(options: { name: string }): Promise<void>;
   addListener(eventName: "datagram", listener: (event: StreamUdpDatagramEvent) => void): Promise<PluginListenerHandle>;
 }

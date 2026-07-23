@@ -58,9 +58,10 @@ describe("NativeUdpStreamReceiver (native platform)", () => {
     receiver.onDatagram((d) => datagrams.push(d));
 
     expect(states).toEqual(["connecting"]);
+    // Destination is the multicast group (known synchronously, before bind resolves).
+    expect(receiver.destination).toBe("239.0.1.64:11000");
     await receiver.ready?.();
-    expect(streamUdp.bind).toHaveBeenCalledWith({ name: "video", port: 11000 });
-    expect(receiver.destination).toBe("192.168.1.206:11000");
+    expect(streamUdp.bind).toHaveBeenCalledWith({ name: "video", port: 11000, group: "239.0.1.64" });
     expect(states).toContain("open");
 
     streamUdp.emit({ name: "video", data: b64(1, 2, 3) });
@@ -83,7 +84,7 @@ describe("NativeUdpStreamReceiver (native platform)", () => {
     receiver.onStateChange((s) => states.push(s));
     await expect(receiver.ready?.()).resolves.toBeUndefined();
     expect(states).toContain("error");
-    expect(receiver.destination).toBe("");
+    expect(receiver.destination).toBe("239.0.1.65:11001"); // still known (multicast)
     receiver.close();
   });
 });

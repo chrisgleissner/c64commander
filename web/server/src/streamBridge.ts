@@ -29,6 +29,10 @@ import crypto from "node:crypto";
 
 export const DEFAULT_STREAM_VIDEO_PORT = 11000;
 export const DEFAULT_STREAM_AUDIO_PORT = 11001;
+// The device streams to multicast by default (unicast fails to ARP-resolve; see the app's
+// MULTICAST_GROUP). The bridge joins these groups so it receives the datagrams.
+export const DEFAULT_STREAM_VIDEO_GROUP = "239.0.1.64";
+export const DEFAULT_STREAM_AUDIO_GROUP = "239.0.1.65";
 
 const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const OPCODE_CLOSE = 0x8;
@@ -46,6 +50,9 @@ type BridgeLog = (
 export interface StreamBridgeOptions {
   videoPort?: number;
   audioPort?: number;
+  /** Multicast groups the device streams to; the bridge joins them. Empty string = unicast only. */
+  videoGroup?: string;
+  audioGroup?: string;
   /** Host the UDP sockets bind to (the device streams here). Defaults to 0.0.0.0. */
   bindHost?: string;
   log?: BridgeLog;
@@ -58,6 +65,7 @@ interface StreamChannel {
   socket: dgram.Socket;
   clients: Set<Duplex>;
   port: number;
+  group: string;
 }
 
 /** Encode a server→client binary WebSocket frame (unmasked, single FIN frame). */
@@ -100,14 +108,22 @@ export class StreamBridge {
     this.maxBufferedBytes = options.maxBufferedBytes ?? 4 * 1024 * 1024;
     this.log = options.log ?? (() => {});
     this.channels = {
-      video: this.makeChannel("video", options.videoPort ?? DEFAULT_STREAM_VIDEO_PORT),
-      audio: this.makeChannel("audio", options.audioPort ?? DEFAULT_STREAM_AUDIO_PORT),
+      video: this.makeChannel(
+        "video",
+        options.videoPort ?? DEFAULT_STREAM_VIDEO_PORT,
+        options.videoGroup ?? DEFAULT_STREAM_VIDEO_GROUP,
+      ),
+      audio: this.makeChannel(
+        "audio",
+        options.audioPort ?? DEFAULT_STREAM_AUDIO_PORT,
+        options.audioGroup ?? DEFAULT_STREAM_AUDIO_GROUP,
+      ),
     };
   }
 
-  private makeChannel(name: StreamName, port: number): StreamChannel {
+  private makeChannel(name: StreamName, port: number, group: string): StreamChannel {
     const socket = dgram.createSocket({ type: "udp4", reuseAddr: true });
-    const channel: StreamChannel = { name, socket, clients: new Set(), port };
+    const channel: StreamChannel = { name, socket, clients: new Set(), port, group };
     socket.on("message", (msg: Buffer) => this.broadcast(channel, msg));
     socket.on("error", (error) => this.log("warn", `Stream bridge ${name} UDP error`, { error: String(error) }));
     return channel;
@@ -125,6 +141,13 @@ export class StreamBridge {
             channel.socket.bind(channel.port, this.bindHost, () => {
               channel.socket.off("error", reject);
               channel.port = channel.socket.address().port;
+              if (channel.group) {
+                try {
+                  channel.socket.addMembership(channel.group);
+                } catch (error) {
+                  this.log("warn", `Stream bridge ${channel.name} multicast join failed`, { error: String(error) });
+                }
+              }
               resolve();
             });
           }),

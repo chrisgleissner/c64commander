@@ -91,7 +91,7 @@ interface Client {
 }
 
 const startHarness = async (): Promise<Harness> => {
-  const bridge = createStreamBridge({ videoPort: 0, audioPort: 0 });
+  const bridge = createStreamBridge({ videoPort: 0, audioPort: 0, videoGroup: "", audioGroup: "" });
   await bridge.start();
 
   const server = http.createServer((_req, res) => res.end());

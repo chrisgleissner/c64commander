@@ -107,6 +107,32 @@ class StreamUdpPluginTest {
   }
 
   @Test
+  fun bindJoinsAMulticastGroup() {
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("name")).thenReturn("video")
+    `when`(call.getInt("port")).thenReturn(0)
+    `when`(call.getString("group")).thenReturn("239.0.1.64")
+    var resolved: JSObject? = null
+    doAnswer { invocation ->
+              resolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(any())
+
+    plugin.bind(call)
+
+    verify(call).resolve(any())
+    assertNotNull(resolved)
+    assertTrue(resolved!!.getInteger("port")!! > 0)
+
+    val closeCall = mock(PluginCall::class.java)
+    `when`(closeCall.getString("name")).thenReturn("video")
+    plugin.close(closeCall)
+    verify(closeCall).resolve(any())
+  }
+
+  @Test
   fun closeRejectsMissingName() {
     val call = mock(PluginCall::class.java)
     `when`(call.getString("name")).thenReturn(null)
