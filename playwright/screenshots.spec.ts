@@ -2128,6 +2128,83 @@ test.describe("App screenshots", () => {
   });
 
   test(
+    "capture content explorer screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      // The Content Explorer capabilities are additive and flag-gated. Enable the
+      // ones we want to document so the New disk button, the Disk Explorer menu
+      // action, and the launch-safety Settings section render for the captures
+      // below. Registered after the beforeEach seeds, so this override wins.
+      await page.addInitScript(() => {
+        for (const flag of [
+          "new_disk_enabled",
+          "disk_explorer_enabled",
+          "in_image_search_enabled",
+          "launch_safety_enabled",
+        ]) {
+          localStorage.setItem(`c64u_feature_flag:${flag}`, "1");
+          sessionStorage.setItem(`c64u_feature_flag:${flag}`, "1");
+        }
+      });
+      await installListPreviewLimit(page, 3);
+
+      // --- New disk dialog: create a formatted blank image on the device ---
+      await page.goto("/disks");
+      await expect(page.getByRole("heading", { name: "Disks", level: 1 })).toBeVisible();
+      await expect(getActiveMain(page).getByTestId("disk-list")).toContainText("Disk 1.d64");
+
+      await getActiveMain(page).getByTestId("new-disk-open").click();
+      const newDiskDialog = page.getByRole("dialog");
+      await expect(newDiskDialog.getByTestId("new-disk-name")).toBeVisible();
+      await newDiskDialog.getByTestId("new-disk-name").fill("bubble-bobble.d64");
+      await newDiskDialog.getByTestId("new-disk-label").fill("BUBBLE BOBBLE");
+      await newDiskDialog.getByTestId("new-disk-folder").fill("/USB0");
+      await expect(newDiskDialog.getByTestId("new-disk-create")).toBeEnabled();
+      await captureScreenshot(page, testInfo, "disks/content-explorer/01-new-disk.png", {
+        locator: newDiskDialog,
+      });
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+
+      // --- Disk Explorer: look inside an image and Run/Load/Mount a single
+      //     program. Best-effort — the mock disk may not carry a parseable
+      //     directory, so we only capture when the entry list renders. ---
+      const rowMenu = getActiveMain(page).getByRole("button", { name: "Item actions" }).first();
+      if (await rowMenu.isVisible().catch(() => false)) {
+        await rowMenu.click();
+        const explorerItem = page.getByRole("menuitem", { name: /Open \(Disk Explorer\)/ });
+        if (await explorerItem.isVisible().catch(() => false)) {
+          await explorerItem.click();
+          const explorerDialog = page.getByRole("dialog");
+          const listRendered = await explorerDialog
+            .getByTestId("disk-contents-list")
+            .waitFor({ state: "visible", timeout: 6000 })
+            .then(() => true)
+            .catch(() => false);
+          if (listRendered) {
+            await captureScreenshot(page, testInfo, "disks/content-explorer/02-disk-contents.png", {
+              locator: explorerDialog,
+            });
+          }
+        }
+        await page.keyboard.press("Escape");
+      }
+
+      // --- Settings: launch safety + in-image search (Play and Disk card) ---
+      await page.goto("/settings");
+      const bootMenuAnswer = getActiveMain(page).getByTestId("settings-boot-menu-answer");
+      await expect(bootMenuAnswer).toBeVisible();
+      const playAndDiskCard = getActiveMain(page)
+        .locator(".profile-card")
+        .filter({ has: page.getByTestId("settings-boot-menu-answer") });
+      await playAndDiskCard.scrollIntoViewIfNeeded();
+      await captureScreenshot(page, testInfo, "settings/content-explorer/01-launch-safety.png", {
+        locator: playAndDiskCard,
+      });
+    },
+  );
+
+  test(
     "capture disks profile screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {

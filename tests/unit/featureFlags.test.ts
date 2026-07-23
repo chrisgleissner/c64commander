@@ -42,6 +42,12 @@ describe("featureFlags persistence and logging", () => {
       "home_telnet_power_cycle_enabled",
       "home_telnet_clear_ram_reboot_enabled",
       "keypad_input_enabled",
+      "launch_safety_enabled",
+      "disk_explorer_enabled",
+      "in_image_search_enabled",
+      "audio_mirror_enabled",
+      "video_mirror_enabled",
+      "new_disk_enabled",
     ]);
   });
 
@@ -64,6 +70,12 @@ describe("featureFlags persistence and logging", () => {
       home_telnet_power_cycle_enabled: "experimental",
       home_telnet_clear_ram_reboot_enabled: "experimental",
       keypad_input_enabled: "experimental",
+      launch_safety_enabled: "stable",
+      disk_explorer_enabled: "experimental",
+      in_image_search_enabled: "experimental",
+      audio_mirror_enabled: "experimental",
+      video_mirror_enabled: "experimental",
+      new_disk_enabled: "experimental",
     });
   });
 
