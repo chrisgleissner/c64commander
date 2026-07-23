@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { addLog } from "@/lib/logging";
+
 /**
  * Content Explorer capabilities D/E — platform stream receiver seam.
  *
@@ -97,8 +99,10 @@ export class WebSocketStreamReceiver implements StreamReceiver {
   close(): void {
     try {
       this.socket.close();
-    } catch {
-      /* already closed */
+    } catch (error) {
+      addLog("debug", "Stream receiver socket already closed", {
+        error: (error as Error)?.message ?? String(error),
+      });
     }
   }
 }
