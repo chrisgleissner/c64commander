@@ -18,6 +18,13 @@ export interface StreamUdpBindResult {
 export interface StreamUdpDatagramEvent {
   name: string;
   data: string;
+  /**
+   * Monotonic wire-arrival timestamp (ms, `System.nanoTime`-based) captured natively the instant
+   * the datagram was read off the socket — before base64 encoding or the bridge hop. The A/V sync
+   * analyzer uses this so the asymmetric downstream latency of the video (frame assembly + decode)
+   * vs audio pipeline cannot skew the measured offset. Absent only on very old plugin builds.
+   */
+  t?: number;
 }
 
 /**

@@ -123,7 +123,16 @@ export class AvSyncAnalyzer {
   private readonly offsets: number[] = [];
   private last: number | null = null;
 
-  constructor(options: AvSyncOptions = {}) {
+  /**
+   * @param options  detection/matching tuning.
+   * @param onPop     fired the instant a video/audio pop is detected (rising edge), BEFORE
+   *                  matching — with the same timestamp passed to push. The hook uses it to
+   *                  correlate a pop with the JS render/observe time for press→see/hear latency.
+   */
+  constructor(
+    options: AvSyncOptions = {},
+    private readonly onPop?: (kind: "video" | "audio", timestampMs: number) => void,
+  ) {
     this.opts = { ...DEFAULTS, ...options };
   }
 
@@ -156,6 +165,7 @@ export class AvSyncAnalyzer {
   }
 
   private register(kind: "video" | "audio", timestampMs: number): number | null {
+    this.onPop?.(kind, timestampMs);
     // Prune first — it reassigns the pending arrays — then capture the current references.
     this.prune(timestampMs);
     const own = kind === "video" ? this.pendingVideo : this.pendingAudio;

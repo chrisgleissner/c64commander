@@ -17,9 +17,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 interface Captured {
   deps: {
-    onChange: (s: { state: string; droppedPackets?: number; fps?: number; error: string | null }) => void;
-    renderFrame?: (frame: Uint8Array, height: number) => void;
+    onChange: (s: {
+      state: string;
+      droppedPackets?: number;
+      fps?: number;
+      standard?: string;
+      error: string | null;
+    }) => void;
+    renderFrame?: (frame: Uint8Array, height: number, arrivalMs?: number) => void;
     renderAudio?: (samples: Int16Array) => void;
+    renderAudioForAnalysis?: (samples: Int16Array, arrivalMs: number) => void;
   };
   start: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
@@ -80,7 +87,7 @@ describe("AvMirrorSession", () => {
     expect(seen).toHaveLength(1);
     expect(session.getSnapshot()).toEqual({
       audio: { state: "off", droppedPackets: 0, error: null },
-      video: { state: "off", fps: 0, error: null },
+      video: { state: "off", fps: 0, standard: "PAL", error: null },
     });
     expect(session.audioLive).toBe(false);
     expect(session.videoLive).toBe(false);
@@ -133,15 +140,17 @@ describe("AvMirrorSession", () => {
     expect(late).toEqual([3]);
   });
 
-  it("broadcasts decoded audio batches to audio subscribers", () => {
+  it("broadcasts per-packet analyzer audio (with arrival timestamp) to audio subscribers", () => {
     const { session, audio } = makeSession();
-    const batches: number[] = [];
-    const unsubscribe = session.subscribeAudio((samples) => batches.push(samples.length));
-    audio.deps.renderAudio?.(new Int16Array([1, 2, 3, 4]));
-    expect(batches).toEqual([4]);
+    const batches: Array<{ len: number; arrivalMs: number }> = [];
+    const unsubscribe = session.subscribeAudio((samples, arrivalMs) =>
+      batches.push({ len: samples.length, arrivalMs }),
+    );
+    audio.deps.renderAudioForAnalysis?.(new Int16Array([1, 2, 3, 4]), 100);
+    expect(batches).toEqual([{ len: 4, arrivalMs: 100 }]);
     unsubscribe();
-    audio.deps.renderAudio?.(new Int16Array([5, 6]));
-    expect(batches).toEqual([4]); // no delivery after unsubscribe
+    audio.deps.renderAudioForAnalysis?.(new Int16Array([5, 6]), 200);
+    expect(batches).toEqual([{ len: 4, arrivalMs: 100 }]); // no delivery after unsubscribe
   });
 
   it("stops delivering frames after unsubscribe", () => {

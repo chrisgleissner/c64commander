@@ -272,6 +272,14 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
                 : "Not watching"}
           </div>
         )}
+        {videoLive && video.fps > 0 && (
+          <span
+            className="absolute right-2 top-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-xs leading-tight text-white/80"
+            data-testid="av-mirror-immersive-fps"
+          >
+            {video.standard ?? "PAL"} {video.fps} fps
+          </span>
+        )}
       </div>
 
       {/* Minimap — only meaningful once zoomed in. */}

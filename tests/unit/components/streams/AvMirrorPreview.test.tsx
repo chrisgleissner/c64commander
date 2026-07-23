@@ -42,12 +42,18 @@ describe("AvMirrorPreview", () => {
     expect(screen.getByText("Video unavailable")).toBeInTheDocument();
   });
 
-  it("hides the overlay and shows an fps badge while live", () => {
-    mirror.state = { videoLive: true, video: { state: "live", fps: 45 } };
+  it("hides the overlay and shows a standard + fps badge while live", () => {
+    mirror.state = { videoLive: true, video: { state: "live", fps: 45, standard: "PAL" } };
     render(<AvMirrorPreview size="immersive" />);
     expect(screen.queryByText("Not watching")).toBeNull();
     expect(screen.getByTestId("av-mirror-preview")).toHaveAttribute("data-size", "immersive");
-    expect(screen.getByTestId("av-mirror-fps")).toHaveTextContent("45 fps");
+    expect(screen.getByTestId("av-mirror-fps")).toHaveTextContent("PAL 45 fps");
+  });
+
+  it("shows the detected NTSC standard in the badge", () => {
+    mirror.state = { videoLive: true, video: { state: "live", fps: 56, standard: "NTSC" } };
+    render(<AvMirrorPreview />);
+    expect(screen.getByTestId("av-mirror-fps")).toHaveTextContent("NTSC 56 fps");
   });
 
   it("omits the fps badge when live but fps is still 0", () => {

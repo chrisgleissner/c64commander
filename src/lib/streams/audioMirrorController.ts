@@ -15,7 +15,7 @@
  */
 
 import { addLog } from "@/lib/logging";
-import { AudioBatcher } from "./audioStream";
+import { AudioBatcher, bytesToInt16LE, parseAudioPacket } from "./audioStream";
 import { AudioMirrorPlayer } from "./audioPlayer";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
 
@@ -34,8 +34,15 @@ export interface AudioMirrorDeps {
   startStream: (name: "audio", destination: string) => Promise<unknown>;
   stopStream: (name: "audio") => Promise<unknown>;
   onChange: (snapshot: AudioMirrorSnapshot) => void;
-  /** Broadcast each decoded audio batch (interleaved Int16) — used by the A/V sync analyzer. */
+  /** Broadcast each decoded audio batch (interleaved Int16) — the ~32 ms player cadence. */
   renderAudio?: (samples: Int16Array) => void;
+  /**
+   * Per-packet (~4 ms) interleaved-Int16 feed with each packet's wire-arrival timestamp —
+   * for the A/V sync analyzer. Finer-grained than {@link renderAudio} so the tone onset is
+   * located to a single packet (not quantised to a 32 ms batch), and wire-stamped so the
+   * measured audio↔video offset is independent of downstream buffering.
+   */
+  renderAudioForAnalysis?: (samples: Int16Array, arrivalMs: number) => void;
 }
 
 export class AudioMirrorController {
@@ -81,7 +88,12 @@ export class AudioMirrorController {
       }
     });
 
-    receiver.onDatagram((bytes) => {
+    receiver.onDatagram((bytes, arrivalMs) => {
+      // Per-packet analyzer feed (fine-grained, wire-stamped) — see renderAudioForAnalysis.
+      if (this.deps.renderAudioForAnalysis) {
+        const parsed = parseAudioPacket(bytes);
+        if (parsed) this.deps.renderAudioForAnalysis(bytesToInt16LE(parsed.body), arrivalMs);
+      }
       const batch = this.batcher.push(bytes);
       if (batch) {
         this.player?.playChunk(batch);

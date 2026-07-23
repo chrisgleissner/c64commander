@@ -46,11 +46,20 @@ class StreamUdpPlugin : Plugin() {
   private val logTag = "StreamUdpPlugin"
   private var multicastLock: WifiManager.MulticastLock? = null
 
-  /** Test seam: how a received datagram is delivered to JS (default: a `datagram` event). */
-  internal var emitDatagram: (String, String) -> Unit = { name, data ->
+  /**
+   * Test seam: how a received datagram is delivered to JS (default: a `datagram` event).
+   *
+   * `arrivalMs` is a **monotonic wire-arrival timestamp** (ms, `System.nanoTime`-based) captured
+   * the instant the datagram is read off the socket — before the Capacitor bridge hop, base64
+   * encoding, frame assembly or decode. The A/V sync analyzer measures the audio↔video offset
+   * from these, so the (asymmetric) downstream latency of the two pipelines cannot skew it: both
+   * streams are stamped on the same clock at the earliest possible point.
+   */
+  internal var emitDatagram: (String, String, Double) -> Unit = { name, data, arrivalMs ->
     val event = JSObject()
     event.put("name", name)
     event.put("data", data)
+    event.put("t", arrivalMs)
     notifyListeners("datagram", event)
   }
 
@@ -114,8 +123,10 @@ class StreamUdpPlugin : Plugin() {
       try {
         val packet = DatagramPacket(buffer, buffer.size)
         socket.receive(packet)
+        // Stamp wire-arrival time immediately, before any encoding/bridge latency (see emitDatagram).
+        val arrivalMs = System.nanoTime() / 1_000_000.0
         val encoded = Base64.encodeToString(packet.data, packet.offset, packet.length, Base64.NO_WRAP)
-        emitDatagram(name, encoded)
+        emitDatagram(name, encoded, arrivalMs)
       } catch (error: Exception) {
         if (socket.isClosed) break
         // Transient receive error; keep listening.

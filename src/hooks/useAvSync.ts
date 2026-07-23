@@ -12,8 +12,6 @@ import { AvSyncAnalyzer, type AvSyncStats } from "@/lib/streams/avSync";
 import { runAvSyncTest } from "@/lib/streams/avSyncPrg";
 import { addLog } from "@/lib/logging";
 
-const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
-
 /**
  * Binds the {@link AvSyncAnalyzer} to the shared A/V mirror session: every decoded video
  * frame and audio batch is timestamped on arrival and fed to the analyzer, which matches
@@ -29,11 +27,14 @@ export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
 
   useEffect(() => {
     const analyzer = analyzerRef.current!;
-    const unsubscribeFrames = session.subscribeFrames((frame) => {
-      if (analyzer.pushVideoFrame(frame, now()) !== null) setStats(analyzer.getStats());
+    // Offset is measured from the WIRE-ARRIVAL timestamp (native: stamped off the socket before
+    // any decode; web: message receipt) so the asymmetric video-assembly vs audio latency cannot
+    // skew it. `now()` (JS observe/render time) is reserved for press→see/hear latency (Phase 3).
+    const unsubscribeFrames = session.subscribeFrames((frame, _height, arrivalMs) => {
+      if (analyzer.pushVideoFrame(frame, arrivalMs) !== null) setStats(analyzer.getStats());
     });
-    const unsubscribeAudio = session.subscribeAudio((samples) => {
-      if (analyzer.pushAudioSamples(samples, now()) !== null) setStats(analyzer.getStats());
+    const unsubscribeAudio = session.subscribeAudio((samples, arrivalMs) => {
+      if (analyzer.pushAudioSamples(samples, arrivalMs) !== null) setStats(analyzer.getStats());
     });
     // Reflect unmatched-pop counts as they accrue, so the panel updates before the first match.
     const poll = setInterval(() => setStats(analyzer.getStats()), 500);

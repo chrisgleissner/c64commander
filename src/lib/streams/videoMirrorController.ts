@@ -22,6 +22,7 @@
 
 import { addLog } from "@/lib/logging";
 import { VicStreamAssembler } from "./vicStream";
+import { videoStandardForHeight, type VideoStandard } from "./vicDecode";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
 
 export type VideoMirrorState = "off" | "connecting" | "live" | "error";
@@ -30,6 +31,8 @@ export interface VideoMirrorSnapshot {
   state: VideoMirrorState;
   fps: number;
   droppedPackets: number;
+  /** Video standard detected from the actual received frame height (PAL 272 / NTSC 240). */
+  standard: VideoStandard;
   error: string | null;
 }
 
@@ -39,10 +42,14 @@ export interface VideoMirrorDeps {
   stopStream: (name: "video") => Promise<unknown>;
   onChange: (snapshot: VideoMirrorSnapshot) => void;
   /**
-   * Frame sink: receives a full 52224-byte VIC frame plus the detected frame
-   * height (PAL 272 / NTSC 240) for every RENDERED frame.
+   * Frame sink: receives a full 52224-byte VIC frame, the detected frame height
+   * (PAL 272 / NTSC 240) and the wire-arrival timestamp (ms) of the frame's FIRST
+   * datagram — for every RENDERED frame. Frame-start (top of frame) is used because
+   * the av-sync tone gate opens at the top raster line, so the video pop and the audio
+   * tone onset share the same wire instant, letting the A/V sync analyzer cancel the
+   * asymmetric frame-assembly/decode latency out of the measured offset.
    */
-  renderFrame?: (frame: Uint8Array, height: number) => void;
+  renderFrame?: (frame: Uint8Array, height: number, arrivalMs: number) => void;
   /** Render every Nth assembled frame (default 1 = every frame). */
   frameThrottle?: number;
   /** Injectable clock for the rolling fps window (defaults to Date.now). */
@@ -52,8 +59,10 @@ export interface VideoMirrorDeps {
 export class VideoMirrorController {
   private receiver: StreamReceiver | null = null;
   private assembler = new VicStreamAssembler();
-  private snapshot: VideoMirrorSnapshot = { state: "off", fps: 0, droppedPackets: 0, error: null };
+  private snapshot: VideoMirrorSnapshot = { state: "off", fps: 0, droppedPackets: 0, standard: "PAL", error: null };
   private frameTick = 0;
+  /** Wire-arrival time of the first datagram of the in-progress frame (null between frames). */
+  private frameStartMs: number | null = null;
   private renderTimes: number[] = [];
   private readonly throttle: number;
   private readonly now: () => number;
@@ -85,6 +94,7 @@ export class VideoMirrorController {
     if (this.snapshot.state === "connecting" || this.snapshot.state === "live") return;
     this.assembler.reset();
     this.frameTick = 0;
+    this.frameStartMs = null;
     this.renderTimes = [];
     this.update({ state: "connecting", error: null, fps: 0, droppedPackets: 0 });
 
@@ -101,16 +111,24 @@ export class VideoMirrorController {
       }
     });
 
-    receiver.onDatagram((bytes) => {
+    receiver.onDatagram((bytes, arrivalMs) => {
+      // The first datagram after a completed frame marks the top of the next frame.
+      if (this.frameStartMs === null) this.frameStartMs = arrivalMs;
       const frame = this.assembler.ingest(bytes);
       if (!frame) return;
+      const frameArrivalMs = this.frameStartMs;
+      this.frameStartMs = null;
       this.frameTick += 1;
       let fps = this.snapshot.fps;
       if (this.frameTick % this.throttle === 0) {
-        this.deps.renderFrame?.(frame, this.assembler.frameHeight);
+        this.deps.renderFrame?.(frame, this.assembler.frameHeight, frameArrivalMs);
         fps = this.recordRenderedFrame();
       }
-      this.update({ fps, droppedPackets: this.assembler.stats.droppedPackets });
+      this.update({
+        fps,
+        droppedPackets: this.assembler.stats.droppedPackets,
+        standard: videoStandardForHeight(this.assembler.frameHeight),
+      });
     });
 
     try {
@@ -137,6 +155,7 @@ export class VideoMirrorController {
     this.receiver = null;
     this.assembler.reset();
     this.frameTick = 0;
+    this.frameStartMs = null;
     this.renderTimes = [];
     this.update({ state: "off", fps: 0, error: null });
   }

@@ -30,6 +30,16 @@ export const VIC_PIXELS_PER_FRAME = VIC_FRAME_WIDTH * VIC_FRAME_HEIGHT;
 export const clampFrameHeight = (height: number): number =>
   height < VIC_NTSC_HEIGHT ? VIC_NTSC_HEIGHT : height > VIC_PAL_HEIGHT ? VIC_PAL_HEIGHT : height;
 
+export type VideoStandard = "PAL" | "NTSC";
+
+/**
+ * Classify the actual video standard from a received frame's line count: PAL frames are
+ * 272 lines, NTSC 240 — so the midpoint (256) cleanly separates them. Derived from what the
+ * device really streams (not a config guess), for the Live View overlay and NTSC audio-rate.
+ */
+export const videoStandardForHeight = (height: number): VideoStandard =>
+  height >= (VIC_NTSC_HEIGHT + VIC_PAL_HEIGHT) / 2 ? "PAL" : "NTSC";
+
 /**
  * 16-entry VIC palette (RGB) — the "C64 Ultimate Default Palette" the device
  * streams (source of truth: c64stream `data/palettes/default.vpl`), so in-app

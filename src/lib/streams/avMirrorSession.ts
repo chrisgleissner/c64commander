@@ -22,20 +22,21 @@ import { loadStreamAudioPort, loadStreamVideoPort } from "@/lib/config/appSettin
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
 import { AudioMirrorController, type AudioMirrorState } from "./audioMirrorController";
 import { VideoMirrorController, type VideoMirrorState } from "./videoMirrorController";
+import type { VideoStandard } from "./vicDecode";
 import type { AudioMirrorPlayer } from "./audioPlayer";
 
 export interface AvMirrorSnapshot {
   audio: { state: AudioMirrorState; droppedPackets: number; error: string | null };
-  video: { state: VideoMirrorState; fps: number; error: string | null };
+  video: { state: VideoMirrorState; fps: number; standard: VideoStandard; error: string | null };
 }
 
-export type AvMirrorFrameHandler = (frame: Uint8Array, height: number) => void;
-export type AvMirrorAudioHandler = (samples: Int16Array) => void;
+export type AvMirrorFrameHandler = (frame: Uint8Array, height: number, arrivalMs: number) => void;
+export type AvMirrorAudioHandler = (samples: Int16Array, arrivalMs: number) => void;
 export type AvMirrorListener = (snapshot: AvMirrorSnapshot) => void;
 
 const INITIAL: AvMirrorSnapshot = {
   audio: { state: "off", droppedPackets: 0, error: null },
-  video: { state: "off", fps: 0, error: null },
+  video: { state: "off", fps: 0, standard: "PAL", error: null },
 };
 
 const isLiveState = (state: AudioMirrorState | VideoMirrorState) => state === "connecting" || state === "live";
@@ -55,7 +56,7 @@ export class AvMirrorSession {
   private readonly listeners = new Set<AvMirrorListener>();
   private readonly frameListeners = new Set<AvMirrorFrameHandler>();
   private readonly audioListeners = new Set<AvMirrorAudioHandler>();
-  private latestFrame: { frame: Uint8Array; height: number } | null = null;
+  private latestFrame: { frame: Uint8Array; height: number; arrivalMs: number } | null = null;
   private readonly audio: AudioMirrorController;
   private readonly video: VideoMirrorController;
 
@@ -70,16 +71,16 @@ export class AvMirrorSession {
       createReceiver:
         deps.createAudioReceiver ?? ((opts) => createStreamReceiver({ ...opts, port: loadStreamAudioPort() })),
       createPlayer: deps.createPlayer,
-      renderAudio: (samples) => this.emitAudio(samples),
+      renderAudioForAnalysis: (samples, arrivalMs) => this.emitAudio(samples, arrivalMs),
     });
 
     this.video = new VideoMirrorController({
       startStream: (_name, destination) => startStream("video", destination),
       stopStream: () => stopStream("video"),
-      onChange: (s) => this.update({ video: { state: s.state, fps: s.fps, error: s.error } }),
+      onChange: (s) => this.update({ video: { state: s.state, fps: s.fps, standard: s.standard, error: s.error } }),
       createReceiver:
         deps.createVideoReceiver ?? ((opts) => createStreamReceiver({ ...opts, port: loadStreamVideoPort() })),
-      renderFrame: (frame, height) => this.emitFrame(frame, height),
+      renderFrame: (frame, height, arrivalMs) => this.emitFrame(frame, height, arrivalMs),
       frameThrottle: deps.videoFrameThrottle,
       now: deps.now,
     });
@@ -94,13 +95,13 @@ export class AvMirrorSession {
     this.listeners.forEach((listener) => listener(this.snapshot));
   }
 
-  private emitFrame(frame: Uint8Array, height: number) {
-    this.latestFrame = { frame, height };
-    this.frameListeners.forEach((handler) => handler(frame, height));
+  private emitFrame(frame: Uint8Array, height: number, arrivalMs: number) {
+    this.latestFrame = { frame, height, arrivalMs };
+    this.frameListeners.forEach((handler) => handler(frame, height, arrivalMs));
   }
 
-  private emitAudio(samples: Int16Array) {
-    this.audioListeners.forEach((handler) => handler(samples));
+  private emitAudio(samples: Int16Array, arrivalMs: number) {
+    this.audioListeners.forEach((handler) => handler(samples, arrivalMs));
   }
 
   subscribe(listener: AvMirrorListener): () => void {
@@ -114,13 +115,18 @@ export class AvMirrorSession {
   /** Subscribe to decoded-ready video frames (a canvas surface). Replays the last frame. */
   subscribeFrames(handler: AvMirrorFrameHandler): () => void {
     this.frameListeners.add(handler);
-    if (this.latestFrame) handler(this.latestFrame.frame, this.latestFrame.height);
+    if (this.latestFrame) handler(this.latestFrame.frame, this.latestFrame.height, this.latestFrame.arrivalMs);
     return () => {
       this.frameListeners.delete(handler);
     };
   }
 
-  /** Subscribe to decoded audio batches (interleaved Int16) — for the A/V sync analyzer. */
+  /**
+   * Subscribe to per-packet (~4 ms) decoded audio (interleaved Int16) with each packet's
+   * wire-arrival timestamp — for the A/V sync analyzer. This is the RAW received stream (no
+   * jitter-buffer reordering or loss concealment): the analyzer must measure the true stream,
+   * so concealment fill can never be mistaken for a tone pop.
+   */
   subscribeAudio(handler: AvMirrorAudioHandler): () => void {
     this.audioListeners.add(handler);
     return () => {

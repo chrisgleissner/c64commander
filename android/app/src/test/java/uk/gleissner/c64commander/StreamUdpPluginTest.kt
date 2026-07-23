@@ -37,7 +37,7 @@ import org.robolectric.RobolectricTestRunner
 class StreamUdpPluginTest {
   private lateinit var plugin: StreamUdpPlugin
   private lateinit var context: Context
-  private val received = ArrayList<Pair<String, String>>()
+  private val received = ArrayList<Triple<String, String, Double>>()
   private lateinit var latch: CountDownLatch
 
   @Before
@@ -47,8 +47,8 @@ class StreamUdpPluginTest {
     injectBridge(plugin, context)
     received.clear()
     latch = CountDownLatch(1)
-    plugin.emitDatagram = { name, data ->
-      received.add(name to data)
+    plugin.emitDatagram = { name, data, arrivalMs ->
+      received.add(Triple(name, data, arrivalMs))
       latch.countDown()
     }
   }
@@ -95,10 +95,15 @@ class StreamUdpPluginTest {
       sender.send(DatagramPacket(payload, payload.size, InetAddress.getByName("127.0.0.1"), port))
     }
 
+    val beforeMs = System.nanoTime() / 1_000_000.0
     assertTrue("no datagram received", latch.await(3, TimeUnit.SECONDS))
+    val afterMs = System.nanoTime() / 1_000_000.0
     assertEquals(1, received.size)
     assertEquals("video", received[0].first)
     assertEquals(Base64.encodeToString(payload, Base64.NO_WRAP), received[0].second)
+    // A monotonic wire-arrival timestamp must be stamped, within the receive window.
+    val arrivalMs = received[0].third
+    assertTrue("arrival timestamp not monotonic within window", arrivalMs in beforeMs..afterMs)
 
     val closeCall = mock(PluginCall::class.java)
     `when`(closeCall.getString("name")).thenReturn("video")

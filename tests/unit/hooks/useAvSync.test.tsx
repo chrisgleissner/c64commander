@@ -21,21 +21,23 @@ const loud = () => new Int16Array(768).fill(8000);
 const silent = () => new Int16Array(768);
 
 class FakeSession {
-  private frameHandlers = new Set<(f: Uint8Array, h: number) => void>();
-  private audioHandlers = new Set<(s: Int16Array) => void>();
-  subscribeFrames(handler: (f: Uint8Array, h: number) => void) {
+  private frameHandlers = new Set<(f: Uint8Array, h: number, arrivalMs: number) => void>();
+  private audioHandlers = new Set<(s: Int16Array, arrivalMs: number) => void>();
+  // Monotonic wire clock: each emit advances 10 ms, mirroring native arrival stamps.
+  private clock = 1000;
+  subscribeFrames(handler: (f: Uint8Array, h: number, arrivalMs: number) => void) {
     this.frameHandlers.add(handler);
     return () => this.frameHandlers.delete(handler);
   }
-  subscribeAudio(handler: (s: Int16Array) => void) {
+  subscribeAudio(handler: (s: Int16Array, arrivalMs: number) => void) {
     this.audioHandlers.add(handler);
     return () => this.audioHandlers.delete(handler);
   }
-  emitFrame(frame: Uint8Array) {
-    this.frameHandlers.forEach((h) => h(frame, 272));
+  emitFrame(frame: Uint8Array, t: number = (this.clock += 10)) {
+    this.frameHandlers.forEach((h) => h(frame, 272, t));
   }
-  emitAudio(samples: Int16Array) {
-    this.audioHandlers.forEach((h) => h(samples));
+  emitAudio(samples: Int16Array, t: number = (this.clock += 10)) {
+    this.audioHandlers.forEach((h) => h(samples, t));
   }
   get frameSubs() {
     return this.frameHandlers.size;

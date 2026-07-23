@@ -55,10 +55,10 @@ export function AvMirrorPreview({ size = "check", session, className }: AvMirror
       )}
       {videoLive && video.fps > 0 && (
         <span
-          className="absolute bottom-1 right-1 rounded bg-black/60 px-1 text-[10px] leading-tight text-white/80"
+          className="absolute right-1 top-1 rounded bg-black/60 px-1 text-[10px] leading-tight text-white/80"
           data-testid="av-mirror-fps"
         >
-          {video.fps} fps
+          {video.standard ?? "PAL"} {video.fps} fps
         </span>
       )}
     </div>

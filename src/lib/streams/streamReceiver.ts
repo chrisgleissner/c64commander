@@ -30,7 +30,13 @@ export type StreamName = "audio" | "video";
 export type StreamConnectionState = "connecting" | "open" | "closed" | "error";
 
 export interface StreamReceiver {
-  onDatagram(handler: (data: Uint8Array) => void): void;
+  /**
+   * `arrivalMs` is a monotonic wire-arrival timestamp (ms). Native supplies the plugin's
+   * `System.nanoTime`-based stamp captured off the socket (before the bridge/decode); the web
+   * bridge supplies `performance.now()` at message receipt. The A/V sync analyzer measures the
+   * audio↔video offset from this so asymmetric downstream latency cannot skew it.
+   */
+  onDatagram(handler: (data: Uint8Array, arrivalMs: number) => void): void;
   onStateChange(handler: (state: StreamConnectionState) => void): void;
   /** The host:port the device should stream to (the receiver's own address). */
   readonly destination: string;
@@ -79,6 +85,9 @@ export const MULTICAST_GROUP: Record<StreamName, string> = { video: "239.0.1.64"
 const defaultPortFor = (name: StreamName) => (name === "audio" ? DEFAULT_AUDIO_PORT : DEFAULT_VIDEO_PORT);
 const multicastDestination = (name: StreamName, port: number) => `${MULTICAST_GROUP[name]}:${port}`;
 
+/** Monotonic clock for wire-arrival stamps; falls back to Date.now where performance is absent. */
+const nowMs = (): number => (typeof performance !== "undefined" ? performance.now() : Date.now());
+
 const toUint8 = (data: unknown): Uint8Array | null => {
   if (data instanceof ArrayBuffer) return new Uint8Array(data);
   if (data instanceof Uint8Array) return data;
@@ -89,7 +98,7 @@ const toUint8 = (data: unknown): Uint8Array | null => {
 /** Web receiver: consumes the app server's UDP→WebSocket bridge. */
 export class WebSocketStreamReceiver implements StreamReceiver {
   private socket: WebSocketLike;
-  private datagramHandler: ((data: Uint8Array) => void) | null = null;
+  private datagramHandler: ((data: Uint8Array, arrivalMs: number) => void) | null = null;
   private stateHandler: ((state: StreamConnectionState) => void) | null = null;
   readonly destination: string;
 
@@ -107,11 +116,11 @@ export class WebSocketStreamReceiver implements StreamReceiver {
     this.socket.onerror = () => this.stateHandler?.("error");
     this.socket.onmessage = (event) => {
       const bytes = toUint8(event.data);
-      if (bytes) this.datagramHandler?.(bytes);
+      if (bytes) this.datagramHandler?.(bytes, nowMs());
     };
   }
 
-  onDatagram(handler: (data: Uint8Array) => void): void {
+  onDatagram(handler: (data: Uint8Array, arrivalMs: number) => void): void {
     this.datagramHandler = handler;
   }
 
@@ -140,7 +149,7 @@ const base64ToBytes = (base64: string): Uint8Array => {
 
 /** Native receiver: binds a UDP port through the StreamUdp plugin and forwards datagrams. */
 export class NativeUdpStreamReceiver implements StreamReceiver {
-  private datagramHandler: ((data: Uint8Array) => void) | null = null;
+  private datagramHandler: ((data: Uint8Array, arrivalMs: number) => void) | null = null;
   private stateHandler: ((state: StreamConnectionState) => void) | null = null;
   destination = "";
   private closed = false;
@@ -156,7 +165,8 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
     this.destination = options.destination ?? multicastDestination(options.name, port);
     this.listener = StreamUdp.addListener("datagram", (event) => {
       if (event.name !== this.name || !this.datagramHandler) return;
-      this.datagramHandler(base64ToBytes(event.data));
+      // Prefer the native wire-arrival stamp; fall back for pre-timestamp plugin builds.
+      this.datagramHandler(base64ToBytes(event.data), typeof event.t === "number" ? event.t : nowMs());
     });
     this.readyPromise = StreamUdp.bind({ name: this.name, port, group })
       .then(() => {
@@ -172,7 +182,7 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
     return this.readyPromise;
   }
 
-  onDatagram(handler: (data: Uint8Array) => void): void {
+  onDatagram(handler: (data: Uint8Array, arrivalMs: number) => void): void {
     this.datagramHandler = handler;
   }
 
