@@ -11,9 +11,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AvSyncPanel } from "@/components/streams/AvSyncPanel";
 import type { AvSyncStats } from "@/lib/streams/avSync";
 
+const emptyLatency = {
+  count: 0,
+  missed: 0,
+  seeLastMs: null,
+  seeP99Ms: null,
+  hearLastMs: null,
+  hearP99Ms: null,
+  offsetLastMs: null,
+  offsetP99Ms: null,
+};
+
 const mirror = vi.hoisted(() => ({
   reset: vi.fn(),
   runTest: vi.fn(),
+  runKeyTest: vi.fn(),
+  pressSpace: vi.fn(),
   state: {
     stats: {
       count: 0,
@@ -26,6 +39,16 @@ const mirror = vi.hoisted(() => ({
       unmatchedVideo: 0,
       unmatchedAudio: 0,
     } as AvSyncStats,
+    latencyStats: {
+      count: 0,
+      missed: 0,
+      seeLastMs: null,
+      seeP99Ms: null,
+      hearLastMs: null,
+      hearP99Ms: null,
+      offsetLastMs: null,
+      offsetP99Ms: null,
+    },
     runningTest: false,
     testError: null as string | null,
   },
@@ -34,8 +57,11 @@ const mirror = vi.hoisted(() => ({
 vi.mock("@/hooks/useAvSync", () => ({
   useAvSync: () => ({
     stats: mirror.state.stats,
+    latencyStats: mirror.state.latencyStats,
     reset: mirror.reset,
     runTest: mirror.runTest,
+    runKeyTest: mirror.runKeyTest,
+    pressSpace: mirror.pressSpace,
     runningTest: mirror.state.runningTest,
     testError: mirror.state.testError,
   }),
@@ -45,6 +71,8 @@ describe("AvSyncPanel", () => {
   beforeEach(() => {
     mirror.reset.mockReset();
     mirror.runTest.mockReset();
+    mirror.runKeyTest.mockReset();
+    mirror.pressSpace.mockReset();
     mirror.state = {
       stats: {
         count: 0,
@@ -57,6 +85,7 @@ describe("AvSyncPanel", () => {
         unmatchedVideo: 0,
         unmatchedAudio: 0,
       },
+      latencyStats: { ...emptyLatency },
       runningTest: false,
       testError: null,
     };
@@ -100,5 +129,29 @@ describe("AvSyncPanel", () => {
     expect(screen.getByTestId("av-sync-run")).toBeDisabled();
     expect(screen.getByTestId("av-sync-run")).toHaveTextContent("Starting…");
     expect(screen.getByTestId("av-sync-error")).toHaveTextContent("device offline");
+  });
+
+  it("drives the interactive space-triggered latency test and renders its P99 stats", () => {
+    mirror.state.latencyStats = {
+      count: 5,
+      missed: 1,
+      seeLastMs: 42,
+      seeP99Ms: 48,
+      hearLastMs: 40,
+      hearP99Ms: 45,
+      offsetLastMs: 6,
+      offsetP99Ms: 12,
+    };
+    render(<AvSyncPanel />);
+    expect(screen.getByTestId("av-sync-lat-count")).toHaveTextContent("5 taps");
+    expect(screen.getByTestId("av-sync-lat-count")).toHaveTextContent("1 missed");
+    expect(screen.getByTestId("av-sync-lat-see")).toHaveTextContent("48 ms");
+    expect(screen.getByTestId("av-sync-lat-hear")).toHaveTextContent("45 ms");
+    expect(screen.getByTestId("av-sync-lat-offset")).toHaveTextContent("12 ms");
+
+    fireEvent.click(screen.getByTestId("av-sync-key-load"));
+    expect(mirror.runKeyTest).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByTestId("av-sync-press"));
+    expect(mirror.pressSpace).toHaveBeenCalledTimes(1);
   });
 });
