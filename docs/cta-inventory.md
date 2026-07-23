@@ -103,12 +103,23 @@ persistent status badge that appear on every page).
 
 | Page     | Route       |     CTAs | Notes                                                                                                                                                                                             |
 | -------- | ----------- | -------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Home     | `/`         | 113 (+1) | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots. `+1` Remote Input tile behind `remote_input_enabled` (stable, enabled and user-visible by default in C64 Commander; disabled and hidden in C64U Remote per `variants/feature-flags/c64u-remote.yaml`). |
-| Settings | `/settings` |  77 (+2) | Connection, devices, display (+2 native Android full-screen toggles), feature flags, network/cache, notifications, dev-mode, build info.                                                          |
+| Home     | `/`         | 113 (+3) | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots. `+1` Remote Input tile behind `remote_input_enabled` (stable, enabled and user-visible by default in C64 Commander; disabled and hidden in C64U Remote per `variants/feature-flags/c64u-remote.yaml`). `+2` Content Explorer Live Mirror toggles: Audio Mirror (`audio_mirror_enabled`) and Video Mirror (`video_mirror_enabled`, developer-only), each mounted only when the device advertises streaming (code-verified — see note below). |
+| Settings | `/settings` |  77 (+8) | Connection, devices, display (+2 native Android full-screen toggles), feature flags, network/cache, notifications, dev-mode, build info. `+6` Content Explorer **Play and Disk** controls: Search inside disk images (`in_image_search_enabled`), Answer cartridge boot menu (`launch_safety_enabled`, default on) plus its Menu key select and Boot settle input, and Video/Audio stream port inputs (`audio_mirror_enabled`/`video_mirror_enabled`) (code-verified — see note below). |
 | Play     | `/play`     |  32 (+1) | Transport, volume, playback flags, playlist, type filters, HVSC. `+1` Open Controller button, shown only while playing, behind `remote_input_enabled`.                                            |
 | Config   | `/config`   |       30 | Search + 22 config-category accordions (each expands to config-item rows).                                                                                                                        |
-| Disks    | `/disks`    |       28 | Drive A/B/Soft-IEC controls, disk library.                                                                                                                                                        |
+| Disks    | `/disks`    |   28 (+1) | Drive A/B/Soft-IEC controls, disk library. `+1` Content Explorer **New disk** button (`new_disk_enabled`); the per-disk **Open (Disk Explorer)…** overflow action (`disk_explorer_enabled`) and the New-disk / Disk-contents dialogs it opens are documented in §4.3/§5 (code-verified — see note below).                            |
 | Docs     | `/docs`     |       18 | 8 doc-section toggles + 3 external links.                                                                                                                                                         |
+
+> **Content Explorer CTAs — code-verified, not yet hardware-verified.** The six
+> flag-gated Content Explorer capabilities (Disk Explorer, In-image search, Launch
+> Safety, Audio Mirror, Video Mirror, New disk) contribute the conditional CTAs
+> tallied in the `(+N)` columns above and detailed in §4.1/§4.3/§4.5 and §5. They
+> were verified against source on branch `feat/content-explorer`; unlike the base
+> counts in this section they have **not** yet been enumerated on real hardware.
+> Keypad / D-pad reachability for them is derived from each control's type (dialog
+> buttons, selects, checkboxes, and number inputs behave like their
+> hardware-verified neighbours in §4). The "Last verified on real hardware" header
+> above refers to the prior verification pass and is unchanged.
 
 **Persistent on every page (counted within each page above):**
 
@@ -202,6 +213,9 @@ not-connected / empty / single-device).
   - Start — button — `home-stream-start-*` — R✅ I✅
   - Stop — button — `home-stream-stop-*` — R✅ I✅
   - (edit mode) endpoint — text — `home-stream-endpoint-*` — R✅ I✅
+- **Live Mirror** _(Content Explorer; mounted only when the device advertises streaming)_
+  - Audio Mirror — Listen / Stop toggle — button — `audio-mirror-toggle` — R✅ I✅ _(flag `audio_mirror_enabled`; the state badge / dropped-packet line are display-only, not interactive)_
+  - Video Mirror — Watch / Stop toggle — button — `video-mirror-toggle` — R✅ I✅ _(flag `video_mirror_enabled`, developer-only; the render canvas and fps/state badges are display-only, not interactive)_
 - **Config actions** (`data-section-label="Config"`)
   - Save/Load (flash) — button — R✅ I✅
   - Reset to default — button (danger) — R✅ I✅
@@ -239,7 +253,9 @@ Per drive (A / B / Soft-IEC):
 - Reset — button — `drive-reset-*` — R✅ I✅
 - Power (Turn On/Off) — button — `drive-power-toggle-*` — R✅ I✅
 
-Disk library: Add disks — button — R✅ I✅ ; Filter disks — text — `list-filter-input` — R✅ I✅ ; Select all — button — `disk-list-toggle-select-all` — R✅ I✅ `[disabled: empty]`.
+Disk library: New disk — button — `new-disk-open` — R✅ I✅ _(flag `new_disk_enabled`; opens the **New disk dialog**, §5)_ ; Add disks — button — R✅ I✅ ; Filter disks — text — `list-filter-input` — R✅ I✅ ; Select all — button — `disk-list-toggle-select-all` — R✅ I✅ `[disabled: empty]`.
+
+Per-disk overflow menu (Set group / Rename / Remove) additionally gains, behind `disk_explorer_enabled`: Open (Disk Explorer)… — action — R✅ I✅ `[only for .d64/.d71/.d81/.dnp rows]` — opens the **Disk contents dialog** (§5).
 
 Mount disk sheet: Available disks list — filter text — `list-filter-input` — R✅ I✅ ; Mount disk row action — button — R✅ I✅ ; Add disks — button — `mount-sheet-add-disks` — R✅ I✅ `[visible when library empty]`; Add disks source picker Local / C64U / CommoServe — buttons — `import-option-*` — R✅ I✅.
 
@@ -290,6 +306,15 @@ Mount disk sheet: Available disks list — filter text — `list-filter-input` �
   `archive-*-override` — R✅ I✅ ; Open archive browser — button —
   `open-online-archive` — R✅ I✅ ; many device-safety number inputs — number — R✅ I✅
 - **Disk autostart** — select — R✅ I✅
+- **Play and Disk** _(Content Explorer)_: Search inside disk images — checkbox —
+  `settings-search-inside-disks` — R✅ I✅ _(flag `in_image_search_enabled`)_ ;
+  Answer cartridge boot menu after reset — checkbox — `settings-boot-menu-answer`
+  — R✅ I✅ _(flag `launch_safety_enabled`, default on, so visible by default)_ —
+  when checked reveals Menu key — select — `settings-boot-menu-key` — R✅ I✅ and
+  Boot settle (ms) — number — `settings-boot-settle` — R✅ I✅ ; Video stream port
+  / Audio stream port — number ×2 — `settings-stream-video-port` /
+  `settings-stream-audio-port` — R✅ I✅
+  `[visible when audio_mirror_enabled or video_mirror_enabled]`
 - **Notifications**: visibility — select — R✅ I✅ ; duration — slider — R✅ I✅
 - **Build/info**: REST API docs — link — `settings-about-rest-api-docs` — R✅ I✅
   (`c64u-remote`: C64U User Guide — link — `settings-about-c64u-user-guide`
@@ -326,6 +351,25 @@ manual host/IP — text input — `startup-manual-device-host-input` — R✅ I�
 Open Settings — button — `startup-device-discovery-open-settings` — R✅ I✅ ;
 Not now / Close — buttons — `startup-device-discovery-dismiss`,
 `startup-device-discovery-close` — R✅ I✅.
+
+**New disk dialog** (`new-disk-*`, Content Explorer, behind `new_disk_enabled`;
+opened from the Disks library's "New disk" button): Type — select — `new-disk-type`
+— R✅ I✅ ; File name — text — `new-disk-name` — R✅ I✅ ; Disk label — text —
+`new-disk-label` — R✅ I✅ ; Tracks — number — `new-disk-tracks` — R✅ I✅
+`[visible for D64/DNP types only]` ; Storage folder — text — `new-disk-folder` —
+R✅ I✅ ; Cancel — button — R✅ I✅ ; Create & mount — button — `new-disk-create`
+— R✅ I✅ `[disabled until a non-empty file name is entered / while creating]`.
+Selecting the D64 or DNP type reveals the Tracks field; a successful create adds
+the image to the library and mounts it to drive A.
+
+**Disk contents dialog** (`disk-contents-*` / `disk-entry-*`, Content Explorer,
+behind `disk_explorer_enabled`; opened from a disk row's "Open (Disk Explorer)…"
+action): per directory entry `disk-entry-<i>` — Run — button —
+`disk-entry-run-<i>` — R✅ I✅ ; Load — button — `disk-entry-load-<i>` — R✅ I✅ ;
+Mount & Load — button — `disk-entry-mount-<i>` — R✅ I✅
+`[all three shown only for launchable closed PRG entries, and disabled for the row
+currently launching; non-PRG / unclosed (splat) rows show a reason instead of
+buttons]`.
 
 **Remote Input sheet** (`remote-input-sheet`, HARD12-017, behind
 `remote_input_enabled`; opened from Home's "Remote Input" tile or Play's "Open
