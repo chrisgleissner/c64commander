@@ -25,8 +25,17 @@
 > `tests/unit/web/streamBridge.test.ts`: fake VIC/audio UDP packets (c64stream wire shape) are
 > received by a real WebSocket client byte-for-byte and drive the app's real `VicStreamAssembler`
 > to a complete 52224-byte frame (plus stream isolation, broadcast, disconnect, and RFC 6455
-> ping/pong/close). So Live View fully works on the web/Docker build today; the **native** UDP
-> receiver plugin is the remaining follow-up (`UnsupportedStreamReceiver` fallback until then).
+> ping/pong/close).
+>
+> **Native transport shipped + hardware-proven.** `StreamUdpPlugin.kt` (Capacitor) binds the UDP
+> ports and **joins the firmware's multicast groups** (video `239.0.1.64`, audio `239.0.1.65`),
+> holding a Wi-Fi `MulticastLock`; `NativeUdpStreamReceiver` consumes its events and
+> `createStreamReceiver` picks it on native. **Multicast is required** — a unicast `streams:start`
+> returns 404 "Network Host Resolve Error" because the device streams from its wired port and can't
+> ARP-resolve a Wi-Fi client (root cause in the `1541ultimate` firmware; multicast is the firmware
+> default). Verified on a Pixel 4 + real c64u (fw 1.2.0): live `COMMODORE 64 BASIC V2` at ~50 fps,
+> audio playing, and the A/V-sync tool measured 23 pops (avg −16 ms). So Live View works on **both**
+> the web/Docker build and the phone app.
 >
 > **Reconciled with c64stream (the authoritative native reference).** After reviewing
 > `github.com/chrisgleissner/c64stream` (`src/network/c64-protocol.h`, `src/video/c64-video.c`),
