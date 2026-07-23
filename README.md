@@ -24,7 +24,7 @@ Control and manage a Commodore 64 Ultimate from Android, iOS, or a self-hosted w
   - **Launch Safety**: Automatically parks a configured cartridge around direct launches so a freezer cartridge can't hijack a Run into its menu; optional boot-menu answer after a Mount & Load reset.
   - **In-image search**: Search finds programs inside `.d64`/`.d71`/`.d81` images, shown as disk → program.
   - **New disk**: Create a formatted blank D64/D71/D81/DNP image on the device.
-  - **Live mirror** *(experimental)*: Receive and play the running machine's audio in-app, with a more demanding, off-by-default video mirror.
+  - **Live mirror** _(experimental)_: Receive and play the running machine's audio in-app, with a more demanding, off-by-default video mirror.
 
 ## Getting Started
 
@@ -156,17 +156,20 @@ The following shows the Keys tab using various display profiles, from small to l
 
 ### Live View (audio & video mirror)
 
-Hear and see the running machine from inside the app. **Live View** receives the C64's audio and video streams over your network and plays them back in a single, shared session — start it in one place and it stays live everywhere you go, never doubling up.
+Hear and see the running machine from inside the app, in one shared session that stays live wherever you go. **Listen** for audio-only (no screen space, just a live dot); **Watch** for a small preview you can expand.
 
-<img src="docs/img/app/home/content-explorer/01-live-view.png" alt="Live View control on Home: Listen and Watch toggles beneath the quick actions" width="480"/>
+<table>
+  <tr>
+    <td><img src="docs/img/app/home/content-explorer/01-live-view.png" alt="Live View on Home: Listen and Watch toggles with a small live preview" width="300"/></td>
+    <td><img src="docs/img/app/home/content-explorer/02-live-view-expanded.png" alt="Live View expanded to a larger inline preview of the C64 screen" width="300"/></td>
+  </tr>
+</table>
 
-It is deliberately small and stays out of the way:
+Inside **Remote Input**, the mirror becomes a full-width, zoomable screen for playing games or driving keypad-only devices. A colour-coded **view-lock** keeps physical keys unambiguous — **blue = driving the C64**, **amber = adjusting the view** — and you can pinch/drag/double-tap to zoom and pan, follow on-screen activity automatically, or jump around with the minimap.
 
-- **Audio only** — a one-tap **Listen** toggle that takes no screen space; a subtle live dot (and a tiny app-bar indicator while you navigate) makes sure you always know it is on. Perfect for hearing a game or SID tune while you do something else.
-- **Video — check** — a small preview of the screen you can glance at and expand inline. Available on **Home**, beneath the quick actions.
-- **Video — immersive** — inside **Remote Input**, the mirror maximises to a full-width, zoomable, pannable screen for playing games or driving apps. On devices controlled by a physical keypad it adds a clear, colour-coded **view-lock** so a key press is never ambiguously "drive the C64" versus "move the view": blue means you are driving the machine, amber means you are adjusting the view. Pinch, drag, or double-tap the picture to zoom and pan, let it **follow the on-screen activity** automatically (e.g. the cursor as you type), and jump anywhere with the draggable minimap.
+<img src="docs/img/app/home/remote-input/06-av-mirror-immersive.png" alt="Remote Input immersive mirror: the C64 screen with a Driving-C64 view-lock chip and zoom/pan controls" width="300"/>
 
-Live View is an opt-in feature — turn on **Audio Mirror** and **Video Mirror** under **Settings → Features**. It appears only when the connected device advertises streaming. (Full playback on the phone app arrives with its on-device stream receiver; the ports the device streams to are configurable under **Settings → Play and disk behaviour**, defaulting to 11000 / 11001.)
+Enable **Audio Mirror** / **Video Mirror** under **Settings → Features** (stream ports are configurable under **Settings → Play and disk behaviour**, defaulting to 11000 / 11001). It works today on the web/Docker build; the phone app adds its on-device stream receiver as a follow-up.
 
 ### Play
 

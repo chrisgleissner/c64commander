@@ -2141,8 +2141,6 @@ test.describe("App screenshots", () => {
           "disk_explorer_enabled",
           "in_image_search_enabled",
           "launch_safety_enabled",
-          "audio_mirror_enabled",
-          "video_mirror_enabled",
         ]) {
           localStorage.setItem(`c64u_feature_flag:${flag}`, "1");
           sessionStorage.setItem(`c64u_feature_flag:${flag}`, "1");
@@ -2203,17 +2201,114 @@ test.describe("App screenshots", () => {
       await captureScreenshot(page, testInfo, "settings/content-explorer/01-launch-safety.png", {
         locator: playAndDiskCard,
       });
+    },
+  );
 
-      // --- Home: the cross-app A/V Mirror "Live View" control (06-av-mirror-ux).
-      //     Best-effort — only renders when the mock device advertises streaming. ---
+  test(
+    "capture A/V mirror Live View screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      allowWarnings(testInfo, "A/V mirror stream start + stub WebSocket during screenshots.");
+
+      // Enable the mirror flags and install a browser-side stub so the app receives a
+      // real (synthetic) VIC video stream: colour-bar frames in the app's own packet
+      // format flow through the genuine WebSocketStreamReceiver → VideoMirrorController →
+      // decoder → canvas, so these shots show the actual rendered pipeline, not a mock UI.
+      await page.addInitScript(() => {
+        for (const flag of ["audio_mirror_enabled", "video_mirror_enabled"]) {
+          localStorage.setItem(`c64u_feature_flag:${flag}`, "1");
+          sessionStorage.setItem(`c64u_feature_flag:${flag}`, "1");
+        }
+        const RealWebSocket = window.WebSocket;
+        const HDR = 12;
+        const BYTES_PER_LINE = 192;
+        const LINES_PER_PKT = 4;
+        const WIDTH = 384;
+        const HEIGHT = 272;
+        const packets: ArrayBuffer[] = [];
+        const total = HEIGHT / LINES_PER_PKT;
+        for (let i = 0; i < total; i++) {
+          const line = i * LINES_PER_PKT;
+          const buf = new ArrayBuffer(HDR + LINES_PER_PKT * BYTES_PER_LINE);
+          const dv = new DataView(buf);
+          const u8 = new Uint8Array(buf);
+          dv.setUint16(0, i, true); // seq
+          dv.setUint16(4, (line & 0x7fff) | (i === total - 1 ? 0x8000 : 0), true); // line + last-line
+          dv.setUint16(6, WIDTH, true); // width
+          u8[8] = LINES_PER_PKT;
+          u8[9] = 4; // bpp
+          for (let k = 0; k < LINES_PER_PKT; k++) {
+            const color = Math.floor((line + k) / (HEIGHT / 16)) & 0x0f; // 16 colour bars
+            u8.fill(color | (color << 4), HDR + k * BYTES_PER_LINE, HDR + (k + 1) * BYTES_PER_LINE);
+          }
+          packets.push(buf);
+        }
+        class StubStreamWebSocket {
+          url: string;
+          binaryType = "blob";
+          readyState = 0;
+          onopen: ((e?: unknown) => void) | null = null;
+          onmessage: ((e: { data: unknown }) => void) | null = null;
+          onclose: ((e?: unknown) => void) | null = null;
+          onerror: ((e?: unknown) => void) | null = null;
+          private closed = false;
+          constructor(url: string) {
+            this.url = String(url);
+            if (!this.url.includes("/streams/")) return new RealWebSocket(url) as unknown as StubStreamWebSocket;
+            const isVideo = this.url.endsWith("/streams/video");
+            setTimeout(() => {
+              this.readyState = 1;
+              this.onopen?.({});
+              if (!isVideo) return;
+              let n = 0;
+              const tick = () => {
+                if (this.closed || n > 400) return; // ~13s of frames covers the whole capture
+                for (const p of packets) this.onmessage?.({ data: p.slice(0) });
+                n += 1;
+                setTimeout(tick, 33);
+              };
+              tick();
+            }, 15);
+          }
+          send() {}
+          close() {
+            this.closed = true;
+            this.readyState = 3;
+            this.onclose?.({});
+          }
+        }
+        window.WebSocket = StubStreamWebSocket as unknown as typeof WebSocket;
+      });
+
+      // The device stream start/stop REST must be accepted so the controller stays live.
+      await page.route("**/v1/streams/**", (route) =>
+        route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ errors: [] }) }),
+      );
+
       await page.goto("/");
       await waitForConnected(page);
+
       const liveView = getActiveMain(page).getByTestId("live-view-card");
-      if (await liveView.isVisible().catch(() => false)) {
-        await liveView.scrollIntoViewIfNeeded();
-        await captureScreenshot(page, testInfo, "home/content-explorer/01-live-view.png", {
-          locator: liveView,
-        });
+      await expect(liveView).toBeVisible();
+      await liveView.scrollIntoViewIfNeeded();
+      await liveView.getByTestId("av-video-toggle").click();
+      // Wait until decoded frames are flowing (the fps badge only shows once they are).
+      await expect(liveView.getByTestId("av-mirror-fps")).toBeVisible({ timeout: 8000 });
+      await captureScreenshot(page, testInfo, "home/content-explorer/01-live-view.png", { locator: liveView });
+
+      // Expanded inline preview.
+      await liveView.getByTestId("live-view-expand").click();
+      await page.waitForTimeout(200);
+      await captureScreenshot(page, testInfo, "home/content-explorer/02-live-view-expanded.png", { locator: liveView });
+
+      // Remote Input immersive mirror: the zoomable screen with the view-lock controls.
+      await getActiveMain(page).getByTestId("home-machine-inline-openRemoteInput").click();
+      const sheet = page.getByTestId("remote-input-sheet");
+      await expect(sheet).toBeVisible();
+      const immersiveMirror = sheet.getByTestId("av-mirror-immersive");
+      if (await immersiveMirror.isVisible().catch(() => false)) {
+        await expect(immersiveMirror.getByTestId("av-mirror-immersive-controls")).toBeVisible({ timeout: 8000 });
+        await captureScreenshot(page, testInfo, "home/remote-input/06-av-mirror-immersive.png", { locator: sheet });
       }
     },
   );

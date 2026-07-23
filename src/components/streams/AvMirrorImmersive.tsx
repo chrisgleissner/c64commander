@@ -222,7 +222,9 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-lg border-2 bg-black transition-colors",
+        // shrink-0: keep the aspect-ratio height inside the Remote Input flex column,
+        // which would otherwise collapse the mirror to its borders.
+        "relative shrink-0 overflow-hidden rounded-lg border-2 bg-black transition-colors",
         adjust ? "border-amber-400" : "border-primary",
         className,
       )}

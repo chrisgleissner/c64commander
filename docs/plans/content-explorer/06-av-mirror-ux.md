@@ -206,10 +206,12 @@ in Adjust mode and to the existing relay when in Drive mode.
 
 **Flags & defaults.** `audio_mirror_enabled` and `video_mirror_enabled` are both
 user-visible and non-developer (any user can toggle), but ship **off by default**: the
-phone app has no stream receiver (UDP transport) yet, so on-by-default would present a
-non-functional control — the deliberate "fragile / known to break" exception. The web
-path works through the `streamReceiver.web` UDP→WebSocket bridge seam; the native UDP
-receiver plugin is the one remaining piece before either can be safely defaulted on.
+**web/Docker** build fully works via the shipped UDP→WebSocket bridge
+(`web/server/src/streamBridge.ts`, proven by `tests/unit/web/streamBridge.test.ts`), but the
+**phone** app still has no native UDP receiver, so on-by-default would present a control that
+is non-functional on the primary platform — the deliberate "fragile / known to break"
+exception. The native UDP receiver plugin is the one remaining piece before either can be
+safely defaulted on everywhere.
 
 **Deviation from §3.** The optional Disks audio toggle is deferred (the plan flagged it
 as "ships if it fits without clutter"); Home + Remote Input are the shipped surfaces.

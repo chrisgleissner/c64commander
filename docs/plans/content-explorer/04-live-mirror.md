@@ -17,7 +17,15 @@
 > Input rather than owned by one panel. Both flags are user-visible and non-developer; both stay
 > off by default pending the native UDP receiver plugin (the manual documents Audio Mirror; the
 > zoom/pan immersive video screen is documented under Remote Input).
-> The web path consumes a UDP→WebSocket bridge (`streamReceiver.web` seam); the native UDP
+>
+> **Web transport shipped + proven.** The web server now runs a dependency-free UDP→WebSocket
+> bridge (`web/server/src/streamBridge.ts`, on by default in the Docker image via
+> `WEB_STREAM_BRIDGE`) that binds the two UDP ports and relays each datagram byte-for-byte to
+> the in-app `WebSocketStreamReceiver`. It is proven **without hardware** by
+> `tests/unit/web/streamBridge.test.ts`: fake VIC/audio UDP packets (c64stream wire shape) are
+> received by a real WebSocket client byte-for-byte and drive the app's real `VicStreamAssembler`
+> to a complete 52224-byte frame (plus stream isolation, broadcast, disconnect, and RFC 6455
+> ping/pong/close). So Live View fully works on the web/Docker build today; the **native** UDP
 > receiver plugin is the remaining follow-up (`UnsupportedStreamReceiver` fallback until then).
 >
 > **Reconciled with c64stream (the authoritative native reference).** After reviewing
