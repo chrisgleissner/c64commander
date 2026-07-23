@@ -273,4 +273,34 @@ describe("diskImage — layoutForType", () => {
     expect(() => layoutForType("d81", 1234)).toThrow("Unsupported D81 size");
     expect(() => layoutForType("xyz" as DiskImageType, 1000)).toThrow("Unsupported disk type");
   });
+
+  it("resolves d71/d81 base and error-table geometry", () => {
+    let d71 = 0;
+    for (let t = 1; t <= 70; t += 1) d71 += sectorsPerTrack1541(((t - 1) % 35) + 1);
+    const d71Base = layoutForType("d71", d71 * SECTOR);
+    expect(d71Base.hasErrorTable).toBe(false);
+    const d71Err = layoutForType("d71", d71 * SECTOR + d71);
+    expect(d71Err.hasErrorTable).toBe(true);
+    expect(d71Err.directoryTrack).toBe(18);
+
+    const d81 = 80 * 40;
+    const d81Base = layoutForType("d81", d81 * SECTOR);
+    expect(d81Base.directoryTrack).toBe(40);
+    expect(d81Base.directorySector).toBe(3);
+    const d81Err = layoutForType("d81", d81 * SECTOR + d81);
+    expect(d81Err.hasErrorTable).toBe(true);
+  });
+
+  it("40-track D64 base and error-table geometry", () => {
+    const base = totalSectors1541(40) * SECTOR;
+    expect(layoutForType("d64", base).tracks).toBe(40);
+    expect(layoutForType("d64", base + totalSectors1541(40)).hasErrorTable).toBe(true);
+  });
+});
+
+describe("diskImage — readSector short-read guard", () => {
+  it("throws when the image is truncated below a valid sector offset", () => {
+    const layout = layoutForType("d64", totalSectors1541(35) * SECTOR);
+    expect(() => readSector(new Uint8Array(0), layout, 1, 0)).toThrow("Short sector read");
+  });
 });

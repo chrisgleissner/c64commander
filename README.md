@@ -195,6 +195,17 @@ View drive state, mount and eject images, and manage disk collections with multi
   </tr>
 </table>
 
+### Content Explorer
+
+Go beyond mounting a whole image: create a formatted blank disk on the device, look inside an image to Run, Load, or Mount a single program, search the programs inside disk images, and let Launch Safety answer a cartridge boot menu after a reset.
+
+<table>
+  <tr>
+    <td><img src="docs/img/app/disks/content-explorer/01-new-disk.png" alt="New disk dialog: create a formatted blank D64/D71/D81/DNP image on the device" width="360"/></td>
+    <td><img src="docs/img/app/settings/content-explorer/01-launch-safety.png" alt="Settings: search inside disk images and answer a cartridge boot menu after reset" width="360"/></td>
+  </tr>
+</table>
+
 ### Configuration
 
 Browse and edit the full C64 Ultimate configuration: categories, items, sliders, toggles, and per-item refresh.
