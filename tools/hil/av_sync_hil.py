@@ -81,8 +81,13 @@ def evaluate(expr):
 
 
 def click(testid):
-    return evaluate(f"(()=>{{const e=document.querySelector('[data-testid=\"{testid}\"]');"
-                    f"if(!e)return 'NF';e.click();return 'ok';}})()")
+    result = evaluate(f"(()=>{{const e=document.querySelector('[data-testid=\"{testid}\"]');"
+                      f"if(!e)return 'NF';e.click();return 'ok';}})()")
+    if result != "ok":
+        # A missing CTA means the page is not in the expected state — fail loudly rather than
+        # continuing to read stale counters and reporting a misleading pass.
+        raise RuntimeError(f"HIL action failed: '{testid}' not found (page not in expected state)")
+    return result
 
 
 def text(testid):
@@ -132,12 +137,18 @@ def main():
         click("av-sync-press")
         time.sleep(1.6)
     time.sleep(1)
+    see = text("av-sync-lat-see")
+    hear = text("av-sync-lat-hear")
+    offset = text("av-sync-lat-offset")
     print("  taps:", text("av-sync-lat-count"),
-          "| press->see P99:", text("av-sync-lat-see"),
-          "| press->hear P99:", text("av-sync-lat-hear"),
-          "| A/V offset P99:", text("av-sync-lat-offset"))
+          "| press->see P99:", see, "| press->hear P99:", hear, "| A/V offset P99:", offset)
     taps = int((text("av-sync-lat-count") or "0").split()[0])
-    assert taps >= 1, "no SPACE tap produced a detected pop on hardware"
+    # A single measured tap is not a meaningful P99. Require a majority of the sent taps to have
+    # produced a detected pop, and require the latency fields to actually be populated.
+    required = max(2, args.taps // 2)
+    assert taps >= required, f"only {taps}/{args.taps} SPACE taps produced a detected pop (need >= {required})"
+    for label, value in (("press->see", see), ("press->hear", hear), ("A/V offset", offset)):
+        assert value not in (None, "", "—"), f"{label} P99 not reported after the taps"
 
     print("HIL PASS: pipeline works end to end on real hardware.")
 

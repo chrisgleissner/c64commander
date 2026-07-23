@@ -42,6 +42,14 @@ interface Pending {
   offsetMs: number | null;
 }
 
+/**
+ * A pop must belong to the CURRENT press: one press is measured at a time, and the caller spaces
+ * presses further apart than the end-to-end pop latency (~200 ms on hardware; the mocked E2E fires
+ * one tap at a time). A pop arriving more than this after the press is stale — from an abandoned
+ * earlier press — and is rejected so it cannot complete a mixed measurement against a newer press.
+ */
+const MAX_POP_WINDOW_MS = 5000;
+
 const percentile = (sortedAsc: number[], p: number): number => {
   if (sortedAsc.length === 0) return 0;
   if (sortedAsc.length === 1) return sortedAsc[0];
@@ -76,7 +84,7 @@ export class AvLatencyTracker {
   /** A video pop was rendered at `observeMs` (JS observe clock). */
   onVideoPop(observeMs: number): void {
     if (!this.pending || this.pending.videoObserveMs !== null) return;
-    if (observeMs < this.pending.pressMs) return; // a stale pop from before this press
+    if (!this.belongsToPending(observeMs)) return;
     this.pending.videoObserveMs = observeMs;
     this.tryComplete();
   }
@@ -84,9 +92,16 @@ export class AvLatencyTracker {
   /** An audio pop was observed at `observeMs` (JS observe clock). */
   onAudioPop(observeMs: number): void {
     if (!this.pending || this.pending.audioObserveMs !== null) return;
-    if (observeMs < this.pending.pressMs) return;
+    if (!this.belongsToPending(observeMs)) return;
     this.pending.audioObserveMs = observeMs;
     this.tryComplete();
+  }
+
+  /** True when a pop at `observeMs` plausibly belongs to the current press (after it, within window). */
+  private belongsToPending(observeMs: number): boolean {
+    const pending = this.pending;
+    if (!pending) return false;
+    return observeMs >= pending.pressMs && observeMs - pending.pressMs <= MAX_POP_WINDOW_MS;
   }
 
   /** The analyzer matched the pop pair with this signed wire offset (audio − video, ms). */

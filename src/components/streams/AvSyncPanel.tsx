@@ -119,7 +119,7 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
             >
               {runningTest ? "Starting…" : "Load"}
             </Button>
-            <Button size="sm" onClick={() => void pressSpace()} data-testid="av-sync-press">
+            <Button size="sm" onClick={() => void pressSpace()} disabled={runningTest} data-testid="av-sync-press">
               Send SPACE
             </Button>
           </div>

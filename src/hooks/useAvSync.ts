@@ -140,13 +140,17 @@ export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
       setTestError(message);
       addLog("warn", "A/V sync: failed to send the SPACE keypress", { error: message });
     } finally {
-      // Always release, so the key never sticks (which would block the next rising edge).
+      // Always release, so the key never sticks — a stuck SPACE keeps the matrix asserted and
+      // blocks every later rising-edge poll (no more pops). If the release itself fails, that is
+      // exactly the wedge we must surface, so log it (never swallow).
       try {
         await api.sendMachineInputBatch({
           events: [{ kind: "keyboard", inputs: ["space"], transition: "release" }],
         });
-      } catch {
-        /* best-effort release */
+      } catch (error) {
+        const message = (error as Error)?.message ?? String(error);
+        setTestError(message);
+        addLog("warn", "A/V sync: failed to release the SPACE keypress (key may be stuck)", { error: message });
       }
     }
   }, []);

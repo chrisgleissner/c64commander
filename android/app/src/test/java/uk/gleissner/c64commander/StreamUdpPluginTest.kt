@@ -47,10 +47,16 @@ class StreamUdpPluginTest {
     injectBridge(plugin, context)
     received.clear()
     latch = CountDownLatch(1)
+    plugin.clockNanos = { FIXED_CLOCK_NANOS }
     plugin.emitDatagram = { name, data, arrivalMs ->
       received.add(Triple(name, data, arrivalMs))
       latch.countDown()
     }
+  }
+
+  companion object {
+    // A deterministic, non-trivial clock value (≠ 0, ≠ wall time) so the timestamp assertion is exact.
+    private const val FIXED_CLOCK_NANOS = 123_456_000_000L
   }
 
   @Test
@@ -99,11 +105,10 @@ class StreamUdpPluginTest {
     assertEquals(1, received.size)
     assertEquals("video", received[0].first)
     assertEquals(Base64.encodeToString(payload, Base64.NO_WRAP), received[0].second)
-    // A finite wire-arrival timestamp must be stamped and plumbed through (its real-time
-    // monotonicity is validated on-device; Robolectric shadows System.nanoTime, so we only
-    // assert it is a finite, non-negative value here).
-    val arrivalMs = received[0].third
-    assertTrue("arrival timestamp not stamped", arrivalMs.isFinite() && arrivalMs >= 0.0)
+    // The clock read at socket receive is stamped and plumbed through unchanged (ns → ms). An
+    // injected fixed clock makes this deterministic — a regression that dropped or altered the
+    // stamp would fail here, not just on-device.
+    assertEquals(FIXED_CLOCK_NANOS / 1_000_000.0, received[0].third, 0.0)
 
     val closeCall = mock(PluginCall::class.java)
     `when`(closeCall.getString("name")).thenReturn("video")

@@ -53,8 +53,10 @@ Two practical notes the app depends on:
 
 - **Hold, don't tap.** `av-sync-key` polls the matrix once per frame, so a sub-frame `tap` can fall
   between two polls and be missed. `pressSpace` sends **press → hold ~3 frames → release** so the
-  poll reliably catches the rising edge (the pop still fires on the press instant, so latency is
-  unaffected).
+  poll reliably catches the rising edge. Note the poll is not free: the pop fires when the
+  end-of-frame IRQ next observes the key, i.e. up to one frame (~20 ms PAL) after the machine:input
+  request arrives — that per-frame poll latency is part of the reported press→pop numbers (holding
+  prevents a MISSED poll, it does not remove the poll delay itself).
 - **Don't hammer the device while streaming.** Heavy concurrent REST (e.g. bulk `readmem` polling)
   degrades the video stream (observed ~47 → ~23 fps) and drops the 1-frame flashes. Read state
   sparingly during a soak.

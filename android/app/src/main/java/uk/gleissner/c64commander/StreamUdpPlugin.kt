@@ -46,6 +46,9 @@ class StreamUdpPlugin : Plugin() {
   private val logTag = "StreamUdpPlugin"
   private var multicastLock: WifiManager.MulticastLock? = null
 
+  /** Test seam: monotonic clock (nanoseconds) stamped at socket receive. Default: `System.nanoTime`. */
+  internal var clockNanos: () -> Long = { System.nanoTime() }
+
   /**
    * Test seam: how a received datagram is delivered to JS (default: a `datagram` event).
    *
@@ -127,7 +130,7 @@ class StreamUdpPlugin : Plugin() {
         val packet = DatagramPacket(buffer, buffer.size)
         socket.receive(packet)
         // Stamp wire-arrival time immediately, before any encoding/bridge latency (see emitDatagram).
-        val arrivalMs = System.nanoTime() / 1_000_000.0
+        val arrivalMs = clockNanos() / 1_000_000.0
         val encoded = Base64.encodeToString(packet.data, packet.offset, packet.length, Base64.NO_WRAP)
         emitDatagram(name, encoded, arrivalMs)
       } catch (error: Exception) {
