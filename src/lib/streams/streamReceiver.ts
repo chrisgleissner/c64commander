@@ -17,12 +17,13 @@ import type { PluginListenerHandle } from "@capacitor/core";
  * Receiving raw UDP needs a real socket. Following the app's native/web split:
  *   - Web/Docker: the app server binds the UDP port and bridges datagrams to the
  *     client over a WebSocket; the WebSocketStreamReceiver consumes that bridge.
- *   - Native: a small Capacitor plugin receives UDP directly (follow-up work). Until
- *     it ships, native resolves to an unsupported receiver so the feature degrades
- *     cleanly rather than crashing.
+ *   - Native: the StreamUdp Capacitor plugin binds the UDP port and joins the multicast
+ *     group directly; the NativeUdpStreamReceiver consumes its `datagram` events.
  *
- * The receiver only transports datagrams and connection state. Telling the DEVICE
- * where to stream (PUT /v1/streams/{name}:start?ip=…) is the hook's job.
+ * The device streams to a **multicast group** ({@link MULTICAST_GROUP}) — unicast fails
+ * ("Network Host Resolve Error") because the firmware streams from its wired port and
+ * cannot ARP-resolve a Wi-Fi client. The receiver only transports datagrams and connection
+ * state; telling the device where to stream (PUT /v1/streams/{name}:start?ip=…) is the hook's job.
  */
 
 export type StreamName = "audio" | "video";
