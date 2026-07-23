@@ -93,10 +93,9 @@ export function useSavedDeviceSwitching() {
       const liveViewVideoWasActive = avMirrorSession.videoLive;
       const liveViewAudioWasActive = avMirrorSession.audioLive;
       if (liveViewVideoWasActive || liveViewAudioWasActive) {
-        await Promise.race([
-          avMirrorSession.stopAll(),
-          new Promise((resolve) => setTimeout(resolve, 1500)),
-        ]).catch(() => {});
+        await Promise.race([avMirrorSession.stopAll(), new Promise((resolve) => setTimeout(resolve, 1500))]).catch(
+          () => {},
+        );
       }
 
       // Stale error toasts attributed to the device being switched away from
