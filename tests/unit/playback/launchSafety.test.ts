@@ -167,18 +167,13 @@ describe("launchSafety — readCartridgeValue", () => {
     await expect(readCartridgeValue(api as never)).resolves.toBeNull();
   });
 
-  it("passes bounded, non-retrying options to the config read", async () => {
+  it("passes a bounded timeout to the config read", async () => {
     const api = makeApi("Retro Replay");
     await readCartridgeValue(api as never);
     expect(api.getConfigItem).toHaveBeenCalledWith(
       CART_CATEGORY,
       CART_ITEM,
-      expect.objectContaining({
-        timeoutMs: expect.any(Number),
-        __c64uBypassBackoff: true,
-        __c64uBypassCircuit: true,
-        __c64uBypassCooldown: true,
-      }),
+      expect.objectContaining({ timeoutMs: expect.any(Number) }),
     );
   });
 

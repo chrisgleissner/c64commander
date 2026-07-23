@@ -68,13 +68,11 @@ const withTimeout = async <T>(promise: Promise<T>, ms: number): Promise<T> => {
  */
 export const readCartridgeValue = async (api: C64API): Promise<string | null> => {
   try {
+    // The `withTimeout` race guarantees this resolves within the budget regardless
+    // of gateway retries, so the launch is never stalled. (Gateway-internal circuit/
+    // backoff bypass flags stay out of app code — see deviceGatewayGuard.)
     const response = await withTimeout(
-      api.getConfigItem(CART_CATEGORY, CART_ITEM, {
-        timeoutMs: CART_READ_TIMEOUT_MS,
-        __c64uBypassBackoff: true,
-        __c64uBypassCircuit: true,
-        __c64uBypassCooldown: true,
-      }),
+      api.getConfigItem(CART_CATEGORY, CART_ITEM, { timeoutMs: CART_READ_TIMEOUT_MS }),
       CART_READ_TIMEOUT_MS + 250,
     );
     const category = response?.[CART_CATEGORY];
