@@ -81,6 +81,11 @@ export const getFeatureFlagValue = (flags: FeatureFlags, id: FeatureFlagId) => f
  */
 export const useFeatureFlagValue = (id: FeatureFlagId): boolean => {
   const [snapshot, setSnapshot] = useState<FeatureFlagSnapshot>(() => featureFlagManager.getSnapshot());
-  useEffect(() => featureFlagManager.subscribe(setSnapshot), []);
+  useEffect(() => {
+    const unsubscribe = featureFlagManager.subscribe(setSnapshot);
+    return () => {
+      unsubscribe();
+    };
+  }, []);
   return Boolean(snapshot.flags[id]);
 };

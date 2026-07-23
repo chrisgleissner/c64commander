@@ -42,14 +42,41 @@ const NONE_VALUE_SET = new Set(["", "none"]);
 
 export const launchSafetyEnabled = (): boolean => Boolean(featureFlagManager.getSnapshot().flags.launch_safety_enabled);
 
+// Launch Safety is a best-effort safety net, never a gate: bound the Cartridge
+// read so a slow, retrying, or absent config item (e.g. firmware without the item)
+// can't stall the launch it is protecting.
+export const CART_READ_TIMEOUT_MS = 1500;
+export const CART_WRITE_TIMEOUT_MS = 2000;
+
+const withTimeout = async <T>(promise: Promise<T>, ms: number): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
+
 /**
  * Read the CURRENT Cartridge config value, or `null` when it can't be resolved
- * (older firmware without the item, a read failure, etc.). A `null` result means
- * "don't park" — Launch Safety must never turn a read hiccup into a failed launch.
+ * (older firmware without the item, a read failure/timeout, etc.). A `null` result
+ * means "don't park" — Launch Safety must never turn a read hiccup into a failed or
+ * stalled launch. The read is a single, bounded, non-retrying attempt.
  */
 export const readCartridgeValue = async (api: C64API): Promise<string | null> => {
   try {
-    const response = await api.getConfigItem(CART_CATEGORY, CART_ITEM);
+    const response = await withTimeout(
+      api.getConfigItem(CART_CATEGORY, CART_ITEM, {
+        timeoutMs: CART_READ_TIMEOUT_MS,
+        __c64uBypassBackoff: true,
+        __c64uBypassCircuit: true,
+        __c64uBypassCooldown: true,
+      }),
+      CART_READ_TIMEOUT_MS + 250,
+    );
     const category = response?.[CART_CATEGORY];
     if (!category || Array.isArray(category)) return null;
     const items = (category as { items?: Record<string, unknown> }).items ?? category;
@@ -82,7 +109,7 @@ export const withCartridgeParked = async <T>(api: C64API, run: () => Promise<T>)
   if (!shouldPark) return run();
 
   try {
-    await api.setConfigValue(CART_CATEGORY, CART_ITEM, "");
+    await withTimeout(api.setConfigValue(CART_CATEGORY, CART_ITEM, ""), CART_WRITE_TIMEOUT_MS);
     addLog("info", "Launch Safety: parked cartridge for direct launch", { previous: current });
   } catch (error) {
     // If we couldn't park, run anyway — parking is a best-effort safety net, not a gate.
@@ -96,7 +123,7 @@ export const withCartridgeParked = async <T>(api: C64API, run: () => Promise<T>)
     return await run();
   } finally {
     try {
-      await api.setConfigValue(CART_CATEGORY, CART_ITEM, current);
+      await withTimeout(api.setConfigValue(CART_CATEGORY, CART_ITEM, current), CART_WRITE_TIMEOUT_MS);
       addLog("info", "Launch Safety: restored cartridge value", { restored: current });
     } catch (error) {
       addLog("error", "Launch Safety: failed to restore cartridge value after launch", {

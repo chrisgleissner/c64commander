@@ -94,7 +94,9 @@ export const runDiskEntry = async (
 ): Promise<void> => {
   assertLaunchable(entry);
   const bytes = extractDiskEntry(image, type, entry);
-  const blob = new Blob([bytes], { type: "application/octet-stream" });
+  // Copy into a fresh ArrayBuffer-backed view so the Blob part is typed
+  // `Uint8Array<ArrayBuffer>` (readChain's array is widened to ArrayBufferLike).
+  const blob = new Blob([new Uint8Array(bytes)], { type: "application/octet-stream" });
   const filename = sanitizeFilename(entry.name, `entry${entry.index}`);
   await withCartridgeParked(api, () =>
     mode === "load" ? api.loadPrgUpload(blob, { filename }) : api.runPrgUpload(blob, { filename }),

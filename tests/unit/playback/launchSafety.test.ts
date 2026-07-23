@@ -11,6 +11,7 @@ import {
   BOOT_MENU_KEY_PETSCII,
   CART_CATEGORY,
   CART_ITEM,
+  CART_READ_TIMEOUT_MS,
   bootSettle,
   launchSafetyEnabled,
   pressKeyWithRetry,
@@ -164,6 +165,33 @@ describe("launchSafety — readCartridgeValue", () => {
       }),
     };
     await expect(readCartridgeValue(api as never)).resolves.toBeNull();
+  });
+
+  it("passes bounded, non-retrying options to the config read", async () => {
+    const api = makeApi("Retro Replay");
+    await readCartridgeValue(api as never);
+    expect(api.getConfigItem).toHaveBeenCalledWith(
+      CART_CATEGORY,
+      CART_ITEM,
+      expect.objectContaining({
+        timeoutMs: expect.any(Number),
+        __c64uBypassBackoff: true,
+        __c64uBypassCircuit: true,
+        __c64uBypassCooldown: true,
+      }),
+    );
+  });
+
+  it("times out (returns null) instead of stalling on a hanging config read", async () => {
+    vi.useFakeTimers();
+    try {
+      const api = { getConfigItem: vi.fn(() => new Promise(() => {})) }; // never resolves
+      const pending = readCartridgeValue(api as never);
+      await vi.advanceTimersByTimeAsync(CART_READ_TIMEOUT_MS + 300);
+      await expect(pending).resolves.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
