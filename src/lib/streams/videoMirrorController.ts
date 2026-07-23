@@ -21,11 +21,14 @@
  */
 
 import { addLog } from "@/lib/logging";
-import { VicStreamAssembler } from "./vicStream";
+import { VicStreamAssembler, parseVicHeader } from "./vicStream";
 import { videoStandardForHeight, type VideoStandard } from "./vicDecode";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
 
 export type VideoMirrorState = "off" | "connecting" | "live" | "error";
+
+/** Max in-flight frame-start entries kept (a frame whose last line is lost never completes). */
+const FRAME_START_CAP = 12;
 
 export interface VideoMirrorSnapshot {
   state: VideoMirrorState;
@@ -61,8 +64,13 @@ export class VideoMirrorController {
   private assembler = new VicStreamAssembler();
   private snapshot: VideoMirrorSnapshot = { state: "off", fps: 0, droppedPackets: 0, standard: "PAL", error: null };
   private frameTick = 0;
-  /** Wire-arrival time of the first datagram of the in-progress frame (null between frames). */
-  private frameStartMs: number | null = null;
+  /**
+   * Earliest wire-arrival time seen for each VIC frame number in flight. Keyed by frame number
+   * (not a single "current frame") so cross-frame packet REORDERING on a jittery link cannot
+   * misattribute a frame's start time — a straggler from the previous frame arriving after the
+   * next one began does not move either frame's stamp. Bounded by {@link FRAME_START_CAP}.
+   */
+  private readonly frameStartByNum = new Map<number, number>();
   private renderTimes: number[] = [];
   private readonly throttle: number;
   private readonly now: () => number;
@@ -94,7 +102,7 @@ export class VideoMirrorController {
     if (this.snapshot.state === "connecting" || this.snapshot.state === "live") return;
     this.assembler.reset();
     this.frameTick = 0;
-    this.frameStartMs = null;
+    this.frameStartByNum.clear();
     this.renderTimes = [];
     this.update({ state: "connecting", error: null, fps: 0, droppedPackets: 0 });
 
@@ -112,12 +120,27 @@ export class VideoMirrorController {
     });
 
     receiver.onDatagram((bytes, arrivalMs) => {
-      // The first datagram after a completed frame marks the top of the next frame.
-      if (this.frameStartMs === null) this.frameStartMs = arrivalMs;
+      // Stamp each frame with the EARLIEST wire arrival of any of its packets (keyed by the VIC
+      // frame number). The top of the frame is when the av-sync tone gate opens, so the video pop
+      // and the audio tone share the wire instant — letting the analyzer cancel the asymmetric
+      // frame-assembly/decode latency out of the offset. Using the frame number (every packet
+      // carries it) keeps this correct even when a last-line packet is lost (no whole-frame skew)
+      // or packets reorder across the frame boundary on a jittery link.
+      const header = parseVicHeader(bytes);
+      const frameNum = header ? header.frame : -1;
+      const prevStart = this.frameStartByNum.get(frameNum);
+      if (prevStart === undefined || arrivalMs < prevStart) this.frameStartByNum.set(frameNum, arrivalMs);
+
       const frame = this.assembler.ingest(bytes);
       if (!frame) return;
-      const frameArrivalMs = this.frameStartMs;
-      this.frameStartMs = null;
+      const frameArrivalMs = this.frameStartByNum.get(frameNum) ?? arrivalMs;
+      this.frameStartByNum.delete(frameNum);
+      // Evict the oldest stragglers (frames whose last line never arrived) to bound the map.
+      while (this.frameStartByNum.size > FRAME_START_CAP) {
+        const oldest = this.frameStartByNum.keys().next().value;
+        if (oldest === undefined) break;
+        this.frameStartByNum.delete(oldest);
+      }
       this.frameTick += 1;
       let fps = this.snapshot.fps;
       if (this.frameTick % this.throttle === 0) {
@@ -155,7 +178,7 @@ export class VideoMirrorController {
     this.receiver = null;
     this.assembler.reset();
     this.frameTick = 0;
-    this.frameStartMs = null;
+    this.frameStartByNum.clear();
     this.renderTimes = [];
     this.update({ state: "off", fps: 0, error: null });
   }

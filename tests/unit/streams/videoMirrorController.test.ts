@@ -13,11 +13,12 @@ import { VIC_HEADER_BYTES, VIC_BYTES_PER_LINE, VIC_LAST_LINE_FLAG } from "@/lib/
 import { VIC_FRAME_WIDTH } from "@/lib/streams/vicDecode";
 
 class FakeReceiver implements StreamReceiver {
-  datagram: ((data: Uint8Array) => void) | null = null;
+  datagram: ((data: Uint8Array, arrivalMs: number) => void) | null = null;
   stateCb: ((s: StreamConnectionState) => void) | null = null;
   readonly destination = "10.0.0.5:11000";
   closed = false;
-  onDatagram(handler: (data: Uint8Array) => void) {
+  private clock = 0;
+  onDatagram(handler: (data: Uint8Array, arrivalMs: number) => void) {
     this.datagram = handler;
   }
   onStateChange(handler: (s: StreamConnectionState) => void) {
@@ -29,8 +30,8 @@ class FakeReceiver implements StreamReceiver {
   emitState(s: StreamConnectionState) {
     this.stateCb?.(s);
   }
-  emit(bytes: Uint8Array) {
-    this.datagram?.(bytes);
+  emit(bytes: Uint8Array, arrivalMs: number = (this.clock += 1)) {
+    this.datagram?.(bytes, arrivalMs);
   }
 }
 
@@ -83,6 +84,51 @@ describe("VideoMirrorController", () => {
     // The frame handed to the sink is a full 52224-byte VIC frame.
     expect(renderFrame.mock.calls[0][0].length).toBe((VIC_FRAME_WIDTH * 272) / 2);
     expect(controller.getSnapshot().state).toBe("live");
+  });
+
+  it("stamps a frame with the EARLIEST arrival of its packets, despite reordering", async () => {
+    const receiver = new FakeReceiver();
+    const renderFrame = vi.fn();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+
+    // Frame 5 arrives reordered: a later line first, then line 0 EARLIER, then the last-line packet.
+    receiver.emit(videoPacket({ seq: 1, frame: 5, line: 8 }), 100);
+    receiver.emit(videoPacket({ seq: 2, frame: 5, line: 0 }), 90);
+    receiver.emit(videoPacket({ seq: 3, frame: 5, line: 268, lastLine: true }), 110);
+
+    expect(renderFrame).toHaveBeenCalledTimes(1);
+    // The frame's wire timestamp is the earliest arrival (90), not first-seen (100) or last (110).
+    expect(renderFrame.mock.calls[0][2]).toBe(90);
+  });
+
+  it("does not skew a frame's timestamp when the previous frame's last-line packet is lost", async () => {
+    const receiver = new FakeReceiver();
+    const renderFrame = vi.fn();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+
+    // Frame 0 never completes (its last-line packet is lost) — only a mid packet arrives at t=0.
+    receiver.emit(videoPacket({ seq: 1, frame: 0, line: 0 }), 0);
+    // Frame 1 completes; its stamp must be frame 1's own arrival (20), NOT frame 0's leftover start.
+    receiver.emit(videoPacket({ seq: 2, frame: 1, line: 0, lastLine: true }), 20);
+
+    expect(renderFrame).toHaveBeenCalledTimes(1);
+    expect(renderFrame.mock.calls[0][2]).toBe(20);
   });
 
   it("counts frames rendered in the last ~1s as fps", async () => {
