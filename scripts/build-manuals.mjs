@@ -447,9 +447,7 @@ const saveToFlashGuidance = (variant) =>
 // only) Ultimate 64-family firmware 3.15. On anything older, or on the
 // Ultimate-II+(L) which has no such endpoint, the app falls back to Keys only.
 const remoteInputKeyboardImage = (profile) =>
-  profile === "compact"
-    ? "home/remote-input/03-keyboard-compact.png"
-    : "home/remote-input/04-keyboard-medium.png";
+  profile === "compact" ? "home/remote-input/03-keyboard-compact.png" : "home/remote-input/04-keyboard-medium.png";
 
 const remoteInputFallbackExplainer =
   "That fallback types by placing characters into the C64's KERNAL keyboard buffer. It is ideal for BASIC, where you can type commands, `LOAD`, and `RUN`, but most games read the keyboard and joystick hardware directly and will not respond to it. RUN/STOP and RESTORE are also unavailable in the fallback.";
@@ -969,7 +967,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Settings also holds saved devices. Use it to edit a name, host, HTTP port, FTP port, Telnet port, or password. When you save and connect, the app probes the device and reports whether the chosen services answer.",
     "",
-    "Display settings are local to the app. They do not change the C64 Ultimate. Use them to choose the display profile, full-screen behavior, notification style, and how dense the interface should feel.",
+    "Display settings are local to the app. They do not change your C64. Use them to choose the display profile, full-screen behavior, notification style, and how dense the interface should feel.",
     "",
     "Feature toggles appear only when a feature is safe for normal users to change in this variant. If a feature is not supported by this variant, it is absent from Settings and from this manual.",
     "",
@@ -1210,6 +1208,66 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
         ]
       : []),
+    ...(includeFeature(features, "audio_mirror_enabled") || includeFeature(features, "video_mirror_enabled")
+      ? [
+          "### Live View",
+          "",
+          "Your C64 can send its own sound and picture out across your network, and Live View brings them straight back into the app — so you can hear a tune or watch the screen without wiring up a speaker or a second television.",
+          "",
+          "It is one shared session. Start it in a single place and it keeps playing wherever you go; there is never a second copy fighting for the same stream. You will find it just below the Quick Actions on **Home**, with two switches:",
+          "",
+          ...(includeFeature(features, "audio_mirror_enabled")
+            ? [
+                "- **Listen** turns the sound on. It asks for almost no room — a lit button and a small live dot — so it is perfect for keeping half an ear on a game or a SID tune while you get on with something else. Wander to another page and a matching dot appears in the top bar to remind you it is still playing; a tap on it stops everything at once.",
+              ]
+            : []),
+          ...(includeFeature(features, "video_mirror_enabled")
+            ? [
+                "- **Watch** turns the picture on. A small preview of the C64 screen appears just beneath the switches; tap the chevron beside it to grow that preview in place.",
+              ]
+            : []),
+          "",
+          image("Live View on Home", profile, "home/content-explorer/01-live-view.png"),
+          "",
+          ...(includeFeature(features, "video_mirror_enabled")
+            ? [
+                "#### The immersive screen",
+                "",
+                "Open **Remote Input** while **Watch** is on and the picture stretches to fill the width of the sheet, above the joystick and keyboard — a proper screen for playing a game or driving a program you are typing into.",
+                "",
+                "Move around it however suits you. On a touchscreen, **pinch** to zoom, **drag** to slide the picture about, and **double-tap** to jump straight in on a spot — a second double-tap fits the whole screen back on. A small map in the corner shows which part you are looking at; drag its rectangle to leap somewhere else in an instant. Switch on **Follow** and the view drifts along on its own to wherever the action is — a lovely way to keep the cursor in sight as you type.",
+                "",
+                image("The immersive screen in Remote Input", profile, "home/remote-input/06-av-mirror-immersive.png"),
+                "",
+                "#### Driving the C64, or adjusting the view",
+                "",
+                `When you steer your ${appDeviceName(
+                  variant,
+                )} with a physical keypad, those same keys could either work the C64 or move the picture, so Live View makes the difference impossible to mistake. The mirror wears a coloured border that tells you at a glance which one you are doing: a **blue “Driving C64”** border means your keys go straight to the machine, as usual; an **amber “Adjusting view”** border means your keys zoom and pan the picture instead.`,
+                "",
+                "Press the **menu key** — or the on-screen **Adjust** button — to switch between the two. You are never stranded looking at a frozen game: adjusting view slips quietly back to driving on its own after a short pause. While the border is amber, the keypad moves the view like this:",
+                "",
+                "| Key | What it does |",
+                "| --- | --- |",
+                "| **2**, or D-pad up | Pan up |",
+                "| **8**, or D-pad down | Pan down |",
+                "| **4**, or D-pad left | Pan left |",
+                "| **6**, or D-pad right | Pan right |",
+                "| **3** or **9** | Zoom in |",
+                "| **1** or **7** | Zoom out |",
+                "| **0**, **5**, or the centre/OK key | Fit the whole screen back on |",
+                "| the **menu** key | Return to driving the C64 |",
+                "",
+                "The same four moves have on-screen buttons too — **＋** and **−** to zoom, **⤢** to fit, and **◎** to turn Follow on and off — so a touchscreen and a keypad reach every control.",
+                "",
+              ]
+            : []),
+          "Live View is optional and starts switched off. The device streams to two network ports (11000 for the picture, 11001 for the sound); if your setup needs different ones, you can change them in **Settings**, under Play and disk behaviour.",
+          "",
+          featureAvailability(features.video_mirror_enabled ?? features.audio_mirror_enabled),
+          "",
+        ]
+      : []),
     ...(includeFeature(features, "ram_snapshots_enabled")
       ? [
           "### RAM Snapshots",
@@ -1253,13 +1311,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
     ...(includeFeature(features, "disk_explorer_enabled") ||
     includeFeature(features, "launch_safety_enabled") ||
     includeFeature(features, "in_image_search_enabled") ||
-    includeFeature(features, "new_disk_enabled") ||
-    includeFeature(features, "audio_mirror_enabled") ||
-    includeFeature(features, "video_mirror_enabled")
+    includeFeature(features, "new_disk_enabled")
       ? [
           "### Content Explorer",
           "",
-          "Content Explorer is a set of additive tools for working with the programs *inside* disk images, launching them safely, and hearing and seeing the running machine. Each part is optional and independent — turn on only the ones you want in **Settings**, and the rest stay out of the way.",
+          "Content Explorer is a set of additive tools for working with the programs *inside* disk images and launching them safely. Each part is optional and independent — turn on only the ones you want in **Settings**, and the rest stay out of the way.",
           "",
           ...(includeFeature(features, "disk_explorer_enabled")
             ? [
@@ -1311,58 +1367,19 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
               ]
             : []),
-          ...(includeFeature(features, "audio_mirror_enabled") || includeFeature(features, "video_mirror_enabled")
-            ? [
-                "#### Live View — Hearing and Seeing the Running Machine",
-                "",
-                "Your Ultimate can send the sound and picture of the running C64 out across the network, and Live View brings them back inside the app — so you can hear a tune or watch the screen without wiring up a speaker or a second display.",
-                "",
-                "Live View is one shared session. Start it in one place and it keeps running everywhere you go; there is never a second, competing stream. It sits just beneath the Quick Actions on **Home**, with two toggles:",
-                "",
-                ...(includeFeature(features, "audio_mirror_enabled")
-                  ? [
-                      "- **Listen** turns the sound on. It takes up no room — just the lit button and a small live dot — so it is ideal for keeping an ear on a game or a SID tune while you do something else. A matching dot appears in the top bar once you move to another page, as a reminder that it is still playing; tap it to stop everything at once.",
-                    ]
-                  : []),
-                ...(includeFeature(features, "video_mirror_enabled")
-                  ? [
-                      "- **Watch** turns the picture on. A small preview of the C64 screen appears beneath the toggles; tap the chevron beside it to enlarge the preview in place.",
-                    ]
-                  : []),
-                "",
-                image("Live View on Home", profile, "home/content-explorer/01-live-view.png"),
-                "",
-                ...(includeFeature(features, "video_mirror_enabled")
-                  ? [
-                      "**The immersive screen.** Open **Remote Input** while Watch is on and the picture grows to fill the width of the sheet, above the joystick and keyboard — a proper screen for playing a game or driving an app you are typing into.",
-                      "",
-                      "You can move around it freely: **pinch** to zoom, **drag** to pan, and **double-tap** to zoom straight to a point (double-tap again to fit the whole screen back on). A small map in the corner shows which part you are looking at; drag its rectangle to leap somewhere else. Turn on **Follow** and the view drifts on its own toward wherever the action is — handy for keeping the cursor in sight as you type.",
-                      "",
-                      "On a device driven by a physical keypad, those same keys could either work the C64 or move the view, so Live View makes the difference impossible to mistake. A coloured border and label tell you which at a glance: a **blue “Driving C64”** border means your keys reach the machine, and an **amber “Adjusting view”** border means they zoom and pan the picture instead. Tap **Adjust** — or press the menu key — to switch between them; it returns to Driving on its own after a short pause, so you are never left steering a frozen game.",
-                      "",
-                      image("The immersive screen in Remote Input", profile, "home/remote-input/06-av-mirror-immersive.png"),
-                      "",
-                    ]
-                  : []),
-                "Live View is optional and starts switched off. The device streams to two network ports (11000 for video, 11001 for audio); if your setup needs different ones, change them in **Settings**, under Play and disk behaviour.",
-                "",
-                featureAvailability(features.video_mirror_enabled ?? features.audio_mirror_enabled),
-                "",
-              ]
-            : []),
         ]
       : []),
     "### The SID Audio Mixer",
     "",
-    "The C64's sound comes from its SID chip, and the Ultimate can host more than one. **Home > SID / Audio mixer** is a live mixing desk: a **master volume** for everything, and, for each SID the device reports, that chip's own **volume** and **stereo position**. Slide one SID toward the left speaker and another toward the right for true stereo, or pull one down to let the other lead. Changes are heard at once, and the same controls appear in **Config > Audio Mixer** if you prefer the full tree.",
+    "Your C64 makes its sound with a SID chip, and can host more than one. **Home > SID / Audio mixer** is a live mixing desk: a **master volume** for everything, and, for each SID it reports, that chip's own **volume** and **stereo position**. Slide one SID toward the left speaker and another toward the right for true stereo, or pull one down to let the other lead. Changes are heard at once, and the same controls appear in **Config > Audio Mixer** if you prefer the full tree.",
     "",
     "### Video, Audio, and Debug Streams",
     "",
-    "The Ultimate can send what your C64 is doing out across the network. **Home > Streams** exposes three feeds — **VIC** (the live video picture), **Audio** (the SID output), and **Debug** (a low-level trace for developers). Point a feed at a destination address, press **Start**, and the device streams it there; **Stop** ends it. The Streams card appears only when the connected device advertises streaming support.",
+    "Your C64 can send what it is doing out across the network. **Home > Streams** exposes three feeds — **VIC** (the live video picture), **Audio** (the SID output), and **Debug** (a low-level trace for developers). Point a feed at a destination address, press **Start**, and it streams there; **Stop** ends it. The Streams card appears only when the connected device advertises streaming support.",
     "",
     "### The Virtual Printer",
     "",
-    "A C64 once talked to a Commodore printer over the serial bus; the Ultimate emulates one so you never need the vintage hardware. **Home > Printer** picks the **emulation** (such as Commodore MPS), sets the printer's **bus ID**, and manages its output: **Flush** commits what has been printed so far, **Eject** finishes the page, and **Reset** clears the emulated printer.",
+    "A C64 once talked to a Commodore printer over the serial bus; yours emulates one so you never need the vintage hardware. **Home > Printer** picks the **emulation** (such as Commodore MPS), sets the printer's **bus ID**, and manages its output: **Flush** commits what has been printed so far, **Eject** finishes the page, and **Reset** clears the emulated printer.",
     "",
     "### File Sources",
     "",
@@ -1462,7 +1479,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "### Password required",
     "",
-    "Enter the network password configured on the C64 Ultimate. If the saved password stops working, the app asks again.",
+    `Enter the network password configured on ${targetDeviceShortName(variant)}. If the saved password stops working, the app asks again.`,
     "",
     "### File browsing fails",
     "",
@@ -1548,7 +1565,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
     table(
       ["Mode", "Requests at once", "Use it when"],
       [
-        ["Auto", "Chosen for you", "Always a safe default — picks Conservative or Balanced from the device and its firmware. Recommended."],
+        [
+          "Auto",
+          "Chosen for you",
+          "Always a safe default — picks Conservative or Balanced from the device and its firmware. Recommended.",
+        ],
         ["Relaxed", "Up to 3", "The device and network are proven fast and stable, and you accept higher risk."],
         ["Balanced", "Up to 2", balancedFirmwareNote(variant)],
         ["Conservative", "1 (serialized)", "A first setup, Wi-Fi, or firmware you do not yet trust. Maximum safety."],
@@ -1600,7 +1621,10 @@ export const renderManualMarkdown = ({ variant, features }) => {
         ["REST", "The Web Remote Control service answers."],
         ["FTP", "The FTP file service answers."],
         ["Telnet", "The Telnet menu service answers."],
-        ["CONFIG", "Writes a live setting, reads it back, and restores it — proving the device applies changes. A device with an LED strip pulses once as it runs."],
+        [
+          "CONFIG",
+          "Writes a live setting, reads it back, and restores it — proving the device applies changes. A device with an LED strip pulses once as it runs.",
+        ],
         ["RASTER", "The VIC-II raster line is available — the video chip is running."],
         ["JIFFY", "The KERNAL jiffy clock is ticking, which also reports the machine's uptime."],
       ],
