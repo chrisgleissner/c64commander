@@ -94,6 +94,7 @@ export class AudioMirrorController {
     });
 
     try {
+      await receiver.ready?.(); // native binds a UDP socket first, learning its destination
       await this.deps.startStream("audio", receiver.destination);
     } catch (error) {
       addLog("warn", "Audio Mirror: device stream start failed", {

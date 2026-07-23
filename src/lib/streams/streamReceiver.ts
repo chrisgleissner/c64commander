@@ -7,6 +7,9 @@
  */
 
 import { addLog } from "@/lib/logging";
+import { isNativePlatform } from "@/lib/native/platform";
+import { StreamUdp } from "@/lib/native/streamUdp";
+import type { PluginListenerHandle } from "@capacitor/core";
 
 /**
  * Content Explorer capabilities D/E — platform stream receiver seam.
@@ -30,6 +33,13 @@ export interface StreamReceiver {
   onStateChange(handler: (state: StreamConnectionState) => void): void;
   /** The host:port the device should stream to (the receiver's own address). */
   readonly destination: string;
+  /**
+   * Resolves once the receiver is ready and {@link destination} is final. Optional: the web
+   * receiver knows its destination synchronously; the native receiver must first bind a UDP
+   * socket to learn the phone's address, so a caller must await this before telling the
+   * device where to stream.
+   */
+  ready?(): Promise<void>;
   close(): void;
 }
 
@@ -110,7 +120,64 @@ export class WebSocketStreamReceiver implements StreamReceiver {
   }
 }
 
-/** Native (until the UDP plugin ships) / unavailable-transport fallback. */
+const base64ToBytes = (base64: string): Uint8Array => {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+};
+
+/** Native receiver: binds a UDP port through the StreamUdp plugin and forwards datagrams. */
+export class NativeUdpStreamReceiver implements StreamReceiver {
+  private datagramHandler: ((data: Uint8Array) => void) | null = null;
+  private stateHandler: ((state: StreamConnectionState) => void) | null = null;
+  destination = "";
+  private closed = false;
+  private readonly name: StreamName;
+  private readonly listener: Promise<PluginListenerHandle>;
+  private readonly readyPromise: Promise<void>;
+
+  constructor(options: StreamReceiverOptions) {
+    this.name = options.name;
+    const port = options.port ?? defaultPortFor(options.name);
+    this.listener = StreamUdp.addListener("datagram", (event) => {
+      if (event.name !== this.name || !this.datagramHandler) return;
+      this.datagramHandler(base64ToBytes(event.data));
+    });
+    this.readyPromise = StreamUdp.bind({ name: this.name, port })
+      .then((result) => {
+        if (this.closed) return;
+        this.destination = options.destination ?? `${result.localIp}:${result.port}`;
+        this.stateHandler?.("open");
+      })
+      .catch((error) => {
+        this.stateHandler?.("error");
+        addLog("warn", "Native UDP stream bind failed", { error: (error as Error)?.message ?? String(error) });
+      });
+  }
+
+  ready(): Promise<void> {
+    return this.readyPromise;
+  }
+
+  onDatagram(handler: (data: Uint8Array) => void): void {
+    this.datagramHandler = handler;
+  }
+
+  onStateChange(handler: (state: StreamConnectionState) => void): void {
+    this.stateHandler = handler;
+    handler("connecting");
+  }
+
+  close(): void {
+    this.closed = true;
+    void StreamUdp.close({ name: this.name }).catch(() => {});
+    void this.listener.then((handle) => handle.remove()).catch(() => {});
+    if (this.stateHandler) this.stateHandler("closed");
+  }
+}
+
+/** Unavailable-transport fallback (e.g. a platform with neither bridge nor UDP plugin). */
 export class UnsupportedStreamReceiver implements StreamReceiver {
   readonly destination = "";
   onDatagram(): void {}
@@ -140,11 +207,18 @@ const defaultSocketFactory = (url: string): WebSocketLike => {
 };
 
 /**
- * Resolve a receiver for the platform. On web returns a WebSocket bridge receiver;
- * a caller may inject a socketFactory for tests. Native returns unsupported until
- * the UDP plugin ships (`video_mirror_enabled` stays developer_only meanwhile).
+ * Resolve a receiver for the platform: native binds a UDP socket via the StreamUdp plugin;
+ * web/Docker consumes the server's UDP -> WebSocket bridge (a caller may inject a
+ * socketFactory for tests). Either falls back to an unsupported receiver on construction error.
  */
 export const createStreamReceiver = (options: StreamReceiverOptions): StreamReceiver => {
+  if (isNativePlatform()) {
+    try {
+      return new NativeUdpStreamReceiver(options);
+    } catch {
+      return new UnsupportedStreamReceiver();
+    }
+  }
   try {
     return new WebSocketStreamReceiver(options);
   } catch {

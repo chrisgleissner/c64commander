@@ -114,6 +114,7 @@ export class VideoMirrorController {
     });
 
     try {
+      await receiver.ready?.(); // native binds a UDP socket first, learning its destination
       await this.deps.startStream("video", receiver.destination);
     } catch (error) {
       addLog("warn", "Video Mirror: device stream start failed", {
