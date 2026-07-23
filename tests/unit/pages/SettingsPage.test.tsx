@@ -484,6 +484,8 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveStreamVideoPort: vi.fn(),
   loadStreamAudioPort: vi.fn(() => 11001),
   saveStreamAudioPort: vi.fn(),
+  loadStreamNetworkBufferMs: vi.fn(() => 5),
+  saveStreamNetworkBufferMs: vi.fn(),
   loadArchiveClientIdOverride: vi.fn(() => ""),
   loadArchiveHostOverride: vi.fn(() => ""),
   loadArchiveUserAgentOverride: vi.fn(() => ""),
