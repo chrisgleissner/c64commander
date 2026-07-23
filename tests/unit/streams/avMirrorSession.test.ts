@@ -19,6 +19,7 @@ interface Captured {
   deps: {
     onChange: (s: { state: string; droppedPackets?: number; fps?: number; error: string | null }) => void;
     renderFrame?: (frame: Uint8Array, height: number) => void;
+    renderAudio?: (samples: Int16Array) => void;
   };
   start: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
@@ -130,6 +131,17 @@ describe("AvMirrorSession", () => {
     const late: number[] = [];
     session.subscribeFrames((frame) => late.push(frame.length));
     expect(late).toEqual([3]);
+  });
+
+  it("broadcasts decoded audio batches to audio subscribers", () => {
+    const { session, audio } = makeSession();
+    const batches: number[] = [];
+    const unsubscribe = session.subscribeAudio((samples) => batches.push(samples.length));
+    audio.deps.renderAudio?.(new Int16Array([1, 2, 3, 4]));
+    expect(batches).toEqual([4]);
+    unsubscribe();
+    audio.deps.renderAudio?.(new Int16Array([5, 6]));
+    expect(batches).toEqual([4]); // no delivery after unsubscribe
   });
 
   it("stops delivering frames after unsubscribe", () => {

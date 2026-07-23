@@ -30,6 +30,7 @@ export interface AvMirrorSnapshot {
 }
 
 export type AvMirrorFrameHandler = (frame: Uint8Array, height: number) => void;
+export type AvMirrorAudioHandler = (samples: Int16Array) => void;
 export type AvMirrorListener = (snapshot: AvMirrorSnapshot) => void;
 
 const INITIAL: AvMirrorSnapshot = {
@@ -53,6 +54,7 @@ export class AvMirrorSession {
   private snapshot: AvMirrorSnapshot = INITIAL;
   private readonly listeners = new Set<AvMirrorListener>();
   private readonly frameListeners = new Set<AvMirrorFrameHandler>();
+  private readonly audioListeners = new Set<AvMirrorAudioHandler>();
   private latestFrame: { frame: Uint8Array; height: number } | null = null;
   private readonly audio: AudioMirrorController;
   private readonly video: VideoMirrorController;
@@ -68,6 +70,7 @@ export class AvMirrorSession {
       createReceiver:
         deps.createAudioReceiver ?? ((opts) => createStreamReceiver({ ...opts, port: loadStreamAudioPort() })),
       createPlayer: deps.createPlayer,
+      renderAudio: (samples) => this.emitAudio(samples),
     });
 
     this.video = new VideoMirrorController({
@@ -96,6 +99,10 @@ export class AvMirrorSession {
     this.frameListeners.forEach((handler) => handler(frame, height));
   }
 
+  private emitAudio(samples: Int16Array) {
+    this.audioListeners.forEach((handler) => handler(samples));
+  }
+
   subscribe(listener: AvMirrorListener): () => void {
     this.listeners.add(listener);
     listener(this.snapshot);
@@ -110,6 +117,14 @@ export class AvMirrorSession {
     if (this.latestFrame) handler(this.latestFrame.frame, this.latestFrame.height);
     return () => {
       this.frameListeners.delete(handler);
+    };
+  }
+
+  /** Subscribe to decoded audio batches (interleaved Int16) — for the A/V sync analyzer. */
+  subscribeAudio(handler: AvMirrorAudioHandler): () => void {
+    this.audioListeners.add(handler);
+    return () => {
+      this.audioListeners.delete(handler);
     };
   }
 

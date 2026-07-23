@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { useAvMirror } from "@/hooks/useAvMirror";
 import { AvMirrorControls } from "./AvMirrorControls";
 import { AvMirrorPreview } from "./AvMirrorPreview";
+import { AvSyncPanel } from "./AvSyncPanel";
 
 export interface LiveViewCardProps {
   audioEnabled?: boolean;
@@ -61,6 +62,8 @@ export function LiveViewCard({ audioEnabled = true, videoEnabled = true, classNa
           <AvMirrorPreview size={expanded ? "immersive" : "check"} />
         </div>
       )}
+
+      {showPreview && expanded && <AvSyncPanel className="mt-3" />}
 
       <p className="mt-2 text-xs text-muted-foreground">
         Hear{videoEnabled ? " and see" : ""} the running machine. Open Remote Input for the full zoomable screen.

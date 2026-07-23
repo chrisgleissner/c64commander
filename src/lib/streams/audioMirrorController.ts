@@ -34,6 +34,8 @@ export interface AudioMirrorDeps {
   startStream: (name: "audio", destination: string) => Promise<unknown>;
   stopStream: (name: "audio") => Promise<unknown>;
   onChange: (snapshot: AudioMirrorSnapshot) => void;
+  /** Broadcast each decoded audio batch (interleaved Int16) — used by the A/V sync analyzer. */
+  renderAudio?: (samples: Int16Array) => void;
 }
 
 export class AudioMirrorController {
@@ -83,6 +85,7 @@ export class AudioMirrorController {
       const batch = this.batcher.push(bytes);
       if (batch) {
         this.player?.playChunk(batch);
+        this.deps.renderAudio?.(batch);
         this.update({
           chunks: this.player?.scheduledChunks ?? this.snapshot.chunks + 1,
           droppedPackets: this.batcher.stats.droppedPackets,

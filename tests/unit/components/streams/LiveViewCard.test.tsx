@@ -26,6 +26,10 @@ vi.mock("@/components/streams/AvMirrorPreview", () => ({
   AvMirrorPreview: ({ size }: { size?: string }) => <div data-testid="preview" data-size={size} />,
 }));
 
+vi.mock("@/components/streams/AvSyncPanel", () => ({
+  AvSyncPanel: () => <div data-testid="av-sync-panel" />,
+}));
+
 describe("LiveViewCard", () => {
   beforeEach(() => {
     mirror.state = { video: { state: "off" } };
