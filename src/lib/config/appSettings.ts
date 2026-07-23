@@ -30,6 +30,7 @@ const HIDE_NAVIGATION_BAR_KEY = "c64u_full_screen_hide_navigation_bar";
 const BOOT_MENU_ANSWER_ENABLED_KEY = "c64u_boot_menu_answer_enabled";
 const BOOT_MENU_KEY_KEY = "c64u_boot_menu_key";
 const BOOT_SETTLE_MS_KEY = "c64u_boot_settle_ms";
+const SEARCH_INSIDE_DISKS_KEY = "c64u_search_inside_disks";
 
 export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 200;
 export type NotificationVisibility = "errors-only" | "all";
@@ -295,6 +296,18 @@ export const saveBootSettleMs = (value: number) => {
 };
 
 export const clampBootSettleMs = (value: number) => clampBootSettleMsInternal(value);
+
+// In-image search (Content Explorer capability C): whether media search descends
+// into disk images. Off by default (today's top-level-only behaviour).
+export const DEFAULT_SEARCH_INSIDE_DISKS = false;
+
+export const loadSearchInsideDisks = () => readBoolean(SEARCH_INSIDE_DISKS_KEY, DEFAULT_SEARCH_INSIDE_DISKS);
+
+export const saveSearchInsideDisks = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(SEARCH_INSIDE_DISKS_KEY, enabled ? "1" : "0");
+  broadcast(SEARCH_INSIDE_DISKS_KEY, enabled);
+};
 
 export const loadNotificationVisibility = (): NotificationVisibility => {
   if (typeof localStorage === "undefined") return DEFAULT_NOTIFICATION_VISIBILITY;
