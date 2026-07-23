@@ -1058,6 +1058,17 @@ export function usePlaybackController({
             ),
           );
         }
+        // HARD23-004: playItem is the shared launch primitive for Play, Next,
+        // Previous, and auto-advance. startPlaylist/resume assert the shared
+        // machine-execution store as "running", but a user Next/Previous skip
+        // reaches the device only through playItem — so skipping from a paused
+        // session (a restored/paused queue, or pause-then-Next) left the store
+        // stuck "paused" while audio actually played. That stale "paused" both
+        // mislabelled Home's Pause/Resume control AND permanently gated
+        // auto-advance (handleNext "auto" returns early when the store reads
+        // paused), so every track overran its songlength forever. Assert
+        // "running" here — the single point where a track has actually launched.
+        writeMachineExecutionFromPlay("running");
         setIsPlaying(true);
         setIsPaused(false);
       });
@@ -1091,6 +1102,7 @@ export function usePlaybackController({
       setPlaylist,
       setTrackInstanceId,
       setAutoAdvanceDueAtMs,
+      writeMachineExecutionFromPlay,
       autoAdvanceGuardRef,
       isPausedRef,
       playedClockRef,
