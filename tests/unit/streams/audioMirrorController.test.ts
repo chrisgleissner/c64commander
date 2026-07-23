@@ -168,7 +168,7 @@ describe("streamReceiver", () => {
       bridgeUrl: "ws://host:8788",
       socketFactory: (url) => (socket = new MockSocket(url)),
     });
-    expect(receiver.destination).toBe("host:11001");
+    expect(receiver.destination).toBe("239.0.1.65:11001");
     expect(socket!.url).toBe("ws://host:8788/streams/audio");
 
     const states: string[] = [];
