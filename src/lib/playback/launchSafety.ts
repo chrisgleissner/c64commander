@@ -54,8 +54,9 @@ const withTimeout = async <T>(promise: Promise<T>, ms: number): Promise<T> => {
   // race. Attach a handler now so its eventual rejection is logged rather than surfacing as an
   // unhandled promise rejection after the launch has already continued.
   promise.catch((error) => {
-    addLog("debug", "Launch Safety: cartridge write rejected (best-effort; may have lost a timeout race)", {
-      error: (error as Error)?.message ?? String(error),
+    addLog("warn", "Launch Safety: cartridge write rejected (best-effort; may have lost a timeout race)", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
     });
   });
   try {

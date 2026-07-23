@@ -94,7 +94,12 @@ export function useSavedDeviceSwitching() {
       const liveViewAudioWasActive = avMirrorSession.audioLive;
       if (liveViewVideoWasActive || liveViewAudioWasActive) {
         await Promise.race([avMirrorSession.stopAll(), new Promise((resolve) => setTimeout(resolve, 1500))]).catch(
-          () => {},
+          (error) => {
+            addLog("warn", "Live View: failed to stop the A/V mirror before device switch", {
+              fromDeviceId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          },
         );
       }
 
@@ -202,8 +207,20 @@ export function useSavedDeviceSwitching() {
           // Follow Live View to the now-verified new device (single clean source). Fire-and-forget
           // so a slow streams:start cannot delay the switch resolving; startVideo/startAudio bind a
           // fresh receiver and issue streams:start on the new device.
-          if (liveViewVideoWasActive) void avMirrorSession.startVideo().catch(() => {});
-          if (liveViewAudioWasActive) void avMirrorSession.startAudio().catch(() => {});
+          if (liveViewVideoWasActive)
+            void avMirrorSession.startVideo().catch((error) => {
+              addLog("warn", "Live View: failed to restart video on the new device after switch", {
+                deviceId,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            });
+          if (liveViewAudioWasActive)
+            void avMirrorSession.startAudio().catch((error) => {
+              addLog("warn", "Live View: failed to restart audio on the new device after switch", {
+                deviceId,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            });
           completeSavedDeviceSwitchAttempt(attemptId, {
             outcome: "success",
             verification,
