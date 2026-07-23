@@ -22,6 +22,17 @@
 > `byte1 == 0` full-sector guard), and the practical difference is at most a single
 > trailing pad byte, so extraction stays byte-identical across the whole app. See the
 > header comment in `diskImage.ts`.
+>
+> **Deviation from §5 (play-plan integration).** Launches use the standalone
+> `diskLaunch.ts` functions (each wrapped by `withCartridgeParked`), not a new
+> `disk-file` kind inside `executePlayPlan`. The plan itself flagged the play-plan
+> variant as "worth considering"; the standalone launchers are the cleaner path it
+> recommended (less client-side logic, no router surgery). Run/Load use the firmware
+> `run_prg`/`load_prg` upload path so the device handles BASIC-vs-ML autostart.
+>
+> **Scope: entry point.** The **Open (Disk Explorer)…** affordance ships on the Disks
+> page only. The plan also mentioned Browse & Import results; that secondary entry point
+> is a follow-up (transient results vs the persistent library).
 
 > Goal: open any `.d64` / `.d71` / `.d81` and act on an *individual* program
 > inside it — **Run**, **Load**, or **Mount & Load** — without mounting the disk

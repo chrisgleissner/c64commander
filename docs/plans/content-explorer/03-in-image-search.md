@@ -13,6 +13,18 @@
 > as planned. The **Search inside disk images** toggle ships in **Settings → Play and disk
 > behaviour**; hits render as **DISK → PROGRAM** and reuse Disk Explorer's Run / Load.
 > Matches the plan; a child's `sizeBytes` is derived as `blocks × 254`.
+>
+> **Known limitation — scan population is a follow-up.** The v2 schema, migration,
+> supersede/reconcile, and search matcher are shipped and unit-tested, but the §3 *scan
+> integration* that would actually populate in-image children (hooking `listDirectory`
+> into the media-index/source-walk with the Device-Safety-throttled fetch, scoped +
+> time-budgeted with a Stop control, and the `(path,size,mtime)` freshness cache) is **not
+> wired yet**. So with `in_image_search_enabled` on, the toggle and matching logic work,
+> but until a scan populates children a search returns only top-level hits. This is a
+> deliberate, low-risk increment (the capability is experimental and off by default, and
+> wiring into the HVSC index/ingestion pipeline is the larger, separate piece); the
+> reusable core (`replaceChildren`/`hasFreshChildren`/`toChildEntry`) is exactly what that
+> scan will consume. Tracked as the remaining work for capability C.
 
 > Goal: find a program that only exists *inside* a `.d64` / `.d71` / `.d81`, then
 > act on it directly. Search should descend into disk images, not stop at their
