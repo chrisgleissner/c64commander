@@ -2,23 +2,21 @@
 
 **Capabilities D and E** of the [Content Explorer](./overview.md) initiative.
 **Feature flags:** `audio_mirror_enabled`, `video_mirror_enabled`
-**Status:** Audio Mirror implemented behind `audio_mirror_enabled` (experimental, off by default); Video Mirror behind `video_mirror_enabled` (developer-only, off by default).
+**Status:** Audio Mirror behind `audio_mirror_enabled`; Video Mirror behind `video_mirror_enabled`. Both are now user-visible and non-developer (any user can toggle) but **off by default** until the native stream receiver ships. The Home UI was subsequently reworked into the cohesive cross-app **Live View** — see [06 — A/V Mirror UX refinement](./06-av-mirror-ux.md).
 
-> **As-built (shipped).** The receive-and-play stack landed as planned:
+> **As-built (shipped).** The receive-and-play engine landed as planned:
 > `src/lib/streams/vicDecode.ts` (4bpp→RGBA palette LUT), `vicStream.ts` / `audioStream.ts`
 > (de-packetize), `audioPlayer.ts` (WebAudio scheduling), `streamReceiver.ts` (platform
-> receiver seam), and `audioMirrorController.ts` / `videoMirrorController.ts`, with the
-> `useAudioMirror` / `useVideoMirror` hooks and the `AudioMirrorPanel` / `VideoMirrorPanel`
-> components (Listen/Stop, Off/Connecting/Live/Error state, dropped-packet and fps
-> readouts). `audio_mirror_enabled` is user-visible; `video_mirror_enabled` stays
-> developer-only pending the native UDP receiver plugin.
+> receiver seam), and `audioMirrorController.ts` / `videoMirrorController.ts` (Off/Connecting/
+> Live/Error state, dropped-packet and fps readouts).
 >
-> **Surface.** Both mirror panels are mounted on **Home**, below the existing streams
-> section, each behind its own flag and `deviceCapabilities.supportsStreaming`: `AudioMirrorPanel`
-> (Listen/Stop, Off/Connecting/Live state, dropped-packet health) under `audio_mirror_enabled`,
-> and `VideoMirrorPanel` (native-res canvas, frame-throttle, fps) under `video_mirror_enabled`.
-> Because Video Mirror is developer-only it is intentionally absent from the generated user
-> manual (matching the `lighting_studio` convention); the manual documents Audio Mirror only.
+> **Superseded UI (see 06).** The original single-purpose `AudioMirrorPanel` / `VideoMirrorPanel`
+> components and their `useAudioMirror` / `useVideoMirror` hooks were replaced by the shared
+> app-wide session (`avMirrorSession` + `useAvMirror`) and the cohesive `AvMirror*` /
+> `LiveViewCard` pieces, so the two controllers above are now shared across Home and Remote
+> Input rather than owned by one panel. Both flags are user-visible and non-developer; both stay
+> off by default pending the native UDP receiver plugin (the manual documents Audio Mirror; the
+> zoom/pan immersive video screen is documented under Remote Input).
 > The web path consumes a UDP→WebSocket bridge (`streamReceiver.web` seam); the native UDP
 > receiver plugin is the remaining follow-up (`UnsupportedStreamReceiver` fallback until then).
 >

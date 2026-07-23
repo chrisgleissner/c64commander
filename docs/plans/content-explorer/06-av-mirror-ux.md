@@ -178,4 +178,38 @@ in Adjust mode and to the existing relay when in Drive mode.
 
 ## 8. As-built
 
-Recorded here once shipped; deviations noted against §3/§7.
+**Shipped as designed.** The shared session and cross-app Live View landed exactly as
+§1–§7 describe:
+
+- **Shared session (§1, §5).** `src/lib/streams/avMirrorSession.ts` — one app-wide
+  `AvMirrorSession` (singleton `avMirrorSession`) owning the single `AudioMirrorController`
+  - `VideoMirrorController`, broadcasting snapshot + decoded video frames. `useAvMirror` /
+    `useAvMirrorCanvas` (`src/hooks/useAvMirror.ts`) are the React bindings; any number of
+    canvases render the one stream. No surface owns the stream; stopping anywhere stops it
+    everywhere.
+- **Surfaces (§3).** **Home** shows `LiveViewCard` directly beneath the quick actions
+  (`AvMirrorControls` + a collapsible `AvMirrorPreview` that grows check→immersive on
+  expand). **Remote Input** pins `AvMirrorControls` (`remote-input-mirror-controls`) in
+  the sheet chrome and mounts `AvMirrorImmersive` above the input controls. Play/Disks
+  reuse the same `AvMirrorControls` where wired. Every surface renders the shared control,
+  never its own stream (the no-duplication rule).
+- **Indicators (§4).** In-control lit state + a pulsing `LiveDot`; a global app-bar
+  `AvMirrorLivePip` (`av-mirror-live-pip`) that appears only while a stream is live and
+  stops all mirroring on tap.
+- **Immersive screen control (§7).** `mirrorViewport.ts` (pure scale/pan/clamp/rect/CSS
+  transform) + `motionTracker.ts` (pure frame-diff centroid/bbox) + `useMirrorViewport`
+  (viewport state, zoom/pan/fit, eased smart-follow). `AvMirrorImmersive` is the maximised
+  GPU-scaled surface: pinch/drag/double-tap gestures, an auto-hiding ＋/−/⤢/◎ cluster, the
+  colour-coded **view-lock mode** (blue "Driving C64" / amber "Adjusting view") reachable
+  by on-screen toggle, the `*`/Menu physical key, and idle auto-revert, plus `AvMirrorMinimap`
+  (draggable viewport rectangle). Physical keys route to viewport ops only in Adjust mode.
+
+**Flags & defaults.** `audio_mirror_enabled` and `video_mirror_enabled` are both
+user-visible and non-developer (any user can toggle), but ship **off by default**: the
+phone app has no stream receiver (UDP transport) yet, so on-by-default would present a
+non-functional control — the deliberate "fragile / known to break" exception. The web
+path works through the `streamReceiver.web` UDP→WebSocket bridge seam; the native UDP
+receiver plugin is the one remaining piece before either can be safely defaulted on.
+
+**Deviation from §3.** The optional Disks audio toggle is deferred (the plan flagged it
+as "ships if it fits without clutter"); Home + Remote Input are the shipped surfaces.

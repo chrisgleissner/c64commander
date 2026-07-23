@@ -103,8 +103,8 @@ persistent status badge that appear on every page).
 
 | Page     | Route       |     CTAs | Notes                                                                                                                                                                                             |
 | -------- | ----------- | -------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Home     | `/`         | 113 (+3) | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots. `+1` Remote Input tile behind `remote_input_enabled` (stable, enabled and user-visible by default in C64 Commander; disabled and hidden in C64U Remote per `variants/feature-flags/c64u-remote.yaml`). `+2` Content Explorer Live Mirror toggles: Audio Mirror (`audio_mirror_enabled`) and Video Mirror (`video_mirror_enabled`, developer-only), each mounted only when the device advertises streaming (code-verified — see note below). |
-| Settings | `/settings` |  77 (+8) | Connection, devices, display (+2 native Android full-screen toggles), feature flags, network/cache, notifications, dev-mode, build info. `+6` Content Explorer **Play and Disk** controls: Search inside disk images (`in_image_search_enabled`), Answer cartridge boot menu (`launch_safety_enabled`, default on) plus its Menu key select and Boot settle input, and Video/Audio stream port inputs (`audio_mirror_enabled`/`video_mirror_enabled`) (code-verified — see note below). |
+| Home     | `/`         | 113 (+3) | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots. `+1` Remote Input tile behind `remote_input_enabled` (stable, enabled and user-visible by default in C64 Commander; disabled and hidden in C64U Remote per `variants/feature-flags/c64u-remote.yaml`). `+2` Content Explorer **Live View** card (`live-view-card`) beneath the quick actions — one Audio toggle (`av-audio-toggle`, `audio_mirror_enabled`) and one Video toggle (`av-video-toggle`, `video_mirror_enabled`) sharing the single app-wide A/V mirror session; both user-visible and non-developer, off by default until the phone stream receiver ships. Mounted only when the device advertises streaming (code-verified — see note below). |
+| Settings | `/settings` |  77 (+8) | Connection, devices, display (+2 native Android full-screen toggles), feature flags, network/cache, notifications, dev-mode, build info. `+6` Content Explorer **Play and Disk** controls: Search inside disk images (`in_image_search_enabled`), Answer cartridge boot menu (`launch_safety_enabled`, default on) plus its Menu key select and Boot settle input, and Video/Audio stream port inputs (shown when `audio_mirror_enabled` or `video_mirror_enabled`) (code-verified — see note below). |
 | Play     | `/play`     |  32 (+1) | Transport, volume, playback flags, playlist, type filters, HVSC. `+1` Open Controller button, shown only while playing, behind `remote_input_enabled`.                                            |
 | Config   | `/config`   |       30 | Search + 22 config-category accordions (each expands to config-item rows).                                                                                                                        |
 | Disks    | `/disks`    |   28 (+1) | Drive A/B/Soft-IEC controls, disk library. `+1` Content Explorer **New disk** button (`new_disk_enabled`); the per-disk **Open (Disk Explorer)…** overflow action (`disk_explorer_enabled`) and the New-disk / Disk-contents dialogs it opens are documented in §4.3/§5 (code-verified — see note below).                            |
@@ -132,6 +132,11 @@ persistent status badge that appear on every page).
 | Tab: Config           | tab (button) | `tab-config`           | ✅        | ✅                 |                                                                      |
 | Tab: Settings         | tab (button) | `tab-settings`         | ✅        | ✅                 |                                                                      |
 | Tab: Docs             | tab (button) | `tab-docs`             | ✅        | ✅                 | OK on a focused tab switches route (verified).                       |
+
+> **Conditional app-bar CTA — A/V mirror live pip** (`av-mirror-live-pip`): a tiny
+> indicator that appears in the header next to the status badge on every page **only
+> while an A/V mirror stream is live** (Content Explorer). Tapping it stops all
+> mirroring. Invisible — and not counted above — when nothing is streaming.
 
 ---
 
@@ -213,9 +218,10 @@ not-connected / empty / single-device).
   - Start — button — `home-stream-start-*` — R✅ I✅
   - Stop — button — `home-stream-stop-*` — R✅ I✅
   - (edit mode) endpoint — text — `home-stream-endpoint-*` — R✅ I✅
-- **Live Mirror** _(Content Explorer; mounted only when the device advertises streaming)_
-  - Audio Mirror — Listen / Stop toggle — button — `audio-mirror-toggle` — R✅ I✅ _(flag `audio_mirror_enabled`; the state badge / dropped-packet line are display-only, not interactive)_
-  - Video Mirror — Watch / Stop toggle — button — `video-mirror-toggle` — R✅ I✅ _(flag `video_mirror_enabled`, developer-only; the render canvas and fps/state badges are display-only, not interactive)_
+- **Live View** (`live-view-card`) _(Content Explorer A/V Mirror; mounted only when the device advertises streaming and `audio_mirror_enabled` or `video_mirror_enabled` is on)_
+  - Audio — Listen / Listening toggle — button — `av-audio-toggle` — R✅ I✅ _(flag `audio_mirror_enabled`; controls the shared app-wide session; the live dot is display-only)_
+  - Video — Watch / Watching toggle — button — `av-video-toggle` — R✅ I✅ _(flag `video_mirror_enabled`; the check-preview canvas and fps badge are display-only)_
+  - Expand / collapse preview — button — `live-view-expand` — R✅ I✅ _(shown only while a video stream is active; toggles the check preview between check and immersive size)_
 - **Config actions** (`data-section-label="Config"`)
   - Save/Load (flash) — button — R✅ I✅
   - Reset to default — button (danger) — R✅ I✅
@@ -399,6 +405,27 @@ ordinary focus-ring CTAs in both output modes.
 - Game mode toggle (Joystick mode, joystick-capable tier only) — button —
   `remote-input-immersive-toggle` — R✅ I✅ — enters/exits the stripped,
   edge-anchored no-look layout; auto-exits if the tier downgrades mid-session
+- **A/V mirror controls** (`remote-input-mirror-controls`) _(Content Explorer
+  A/V Mirror; pinned in the sheet chrome when `audio_mirror_enabled` or
+  `video_mirror_enabled` is on and the device advertises streaming; shares the
+  single app-wide session with Home's Live View)_
+  - Audio toggle — button — `av-audio-toggle` — R✅ I✅ _(flag `audio_mirror_enabled`)_
+  - Video toggle — button — `av-video-toggle` — R✅ I✅ _(flag `video_mirror_enabled`)_
+- **Immersive screen mirror** (`av-mirror-immersive`) _(mounts above the input
+  controls when a video stream is on; the maximised zoom/pan surface for
+  keypad-driven devices — 06-av-mirror-ux §7)_
+  - Mode banner — status chip — `av-mirror-mode-chip` — not interactive (the
+    glanceable "Driving C64" vs "Adjusting view" view-lock signal)
+  - Zoom out / Zoom in / Fit — buttons — `av-immersive-zoom-out`,
+    `av-immersive-zoom-in`, `av-immersive-fit` — R✅ I✅
+  - Follow activity — toggle button — `av-immersive-follow` — R✅ I✅ (off by default)
+  - Adjust / Done view-lock — toggle button — `av-immersive-mode-toggle` — R✅ I✅
+    — flips physical-key ownership between relaying to the C64 and adjusting the
+    view; also reachable via the `*`/Menu physical key and auto-reverts after idle
+  - Minimap — draggable viewport rectangle — `av-mirror-minimap` /
+    `av-mirror-minimap-viewport` — pointer-drag to reposition (shown once zoomed in)
+  - The picture itself — pinch to zoom, drag to pan, double-tap to zoom-to-point
+    (touch on the mirror is always view-control, never relayed)
 - **Joystick mode:**
   - Port swap — switch (one-tap toggle, same directness as Autofire) —
     `remote-input-port-switch` — R✅ I✅ (default Port 2; label shows the
