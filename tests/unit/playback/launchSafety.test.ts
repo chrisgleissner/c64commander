@@ -11,7 +11,6 @@ import {
   BOOT_MENU_KEY_PETSCII,
   CART_CATEGORY,
   CART_ITEM,
-  CART_READ_TIMEOUT_MS,
   bootSettle,
   launchSafetyEnabled,
   pressKeyWithRetry,
@@ -32,14 +31,7 @@ const setFlag = (value: boolean) => {
 };
 
 const makeApi = (cartridgeValue: string | undefined = "Final Cartridge III") => ({
-  getConfigItem: vi.fn(async () => ({
-    [CART_CATEGORY]: {
-      items: {
-        [CART_ITEM]: cartridgeValue === undefined ? undefined : { selected: cartridgeValue },
-      },
-    },
-    errors: [],
-  })),
+  getCachedConfigItem: vi.fn(() => (cartridgeValue === undefined ? undefined : { selected: cartridgeValue })),
   setConfigValue: vi.fn(async () => ({ errors: [] })),
 });
 
@@ -54,7 +46,7 @@ describe("launchSafety — withCartridgeParked", () => {
     const api = makeApi();
     const run = vi.fn(async () => "ok");
     await expect(withCartridgeParked(api as never, run)).resolves.toBe("ok");
-    expect(api.getConfigItem).not.toHaveBeenCalled();
+    expect(api.getCachedConfigItem).not.toHaveBeenCalled();
     expect(api.setConfigValue).not.toHaveBeenCalled();
     expect(run).toHaveBeenCalledTimes(1);
   });
@@ -103,9 +95,9 @@ describe("launchSafety — withCartridgeParked", () => {
     expect(api.setConfigValue).not.toHaveBeenCalled();
   });
 
-  it("does not write when the cartridge value cannot be read", async () => {
+  it("does not write when the cartridge value is not cached", async () => {
     const api = {
-      getConfigItem: vi.fn(async () => ({ [CART_CATEGORY]: { items: {} }, errors: [] })),
+      getCachedConfigItem: vi.fn(() => undefined),
       setConfigValue: vi.fn(async () => ({ errors: [] })),
     };
     const run = vi.fn(async () => "done");
@@ -133,60 +125,42 @@ describe("launchSafety — withCartridgeParked", () => {
   });
 });
 
-describe("launchSafety — readCartridgeValue", () => {
+describe("launchSafety — readCartridgeValue (cache-only, synchronous)", () => {
   beforeEach(() => vi.restoreAllMocks());
 
-  it("extracts a selected value from the items block", async () => {
+  it("extracts the selected value from the cached item", () => {
     const api = makeApi("Kung Fu Flash");
-    await expect(readCartridgeValue(api as never)).resolves.toBe("Kung Fu Flash");
+    expect(readCartridgeValue(api as never)).toBe("Kung Fu Flash");
   });
 
-  it("handles the category-as-items shape (no nested items)", async () => {
+  it("handles a { value } shaped cached item", () => {
+    const api = { getCachedConfigItem: vi.fn(() => ({ value: "EasyFlash" })) };
+    expect(readCartridgeValue(api as never)).toBe("EasyFlash");
+  });
+
+  it("returns null when the item is not cached", () => {
+    const api = { getCachedConfigItem: vi.fn(() => undefined) };
+    expect(readCartridgeValue(api as never)).toBeNull();
+  });
+
+  it("returns null when the API has no cache accessor", () => {
+    expect(readCartridgeValue({} as never)).toBeNull();
+  });
+
+  it("returns null on a cache-read failure", () => {
     const api = {
-      getConfigItem: vi.fn(async () => ({
-        [CART_CATEGORY]: { [CART_ITEM]: { value: "EasyFlash" } },
-        errors: [],
-      })),
-    };
-    await expect(readCartridgeValue(api as never)).resolves.toBe("EasyFlash");
-  });
-
-  it("returns null when the category is missing or an array", async () => {
-    const api = { getConfigItem: vi.fn(async () => ({ errors: [] })) };
-    await expect(readCartridgeValue(api as never)).resolves.toBeNull();
-    const apiArr = { getConfigItem: vi.fn(async () => ({ [CART_CATEGORY]: ["x"], errors: [] })) };
-    await expect(readCartridgeValue(apiArr as never)).resolves.toBeNull();
-  });
-
-  it("returns null on a read failure", async () => {
-    const api = {
-      getConfigItem: vi.fn(async () => {
-        throw new Error("network");
+      getCachedConfigItem: vi.fn(() => {
+        throw new Error("boom");
       }),
     };
-    await expect(readCartridgeValue(api as never)).resolves.toBeNull();
+    expect(readCartridgeValue(api as never)).toBeNull();
   });
 
-  it("passes a bounded timeout to the config read", async () => {
+  it("does not issue any network read", () => {
     const api = makeApi("Retro Replay");
-    await readCartridgeValue(api as never);
-    expect(api.getConfigItem).toHaveBeenCalledWith(
-      CART_CATEGORY,
-      CART_ITEM,
-      expect.objectContaining({ timeoutMs: expect.any(Number) }),
-    );
-  });
-
-  it("times out (returns null) instead of stalling on a hanging config read", async () => {
-    vi.useFakeTimers();
-    try {
-      const api = { getConfigItem: vi.fn(() => new Promise(() => {})) }; // never resolves
-      const pending = readCartridgeValue(api as never);
-      await vi.advanceTimersByTimeAsync(CART_READ_TIMEOUT_MS + 300);
-      await expect(pending).resolves.toBeNull();
-    } finally {
-      vi.useRealTimers();
-    }
+    readCartridgeValue(api as never);
+    expect(api.getCachedConfigItem).toHaveBeenCalledWith(CART_CATEGORY, CART_ITEM);
+    expect((api as Record<string, unknown>).getConfigItem).toBeUndefined();
   });
 });
 

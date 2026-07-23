@@ -42,10 +42,7 @@ const NONE_VALUE_SET = new Set(["", "none"]);
 
 export const launchSafetyEnabled = (): boolean => Boolean(featureFlagManager.getSnapshot().flags.launch_safety_enabled);
 
-// Launch Safety is a best-effort safety net, never a gate: bound the Cartridge
-// read so a slow, retrying, or absent config item (e.g. firmware without the item)
-// can't stall the launch it is protecting.
-export const CART_READ_TIMEOUT_MS = 1500;
+// Best-effort restore write budget (park/restore are mutations, not the hot read).
 export const CART_WRITE_TIMEOUT_MS = 2000;
 
 const withTimeout = async <T>(promise: Promise<T>, ms: number): Promise<T> => {
@@ -61,29 +58,24 @@ const withTimeout = async <T>(promise: Promise<T>, ms: number): Promise<T> => {
 };
 
 /**
- * Read the CURRENT Cartridge config value, or `null` when it can't be resolved
- * (older firmware without the item, a read failure/timeout, etc.). A `null` result
- * means "don't park" — Launch Safety must never turn a read hiccup into a failed or
- * stalled launch. The read is a single, bounded, non-retrying attempt.
+ * Read the current Cartridge value from the config CACHE only (synchronous, no
+ * network). Returns `null` when it isn't cached.
+ *
+ * Deliberately cache-only: a live `GET` issued in the middle of a launch competes
+ * with the launch's own device traffic (the read blocks on the interaction gate and
+ * a raced timeout would leave the request holding a lane slot, stalling the launch —
+ * this exact hang was caught by the coverage-probe E2E). The app reads config
+ * extensively (Home/Config), so a configured cartridge is normally cached; when it
+ * isn't, we simply skip parking — parking is a best-effort safety net, never a gate.
+ * Config writes keep the cache fresh, so an app-driven cartridge change is reflected.
  */
-export const readCartridgeValue = async (api: C64API): Promise<string | null> => {
+export const readCartridgeValue = (api: C64API): string | null => {
   try {
-    // The `withTimeout` race guarantees this resolves within the budget regardless
-    // of gateway retries, so the launch is never stalled. (Gateway-internal circuit/
-    // backoff bypass flags stay out of app code — see deviceGatewayGuard.)
-    const response = await withTimeout(
-      api.getConfigItem(CART_CATEGORY, CART_ITEM, { timeoutMs: CART_READ_TIMEOUT_MS }),
-      CART_READ_TIMEOUT_MS + 250,
-    );
-    const category = response?.[CART_CATEGORY];
-    if (!category || Array.isArray(category)) return null;
-    const items = (category as { items?: Record<string, unknown> }).items ?? category;
-    const raw = (items as Record<string, unknown>)?.[CART_ITEM];
-    if (raw === undefined) return null;
-    const value = extractConfigValue(raw);
-    return String(value);
+    const cached = api.getCachedConfigItem?.(CART_CATEGORY, CART_ITEM);
+    if (cached === undefined || cached === null) return null;
+    return String(extractConfigValue(cached));
   } catch (error) {
-    addLog("debug", "Launch Safety: could not read Cartridge value; skipping park", {
+    addLog("debug", "Launch Safety: could not read cached Cartridge value; skipping park", {
       error: (error as Error)?.message ?? String(error),
     });
     return null;
@@ -101,7 +93,7 @@ const isNoneValue = (value: string) => NONE_VALUE_SET.has(value.trim().toLowerCa
 export const withCartridgeParked = async <T>(api: C64API, run: () => Promise<T>): Promise<T> => {
   if (!launchSafetyEnabled()) return run();
 
-  const current = await readCartridgeValue(api);
+  const current = readCartridgeValue(api);
   const shouldPark = current != null && !isNoneValue(current);
 
   if (!shouldPark) return run();

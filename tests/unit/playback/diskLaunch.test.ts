@@ -171,10 +171,7 @@ describe("diskLaunch — runDiskEntry", () => {
     const image = makeD64WithEntry(new Uint8Array([0x01, 0x08, 0xaa, 0xbb]));
     const order: string[] = [];
     const api = {
-      getConfigItem: vi.fn(async () => ({
-        "C64 and Cartridge Settings": { items: { Cartridge: { selected: "Retro Replay" } } },
-        errors: [],
-      })),
+      getCachedConfigItem: vi.fn(() => ({ selected: "Retro Replay" })),
       setConfigValue: vi.fn(async (_c: string, _i: string, v: string) => {
         order.push(`set:${v === "" ? "<empty>" : v}`);
         return { errors: [] };
