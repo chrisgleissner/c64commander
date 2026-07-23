@@ -14,6 +14,7 @@
  * tested without a real audio device.
  */
 
+import { addLog } from "@/lib/logging";
 import { AUDIO_SAMPLE_RATE, deinterleaveStereo } from "./audioStream";
 
 export const AUDIO_LEAD_IN_SECONDS = 0.08;
@@ -58,7 +59,12 @@ export class AudioMirrorPlayer {
     if (!this.ctx) {
       try {
         this.ctx = this.factory();
-      } catch {
+      } catch (error) {
+        // WebAudio genuinely unavailable (e.g. no AudioContext, autoplay policy). Log the reason
+        // so the caller's "audio unavailable" state is diagnosable rather than a silent false.
+        addLog("warn", "Audio Mirror: WebAudio context unavailable; audio playback disabled", {
+          error: (error as Error)?.message ?? String(error),
+        });
         return false;
       }
       this.nextTime = 0;

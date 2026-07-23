@@ -88,16 +88,18 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
 
   const modeRef = useRef(mode);
   modeRef.current = mode;
-  const setMode = useCallback(
-    (next: MirrorInputMode) => {
-      setModeState((prev) => {
-        if (prev !== next) haptic();
-        return next;
-      });
-      onModeChange?.(next);
-    },
-    [onModeChange],
-  );
+  // Hold onModeChange in a ref: consumers (RemoteInputSheet) pass an inline arrow, so depending on
+  // it here would rebuild setMode → bumpIdle every render and reset the idle timer forever (it
+  // would never fire). Keeping setMode STABLE lets the idle-timer effect re-run only on mode change.
+  const onModeChangeRef = useRef(onModeChange);
+  onModeChangeRef.current = onModeChange;
+  const setMode = useCallback((next: MirrorInputMode) => {
+    setModeState((prev) => {
+      if (prev !== next) haptic();
+      return next;
+    });
+    onModeChangeRef.current?.(next);
+  }, []);
   const toggleMode = useCallback(() => setMode(modeRef.current === "drive" ? "adjust" : "drive"), [setMode]);
 
   // Auto-revert Adjust → Drive after idle, so a user can never be stranded in view mode.

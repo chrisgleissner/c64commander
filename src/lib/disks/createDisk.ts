@@ -47,7 +47,21 @@ export const encodeC64uPath = (path: string): string =>
     .map((segment) => encodeURIComponent(segment))
     .join("/");
 
-const normalizeFolder = (folder: string) => "/" + folder.replace(/^\/+|\/+$/g, "");
+const normalizeFolder = (folder: string) => {
+  const segments = folder.split("/").filter((segment) => segment.length > 0);
+  for (const segment of segments) {
+    // Reject path traversal (`.`/`..`) and control/separator characters so a folder like
+    // "/USB0/../" can never resolve to a firmware path outside the selected storage directory.
+    if (segment === "." || segment === "..") {
+      throw new Error(`Invalid folder "${folder}": path traversal ("${segment}") is not allowed.`);
+    }
+    // eslint-disable-next-line no-control-regex
+    if (/[\u0000-\u001f\\]/.test(segment)) {
+      throw new Error(`Invalid folder "${folder}": contains an unsupported character.`);
+    }
+  }
+  return "/" + segments.join("/");
+};
 
 const ensureExtension = (name: string, kind: CreateDiskKind) =>
   name.toLowerCase().endsWith("." + kind) ? name : `${name}.${kind}`;

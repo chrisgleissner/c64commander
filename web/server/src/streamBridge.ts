@@ -96,6 +96,15 @@ const websocketAccept = (key: string): string =>
     .update(key + WS_GUID)
     .digest("base64");
 
+/** Extract the `host:port` authority from an Origin header, or null if it is unparseable. */
+const safeOriginHost = (origin: string): string | null => {
+  try {
+    return new URL(origin).host;
+  } catch {
+    return null;
+  }
+};
+
 export class StreamBridge {
   private readonly bindHost: string;
   private readonly maxBufferedBytes: number;
@@ -185,6 +194,24 @@ export class StreamBridge {
     if (typeof key !== "string" || upgrade !== "websocket") {
       socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
       return true;
+    }
+
+    // Same-origin allow-list: a browser always sends `Origin`, so reject any cross-origin upgrade.
+    // Without this, a drive-by web page loaded in a viewer's browser could open this WebSocket and
+    // exfiltrate the live VIC video / SID audio over the LAN (the bridge binds 0.0.0.0). Requests
+    // with no Origin (non-browser LAN tooling) are allowed; the browser threat is the one that matters.
+    const origin = req.headers["origin"];
+    if (typeof origin === "string" && origin.length > 0) {
+      const originHost = safeOriginHost(origin);
+      const requestHost = String(req.headers["host"] ?? "");
+      if (originHost === null || originHost !== requestHost) {
+        this.log("warn", "A/V mirror stream bridge rejected cross-origin WebSocket upgrade", {
+          origin,
+          host: requestHost,
+        });
+        socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+        return true;
+      }
     }
 
     socket.write(

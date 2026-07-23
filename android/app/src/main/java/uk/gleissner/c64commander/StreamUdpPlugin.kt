@@ -100,6 +100,9 @@ class StreamUdpPlugin : Plugin() {
       result.put("port", socket.localPort)
       call.resolve(result)
     } catch (error: Exception) {
+      // Release the multicast lock if we acquired it above but never got a running socket, so a
+      // failed multicast bind cannot leak the Wi-Fi MulticastLock (it is not reference-counted).
+      if (sockets.isEmpty()) releaseMulticastLock()
       Log.w(logTag, "bind failed for $name:$port (group=$group)", error)
       call.reject("bind failed: ${error.message}", error)
     }
@@ -129,7 +132,9 @@ class StreamUdpPlugin : Plugin() {
         emitDatagram(name, encoded, arrivalMs)
       } catch (error: Exception) {
         if (socket.isClosed) break
-        // Transient receive error; keep listening.
+        // Transient receive error on a still-open socket: log with the stack trace (mandatory
+        // exception handling) and keep listening rather than tearing the stream down.
+        Log.w(logTag, "Transient receive error on $name socket; continuing", error)
       }
     }
   }

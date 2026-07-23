@@ -28,6 +28,7 @@ import {
   type CreateDiskKind,
 } from "@/lib/disks/createDisk";
 import type { CreateDiskResult } from "@/lib/c64api";
+import { addLog } from "@/lib/logging";
 
 export interface NewDiskDialogProps {
   open: boolean;
@@ -104,7 +105,14 @@ export function NewDiskDialog({
       onOpenChange(false);
       reset();
     } catch (err) {
-      setError((err as Error).message || "Could not create the disk.");
+      const message = (err as Error).message || "Could not create the disk.";
+      addLog("warn", "New Disk: creation failed", {
+        name: args.name,
+        folder: args.folder,
+        kind: args.kind,
+        error: message,
+      });
+      setError(message);
     } finally {
       setBusy(false);
     }

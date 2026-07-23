@@ -284,6 +284,32 @@ describe("A/V mirror stream bridge (UDP → WebSocket)", () => {
     await waitFor(() => harness!.bridge.clientCount("video") === 0);
     socket.destroy();
   });
+
+  it("rejects a cross-origin WebSocket upgrade with 403 (same-origin allow-list)", async () => {
+    harness = await startHarness();
+
+    const socket = net.connect(harness.httpPort, "127.0.0.1");
+    const response = await new Promise<string>((resolve, reject) => {
+      let text = "";
+      socket.on("error", reject);
+      socket.on("data", (chunk: Buffer) => {
+        text += chunk.toString("latin1");
+        resolve(text);
+      });
+      const key = crypto.randomBytes(16).toString("base64");
+      // A drive-by page's Origin does NOT match the request Host → must be refused.
+      socket.write(
+        `GET /streams/video HTTP/1.1\r\nHost: 127.0.0.1:${harness!.httpPort}\r\n` +
+          `Origin: http://evil.example\r\nUpgrade: websocket\r\n` +
+          `Connection: Upgrade\r\nSec-WebSocket-Key: ${key}\r\nSec-WebSocket-Version: 13\r\n\r\n`,
+      );
+    });
+
+    expect(response).toContain("403");
+    expect(response).not.toContain("101");
+    expect(harness.bridge.clientCount("video")).toBe(0);
+    socket.destroy();
+  });
 });
 
 describe("encodeBinaryFrame", () => {

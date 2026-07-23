@@ -18,6 +18,7 @@
  */
 
 import { getC64API } from "@/lib/c64api";
+import { addLog } from "@/lib/logging";
 import { loadStreamAudioPort, loadStreamVideoPort } from "@/lib/config/appSettings";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
 import { AudioMirrorController, type AudioMirrorState } from "./audioMirrorController";
@@ -168,7 +169,20 @@ export class AvMirrorSession {
   }
 
   async stopAll(): Promise<void> {
-    await Promise.allSettled([this.stopAudio(), this.stopVideo()]);
+    // allSettled so one failing stop cannot orphan the other, but a rejection must not be silently
+    // swallowed (a failed stop can leave the device streaming / a receiver bound) — log each with
+    // context so it stays diagnosable.
+    const [audio, video] = await Promise.allSettled([this.stopAudio(), this.stopVideo()]);
+    for (const [name, outcome] of [
+      ["audio", audio],
+      ["video", video],
+    ] as const) {
+      if (outcome.status === "rejected") {
+        addLog("warn", `A/V mirror: failed to stop ${name} stream`, {
+          error: (outcome.reason as Error)?.message ?? String(outcome.reason),
+        });
+      }
+    }
   }
 }
 

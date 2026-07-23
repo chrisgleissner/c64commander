@@ -320,7 +320,8 @@ Mount disk sheet: Available disks list — filter text — `list-filter-input` �
   when checked reveals Menu key — select — `settings-boot-menu-key` — R✅ I✅ and
   Boot settle (ms) — number — `settings-boot-settle` — R✅ I✅ ; Video stream port
   / Audio stream port — number ×2 — `settings-stream-video-port` /
-  `settings-stream-audio-port` — R✅ I✅
+  `settings-stream-audio-port` — R✅ I✅ ; Audio network buffer (ms) — number —
+  `settings-stream-network-buffer` — R✅ I✅
   `[visible when audio_mirror_enabled or video_mirror_enabled]`
 - **Notifications**: visibility — select — R✅ I✅ ; duration — slider — R✅ I✅
 - **Build/info**: REST API docs — link — `settings-about-rest-api-docs` — R✅ I✅

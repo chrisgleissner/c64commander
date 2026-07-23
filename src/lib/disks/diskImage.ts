@@ -24,6 +24,8 @@
  * consistent across the whole app.
  */
 
+import { addLog } from "@/lib/logging";
+
 const SECTOR_SIZE = 256;
 const FILE_TYPE_MASK = 0x07;
 const FILE_TYPE_CLOSED = 0x80;
@@ -307,8 +309,15 @@ export const listDirectory = (image: Uint8Array, type: DiskImageType): DiskDirec
         try {
           const firstSector = readSector(trimmed, layout, startTrack, startSector);
           loadAddress = firstSector[2] | (firstSector[3] << 8);
-        } catch {
+        } catch (error) {
+          // A truncated image / unsupported layout: the entry stays without a load address rather
+          // than failing the whole listing, but the read failure must be diagnosable (not swallowed).
           loadAddress = undefined;
+          addLog("warn", "Disk image: failed to read PRG load address for a directory entry", {
+            startTrack,
+            startSector,
+            error: (error as Error)?.message ?? String(error),
+          });
         }
       }
 

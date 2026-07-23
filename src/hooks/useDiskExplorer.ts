@@ -102,6 +102,8 @@ export const useDiskExplorer = ({
 }: UseDiskExplorerOptions) => {
   const [state, setState] = useState<DiskExplorerState>(INITIAL);
   const loadedRef = useRef<{ disk: DiskEntry; image: Uint8Array; diskType: DiskImageType } | null>(null);
+  // Monotonic request id so a slow load for disk A cannot overwrite a newer selection of disk B.
+  const loadGenerationRef = useRef(0);
 
   const close = useCallback(() => setState((prev) => ({ ...prev, open: false })), []);
 
@@ -117,14 +119,19 @@ export const useDiskExplorer = ({
         });
         return;
       }
+      const generation = ++loadGenerationRef.current;
       loadedRef.current = null;
       setState({ ...INITIAL, open: true, disk, diskName, diskType, loading: true });
       try {
         const image = await loadImage(disk, runtimeFile);
+        // A newer openDisk started while this load was pending: drop this stale result so it can't
+        // write disk A's bytes into a dialog now showing disk B.
+        if (generation !== loadGenerationRef.current) return;
         const entries = listDirectory(image, diskType);
         loadedRef.current = { disk, image, diskType };
         setState((prev) => ({ ...prev, image, entries, loading: false }));
       } catch (error) {
+        if (generation !== loadGenerationRef.current) return; // superseded — do not clobber newer state
         const message = (error as Error)?.message ?? "Could not read the disk image.";
         addErrorLog("Disk Explorer failed to open image", { path: disk.path, error: message });
         setState((prev) => ({ ...prev, loading: false, error: `Unreadable directory: ${message}` }));
@@ -149,6 +156,12 @@ export const useDiskExplorer = ({
         setState((prev) => ({ ...prev, busyIndex: null, open: false }));
       } catch (error) {
         const message = (error as Error)?.message ?? "Launch failed.";
+        addErrorLog("Disk Explorer launch failed", {
+          path: loaded.disk.path,
+          entry: entry.name,
+          action,
+          error: message,
+        });
         onToast?.({ title: "Launch failed", description: message, variant: "destructive" });
         setState((prev) => ({ ...prev, busyIndex: null }));
       }

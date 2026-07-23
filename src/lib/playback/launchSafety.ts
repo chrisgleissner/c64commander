@@ -50,6 +50,14 @@ const withTimeout = async <T>(promise: Promise<T>, ms: number): Promise<T> => {
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms);
   });
+  // If the timeout wins, the original request is still in flight and no longer observed by the
+  // race. Attach a handler now so its eventual rejection is logged rather than surfacing as an
+  // unhandled promise rejection after the launch has already continued.
+  promise.catch((error) => {
+    addLog("debug", "Launch Safety: cartridge write rejected (best-effort; may have lost a timeout race)", {
+      error: (error as Error)?.message ?? String(error),
+    });
+  });
   try {
     return await Promise.race([promise, timeout]);
   } finally {

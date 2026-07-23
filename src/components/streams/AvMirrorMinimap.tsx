@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { cn } from "@/lib/utils";
 import { useAvMirrorCanvas } from "@/hooks/useAvMirror";
 import { viewportRect, type Viewport } from "@/lib/streams/mirrorViewport";
@@ -44,11 +44,31 @@ export function AvMirrorMinimap({ viewport, onSeek, session, className }: AvMirr
     );
   };
 
+  // Keyboard / D-pad panning (the C64U Remote target has a keypad, no pointer): arrow keys nudge
+  // the viewport centre by a step so the minimap is operable without a touchscreen.
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const step = 0.1;
+    let dx = 0;
+    let dy = 0;
+    if (event.key === "ArrowLeft") dx = -step;
+    else if (event.key === "ArrowRight") dx = step;
+    else if (event.key === "ArrowUp") dy = -step;
+    else if (event.key === "ArrowDown") dy = step;
+    else return;
+    event.preventDefault();
+    const centerX = rect.x + rect.w / 2;
+    const centerY = rect.y + rect.h / 2;
+    onSeek(clamp01(centerX + dx), clamp01(centerY + dy));
+  };
+
   return (
     <div
       ref={containerRef}
+      role="application"
+      tabIndex={0}
+      aria-label="Live view minimap — arrow keys pan the viewport"
       className={cn(
-        "relative w-28 shrink-0 cursor-pointer overflow-hidden rounded border border-white/40 bg-black touch-none",
+        "relative w-28 shrink-0 cursor-pointer overflow-hidden rounded border border-white/40 bg-black touch-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400",
         className,
       )}
       onPointerDown={(event) => {
@@ -58,6 +78,7 @@ export function AvMirrorMinimap({ viewport, onSeek, session, className }: AvMirr
       onPointerMove={(event) => {
         if (event.buttons !== 0) seekFromEvent(event);
       }}
+      onKeyDown={onKeyDown}
       data-testid="av-mirror-minimap"
     >
       <canvas

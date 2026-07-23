@@ -145,6 +145,10 @@ export const mountAndLoadEntry = async (
   options: MountAndLoadOptions,
 ): Promise<void> => {
   const wait = options.delayFn ?? delay;
+  // Reject non-launchable entries (SEQ/REL/USR/DEL, open/splat) BEFORE mounting + resetting +
+  // typing a LOAD — otherwise the user is left at a reset machine with a command for a file that
+  // can't load as a program (same guard runDiskEntry applies).
+  assertLaunchable(entry);
   await options.mount();
   await api.machineReset();
   await bootSettle(api, { ...options, delayFn: options.delayFn });
