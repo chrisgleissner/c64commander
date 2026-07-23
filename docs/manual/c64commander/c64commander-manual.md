@@ -448,9 +448,23 @@ Press the **menu key** — or the on-screen **Adjust** button — to switch betw
 
 The same four moves have on-screen buttons too — **＋** and **−** to zoom, **⤢** to fit, and **◎** to turn Follow on and off — so a touchscreen and a keypad reach every control.
 
-Live View is optional and starts switched off. The device streams to two network ports (11000 for the picture, 11001 for the sound); if your setup needs different ones, you can change them in **Settings**, under Play and disk behaviour.
+Live View is optional and starts switched off. The device streams to two network ports (11000 for the picture, 11001 for the sound); if your setup needs different ones, you can change them in **Settings**, under Play and disk behaviour. Live View borrows the same feeds as **Streams** (below), and while it is playing it takes charge of them — see there for how the two work together.
 
 Optional. Enable it in Settings > Experimental Features.
+
+### Streams
+
+Your C64 can send what it is doing out across the network. **Home > Streams** exposes three feeds — **VIC** (the live video picture), **Audio** (the SID output), and **Debug** (a low-level trace for developers). Point a feed at a destination address, press **Start**, and it streams there; **Stop** ends it. The card appears only when the connected device advertises streaming support.
+
+Live View (above) plays those same **VIC** and **Audio** feeds inside the app, so the two are careful never to fight over one stream. Turn Live View on and it takes charge of the feed it needs: that row shows a small **Live View** badge and turns read-only, so nothing you do here can pull the picture or sound out from under it. Your own target is remembered, and the moment you stop Live View the row hands control straight back to you.
+
+### The SID Audio Mixer
+
+Your C64 makes its sound with a SID chip, and can host more than one. **Home > SID / Audio mixer** is a live mixing desk: a **master volume** for everything, and, for each SID it reports, that chip's own **volume** and **stereo position**. Slide one SID toward the left speaker and another toward the right for true stereo, or pull one down to let the other lead. Changes are heard at once, and the same controls appear in **Config > Audio Mixer** if you prefer the full tree.
+
+### The Virtual Printer
+
+A C64 once talked to a Commodore printer over the serial bus; yours emulates one so you never need the vintage hardware. **Home > Printer** picks the **emulation** (such as Commodore MPS), sets the printer's **bus ID**, and manages its output: **Flush** commits what has been printed so far, **Eject** finishes the page, and **Reset** clears the emulated printer.
 
 ### RAM Snapshots
 
@@ -519,18 +533,6 @@ Optional. Enable it in Settings > Experimental Features.
 Need a fresh disk to save to? On **Disks**, choose **New disk** to format a blank image on the device. Pick the **type** — D64 (1541), D71 (1571), D81 (1581), or DNP (CMD native) — give it a **file name**, and set a **disk label** of up to 16 characters (it defaults to the file name). A D64 lets you choose the number of **tracks** (35 to 41, usually 35); a DNP requires a track count (1 to 255); D71 and D81 need none. Finally pick a real **storage folder** on the device, such as USB0 — the top-level `/` is only a virtual list of drives and cannot hold files. The app creates the image and mounts it ready to write to.
 
 On by default. You can change it in Settings > Stable Features.
-
-### The SID Audio Mixer
-
-Your C64 makes its sound with a SID chip, and can host more than one. **Home > SID / Audio mixer** is a live mixing desk: a **master volume** for everything, and, for each SID it reports, that chip's own **volume** and **stereo position**. Slide one SID toward the left speaker and another toward the right for true stereo, or pull one down to let the other lead. Changes are heard at once, and the same controls appear in **Config > Audio Mixer** if you prefer the full tree.
-
-### Video, Audio, and Debug Streams
-
-Your C64 can send what it is doing out across the network. **Home > Streams** exposes three feeds — **VIC** (the live video picture), **Audio** (the SID output), and **Debug** (a low-level trace for developers). Point a feed at a destination address, press **Start**, and it streams there; **Stop** ends it. The Streams card appears only when the connected device advertises streaming support.
-
-### The Virtual Printer
-
-A C64 once talked to a Commodore printer over the serial bus; yours emulates one so you never need the vintage hardware. **Home > Printer** picks the **emulation** (such as Commodore MPS), sets the printer's **bus ID**, and manages its output: **Flush** commits what has been printed so far, **Eject** finishes the page, and **Reset** clears the emulated printer.
 
 ### File Sources
 

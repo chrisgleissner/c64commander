@@ -2308,6 +2308,11 @@ test.describe("App screenshots", () => {
       const immersiveMirror = sheet.getByTestId("av-mirror-immersive");
       if (await immersiveMirror.isVisible().catch(() => false)) {
         await expect(immersiveMirror.getByTestId("av-mirror-immersive-controls")).toBeVisible({ timeout: 8000 });
+        // Zoom in so the picture is magnified and the corner minimap (with its draggable
+        // viewport rectangle) is on screen — the CTAs the manual/README describe.
+        await immersiveMirror.getByTestId("av-immersive-zoom-in").click();
+        await immersiveMirror.getByTestId("av-immersive-zoom-in").click();
+        await expect(immersiveMirror.getByTestId("av-mirror-minimap")).toBeVisible({ timeout: 4000 });
         await captureScreenshot(page, testInfo, "home/remote-input/06-av-mirror-immersive.png", { locator: sheet });
       }
     },
