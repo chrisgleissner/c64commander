@@ -160,8 +160,7 @@ export class StreamBridge {
     const key = req.headers["sec-websocket-key"];
     const upgrade = String(req.headers["upgrade"] ?? "").toLowerCase();
     if (typeof key !== "string" || upgrade !== "websocket") {
-      socket.write("HTTP/1.1 400 Bad Request\r\n\r\n");
-      socket.destroy();
+      socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
       return true;
     }
 

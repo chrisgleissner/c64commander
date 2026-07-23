@@ -442,7 +442,7 @@ For a title that spans several disks, drop the related images into one **group**
 
 ### Content Explorer
 
-Content Explorer is a set of additive tools for working with the programs *inside* disk images, launching them safely, and hearing the running machine. Each part is optional and independent — turn on only the ones you want in **Settings**, and the rest stay out of the way.
+Content Explorer is a set of additive tools for working with the programs *inside* disk images, launching them safely, and hearing and seeing the running machine. Each part is optional and independent — turn on only the ones you want in **Settings**, and the rest stay out of the way.
 
 #### Looking Inside a Disk
 
@@ -456,7 +456,7 @@ Each launchable file offers three actions:
 
 Only a proper **PRG** program can be launched directly. Other file types show a short note explaining why they cannot, and an unclosed "splat" file — one that was never finished being written — cannot be launched either.
 
-Optional. Enable it in Settings > Experimental Features.
+On by default. You can change it in Settings > Stable Features.
 
 #### Launch Safety
 
@@ -476,11 +476,28 @@ Optional. Enable it in Settings > Experimental Features.
 
 Need a fresh disk to save to? On **Disks**, choose **New disk** to format a blank image on the device. Pick the **type** — D64 (1541), D71 (1571), D81 (1581), or DNP (CMD native) — give it a **file name**, and set a **disk label** of up to 16 characters (it defaults to the file name). A D64 lets you choose the number of **tracks** (35 to 41, usually 35); a DNP requires a track count (1 to 255); D71 and D81 need none. Finally pick a real **storage folder** on the device, such as USB0 — the top-level `/` is only a virtual list of drives and cannot hold files. The app creates the image and mounts it ready to write to.
 
-Optional. Enable it in Settings > Experimental Features.
+On by default. You can change it in Settings > Stable Features.
 
-#### Hearing the Running Machine
+#### Live View — Hearing and Seeing the Running Machine
 
-The Ultimate can stream the sound your C64 is making across the network, and Audio Mirror plays it back inside the app so you can listen without wiring up speakers. Its control is a single **Listen** button that starts receiving the stream and becomes **Stop**; a small badge beside it shows the connection as **Off**, **Connecting…**, or **Live**, and notes any dropped packets while a stream runs. Audio Mirror is light enough to run on modest hardware. It is an early, experimental capability, so it stays off until you enable it. A companion video mirror — drawing the C64's picture in the app — is far more demanding and remains an advanced option, off by default on constrained hardware.
+Your Ultimate can send the sound and picture of the running C64 out across the network, and Live View brings them back inside the app — so you can hear a tune or watch the screen without wiring up a speaker or a second display.
+
+Live View is one shared session. Start it in one place and it keeps running everywhere you go; there is never a second, competing stream. It sits just beneath the Quick Actions on **Home**, with two toggles:
+
+- **Listen** turns the sound on. It takes up no room — just the lit button and a small live dot — so it is ideal for keeping an ear on a game or a SID tune while you do something else. A matching dot appears in the top bar once you move to another page, as a reminder that it is still playing; tap it to stop everything at once.
+- **Watch** turns the picture on. A small preview of the C64 screen appears beneath the toggles; tap the chevron beside it to enlarge the preview in place.
+
+![Live View on Home](../../img/app/home/content-explorer/01-live-view.png)
+
+**The immersive screen.** Open **Remote Input** while Watch is on and the picture grows to fill the width of the sheet, above the joystick and keyboard — a proper screen for playing a game or driving an app you are typing into.
+
+You can move around it freely: **pinch** to zoom, **drag** to pan, and **double-tap** to zoom straight to a point (double-tap again to fit the whole screen back on). A small map in the corner shows which part you are looking at; drag its rectangle to leap somewhere else. Turn on **Follow** and the view drifts on its own toward wherever the action is — handy for keeping the cursor in sight as you type.
+
+On a device driven by a physical keypad, those same keys could either work the C64 or move the view, so Live View makes the difference impossible to mistake. A coloured border and label tell you which at a glance: a **blue “Driving C64”** border means your keys reach the machine, and an **amber “Adjusting view”** border means they zoom and pan the picture instead. Tap **Adjust** — or press the menu key — to switch between them; it returns to Driving on its own after a short pause, so you are never left steering a frozen game.
+
+![The immersive screen in Remote Input](../../img/app/home/remote-input/06-av-mirror-immersive.png)
+
+Live View is optional and starts switched off. The device streams to two network ports (11000 for video, 11001 for audio); if your setup needs different ones, change them in **Settings**, under Play and disk behaviour.
 
 Optional. Enable it in Settings > Experimental Features.
 
@@ -646,11 +663,12 @@ Preferred locations are marked first.
 | Streams | **Home > Streams**, Config | Visible when the device exposes streaming support. |
 | Save/load device config | **Home > Config actions** | Use Save to flash when Auto save config is Ask or No, or when you want to force a flash save now. |
 | App-stored config snapshots | **Home > Config actions** | Local app snapshots, separate from device flash. |
-| Disk Explorer (launch a program inside a disk) | **Disks > disk menu > Open (Disk Explorer)** | Optional. Enable it in Settings > Experimental Features. |
-| Create a blank disk | **Disks > New disk** | Optional. Enable it in Settings > Experimental Features. |
+| Disk Explorer (launch a program inside a disk) | **Disks > disk menu > Open (Disk Explorer)** | On by default. You can change it in Settings > Stable Features. |
+| Create a blank disk | **Disks > New disk** | On by default. You can change it in Settings > Stable Features. |
 | Search inside disk images | **Settings > Play and disk behavior** | Optional. Enable it in Settings > Experimental Features. |
 | Launch Safety (cartridge parking) | Automatic; boot-menu answer in **Settings > Play and disk behavior** | On by default. You can change it in Settings > Stable Features. |
-| Audio Mirror | **Settings > Experimental Features** | Optional. Enable it in Settings > Experimental Features. |
+| Live View — Audio Mirror | **Settings > Experimental Features** | Optional. Enable it in Settings > Experimental Features. |
+| Live View — Video Mirror | **Settings > Experimental Features** | Optional. Enable it in Settings > Experimental Features. |
 | Advanced config file actions | **Home > Config actions** | Optional. Enable it in Settings > Experimental Features. |
 | Advanced drive shortcuts | **Home > Drives** | Optional. Enable it in Settings > Experimental Features. |
 | Advanced printer shortcuts | **Home > Printer** | Optional. Enable it in Settings > Experimental Features. |

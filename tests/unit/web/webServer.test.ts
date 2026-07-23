@@ -769,4 +769,39 @@ describe("web server platform runtime", () => {
     expect(closedWithoutOpen).toBe(true);
     await server.close();
   });
+
+  it("gates the stream bridge behind login when a password is configured", async () => {
+    const distDir = await makeTempDir("c64-web-dist-");
+    const configDir = await makeTempDir("c64-web-config-");
+    await writeFile(path.join(distDir, "index.html"), "<html></html>", "utf8");
+    const server = await startWebServer({
+      HOST: "127.0.0.1",
+      PORT: "0",
+      WEB_DIST_DIR: distDir,
+      WEB_CONFIG_DIR: configDir,
+      NODE_ENV: "production",
+      C64U_NETWORK_PASSWORD: "secret",
+      WEB_STREAM_BRIDGE: "1",
+      WEB_STREAM_VIDEO_PORT: "52131",
+      WEB_STREAM_AUDIO_PORT: "52132",
+    });
+
+    // An unauthenticated WebSocket handshake must be cleanly rejected (not hang): the server
+    // returns 401 to the upgrade, so a real client fires error/close without ever opening.
+    const wsUrl = `${server.baseUrl.replace(/^http/, "ws")}/streams/video`;
+    const outcome = await new Promise<"open" | "rejected">((resolve) => {
+      const ws = new WebSocket(wsUrl);
+      const guard = setTimeout(() => resolve("open"), 6000); // treat a hang as a failure to reject
+      const done = (result: "open" | "rejected") => {
+        clearTimeout(guard);
+        resolve(result);
+      };
+      ws.onopen = () => done("open");
+      ws.onerror = () => done("rejected");
+      ws.onclose = () => done("rejected");
+    });
+    expect(outcome).toBe("rejected");
+
+    await server.close();
+  });
 });

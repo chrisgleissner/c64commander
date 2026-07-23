@@ -679,6 +679,13 @@ export const startWebServer = async () => {
     // (the app has no other WebSocket endpoints).
     server.on("upgrade", (req, socket, _head) => {
       const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+      // Respect the same login gate as the REST/FTP proxy: an unauthenticated client cannot
+      // open a mirror stream. Browsers send the session cookie on same-origin WS handshakes.
+      if (requiresLogin(config) && !isAuthenticated(req)) {
+        // end() flushes the response before closing (destroy() could drop it).
+        socket.end("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
+        return;
+      }
       if (!streamBridge.handleUpgrade(req, socket, pathname)) {
         socket.destroy();
       }

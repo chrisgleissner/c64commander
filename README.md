@@ -154,7 +154,7 @@ The following shows the Keys tab using various display profiles, from small to l
   </tr>
 </table>
 
-### Live View (audio & video mirror)
+### Live View
 
 Hear and see the running machine from inside the app, in one shared session that stays live wherever you go. **Listen** for audio-only (no screen space, just a live dot); **Watch** for a small preview you can expand.
 
@@ -169,7 +169,7 @@ Inside **Remote Input**, the mirror becomes a full-width, zoomable screen for pl
 
 <img src="docs/img/app/home/remote-input/06-av-mirror-immersive.png" alt="Remote Input immersive mirror: the C64 screen with a Driving-C64 view-lock chip and zoom/pan controls" width="300"/>
 
-Enable **Audio Mirror** / **Video Mirror** under **Settings → Features** (stream ports are configurable under **Settings → Play and disk behaviour**, defaulting to 11000 / 11001). It works today on the web/Docker build; the phone app adds its on-device stream receiver as a follow-up.
+Enable **Audio Mirror** / **Video Mirror** under **Settings → Features** (stream ports are configurable under **Settings → Play and disk behaviour**, defaulting to 11000 / 11001).
 
 ### Play
 
