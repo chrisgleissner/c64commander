@@ -24,6 +24,7 @@ const featureFlagsRef = vi.hoisted(() => ({
 }));
 
 vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlagValue: () => false,
   useFeatureFlag: (key: string) => ({ value: featureFlagsRef.current[key] ?? true }),
 }));
 

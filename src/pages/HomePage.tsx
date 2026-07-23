@@ -31,8 +31,7 @@ import { SystemInfo } from "./home/components/SystemInfo";
 import { MachineControls } from "./home/components/MachineControls";
 import { AudioMixer } from "./home/components/AudioMixer";
 import { StreamStatus } from "./home/components/StreamStatus";
-import { AudioMirrorPanel } from "@/components/streams/AudioMirrorPanel";
-import { VideoMirrorPanel } from "@/components/streams/VideoMirrorPanel";
+import { LiveViewCard } from "@/components/streams/LiveViewCard";
 import { DriveManager } from "./home/components/DriveManager";
 import { HomeCpuSpeedSlider } from "./home/components/HomeCpuSpeedSlider";
 import { PrinterManager } from "./home/components/PrinterManager";
@@ -1258,6 +1257,10 @@ function HomePageContent() {
             footer={ramSnapshotsEnabled ? ramDumpFolderCard : null}
           />
 
+          {(audioMirrorEnabled || videoMirrorEnabled) && deviceCapabilities.supportsStreaming ? (
+            <LiveViewCard audioEnabled={audioMirrorEnabled} videoEnabled={videoMirrorEnabled} />
+          ) : null}
+
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1765,18 +1768,6 @@ function HomePageContent() {
           <AudioMixer isConnected={isActive} machineTaskBusy={machineTaskBusy} runMachineTask={runMachineTask} />
 
           {deviceCapabilities.supportsStreaming ? <StreamStatus isConnected={isActive} /> : null}
-
-          {audioMirrorEnabled && deviceCapabilities.supportsStreaming ? (
-            <div className="mt-3">
-              <AudioMirrorPanel />
-            </div>
-          ) : null}
-
-          {videoMirrorEnabled && deviceCapabilities.supportsStreaming ? (
-            <div className="mt-3">
-              <VideoMirrorPanel />
-            </div>
-          ) : null}
 
           {/* Config Actions */}
           {/*

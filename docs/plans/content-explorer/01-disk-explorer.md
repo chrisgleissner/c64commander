@@ -34,7 +34,7 @@
 > page only. The plan also mentioned Browse & Import results; that secondary entry point
 > is a follow-up (transient results vs the persistent library).
 
-> Goal: open any `.d64` / `.d71` / `.d81` and act on an *individual* program
+> Goal: open any `.d64` / `.d71` / `.d81` and act on an _individual_ program
 > inside it — **Run**, **Load**, or **Mount & Load** — without mounting the disk
 > and hand-driving the C64.
 
@@ -42,7 +42,7 @@
 
 ## 1. What already exists (and its one latent limit)
 
-`src/lib/playback/diskFirstPrg.ts` already implements, for the *first* PRG only:
+`src/lib/playback/diskFirstPrg.ts` already implements, for the _first_ PRG only:
 
 - `layoutForType(type, fileSize)` — 1541/1571/1581 geometry incl. error-table sizes.
 - `tsOffset` / `readSector` — track/sector addressing with range checks.
@@ -60,7 +60,7 @@ missing: (1) listing **all** entries, and (2) launching an **arbitrary** one.
 `findFirstPrg` reads an entry as:
 
 ```ts
-const offset = 2 + i * 32;                 // i = 0..7
+const offset = 2 + i * 32; // i = 0..7
 const entry = sectorData.slice(offset, offset + 32);
 ```
 
@@ -75,13 +75,13 @@ The correct, proven windowing treats entry `i` as the 32-byte window
 `sector[i*32 .. i*32 + 32]` and reads fields at window-relative offsets (the
 2-byte next-dir pointer lives harmlessly in entry 0's window at +0/+1):
 
-| Window offset | Field |
-|---------------|-------|
-| +2 | file-type byte — bits 0–2 type, bit 6 locked, bit 7 closed |
-| +3 | first data-block track |
-| +4 | first data-block sector |
-| +5 … +20 | 16-byte PETSCII filename (0xA0-padded) |
-| +30 … +31 | block count (u16 LE) |
+| Window offset | Field                                                      |
+| ------------- | ---------------------------------------------------------- |
+| +2            | file-type byte — bits 0–2 type, bit 6 locked, bit 7 closed |
+| +3            | first data-block track                                     |
+| +4            | first data-block sector                                    |
+| +5 … +20      | 16-byte PETSCII filename (0xA0-padded)                     |
+| +30 … +31     | block count (u16 LE)                                       |
 
 File-type codes: `0 DEL, 1 SEQ, 2 PRG, 3 USR, 4 REL, 5 CBM`.
 
@@ -100,21 +100,21 @@ export type DiskImageType = "d64" | "d71" | "d81";
 export type C64FileType = "DEL" | "SEQ" | "PRG" | "USR" | "REL" | "CBM" | "UNKNOWN";
 
 export interface DiskDirectoryEntry {
-  index: number;          // stable position for UI + play-plan reference
-  name: string;           // decoded PETSCII, trimmed
-  rawName: Uint8Array;    // 16 bytes as stored, for exact LOAD re-encoding
+  index: number; // stable position for UI + play-plan reference
+  name: string; // decoded PETSCII, trimmed
+  rawName: Uint8Array; // 16 bytes as stored, for exact LOAD re-encoding
   type: C64FileType;
-  closed: boolean;        // bit 7 of the type byte (an "open"/splat file is unsafe)
-  locked: boolean;        // bit 6
+  closed: boolean; // bit 7 of the type byte (an "open"/splat file is unsafe)
+  locked: boolean; // bit 6
   startTrack: number;
   startSector: number;
-  blocks: number;         // u16 LE from window +30/+31
-  loadAddress?: number;   // first 2 bytes of the file's first sector (LE), if PRG+closed
+  blocks: number; // u16 LE from window +30/+31
+  loadAddress?: number; // first 2 bytes of the file's first sector (LE), if PRG+closed
 }
 
 export function layoutForType(type: DiskImageType, fileSize: number): DiskLayout; // moved
-export function readSector(image, layout, t, s): Uint8Array;                      // moved
-export function readChain(image, layout, t, s): Uint8Array;                       // = readPrgChain
+export function readSector(image, layout, t, s): Uint8Array; // moved
+export function readChain(image, layout, t, s): Uint8Array; // = readPrgChain
 export function listDirectory(image: Uint8Array, type: DiskImageType): DiskDirectoryEntry[];
 ```
 
@@ -166,10 +166,10 @@ guards and one subtlety:
 ```ts
 if (nextTrack === 0) {
   const lastByte = Math.min(Math.max(nextSector, 2), 255);
-  out.push(...sector.slice(2, lastByte + 1));   // final sector
+  out.push(...sector.slice(2, lastByte + 1)); // final sector
   break;
 }
-out.push(...sector.slice(2, 256));              // full sector
+out.push(...sector.slice(2, 256)); // full sector
 ```
 
 ---
@@ -183,7 +183,9 @@ Three launch modes map to three device behaviours.
 Generalize `loadFirstDiskPrgViaDma` into an entry-driven launcher:
 
 ```ts
-export interface DiskLaunchOptions { autostart: boolean; }
+export interface DiskLaunchOptions {
+  autostart: boolean;
+}
 
 export async function loadDiskEntryViaDma(api, image, type, entry, { autostart }) {
   const layout = layoutForType(type, image.byteLength);
@@ -231,10 +233,10 @@ type the load. The exact, working sequence:
 
 ```ts
 export async function mountAndLoadEntry(api, drive, mode, image, type, entry, opts) {
-  await mountImage(api, drive, mode, image);          // reuse write-back-aware mount
+  await mountImage(api, drive, mode, image); // reuse write-back-aware mount
   await api.put("/v1/machine:reset");
-  await bootSettle(opts);                              // ~2.8 s; optional boot-menu answer (cap. B)
-  const bus = await busIdFor(api, drive);              // read /v1/drives → bus_id, default 8
+  await bootSettle(opts); // ~2.8 s; optional boot-menu answer (cap. B)
+  const bus = await busIdFor(api, drive); // read /v1/drives → bus_id, default 8
   // rawName is the exact 16 PETSCII bytes; do NOT re-encode the display name
   await enqueueKeyboardBufferInjection(api, petscii(`LOAD"`), entry.rawName, petscii(`",${bus},1\r`));
   await delay(400);
@@ -312,16 +314,16 @@ Reuse existing primitives; add no new interaction paradigm.
 
 ## 7. Edge cases & guards
 
-| Case | Handling |
-|------|----------|
-| Corrupt / cyclic directory chain | `visited` set breaks the loop; surface "unreadable directory" |
-| Cyclic file sector chain | `readChain` throws on a revisited sector; per-row error |
-| Open ("splat") file, `closed == false` | Extraction unreliable; disable launch with a reason |
-| Non-standard image size | `layoutForType` throws; disable Explorer for that image with a reason (G64 and odd sizes out of scope) |
-| Entry moved/deleted since listing | Re-parse at launch; if `entryIndex` no longer resolves, clean error |
-| PETSCII names with shifted/graphic chars | `rawName` used verbatim for `LOAD`; display name is best-effort |
-| Payload past address space | `dmaLoadPrg` already rejects; `run_prg` path lets the firmware reject |
-| Freezer cartridge configured | Wrapped by `withCartridgeParked` (capability B) |
+| Case                                     | Handling                                                                                               |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Corrupt / cyclic directory chain         | `visited` set breaks the loop; surface "unreadable directory"                                          |
+| Cyclic file sector chain                 | `readChain` throws on a revisited sector; per-row error                                                |
+| Open ("splat") file, `closed == false`   | Extraction unreliable; disable launch with a reason                                                    |
+| Non-standard image size                  | `layoutForType` throws; disable Explorer for that image with a reason (G64 and odd sizes out of scope) |
+| Entry moved/deleted since listing        | Re-parse at launch; if `entryIndex` no longer resolves, clean error                                    |
+| PETSCII names with shifted/graphic chars | `rawName` used verbatim for `LOAD`; display name is best-effort                                        |
+| Payload past address space               | `dmaLoadPrg` already rejects; `run_prg` path lets the firmware reject                                  |
+| Freezer cartridge configured             | Wrapped by `withCartridgeParked` (capability B)                                                        |
 
 ---
 
@@ -346,7 +348,7 @@ Reuse existing primitives; add no new interaction paradigm.
 ## 9. Out of scope (here)
 
 - G64 and non-standard image sizes (no reliable directory geometry).
-- Writing *into* an image from Explorer (extract-only; disk writes stay with the
+- Writing _into_ an image from Explorer (extract-only; disk writes stay with the
   mount write-back model).
-- In-image *search* — capability C (`03-in-image-search.md`), which consumes
+- In-image _search_ — capability C (`03-in-image-search.md`), which consumes
   `listDirectory` from here.

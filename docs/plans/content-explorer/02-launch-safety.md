@@ -18,6 +18,7 @@
 > is fully automatic and invisible, exactly as intended.
 
 > Two related correctness behaviours for launching software:
+>
 > 1. **Cartridge parking** — stop a configured freezer cartridge from hijacking a
 >    direct-memory launch (the default, invisible behaviour).
 > 2. **Boot-menu answer** — optionally press a key after a Mount & Load reset so a
@@ -76,7 +77,11 @@ export async function withCartridgeParked<T>(api: C64API, run: () => Promise<T>)
   } finally {
     if (shouldPark) {
       // best-effort restore; never let a restore failure mask the run's result
-      try { await api.setConfigValue(CART_CATEGORY, CART_ITEM, current!); } catch { /* logged */ }
+      try {
+        await api.setConfigValue(CART_CATEGORY, CART_ITEM, current!);
+      } catch {
+        /* logged */
+      }
     }
   }
 }
@@ -98,15 +103,15 @@ Notes:
 Wrap the **direct-memory** cases in `src/lib/playback/playbackRouter.ts`; leave
 `crt` alone.
 
-| Plan kind | Wrap? | Why |
-|-----------|-------|-----|
-| `prg` | yes | direct-memory run |
-| `sid` | yes | sidplay is a direct-memory launch |
-| `mod` | yes | modplay is a direct-memory launch |
-| `disk` (first-PRG autostart) | yes | direct-memory |
-| `disk-file` (Disk Explorer Run/Load) | yes | direct-memory |
-| `crt` | **no** | a CRT launch *is* a cartridge swap by definition; parking would defeat it |
-| `disk` (Mount & Load) | no | drive-backed; nothing DMA'd; see §4 instead |
+| Plan kind                            | Wrap?  | Why                                                                       |
+| ------------------------------------ | ------ | ------------------------------------------------------------------------- |
+| `prg`                                | yes    | direct-memory run                                                         |
+| `sid`                                | yes    | sidplay is a direct-memory launch                                         |
+| `mod`                                | yes    | modplay is a direct-memory launch                                         |
+| `disk` (first-PRG autostart)         | yes    | direct-memory                                                             |
+| `disk-file` (Disk Explorer Run/Load) | yes    | direct-memory                                                             |
+| `crt`                                | **no** | a CRT launch _is_ a cartridge swap by definition; parking would defeat it |
+| `disk` (Mount & Load)                | no     | drive-backed; nothing DMA'd; see §4 instead                               |
 
 ```ts
 case "prg": {
@@ -142,16 +147,16 @@ default and surfaced only as an advanced option next to Launch Safety.
 
 ```ts
 // PETSCII codes for the answerable keys:
-const KEY_PETSCII = { F1:133, F2:137, F3:134, F4:138, F5:135, F6:139, F7:136, F8:140, RETURN:13, SPACE:32 };
+const KEY_PETSCII = { F1: 133, F2: 137, F3: 134, F4: 138, F5: 135, F6: 139, F7: 136, F8: 140, RETURN: 13, SPACE: 32 };
 
 export async function bootSettle(api: C64API, opts) {
   const total = opts.bootSettleMs ?? 2800;
   if (opts.bootMenuAnswerEnabled) {
-    await delay(Math.min(1000, total));               // let the menu come up
-    await pressKeyWithRetry(api, KEY_PETSCII[opts.bootMenuKey]);  // reboot can briefly drop the input path
-    await delay(Math.max(0, total - 1000) + 600);     // remainder + menu-handoff margin
+    await delay(Math.min(1000, total)); // let the menu come up
+    await pressKeyWithRetry(api, KEY_PETSCII[opts.bootMenuKey]); // reboot can briefly drop the input path
+    await delay(Math.max(0, total - 1000) + 600); // remainder + menu-handoff margin
   } else {
-    await delay(total);                               // stock BASIC ~2.5 s
+    await delay(total); // stock BASIC ~2.5 s
   }
 }
 ```

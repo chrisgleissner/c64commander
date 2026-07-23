@@ -14,20 +14,20 @@
 
 ## 1. Motivation
 
-C64 Commander is strong at *operating* a device. Three shaped gaps remain:
+C64 Commander is strong at _operating_ a device. Three shaped gaps remain:
 
 1. **A disk image is opaque.** We mount a `.d64`, rotate multi-disk groups, and
-   DMA-autostart the *first* program (`src/lib/playback/diskFirstPrg.ts`). A
+   DMA-autostart the _first_ program (`src/lib/playback/diskFirstPrg.ts`). A
    compilation disk with 40 programs, or a demo disk whose payload is the third
    file, is a dead end without mounting and hand-driving the C64.
 
 2. **Search stops at the disk boundary.** `src/lib/media-index/mediaIndex.ts`
-   stores one opaque entry per disk. A program that only exists *inside* a `.d64`
+   stores one opaque entry per disk. A program that only exists _inside_ a `.d64`
    is unfindable.
 
 3. **We can point the device's streams somewhere but never watch or hear them.**
    The Home "streams" section (`src/lib/config/homeStreams.ts`,
-   `streamStatus.ts`) only configures *where* the device streams VIC/audio; the
+   `streamStatus.ts`) only configures _where_ the device streams VIC/audio; the
    app renders neither. Separately, a direct-memory launch on a machine with a
    freezer cartridge configured can hard-reset into the cartridge menu, which
    reads as a bug.
@@ -36,14 +36,14 @@ C64 Commander is strong at *operating* a device. Three shaped gaps remain:
 
 ## 2. The six capabilities
 
-| # | Capability | Feature flag | Extends |
-|---|-----------|--------------|---------|
-| A | **Disk Explorer** — list a disk's directory; Run / Load / Mount & Load any single file | `disk_explorer_enabled` | `diskFirstPrg.ts`, `playbackRouter.ts`, `HomeDiskManager.tsx` |
-| B | **Launch Safety** — park the `Cartridge` config item around direct launches (+ optional boot-menu answer for Mount & Load) | `launch_safety_enabled` | `playbackRouter.ts`, config query, `kernalFallbackInjector.ts` |
-| C | **In-Image Search** — index & search files *inside* disk images | `in_image_search_enabled` | `mediaIndex.ts`, source browse |
-| D | **Audio Mirror** — receive and play the device audio stream in-app (+ optional audio recording) | `audio_mirror_enabled` | `homeStreams.ts`, `src/lib/native/*`, web server |
-| E | **Video Mirror** — render the VIC stream to a canvas (+ optional video/combined recording), CPU-budgeted | `video_mirror_enabled` | as D + a decode/render path |
-| F | **New Disk** — create a formatted blank image on the device | `new_disk_enabled` | `c64api.ts`, `HomeDiskManager.tsx` |
+| #   | Capability                                                                                                                 | Feature flag              | Extends                                                        |
+| --- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------- | -------------------------------------------------------------- |
+| A   | **Disk Explorer** — list a disk's directory; Run / Load / Mount & Load any single file                                     | `disk_explorer_enabled`   | `diskFirstPrg.ts`, `playbackRouter.ts`, `HomeDiskManager.tsx`  |
+| B   | **Launch Safety** — park the `Cartridge` config item around direct launches (+ optional boot-menu answer for Mount & Load) | `launch_safety_enabled`   | `playbackRouter.ts`, config query, `kernalFallbackInjector.ts` |
+| C   | **In-Image Search** — index & search files _inside_ disk images                                                            | `in_image_search_enabled` | `mediaIndex.ts`, source browse                                 |
+| D   | **Audio Mirror** — receive and play the device audio stream in-app (+ optional audio recording)                            | `audio_mirror_enabled`    | `homeStreams.ts`, `src/lib/native/*`, web server               |
+| E   | **Video Mirror** — render the VIC stream to a canvas (+ optional video/combined recording), CPU-budgeted                   | `video_mirror_enabled`    | as D + a decode/render path                                    |
+| F   | **New Disk** — create a formatted blank image on the device                                                                | `new_disk_enabled`        | `c64api.ts`, `HomeDiskManager.tsx`                             |
 
 **Deliberately split D and E.** The device exposes video and audio as **two
 independent firmware streams** (`/v1/streams/video`, `/v1/streams/audio`), so we
@@ -105,7 +105,7 @@ algorithm, byte layout, endpoint, and edge cases.
 Open any `.d64` / `.d71` / `.d81` and act on an individual program:
 
 - **Run** — extract the program's sector chain and DMA-run it (`POST
-  /v1/runners:run_prg`, wrapped by Launch Safety), with the existing BASIC-vs-ML
+/v1/runners:run_prg`, wrapped by Launch Safety), with the existing BASIC-vs-ML
   autostart logic.
 - **Load** — DMA-load only, no autostart, via `POST /v1/runners:load_prg` (a
   firmware endpoint we don't call yet). For monitors / dev work.
@@ -249,18 +249,18 @@ own `/v1` REST API, the port-64 command socket, and the UDP stream formats.
 
 ### REST
 
-| Purpose | Call |
-|---------|------|
-| DMA run + autostart | `POST /v1/runners:run_prg` (multipart `file`) |
-| DMA load, no run | `POST /v1/runners:load_prg` (multipart `file`) — **not yet used by the app** |
-| Run cartridge | `POST /v1/runners:run_crt` (multipart) |
-| Mount (upload) | `POST /v1/drives/{a\|b}:mount` (multipart) `?mode=readonly\|readwrite\|unlinked[&type=]` |
-| Mount (device path) | `PUT /v1/drives/{a\|b}:mount?image=<path>&mode=…` |
-| Reset / reboot | `PUT /v1/machine:reset` \| `:reboot` |
-| Read/write a config item | `GET`/`PUT /v1/configs/{category}/{item}?value=…` |
-| Cartridge item | category `C64 and Cartridge Settings`, item `Cartridge` |
-| Start/stop a stream | `PUT /v1/streams/{video\|audio}:start?ip=<host:port>` \| `:stop` |
-| Create blank disk | `PUT /v1/files/<folder>/<name>:create_d64?diskname=<≤16>&tracks=<35-41>` (also `create_d71` / `create_d81` / `create_dnp?tracks=1-255`) |
+| Purpose                  | Call                                                                                                                                    |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| DMA run + autostart      | `POST /v1/runners:run_prg` (multipart `file`)                                                                                           |
+| DMA load, no run         | `POST /v1/runners:load_prg` (multipart `file`) — **not yet used by the app**                                                            |
+| Run cartridge            | `POST /v1/runners:run_crt` (multipart)                                                                                                  |
+| Mount (upload)           | `POST /v1/drives/{a\|b}:mount` (multipart) `?mode=readonly\|readwrite\|unlinked[&type=]`                                                |
+| Mount (device path)      | `PUT /v1/drives/{a\|b}:mount?image=<path>&mode=…`                                                                                       |
+| Reset / reboot           | `PUT /v1/machine:reset` \| `:reboot`                                                                                                    |
+| Read/write a config item | `GET`/`PUT /v1/configs/{category}/{item}?value=…`                                                                                       |
+| Cartridge item           | category `C64 and Cartridge Settings`, item `Cartridge`                                                                                 |
+| Start/stop a stream      | `PUT /v1/streams/{video\|audio}:start?ip=<host:port>` \| `:stop`                                                                        |
+| Create blank disk        | `PUT /v1/files/<folder>/<name>:create_d64?diskname=<≤16>&tracks=<35-41>` (also `create_d71` / `create_d81` / `create_dnp?tracks=1-255`) |
 
 Notes: the firmware wants `%20` (not `+`) in query strings; quote the whole path.
 The top-level `/` is a virtual device list and cannot hold files — require a real
@@ -305,14 +305,14 @@ border colour can be sampled from a border pixel to tint the surrounding UI.
 
 ## 8. Phasing
 
-| Phase | Ships | Flag state | Rationale |
-|-------|-------|-----------|-----------|
-| 1 | **B Launch Safety** | experimental → stable | Smallest; pure correctness; no new UI surface |
-| 2 | **A Disk Explorer** | experimental | Anchor capability; unlocks C |
-| 3 | **C In-Image Search** | experimental | Reuses A's parser |
-| 4 | **D Audio Mirror** | experimental | Cheap, high value, de-risks the stream infra for E |
-| 5 | **F New Disk** | experimental → stable | Small, independent |
-| 6 | **E Video Mirror (web)** → **(native)** | experimental → developer_only | Largest; web first; native gated + CPU-budgeted |
+| Phase | Ships                                   | Flag state                    | Rationale                                          |
+| ----- | --------------------------------------- | ----------------------------- | -------------------------------------------------- |
+| 1     | **B Launch Safety**                     | experimental → stable         | Smallest; pure correctness; no new UI surface      |
+| 2     | **A Disk Explorer**                     | experimental                  | Anchor capability; unlocks C                       |
+| 3     | **C In-Image Search**                   | experimental                  | Reuses A's parser                                  |
+| 4     | **D Audio Mirror**                      | experimental                  | Cheap, high value, de-risks the stream infra for E |
+| 5     | **F New Disk**                          | experimental → stable         | Small, independent                                 |
+| 6     | **E Video Mirror (web)** → **(native)** | experimental → developer_only | Largest; web first; native gated + CPU-budgeted    |
 
 Each phase is independently revertible by its flag.
 
@@ -339,14 +339,14 @@ Follow the established layers (`docs/plans/tests`, existing specs):
 
 ## 10. Risks & mitigations
 
-| Risk | Mitigation |
-|------|-----------|
-| Refactoring `diskFirstPrg.ts` regresses first-PRG autostart | Keep its public function; delegate to `diskImage.ts`; existing tests stay green unchanged |
-| Cartridge park/restore leaves the device parked if the app dies mid-run | `finally` restore; config-only (no flash write) so a power-cycle restores; documented |
-| Video decode overwhelms a weak CPU | Separate flag, default-off on constrained targets; audio-only mode; frame throttle; fixed-cost native-res decode + GPU scale |
-| In-image scan overwhelms a weak device over FTP | Device Safety throttle; scoped + time-budgeted with Stop; mtime cache avoids re-reads |
-| Native UDP receiver balloons | Ship web mirror first; native behind a capability flag, audio path before video |
-| Feature-flag sprawl | Six flags, staged and documented here; promote and eventually retire |
+| Risk                                                                    | Mitigation                                                                                                                   |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Refactoring `diskFirstPrg.ts` regresses first-PRG autostart             | Keep its public function; delegate to `diskImage.ts`; existing tests stay green unchanged                                    |
+| Cartridge park/restore leaves the device parked if the app dies mid-run | `finally` restore; config-only (no flash write) so a power-cycle restores; documented                                        |
+| Video decode overwhelms a weak CPU                                      | Separate flag, default-off on constrained targets; audio-only mode; frame throttle; fixed-cost native-res decode + GPU scale |
+| In-image scan overwhelms a weak device over FTP                         | Device Safety throttle; scoped + time-budgeted with Stop; mtime cache avoids re-reads                                        |
+| Native UDP receiver balloons                                            | Ship web mirror first; native behind a capability flag, audio path before video                                              |
+| Feature-flag sprawl                                                     | Six flags, staged and documented here; promote and eventually retire                                                         |
 
 ---
 

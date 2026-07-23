@@ -25,6 +25,7 @@
 > **Reconciled with c64stream (the authoritative native reference).** After reviewing
 > `github.com/chrisgleissner/c64stream` (`src/network/c64-protocol.h`, `src/video/c64-video.c`),
 > the wire-format details were corrected against it:
+>
 > - **Palette** now uses the device-accurate "C64 Ultimate Default Palette"
 >   (`c64stream data/palettes/default.vpl`), not the plan's §4 generic VIC-II table, so in-app
 >   video matches the machine / OBS. White is `#F7F7F7`, red `#8D2F34`, etc.
@@ -37,9 +38,9 @@
 > - **Ports** stay the real defaults **11000 (video) / 11001 (audio)** and are now
 >   **configurable** in Settings (`c64u_stream_video_port` / `_audio_port`) — c64stream's
 >   21000/21001 are test-only.
-> Deliberately NOT ported from c64stream (kept simple for an in-app monitor, not an OBS-grade
-> pipeline): the network jitter buffer, audio concealment/gap-fill, GPU CRT effects, and
-> file recording (the plan's optional §5 recording remains a follow-up).
+>   Deliberately NOT ported from c64stream (kept simple for an in-app monitor, not an OBS-grade
+>   pipeline): the network jitter buffer, audio concealment/gap-fill, GPU CRT effects, and
+>   file recording (the plan's optional §5 recording remains a follow-up).
 
 > Goal: hear and (optionally) see the running machine inside the app. The device
 > exposes **two independent streams** — audio and video — so we mirror them
@@ -51,7 +52,7 @@
 ## 1. Why the split is first-class, not cosmetic
 
 Today the Home "streams" section (`src/lib/config/homeStreams.ts`,
-`streamStatus.ts`) only tells the *device* where to send VIC/audio; the app
+`streamStatus.ts`) only tells the _device_ where to send VIC/audio; the app
 renders neither. This initiative adds the receive-and-play side.
 
 Audio and video are separate firmware streams with separate start/stop:
@@ -121,19 +122,25 @@ per-packet overhead.
 Player (WebAudio), the proven scheduling:
 
 ```ts
-const ctx = new AudioContext();       // 47983 Hz source; ctx resamples to its own rate
+const ctx = new AudioContext(); // 47983 Hz source; ctx resamples to its own rate
 let nextT = 0;
 function playChunk(pcm: ArrayBuffer) {
   const i16 = new Int16Array(pcm);
-  const frames = i16.length >> 1;               // stereo interleaved
+  const frames = i16.length >> 1; // stereo interleaved
   if (!frames) return;
   const buf = ctx.createBuffer(2, frames, 47983);
-  const L = buf.getChannelData(0), R = buf.getChannelData(1);
-  for (let k = 0; k < frames; k++) { L[k] = i16[2*k] / 32768; R[k] = i16[2*k+1] / 32768; }
+  const L = buf.getChannelData(0),
+    R = buf.getChannelData(1);
+  for (let k = 0; k < frames; k++) {
+    L[k] = i16[2 * k] / 32768;
+    R[k] = i16[2 * k + 1] / 32768;
+  }
   const src = ctx.createBufferSource();
-  src.buffer = buf; src.connect(ctx.destination);
-  const t = Math.max(ctx.currentTime + 0.08, nextT);   // ~80 ms lead-in for gapless playback
-  src.start(t); nextT = t + frames / 47983;
+  src.buffer = buf;
+  src.connect(ctx.destination);
+  const t = Math.max(ctx.currentTime + 0.08, nextT); // ~80 ms lead-in for gapless playback
+  src.start(t);
+  nextT = t + frames / 47983;
 }
 ```
 
@@ -187,11 +194,11 @@ little-endian the ImageData word is `0xAABBGGRR`), then the per-frame inner loop
 is branch-free:
 
 ```ts
-const px = new Uint32Array(imageData.data.buffer);   // 384*272
+const px = new Uint32Array(imageData.data.buffer); // 384*272
 for (let i = 0, p = 0; i < frame.length; i++) {
   const b = frame[i];
-  px[p++] = LUT[b & 15];    // left pixel
-  px[p++] = LUT[b >> 4];    // right pixel
+  px[p++] = LUT[b & 15]; // left pixel
+  px[p++] = LUT[b >> 4]; // right pixel
 }
 ctx2d.putImageData(imageData, 0, 0);
 ```

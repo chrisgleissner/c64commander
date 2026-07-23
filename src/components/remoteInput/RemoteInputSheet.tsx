@@ -34,6 +34,10 @@ import {
 import { VirtualJoystick } from "@/components/remoteInput/VirtualJoystick";
 import { TypeKeyboard } from "@/components/remoteInput/TypeKeyboard";
 import { QuickKeysBar } from "@/components/remoteInput/QuickKeysBar";
+import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
+import { useAvMirror } from "@/hooks/useAvMirror";
+import { AvMirrorControls } from "@/components/streams/AvMirrorControls";
+import { AvMirrorImmersive, type AvMirrorImmersiveHandle } from "@/components/streams/AvMirrorImmersive";
 import type { JoystickInputName } from "@/lib/c64api";
 
 export type RemoteInputSheetProps = {
@@ -73,6 +77,15 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   const [controlSize, setControlSize] = useState<RemoteInputControlSize>(DEFAULT_REMOTE_INPUT_CONTROL_SIZE);
   const [immersive, setImmersive] = useState(false);
   const scale = remoteInputControlScale(controlSize);
+
+  // Content Explorer A/V mirror: pair the live screen with driving the machine.
+  const audioMirrorEnabled = useFeatureFlagValue("audio_mirror_enabled");
+  const videoMirrorEnabled = useFeatureFlagValue("video_mirror_enabled");
+  const mirrorEnabled = audioMirrorEnabled || videoMirrorEnabled;
+  const mirror = useAvMirror();
+  const mirrorRef = useRef<AvMirrorImmersiveHandle>(null);
+  const [mirrorAdjust, setMirrorAdjust] = useState(false);
+  const showMirrorScreen = videoMirrorEnabled && mirror.video.state !== "off";
 
   // Rehydrate the persisted control-size preference when the sheet opens.
   useEffect(() => {
@@ -116,6 +129,60 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   // existing focus-ring, and no changes needed to it.
   const handlePhysicalKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
+      // A/V mirror view-lock (06-av-mirror-ux §7.1): the `*`/menu key ALWAYS flips
+      // between Driving C64 and Adjusting view (never ambiguous); while Adjusting,
+      // physical keys pan/zoom the mirror instead of relaying to the C64.
+      const mirrorHandle = mirrorRef.current;
+      if (mirrorHandle) {
+        const mirrorAction = resolveSemanticAction(PHYSICAL_INPUT_KEYMAP, event);
+        if (mirrorAction === "star" || mirrorAction === "openMenu") {
+          event.preventDefault();
+          mirrorHandle.toggleMode();
+          return;
+        }
+        if (mirrorHandle.getMode() === "adjust" && mirrorAction) {
+          let handled = true;
+          switch (mirrorAction) {
+            case "dpadUp":
+            case "digit2":
+              mirrorHandle.panStep(0, -1);
+              break;
+            case "dpadDown":
+            case "digit8":
+              mirrorHandle.panStep(0, 1);
+              break;
+            case "dpadLeft":
+            case "digit4":
+              mirrorHandle.panStep(-1, 0);
+              break;
+            case "dpadRight":
+            case "digit6":
+              mirrorHandle.panStep(1, 0);
+              break;
+            case "digit3":
+            case "digit9":
+              mirrorHandle.zoomIn();
+              break;
+            case "digit1":
+            case "digit7":
+              mirrorHandle.zoomOut();
+              break;
+            case "digit0":
+            case "digit5":
+            case "center":
+            case "enter":
+              mirrorHandle.reset();
+              break;
+            default:
+              handled = false;
+          }
+          if (handled) {
+            event.preventDefault();
+            return;
+          }
+        }
+      }
+
       if (session.outputMode !== "joystick") return;
       const action = resolveSemanticAction(PHYSICAL_INPUT_KEYMAP, event);
       if (!action) return;
@@ -354,6 +421,19 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
               {immersiveToggle}
             </div>
           ) : null}
+          {mirrorEnabled ? (
+            <div
+              className="flex flex-wrap items-center justify-between gap-2"
+              data-testid="remote-input-mirror-controls"
+            >
+              <AvMirrorControls showAudio={audioMirrorEnabled} showVideo={videoMirrorEnabled} />
+              {mirrorAdjust ? (
+                <span className="text-xs font-medium text-amber-500" data-testid="remote-input-mirror-adjust-hint">
+                  Physical keys adjust the view
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
         <AppSheetBody
           className={cn(
@@ -364,6 +444,14 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
             showFooterActions && "pb-[calc(0.75rem+var(--safe-area-inset-bottom))]",
           )}
         >
+          {showMirrorScreen ? (
+            <AvMirrorImmersive
+              ref={mirrorRef}
+              onModeChange={(nextMode) => setMirrorAdjust(nextMode === "adjust")}
+              className="mx-4"
+            />
+          ) : null}
+
           {session.outputMode === "joystick" ? (
             <VirtualJoystick
               port={session.port}

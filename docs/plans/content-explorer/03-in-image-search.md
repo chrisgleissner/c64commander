@@ -15,8 +15,8 @@
 > Matches the plan; a child's `sizeBytes` is derived as `blocks × 254`.
 >
 > **Known limitation — scan population is a follow-up.** The v2 schema, migration,
-> supersede/reconcile, and search matcher are shipped and unit-tested, but the §3 *scan
-> integration* that would actually populate in-image children (hooking `listDirectory`
+> supersede/reconcile, and search matcher are shipped and unit-tested, but the §3 _scan
+> integration_ that would actually populate in-image children (hooking `listDirectory`
 > into the media-index/source-walk with the Device-Safety-throttled fetch, scoped +
 > time-budgeted with a Stop control, and the `(path,size,mtime)` freshness cache) is **not
 > wired yet**. So with `in_image_search_enabled` on, the toggle and matching logic work,
@@ -26,7 +26,7 @@
 > reusable core (`replaceChildren`/`hasFreshChildren`/`toChildEntry`) is exactly what that
 > scan will consume. Tracked as the remaining work for capability C.
 
-> Goal: find a program that only exists *inside* a `.d64` / `.d71` / `.d81`, then
+> Goal: find a program that only exists _inside_ a `.d64` / `.d71` / `.d81`, then
 > act on it directly. Search should descend into disk images, not stop at their
 > filenames.
 
@@ -37,7 +37,7 @@
 `src/lib/media-index/mediaIndex.ts` stores exactly one entry per file:
 
 ```ts
-type MediaEntry = { path; name; type: "sid"|"mod"|"prg"|"crt"|"disk"; durationSeconds?; sizeBytes? };
+type MediaEntry = { path; name; type: "sid" | "mod" | "prg" | "crt" | "disk"; durationSeconds?; sizeBytes? };
 ```
 
 A disk is a single `type: "disk"` row with no notion of its contents. So a scan of
@@ -56,8 +56,8 @@ two related record shapes.
 
 ```ts
 export type MediaEntryV2 = {
-  path: string;                 // for a child: "<diskPath>#<index>"
-  name: string;                 // child: the in-disk program name
+  path: string; // for a child: "<diskPath>#<index>"
+  name: string; // child: the in-disk program name
   type: "sid" | "mod" | "prg" | "crt" | "disk";
   durationSeconds?: number | null;
   sizeBytes?: number | null;
@@ -66,16 +66,16 @@ export type MediaEntryV2 = {
   container?: {
     diskPath: string;
     diskType: "d64" | "d71" | "d81";
-    diskSize: number;           // parent identity …
-    diskMtime: string;          // … the (path,size,mtime) supersede key
-    entryIndex: number;         // stable index into listDirectory()
+    diskSize: number; // parent identity …
+    diskMtime: string; // … the (path,size,mtime) supersede key
+    entryIndex: number; // stable index into listDirectory()
     fileType: "PRG" | "SEQ" | "USR" | "REL" | "CBM" | "DEL";
     blocks?: number;
   };
 };
 
 export type MediaIndexSnapshot =
-  | { version: 1; updatedAt: string; entries: MediaEntry[] }              // legacy, still loadable
+  | { version: 1; updatedAt: string; entries: MediaEntry[] } // legacy, still loadable
   | { version: 2; updatedAt: string; entries: MediaEntryV2[] };
 ```
 
@@ -105,10 +105,11 @@ Extend `MediaIndex.scan(paths)` (and the source-walk that feeds it):
 ```ts
 // pseudo — inside the per-file step of a scan
 if (isDiskFile(entry) && inImageSearchEnabled()) {
-  const { size, mtime } = entry;                       // FTP MLSD facts / local stat
-  if (!hasFreshChildren(entry.path, size, mtime)) {    // cache check on (path,size,mtime)
-    const bytes = await fetchWithSafety(entry.path);   // Device Safety-throttled fetch (or local blob)
-    const dir = listDirectory(bytes, diskTypeOf(entry));   // capability A
+  const { size, mtime } = entry; // FTP MLSD facts / local stat
+  if (!hasFreshChildren(entry.path, size, mtime)) {
+    // cache check on (path,size,mtime)
+    const bytes = await fetchWithSafety(entry.path); // Device Safety-throttled fetch (or local blob)
+    const dir = listDirectory(bytes, diskTypeOf(entry)); // capability A
     replaceChildren(entry.path, size, mtime, dir.map(toChildEntry));
   }
 }

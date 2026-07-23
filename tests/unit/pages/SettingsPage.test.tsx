@@ -277,6 +277,7 @@ vi.mock("@/hooks/useListPreviewLimit", () => ({
 }));
 
 vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlagValue: () => false,
   useFeatureFlags: () => ({
     flags: featureFlagsRef.current,
     resolved: Object.fromEntries(

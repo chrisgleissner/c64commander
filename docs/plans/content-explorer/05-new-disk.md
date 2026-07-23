@@ -39,10 +39,10 @@ PUT /v1/files/<folder>/<name>:create_dnp?diskname=<label>&tracks=<n>
 
 Rules learned from the device's behaviour:
 
-- **D64** takes `tracks` 35–41 (default 35). **DNP** *requires* `tracks` (1–255).
+- **D64** takes `tracks` 35–41 (default 35). **DNP** _requires_ `tracks` (1–255).
   D71/D81 take no track count.
 - **`diskname`** is the on-disk label, max **16** characters.
-- **Folder must be real.** The top-level `/` is a *virtual* device list (USB0, SD,
+- **Folder must be real.** The top-level `/` is a _virtual_ device list (USB0, SD,
   Flash, Temp), not a writable directory; the firmware returns a misleading "PATH
   DOESN'T EXIST" if you create there. Require a real folder (e.g. `USB0` or a
   subfolder) and reject `/` up front with a clear message.
