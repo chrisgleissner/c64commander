@@ -17,6 +17,9 @@ import { addLog } from "@/lib/logging";
 
 const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
+/** Hold the SPACE key this long (~3 PAL frames) so the device's once-per-frame matrix poll sees it. */
+const SPACE_HOLD_MS = 60;
+
 /**
  * Binds the {@link AvSyncAnalyzer} to the shared A/V mirror session: every decoded video frame
  * and audio batch is stamped and fed to the analyzer, which matches the periodic white-flash /
@@ -122,14 +125,29 @@ export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
     // then includes the full round trip (input → device → pop → stream back), the real thing.
     latencyRef.current!.markPress(now());
     setLatencyStats(latencyRef.current!.getStats());
+    const api = getC64API();
     try {
-      await getC64API().sendMachineInputBatch({
-        events: [{ kind: "keyboard", inputs: ["space"], transition: "tap" }],
+      // HOLD the key, don't "tap": av-sync-key polls the CIA keyboard matrix once per frame, so a
+      // sub-frame tap can fall between two polls and be missed. A press held ~3 frames guarantees
+      // the poll sees the rising edge (verified on real hardware); the pop still fires on the press
+      // instant, so the latency measurement is unaffected by the hold.
+      await api.sendMachineInputBatch({
+        events: [{ kind: "keyboard", inputs: ["space"], transition: "press" }],
       });
+      await new Promise((resolve) => setTimeout(resolve, SPACE_HOLD_MS));
     } catch (error) {
       const message = (error as Error)?.message ?? String(error);
       setTestError(message);
       addLog("warn", "A/V sync: failed to send the SPACE keypress", { error: message });
+    } finally {
+      // Always release, so the key never sticks (which would block the next rising edge).
+      try {
+        await api.sendMachineInputBatch({
+          events: [{ kind: "keyboard", inputs: ["space"], transition: "release" }],
+        });
+      } catch {
+        /* best-effort release */
+      }
     }
   }, []);
 
