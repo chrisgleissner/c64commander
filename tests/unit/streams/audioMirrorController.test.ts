@@ -18,11 +18,12 @@ import {
 } from "@/lib/streams/streamReceiver";
 
 class FakeReceiver implements StreamReceiver {
-  datagram: ((data: Uint8Array) => void) | null = null;
+  datagram: ((data: Uint8Array, arrivalMs: number) => void) | null = null;
   stateCb: ((s: StreamConnectionState) => void) | null = null;
   readonly destination = "10.0.0.5:11001";
   closed = false;
-  onDatagram(handler: (data: Uint8Array) => void) {
+  private clock = 0;
+  onDatagram(handler: (data: Uint8Array, arrivalMs: number) => void) {
     this.datagram = handler;
   }
   onStateChange(handler: (s: StreamConnectionState) => void) {
@@ -34,8 +35,8 @@ class FakeReceiver implements StreamReceiver {
   emitState(s: StreamConnectionState) {
     this.stateCb?.(s);
   }
-  emit(bytes: Uint8Array) {
-    this.datagram?.(bytes);
+  emit(bytes: Uint8Array, arrivalMs: number = (this.clock += 4)) {
+    this.datagram?.(bytes, arrivalMs);
   }
 }
 
@@ -72,6 +73,7 @@ describe("AudioMirrorController", () => {
       startStream,
       stopStream: vi.fn(async () => ({ errors: [] })),
       onChange: (s) => snapshots.push(s),
+      networkBufferMs: 0, // pass-through: isolate batching/chunk plumbing from jitter buffering
     });
 
     await controller.start();

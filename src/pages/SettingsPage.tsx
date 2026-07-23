@@ -126,6 +126,8 @@ import {
   saveStreamVideoPort,
   loadStreamAudioPort,
   saveStreamAudioPort,
+  loadStreamNetworkBufferMs,
+  saveStreamNetworkBufferMs,
   loadNotificationVisibility,
   saveNotificationVisibility,
   loadNotificationDurationMs,
@@ -351,6 +353,7 @@ export default function SettingsPage() {
   // Live Mirror (D/E) transport ports — configurable (defaults 11000/11001).
   const [streamVideoPort, setStreamVideoPort] = useState<number>(loadStreamVideoPort);
   const [streamAudioPort, setStreamAudioPort] = useState<number>(loadStreamAudioPort);
+  const [streamNetworkBufferMs, setStreamNetworkBufferMs] = useState<number>(loadStreamNetworkBufferMs);
   const [volumeSliderPreviewIntervalMs, setVolumeSliderPreviewIntervalMs] = useState(
     loadVolumeSliderPreviewIntervalMs(),
   );
@@ -2058,6 +2061,27 @@ export default function SettingsPage() {
                       UDP ports the device streams Audio/Video Mirror to. Defaults 11000 / 11001; change only if a port
                       is already in use.
                     </p>
+                    <div className="col-span-2 space-y-2">
+                      <Label htmlFor="settings-stream-network-buffer" className="text-sm">
+                        Audio network buffer (ms)
+                      </Label>
+                      <Input
+                        id="settings-stream-network-buffer"
+                        data-testid="settings-stream-network-buffer"
+                        inputMode="numeric"
+                        value={String(streamNetworkBufferMs)}
+                        onChange={(event) => setStreamNetworkBufferMs(Number(event.target.value) || 0)}
+                        onBlur={() => {
+                          saveStreamNetworkBufferMs(streamNetworkBufferMs);
+                          setStreamNetworkBufferMs(loadStreamNetworkBufferMs());
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Jitter buffer depth for Live View audio. Holds each packet briefly so a slightly-late or
+                        reordered packet still plays in order, and a lost packet is smoothly concealed instead of
+                        clicking. Default 5 ms; 0 = lowest latency, least resilient.
+                      </p>
+                    </div>
                   </div>
                 )}
 

@@ -101,8 +101,16 @@ export class AudioBatcher {
       if (gap > 0 && gap < 0x8000) this.stats.droppedPackets += gap;
     }
     this.lastSeq = parsed.seq;
+    return this.pushBody(parsed.body);
+  }
 
-    this.chunks.push(parsed.body);
+  /**
+   * Accumulate an already-parsed, seq-stripped PCM body (whole stereo frames) and flush a batch
+   * every `batchPackets`. Used by the {@link AudioPlaybackBuffer} path, which has already handled
+   * sequencing + loss concealment — so this skips seq parsing and gap counting.
+   */
+  pushBody(body: Uint8Array): Int16Array | null {
+    this.chunks.push(body);
     this.pending += 1;
     if (this.pending >= this.batchPackets) return this.flush();
     return null;

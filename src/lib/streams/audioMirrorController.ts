@@ -15,7 +15,9 @@
  */
 
 import { addLog } from "@/lib/logging";
+import { loadStreamNetworkBufferMs } from "@/lib/config/appSettings";
 import { AudioBatcher, bytesToInt16LE, parseAudioPacket } from "./audioStream";
+import { AudioPlaybackBuffer } from "./audioPlaybackBuffer";
 import { AudioMirrorPlayer } from "./audioPlayer";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
 
@@ -43,12 +45,15 @@ export interface AudioMirrorDeps {
    * measured audio↔video offset is independent of downstream buffering.
    */
   renderAudioForAnalysis?: (samples: Int16Array, arrivalMs: number) => void;
+  /** Jitter/network buffer depth (ms) for the player path; defaults to the app setting. */
+  networkBufferMs?: number;
 }
 
 export class AudioMirrorController {
   private receiver: StreamReceiver | null = null;
   private player: AudioMirrorPlayer | null = null;
   private batcher = new AudioBatcher();
+  private playbackBuffer: AudioPlaybackBuffer | null = null;
   private snapshot: AudioMirrorSnapshot = { state: "off", droppedPackets: 0, chunks: 0, error: null };
 
   constructor(private readonly deps: AudioMirrorDeps) {}
@@ -65,6 +70,23 @@ export class AudioMirrorController {
   async start(): Promise<void> {
     if (this.snapshot.state === "connecting" || this.snapshot.state === "live") return;
     this.batcher.reset();
+    // The jitter/network buffer reorders + delays for the player, and conceals losses so a
+    // dropped packet fades instead of clicking (see AudioPlaybackBuffer). Its timeline is the
+    // source of truth for the dropped-packet health counter.
+    const buffer = new AudioPlaybackBuffer({
+      delayMs: this.deps.networkBufferMs ?? loadStreamNetworkBufferMs(),
+      emit: (body) => {
+        const batch = this.batcher.pushBody(body);
+        if (batch) {
+          this.player?.playChunk(batch);
+          this.update({
+            chunks: this.player?.scheduledChunks ?? this.snapshot.chunks + 1,
+            droppedPackets: buffer.stats.packetsLost,
+          });
+        }
+      },
+    });
+    this.playbackBuffer = buffer;
     this.update({ state: "connecting", error: null, droppedPackets: 0, chunks: 0 });
 
     const player = (this.deps.createPlayer ?? (() => new AudioMirrorPlayer()))();
@@ -89,20 +111,14 @@ export class AudioMirrorController {
     });
 
     receiver.onDatagram((bytes, arrivalMs) => {
-      // Per-packet analyzer feed (fine-grained, wire-stamped) — see renderAudioForAnalysis.
-      if (this.deps.renderAudioForAnalysis) {
-        const parsed = parseAudioPacket(bytes);
-        if (parsed) this.deps.renderAudioForAnalysis(bytesToInt16LE(parsed.body), arrivalMs);
-      }
-      const batch = this.batcher.push(bytes);
-      if (batch) {
-        this.player?.playChunk(batch);
-        this.deps.renderAudio?.(batch);
-        this.update({
-          chunks: this.player?.scheduledChunks ?? this.snapshot.chunks + 1,
-          droppedPackets: this.batcher.stats.droppedPackets,
-        });
-      }
+      const parsed = parseAudioPacket(bytes);
+      if (!parsed) return;
+      // Analyzer feed: RAW per-packet stream (fine-grained, wire-stamped) — measurement integrity.
+      const samples = bytesToInt16LE(parsed.body);
+      this.deps.renderAudioForAnalysis?.(samples, arrivalMs);
+      this.deps.renderAudio?.(samples);
+      // Player feed: reorder + delay + loss-conceal, then batch → play.
+      buffer.push(parsed.seq, parsed.body, arrivalMs);
     });
 
     try {
@@ -127,6 +143,9 @@ export class AudioMirrorController {
     }
     this.receiver?.close();
     this.receiver = null;
+    // Flush any buffered tail so no packets are stranded, then release the player.
+    this.playbackBuffer?.drainAll();
+    this.playbackBuffer = null;
     await this.player?.stop();
     this.player = null;
     this.batcher.reset();

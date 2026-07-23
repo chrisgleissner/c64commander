@@ -33,6 +33,7 @@ const BOOT_SETTLE_MS_KEY = "c64u_boot_settle_ms";
 const SEARCH_INSIDE_DISKS_KEY = "c64u_search_inside_disks";
 const STREAM_VIDEO_PORT_KEY = "c64u_stream_video_port";
 const STREAM_AUDIO_PORT_KEY = "c64u_stream_audio_port";
+const STREAM_NETWORK_BUFFER_MS_KEY = "c64u_stream_network_buffer_ms";
 
 export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 200;
 export type NotificationVisibility = "errors-only" | "all";
@@ -340,6 +341,31 @@ export const saveStreamAudioPort = (value: number) => {
   const clamped = clampPort(value, DEFAULT_STREAM_AUDIO_PORT);
   localStorage.setItem(STREAM_AUDIO_PORT_KEY, String(clamped));
   broadcast(STREAM_AUDIO_PORT_KEY, clamped);
+};
+
+/**
+ * Audio jitter / network buffer depth (ms). The Live View player holds each received audio
+ * packet this long before playback, so a slightly-late or reordered packet still lands in
+ * order (and a genuine gap is known in time to be concealed rather than clicking). Default 5 ms
+ * — one-and-a-bit audio packets (~4 ms each) — trades a hair of latency for glitch-free audio
+ * on a healthy LAN. 0 disables buffering (lowest latency, least resilient).
+ */
+export const DEFAULT_STREAM_NETWORK_BUFFER_MS = 5;
+export const MAX_STREAM_NETWORK_BUFFER_MS = 400; // matches c64stream C64_MAX_JITTER_MS
+
+const clampNetworkBufferMs = (value: number) => {
+  if (Number.isNaN(value)) return DEFAULT_STREAM_NETWORK_BUFFER_MS;
+  return Math.min(MAX_STREAM_NETWORK_BUFFER_MS, Math.max(0, Math.round(value)));
+};
+
+export const loadStreamNetworkBufferMs = () =>
+  clampNetworkBufferMs(readNumber(STREAM_NETWORK_BUFFER_MS_KEY, DEFAULT_STREAM_NETWORK_BUFFER_MS));
+
+export const saveStreamNetworkBufferMs = (value: number) => {
+  if (typeof localStorage === "undefined") return;
+  const clamped = clampNetworkBufferMs(value);
+  localStorage.setItem(STREAM_NETWORK_BUFFER_MS_KEY, String(clamped));
+  broadcast(STREAM_NETWORK_BUFFER_MS_KEY, clamped);
 };
 
 export const loadNotificationVisibility = (): NotificationVisibility => {
