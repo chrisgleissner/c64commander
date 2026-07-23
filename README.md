@@ -154,6 +154,20 @@ The following shows the Keys tab using various display profiles, from small to l
   </tr>
 </table>
 
+### Live View (audio & video mirror)
+
+Hear and see the running machine from inside the app. **Live View** receives the C64's audio and video streams over your network and plays them back in a single, shared session — start it in one place and it stays live everywhere you go, never doubling up.
+
+<img src="docs/img/app/home/content-explorer/01-live-view.png" alt="Live View control on Home: Listen and Watch toggles beneath the quick actions" width="480"/>
+
+It is deliberately small and stays out of the way:
+
+- **Audio only** — a one-tap **Listen** toggle that takes no screen space; a subtle live dot (and a tiny app-bar indicator while you navigate) makes sure you always know it is on. Perfect for hearing a game or SID tune while you do something else.
+- **Video — check** — a small preview of the screen you can glance at and expand inline. Available on **Home**, beneath the quick actions.
+- **Video — immersive** — inside **Remote Input**, the mirror maximises to a full-width, zoomable, pannable screen for playing games or driving apps. On devices controlled by a physical keypad it adds a clear, colour-coded **view-lock** so a key press is never ambiguously "drive the C64" versus "move the view": blue means you are driving the machine, amber means you are adjusting the view. Pinch, drag, or double-tap the picture to zoom and pan, let it **follow the on-screen activity** automatically (e.g. the cursor as you type), and jump anywhere with the draggable minimap.
+
+Live View is an opt-in feature — turn on **Audio Mirror** and **Video Mirror** under **Settings → Features**. It appears only when the connected device advertises streaming. (Full playback on the phone app arrives with its on-device stream receiver; the ports the device streams to are configurable under **Settings → Play and disk behaviour**, defaulting to 11000 / 11001.)
+
 ### Play
 
 Build playlists for programs and songs sourced from the local device, C64U storage, HVSC, or CommoServe. Supports autoplay, shuffle, repeat, subsong selection, and automatic song length discovery.

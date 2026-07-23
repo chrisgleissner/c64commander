@@ -2141,6 +2141,8 @@ test.describe("App screenshots", () => {
           "disk_explorer_enabled",
           "in_image_search_enabled",
           "launch_safety_enabled",
+          "audio_mirror_enabled",
+          "video_mirror_enabled",
         ]) {
           localStorage.setItem(`c64u_feature_flag:${flag}`, "1");
           sessionStorage.setItem(`c64u_feature_flag:${flag}`, "1");
@@ -2201,6 +2203,18 @@ test.describe("App screenshots", () => {
       await captureScreenshot(page, testInfo, "settings/content-explorer/01-launch-safety.png", {
         locator: playAndDiskCard,
       });
+
+      // --- Home: the cross-app A/V Mirror "Live View" control (06-av-mirror-ux).
+      //     Best-effort — only renders when the mock device advertises streaming. ---
+      await page.goto("/");
+      await waitForConnected(page);
+      const liveView = getActiveMain(page).getByTestId("live-view-card");
+      if (await liveView.isVisible().catch(() => false)) {
+        await liveView.scrollIntoViewIfNeeded();
+        await captureScreenshot(page, testInfo, "home/content-explorer/01-live-view.png", {
+          locator: liveView,
+        });
+      }
     },
   );
 
