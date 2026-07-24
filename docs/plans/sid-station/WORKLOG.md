@@ -186,3 +186,23 @@ _(append entries below as tasks/gates complete — newest last)_
 - Gate: **G2 code path complete** (index + finalize-hook rebuild + D14). On-device
   `Commando.sid` resolution is the HIL/device proof at M0 EXIT (needs installed HVSC + the
   worker spike M0.5). G12 re-map behaviour unit-proven (moved-tune test).
+
+### 2026-07-24 — spec §2.2 v2-layout fix + decision D16 (format audit, doc-only)
+- Task: Independent format audit flagged that spec §2.2 still described the **v1** layout
+  (u24-only 9-byte neighbor rows "~783 KB", no RATING_TABLE) while §2.1 pins the **v2**
+  bundle — contradicting the shipped M0 parser and misleading M2. Doc + one decision only;
+  no code/fixture refactor (parser & fixture are already correct v2).
+- Files: `docs/plans/sid-station/spec.md` §2.2 (true v2 section order incl. RATING_TABLE
+  u16/track between STYLE_MASK_TABLE and NEIGHBOR_TABLE; NEIGHBOR_TABLE = 12-byte rows
+  u24 target + u8 quantized cosine, ~1.02 MiB; parser is offset-driven and infers record
+  width from `neighbors_bytes`; v1 still readable) + new decision **D16**.
+- Decision D16: the two v2-only fields the parser exposes are **parsed-but-unused by GA** —
+  scoring stays **rank-based** `Σ seedWeight×(3−rank)` (needs only presence + rank; integer
+  determinism protects the G11 `--shuffle-replay` gate). `neighborSimilarity`/`reverseSimilarity`
+  are an optional magnitude-weighted Song-Radio upgrade; `ratings` (e/m/c/p) stay unused
+  (Style Radio uses STYLE_MASK_TABLE; ♥/✕ is the user's own full-MD5 signal). Keep consuming
+  v2 (RAM-irrelevant, ~+435 KB mostly DEFLATE-absorbed, zero hot-path cost, keeps upgrade
+  paths open as pure code changes). Do not request a v1 variant from sidflow.
+- Commands + evidence: doc-only; no tests affected (parser/fixture unchanged and already v2,
+  proven by the M0.3 golden + M0.2 self-test).
+- Gate: n/a (spec/parser now mutually consistent; unblocks M2 stationEngine design).

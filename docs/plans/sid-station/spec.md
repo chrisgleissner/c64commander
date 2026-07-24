@@ -196,8 +196,15 @@ From `sidcorr-hvsc-full-sidcorr-tiny-1.manifest.json` (release
 
 ### 2.2 Binary layout (little-endian, byte-aligned)
 
-- **Header (64 B):** magic `SIDTINY1`, version, counts, `neighbors_per_track=3`,
-  `file_id_kind=md5_48`, style-table version, section offsets/lengths.
+The pinned bundle (§2.1) is **`binary_format_version` 2**. Sections appear in this order,
+tightly packed; the parser locates every section from **header offsets/lengths** and infers
+the neighbor record width from `neighbors_bytes` (it never hardcodes a row size). v1 bundles
+remain readable. (Authoritative: sidflow `doc/similarity-export-tiny.md`; this app:
+`src/lib/sidRadio/sidcorrTiny.ts`.)
+
+- **Header (64 B):** magic `SIDTINY1`, `binary_format_version` (2), counts,
+  `neighbors_per_track=3`, `file_id_kind=md5_48`, style-table version, section
+  offsets/lengths.
 - **STYLE_TABLE:** 9 style records — `fast_paced`, `slow_ambient`, `melodic`,
   `experimental`, `nostalgic`, `composer_focus`, `era_explorer`, `deep_discovery`,
   `theme_hunter` — each with a mask bit, kind (audio/metadata/hybrid), and label.
@@ -205,11 +212,17 @@ From `sidcorr-hvsc-full-sidcorr-tiny-1.manifest.json` (release
   (~363 KB, incompressible).
 - **FILE_TRACK_COUNT_TABLE:** `fileTrackCountMinus1[file_count]` (u8) → resolves a
   global track ordinal to `(fileOrdinal, song_index)`.
-- **STYLE_MASK_TABLE:** `styleMask[track_count]` (u16) — bit *i* = membership in
+- **STYLE_MASK_TABLE:** `styleMask[track_count]` (u16, ~174 KB) — bit *i* = membership in
   style *i*. **This is the Style-Radio filter.**
-- **NEIGHBOR_TABLE:** `neighborTarget[track_count][3]` packed u24 (~783 KB). Edges
-  form a **DAG** (targets always have a *smaller* ordinal), rank-ordered, `0xFFFFFF`
-  sentinel padding.
+- **RATING_TABLE (v2 only):** `compactRating[track_count]` (u16, ~174 KB) — packed
+  e/m/c/p nibbles. Sits **between** STYLE_MASK_TABLE and NEIGHBOR_TABLE; absent in v1.
+  Parsed into `ratings` but **not used by GA** (see D16).
+- **NEIGHBOR_TABLE:** `neighborRecord[track_count][3]` — in v2 each record is **12 bytes**
+  per row: a u24 target ordinal **+ a u8 quantized cosine similarity** (~1.02 MiB total,
+  1,044,876 B). v1 stores u24-only 9-byte rows. Edges form a **DAG** (targets always have a
+  *smaller* ordinal), rank-ordered, `0xFFFFFF` sentinel padding. The similarity byte is
+  hydrated into `neighborSimilarity`/`reverseSimilarity` but **not used by GA scoring**
+  (see D16).
 
 **Track identity key = `(md5_48, song_index)`.** Ordinals are sorted by SID path then
 subsong. The export does **not** carry HVSC paths — see the join problem in §2.4. The
@@ -907,6 +920,7 @@ converges without waiting on open questions.
 | D13 | Non-corpus "Start Radio" (Q5) | **Try by MD5, fall back on miss** to "No radio yet" + Style/Taste one tap away | — |
 | D14 | `md5_48 → path` tie-break (Q6) | **Installed-path-preferred, then lowest sorted path** (deterministic) | — |
 | D15 | Resume fidelity (Q7) | **Persist `(seed, shuffleSeed, rankingSnapshot, exclusion set)` and recompute** — exact continuation, tiny storage | — |
+| D16 | v2-only export fields (per-edge similarity byte, packed e/m/c/p ratings) | **Parsed but unused by GA.** We consume the v2 bundle (§2.1) but keep scoring **rank-based** `Σ seedWeight × (3 − rank)` (§2.3) — it needs only edge presence + rank order (present in v1 too), and its integer determinism protects the **G11** `--shuffle-replay` byte-identical gate. `neighborSimilarity`/`reverseSimilarity` are hydrated and available as an optional magnitude-weighted / drift-control upgrade for Song Radio; `ratings` stay unused (Style Radio uses STYLE_MASK_TABLE; ♥/✕ is the user's own full-MD5 signal in `rankingStore`). v2 costs ~+435 KB (mostly absorbed by APK DEFLATE), is RAM-irrelevant (§2.6), and adds **zero** hot-path cost (unused sections are skipped). | a magnitude-weighted Song Radio, or the deferred energy/mood self-tag → e/m/c/p mapping (§5.1), is wanted — **both are pure code changes, no data re-release**. Do not request a v1 variant from sidflow. |
 
 ---
 
