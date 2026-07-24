@@ -105,9 +105,16 @@ export class AvLatencyTracker {
     this.hear.push(observeMs - this.pending.pressMs);
   }
 
-  /** The analyzer matched the pop pair with this signed wire offset (audio − video, ms). */
-  onMatchOffset(wireOffsetMs: number): void {
-    if (!this.pending || this.pending.sawOffset) return;
+  /**
+   * The analyzer matched the pop pair with this signed wire offset (audio − video, ms), observed at
+   * `observeMs` (the JS observe clock of the frame/audio batch that completed the match). The window
+   * guard is essential: the analyzer runs continuously and its periodic-flash matches keep firing, so
+   * a match from an abandoned earlier press must be rejected — otherwise a stale offset lands in the
+   * CURRENT press's slot (the independent-metrics design decouples offset from see/hear, so nothing
+   * else would catch it).
+   */
+  onMatchOffset(wireOffsetMs: number, observeMs: number): void {
+    if (!this.pending || this.pending.sawOffset || !this.belongsToPending(observeMs)) return;
     this.pending.sawOffset = true;
     this.offset.push(Math.abs(wireOffsetMs));
   }

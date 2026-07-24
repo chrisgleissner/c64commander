@@ -37,6 +37,30 @@ describe("VIC synthetic test pattern — no frame is lost", () => {
     expect([...testPatternFrame(42)]).not.toEqual([...testPatternFrame(43)]);
   });
 
+  it("every 16-bit frame number yields a distinct buffer — frames 256 apart are NOT identical", () => {
+    // Regression: a single-byte base derived only from (frameNum & 0xff) made 0↔256, 1↔257, … byte-
+    // identical, so a duplicate or a 256-frame reorder would pass a byte-exact check. The per-byte
+    // step now derives from the high byte, so wire numbers that differ by a multiple of 256 differ.
+    for (const n of [0, 1, 42, 100, 255, 300, 65279]) {
+      expect([...testPatternFrame(n)]).not.toEqual([...testPatternFrame((n + 256) & 0xffff)]);
+    }
+    // No collisions across a full low-byte sweep at two different high bytes either.
+    const seen = new Set<string>();
+    for (const n of [0, 256, 512, 1, 257, 513, 128, 384]) {
+      const key = [...testPatternFrame(n)].join(",");
+      expect(seen.has(key)).toBe(false);
+      seen.add(key);
+    }
+  });
+
+  it("firstFrameMismatch rejects a truncated/empty frame instead of reporting a match", () => {
+    const full = testPatternFrame(7);
+    expect(firstFrameMismatch(full, 7, VIC_PAL_HEIGHT)).toBe(-1);
+    // A frame shorter than its active region must not read as byte-exact just because its prefix agrees.
+    expect(firstFrameMismatch(full.subarray(0, 10), 7, VIC_PAL_HEIGHT)).toBe(-2);
+    expect(firstFrameMismatch(new Uint8Array(0), 7, VIC_PAL_HEIGHT)).toBe(-2);
+  });
+
   it("delivers EVERY frame of a long PAL stream, byte-exact, with zero frame loss", () => {
     const FRAMES = 600; // ~12s at 50fps
     const { packets, frameNumbers } = buildTestPatternStream(FRAMES, { height: VIC_PAL_HEIGHT });
@@ -78,6 +102,25 @@ describe("VIC synthetic test pattern — no frame is lost", () => {
     // 9 frames complete; frame 4 is the missing one → detected as exactly 1 lost frame.
     expect(frames).toHaveLength(9);
     expect(assembler.stats.lostFrames).toBe(1);
+  });
+
+  it("does not over-count lost frames on a benign cross-frame reorder", () => {
+    // Regression (mirrors StreamUdpPluginTest.assembleBindDoesNotOvercountLostFramesOnCrossFrameReorder):
+    // completed-frame order 0,1,3,2,4 — frame 3 finishes before the late frame 2, but nothing was lost.
+    // Advancing the loss baseline backward onto frame 2 would make frame 4 recompute an inflated gap
+    // and double-count. The forward-only baseline settles the count at 1 (the transient 2→3 gap), not 2.
+    const completedOrder = [0, 1, 3, 2, 4];
+    const packets: Uint8Array[] = [];
+    let seq = 0;
+    for (const f of completedOrder) {
+      const out = packetizeVicFrame(testPatternFrame(f), f, VIC_PAL_HEIGHT, seq);
+      packets.push(...out.packets);
+      seq = out.nextSeq;
+    }
+    const { assembler, frames } = assembleStream(packets);
+    expect(frames).toHaveLength(5);
+    expect(assembler.stats.lostFrames).toBe(1); // NOT 2
+    expect(assembler.stats.droppedPackets).toBe(0); // monotonic seq → no packet-loss artefact
   });
 
   it("counts multiple lost frames across several gaps", () => {

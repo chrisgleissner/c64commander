@@ -280,6 +280,38 @@ class StreamUdpPluginTest {
   }
 
   @Test
+  fun assembleBindDoesNotOvercountLostFramesOnCrossFrameReorder() {
+    // Regression: a benign UDP reorder must not inflate the user-visible frame-loss count. Send
+    // frames 0,1, then frame 3 BEFORE frame 2 (a reorder — nothing was actually lost), then 2, then 4.
+    // Advancing the loss baseline backward on the late frame 2 would make the next forward frame (4)
+    // recompute an inflated gap and double-count. With the forward-only baseline, the count settles at
+    // exactly 1 (the transient gap when 3 completed before 2) and never climbs to 2.
+    latch = CountDownLatch(5) // frames 0,1,3,2,4 all complete
+    val port = bindAssemble()
+
+    DatagramSocket().use { sender ->
+      val addr = InetAddress.getByName("127.0.0.1")
+      sendFrame(sender, addr, port, 0, 0)
+      Thread.sleep(3)
+      sendFrame(sender, addr, port, 2, 1)
+      Thread.sleep(3)
+      sendFrame(sender, addr, port, 4, 3) // frame 3 arrives before frame 2 (reorder)
+      Thread.sleep(3)
+      sendFrame(sender, addr, port, 6, 2) // the late frame 2
+      Thread.sleep(3)
+      sendFrame(sender, addr, port, 8, 4)
+    }
+
+    assertTrue("expected 5 completed frames", latch.await(5, TimeUnit.SECONDS))
+    assertEquals(5, frames.size)
+    assertEquals(1, frames.last().lost) // NOT 2 — the reorder is not double-counted
+
+    val closeCall = mock(PluginCall::class.java)
+    `when`(closeCall.getString("name")).thenReturn("video")
+    plugin.close(closeCall)
+  }
+
+  @Test
   fun setKeepFractionDecimatesNativelyAndSkipsBase64ForUnpresentedFrames() {
     val port = bindAssemble()
     // Keep 50%: present every 2nd assembled frame; the others emit an event with NO base64 payload.

@@ -415,11 +415,16 @@ class StreamUdpPlugin : Plugin() {
           frameHeight = clampFrameHeight(line + (if (linesPerPacket > 0) linesPerPacket else VIC_LINES_PER_PACKET))
           // Frame-loss: a jump of >1 in the frame number between consecutively completed frames means
           // the intervening frame(s) never completed. Wrap-safe (65535→0) via Short truncation.
-          if (prevCompletedFrame >= 0) {
+          // Only advance the baseline on FORWARD progress (gap >= 1): a UDP-reordered late frame
+          // (gap <= 0) must not move it backward, or the next forward frame would recompute an
+          // inflated gap and double-count a loss that never happened. Mirrors VicStreamAssembler.
+          if (prevCompletedFrame < 0) {
+            prevCompletedFrame = frameNum
+          } else {
             val gap = (frameNum - prevCompletedFrame).toShort().toInt()
             if (gap > 1) lost += gap - 1
+            if (gap >= 1) prevCompletedFrame = frameNum
           }
-          prevCompletedFrame = frameNum
           // Native cadence decision: present this frame only when the accumulator crosses 1000.
           // A skipped frame emits a tiny event (empty data, present=false) so JS still counts it —
           // but its ~52 KB Base64 encode + bridge payload are elided (the CPU win).

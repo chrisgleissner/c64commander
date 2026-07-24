@@ -108,6 +108,15 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     return () => window.removeEventListener(AUTOFIRE_VISIBILITY_CHANGE_EVENT, sync);
   }, []);
 
+  // A hidden Autofire button must be a STOPPED autofire. The session owns `autofireEnabled`, so
+  // merely un-rendering the toggle (default, or via the Settings switch mid-session) would leave the
+  // dedicated interval pulsing FIRE with no UI left to turn it off. Force it off whenever the control
+  // is not shown, so a hidden control is a stopped control.
+  const setAutofireEnabled = session.setAutofireEnabled;
+  useEffect(() => {
+    if (!showAutofire) setAutofireEnabled(false);
+  }, [showAutofire, setAutofireEnabled]);
+
   const changeSize = useCallback((direction: 1 | -1) => {
     setControlSize((current) => {
       const next = stepRemoteInputControlSize(current, direction);

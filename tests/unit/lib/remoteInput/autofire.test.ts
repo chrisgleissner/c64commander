@@ -6,8 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it } from "vitest";
-import { applyAutofirePhase, DEFAULT_AUTOFIRE_RATE_HZ } from "@/lib/remoteInput/autofire";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  applyAutofirePhase,
+  AUTOFIRE_VISIBILITY_CHANGE_EVENT,
+  DEFAULT_AUTOFIRE_RATE_HZ,
+  DEFAULT_SHOW_AUTOFIRE_BUTTON,
+  loadShowAutofireButton,
+  saveShowAutofireButton,
+} from "@/lib/remoteInput/autofire";
 
 describe("applyAutofirePhase", () => {
   it("leaves the held set untouched when autofire is disabled, even during the off phase", () => {
@@ -45,5 +52,51 @@ describe("applyAutofirePhase", () => {
 
   it("defaults to 5 fires per second", () => {
     expect(DEFAULT_AUTOFIRE_RATE_HZ).toBe(5);
+  });
+});
+
+describe("show-autofire-button preference", () => {
+  const KEY = "c64u_remote_input_show_autofire";
+
+  beforeEach(() => {
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+  afterEach(() => localStorage.clear());
+
+  it("defaults to hidden (false) when nothing is stored", () => {
+    expect(DEFAULT_SHOW_AUTOFIRE_BUTTON).toBe(false);
+    expect(loadShowAutofireButton()).toBe(false);
+    expect(localStorage.getItem(KEY)).toBeNull();
+  });
+
+  it("returns the default for an unset key rather than coercing an empty read to true", () => {
+    localStorage.removeItem(KEY);
+    expect(loadShowAutofireButton()).toBe(DEFAULT_SHOW_AUTOFIRE_BUTTON);
+  });
+
+  it('persists "1" for shown and "0" for hidden, and round-trips through load', () => {
+    saveShowAutofireButton(true);
+    expect(localStorage.getItem(KEY)).toBe("1");
+    expect(loadShowAutofireButton()).toBe(true);
+
+    saveShowAutofireButton(false);
+    expect(localStorage.getItem(KEY)).toBe("0");
+    expect(loadShowAutofireButton()).toBe(false);
+  });
+
+  it('treats any non-"1" stored value as hidden (strict parse)', () => {
+    localStorage.setItem(KEY, "yes");
+    expect(loadShowAutofireButton()).toBe(false);
+    localStorage.setItem(KEY, "0");
+    expect(loadShowAutofireButton()).toBe(false);
+    localStorage.setItem(KEY, "1");
+    expect(loadShowAutofireButton()).toBe(true);
+  });
+
+  it("dispatches the visibility-change event on save so a live session can hot-swap", () => {
+    const spy = vi.spyOn(window, "dispatchEvent");
+    saveShowAutofireButton(true);
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ type: AUTOFIRE_VISIBILITY_CHANGE_EVENT }));
   });
 });

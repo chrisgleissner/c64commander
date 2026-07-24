@@ -29,15 +29,20 @@ import {
 import { VIC_FRAME_WIDTH, VIC_PAL_HEIGHT, VIC_BYTES_PER_FRAME } from "./vicDecode";
 
 /**
- * The reproducible frame content for frame `frameNum`: `frame[i] = (frameNum * 131 + i * 7) & 0xFF`.
- * A pure function of (frameNum, byteIndex), so the same frame number always yields the same bytes and
- * different frame numbers almost never collide — letting a test assert a decoded frame IS frame N.
+ * The reproducible frame content for frame `frameNum`: `frame[i] = (base + i * step) & 0xFF`, where
+ * the per-frame `base` derives from the LOW byte of the frame number and the per-byte `step` from the
+ * HIGH byte — each through an odd multiplier, so both maps are bijections mod 256. Deriving the step
+ * (not just a single base byte) from the frame number is what makes every one of the 65536 wire frame
+ * numbers produce a DISTINCT buffer: a single-byte base alone collapses to `frameNum & 0xff`, so
+ * frames 256 apart (0↔256, 1↔257, …) would be byte-identical and a duplicate / 256-frame reorder
+ * would slip past a byte-exact check. Pure function of (frameNum, byteIndex).
  * Always PAL-sized (52224 bytes); NTSC uses the first `height*192` bytes.
  */
 export const testPatternFrame = (frameNum: number): Uint8Array => {
   const frame = new Uint8Array(VIC_BYTES_PER_FRAME);
-  const base = (frameNum * 131) & 0xff;
-  for (let i = 0; i < VIC_BYTES_PER_FRAME; i += 1) frame[i] = (base + i * 7) & 0xff;
+  const base = (frameNum * 131) & 0xff; // low byte → base (131 odd ⇒ bijection mod 256)
+  const step = (((frameNum >>> 8) & 0xff) * 173 + 7) & 0xff; // high byte → per-byte step (173 odd)
+  for (let i = 0; i < VIC_BYTES_PER_FRAME; i += 1) frame[i] = (base + i * step) & 0xff;
   return frame;
 };
 
@@ -89,7 +94,11 @@ export interface TestPatternStream {
  */
 export const buildTestPatternStream = (
   frameCount: number,
-  { startFrame = 0, height = VIC_PAL_HEIGHT, startSeq = 0 }: { startFrame?: number; height?: number; startSeq?: number } = {},
+  {
+    startFrame = 0,
+    height = VIC_PAL_HEIGHT,
+    startSeq = 0,
+  }: { startFrame?: number; height?: number; startSeq?: number } = {},
 ): TestPatternStream => {
   const packets: Uint8Array[] = [];
   const frameNumbers: number[] = [];
@@ -108,11 +117,14 @@ export const buildTestPatternStream = (
 /**
  * Whether a decoded/assembled frame is byte-exact for the expected frame number, over its active
  * region (first `height*192` bytes — NTSC leaves the tail rows untouched). Returns the first
- * mismatching byte index, or -1 if it matches.
+ * mismatching byte index, `-1` if it matches, or `-2` if the frame is too short to cover its active
+ * region (a truncated / empty buffer — which must NOT read as a clean match just because the bytes it
+ * does carry happen to agree with the expected prefix).
  */
 export const firstFrameMismatch = (frame: Uint8Array, expectedFrameNum: number, height: number): number => {
+  const activeBytes = height * VIC_BYTES_PER_LINE;
+  if (frame.length < activeBytes) return -2;
   const expected = testPatternFrame(expectedFrameNum);
-  const activeBytes = Math.min(height * VIC_BYTES_PER_LINE, VIC_BYTES_PER_FRAME, frame.length);
   for (let i = 0; i < activeBytes; i += 1) if (frame[i] !== expected[i]) return i;
   return -1;
 };

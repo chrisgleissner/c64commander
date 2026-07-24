@@ -14,6 +14,18 @@ import type { AvMirrorSession } from "@/lib/streams/avMirrorSession";
 const { runAvSyncTest } = vi.hoisted(() => ({ runAvSyncTest: vi.fn().mockResolvedValue({ errors: [] }) }));
 vi.mock("@/lib/streams/avSyncPrg", () => ({ runAvSyncTest }));
 
+const { runAvSyncKeyTest } = vi.hoisted(() => ({ runAvSyncKeyTest: vi.fn().mockResolvedValue({ errors: [] }) }));
+vi.mock("@/lib/streams/avSyncKeyPrg", () => ({ runAvSyncKeyTest }));
+
+const { sendMachineInputBatch, machineReset } = vi.hoisted(() => ({
+  sendMachineInputBatch: vi.fn().mockResolvedValue(undefined),
+  machineReset: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("@/lib/c64api", () => ({ getC64API: () => ({ sendMachineInputBatch, machineReset }) }));
+
+const { addLog } = vi.hoisted(() => ({ addLog: vi.fn() }));
+vi.mock("@/lib/logging", () => ({ addLog }));
+
 const FRAME_BYTES = (384 * 272) / 2;
 const white = () => new Uint8Array(FRAME_BYTES).fill(0x11);
 const black = () => new Uint8Array(FRAME_BYTES);
@@ -50,7 +62,13 @@ class FakeSession {
 const asSession = (fake: FakeSession) => fake as unknown as AvMirrorSession;
 
 describe("useAvSync", () => {
-  beforeEach(() => runAvSyncTest.mockClear());
+  beforeEach(() => {
+    runAvSyncTest.mockClear();
+    runAvSyncKeyTest.mockClear();
+    addLog.mockClear();
+    sendMachineInputBatch.mockReset().mockResolvedValue(undefined);
+    machineReset.mockReset().mockResolvedValue(undefined);
+  });
 
   it("feeds session frames/audio into the analyzer and records a matched pop", () => {
     const fake = new FakeSession();
@@ -111,5 +129,76 @@ describe("useAvSync", () => {
     unmount();
     expect(fake.frameSubs).toBe(0);
     expect(fake.audioSubs).toBe(0);
+  });
+
+  it("serialises Stop with an in-flight SPACE press — the release fires BEFORE the reset", async () => {
+    // Regression: tapping Stop during the ~60 ms SPACE hold must not reset the C64 while SPACE is
+    // still asserted. stopTest awaits the in-flight press so the release always lands first.
+    const order: string[] = [];
+    sendMachineInputBatch.mockImplementation((batch: { events: { transition: string }[] }) => {
+      order.push(batch.events[0].transition);
+      return Promise.resolve();
+    });
+    machineReset.mockImplementation(() => {
+      order.push("reset");
+      return Promise.resolve();
+    });
+    const fake = new FakeSession();
+    const { result } = renderHook(() => useAvSync(asSession(fake)));
+
+    await act(async () => {
+      const pressP = result.current.pressSpace(); // press + 60 ms hold + release
+      const stopP = result.current.stopTest(); // must wait for the release before resetting
+      await Promise.all([pressP, stopP]);
+    });
+
+    expect(order).toEqual(["press", "release", "reset"]);
+  });
+
+  it("still logs a FAILED SPACE release when Stop is pressed during the hold", async () => {
+    sendMachineInputBatch.mockImplementation((batch: { events: { transition: string }[] }) =>
+      batch.events[0].transition === "release" ? Promise.reject(new Error("release wedged")) : Promise.resolve(),
+    );
+    const fake = new FakeSession();
+    const { result } = renderHook(() => useAvSync(asSession(fake)));
+
+    await act(async () => {
+      const pressP = result.current.pressSpace();
+      const stopP = result.current.stopTest();
+      await Promise.all([pressP, stopP]);
+    });
+
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("failed to release the SPACE keypress"),
+      expect.objectContaining({ error: "release wedged", stack: expect.any(String) }),
+    );
+    expect(machineReset).toHaveBeenCalledTimes(1); // the reset still happens, after the release attempt
+  });
+
+  it("keeps the Stop affordance (testActive) across a remount while the device program runs", async () => {
+    const fake = new FakeSession();
+    // Normalise the cross-mount latch to a known state regardless of earlier tests.
+    const warmup = renderHook(() => useAvSync(asSession(fake)));
+    await act(async () => {
+      await warmup.result.current.stopTest();
+    });
+    warmup.unmount();
+
+    const first = renderHook(() => useAvSync(asSession(fake)));
+    expect(first.result.current.testActive).toBe(false);
+    await act(async () => {
+      await first.result.current.runKeyTest();
+    });
+    expect(first.result.current.testActive).toBe(true);
+    first.unmount();
+
+    // Remount (e.g. navigating back to Home): the program is still on the device, so Stop must return.
+    const second = renderHook(() => useAvSync(asSession(fake)));
+    expect(second.result.current.testActive).toBe(true);
+    await act(async () => {
+      await second.result.current.stopTest();
+    });
+    expect(second.result.current.testActive).toBe(false);
   });
 });

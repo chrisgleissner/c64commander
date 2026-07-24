@@ -128,11 +128,16 @@ export class VicStreamAssembler {
     this.frameHeight = clampFrameHeight(header.line + (header.linesPerPacket || VIC_LINES_PER_PACKET));
     // Frame-loss: a jump of >1 in the frame number between consecutively completed frames means the
     // intervening frame(s) never completed (their last-line packet was lost). Wrap-safe (65535→0).
-    if (this.prevCompletedFrame !== null) {
+    // Only advance the baseline on FORWARD progress (gap >= 1): a UDP-reordered late frame (gap <= 0)
+    // must not move it backward, or the NEXT forward frame would recompute an inflated gap and
+    // double-count a loss that never happened. The baseline stays at the highest frame seen so far.
+    if (this.prevCompletedFrame === null) {
+      this.prevCompletedFrame = header.frame;
+    } else {
       const gap = frameSeqDiff(header.frame, this.prevCompletedFrame);
       if (gap > 1) this.stats.lostFrames += gap - 1;
+      if (gap >= 1) this.prevCompletedFrame = header.frame;
     }
-    this.prevCompletedFrame = header.frame;
     this.stats.frames += 1;
     return this.frame.slice();
   }

@@ -223,6 +223,10 @@ not-connected / empty / single-device).
   - Audio — Listen / Listening toggle — button — `av-audio-toggle` — R✅ I✅ _(flag `audio_mirror_enabled`; controls the shared app-wide session; the live dot is display-only)_
   - Video — Watch / Watching toggle — button — `av-video-toggle` — R✅ I✅ _(flag `video_mirror_enabled`; the check-preview canvas and fps badge are display-only)_
   - Expand / collapse preview — button — `live-view-expand` — R✅ I✅ _(shown only while a video stream is active; toggles the check preview between check and immersive size)_
+  - Stats — expand/collapse toggle — `stream-stats-toggle` — R✅ I✅ _(display-only telemetry grid below; diagnostic)_
+  - **A/V measurement** (`av-sync-panel`) _(power-user diagnostic; two independently collapsible sections, both collapsed by default)_
+    - A/V Sync section — expand/collapse — `av-sync-toggle` — R✅ I✅ ; inside: Run test — button — `av-sync-run` — R✅ I✅ ; Reset all A/V measurements — icon button — `av-sync-reset` — R✅ I✅ ; Stop — button — `av-sync-stop` — R✅ I✅ `[visible when a test program is running on the device]`
+    - Tap latency section — expand/collapse — `av-sync-lat-toggle` — R✅ I✅ ; inside: Load — button — `av-sync-key-load` — R✅ I✅ ; Send SPACE — button — `av-sync-press` — R✅ I✅ ; Stop — button — `av-sync-stop` (shared with the A/V Sync section) `[visible when a test program is running]`
 - **Config actions** (`data-section-label="Config"`)
   - Save/Load (flash) — button — R✅ I✅
   - Reset to default — button (danger) — R✅ I✅
@@ -321,7 +325,9 @@ Mount disk sheet: Available disks list — filter text — `list-filter-input` �
   Boot settle (ms) — number — `settings-boot-settle` — R✅ I✅ ; Video stream port
   / Audio stream port — number ×2 — `settings-stream-video-port` /
   `settings-stream-audio-port` — R✅ I✅ ; Audio network buffer (ms) — number —
-  `settings-stream-network-buffer` — R✅ I✅
+  `settings-stream-network-buffer` — R✅ I✅ ; Fast video (native assembly) —
+  switch — `settings-stream-native-assembly` — R✅ I✅ _(default on; native VIC
+  frame assembly, A/B / escape-hatch toggle — native builds only)_
   `[visible when audio_mirror_enabled or video_mirror_enabled]`
 - **Notifications**: visibility — select — R✅ I✅ ; duration — slider — R✅ I✅
 - **Build/info**: REST API docs — link — `settings-about-rest-api-docs` — R✅ I✅

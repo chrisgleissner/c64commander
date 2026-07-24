@@ -24,6 +24,21 @@ const SPACE_HOLD_MS = 60;
 const STATS_REFRESH_MS = 250;
 
 /**
+ * A test program lives on the DEVICE, not in this component, so "a test is running" must survive the
+ * panel unmounting (e.g. navigating away with the mirror off) and remounting — otherwise the only
+ * Stop button vanishes while the program keeps running, leaving the user with no off-switch. This
+ * module-scoped latch persists it across mounts for the app session (an SPA never reloads the module);
+ * a full page reload can't know the device state regardless, so it legitimately starts clean.
+ */
+let deviceTestProgramActive = false;
+
+/** Error detail carrying the stack (REVIEW.md §7) so a failed device op stays diagnosable in logs. */
+const errorDetail = (error: unknown): { error: string; stack?: string } => {
+  const e = error instanceof Error ? error : new Error(String(error));
+  return { error: e.message, stack: e.stack };
+};
+
+/**
  * Binds the {@link AvSyncAnalyzer} to the shared A/V mirror session: every decoded video frame
  * and audio batch is stamped and fed to the analyzer, which matches the periodic white-flash /
  * tone "pops" and reports the audio↔video offset. The offset is measured from the WIRE-arrival
@@ -57,7 +72,14 @@ export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
   const [runningTest, setRunningTest] = useState(false);
   const [testError, setTestError] = useState<string | null>(null);
   /** Whether a test program is currently loaded/running on the device (so Stop can reset it). */
-  const [testActive, setTestActive] = useState(false);
+  const [testActive, setTestActiveState] = useState(deviceTestProgramActive);
+  /** Persist across mounts via the module latch so a remount keeps the Stop button (see above). */
+  const setTestActive = useCallback((active: boolean) => {
+    deviceTestProgramActive = active;
+    setTestActiveState(active);
+  }, []);
+  /** In-flight SPACE press (press → hold → release); stopTest awaits it so a reset can't preempt it. */
+  const pendingKeyRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     const analyzer = analyzerRef.current!;
@@ -70,8 +92,10 @@ export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
       videoObserveRef.current = now();
       const offset = analyzer.pushVideoFrame(frame, arrivalMs);
       // A matched pop feeds the wire offset into the latency tracker and surfaces stats immediately.
+      // Pass the observe time of the frame that completed the match so the tracker's window guard can
+      // reject a match belonging to an abandoned earlier press.
       if (offset !== null) {
-        latency.onMatchOffset(offset);
+        latency.onMatchOffset(offset, videoObserveRef.current);
         refresh();
       }
     });
@@ -79,7 +103,7 @@ export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
       audioObserveRef.current = now();
       const offset = analyzer.pushAudioSamples(samples, arrivalMs);
       if (offset !== null) {
-        latency.onMatchOffset(offset);
+        latency.onMatchOffset(offset, audioObserveRef.current);
         refresh();
       }
     });
@@ -106,13 +130,13 @@ export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
       await runAvSyncTest();
       setTestActive(true);
     } catch (error) {
-      const message = (error as Error)?.message ?? String(error);
-      setTestError(message);
-      addLog("warn", "A/V sync: failed to start the test program", { error: message });
+      const detail = errorDetail(error);
+      setTestError(detail.error);
+      addLog("warn", "A/V sync: failed to start the test program", detail);
     } finally {
       setRunningTest(false);
     }
-  }, []);
+  }, [setTestActive]);
 
   const runKeyTest = useCallback(async () => {
     setRunningTest(true);
@@ -121,46 +145,59 @@ export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
       await runAvSyncKeyTest();
       setTestActive(true);
     } catch (error) {
-      const message = (error as Error)?.message ?? String(error);
-      setTestError(message);
-      addLog("warn", "A/V sync: failed to start the space-triggered test program", { error: message });
+      const detail = errorDetail(error);
+      setTestError(detail.error);
+      addLog("warn", "A/V sync: failed to start the space-triggered test program", detail);
     } finally {
       setRunningTest(false);
     }
-  }, []);
+  }, [setTestActive]);
 
   const pressSpace = useCallback(async () => {
     // Stamp the press the instant the user initiates it — the measured press→see/hear latency
     // then includes the full round trip (input → device → pop → stream back), the real thing.
-    latencyRef.current!.markPress(now());
-    setLatencyStats(latencyRef.current!.getStats());
-    const api = getC64API();
-    try {
-      // HOLD the key, don't "tap": av-sync-key polls the CIA keyboard matrix once per frame, so a
-      // sub-frame tap can fall between two polls and be missed. A press held ~3 frames guarantees
-      // the poll sees the rising edge (verified on real hardware); the pop still fires on the press
-      // instant, so the latency measurement is unaffected by the hold.
-      await api.sendMachineInputBatch({
-        events: [{ kind: "keyboard", inputs: ["space"], transition: "press" }],
-      });
-      await new Promise((resolve) => setTimeout(resolve, SPACE_HOLD_MS));
-    } catch (error) {
-      const message = (error as Error)?.message ?? String(error);
-      setTestError(message);
-      addLog("warn", "A/V sync: failed to send the SPACE keypress", { error: message });
-    } finally {
-      // Always release, so the key never sticks — a stuck SPACE keeps the matrix asserted and
-      // blocks every later rising-edge poll (no more pops). If the release itself fails, that is
-      // exactly the wedge we must surface, so log it (never swallow).
+    // The whole press→hold→release runs as one tracked operation (pendingKeyRef) so stopTest can
+    // await it: without that, tapping Stop during the 60 ms hold would reset the C64 while SPACE is
+    // still asserted and the queued release would land on a freshly-booted machine (and a FAILED
+    // release would slip past the wedge log). The synchronous markPress below still runs at the
+    // instant of the tap because the async body executes up to its first await eagerly.
+    const op = (async () => {
+      latencyRef.current!.markPress(now());
+      setLatencyStats(latencyRef.current!.getStats());
+      const api = getC64API();
       try {
+        // HOLD the key, don't "tap": av-sync-key polls the CIA keyboard matrix once per frame, so a
+        // sub-frame tap can fall between two polls and be missed. A press held ~3 frames guarantees
+        // the poll sees the rising edge (verified on real hardware); the pop still fires on the press
+        // instant, so the latency measurement is unaffected by the hold.
         await api.sendMachineInputBatch({
-          events: [{ kind: "keyboard", inputs: ["space"], transition: "release" }],
+          events: [{ kind: "keyboard", inputs: ["space"], transition: "press" }],
         });
+        await new Promise((resolve) => setTimeout(resolve, SPACE_HOLD_MS));
       } catch (error) {
-        const message = (error as Error)?.message ?? String(error);
-        setTestError(message);
-        addLog("warn", "A/V sync: failed to release the SPACE keypress (key may be stuck)", { error: message });
+        const detail = errorDetail(error);
+        setTestError(detail.error);
+        addLog("warn", "A/V sync: failed to send the SPACE keypress", detail);
+      } finally {
+        // Always release, so the key never sticks — a stuck SPACE keeps the matrix asserted and
+        // blocks every later rising-edge poll (no more pops). If the release itself fails, that is
+        // exactly the wedge we must surface, so log it (never swallow).
+        try {
+          await api.sendMachineInputBatch({
+            events: [{ kind: "keyboard", inputs: ["space"], transition: "release" }],
+          });
+        } catch (error) {
+          const detail = errorDetail(error);
+          setTestError(detail.error);
+          addLog("warn", "A/V sync: failed to release the SPACE keypress (key may be stuck)", detail);
+        }
       }
+    })();
+    pendingKeyRef.current = op;
+    try {
+      await op;
+    } finally {
+      if (pendingKeyRef.current === op) pendingKeyRef.current = null;
     }
   }, []);
 
@@ -169,16 +206,25 @@ export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
     setRunningTest(true);
     setTestError(null);
     try {
+      // Let any in-flight SPACE press finish its release BEFORE we reset, so the release never lands
+      // on a freshly-booted machine and a failing release is still logged (pressSpace owns that log).
+      if (pendingKeyRef.current) {
+        try {
+          await pendingKeyRef.current;
+        } catch {
+          /* the press's own catch already surfaced + logged it */
+        }
+      }
       await getC64API().machineReset();
     } catch (error) {
-      const message = (error as Error)?.message ?? String(error);
-      setTestError(message);
-      addLog("warn", "A/V sync: failed to reset the machine to stop the test", { error: message });
+      const detail = errorDetail(error);
+      setTestError(detail.error);
+      addLog("warn", "A/V sync: failed to reset the machine to stop the test", detail);
     } finally {
       setTestActive(false);
       setRunningTest(false);
     }
-  }, []);
+  }, [setTestActive]);
 
   return { stats, latencyStats, reset, runTest, runKeyTest, pressSpace, stopTest, testActive, runningTest, testError };
 };

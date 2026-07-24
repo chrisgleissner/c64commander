@@ -15,7 +15,7 @@ describe("AvLatencyTracker", () => {
     t.markPress(100);
     t.onVideoPop(120); // seen 20 ms after press
     t.onAudioPop(125); // heard 25 ms after press
-    t.onMatchOffset(-3); // wire offset audio−video = -3 → |3|
+    t.onMatchOffset(-3, 125); // wire offset audio−video = -3 → |3|; observed within the press window
     const s = t.getStats();
     expect(s.count).toBe(1);
     expect(s.seeLastMs).toBe(20);
@@ -29,7 +29,7 @@ describe("AvLatencyTracker", () => {
     t.markPress(100);
     t.onAudioPop(122);
     t.onVideoPop(124);
-    t.onMatchOffset(2);
+    t.onMatchOffset(2, 124);
     const s = t.getStats();
     expect(s.count).toBe(1);
     expect(s.seeLastMs).toBe(24);
@@ -43,7 +43,7 @@ describe("AvLatencyTracker", () => {
     t.onVideoPop(90); // stale — before the press
     t.onVideoPop(130); // the real one
     t.onAudioPop(132);
-    t.onMatchOffset(1);
+    t.onMatchOffset(1, 132);
     expect(t.getStats().seeLastMs).toBe(30);
   });
 
@@ -58,7 +58,7 @@ describe("AvLatencyTracker", () => {
     expect(s.offsetLastMs).toBeNull();
     // Audio then the offset arrive later — each surfaces on its own.
     t.onAudioPop(126);
-    t.onMatchOffset(-4);
+    t.onMatchOffset(-4, 126);
     s = t.getStats();
     expect(s.hearLastMs).toBe(26);
     expect(s.offsetLastMs).toBe(4);
@@ -71,7 +71,7 @@ describe("AvLatencyTracker", () => {
     t.markPress(500); // supersedes an empty press → missed 1
     t.onVideoPop(520);
     t.onAudioPop(525);
-    t.onMatchOffset(0);
+    t.onMatchOffset(0, 525);
     const s = t.getStats();
     expect(s.count).toBe(1);
     expect(s.missed).toBe(1);
@@ -96,7 +96,7 @@ describe("AvLatencyTracker", () => {
       t.markPress(press);
       t.onVideoPop(press + 10 + (i === 99 ? 40 : 0)); // one slow outlier
       t.onAudioPop(press + 12);
-      t.onMatchOffset(2);
+      t.onMatchOffset(2, press + 12);
     }
     const s = t.getStats();
     expect(s.count).toBe(100);
@@ -106,12 +106,30 @@ describe("AvLatencyTracker", () => {
     expect(s.offsetP99Ms).toBe(2);
   });
 
+  it("rejects a stale analyzer match whose observe time predates the current press", () => {
+    // The analyzer runs continuously; a periodic-flash match from an abandoned earlier press must not
+    // land in the current press's offset slot. Guarded by the same window check as the see/hear pops.
+    const t = new AvLatencyTracker();
+    t.markPress(1000);
+    t.onMatchOffset(9, 900); // observed BEFORE this press → stale, must be ignored
+    expect(t.getStats().offsetLastMs).toBeNull();
+    t.onMatchOffset(7, 1010); // within the window → accepted
+    expect(t.getStats().offsetLastMs).toBe(7);
+  });
+
+  it("rejects a match that arrives far outside the pop window (superseding press)", () => {
+    const t = new AvLatencyTracker();
+    t.markPress(1000);
+    t.onMatchOffset(3, 1_000_000); // way past MAX_POP_WINDOW_MS → not this press's pop
+    expect(t.getStats().offsetLastMs).toBeNull();
+  });
+
   it("resets cleanly", () => {
     const t = new AvLatencyTracker();
     t.markPress(0);
     t.onVideoPop(10);
     t.onAudioPop(12);
-    t.onMatchOffset(1);
+    t.onMatchOffset(1, 12);
     t.reset();
     const s = t.getStats();
     expect(s.count).toBe(0);

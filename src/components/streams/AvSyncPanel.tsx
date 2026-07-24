@@ -138,7 +138,7 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
             variant="ghost"
             className="h-8 w-8"
             onClick={reset}
-            aria-label="Reset A/V sync statistics"
+            aria-label="Reset all A/V measurements"
             data-testid="av-sync-reset"
           >
             <RotateCcw className="h-4 w-4" />
@@ -207,7 +207,10 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
               <div className="text-sm font-semibold tabular-nums" data-testid={`av-sync-lat-${field.testid}`}>
                 {fmtLatency(field.last)}
               </div>
-              <div className="text-[9px] tabular-nums text-muted-foreground" data-testid={`av-sync-lat-${field.testid}-p99`}>
+              <div
+                className="text-[9px] tabular-nums text-muted-foreground"
+                data-testid={`av-sync-lat-${field.testid}-p99`}
+              >
                 p99 {fmtLatency(field.p99)}
               </div>
             </div>

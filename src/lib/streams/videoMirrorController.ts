@@ -367,6 +367,10 @@ export class VideoMirrorController {
     // receiver assembles frames it fires `onFrame`; otherwise it fires `onDatagram` and we assemble
     // in JS. Only one path is active per receiver, so registering both is safe.
     receiver.onFrame?.((frame, height, arrivalMs, droppedPackets, framesLost, present) => {
+      // Drop a late frame that crosses the Capacitor bridge AFTER stop()/restart swapped the receiver
+      // out: close() is fire-and-forget, so a `videoframe` already queued would otherwise push a
+      // non-zero fps/framesLost into an off-state snapshot (and the shared session other surfaces read).
+      if (this.receiver !== receiver) return;
       this.handleCompletedFrame(frame, height, arrivalMs, droppedPackets, framesLost, present);
     });
     // Push the current governor cadence to the native transport now that the receiver exists (so a
@@ -374,6 +378,9 @@ export class VideoMirrorController {
     this.applyCadence();
 
     receiver.onDatagram((bytes, arrivalMs) => {
+      // A datagram from a receiver already swapped out by stop()/restart must not mutate the snapshot
+      // (nor feed the assembler for the new session), same as the onFrame guard above.
+      if (this.receiver !== receiver) return;
       // Stamp each frame with the EARLIEST wire arrival of any of its packets (keyed by the VIC
       // frame number), so cross-frame reordering cannot skew the frame-start time the analyzer uses.
       const header = parseVicHeader(bytes);
