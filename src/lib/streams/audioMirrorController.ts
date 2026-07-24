@@ -23,6 +23,9 @@ import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions }
 
 export type AudioMirrorState = "off" | "connecting" | "live" | "error";
 
+/** Coalesce audio health broadcasts to ~10 Hz (state/error transitions bypass this). */
+export const AUDIO_SNAPSHOT_EMIT_INTERVAL_MS = 100;
+
 export interface AudioMirrorSnapshot {
   state: AudioMirrorState;
   droppedPackets: number;
@@ -87,9 +90,18 @@ export class AudioMirrorController {
     };
   }
 
+  private lastEmitMs = -Infinity;
+
   private update(patch: Partial<AudioMirrorSnapshot>) {
     this.snapshot = { ...this.snapshot, ...patch };
-    this.deps.onChange(this.snapshot);
+    // Throttle the React broadcast like the video path: the chunk/dropped snapshot changes ~31/s but
+    // state/error transitions must not be delayed. getSnapshot() stays current for the session tick.
+    const important = patch.state !== undefined || patch.error !== undefined;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (important || now - this.lastEmitMs >= AUDIO_SNAPSHOT_EMIT_INTERVAL_MS) {
+      this.lastEmitMs = now;
+      this.deps.onChange(this.snapshot);
+    }
   }
 
   async start(): Promise<void> {

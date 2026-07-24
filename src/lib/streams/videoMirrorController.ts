@@ -42,6 +42,14 @@ const FRAME_START_CAP = 12;
 /** Default present-queue residence budget (ms) beyond which a presented frame is flagged late. */
 export const DEFAULT_MAX_PRESENTATION_AGE_MS = 120;
 
+/**
+ * Health/fps snapshot broadcasts are coalesced to at most one per this interval (~10 Hz). The
+ * snapshot changes on every completed frame (~50/s), and broadcasting each one re-renders every
+ * subscriber 50×/s for no user benefit — HIL showed this per-frame React churn, not the frame
+ * decode, was the bulk of the video CPU. State/error transitions bypass the throttle.
+ */
+export const SNAPSHOT_EMIT_INTERVAL_MS = 100;
+
 /** Monotonic presentation clock; falls back to Date.now where performance is absent. */
 const perfNow = (): number => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
@@ -189,9 +197,19 @@ export class VideoMirrorController {
     return this.keepFraction;
   }
 
+  private lastEmitMs = -Infinity;
+
   private update(patch: Partial<VideoMirrorSnapshot>) {
     this.snapshot = { ...this.snapshot, ...patch };
-    this.deps.onChange(this.snapshot);
+    // Always keep getSnapshot() current (above); throttle only the React BROADCAST. State/error
+    // transitions emit immediately; per-frame health/fps updates coalesce to ~10 Hz. Stats reads
+    // live via the session tick, so it does not lose freshness.
+    const important = patch.state !== undefined || patch.error !== undefined;
+    const now = this.now();
+    if (important || now - this.lastEmitMs >= SNAPSHOT_EMIT_INTERVAL_MS) {
+      this.lastEmitMs = now;
+      this.deps.onChange(this.snapshot);
+    }
   }
 
   /**

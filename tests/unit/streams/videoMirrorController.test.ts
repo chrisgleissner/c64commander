@@ -389,6 +389,41 @@ describe("VideoMirrorController", () => {
     expect(controller.getSnapshot().framesLost).toBe(2);
   });
 
+  it("coalesces per-frame health broadcasts to ~10Hz, but emits state changes immediately", async () => {
+    let clock = 0;
+    const receiver = new FakeReceiver();
+    const onChange = vi.fn();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame: vi.fn(),
+      now: () => clock,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange,
+    });
+    await controller.start();
+    receiver.emitState("open");
+    onChange.mockClear();
+
+    // Five frames within the same 100 ms window → only one broadcast (health is coalesced) …
+    clock = 1000;
+    for (let i = 0; i < 5; i += 1) completeFrame(receiver, i, i);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    // … but getSnapshot() stays fully current every frame.
+    expect(controller.getSnapshot().presented).toBe(5);
+
+    // Past the interval → the next frame broadcasts.
+    clock = 1120;
+    completeFrame(receiver, 5, 5);
+    expect(onChange).toHaveBeenCalledTimes(2);
+
+    // A state change bypasses the throttle entirely.
+    onChange.mockClear();
+    await controller.stop();
+    expect(onChange).toHaveBeenCalled();
+    expect(controller.getSnapshot().state).toBe("off");
+  });
+
   it("ignores datagrams that do not complete a frame", async () => {
     const receiver = new FakeReceiver();
     const renderFrame = vi.fn();
