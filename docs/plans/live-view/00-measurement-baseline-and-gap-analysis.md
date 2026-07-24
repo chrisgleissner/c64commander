@@ -370,3 +370,34 @@ No self-hosted HIL CI gate (§14.5/§17) — these runs were manual on the attac
 `<30 ms` source→display video gate remains physically red (§0). Native audio (Oboe) — the audio JS
 path is still ~26–33% of the WebView thread (per-packet base64 + analysis) and is the next big lever,
 but it is a Phase-3 change gated on §0.
+
+---
+
+## 10. Spec build-out — DELIVERED (2026-07-24, round 3)
+
+Continuing through the remaining specification requirements. All provable on every build; each has
+tests; the HIL fixture was run on the real Pixel 4 → C64U.
+
+| Spec | Delivered | Where |
+| --- | --- | --- |
+| §9 / §16.3 video concealment + presentation-slot accounting | Every source slot → exactly one outcome (complete / partial-concealed / repeated / decimated / backlog); missing lines held from the previous frame (assembler never clears its buffer = temporal region concealment); whole-frame loss → previous frame repeated. No unexplained slots. | `videoMirrorController.ts`, Stats "Video" |
+| §8.1 audio concealment waveform | 7 fixtures (tone/DC-silence/impulse/square/note-ladder/speech/high-freq) reconstructed and analysed on the SIGNAL: exact sample count, click ≤ threshold-or-own-step, counters, determinism, bounded burst recovery, DC-safe silence | `audioConcealmentWaveform.test.ts` |
+| §14.2 recorded replay | Deterministic traces per profile (clean/isolated/burst/partial/reorder/duplicate/malformed) → committed expected slot outcomes, every build | `streamReplay.test.ts` |
+| §7 / §14.6 no-drift soak | `latencyDrift.ts` (rolling p99 vs budget, first-vs-last window, OLS slope); real controller driven ~11 virtual min, proven bounded + non-drifting; gate has teeth (drift + budget-spike both fail) | `streamSoak.test.ts` |
+| §16 committed thresholds | `ci/perf/stream-perf-thresholds.json` (full metadata); guarded so the 30 ms budget is never widened | `streamPerfThresholds.test.ts` |
+| §14.3 / §16.4 host benchmark | `streamHotPaths.bench.ts` + `assert-stream-perf.mjs` relative-regression gate vs committed baseline | `ci/perf/stream-bench-baseline.json` |
+| §12.2 / §12.3 historical Stats | Selectable 60s/5m/15m/Session windows; bounded coarse (minute) tier for the full session; charts for fps/buffer/loss/concealment/rate | `streamTelemetry.ts`, `StreamStatsPanel.tsx` |
+| §5.1 latency method | `clockMapping.ts` — offset/drift fit with quantified residual uncertainty; `canAssertBelow` returns *inconclusive* when uncertainty can't distinguish the threshold (no false "proven") | `clockMapping.test.ts` |
+| §17 CI orchestrator | `scripts/ci/stream-gates.mjs` + `.github/workflows/stream-gates.yaml` — host gates on PR/push with a machine-readable summary; the Pixel-4 HIL job is self-hosted + hardware-locked, run on dispatch | — |
+| §14.5 / §15 HIL fixture | `tools/hil/hil_stream_fixture.py` — preconditions + device-state gate + telemetry + committed CPU gates + JSON report + distinct infra/product exit codes. **Ran on real hardware → PASS** (CrRenderer 43%, underruns 0, fps 51) | `docs/plans/live-view/hil-stream-report.sample.json` |
+
+### Honest completion state (§22/§23)
+
+Green on every build (host, deterministic): audio continuity + concealment, video slot continuity,
+bounded queues (size + age), no-drift soak, committed thresholds, benchmark regression, telemetry +
+Stats. The HIL fixture is real and PASSES on the attached Pixel 4 → C64U, but it is **manual** — the
+mandatory §14.5 per-build HIL gate still needs a **self-hosted runner with the physical rig + a
+lock**, which cannot be created here. The `<30 ms` source→display **video** gate remains **physically
+red** (§0 firmware capture-buffer floor). Native audio (Oboe) — the audio JS path is still ~26–33% of
+the WebView thread — remains the next Phase-3 lever. These two are the only items that cannot be
+closed without hardware/firmware access beyond this environment; everything else is committed + green.
