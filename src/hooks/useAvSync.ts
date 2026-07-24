@@ -211,8 +211,13 @@ export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
       if (pendingKeyRef.current) {
         try {
           await pendingKeyRef.current;
-        } catch {
-          /* the press's own catch already surfaced + logged it */
+        } catch (error) {
+          // pressSpace catches + surfaces its own press/release failures, so this promise normally
+          // resolves; a rejection here is unexpected — note it at debug for diagnosability without
+          // double-reporting a failure the user has already seen.
+          addLog("debug", "A/V sync: in-flight SPACE press settled with an error before reset", {
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
       }
       await getC64API().machineReset();
