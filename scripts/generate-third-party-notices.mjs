@@ -364,8 +364,11 @@ const DATA_NOTICES = [
   '| Asset | Source | License |',
   '| --- | --- | --- |',
   '| SID Radio similarity bundle (`sidcorr-tiny-1`) | [chrisgleissner/sidflow-data](https://github.com/chrisgleissner/sidflow-data) | [GPL-3.0-or-later](https://www.gnu.org/licenses/gpl-3.0.html) |',
+  '| libsidplayfp WASM engine (`public/wasm/libsidplayfp/`, from `@sidflow/libsidplayfp-wasm`) | [chrisgleissner/sidflow](https://github.com/chrisgleissner/sidflow) / [libsidplayfp](https://github.com/libsidplayfp/libsidplayfp) | [GPL-2.0-or-later](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html) |',
   '',
   'The SID Radio similarity bundle is a compact, content-addressed index derived from analysis of the High Voltage SID Collection (HVSC, <https://www.hvsc.c64.org/>). SID tunes and their metadata remain the property of their respective composers and the HVSC team; this application bundles only the derived similarity index — not the SID files themselves and not any C64 ROM images.',
+  '',
+  'The libsidplayfp WASM engine powers on-device SID playback (the optional "This device" playback engine). libsidplayfp (including reSIDfp) is GPL-2.0-or-later, compatible with this application\'s GPL-3.0-or-later licence; the vendored build and its licence are under `public/wasm/libsidplayfp/` (see `VENDORING.md`). No C64 KERNAL/BASIC/CHARGEN ROM images are bundled — ROM-dependent tunes are played on the C64 instead.',
   '',
 ].join('\n');
 

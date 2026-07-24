@@ -550,3 +550,34 @@ _(append entries below as tasks/gates complete — newest last)_
   LE1–LE3 (the on-device libsidplayfp-WASM engine) is NOT built** — LE0 licence audit passed; the
   engine + audio sink + toggle + L2–L4 device proofs remain as the independent Track B build. GA
   (flip flags default-on) awaits the device HIL soaks + Track B.
+
+### 2026-07-24 — PR #320 E2E fix + Track B LE1 (local WASM engine core, host-tested)
+- **PR #320 green.** The settings-order E2E (`settingsConnection.spec.ts › settings sections appear
+  in expected order`) failed: in **developer mode** it enumerates every `h2`, and the dev-only
+  **SID Radio** settings section (the flag toggle) is a legit new heading after "Experimental
+  Features". Taught the expected list about it (commit `13a5cd7d`); default (non-dev) mode is
+  unchanged so no pixel baseline moves. Re-run: all 12 E2E shards pass, **31/31 substantive checks
+  green**, MERGEABLE (only the flaky `iOS | Maestro` still cycling — see [[ios-maestro-timeout-flakiness]]).
+- **Track B LE1 — local libsidplayfp-WASM engine (host-testable core).** Built test-first:
+  - `src/lib/playback/localSidChunkScheduler.ts` — v1 chunked Web Audio sink (D6): gapless
+    back-to-back scheduling + underrun accounting + position/buffered reporting, over a narrow
+    injected `AudioScheduleSink` (no real audio/WASM in tests). 10 tests.
+  - `src/lib/playback/localSidEngine.ts` — main-thread controller: injectable worker + AudioContext
+    factories; load→open→**clock-driven prefetch**→gapless schedule→position→end; **ROM-required
+    tunes are NOT started** (routed to C64 in LE2); `renderMsPerSec`/underrun stats. 11 tests.
+  - `src/lib/playback/localSidWorkerProtocol.ts` (typed contract), `localSidWorkerCore.ts`
+    (RSID-magic ROM detection + worker guards; 8 tests), `localSid.worker.ts` (thin; coverage-excluded;
+    **dynamic-imports** the vendored WASM at runtime).
+  - **Vendored `@sidflow/libsidplayfp-wasm` 0.3.10** → `public/wasm/libsidplayfp/` (NOT on npm →
+    static assets so the bundler never parses emscripten output and the lockfile is untouched;
+    fixed the source's `../dist/` self-refs; `VENDORING.md` + LICENSE + a `THIRD_PARTY_NOTICES.md`
+    Data-notices row). ROMs never bundled.
+  - Flag `c64u_playback_engine` in `appSettings` (default **`c64`** → playback path byte-for-byte
+    unchanged); typed load/save + 5 appSettings tests.
+  - Local gates green: **33 new unit tests**, catch-guardrail, `tsc`, full `npm run lint`
+    (incl. bundle-budgets — WASM is a public asset, not a JS chunk), `vite build` (✓ 9.4s; public
+    asset copied to `dist/wasm/`; lockfile intact).
+- **Scope truth:** LE1's **on-device L2 exit** (3-min PSID gapless, 0 underruns; `renderMsPerSec`)
+  needs a fresh APK on the Pixel/Callback 8020 — the spec's own manual/local gate (§9.5/§12.6),
+  not CI-provable here. Next: **LE2** (engine toggle + `playItem` routing + one-time ROM notice +
+  wake lock), then the hardware-gated L2–L4 soaks + GA flag-flip.

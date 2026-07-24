@@ -29,6 +29,7 @@ const HIDE_STATUS_BAR_KEY = "c64u_full_screen_hide_status_bar";
 const HIDE_NAVIGATION_BAR_KEY = "c64u_full_screen_hide_navigation_bar";
 const SID_RADIO_ENABLED_KEY = "c64u_sid_radio_enabled";
 const SID_RANKING_ENABLED_KEY = "c64u_sid_ranking_enabled";
+const PLAYBACK_ENGINE_KEY = "c64u_playback_engine";
 const BOOT_MENU_ANSWER_ENABLED_KEY = "c64u_boot_menu_answer_enabled";
 const BOOT_MENU_KEY_KEY = "c64u_boot_menu_key";
 const BOOT_SETTLE_MS_KEY = "c64u_boot_settle_ms";
@@ -570,6 +571,28 @@ export const saveSidRankingEnabled = (enabled: boolean) => {
   broadcast(SID_RANKING_ENABLED_KEY, enabled);
 };
 
+/**
+ * Playback engine (spec §12.5, Track B). `"c64"` plays on the Ultimate and
+ * mirrors the audio back over Live View (the app's identity — always works);
+ * `"local"` renders the SID on-device with the libsidplayfp WASM engine, no C64
+ * required. Defaults **`c64`**; the Local engine is opt-in during rollout, so
+ * with the default the playback path is byte-for-byte unchanged.
+ */
+export type PlaybackEngine = "c64" | "local";
+
+export const DEFAULT_PLAYBACK_ENGINE: PlaybackEngine = "c64";
+
+export const loadPlaybackEngine = (): PlaybackEngine => {
+  if (typeof localStorage === "undefined") return DEFAULT_PLAYBACK_ENGINE;
+  return localStorage.getItem(PLAYBACK_ENGINE_KEY) === "local" ? "local" : DEFAULT_PLAYBACK_ENGINE;
+};
+
+export const savePlaybackEngine = (engine: PlaybackEngine) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(PLAYBACK_ENGINE_KEY, engine);
+  broadcast(PLAYBACK_ENGINE_KEY, engine);
+};
+
 const loadString = (key: string) => {
   if (typeof localStorage === "undefined") return "";
   return localStorage.getItem(key) ?? "";
@@ -615,4 +638,5 @@ export const APP_SETTINGS_KEYS = {
   HIDE_NAVIGATION_BAR_KEY,
   SID_RADIO_ENABLED_KEY,
   SID_RANKING_ENABLED_KEY,
+  PLAYBACK_ENGINE_KEY,
 };

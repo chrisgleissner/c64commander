@@ -18,7 +18,10 @@ import {
   DEFAULT_ENABLE_SWIPE_NAVIGATION,
   DEFAULT_SID_RADIO_ENABLED,
   DEFAULT_SID_RANKING_ENABLED,
+  DEFAULT_PLAYBACK_ENGINE,
   APP_SETTINGS_KEYS,
+  loadPlaybackEngine,
+  savePlaybackEngine,
   loadSidRadioEnabled,
   saveSidRadioEnabled,
   loadSidRankingEnabled,
@@ -78,6 +81,24 @@ describe("appSettings", () => {
     expect(DEFAULT_SID_RADIO_ENABLED).toBe(false); // spec §0.4: off during rollout
     expect(loadSidRankingEnabled()).toBe(DEFAULT_SID_RANKING_ENABLED);
     expect(DEFAULT_SID_RANKING_ENABLED).toBe(false);
+    expect(loadPlaybackEngine()).toBe(DEFAULT_PLAYBACK_ENGINE);
+    expect(DEFAULT_PLAYBACK_ENGINE).toBe("c64"); // spec §12.5: C64 by default (always works)
+  });
+
+  it("persists the playback engine and rejects unknown values", () => {
+    const { events, dispose } = collectSettingEvents();
+    savePlaybackEngine("local");
+    expect(localStorage.getItem(APP_SETTINGS_KEYS.PLAYBACK_ENGINE_KEY)).toBe("local");
+    expect(loadPlaybackEngine()).toBe("local");
+    expect(events).toContainEqual({ key: APP_SETTINGS_KEYS.PLAYBACK_ENGINE_KEY, value: "local" });
+
+    savePlaybackEngine("c64");
+    expect(loadPlaybackEngine()).toBe("c64");
+
+    // A garbage value falls back to the safe default rather than throwing.
+    localStorage.setItem(APP_SETTINGS_KEYS.PLAYBACK_ENGINE_KEY, "bogus");
+    expect(loadPlaybackEngine()).toBe("c64");
+    dispose();
   });
 
   it("saves values and emits setting events", () => {

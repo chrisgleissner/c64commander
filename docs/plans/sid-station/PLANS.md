@@ -80,8 +80,8 @@ Branch: **`feat/sid-radio`** (cut from `main`). Flags default **off** until each
 
 ## Track B — Local Playback Engine (parallel after M0; independent)  (→ L1–L4)
 
-- [~] LE0 Licence audit **(licence PASS: no GPL-2.0-only; libsidplayfp v2-or-later ✓, hashlib MIT)**; runtime WASM-render proof + vendor dist remain → (`dist/LICENSE` + residfp + transitive = v2-or-later/permissive); render one PSID → PCM on Callback 8020 / SailfishOS → **L1**
-- [ ] LE1 `localSidEngine.ts` + `localSid.worker.ts` + chunked Web Audio sink; gapless scheduling; position events — **RED→GREEN** → **L2**
+- [~] LE0 Licence audit **(licence PASS: no GPL-2.0-only; libsidplayfp v2-or-later ✓, hashlib MIT)**; **vendor dist DONE** — `@sidflow/libsidplayfp-wasm` 0.3.10 vendored under `public/wasm/libsidplayfp/` (not on npm → static assets, Vite copies verbatim; LICENSE + `THIRD_PARTY_NOTICES.md` row added). Remaining: on-device WASM-render proof (render one PSID → PCM on Callback 8020 / SailfishOS) → **L1** (hardware-gated)
+- [~] LE1 **host-testable core DONE + green** — `localSidChunkScheduler.ts` (gapless schedule math + underrun accounting), `localSidEngine.ts` (worker+AudioContext-injected orchestration: load→open→prefetch→gapless→position→end, ROM-required routing, renderMsPerSec stats), `localSidWorkerProtocol.ts`, `localSidWorkerCore.ts` (RSID-magic ROM detection), `localSid.worker.ts` (coverage-excluded; dynamic-imports vendored WASM). 33 new unit tests; flag `c64u_playback_engine` (default `c64`). Remaining: **L2 on-device** gapless/zero-underrun 3-min PSID proof → hardware-gated
 - [ ] LE2 `c64u_playback_engine` setting + Play-page segmented control (`playback-engine-c64`/`playback-engine-local`); route in `playItem`; ROM-less fallback + one-time notice; clean instant switch; foreground wake lock → **L3**
 - [ ] LE3 On-device battery/CPU gate (§12.6); background-audio doc + native-sink escape hatch noted; **SID Radio e2e on Local engine, no C64** (`--engine local`); manual chapter → **L4**
 
