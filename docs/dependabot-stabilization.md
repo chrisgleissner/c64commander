@@ -6,6 +6,18 @@ bumps — all majors are ignored and taken by hand. The full CI suite (web +
 Android + iOS + `c64scope`) runs on every Dependabot PR, so breakages surface in
 the PR, not after merge.
 
+Security-alert PRs are a separate path: GitHub fires them immediately (not on
+Friday's schedule), ignores the major-version filter, and can never share a
+group with version updates or span ecosystems/directories. Each
+`package-ecosystem` entry has its own `security-rollup` group
+(`applies-to: security-updates`, `patterns: ["*"]`) so that when several
+advisories land for the same ecosystem+directory on the same day, they land as
+one PR instead of one-per-CVE — e.g. a same-day cluster of `postcss` +
+`fast-uri` + `hono` + `body-parser` alerts in `/c64scope` becomes a single
+`security-rollup` PR. Alerts in different ecosystems/directories (e.g. a root
+`npm` CVE alongside one in `/c64scope`) still open as separate PRs — that split
+is a GitHub Dependabot constraint, not a config gap.
+
 This doc is the playbook for keeping those PRs mergeable **without manual
 cleanup**. When a rollup PR is red, classify the failure before assuming "just
 flaky" — most red rollups are one of the classes below, each with a _durable_

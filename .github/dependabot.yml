@@ -12,9 +12,16 @@ version: 2
 # Security updates are NOT restricted by the rules below. Per GitHub's docs, the
 # `ignore` + `update-types` filter applies to version updates only; Dependabot
 # security updates are raised automatically for every manifest in the repo
-# (including ones not listed here) and may cross the major-version boundary when
-# that is the only available fix. This keeps us protected against advisories
-# while major *routine* upgrades stay behind a manual review.
+# (including ones not listed here), fire immediately (not on the weekly
+# schedule), and may cross the major-version boundary when that is the only
+# available fix. This keeps us protected against advisories while major
+# *routine* upgrades stay behind a manual review.
+#
+# GitHub does not let security updates join the "weekly-rollup" multi-ecosystem
+# group (security and version updates can never share a group, and grouping
+# never spans ecosystems/directories), but same-day security alerts within one
+# ecosystem+directory are still bundled into a single PR via the per-entry
+# "security-rollup" group below, instead of one PR per advisory.
 #
 # Major upgrades are intentionally opt-in: bump the manifest by hand (or run
 # `@dependabot ignore <dep> major version` / unignore) so the breaking change
@@ -39,6 +46,11 @@ updates:
     multi-ecosystem-group: weekly-rollup
     patterns:
       - "*"
+    groups:
+      security-rollup:
+        applies-to: security-updates
+        patterns:
+          - "*"
     ignore:
       - dependency-name: "*"
         update-types:
@@ -52,6 +64,11 @@ updates:
     multi-ecosystem-group: weekly-rollup
     patterns:
       - "*"
+    groups:
+      security-rollup:
+        applies-to: security-updates
+        patterns:
+          - "*"
     ignore:
       - dependency-name: "*"
         update-types:
@@ -62,6 +79,11 @@ updates:
     multi-ecosystem-group: weekly-rollup
     patterns:
       - "*"
+    groups:
+      security-rollup:
+        applies-to: security-updates
+        patterns:
+          - "*"
     ignore:
       - dependency-name: actions/setup-python
         versions:
@@ -76,6 +98,11 @@ updates:
     multi-ecosystem-group: weekly-rollup
     patterns:
       - "*"
+    groups:
+      security-rollup:
+        applies-to: security-updates
+        patterns:
+          - "*"
     ignore:
       # The Gradle wrapper (gradle-wrapper.properties distributionUrl) must move in
       # lockstep with the Android Gradle Plugin — AGP major versions change
