@@ -22,6 +22,7 @@ import { installNativeSafeAreaSync } from "./lib/native/safeArea";
 import { applyFullScreenFromSettings } from "./lib/native/fullScreen";
 import { applyScreenOrientationFromSettings } from "./lib/native/screenOrientation";
 import { loadRemoteFonts } from "./lib/startup/fontLoading";
+import { registerSidRadioProbe } from "./lib/sidRadio/sidRadioProbe";
 import "./index.css";
 
 export const scheduleAfterFirstPaint = (work: () => void) => {
@@ -68,6 +69,9 @@ const startDeferredStartupBootstrap = () => {
   registerRemoteInputLatencyBridge();
   registerFetchTrace();
   registerUserInteractionCapture();
+  // SID Radio M0.5 device harness: installs window.__sidRadioProbe only when the
+  // flag is on (no-op otherwise); also keeps the worker in the build graph.
+  registerSidRadioProbe();
   markStartupBootstrapComplete();
   void import("./lib/startup/secureStorageBootstrap")
     .then(({ primeSecureStorageAfterStartup }) => primeSecureStorageAfterStartup())

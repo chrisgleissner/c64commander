@@ -206,3 +206,31 @@ _(append entries below as tasks/gates complete — newest last)_
 - Commands + evidence: doc-only; no tests affected (parser/fixture unchanged and already v2,
   proven by the M0.3 golden + M0.2 self-test).
 - Gate: n/a (spec/parser now mutually consistent; unblocks M2 stationEngine design).
+
+### 2026-07-24 — M0.5 Web Worker / asset harness spike (the biggest unknown)
+- Task: Prove the vite-worker → Capacitor-WebView path before any engine logic depends on
+  it (principle 5, G3). The repo had **no Web Worker precedent**.
+- Files: `src/lib/sidRadio/sidRadioWorkerProtocol.ts` (typed `load`→`ready`/`error` contract,
+  §6.5 subset), `sidRadioWorkerCore.ts` (pure `buildReadyStats`/`toWorkerErrorMessage`/
+  `isWorkerGlobalScope`, Node-testable), `sidRadio.worker.ts` (thin worker entry: fetch
+  `SIDCORR_BUNDLE_URL` → parse → post `ready` w/ `engineThreadIsMain:false`; sets
+  `__runsInWorker`), `sidRadioWorkerClient.ts` (injectable-factory client; promise `load()`;
+  **off-main-thread guard** — no synchronous fallback, throws `SidRadioWorkerUnavailableError`
+  when `Worker` is absent), `sidRadioProbe.ts` (flag-gated `window.__sidRadioProbe` device
+  hook + pulls the worker into the build graph), `src/main.tsx` (calls `registerSidRadioProbe`
+  in the deferred bootstrap). Tests: `sidRadioWorkerCore` (5), `sidRadioWorkerClient` (5,
+  fake-worker driven), `sidRadioProbe` (3).
+- Decisions: Keep all parse/BFS in pure importable modules; the `.worker.ts` shell only wires
+  `self`. Engine runs **only** in a worker — the client refuses main-thread execution (§8.6)
+  rather than risk starving Remote Input ([[hvsc-hydration-starved-remote-input]]). Probe is
+  flag-gated so the app is inert with the flag off; the worker chunk ships dormant.
+- Commands + evidence:
+  - `npx vitest run tests/unit/sidRadio/` → **43 passed, 1 skipped** (whole sidRadio suite).
+  - `npm run build` → **exit 0**; **`dist/assets/sidRadio.worker-vbj2HbZD.js` (5,572 B)**
+    emitted as a module-worker chunk containing the `SIDTINY1` parser; `prebuild`'s
+    `sidcorr:fetch` shipped the real bundle to `dist/data/sidcorr/hvsc-tiny.sidcorr`
+    (1,818,171 B) — the worker's `fetch('/data/sidcorr/hvsc-tiny.sidcorr')` target.
+  - `eslint` + `tsc -p tsconfig.app.json --noEmit` clean.
+- Gate: **G3 host/web proven** (worker builds under vite; engine off the main thread by
+  construction; guard tested). The Android WebView `ready` / `engineThreadIsMain=false`
+  device proof is the M0 EXIT (HIL via `window.__sidRadioProbe`).

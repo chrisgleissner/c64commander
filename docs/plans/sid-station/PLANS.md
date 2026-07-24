@@ -41,7 +41,7 @@ Branch: **`feat/sid-radio`** (cut from `main`). Flags default **off** until each
 - [x] 0.2 Fixtures: `tests/fixtures/sidcorr/buildTinyFixture.ts` (+ self-test) — golden `SIDCORR_REAL=1` manifest test delivered with the parser in 0.3 (it exercises the parser)
 - [x] 0.3 `sidcorrTiny.ts` parser + header validation + cold→hot transform (§2.6) — **RED→GREEN**; golden `SIDCORR_REAL=1` round-trips the real bundle (G1 host-side proof)
 - [x] 0.4 `md5PathIndex.ts` from `Songlengths.md5`; rebuild on finalize hook (gated by `sidRadioEnabled`); deterministic tie-break (D14) — **RED→GREEN**
-- [ ] 0.5 Worker/asset harness spike `sidRadio.worker.ts`: builds under vite + loads in Capacitor WebView on Android/web/iOS; off-main-thread guard (§8.6)
+- [x] 0.5 Worker/asset harness spike `sidRadio.worker.ts`: builds under vite (worker chunk emitted; bundled asset in dist) + off-main-thread guard (§8.6). Device WebView `ready`/`engineThreadIsMain=false` proof = M0 EXIT (HIL)
 - [ ] 0.6 Packaging test: `.sidcorr` absent from `androidResources.noCompress`; sha256 verify fails loudly on drift (§8.4)
 - [ ] **M0 EXIT** — parser round-trips real bundle; `Commando.sid` resolves on device; worker posts `ready` w/ `engineThreadIsMain=false` → tick **G1, G2, G3(partial)**
 
