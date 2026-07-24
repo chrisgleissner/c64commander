@@ -234,3 +234,20 @@ _(append entries below as tasks/gates complete — newest last)_
 - Gate: **G3 host/web proven** (worker builds under vite; engine off the main thread by
   construction; guard tested). The Android WebView `ready` / `engineThreadIsMain=false`
   device proof is the M0 EXIT (HIL via `window.__sidRadioProbe`).
+
+### 2026-07-24 — M0.6 packaging test (§8.4) + fetch-sidcorr testability refactor
+- Task: Assert `.sidcorr` is never in `androidResources`/`aaptOptions` `noCompress` (so AGP
+  DEFLATE-compresses it in the APK) and that the sha256 pin fails loudly on drift.
+- Files: `tests/unit/scripts/sidcorrPackaging.test.ts` (new, node), `scripts/fetch-sidcorr.mjs`
+  (made fs injectable — `readFileImpl`/`writeFileImpl`/`mkdirImpl`; moved the exit-code
+  decision out of the function into the CLI via new `isFatalStatus`, so tests never mutate the
+  shared `process.exitCode`).
+- Decisions: `android/app/build.gradle` has no `noCompress` block → default DEFLATE already
+  applies (spec §3), so the test locks in "no `noCompress` line mentions `sidcorr`". Drift is
+  tested without the real asset (inject ENOENT + a tampered download → `sha-mismatch`, no
+  write); a happy-path write test runs only when the git-ignored asset is present.
+- Commands + evidence: `npx vitest run tests/unit/scripts/{sidcorrPackaging,fetchSidcorr}.test.ts`
+  → **8 passed** (no-`noCompress`-sidcorr; drifted download refused + fatal; drifted cache
+  refused; correctly-hashed write matches the pin). `node scripts/fetch-sidcorr.mjs` still
+  `up to date … exit 0`. eslint clean.
+- Gate: §8.4 packaging assertions green (feeds G1).

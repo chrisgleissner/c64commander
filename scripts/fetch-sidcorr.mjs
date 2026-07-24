@@ -53,30 +53,38 @@ export const verifyBundleSha256 = (buffer, expectedSha = SIDCORR_RELEASE.bundleS
 export const bundleDownloadUrl = (release = SIDCORR_RELEASE) =>
   `https://github.com/${release.repo}/releases/download/${release.tag}/${release.bundleAsset}`;
 
-const readIfExists = async (absPath) => {
+const readIfExists = async (absPath, readFile) => {
   try {
-    return await fs.readFile(absPath);
+    return await readFile(absPath);
   } catch (error) {
     if (error?.code === "ENOENT") return null;
     throw error;
   }
 };
 
-const fail = (message) => {
+const logError = (message) => {
   console.error(`[fetch-sidcorr] ${message}`);
-  process.exitCode = 1;
 };
 
-export const fetchSidcorr = async ({ required = false, fetchImpl = fetch } = {}) => {
+// fs is injectable so the sha-drift / write paths are unit-testable without
+// touching the real asset. The function is side-effect-free w.r.t. process
+// exit; the CLI runner maps the returned status to an exit code (see below).
+export const fetchSidcorr = async ({
+  required = false,
+  fetchImpl = fetch,
+  readFileImpl = (absPath) => fs.readFile(absPath),
+  writeFileImpl = (absPath, data) => fs.writeFile(absPath, data),
+  mkdirImpl = (dir, options) => fs.mkdir(dir, options),
+} = {}) => {
   const targetPath = path.join(REPO_ROOT, "public", SIDCORR_RELEASE.publicPath);
 
-  const existing = await readIfExists(targetPath);
+  const existing = await readIfExists(targetPath, readFileImpl);
   if (existing) {
     if (verifyBundleSha256(existing)) {
       console.log(`[fetch-sidcorr] up to date (${existing.length} bytes, sha ok): ${SIDCORR_RELEASE.publicPath}`);
       return { status: "cached", path: targetPath };
     }
-    fail(
+    logError(
       `existing bundle at ${SIDCORR_RELEASE.publicPath} does not match the pinned sha256 ` +
         `(${SIDCORR_RELEASE.bundleSha256}). Delete it and re-run, or re-pin the release.`,
     );
@@ -94,7 +102,7 @@ export const fetchSidcorr = async ({ required = false, fetchImpl = fetch } = {})
   } catch (error) {
     const message = `could not download ${SIDCORR_RELEASE.bundleAsset} from ${url}: ${error?.message ?? error}`;
     if (required) {
-      fail(`${message} (--required)`);
+      logError(`${message} (--required)`);
       return { status: "download-failed", path: targetPath };
     }
     console.warn(
@@ -105,18 +113,21 @@ export const fetchSidcorr = async ({ required = false, fetchImpl = fetch } = {})
   }
 
   if (!verifyBundleSha256(buffer)) {
-    fail(
+    logError(
       `downloaded bundle sha256 ${sha256Hex(buffer)} != pinned ${SIDCORR_RELEASE.bundleSha256}. ` +
         `Refusing to write a drifted asset.`,
     );
     return { status: "sha-mismatch", path: targetPath };
   }
 
-  await fs.mkdir(path.dirname(targetPath), { recursive: true });
-  await fs.writeFile(targetPath, buffer);
+  await mkdirImpl(path.dirname(targetPath), { recursive: true });
+  await writeFileImpl(targetPath, buffer);
   console.log(`[fetch-sidcorr] downloaded ${buffer.length} bytes → ${SIDCORR_RELEASE.publicPath} (sha ok)`);
   return { status: "downloaded", path: targetPath };
 };
+
+/** Statuses a build must treat as fatal (pin drift, or a required-but-missing asset). */
+export const isFatalStatus = (status) => status === "sha-mismatch" || status === "download-failed";
 
 const isDirectRun = () => {
   const invoked = process.argv[1];
@@ -125,8 +136,12 @@ const isDirectRun = () => {
 
 if (isDirectRun()) {
   const required = process.argv.includes("--required");
-  fetchSidcorr({ required }).catch((error) => {
-    console.error("[fetch-sidcorr] unexpected failure", error);
-    process.exitCode = 1;
-  });
+  fetchSidcorr({ required })
+    .then((result) => {
+      if (isFatalStatus(result.status)) process.exitCode = 1;
+    })
+    .catch((error) => {
+      console.error("[fetch-sidcorr] unexpected failure", error);
+      process.exitCode = 1;
+    });
 }
