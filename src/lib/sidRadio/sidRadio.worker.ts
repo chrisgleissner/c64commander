@@ -17,7 +17,13 @@
  */
 
 import { SIDCORR_BUNDLE_URL } from "./sidcorrRelease";
-import { buildReadyStats, isWorkerGlobalScope, toWorkerErrorMessage } from "./sidRadioWorkerCore";
+import { parseSidcorrTiny, type SidcorrTinyBundle } from "./sidcorrTiny";
+import {
+  computeStationResponse,
+  isWorkerGlobalScope,
+  readyStatsFromBundle,
+  toWorkerErrorMessage,
+} from "./sidRadioWorkerCore";
 import type { SidRadioMainToWorker } from "./sidRadioWorkerProtocol";
 
 interface WorkerScope {
@@ -39,13 +45,23 @@ const fetchBundle = async (provided?: ArrayBuffer): Promise<ArrayBuffer> => {
   return response.arrayBuffer();
 };
 
+let loadedBundle: SidcorrTinyBundle | null = null;
+
 ctx.onmessage = async (event: MessageEvent<SidRadioMainToWorker>) => {
   const message = event.data;
   try {
     if (message?.type === "load") {
-      const bundle = await fetchBundle(message.bundle);
-      const stats = buildReadyStats(bundle, !isWorkerGlobalScope());
-      ctx.postMessage({ type: "ready", stats });
+      const buffer = await fetchBundle(message.bundle);
+      loadedBundle = parseSidcorrTiny(buffer);
+      ctx.postMessage({ type: "ready", stats: readyStatsFromBundle(loadedBundle, !isWorkerGlobalScope()) });
+      return;
+    }
+    if (message?.type === "compute") {
+      if (!loadedBundle) {
+        ctx.postMessage({ type: "error", id: message.id, code: "not-loaded", message: "bundle not loaded" });
+        return;
+      }
+      ctx.postMessage(computeStationResponse(loadedBundle, message.id, message.request));
       return;
     }
     ctx.postMessage({
@@ -54,6 +70,11 @@ ctx.onmessage = async (event: MessageEvent<SidRadioMainToWorker>) => {
       message: `unknown worker message: ${String((message as { type?: unknown } | undefined)?.type)}`,
     });
   } catch (error) {
-    ctx.postMessage(toWorkerErrorMessage(error));
+    const errorMessage = toWorkerErrorMessage(error);
+    ctx.postMessage(
+      message && typeof message === "object" && "id" in message
+        ? { ...errorMessage, id: (message as { id?: number }).id }
+        : errorMessage,
+    );
   }
 };

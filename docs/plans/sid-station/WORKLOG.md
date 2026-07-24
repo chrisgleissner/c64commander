@@ -376,3 +376,19 @@ _(append entries below as tasks/gates complete — newest last)_
 - Evidence: 6 tests — next-N + exclude advance, skip-unresolved-no-gap (removed tune §2.5),
   default lookahead=10, exhausted, no-neighbours passthrough, initial-exclude resume. eslint+tsc clean.
 - Gate: feeds G5 continuity + G12 removed-tune skip.
+
+### 2026-07-24 — M2.5 worker compute + contract test + sidRadioStats
+- Task: Extend the worker to compute candidate batches; pin the message contract (§8.3);
+  add the `sid-radio-stats` DOM blob (§9.4).
+- Files: `sidRadioWorkerProtocol.ts` (+compute/candidates/empty, id-correlated),
+  `sidRadioWorkerCore.ts` (+`computeStationResponse`, `readyStatsFromBundle`),
+  `sidRadio.worker.ts` (holds the parsed bundle across messages; handles `compute`),
+  `sidRadioWorkerClient.ts` (persistent id-routed handler; `compute(request)` promise),
+  `sidRadioStats.ts` (new — §9.4 counters mirrored to a hidden `sid-radio-stats` DOM element;
+  refill/auto-advance/skip aggregators; node-safe), `tests/contract/sidRadioWorker.contract.test.ts`
+  (new, 5 — round-trips through the real core), `tests/unit/sidRadio/sidRadioStats.test.ts` (new, 4).
+- Decisions: engine stays pure — a `compute` request carries the full station state each time;
+  the worker only holds the bundle. Client correlates responses by id (concurrent computes safe).
+  Stats DOM blob is the HIL/CDP read surface (mirrors Live View) and doubles as Diagnostics.
+- Evidence: contract 5 + stats 4 pass; existing worker core/client 10 still pass; eslint + tsc clean.
+- Gate: worker contract (§8.3) green; feeds G5/G6/G9 HIL (the stats surface).
