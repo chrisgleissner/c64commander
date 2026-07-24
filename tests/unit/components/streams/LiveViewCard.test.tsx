@@ -12,8 +12,14 @@ import { LiveViewCard } from "@/components/streams/LiveViewCard";
 
 const mirror = vi.hoisted(() => ({ state: { video: { state: "off" } } }));
 
+const isLive = (s: string) => s === "live" || s === "connecting";
+
 vi.mock("@/hooks/useAvMirror", () => ({
-  useAvMirror: () => ({ video: mirror.state.video }),
+  useAvMirror: () => ({ video: mirror.state.video, anyLive: isLive(mirror.state.video.state) }),
+}));
+
+vi.mock("@/components/streams/StreamStatsPanel", () => ({
+  StreamStatsPanel: () => <div data-testid="stream-stats" />,
 }));
 
 vi.mock("@/components/streams/AvMirrorControls", () => ({
@@ -35,13 +41,20 @@ describe("LiveViewCard", () => {
     mirror.state = { video: { state: "off" } };
   });
 
-  it("renders controls and a hint, with no preview while video is off", () => {
+  it("renders controls and a hint, with no preview or Stats while nothing is live", () => {
     render(<LiveViewCard />);
     expect(screen.getByTestId("live-view-card")).toBeInTheDocument();
     expect(screen.getByTestId("controls")).toBeInTheDocument();
     expect(screen.queryByTestId("preview")).toBeNull();
     expect(screen.queryByTestId("live-view-expand")).toBeNull();
+    expect(screen.queryByTestId("stream-stats")).toBeNull();
     expect(screen.getByText(/Hear and see the running machine/)).toBeInTheDocument();
+  });
+
+  it("mounts the Stats panel while a stream is live", () => {
+    mirror.state = { video: { state: "live" } };
+    render(<LiveViewCard />);
+    expect(screen.getByTestId("stream-stats")).toBeInTheDocument();
   });
 
   it("passes audio/video enablement to the controls and drops 'see' from the hint", () => {

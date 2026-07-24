@@ -10,6 +10,7 @@ package uk.gleissner.c64commander
 
 import android.content.Context
 import android.net.wifi.WifiManager
+import android.os.Process
 import android.util.Base64
 import android.util.Log
 import com.getcapacitor.JSObject
@@ -79,13 +80,14 @@ class StreamUdpPlugin : Plugin() {
    * packet), `height` the line count (PAL 272 / NTSC 240), `dropped` the cumulative sequence-gap
    * (packet-loss) count, `lost` the cumulative FRAME-loss count (gaps in the frame-number sequence).
    */
-  internal var emitFrame: (String, String, Double, Int, Int, Int) -> Unit = {
+  internal var emitFrame: (String, String, Double, Int, Int, Int, Boolean) -> Unit = {
     name,
     data,
     arrivalMs,
     height,
     dropped,
-    lost ->
+    lost,
+    present ->
     val event = JSObject()
     event.put("name", name)
     event.put("data", data)
@@ -93,7 +95,30 @@ class StreamUdpPlugin : Plugin() {
     event.put("height", height)
     event.put("dropped", dropped)
     event.put("lost", lost)
+    event.put("present", present)
     notifyListeners("videoframe", event)
+  }
+
+  /**
+   * Per-stream keep-rate in permille (0–1000; default 1000 = present every frame). The governor
+   * pushes this so the assembler can DECIMATE natively — skipping the ~52 KB Base64 encode + the
+   * bridge hop + the JS decode for frames that will not be presented. HIL showed decimating only in
+   * JS barely reduced CPU because every frame was still base64'd on both sides; deciding here is what
+   * makes the frame-rate governor actually save CPU. Receive, assembly and loss accounting stay
+   * complete for EVERY frame (spec §11.4) — only the encode + forward of a skipped frame is elided.
+   */
+  private val keepPermille = ConcurrentHashMap<String, Int>()
+
+  @PluginMethod
+  fun setKeepFraction(call: PluginCall) {
+    val name = call.getString("name")
+    if (name == null) {
+      call.reject("name is required")
+      return
+    }
+    val permille = (call.getInt("permille") ?: 1000).coerceIn(0, 1000)
+    keepPermille[name] = permille
+    call.resolve(JSObject())
   }
 
   @PluginMethod
@@ -127,6 +152,14 @@ class StreamUdpPlugin : Plugin() {
             bind(InetSocketAddress(port))
           }
         }
+      // Enlarge the OS receive buffer so a scheduling gap or GC pause can't silently drop packets:
+      // video is ~3400 pkt/s × ~780 B ≈ 2.6 MB/s, so the small default SO_RCVBUF can overflow under
+      // load (HIL saw occasional drops even on a clean LAN). The OS may cap the request; harmless.
+      try {
+        socket.receiveBufferSize = RECV_BUFFER_BYTES
+      } catch (error: Exception) {
+        Log.d(logTag, "receiveBufferSize hint ignored for $name", error)
+      }
       sockets[name] = socket
       if (assemble) {
         executor.execute { assembleLoop(name, socket) }
@@ -158,14 +191,22 @@ class StreamUdpPlugin : Plugin() {
   }
 
   private fun receiveLoop(name: String, socket: DatagramSocket) {
+    raiseThreadPriority(name)
     // VIC packets are ~780 bytes and audio ~770; 2048 leaves ample headroom.
     val buffer = ByteArray(2048)
+    // Reuse one DatagramPacket across the loop (reset its length each time) to avoid a per-packet
+    // allocation on the hot receive thread (~3400/s video) — less GC pressure (spec §1.4).
+    val packet = DatagramPacket(buffer, buffer.size)
     val stats = RateLog(name, "raw")
+    // Frame/loss accounting only makes sense for the VIC video stream; applying VIC last-line/
+    // frame-number parsing to AUDIO packets reads PCM bytes as frame numbers and reports garbage
+    // (HIL saw audio "lost" climbing into the thousands). Audio reports packets/s only.
+    val countFrames = name == "video"
     var prevCompletedFrame = -1
     var lost = 0
     while (!socket.isClosed) {
       try {
-        val packet = DatagramPacket(buffer, buffer.size)
+        packet.setLength(buffer.size)
         socket.receive(packet)
         // Stamp wire-arrival time immediately, before any encoding/bridge latency (see emitDatagram).
         val arrivalNanos = clockNanos()
@@ -175,7 +216,7 @@ class StreamUdpPlugin : Plugin() {
         // and track frame-number gaps, so the per-second measurement log reports frames/s AND frame
         // loss even on the per-packet path (JS still does the authoritative assembly + loss counting).
         var completedFrame = false
-        if (packet.length >= VIC_HEADER_BYTES && isLastLine(packet.data, packet.offset)) {
+        if (countFrames && packet.length >= VIC_HEADER_BYTES && isLastLine(packet.data, packet.offset)) {
           completedFrame = true
           val frameNum = u16(packet.data, packet.offset + 2)
           if (prevCompletedFrame >= 0) {
@@ -195,6 +236,21 @@ class StreamUdpPlugin : Plugin() {
   }
 
   /**
+   * Raise the receive thread's scheduling priority so a busy device can't starve packet reception
+   * (packet-loss resilience, spec §10.3). Audio feeds real-time playback → URGENT_AUDIO; video →
+   * DISPLAY. Threads default to background priority otherwise.
+   */
+  private fun raiseThreadPriority(name: String) {
+    try {
+      Process.setThreadPriority(
+        if (name == "audio") Process.THREAD_PRIORITY_URGENT_AUDIO else Process.THREAD_PRIORITY_DISPLAY,
+      )
+    } catch (error: Exception) {
+      Log.d(logTag, "setThreadPriority ignored for $name", error)
+    }
+  }
+
+  /**
    * Native VIC frame assembler (the Live View fast path). Reassembles the per-line datagrams of a
    * frame into one 52224-byte 4bpp buffer and emits it as a single `videoframe` event, collapsing
    * ~68 bridge hops per frame into one. Format/guard rules mirror the JS `VicStreamAssembler` and
@@ -202,7 +258,11 @@ class StreamUdpPlugin : Plugin() {
    * assembly state live on this receive thread, so no synchronisation is needed.
    */
   private fun assembleLoop(name: String, socket: DatagramSocket) {
+    raiseThreadPriority(name)
     val buffer = ByteArray(2048)
+    // Reuse one DatagramPacket across the loop (reset length per receive) — no per-packet alloc on
+    // the hot video receive thread (~3400/s).
+    val packet = DatagramPacket(buffer, buffer.size)
     val frame = ByteArray(VIC_BYTES_PER_FRAME)
     var lastSeq = -1
     var dropped = 0
@@ -211,10 +271,12 @@ class StreamUdpPlugin : Plugin() {
     var curFrameNum = -1
     var frameStartNanos = Long.MAX_VALUE
     var frameHeight = VIC_PAL_HEIGHT
+    // Bresenham phase accumulator (permille units) for native cadence decimation; thread-confined.
+    var phaseAccum = 0
     val stats = RateLog(name, "assembled")
     while (!socket.isClosed) {
       try {
-        val packet = DatagramPacket(buffer, buffer.size)
+        packet.setLength(buffer.size)
         socket.receive(packet)
         val arrivalNanos = clockNanos()
         val data = packet.data
@@ -270,8 +332,16 @@ class StreamUdpPlugin : Plugin() {
             if (gap > 1) lost += gap - 1
           }
           prevCompletedFrame = frameNum
-          val encoded = Base64.encodeToString(frame, 0, VIC_BYTES_PER_FRAME, Base64.NO_WRAP)
-          emitFrame(name, encoded, frameStartNanos / 1_000_000.0, frameHeight, dropped, lost)
+          // Native cadence decision: present this frame only when the accumulator crosses 1000.
+          // A skipped frame emits a tiny event (empty data, present=false) so JS still counts it —
+          // but its ~52 KB Base64 encode + bridge payload are elided (the CPU win).
+          val permille = keepPermille[name] ?: DEFAULT_KEEP_PERMILLE
+          phaseAccum += permille
+          val present = phaseAccum >= 1000
+          if (present) phaseAccum -= 1000
+          val encoded =
+            if (present) Base64.encodeToString(frame, 0, VIC_BYTES_PER_FRAME, Base64.NO_WRAP) else ""
+          emitFrame(name, encoded, frameStartNanos / 1_000_000.0, frameHeight, dropped, lost, present)
           curFrameNum = -1
           frameStartNanos = Long.MAX_VALUE
           stats.record(arrivalNanos, 1, dropped, lost)
@@ -407,6 +477,13 @@ class StreamUdpPlugin : Plugin() {
   }
 
   companion object {
+    // OS socket receive-buffer request (2 MB) — ~0.8 s of video at the 2.6 MB/s wire rate, ample
+    // headroom for a scheduling/GC gap. The kernel may clamp it to net.core.rmem_max.
+    private const val RECV_BUFFER_BYTES = 2 * 1024 * 1024
+
+    // Default native keep-rate: present every assembled frame.
+    private const val DEFAULT_KEEP_PERMILLE = 1000
+
     // VIC wire-format constants (source of truth: src/lib/streams/vicStream.ts + c64stream).
     private const val VIC_HEADER_BYTES = 12
     private const val VIC_FRAME_WIDTH = 384

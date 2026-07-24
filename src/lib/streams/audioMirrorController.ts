@@ -23,11 +23,26 @@ import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions }
 
 export type AudioMirrorState = "off" | "connecting" | "live" | "error";
 
+/** Coalesce audio health broadcasts to ~10 Hz (state/error transitions bypass this). */
+export const AUDIO_SNAPSHOT_EMIT_INTERVAL_MS = 100;
+
 export interface AudioMirrorSnapshot {
   state: AudioMirrorState;
   droppedPackets: number;
   chunks: number;
   error: string | null;
+}
+
+/** Live audio-pipeline signals for the governor + telemetry (read on the low-rate tick). */
+export interface AudioMirrorSignals {
+  /** WebAudio player buffer depth ahead of the audio clock (ms). */
+  audioBufferMs: number;
+  /** Cumulative player underruns (output ran dry). */
+  audioUnderruns: number;
+  /** Cumulative audio packets whose loss was concealed. */
+  audioConcealed: number;
+  /** Cumulative audio packets detected lost. */
+  audioLostPackets: number;
 }
 
 export interface AudioMirrorDeps {
@@ -62,9 +77,31 @@ export class AudioMirrorController {
     return this.snapshot;
   }
 
+  /**
+   * Current audio-pipeline signals for the governor + telemetry. Cheap reads only (no allocation):
+   * the player's buffer depth / underrun count and the jitter buffer's concealment stats.
+   */
+  getSignals(): AudioMirrorSignals {
+    return {
+      audioBufferMs: this.player?.bufferedMs ?? 0,
+      audioUnderruns: this.player?.underrunCount ?? 0,
+      audioConcealed: this.playbackBuffer?.stats.concealed ?? 0,
+      audioLostPackets: this.playbackBuffer?.stats.packetsLost ?? 0,
+    };
+  }
+
+  private lastEmitMs = -Infinity;
+
   private update(patch: Partial<AudioMirrorSnapshot>) {
     this.snapshot = { ...this.snapshot, ...patch };
-    this.deps.onChange(this.snapshot);
+    // Throttle the React broadcast like the video path: the chunk/dropped snapshot changes ~31/s but
+    // state/error transitions must not be delayed. getSnapshot() stays current for the session tick.
+    const important = patch.state !== undefined || patch.error !== undefined;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (important || now - this.lastEmitMs >= AUDIO_SNAPSHOT_EMIT_INTERVAL_MS) {
+      this.lastEmitMs = now;
+      this.deps.onChange(this.snapshot);
+    }
   }
 
   async start(): Promise<void> {

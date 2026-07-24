@@ -1,0 +1,11 @@
+{
+  "note": "committed stream-bench baseline (ops/s); update requires review + evidence (§21)",
+  "hz": {
+    "VIC frame assembly (68 packets → 1 frame)": 32213,
+    "audio PLC timeline advance (contiguous packet)": 1514034,
+    "audio concealment fill (one 768-byte packet)": 932457,
+    "governor tick": 576956,
+    "telemetry ingest (one 10 Hz sample)": 183305,
+    "audio bytesToInt16 of one packet": 170767
+  }
+}

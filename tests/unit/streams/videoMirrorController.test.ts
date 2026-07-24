@@ -303,17 +303,22 @@ describe("VideoMirrorController", () => {
     // A receiver that delivers whole frames (the native Android plugin's assemble mode): the
     // controller must render them directly, passing through height, frame-start time and drops —
     // without any JS-side assembly.
+    type FrameHandler = (f: Uint8Array, h: number, t: number, dropped: number, lost: number, present: boolean) => void;
     class FrameReceiver implements StreamReceiver {
-      frame: ((f: Uint8Array, h: number, t: number, dropped: number, lost: number) => void) | null = null;
+      frame: FrameHandler | null = null;
       datagram: ((d: Uint8Array, t: number) => void) | null = null;
       stateCb: ((s: StreamConnectionState) => void) | null = null;
       readonly destination = "10.0.0.9:11000";
       closed = false;
+      nativeFraction: number | null = null;
       onDatagram(handler: (d: Uint8Array, t: number) => void) {
         this.datagram = handler;
       }
-      onFrame(handler: (f: Uint8Array, h: number, t: number, dropped: number, lost: number) => void) {
+      onFrame(handler: FrameHandler) {
         this.frame = handler;
+      }
+      setNativeCadence(fraction: number) {
+        this.nativeFraction = fraction;
       }
       onStateChange(handler: (s: StreamConnectionState) => void) {
         this.stateCb = handler;
@@ -336,7 +341,7 @@ describe("VideoMirrorController", () => {
     receiver.stateCb?.("open");
 
     const frame = new Uint8Array((VIC_FRAME_WIDTH * 272) / 2);
-    receiver.frame?.(frame, 240, 7777, 5, 2);
+    receiver.frame?.(frame, 240, 7777, 5, 2, true);
 
     expect(renderFrame).toHaveBeenCalledTimes(1);
     expect(renderFrame.mock.calls[0][1]).toBe(240); // height passed through
@@ -384,6 +389,41 @@ describe("VideoMirrorController", () => {
     expect(controller.getSnapshot().framesLost).toBe(2);
   });
 
+  it("coalesces per-frame health broadcasts to ~10Hz, but emits state changes immediately", async () => {
+    let clock = 0;
+    const receiver = new FakeReceiver();
+    const onChange = vi.fn();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame: vi.fn(),
+      now: () => clock,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange,
+    });
+    await controller.start();
+    receiver.emitState("open");
+    onChange.mockClear();
+
+    // Five frames within the same 100 ms window → only one broadcast (health is coalesced) …
+    clock = 1000;
+    for (let i = 0; i < 5; i += 1) completeFrame(receiver, i, i);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    // … but getSnapshot() stays fully current every frame.
+    expect(controller.getSnapshot().presented).toBe(5);
+
+    // Past the interval → the next frame broadcasts.
+    clock = 1120;
+    completeFrame(receiver, 5, 5);
+    expect(onChange).toHaveBeenCalledTimes(2);
+
+    // A state change bypasses the throttle entirely.
+    onChange.mockClear();
+    await controller.stop();
+    expect(onChange).toHaveBeenCalled();
+    expect(controller.getSnapshot().state).toBe("off");
+  });
+
   it("ignores datagrams that do not complete a frame", async () => {
     const receiver = new FakeReceiver();
     const renderFrame = vi.fn();
@@ -399,5 +439,324 @@ describe("VideoMirrorController", () => {
     // A non-last-line packet: assembler returns null, no render.
     receiver.emit(videoPacket({ seq: 0, line: 0, lastLine: false }));
     expect(renderFrame).not.toHaveBeenCalled();
+  });
+});
+
+describe("VideoMirrorController — coalescing present queue (drop-late / present-newest, §7.6)", () => {
+  /** A manual present pump: the controller enqueues; the test decides when a present tick runs. */
+  const manualPump = () => {
+    const queued: Array<() => void> = [];
+    return {
+      schedule: (present: () => void) => queued.push(present),
+      /** Run every scheduled present tick (there is at most one pending at a time). */
+      flush: () => {
+        while (queued.length) queued.shift()!();
+      },
+      pending: () => queued.length,
+    };
+  };
+
+  it("presents only the NEWEST frame of a burst, counting the superseded ones as backlog replacements", async () => {
+    const pump = manualPump();
+    const receiver = new FakeReceiver();
+    const renderFrame = vi.fn();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame,
+      schedulePresent: pump.schedule,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+
+    // Three frames complete before the present tick runs (a renderer backlog).
+    completeFrame(receiver, 0, 0);
+    completeFrame(receiver, 1, 1);
+    completeFrame(receiver, 2, 2);
+    expect(renderFrame).not.toHaveBeenCalled(); // nothing presented until the pump runs
+    expect(pump.pending()).toBe(1); // exactly one present tick scheduled for the whole burst
+
+    pump.flush();
+    expect(renderFrame).toHaveBeenCalledTimes(1); // only the newest survives
+    const snap = controller.getSnapshot();
+    expect(snap.presented).toBe(1);
+    expect(snap.backlogReplacements).toBe(2); // the two older frames were superseded, never rendered
+    // Frames superseded before presentation are NOT lost on the wire and NOT decimation.
+    expect(snap.framesLost).toBe(0);
+    expect(snap.decimated).toBe(0);
+  });
+
+  it("does not fabricate backlog replacements when each frame is presented before the next completes", async () => {
+    const pump = manualPump();
+    const receiver = new FakeReceiver();
+    const renderFrame = vi.fn();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame,
+      schedulePresent: pump.schedule,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+
+    for (let i = 0; i < 3; i += 1) {
+      completeFrame(receiver, i, i);
+      pump.flush(); // present each before the next arrives (no backlog)
+    }
+    expect(renderFrame).toHaveBeenCalledTimes(3);
+    expect(controller.getSnapshot().presented).toBe(3);
+    expect(controller.getSnapshot().backlogReplacements).toBe(0);
+  });
+
+  it("reports the cadence divisor as decimation, distinct from backlog replacement and wire loss", async () => {
+    const receiver = new FakeReceiver();
+    const renderFrame = vi.fn();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame,
+      frameThrottle: 2, // present every 2nd source frame
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+
+    for (let i = 0; i < 4; i += 1) completeFrame(receiver, i, i);
+    const snap = controller.getSnapshot();
+    expect(snap.presented).toBe(2); // 2nd and 4th
+    expect(snap.decimated).toBe(2); // 1st and 3rd — intentional, NOT a defect
+    expect(snap.backlogReplacements).toBe(0);
+    expect(snap.framesLost).toBe(0);
+  });
+
+  it("setFrameThrottle changes the live cadence divisor (governor hook)", async () => {
+    const receiver = new FakeReceiver();
+    const renderFrame = vi.fn();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+    expect(controller.frameThrottle).toBe(1);
+    completeFrame(receiver, 0, 0); // presented
+    controller.setFrameThrottle(4);
+    expect(controller.frameThrottle).toBe(4);
+    // frameTick continues from 1; next 3 frames (ticks 2,3,4) → only tick 4 presents.
+    for (let i = 1; i <= 4; i += 1) completeFrame(receiver, i, i);
+    expect(renderFrame).toHaveBeenCalledTimes(2);
+  });
+
+  it("tracks present-queue residence on the injected clock (feeds the governor / §6 telemetry)", async () => {
+    const pump = manualPump();
+    let clock = 0;
+    const receiver = new FakeReceiver();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame: vi.fn(),
+      schedulePresent: pump.schedule,
+      now: () => clock,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+
+    completeFrame(receiver, 0, 0); // readyMs = 0
+    clock = 40; // 40 ms elapse before the present tick runs
+    pump.flush();
+    expect(controller.getSnapshot().renderResidenceMs).toBe(40);
+    expect(controller.getSnapshot().maxResidenceMs).toBe(40);
+  });
+});
+
+describe("VideoMirrorController — presentation-slot accounting / concealment (§9)", () => {
+  /** Build a two-packet frame (line 0 + last-line) whose seq numbers the caller controls. */
+  const frameOf = (receiver: FakeReceiver, seq0: number, frameNum: number) => {
+    receiver.emit(videoPacket({ seq: seq0, frame: frameNum, line: 0, lastLine: false }));
+    receiver.emit(videoPacket({ seq: seq0 + 1, frame: frameNum, line: 268, lastLine: true }));
+  };
+
+  it("classifies clean frames as complete, with no repeats or partials and no unexplained gaps", async () => {
+    const receiver = new FakeReceiver();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame: vi.fn(),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+    let seq = 0;
+    for (let f = 0; f < 10; f += 1) {
+      frameOf(receiver, seq, f);
+      seq += 2;
+    }
+    const s = controller.getSnapshot();
+    expect(s.completeFrames).toBe(10);
+    expect(s.partialConcealed).toBe(0);
+    expect(s.repeatedFrames).toBe(0);
+    // Every completed source frame was presented (no decimation, no backlog) — no unexplained gaps.
+    expect(s.presented + s.decimated + s.backlogReplacements).toBe(s.completeFrames + s.partialConcealed);
+  });
+
+  it("counts a whole-frame loss as a repeated slot (previous frame held on the canvas)", async () => {
+    const receiver = new FakeReceiver();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame: vi.fn(),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+    // Frames 0,1, then SKIP frame 2 (its last-line lost), then 3 → frame-number gap 1→3 = 1 lost slot.
+    frameOf(receiver, 0, 0);
+    frameOf(receiver, 2, 1);
+    frameOf(receiver, 6, 3); // seq jumps too (frame 2's packets never arrived)
+    const s = controller.getSnapshot();
+    expect(s.repeatedFrames).toBe(1); // the missing frame 2 slot = one repeat of the previous frame
+    expect(s.framesLost).toBe(1);
+    // Slot invariant still holds: completed frames are all classified + presented.
+    expect(s.presented + s.decimated + s.backlogReplacements).toBe(s.completeFrames + s.partialConcealed);
+  });
+
+  it("classifies a frame with missing line packets as partially concealed", async () => {
+    const receiver = new FakeReceiver();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame: vi.fn(),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+    frameOf(receiver, 0, 0); // complete
+    // Frame 1: a mid-line packet is missing (seq gap within the frame) → dropped++ → partial-concealed.
+    receiver.emit(videoPacket({ seq: 2, frame: 1, line: 0, lastLine: false }));
+    receiver.emit(videoPacket({ seq: 5, frame: 1, line: 268, lastLine: true })); // seq 3,4 dropped
+    const s = controller.getSnapshot();
+    expect(s.droppedPackets).toBeGreaterThan(0);
+    expect(s.partialConcealed).toBe(1);
+    expect(s.completeFrames).toBe(1); // only frame 0 was clean
+  });
+});
+
+describe("VideoMirrorController — continuous fractional cadence (§11 governor)", () => {
+  /** Present `frames` source frames at `keepFraction` and return how many were rendered. */
+  const presentedAt = async (keepFraction: number, frames: number): Promise<number> => {
+    const receiver = new FakeReceiver();
+    const renderFrame = vi.fn();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+    controller.setKeepFraction(keepFraction);
+    for (let i = 0; i < frames; i += 1) completeFrame(receiver, i, i);
+    return renderFrame.mock.calls.length;
+  };
+
+  it("presents the exact target percentage of source frames over a long run", async () => {
+    expect(await presentedAt(1, 100)).toBe(100); // 100%
+    expect(await presentedAt(0.5, 100)).toBe(50); // 50%
+    expect(await presentedAt(0.25, 100)).toBe(25); // 25%
+    expect(await presentedAt(0.75, 100)).toBe(75); // 75% — impossible with integer divisors
+    expect(await presentedAt(0.6, 100)).toBe(60); // 60%
+    expect(await presentedAt(0.73, 100)).toBe(73); // arbitrary 73%
+  });
+
+  it("is float-safe: 0.1 lands exactly one frame in ten (no epsilon drift)", async () => {
+    expect(await presentedAt(0.1, 100)).toBe(10);
+  });
+
+  it("clamps out-of-range fractions into (0,1]", async () => {
+    expect(await presentedAt(2, 50)).toBe(50); // >1 → 1 (present all)
+    expect(await presentedAt(0, 50)).toBe(0); // 0 → 0.01 floor (~1%); 50×0.01 < 1 → none in 50 frames
+    expect(await presentedAt(0, 100)).toBe(1); // …but the 1% floor lands exactly one in 100 (never fully stalls)
+  });
+
+  it("routes cadence to the native transport when supported; JS then presents every received frame", async () => {
+    // A transport that decimates natively (the Android plugin): setKeepFraction is pushed to it, and
+    // the controller stops decimating in JS (keepFraction 1). Skipped frames arrive as present=false
+    // with an empty payload (their base64 was elided) and are counted, not rendered.
+    type FrameHandler = (f: Uint8Array, h: number, t: number, d: number, l: number, present: boolean) => void;
+    class NativeReceiver implements StreamReceiver {
+      frame: FrameHandler | null = null;
+      stateCb: ((s: StreamConnectionState) => void) | null = null;
+      readonly destination = "10.0.0.9:11000";
+      nativeFraction = 1;
+      onDatagram() {}
+      onFrame(handler: FrameHandler) {
+        this.frame = handler;
+      }
+      setNativeCadence(fraction: number) {
+        this.nativeFraction = fraction;
+      }
+      onStateChange(handler: (s: StreamConnectionState) => void) {
+        this.stateCb = handler;
+      }
+      close() {}
+    }
+
+    const receiver = new NativeReceiver();
+    const renderFrame = vi.fn();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.stateCb?.("open");
+
+    controller.setKeepFraction(0.5);
+    expect(receiver.nativeFraction).toBe(0.5); // pushed to the native transport
+    expect(controller.keepFractionValue).toBe(1); // JS presents everything it receives
+
+    const full = new Uint8Array((VIC_FRAME_WIDTH * 272) / 2);
+    const empty = new Uint8Array(0);
+    receiver.frame?.(empty, 272, 0, 0, 0, false); // native-decimated
+    receiver.frame?.(full, 272, 0, 0, 0, true);
+    receiver.frame?.(empty, 272, 0, 0, 0, false);
+    receiver.frame?.(full, 272, 0, 0, 0, true);
+
+    expect(renderFrame).toHaveBeenCalledTimes(2);
+    expect(controller.getSnapshot().presented).toBe(2);
+    expect(controller.getSnapshot().decimated).toBe(2); // the two native-skipped frames still counted
+  });
+
+  it("setKeepFraction and setFrameThrottle are interchangeable views of the same cadence", async () => {
+    // frameThrottle N ⇔ keepFraction 1/N, and the divisor getter round-trips.
+    const receiver = new FakeReceiver();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame: vi.fn(),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    controller.setKeepFraction(0.25);
+    expect(controller.frameThrottle).toBe(4);
+    controller.setFrameThrottle(2);
+    expect(controller.keepFractionValue).toBe(0.5);
   });
 });

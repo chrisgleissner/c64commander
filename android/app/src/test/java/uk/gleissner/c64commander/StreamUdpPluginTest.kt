@@ -48,6 +48,7 @@ class StreamUdpPluginTest {
     val height: Int,
     val dropped: Int,
     val lost: Int,
+    val present: Boolean,
   )
 
   @Before
@@ -63,8 +64,8 @@ class StreamUdpPluginTest {
       received.add(Triple(name, data, arrivalMs))
       latch.countDown()
     }
-    plugin.emitFrame = { name, data, arrivalMs, height, dropped, lost ->
-      frames.add(AssembledFrame(name, data, arrivalMs, height, dropped, lost))
+    plugin.emitFrame = { name, data, arrivalMs, height, dropped, lost, present ->
+      frames.add(AssembledFrame(name, data, arrivalMs, height, dropped, lost, present))
       latch.countDown()
     }
   }
@@ -276,6 +277,50 @@ class StreamUdpPluginTest {
     val closeCall = mock(PluginCall::class.java)
     `when`(closeCall.getString("name")).thenReturn("video")
     plugin.close(closeCall)
+  }
+
+  @Test
+  fun setKeepFractionDecimatesNativelyAndSkipsBase64ForUnpresentedFrames() {
+    val port = bindAssemble()
+    // Keep 50%: present every 2nd assembled frame; the others emit an event with NO base64 payload.
+    val setCall = mock(PluginCall::class.java)
+    `when`(setCall.getString("name")).thenReturn("video")
+    `when`(setCall.getInt("permille")).thenReturn(500)
+    plugin.setKeepFraction(setCall)
+    verify(setCall).resolve(any())
+
+    val n = 10
+    latch = CountDownLatch(n) // EVERY assembled frame still emits an event (honest JS accounting)
+    DatagramSocket().use { sender ->
+      val addr = InetAddress.getByName("127.0.0.1")
+      var seq = 0
+      for (f in 0 until n) {
+        sendFrame(sender, addr, port, seq, f)
+        seq += 2
+        Thread.sleep(3)
+      }
+    }
+
+    assertTrue("not all frames emitted an event", latch.await(5, TimeUnit.SECONDS))
+    assertEquals(n, frames.size)
+    assertEquals(5, frames.count { it.present }) // exactly half presented at 50%
+    assertEquals(5, frames.count { !it.present })
+    // Presented frames carry a full 52224-byte 4bpp payload …
+    assertTrue(frames.filter { it.present }.all { Base64.decode(it.data, Base64.NO_WRAP).size == 52224 })
+    // … skipped frames carry NO base64 (the elided encode + bridge payload = the CPU win).
+    assertTrue(frames.filter { !it.present }.all { it.data.isEmpty() })
+
+    val closeCall = mock(PluginCall::class.java)
+    `when`(closeCall.getString("name")).thenReturn("video")
+    plugin.close(closeCall)
+  }
+
+  @Test
+  fun setKeepFractionRejectsMissingName() {
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("name")).thenReturn(null)
+    plugin.setKeepFraction(call)
+    verify(call).reject("name is required")
   }
 
   @Test
