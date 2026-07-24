@@ -37,6 +37,7 @@ const MAX_HOPS = 3;
 const FRONTIER_CAP = 256;
 const NOT_FOR_ME_PENALTY = 2.5;
 const STYLE_SEED_SAMPLE = 32;
+const TASTE_SEED_SAMPLE = 16;
 const DEFAULT_LIMIT = 200;
 
 export type StationSeedKind = "song" | "style" | "taste";
@@ -126,6 +127,16 @@ const sampleStyleOrdinals = (
   return keyed.slice(0, count).map((entry) => entry.ordinal);
 };
 
+/** Deterministic diversity sample of `ordinals` (spreads via the shuffleSeed, D12). */
+const diversitySample = (ordinals: number[], shuffleSeed: number, count: number): number[] => {
+  if (ordinals.length <= count) return [...ordinals];
+  return ordinals
+    .map((ordinal) => ({ ordinal, key: perOrdinalRandom(shuffleSeed, ordinal) }))
+    .sort((a, b) => a.key - b.key || a.ordinal - b.ordinal)
+    .slice(0, count)
+    .map((entry) => entry.ordinal);
+};
+
 const capFrontier = (frontier: Map<number, number>, cap: number): Map<number, number> => {
   if (frontier.size <= cap) return frontier;
   const top = [...frontier.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).slice(0, cap);
@@ -157,7 +168,9 @@ export const computeStation = (options: StationEngineOptions): StationResult => 
     }
   } else if (seed.kind === "taste") {
     if (likeOrdinals.length === 0) return { candidates: [], empty: "no-neighbours" };
-    for (const ordinal of likeOrdinals) {
+    // Diversity-sampled subset of Likes so one composer/cluster can't dominate (D12).
+    const sampled = diversitySample(likeOrdinals, shuffleSeed, TASTE_SEED_SAMPLE);
+    for (const ordinal of sampled) {
       addSeed(ordinal, BASE_SEED_WEIGHT);
       primaryExclude.add(ordinal);
     }

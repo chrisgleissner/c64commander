@@ -443,3 +443,16 @@ _(append entries below as tasks/gates complete — newest last)_
   ✕ skip-latency, and `--shuffle-replay` runs need a fresh APK + live C64U → documented manual HIL
   (§9.5). No lockfile prune committed (guarded).
 - Push: milestone complete → pushed to `origin/feat/sid-radio`.
+
+### 2026-07-24 — M3.1 stationEngine: diversity-sampled Taste + Style×Likes composition
+- Task: D12 diversity-sampled Taste aggregation; D10 composed style × Likes admission; verify.
+- Files: `stationEngine.ts` (+`diversitySample` — deterministic shuffleSeed-spread cap so one
+  composer/cluster can't dominate a Taste station; TASTE_SEED_SAMPLE=16),
+  `tests/unit/sidRadio/stationEngineStyle.test.ts` (new, 4).
+- Decisions: Style × Likes ("Fast-Paced from my Likes") is `seed=taste(likes) + styleFilter=bit`
+  — the engine already composes any seed with a style filter (D10), verified. Taste seeds are a
+  deterministic diversity sample of Likes (D12). Style/Song + style filter admit only the bit.
+- Evidence: 4 tests (broad style admits only the bit; Style×Likes composes to Fast; Song+filter
+  keeps only that style; Taste diversity sample deterministic). Existing engine 10 still pass.
+  eslint + prettier clean.
+- Gate: feeds G7 (composition/on-vibe); Taste-unlock UI is 3.2.

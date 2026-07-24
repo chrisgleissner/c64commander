@@ -65,7 +65,7 @@ Branch: **`feat/sid-radio`** (cut from `main`). Flags default **off** until each
 
 ## M3 — Style & Taste Radio (+ Style × Likes)  (→ G7)
 
-- [ ] 3.1 `stationEngine`: diversity-sampled Taste aggregation (D12); **composed style × Likes admission (D10)**; Like-boosted `seedWeight` — **RED→GREEN**
+- [x] 3.1 `stationEngine`: diversity-sampled Taste aggregation (D12); **composed style × Likes admission (D10)**; Like-boosted `seedWeight` — **RED→GREEN**
 - [ ] 3.2 Launcher `AppSheet`: 9 style tiles (`sid-radio-style-<bit>`), `sid-radio-likes-toggle`, Taste unlock at threshold (D1), `sid-radio-surprise`
 - [ ] **M3 EXIT** — style on-vibe (HIL mask spot-check); "Fast-Paced from my Likes" composes; Taste unlocks & reflects likes → tick **G7**
 
