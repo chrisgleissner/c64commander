@@ -7,7 +7,18 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Gamepad2, Keyboard as KeyboardIcon, Maximize2, Minimize2, Minus, Plus, Wifi, WifiOff } from "lucide-react";
+import {
+  ChevronDown,
+  Gamepad2,
+  Keyboard as KeyboardIcon,
+  Maximize2,
+  Minimize2,
+  Minus,
+  PanelTopClose,
+  Plus,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppSheet, AppSheetBody, AppSheetContent, AppSheetHeader, AppSheetTitle } from "@/components/ui/app-surface";
 import { cn } from "@/lib/utils";
@@ -77,6 +88,9 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   const isCompactDisplay = profile === "compact";
   const [controlSize, setControlSize] = useState<RemoteInputControlSize>(DEFAULT_REMOTE_INPUT_CONTROL_SIZE);
   const [immersive, setImmersive] = useState(false);
+  // Game mode can further collapse ALL remaining chrome (sheet header + pinned toolbar + mirror
+  // controls) so only the live screen and the joystick remain — maximum picture, minimum clutter.
+  const [chromeCollapsed, setChromeCollapsed] = useState(false);
   const [showAutofire, setShowAutofire] = useState(loadShowAutofireButton);
   const scale = remoteInputControlScale(controlSize);
 
@@ -268,6 +282,12 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     if (!joystickAvailable && immersive) setImmersive(false);
   }, [joystickAvailable, immersive]);
 
+  // Chrome-collapse only makes sense inside game mode; restore it whenever game mode ends, so the
+  // controls can never stay hidden after the user has left the stripped layout.
+  useEffect(() => {
+    if (!immersive || session.outputMode !== "joystick") setChromeCollapsed(false);
+  }, [immersive, session.outputMode]);
+
   // Smart default: when the connected device's REST API has no machine:input
   // support (keyboard-only), open straight into Type mode rather than a disabled
   // Joystick tab. Gated on `resolved` (HARD15-006), not merely `!tierLoading` -
@@ -342,17 +362,36 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     </div>
   );
 
+  const gameMode = joystickAvailable && session.outputMode === "joystick" && immersive;
+  // Fully collapsed: only the live screen + joystick remain (game mode with the chrome hidden).
+  const fullyImmersive = gameMode && chromeCollapsed;
+
   const immersiveToggle = joystickAvailable && session.outputMode === "joystick" && (
-    <Button
-      size="sm"
-      variant={immersive ? "default" : "secondary"}
-      data-testid="remote-input-immersive-toggle"
-      aria-pressed={immersive}
-      onClick={() => setImmersive((value) => !value)}
-    >
-      {immersive ? <Minimize2 className="mr-1.5 h-4 w-4" /> : <Maximize2 className="mr-1.5 h-4 w-4" />}
-      {immersive ? "Exit game mode" : "Game mode"}
-    </Button>
+    <div className="flex items-center gap-2">
+      <Button
+        size="sm"
+        variant={immersive ? "default" : "secondary"}
+        data-testid="remote-input-immersive-toggle"
+        aria-pressed={immersive}
+        onClick={() => setImmersive((value) => !value)}
+      >
+        {immersive ? <Minimize2 className="mr-1.5 h-4 w-4" /> : <Maximize2 className="mr-1.5 h-4 w-4" />}
+        {immersive ? "Exit game mode" : "Game mode"}
+      </Button>
+      {/* Inside game mode, one more tap hides ALL chrome so only the screen + joystick remain. */}
+      {gameMode ? (
+        <Button
+          size="sm"
+          variant="secondary"
+          data-testid="remote-input-collapse-chrome"
+          aria-label="Hide controls — full screen"
+          onClick={() => setChromeCollapsed(true)}
+        >
+          <PanelTopClose className="mr-1.5 h-4 w-4" />
+          Hide controls
+        </Button>
+      ) : null}
+    </div>
   );
 
   const showFooterActions = !(immersive && session.outputMode === "joystick");
@@ -363,6 +402,9 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
         data-testid="remote-input-sheet"
         // The top-right X is now the sole Close (the duplicate footer Close was
         // removed); give it a stable testid for keypad-reachability coverage.
+        // In fully-immersive game mode even the X is hidden — the floating restore
+        // handle brings the chrome (and its Close) back.
+        showClose={!fullyImmersive}
         closeTestId="remote-input-close"
         // The sheet reserves a 5rem bottom clearance (to sit above the app tab
         // bar), but the tab bar is hidden while any sheet is open. In normal
@@ -374,24 +416,41 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
         onKeyDown={handlePhysicalKeyDown}
         onKeyUp={handlePhysicalKeyUp}
       >
-        <AppSheetHeader>
-          <AppSheetTitle className="flex items-center gap-2">
-            Remote Input
-            <span
-              className="flex items-center gap-1 text-xs font-normal text-muted-foreground"
-              data-testid="remote-input-connection-indicator"
-              data-status={session.connectionStatus}
-            >
-              {session.connectionStatus === "error" ? (
-                <>
-                  <WifiOff className="h-3.5 w-3.5" /> Reconnecting…
-                </>
-              ) : (
-                <Wifi className="h-3.5 w-3.5" aria-label="Connected" />
-              )}
-            </span>
-          </AppSheetTitle>
-        </AppSheetHeader>
+        {/* Fully-immersive game mode hides the header, the pinned toolbar and the mirror controls so
+            only the live screen + joystick remain. A single always-visible floating handle brings it
+            all back — an intuitive "pull the controls down" affordance over the top of the picture. */}
+        {fullyImmersive ? (
+          <button
+            type="button"
+            data-testid="remote-input-restore-chrome"
+            aria-label="Show controls"
+            onClick={() => setChromeCollapsed(false)}
+            className="absolute left-1/2 top-1 z-30 flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/55 px-3 py-1 text-xs font-medium text-white/90 shadow backdrop-blur transition-colors hover:bg-black/70"
+          >
+            <ChevronDown className="h-4 w-4" />
+            Controls
+          </button>
+        ) : null}
+        {fullyImmersive ? null : (
+          <AppSheetHeader>
+            <AppSheetTitle className="flex items-center gap-2">
+              Remote Input
+              <span
+                className="flex items-center gap-1 text-xs font-normal text-muted-foreground"
+                data-testid="remote-input-connection-indicator"
+                data-status={session.connectionStatus}
+              >
+                {session.connectionStatus === "error" ? (
+                  <>
+                    <WifiOff className="h-3.5 w-3.5" /> Reconnecting…
+                  </>
+                ) : (
+                  <Wifi className="h-3.5 w-3.5" aria-label="Connected" />
+                )}
+              </span>
+            </AppSheetTitle>
+          </AppSheetHeader>
+        )}
         {/* Pinned chrome: the Joystick/Keys toggle and Release All live OUTSIDE
             the scrollable body (shrink-0), so they never scroll away and stay
             reachable however far the joystick/keyboard content scrolls. Release
@@ -399,67 +458,70 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
             (AppSheetContent) is the sole Close affordance. Size + Game mode ride
             a second pinned row so the toggle+Release All row always fits one
             line. HARD16-008: chrome keeps the standard px-4 gutter; the joystick
-            zone and keyboard grid below stay edge-to-edge. */}
-        <div className="flex shrink-0 flex-col gap-2 border-b border-border px-4 py-2">
-          <div className="flex items-center justify-between gap-2">
-            {immersive ? (
-              <span className="text-sm font-semibold text-muted-foreground">Game mode</span>
-            ) : (
-              <div className="flex min-w-0 items-center gap-2" data-testid="remote-input-output-mode-toggle">
-                <Button
-                  size="sm"
-                  variant={session.outputMode === "joystick" ? "default" : "secondary"}
-                  data-testid="remote-input-mode-joystick"
-                  disabled={!joystickAvailable}
-                  title={!joystickAvailable ? joystickUnavailableHint : undefined}
-                  onClick={() => handleOutputModeChange("joystick")}
-                >
-                  {isCompactDisplay ? null : <Gamepad2 className="mr-1.5 h-4 w-4" />}
-                  Joystick
-                </Button>
-                <Button
-                  size="sm"
-                  variant={session.outputMode === "type" ? "default" : "secondary"}
-                  data-testid="remote-input-mode-type"
-                  onClick={() => handleOutputModeChange("type")}
-                >
-                  {isCompactDisplay ? null : <KeyboardIcon className="mr-1.5 h-4 w-4" />}
-                  Keys
-                </Button>
-              </div>
-            )}
-            {showFooterActions ? (
-              <Button
-                size="sm"
-                variant="destructive"
-                className="shrink-0"
-                data-testid="remote-input-panic-button"
-                onClick={() => session.releaseAll()}
-              >
-                Release All
-              </Button>
-            ) : null}
-          </div>
-          {session.outputMode === "joystick" ? (
+            zone and keyboard grid below stay edge-to-edge. Hidden entirely in
+            fully-immersive game mode (restored via the floating handle). */}
+        {fullyImmersive ? null : (
+          <div className="flex shrink-0 flex-col gap-2 border-b border-border px-4 py-2">
             <div className="flex items-center justify-between gap-2">
-              {sizeStepper}
-              {immersiveToggle}
-            </div>
-          ) : null}
-          {mirrorEnabled ? (
-            <div
-              className="flex flex-wrap items-center justify-between gap-2"
-              data-testid="remote-input-mirror-controls"
-            >
-              <AvMirrorControls showAudio={audioMirrorEnabled} showVideo={videoMirrorEnabled} />
-              {mirrorAdjust ? (
-                <span className="text-xs font-medium text-amber-500" data-testid="remote-input-mirror-adjust-hint">
-                  Physical keys adjust the view
-                </span>
+              {immersive ? (
+                <span className="text-sm font-semibold text-muted-foreground">Game mode</span>
+              ) : (
+                <div className="flex min-w-0 items-center gap-2" data-testid="remote-input-output-mode-toggle">
+                  <Button
+                    size="sm"
+                    variant={session.outputMode === "joystick" ? "default" : "secondary"}
+                    data-testid="remote-input-mode-joystick"
+                    disabled={!joystickAvailable}
+                    title={!joystickAvailable ? joystickUnavailableHint : undefined}
+                    onClick={() => handleOutputModeChange("joystick")}
+                  >
+                    {isCompactDisplay ? null : <Gamepad2 className="mr-1.5 h-4 w-4" />}
+                    Joystick
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={session.outputMode === "type" ? "default" : "secondary"}
+                    data-testid="remote-input-mode-type"
+                    onClick={() => handleOutputModeChange("type")}
+                  >
+                    {isCompactDisplay ? null : <KeyboardIcon className="mr-1.5 h-4 w-4" />}
+                    Keys
+                  </Button>
+                </div>
+              )}
+              {showFooterActions ? (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="shrink-0"
+                  data-testid="remote-input-panic-button"
+                  onClick={() => session.releaseAll()}
+                >
+                  Release All
+                </Button>
               ) : null}
             </div>
-          ) : null}
-        </div>
+            {session.outputMode === "joystick" ? (
+              <div className="flex items-center justify-between gap-2">
+                {sizeStepper}
+                {immersiveToggle}
+              </div>
+            ) : null}
+            {mirrorEnabled ? (
+              <div
+                className="flex flex-wrap items-center justify-between gap-2"
+                data-testid="remote-input-mirror-controls"
+              >
+                <AvMirrorControls showAudio={audioMirrorEnabled} showVideo={videoMirrorEnabled} />
+                {mirrorAdjust ? (
+                  <span className="text-xs font-medium text-amber-500" data-testid="remote-input-mirror-adjust-hint">
+                    Physical keys adjust the view
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        )}
         <AppSheetBody
           className={cn(
             "flex flex-col gap-4",
