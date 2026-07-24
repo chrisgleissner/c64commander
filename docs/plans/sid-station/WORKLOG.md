@@ -410,3 +410,22 @@ _(append entries below as tasks/gates complete — newest last)_
 - Commands + evidence: useSidRadio 5 + SidRadioChip 3 pass; existing playFiles page/card suites
   (31 files / 257) still pass; tsc + eslint clean.
 - Gate: feeds G5 (continuity), G6 (✕ skip), G11 (controls-disabled) — device proofs are M2.6/2.7 HIL.
+
+### 2026-07-24 — M2.6/2.7 HIL harness + pinned §9.2 thresholds + asserter
+- Task: `tools/hil/sid_radio_hil.py` + `ci/perf/sid-radio-perf-thresholds.json` (MEASURE→PIN)
+  + `--shuffle-replay`; the host-deterministic budget check.
+- Files: `ci/perf/sid-radio-perf-thresholds.json` (new — §9.2 + §12.6 localEngine block, each
+  threshold profile/metric/unit/bound/aggregation/pinned/measured), `scripts/assert-sid-radio-perf.mjs`
+  (new — validates a captured `sid-radio-stats` blob against the pins, composite metrics, exit 1
+  on regress; importable + unit-tested), `tests/unit/scripts/assertSidRadioPerf.test.ts` (new, 6),
+  `tools/hil/sid_radio_hil.py` (new — CDP driver: enable flags, start a station via testids, soak
+  N auto-advances firing ✕, read `sid-radio-stats`, assert budgets; `--station/--style/--soak-tracks/
+  --skips/--soak-seconds/--shuffle-replay/--hvsc-update/--engine`), `tools/hil/README.md`.
+- Decisions (§9.2/§9.5): pins are the spec's proposed targets, which already carry headroom over
+  the on-device measurements (M0: coldLoad 145 ms « 1500; engineThreadIsMain false; 5.0 MB;
+  M2: compute 0.09 ms host « refill budgets). Never auto-rewrite a baseline. The deterministic
+  asserter runs in CI (unit test); the device driver is manual/local (§9.5).
+- Evidence: asserter 6 tests pass (pass-within-budget, cold-load regress, off-main-fail,
+  continuity-shortfall, skip-unmeasured); `python3 -m py_compile` OK; eslint clean.
+- Gate: G9 thresholds pinned + asserter green (host); the full continuity/skip on-device soak
+  needs a fresh APK + live C64U → documented manual HIL. Engine-side budgets device-proven.

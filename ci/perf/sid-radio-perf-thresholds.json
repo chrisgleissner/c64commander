@@ -1,0 +1,126 @@
+{
+  "$schema": "./sid-radio-perf-thresholds.schema.json",
+  "description": "Machine-readable, MEASURED-then-PINNED SID Radio performance budgets (spec §9.2 / §12.6). A regression fails the HIL run (exit 1). Never auto-rewrite a baseline to hide a regression (spec §9.2).",
+  "profile": "pixel4-c64u",
+  "runner": "tools/hil/sid_radio_hil.py",
+  "thresholds": {
+    "coldLoadMs": {
+      "metric": "bundleLoadMs+reverseIndexMs",
+      "unit": "ms",
+      "bound": "max",
+      "aggregation": "p99",
+      "pinned": 1500,
+      "measured": {
+        "device": "Pixel 4 (flame)",
+        "value": 145,
+        "note": "M0 EXIT on-device probe: 131.4+13.6 ms; pinned with headroom"
+      }
+    },
+    "firstCandidateMs": {
+      "metric": "firstCandidateMs",
+      "unit": "ms",
+      "bound": "max",
+      "aggregation": "p99",
+      "pinned": 300,
+      "measured": {
+        "device": "Pixel 4 (flame)",
+        "value": null,
+        "note": "measure on first station start; compute is ~0.09 ms host on the full bundle"
+      }
+    },
+    "lastRefillMs": {
+      "metric": "lastRefillMs",
+      "unit": "ms",
+      "bound": "max",
+      "aggregation": "p99",
+      "pinned": 150,
+      "measured": { "device": "Pixel 4 (flame)", "value": null, "note": "worker compute + path resolve per refill" }
+    },
+    "refillMainThreadMaxMs": {
+      "metric": "refillMainThreadMaxMs",
+      "unit": "ms",
+      "bound": "max",
+      "aggregation": "max",
+      "pinned": 16,
+      "measured": {
+        "device": "Pixel 4 (flame)",
+        "value": null,
+        "note": "one 60 fps frame; engine runs off-main so this is only path resolve + append"
+      }
+    },
+    "skipToLaunchMs": {
+      "metric": "skipToLaunchMs",
+      "unit": "ms",
+      "bound": "max",
+      "aggregation": "p99",
+      "pinned": 400,
+      "measured": { "device": "Pixel 4 (flame)", "value": null, "note": "✕ → next track launched" }
+    },
+    "tracksAutoAdvanced": {
+      "metric": "tracksAutoAdvanced",
+      "unit": "count",
+      "bound": "min",
+      "aggregation": "count",
+      "pinned": 30,
+      "measured": {
+        "device": "Pixel 4 (flame)",
+        "value": null,
+        "note": "≥30 auto-advances, zero gaps (needs a live C64U or the Local engine)"
+      }
+    },
+    "engineThreadIsMain": {
+      "metric": "engineThreadIsMain",
+      "unit": "bool",
+      "bound": "equals",
+      "aggregation": "value",
+      "pinned": false,
+      "measured": {
+        "device": "Pixel 4 (flame)",
+        "value": false,
+        "note": "M0 EXIT proven: engine runs off the main thread"
+      }
+    },
+    "memoryEstimateBytes": {
+      "metric": "memoryEstimateBytes",
+      "unit": "bytes",
+      "bound": "max",
+      "aggregation": "max",
+      "pinned": 8388608,
+      "measured": {
+        "device": "Pixel 4 (flame)",
+        "value": 5247024,
+        "note": "M0 EXIT: 5.0 MB hot; observability, not a hard cap (2 GiB budget)"
+      }
+    }
+  },
+  "localEngine": {
+    "renderMsPerSec": {
+      "metric": "renderMsPerSec",
+      "unit": "ms/sec",
+      "bound": "max",
+      "aggregation": "p99",
+      "pinned": 250,
+      "measured": { "device": "Callback 8020", "value": null, "note": "≥4× realtime; Track B LE3" }
+    },
+    "audioUnderruns": {
+      "metric": "audioUnderruns",
+      "unit": "count",
+      "bound": "max",
+      "aggregation": "count",
+      "pinned": 0,
+      "measured": { "device": "Callback 8020", "value": null, "note": "zero underruns over a 3-min PSID; Track B LE3" }
+    },
+    "engineSwitchMs": {
+      "metric": "engineSwitchMs",
+      "unit": "ms",
+      "bound": "max",
+      "aggregation": "p99",
+      "pinned": 1500,
+      "measured": {
+        "device": "Pixel 4 (flame)",
+        "value": null,
+        "note": "C64 ↔ Local switch → audio resumes; Track B LE3"
+      }
+    }
+  }
+}
