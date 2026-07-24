@@ -72,7 +72,11 @@ const p99Of = (values: number[]): number =>
     99,
   );
 
-/** p99 of samples whose time is within [fromMs, toMs). */
+/**
+ * p99 of samples in the half-open interval [fromMs, toMs). Half-open so adjacent rolling windows
+ * never double-count a sample on their shared edge. A caller that needs the final sample included
+ * (a closed end window) passes `endMs + 1`; see the last-window call in {@link analyzeLatencyDrift}.
+ */
 const windowP99 = (samples: LatencySample[], fromMs: number, toMs: number): number => {
   const inWindow = samples.filter((s) => s.tMs >= fromMs && s.tMs < toMs).map((s) => s.latencyMs);
   return inWindow.length ? p99Of(inWindow) : 0;
@@ -116,6 +120,8 @@ export const analyzeLatencyDrift = (samples: LatencySample[], thresholds: DriftT
   }
 
   const firstWindowP99 = windowP99(sorted, startMs, startMs + thresholds.compareWindowMs);
+  // `endMs + 1`: windowP99 is half-open [from, to), so the upper bound is nudged past the final
+  // sample at exactly endMs to keep it inside the closing comparison window.
   const lastWindowP99 = windowP99(sorted, endMs - thresholds.compareWindowMs, endMs + 1);
   const windowDelta = lastWindowP99 - firstWindowP99;
   const slopeMsPerMin = slopePerMs(sorted) * 60_000;

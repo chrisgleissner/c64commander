@@ -174,7 +174,10 @@ def main():
     checks = {
         "videoInputToDisplayP99Ms": (see_p99, gates["videoInputToDisplayP99Ms"]),
         "audioInputToHearP99Ms": (hear_p99, gates["audioInputToHearP99Ms"]),
-        "avOffsetP99Ms": (max(v for v in (offset_p99, soak_offset_p99) if v is not None), gates["avOffsetP99Ms"]),
+        # `default=None` guards the empty case (neither the tap-latency section nor the auto-soak
+        # populated an offset p99): without it `max()` raises ValueError and escapes the gate loop as
+        # an opaque traceback instead of the clean `measured is None -> FAIL` the check below reports.
+        "avOffsetP99Ms": (max((v for v in (offset_p99, soak_offset_p99) if v is not None), default=None), gates["avOffsetP99Ms"]),
         # Native low-latency audio: the player buffer must stay well under the WebAudio baseline.
         "nativeAudioBufferMaxMs": (audio_buffer_ms, cfg["audioPlaybackLatency"]["thresholds"]["nativeAudioBufferMaxMs"]),
     }

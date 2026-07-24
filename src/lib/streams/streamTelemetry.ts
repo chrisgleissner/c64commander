@@ -319,7 +319,12 @@ export class StreamTelemetry {
     const coarse = [...this.coarseBuckets];
     if (this.coarseGroup.length > 0) coarse.push(aggregateBuckets(this.coarseGroup));
     // Session shorter than a full minute of closed buckets: fall back to the fine tier.
-    return coarse.length > 0 ? coarse : this.buffersWindow(windowSec);
+    if (coarse.length === 0) return this.buffersWindow(windowSec);
+    // Honour the requested window even on the coarse tier (its `sec` is the group's first fine-bucket
+    // second): the "Session" button passes Number.MAX_SAFE_INTEGER so this returns everything, but a
+    // bounded window (e.g. 1500 s) no longer leaks the full ~4 h coarse ring past the caller's ask.
+    const cutoff = coarse[coarse.length - 1].sec - windowSec;
+    return coarse.filter((b) => b.sec > cutoff);
   }
 
   private snapshotOpenBucket(b: BucketAccumulator): TelemetryBucket {

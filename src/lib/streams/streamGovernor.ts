@@ -258,6 +258,9 @@ export class StreamGovernor {
       return `latency ${Math.round(s.localLatencyP99Ms)}ms`;
     if (s.videoQueueAgeMs !== undefined && s.videoQueueAgeMs >= this.config.videoQueueAgeMaxMs * approach)
       return `queue age ${Math.round(s.videoQueueAgeMs)}ms`;
+    // Deliberately the full budget (1.0×), not `approach`: the per-frame budget IS the deadline —
+    // p95 at/above it means frames are already missing their present slot, which the latency/queue
+    // signals only *predict*. Demoting at 0.8× here would shed rate on transient spikes with slack.
     if (s.frameProcessingP95Ms !== undefined && s.frameProcessingP95Ms >= this.config.frameProcessingBudgetMs)
       return `frame proc ${Math.round(s.frameProcessingP95Ms)}ms`;
     return null;
@@ -287,6 +290,12 @@ export class StreamGovernor {
 
   private commit(kind: GovernorTransitionKind, beforeEffective: number, nowMs: number, reason: string): void {
     const after = this.effective;
+    // A governor-level change can be masked by a lower ceiling (effective unchanged): recording it
+    // would push a no-op `from === to` entry whose reason (e.g. "audio underrun ×1") misleads anyone
+    // auditing the log into thinking the presented rate moved. Mirror setRequested's guard and only
+    // log a transition the viewer can actually observe. `this.governor` is already updated regardless,
+    // so a masked demote still counts toward future promotions.
+    if (after === beforeEffective) return;
     this.reason = reason;
     this.lastTransitionAtMs = nowMs;
     this.record(kind, beforeEffective, after, nowMs, reason);

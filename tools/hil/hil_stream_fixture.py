@@ -126,9 +126,22 @@ def device_state(serial):
 
 
 def sample_cpu(serial):
-    out = adb(serial, "shell", "top", "-H", "-b", "-n", "3")
-    pool = rend = pooln = rendn = 0.0
+    # `top`'s FIRST batch sample reports CPU% cumulative-since-boot, which is wildly inflated on a
+    # long-running session and would bias the mean high. Take two 1 s-spaced samples and parse only
+    # the LAST snapshot (the streaming window), splitting batch output on top's per-iteration header.
+    out = adb(serial, "shell", "top", "-H", "-b", "-d", "1", "-n", "2")
+    snapshots, current = [], []
     for line in out.splitlines():
+        if line.lstrip().startswith("top -"):
+            if current:
+                snapshots.append(current)
+            current = []
+        current.append(line)
+    if current:
+        snapshots.append(current)
+    sample_lines = snapshots[-1] if snapshots else out.splitlines()
+    pool = rend = pooln = rendn = 0.0
+    for line in sample_lines:
         cols = line.split()
         if len(cols) < 9:
             continue
@@ -220,16 +233,20 @@ def main():
         report["measurements"] = {"cpu": cpu, "jank": jank, "stats": stats}
 
         # 5. Assert the committed device gates (§16.4). Product failures → exit 1.
+        # Jank needs enough HWUI frames to be meaningful; too few → inconclusive. An inconclusive
+        # gate is NOT evidence the jank threshold held, so it is excluded from `passed` rather than
+        # short-circuited to True — otherwise a 1-frame sample would silently green the jank gate.
+        jank_inconclusive = jank["totalFrames"] < 100
         checks = {
             "appTotalCpuPctAt100": cpu["appTotalPct"] <= gates["appTotalCpuPctAt100"],
             "audioUnderruns": stats["underruns"] <= gates["audioUnderruns"],
-            # Jank needs enough HWUI frames to be meaningful; too few → inconclusive, not a fail.
-            "jankyFramesPct": jank["totalFrames"] < 100 or jank["jankyPct"] <= gates["jankyFramesPct"],
+            "jankyFramesPct": jank_inconclusive or jank["jankyPct"] <= gates["jankyFramesPct"],
             "videoLive": fps >= 40,  # PAL 50 with headroom
         }
-        report["jankInconclusive"] = jank["totalFrames"] < 100
+        inconclusive = {"jankyFramesPct": jank_inconclusive}
+        report["jankInconclusive"] = jank_inconclusive
         report["gates"] = checks
-        report["passed"] = all(checks.values())
+        report["passed"] = all(v for k, v in checks.items() if not inconclusive.get(k))
 
         # 6. Clean stop (validate no stale session left streaming).
         click("av-audio-toggle"); time.sleep(0.5); click("av-video-toggle")

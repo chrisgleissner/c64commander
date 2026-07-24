@@ -46,8 +46,12 @@ for (const stage of stages) {
   try {
     execFileSync(stage.cmd[0], stage.cmd[1], { stdio: "inherit" });
     results.push({ ...stage, ok: true, ms: Date.now() - started });
-  } catch {
-    results.push({ ...stage, ok: false, ms: Date.now() - started });
+  } catch (e) {
+    // `stdio: "inherit"` streamed the child's output live, but the orchestrator's own summary keeps
+    // no record of WHY a gate failed — capture the exit code/signal/message so the GitHub step
+    // summary can point a triager at the failing gate without a local re-run.
+    const error = { code: e?.status ?? null, signal: e?.signal ?? null, message: e?.message?.slice(0, 200) };
+    results.push({ ...stage, ok: false, ms: Date.now() - started, error });
   }
 }
 
@@ -66,6 +70,13 @@ const lines = [
   failed === 0
     ? "Host gates green. The mandatory Pixel-4 → C64U HIL runs on the LOCAL build (`./build --stream-hil` / `npm run test:streams:hil`), not in shared CI."
     : `**${failed} host gate(s) failed.**`,
+  // Surface the captured failure detail so a red gate is triageable straight from the summary.
+  ...results
+    .filter((r) => !r.ok && r.error)
+    .map(
+      (r) =>
+        `- \`${r.id}\` exit=${r.error.code ?? "?"}${r.error.signal ? ` signal=${r.error.signal}` : ""}: ${r.error.message ?? "no message"}`,
+    ),
 ];
 const summary = lines.join("\n");
 console.log(`\n${summary}\n`);
