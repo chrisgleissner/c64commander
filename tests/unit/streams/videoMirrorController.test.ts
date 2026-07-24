@@ -319,6 +319,7 @@ describe("VideoMirrorController", () => {
       }
       setNativeCadence(fraction: number) {
         this.nativeFraction = fraction;
+        return true; // native assembly on → the native side decimates (JS keeps every frame)
       }
       onStateChange(handler: (s: StreamConnectionState) => void) {
         this.stateCb = handler;
@@ -708,6 +709,7 @@ describe("VideoMirrorController — continuous fractional cadence (§11 governor
       }
       setNativeCadence(fraction: number) {
         this.nativeFraction = fraction;
+        return true; // native assembly on → the native side decimates (JS keeps every frame)
       }
       onStateChange(handler: (s: StreamConnectionState) => void) {
         this.stateCb = handler;
@@ -741,6 +743,30 @@ describe("VideoMirrorController — continuous fractional cadence (§11 governor
     expect(renderFrame).toHaveBeenCalledTimes(2);
     expect(controller.getSnapshot().presented).toBe(2);
     expect(controller.getSnapshot().decimated).toBe(2); // the two native-skipped frames still counted
+  });
+
+  it("keeps JS decimation when native assembly is OFF (setNativeCadence reports false)", async () => {
+    // Regression: with the native-assembly escape hatch off, setNativeCadence returns false — the
+    // controller must NOT assume the native side decimated (keepFraction 1) or Auto/50%/25% would
+    // render every frame. It must fall back to JS decimation at the requested fraction.
+    class NoAssemblyReceiver extends FakeReceiver {
+      setNativeCadence() {
+        return false; // assembly off → native does not decimate
+      }
+    }
+    const receiver = new NoAssemblyReceiver();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame: vi.fn(),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.stateCb?.("open");
+
+    controller.setKeepFraction(0.5);
+    expect(controller.keepFractionValue).toBe(0.5); // JS decimates at the requested fraction
   });
 
   it("setKeepFraction and setFrameThrottle are interchangeable views of the same cadence", async () => {

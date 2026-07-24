@@ -20,27 +20,19 @@ import type { TelemetryBucket } from "@/lib/streams/streamTelemetry";
 export const STATS_TICK_MS = 250;
 
 /**
- * React binding for the Live View **Stats** view. It:
- *   - drives the session's timer-free {@link AvMirrorSession.tick} on a low-rate interval while a
- *     stream is live (so the governor + telemetry advance), and
- *   - subscribes to the resulting Stats snapshots.
+ * React binding for the Live View **Stats** view. It subscribes to the session's Stats snapshots and
+ * exposes the frame-rate control + history/export helpers.
  *
- * The interval is owned here (proper cleanup on unmount) so the session stays a pure class. Ticking
- * only while live avoids recording idle samples. Opening/closing Stats only adds this ~4 Hz read;
- * it does not change the streaming hot paths (§12.3).
+ * It does NOT drive the tick: the governor + telemetry lifecycle is owned app-wide by
+ * {@link AvMirrorGovernorDriver} (mounted at the app root) so it keeps advancing whenever a stream is
+ * live — in game mode, on another page, or with Stats closed — not only while this panel is mounted.
+ * Opening/closing Stats only adds this subscription; it does not change the streaming hot paths (§12.3).
  */
-export const useStreamStats = (session: AvMirrorSession = avMirrorSession, tickMs: number = STATS_TICK_MS) => {
+export const useStreamStats = (session: AvMirrorSession = avMirrorSession, _tickMs: number = STATS_TICK_MS) => {
   const [stats, setStats] = useState<AvStatsSnapshot>(() => session.getStatsSnapshot());
   const [requestedMode, setRequestedMode] = useState<StreamVideoFrameRateMode>(() => loadStreamVideoFrameRateMode());
 
   useEffect(() => session.subscribeStats(setStats), [session]);
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      if (session.audioLive || session.videoLive) session.tick();
-    }, tickMs);
-    return () => clearInterval(id);
-  }, [session, tickMs]);
 
   const setFrameRateMode = useCallback(
     (mode: StreamVideoFrameRateMode) => {

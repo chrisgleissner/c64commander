@@ -21,6 +21,11 @@ on:
       - "tests/benchmarks/streamHotPaths.bench.ts"
       - "scripts/assert-stream-perf.mjs"
       - "scripts/ci/stream-gates.mjs"
+      - "scripts/streams-hil.mjs"
+      - "tools/hil/**"
+      - "package.json"
+      - "package-lock.json"
+      - "build"
       - ".github/workflows/stream-gates.yaml"
   workflow_dispatch:
 

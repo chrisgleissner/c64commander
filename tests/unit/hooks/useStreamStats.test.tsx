@@ -63,11 +63,11 @@ const makeFakeSession = (opts: { audioLive?: boolean; videoLive?: boolean } = {}
     audioLive: opts.audioLive ?? false,
     videoLive: opts.videoLive ?? false,
     getStatsSnapshot: () => baseSnapshot(),
-    subscribeStats: (h: (s: AvStatsSnapshot) => void) => {
+    subscribeStats: vi.fn((h: (s: AvStatsSnapshot) => void) => {
       subs.add(h);
       h(baseSnapshot());
       return () => subs.delete(h);
-    },
+    }),
     tick: vi.fn(),
     statsHistory: vi.fn(() => []),
     exportDiagnostics: vi.fn(() => ({})),
@@ -84,29 +84,14 @@ describe("useStreamStats", () => {
     vi.useRealTimers();
   });
 
-  it("drives session.tick on the interval only while a stream is live", () => {
-    const live = makeFakeSession({ videoLive: true }) as AvMirrorSession & { tick: ReturnType<typeof vi.fn> };
-    const { unmount } = renderHook(() => useStreamStats(live, 100));
-    act(() => {
-      vi.advanceTimersByTime(350);
-    });
-    expect(live.tick).toHaveBeenCalledTimes(3);
-    unmount();
-    act(() => {
-      vi.advanceTimersByTime(300);
-    });
-    expect(live.tick).toHaveBeenCalledTimes(3); // interval cleared on unmount
-  });
-
-  it("does not tick while nothing is live", () => {
-    const idle = makeFakeSession({ audioLive: false, videoLive: false }) as AvMirrorSession & {
-      tick: ReturnType<typeof vi.fn>;
-    };
-    renderHook(() => useStreamStats(idle, 100));
-    act(() => {
-      vi.advanceTimersByTime(500);
-    });
-    expect(idle.tick).not.toHaveBeenCalled();
+  // The tick lifecycle now lives in AvMirrorGovernorDriver (app-wide), tested in
+  // tests/unit/components/streams/AvMirrorGovernorDriver.test.tsx — this hook only subscribes.
+  it("subscribes to session stats (cleanup owned by the effect's returned unsubscribe)", () => {
+    const session = makeFakeSession({ videoLive: true });
+    const { result, unmount } = renderHook(() => useStreamStats(session));
+    expect(session.subscribeStats).toHaveBeenCalledTimes(1);
+    expect(result.current.stats).toBeDefined();
+    expect(() => unmount()).not.toThrow();
   });
 
   it("persists and routes a frame-rate mode change", () => {

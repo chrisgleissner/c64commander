@@ -140,4 +140,15 @@ describe("Live View soak — no progressive latency drift (§7/§14.6)", () => {
     expect(analysis.rollingWithinBudget).toBe(false); // the spike window exceeds the 30 ms budget
     expect(analysis.passed).toBe(false);
   });
+
+  it("treats an empty or single-sample series as INCONCLUSIVE (never a pass)", () => {
+    // A soak that recorded no latency must not certify "no drift" just because every derived metric
+    // is zero and slides under the positive thresholds — fail closed.
+    for (const degenerate of [[] as LatencySample[], [{ tMs: 0, latencyMs: 5 }]]) {
+      const analysis = analyzeLatencyDrift(degenerate, DRIFT);
+      expect(analysis.passed).toBe(false);
+      expect(analysis.rollingWithinBudget).toBe(false);
+      expect(analysis.samples).toBe(degenerate.length);
+    }
+  });
 });

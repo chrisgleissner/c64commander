@@ -61,7 +61,8 @@ export interface StreamReceiver {
    * plugin), so decimated frames skip their Base64 encode + bridge payload. Present only when the
    * transport supports it; the caller falls back to JS-side decimation otherwise.
    */
-  setNativeCadence?(fraction: number): void;
+  /** Returns true iff the NATIVE side will decimate (assembly on); false → keep JS decimation. */
+  setNativeCadence?(fraction: number): boolean;
   onStateChange(handler: (state: StreamConnectionState) => void): void;
   /** The host:port the device should stream to (the receiver's own address). */
   readonly destination: string;
@@ -264,13 +265,19 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
     this.frameHandler = handler;
   }
 
-  /** Push the keep-fraction to the native assembler (video only) so it decimates before encoding. */
-  setNativeCadence(fraction: number): void {
-    if (!this.assemble) return;
+  /**
+   * Push the keep-fraction to the native assembler (video only) so it decimates before encoding.
+   * Returns whether the NATIVE path will actually decimate: false when native assembly is off (the
+   * escape hatch), so the caller keeps JS-side decimation enabled instead of assuming the native
+   * side handled it — otherwise Auto/50%/25% would silently render every frame.
+   */
+  setNativeCadence(fraction: number): boolean {
+    if (!this.assemble) return false;
     const permille = Math.max(0, Math.min(1000, Math.round(fraction * 1000)));
     void StreamUdp.setKeepFraction({ name: this.name, permille }).catch((error) => {
       addLog("debug", "Native keep-fraction set failed", { error: (error as Error)?.message ?? String(error) });
     });
+    return true;
   }
 
   onStateChange(handler: (state: StreamConnectionState) => void): void {

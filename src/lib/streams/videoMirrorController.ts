@@ -201,12 +201,11 @@ export class VideoMirrorController {
    */
   private applyCadence(): void {
     const native = this.receiver?.setNativeCadence;
-    if (native) {
-      native.call(this.receiver, this.requestedKeepFraction);
-      this.keepFraction = 1;
-    } else {
-      this.keepFraction = this.requestedKeepFraction;
-    }
+    // Native decimation applies ONLY when the receiver reports it did (assembly on). When the
+    // native-assembly escape hatch is off, setNativeCadence returns false — fall back to JS
+    // decimation so Auto/50%/25% still cap the rate instead of silently rendering every frame.
+    const nativeDecimating = native ? native.call(this.receiver, this.requestedKeepFraction) : false;
+    this.keepFraction = nativeDecimating ? 1 : this.requestedKeepFraction;
   }
 
   /** Integer divisor view of the current keep-fraction (1/fraction, rounded) — for existing callers. */

@@ -107,6 +107,24 @@ const slopePerMs = (samples: LatencySample[]): number => {
  * the regression slope are all within tolerance.
  */
 export const analyzeLatencyDrift = (samples: LatencySample[], thresholds: DriftThresholds): DriftAnalysis => {
+  // Insufficient data is INCONCLUSIVE, never a pass: an empty (or single-sample) series makes every
+  // derived metric zero, which would otherwise sail under every positive threshold and falsely
+  // certify "no drift" for a soak that recorded no latency at all. Fail closed.
+  if (samples.length < 2) {
+    return {
+      samples: samples.length,
+      durationMs: 0,
+      rollingP99MaxMs: 0,
+      firstWindowP99Ms: 0,
+      lastWindowP99Ms: 0,
+      windowDeltaMs: 0,
+      slopeMsPerMin: 0,
+      rollingWithinBudget: false,
+      windowDeltaWithinTolerance: false,
+      slopeWithinTolerance: false,
+      passed: false,
+    };
+  }
   const sorted = [...samples].sort((a, b) => a.tMs - b.tMs);
   const durationMs = sorted.length ? sorted[sorted.length - 1].tMs - sorted[0].tMs : 0;
   const startMs = sorted.length ? sorted[0].tMs : 0;

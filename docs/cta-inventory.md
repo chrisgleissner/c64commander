@@ -223,7 +223,10 @@ not-connected / empty / single-device).
   - Audio — Listen / Listening toggle — button — `av-audio-toggle` — R✅ I✅ _(flag `audio_mirror_enabled`; controls the shared app-wide session; the live dot is display-only)_
   - Video — Watch / Watching toggle — button — `av-video-toggle` — R✅ I✅ _(flag `video_mirror_enabled`; the check-preview canvas and fps badge are display-only)_
   - Expand / collapse preview — button — `live-view-expand` — R✅ I✅ _(shown only while a video stream is active; toggles the check preview between check and immersive size)_
-  - Stats — expand/collapse toggle — `stream-stats-toggle` — R✅ I✅ _(display-only telemetry grid below; diagnostic)_
+  - Stats — expand/collapse toggle — `stream-stats-toggle` — R✅ I✅ _(reveals the telemetry grid + the controls below; diagnostic)_
+    - Frame-rate mode — segmented buttons ×4 — `stream-stats-mode-auto` / `-100` / `-50` / `-25` — R✅ I✅ _(user max presented rate; the governor may still demote below it)_
+    - History window — segmented buttons — `stream-stats-window-{label}` (e.g. `1m`/`5m`/`15m`/Session) — R✅ I✅ _(selects the downsampled history span; display grid otherwise)_
+    - Export diagnostics — button — `stream-stats-export` — R✅ I✅
   - **A/V measurement** (`av-sync-panel`) _(power-user diagnostic; two independently collapsible sections, both collapsed by default)_
     - A/V Sync section — expand/collapse — `av-sync-toggle` — R✅ I✅ ; inside: Run test — button — `av-sync-run` — R✅ I✅ ; Reset all A/V measurements — icon button — `av-sync-reset` — R✅ I✅ ; Stop — button — `av-sync-stop` — R✅ I✅ `[visible when a test program is running on the device]`
     - Tap latency section — expand/collapse — `av-sync-lat-toggle` — R✅ I✅ ; inside: Load — button — `av-sync-key-load` — R✅ I✅ ; Send SPACE — button — `av-sync-press` — R✅ I✅ ; Stop — button — `av-sync-stop` (shared with the A/V Sync section) `[visible when a test program is running]`
@@ -330,7 +333,9 @@ Mount disk sheet: Available disks list — filter text — `list-filter-input` �
   frame assembly, A/B / escape-hatch toggle — native builds only)_ ; Input
   priority (instant joystick) — switch — `settings-stream-input-priority` —
   R✅ I✅ _(default on; sheds video briefly while the user is actively driving so
-  joystick/keyboard/mouse input reaches the C64 instantly)_
+  joystick/keyboard/mouse input reaches the C64 instantly)_ ; Low-latency audio
+  (native) — switch — `settings-stream-native-audio` — R✅ I✅ _(default on; plays
+  Live View audio through a native low-latency track — Android only)_
   `[visible when audio_mirror_enabled or video_mirror_enabled]`
 - **Notifications**: visibility — select — R✅ I✅ ; duration — slider — R✅ I✅
 - **Build/info**: REST API docs — link — `settings-about-rest-api-docs` — R✅ I✅

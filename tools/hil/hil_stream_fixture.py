@@ -205,6 +205,11 @@ def main():
         # 3. Start Live View, let it stabilise.
         if not cdp_eval("!!document.querySelector('[data-testid=\"av-video-toggle\"]')"):
             raise InfraError("Live View controls not present (app not on a streaming surface)")
+        # Force Auto frame-rate BEFORE the session starts (it reads the mode at start): the 40 fps gate
+        # below is meaningless if a prior session saved 25%/50%, which intentionally caps fps under 40.
+        # Stash the user's setting and restore it on clean stop.
+        saved_frame_rate_mode = cdp_eval("localStorage.getItem('c64u_stream_video_frame_rate_mode')")
+        cdp_eval("localStorage.setItem('c64u_stream_video_frame_rate_mode','auto')")
         click("av-video-toggle"); time.sleep(1)
         click("av-audio-toggle")
         time.sleep(args.stabilise)
@@ -246,10 +251,16 @@ def main():
         inconclusive = {"jankyFramesPct": jank_inconclusive}
         report["jankInconclusive"] = jank_inconclusive
         report["gates"] = checks
+        report["inconclusiveGates"] = [k for k, v in inconclusive.items() if v]
         report["passed"] = all(v for k, v in checks.items() if not inconclusive.get(k))
 
-        # 6. Clean stop (validate no stale session left streaming).
+        # 6. Clean stop (validate no stale session left streaming) + restore the user's frame-rate mode.
         click("av-audio-toggle"); time.sleep(0.5); click("av-video-toggle")
+        cdp_eval(
+            "localStorage.removeItem('c64u_stream_video_frame_rate_mode')"
+            if saved_frame_rate_mode is None
+            else f"localStorage.setItem('c64u_stream_video_frame_rate_mode',{json.dumps(saved_frame_rate_mode)})"
+        )
 
     except InfraError as exc:
         report["error"] = str(exc)
@@ -264,6 +275,14 @@ def main():
         print(f"HIL UNEXPECTED ERROR: {exc!r}", file=sys.stderr)
         sys.exit(2)
 
+    # An inconclusive REQUIRED gate (e.g. too few HWUI frames to judge jank) is NOT a pass: the run
+    # never validated that threshold, so it must not exit 0. Distinct exit 3 so CI can tell "the gate
+    # could not be measured" apart from a clean pass (0) or a real product failure (1).
+    if report.get("inconclusiveGates"):
+        report["result"] = "inconclusive"
+        _emit(report, args.report)
+        print(f"HIL INCONCLUSIVE: gate(s) had too little data to validate: {report['inconclusiveGates']}", file=sys.stderr)
+        sys.exit(3)
     report["result"] = "pass" if report["passed"] else "fail"
     _emit(report, args.report)
     sys.exit(0 if report["passed"] else 1)

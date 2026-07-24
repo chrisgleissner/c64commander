@@ -1275,7 +1275,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
               ]
             : []),
-          "Live View is optional and starts switched off. The device streams to two network ports (11000 for the picture, 11001 for the sound); if your setup needs different ones, you can change them in **Settings**, under Play and disk behaviour. Live View borrows the same feeds as **Streams** (below), and while it is playing it takes charge of them — see there for how the two work together.",
+          "Live View is ready to use out of the box; the picture and sound simply stay off until you press **Watch** or **Listen**, so nothing streams until you ask for it. The device streams to two network ports (11000 for the picture, 11001 for the sound); if your setup needs different ones, you can change them in **Settings**, under Play and disk behaviour. Live View borrows the same feeds as **Streams** (below), and while it is playing it takes charge of them — see there for how the two work together.",
           "",
           featureAvailability(features.video_mirror_enabled ?? features.audio_mirror_enabled),
           "",

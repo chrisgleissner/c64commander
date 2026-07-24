@@ -23,7 +23,7 @@ const sample = (tMs: number, over: Partial<StreamTelemetrySample> = {}): StreamT
   videoDroppedPackets: 0,
   renderResidenceMs: 0,
   fps: 50,
-  effectiveDivisor: 1,
+  effectiveFraction: 1,
   requestedMode: "auto",
   ...over,
 });
