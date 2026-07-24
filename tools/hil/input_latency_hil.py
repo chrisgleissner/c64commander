@@ -126,23 +126,40 @@ DRIVE_BURST_JS = r"""
   const fire = (type, x, y) => knob.dispatchEvent(new PointerEvent(type, {
     pointerId: 1, isPrimary: true, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, cancelable: true }));
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  // Human-rate discrete flicks with a gap WIDE enough for the serialized input queue to fully drain
+  // between them, so each sample measures ONE input's gesture->dispatch latency (coalesce window +
+  // any JS-thread stall from video) rather than a saturation backlog of queued round-trips.
   for (let i = 0; i < taps; i++) {
     const [dx, dy] = dirs[i % dirs.length];
     fire('pointerdown', cx, cy);
     await sleep(8);
     fire('pointermove', cx + dx * reach, cy + dy * reach);
-    await sleep(40);
+    await sleep(120);
     fire('pointerup', cx + dx * reach, cy + dy * reach);
-    await sleep(40);
+    await sleep(320);
   }
   return { ok: true };
-})(%d)
+})(__TAPS__)
 """
+
+
+def home_fps():
+    return num("av-mirror-fps") if present("av-mirror-fps") else 0.0
+
+
+def wait_video_live(timeout_s=20):
+    """Poll Home's mirror fps until the stream is actually presenting frames (or give up)."""
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        if home_fps() > 0:
+            return True
+        time.sleep(1)
+    return False
 
 
 def run_burst(taps):
     evaluate("window.__c64uRemoteInputLatency && window.__c64uRemoteInputLatency.clear()")
-    result = evaluate(DRIVE_BURST_JS % taps)
+    result = evaluate(DRIVE_BURST_JS.replace("__TAPS__", str(int(taps))))
     if isinstance(result, dict) and result.get("error"):
         raise RuntimeError(f"input driver failed: {result['error']}")
     time.sleep(0.5)
@@ -159,15 +176,50 @@ def sample_stream():
     }
 
 
-def phase(label, taps):
+def pressed(testid):
+    """Whether a toggle button reads as on (aria-pressed=true)."""
+    return bool(
+        evaluate(
+            f"(()=>{{const e=document.querySelector('[data-testid=\"{testid}\"]');"
+            f"return !!e && e.getAttribute('aria-pressed')==='true';}})()"
+        )
+    )
+
+
+def start_mirror():
+    """Start audio+video on Home (sheet CLOSED, so the toggles are unambiguous)."""
+    if present("av-video-toggle") and not pressed("av-video-toggle"):
+        click("av-video-toggle")
+    time.sleep(0.6)
+    if present("av-audio-toggle") and not pressed("av-audio-toggle"):
+        click("av-audio-toggle")
+
+
+def stop_mirror():
+    for t in ("av-audio-toggle", "av-video-toggle"):
+        if present(t) and pressed(t):
+            click(t)
+            time.sleep(0.4)
+
+
+def phase(label, taps, fps):
+    # Open Remote Input (Joystick mode) OVER the running mirror, drive the stick, read the app's stats.
+    click("home-machine-inline-openRemoteInput")
+    time.sleep(1)
+    if present("remote-input-mode-joystick"):
+        click("remote-input-mode-joystick")
+        time.sleep(0.5)
     burst = run_burst(taps)
-    stream = sample_stream()
+    result = {"label": label, "input": burst, "fpsDuringBurst": fps}
     print(
         f"  [{label}] input dispatch: count={burst.get('count')} p50={burst.get('p50Ms')}ms "
-        f"p95={burst.get('p95Ms')}ms max={burst.get('maxMs')}ms | video {stream['fps']} fps "
-        f"underruns={stream['underruns']}"
+        f"p95={burst.get('p95Ms')}ms max={burst.get('maxMs')}ms mean={round(burst.get('meanMs',0),1)}ms | "
+        f"mirror {fps} fps"
     )
-    return {"label": label, "input": burst, "stream": stream}
+    if present("remote-input-close"):
+        click("remote-input-close")
+        time.sleep(0.8)
+    return result
 
 
 def main():
@@ -184,46 +236,42 @@ def main():
         sys.exit("no ADB device")
     forward_cdp(serial)
     print("== input-latency-under-load HIL ==", evaluate("document.title"))
-
-    # Open Remote Input in Joystick mode with the mirror running, so the burst competes with video.
+    # Make sure we're on Home (the Live View card + Remote Input action live there).
+    if present("tab-home"):
+        click("tab-home")
+        time.sleep(2)
     if not present("av-video-toggle"):
         sys.exit("Live View controls not present (open the app on Home first)")
-    if not evaluate("!!document.querySelector('[data-testid=\"av-video-toggle\"]')"):
-        sys.exit("no Live View")
-    click("av-video-toggle")
-    time.sleep(1)
-    if present("av-audio-toggle"):
-        click("av-audio-toggle")
-    print("Stabilising the stream…")
-    time.sleep(12)
-    if present("stream-stats-toggle"):
-        click("stream-stats-toggle")
+    if not present("home-machine-inline-openRemoteInput"):
+        sys.exit("Remote Input action not present (device not connected/active?)")
 
     report = {"startedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "serial": serial, "phases": []}
 
-    # A: input priority ON (default) — the shipped behaviour.
-    print(f"Phase A — Input Priority ON ({args.taps} joystick moves under load)…")
-    report["phases"].append(phase("priority-on", args.taps))
+    def run_phase(label, priority_flag):
+        stop_mirror()
+        evaluate(f"localStorage.setItem('c64u_stream_input_priority','{priority_flag}')")
+        time.sleep(0.8)
+        start_mirror()
+        print(f"Phase {label}; stabilising the stream…")
+        live = wait_video_live(25)
+        time.sleep(3)
+        fps = home_fps()
+        if not live or fps <= 0:
+            print(f"  WARNING: video not presenting (fps={fps}) — load not comparable this phase")
+        return phase(label, args.taps, fps)
 
-    # Flip the Settings toggle off and restart the stream so the session re-reads it, then re-measure.
-    print("Toggling Input Priority OFF (Settings) + restarting the stream…")
-    # Navigate to Settings, flip, come back — via the persisted key so we don't fight the UI route.
-    evaluate("localStorage.setItem('c64u_stream_input_priority','0')")
-    click("av-video-toggle")  # stop
-    time.sleep(1)
-    click("av-video-toggle")  # start again → session re-reads the setting
-    time.sleep(12)
-    print(f"Phase B — Input Priority OFF ({args.taps} joystick moves under load)…")
-    report["phases"].append(phase("priority-off", args.taps))
+    # Phase A — Input Priority ON (default, shipped). Phase B — OFF (A/B). Equal video load each phase.
+    report["phases"].append(run_phase("priority-on", "1"))
+    report["phases"].append(run_phase("priority-off", "0"))
 
     # Restore the default.
     evaluate("localStorage.setItem('c64u_stream_input_priority','1')")
 
     on = report["phases"][0]["input"]
     off = report["phases"][1]["input"]
-    print("\n=== A/B summary (input dispatch p95 under Live View load) ===")
-    print(f"  Input Priority ON : p50 {on.get('p50Ms')}ms  p95 {on.get('p95Ms')}ms")
-    print(f"  Input Priority OFF: p50 {off.get('p50Ms')}ms  p95 {off.get('p95Ms')}ms")
+    print("\n=== A/B summary (joystick press→dispatch latency under Live View load) ===")
+    print(f"  Input Priority ON : p50 {on.get('p50Ms')}ms  p95 {on.get('p95Ms')}ms  mean {round(on.get('meanMs',0),1)}ms")
+    print(f"  Input Priority OFF: p50 {off.get('p50Ms')}ms  p95 {off.get('p95Ms')}ms  mean {round(off.get('meanMs',0),1)}ms")
 
     if args.report:
         with open(args.report, "w") as f:
