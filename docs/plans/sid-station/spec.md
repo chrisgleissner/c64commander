@@ -1,6 +1,6 @@
 # SID Radio — endless stations of similar SIDs from your rankings
 
-**Status:** Draft → planning (convergence pass 2026-07-24).
+**Status:** Specification (convergence pass 2026-07-24). Implementation order & execution protocol: see `prompt.md`; live task board: `PLANS.md`; append-only history: `WORKLOG.md`.
 **Feature flags:** `sidRadioEnabled` (master), `sidRankingEnabled` (the Like / Not-for-me affordance), `localPlaybackEnabled` (the on-device engine — see §12). Canonical names & storage keys: **§0.4**.
 **Data dependency:** [`chrisgleissner/sidflow-data`](https://github.com/chrisgleissner/sidflow-data) — the **Tiny** `sidcorr-tiny-1` similarity export (~1.8 MB).
 **Code dependency (§12):** [`libsidplayfp/libsidplayfp`](https://github.com/libsidplayfp/libsidplayfp) — GPL-2.0-**or-later** SID player, for on-device playback.
@@ -21,10 +21,10 @@
 
 ## 0. Reading guide, definitions & canon (read this first)
 
-This section exists so the rest of the plan has **one** source of truth for names,
-gates, and ordering. Anything below that disagrees with §0 is a bug in the plan.
+This section exists so the rest of the spec has **one** source of truth for names,
+gates, and ordering. Anything below that disagrees with §0 is a bug in the spec.
 
-### 0.1 How to read this plan
+### 0.1 How to read this spec
 
 - **§1–§3** — *what* we build and the data behind it (stable; already validated against
   the `sidcorr-tiny-1` spec).
@@ -887,7 +887,7 @@ fixture, run before each release and pinned in-repo.
 
 ## 11. Decisions (resolved, with forcing functions)
 
-Each carries a **default we ship** and the **signal that would revisit it** — so the plan
+Each carries a **default we ship** and the **signal that would revisit it** — so the spec
 converges without waiting on open questions.
 
 | # | Decision | Shipped default | Revisit if… |
