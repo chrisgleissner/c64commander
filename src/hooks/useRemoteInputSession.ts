@@ -53,6 +53,15 @@ export type RemoteInputConnectionStatus = "idle" | "sending" | "error";
 /** Held-set changes within this window collapse into one network call (device-safety). */
 const COALESCE_WINDOW_MS = 40;
 /**
+ * Joystick moves get a TIGHTER coalesce window than the 40 ms default: the C64 polls the joystick
+ * matrix once per raster frame (~20 ms PAL / ~16.7 ms NTSC), so a 40 ms window was two frames of pure
+ * latency on the thing the user is most sensitive to (spec priority: joystick FIRST). One frame still
+ * coalesces a diagonal's two axis changes into a single packet (they land within one frame) and the
+ * serialized input lane still caps the wire rate — this only shaves the floor on a sudden movement.
+ * HIL (Pixel → C64U) measured joystick press→dispatch p50 == the window, so this ~halves that floor.
+ */
+const JOYSTICK_COALESCE_WINDOW_MS = 16;
+/**
  * The window used for the FIRST change since the last flush (nothing else is
  * pending yet): fires on the next tick instead of waiting out the full
  * COALESCE_WINDOW_MS, so a single discrete press/tap reaches the wire in well
@@ -348,7 +357,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
   // move's flush fire and complete before the autofire edge ever sees it as
   // pending, splitting what should be one call into two.
   const scheduleFlush = useCallback(
-    (options: { fastPath?: boolean } = {}) => {
+    (options: { fastPath?: boolean; windowMs?: number } = {}) => {
       // Input priority: the user just did something C64-bound (joystick/keyboard/type/cursor). Tell
       // the Live View mirror IMMEDIATELY so it sheds video and hands the CPU to this input path
       // (spec: joystick > keyboard > audio > video). This is the leading edge of every USER input —
@@ -360,10 +369,16 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       // sample's start later than the user's actual first press.
       const isLeadingEdge = flushTimerRef.current === null;
       pendingChangeAtRef.current ??= performance.now();
-      const windowMs = options.fastPath && isLeadingEdge ? LEADING_EDGE_WINDOW_MS : COALESCE_WINDOW_MS;
+      const windowMs =
+        options.windowMs ?? (options.fastPath && isLeadingEdge ? LEADING_EDGE_WINDOW_MS : COALESCE_WINDOW_MS);
       scheduleFlushIn(windowMs);
     },
     [scheduleFlushIn],
+  );
+  /** Joystick moves flush on the tighter, frame-aligned window (see JOYSTICK_COALESCE_WINDOW_MS). */
+  const scheduleJoystickFlush = useCallback(
+    () => scheduleFlush({ windowMs: JOYSTICK_COALESCE_WINDOW_MS }),
+    [scheduleFlush],
   );
   const scheduleKeyboardFlush = useCallback(() => scheduleFlush({ fastPath: true }), [scheduleFlush]);
 
@@ -416,9 +431,11 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
     (next: HeldJoystickInputs) => {
       pendingHeldSetRef.current = next;
       setHeldJoystickInputsState(next);
-      scheduleFlush();
+      // Tighter, frame-aligned window: a rapid thumb flick (e.g. steering the mouse in Maniac Mansion)
+      // must reach the C64 within a frame, not sit out the 40 ms drag debounce.
+      scheduleJoystickFlush();
     },
-    [scheduleFlush],
+    [scheduleJoystickFlush],
   );
 
   const setHeldKeyboardInputs = useCallback(
