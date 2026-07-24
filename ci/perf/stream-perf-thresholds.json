@@ -1,0 +1,86 @@
+{
+  "$comment": [
+    "Committed Live View streaming performance thresholds (spec §16). Machine-readable; every",
+    "threshold carries its measurement metadata (profile, runner, metric, unit, bound, duration,",
+    "warmup, repetitions, aggregation). Changing a threshold requires review + evidence (§21) — do",
+    "NOT auto-rewrite a baseline to make a regression pass. The soak/drift gates run on every build",
+    "(host, deterministic). The device CPU gates are asserted by the Pixel-4 HIL fixture, which is",
+    "currently MANUAL (no self-hosted CI runner) — see docs/plans/live-view and tools/hil."
+  ],
+  "version": 1,
+  "latencyDrift": {
+    "profile": "deterministic-soak",
+    "runner": "host-node",
+    "metric": "video-local-pipeline-residence",
+    "unit": "ms",
+    "durationSimulatedMs": 600000,
+    "warmupMs": 5000,
+    "repetitions": 1,
+    "aggregation": "rolling-p99 + first/last-window-p99 + ols-slope",
+    "thresholds": {
+      "maxRollingP99Ms": 30,
+      "rollingWindowMs": 60000,
+      "compareWindowMs": 300000,
+      "maxWindowDeltaMs": 2,
+      "maxSlopeMsPerMin": 0.5
+    }
+  },
+  "audioContinuity": {
+    "profile": "deterministic-core",
+    "runner": "host-node",
+    "unit": "count",
+    "aggregation": "session-total",
+    "thresholds": {
+      "audioCallbackUnderruns": 0,
+      "applicationInducedAudioLoss": 0,
+      "unexplainedAudioGaps": 0,
+      "staleSessionAudioSamples": 0
+    }
+  },
+  "audioConcealmentClick": {
+    "profile": "deterministic-core",
+    "runner": "host-node",
+    "metric": "max-consecutive-sample-step",
+    "unit": "int16-code",
+    "aggregation": "max",
+    "thresholds": { "maxClickStep": 600 }
+  },
+  "videoSlots": {
+    "profile": "deterministic-core",
+    "runner": "host-node",
+    "unit": "count",
+    "aggregation": "session-total",
+    "thresholds": { "unexplainedMissingPresentationSlots": 0 }
+  },
+  "hostBenchmark": {
+    "profile": "host-benchmark",
+    "runner": "host-node-dedicated",
+    "unit": "ops-per-second",
+    "warmupIterations": 100,
+    "repetitions": 3,
+    "aggregation": "median",
+    "$comment": [
+      "Relative-regression gate only: a dedicated, quiesced runner is required for a HARD absolute",
+      "CPU gate (§14.3/§16.4 — a shared cloud runner is too noisy). The vitest bench prints ops/s;",
+      "assert-stream-perf.mjs compares against a committed baseline with a tolerance band."
+    ],
+    "thresholds": { "maxRegressionPct": 25 }
+  },
+  "deviceCpu": {
+    "profile": "pixel4-hil",
+    "runner": "pixel4-c64u-hil-manual",
+    "unit": "percent-of-one-core",
+    "device": "Pixel 4 (flame)",
+    "os": "Android 13",
+    "firmware": "C64U fw1.2.0",
+    "source": "PAL",
+    "aggregation": "top-H-4-sample-mean",
+    "$comment": "Absolute ceilings measured on-device 2026-07-24; asserted by the manual HIL fixture, not a CI gate yet.",
+    "thresholds": {
+      "appTotalCpuPctAt100": 70,
+      "appTotalCpuPctAt25": 60,
+      "audioUnderruns": 0,
+      "jankyFramesPct": 2
+    }
+  }
+}
