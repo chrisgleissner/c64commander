@@ -31,6 +31,7 @@ import { SystemInfo } from "./home/components/SystemInfo";
 import { MachineControls } from "./home/components/MachineControls";
 import { AudioMixer } from "./home/components/AudioMixer";
 import { StreamStatus } from "./home/components/StreamStatus";
+import { LiveViewCard } from "@/components/streams/LiveViewCard";
 import { DriveManager } from "./home/components/DriveManager";
 import { HomeCpuSpeedSlider } from "./home/components/HomeCpuSpeedSlider";
 import { PrinterManager } from "./home/components/PrinterManager";
@@ -282,6 +283,10 @@ function HomePageContent() {
   const { value: homeTelnetPrinterActionsEnabled } = useFeatureFlag("home_telnet_printer_actions_enabled");
   const { value: homeTelnetPowerCycleEnabled } = useFeatureFlag("home_telnet_power_cycle_enabled");
   const { value: homeTelnetClearRamRebootEnabled } = useFeatureFlag("home_telnet_clear_ram_reboot_enabled");
+  const { value: liveViewEnabled } = useFeatureFlag("live_view_enabled");
+  const { value: audioMirrorEnabled } = useFeatureFlag("audio_mirror_enabled");
+  const { value: videoMirrorEnabled } = useFeatureFlag("video_mirror_enabled");
+  const { value: avSyncTestsEnabled } = useFeatureFlag("av_sync_tests_enabled");
   const deviceControlBusy = deviceControlActionId !== null;
   const machineTaskBusy = machineTaskId !== null || pauseResumePending || deviceControlBusy || reuTaskPending;
   const allSnapshots: RestorableSnapshotEntry[] = [...snapshots, ...(reuSnapshotEnabled ? reuSnapshots : [])].sort(
@@ -1253,6 +1258,16 @@ function HomePageContent() {
             telnetBusy={telnet.isBusy}
             footer={ramSnapshotsEnabled ? ramDumpFolderCard : null}
           />
+
+          {liveViewEnabled && (audioMirrorEnabled || videoMirrorEnabled) && deviceCapabilities.supportsStreaming ? (
+            <div data-section-label="Live View">
+              <LiveViewCard
+                audioEnabled={audioMirrorEnabled}
+                videoEnabled={videoMirrorEnabled}
+                showAvSyncTests={avSyncTestsEnabled}
+              />
+            </div>
+          ) : null}
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}

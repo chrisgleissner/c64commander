@@ -136,6 +136,7 @@ open class MainActivity : BridgeActivity() {
     registerPlugin(HvscIngestionPlugin::class.java)
     registerPlugin(SafeAreaPlugin::class.java)
     registerPlugin(SecureStoragePlugin::class.java)
+    registerPlugin(StreamUdpPlugin::class.java)
     registerPlugin(TelnetSocketPlugin::class.java)
     super.onCreate(savedInstanceState)
     installLanCookieBypassIfNeeded()

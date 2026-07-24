@@ -68,6 +68,10 @@ import {
   type ArchiveDiskCopyOffer,
 } from "@/lib/disks/diskMount";
 import { ToastAction } from "@/components/ui/toast";
+import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
+import { useDiskExplorer, diskTypeForPath } from "@/hooks/useDiskExplorer";
+import { DiskContentsDialog } from "@/components/disks/DiskContentsDialog";
+import { NewDiskDialog } from "@/components/disks/NewDiskDialog";
 import { buildDiskWriteBackDependencies } from "@/lib/disks/diskWriteBackDependencies";
 import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 import {
@@ -237,6 +241,11 @@ export const HomeDiskManager = () => {
   );
 
   const [activeDrive, setActiveDrive] = useState<DriveKey | null>(null);
+  // Content Explorer: Disk Explorer (A) + New disk (F). Provider-free readers so
+  // HomeDiskManager keeps rendering standalone in its many existing unit tests.
+  const diskExplorerEnabled = useFeatureFlagValue("disk_explorer_enabled");
+  const newDiskEnabled = useFeatureFlagValue("new_disk_enabled");
+  const [newDiskOpen, setNewDiskOpen] = useState(false);
   const [activeDisk, setActiveDisk] = useState<DiskEntry | null>(null);
   const [driveErrors, setDriveErrors] = useState<Record<string, string>>({});
   // Timestamp each per-drive operation error so the drive poll can clear a stale
@@ -1684,64 +1693,84 @@ export const HomeDiskManager = () => {
     [addSourceFromPicker, browserOpen, handleAddDiskSelections, trace],
   );
 
-  const buildDiskMenuItems = useCallback((disk: DiskEntry, disableActions?: boolean): ActionListMenuItem[] => {
-    const detailsDate = disk.modifiedAt || disk.importedAt;
-    const configUiState = resolvePlaybackConfigUiState({
-      configRef: disk.configRef ?? null,
-      configOrigin: disk.configOrigin ?? resolveStoredConfigOrigin(disk.configRef ?? null, null),
-      configOverrides: disk.configOverrides ?? null,
-      configCandidates: disk.configCandidates ?? null,
-    });
-    return [
-      { type: "label", label: "Details" },
-      { type: "info", label: "Size", value: formatBytes(disk.sizeBytes) },
-      { type: "info", label: "Date", value: formatDate(detailsDate) },
-      { type: "separator" },
-      { type: "label", label: "Config" },
-      { type: "info", label: "Attached", value: disk.configRef?.fileName ?? "None" },
-      { type: "info", label: "Origin", value: describeConfigOrigin(disk.configOrigin ?? "none") },
-      {
-        type: "info",
-        label: "Status",
-        value:
-          configUiState === "edited"
-            ? "Edited"
-            : configUiState === "resolved"
-              ? "Resolved"
-              : configUiState === "candidates"
-                ? "Candidates found"
-                : configUiState === "declined"
-                  ? "Declined"
-                  : "No config",
-      },
-      { type: "separator" },
-      {
-        type: "action",
-        label: "Set group…",
-        onSelect: () => {
-          setGroupDialogDisk(disk);
-          setGroupName(disk.group || "");
+  const diskExplorer = useDiskExplorer({
+    api,
+    drive: "a",
+    mount: (disk) => handleMountDisk("a", disk),
+    onToast: toast,
+  });
+
+  const buildDiskMenuItems = useCallback(
+    (disk: DiskEntry, disableActions?: boolean): ActionListMenuItem[] => {
+      const detailsDate = disk.modifiedAt || disk.importedAt;
+      const configUiState = resolvePlaybackConfigUiState({
+        configRef: disk.configRef ?? null,
+        configOrigin: disk.configOrigin ?? resolveStoredConfigOrigin(disk.configRef ?? null, null),
+        configOverrides: disk.configOverrides ?? null,
+        configCandidates: disk.configCandidates ?? null,
+      });
+      return [
+        { type: "label", label: "Details" },
+        { type: "info", label: "Size", value: formatBytes(disk.sizeBytes) },
+        { type: "info", label: "Date", value: formatDate(detailsDate) },
+        { type: "separator" },
+        { type: "label", label: "Config" },
+        { type: "info", label: "Attached", value: disk.configRef?.fileName ?? "None" },
+        { type: "info", label: "Origin", value: describeConfigOrigin(disk.configOrigin ?? "none") },
+        {
+          type: "info",
+          label: "Status",
+          value:
+            configUiState === "edited"
+              ? "Edited"
+              : configUiState === "resolved"
+                ? "Resolved"
+                : configUiState === "candidates"
+                  ? "Candidates found"
+                  : configUiState === "declined"
+                    ? "Declined"
+                    : "No config",
         },
-        disabled: disableActions,
-      },
-      {
-        type: "action",
-        label: "Rename disk…",
-        onSelect: () => {
-          setRenameDialogDisk(disk);
-          setRenameValue(disk.name || "");
+        { type: "separator" },
+        {
+          type: "action",
+          label: "Set group…",
+          onSelect: () => {
+            setGroupDialogDisk(disk);
+            setGroupName(disk.group || "");
+          },
+          disabled: disableActions,
         },
-        disabled: disableActions,
-      },
-      {
-        type: "action",
-        label: "Remove from collection",
-        onSelect: () => setDeleteDialogDisk(disk),
-        disabled: disableActions,
-        destructive: true,
-      },
-    ];
-  }, []);
+        {
+          type: "action",
+          label: "Rename disk…",
+          onSelect: () => {
+            setRenameDialogDisk(disk);
+            setRenameValue(disk.name || "");
+          },
+          disabled: disableActions,
+        },
+        ...(diskExplorerEnabled && diskTypeForPath(disk.path)
+          ? ([
+              {
+                type: "action",
+                label: "Open (Disk Explorer)…",
+                onSelect: () => void diskExplorer.openDisk(disk, diskLibrary.runtimeFiles[disk.id]),
+                disabled: disableActions,
+              },
+            ] as ActionListMenuItem[])
+          : []),
+        {
+          type: "action",
+          label: "Remove from collection",
+          onSelect: () => setDeleteDialogDisk(disk),
+          disabled: disableActions,
+          destructive: true,
+        },
+      ];
+    },
+    [diskExplorerEnabled, diskExplorer, diskLibrary.runtimeFiles],
+  );
 
   const buildDiskListItems = useCallback(
     (
@@ -2364,16 +2393,28 @@ export const HomeDiskManager = () => {
               rowTestId="disk-row"
               viewAllMode="non-empty"
               headerActions={
-                <FocusableDiskButton
-                  focusId="disks-library-add-disks"
-                  focusOrder={DISKS_LIBRARY_FOCUS_ORDER.addDisks}
-                  focusGroup="disks-library"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setBrowserOpen(true)}
-                >
-                  {diskLibrary.disks.length ? "Add more disks" : "Add disks"}
-                </FocusableDiskButton>
+                <div className="flex items-center gap-2">
+                  {newDiskEnabled && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setNewDiskOpen(true)}
+                      data-testid="new-disk-open"
+                    >
+                      New disk
+                    </Button>
+                  )}
+                  <FocusableDiskButton
+                    focusId="disks-library-add-disks"
+                    focusOrder={DISKS_LIBRARY_FOCUS_ORDER.addDisks}
+                    focusGroup="disks-library"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBrowserOpen(true)}
+                  >
+                    {diskLibrary.disks.length ? "Add more disks" : "Add disks"}
+                  </FocusableDiskButton>
+                </div>
               }
             />
           </div>
@@ -2469,6 +2510,37 @@ export const HomeDiskManager = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      <DiskContentsDialog
+        open={diskExplorer.open}
+        onOpenChange={diskExplorer.setOpen}
+        diskName={diskExplorer.diskName}
+        entries={diskExplorer.entries}
+        loading={diskExplorer.loading}
+        error={diskExplorer.error}
+        busyIndex={diskExplorer.busyIndex}
+        onAction={diskExplorer.runAction}
+      />
+
+      {newDiskEnabled && (
+        <NewDiskDialog
+          open={newDiskOpen}
+          onOpenChange={setNewDiskOpen}
+          createDisk={(args) => api.createDisk(args)}
+          onCreated={async (result) => {
+            const diskEntry = createDiskEntry({ path: result.filePath, location: "ultimate" });
+            try {
+              diskLibrary.addDisks([diskEntry]);
+            } catch (error) {
+              addLog("debug", "New disk: add to library skipped", {
+                error: (error as Error)?.message ?? String(error),
+              });
+            }
+            await handleMountDisk("a", diskEntry);
+            toast({ title: "Disk created", description: `${result.fileName} created and mounted.` });
+          }}
+        />
+      )}
 
       <ItemSelectionDialog
         open={browserOpen}

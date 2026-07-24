@@ -1,0 +1,59 @@
+name: stream-gates
+
+# Live View streaming CI gates (spec §17). CI runs the deterministic HOST gates on every eligible
+# build. The mandatory Pixel-4 → Ultimate-64 HIL gate (§14.5) needs the physical rig (phone on USB +
+# C64U on the LAN), so it is a LOCAL-build gate — `./build --stream-hil` / `npm run test:streams:hil`
+# (tools/hil) — not a CI job. CI never reports a build "fully green" on the host gates alone.
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["*"]
+  pull_request:
+    paths:
+      - "src/lib/streams/**"
+      - "src/components/streams/**"
+      - "src/components/remoteInput/**"
+      - "src/hooks/useStreamStats.ts"
+      - "android/app/src/main/java/uk/gleissner/c64commander/StreamUdpPlugin.kt"
+      - "ci/perf/**"
+      - "tests/unit/streams/**"
+      - "tests/benchmarks/streamHotPaths.bench.ts"
+      - "scripts/assert-stream-perf.mjs"
+      - "scripts/ci/stream-gates.mjs"
+      - "scripts/streams-hil.mjs"
+      - "tools/hil/**"
+      - "package.json"
+      - "package-lock.json"
+      - "build"
+      - ".github/workflows/stream-gates.yaml"
+  workflow_dispatch:
+
+concurrency:
+  group: stream-gates-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  host-gates:
+    name: Stream | Host gates (deterministic + replay + soak + benchmark)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run streaming host gates
+        run: node scripts/ci/stream-gates.mjs
+        # The mandatory Pixel-4 -> C64U HIL gate is not run here — it runs on the LOCAL build with the
+        # physical rig (./build --stream-hil). See tools/hil/README.md.

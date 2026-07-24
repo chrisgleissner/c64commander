@@ -53,6 +53,7 @@ SKIP_TESTS=false
 SKIP_APK=false
 SKIP_FORMAT=false
 INSTALL_APK=false
+STREAM_HIL=false
 FUZZ_SEED=""
 FUZZ_STEPS=""
 FUZZ_TIME_BUDGET=""
@@ -149,6 +150,8 @@ Build domain (default build only):
   --skip-apk
   --skip-format            Skip Prettier + ESLint formatting (saves time for quick local builds)
   --install-apk            Install APK to a connected Android device (via adb)
+  --stream-hil             After install, run the Pixel-4 -> Ultimate-64 Live View HIL gate
+                           (streaming + end-to-end latency; requires the phone on USB + C64U on LAN)
   --apk-variant <variant>  APK build/install variant: debug or release (default: debug)
   --apk-path <path>        APK path to install (default: android/app/build/outputs/apk/debug/app-debug.apk)
   --device-id <id>         Device ID for adb (optional). If omitted, auto-selects the sole real device or sole 9B0* device.
@@ -1010,6 +1013,11 @@ while [[ $# -gt 0 ]]; do
     --install-apk)
       record_flag BUILD_FLAGS "$1"
       INSTALL_APK=true
+      shift
+      ;;
+    --stream-hil)
+      record_flag BUILD_FLAGS "$1"
+      STREAM_HIL=true
       shift
       ;;
     --apk-variant)
@@ -1954,6 +1962,16 @@ if [[ "$RUN_INSTALL_APK" == "true" ]]; then
 
   log "Launching app"
   adb -s "$DEVICE_ID" shell monkey -p uk.gleissner.c64commander -c android.intent.category.LAUNCHER 1
+fi
+
+# Mandatory Pixel-4 -> Ultimate-64 Live View HIL gate (spec §14.5), run on the LOCAL build (this
+# machine has the phone on USB + the C64U on the LAN). Streaming + reframed end-to-end latency gates.
+if [[ "$STREAM_HIL" == "true" ]]; then
+  require_cmd adb
+  DEVICE_ID="$(resolve_adb_device_id "${DEVICE_ID:-}")"
+  log "Running Live View HIL gate (Pixel 4 -> C64U) on device: $DEVICE_ID"
+  sleep 4 # let the freshly-launched app settle + reconnect
+  (cd "$ROOT_DIR" && HIL_ADB_SERIAL="$DEVICE_ID" node scripts/streams-hil.mjs)
 fi
 
 if [[ "$RUN_TEST_DEVICE_SWITCH_SOAK" == "true" ]]; then

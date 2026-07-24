@@ -27,7 +27,15 @@ export type FeatureFlagId =
   | "home_telnet_printer_actions_enabled"
   | "home_telnet_power_cycle_enabled"
   | "home_telnet_clear_ram_reboot_enabled"
-  | "keypad_input_enabled";
+  | "keypad_input_enabled"
+  | "launch_safety_enabled"
+  | "disk_explorer_enabled"
+  | "in_image_search_enabled"
+  | "live_view_enabled"
+  | "av_sync_tests_enabled"
+  | "audio_mirror_enabled"
+  | "video_mirror_enabled"
+  | "new_disk_enabled";
 
 export type FeatureFlagGroupKey = keyof typeof FEATURE_FLAG_GROUPS;
 
@@ -186,6 +194,78 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     group: "experimental",
     title: "Keyboard and keypad navigation",
     description: "Drive the app with a hardware keyboard, remote, or keypad. Arrow/D-pad navigation, activation, and literal hardware-keyboard typing are enabled by default; numeric keypad T9 text entry remains reserved for keypad-first variants.",
+  },
+  {
+    id: "launch_safety_enabled",
+    enabled: true,
+    visible_to_user: true,
+    developer_only: false,
+    group: "stable",
+    title: "Launch Safety",
+    description: "Park the configured cartridge around direct-memory launches so a freezer cartridge cannot hijack a Run/Load into its own menu, and optionally answer a cartridge boot menu after a Mount & Load reset. A no-op when no cartridge is configured.",
+  },
+  {
+    id: "disk_explorer_enabled",
+    enabled: true,
+    visible_to_user: true,
+    developer_only: false,
+    group: "stable",
+    title: "Disk Explorer",
+    description: "Look inside a disk image and Run, Load, or Mount & Load any single program from it, instead of only mounting the whole disk.",
+  },
+  {
+    id: "in_image_search_enabled",
+    enabled: false,
+    visible_to_user: true,
+    developer_only: false,
+    group: "experimental",
+    title: "In-image search",
+    description: "Index and search the programs inside disk images, so a program that only exists inside a .d64/.d71/.d81 becomes findable. Depends on Disk Explorer.",
+  },
+  {
+    id: "live_view_enabled",
+    enabled: true,
+    visible_to_user: true,
+    developer_only: false,
+    group: "stable",
+    title: "Live View",
+    description: "Master switch for Live View — see and hear the running machine — everywhere it appears: the Home and Play dashboards and Remote Input game mode. On by default. Turn off to hide all Live View UI on every page. The Audio Mirror and Video Mirror flags below choose which of the two feeds is offered within it.",
+  },
+  {
+    id: "av_sync_tests_enabled",
+    enabled: true,
+    visible_to_user: true,
+    developer_only: false,
+    group: "experimental",
+    title: "A/V Sync tests",
+    description: "Show the A/V Sync and Tap latency measurement tools inside Live View on Home (audio↔video offset, and press→see/hear round-trip latency). On by default. Requires Live View.",
+  },
+  {
+    id: "audio_mirror_enabled",
+    enabled: true,
+    visible_to_user: true,
+    developer_only: false,
+    group: "experimental",
+    title: "Audio Mirror",
+    description: "Within Live View, offer the audio feed: hear the running machine by receiving the device audio stream in-app, with an optional audio recording.",
+  },
+  {
+    id: "video_mirror_enabled",
+    enabled: true,
+    visible_to_user: true,
+    developer_only: false,
+    group: "experimental",
+    title: "Video Mirror",
+    description: "Within Live View, offer the video feed: decode and render the device VIC stream to a canvas, with zoom/pan immersive control in Remote Input.",
+  },
+  {
+    id: "new_disk_enabled",
+    enabled: true,
+    visible_to_user: true,
+    developer_only: false,
+    group: "stable",
+    title: "New disk",
+    description: "Create a formatted blank disk image (D64/D71/D81/DNP) on the device.",
   },
 ] as const;
 

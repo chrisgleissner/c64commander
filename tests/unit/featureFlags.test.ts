@@ -42,6 +42,14 @@ describe("featureFlags persistence and logging", () => {
       "home_telnet_power_cycle_enabled",
       "home_telnet_clear_ram_reboot_enabled",
       "keypad_input_enabled",
+      "launch_safety_enabled",
+      "disk_explorer_enabled",
+      "in_image_search_enabled",
+      "live_view_enabled",
+      "av_sync_tests_enabled",
+      "audio_mirror_enabled",
+      "video_mirror_enabled",
+      "new_disk_enabled",
     ]);
   });
 
@@ -64,7 +72,46 @@ describe("featureFlags persistence and logging", () => {
       home_telnet_power_cycle_enabled: "experimental",
       home_telnet_clear_ram_reboot_enabled: "experimental",
       keypad_input_enabled: "experimental",
+      launch_safety_enabled: "stable",
+      disk_explorer_enabled: "stable",
+      in_image_search_enabled: "experimental",
+      live_view_enabled: "stable",
+      av_sync_tests_enabled: "experimental",
+      audio_mirror_enabled: "experimental",
+      video_mirror_enabled: "experimental",
+      new_disk_enabled: "stable",
     });
+  });
+
+  it("ships Disk Explorer and New disk on by default for any user (Content Explorer)", () => {
+    for (const id of ["disk_explorer_enabled", "new_disk_enabled"]) {
+      const flag = FEATURE_FLAG_DEFINITIONS.find((definition) => definition.id === id);
+      expect(flag, id).toBeDefined();
+      expect(flag?.enabled, id).toBe(true);
+      expect(flag?.visible_to_user, id).toBe(true);
+      expect(flag?.developer_only, id).toBe(false);
+    }
+  });
+
+  it("ships Live View and the A/V mirror feeds on by default (the native stream transport shipped)", () => {
+    // Live View master + both feed toggles are user-visible and now default-on: the native UDP
+    // stream receiver exists, so the phone can receive audio/video without any extra setup.
+    for (const id of ["live_view_enabled", "audio_mirror_enabled", "video_mirror_enabled"]) {
+      const flag = FEATURE_FLAG_DEFINITIONS.find((definition) => definition.id === id);
+      expect(flag, id).toBeDefined();
+      expect(flag?.visible_to_user, id).toBe(true);
+      expect(flag?.developer_only, id).toBe(false);
+      expect(flag?.enabled, id).toBe(true);
+    }
+  });
+
+  it("ships the A/V Sync tests as a user-visible, default-on experimental flag", () => {
+    const flag = FEATURE_FLAG_DEFINITIONS.find((definition) => definition.id === "av_sync_tests_enabled");
+    expect(flag).toBeDefined();
+    expect(flag?.enabled).toBe(true);
+    expect(flag?.visible_to_user).toBe(true);
+    expect(flag?.developer_only).toBe(false);
+    expect(flag?.group).toBe("experimental");
   });
 
   it("ships keyboard and keypad navigation as a user-visible, default-on experimental flag", () => {

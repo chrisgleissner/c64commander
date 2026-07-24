@@ -15,6 +15,7 @@ vi.mock("@/hooks/useLightingStudio", () => ({
 }));
 
 vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlagValue: () => false,
   useFeatureFlag: () => ({ value: true }),
 }));
 

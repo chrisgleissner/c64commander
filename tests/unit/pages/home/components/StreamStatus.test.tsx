@@ -7,14 +7,21 @@
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { StreamStatus } from "@/pages/home/components/StreamStatus";
 
-const { updateConfigValueSpy, handleStreamStartSpy, handleStreamStopSpy, handleStreamCommitSpy } = vi.hoisted(() => ({
-  updateConfigValueSpy: vi.fn().mockResolvedValue(undefined),
-  handleStreamStartSpy: vi.fn().mockResolvedValue(undefined),
-  handleStreamStopSpy: vi.fn().mockResolvedValue(undefined),
-  handleStreamCommitSpy: vi.fn().mockResolvedValue(undefined),
+const { updateConfigValueSpy, handleStreamStartSpy, handleStreamStopSpy, handleStreamCommitSpy, avMirror } = vi.hoisted(
+  () => ({
+    updateConfigValueSpy: vi.fn().mockResolvedValue(undefined),
+    handleStreamStartSpy: vi.fn().mockResolvedValue(undefined),
+    handleStreamStopSpy: vi.fn().mockResolvedValue(undefined),
+    handleStreamCommitSpy: vi.fn().mockResolvedValue(undefined),
+    avMirror: { videoLive: false, audioLive: false },
+  }),
+);
+
+vi.mock("@/hooks/useAvMirror", () => ({
+  useAvMirror: () => avMirror,
 }));
 
 vi.mock("@/pages/home/hooks/ConfigActionsContext", () => ({
@@ -32,6 +39,8 @@ const mockStreamData = {
   streamControlEntries: [
     { key: "sid", label: "sid", ip: "192.168.1.1", port: "4422", itemName: "SID Network" },
     { key: "iec", label: "iec", ip: "192.168.1.2", port: "4423", itemName: "IEC Network" },
+    { key: "vic", label: "vic", ip: "192.168.1.3", port: "11000", itemName: "VIC Network" },
+    { key: "audio", label: "audio", ip: "192.168.1.4", port: "11001", itemName: "Audio Network" },
   ],
   streamDrafts: {},
   activeStreamEditorKey: null,
@@ -74,6 +83,32 @@ vi.mock("@/components/ui/input", () => ({
 }));
 
 describe("StreamStatus", () => {
+  afterEach(() => {
+    avMirror.videoLive = false;
+    avMirror.audioLive = false;
+  });
+
+  it("hands the VIC/Audio feed to Live View (read-only) while it is receiving, and frees it otherwise", () => {
+    avMirror.videoLive = true;
+    avMirror.audioLive = false;
+    const { rerender } = render(<StreamStatus isConnected={true} />);
+
+    // VIC is controlled by Live View: read-only badge + note, no Start/Stop.
+    expect(screen.getByTestId("home-stream-liveview-badge-vic")).toBeInTheDocument();
+    expect(screen.getByTestId("home-stream-liveview-note-vic")).toBeInTheDocument();
+    expect(screen.queryByTestId("home-stream-start-vic")).toBeNull();
+    expect(screen.getByTestId("home-stream-edit-toggle-vic")).toBeDisabled();
+    // Audio (not live) stays a normal, controllable row.
+    expect(screen.queryByTestId("home-stream-liveview-badge-audio")).toBeNull();
+    expect(screen.getByTestId("home-stream-start-audio")).toBeInTheDocument();
+
+    // When Live View stops, the VIC row's controls return.
+    avMirror.videoLive = false;
+    rerender(<StreamStatus isConnected={true} />);
+    expect(screen.queryByTestId("home-stream-liveview-badge-vic")).toBeNull();
+    expect(screen.getByTestId("home-stream-start-vic")).toBeInTheDocument();
+  });
+
   it("renders the Streams section header", () => {
     render(<StreamStatus isConnected={true} />);
     expect(screen.getByText("Streams")).toBeInTheDocument();

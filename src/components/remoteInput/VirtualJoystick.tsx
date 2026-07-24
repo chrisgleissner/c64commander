@@ -30,6 +30,13 @@ export type VirtualJoystickProps = {
   onAutofireEnabledChange: (enabled: boolean) => void;
   autofireRateHz: number;
   onAutofireRateHzChange: (rateHz: number) => void;
+  /**
+   * Whether the Autofire control is shown at all. Autofire is rarely needed for C64 games and
+   * otherwise crowds the game-mode action zone (overlapping the Live View picture), so the app
+   * hides it by default (Settings → Remote Input opts it back in). Defaults to shown for callers
+   * that don't thread the preference.
+   */
+  showAutofire?: boolean;
   disabled?: boolean;
   disabledHint?: string;
   /** Control-size multiplier (from the user's size preference). */
@@ -52,13 +59,14 @@ const MOVEMENT_STYLES: ReadonlyArray<{ id: MovementStyle; label: string; icon: t
 const BASE_CONTROL_PX = 132;
 const BASE_FIRE_PX = 92;
 const IMMERSIVE_ACTION_TOP_GAP_PX = 16;
-const IMMERSIVE_ACTION_BOTTOM_OFFSET_PX = 40;
+// Game mode anchors the movement control and FIRE near the bottom edge. Kept low so that with
+// Live View ("Watching") on, the controls sit below the picture instead of overlapping it.
+const IMMERSIVE_ACTION_BOTTOM_OFFSET_PX = 20;
 const ACTION_CONTROL_STACK_GAP_PX = 32;
-// In game mode the Autofire toggle floats above FIRE with no surrounding chrome.
-// Give it a generous separation — sized so that even a thick thumb pressing FIRE
-// on a ~3" display stays well clear of Autofire — while keeping it low enough to
-// remain easy to reach (deliberately NOT anchored to the top of the screen).
-const IMMERSIVE_ACTION_CONTROL_STACK_GAP_PX = 104;
+// In game mode Autofire sits BELOW FIRE (when shown). A modest separation keeps a thumb pressing
+// FIRE from drifting onto Autofire, without the tall stack that used to push Autofire up into the
+// Live View picture. Autofire is hidden by default, so in the common case this stack is just FIRE.
+const IMMERSIVE_ACTION_CONTROL_STACK_GAP_PX = 28;
 
 export const VirtualJoystick = ({
   port,
@@ -69,6 +77,7 @@ export const VirtualJoystick = ({
   onAutofireEnabledChange,
   autofireRateHz,
   onAutofireRateHzChange,
+  showAutofire = true,
   disabled = false,
   disabledHint,
   scale = 1,
@@ -86,6 +95,15 @@ export const VirtualJoystick = ({
   const controlPx = Math.round(BASE_CONTROL_PX * safeScale);
   const thumbPx = Math.round(Math.max(40, controlPx * 0.36));
   const firePx = Math.round(BASE_FIRE_PX * safeScale);
+  // Game mode: the action controls are absolute (edge-anchored) so they don't size their container.
+  // Reserve exactly their height here — the zone is shrink-0 at this height — so the controls are
+  // fully contained and the Live View picture (a flex sibling above) fits ABOVE them, never hidden
+  // by them. Includes an allowance for the Autofire control when it is shown below FIRE.
+  const immersiveActionZonePx =
+    IMMERSIVE_ACTION_TOP_GAP_PX +
+    controlPx +
+    IMMERSIVE_ACTION_BOTTOM_OFFSET_PX +
+    (showAutofire ? IMMERSIVE_ACTION_CONTROL_STACK_GAP_PX + Math.round(firePx * 0.9) : 0);
 
   const applyDirections = useCallback(
     (next: JoystickInputName[]) => {
@@ -336,11 +354,17 @@ export const VirtualJoystick = ({
           controls stay edge-anchored for no-look thumb reach with extra vertical
           clearance from both the top controls and the footer. */}
       <div
+        data-testid="remote-input-joystick-action-zone"
+        data-immersive-min-height={immersive ? immersiveActionZonePx : undefined}
         className={cn("flex items-end justify-between gap-4", immersive && "relative min-h-0 flex-1")}
         style={
           immersive
             ? {
                 paddingTop: IMMERSIVE_ACTION_TOP_GAP_PX,
+                // Never let the action zone shrink below the controls' own height: the controls are
+                // absolute (edge-anchored) so a shorter zone would let them overflow UP over the Live
+                // View picture above. With this floor they stay contained and the picture is never hidden.
+                minHeight: immersiveActionZonePx,
               }
             : undefined
         }
@@ -357,16 +381,15 @@ export const VirtualJoystick = ({
             immersive ? { minHeight: controlPx, bottom: IMMERSIVE_ACTION_BOTTOM_OFFSET_PX } : { minHeight: controlPx }
           }
         >
-          {/* Autofire sits above FIRE. In game mode the gap widens generously so
-              a thick thumb on a ~3" display pressing FIRE cannot accidentally
-              flip Autofire — while keeping Autofire close enough to stay easy to
-              reach (it is NOT banished to the top of the screen). */}
+          {/* FIRE on top, Autofire directly beneath it (when shown). Keeping Autofire below FIRE —
+              rather than above — stops the control stack from growing up into the Live View
+              picture in game mode. Autofire is hidden by default, so this is usually just FIRE. */}
           <div
-            className="flex flex-col-reverse items-center"
+            className="flex flex-col items-center"
             style={{ gap: immersive ? IMMERSIVE_ACTION_CONTROL_STACK_GAP_PX : ACTION_CONTROL_STACK_GAP_PX }}
           >
             {fireButton}
-            {autofireToggle}
+            {showAutofire ? autofireToggle : null}
           </div>
         </div>
       </div>

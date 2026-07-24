@@ -17,6 +17,7 @@ import React, { Suspense, lazy, useEffect, useMemo } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { TabBar } from "@/components/TabBar";
 import { ConnectionController } from "@/components/ConnectionController";
+import { AvMirrorGovernorDriver } from "@/components/streams/AvMirrorGovernorDriver";
 import { DemoModeInterstitial } from "@/components/DemoModeInterstitial";
 import { DeviceDiscoveryInterstitial } from "@/components/DeviceDiscoveryInterstitial";
 import { DeviceAuthChallengeDialog } from "@/components/DeviceAuthChallengeDialog";
@@ -280,6 +281,7 @@ const AppRoutes = () => {
             <GlobalButtonInteractionModel />
             <GlobalNavigationBlocker />
             <RouteRefresher />
+            <AvMirrorGovernorDriver />
             <DebugStartupLogger />
             <DiagnosticsRuntimeBridge />
             <TraceContextBridge />

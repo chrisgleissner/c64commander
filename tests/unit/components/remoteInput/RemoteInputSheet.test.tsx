@@ -221,6 +221,40 @@ describe("RemoteInputSheet", () => {
     expect(sheet.className).toContain("app-sheet-bottom-clearance");
   });
 
+  it("collapses ALL chrome in game mode leaving only the screen + joystick, restorable via the floating handle", () => {
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+    // Enter game mode → the collapse-chrome affordance appears.
+    fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));
+    expect(screen.queryByTestId("remote-input-restore-chrome")).not.toBeInTheDocument();
+    const collapse = screen.getByTestId("remote-input-collapse-chrome");
+
+    // Collapse: the pinned toolbar (mirror controls), the sheet Close and the collapse button itself
+    // all disappear; the joystick action zone survives and a single restore handle takes their place.
+    fireEvent.click(collapse);
+    expect(screen.queryByTestId("remote-input-collapse-chrome")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("remote-input-close")).not.toBeInTheDocument();
+    expect(screen.getByTestId("remote-input-joystick-action-zone")).toBeInTheDocument();
+    const restore = screen.getByTestId("remote-input-restore-chrome");
+
+    // Restore: intuitive one-tap brings the chrome (and its Close) back.
+    fireEvent.click(restore);
+    expect(screen.queryByTestId("remote-input-restore-chrome")).not.toBeInTheDocument();
+    expect(screen.getByTestId("remote-input-collapse-chrome")).toBeInTheDocument();
+    expect(screen.getByTestId("remote-input-close")).toBeInTheDocument();
+  });
+
+  it("auto-restores the chrome when leaving game mode while collapsed", () => {
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+    fireEvent.click(screen.getByTestId("remote-input-immersive-toggle")); // enter game mode
+    fireEvent.click(screen.getByTestId("remote-input-collapse-chrome")); // collapse
+    // Exit game mode via a physical/other path: the immersive toggle is hidden while collapsed, so
+    // restore the chrome first, then exit — the collapsed state must not persist outside game mode.
+    fireEvent.click(screen.getByTestId("remote-input-restore-chrome"));
+    fireEvent.click(screen.getByTestId("remote-input-immersive-toggle")); // exit game mode
+    expect(screen.queryByTestId("remote-input-restore-chrome")).not.toBeInTheDocument();
+    expect(screen.getByTestId("remote-input-mode-joystick")).toBeInTheDocument(); // normal chrome back
+  });
+
   it("shifts a key only while SHIFT is held on the on-screen keyboard, and never latches a bare tap", () => {
     // Full tier relays keyboard input via the held-keyboard-inputs set (real
     // press/release), not the one-shot sendKeyboardInputs tap prop - that
