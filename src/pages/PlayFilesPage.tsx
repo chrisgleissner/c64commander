@@ -80,6 +80,9 @@ import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import { VolumeControls } from "@/pages/playFiles/components/VolumeControls";
 import { PlaybackControlsCard } from "@/pages/playFiles/components/PlaybackControlsCard";
+import { NowPlayingRanking } from "@/pages/playFiles/components/NowPlayingRanking";
+import { useCurrentTuneMd5 } from "@/pages/playFiles/hooks/useCurrentTuneMd5";
+import { useSidRadioFlags } from "@/lib/sidRadio/useSidRadioFlags";
 import { PlaybackSettingsPanel } from "@/pages/playFiles/components/PlaybackSettingsPanel";
 import { PlaylistPanel } from "@/pages/playFiles/components/PlaylistPanel";
 import { HvscManager } from "@/pages/playFiles/components/HvscManager";
@@ -1329,6 +1332,8 @@ export default function PlayFilesPage() {
   }, [autoAdvanceGuardRef, handleNextRef, playbackStateRef, queueBackgroundDueAtUpdateRef, syncPlaybackTimelineRef]);
 
   const currentItem = playlist[currentIndex];
+  const sidRadioFlags = useSidRadioFlags();
+  const currentTuneMd5 = useCurrentTuneMd5(currentItem ?? null, sidRadioFlags.rankingActive);
   const { setPlaybackContext, resolved: lightingResolved, openStudio, openContextLens } = useLightingStudio();
   const currentDurationMs = currentItem ? playlistItemDuration(currentItem, currentIndex) : undefined;
   const sourceKind = useMemo<TraceSourceKind | null>(() => {
@@ -1807,6 +1812,11 @@ export default function PlayFilesPage() {
                   ) : undefined
                 }
                 currentItemLabel={currentItem?.label ?? null}
+                rankingControls={
+                  sidRadioFlags.rankingActive ? (
+                    <NowPlayingRanking md5={currentTuneMd5} enabled={sidRadioFlags.rankingActive} />
+                  ) : undefined
+                }
                 currentDurationLabel={currentDurationLabel}
                 subsongLabel={
                   knownSubsongCount && knownSubsongCount > 1 ? `Subsong ${clampedSongNr}/${subsongCount}` : null

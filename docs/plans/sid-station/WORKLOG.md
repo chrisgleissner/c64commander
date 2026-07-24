@@ -295,3 +295,22 @@ _(append entries below as tasks/gates complete — newest last)_
   offset-driven parser) — landed in commit `ae1b1067`, so no §2.2 change here.
 - Files: `docs/plans/sid-station/spec.md` (§11 D17). Doc-only; no code/parser/fixture change.
 - Gate: n/a.
+
+### 2026-07-24 — M1.2 ♥/✕ Now Playing affordance + Settings group
+- Task: Ambient ♥/✕ ranking on the Now Playing card + "Clear my rankings" in Settings (spec §5.1, §6.4).
+- Files: `appSettings.ts` (+`sidRankingEnabled`, key `c64u_sid_ranking_enabled`, default off),
+  `useNowPlayingRanking.ts` (reactive ranking state over rankingStore), `useSidRadioFlags.ts`
+  (reactive master+ranking flags), `NowPlayingRanking.tsx` (♥/✕ buttons, testids
+  `now-playing-like`/`now-playing-notforme`, a11y labels, `onNotForMe` station-skip hook),
+  `useCurrentTuneMd5.ts` (computes the current SID's full MD5 once per tune via `computeSidMd5`),
+  `PlaybackControlsCard.tsx` (+`rankingControls` slot), `PlayFilesPage.tsx` (wires the affordance,
+  flag-gated), `settings/SidRadioSettingsSection.tsx` (enable toggles + Clear), `SettingsPage.tsx`
+  (renders the section). Tests: NowPlayingRanking (7), SidRadioSettingsSection (3), appSettings (+2).
+- Decisions: ✕ only *records* with no active station (D8); `onNotForMe` (station skip) is wired in
+  M2. Flag-gated (both `sidRadioEnabled` && `sidRankingEnabled`) so the card is byte-for-byte
+  unchanged with flags off. MD5 computed once per tune-change (not on the render hot path) from the
+  item's local bytes (`request.file.arrayBuffer()`), reusing `computeSidMd5`.
+- Commands + evidence: 14 tests pass (toggle on/off + persist, a11y labels, disabled-until-MD5,
+  ✕-records-without-station, ✕-skips-only-when-newly-marking, Like→✕ replace; Settings renders,
+  master toggle reveals ranking toggle, Clear wipes rankings). `tsc` + `eslint` clean.
+- Gate: G4 affordance + persistence proven (unit/component); jank/starvation is the M1 HIL soak.

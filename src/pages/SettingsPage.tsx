@@ -42,6 +42,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { SidRadioSettingsSection } from "@/pages/settings/SidRadioSettingsSection";
 import { Slider } from "@/components/ui/slider";
 import {
   loadAutofireRateHz,
@@ -1973,6 +1974,9 @@ export default function SettingsPage() {
               </div>
             </motion.div>
           ))}
+
+          {/* 5. SID Radio */}
+          <SidRadioSettingsSection />
 
           {/* 6. HVSC (hidden when the HVSC feature is disabled for the variant) */}
           {hvscEnabled && (

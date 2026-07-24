@@ -50,6 +50,8 @@ export type PlaybackControlsCardProps = {
   shuffleSeed: number | null;
   /** HARD12-017: one-tap entry to the remote input sheet, shown while playing. */
   openControllerAction?: ReactNode;
+  /** SID Radio ambient ♥/✕ ranking affordance (spec §5.1); null when disabled. */
+  rankingControls?: ReactNode;
 };
 
 const PLAY_TRANSPORT_FOCUS_ORDER = {
@@ -96,6 +98,7 @@ export const PlaybackControlsCard = ({
   reshuffleDisabled,
   shuffleSeed,
   openControllerAction,
+  rankingControls,
 }: PlaybackControlsCardProps) => {
   const previousFocusRef = useFocusItem<HTMLButtonElement>({
     id: "play-transport-previous",
@@ -139,6 +142,7 @@ export const PlaybackControlsCard = ({
               <span className="text-xs text-muted-foreground">({currentDurationLabel})</span>
             ) : null}
             {subsongLabel ? <span className="text-xs text-muted-foreground">{subsongLabel}</span> : null}
+            {rankingControls ? <span className="ml-auto shrink-0">{rankingControls}</span> : null}
           </div>
         ) : (
           "Select a playlist item to start"
