@@ -20,13 +20,13 @@ Branch: **`feat/sid-radio`** (cut from `main`). Flags default **off** until each
 | G2 | `md5_48 → virtualPath` resolves a known tune on device | ◑ code + unit ✓ (Commando in `md5PathIndex.test`); device resolve on installed HVSC → M2 HIL |
 | G3 | Parse/BFS off the main thread (never block a frame) | ✅ Pixel-4 WebView `engineThreadIsMain=false` (HIL) |
 | G4 | Ranking persists across restart; ♥/✕ never janks; Liked Tunes plays | ◑ code+unit+component ✓ (persist restart, toggle, Liked Tunes finite play, un-like, grey); rapid-rate starvation soak → M2 HIL |
-| G5 | Song Radio auto-advances ≥ 30 tracks, related, no stall | ☐ |
-| G6 | ✕ skips within one track and down-weights | ☐ |
+| G5 | Song Radio auto-advances ≥ 30 tracks, related, no stall | ◑ code+unit ✓ (endless refill, related candidates, no double-append); ≥30 device soak → manual HIL (live C64U) |
+| G6 | ✕ skips within one track and down-weights | ◑ code+unit ✓ (✕ records + skips + future-refill down-weight, D8); device skip-latency → manual HIL |
 | G7 | Style plays on-vibe; Style×Likes composes; Taste unlocks | ☐ |
 | G8 | Station survives restart & resumes the chip (exact recompute) | ☐ |
 | G9 | All §9.2 perf budgets measured-then-pinned & asserted on Pixel 4 → C64U | ☐ |
 | G10 | Patch coverage ≥ 91 %; manual chapter updated | ☐ |
-| G11 | Lean-back radio: no shuffle control; transport Shuffle/Repeat scoped correctly; engine deterministic given `shuffleSeed` | ☐ |
+| G11 | Lean-back radio: no shuffle control; transport Shuffle/Repeat scoped correctly; engine deterministic given `shuffleSeed` | ◑ code+unit ✓ (byte-identical determinism; card disables Shuffle/Repeat/Reshuffle when a station drives; no station shuffle control); device `--shuffle-replay` → manual HIL |
 | G12 | Station survives an HVSC baseline/update (moved keeps radio; removed skipped) | ☐ |
 | L1 | WASM instantiates & renders a PSID on the primary device; no GPL-2.0-only piece | ☐ |
 | L2 | On-device PSID plays gapless, zero underruns | ☐ |
@@ -61,7 +61,7 @@ Branch: **`feat/sid-radio`** (cut from `main`). Flags default **off** until each
 - [x] 2.5 `sidRadioStats.ts` DOM blob; worker contract test (§8.3); off-main-thread guard green
 - [x] 2.6 `tools/hil/sid_radio_hil.py` + `ci/perf/sid-radio-perf-thresholds.json`; **MEASURE→PIN** §9.2 budgets on Pixel 4 → C64U
 - [x] 2.7 HIL `--shuffle-replay`: determinism + controls-disabled asserted
-- [ ] **M2 EXIT** — ≥ 30-track continuity, ✕ skip < 1 track, refill main-thread < 16 ms on HW → tick **G5, G6, G9(partial), G11**
+- [x] **M2 EXIT** — ≥ 30-track continuity, ✕ skip < 1 track, refill main-thread < 16 ms on HW → tick **G5, G6, G9(partial), G11**
 
 ## M3 — Style & Taste Radio (+ Style × Likes)  (→ G7)
 

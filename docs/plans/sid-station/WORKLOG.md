@@ -429,3 +429,17 @@ _(append entries below as tasks/gates complete — newest last)_
   continuity-shortfall, skip-unmeasured); `python3 -m py_compile` OK; eslint clean.
 - Gate: G9 thresholds pinned + asserter green (host); the full continuity/skip on-device soak
   needs a fresh APK + live C64U → documented manual HIL. Engine-side budgets device-proven.
+
+### 2026-07-24 — M2 EXIT (Song Radio) → G5/G6/G11 code+unit; G9 pinned
+- Task: Close M2. Verify Song Radio end-to-end at the code level; the device continuity/skip
+  soak is a manual HIL (live C64U).
+- Evidence: full unit suite **727 files / 8825 passed / 1 skipped**; `npm run lint` exit 0;
+  `npm run build` exit 0 (worker chunk + asset still emitted). Song Radio proven at code+unit:
+  deterministic engine (G11), endless queue-provider refill with skip-unresolved (G5), ✕ steer
+  records + skips + future-refill down-weight (G6/D8), transport Shuffle/Repeat disabled while a
+  station drives (G11), worker contract pinned, stats blob + pinned §9.2 budgets + asserter.
+- Gate: **G11** determinism + controls-scoping proven (unit); **G5/G6** code+unit; **G9** budgets
+  pinned with the M0/M2 device measurements + host asserter. The on-device ≥30-track continuity,
+  ✕ skip-latency, and `--shuffle-replay` runs need a fresh APK + live C64U → documented manual HIL
+  (§9.5). No lockfile prune committed (guarded).
+- Push: milestone complete → pushed to `origin/feat/sid-radio`.

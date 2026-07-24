@@ -10,11 +10,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import {
-  DEFAULT_THRESHOLDS_PATH,
-  assertSidRadioPerf,
-  resolveMetric,
-} from "../../../scripts/assert-sid-radio-perf.mjs";
+import { DEFAULT_THRESHOLDS_PATH, assertSidRadioPerf, resolveMetric } from "../../../scripts/assert-sid-radio-perf.mjs";
 
 const thresholds = () => JSON.parse(readFileSync(DEFAULT_THRESHOLDS_PATH, "utf8"));
 
@@ -61,7 +57,10 @@ describe("assert-sid-radio-perf", () => {
   });
 
   it("skips (does not fail) metrics missing from the stats blob", () => {
-    const result = assertSidRadioPerf({ bundleLoadMs: 100, reverseIndexMs: 10, engineThreadIsMain: false }, thresholds());
+    const result = assertSidRadioPerf(
+      { bundleLoadMs: 100, reverseIndexMs: 10, engineThreadIsMain: false },
+      thresholds(),
+    );
     expect(result.skipped.length).toBeGreaterThan(0);
     // Present metrics still pass.
     expect(result.failures).toEqual([]);
