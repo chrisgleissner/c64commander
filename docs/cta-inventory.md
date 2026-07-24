@@ -421,6 +421,12 @@ ordinary focus-ring CTAs in both output modes.
 - Game mode toggle (Joystick mode, joystick-capable tier only) — button —
   `remote-input-immersive-toggle` — R✅ I✅ — enters/exits the stripped,
   edge-anchored no-look layout; auto-exits if the tier downgrades mid-session
+- Hide controls (inside Game mode) — button — `remote-input-collapse-chrome` —
+  R✅ I✅ _(collapses ALL remaining chrome — sheet header, toolbar, mirror
+  controls, Close — leaving only the live screen + joystick; shown only in Game mode)_
+- Show controls handle — button — `remote-input-restore-chrome` — R✅ I✅ _(the
+  floating top-center "Controls" pull-down that restores the chrome; the ONLY
+  affordance shown in fully-collapsed Game mode; auto-restores on leaving Game mode)_
 - **A/V mirror controls** (`remote-input-mirror-controls`) _(Content Explorer
   A/V Mirror; pinned in the sheet chrome when `audio_mirror_enabled` or
   `video_mirror_enabled` is on and the device advertises streaming; shares the
