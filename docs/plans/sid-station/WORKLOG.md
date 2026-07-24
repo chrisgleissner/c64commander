@@ -365,3 +365,14 @@ _(append entries below as tasks/gates complete — newest last)_
   0.09 ms** on the 87k-track bundle, deterministic — far under the §9.2 refill budget.
 - Gate: **G11 determinism proven (unit)**; the on-device `--shuffle-replay` + controls-disabled
   proof is M2.7 HIL. Feeds G5 (continuity).
+
+### 2026-07-24 — M2.3 stationQueueProvider (lookahead refill + skip-unresolved)
+- Task: Resolve the engine's candidate stream → playable PlaylistItems, keep ~10 lookahead,
+  skip a candidate whose path no longer resolves (spec §6.1, §2.5).
+- Files: `stationQueueProvider.ts` (new — async `refill(count)`; injected computeCandidates
+  (worker)/resolvePath (md5PathIndex)/buildItem; consumes each ordinal once so no double-append;
+  bounded guard against unresolved loops; `no-neighbours`/`exhausted` reasons; `initialExclude`
+  for resume), `stationQueueProvider.test.ts` (6).
+- Evidence: 6 tests — next-N + exclude advance, skip-unresolved-no-gap (removed tune §2.5),
+  default lookahead=10, exhausted, no-neighbours passthrough, initial-exclude resume. eslint+tsc clean.
+- Gate: feeds G5 continuity + G12 removed-tune skip.

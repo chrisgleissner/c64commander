@@ -56,7 +56,7 @@ Branch: **`feat/sid-radio`** (cut from `main`). Flags default **off** until each
 
 - [x] 2.1 `stationEngine.ts` (worker): reverse index, seed resolution, style-mask admission, exclude/dedupe, scoring, `notForMe` down-weight (future-refill D8), empty fallbacks, `shuffleSeed` permutation — **RED→GREEN**
 - [x] 2.2 **Determinism test (G11)**: fixed `(seed, rankingSnapshot, shuffleSeed)` = byte-identical; random seed varies; tie-break (D14)
-- [ ] 2.3 `stationQueueProvider.ts` (lookahead ~10 refill; skip-a-candidate when unresolved)
+- [x] 2.3 `stationQueueProvider.ts` (lookahead ~10 refill; skip-a-candidate when unresolved)
 - [ ] 2.4 `useSidRadio.ts`; "Start Radio" from a tune; `sid-radio-chip` + Stop + "why this tune"; **transport Shuffle/Repeat disabled while a station drives** (principle 9)
 - [ ] 2.5 `sidRadioStats.ts` DOM blob; worker contract test (§8.3); off-main-thread guard green
 - [ ] 2.6 `tools/hil/sid_radio_hil.py` + `ci/perf/sid-radio-perf-thresholds.json`; **MEASURE→PIN** §9.2 budgets on Pixel 4 → C64U
