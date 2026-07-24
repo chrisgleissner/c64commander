@@ -303,17 +303,22 @@ describe("VideoMirrorController", () => {
     // A receiver that delivers whole frames (the native Android plugin's assemble mode): the
     // controller must render them directly, passing through height, frame-start time and drops —
     // without any JS-side assembly.
+    type FrameHandler = (f: Uint8Array, h: number, t: number, dropped: number, lost: number, present: boolean) => void;
     class FrameReceiver implements StreamReceiver {
-      frame: ((f: Uint8Array, h: number, t: number, dropped: number, lost: number) => void) | null = null;
+      frame: FrameHandler | null = null;
       datagram: ((d: Uint8Array, t: number) => void) | null = null;
       stateCb: ((s: StreamConnectionState) => void) | null = null;
       readonly destination = "10.0.0.9:11000";
       closed = false;
+      nativeFraction: number | null = null;
       onDatagram(handler: (d: Uint8Array, t: number) => void) {
         this.datagram = handler;
       }
-      onFrame(handler: (f: Uint8Array, h: number, t: number, dropped: number, lost: number) => void) {
+      onFrame(handler: FrameHandler) {
         this.frame = handler;
+      }
+      setNativeCadence(fraction: number) {
+        this.nativeFraction = fraction;
       }
       onStateChange(handler: (s: StreamConnectionState) => void) {
         this.stateCb = handler;
@@ -336,7 +341,7 @@ describe("VideoMirrorController", () => {
     receiver.stateCb?.("open");
 
     const frame = new Uint8Array((VIC_FRAME_WIDTH * 272) / 2);
-    receiver.frame?.(frame, 240, 7777, 5, 2);
+    receiver.frame?.(frame, 240, 7777, 5, 2, true);
 
     expect(renderFrame).toHaveBeenCalledTimes(1);
     expect(renderFrame.mock.calls[0][1]).toBe(240); // height passed through
@@ -575,6 +580,57 @@ describe("VideoMirrorController — continuous fractional cadence (§11 governor
     expect(await presentedAt(2, 50)).toBe(50); // >1 → 1 (present all)
     expect(await presentedAt(0, 50)).toBe(0); // 0 → 0.01 floor (~1%); 50×0.01 < 1 → none in 50 frames
     expect(await presentedAt(0, 100)).toBe(1); // …but the 1% floor lands exactly one in 100 (never fully stalls)
+  });
+
+  it("routes cadence to the native transport when supported; JS then presents every received frame", async () => {
+    // A transport that decimates natively (the Android plugin): setKeepFraction is pushed to it, and
+    // the controller stops decimating in JS (keepFraction 1). Skipped frames arrive as present=false
+    // with an empty payload (their base64 was elided) and are counted, not rendered.
+    type FrameHandler = (f: Uint8Array, h: number, t: number, d: number, l: number, present: boolean) => void;
+    class NativeReceiver implements StreamReceiver {
+      frame: FrameHandler | null = null;
+      stateCb: ((s: StreamConnectionState) => void) | null = null;
+      readonly destination = "10.0.0.9:11000";
+      nativeFraction = 1;
+      onDatagram() {}
+      onFrame(handler: FrameHandler) {
+        this.frame = handler;
+      }
+      setNativeCadence(fraction: number) {
+        this.nativeFraction = fraction;
+      }
+      onStateChange(handler: (s: StreamConnectionState) => void) {
+        this.stateCb = handler;
+      }
+      close() {}
+    }
+
+    const receiver = new NativeReceiver();
+    const renderFrame = vi.fn();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.stateCb?.("open");
+
+    controller.setKeepFraction(0.5);
+    expect(receiver.nativeFraction).toBe(0.5); // pushed to the native transport
+    expect(controller.keepFractionValue).toBe(1); // JS presents everything it receives
+
+    const full = new Uint8Array((VIC_FRAME_WIDTH * 272) / 2);
+    const empty = new Uint8Array(0);
+    receiver.frame?.(empty, 272, 0, 0, 0, false); // native-decimated
+    receiver.frame?.(full, 272, 0, 0, 0, true);
+    receiver.frame?.(empty, 272, 0, 0, 0, false);
+    receiver.frame?.(full, 272, 0, 0, 0, true);
+
+    expect(renderFrame).toHaveBeenCalledTimes(2);
+    expect(controller.getSnapshot().presented).toBe(2);
+    expect(controller.getSnapshot().decimated).toBe(2); // the two native-skipped frames still counted
   });
 
   it("setKeepFraction and setFrameThrottle are interchangeable views of the same cadence", async () => {

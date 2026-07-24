@@ -34,7 +34,7 @@ export interface StreamUdpDatagramEvent {
  */
 export interface StreamUdpVideoFrameEvent {
   name: string;
-  /** Base64 of the whole 52224-byte 4bpp VIC frame (PAL-sized storage; NTSC is a subset). */
+  /** Base64 of the whole 52224-byte 4bpp VIC frame; EMPTY when `present` is false (decimated). */
   data: string;
   /** Wire-arrival timestamp (ms) of the frame's EARLIEST packet — the frame-start instant for A/V sync. */
   t?: number;
@@ -44,6 +44,13 @@ export interface StreamUdpVideoFrameEvent {
   dropped: number;
   /** Cumulative frames LOST (gaps in the frame-number sequence — a frame that never completed). */
   lost: number;
+  /**
+   * Whether this frame is presented at the current native keep-rate (see {@link StreamUdpPlugin.setKeepFraction}).
+   * When false the frame was decimated natively: `data` is empty (its Base64 encode + bridge payload
+   * were elided to save CPU), but the event is still delivered so JS can count it. Absent (treated as
+   * true) on plugin builds without native decimation.
+   */
+  present?: boolean;
 }
 
 /**
@@ -58,6 +65,12 @@ export interface StreamUdpPlugin {
    */
   bind(options: { name: string; port: number; group?: string; assemble?: boolean }): Promise<StreamUdpBindResult>;
   close(options: { name: string }): Promise<void>;
+  /**
+   * Set the native keep-rate for an assembled video stream, in permille (0–1000; 1000 = present
+   * every frame). The assembler decimates natively — skipping the Base64 encode + bridge of frames
+   * that will not be presented — so the governor's frame-rate reduction actually saves CPU.
+   */
+  setKeepFraction(options: { name: string; permille: number }): Promise<void>;
   addListener(eventName: "datagram", listener: (event: StreamUdpDatagramEvent) => void): Promise<PluginListenerHandle>;
   addListener(
     eventName: "videoframe",

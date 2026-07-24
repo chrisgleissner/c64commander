@@ -127,16 +127,19 @@ export class VideoMirrorController {
   private backlogReplacements = 0;
   private presented = 0;
   private maxResidenceMs = 0;
-  /** Fraction of source frames to present, (0,1]. Continuous — the governor drives it (§11). */
+  /** The governor's requested keep-fraction (0,1]. Realised natively when the transport supports it. */
+  private requestedKeepFraction: number;
+  /** JS-side keep-fraction, (0,1]. 1 when the native transport decimates; else = requested. */
   private keepFraction: number;
-  /** Phase accumulator for deterministic fractional decimation (Bresenham-style). */
+  /** Phase accumulator for deterministic JS-side fractional decimation (Bresenham-style). */
   private presentPhase = 0;
   private readonly maxPresentationAgeMs: number;
   private readonly schedulePresent: (present: () => void) => void;
   private readonly now: () => number;
 
   constructor(private readonly deps: VideoMirrorDeps) {
-    this.keepFraction = clampFraction(1 / Math.max(1, Math.floor(deps.frameThrottle ?? 1)));
+    this.requestedKeepFraction = clampFraction(1 / Math.max(1, Math.floor(deps.frameThrottle ?? 1)));
+    this.keepFraction = this.requestedKeepFraction;
     this.maxPresentationAgeMs = deps.maxPresentationAgeMs ?? DEFAULT_MAX_PRESENTATION_AGE_MS;
     // Default scheduler is synchronous: present immediately, preserving the historical per-frame path.
     this.schedulePresent = deps.schedulePresent ?? ((present) => present());
@@ -153,17 +156,33 @@ export class VideoMirrorController {
    * the discrete cases reduce to exact every-Nth cadence and fractional targets average correctly.
    */
   setKeepFraction(fraction: number): void {
-    this.keepFraction = clampFraction(fraction);
+    this.requestedKeepFraction = clampFraction(fraction);
+    this.applyCadence();
   }
 
   /** Back-compat: set an integer cadence divisor (N ⇒ present every Nth frame ⇒ keepFraction 1/N). */
   setFrameThrottle(divisor: number): void {
-    this.keepFraction = clampFraction(1 / Math.max(1, Math.floor(divisor)));
+    this.setKeepFraction(1 / Math.max(1, Math.floor(divisor)));
+  }
+
+  /**
+   * Apply the requested cadence: prefer NATIVE decimation (the transport skips the Base64 encode +
+   * bridge of unpresented frames — the real CPU win) and then present every frame JS receives;
+   * otherwise decimate in JS. Re-applied on start once the receiver exists.
+   */
+  private applyCadence(): void {
+    const native = this.receiver?.setNativeCadence;
+    if (native) {
+      native.call(this.receiver, this.requestedKeepFraction);
+      this.keepFraction = 1;
+    } else {
+      this.keepFraction = this.requestedKeepFraction;
+    }
   }
 
   /** Integer divisor view of the current keep-fraction (1/fraction, rounded) — for existing callers. */
   get frameThrottle(): number {
-    return Math.max(1, Math.round(1 / this.keepFraction));
+    return Math.max(1, Math.round(1 / this.requestedKeepFraction));
   }
 
   get keepFractionValue(): number {
@@ -187,11 +206,19 @@ export class VideoMirrorController {
     arrivalMs: number,
     droppedPackets: number,
     framesLost: number,
+    present = true,
   ): void {
     const standard = videoStandardForHeight(height);
-    // Fractional cadence: accumulate the keep-fraction and present when it crosses 1 (subtract 1,
-    // keeping the remainder so the long-run average equals the target). A small epsilon absorbs
-    // float error so e.g. 0.1×10 still lands a frame on the tenth.
+    // Native decimation: the transport already decided to skip this frame (payload elided). Count it
+    // as intentional cadence decimation and render nothing — the JS cadence is a no-op (keepFraction 1).
+    if (present === false) {
+      this.decimated += 1;
+      this.update({ droppedPackets, framesLost, decimated: this.decimated, standard });
+      return;
+    }
+    // JS-side fractional cadence (web path, or native transport that isn't decimating): accumulate
+    // the keep-fraction and present when it crosses 1 (subtract 1, keeping the remainder so the
+    // long-run average equals the target). A small epsilon absorbs float error (0.1×10 lands one).
     this.presentPhase += this.keepFraction;
     if (this.presentPhase + 1e-9 < 1) {
       // Intentional cadence decimation — not a defect, counted separately (§2/§16.3).
@@ -277,9 +304,12 @@ export class VideoMirrorController {
     // the Capacitor bridge once per FRAME (~50/s) instead of once per PACKET (~3400/s). When the
     // receiver assembles frames it fires `onFrame`; otherwise it fires `onDatagram` and we assemble
     // in JS. Only one path is active per receiver, so registering both is safe.
-    receiver.onFrame?.((frame, height, arrivalMs, droppedPackets, framesLost) => {
-      this.handleCompletedFrame(frame, height, arrivalMs, droppedPackets, framesLost);
+    receiver.onFrame?.((frame, height, arrivalMs, droppedPackets, framesLost, present) => {
+      this.handleCompletedFrame(frame, height, arrivalMs, droppedPackets, framesLost, present);
     });
+    // Push the current governor cadence to the native transport now that the receiver exists (so a
+    // decimating build skips the encode+bridge of unpresented frames from the start).
+    this.applyCadence();
 
     receiver.onDatagram((bytes, arrivalMs) => {
       // Stamp each frame with the EARLIEST wire arrival of any of its packets (keyed by the VIC
