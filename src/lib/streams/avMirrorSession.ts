@@ -160,7 +160,7 @@ export class AvMirrorSession {
           })),
       renderFrame: (frame, height, arrivalMs) => this.emitFrame(frame, height, arrivalMs),
       // Start at the governor's effective divisor (from the saved frame-rate mode); the tick keeps it live.
-      frameThrottle: deps.videoFrameThrottle ?? this.governor.state.effectiveDivisor,
+      frameThrottle: deps.videoFrameThrottle ?? 1,
       now: deps.now,
     });
   }
@@ -240,6 +240,9 @@ export class AvMirrorSession {
         audioBufferMs: signals.audioBufferMs,
         // Feed the underruns SINCE the last tick as the demote trigger; the cumulative total goes to telemetry.
         audioUnderruns: Math.max(0, signals.audioUnderruns - this.lastAudioUnderruns),
+        // Only let the audio buffer/underrun signals drive video when audio is actually playing —
+        // a video-only mirror has no player (bufferedMs = 0) and must not be pegged to the floor.
+        audioActive: this.audioLive,
         videoQueueAgeMs: video.renderResidenceMs,
         frameProcessingP95Ms: undefined,
         localLatencyP99Ms: undefined,
@@ -247,7 +250,7 @@ export class AvMirrorSession {
       nowMs,
     );
     this.lastAudioUnderruns = signals.audioUnderruns;
-    this.applyThrottle(governor.effectiveDivisor);
+    this.applyKeepFraction(governor.effectiveFraction);
 
     this.telemetry.record({
       tMs: nowMs,
@@ -262,7 +265,7 @@ export class AvMirrorSession {
       videoDroppedPackets: video.droppedPackets,
       renderResidenceMs: video.renderResidenceMs,
       fps: video.fps,
-      effectiveDivisor: governor.effectiveDivisor,
+      effectiveFraction: governor.effectiveFraction,
       requestedMode: governor.requested,
     });
     this.emitStats();
@@ -271,7 +274,7 @@ export class AvMirrorSession {
   /** Set the requested Live View frame-rate mode (§11.1). Applies immediately + records the transition. */
   setFrameRateMode(mode: FrameRateMode, nowMs: number = this.now()): void {
     const state = this.governor.setRequested(mode, nowMs);
-    this.applyThrottle(state.effectiveDivisor);
+    this.applyKeepFraction(state.effectiveFraction);
     this.emitStats();
   }
 
@@ -335,8 +338,8 @@ export class AvMirrorSession {
   }
 
   /** Apply the effective cadence divisor to the video controller (guarded for mocked controllers in tests). */
-  private applyThrottle(divisor: number): void {
-    if (typeof this.video.setFrameThrottle === "function") this.video.setFrameThrottle(divisor);
+  private applyKeepFraction(fraction: number): void {
+    if (typeof this.video.setKeepFraction === "function") this.video.setKeepFraction(fraction);
   }
 
   /** Clear stale telemetry + governor pressure when a fresh session begins (§7.10), and apply the saved mode. */
@@ -349,7 +352,7 @@ export class AvMirrorSession {
     // no-op if it already matches, so restarts don't spam transitions.
     const stored = FRAME_RATE_MODE[loadStreamVideoFrameRateMode()];
     const state = this.governor.setRequested(stored, this.now());
-    this.applyThrottle(state.effectiveDivisor);
+    this.applyKeepFraction(state.effectiveFraction);
   }
 
   startAudio(): Promise<void> {

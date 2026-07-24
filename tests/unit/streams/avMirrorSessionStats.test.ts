@@ -86,8 +86,8 @@ describe("AvMirrorSession — governor + telemetry wiring", () => {
     session.setFrameRateMode("25", 0);
     const stats = session.getStatsSnapshot();
     expect(stats.governor.requested).toBe("25");
-    expect(stats.governor.effectiveDivisor).toBe(4);
-    expect(stats.governor.ceilingDivisor).toBe(4);
+    expect(stats.governor.effectivePercent).toBe(25);
+    expect(stats.governor.ceilingPercent).toBe(25);
   });
 
   it("tick() demotes the video divisor when the player reports an underrun, and records telemetry", async () => {
@@ -103,13 +103,13 @@ describe("AvMirrorSession — governor + telemetry wiring", () => {
 
     // Healthy first tick: no demote.
     session.tick(0);
-    expect(session.getStatsSnapshot().governor.effectiveDivisor).toBe(1);
+    expect(session.getStatsSnapshot().governor.effectivePercent).toBe(100);
 
     // The player now reports an underrun → the next tick must demote video to protect audio.
     player.underrunCount = 1;
     session.tick(100);
     const stats = session.getStatsSnapshot();
-    expect(stats.governor.effectiveDivisor).toBe(2);
+    expect(stats.governor.effectivePercent).toBe(80);
     expect(stats.governor.reason).toContain("underrun");
     expect(stats.summary.videoPresented).toBeGreaterThan(0);
   });
@@ -142,19 +142,22 @@ describe("AvMirrorSession — governor + telemetry wiring", () => {
   });
 
   it("clears telemetry + governor pressure when a fresh session begins after a full stop", async () => {
-    const { session, videoReceiver, player } = makeSession();
+    const { session, audioReceiver, videoReceiver, player } = makeSession();
+    await session.startAudio(); // audio must be active for the underrun signal to apply
+    audioReceiver.open();
     await session.startVideo();
     videoReceiver.open();
+    session.tick(0); // primes the audio buffer (FakePlayer bufferedMs 100 ≥ healthy)
     player.underrunCount = 3;
-    session.tick(0); // demotes
-    expect(session.getStatsSnapshot().governor.effectiveDivisor).toBe(2);
+    session.tick(100); // demotes
+    expect(session.getStatsSnapshot().governor.effectivePercent).toBe(80);
     await session.stopAll();
 
     // A new session resets governor pressure (mode preserved) and telemetry counters.
     await session.startVideo();
     videoReceiver.open();
     const stats = session.getStatsSnapshot();
-    expect(stats.governor.effectiveDivisor).toBe(1);
+    expect(stats.governor.effectivePercent).toBe(100);
     expect(stats.summary.videoPresented).toBe(0);
   });
 });

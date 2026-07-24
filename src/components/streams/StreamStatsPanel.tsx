@@ -30,7 +30,7 @@ const MODES: ReadonlyArray<{ value: StreamVideoFrameRateMode; label: string }> =
   { value: "25", label: "25%" },
 ];
 
-const DIVISOR_RATE: Record<number, string> = { 1: "100%", 2: "50%", 4: "25%" };
+const pct = (percent: number): string => `${Math.round(percent)}%`;
 
 const ms = (v: number): string => `${Math.round(v)} ms`;
 const num = (v: number): string => `${Math.round(v)}`;
@@ -164,7 +164,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
             data-testid="stream-stats-override"
             title={governor.reason}
           >
-            auto-reduced → {DIVISOR_RATE[governor.effectiveDivisor]}
+            auto-reduced → {pct(governor.effectivePercent)}
           </span>
         )}
       </div>
@@ -172,7 +172,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
       {/* Compact live summary */}
       <div className="grid grid-cols-4 gap-2">
         <Stat label="FPS" value={num(live.fps)} testid="fps" />
-        <Stat label="Rate" value={DIVISOR_RATE[governor.effectiveDivisor] ?? "—"} testid="rate" />
+        <Stat label="Rate" value={pct(governor.effectivePercent)} testid="rate" />
         <Stat
           label="Audio buf"
           value={ms(live.audioBufferMs)}
@@ -246,7 +246,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
             <div className="mb-1 text-[11px] font-medium">Governor</div>
             <p className="text-[11px] text-muted-foreground" data-testid="stream-stats-governor-reason">
               requested <strong>{governor.requested}</strong> · effective{" "}
-              <strong>{DIVISOR_RATE[governor.effectiveDivisor]}</strong>
+              <strong>{pct(governor.effectivePercent)}</strong>
               {governor.reason ? ` · ${governor.reason}` : ""}
             </p>
           </section>

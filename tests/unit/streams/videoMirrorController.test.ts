@@ -538,3 +538,59 @@ describe("VideoMirrorController — coalescing present queue (drop-late / presen
     expect(controller.getSnapshot().maxResidenceMs).toBe(40);
   });
 });
+
+describe("VideoMirrorController — continuous fractional cadence (§11 governor)", () => {
+  /** Present `frames` source frames at `keepFraction` and return how many were rendered. */
+  const presentedAt = async (keepFraction: number, frames: number): Promise<number> => {
+    const receiver = new FakeReceiver();
+    const renderFrame = vi.fn();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+    controller.setKeepFraction(keepFraction);
+    for (let i = 0; i < frames; i += 1) completeFrame(receiver, i, i);
+    return renderFrame.mock.calls.length;
+  };
+
+  it("presents the exact target percentage of source frames over a long run", async () => {
+    expect(await presentedAt(1, 100)).toBe(100); // 100%
+    expect(await presentedAt(0.5, 100)).toBe(50); // 50%
+    expect(await presentedAt(0.25, 100)).toBe(25); // 25%
+    expect(await presentedAt(0.75, 100)).toBe(75); // 75% — impossible with integer divisors
+    expect(await presentedAt(0.6, 100)).toBe(60); // 60%
+    expect(await presentedAt(0.73, 100)).toBe(73); // arbitrary 73%
+  });
+
+  it("is float-safe: 0.1 lands exactly one frame in ten (no epsilon drift)", async () => {
+    expect(await presentedAt(0.1, 100)).toBe(10);
+  });
+
+  it("clamps out-of-range fractions into (0,1]", async () => {
+    expect(await presentedAt(2, 50)).toBe(50); // >1 → 1 (present all)
+    expect(await presentedAt(0, 50)).toBe(0); // 0 → 0.01 floor (~1%); 50×0.01 < 1 → none in 50 frames
+    expect(await presentedAt(0, 100)).toBe(1); // …but the 1% floor lands exactly one in 100 (never fully stalls)
+  });
+
+  it("setKeepFraction and setFrameThrottle are interchangeable views of the same cadence", async () => {
+    // frameThrottle N ⇔ keepFraction 1/N, and the divisor getter round-trips.
+    const receiver = new FakeReceiver();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame: vi.fn(),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    controller.setKeepFraction(0.25);
+    expect(controller.frameThrottle).toBe(4);
+    controller.setFrameThrottle(2);
+    expect(controller.keepFractionValue).toBe(0.5);
+  });
+});

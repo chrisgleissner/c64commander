@@ -57,8 +57,8 @@ export interface StreamTelemetrySample {
   renderResidenceMs: number;
   /** Instantaneous presented fps. */
   fps: number;
-  /** Governor effective cadence divisor (1/2/4). */
-  effectiveDivisor: number;
+  /** Governor effective keep-fraction (0..1). */
+  effectiveFraction: number;
   /** Requested user frame-rate mode. */
   requestedMode: string;
 }
@@ -79,7 +79,7 @@ export interface TelemetryBucket {
   videoDroppedPerSec: number;
   residenceMaxMs: number;
   underrunsInSec: number;
-  effectiveDivisor: number;
+  effectiveFraction: number;
 }
 
 export interface TelemetryPercentiles {
@@ -152,7 +152,7 @@ interface BucketAccumulator {
   lastBacklog: number;
   lastFramesLost: number;
   lastVideoDropped: number;
-  effectiveDivisor: number;
+  effectiveFraction: number;
 }
 
 export class StreamTelemetry {
@@ -216,7 +216,7 @@ export class StreamTelemetry {
       lastBacklog: s.videoBacklogReplacements,
       lastFramesLost: s.videoFramesLost,
       lastVideoDropped: s.videoDroppedPackets,
-      effectiveDivisor: s.effectiveDivisor,
+      effectiveFraction: s.effectiveFraction,
     };
   }
 
@@ -235,7 +235,7 @@ export class StreamTelemetry {
     b.lastBacklog = s.videoBacklogReplacements;
     b.lastFramesLost = s.videoFramesLost;
     b.lastVideoDropped = s.videoDroppedPackets;
-    b.effectiveDivisor = s.effectiveDivisor;
+    b.effectiveFraction = s.effectiveFraction;
   }
 
   private closeBucket(b: BucketAccumulator): void {
@@ -253,7 +253,7 @@ export class StreamTelemetry {
       videoDroppedPerSec: b.lastVideoDropped - b.firstVideoDropped,
       residenceMaxMs: b.residenceMax,
       underrunsInSec: b.underruns,
-      effectiveDivisor: b.effectiveDivisor,
+      effectiveFraction: b.effectiveFraction,
     };
     this.buckets.push(bucket);
     while (this.buckets.length > MAX_BUCKETS) this.buckets.shift();
@@ -284,7 +284,7 @@ export class StreamTelemetry {
       videoDroppedPerSec: b.lastVideoDropped - b.firstVideoDropped,
       residenceMaxMs: b.residenceMax,
       underrunsInSec: b.underruns,
-      effectiveDivisor: b.effectiveDivisor,
+      effectiveFraction: b.effectiveFraction,
     };
   }
 

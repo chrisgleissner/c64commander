@@ -17,9 +17,10 @@ const snapshot = (
 ): AvStatsSnapshot => ({
   governor: {
     requested: "auto",
-    ceilingDivisor: 1,
-    governorDivisor: 1,
-    effectiveDivisor: 1,
+    ceilingPercent: 100,
+    governorPercent: 100,
+    effectivePercent: 100,
+    effectiveFraction: 1,
     overridden: false,
     reason: "start",
     lastTransitionAtMs: 0,
@@ -74,10 +75,15 @@ const makeFakeSession = (initial: AvStatsSnapshot) => {
     statsHistory: vi.fn(() => []),
     exportDiagnostics: vi.fn(() => ({ ok: true, governor: snap.governor })),
     setFrameRateMode: vi.fn((mode: string) => {
-      const effectiveDivisor = mode === "25" ? 4 : mode === "50" ? 2 : 1;
+      const effectivePercent = mode === "25" ? 25 : mode === "50" ? 50 : 100;
       snap = {
         ...snap,
-        governor: { ...snap.governor, requested: mode as never, effectiveDivisor: effectiveDivisor as never },
+        governor: {
+          ...snap.governor,
+          requested: mode as never,
+          effectivePercent: effectivePercent as never,
+          effectiveFraction: (effectivePercent / 100) as never,
+        },
       };
       subs.forEach((h) => h(snap));
     }),
@@ -112,8 +118,8 @@ describe("StreamStatsPanel", () => {
     const session = makeFakeSession(
       snapshot({
         requested: "100",
-        ceilingDivisor: 1,
-        effectiveDivisor: 2,
+        ceilingPercent: 100,
+        effectivePercent: 50,
         overridden: true,
         reason: "audio underrun ×1",
       }),

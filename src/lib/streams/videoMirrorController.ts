@@ -45,6 +45,12 @@ export const DEFAULT_MAX_PRESENTATION_AGE_MS = 120;
 /** Monotonic presentation clock; falls back to Date.now where performance is absent. */
 const perfNow = (): number => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
+/** Clamp a keep-fraction into (0, 1]. 0 or negative would stall video entirely, so floor above 0. */
+const clampFraction = (fraction: number): number => {
+  if (!Number.isFinite(fraction) || fraction >= 1) return 1;
+  return fraction <= 0 ? 0.01 : fraction;
+};
+
 export interface VideoMirrorSnapshot {
   state: VideoMirrorState;
   /** Actual PRESENTED frame rate (frames rendered in the last ~1s), spec §12.1. */
@@ -112,7 +118,6 @@ export class VideoMirrorController {
     standard: "PAL",
     error: null,
   };
-  private frameTick = 0;
   private readonly frameStartByNum = new Map<number, number>();
   private renderTimes: number[] = [];
   /** Coalescing present queue of depth one (§7.6): only the newest ready frame survives. */
@@ -122,13 +127,16 @@ export class VideoMirrorController {
   private backlogReplacements = 0;
   private presented = 0;
   private maxResidenceMs = 0;
-  private throttle: number;
+  /** Fraction of source frames to present, (0,1]. Continuous — the governor drives it (§11). */
+  private keepFraction: number;
+  /** Phase accumulator for deterministic fractional decimation (Bresenham-style). */
+  private presentPhase = 0;
   private readonly maxPresentationAgeMs: number;
   private readonly schedulePresent: (present: () => void) => void;
   private readonly now: () => number;
 
   constructor(private readonly deps: VideoMirrorDeps) {
-    this.throttle = Math.max(1, Math.floor(deps.frameThrottle ?? 1));
+    this.keepFraction = clampFraction(1 / Math.max(1, Math.floor(deps.frameThrottle ?? 1)));
     this.maxPresentationAgeMs = deps.maxPresentationAgeMs ?? DEFAULT_MAX_PRESENTATION_AGE_MS;
     // Default scheduler is synchronous: present immediately, preserving the historical per-frame path.
     this.schedulePresent = deps.schedulePresent ?? ((present) => present());
@@ -140,15 +148,26 @@ export class VideoMirrorController {
   }
 
   /**
-   * Set the cadence divisor at runtime (the governor drives this). 1 = present every source frame,
-   * 2 = every second, 4 = every fourth. Deterministic division, not fps interpolation.
+   * Set the fraction of source frames to present, (0,1] (the governor drives this). 1 = every source
+   * frame, 0.5 = half, 0.25 = a quarter, 0.73 = ~73%. Realised by a phase-accumulator decimator, so
+   * the discrete cases reduce to exact every-Nth cadence and fractional targets average correctly.
    */
-  setFrameThrottle(divisor: number): void {
-    this.throttle = Math.max(1, Math.floor(divisor));
+  setKeepFraction(fraction: number): void {
+    this.keepFraction = clampFraction(fraction);
   }
 
+  /** Back-compat: set an integer cadence divisor (N ⇒ present every Nth frame ⇒ keepFraction 1/N). */
+  setFrameThrottle(divisor: number): void {
+    this.keepFraction = clampFraction(1 / Math.max(1, Math.floor(divisor)));
+  }
+
+  /** Integer divisor view of the current keep-fraction (1/fraction, rounded) — for existing callers. */
   get frameThrottle(): number {
-    return this.throttle;
+    return Math.max(1, Math.round(1 / this.keepFraction));
+  }
+
+  get keepFractionValue(): number {
+    return this.keepFraction;
   }
 
   private update(patch: Partial<VideoMirrorSnapshot>) {
@@ -169,14 +188,18 @@ export class VideoMirrorController {
     droppedPackets: number,
     framesLost: number,
   ): void {
-    this.frameTick += 1;
     const standard = videoStandardForHeight(height);
-    if (this.frameTick % this.throttle !== 0) {
+    // Fractional cadence: accumulate the keep-fraction and present when it crosses 1 (subtract 1,
+    // keeping the remainder so the long-run average equals the target). A small epsilon absorbs
+    // float error so e.g. 0.1×10 still lands a frame on the tenth.
+    this.presentPhase += this.keepFraction;
+    if (this.presentPhase + 1e-9 < 1) {
       // Intentional cadence decimation — not a defect, counted separately (§2/§16.3).
       this.decimated += 1;
       this.update({ droppedPackets, framesLost, decimated: this.decimated, standard });
       return;
     }
+    this.presentPhase -= 1;
     this.enqueueForPresent({ frame, height, arrivalMs, readyMs: this.now() });
     this.update({ droppedPackets, framesLost, standard });
   }
@@ -297,7 +320,7 @@ export class VideoMirrorController {
   }
 
   private resetPresentation(): void {
-    this.frameTick = 0;
+    this.presentPhase = 0;
     this.frameStartByNum.clear();
     this.renderTimes = [];
     this.pending = null;

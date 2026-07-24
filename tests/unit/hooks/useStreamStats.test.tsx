@@ -14,9 +14,10 @@ import type { AvMirrorSession, AvStatsSnapshot } from "@/lib/streams/avMirrorSes
 const baseSnapshot = (): AvStatsSnapshot => ({
   governor: {
     requested: "auto",
-    ceilingDivisor: 1,
-    governorDivisor: 1,
-    effectiveDivisor: 1,
+    ceilingPercent: 100,
+    governorPercent: 100,
+    effectivePercent: 100,
+    effectiveFraction: 1,
     overridden: false,
     reason: "start",
     lastTransitionAtMs: 0,
