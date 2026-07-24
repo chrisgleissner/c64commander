@@ -35,6 +35,7 @@ const STREAM_VIDEO_PORT_KEY = "c64u_stream_video_port";
 const STREAM_AUDIO_PORT_KEY = "c64u_stream_audio_port";
 const STREAM_NETWORK_BUFFER_MS_KEY = "c64u_stream_network_buffer_ms";
 const STREAM_NATIVE_VIDEO_ASSEMBLY_KEY = "c64u_stream_native_video_assembly";
+const STREAM_VIDEO_FRAME_RATE_MODE_KEY = "c64u_stream_video_frame_rate_mode";
 
 export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 200;
 export type NotificationVisibility = "errors-only" | "all";
@@ -386,6 +387,30 @@ export const saveStreamNativeVideoAssembly = (enabled: boolean) => {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(STREAM_NATIVE_VIDEO_ASSEMBLY_KEY, enabled ? "1" : "0");
   broadcast(STREAM_NATIVE_VIDEO_ASSEMBLY_KEY, enabled);
+};
+
+/**
+ * Live View video frame-rate mode (spec §11.1). A user *maximum*: `auto` tries full source cadence
+ * and lets the governor back it off under pressure; `100`/`50`/`25` cap the presented rate to
+ * every / every-2nd / every-4th source frame. The governor may still demote below a manual cap to
+ * protect audio (§11.2). Default `auto`.
+ */
+export type StreamVideoFrameRateMode = "auto" | "100" | "50" | "25";
+export const DEFAULT_STREAM_VIDEO_FRAME_RATE_MODE: StreamVideoFrameRateMode = "auto";
+const FRAME_RATE_MODES: readonly StreamVideoFrameRateMode[] = ["auto", "100", "50", "25"] as const;
+
+export const loadStreamVideoFrameRateMode = (): StreamVideoFrameRateMode => {
+  if (typeof localStorage === "undefined") return DEFAULT_STREAM_VIDEO_FRAME_RATE_MODE;
+  const raw = localStorage.getItem(STREAM_VIDEO_FRAME_RATE_MODE_KEY);
+  return FRAME_RATE_MODES.includes(raw as StreamVideoFrameRateMode)
+    ? (raw as StreamVideoFrameRateMode)
+    : DEFAULT_STREAM_VIDEO_FRAME_RATE_MODE;
+};
+
+export const saveStreamVideoFrameRateMode = (mode: StreamVideoFrameRateMode) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(STREAM_VIDEO_FRAME_RATE_MODE_KEY, mode);
+  broadcast(STREAM_VIDEO_FRAME_RATE_MODE_KEY, mode);
 };
 
 export const loadNotificationVisibility = (): NotificationVisibility => {

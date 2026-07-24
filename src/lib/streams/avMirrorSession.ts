@@ -19,10 +19,18 @@
 
 import { getC64API } from "@/lib/c64api";
 import { addLog } from "@/lib/logging";
-import { loadStreamAudioPort, loadStreamNativeVideoAssembly, loadStreamVideoPort } from "@/lib/config/appSettings";
+import {
+  loadStreamAudioPort,
+  loadStreamNativeVideoAssembly,
+  loadStreamVideoFrameRateMode,
+  loadStreamVideoPort,
+  type StreamVideoFrameRateMode,
+} from "@/lib/config/appSettings";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
-import { AudioMirrorController, type AudioMirrorState } from "./audioMirrorController";
+import { AudioMirrorController, type AudioMirrorSignals, type AudioMirrorState } from "./audioMirrorController";
 import { VideoMirrorController, type VideoMirrorState } from "./videoMirrorController";
+import { StreamGovernor, type FrameRateMode, type GovernorState, type GovernorTransition } from "./streamGovernor";
+import { StreamTelemetry, type TelemetryBucket, type TelemetrySessionSummary } from "./streamTelemetry";
 import type { VideoStandard } from "./vicDecode";
 import type { AudioMirrorPlayer } from "./audioPlayer";
 
@@ -42,6 +50,34 @@ export type AvMirrorFrameHandler = (frame: Uint8Array, height: number, arrivalMs
 export type AvMirrorAudioHandler = (samples: Int16Array, arrivalMs: number) => void;
 export type AvMirrorListener = (snapshot: AvMirrorSnapshot) => void;
 
+/**
+ * Live Stats snapshot (governor + telemetry) — a SEPARATE channel from {@link AvMirrorSnapshot} so
+ * existing surfaces keep their lightweight state/health payload and only the Stats screen pays for
+ * the richer view. Produced on the low-rate {@link AvMirrorSession.tick} (~4 Hz).
+ */
+export interface AvStatsSnapshot {
+  governor: GovernorState;
+  transitions: readonly GovernorTransition[];
+  summary: TelemetrySessionSummary;
+  /** Instantaneous values captured at the last tick. */
+  live: {
+    fps: number;
+    audioBufferMs: number;
+    audioUnderruns: number;
+    audioConcealed: number;
+    renderResidenceMs: number;
+    maxResidenceMs: number;
+    presented: number;
+    decimated: number;
+    backlogReplacements: number;
+    framesLost: number;
+    droppedPackets: number;
+    standard: VideoStandard;
+  };
+}
+
+export type AvStatsListener = (snapshot: AvStatsSnapshot) => void;
+
 const INITIAL: AvMirrorSnapshot = {
   audio: { state: "off", droppedPackets: 0, error: null },
   video: { state: "off", fps: 0, droppedPackets: 0, framesLost: 0, standard: "PAL", error: null },
@@ -59,18 +95,36 @@ export interface AvMirrorSessionDeps {
   now?: () => number;
 }
 
+const FRAME_RATE_MODE: Record<StreamVideoFrameRateMode, FrameRateMode> = {
+  auto: "auto",
+  "100": "100",
+  "50": "50",
+  "25": "25",
+};
+
 export class AvMirrorSession {
   private snapshot: AvMirrorSnapshot = INITIAL;
   private readonly listeners = new Set<AvMirrorListener>();
   private readonly frameListeners = new Set<AvMirrorFrameHandler>();
   private readonly audioListeners = new Set<AvMirrorAudioHandler>();
+  private readonly statsListeners = new Set<AvStatsListener>();
   private latestFrame: { frame: Uint8Array; height: number; arrivalMs: number } | null = null;
   private readonly audio: AudioMirrorController;
   private readonly video: VideoMirrorController;
+  private readonly governor: StreamGovernor;
+  private readonly telemetry = new StreamTelemetry();
+  private readonly now: () => number;
+  /** Last observed cumulative player-underrun count, for per-tick delta. */
+  private lastAudioUnderruns = 0;
 
   constructor(deps: AvMirrorSessionDeps = {}) {
     const startStream = deps.startStream ?? ((name, destination) => getC64API().startStream(name, destination));
     const stopStream = deps.stopStream ?? ((name) => getC64API().stopStream(name));
+    this.now = deps.now ?? (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
+    // The stored frame-rate mode is applied when a session starts (see beginSessionIfIdle), NOT at
+    // construction — the app-wide singleton is built at import time, before localStorage-backed
+    // settings are safe to read under test, so reading here would couple every importer to the setting.
+    this.governor = new StreamGovernor("auto");
 
     this.audio = new AudioMirrorController({
       startStream: (_name, destination) => startStream("audio", destination),
@@ -105,7 +159,8 @@ export class AvMirrorSession {
             nativeVideoAssembly: loadStreamNativeVideoAssembly(),
           })),
       renderFrame: (frame, height, arrivalMs) => this.emitFrame(frame, height, arrivalMs),
-      frameThrottle: deps.videoFrameThrottle,
+      // Start at the governor's effective divisor (from the saved frame-rate mode); the tick keeps it live.
+      frameThrottle: deps.videoFrameThrottle ?? this.governor.state.effectiveDivisor,
       now: deps.now,
     });
   }
@@ -158,6 +213,119 @@ export class AvMirrorSession {
     };
   }
 
+  /** Subscribe to the low-rate Stats snapshot (governor + telemetry). Replays the current snapshot. */
+  subscribeStats(handler: AvStatsListener): () => void {
+    this.statsListeners.add(handler);
+    handler(this.buildStatsSnapshot());
+    return () => {
+      this.statsListeners.delete(handler);
+    };
+  }
+
+  /**
+   * Advance the governor + telemetry one low-rate tick (the Stats hook drives this ~4 Hz while a
+   * stream is live). Timer-free by design so the session stays a pure, unit-testable class: it reads
+   * the current audio/video signals, lets the governor set the effective video divisor, records one
+   * telemetry sample, and broadcasts the Stats snapshot. Cheap: a handful of reads + one push.
+   */
+  tick(nowMs: number = this.now()): void {
+    const signals: AudioMirrorSignals =
+      typeof this.audio.getSignals === "function"
+        ? this.audio.getSignals()
+        : { audioBufferMs: 0, audioUnderruns: 0, audioConcealed: 0, audioLostPackets: 0 };
+    const video = this.video.getSnapshot();
+
+    const governor = this.governor.update(
+      {
+        audioBufferMs: signals.audioBufferMs,
+        // Feed the underruns SINCE the last tick as the demote trigger; the cumulative total goes to telemetry.
+        audioUnderruns: Math.max(0, signals.audioUnderruns - this.lastAudioUnderruns),
+        videoQueueAgeMs: video.renderResidenceMs,
+        frameProcessingP95Ms: undefined,
+        localLatencyP99Ms: undefined,
+      },
+      nowMs,
+    );
+    this.lastAudioUnderruns = signals.audioUnderruns;
+    this.applyThrottle(governor.effectiveDivisor);
+
+    this.telemetry.record({
+      tMs: nowMs,
+      audioConcealed: signals.audioConcealed,
+      audioLostPackets: signals.audioLostPackets,
+      audioBufferMs: signals.audioBufferMs,
+      audioUnderruns: signals.audioUnderruns,
+      videoPresented: video.presented,
+      videoDecimated: video.decimated,
+      videoBacklogReplacements: video.backlogReplacements,
+      videoFramesLost: video.framesLost,
+      videoDroppedPackets: video.droppedPackets,
+      renderResidenceMs: video.renderResidenceMs,
+      fps: video.fps,
+      effectiveDivisor: governor.effectiveDivisor,
+      requestedMode: governor.requested,
+    });
+    this.emitStats();
+  }
+
+  /** Set the requested Live View frame-rate mode (§11.1). Applies immediately + records the transition. */
+  setFrameRateMode(mode: FrameRateMode, nowMs: number = this.now()): void {
+    const state = this.governor.setRequested(mode, nowMs);
+    this.applyThrottle(state.effectiveDivisor);
+    this.emitStats();
+  }
+
+  getStatsSnapshot(): AvStatsSnapshot {
+    return this.buildStatsSnapshot();
+  }
+
+  /** History buckets for a Stats chart window (seconds). Computed on demand (Stats open only). */
+  statsHistory(windowSec: number): TelemetryBucket[] {
+    return this.telemetry.buffersWindow(windowSec);
+  }
+
+  /** Diagnostic export (§12.4). Caller supplies app/device/settings meta + limitations. */
+  exportDiagnostics(meta: Record<string, unknown> = {}): Record<string, unknown> {
+    return this.telemetry.export({
+      ...meta,
+      governor: this.governor.state,
+      governorTransitions: this.governor.getTransitions(),
+    });
+  }
+
+  private buildStatsSnapshot(): AvStatsSnapshot {
+    const video = this.video.getSnapshot();
+    const signals: AudioMirrorSignals =
+      typeof this.audio.getSignals === "function"
+        ? this.audio.getSignals()
+        : { audioBufferMs: 0, audioUnderruns: 0, audioConcealed: 0, audioLostPackets: 0 };
+    return {
+      governor: this.governor.state,
+      transitions: this.governor.getTransitions(),
+      summary: this.telemetry.summary(),
+      live: {
+        fps: video.fps,
+        audioBufferMs: signals.audioBufferMs,
+        audioUnderruns: signals.audioUnderruns,
+        audioConcealed: signals.audioConcealed,
+        renderResidenceMs: video.renderResidenceMs,
+        maxResidenceMs: video.maxResidenceMs,
+        presented: video.presented,
+        decimated: video.decimated,
+        backlogReplacements: video.backlogReplacements,
+        framesLost: video.framesLost,
+        droppedPackets: video.droppedPackets,
+        standard: video.standard,
+      },
+    };
+  }
+
+  private emitStats(): void {
+    if (this.statsListeners.size === 0) return;
+    const snapshot = this.buildStatsSnapshot();
+    this.statsListeners.forEach((listener) => listener(snapshot));
+  }
+
   get audioLive(): boolean {
     return isLiveState(this.snapshot.audio.state);
   }
@@ -166,7 +334,26 @@ export class AvMirrorSession {
     return isLiveState(this.snapshot.video.state);
   }
 
+  /** Apply the effective cadence divisor to the video controller (guarded for mocked controllers in tests). */
+  private applyThrottle(divisor: number): void {
+    if (typeof this.video.setFrameThrottle === "function") this.video.setFrameThrottle(divisor);
+  }
+
+  /** Clear stale telemetry + governor pressure when a fresh session begins (§7.10), and apply the saved mode. */
+  private beginSessionIfIdle(): void {
+    if (this.audioLive || this.videoLive) return;
+    this.telemetry.reset();
+    this.governor.reset();
+    this.lastAudioUnderruns = 0;
+    // Apply the persisted user frame-rate mode now (deferred from construction). setRequested is a
+    // no-op if it already matches, so restarts don't spam transitions.
+    const stored = FRAME_RATE_MODE[loadStreamVideoFrameRateMode()];
+    const state = this.governor.setRequested(stored, this.now());
+    this.applyThrottle(state.effectiveDivisor);
+  }
+
   startAudio(): Promise<void> {
+    this.beginSessionIfIdle();
     return this.audio.start();
   }
 
@@ -179,6 +366,7 @@ export class AvMirrorSession {
   }
 
   startVideo(): Promise<void> {
+    this.beginSessionIfIdle();
     return this.video.start();
   }
 
