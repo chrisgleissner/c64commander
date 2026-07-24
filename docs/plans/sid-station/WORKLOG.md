@@ -346,3 +346,22 @@ _(append entries below as tasks/gates complete — newest last)_
   unit/component tests. The on-device "zero Remote-Input starvation while rapidly rating" soak
   is trivial I/O and folds into the M2 HIL harness (which drives the device end-to-end).
 - Push: milestone complete → pushed to `origin/feat/sid-radio`.
+
+### 2026-07-24 — M2.1/2.2 stationEngine + determinism (G11 unit)
+- Task: The pure, deterministic station engine (spec §2.3) + the G11 determinism test.
+- Files: `src/lib/sidRadio/stationEngine.ts` (new), `tests/unit/sidRadio/stationEngine.test.ts` (10).
+- Design: seed → BFS over forward + reverse edges (reverse CSR from the bundle),
+  rank-weighted hop-decayed scoring `Σ seedWeight×(neighbors−rank)`. Likes always steer
+  (added as steer-seeds for song/style; the primary seeds for taste); Not-for-me hard-excludes
+  the tune + down-weights its neighbourhood (future-refill only, D8). Optional style-mask
+  admission (D10). `primaryExclude` = the "you started here" seed(s) only, so liked/steer
+  tunes can still appear. Determinism (G11/D16): integer-rank scoring (per-edge similarity
+  byte intentionally unused); the only randomness is `shuffleSeed`, applied as a deterministic
+  Efraimidis–Spirakis weighted permutation with an ascending-ordinal tie-break.
+- Evidence: 10 tests (song related+no-replay, no-neighbours empty, style-filter admission,
+  exclude dedupe, notForMe exclude+downweight, taste seeds-from-likes, likes-steer-song;
+  G11: byte-identical for fixed inputs, varies-but-overlaps for a new shuffleSeed, stable
+  tie-break). Real-bundle smoke (vite-node): seed md5_48 e19ea943bb62 → **42 candidates in
+  0.09 ms** on the 87k-track bundle, deterministic — far under the §9.2 refill budget.
+- Gate: **G11 determinism proven (unit)**; the on-device `--shuffle-replay` + controls-disabled
+  proof is M2.7 HIL. Feeds G5 (continuity).
