@@ -18,6 +18,8 @@
  * broadcasts every change (§6.4 broadcast pattern).
  */
 
+import { addErrorLog } from "@/lib/logging";
+
 export type RankingSignal = "like" | "notForMe";
 
 export interface RankingSnapshot {
@@ -95,7 +97,8 @@ const lsLoad = (): RankingMap => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? (JSON.parse(raw) as RankingMap) : {};
-  } catch {
+  } catch (error) {
+    addErrorLog("Failed to read SID rankings from localStorage", { error: (error as Error).message });
     return {};
   }
 };
@@ -104,8 +107,9 @@ const lsSave = (map: RankingMap): void => {
   if (typeof localStorage === "undefined") return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
-  } catch {
-    /* quota / disabled storage — ambient ranking is best-effort */
+  } catch (error) {
+    // Quota / disabled storage — ambient ranking is best-effort.
+    addErrorLog("Failed to persist SID rankings to localStorage", { error: (error as Error).message });
   }
 };
 
