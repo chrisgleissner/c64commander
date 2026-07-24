@@ -401,3 +401,140 @@ describe("VideoMirrorController", () => {
     expect(renderFrame).not.toHaveBeenCalled();
   });
 });
+
+describe("VideoMirrorController — coalescing present queue (drop-late / present-newest, §7.6)", () => {
+  /** A manual present pump: the controller enqueues; the test decides when a present tick runs. */
+  const manualPump = () => {
+    const queued: Array<() => void> = [];
+    return {
+      schedule: (present: () => void) => queued.push(present),
+      /** Run every scheduled present tick (there is at most one pending at a time). */
+      flush: () => {
+        while (queued.length) queued.shift()!();
+      },
+      pending: () => queued.length,
+    };
+  };
+
+  it("presents only the NEWEST frame of a burst, counting the superseded ones as backlog replacements", async () => {
+    const pump = manualPump();
+    const receiver = new FakeReceiver();
+    const renderFrame = vi.fn();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame,
+      schedulePresent: pump.schedule,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+
+    // Three frames complete before the present tick runs (a renderer backlog).
+    completeFrame(receiver, 0, 0);
+    completeFrame(receiver, 1, 1);
+    completeFrame(receiver, 2, 2);
+    expect(renderFrame).not.toHaveBeenCalled(); // nothing presented until the pump runs
+    expect(pump.pending()).toBe(1); // exactly one present tick scheduled for the whole burst
+
+    pump.flush();
+    expect(renderFrame).toHaveBeenCalledTimes(1); // only the newest survives
+    const snap = controller.getSnapshot();
+    expect(snap.presented).toBe(1);
+    expect(snap.backlogReplacements).toBe(2); // the two older frames were superseded, never rendered
+    // Frames superseded before presentation are NOT lost on the wire and NOT decimation.
+    expect(snap.framesLost).toBe(0);
+    expect(snap.decimated).toBe(0);
+  });
+
+  it("does not fabricate backlog replacements when each frame is presented before the next completes", async () => {
+    const pump = manualPump();
+    const receiver = new FakeReceiver();
+    const renderFrame = vi.fn();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame,
+      schedulePresent: pump.schedule,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+
+    for (let i = 0; i < 3; i += 1) {
+      completeFrame(receiver, i, i);
+      pump.flush(); // present each before the next arrives (no backlog)
+    }
+    expect(renderFrame).toHaveBeenCalledTimes(3);
+    expect(controller.getSnapshot().presented).toBe(3);
+    expect(controller.getSnapshot().backlogReplacements).toBe(0);
+  });
+
+  it("reports the cadence divisor as decimation, distinct from backlog replacement and wire loss", async () => {
+    const receiver = new FakeReceiver();
+    const renderFrame = vi.fn();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame,
+      frameThrottle: 2, // present every 2nd source frame
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+
+    for (let i = 0; i < 4; i += 1) completeFrame(receiver, i, i);
+    const snap = controller.getSnapshot();
+    expect(snap.presented).toBe(2); // 2nd and 4th
+    expect(snap.decimated).toBe(2); // 1st and 3rd — intentional, NOT a defect
+    expect(snap.backlogReplacements).toBe(0);
+    expect(snap.framesLost).toBe(0);
+  });
+
+  it("setFrameThrottle changes the live cadence divisor (governor hook)", async () => {
+    const receiver = new FakeReceiver();
+    const renderFrame = vi.fn();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+    expect(controller.frameThrottle).toBe(1);
+    completeFrame(receiver, 0, 0); // presented
+    controller.setFrameThrottle(4);
+    expect(controller.frameThrottle).toBe(4);
+    // frameTick continues from 1; next 3 frames (ticks 2,3,4) → only tick 4 presents.
+    for (let i = 1; i <= 4; i += 1) completeFrame(receiver, i, i);
+    expect(renderFrame).toHaveBeenCalledTimes(2);
+  });
+
+  it("tracks present-queue residence on the injected clock (feeds the governor / §6 telemetry)", async () => {
+    const pump = manualPump();
+    let clock = 0;
+    const receiver = new FakeReceiver();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame: vi.fn(),
+      schedulePresent: pump.schedule,
+      now: () => clock,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+
+    completeFrame(receiver, 0, 0); // readyMs = 0
+    clock = 40; // 40 ms elapse before the present tick runs
+    pump.flush();
+    expect(controller.getSnapshot().renderResidenceMs).toBe(40);
+    expect(controller.getSnapshot().maxResidenceMs).toBe(40);
+  });
+});

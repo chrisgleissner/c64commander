@@ -9,15 +9,24 @@
 /**
  * Content Explorer capability E — Video Mirror controller.
  *
- * Ties the platform receiver → VicStreamAssembler → a caller-provided frame sink
- * and drives the device video stream start/stop. Kept as a plain class (deps
- * injected) so the state machine, frame-throttle and fps counter are unit tested
- * without React, a real socket, or a canvas.
+ * Ties the platform receiver → VicStreamAssembler (or the native onFrame fast path) → a
+ * caller-provided frame sink, and drives the device video stream start/stop. Kept as a plain
+ * class (deps injected) so the state machine, cadence throttle, coalescing present-queue and fps
+ * counter are unit tested without React, a real socket, or a canvas.
  *
- * Video is the expensive Live Mirror capability: it is CPU-budgeted per
- * `docs/plans/content-explorer/04-live-mirror.md` §4. The `frameThrottle` renders
- * only every Nth assembled frame while still receiving every datagram, so the
- * dropped-packet health and buffer stay current at a lower blit cost.
+ * Presentation model (spec §6/§7.6/§16.3). A completed frame is not rendered inline; it is handed
+ * to a coalescing **present queue** of depth one: only the newest ready frame survives to the next
+ * present tick, so under a renderer backlog the pipeline **presents the newest frame and drops the
+ * stale ones** instead of accumulating lag. This also means a frame that will not be displayed is
+ * never decoded/blitted (§1.4). The present tick is an injected scheduler:
+ *   - default = synchronous (present immediately — identical to the historical per-frame behaviour);
+ *   - production = requestAnimationFrame (coalesce to the display refresh);
+ *   - tests = a manual pump (drive bursts deterministically).
+ *
+ * Every completed source frame is accounted for in exactly one category (§2, never one generic
+ * "dropped"): PRESENTED, intentional cadence DECIMATION (the throttle/governor divisor),
+ * renderer-BACKLOG replacement (superseded before it could be presented), or frames LOST on the
+ * wire (a frame whose last-line packet never arrived — counted by the assembler / native plugin).
  */
 
 import { addLog } from "@/lib/logging";
@@ -30,12 +39,29 @@ export type VideoMirrorState = "off" | "connecting" | "live" | "error";
 /** Max in-flight frame-start entries kept (a frame whose last line is lost never completes). */
 const FRAME_START_CAP = 12;
 
+/** Default present-queue residence budget (ms) beyond which a presented frame is flagged late. */
+export const DEFAULT_MAX_PRESENTATION_AGE_MS = 120;
+
+/** Monotonic presentation clock; falls back to Date.now where performance is absent. */
+const perfNow = (): number => (typeof performance !== "undefined" ? performance.now() : Date.now());
+
 export interface VideoMirrorSnapshot {
   state: VideoMirrorState;
+  /** Actual PRESENTED frame rate (frames rendered in the last ~1s), spec §12.1. */
   fps: number;
   droppedPackets: number;
   /** Frames LOST — gaps in the VIC frame-number sequence (a frame whose last-line packet never arrived). */
   framesLost: number;
+  /** Source frames intentionally not presented by the cadence divisor (throttle/governor). Not a defect. */
+  decimated: number;
+  /** Ready frames superseded by a newer one before they could be presented (renderer-backlog replacement). */
+  backlogReplacements: number;
+  /** Frames actually handed to the sink (presented). */
+  presented: number;
+  /** Most recent present-queue residence (ms, presentation clock): ready → presented. */
+  renderResidenceMs: number;
+  /** Max present-queue residence since start (ms) — the video queue-age bound telemetry (§6). */
+  maxResidenceMs: number;
   /** Video standard detected from the actual received frame height (PAL 272 / NTSC 240). */
   standard: VideoStandard;
   error: string | null;
@@ -48,17 +74,26 @@ export interface VideoMirrorDeps {
   onChange: (snapshot: VideoMirrorSnapshot) => void;
   /**
    * Frame sink: receives a full 52224-byte VIC frame, the detected frame height
-   * (PAL 272 / NTSC 240) and the wire-arrival timestamp (ms) of the frame's FIRST
-   * datagram — for every RENDERED frame. Frame-start (top of frame) is used because
-   * the av-sync tone gate opens at the top raster line, so the video pop and the audio
-   * tone onset share the same wire instant, letting the A/V sync analyzer cancel the
-   * asymmetric frame-assembly/decode latency out of the measured offset.
+   * (PAL 272 / NTSC 240) and the wire-arrival timestamp (ms) of the frame's FIRST datagram — for
+   * every PRESENTED frame. Frame-start (top of frame) is used because the av-sync tone gate opens
+   * at the top raster line, so the video pop and the audio tone onset share the same wire instant.
    */
   renderFrame?: (frame: Uint8Array, height: number, arrivalMs: number) => void;
-  /** Render every Nth assembled frame (default 1 = every frame). */
+  /** Present every Nth assembled frame (default 1 = every frame). Overridden at runtime by the governor. */
   frameThrottle?: number;
-  /** Injectable clock for the rolling fps window (defaults to Date.now). */
+  /** Injected present scheduler (default synchronous). Production wires requestAnimationFrame. */
+  schedulePresent?: (present: () => void) => void;
+  /** Present-queue residence budget (ms) above which a presented frame is flagged late. */
+  maxPresentationAgeMs?: number;
+  /** Injectable presentation clock (defaults to performance.now / Date.now). */
   now?: () => number;
+}
+
+interface PendingFrame {
+  frame: Uint8Array;
+  height: number;
+  arrivalMs: number;
+  readyMs: number;
 }
 
 export class VideoMirrorController {
@@ -69,28 +104,51 @@ export class VideoMirrorController {
     fps: 0,
     droppedPackets: 0,
     framesLost: 0,
+    decimated: 0,
+    backlogReplacements: 0,
+    presented: 0,
+    renderResidenceMs: 0,
+    maxResidenceMs: 0,
     standard: "PAL",
     error: null,
   };
   private frameTick = 0;
-  /**
-   * Earliest wire-arrival time seen for each VIC frame number in flight. Keyed by frame number
-   * (not a single "current frame") so cross-frame packet REORDERING on a jittery link cannot
-   * misattribute a frame's start time — a straggler from the previous frame arriving after the
-   * next one began does not move either frame's stamp. Bounded by {@link FRAME_START_CAP}.
-   */
   private readonly frameStartByNum = new Map<number, number>();
   private renderTimes: number[] = [];
-  private readonly throttle: number;
+  /** Coalescing present queue of depth one (§7.6): only the newest ready frame survives. */
+  private pending: PendingFrame | null = null;
+  private presentScheduled = false;
+  private decimated = 0;
+  private backlogReplacements = 0;
+  private presented = 0;
+  private maxResidenceMs = 0;
+  private throttle: number;
+  private readonly maxPresentationAgeMs: number;
+  private readonly schedulePresent: (present: () => void) => void;
   private readonly now: () => number;
 
   constructor(private readonly deps: VideoMirrorDeps) {
     this.throttle = Math.max(1, Math.floor(deps.frameThrottle ?? 1));
-    this.now = deps.now ?? (() => Date.now());
+    this.maxPresentationAgeMs = deps.maxPresentationAgeMs ?? DEFAULT_MAX_PRESENTATION_AGE_MS;
+    // Default scheduler is synchronous: present immediately, preserving the historical per-frame path.
+    this.schedulePresent = deps.schedulePresent ?? ((present) => present());
+    this.now = deps.now ?? perfNow;
   }
 
   getSnapshot(): VideoMirrorSnapshot {
     return this.snapshot;
+  }
+
+  /**
+   * Set the cadence divisor at runtime (the governor drives this). 1 = present every source frame,
+   * 2 = every second, 4 = every fourth. Deterministic division, not fps interpolation.
+   */
+  setFrameThrottle(divisor: number): void {
+    this.throttle = Math.max(1, Math.floor(divisor));
+  }
+
+  get frameThrottle(): number {
+    return this.throttle;
   }
 
   private update(patch: Partial<VideoMirrorSnapshot>) {
@@ -99,9 +157,10 @@ export class VideoMirrorController {
   }
 
   /**
-   * A complete frame is ready (from the native fast path or JS assembly): apply the render throttle,
-   * update the rolling fps and the dropped/standard health. `arrivalMs` is the frame-start wire time
-   * (earliest packet), so the A/V sync analyzer stays correct regardless of which path produced it.
+   * A complete frame is ready (from the native fast path or JS assembly). Update health for EVERY
+   * frame, then either intentionally decimate it (cadence divisor) or enqueue it for coalesced
+   * presentation. `arrivalMs` is the frame-start wire time; health counters always advance so
+   * dropped/lost stay live even for decimated frames.
    */
   private handleCompletedFrame(
     frame: Uint8Array,
@@ -111,15 +170,48 @@ export class VideoMirrorController {
     framesLost: number,
   ): void {
     this.frameTick += 1;
-    let fps = this.snapshot.fps;
-    if (this.frameTick % this.throttle === 0) {
-      this.deps.renderFrame?.(frame, height, arrivalMs);
-      fps = this.recordRenderedFrame();
+    const standard = videoStandardForHeight(height);
+    if (this.frameTick % this.throttle !== 0) {
+      // Intentional cadence decimation — not a defect, counted separately (§2/§16.3).
+      this.decimated += 1;
+      this.update({ droppedPackets, framesLost, decimated: this.decimated, standard });
+      return;
     }
-    this.update({ fps, droppedPackets, framesLost, standard: videoStandardForHeight(height) });
+    this.enqueueForPresent({ frame, height, arrivalMs, readyMs: this.now() });
+    this.update({ droppedPackets, framesLost, standard });
   }
 
-  /** Record a rendered frame and return the frame count in the last ~1s. */
+  /** Coalesce into the depth-one present queue; a superseded ready frame is a backlog replacement. */
+  private enqueueForPresent(next: PendingFrame): void {
+    if (this.pending) this.backlogReplacements += 1; // previous ready frame never got presented
+    this.pending = next;
+    if (!this.presentScheduled) {
+      this.presentScheduled = true;
+      this.schedulePresent(() => this.present());
+    }
+  }
+
+  /** Present the newest ready frame (drop-late is implicit: only the newest survives the queue). */
+  private present(): void {
+    this.presentScheduled = false;
+    const frame = this.pending;
+    this.pending = null;
+    if (!frame || this.snapshot.state === "off") return;
+    const residence = Math.max(0, this.now() - frame.readyMs);
+    if (residence > this.maxResidenceMs) this.maxResidenceMs = residence;
+    this.deps.renderFrame?.(frame.frame, frame.height, frame.arrivalMs);
+    this.presented += 1;
+    const fps = this.recordRenderedFrame();
+    this.update({
+      fps,
+      presented: this.presented,
+      backlogReplacements: this.backlogReplacements,
+      renderResidenceMs: residence,
+      maxResidenceMs: this.maxResidenceMs,
+    });
+  }
+
+  /** Record a presented frame and return the frame count in the last ~1s (actual presented fps). */
   private recordRenderedFrame(): number {
     const now = this.now();
     this.renderTimes.push(now);
@@ -131,10 +223,19 @@ export class VideoMirrorController {
   async start(): Promise<void> {
     if (this.snapshot.state === "connecting" || this.snapshot.state === "live") return;
     this.assembler.reset();
-    this.frameTick = 0;
-    this.frameStartByNum.clear();
-    this.renderTimes = [];
-    this.update({ state: "connecting", error: null, fps: 0, droppedPackets: 0, framesLost: 0 });
+    this.resetPresentation();
+    this.update({
+      state: "connecting",
+      error: null,
+      fps: 0,
+      droppedPackets: 0,
+      framesLost: 0,
+      decimated: 0,
+      backlogReplacements: 0,
+      presented: 0,
+      renderResidenceMs: 0,
+      maxResidenceMs: 0,
+    });
 
     const receiver = (this.deps.createReceiver ?? createStreamReceiver)({ name: "video" });
     this.receiver = receiver;
@@ -150,21 +251,16 @@ export class VideoMirrorController {
     });
 
     // Native fast path: the Android plugin reassembles VIC datagrams into whole frames and crosses
-    // the Capacitor bridge once per FRAME (~50/s) instead of once per PACKET (~3400/s) — the per-event
-    // bridge overhead was what capped the mirror at ~20–30 fps. When the receiver assembles frames it
-    // fires `onFrame`; otherwise (web WebSocket bridge, or assembly off) it fires `onDatagram` and we
-    // assemble in JS. Only one path is active per receiver, so registering both is safe.
+    // the Capacitor bridge once per FRAME (~50/s) instead of once per PACKET (~3400/s). When the
+    // receiver assembles frames it fires `onFrame`; otherwise it fires `onDatagram` and we assemble
+    // in JS. Only one path is active per receiver, so registering both is safe.
     receiver.onFrame?.((frame, height, arrivalMs, droppedPackets, framesLost) => {
       this.handleCompletedFrame(frame, height, arrivalMs, droppedPackets, framesLost);
     });
 
     receiver.onDatagram((bytes, arrivalMs) => {
       // Stamp each frame with the EARLIEST wire arrival of any of its packets (keyed by the VIC
-      // frame number). The top of the frame is when the av-sync tone gate opens, so the video pop
-      // and the audio tone share the wire instant — letting the analyzer cancel the asymmetric
-      // frame-assembly/decode latency out of the offset. Using the frame number (every packet
-      // carries it) keeps this correct even when a last-line packet is lost (no whole-frame skew)
-      // or packets reorder across the frame boundary on a jittery link.
+      // frame number), so cross-frame reordering cannot skew the frame-start time the analyzer uses.
       const header = parseVicHeader(bytes);
       const frameNum = header ? header.frame : -1;
       const prevStart = this.frameStartByNum.get(frameNum);
@@ -174,7 +270,6 @@ export class VideoMirrorController {
       if (!frame) return;
       const frameArrivalMs = this.frameStartByNum.get(frameNum) ?? arrivalMs;
       this.frameStartByNum.delete(frameNum);
-      // Evict the oldest stragglers (frames whose last line never arrived) to bound the map.
       while (this.frameStartByNum.size > FRAME_START_CAP) {
         const oldest = this.frameStartByNum.keys().next().value;
         if (oldest === undefined) break;
@@ -201,6 +296,18 @@ export class VideoMirrorController {
     }
   }
 
+  private resetPresentation(): void {
+    this.frameTick = 0;
+    this.frameStartByNum.clear();
+    this.renderTimes = [];
+    this.pending = null;
+    this.presentScheduled = false;
+    this.decimated = 0;
+    this.backlogReplacements = 0;
+    this.presented = 0;
+    this.maxResidenceMs = 0;
+  }
+
   async stop(): Promise<void> {
     try {
       await this.deps.stopStream("video");
@@ -212,9 +319,17 @@ export class VideoMirrorController {
     this.receiver?.close();
     this.receiver = null;
     this.assembler.reset();
-    this.frameTick = 0;
-    this.frameStartByNum.clear();
-    this.renderTimes = [];
-    this.update({ state: "off", fps: 0, framesLost: 0, error: null });
+    this.resetPresentation();
+    this.update({
+      state: "off",
+      fps: 0,
+      framesLost: 0,
+      decimated: 0,
+      backlogReplacements: 0,
+      presented: 0,
+      renderResidenceMs: 0,
+      maxResidenceMs: 0,
+      error: null,
+    });
   }
 }
