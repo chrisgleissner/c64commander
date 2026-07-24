@@ -321,3 +321,52 @@ timestamps), G10/G12/G13 (committed thresholds, versioned replay, soak — the u
 G11/G14/G15 (deterministic frame-ID source, self-hosted HIL CI gate). Completion gate items §23.5
 (video source→display <30 ms) remain **physically red** per §0; §23.18/19 remain **RED** (no HIL CI
 gate). This branch does **not** claim the full §23 completion — it delivers the provable Phase-1 slice.
+
+---
+
+## 9. HIL round 2 — continuous-% governor + measured optimizations (2026-07-24)
+
+Follow-up work: a **continuous-percentage** governor (replacing the discrete 100/50/25 divisor) and
+a real Pixel 4 → C64U measure→optimise→re-measure loop. The APK was built (user-space Temurin
+JDK 21), installed, and driven via the WebView CDP socket; CPU via `top -H`, jank via `gfxinfo`.
+
+### Continuous governor
+The governor target is now an integer percent (100…floor) realised by a Bresenham phase-accumulator
+decimator, so it sheds exactly what audio needs (e.g. 85%) instead of halving. Verified on device:
+50%→26 fps, 25%→13 fps, Auto→51 fps; intermediate percentages exercised (a pre-fix startup transient
+demoted to 30%). The `minPercent` floor (default 10) is configurable toward the "…to 1" end.
+
+### Bugs HIL caught that unit tests could not
+| Bug | Symptom on device | Fix |
+| --- | --- | --- |
+| Startup false-demote | video dropped to ~30% for ~9 s at stream start (audio buffer fills from 0 → read as "critical") | `primed` latch: audio pressure applies only after the buffer first reaches healthy |
+| Video-only floor | a video-only mirror would peg to the governor floor (no player → bufferedMs permanently 0) | `audioActive` gate: audio pressure ignored unless audio is live |
+| Garbage audio telemetry | native `progression` reported audio `lost` climbing into the thousands | stop applying VIC frame/loss parsing to the audio stream (O3) |
+
+### Measured CPU (Pixel 4 → C64U fw1.2.0, PAL, video+audio; %of one core, top -H)
+| Build | native-pool (recv+base64) | CrRenderer (WebView JS) | app SUM |
+| --- | ---: | ---: | ---: |
+| baseline 0.9.3 @ 100% | ~14% | ~54% | **~68%** |
+| + optimisations @ 100% | ~15% | ~42% | **~58%** (−15%) |
+| + optimisations @ 25% | ~13% | ~36% | **~49%** (−28% vs baseline) |
+| audio-only, baseline | ~6% | ~33% | ~39% |
+| audio-only, + throttle | ~6% | ~26% | ~31% |
+
+Isolation (audio-only vs video+audio vs idle ~1%) showed the video CPU was dominated by ~50 React
+re-renders/s (the controllers broadcast a snapshot on every completed frame), NOT the per-frame
+decode — a "measure, don't assume" correction. Optimisations, in impact order:
+1. **Throttle snapshot broadcasts to ~10 Hz** (state/error transitions bypass) — the biggest win
+   (−15% at all rates). getSnapshot()/Stats stay live.
+2. **Native-side decimation** — the governor pushes its keep-fraction to the plugin, which skips the
+   Base64 encode + bridge of unpresented frames (empty `present=false` event keeps JS accounting
+   honest). Modest here (the per-frame cost wasn't the bottleneck) but correct and larger on weak devices.
+3. **Native recv-thread priority** (URGENT_AUDIO/DISPLAY) — held 50 fps / 0 underruns under 8
+   background CPU hogs. **2 MB SO_RCVBUF**, **DatagramPacket reuse**, **honest audio telemetry** (O1/O2/O3/O4).
+
+Jank stayed healthy (full-run gfxinfo 0.08% janky, 0 missed vsync). Audio underruns 0 throughout.
+
+### Still not done (unchanged external blockers)
+No self-hosted HIL CI gate (§14.5/§17) — these runs were manual on the attached hardware. The
+`<30 ms` source→display video gate remains physically red (§0). Native audio (Oboe) — the audio JS
+path is still ~26–33% of the WebView thread (per-packet base64 + analysis) and is the next big lever,
+but it is a Phase-3 change gated on §0.
