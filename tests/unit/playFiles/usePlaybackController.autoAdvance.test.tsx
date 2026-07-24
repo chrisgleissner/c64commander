@@ -310,8 +310,12 @@ describe("usePlaybackController auto advance", () => {
   // to funnel through one sourceless flag, so an unconditional menu-close resume
   // clobbered the user pause — re-arming auto-advance against the user's intent.
   it("HARD21-004: menu open+close does not resume a user-initiated pause (pausedBy play)", async () => {
-    const { setMachineExecutionPaused, resumeMachineExecutionIfPausedBy, getMachineExecutionSnapshot, resetMachineExecution } =
-      await import("@/lib/deviceInteraction/machineExecutionStore");
+    const {
+      setMachineExecutionPaused,
+      resumeMachineExecutionIfPausedBy,
+      getMachineExecutionSnapshot,
+      resetMachineExecution,
+    } = await import("@/lib/deviceInteraction/machineExecutionStore");
     resetMachineExecution();
     const playlist = [createPlaylistItem("one", 1_000), createPlaylistItem("two", 1_000)];
     const { result } = renderPlaybackHarness(playlist);
@@ -350,8 +354,12 @@ describe("usePlaybackController auto advance", () => {
   // open pauses the timeline, menu close resumes it (this is the HARD20-009
   // contract the source tag must not break).
   it("HARD21-004: menu open pauses and menu close resumes a was-playing timeline", async () => {
-    const { setMachineExecutionPaused, resumeMachineExecutionIfPausedBy, getMachineExecutionSnapshot, resetMachineExecution } =
-      await import("@/lib/deviceInteraction/machineExecutionStore");
+    const {
+      setMachineExecutionPaused,
+      resumeMachineExecutionIfPausedBy,
+      getMachineExecutionSnapshot,
+      resetMachineExecution,
+    } = await import("@/lib/deviceInteraction/machineExecutionStore");
     resetMachineExecution();
     const playlist = [createPlaylistItem("one", 1_000), createPlaylistItem("two", 1_000)];
     const { result } = renderPlaybackHarness(playlist);
