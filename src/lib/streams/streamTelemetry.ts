@@ -27,8 +27,12 @@
  * (per-second); session fields are SESSION-WIDE.
  */
 
-/** ~15 minutes of one-second buckets. */
+/** ~15 minutes of one-second buckets (the fine tier). */
 export const MAX_BUCKETS = 900;
+/** Fine buckets folded into one coarse (minute) bucket. */
+export const COARSE_GROUP_SIZE = 60;
+/** ~4 hours of one-minute buckets (the coarse tier for the full-session view — bounded, downsampled). */
+export const MAX_COARSE_BUCKETS = 240;
 /** Bounded residence-sample ring for session percentiles. */
 export const RESIDENCE_RESERVOIR = 4096;
 
@@ -116,6 +120,28 @@ const percentile = (sortedAsc: number[], p: number): number => {
   return sortedAsc[lo] + (sortedAsc[hi] - sortedAsc[lo]) * (rank - lo);
 };
 
+/** Aggregate a group of one-second buckets into one coarse bucket (means, plus min/max extremes). */
+const aggregateBuckets = (group: TelemetryBucket[]): TelemetryBucket => {
+  const n = group.length || 1;
+  const mean = (key: keyof TelemetryBucket) => group.reduce((s, b) => s + (b[key] as number), 0) / n;
+  return {
+    sec: group[0].sec,
+    fpsAvg: mean("fpsAvg"),
+    audioBufferMsMin: Math.min(...group.map((b) => b.audioBufferMsMin)),
+    audioBufferMsAvg: mean("audioBufferMsAvg"),
+    concealedPerSec: mean("concealedPerSec"),
+    audioLostPerSec: mean("audioLostPerSec"),
+    presentedPerSec: mean("presentedPerSec"),
+    decimatedPerSec: mean("decimatedPerSec"),
+    backlogPerSec: mean("backlogPerSec"),
+    framesLostPerSec: mean("framesLostPerSec"),
+    videoDroppedPerSec: mean("videoDroppedPerSec"),
+    residenceMaxMs: Math.max(...group.map((b) => b.residenceMaxMs)),
+    underrunsInSec: mean("underrunsInSec"),
+    effectiveFraction: mean("effectiveFraction"),
+  };
+};
+
 const percentiles = (values: number[]): TelemetryPercentiles => {
   const sorted = [...values].sort((a, b) => a - b);
   return {
@@ -157,6 +183,9 @@ interface BucketAccumulator {
 
 export class StreamTelemetry {
   private readonly buckets: TelemetryBucket[] = [];
+  /** Coarse (minute) tier for the full-session view; each is the mean of up to COARSE_GROUP_SIZE fine buckets. */
+  private readonly coarseBuckets: TelemetryBucket[] = [];
+  private coarseGroup: TelemetryBucket[] = [];
   private current: BucketAccumulator | null = null;
   private readonly residence: number[] = [];
   private residenceHead = 0;
@@ -257,6 +286,17 @@ export class StreamTelemetry {
     };
     this.buckets.push(bucket);
     while (this.buckets.length > MAX_BUCKETS) this.buckets.shift();
+    this.rollupCoarse(bucket);
+  }
+
+  /** Fold each closed fine bucket into the coarse (minute) tier for the full-session view. */
+  private rollupCoarse(fine: TelemetryBucket): void {
+    this.coarseGroup.push(fine);
+    if (this.coarseGroup.length >= COARSE_GROUP_SIZE) {
+      this.coarseBuckets.push(aggregateBuckets(this.coarseGroup));
+      while (this.coarseBuckets.length > MAX_COARSE_BUCKETS) this.coarseBuckets.shift();
+      this.coarseGroup = [];
+    }
   }
 
   /** History buckets within the last `windowSec` seconds (Stats view). Closes the open bucket first. */
@@ -267,6 +307,19 @@ export class StreamTelemetry {
     const latest = closed[closed.length - 1].sec;
     const cutoff = latest - windowSec;
     return closed.filter((b) => b.sec > cutoff);
+  }
+
+  /**
+   * History for a Stats window. Windows up to the fine-tier coverage (~15 min) return one-second
+   * buckets; a longer "full session" window returns the coarse (minute) tier — bounded, downsampled
+   * (§12.2: lower-resolution buckets for the session; no unbounded raw telemetry).
+   */
+  history(windowSec: number): TelemetryBucket[] {
+    if (windowSec <= MAX_BUCKETS) return this.buffersWindow(windowSec);
+    const coarse = [...this.coarseBuckets];
+    if (this.coarseGroup.length > 0) coarse.push(aggregateBuckets(this.coarseGroup));
+    // Session shorter than a full minute of closed buckets: fall back to the fine tier.
+    return coarse.length > 0 ? coarse : this.buffersWindow(windowSec);
   }
 
   private snapshotOpenBucket(b: BucketAccumulator): TelemetryBucket {
@@ -330,6 +383,8 @@ export class StreamTelemetry {
 
   reset(): void {
     this.buckets.length = 0;
+    this.coarseBuckets.length = 0;
+    this.coarseGroup = [];
     this.current = null;
     this.residence.length = 0;
     this.residenceHead = 0;

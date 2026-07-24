@@ -148,6 +148,21 @@ describe("StreamStatsPanel", () => {
     expect(screen.getByTestId("stream-stats-presented")).toHaveTextContent("500");
   });
 
+  it("offers selectable history windows and re-queries the telemetry when one is chosen", () => {
+    const session = makeFakeSession(snapshot());
+    render(<StreamStatsPanel session={session} />);
+    fireEvent.click(screen.getByTestId("stream-stats-toggle"));
+    // The window selector + charts are present.
+    expect(screen.getByTestId("stream-stats-window")).toBeInTheDocument();
+    expect(screen.getByTestId("stream-stats-spark-loss")).toBeInTheDocument();
+    expect(screen.getByTestId("stream-stats-spark-rate")).toBeInTheDocument();
+    (session.statsHistory as ReturnType<typeof vi.fn>).mockClear();
+    fireEvent.click(screen.getByTestId("stream-stats-window-Session"));
+    // Choosing "Session" re-queries history with a large window (the full-session coarse tier).
+    const calls = (session.statsHistory as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
+    expect(Math.max(...calls)).toBeGreaterThan(900);
+  });
+
   it("exports a diagnostic payload via the injected sink", () => {
     const onExport = vi.fn();
     const session = makeFakeSession(snapshot());

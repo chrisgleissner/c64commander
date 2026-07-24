@@ -85,6 +85,29 @@ describe("StreamTelemetry — bounded history", () => {
   });
 });
 
+describe("StreamTelemetry — tiered history (§12.2)", () => {
+  it("returns fine 1s buckets for short windows and coarse minute buckets for the full session", () => {
+    const t = new StreamTelemetry();
+    // 130 seconds of samples at 1 Hz → 129 closed fine buckets → 2 coarse (minute) buckets.
+    for (let s = 0; s <= 130; s++) t.record(sample(s * 1000 + 1, { videoPresented: s * 50 }));
+
+    const last60 = t.history(60); // fine tier
+    expect(last60.length).toBeLessThanOrEqual(61);
+    expect(last60.length).toBeGreaterThan(30);
+
+    const session = t.history(Number.MAX_SAFE_INTEGER); // coarse tier
+    expect(session.length).toBeGreaterThanOrEqual(2); // ~2 minute buckets
+    expect(session.length).toBeLessThan(60); // downsampled, not the raw 130 fine buckets
+  });
+
+  it("a session shorter than a minute falls back to the fine tier", () => {
+    const t = new StreamTelemetry();
+    for (let s = 0; s < 10; s++) t.record(sample(s * 1000 + 1));
+    const session = t.history(Number.MAX_SAFE_INTEGER);
+    expect(session.length).toBeGreaterThan(0); // fine buckets, since no coarse bucket has closed yet
+  });
+});
+
 describe("StreamTelemetry — session summary", () => {
   it("summarises totals, extremes and residence percentiles", () => {
     const t = new StreamTelemetry();

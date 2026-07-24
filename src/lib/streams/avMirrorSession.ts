@@ -287,7 +287,7 @@ export class AvMirrorSession {
 
   /** History buckets for a Stats chart window (seconds). Computed on demand (Stats open only). */
   statsHistory(windowSec: number): TelemetryBucket[] {
-    return this.telemetry.buffersWindow(windowSec);
+    return this.telemetry.history(windowSec);
   }
 
   /** Diagnostic export (§12.4). Caller supplies app/device/settings meta + limitations. */

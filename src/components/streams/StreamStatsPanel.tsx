@@ -91,14 +91,25 @@ function Stat({ label, value, testid, tone }: { label: string; value: string; te
  * Latency is labelled honestly: this is the LOCAL present-queue residence, not sender→display
  * latency (which is floored by the C64U capture buffer + Wi-Fi — see the Live View gap analysis).
  */
+const WINDOWS: ReadonlyArray<{ label: string; sec: number }> = [
+  { label: "60s", sec: 60 },
+  { label: "5m", sec: 300 },
+  { label: "15m", sec: 900 },
+  { label: "Session", sec: Number.MAX_SAFE_INTEGER },
+];
+
 export function StreamStatsPanel({ session, className, onExport }: StreamStatsPanelProps) {
   const { stats, requestedMode, setFrameRateMode, history, exportDiagnostics } = useStreamStats(session);
   const [expanded, setExpanded] = useState(false);
+  const [windowSec, setWindowSec] = useState(60);
 
   const { governor, live, summary } = stats;
-  const buckets: TelemetryBucket[] = history(60);
+  const buckets: TelemetryBucket[] = history(windowSec);
   const fpsSeries = buckets.map((b) => b.fpsAvg);
   const bufferSeries = buckets.map((b) => b.audioBufferMsMin);
+  const lossSeries = buckets.map((b) => b.videoDroppedPerSec + b.framesLostPerSec + b.audioLostPerSec);
+  const concealSeries = buckets.map((b) => b.concealedPerSec);
+  const rateSeries = buckets.map((b) => b.effectiveFraction * 100);
 
   const handleExport = () => {
     const payload = exportDiagnostics({ exportedAt: new Date().toISOString() });
@@ -189,22 +200,60 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
 
       {expanded && (
         <div className="space-y-3" data-testid="stream-stats-details">
-          {/* History charts */}
+          {/* History window selector (§12.2) */}
+          <div className="flex items-center gap-1.5" data-testid="stream-stats-window">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">History</span>
+            {WINDOWS.map((w) => (
+              <Button
+                key={w.label}
+                size="sm"
+                variant={windowSec === w.sec ? "default" : "outline"}
+                className="h-6 px-2 text-[11px]"
+                onClick={() => setWindowSec(w.sec)}
+                data-testid={`stream-stats-window-${w.label}`}
+                aria-pressed={windowSec === w.sec}
+              >
+                {w.label}
+              </Button>
+            ))}
+          </div>
+
+          {/* History charts (§12.3) */}
           <div className="grid grid-cols-2 gap-3">
             <div className="text-muted-foreground">
-              <div className="mb-1 text-[10px] uppercase tracking-wide">Presented FPS · 60s</div>
-              <Sparkline
-                values={fpsSeries}
-                testid="stream-stats-spark-fps"
-                ariaLabel="Presented FPS over the last 60 seconds"
-              />
+              <div className="mb-1 text-[10px] uppercase tracking-wide">Presented FPS</div>
+              <Sparkline values={fpsSeries} testid="stream-stats-spark-fps" ariaLabel="Presented FPS over the window" />
             </div>
             <div className="text-muted-foreground">
-              <div className="mb-1 text-[10px] uppercase tracking-wide">Audio buffer min · 60s</div>
+              <div className="mb-1 text-[10px] uppercase tracking-wide">Audio buffer min (ms)</div>
               <Sparkline
                 values={bufferSeries}
                 testid="stream-stats-spark-buffer"
-                ariaLabel="Minimum audio buffer depth over the last 60 seconds"
+                ariaLabel="Minimum audio buffer depth over the window"
+              />
+            </div>
+            <div className="text-muted-foreground">
+              <div className="mb-1 text-[10px] uppercase tracking-wide">Loss (pkts+frames/s)</div>
+              <Sparkline
+                values={lossSeries}
+                testid="stream-stats-spark-loss"
+                ariaLabel="Packet + frame loss per second"
+              />
+            </div>
+            <div className="text-muted-foreground">
+              <div className="mb-1 text-[10px] uppercase tracking-wide">Concealed audio/s</div>
+              <Sparkline
+                values={concealSeries}
+                testid="stream-stats-spark-conceal"
+                ariaLabel="Concealed audio packets per second"
+              />
+            </div>
+            <div className="col-span-2 text-muted-foreground">
+              <div className="mb-1 text-[10px] uppercase tracking-wide">Effective video rate (%)</div>
+              <Sparkline
+                values={rateSeries}
+                testid="stream-stats-spark-rate"
+                ariaLabel="Governor effective video rate percent"
               />
             </div>
           </div>
