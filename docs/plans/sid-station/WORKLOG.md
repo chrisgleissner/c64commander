@@ -456,3 +456,17 @@ _(append entries below as tasks/gates complete — newest last)_
   keeps only that style; Taste diversity sample deterministic). Existing engine 10 still pass.
   eslint + prettier clean.
 - Gate: feeds G7 (composition/on-vibe); Taste-unlock UI is 3.2.
+
+### 2026-07-24 — M3.2 + M3 EXIT: launcher AppSheet → G7 (code+unit)
+- Task: The SID Radio launcher (spec §5.2) — 9 style tiles, "based on my likes" composition
+  toggle, Taste unlock at threshold, Surprise; close M3.
+- Files: `SidRadioLauncherSheet.tsx` (new — `sid-radio-style-<bit>` tiles, `sid-radio-likes-toggle`,
+  `sid-radio-taste` (+hint), `sid-radio-surprise`), `useSidRadio.ts` (startStyleRadio `fromLikes`
+  composes taste+styleFilter D10; `startSurpriseRadio`; exported `SID_RADIO_STYLE_TILES` §5.4 +
+  `SID_RADIO_TASTE_UNLOCK_LIKES`=5 D1), `PlayFilesPage.tsx` (`sid-radio-launcher` entry + sheet;
+  likeCount from getLikedMd5s). Tests: SidRadioLauncherSheet (6).
+- Decisions: the sheet composes seed × optional style (§5.2). "Based on my likes" on a style tile
+  launches taste(likes)+styleFilter (D10). Taste unlocks at 5 likes (D1) with a progress hint.
+- Evidence: launcher 6 tests; full sidRadio + playFiles suites (49 files / 364) pass; tsc + eslint clean.
+- Gate: **G7** style admission + Style×Likes composition + Taste unlock proven (code+unit). The
+  on-device on-vibe mask spot-check is a manual HIL (§9.5).

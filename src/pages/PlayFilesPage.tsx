@@ -86,6 +86,8 @@ import { useSidRadioFlags } from "@/lib/sidRadio/useSidRadioFlags";
 import { LikedTunesSheet } from "@/pages/playFiles/components/LikedTunesSheet";
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
 import { SidRadioChip } from "@/pages/playFiles/components/SidRadioChip";
+import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
+import { getLikedMd5s } from "@/lib/sidRadio/rankingStore";
 import { Radio as RadioIcon } from "lucide-react";
 import { PlaybackSettingsPanel } from "@/pages/playFiles/components/PlaybackSettingsPanel";
 import { PlaylistPanel } from "@/pages/playFiles/components/PlaylistPanel";
@@ -298,6 +300,7 @@ export default function PlayFilesPage() {
   const { value: remoteInputEnabled } = useFeatureFlag("remote_input_enabled");
   const [remoteInputSheetOpen, setRemoteInputSheetOpen] = useState(false);
   const [likedTunesSheetOpen, setLikedTunesSheetOpen] = useState(false);
+  const [sidRadioLauncherOpen, setSidRadioLauncherOpen] = useState(false);
 
   const {
     volumeSliderPreviewIntervalMs,
@@ -1936,6 +1939,16 @@ export default function PlayFilesPage() {
                         <RadioIcon className="mr-1.5 h-4 w-4" /> Start Radio
                       </Button>
                     ) : null}
+                    {!sidRadio.active ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        data-testid="sid-radio-launcher"
+                        onClick={() => setSidRadioLauncherOpen(true)}
+                      >
+                        <RadioIcon className="mr-1.5 h-4 w-4" /> SID Radio
+                      </Button>
+                    ) : null}
                     <Button
                       variant="outline"
                       size="sm"
@@ -2174,6 +2187,14 @@ export default function PlayFilesPage() {
             open={likedTunesSheetOpen}
             onOpenChange={setLikedTunesSheetOpen}
             onPlay={(items, startIndex) => void startPlaylist(items, startIndex)}
+          />
+          <SidRadioLauncherSheet
+            open={sidRadioLauncherOpen}
+            onOpenChange={setSidRadioLauncherOpen}
+            likeCount={getLikedMd5s().length}
+            onStartStyle={(bit, label, fromLikes) => void sidRadio.startStyleRadio(bit, label, fromLikes)}
+            onStartTaste={() => void sidRadio.startTasteRadio()}
+            onSurprise={() => void sidRadio.startSurpriseRadio()}
           />
 
           <AlertDialog

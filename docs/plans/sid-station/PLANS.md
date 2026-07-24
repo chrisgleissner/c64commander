@@ -22,7 +22,7 @@ Branch: **`feat/sid-radio`** (cut from `main`). Flags default **off** until each
 | G4 | Ranking persists across restart; ♥/✕ never janks; Liked Tunes plays | ◑ code+unit+component ✓ (persist restart, toggle, Liked Tunes finite play, un-like, grey); rapid-rate starvation soak → M2 HIL |
 | G5 | Song Radio auto-advances ≥ 30 tracks, related, no stall | ◑ code+unit ✓ (endless refill, related candidates, no double-append); ≥30 device soak → manual HIL (live C64U) |
 | G6 | ✕ skips within one track and down-weights | ◑ code+unit ✓ (✕ records + skips + future-refill down-weight, D8); device skip-latency → manual HIL |
-| G7 | Style plays on-vibe; Style×Likes composes; Taste unlocks | ☐ |
+| G7 | Style plays on-vibe; Style×Likes composes; Taste unlocks | ◑ code+unit ✓ (style admission; "Fast-Paced from my Likes" composes D10; Taste unlock D1; launcher tiles + likes-toggle + surprise); on-vibe device spot-check → manual HIL |
 | G8 | Station survives restart & resumes the chip (exact recompute) | ☐ |
 | G9 | All §9.2 perf budgets measured-then-pinned & asserted on Pixel 4 → C64U | ☐ |
 | G10 | Patch coverage ≥ 91 %; manual chapter updated | ☐ |
@@ -66,8 +66,8 @@ Branch: **`feat/sid-radio`** (cut from `main`). Flags default **off** until each
 ## M3 — Style & Taste Radio (+ Style × Likes)  (→ G7)
 
 - [x] 3.1 `stationEngine`: diversity-sampled Taste aggregation (D12); **composed style × Likes admission (D10)**; Like-boosted `seedWeight` — **RED→GREEN**
-- [ ] 3.2 Launcher `AppSheet`: 9 style tiles (`sid-radio-style-<bit>`), `sid-radio-likes-toggle`, Taste unlock at threshold (D1), `sid-radio-surprise`
-- [ ] **M3 EXIT** — style on-vibe (HIL mask spot-check); "Fast-Paced from my Likes" composes; Taste unlocks & reflects likes → tick **G7**
+- [x] 3.2 Launcher `AppSheet`: 9 style tiles (`sid-radio-style-<bit>`), `sid-radio-likes-toggle`, Taste unlock at threshold (D1), `sid-radio-surprise`
+- [x] **M3 EXIT** — style on-vibe (HIL mask spot-check); "Fast-Paced from my Likes" composes; Taste unlocks & reflects likes → tick **G7**
 
 ## M4 — Persistence & polish → GA  (→ G8, G9 full, G10, G12)
 

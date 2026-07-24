@@ -61,8 +61,11 @@ export interface UseSidRadioResult {
   active: boolean;
   station: ActiveStation | null;
   startSongRadio: (md5_48: string, seedLabel: string) => Promise<void>;
-  startStyleRadio: (styleBit: number, label: string) => Promise<void>;
+  /** Style station; `fromLikes` composes a style filter over a Likes seed (D10). */
+  startStyleRadio: (styleBit: number, label: string, fromLikes?: boolean) => Promise<void>;
   startTasteRadio: () => Promise<void>;
+  /** Surprise: a random style / broad Deep-Discovery station (§5.2). */
+  startSurpriseRadio: () => Promise<void>;
   steer: (md5: string, signal: RankingSignal) => void;
   stop: () => void;
 }
@@ -172,10 +175,26 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     [start],
   );
   const startStyleRadio = useCallback(
-    (styleBit: number, label: string) => start({ kind: "style", styleBit }, styleBit, "style", label),
+    (styleBit: number, label: string, fromLikes = false) =>
+      start(fromLikes ? { kind: "taste" } : { kind: "style", styleBit }, styleBit, "style", label),
     [start],
   );
   const startTasteRadio = useCallback(() => start({ kind: "taste" }, null, "taste", "Tunes you like"), [start]);
+  const startSurpriseRadio = useCallback(() => {
+    const bit = Math.floor(randomSeed() % 9);
+    const labels = [
+      "Fast-Paced",
+      "Chill / Ambient",
+      "Melodic",
+      "Experimental",
+      "Nostalgic",
+      "Composer Deep-Dive",
+      "Era Explorer",
+      "Deep Cuts",
+      "Game Themes",
+    ];
+    return start({ kind: "style", styleBit: bit }, bit, "style", labels[bit] ?? "Surprise");
+  }, [start, randomSeed]);
 
   const stop = useCallback(() => {
     setStation(null);
@@ -242,7 +261,24 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     startSongRadio,
     startStyleRadio,
     startTasteRadio,
+    startSurpriseRadio,
     steer,
     stop,
   };
 };
+
+/** The 9 style tiles (spec §5.4) — mask bit → friendly label + blurb. */
+export const SID_RADIO_STYLE_TILES: ReadonlyArray<{ bit: number; key: string; label: string; blurb: string }> = [
+  { bit: 0, key: "fast_paced", label: "Fast-Paced", blurb: "High-energy, driving tunes" },
+  { bit: 1, key: "slow_ambient", label: "Chill / Ambient", blurb: "Slow, atmospheric" },
+  { bit: 2, key: "melodic", label: "Melodic", blurb: "Strong, hummable melodies" },
+  { bit: 3, key: "experimental", label: "Experimental", blurb: "Off the beaten track" },
+  { bit: 4, key: "nostalgic", label: "Nostalgic", blurb: "Classic, wistful vibes" },
+  { bit: 5, key: "composer_focus", label: "Composer Deep-Dive", blurb: "Stays close to a composer's signature" },
+  { bit: 6, key: "era_explorer", label: "Era Explorer", blurb: "Roams a musical era" },
+  { bit: 7, key: "deep_discovery", label: "Deep Cuts", blurb: "Rarely-heard corners of HVSC" },
+  { bit: 8, key: "theme_hunter", label: "Game Themes", blurb: "Themes & loader tunes" },
+];
+
+/** Taste-Radio unlock threshold (D1). */
+export const SID_RADIO_TASTE_UNLOCK_LIKES = 5;
