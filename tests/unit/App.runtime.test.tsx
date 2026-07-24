@@ -82,6 +82,7 @@ vi.mock("@/hooks/useDisplayProfile", () => ({
   }),
 }));
 vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlagValue: () => false,
   FeatureFlagsProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   useFeatureFlags: () => ({
     flags: {

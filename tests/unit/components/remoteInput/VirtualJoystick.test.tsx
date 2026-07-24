@@ -67,6 +67,33 @@ describe("VirtualJoystick", () => {
       />,
     );
 
+  it("reserves the game-mode action zone at least as tall as its controls (screen never hidden by CTAs)", () => {
+    // The Live View picture is a flex sibling ABOVE the joystick; the absolute controls must never
+    // overflow up over it. The action zone's min-height must cover the controls and grow with size.
+    const renderImmersive = (scale: number) =>
+      render(
+        <VirtualJoystick
+          port={2}
+          onSetPort={setPortMock}
+          heldInputs={EMPTY_HELD_JOYSTICK_INPUTS as never}
+          onHeldInputsChange={onHeldInputsChangeMock}
+          autofireEnabled={false}
+          onAutofireEnabledChange={setAutofireEnabledChangeMock}
+          autofireRateHz={5}
+          onAutofireRateHzChange={() => {}}
+          immersive
+          scale={scale}
+        />,
+      ).container.querySelector('[data-testid="remote-input-joystick-action-zone"]') as HTMLElement;
+
+    const small = Number(renderImmersive(1).getAttribute("data-immersive-min-height"));
+    const large = Number(renderImmersive(2.5).getAttribute("data-immersive-min-height"));
+    // At scale 1 the control is 132px; the reserved zone must exceed the control's extent from the
+    // bottom edge (control height + bottom offset), and it must scale up with the control size.
+    expect(small).toBeGreaterThan(132 + 20);
+    expect(large).toBeGreaterThan(small * 2);
+  });
+
   it("resolves a drag past the dead zone to a direction and emits the held set", () => {
     renderStick();
     const zone = screen.getByTestId("remote-input-stick-zone");
@@ -373,16 +400,39 @@ describe("VirtualJoystick", () => {
       expect(screen.getByTestId("remote-input-stick-zone")).toBeInTheDocument();
     });
 
-    it("keeps Port on the left rail and stacks Autofire above FIRE in the standard layout", () => {
+    it("keeps Port on the left rail and stacks Autofire below FIRE in the standard layout", () => {
       renderStick();
 
       const portToggle = screen.getByTestId("remote-input-port-toggle");
       const movementStyleToggle = screen.getByTestId("remote-input-movement-style-toggle");
       expect(portToggle.compareDocumentPosition(movementStyleToggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-      const fireStack = screen.getByTestId("remote-input-fire-button").parentElement;
-      expect(fireStack).toHaveClass("flex-col-reverse");
-      expect(screen.getByTestId("remote-input-autofire-toggle")).toBeInTheDocument();
+      const fireButton = screen.getByTestId("remote-input-fire-button");
+      const fireStack = fireButton.parentElement;
+      expect(fireStack).toHaveClass("flex-col");
+      const autofire = screen.getByTestId("remote-input-autofire-toggle");
+      expect(autofire).toBeInTheDocument();
+      // Autofire renders AFTER (below) FIRE in the column.
+      expect(fireButton.compareDocumentPosition(autofire) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it("hides the Autofire control entirely when showAutofire is false", () => {
+      render(
+        <VirtualJoystick
+          port={2}
+          onSetPort={setPortMock}
+          heldInputs={EMPTY_HELD_JOYSTICK_INPUTS}
+          onHeldInputsChange={onHeldInputsChangeMock}
+          autofireEnabled={false}
+          onAutofireEnabledChange={setAutofireEnabledChangeMock}
+          autofireRateHz={5}
+          onAutofireRateHzChange={() => {}}
+          showAutofire={false}
+        />,
+      );
+      expect(screen.getByTestId("remote-input-fire-button")).toBeInTheDocument();
+      expect(screen.queryByTestId("remote-input-autofire-toggle")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("remote-input-autofire-switch")).not.toBeInTheDocument();
     });
 
     it("switches between all three touch styles' surfaces", () => {
@@ -459,7 +509,7 @@ describe("VirtualJoystick", () => {
       expect(screen.getByTestId("remote-input-fire-button")).toBeInTheDocument();
       expect(screen.getByTestId("remote-input-port-toggle")).toBeInTheDocument();
       const fireStack = screen.getByTestId("remote-input-fire-button").parentElement;
-      expect(fireStack).toHaveClass("flex-col-reverse");
+      expect(fireStack).toHaveClass("flex-col");
       expect(screen.getByTestId("remote-input-autofire-toggle")).toBeInTheDocument();
     });
 

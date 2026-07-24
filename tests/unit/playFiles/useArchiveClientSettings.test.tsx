@@ -15,6 +15,7 @@ const featureFlagsRef = vi.hoisted(() => ({
 }));
 
 vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlagValue: () => false,
   useFeatureFlag: (key: "commoserve_enabled") => ({
     value: featureFlagsRef.current[key],
   }),

@@ -44,6 +44,7 @@ vi.mock("@/components/layout/PageContainer", () => ({
 }));
 
 vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlagValue: () => false,
   useFeatureFlags: () => ({ flags: featureFlagsRef.flags }),
 }));
 

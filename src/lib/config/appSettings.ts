@@ -27,6 +27,18 @@ const ARCHIVE_CLIENT_ID_OVERRIDE_KEY = "c64u_archive_client_id_override";
 const ARCHIVE_USER_AGENT_OVERRIDE_KEY = "c64u_archive_user_agent_override";
 const HIDE_STATUS_BAR_KEY = "c64u_full_screen_hide_status_bar";
 const HIDE_NAVIGATION_BAR_KEY = "c64u_full_screen_hide_navigation_bar";
+const BOOT_MENU_ANSWER_ENABLED_KEY = "c64u_boot_menu_answer_enabled";
+const BOOT_MENU_KEY_KEY = "c64u_boot_menu_key";
+const BOOT_SETTLE_MS_KEY = "c64u_boot_settle_ms";
+const SEARCH_INSIDE_DISKS_KEY = "c64u_search_inside_disks";
+const STREAM_VIDEO_PORT_KEY = "c64u_stream_video_port";
+const STREAM_AUDIO_PORT_KEY = "c64u_stream_audio_port";
+const STREAM_NETWORK_BUFFER_MS_KEY = "c64u_stream_network_buffer_ms";
+const STREAM_NATIVE_VIDEO_ASSEMBLY_KEY = "c64u_stream_native_video_assembly";
+const STREAM_NATIVE_AUDIO_KEY = "c64u_stream_native_audio";
+const STREAM_NATIVE_AUDIO_BUFFER_MS_KEY = "c64u_stream_native_audio_buffer_ms";
+const STREAM_VIDEO_FRAME_RATE_MODE_KEY = "c64u_stream_video_frame_rate_mode";
+const STREAM_INPUT_PRIORITY_KEY = "c64u_stream_input_priority";
 
 export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 200;
 export type NotificationVisibility = "errors-only" | "all";
@@ -230,6 +242,237 @@ export const saveVolumeSliderPreviewIntervalMs = (value: number) => {
 };
 
 export const clampVolumeSliderPreviewIntervalMs = (value: number) => clampVolumeSliderPreviewIntervalMsInternal(value);
+
+// Launch Safety — optional boot-menu answer (Content Explorer capability B).
+// Off by default; only helps machines running a cartridge that shows a boot menu
+// on reset, where a Mount & Load's typed LOAD would otherwise be swallowed.
+export type BootMenuKey = "F1" | "F2" | "F3" | "F4" | "F5" | "F6" | "F7" | "F8" | "RETURN" | "SPACE";
+export const BOOT_MENU_KEYS: readonly BootMenuKey[] = [
+  "F1",
+  "F2",
+  "F3",
+  "F4",
+  "F5",
+  "F6",
+  "F7",
+  "F8",
+  "RETURN",
+  "SPACE",
+];
+export const DEFAULT_BOOT_MENU_ANSWER_ENABLED = false;
+export const DEFAULT_BOOT_MENU_KEY: BootMenuKey = "F7";
+export const DEFAULT_BOOT_SETTLE_MS = 2800;
+export const BOOT_SETTLE_MIN_MS = 1000;
+export const BOOT_SETTLE_MAX_MS = 8000;
+
+const normalizeBootMenuKey = (value: unknown): BootMenuKey =>
+  BOOT_MENU_KEYS.includes(value as BootMenuKey) ? (value as BootMenuKey) : DEFAULT_BOOT_MENU_KEY;
+
+const clampBootSettleMsInternal = (value: number) => {
+  if (Number.isNaN(value)) return DEFAULT_BOOT_SETTLE_MS;
+  return Math.min(BOOT_SETTLE_MAX_MS, Math.max(BOOT_SETTLE_MIN_MS, Math.round(value / 100) * 100));
+};
+
+export const loadBootMenuAnswerEnabled = () =>
+  readBoolean(BOOT_MENU_ANSWER_ENABLED_KEY, DEFAULT_BOOT_MENU_ANSWER_ENABLED);
+
+export const saveBootMenuAnswerEnabled = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(BOOT_MENU_ANSWER_ENABLED_KEY, enabled ? "1" : "0");
+  broadcast(BOOT_MENU_ANSWER_ENABLED_KEY, enabled);
+};
+
+export const loadBootMenuKey = (): BootMenuKey => {
+  if (typeof localStorage === "undefined") return DEFAULT_BOOT_MENU_KEY;
+  return normalizeBootMenuKey(localStorage.getItem(BOOT_MENU_KEY_KEY));
+};
+
+export const saveBootMenuKey = (value: BootMenuKey) => {
+  if (typeof localStorage === "undefined") return;
+  const normalized = normalizeBootMenuKey(value);
+  localStorage.setItem(BOOT_MENU_KEY_KEY, normalized);
+  broadcast(BOOT_MENU_KEY_KEY, normalized);
+};
+
+export const loadBootSettleMs = () => clampBootSettleMsInternal(readNumber(BOOT_SETTLE_MS_KEY, DEFAULT_BOOT_SETTLE_MS));
+
+export const saveBootSettleMs = (value: number) => {
+  if (typeof localStorage === "undefined") return;
+  const clamped = clampBootSettleMsInternal(value);
+  localStorage.setItem(BOOT_SETTLE_MS_KEY, String(clamped));
+  broadcast(BOOT_SETTLE_MS_KEY, clamped);
+};
+
+export const clampBootSettleMs = (value: number) => clampBootSettleMsInternal(value);
+
+// In-image search (Content Explorer capability C): whether media search descends
+// into disk images. Off by default (today's top-level-only behaviour).
+export const DEFAULT_SEARCH_INSIDE_DISKS = false;
+
+export const loadSearchInsideDisks = () => readBoolean(SEARCH_INSIDE_DISKS_KEY, DEFAULT_SEARCH_INSIDE_DISKS);
+
+export const saveSearchInsideDisks = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(SEARCH_INSIDE_DISKS_KEY, enabled ? "1" : "0");
+  broadcast(SEARCH_INSIDE_DISKS_KEY, enabled);
+};
+
+// Live Mirror (Content Explorer D/E): UDP ports the device streams to and the
+// receiver/bridge binds. Defaults 11000 (video) / 11001 (audio); configurable
+// because deployments (or a c64stream instance on 21000/21001) may need others.
+export const DEFAULT_STREAM_VIDEO_PORT = 11000;
+export const DEFAULT_STREAM_AUDIO_PORT = 11001;
+
+const clampPort = (value: number, fallback: number) => {
+  if (Number.isNaN(value)) return fallback;
+  return Math.min(65535, Math.max(1, Math.round(value)));
+};
+
+export const loadStreamVideoPort = () =>
+  clampPort(readNumber(STREAM_VIDEO_PORT_KEY, DEFAULT_STREAM_VIDEO_PORT), DEFAULT_STREAM_VIDEO_PORT);
+
+export const saveStreamVideoPort = (value: number) => {
+  if (typeof localStorage === "undefined") return;
+  const clamped = clampPort(value, DEFAULT_STREAM_VIDEO_PORT);
+  localStorage.setItem(STREAM_VIDEO_PORT_KEY, String(clamped));
+  broadcast(STREAM_VIDEO_PORT_KEY, clamped);
+};
+
+export const loadStreamAudioPort = () =>
+  clampPort(readNumber(STREAM_AUDIO_PORT_KEY, DEFAULT_STREAM_AUDIO_PORT), DEFAULT_STREAM_AUDIO_PORT);
+
+export const saveStreamAudioPort = (value: number) => {
+  if (typeof localStorage === "undefined") return;
+  const clamped = clampPort(value, DEFAULT_STREAM_AUDIO_PORT);
+  localStorage.setItem(STREAM_AUDIO_PORT_KEY, String(clamped));
+  broadcast(STREAM_AUDIO_PORT_KEY, clamped);
+};
+
+/**
+ * Audio jitter / network buffer depth (ms). The Live View player holds each received audio
+ * packet this long before playback, so a slightly-late or reordered packet still lands in
+ * order (and a genuine gap is known in time to be concealed rather than clicking). Default 5 ms
+ * — one-and-a-bit audio packets (~4 ms each) — trades a hair of latency for glitch-free audio
+ * on a healthy LAN. 0 disables buffering (lowest latency, least resilient).
+ */
+export const DEFAULT_STREAM_NETWORK_BUFFER_MS = 5;
+export const MAX_STREAM_NETWORK_BUFFER_MS = 400; // matches c64stream C64_MAX_JITTER_MS
+
+const clampNetworkBufferMs = (value: number) => {
+  if (Number.isNaN(value)) return DEFAULT_STREAM_NETWORK_BUFFER_MS;
+  return Math.min(MAX_STREAM_NETWORK_BUFFER_MS, Math.max(0, Math.round(value)));
+};
+
+export const loadStreamNetworkBufferMs = () =>
+  clampNetworkBufferMs(readNumber(STREAM_NETWORK_BUFFER_MS_KEY, DEFAULT_STREAM_NETWORK_BUFFER_MS));
+
+export const saveStreamNetworkBufferMs = (value: number) => {
+  if (typeof localStorage === "undefined") return;
+  const clamped = clampNetworkBufferMs(value);
+  localStorage.setItem(STREAM_NETWORK_BUFFER_MS_KEY, String(clamped));
+  broadcast(STREAM_NETWORK_BUFFER_MS_KEY, clamped);
+};
+
+/**
+ * Native video assembly (Live View fast path). When on (default), the Android StreamUdp plugin
+ * assembles VIC datagrams into whole frames natively and crosses the Capacitor bridge once per
+ * FRAME (~50/s PAL) instead of once per PACKET (~3400/s) — the per-event bridge overhead was the
+ * hard cap that held the mirror to ~20–30 fps. Off falls back to the per-packet path (JS assembles
+ * frames), for A/B measurement or as an escape hatch. Native-only; the web/Docker WebSocket bridge
+ * is unaffected.
+ */
+export const DEFAULT_STREAM_NATIVE_VIDEO_ASSEMBLY = true;
+
+export const loadStreamNativeVideoAssembly = () =>
+  readBoolean(STREAM_NATIVE_VIDEO_ASSEMBLY_KEY, DEFAULT_STREAM_NATIVE_VIDEO_ASSEMBLY);
+
+export const saveStreamNativeVideoAssembly = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(STREAM_NATIVE_VIDEO_ASSEMBLY_KEY, enabled ? "1" : "0");
+  broadcast(STREAM_NATIVE_VIDEO_ASSEMBLY_KEY, enabled);
+};
+
+/**
+ * Native low-latency audio (Live View). When on (default), decoded PCM is played through a native
+ * Android `AudioTrack` in low-latency mode instead of the WebAudio player. WebAudio needs an ~80 ms
+ * scheduling lead-in for gapless output; the native track's fast-mixer buffer is far smaller
+ * (~20–40 ms on the Pixel 4), which is the single largest app-reducible slice of the press→hear
+ * latency. All the audio SMARTS stay in TypeScript — the jitter/reorder buffer, loss concealment,
+ * batching, health stats and A/V-sync analyzer are unchanged; only the final "push these samples to
+ * the speaker" step is native. Off falls back to the WebAudio player (also the web/Docker path,
+ * which has no plugin). Native-only.
+ */
+export const DEFAULT_STREAM_NATIVE_AUDIO = true;
+
+export const loadStreamNativeAudio = () => readBoolean(STREAM_NATIVE_AUDIO_KEY, DEFAULT_STREAM_NATIVE_AUDIO);
+
+export const saveStreamNativeAudio = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(STREAM_NATIVE_AUDIO_KEY, enabled ? "1" : "0");
+  broadcast(STREAM_NATIVE_AUDIO_KEY, enabled);
+};
+
+/**
+ * Native audio buffer depth target (ms) — the native audio latency (with the AudioTrack's non-blocking
+ * writes the buffer fills to ~this depth). The native AudioTrack is fed straight from the plugin's
+ * URGENT_AUDIO receive thread, NOT from JS, so the video paint on the JS thread can't stall the audio
+ * feed — a small buffer holds without underrunning. That lets this sit far below the WebAudio player,
+ * whose buffer BALLOONS under concurrent video (its scheduler queues ahead through every JS-thread
+ * jank): measured ~192 ms watching on the Pixel 4 vs the native target here. 60 ms floors to the
+ * platform-minimum AudioTrack buffer on the Pixel 4 (~52 ms). Internal tunable (no UI), clamped to a
+ * safe range; the AudioTrack always floors it at the platform minimum buffer.
+ */
+export const DEFAULT_STREAM_NATIVE_AUDIO_BUFFER_MS = 60;
+export const MIN_STREAM_NATIVE_AUDIO_BUFFER_MS = 20;
+export const MAX_STREAM_NATIVE_AUDIO_BUFFER_MS = 240;
+
+export const loadStreamNativeAudioBufferMs = () => {
+  const raw = readNumber(STREAM_NATIVE_AUDIO_BUFFER_MS_KEY, DEFAULT_STREAM_NATIVE_AUDIO_BUFFER_MS);
+  if (Number.isNaN(raw)) return DEFAULT_STREAM_NATIVE_AUDIO_BUFFER_MS;
+  return Math.min(MAX_STREAM_NATIVE_AUDIO_BUFFER_MS, Math.max(MIN_STREAM_NATIVE_AUDIO_BUFFER_MS, Math.round(raw)));
+};
+
+/**
+ * Live View video frame-rate mode (spec §11.1). A user *maximum*: `auto` tries full source cadence
+ * and lets the governor back it off under pressure; `100`/`50`/`25` cap the presented rate to
+ * every / every-2nd / every-4th source frame. The governor may still demote below a manual cap to
+ * protect audio (§11.2). Default `auto`.
+ */
+export type StreamVideoFrameRateMode = "auto" | "100" | "50" | "25";
+export const DEFAULT_STREAM_VIDEO_FRAME_RATE_MODE: StreamVideoFrameRateMode = "auto";
+const FRAME_RATE_MODES: readonly StreamVideoFrameRateMode[] = ["auto", "100", "50", "25"] as const;
+
+export const loadStreamVideoFrameRateMode = (): StreamVideoFrameRateMode => {
+  if (typeof localStorage === "undefined") return DEFAULT_STREAM_VIDEO_FRAME_RATE_MODE;
+  const raw = localStorage.getItem(STREAM_VIDEO_FRAME_RATE_MODE_KEY);
+  return FRAME_RATE_MODES.includes(raw as StreamVideoFrameRateMode)
+    ? (raw as StreamVideoFrameRateMode)
+    : DEFAULT_STREAM_VIDEO_FRAME_RATE_MODE;
+};
+
+export const saveStreamVideoFrameRateMode = (mode: StreamVideoFrameRateMode) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(STREAM_VIDEO_FRAME_RATE_MODE_KEY, mode);
+  broadcast(STREAM_VIDEO_FRAME_RATE_MODE_KEY, mode);
+};
+
+/**
+ * Input priority (Live View). When on (default), active C64 input (joystick/keyboard/mouse) briefly
+ * sheds the video mirror to a low cadence so the JS thread and the native encoder are free for the
+ * input path — guaranteeing an instant C64 response to a sudden joystick movement even while a
+ * high-fps stream is running (spec priority: joystick > keyboard > audio > video). Video ramps back
+ * up the moment input goes idle. Off = video keeps full cadence regardless of input (useful only for
+ * A/B measurement of the effect). See {@link AvMirrorSession.notifyInputActivity}.
+ */
+export const DEFAULT_STREAM_INPUT_PRIORITY = true;
+
+export const loadStreamInputPriority = () => readBoolean(STREAM_INPUT_PRIORITY_KEY, DEFAULT_STREAM_INPUT_PRIORITY);
+
+export const saveStreamInputPriority = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(STREAM_INPUT_PRIORITY_KEY, enabled ? "1" : "0");
+  broadcast(STREAM_INPUT_PRIORITY_KEY, enabled);
+};
 
 export const loadNotificationVisibility = (): NotificationVisibility => {
   if (typeof localStorage === "undefined") return DEFAULT_NOTIFICATION_VISIBILITY;

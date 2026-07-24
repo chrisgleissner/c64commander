@@ -82,11 +82,30 @@ describe("useRemoteInputSession", () => {
     });
   });
 
+  it("dispatches a joystick move on the tighter frame-aligned window (well before the 40ms drag debounce)", async () => {
+    // Regression guard for the joystick input-latency floor: a single move must reach the wire within
+    // ~one C64 raster frame (JOYSTICK_COALESCE_WINDOW_MS = 16 ms), not sit out the 40 ms window — the
+    // "not responsive to quick thumb changes" lag (steering the mouse in Maniac Mansion). It must not
+    // fire on the SAME synchronous tick (that would over-send a continuous drag); a 16 ms advance fires
+    // it, a 40 ms advance (the old floor) must not be required.
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+    act(() => result.current.setHeldJoystickInputs(new Set(["up"])));
+    expect(sendMachineInputBatchMock).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(16);
+    });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(1);
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({
+      events: [{ kind: "joystick", port: 2, inputs: ["up"], transition: "press" }],
+    });
+  });
+
   it("flushes a single keyboard press on the leading edge, well before the full coalesce window elapses", async () => {
     const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
 
     act(() => result.current.setHeldKeyboardInputs(new Set(["a"])));
-    // Unlike the joystick path above (fixed 40ms wait), a keyboard change on
+    // Unlike the joystick path above (a tight frame-aligned window), a keyboard change on
     // an otherwise-idle session rides LEADING_EDGE_WINDOW_MS (0ms), not
     // COALESCE_WINDOW_MS - advancing by 0ms is enough to fire the timeout.
     await act(async () => {

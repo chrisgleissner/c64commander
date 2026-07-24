@@ -17,6 +17,7 @@ import type { OverallHealthState } from "@/lib/diagnostics/healthModel";
 
 // The connection editor surface reads the keypad/T9 flag; default it off.
 vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlagValue: () => false,
   useFeatureFlags: () => ({ flags: { keypad_input_enabled: false } }),
 }));
 

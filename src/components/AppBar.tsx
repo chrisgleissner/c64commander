@@ -9,6 +9,7 @@
 import type { ReactNode } from "react";
 import { useLayoutEffect, useRef } from "react";
 import { UnifiedHealthBadge } from "@/components/UnifiedHealthBadge";
+import { AvMirrorLivePip } from "@/components/streams/AvMirrorLivePip";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useScreenActivity } from "@/hooks/useScreenActivity";
 import { cn } from "@/lib/utils";
@@ -83,8 +84,12 @@ export function AppBar({ title, subtitle: _subtitle, leading, children }: Props)
           <div className="flex min-h-11 min-w-0 items-center" data-testid="app-bar-title-zone">
             {leading ? leading : <h1 className="c64-header text-xl leading-none truncate">{title}</h1>}
           </div>
-          {/* §8.1 — Unified badge: sole diagnostic/connectivity element in AppBar */}
-          <UnifiedHealthBadge className="self-center" />
+          <div className="flex items-center gap-1">
+            {/* Live A/V mirror indicator — renders only while a stream is active. */}
+            <AvMirrorLivePip />
+            {/* §8.1 — Unified badge: sole diagnostic/connectivity element in AppBar */}
+            <UnifiedHealthBadge className="self-center" />
+          </div>
         </div>
         {children ? <div className="min-w-0">{children}</div> : null}
       </div>

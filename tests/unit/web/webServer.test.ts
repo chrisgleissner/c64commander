@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import http from "node:http";
+import dgram from "node:dgram";
 import { mkdtemp, mkdir, writeFile, rm, chmod } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
@@ -712,6 +713,94 @@ describe("web server platform runtime", () => {
       }),
     });
     expect(ftpDenied.status).toBe(403);
+
+    await server.close();
+  });
+
+  it("bridges UDP datagrams to a WebSocket client when the stream bridge is enabled", async () => {
+    const videoPort = 52123;
+    const server = await startWebServer({
+      PORT: "0",
+      WEB_STREAM_BRIDGE: "1",
+      WEB_STREAM_VIDEO_PORT: String(videoPort),
+      WEB_STREAM_AUDIO_PORT: "52124",
+    });
+
+    const ws = new WebSocket(`${server.baseUrl.replace(/^http/, "ws")}/streams/video`);
+    ws.binaryType = "arraybuffer";
+    const received: Uint8Array[] = [];
+    ws.onmessage = (event) => received.push(new Uint8Array(event.data as ArrayBuffer));
+    await new Promise<void>((resolve, reject) => {
+      ws.onopen = () => resolve();
+      ws.onerror = () => reject(new Error("ws error"));
+    });
+
+    // onopen fires after the server added this client, so a datagram now round-trips.
+    const payload = Buffer.from([0xc6, 0x40, 0x01, 0x02, 0x03]);
+    const sender = dgram.createSocket("udp4");
+    await new Promise<void>((resolve, reject) =>
+      sender.send(payload, videoPort, "127.0.0.1", (err) => (err ? reject(err) : resolve())),
+    );
+
+    const start = Date.now();
+    while (received.length === 0) {
+      if (Date.now() - start > 3000) throw new Error("no bridged datagram received");
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(Buffer.from(received[0])).toEqual(payload);
+
+    sender.close();
+    ws.close();
+    await server.close();
+  });
+
+  it("does not open the stream bridge unless it is enabled", async () => {
+    const server = await startWebServer({ PORT: "0" });
+    const ws = new WebSocket(`${server.baseUrl.replace(/^http/, "ws")}/streams/video`);
+    // With no bridge, the server has no upgrade handler, so the socket is destroyed.
+    const closedWithoutOpen = await new Promise<boolean>((resolve) => {
+      let opened = false;
+      ws.onopen = () => {
+        opened = true;
+      };
+      ws.onerror = () => resolve(!opened);
+      ws.onclose = () => resolve(!opened);
+    });
+    expect(closedWithoutOpen).toBe(true);
+    await server.close();
+  });
+
+  it("gates the stream bridge behind login when a password is configured", async () => {
+    const distDir = await makeTempDir("c64-web-dist-");
+    const configDir = await makeTempDir("c64-web-config-");
+    await writeFile(path.join(distDir, "index.html"), "<html></html>", "utf8");
+    const server = await startWebServer({
+      HOST: "127.0.0.1",
+      PORT: "0",
+      WEB_DIST_DIR: distDir,
+      WEB_CONFIG_DIR: configDir,
+      NODE_ENV: "production",
+      C64U_NETWORK_PASSWORD: "secret",
+      WEB_STREAM_BRIDGE: "1",
+      WEB_STREAM_VIDEO_PORT: "52131",
+      WEB_STREAM_AUDIO_PORT: "52132",
+    });
+
+    // An unauthenticated WebSocket handshake must be cleanly rejected (not hang): the server
+    // returns 401 to the upgrade, so a real client fires error/close without ever opening.
+    const wsUrl = `${server.baseUrl.replace(/^http/, "ws")}/streams/video`;
+    const outcome = await new Promise<"open" | "rejected">((resolve) => {
+      const ws = new WebSocket(wsUrl);
+      const guard = setTimeout(() => resolve("open"), 6000); // treat a hang as a failure to reject
+      const done = (result: "open" | "rejected") => {
+        clearTimeout(guard);
+        resolve(result);
+      };
+      ws.onopen = () => done("open");
+      ws.onerror = () => done("rejected");
+      ws.onclose = () => done("rejected");
+    });
+    expect(outcome).toBe("rejected");
 
     await server.close();
   });

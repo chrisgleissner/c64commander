@@ -13,6 +13,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const SAVED_DEVICES_STORAGE_KEY = "c64u_saved_devices:v1";
 
 vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlagValue: () => false,
   useFeatureFlags: () => ({
     resolved: {
       hvsc_enabled: { id: "hvsc_enabled", value: true },

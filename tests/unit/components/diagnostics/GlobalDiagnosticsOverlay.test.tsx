@@ -16,6 +16,7 @@ import {
 // The overlay renders the real DiagnosticsDialog, whose connection editor reads
 // the keypad/T9 flag; default it off so this test needs no FeatureFlagsProvider.
 vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlagValue: () => false,
   useFeatureFlags: () => ({ flags: { keypad_input_enabled: false } }),
 }));
 

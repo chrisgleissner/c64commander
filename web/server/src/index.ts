@@ -12,6 +12,7 @@ import { readBody, readJsonBody, writeJson, writeText } from "./httpIO.js";
 import { createStaticAssetServer } from "./staticAssets.js";
 import { createAuthState } from "./authState.js";
 import { variant } from "./variant.generated.js";
+import { createStreamBridge, DEFAULT_STREAM_VIDEO_PORT, DEFAULT_STREAM_AUDIO_PORT } from "./streamBridge.js";
 
 type AppConfig = {
   networkPassword: string | null;
@@ -72,6 +73,16 @@ const allowRemoteRestHosts = (() => {
   const value = (process.env.WEB_ALLOW_REMOTE_REST_HOSTS ?? "").trim().toLowerCase();
   return value === "true" || value === "1";
 })();
+
+// A/V mirror stream bridge. Disabled unless WEB_STREAM_BRIDGE is truthy, so the default
+// deployment opens no extra UDP ports. When on, the device streams VIC video / audio to
+// these UDP ports and the bridge relays them to the browser over WebSocket.
+const streamBridgeEnabled = (() => {
+  const value = (process.env.WEB_STREAM_BRIDGE ?? "").trim().toLowerCase();
+  return value === "true" || value === "1";
+})();
+const streamVideoPort = Number(process.env.WEB_STREAM_VIDEO_PORT ?? DEFAULT_STREAM_VIDEO_PORT);
+const streamAudioPort = Number(process.env.WEB_STREAM_AUDIO_PORT ?? DEFAULT_STREAM_AUDIO_PORT);
 
 const appendServerLog = (entry: ServerLogEntry) => {
   serverLogs.unshift(entry);
@@ -651,14 +662,54 @@ export const startWebServer = async () => {
     }
   });
 
+  const streamBridge = streamBridgeEnabled
+    ? createStreamBridge({
+        videoPort: streamVideoPort,
+        audioPort: streamAudioPort,
+        // The server log sink has no "debug" level; keep the bridge's per-connection
+        // debug chatter out and forward only info/warn/error.
+        log: (level, message, details) => {
+          if (level !== "debug") log(level, message, details);
+        },
+      })
+    : null;
+
+  if (streamBridge) {
+    // Only claim WebSocket upgrades on the two stream paths; everything else is destroyed
+    // (the app has no other WebSocket endpoints).
+    server.on("upgrade", (req, socket, _head) => {
+      const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+      // Respect the same login gate as the REST/FTP proxy: an unauthenticated client cannot
+      // open a mirror stream. Browsers send the session cookie on same-origin WS handshakes.
+      if (requiresLogin(config) && !isAuthenticated(req)) {
+        // end() flushes the response before closing (destroy() could drop it).
+        socket.end("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
+        return;
+      }
+      if (!streamBridge.handleUpgrade(req, socket, pathname)) {
+        socket.destroy();
+      }
+    });
+  }
+
   server.once("close", () => {
     clearInterval(cleanupTimer);
+    void streamBridge?.close();
   });
 
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
     server.listen(PORT, HOST, () => resolve());
   });
+
+  if (streamBridge) {
+    // A UDP bind conflict must degrade the mirror, never take down the whole web server.
+    try {
+      await streamBridge.start();
+    } catch (error) {
+      log("warn", "A/V mirror stream bridge failed to start (mirror disabled)", errorDetails(error));
+    }
+  }
 
   log("info", "C64 Commander web server running", {
     host: HOST,

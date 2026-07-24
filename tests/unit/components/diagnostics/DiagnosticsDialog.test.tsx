@@ -37,6 +37,7 @@ vi.mock("@/lib/tracing/traceFormatter", async () => {
 // The connection editor surface reads the keypad/T9 flag; default it off so
 // digit keys insert literal digits (the touch / hardware-keyboard path).
 vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlagValue: () => false,
   useFeatureFlags: () => ({ flags: { keypad_input_enabled: false } }),
 }));
 

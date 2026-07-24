@@ -15,6 +15,7 @@ import { useStreamData } from "../hooks/useStreamData";
 import { buildConfigKey } from "@/pages/home/utils/HomeConfigUtils";
 import { buildStreamEndpointLabel } from "@/lib/config/homeStreams";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { useAvMirror } from "@/hooks/useAvMirror";
 
 interface StreamStatusProps {
   isConnected: boolean;
@@ -23,6 +24,11 @@ interface StreamStatusProps {
 export function StreamStatus({ isConnected }: StreamStatusProps) {
   const { profile } = useDisplayProfile();
   const { configWritePending, updateConfigValue } = useSharedConfigActions();
+  // Live View shares the device's VIC/Audio feeds. While it is receiving one, it takes
+  // precedence: that Streams row is shown read-only with an explanation, and the user's
+  // configured target resumes control the moment Live View stops.
+  const { videoLive, audioLive } = useAvMirror();
+  const isLiveViewFeed = (key: string) => (key === "vic" && videoLive) || (key === "audio" && audioLive);
 
   const {
     streamControlEntries,
@@ -58,11 +64,14 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
           const pending =
             Boolean(configWritePending[buildConfigKey("Data Streams", entry.itemName)]) ||
             Boolean(streamActionPending[entry.key]);
+          const liveViewControlled = isLiveViewFeed(entry.key);
+          const locked = !isConnected || pending || liveViewControlled;
           return (
             <div
               key={entry.key}
               className="rounded-lg border border-border/60 bg-muted/40 px-3 py-2"
               data-testid={`home-stream-row-${entry.key}`}
+              data-live-view-controlled={liveViewControlled ? "true" : undefined}
             >
               <div
                 className="flex items-center justify-between gap-2 text-xs"
@@ -72,7 +81,7 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
                   type="button"
                   className="min-w-0 flex-1 text-left flex items-center gap-2"
                   onClick={() => handleStreamEditOpen(entry.key)}
-                  disabled={!isConnected || pending}
+                  disabled={locked}
                   data-testid={`home-stream-edit-toggle-${entry.key}`}
                   aria-label={`Edit ${entry.label} stream target`}
                 >
@@ -90,29 +99,49 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
                   </span>
                 </button>
                 <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void handleStreamStart(entry.key)}
-                    disabled={!isConnected || pending}
-                    data-testid={`home-stream-start-${entry.key}`}
-                    className="h-6 px-2 text-xs"
-                  >
-                    Start
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void handleStreamStop(entry.key)}
-                    disabled={!isConnected || pending}
-                    data-testid={`home-stream-stop-${entry.key}`}
-                    className="h-6 px-2 text-xs"
-                  >
-                    Stop
-                  </Button>
+                  {liveViewControlled ? (
+                    <span
+                      className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary"
+                      data-testid={`home-stream-liveview-badge-${entry.key}`}
+                    >
+                      Live View
+                    </span>
+                  ) : (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void handleStreamStart(entry.key)}
+                        disabled={locked}
+                        data-testid={`home-stream-start-${entry.key}`}
+                        className="h-6 px-2 text-xs"
+                      >
+                        Start
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void handleStreamStop(entry.key)}
+                        disabled={locked}
+                        data-testid={`home-stream-stop-${entry.key}`}
+                        className="h-6 px-2 text-xs"
+                      >
+                        Stop
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
-              {activeStreamEditorKey === entry.key && (
+              {liveViewControlled && (
+                <p
+                  className="mt-1.5 text-[11px] text-muted-foreground"
+                  data-testid={`home-stream-liveview-note-${entry.key}`}
+                >
+                  Live View is receiving this stream into the app. Your configured target resumes when you stop Live
+                  View.
+                </p>
+              )}
+              {!liveViewControlled && activeStreamEditorKey === entry.key && (
                 <div className="mt-2 rounded-md border border-border/60 bg-background p-2.5">
                   <div
                     className={

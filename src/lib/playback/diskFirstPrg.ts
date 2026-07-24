@@ -8,234 +8,22 @@
 
 import type { C64API } from "@/lib/c64api";
 import { enqueueKeyboardBufferInjection } from "@/lib/remoteInput/kernalFallbackInjector";
-
-const SECTOR_SIZE = 256;
-const FILE_TYPE_MASK = 0x07;
-const PRG_TYPE = 0x02;
+import { layoutForType, listDirectory, readChain, trimErrorTable, type DiskImageType } from "@/lib/disks/diskImage";
 
 const TXTTAB = 0x002b;
 
 const MAX_BASIC_SCAN_STEPS = 2000;
 
-export type DiskImageType = "d64" | "d71" | "d81";
+export type { DiskImageType };
 
-type DiskLayout = {
-  tracks: number;
-  directoryTrack: number;
-  directorySector: number;
-  sectorsPerTrack: (track: number) => number;
-  totalSectors: number;
-  hasErrorTable: boolean;
-};
-
-const sectorsPerTrack1541 = (track: number) => {
-  if (track <= 17) return 21;
-  if (track <= 24) return 19;
-  if (track <= 30) return 18;
-  return 17;
-};
-
-const sectorsPerTrack1571 = (track: number) => {
-  const localTrack = ((track - 1) % 35) + 1;
-  return sectorsPerTrack1541(localTrack);
-};
-
-const sectorsPerTrack1581 = () => 40;
-
-const layoutForType = (type: DiskImageType, fileSize: number): DiskLayout => {
-  if (type === "d64") {
-    for (const tracks of [35, 40]) {
-      const baseSectors = Array.from({ length: tracks }, (_, idx) => sectorsPerTrack1541(idx + 1)).reduce(
-        (sum, value) => sum + value,
-        0,
-      );
-      const baseSize = baseSectors * SECTOR_SIZE;
-      const errorSize = baseSize + baseSectors;
-      if (fileSize === baseSize) {
-        return {
-          tracks,
-          directoryTrack: 18,
-          directorySector: 1,
-          sectorsPerTrack: sectorsPerTrack1541,
-          totalSectors: baseSectors,
-          hasErrorTable: false,
-        };
-      }
-      if (fileSize === errorSize) {
-        return {
-          tracks,
-          directoryTrack: 18,
-          directorySector: 1,
-          sectorsPerTrack: sectorsPerTrack1541,
-          totalSectors: baseSectors,
-          hasErrorTable: true,
-        };
-      }
-    }
-    throw new Error(`Unsupported D64 size: ${fileSize} bytes`);
+const extractFirstPrg = (image: Uint8Array, type: DiskImageType) => {
+  const layout = layoutForType(type, image.byteLength);
+  const first = listDirectory(image, type).find((entry) => entry.type === "PRG");
+  if (!first) {
+    throw new Error("No PRG found in directory");
   }
-
-  if (type === "d71") {
-    const tracks = 70;
-    const baseSectors = Array.from({ length: tracks }, (_, idx) => sectorsPerTrack1571(idx + 1)).reduce(
-      (sum, value) => sum + value,
-      0,
-    );
-    const baseSize = baseSectors * SECTOR_SIZE;
-    const errorSize = baseSize + baseSectors;
-    if (fileSize === baseSize) {
-      return {
-        tracks,
-        directoryTrack: 18,
-        directorySector: 1,
-        sectorsPerTrack: sectorsPerTrack1571,
-        totalSectors: baseSectors,
-        hasErrorTable: false,
-      };
-    }
-    if (fileSize === errorSize) {
-      return {
-        tracks,
-        directoryTrack: 18,
-        directorySector: 1,
-        sectorsPerTrack: sectorsPerTrack1571,
-        totalSectors: baseSectors,
-        hasErrorTable: true,
-      };
-    }
-    throw new Error(`Unsupported D71 size: ${fileSize} bytes`);
-  }
-
-  if (type === "d81") {
-    const baseSectors = 80 * 40;
-    const baseSize = baseSectors * SECTOR_SIZE;
-    const errorSize = baseSize + baseSectors;
-    if (fileSize === baseSize) {
-      return {
-        tracks: 80,
-        directoryTrack: 40,
-        directorySector: 3,
-        sectorsPerTrack: sectorsPerTrack1581,
-        totalSectors: baseSectors,
-        hasErrorTable: false,
-      };
-    }
-    if (fileSize === errorSize) {
-      return {
-        tracks: 80,
-        directoryTrack: 40,
-        directorySector: 3,
-        sectorsPerTrack: sectorsPerTrack1581,
-        totalSectors: baseSectors,
-        hasErrorTable: true,
-      };
-    }
-    throw new Error(`Unsupported D81 size: ${fileSize} bytes`);
-  }
-
-  throw new Error(`Unsupported disk type: ${type}`);
-};
-
-const tsOffset = (layout: DiskLayout, track: number, sector: number) => {
-  if (track < 1 || track > layout.tracks) {
-    throw new Error(`Track out of range: ${track}`);
-  }
-  const maxSector = layout.sectorsPerTrack(track);
-  if (sector < 0 || sector >= maxSector) {
-    throw new Error(`Sector out of range: track ${track} sector ${sector}`);
-  }
-  let offsetSectors = 0;
-  for (let t = 1; t < track; t += 1) {
-    offsetSectors += layout.sectorsPerTrack(t);
-  }
-  return (offsetSectors + sector) * SECTOR_SIZE;
-};
-
-const readSector = (image: Uint8Array, layout: DiskLayout, track: number, sector: number) => {
-  const offset = tsOffset(layout, track, sector);
-  const slice = image.slice(offset, offset + SECTOR_SIZE);
-  if (slice.length !== SECTOR_SIZE) {
-    throw new Error(`Short sector read at track ${track} sector ${sector}`);
-  }
-  return slice;
-};
-
-const decodeDirName = (entryName: Uint8Array) =>
-  String.fromCharCode(...Array.from(entryName))
-    .replace(/\u00a0/g, " ")
-    .trim();
-
-const isPrgDirEntry = (entry: Uint8Array) => {
-  if (entry.length !== 32) return false;
-  const fileType = entry[0];
-  const startTrack = entry[1];
-  if (fileType === 0 || startTrack === 0) return false;
-  return (fileType & FILE_TYPE_MASK) === PRG_TYPE;
-};
-
-const findFirstPrg = (image: Uint8Array, layout: DiskLayout) => {
-  let track = layout.directoryTrack;
-  let sector = layout.directorySector;
-  const visited = new Set<string>();
-
-  while (track !== 0) {
-    const key = `${track}:${sector}`;
-    if (visited.has(key)) break;
-    visited.add(key);
-
-    const sectorData = readSector(image, layout, track, sector);
-    const nextTrack = sectorData[0];
-    const nextSector = sectorData[1];
-
-    for (let i = 0; i < 8; i += 1) {
-      const offset = 2 + i * 32;
-      const entry = sectorData.slice(offset, offset + 32);
-      if (!isPrgDirEntry(entry)) continue;
-      const name = decodeDirName(entry.slice(3, 19));
-      return { track: entry[1], sector: entry[2], name };
-    }
-
-    track = nextTrack;
-    sector = nextSector;
-  }
-
-  throw new Error("No PRG found in directory");
-};
-
-const readPrgChain = (image: Uint8Array, layout: DiskLayout, startTrack: number, startSector: number) => {
-  const out: number[] = [];
-  let track = startTrack;
-  let sector = startSector;
-  const visited = new Set<string>();
-
-  while (track !== 0) {
-    const key = `${track}:${sector}`;
-    if (visited.has(key)) throw new Error("Loop detected while reading PRG sectors");
-    visited.add(key);
-
-    const sectorData = readSector(image, layout, track, sector);
-    const nextTrack = sectorData[0];
-    const nextSector = sectorData[1];
-
-    if (nextTrack === 0) {
-      let used = nextSector;
-      if (used < 1 || used > 254) used = 254;
-      out.push(...sectorData.slice(2, 2 + used));
-      break;
-    }
-
-    out.push(...sectorData.slice(2));
-    track = nextTrack;
-    sector = nextSector;
-  }
-
-  return new Uint8Array(out);
-};
-
-const extractFirstPrg = (image: Uint8Array, layout: DiskLayout) => {
-  const trimmed = layout.hasErrorTable ? image.slice(0, layout.totalSectors * SECTOR_SIZE) : image;
-  const first = findFirstPrg(trimmed, layout);
-  const prgData = readPrgChain(trimmed, layout, first.track, first.sector);
+  const trimmed = trimErrorTable(image, layout);
+  const prgData = readChain(trimmed, layout, first.startTrack, first.startSector);
   if (prgData.length < 2) {
     throw new Error("Extracted PRG is too small");
   }
@@ -333,8 +121,7 @@ const dmaLoadPrg = async (api: C64API, prg: Uint8Array, retries = 5, backoffMs =
 };
 
 export const loadFirstDiskPrgViaDma = async (api: C64API, diskImage: Uint8Array, type: DiskImageType) => {
-  const layout = layoutForType(type, diskImage.byteLength);
-  const { prgData, name } = extractFirstPrg(diskImage, layout);
+  const { prgData, name } = extractFirstPrg(diskImage, type);
   const { loadAddress, endAddressExclusive } = await dmaLoadPrg(api, prgData);
 
   const isBasic = loadAddress === 0x0801 && looksLikeTokenisedBasic(prgData);

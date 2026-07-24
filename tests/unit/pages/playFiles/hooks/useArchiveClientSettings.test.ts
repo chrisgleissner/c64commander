@@ -29,6 +29,7 @@ vi.mock("@/lib/archive/config", () => ({
 }));
 
 vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlagValue: () => false,
   useFeatureFlag: () => ({
     value: settingsState.commoserveEnabled,
   }),

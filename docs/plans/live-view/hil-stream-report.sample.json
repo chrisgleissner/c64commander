@@ -1,0 +1,50 @@
+{
+  "startedAt": "2026-07-24T09:44:46Z",
+  "gates": {
+    "appTotalCpuPctAt100": true,
+    "audioUnderruns": true,
+    "jankyFramesPct": true,
+    "videoLive": true
+  },
+  "serial": "9B081FFAZ001WX",
+  "c64u": {
+    "product": "C64 Ultimate",
+    "firmware": "1.2.0"
+  },
+  "device": {
+    "batteryPct": 99,
+    "batteryTempC": 34.1,
+    "charging": false,
+    "androidRelease": "16",
+    "model": "Pixel 4",
+    "appVersion": "0.9.3-4714e"
+  },
+  "appTitle": "C64 Commander",
+  "measurements": {
+    "cpu": {
+      "nativePoolPct": 0.6,
+      "crRendererPct": 43.2,
+      "appTotalPct": 43.8
+    },
+    "jank": {
+      "totalFrames": 1,
+      "jankyFrames": 0,
+      "jankyPct": 0.0,
+      "missedVsync": 0
+    },
+    "stats": {
+      "fps": 51.0,
+      "rate": "100%",
+      "underruns": 0,
+      "concealed": 4,
+      "residenceP99Ms": 0.0,
+      "presented": 1406,
+      "partial": 0,
+      "repeated": 0,
+      "framesLost": 1
+    }
+  },
+  "jankInconclusive": true,
+  "passed": true,
+  "result": "pass"
+}

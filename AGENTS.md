@@ -372,13 +372,16 @@ unnecessary:
 
 ```ts
 // Bad: prose justifying the cast
-export const createHvscCancellationError = (message = 'HVSC update cancelled'): HvscCancellationError =>
+export const createHvscCancellationError = (message = "HVSC update cancelled"): HvscCancellationError =>
   // Object.assign widens `code` to `string`; the runtime value is the literal code, so the
   // assertion to HvscCancellationError is sound.
-  Object.assign(new Error(message), { code: HVSC_CANCELLATION_CODE, isCancellation: true as const }) as HvscCancellationError;
+  Object.assign(new Error(message), {
+    code: HVSC_CANCELLATION_CODE,
+    isCancellation: true as const,
+  }) as HvscCancellationError;
 
 // Good: build the typed value directly — no cast to defend, so no comment
-export const createHvscCancellationError = (message = 'HVSC update cancelled'): HvscCancellationError => {
+export const createHvscCancellationError = (message = "HVSC update cancelled"): HvscCancellationError => {
   const error = new Error(message) as HvscCancellationError;
   error.code = HVSC_CANCELLATION_CODE;
   error.isCancellation = true;
@@ -578,3 +581,19 @@ Set `JAVA_HOME` to a valid JDK install and avoid hardcoded system paths.
 
 - If a file grows beyond about 600 lines or mixes concerns, split it.
 - If a file approaches 1000 lines, refactoring is expected unless there is a strong documented reason not to.
+
+## Manual authoring — the two-manual split and device terminology
+
+The user manual is **generated** by `scripts/build-manuals.mjs` (`npm run manuals:build`) into `docs/manual/<variant>/…` (the `.md` is tracked; the `.pdf`/`.last-build` are git-ignored). It is emitted once **per variant**, and the two editions have deliberately different scope — write for the right one via the naming helpers, never hard-coded device names.
+
+- **C64 Commander** (`c64commander` variant, `variant.id !== "c64u-remote"`) — the **broad** edition. The controlled machine is **the Ultimate-family device** and covers the **Commodore 64 Ultimate**, the **Ultimate 64 / Elite / Elite II**, and the **Ultimate-II+(L)** — the last being a cartridge that lacks streaming, joystick relay, and other Ultimate-only features, so never assert those unconditionally here. The app runs on a **phone, tablet, or self-hosted web** build (iOS/Android/web).
+- **C64U Remote** (`c64u-remote` variant) — the **specific** edition for a **Commodore 64 Ultimate** driven by a compact keypad **phone**. The exact phone model (currently the Callback 8020) is named **once**, in "Before You Start", then left implicit — do not repeat it, so the manual survives new supported handsets.
+
+**Device terminology — one machine, named consistently:**
+
+- The controlled machine is **one device**. The C64 Ultimate (and its siblings) **is** the C64 — never write "the Ultimate" and "the C64" as if they were two separate things (e.g. _"the Ultimate can send what your C64 is doing"_ is wrong).
+- Refer to the running machine as **"your C64"** for what it does (memory, screen, sound, drives, streams, printer emulation), and as **`targetDeviceShortName(variant)`** ("the connected Ultimate-family device" / "the Commodore 64 Ultimate") only where the **hardware/model or connection** genuinely matters (compatibility, firmware, password, network setup).
+- Use **`appDeviceName(variant)`** ("phone or tablet" / "phone") for the device running the app, and precise **model names** (Commodore 64 Ultimate, Ultimate 64 Elite II, Ultimate-II+(L)) only in firmware/compatibility passages.
+- New manual prose must go through these helpers, not literal device names. The `buildManuals` unit test enforces some of this (e.g. the broad edition must not name the specific phone).
+
+**Live View** is a first-class chapter (In Depth → "Live View", 6.2, right after Remote Input), not a Content-Explorer sub-section. Keep the immersive keypad keystroke table (pan/zoom/fit/mode) accurate to `RemoteInputSheet`'s `handlePhysicalKeyDown` mapping.
