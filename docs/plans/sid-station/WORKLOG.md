@@ -132,3 +132,29 @@ _(append entries below as tasks/gates complete — newest last)_
   neighbor edges + similarity byte + sentinel, DAG rejection, v1 3-byte rows).
   prettier + eslint clean.
 - Gate: infra for G1/G3 (feeds the M0.3 parser + M2 engine tests).
+
+### 2026-07-24 — M0.3 `sidcorrTiny.ts` parser + cold→hot transform (+ golden)
+- Task: Zero-copy parser + one-time cold→hot transform (spec §2.6, §6.1) — RED→GREEN.
+- Files: `src/lib/sidRadio/sidcorrTiny.ts` (new), `tests/unit/sidRadio/sidcorrTiny.test.ts`
+  (new — 12 synthetic + 1 opt-in golden).
+- Decisions: Header validation (magic/version{1,2}/neighbors==3/bounds/`fileIdentityBytes
+  == fileCount*6`). v1↔v2 detected from offsets/lengths exactly like the reference decoder
+  (`hasNeighborSimilarity`, `hasPackedRatings`). Cold→hot: expand u24 targets → aligned
+  `Uint32Array` (hot sentinel `0xFFFFFFFF`; also treats `raw>=trackCount` as empty), aligned
+  copies of style-mask/ratings (styleMaskOffset is odd on the real bundle so a Uint16Array
+  *view* is impossible — copy instead), build the reverse CSR once, and a `md5_48→fileOrdinal`
+  map for O(1) seed resolution. `resolveTrack` uses upper_bound over `fileTrackStart`.
+- Commands + evidence:
+  - `npx vitest run tests/unit/sidRadio/sidcorrTiny.test.ts` → 12 passed, 1 skipped
+    (magic/version/truncation/out-of-bounds rejection; neighbour expand + hot sentinel;
+    aligned mask/ratings; reverse CSR sources; resolveTrack (fileOrdinal, songIndex, md5_48);
+    md5_48→ordinals; v1 compat).
+  - `SIDCORR_REAL=1 npx vitest run … -t "real bundle"` → **1 passed** (G1 host-side): parses
+    the real 1.8 MB bundle, version 2, file_count 60571, track_count 87073, 9 styles in order,
+    reverseSource.length == edgeCount.
+  - Real-bundle timing (vite-node, min of 5): parse+reverse **38.9 ms** (host), reverseIndex
+    3.8 ms, **261,213** edges, memoryEstimate **5.00 MB** (< ~8 MB target §2.6). Device budget
+    (<1500 ms) is HIL measured-then-pinned in M2.
+  - `eslint` + `tsc -p tsconfig.app.json --noEmit` → clean.
+- Gate: **G1 (host + web/Node parse) proven**; G1 Android/iOS device-load is the M0.5 worker
+  spike; G3 partial (pure, worker-ready). G2 (`md5_48→virtualPath` on device) is M0.4.
