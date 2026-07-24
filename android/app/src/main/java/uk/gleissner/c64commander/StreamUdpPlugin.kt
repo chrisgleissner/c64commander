@@ -9,7 +9,12 @@
 package uk.gleissner.c64commander
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioManager
+import android.media.AudioTrack
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.Process
 import android.util.Base64
 import android.util.Log
@@ -53,6 +58,15 @@ class StreamUdpPlugin : Plugin() {
   private val executor = Executors.newCachedThreadPool()
   private val logTag = "StreamUdpPlugin"
   private var multicastLock: WifiManager.MulticastLock? = null
+
+  /**
+   * Native low-latency audio sink. The whole audio pipeline (jitter/reorder buffer, loss
+   * concealment, batching, health stats, A/V-sync analyzer) stays in the TypeScript layer; this is
+   * only the final speaker sink, opened/written/closed by JS. Guarded by `audioSinkLock` because
+   * open/write/close arrive on the Capacitor bridge thread(s).
+   */
+  private val audioSinkLock = Any()
+  private var audioSink: AudioSink? = null
 
   /** Test seam: monotonic clock (nanoseconds) stamped at socket receive. Default: `System.nanoTime`. */
   internal var clockNanos: () -> Long = { System.nanoTime() }
@@ -190,6 +204,65 @@ class StreamUdpPlugin : Plugin() {
     call.resolve(JSObject())
   }
 
+  @PluginMethod
+  fun openAudioTrack(call: PluginCall) {
+    val sampleRate = call.getInt("sampleRate") ?: DEFAULT_AUDIO_SAMPLE_RATE
+    // Requested buffer depth (ms). With non-blocking writes the buffer fills to ~this depth, so it is
+    // the audio latency the sink targets, floored at the platform minimum. Absent → the platform min.
+    val bufferMs = call.getInt("bufferMs") ?: 0
+    try {
+      synchronized(audioSinkLock) {
+        audioSink?.close()
+        val sink = AudioSink(sampleRate, bufferMs)
+        audioSink = sink
+        val result = JSObject()
+        result.put("sampleRate", sampleRate)
+        result.put("bufferMs", sink.bufferCapacityMs)
+        call.resolve(result)
+      }
+    } catch (error: Exception) {
+      Log.w(logTag, "openAudioTrack failed (rate=$sampleRate)", error)
+      call.reject("openAudioTrack failed: ${error.message}", error)
+    }
+  }
+
+  @PluginMethod
+  fun writeAudioTrack(call: PluginCall) {
+    val data = call.getString("data")
+    if (data == null) {
+      call.reject("data is required")
+      return
+    }
+    // Decode outside the lock (base64 is the only heavy step); the write itself is non-blocking.
+    val pcm = Base64.decode(data, Base64.NO_WRAP)
+    val stats: AudioSink.Stats =
+      synchronized(audioSinkLock) { audioSink?.write(pcm) } ?: AudioSink.Stats.ZERO
+    val result = JSObject()
+    result.put("bufferedMs", stats.bufferedMs)
+    result.put("underruns", stats.underruns)
+    call.resolve(result)
+  }
+
+  @PluginMethod
+  fun readAudioStats(call: PluginCall) {
+    // The governor's audio-headroom signal. Cheap read (buffer depth + underruns); polled ~4 Hz by JS
+    // since native now feeds playback and JS no longer sees per-write stats.
+    val stats = synchronized(audioSinkLock) { audioSink?.stats() } ?: AudioSink.Stats.ZERO
+    val result = JSObject()
+    result.put("bufferedMs", stats.bufferedMs)
+    result.put("underruns", stats.underruns)
+    call.resolve(result)
+  }
+
+  @PluginMethod
+  fun closeAudioTrack(call: PluginCall) {
+    synchronized(audioSinkLock) {
+      audioSink?.close()
+      audioSink = null
+    }
+    call.resolve(JSObject())
+  }
+
   private fun receiveLoop(name: String, socket: DatagramSocket) {
     raiseThreadPriority(name)
     // VIC packets are ~780 bytes and audio ~770; 2048 leaves ample headroom.
@@ -212,6 +285,21 @@ class StreamUdpPlugin : Plugin() {
         val arrivalNanos = clockNanos()
         val encoded = Base64.encodeToString(packet.data, packet.offset, packet.length, Base64.NO_WRAP)
         emitDatagram(name, encoded, arrivalNanos / 1_000_000.0)
+        // Native low-latency audio: feed the AudioTrack DIRECTLY from this URGENT_AUDIO receive
+        // thread when a sink is open — playback never crosses the JS bridge, so there is no per-packet
+        // bridge traffic to stall the JS analyzer/render loop and no video-paint contention on the
+        // audio feed. JS still receives the datagram above (for the A/V-sync analyzer); it just no
+        // longer drives playback. Strip the 2-byte seq and keep whole stereo frames.
+        if (name == "audio") {
+          synchronized(audioSinkLock) {
+            audioSink?.let { sink ->
+              val pcmOffset = packet.offset + AUDIO_SEQ_BYTES
+              val avail = packet.length - AUDIO_SEQ_BYTES
+              val pcmLen = avail - (avail % AUDIO_BYTES_PER_FRAME)
+              if (pcmLen > 0) sink.writeRaw(packet.data, pcmOffset, pcmLen)
+            }
+          }
+        }
         // Count a completed frame when this datagram carries the last-line flag (cheap header peek),
         // and track frame-number gaps, so the per-second measurement log reports frames/s AND frame
         // loss even on the per-packet path (JS still does the authoritative assembly + loss counting).
@@ -472,14 +560,166 @@ class StreamUdpPlugin : Plugin() {
       }
     }
     sockets.clear()
+    synchronized(audioSinkLock) {
+      audioSink?.close()
+      audioSink = null
+    }
     releaseMulticastLock()
     executor.shutdownNow()
+  }
+
+  /**
+   * The native low-latency speaker sink: a thin wrapper over an `AudioTrack` in streaming +
+   * (API 26+) `PERFORMANCE_MODE_LOW_LATENCY` mode. Deliberately dumb — it plays whatever interleaved
+   * stereo S16LE PCM JS hands it and reports its buffer depth. All sequencing / concealment / jitter
+   * buffering is the TypeScript layer's job, so this stays a small adapter.
+   *
+   * PCM is fed at the source rate ({@link DEFAULT_AUDIO_SAMPLE_RATE}); AudioTrack resamples to the
+   * device output rate internally (continuous, drift-free — no clicks), so there is no clock-recovery
+   * logic to own here. Writes are NON-blocking: in steady state the realtime source fits the buffer;
+   * a transient burst that overflows is dropped (we are ahead, never starving) and the sink re-levels.
+   */
+  private class AudioSink(sampleRate: Int, requestedBufferMs: Int = 0) {
+    data class Stats(val bufferedMs: Double, val underruns: Int) {
+      companion object {
+        val ZERO = Stats(0.0, 0)
+      }
+    }
+
+    private val sampleRate = sampleRate
+    private val track: AudioTrack
+    private val bufferFrames: Int
+    /** Frames to pre-buffer before starting playback — the cushion that absorbs JS-feed stalls. */
+    private val primeFrames: Int
+    /** Total stereo frames handed to AudioTrack (for the buffer-depth estimate). */
+    private var framesWritten: Long = 0
+    /** False until enough is buffered to start playback with a cushion (deferred `play()`). */
+    private var started = false
+
+    /** How much audio the AudioTrack buffer can hold (ms) — its worst-case added latency. */
+    val bufferCapacityMs: Double
+
+    init {
+      val minBytes = AudioTrack.getMinBufferSize(sampleRate, CHANNEL_CONFIG, ENCODING)
+      // getMinBufferSize returns ERROR (-1) / ERROR_BAD_VALUE (-2) on an unsupported config. With
+      // non-blocking writes the buffer fills to ~capacity, so the capacity IS the added latency. The
+      // platform minimum is the lowest-latency depth, but under concurrent VIDEO the JS thread paints
+      // frames and stalls the audio feed, so too small a buffer underruns and the governor thrashes;
+      // the caller requests a depth (floored at the platform min) that trades a little latency for a
+      // stall margin — measured on the Pixel 4 to stay well under the WebAudio player's ~109 ms.
+      val minBufferBytes = if (minBytes > 0) minBytes else FALLBACK_BUFFER_BYTES
+      val bufferBytes = if (requestedBufferMs > 0) maxOf(minBufferBytes, msToBytes(sampleRate, requestedBufferMs)) else minBufferBytes
+      bufferFrames = bufferBytes / BYTES_PER_FRAME
+      bufferCapacityMs = bufferFrames * 1000.0 / sampleRate
+      // Pre-roll a small cushion before play() so the mixer never pulls silence at start (that would
+      // count HAL underruns); capped at the capacity so a tiny min buffer still starts.
+      primeFrames = (msToBytes(sampleRate, PRIME_MS) / BYTES_PER_FRAME).coerceAtMost(bufferFrames)
+      val builder =
+        AudioTrack.Builder()
+          .setAudioAttributes(
+            AudioAttributes.Builder()
+              .setUsage(AudioAttributes.USAGE_MEDIA)
+              .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+              .build(),
+          )
+          .setAudioFormat(
+            AudioFormat.Builder()
+              .setEncoding(ENCODING)
+              .setSampleRate(sampleRate)
+              .setChannelMask(CHANNEL_CONFIG)
+              .build(),
+          )
+          .setBufferSizeInBytes(bufferBytes)
+          .setTransferMode(AudioTrack.MODE_STREAM)
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        builder.setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
+      }
+      track = builder.build()
+      // NB: play() is deferred to the first write that fills the prime cushion (see write()).
+    }
+
+    /** Write already-decoded interleaved S16LE PCM (base64 path from JS). */
+    fun write(pcm: ByteArray): Stats {
+      writeRaw(pcm, 0, pcm.size)
+      return stats()
+    }
+
+    /**
+     * Feed a seq-stripped, frame-aligned PCM slice straight from the native receive thread — the
+     * low-latency path that never crosses the JS bridge. Non-blocking: a short write means the buffer
+     * is full (we are ahead of realtime), and the unwritten tail is intentionally dropped, not retried.
+     */
+    fun writeRaw(data: ByteArray, offset: Int, length: Int) {
+      if (length <= 0) return
+      val written = track.write(data, offset, length, AudioTrack.WRITE_NON_BLOCKING)
+      if (written > 0) framesWritten += (written / BYTES_PER_FRAME).toLong()
+      // Start playback only once a cushion is buffered, so the first feed hiccup can't dry the track
+      // immediately — the whole point of a low-latency buffer is to stay just barely ahead.
+      if (!started && framesWritten >= primeFrames) {
+        track.play()
+        started = true
+      }
+    }
+
+    /** Current buffer depth + underruns (read by the governor via readAudioStats). */
+    fun stats(): Stats = Stats(bufferedMs(), underruns())
+
+    /** PCM still queued ahead of the playback head (ms). 0 when drained. */
+    private fun bufferedMs(): Double {
+      // playbackHeadPosition is a 32-bit frame counter; it will not wrap within a session
+      // (2^31 frames / 48 kHz ≈ 12 h). framesWritten − head = frames not yet played.
+      val head = track.playbackHeadPosition.toLong()
+      val queued = (framesWritten - head).coerceAtLeast(0)
+      return queued * 1000.0 / sampleRate
+    }
+
+    private fun underruns(): Int =
+      // underrunCount is API 24+; wrap defensively — a few HALs (and test shadows) don't back it.
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        try {
+          track.underrunCount
+        } catch (error: Exception) {
+          0
+        }
+      } else {
+        0
+      }
+
+    fun close() {
+      try {
+        if (started) track.pause()
+        track.flush()
+        track.release()
+      } catch (error: Exception) {
+        Log.d("StreamUdpPlugin", "AudioSink close ignored", error)
+      }
+    }
+
+    private companion object {
+      private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_OUT_STEREO
+      private const val ENCODING = AudioFormat.ENCODING_PCM_16BIT
+      private const val BYTES_PER_FRAME = 4 // 2 channels * S16
+      // Only used if getMinBufferSize reports an error: ~40 ms of stereo S16 @ ~48 kHz.
+      private const val FALLBACK_BUFFER_BYTES = 8192
+      // Pre-roll before playback starts — just enough to avoid pulling silence at the very start.
+      private const val PRIME_MS = 24
+
+      // Frame-aligned by construction (frames first, then × frame size): AudioTrack rejects a buffer
+      // size that is not a whole number of stereo frames with "Invalid audio buffer size".
+      private fun msToBytes(sampleRate: Int, ms: Int): Int = (sampleRate.toLong() * ms / 1000).toInt() * BYTES_PER_FRAME
+    }
   }
 
   companion object {
     // OS socket receive-buffer request (2 MB) — ~0.8 s of video at the 2.6 MB/s wire rate, ample
     // headroom for a scheduling/GC gap. The kernel may clamp it to net.core.rmem_max.
     private const val RECV_BUFFER_BYTES = 2 * 1024 * 1024
+
+    // C64U PAL audio sample rate (rounded to int for AudioTrack; source of truth: audioStream.ts).
+    private const val DEFAULT_AUDIO_SAMPLE_RATE = 47983
+    // Audio wire format: u16 LE seq prefix, then interleaved stereo S16 (4 bytes/frame).
+    private const val AUDIO_SEQ_BYTES = 2
+    private const val AUDIO_BYTES_PER_FRAME = 4
 
     // Default native keep-rate: present every assembled frame.
     private const val DEFAULT_KEEP_PERMILLE = 1000

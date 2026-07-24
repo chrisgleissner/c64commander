@@ -49,10 +49,19 @@ const CEILING_PERCENT: Record<FrameRateMode, number> = { auto: 100, "100": 100, 
 
 export interface GovernorSignals {
   /**
-   * WebAudio player buffer depth ahead of the audio output clock (ms). The primary headroom
+   * Audio player buffer depth ahead of the audio output clock (ms). The primary headroom
    * signal: as this trends toward 0 the audio is about to run dry. See {@link AudioMirrorPlayer}.
    */
   audioBufferMs: number;
+  /**
+   * The active player's *nominal* operating buffer depth (ms), when it differs from the WebAudio
+   * baseline the config thresholds are tuned to. The native low-latency AudioTrack runs a much
+   * smaller buffer by design (~50 ms vs WebAudio's ~90–110 ms), so the fixed `audioCriticalMs` /
+   * `audioHealthyMs` would read a healthy native buffer as permanently critical (never priming,
+   * losing audio-underrun demotes). When set, the governor scales its critical/healthy thresholds to
+   * this depth. Absent → the config's absolute thresholds apply unchanged (the WebAudio path).
+   */
+  audioNominalBufferMs?: number;
   /** Player underruns observed since the previous tick (audio output ran dry between chunks). */
   audioUnderruns: number;
   /**
@@ -187,9 +196,10 @@ export class StreamGovernor {
   update(signals: GovernorSignals, nowMs: number): GovernorState {
     const before = this.effective;
     const audioActive = signals.audioActive !== false;
+    const healthyMs = this.audioHealthyMs(signals);
     // Latch "primed" the first time active audio reaches a healthy depth — before that the buffer is
     // filling (or absent), so its low value is warmup, not starvation, and must not drive a demote.
-    if (audioActive && signals.audioBufferMs >= this.config.audioHealthyMs) this.primed = true;
+    if (audioActive && signals.audioBufferMs >= healthyMs) this.primed = true;
     const audioReady = audioActive && this.primed;
 
     const demoteReason = this.pressureReason(signals, audioReady);
@@ -210,8 +220,7 @@ export class StreamGovernor {
     // long enough AND the cooldown since the last promotion has elapsed (anti-oscillation). When
     // audio is ready its buffer must be healthy; when it isn't (video-only / priming) the audio
     // buffer is not a gate, so a latency/queue demote can still recover.
-    const audioHealthy =
-      !audioReady || (signals.audioBufferMs >= this.config.audioHealthyMs && signals.audioUnderruns === 0);
+    const audioHealthy = !audioReady || (signals.audioBufferMs >= healthyMs && signals.audioUnderruns === 0);
     if (!audioHealthy) {
       this.headroomSinceMs = null;
       return this.state;
@@ -242,7 +251,7 @@ export class StreamGovernor {
    */
   private pressureReason(s: GovernorSignals, audioReady: boolean): string | null {
     if (audioReady && s.audioUnderruns > 0) return `audio underrun ×${s.audioUnderruns}`;
-    if (audioReady && s.audioBufferMs <= this.config.audioCriticalMs)
+    if (audioReady && s.audioBufferMs <= this.audioCriticalMs(s))
       return `audio buffer ${Math.round(s.audioBufferMs)}ms`;
     const approach = this.config.approachFraction;
     if (s.localLatencyP99Ms !== undefined && s.localLatencyP99Ms >= this.config.localLatencyBudgetMs * approach)
@@ -252,6 +261,28 @@ export class StreamGovernor {
     if (s.frameProcessingP95Ms !== undefined && s.frameProcessingP95Ms >= this.config.frameProcessingBudgetMs)
       return `frame proc ${Math.round(s.frameProcessingP95Ms)}ms`;
     return null;
+  }
+
+  /**
+   * The buffer depth (ms) that counts as healthy for the active player. The config value is tuned to
+   * the WebAudio player. The native AudioTrack plays on its own OS thread and runs an intentionally
+   * small, noisy buffer (~20–50 ms, swinging with the JS feed cadence), so its depth is a poor gate:
+   * using the WebAudio bar (or any scaled fraction of its capacity) leaves the governor permanently
+   * "unhealthy", pinning video to the floor and never recovering. For native, UNDERRUNS are the true
+   * "audio is struggling" signal, so the depth bar is dropped to 0 — audio primes immediately and
+   * promotion is gated on being underrun-free, not on the noisy depth. See {@link update}.
+   */
+  private audioHealthyMs(s: GovernorSignals): number {
+    return s.audioNominalBufferMs === undefined ? this.config.audioHealthyMs : 0;
+  }
+
+  /**
+   * The buffer depth (ms) at/below which audio is critical. For WebAudio, the config value. For the
+   * native sink (nominal reported), 0 — only a literally-dry buffer or an underrun demotes, because
+   * the small native depth is expected, not starvation. Underruns remain the primary demote trigger.
+   */
+  private audioCriticalMs(s: GovernorSignals): number {
+    return s.audioNominalBufferMs === undefined ? this.config.audioCriticalMs : 0;
   }
 
   private commit(kind: GovernorTransitionKind, beforeEffective: number, nowMs: number, reason: string): void {

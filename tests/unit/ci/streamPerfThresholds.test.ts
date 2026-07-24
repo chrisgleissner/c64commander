@@ -48,6 +48,21 @@ describe("committed stream perf thresholds", () => {
     expect(e.videoInputToDisplayP99Ms).toBeGreaterThan(e.audioInputToHearP99Ms);
   });
 
+  it("gates the native low-latency audio buffer below the WebAudio baseline", () => {
+    const p = cfg.audioPlaybackLatency;
+    expect(p).toBeTruthy();
+    // The HIL underrun gate is a regression-flood catch, not the ideal (that is the deterministic
+    // host audioContinuity gate = 0); it must stay a small, bounded tolerance.
+    expect(p.thresholds.audioUnderrunsMax).toBeGreaterThan(0);
+    expect(p.thresholds.audioUnderrunsMax).toBeLessThanOrEqual(30);
+    // The native buffer must stay well under the measured WebAudio depth (its whole point) …
+    expect(p.thresholds.nativeAudioBufferMaxMs).toBeLessThan(p.measured.webAudioBufferMs);
+    // … and the recorded native measurement must sit under its own gate with headroom.
+    expect(p.measured.nativeAudioBufferMs).toBeLessThanOrEqual(p.thresholds.nativeAudioBufferMaxMs);
+    // A real reduction, not a rounding win: at least ~1.5x lower than WebAudio.
+    expect(p.measured.nativeAudioBufferMs * 1.5).toBeLessThanOrEqual(p.measured.webAudioBufferMs);
+  });
+
   it("keeps the zero-tolerance audio + video gates at zero (§16.2/§16.3)", () => {
     const a = cfg.audioContinuity.thresholds;
     expect(a.audioCallbackUnderruns).toBe(0);

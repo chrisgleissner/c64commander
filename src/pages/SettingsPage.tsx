@@ -132,6 +132,8 @@ import {
   saveStreamNetworkBufferMs,
   loadStreamNativeVideoAssembly,
   saveStreamNativeVideoAssembly,
+  loadStreamNativeAudio,
+  saveStreamNativeAudio,
   loadNotificationVisibility,
   saveNotificationVisibility,
   loadNotificationDurationMs,
@@ -359,6 +361,7 @@ export default function SettingsPage() {
   const [streamAudioPort, setStreamAudioPort] = useState<number>(loadStreamAudioPort);
   const [streamNetworkBufferMs, setStreamNetworkBufferMs] = useState<number>(loadStreamNetworkBufferMs);
   const [streamNativeVideoAssembly, setStreamNativeVideoAssembly] = useState<boolean>(loadStreamNativeVideoAssembly);
+  const [streamNativeAudio, setStreamNativeAudio] = useState<boolean>(loadStreamNativeAudio);
   const [volumeSliderPreviewIntervalMs, setVolumeSliderPreviewIntervalMs] = useState(
     loadVolumeSliderPreviewIntervalMs(),
   );
@@ -2106,6 +2109,28 @@ export default function SettingsPage() {
                           const next = checked === true;
                           setStreamNativeVideoAssembly(next);
                           saveStreamNativeVideoAssembly(next);
+                        }}
+                      />
+                    </div>
+                    <div className="col-span-2 flex items-start justify-between gap-3 min-w-0">
+                      <div className="min-w-0">
+                        <Label htmlFor="settings-stream-native-audio" className="font-medium">
+                          Low-latency audio (native)
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Play Live View audio through a native low-latency track instead of the browser audio engine,
+                          cutting the delay between a keypress and the sound you hear. Leave on; turn off only to
+                          compare or if audio misbehaves. Android only.
+                        </p>
+                      </div>
+                      <Checkbox
+                        id="settings-stream-native-audio"
+                        data-testid="settings-stream-native-audio"
+                        checked={streamNativeAudio}
+                        onCheckedChange={(checked) => {
+                          const next = checked === true;
+                          setStreamNativeAudio(next);
+                          saveStreamNativeAudio(next);
                         }}
                       />
                     </div>

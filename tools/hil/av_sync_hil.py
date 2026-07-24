@@ -125,6 +125,13 @@ def main():
     time.sleep(15)
     print("  video:", text("av-mirror-fps"), "| controls:", text("av-mirror-controls"))
 
+    # Audio player buffer depth — the native AudioTrack's low-latency win (default on). Read from the
+    # live Stats; this is the slice of press→hear that the native sink shrinks (WebAudio ~109 ms →
+    # native ~52 ms). It sits AFTER wire arrival, so it is not in the press→hear (wire) number.
+    audio_buffer_ms = parse_ms(text("stream-stats-audio-buffer"))
+    audio_underruns = int((text("stream-stats-underruns") or "0").split()[0])
+    print(f"  audio player buffer: {audio_buffer_ms} ms | underruns: {audio_underruns}")
+
     # 2) Automatic soak — periodic aligned pops; assert matched pops and report offset P99.
     click("live-view-expand"); time.sleep(1)
     click("av-sync-toggle"); time.sleep(0.5)  # the A/V Sync section is collapsed by default
@@ -162,11 +169,14 @@ def main():
 
     # Assert the committed AMBITIOUS-BUT-ACHIEVABLE end-to-end budgets (§16.1, reframed). These are
     # measured on real hardware and gated with headroom; a regression here fails the local build.
-    gates = json.load(open(THRESHOLDS_PATH))["endToEnd"]["thresholds"]
+    cfg = json.load(open(THRESHOLDS_PATH))
+    gates = cfg["endToEnd"]["thresholds"]
     checks = {
         "videoInputToDisplayP99Ms": (see_p99, gates["videoInputToDisplayP99Ms"]),
         "audioInputToHearP99Ms": (hear_p99, gates["audioInputToHearP99Ms"]),
         "avOffsetP99Ms": (max(v for v in (offset_p99, soak_offset_p99) if v is not None), gates["avOffsetP99Ms"]),
+        # Native low-latency audio: the player buffer must stay well under the WebAudio baseline.
+        "nativeAudioBufferMaxMs": (audio_buffer_ms, cfg["audioPlaybackLatency"]["thresholds"]["nativeAudioBufferMaxMs"]),
     }
     failed = []
     for name, (measured, limit) in checks.items():
@@ -174,6 +184,13 @@ def main():
         print(f"  gate {name}: {measured} ms <= {limit} ms -> {'PASS' if ok else 'FAIL'}")
         if not ok:
             failed.append(name)
+    # Native audio underruns — a REGRESSION-flood catch only (AudioTrack warmup + the HIL's own heavy
+    # polling emit a few; the strict zero-underrun ideal is the deterministic host audioContinuity gate).
+    underruns_max = cfg["audioPlaybackLatency"]["thresholds"]["audioUnderrunsMax"]
+    ok = audio_underruns <= underruns_max
+    print(f"  gate audioUnderrunsMax: {audio_underruns} <= {underruns_max} -> {'PASS' if ok else 'FAIL'}")
+    if not ok:
+        failed.append("audioUnderrunsMax")
     if failed:
         print(f"HIL FAIL: {len(failed)} latency gate(s) exceeded: {', '.join(failed)}", file=sys.stderr)
         sys.exit(1)

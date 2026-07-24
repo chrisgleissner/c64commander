@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from "vitest";
 import { AudioMirrorController, type AudioMirrorSnapshot } from "@/lib/streams/audioMirrorController";
 import type { StreamReceiver, StreamConnectionState } from "@/lib/streams/streamReceiver";
 import { AudioMirrorPlayer } from "@/lib/streams/audioPlayer";
+import type { NativeAudioSink } from "@/lib/streams/audioNativeSink";
 import {
   WebSocketStreamReceiver,
   UnsupportedStreamReceiver,
@@ -61,6 +62,28 @@ const audioPacket = (seq: number) => {
   return p;
 };
 
+const fakeNativeSink = (opens = true) => {
+  let closed = false;
+  // Option C: the sink has no JS write path — the native receive thread feeds the AudioTrack. JS only
+  // opens it, polls stats for the governor, and closes it.
+  const sink = {
+    open: vi.fn(async () => opens),
+    getStats: vi.fn(() => ({ bufferedMs: 30, underruns: 2 })),
+    close: vi.fn(async () => {
+      closed = true;
+    }),
+    get bufferCapacityMs() {
+      return 40;
+    },
+  } as unknown as NativeAudioSink;
+  return {
+    sink,
+    get closed() {
+      return closed;
+    },
+  };
+};
+
 describe("AudioMirrorController", () => {
   it("connects, goes live, plays batched chunks and reports destination to the device", async () => {
     const receiver = new FakeReceiver();
@@ -85,6 +108,79 @@ describe("AudioMirrorController", () => {
     for (let i = 0; i < 8; i += 1) receiver.emit(audioPacket(i));
     expect(player.playChunk).toHaveBeenCalledTimes(1);
     expect(controller.getSnapshot().chunks).toBe(1);
+  });
+
+  it("uses the native sink (not WebAudio) when one is offered and opens; JS drives no playback", async () => {
+    const receiver = new FakeReceiver();
+    const native = fakeNativeSink(true);
+    const player = fakePlayer(true);
+    const analyzed: number[] = [];
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createPlayer: () => player,
+      createNativeSink: () => native.sink,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+      renderAudioForAnalysis: (samples) => analyzed.push(samples.length),
+    });
+
+    await controller.start();
+    receiver.emitState("open");
+    // The native plugin plays the audio; the WebAudio player is never created/used. Datagrams still
+    // feed the A/V-sync analyzer, and JS tracks seq-gap loss for the health counter.
+    for (let i = 0; i < 8; i += 1) receiver.emit(audioPacket(i));
+    expect(player.start).not.toHaveBeenCalled();
+    expect(player.playChunk).not.toHaveBeenCalled();
+    expect(analyzed).toHaveLength(8); // analyzer still fed on the native path
+
+    // The governor headroom signal comes from the native track, not the (absent) player.
+    expect(controller.getSignals().audioBufferMs).toBe(30);
+    expect(controller.getSignals().audioUnderruns).toBe(2);
+
+    await controller.stop();
+    expect(native.sink.close).toHaveBeenCalled();
+  });
+
+  it("counts native audio seq-gap loss for the health counter", async () => {
+    const receiver = new FakeReceiver();
+    const native = fakeNativeSink(true);
+    const snapshots: AudioMirrorSnapshot[] = [];
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createNativeSink: () => native.sink,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: (s) => snapshots.push(s),
+    });
+    await controller.start();
+    receiver.emitState("open");
+    receiver.emit(audioPacket(0));
+    receiver.emit(audioPacket(1));
+    receiver.emit(audioPacket(4)); // gap: 2 and 3 lost
+    expect(controller.getSignals().audioLostPackets).toBe(2);
+    await controller.stop();
+  });
+
+  it("falls back to the WebAudio player when the native sink cannot open", async () => {
+    const receiver = new FakeReceiver();
+    const native = fakeNativeSink(false); // open() resolves false
+    const player = fakePlayer(true);
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createPlayer: () => player,
+      createNativeSink: () => native.sink,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+      networkBufferMs: 0,
+    });
+
+    await controller.start();
+    receiver.emitState("open");
+    expect(player.start).toHaveBeenCalled();
+    for (let i = 0; i < 8; i += 1) receiver.emit(audioPacket(i));
+    expect(player.playChunk).toHaveBeenCalledTimes(1);
   });
 
   it("errors when audio playback is unavailable", async () => {

@@ -435,22 +435,24 @@ When you steer your phone or tablet with a physical keypad, those same keys coul
 
 Press the **menu key** — or the on-screen **Adjust** button — to switch between the two. You are never stranded looking at a frozen game: adjusting view slips quietly back to driving on its own after a short pause. While the border is amber, the keypad moves the view like this:
 
-| Key                                | What it does                 |
-| ---------------------------------- | ---------------------------- |
-| **2**, or D-pad up                 | Pan up                       |
-| **8**, or D-pad down               | Pan down                     |
-| **4**, or D-pad left               | Pan left                     |
-| **6**, or D-pad right              | Pan right                    |
-| **3** or **9**                     | Zoom in                      |
-| **1** or **7**                     | Zoom out                     |
+| Key | What it does |
+| --- | --- |
+| **2**, or D-pad up | Pan up |
+| **8**, or D-pad down | Pan down |
+| **4**, or D-pad left | Pan left |
+| **6**, or D-pad right | Pan right |
+| **3** or **9** | Zoom in |
+| **1** or **7** | Zoom out |
 | **0**, **5**, or the centre/OK key | Fit the whole screen back on |
-| the **menu** key                   | Return to driving the C64    |
+| the **menu** key | Return to driving the C64 |
 
 The same four moves have on-screen buttons too — **＋** and **−** to zoom, **⤢** to fit, and **◎** to turn Follow on and off — so a touchscreen and a keypad reach every control. However large you make the game controls, the picture always stays fully in view above them — the controls never creep up and cover it.
 
 #### Smooth playback, and what it costs
 
 Live View keeps the **sound** running smoothly above everything else. If a packet of audio goes missing on the network it fills the tiny gap so cleanly you will not hear a click, and it never lets the picture run away and leave the sound trailing behind.
+
+The sound also plays through a **fast, low-latency path** so what you hear follows your keypresses closely — the app holds far less sound waiting to play than the ordinary in-app audio does, so the delay is much shorter. This is on by default; if you ever need to compare, or the sound misbehaves on your device, you can switch **Low-latency audio (native)** off in **Settings**.
 
 The **picture** is the demanding part, so you get a say in how much of it to draw. Open **Stats** — it appears under Live View while it is playing — and choose a **Video frame rate**:
 
@@ -509,11 +511,11 @@ For a title that spans several disks, drop the related images into one **group**
 
 ### Content Explorer
 
-Content Explorer is a set of additive tools for working with the programs _inside_ disk images and launching them safely. Each part is optional and independent — turn on only the ones you want in **Settings**, and the rest stay out of the way.
+Content Explorer is a set of additive tools for working with the programs *inside* disk images and launching them safely. Each part is optional and independent — turn on only the ones you want in **Settings**, and the rest stay out of the way.
 
 #### Looking Inside a Disk
 
-Mounting a disk image gives you the whole disk. Disk Explorer instead looks _inside_ one so you can pick a single program to launch. On **Disks**, open a disk image's menu and choose **Open (Disk Explorer)…**; the app lists every file on the disk, each with its type, its size in blocks, and — for a program — its load address.
+Mounting a disk image gives you the whole disk. Disk Explorer instead looks *inside* one so you can pick a single program to launch. On **Disks**, open a disk image's menu and choose **Open (Disk Explorer)…**; the app lists every file on the disk, each with its type, its size in blocks, and — for a program — its load address.
 
 Each launchable file offers three actions:
 
@@ -527,7 +529,7 @@ On by default. You can change it in Settings > Stable Features.
 
 #### Launch Safety
 
-Some setups have a freezer cartridge (Action Replay / Retro Replay style) configured. On those, launching a program directly can occasionally reset into the cartridge's own menu instead — which looks exactly like the app misbehaving. Launch Safety prevents that: around every direct launch it briefly _parks_ the configured cartridge, then restores it afterwards. It never writes to the device's saved (flash) settings, so a power cycle always brings the cartridge back, and when no cartridge is configured it does nothing at all. This happens automatically; there is no per-launch control.
+Some setups have a freezer cartridge (Action Replay / Retro Replay style) configured. On those, launching a program directly can occasionally reset into the cartridge's own menu instead — which looks exactly like the app misbehaving. Launch Safety prevents that: around every direct launch it briefly *parks* the configured cartridge, then restores it afterwards. It never writes to the device's saved (flash) settings, so a power cycle always brings the cartridge back, and when no cartridge is configured it does nothing at all. This happens automatically; there is no per-launch control.
 
 One advanced option sits in **Settings**, under Play and disk behaviour: **Answer cartridge boot menu after reset**. It is off by default and helps only one narrow case — a cartridge that shows a boot menu when the machine resets, which could otherwise swallow the LOAD that Mount & Load types. Turn it on to choose the **menu key** (F1–F8, RETURN, or SPACE) and a **boot settle** time; the app then presses that key after a Mount & Load reset to clear the menu first. Leave it off unless you run such a cartridge.
 
@@ -535,7 +537,7 @@ On by default. You can change it in Settings > Stable Features.
 
 #### Searching Inside Disk Images
 
-By default, searching your media matches disk images by their file name. Turn on **Search inside disk images** — in **Settings**, under Play and disk behaviour — and search also reaches the programs _inside_ your `.d64`, `.d71`, and `.d81` images. A match found inside a disk is shown as **DISK → PROGRAM**, so you can see exactly which disk holds the program you want, then Run or Load it just like any other.
+By default, searching your media matches disk images by their file name. Turn on **Search inside disk images** — in **Settings**, under Play and disk behaviour — and search also reaches the programs *inside* your `.d64`, `.d71`, and `.d81` images. A match found inside a disk is shown as **DISK → PROGRAM**, so you can see exactly which disk holds the program you want, then Run or Load it just like any other.
 
 Optional. Enable it in Settings > Experimental Features.
 
@@ -571,7 +573,6 @@ The panel has three parts, from top to bottom:
 - The **health header** shows the current state (Healthy, Degraded, Unhealthy, or Offline), which device it refers to, and when it was last checked. Tap **Run health check** to test the connection now. The check probes REST, FTP, and Telnet, plus three C64-specific signals (CONFIG, RASTER, and JIFFY), and reports each result with its timing and the overall latency. Expand the header to see every probe in detail.
 
 The CONFIG probe does more than read: it nudges a live setting by a hair, reads it back to confirm the device really applied the change, then restores the original value. On a device with an LED strip — the case light or the keyboard LEDs — you will see the lights **pulse once** as it runs, a tiny visible heartbeat that tells you the connection is alive at a glance.
-
 - The **Filters** bar narrows what you see below. Filter by device, by activity type (Problems, Actions, Logs, Traces), by contributor (App, REST, FTP, Telnet), or by severity (Errors, Warnings, Info). One-tap **Errors only** and **Problems only** shortcuts are there too.
 - The **Activity** list gathers problems, actions, logs, and traces together. Tap any row to expand it for the full details.
 
@@ -674,49 +675,49 @@ The rest of this guide is reference material for when you want the exact answer.
 
 Preferred locations are marked first.
 
-| Feature                                        | Where to find it                                                     | Notes                                                                                                                                                                                                     |
-| ---------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Connect to a device                            | **Startup discovery**, Settings > Connection                         | Use startup discovery first. Use Settings for later edits.                                                                                                                                                |
-| Manual host/IP entry                           | **Startup prompt when no devices are found**, Settings > Connection  | Startup prompt is fastest on first run; Settings is best for saved-device maintenance.                                                                                                                    |
-| Network password                               | **Startup prompt or auth popup**, Settings > Connection              | The app asks only when needed.                                                                                                                                                                            |
-| Switch saved device                            | **Header badge long-press / `#`**, Settings > Connection             | Use Device Switcher for fast switching; Settings for editing.                                                                                                                                             |
-| Reset / Reboot / Pause / Menu                  | **Home > Quick Actions**                                             | Main daily control path.                                                                                                                                                                                  |
-| Power Cycle                                    | **Home > Quick Actions**                                             | Optional. Enable it in Settings > Experimental Features.                                                                                                                                                  |
-| Clear-RAM reboot                               | **Home > Quick Actions**                                             | Optional. Enable it in Settings > Experimental Features.                                                                                                                                                  |
-| Save / Load RAM                                | **Home > Quick Actions**                                             | On by default. You can change it in Settings > Stable Features.                                                                                                                                           |
-| Remote Input                                   | **Home > Quick Actions**, Play (while an item plays)                 | On by default. You can change it in Settings > Stable Features. Joystick needs firmware 1.2.0 or newer on a Commodore 64 Ultimate, or 3.15 or newer on an Ultimate 64; otherwise only Keys are available. |
-| CPU speed and turbo                            | **Home > Quick Config**, Config                                      | Home is preferred for common changes.                                                                                                                                                                     |
-| Video mode and scan lines                      | **Home > Quick Config**, Config                                      | Home is preferred.                                                                                                                                                                                        |
-| Joystick, serial bus, cartridge, user port     | **Home > Quick Config**, Config                                      | Home is preferred.                                                                                                                                                                                        |
-| Drive power, bus, type, reset                  | **Disks**, Home > Drives                                             | Disks is preferred for drive work; Home is good for quick checks.                                                                                                                                         |
-| Mount/eject disks                              | **Disks**, Home > Drives                                             | Disks gives the clearest disk collection view.                                                                                                                                                            |
-| Disk groups and rotation                       | **Disks**                                                            | Set a group in the disk collection, then rotate from drive controls.                                                                                                                                      |
-| Printer controls                               | **Home > Printer**, Config                                           | Home is preferred.                                                                                                                                                                                        |
-| SID mixer                                      | **Home > SID / Audio mixer**, Config > Audio Mixer                   | Home is preferred for live mixing.                                                                                                                                                                        |
-| Streams                                        | **Home > Streams**, Config                                           | Visible when the device exposes streaming support.                                                                                                                                                        |
-| Save/load device config                        | **Home > Config actions**                                            | Use Save to flash when Auto save config is Ask or No, or when you want to force a flash save now.                                                                                                         |
-| App-stored config snapshots                    | **Home > Config actions**                                            | Local app snapshots, separate from device flash.                                                                                                                                                          |
-| Disk Explorer (launch a program inside a disk) | **Disks > disk menu > Open (Disk Explorer)**                         | On by default. You can change it in Settings > Stable Features.                                                                                                                                           |
-| Create a blank disk                            | **Disks > New disk**                                                 | On by default. You can change it in Settings > Stable Features.                                                                                                                                           |
-| Search inside disk images                      | **Settings > Play and disk behavior**                                | Optional. Enable it in Settings > Experimental Features.                                                                                                                                                  |
-| Launch Safety (cartridge parking)              | Automatic; boot-menu answer in **Settings > Play and disk behavior** | On by default. You can change it in Settings > Stable Features.                                                                                                                                           |
-| Live View — Audio Mirror                       | **Settings > Experimental Features**                                 | On by default. You can change it in Settings > Experimental Features.                                                                                                                                     |
-| Live View — Video Mirror                       | **Settings > Experimental Features**                                 | On by default. You can change it in Settings > Experimental Features.                                                                                                                                     |
-| Advanced config file actions                   | **Home > Config actions**                                            | Optional. Enable it in Settings > Experimental Features.                                                                                                                                                  |
-| Advanced drive shortcuts                       | **Home > Drives**                                                    | Optional. Enable it in Settings > Experimental Features.                                                                                                                                                  |
-| Advanced printer shortcuts                     | **Home > Printer**                                                   | Optional. Enable it in Settings > Experimental Features.                                                                                                                                                  |
-| Full configuration tree                        | **Config**                                                           | Use search, open a category, edit rows.                                                                                                                                                                   |
-| Add playlist items                             | **Play > Add items**                                                 | Sources: Local, C64U, HVSC, CommoServe.                                                                                                                                                                   |
-| Playback controls                              | **Play**                                                             | Play, pause, previous/next, shuffle, repeat, duration, and volume.                                                                                                                                        |
-| HVSC preparation                               | **Play**, Settings > HVSC                                            | On by default. You can change it in Settings > Stable Features.                                                                                                                                           |
-| CommoServe                                     | **Play > Add items**, Disks > Add disks, Settings > Online Archive   | On by default. You can change it in Settings > Stable Features.                                                                                                                                           |
-| Demo Mode                                      | **Settings > Connection**                                            | Optional. Enable it in Settings > Stable Features.                                                                                                                                                        |
-| Background playback scheduling                 | **Play**, Android app permissions                                    | Always enabled in this variant.                                                                                                                                                                           |
-| Display profile and theme                      | **Settings > Appearance**                                            | Medium screenshots in this manual match this guide's presentation.                                                                                                                                        |
-| Device Safety                                  | **Settings > Device Safety**                                         | Leave it on Auto (recommended); Auto uses Conservative for a Commodore 64 Ultimate, and Balanced for an Ultimate 64-family device on firmware newer than 3.15. See Device Safety Modes.                   |
-| Diagnostics                                    | **Header badge / `*`**, Settings > Diagnostics                       | Badge is preferred for fast access.                                                                                                                                                                       |
-| Logs, traces, errors, health checks            | **Diagnostics**                                                      | Use filters and Share for support.                                                                                                                                                                        |
-| Built-in help                                  | **Docs**                                                             | Good for quick reminders inside the app.                                                                                                                                                                  |
+| Feature | Where to find it | Notes |
+| --- | --- | --- |
+| Connect to a device | **Startup discovery**, Settings > Connection | Use startup discovery first. Use Settings for later edits. |
+| Manual host/IP entry | **Startup prompt when no devices are found**, Settings > Connection | Startup prompt is fastest on first run; Settings is best for saved-device maintenance. |
+| Network password | **Startup prompt or auth popup**, Settings > Connection | The app asks only when needed. |
+| Switch saved device | **Header badge long-press / `#`**, Settings > Connection | Use Device Switcher for fast switching; Settings for editing. |
+| Reset / Reboot / Pause / Menu | **Home > Quick Actions** | Main daily control path. |
+| Power Cycle | **Home > Quick Actions** | Optional. Enable it in Settings > Experimental Features. |
+| Clear-RAM reboot | **Home > Quick Actions** | Optional. Enable it in Settings > Experimental Features. |
+| Save / Load RAM | **Home > Quick Actions** | On by default. You can change it in Settings > Stable Features. |
+| Remote Input | **Home > Quick Actions**, Play (while an item plays) | On by default. You can change it in Settings > Stable Features. Joystick needs firmware 1.2.0 or newer on a Commodore 64 Ultimate, or 3.15 or newer on an Ultimate 64; otherwise only Keys are available. |
+| CPU speed and turbo | **Home > Quick Config**, Config | Home is preferred for common changes. |
+| Video mode and scan lines | **Home > Quick Config**, Config | Home is preferred. |
+| Joystick, serial bus, cartridge, user port | **Home > Quick Config**, Config | Home is preferred. |
+| Drive power, bus, type, reset | **Disks**, Home > Drives | Disks is preferred for drive work; Home is good for quick checks. |
+| Mount/eject disks | **Disks**, Home > Drives | Disks gives the clearest disk collection view. |
+| Disk groups and rotation | **Disks** | Set a group in the disk collection, then rotate from drive controls. |
+| Printer controls | **Home > Printer**, Config | Home is preferred. |
+| SID mixer | **Home > SID / Audio mixer**, Config > Audio Mixer | Home is preferred for live mixing. |
+| Streams | **Home > Streams**, Config | Visible when the device exposes streaming support. |
+| Save/load device config | **Home > Config actions** | Use Save to flash when Auto save config is Ask or No, or when you want to force a flash save now. |
+| App-stored config snapshots | **Home > Config actions** | Local app snapshots, separate from device flash. |
+| Disk Explorer (launch a program inside a disk) | **Disks > disk menu > Open (Disk Explorer)** | On by default. You can change it in Settings > Stable Features. |
+| Create a blank disk | **Disks > New disk** | On by default. You can change it in Settings > Stable Features. |
+| Search inside disk images | **Settings > Play and disk behavior** | Optional. Enable it in Settings > Experimental Features. |
+| Launch Safety (cartridge parking) | Automatic; boot-menu answer in **Settings > Play and disk behavior** | On by default. You can change it in Settings > Stable Features. |
+| Live View — Audio Mirror | **Settings > Experimental Features** | On by default. You can change it in Settings > Experimental Features. |
+| Live View — Video Mirror | **Settings > Experimental Features** | On by default. You can change it in Settings > Experimental Features. |
+| Advanced config file actions | **Home > Config actions** | Optional. Enable it in Settings > Experimental Features. |
+| Advanced drive shortcuts | **Home > Drives** | Optional. Enable it in Settings > Experimental Features. |
+| Advanced printer shortcuts | **Home > Printer** | Optional. Enable it in Settings > Experimental Features. |
+| Full configuration tree | **Config** | Use search, open a category, edit rows. |
+| Add playlist items | **Play > Add items** | Sources: Local, C64U, HVSC, CommoServe. |
+| Playback controls | **Play** | Play, pause, previous/next, shuffle, repeat, duration, and volume. |
+| HVSC preparation | **Play**, Settings > HVSC | On by default. You can change it in Settings > Stable Features. |
+| CommoServe | **Play > Add items**, Disks > Add disks, Settings > Online Archive | On by default. You can change it in Settings > Stable Features. |
+| Demo Mode | **Settings > Connection** | Optional. Enable it in Settings > Stable Features. |
+| Background playback scheduling | **Play**, Android app permissions | Always enabled in this variant. |
+| Display profile and theme | **Settings > Appearance** | Medium screenshots in this manual match this guide's presentation. |
+| Device Safety | **Settings > Device Safety** | Leave it on Auto (recommended); Auto uses Conservative for a Commodore 64 Ultimate, and Balanced for an Ultimate 64-family device on firmware newer than 3.15. See Device Safety Modes. |
+| Diagnostics | **Header badge / `*`**, Settings > Diagnostics | Badge is preferred for fast access. |
+| Logs, traces, errors, health checks | **Diagnostics** | Use filters and Share for support. |
+| Built-in help | **Docs** | Good for quick reminders inside the app. |
 
 ### Keyboard and Directional Input Reference
 
@@ -724,13 +725,13 @@ On by default. You can change it in Settings > Experimental Features. Directiona
 
 #### Directional Pad
 
-| Key                 | What it does                                                                      |
-| ------------------- | --------------------------------------------------------------------------------- |
-| Up / Down           | Move through the current page, card, list, or dialog.                             |
-| Left / Right        | Adjust sliders, tabs, and segmented controls. Otherwise move to a nearby control. |
-| OK / Center / Enter | Enter a group, open a select, press a button, or toggle a switch.                 |
-| Back / Escape       | Close the top dialog, leave a field, leave a group, or go back.                   |
-| Menu / Context Menu | Open the focused item menu; if none exists, open the Quick Menu.                  |
+| Key | What it does |
+| --- | --- |
+| Up / Down | Move through the current page, card, list, or dialog. |
+| Left / Right | Adjust sliders, tabs, and segmented controls. Otherwise move to a nearby control. |
+| OK / Center / Enter | Enter a group, open a select, press a button, or toggle a switch. |
+| Back / Escape | Close the top dialog, leave a field, leave a group, or go back. |
+| Menu / Context Menu | Open the focused item menu; if none exists, open the Quick Menu. |
 
 The rule is simple: **OK goes in, Back comes out**.
 
@@ -738,20 +739,20 @@ The rule is simple: **OK goes in, Back comes out**.
 
 Outside text fields, number keys jump to pages:
 
-| Key | Page     |
-| --- | -------- |
-| 1   | Home     |
-| 2   | Play     |
-| 3   | Disks    |
-| 4   | Config   |
-| 5   | Settings |
-| 6   | Docs     |
+| Key | Page |
+| --- | --- |
+| 1 | Home |
+| 2 | Play |
+| 3 | Disks |
+| 4 | Config |
+| 5 | Settings |
+| 6 | Docs |
 
 #### Star and Pound
 
-| Key | Outside text fields  | Inside text fields                 |
-| --- | -------------------- | ---------------------------------- |
-| `*` | Open Diagnostics     | Type `*` when the field accepts it |
+| Key | Outside text fields | Inside text fields |
+| --- | --- | --- |
+| `*` | Open Diagnostics | Type `*` when the field accepts it |
 | `#` | Open Device Switcher | Type `#` when the field accepts it |
 
 #### Quick Menu
@@ -760,90 +761,90 @@ Press Menu when no focused control has its own menu. The Quick Menu offers page 
 
 ### File and Source Reference
 
-| Source     | Used in     | Meaning                                                                                                 |
-| ---------- | ----------- | ------------------------------------------------------------------------------------------------------- |
-| Local      | Play, Disks | Files and folders available to the Android device running the app.                                      |
-| C64U       | Play, Disks | Files on the connected Ultimate-family device through FTP.                                              |
-| HVSC       | Play        | On by default. You can change it in Settings > Stable Features. SID library browsing after preparation. |
-| CommoServe | Play, Disks | On by default. You can change it in Settings > Stable Features. Online archive search.                  |
+| Source | Used in | Meaning |
+| --- | --- | --- |
+| Local | Play, Disks | Files and folders available to the Android device running the app. |
+| C64U | Play, Disks | Files on the connected Ultimate-family device through FTP. |
+| HVSC | Play | On by default. You can change it in Settings > Stable Features. SID library browsing after preparation. |
+| CommoServe | Play, Disks | On by default. You can change it in Settings > Stable Features. Online archive search. |
 
 Supported playback/import types include SID, MOD, PRG, CRT, D64, G64, D71, G71, and D81. Disk collection workflows focus on disk images: D64, G64, D71, G71, and D81.
 
-| Format   | Kind      | Notes                                                                    |
-| -------- | --------- | ------------------------------------------------------------------------ |
-| SID      | Music     | One or more subsongs; durations shown when songlength data is available. |
-| MOD      | Music     | Amiga-style tracker module.                                              |
-| PRG      | Program   | A single loadable program.                                               |
-| CRT      | Cartridge | Cartridge image; started as if you inserted a cartridge.                 |
-| D64, G64 | Disk      | 1541 single-sided disk image.                                            |
-| D71, G71 | Disk      | 1571 double-sided disk image.                                            |
-| D81      | Disk      | 1581 3.5-inch disk image.                                                |
+| Format | Kind | Notes |
+| --- | --- | --- |
+| SID | Music | One or more subsongs; durations shown when songlength data is available. |
+| MOD | Music | Amiga-style tracker module. |
+| PRG | Program | A single loadable program. |
+| CRT | Cartridge | Cartridge image; started as if you inserted a cartridge. |
+| D64, G64 | Disk | 1541 single-sided disk image. |
+| D71, G71 | Disk | 1571 double-sided disk image. |
+| D81 | Disk | 1581 3.5-inch disk image. |
 
 ### Network Ports and Services
 
 These are the defaults the app expects. Change them per device in **Settings > Connection** if yours differ.
 
-| Service                   | Default port | Used for                                               |
-| ------------------------- | ------------ | ------------------------------------------------------ |
-| Web Remote Control (REST) | 80           | Control, status, and configuration — required.         |
-| FTP File Service          | 21           | Browsing and transferring files, playlists, and disks. |
-| Telnet Remote Menu        | 23           | Advanced menu-backed actions, when those are enabled.  |
+| Service | Default port | Used for |
+| --- | --- | --- |
+| Web Remote Control (REST) | 80 | Control, status, and configuration — required. |
+| FTP File Service | 21 | Browsing and transferring files, playlists, and disks. |
+| Telnet Remote Menu | 23 | Advanced menu-backed actions, when those are enabled. |
 
 ### Device Safety Modes
 
 Set the mode in **Settings > Device Safety**. Higher concurrency is faster but pushes the device harder; the presets also tune caching, cooldowns, and backoff.
 
-| Mode            | Requests at once | Use it when                                                                                           |
-| --------------- | ---------------- | ----------------------------------------------------------------------------------------------------- |
-| Auto            | Chosen for you   | Always a safe default — picks Conservative or Balanced from the device and its firmware. Recommended. |
-| Relaxed         | Up to 3          | The device and network are proven fast and stable, and you accept higher risk.                        |
-| Balanced        | Up to 2          | A Commodore 64 Ultimate on firmware 1.2.0 or newer, or an Ultimate 64-family device on 3.15 or newer. |
-| Conservative    | 1 (serialized)   | A first setup, Wi-Fi, or firmware you do not yet trust. Maximum safety.                               |
-| Troubleshooting | 1 (serialized)   | You are chasing a problem and want extra debug logging.                                               |
+| Mode | Requests at once | Use it when |
+| --- | --- | --- |
+| Auto | Chosen for you | Always a safe default — picks Conservative or Balanced from the device and its firmware. Recommended. |
+| Relaxed | Up to 3 | The device and network are proven fast and stable, and you accept higher risk. |
+| Balanced | Up to 2 | A Commodore 64 Ultimate on firmware 1.2.0 or newer, or an Ultimate 64-family device on 3.15 or newer. |
+| Conservative | 1 (serialized) | A first setup, Wi-Fi, or firmware you do not yet trust. Maximum safety. |
+| Troubleshooting | 1 (serialized) | You are chasing a problem and want extra debug logging. |
 
 ### Drive Types and Disk Formats
 
 Set a drive's type on the **Disks** page to match the image you are mounting.
 
-| Drive type | Disk images | Description                               |
-| ---------- | ----------- | ----------------------------------------- |
-| 1541       | D64, G64    | The classic single-sided 5.25-inch drive. |
-| 1571       | D71, G71    | Double-sided 5.25-inch drive.             |
-| 1581       | D81         | High-capacity 3.5-inch drive.             |
+| Drive type | Disk images | Description |
+| --- | --- | --- |
+| 1541 | D64, G64 | The classic single-sided 5.25-inch drive. |
+| 1571 | D71, G71 | Double-sided 5.25-inch drive. |
+| 1581 | D81 | High-capacity 3.5-inch drive. |
 
 ### Snapshot Types and Memory Ranges
 
 **Save RAM** offers these capture types. The app keeps up to 100 snapshots on your phone or tablet and drops the oldest once that fills.
 
-| Snapshot  | Captures                                                                                        | Memory range                                    |
-| --------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| CPU + RAM | Full memory plus the CPU registers; can resume where it left off (when the device supports it). | $0000–$FFFF + registers                         |
-| Program   | Almost all of memory, skipping the stack. A good all-round choice.                              | $0000–$00FF, $0200–$FFFF                        |
-| Basic     | The BASIC program and its variables.                                                            | $002B–$0038, $0801–$9FFF                        |
-| Screen    | The current screen and its colours.                                                             | VIC bank, $D000–$D02E, $D800–$DBFF, $DD00–$DD01 |
-| Custom    | Exactly the address ranges you type.                                                            | User-defined                                    |
+| Snapshot | Captures | Memory range |
+| --- | --- | --- |
+| CPU + RAM | Full memory plus the CPU registers; can resume where it left off (when the device supports it). | $0000–$FFFF + registers |
+| Program | Almost all of memory, skipping the stack. A good all-round choice. | $0000–$00FF, $0200–$FFFF |
+| Basic | The BASIC program and its variables. | $002B–$0038, $0801–$9FFF |
+| Screen | The current screen and its colours. | VIC bank, $D000–$D02E, $D800–$DBFF, $DD00–$DD01 |
+| Custom | Exactly the address ranges you type. | User-defined |
 
 ### Health Check Probes
 
 Run a health check from **Diagnostics** to test the connection. Each probe reports its own result and timing.
 
-| Probe  | What it checks                                                                                                                                 |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| REST   | The Web Remote Control service answers.                                                                                                        |
-| FTP    | The FTP file service answers.                                                                                                                  |
-| Telnet | The Telnet menu service answers.                                                                                                               |
+| Probe | What it checks |
+| --- | --- |
+| REST | The Web Remote Control service answers. |
+| FTP | The FTP file service answers. |
+| Telnet | The Telnet menu service answers. |
 | CONFIG | Writes a live setting, reads it back, and restores it — proving the device applies changes. A device with an LED strip pulses once as it runs. |
-| RASTER | The VIC-II raster line is available — the video chip is running.                                                                               |
-| JIFFY  | The KERNAL jiffy clock is ticking, which also reports the machine's uptime.                                                                    |
+| RASTER | The VIC-II raster line is available — the video chip is running. |
+| JIFFY | The KERNAL jiffy clock is ticking, which also reports the machine's uptime. |
 
 ### Status and Safety Reference
 
-| Signal                       | Meaning                                                         | Best next step                                              |
-| ---------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------- |
-| Healthy badge                | The selected device is responding.                              | Continue normally.                                          |
-| Degraded badge               | Some check or recent activity suggests trouble.                 | Open Diagnostics.                                           |
-| Unhealthy badge              | The selected device is not responding correctly.                | Run a health check; verify network services.                |
-| Offline state                | No live connection is active.                                   | Use discovery, manual host entry, or Settings > Connection. |
-| 401/403 password prompt      | The device requires its network password.                       | Enter the target device network password.                   |
-| TCP refused while ping works | The target device TCP stack may be wedged.                      | Stop traffic and power-cycle the device.                    |
-| CPU-speed network drop       | Firmware may briefly drop network while applying clock changes. | Wait for reconnect before changing more settings.           |
+| Signal | Meaning | Best next step |
+| --- | --- | --- |
+| Healthy badge | The selected device is responding. | Continue normally. |
+| Degraded badge | Some check or recent activity suggests trouble. | Open Diagnostics. |
+| Unhealthy badge | The selected device is not responding correctly. | Run a health check; verify network services. |
+| Offline state | No live connection is active. | Use discovery, manual host entry, or Settings > Connection. |
+| 401/403 password prompt | The device requires its network password. | Enter the target device network password. |
+| TCP refused while ping works | The target device TCP stack may be wedged. | Stop traffic and power-cycle the device. |
+| CPU-speed network drop | Firmware may briefly drop network while applying clock changes. | Wait for reconnect before changing more settings. |

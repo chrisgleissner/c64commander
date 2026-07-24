@@ -259,3 +259,47 @@ describe("StreamGovernor — no oscillation under steady borderline load", () =>
     expect(gov.state.effectivePercent).toBe(100);
   });
 });
+
+describe("StreamGovernor — native low-latency audio (underruns-only)", () => {
+  // The native AudioTrack plays on its own OS thread with a small, noisy buffer (~20–50 ms). Passing
+  // its nominal depth switches the governor to underruns-only for audio: the depth doesn't gate, so a
+  // healthy-but-small native buffer is not misread as starving and video recovers after transients.
+  const NATIVE_NOMINAL = 52;
+  const native = (over: Partial<GovernorSignals> = {}) => healthy({ audioNominalBufferMs: NATIVE_NOMINAL, ...over });
+
+  it("primes immediately and promotes on a small native buffer far below the WebAudio healthy bar", () => {
+    const gov = new StreamGovernor("auto");
+    gov.update(native({ audioUnderruns: 1 }), 100); // demote once → 80, room to recover
+    // A 25 ms native buffer is far below config.audioHealthyMs (90) but must count as healthy so video
+    // climbs back to 100% — the exact case that pinned video to the floor before the underruns-only fix.
+    let t = 100;
+    for (let i = 0; i < 200; i++) {
+      t += 50;
+      gov.update(native({ audioBufferMs: 25 }), t);
+    }
+    expect(gov.state.effectivePercent).toBe(100);
+  });
+
+  it("does NOT demote on a small-but-nonzero native buffer (depth is not a gate)", () => {
+    const gov = new StreamGovernor("auto");
+    gov.update(native({ audioBufferMs: 25 }), 1000); // prime
+    // 12 ms would be 'critical' under the WebAudio 25 ms rule, but for native only 0/underrun demotes.
+    const s = gov.update(native({ audioBufferMs: 12 }), 1500);
+    expect(s.effectivePercent).toBe(100);
+  });
+
+  it("demotes on a native audio underrun, then recovers once underruns stop", () => {
+    const gov = new StreamGovernor("auto");
+    gov.update(native({ audioBufferMs: 30 }), 1000); // prime
+    const demoted = gov.update(native({ audioBufferMs: 30, audioUnderruns: 1 }), 1500);
+    expect(demoted.effectivePercent).toBe(100 - C.demoteStep);
+    expect(demoted.reason).toContain("underrun");
+    // With underruns gone, the small native buffer no longer blocks promotion → climbs back to 100%.
+    let t = 1500;
+    for (let i = 0; i < 200; i++) {
+      t += 50;
+      gov.update(native({ audioBufferMs: 30 }), t);
+    }
+    expect(gov.state.effectivePercent).toBe(100);
+  });
+});

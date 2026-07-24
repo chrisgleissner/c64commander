@@ -1264,6 +1264,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 "Live View keeps the **sound** running smoothly above everything else. If a packet of audio goes missing on the network it fills the tiny gap so cleanly you will not hear a click, and it never lets the picture run away and leave the sound trailing behind.",
                 "",
+                "The sound also plays through a **fast, low-latency path** so what you hear follows your keypresses closely — the app holds far less sound waiting to play than the ordinary in-app audio does, so the delay is much shorter. This is on by default; if you ever need to compare, or the sound misbehaves on your device, you can switch **Low-latency audio (native)** off in **Settings**.",
+                "",
                 "The **picture** is the demanding part, so you get a say in how much of it to draw. Open **Stats** — it appears under Live View while it is playing — and choose a **Video frame rate**:",
                 "",
                 "- **Auto** (recommended) plays every frame it can and quietly eases off only when your device is working too hard, then climbs back to full speed once there is room to spare.",

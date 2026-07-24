@@ -53,6 +53,14 @@ export interface StreamUdpVideoFrameEvent {
   present?: boolean;
 }
 
+/** Live buffer/underrun stats returned by each {@link StreamUdpPlugin.writeAudioTrack} write. */
+export interface StreamUdpAudioStats {
+  /** PCM still queued ahead of the AudioTrack playback head (ms) — the native player buffer depth. */
+  bufferedMs: number;
+  /** Cumulative AudioTrack underruns (output ran dry) since {@link StreamUdpPlugin.openAudioTrack}. */
+  underruns: number;
+}
+
 /**
  * Native UDP receiver bridge (Android `StreamUdpPlugin`). Only used on native platforms —
  * the web/Docker build receives streams through the server's UDP -> WebSocket bridge instead.
@@ -71,6 +79,26 @@ export interface StreamUdpPlugin {
    * that will not be presented — so the governor's frame-rate reduction actually saves CPU.
    */
   setKeepFraction(options: { name: string; permille: number }): Promise<void>;
+  /**
+   * Open a native low-latency audio sink (Android `AudioTrack`, `PERFORMANCE_MODE_LOW_LATENCY`) for
+   * interleaved stereo S16LE PCM at `sampleRate` Hz. Replaces the WebAudio player's ~80 ms lead-in
+   * with the AudioTrack's small fast-mixer buffer. All jitter buffering / concealment / batching stay
+   * in JS; this sink only plays already-decided PCM. Idempotent: re-opening closes the previous track.
+   */
+  openAudioTrack(options: { sampleRate: number }): Promise<{ sampleRate: number; bufferMs: number }>;
+  /**
+   * Legacy JS-fed path: queue one chunk of base64 interleaved-stereo-S16LE PCM to the open AudioTrack.
+   * The shipping path feeds the track natively from the receive thread (no bridge traffic); this
+   * remains for completeness/testing. No-op (zeroed stats) if no track is open.
+   */
+  writeAudioTrack(options: { data: string }): Promise<StreamUdpAudioStats>;
+  /**
+   * Read the open AudioTrack's live buffer depth + underrun count — the governor's audio-headroom
+   * signal, polled periodically since native (not JS) now drives playback. Zeroed if no track is open.
+   */
+  readAudioStats(options?: Record<string, never>): Promise<StreamUdpAudioStats>;
+  /** Stop + release the native audio sink. Safe to call when none is open. */
+  closeAudioTrack(options?: Record<string, never>): Promise<void>;
   addListener(eventName: "datagram", listener: (event: StreamUdpDatagramEvent) => void): Promise<PluginListenerHandle>;
   addListener(
     eventName: "videoframe",

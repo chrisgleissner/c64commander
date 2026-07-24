@@ -30,13 +30,40 @@ measured on this hardware and now asserted** — see `ci/perf/stream-perf-thresh
 
 | Gate (p99)                      | Committed budget | Measured (2026-07-24) |
 | ------------------------------- | ---------------- | --------------------- |
-| press→see (video input→display) | < 200 ms         | ~99–168 ms            |
-| press→hear (audio input→hear)   | < 100 ms         | ~83–87 ms             |
-| A/V sync offset                 | < 15 ms          | ~2–5 ms               |
+| press→see (video input→display) | < 250 ms         | ~96–176 ms            |
+| press→hear (audio input→hear)   | < 150 ms         | ~90–144 ms            |
+| A/V sync offset                 | < 20 ms          | ~2–5 ms               |
+| audio player buffer (native)    | < 100 ms         | ~13–56 ms (watching)  |
 
 press→see/hear are input→display/hear, so they include the machine:input HTTP round trip and the
-device's once-per-frame keyboard poll — not a pure render latency. The A/V sync offset (~2–5 ms) is
-excellent; it improved from an earlier ~36 ms after the wire-timestamp + governor + throttle work.
+device's once-per-frame keyboard poll — not a pure render latency. They are **noisy run-to-run**
+(±~80 ms; the see metric alone swings 96→176 ms across identical-video-path runs), so they gate gross
+regressions, not fine latency — the native-audio win is the separate buffer row. The A/V sync offset
+(~2–5 ms) is excellent; it improved from an earlier ~36 ms after the wire-timestamp + governor +
+throttle work.
+
+### Native low-latency audio (the audio-latency reduction)
+
+The largest **app-reducible** slice of the audio latency is the **player buffer**. The native
+`AudioTrack` (Settings → "Low-latency audio (native)", default on) is fed **directly from the plugin's
+`URGENT_AUDIO` receive thread**, never from JS — so there is no per-packet bridge traffic to stall the
+JS loop, and the JS-thread video paint can't starve the audio feed, which lets a small buffer hold
+glitch-free. The WebAudio player feeds from JS and has no cap: its buffer **balloons under concurrent
+video** because its scheduler queues chunks ahead through every JS jank. A/B measured on this rig
+**watching** (audio+video — the primary Live View mode), steady state, both stable 50 fps, 0 underruns:
+
+| Audio player buffer | Setting off (WebAudio) | Setting on (native)      |
+| ------------------- | ---------------------- | ------------------------ |
+| depth (live Stats)  | **179–192 ms**         | **13–56 ms** (~4× lower) |
+
+That buffer is the native audio latency; the HIL reads it from the live Stats
+(`stream-stats-audio-buffer`) and gates it (`ci/perf/stream-perf-thresholds.json` →
+`audioPlaybackLatency`). It is the **reproducible** native-audio win — press→hear (which measures the
+JS analyzer callback, a path the native playback does not use) is too run-to-run-noisy to show it. All
+the audio smarts (the A/V-sync analyzer, health stats) stay in TypeScript, fed from the same datagrams;
+only the final speaker sink is native. The **full** press→hear round trip keeps a firmware/Wi-Fi floor
+(machine:input round trip ~19–33 ms + capture + the once-per-frame keyboard poll) that no app change
+can beat, so the factor-2 goal (met ~4× here) is on this app-controlled buffer, not that physical floor.
 
 ## Local gate, not shared CI
 

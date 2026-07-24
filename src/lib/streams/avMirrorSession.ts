@@ -19,14 +19,18 @@
 
 import { getC64API } from "@/lib/c64api";
 import { addLog } from "@/lib/logging";
+import { isNativePlatform } from "@/lib/native/platform";
 import {
   loadStreamAudioPort,
+  loadStreamNativeAudio,
+  loadStreamNativeAudioBufferMs,
   loadStreamNativeVideoAssembly,
   loadStreamVideoFrameRateMode,
   loadStreamVideoPort,
   type StreamVideoFrameRateMode,
 } from "@/lib/config/appSettings";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
+import { NativeAudioSink } from "./audioNativeSink";
 import { AudioMirrorController, type AudioMirrorSignals, type AudioMirrorState } from "./audioMirrorController";
 import { VideoMirrorController, type VideoMirrorState } from "./videoMirrorController";
 import { StreamGovernor, type FrameRateMode, type GovernorState, type GovernorTransition } from "./streamGovernor";
@@ -136,6 +140,12 @@ export class AvMirrorSession {
       createReceiver:
         deps.createAudioReceiver ?? ((opts) => createStreamReceiver({ ...opts, port: loadStreamAudioPort() })),
       createPlayer: deps.createPlayer,
+      // Native low-latency audio when the setting is on AND we're on a device with the plugin;
+      // evaluated at start (not import) so the live setting wins. Returns null → WebAudio fallback.
+      createNativeSink: (sampleRate) =>
+        loadStreamNativeAudio() && isNativePlatform()
+          ? new NativeAudioSink(sampleRate, undefined, loadStreamNativeAudioBufferMs())
+          : null,
       renderAudioForAnalysis: (samples, arrivalMs) => this.emitAudio(samples, arrivalMs),
     });
 
@@ -241,6 +251,9 @@ export class AvMirrorSession {
     const governor = this.governor.update(
       {
         audioBufferMs: signals.audioBufferMs,
+        // Native low-latency sink runs a smaller buffer; pass its nominal so the governor scales its
+        // health thresholds and doesn't misread a healthy native buffer as starvation.
+        audioNominalBufferMs: signals.audioNominalBufferMs,
         // Feed the underruns SINCE the last tick as the demote trigger; the cumulative total goes to telemetry.
         audioUnderruns: Math.max(0, signals.audioUnderruns - this.lastAudioUnderruns),
         // Only let the audio buffer/underrun signals drive video when audio is actually playing —
