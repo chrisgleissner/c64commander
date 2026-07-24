@@ -21,25 +21,35 @@ pip install websocket-client
 python3 tools/hil/av_sync_hil.py --serial <ADB_SERIAL> --soak-seconds 45 --taps 12
 ```
 
-## Thresholds — why hardware is not asserted to <30ms
+## Thresholds — ambitious-but-achievable, ASSERTED on hardware
 
-The `<30ms` press→pop latency and `<20ms` A/V offset targets are **perfect-network** figures. They
-are asserted deterministically by the every-build mocked-C64 E2E
-(`tests/unit/hooks/useAvSyncInteractive.test.tsx`). On real Wi-Fi the end-to-end path adds tens of
-ms that no client can remove: the machine:input HTTP round trip, the device's once-per-frame
-keyboard poll, the C64U's video-capture buffering (~1–2 frames), frame reassembly and render. So
-the HIL **proves the pipeline works end to end and prints the real numbers** rather than asserting
-the perfect-network thresholds.
+The original spec's `<30 ms` **source→display** target is a physical floor (the C64U's own ~1–2 frame
+capture buffer + multicast Wi-Fi + WebView render), so it was reframed to **end-to-end budgets
+measured on this hardware and now asserted** — see `ci/perf/stream-perf-thresholds.json` → `endToEnd`.
+`av_sync_hil.py` reads those thresholds and **fails (exit 1)** if the pipeline regresses past them:
 
-### Representative results (Pixel 4 → C64U fw 1.2.0, PAL, Wi-Fi)
+| Gate (p99)                      | Committed budget | Measured (2026-07-24) |
+| ------------------------------- | ---------------- | --------------------- |
+| press→see (video input→display) | < 200 ms         | ~99–168 ms            |
+| press→hear (audio input→hear)   | < 100 ms         | ~83–87 ms             |
+| A/V sync offset                 | < 15 ms          | ~2–5 ms               |
 
-| Metric | Value |
-| --- | --- |
-| Auto soak — matched pops | 10–23 over 45 s |
-| Auto soak — offset (signed P99) | within ±30 ms (video wire-lags audio ~36 ms; consistent) |
-| Interactive — press→see P99 | ~200 ms |
-| Interactive — press→hear P99 | ~110 ms |
-| Interactive — A/V offset P99 | ~54 ms |
+press→see/hear are input→display/hear, so they include the machine:input HTTP round trip and the
+device's once-per-frame keyboard poll — not a pure render latency. The A/V sync offset (~2–5 ms) is
+excellent; it improved from an earlier ~36 ms after the wire-timestamp + governor + throttle work.
+
+## Local gate, not shared CI
+
+This HIL needs the physical rig (Pixel 4 on USB + C64U on the LAN), so it runs on the **local build**,
+not in shared CI. Run the whole gate — streaming + latency — with:
+
+```bash
+npm run test:streams:hil        # or: ./build --install-apk --stream-hil
+```
+
+That runs `hil_stream_fixture.py` (fps / CPU / jank / slot accounting) and this `av_sync_hil.py`
+(the latency budgets above), with a machine-readable exit (0 pass, 1 product fail, 2 infra). Shared
+CI runs only the deterministic host gates (`scripts/ci/stream-gates.mjs`).
 
 ## machine:input drives the C64 keyboard matrix (verified)
 

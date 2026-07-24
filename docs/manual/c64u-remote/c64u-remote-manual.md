@@ -444,11 +444,22 @@ Press the **menu key** — or the on-screen **Adjust** button — to switch betw
 | **0**, **5**, or the centre/OK key | Fit the whole screen back on |
 | the **menu** key | Return to driving the C64 |
 
-The same four moves have on-screen buttons too — **＋** and **−** to zoom, **⤢** to fit, and **◎** to turn Follow on and off — so a touchscreen and a keypad reach every control.
+The same four moves have on-screen buttons too — **＋** and **−** to zoom, **⤢** to fit, and **◎** to turn Follow on and off — so a touchscreen and a keypad reach every control. However large you make the game controls, the picture always stays fully in view above them — the controls never creep up and cover it.
+
+#### Smooth playback, and what it costs
+
+Live View keeps the **sound** running smoothly above everything else. If a packet of audio goes missing on the network it fills the tiny gap so cleanly you will not hear a click, and it never lets the picture run away and leave the sound trailing behind.
+
+The **picture** is the demanding part, so you get a say in how much of it to draw. Open **Stats** — it appears under Live View while it is playing — and choose a **Video frame rate**:
+
+- **Auto** (recommended) plays every frame it can and quietly eases off only when your device is working too hard, then climbs back to full speed once there is room to spare.
+- **100%**, **50%**, and **25%** cap the picture at the full rate, half, or a quarter of what the C64 is sending. A lower setting is gentler on the battery and on older phones and leaves more headroom for the game you are driving. Even at a manual cap the app will still drop below it for a moment if that is what it takes to keep the sound perfect — the sound always comes first.
+
+**Stats** also shows, at a glance and over the last minutes, how the stream is really doing: the picture's frame rate, how full the audio buffer is, any packets lost on the network and how they were smoothed over, and the app's own load. Open or close it as you like — it is built to be light enough that watching it costs the stream nothing. If you ever need to send in a report, **Export diagnostics** saves all of it as a small file.
 
 Live View is optional and starts switched off. The device streams to two network ports (11000 for the picture, 11001 for the sound); if your setup needs different ones, you can change them in **Settings**, under Play and disk behaviour. Live View borrows the same feeds as **Streams** (below), and while it is playing it takes charge of them — see there for how the two work together.
 
-Optional. Enable it in Settings > Experimental Features.
+On by default. You can change it in Settings > Experimental Features.
 
 ### Streams
 
@@ -686,8 +697,8 @@ Preferred locations are marked first.
 | Create a blank disk | **Disks > New disk** | On by default. You can change it in Settings > Stable Features. |
 | Search inside disk images | **Settings > Play and disk behavior** | Optional. Enable it in Settings > Experimental Features. |
 | Launch Safety (cartridge parking) | Automatic; boot-menu answer in **Settings > Play and disk behavior** | On by default. You can change it in Settings > Stable Features. |
-| Live View — Audio Mirror | **Settings > Experimental Features** | Optional. Enable it in Settings > Experimental Features. |
-| Live View — Video Mirror | **Settings > Experimental Features** | Optional. Enable it in Settings > Experimental Features. |
+| Live View — Audio Mirror | **Settings > Experimental Features** | On by default. You can change it in Settings > Experimental Features. |
+| Live View — Video Mirror | **Settings > Experimental Features** | On by default. You can change it in Settings > Experimental Features. |
 | Advanced config file actions | **Home > Config actions** | Optional. Enable it in Settings > Experimental Features. |
 | Advanced drive shortcuts | **Home > Drives** | Optional. Enable it in Settings > Experimental Features. |
 | Advanced printer shortcuts | **Home > Printer** | Optional. Enable it in Settings > Experimental Features. |
