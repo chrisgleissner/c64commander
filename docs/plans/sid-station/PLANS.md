@@ -47,7 +47,7 @@ Branch: **`feat/sid-radio`** (cut from `main`). Flags default **off** until each
 
 ## M1 — Ambient ranking + Liked Tunes  (→ G4)
 
-- [ ] 1.1 `rankingStore.ts` (IndexedDB, full-MD5 key, broadcast) — **RED→GREEN**
+- [x] 1.1 `rankingStore.ts` (IndexedDB + localStorage fallback, full-MD5 key, broadcast, deterministic snapshot) — **RED→GREEN**
 - [ ] 1.2 ♥/✕ on Now Playing card (`now-playing-like`/`now-playing-notforme`); "Clear my rankings" in Settings
 - [ ] 1.3 `likedTunes.ts` materialiser + **Liked Tunes** list (`liked-tunes`) via `startPlaylist` (normal Shuffle/Repeat); un-like; grey unresolved (§5.5) — **RED→GREEN**
 - [ ] **M1 EXIT** — likes persist across restart; Liked Tunes plays finite; HIL soak: zero Remote-Input starvation while rating → tick **G4**
