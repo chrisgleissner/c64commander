@@ -280,3 +280,18 @@ _(append entries below as tasks/gates complete — newest last)_
   from it — both reverted to HEAD (never committed). A pre-existing branch-tip prettier drift
   in `usePlaybackController.autoAdvance.test.tsx` (unrelated to SID Radio) was formatted so
   `npm run lint` is green. Device left with the SID Radio flag enabled for later M2 HIL.
+
+### 2026-07-24 — spec D17 bundle-size decision (doc-only)
+- Task: Record the measured v2-vs-v1 bundle-size decision (paste-in steering).
+- Measurement (real pinned bundle, 536.7 KiB gzip): stripping the unused v2 fields
+  (RATING_TABLE + per-edge similarity byte) saves only **18.9 KiB gzip** (~3.5 % asset,
+  < 0.1 % APK; FILE_IDENTITY md5_48 = 355 KiB gzip / 66 %, NEIGHBOR = 160 KiB, RATING = 7.7 KiB,
+  similarity ≈ 0.4–11 KiB). Re-pins per release (D4) → 0 in most OTA deltas.
+- Decision: **ship v2 as-is** (new §11 row D17). No build-time strip, no v1 asset request;
+  the saving isn't worth the build machinery / two-artifact sha story / lost v2 optionality
+  (D16). If the asset must shrink, the lever is the md5_48 table (upstream 6→5-byte prefix),
+  not the v2 fields.
+- Confirmed §2.2 already matches the v2 layout (RATING_TABLE present, 12-byte neighbor rows,
+  offset-driven parser) — landed in commit `ae1b1067`, so no §2.2 change here.
+- Files: `docs/plans/sid-station/spec.md` (§11 D17). Doc-only; no code/parser/fixture change.
+- Gate: n/a.
