@@ -74,6 +74,9 @@ export interface UseSidRadioResult {
   startSurpriseRadio: () => Promise<void>;
   steer: (md5: string, signal: RankingSignal) => void;
   stop: () => void;
+  /** A transient empty/degraded notice (spec §5.2 Q5), or null. */
+  notice: "no-radio-for-tune" | "no-radio" | null;
+  dismissNotice: () => void;
 }
 
 const buildStationItem = (input: { virtualPath: string; songIndex: number; trackOrdinal: number }): PlaylistItem => ({
@@ -99,6 +102,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
   const randomSeed = params.randomSeed ?? (() => Math.floor(Math.random() * 0xffffffff));
 
   const [station, setStation] = useState<ActiveStation | null>(null);
+  const [notice, setNotice] = useState<"no-radio-for-tune" | "no-radio" | null>(null);
   const clientRef = useRef<SidRadioWorkerClient | null>(null);
   const providerRef = useRef<StationQueueProvider | null>(null);
   const seedRef = useRef<{ seed: StationSeed; styleFilter: number | null; shuffleSeed: number }>({
@@ -181,8 +185,10 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       });
       if (items.length === 0) {
         providerRef.current = null;
+        setNotice(seedKind === "song" ? "no-radio-for-tune" : "no-radio");
         return;
       }
+      setNotice(null);
       const activeStation: ActiveStation = {
         seedKind,
         seedLabel,
@@ -327,6 +333,8 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     startSurpriseRadio,
     steer,
     stop,
+    notice,
+    dismissNotice: () => setNotice(null),
   };
 };
 

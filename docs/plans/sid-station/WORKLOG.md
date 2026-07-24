@@ -485,3 +485,15 @@ _(append entries below as tasks/gates complete — newest last)_
 - Evidence: 11 tests (round-trip, null, clear, malformed-reject; start persists + stop clears;
   mount resumes the chip without startPlaylist). tsc + eslint clean.
 - Gate: **G8** exact-recompute persistence + chip resume proven (code+unit); device restart = manual HIL.
+
+### 2026-07-24 — M4.2 empty/degraded states + Settings two-version status line
+- Task: "No radio for this tune yet" empty state (Q5) + the Settings two-version status line (§6.4).
+- Files: `useSidRadio.ts` (+`notice`/`dismissNotice` — set on an empty song start),
+  `PlayFilesPage.tsx` (renders `sid-radio-notice`), `SidRadioSettingsSection.tsx`
+  (+`settings-sid-radio-status`: similarity corpus schema/counts/sha/tag AND installed HVSC
+  baseline+update, with the decoupled-version note, §2.5). Tests: useSidRadio notice (+1),
+  SidRadioSettingsSection status (+1).
+- Decisions: Home quick-action is explicitly optional for GA (D3) → deferred. The status line reads
+  the pinned sidcorr constants + `loadHvscState()`; content-addressing reconciles any skew.
+- Evidence: 12 tests pass; tsc + eslint clean.
+- Gate: feeds G8/G10 polish.

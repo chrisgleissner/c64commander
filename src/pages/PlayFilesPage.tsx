@@ -1958,6 +1958,13 @@ export default function PlayFilesPage() {
                       <Heart className="mr-1.5 h-4 w-4" /> Liked Tunes
                     </Button>
                   </div>
+                  {sidRadio.notice ? (
+                    <p className="text-xs text-muted-foreground" data-testid="sid-radio-notice">
+                      {sidRadio.notice === "no-radio-for-tune"
+                        ? "No radio for this tune yet — try a style or your likes."
+                        : "No radio available yet — like a few tunes to seed one."}
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
               <PlaybackSettingsPanel

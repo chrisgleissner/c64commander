@@ -136,6 +136,21 @@ describe("useSidRadio", () => {
     expect(loadSidRadioSession()).toBeNull();
   });
 
+  it("surfaces a 'no radio for this tune' notice when the seed has no neighbours (Q5)", async () => {
+    const client = makeClient();
+    client.compute = vi.fn(async () => ({ candidates: [], empty: "no-neighbours" }));
+    const params = baseParams(client);
+    const { result } = renderHook(() => useSidRadio(params));
+    await act(async () => {
+      await result.current.startSongRadio("aabbccddeeff", "Commando");
+    });
+    expect(result.current.active).toBe(false);
+    expect(result.current.notice).toBe("no-radio-for-tune");
+    expect(params.startPlaylist).not.toHaveBeenCalled();
+    act(() => result.current.dismissNotice());
+    expect(result.current.notice).toBeNull();
+  });
+
   it("resumes the chip from a saved session on mount (D15)", () => {
     saveSidRadioSession({
       seedKind: "style",

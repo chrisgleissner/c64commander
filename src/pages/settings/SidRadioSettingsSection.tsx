@@ -15,6 +15,13 @@ import { Label } from "@/components/ui/label";
 import { saveSidRadioEnabled, saveSidRankingEnabled } from "@/lib/config/appSettings";
 import { clearAllRankings } from "@/lib/sidRadio/rankingStore";
 import { useSidRadioFlags } from "@/lib/sidRadio/useSidRadioFlags";
+import {
+  SIDCORR_BUNDLE_SHA256,
+  SIDCORR_EXPECTED,
+  SIDCORR_RELEASE_TAG,
+  SIDCORR_SCHEMA_VERSION,
+} from "@/lib/sidRadio/sidcorrRelease";
+import { loadHvscState } from "@/lib/hvsc/hvscStateStore";
 
 type ToggleRowProps = {
   id: string;
@@ -83,6 +90,25 @@ export const SidRadioSettingsSection = () => {
             onChange={saveSidRankingEnabled}
           />
         ) : null}
+
+        <div
+          className="space-y-1 rounded-lg border border-border/70 p-3 text-xs"
+          data-testid="settings-sid-radio-status"
+        >
+          <p className="text-muted-foreground">
+            <span className="font-medium text-foreground">Similarity corpus:</span> {SIDCORR_SCHEMA_VERSION} ·{" "}
+            {SIDCORR_EXPECTED.fileCount.toLocaleString()} files / {SIDCORR_EXPECTED.trackCount.toLocaleString()} tracks
+            · sha {SIDCORR_BUNDLE_SHA256.slice(0, 8)}… · {SIDCORR_RELEASE_TAG}
+          </p>
+          <p className="text-muted-foreground">
+            <span className="font-medium text-foreground">Installed HVSC:</span> baseline{" "}
+            {loadHvscState().installedBaselineVersion ?? "—"} + update {loadHvscState().installedVersion}
+          </p>
+          <p className="text-muted-foreground">
+            The two version lines are decoupled — HVSC self-updates; the corpus re-pins per release. Content-addressing
+            (MD5) reconciles any skew.
+          </p>
+        </div>
 
         <div className="flex items-center justify-between gap-3 rounded-lg border border-border/70 p-3 min-w-0">
           <div className="min-w-0">

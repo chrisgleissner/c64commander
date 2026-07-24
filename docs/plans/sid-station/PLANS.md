@@ -72,7 +72,7 @@ Branch: **`feat/sid-radio`** (cut from `main`). Flags default **off** until each
 ## M4 — Persistence & polish → GA  (→ G8, G9 full, G10, G12)
 
 - [x] 4.1 Persist station descriptor `(seedKind, seedLabel, styleBit?, shuffleSeed, rankingSnapshotId, excludeSet)` → **exact recompute-on-restart** (D15); resume the chip
-- [ ] 4.2 Empty/degraded states; Settings two-version status line (§2.5/§6.4); optional Home quick-action (D3)
+- [x] 4.2 Empty/degraded states; Settings two-version status line (§2.5/§6.4); optional Home quick-action (D3)
 - [ ] 4.3 HIL `--hvsc-update` soak: continuity while `md5PathIndex` rebuilds → **G12**
 - [ ] 4.4 Full §9.2 budgets green on HW → **G9**
 - [ ] 4.5 Manual chapter (new `###` under **In Depth**, beside Live View); patch coverage ≥ 91 % → **G10**

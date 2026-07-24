@@ -36,6 +36,14 @@ describe("SidRadioSettingsSection", () => {
     await waitFor(() => expect(loadSidRankingEnabled()).toBe(true));
   });
 
+  it("shows the two-version status line (§6.4)", () => {
+    render(<SidRadioSettingsSection />);
+    const status = screen.getByTestId("settings-sid-radio-status");
+    expect(status).toHaveTextContent("Similarity corpus");
+    expect(status).toHaveTextContent("sidcorr-tiny-1");
+    expect(status).toHaveTextContent("Installed HVSC");
+  });
+
   it("Clear my rankings wipes every ranking", async () => {
     await setRanking("0123456789abcdef0123456789abcdef", "like");
     render(<SidRadioSettingsSection />);
