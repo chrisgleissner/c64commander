@@ -14,6 +14,7 @@ import { useAvMirror } from "@/hooks/useAvMirror";
 import { AvMirrorControls } from "./AvMirrorControls";
 import { AvMirrorPreview } from "./AvMirrorPreview";
 import { AvSyncPanel } from "./AvSyncPanel";
+import { StreamStatsPanel } from "./StreamStatsPanel";
 
 export interface LiveViewCardProps {
   audioEnabled?: boolean;
@@ -35,7 +36,7 @@ export function LiveViewCard({
   showAvSyncTests = true,
   className,
 }: LiveViewCardProps) {
-  const { video } = useAvMirror();
+  const { video, anyLive } = useAvMirror();
   const [expanded, setExpanded] = useState(false);
   const showPreview = videoEnabled && video.state !== "off";
 
@@ -69,6 +70,8 @@ export function LiveViewCard({
           <AvMirrorPreview size={expanded ? "immersive" : "check"} />
         </div>
       )}
+
+      {anyLive && <StreamStatsPanel className="mt-3" />}
 
       {showPreview && showAvSyncTests && <AvSyncPanel className="mt-3" />}
 

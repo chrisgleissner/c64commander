@@ -35,6 +35,9 @@ const STREAM_VIDEO_PORT_KEY = "c64u_stream_video_port";
 const STREAM_AUDIO_PORT_KEY = "c64u_stream_audio_port";
 const STREAM_NETWORK_BUFFER_MS_KEY = "c64u_stream_network_buffer_ms";
 const STREAM_NATIVE_VIDEO_ASSEMBLY_KEY = "c64u_stream_native_video_assembly";
+const STREAM_NATIVE_AUDIO_KEY = "c64u_stream_native_audio";
+const STREAM_NATIVE_AUDIO_BUFFER_MS_KEY = "c64u_stream_native_audio_buffer_ms";
+const STREAM_VIDEO_FRAME_RATE_MODE_KEY = "c64u_stream_video_frame_rate_mode";
 
 export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 200;
 export type NotificationVisibility = "errors-only" | "all";
@@ -386,6 +389,70 @@ export const saveStreamNativeVideoAssembly = (enabled: boolean) => {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(STREAM_NATIVE_VIDEO_ASSEMBLY_KEY, enabled ? "1" : "0");
   broadcast(STREAM_NATIVE_VIDEO_ASSEMBLY_KEY, enabled);
+};
+
+/**
+ * Native low-latency audio (Live View). When on (default), decoded PCM is played through a native
+ * Android `AudioTrack` in low-latency mode instead of the WebAudio player. WebAudio needs an ~80 ms
+ * scheduling lead-in for gapless output; the native track's fast-mixer buffer is far smaller
+ * (~20–40 ms on the Pixel 4), which is the single largest app-reducible slice of the press→hear
+ * latency. All the audio SMARTS stay in TypeScript — the jitter/reorder buffer, loss concealment,
+ * batching, health stats and A/V-sync analyzer are unchanged; only the final "push these samples to
+ * the speaker" step is native. Off falls back to the WebAudio player (also the web/Docker path,
+ * which has no plugin). Native-only.
+ */
+export const DEFAULT_STREAM_NATIVE_AUDIO = true;
+
+export const loadStreamNativeAudio = () => readBoolean(STREAM_NATIVE_AUDIO_KEY, DEFAULT_STREAM_NATIVE_AUDIO);
+
+export const saveStreamNativeAudio = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(STREAM_NATIVE_AUDIO_KEY, enabled ? "1" : "0");
+  broadcast(STREAM_NATIVE_AUDIO_KEY, enabled);
+};
+
+/**
+ * Native audio buffer depth target (ms) — the native audio latency (with the AudioTrack's non-blocking
+ * writes the buffer fills to ~this depth). The native AudioTrack is fed straight from the plugin's
+ * URGENT_AUDIO receive thread, NOT from JS, so the video paint on the JS thread can't stall the audio
+ * feed — a small buffer holds without underrunning. That lets this sit far below the WebAudio player,
+ * whose buffer BALLOONS under concurrent video (its scheduler queues ahead through every JS-thread
+ * jank): measured ~192 ms watching on the Pixel 4 vs the native target here. 60 ms floors to the
+ * platform-minimum AudioTrack buffer on the Pixel 4 (~52 ms). Internal tunable (no UI), clamped to a
+ * safe range; the AudioTrack always floors it at the platform minimum buffer.
+ */
+export const DEFAULT_STREAM_NATIVE_AUDIO_BUFFER_MS = 60;
+export const MIN_STREAM_NATIVE_AUDIO_BUFFER_MS = 20;
+export const MAX_STREAM_NATIVE_AUDIO_BUFFER_MS = 240;
+
+export const loadStreamNativeAudioBufferMs = () => {
+  const raw = readNumber(STREAM_NATIVE_AUDIO_BUFFER_MS_KEY, DEFAULT_STREAM_NATIVE_AUDIO_BUFFER_MS);
+  if (Number.isNaN(raw)) return DEFAULT_STREAM_NATIVE_AUDIO_BUFFER_MS;
+  return Math.min(MAX_STREAM_NATIVE_AUDIO_BUFFER_MS, Math.max(MIN_STREAM_NATIVE_AUDIO_BUFFER_MS, Math.round(raw)));
+};
+
+/**
+ * Live View video frame-rate mode (spec §11.1). A user *maximum*: `auto` tries full source cadence
+ * and lets the governor back it off under pressure; `100`/`50`/`25` cap the presented rate to
+ * every / every-2nd / every-4th source frame. The governor may still demote below a manual cap to
+ * protect audio (§11.2). Default `auto`.
+ */
+export type StreamVideoFrameRateMode = "auto" | "100" | "50" | "25";
+export const DEFAULT_STREAM_VIDEO_FRAME_RATE_MODE: StreamVideoFrameRateMode = "auto";
+const FRAME_RATE_MODES: readonly StreamVideoFrameRateMode[] = ["auto", "100", "50", "25"] as const;
+
+export const loadStreamVideoFrameRateMode = (): StreamVideoFrameRateMode => {
+  if (typeof localStorage === "undefined") return DEFAULT_STREAM_VIDEO_FRAME_RATE_MODE;
+  const raw = localStorage.getItem(STREAM_VIDEO_FRAME_RATE_MODE_KEY);
+  return FRAME_RATE_MODES.includes(raw as StreamVideoFrameRateMode)
+    ? (raw as StreamVideoFrameRateMode)
+    : DEFAULT_STREAM_VIDEO_FRAME_RATE_MODE;
+};
+
+export const saveStreamVideoFrameRateMode = (mode: StreamVideoFrameRateMode) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(STREAM_VIDEO_FRAME_RATE_MODE_KEY, mode);
+  broadcast(STREAM_VIDEO_FRAME_RATE_MODE_KEY, mode);
 };
 
 export const loadNotificationVisibility = (): NotificationVisibility => {

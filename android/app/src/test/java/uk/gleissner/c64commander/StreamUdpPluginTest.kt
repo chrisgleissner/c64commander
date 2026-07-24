@@ -48,6 +48,7 @@ class StreamUdpPluginTest {
     val height: Int,
     val dropped: Int,
     val lost: Int,
+    val present: Boolean,
   )
 
   @Before
@@ -63,8 +64,8 @@ class StreamUdpPluginTest {
       received.add(Triple(name, data, arrivalMs))
       latch.countDown()
     }
-    plugin.emitFrame = { name, data, arrivalMs, height, dropped, lost ->
-      frames.add(AssembledFrame(name, data, arrivalMs, height, dropped, lost))
+    plugin.emitFrame = { name, data, arrivalMs, height, dropped, lost, present ->
+      frames.add(AssembledFrame(name, data, arrivalMs, height, dropped, lost, present))
       latch.countDown()
     }
   }
@@ -279,6 +280,50 @@ class StreamUdpPluginTest {
   }
 
   @Test
+  fun setKeepFractionDecimatesNativelyAndSkipsBase64ForUnpresentedFrames() {
+    val port = bindAssemble()
+    // Keep 50%: present every 2nd assembled frame; the others emit an event with NO base64 payload.
+    val setCall = mock(PluginCall::class.java)
+    `when`(setCall.getString("name")).thenReturn("video")
+    `when`(setCall.getInt("permille")).thenReturn(500)
+    plugin.setKeepFraction(setCall)
+    verify(setCall).resolve(any())
+
+    val n = 10
+    latch = CountDownLatch(n) // EVERY assembled frame still emits an event (honest JS accounting)
+    DatagramSocket().use { sender ->
+      val addr = InetAddress.getByName("127.0.0.1")
+      var seq = 0
+      for (f in 0 until n) {
+        sendFrame(sender, addr, port, seq, f)
+        seq += 2
+        Thread.sleep(3)
+      }
+    }
+
+    assertTrue("not all frames emitted an event", latch.await(5, TimeUnit.SECONDS))
+    assertEquals(n, frames.size)
+    assertEquals(5, frames.count { it.present }) // exactly half presented at 50%
+    assertEquals(5, frames.count { !it.present })
+    // Presented frames carry a full 52224-byte 4bpp payload …
+    assertTrue(frames.filter { it.present }.all { Base64.decode(it.data, Base64.NO_WRAP).size == 52224 })
+    // … skipped frames carry NO base64 (the elided encode + bridge payload = the CPU win).
+    assertTrue(frames.filter { !it.present }.all { it.data.isEmpty() })
+
+    val closeCall = mock(PluginCall::class.java)
+    `when`(closeCall.getString("name")).thenReturn("video")
+    plugin.close(closeCall)
+  }
+
+  @Test
+  fun setKeepFractionRejectsMissingName() {
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("name")).thenReturn(null)
+    plugin.setKeepFraction(call)
+    verify(call).reject("name is required")
+  }
+
+  @Test
   fun bindJoinsAMulticastGroup() {
     val call = mock(PluginCall::class.java)
     `when`(call.getString("name")).thenReturn("video")
@@ -310,6 +355,124 @@ class StreamUdpPluginTest {
     `when`(call.getString("name")).thenReturn(null)
     plugin.close(call)
     verify(call).reject("name is required")
+  }
+
+  /** Resolve a PluginCall, capturing the resolved JSObject. */
+  private fun resolvingCall(configure: (PluginCall) -> Unit): Pair<PluginCall, () -> JSObject?> {
+    val call = mock(PluginCall::class.java)
+    configure(call)
+    var resolved: JSObject? = null
+    doAnswer { invocation ->
+              resolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(any())
+    return call to { resolved }
+  }
+
+  @Test
+  fun openAudioTrackReportsSampleRateAndBufferCapacity() {
+    val (call, resolved) = resolvingCall { `when`(it.getInt("sampleRate")).thenReturn(47983) }
+    plugin.openAudioTrack(call)
+    verify(call).resolve(any())
+    assertEquals(47983, resolved()!!.getInteger("sampleRate"))
+    // A real (or shadow) AudioTrack always reports a positive buffer capacity.
+    assertTrue("expected a positive buffer capacity", resolved()!!.getDouble("bufferMs") > 0.0)
+
+    plugin.closeAudioTrack(resolvingCall {}.first)
+  }
+
+  @Test
+  fun writeAudioTrackReturnsBufferStatsForTheGovernor() {
+    plugin.openAudioTrack(resolvingCall { `when`(it.getInt("sampleRate")).thenReturn(47983) }.first)
+
+    // 4 stereo S16 frames of PCM (16 bytes), base64-framed as the JS sink sends it.
+    val pcm = ByteArray(16) { it.toByte() }
+    val (writeCall, resolvedWrite) =
+        resolvingCall { `when`(it.getString("data")).thenReturn(Base64.encodeToString(pcm, Base64.NO_WRAP)) }
+    plugin.writeAudioTrack(writeCall)
+    verify(writeCall).resolve(any())
+    // The governor reads these back each write: buffer depth (>= 0) + a non-negative underrun count.
+    assertTrue(resolvedWrite()!!.getDouble("bufferedMs") >= 0.0)
+    assertTrue(resolvedWrite()!!.getInteger("underruns")!! >= 0)
+
+    plugin.closeAudioTrack(resolvingCall {}.first)
+  }
+
+  @Test
+  fun writeAudioTrackRejectsMissingData() {
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("data")).thenReturn(null)
+    plugin.writeAudioTrack(call)
+    verify(call).reject("data is required")
+  }
+
+  @Test
+  fun writeAudioTrackIsANoOpWhenNoTrackIsOpen() {
+    // No openAudioTrack first: the write must resolve with zeroed stats, never crash.
+    val (call, resolved) =
+        resolvingCall { `when`(it.getString("data")).thenReturn(Base64.encodeToString(ByteArray(8), Base64.NO_WRAP)) }
+    plugin.writeAudioTrack(call)
+    verify(call).resolve(any())
+    assertEquals(0.0, resolved()!!.getDouble("bufferedMs"), 0.0)
+    assertEquals(0, resolved()!!.getInteger("underruns"))
+  }
+
+  @Test
+  fun closeAudioTrackIsSafeWhenNoneOpen() {
+    val (call, _) = resolvingCall {}
+    plugin.closeAudioTrack(call)
+    verify(call).resolve(any())
+  }
+
+  @Test
+  fun readAudioStatsReturnsZeroWhenNoTrackOpen() {
+    val (call, resolved) = resolvingCall {}
+    plugin.readAudioStats(call)
+    verify(call).resolve(any())
+    assertEquals(0.0, resolved()!!.getDouble("bufferedMs"), 0.0)
+    assertEquals(0, resolved()!!.getInteger("underruns"))
+  }
+
+  @Test
+  fun audioReceiveLoopFeedsTheOpenAudioTrackNatively() {
+    // Option C: with an AudioTrack open, the AUDIO receive thread feeds it directly (no JS write). We
+    // verify the feed PATH runs end to end without error: the audio packet is received (emitDatagram
+    // fires — writeRaw is called right after it in the same loop iteration) and readAudioStats resolves.
+    // (The buffered DEPTH can't be asserted under Robolectric: its ShadowAudioTrack.write does not model
+    // buffering and returns 0 — that is exercised on real hardware by the HIL.)
+    plugin.openAudioTrack(resolvingCall { `when`(it.getInt("sampleRate")).thenReturn(47983) }.first)
+
+    val (bindCall, bindResolved) =
+        resolvingCall {
+          `when`(it.getString("name")).thenReturn("audio")
+          `when`(it.getInt("port")).thenReturn(0)
+        }
+    plugin.bind(bindCall)
+    val port = bindResolved()!!.getInteger("port")!!
+    assertTrue("expected an OS-assigned audio port", port > 0)
+
+    // Send one audio packet: u16 LE seq + a whole stereo S16 frame (4 bytes of PCM).
+    val packet = byteArrayOf(0, 0, 0x11, 0x22, 0x33, 0x44)
+    DatagramSocket().use { sender ->
+      sender.send(DatagramPacket(packet, packet.size, InetAddress.getByName("127.0.0.1"), port))
+    }
+
+    // The receive loop processed the packet (and thus ran the native feed) without tearing down.
+    assertTrue("audio packet was not received by the receive loop", latch.await(3, TimeUnit.SECONDS))
+    assertEquals(1, received.size)
+    assertEquals("audio", received[0].first)
+
+    // Stats read is safe (>= 0, no crash) while the sink is fed natively.
+    val (statsCall, statsResolved) = resolvingCall {}
+    plugin.readAudioStats(statsCall)
+    assertTrue(statsResolved()!!.getDouble("bufferedMs") >= 0.0)
+
+    val closeCall = mock(PluginCall::class.java)
+    `when`(closeCall.getString("name")).thenReturn("audio")
+    plugin.close(closeCall)
+    plugin.closeAudioTrack(resolvingCall {}.first)
   }
 
   private fun injectBridge(target: Plugin, ctx: Context) {

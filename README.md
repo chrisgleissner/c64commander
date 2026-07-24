@@ -165,9 +165,11 @@ Hear and see the running machine from inside the app, in one shared session that
   </tr>
 </table>
 
-Inside **Remote Input**, the mirror becomes a full-width, zoomable screen for playing games or driving keypad-only devices. A colour-coded **view-lock** keeps physical keys unambiguous — **blue = driving the C64**, **amber = adjusting the view** — and you can pinch/drag/double-tap to zoom and pan, follow on-screen activity automatically, or jump around with the minimap.
+Inside **Remote Input**, the mirror becomes a full-width, zoomable screen for playing games or driving keypad-only devices. A colour-coded **view-lock** keeps physical keys unambiguous — **blue = driving the C64**, **amber = adjusting the view** — and you can pinch/drag/double-tap to zoom and pan, follow on-screen activity automatically, or jump around with the minimap. In game mode the screen stays fully visible above the controls at any control size.
 
 <img src="docs/img/app/home/remote-input/06-av-mirror-immersive.png" alt="Remote Input immersive mirror: the C64 screen with a Driving-C64 view-lock chip and zoom/pan controls" width="300"/>
+
+Audio never clicks or drifts: lost packets are concealed (hold-last-sample with a fade) and the picture is never allowed to lag the sound. A **Stats** panel (open while playing) shows live and historical frame rate, audio-buffer depth, packet loss/concealment and CPU, and exports a JSON diagnostic. An adaptive **Video frame rate** (Auto / 100% / 50% / 25%) sheds exactly as much picture as needed to protect audio and battery, recovering to full rate automatically. On the transport side, video frames are assembled natively (skipping the base64/bridge cost of frames that won't be shown), the receive threads run at raised priority, and a continuous no-drift latency invariant is enforced. Correctness, latency, concealment and CPU are guarded by deterministic tests plus a local Pixel-4 → C64U hardware-in-the-loop gate (`./build --stream-hil`).
 
 Enable **Audio Mirror** / **Video Mirror** under **Settings → Features** (stream ports are configurable under **Settings → Play and disk behaviour**, defaulting to 11000 / 11001).
 

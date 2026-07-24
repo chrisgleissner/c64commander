@@ -1,0 +1,152 @@
+{
+  "$comment": [
+    "Committed Live View streaming performance thresholds (spec §16). Machine-readable; every",
+    "threshold carries its measurement metadata (profile, runner, metric, unit, bound, duration,",
+    "warmup, repetitions, aggregation). Changing a threshold requires review + evidence (§21) — do",
+    "NOT auto-rewrite a baseline to make a regression pass. The soak/drift gates run on every build",
+    "(host, deterministic). The device CPU gates are asserted by the Pixel-4 HIL fixture, which is",
+    "currently MANUAL (no self-hosted CI runner) — see docs/plans/live-view and tools/hil."
+  ],
+  "version": 2,
+  "endToEnd": {
+    "$comment": [
+      "End-to-end latency, reframed from the spec's original <30 ms source→display (unreachable on",
+      "this firmware+transport — the C64U's own capture buffer + Wi-Fi floor it) to AMBITIOUS-BUT-",
+      "ACHIEVABLE budgets MEASURED on real hardware and now ASSERTED by the interactive Pixel-4 → C64U",
+      "HIL (tools/hil/av_sync_hil.py). Measured 2026-07-24 (Pixel 4 → C64U fw1.2.0, PAL, Wi-Fi):",
+      "press→see p99 96–176 ms, press→hear p99 90–144 ms, A/V sync offset p99 ~2–5 ms. press→see/hear",
+      "are NOISY run-to-run (±~80 ms): they include the machine:input round trip + the device's",
+      "once-per-frame keyboard poll + capture + Wi-Fi, and the p99 is over ~15 taps — they gate GROSS",
+      "regressions, not fine latency. (The see metric alone swings 96→176 ms across identical-video-path",
+      "runs, which bounds the noise.) The native audio player latency is the SEPARATE, reproducible",
+      "audioPlaybackLatency gate below, not press→hear (which measures the JS analyzer callback, a path",
+      "the native AudioTrack playback does not use)."
+    ],
+    "profile": "pixel4-hil-avsync",
+    "runner": "pixel4-c64u-hil-local",
+    "device": "Pixel 4 (flame)",
+    "firmware": "C64U fw1.2.0",
+    "source": "PAL",
+    "unit": "ms",
+    "aggregation": "p99",
+    "taps": 10,
+    "soakSeconds": 35,
+    "thresholds": {
+      "videoInputToDisplayP99Ms": 250,
+      "audioInputToHearP99Ms": 150,
+      "avOffsetP99Ms": 20
+    }
+  },
+  "audioPlaybackLatency": {
+    "$comment": [
+      "Native low-latency audio (AudioTrack) vs the WebAudio player — the largest app-reducible slice of",
+      "the audio latency is the PLAYER BUFFER. The native AudioTrack is fed DIRECTLY from the plugin's",
+      "URGENT_AUDIO receive thread (never from JS), so (a) there is no per-packet bridge traffic to stall",
+      "the JS loop and (b) the JS-thread video paint cannot starve the audio feed — a small buffer holds",
+      "glitch-free. The WebAudio player, by contrast, feeds from JS and has no cap: its buffer BALLOONS",
+      "under concurrent video because its scheduler queues chunks ahead through every JS jank. Measured on",
+      "the Pixel 4 → C64U (2026-07-24, PAL, Wi-Fi), WATCHING (audio+video — the primary Live View mode),",
+      "steady state, both holding a stable 50 fps, 0 underruns:",
+      "  WebAudio player buffer   = 179–192 ms   (setting off; balloons under video)",
+      "  Native AudioTrack buffer =  13– 56 ms   (setting on, native-fed)  → ~4x lower.",
+      "This is the reproducible native audio win (the run-to-run-noisy press→hear metric measures the JS",
+      "analyzer callback, a path the native playback does not use). The HIL reads the buffer from the live",
+      "Stats (stream-stats-audio-buffer). The full press→hear round trip still keeps a firmware/Wi-Fi floor",
+      "(input round trip ~19–33 ms + capture + once-per-frame poll) that no app change can beat — the",
+      "factor-2 target (met ~4x here) is on this app-controlled buffer, not that physical floor."
+    ],
+    "profile": "pixel4-hil-avsync",
+    "runner": "pixel4-c64u-hil-local",
+    "device": "Pixel 4 (flame)",
+    "firmware": "C64U fw1.2.0",
+    "source": "PAL",
+    "unit": "ms",
+    "aggregation": "live-sample",
+    "measured": { "webAudioBufferMs": 185, "nativeAudioBufferMs": 56 },
+    "thresholds": {
+      "nativeAudioBufferMaxMs": 100,
+      "$audioUnderrunsMax": [
+        "HIL tolerance, NOT the ideal. The strict zero-underrun guarantee is the deterministic host",
+        "gate (audioContinuity.audioCallbackUnderruns = 0). Native AudioTrack warmup emits a few HAL",
+        "priming underruns at startup, and the HIL's own heavy CDP polling stalls the JS feed; both are",
+        "measurement artifacts, not shipped glitches. This gate only catches a REGRESSION flood."
+      ],
+      "audioUnderrunsMax": 20
+    }
+  },
+  "latencyDrift": {
+    "profile": "deterministic-soak",
+    "runner": "host-node",
+    "metric": "video-local-pipeline-residence",
+    "unit": "ms",
+    "durationSimulatedMs": 600000,
+    "warmupMs": 5000,
+    "repetitions": 1,
+    "aggregation": "rolling-p99 + first/last-window-p99 + ols-slope",
+    "thresholds": {
+      "maxRollingP99Ms": 30,
+      "rollingWindowMs": 60000,
+      "compareWindowMs": 300000,
+      "maxWindowDeltaMs": 2,
+      "maxSlopeMsPerMin": 0.5
+    }
+  },
+  "audioContinuity": {
+    "profile": "deterministic-core",
+    "runner": "host-node",
+    "unit": "count",
+    "aggregation": "session-total",
+    "thresholds": {
+      "audioCallbackUnderruns": 0,
+      "applicationInducedAudioLoss": 0,
+      "unexplainedAudioGaps": 0,
+      "staleSessionAudioSamples": 0
+    }
+  },
+  "audioConcealmentClick": {
+    "profile": "deterministic-core",
+    "runner": "host-node",
+    "metric": "max-consecutive-sample-step",
+    "unit": "int16-code",
+    "aggregation": "max",
+    "thresholds": { "maxClickStep": 600 }
+  },
+  "videoSlots": {
+    "profile": "deterministic-core",
+    "runner": "host-node",
+    "unit": "count",
+    "aggregation": "session-total",
+    "thresholds": { "unexplainedMissingPresentationSlots": 0 }
+  },
+  "hostBenchmark": {
+    "profile": "host-benchmark",
+    "runner": "host-node-dedicated",
+    "unit": "ops-per-second",
+    "warmupIterations": 100,
+    "repetitions": 3,
+    "aggregation": "median",
+    "$comment": [
+      "Relative-regression gate only: a dedicated, quiesced runner is required for a HARD absolute",
+      "CPU gate (§14.3/§16.4 — a shared cloud runner is too noisy). The vitest bench prints ops/s;",
+      "assert-stream-perf.mjs compares against a committed baseline with a tolerance band."
+    ],
+    "thresholds": { "maxRegressionPct": 25 }
+  },
+  "deviceCpu": {
+    "profile": "pixel4-hil",
+    "runner": "pixel4-c64u-hil-manual",
+    "unit": "percent-of-one-core",
+    "device": "Pixel 4 (flame)",
+    "os": "Android 13",
+    "firmware": "C64U fw1.2.0",
+    "source": "PAL",
+    "aggregation": "top-H-4-sample-mean",
+    "$comment": "Absolute ceilings measured on-device 2026-07-24; asserted by the manual HIL fixture, not a CI gate yet.",
+    "thresholds": {
+      "appTotalCpuPctAt100": 70,
+      "appTotalCpuPctAt25": 60,
+      "audioUnderruns": 0,
+      "jankyFramesPct": 2
+    }
+  }
+}

@@ -47,8 +47,21 @@ export interface StreamReceiver {
    * WebSocket bridge, audio) omit this method; the caller falls back to `onDatagram` + JS assembly.
    */
   onFrame?(
-    handler: (frame: Uint8Array, height: number, arrivalMs: number, droppedPackets: number, framesLost: number) => void,
+    handler: (
+      frame: Uint8Array,
+      height: number,
+      arrivalMs: number,
+      droppedPackets: number,
+      framesLost: number,
+      present: boolean,
+    ) => void,
   ): void;
+  /**
+   * Optional: push the video keep-fraction (0–1) to a transport that decimates natively (the Android
+   * plugin), so decimated frames skip their Base64 encode + bridge payload. Present only when the
+   * transport supports it; the caller falls back to JS-side decimation otherwise.
+   */
+  setNativeCadence?(fraction: number): void;
   onStateChange(handler: (state: StreamConnectionState) => void): void;
   /** The host:port the device should stream to (the receiver's own address). */
   readonly destination: string;
@@ -168,8 +181,16 @@ const base64ToBytes = (base64: string): Uint8Array => {
 export class NativeUdpStreamReceiver implements StreamReceiver {
   private datagramHandler: ((data: Uint8Array, arrivalMs: number) => void) | null = null;
   private frameHandler:
-    | ((frame: Uint8Array, height: number, arrivalMs: number, droppedPackets: number, framesLost: number) => void)
+    | ((
+        frame: Uint8Array,
+        height: number,
+        arrivalMs: number,
+        droppedPackets: number,
+        framesLost: number,
+        present: boolean,
+      ) => void)
     | null = null;
+  private static readonly EMPTY = new Uint8Array(0);
   private stateHandler: ((state: StreamConnectionState) => void) | null = null;
   destination = "";
   private closed = false;
@@ -199,12 +220,15 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
       this.listeners.push(
         StreamUdp.addListener("videoframe", (event) => {
           if (event.name !== this.name || !this.frameHandler) return;
+          // Decimated frames (present=false) carry no payload — skip the base64 decode entirely.
+          const present = event.present !== false;
           this.frameHandler(
-            base64ToBytes(event.data),
+            present ? base64ToBytes(event.data) : NativeUdpStreamReceiver.EMPTY,
             event.height,
             typeof event.t === "number" ? event.t : nowMs(),
             event.dropped ?? 0,
             event.lost ?? 0,
+            present,
           );
         }),
       );
@@ -228,9 +252,25 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
   }
 
   onFrame(
-    handler: (frame: Uint8Array, height: number, arrivalMs: number, droppedPackets: number, framesLost: number) => void,
+    handler: (
+      frame: Uint8Array,
+      height: number,
+      arrivalMs: number,
+      droppedPackets: number,
+      framesLost: number,
+      present: boolean,
+    ) => void,
   ): void {
     this.frameHandler = handler;
+  }
+
+  /** Push the keep-fraction to the native assembler (video only) so it decimates before encoding. */
+  setNativeCadence(fraction: number): void {
+    if (!this.assemble) return;
+    const permille = Math.max(0, Math.min(1000, Math.round(fraction * 1000)));
+    void StreamUdp.setKeepFraction({ name: this.name, permille }).catch((error) => {
+      addLog("debug", "Native keep-fraction set failed", { error: (error as Error)?.message ?? String(error) });
+    });
   }
 
   onStateChange(handler: (state: StreamConnectionState) => void): void {

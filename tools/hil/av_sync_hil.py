@@ -27,10 +27,20 @@
 
 import argparse
 import json
+import os
+import re
 import subprocess
 import sys
 import time
 import urllib.request
+
+THRESHOLDS_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "ci", "perf", "stream-perf-thresholds.json")
+
+
+def parse_ms(value):
+    """Extract the millisecond number that precedes 'ms' (e.g. 'p99 153 ms' -> 153, '+2 ms' -> 2)."""
+    m = re.search(r"(-?\d+(?:\.\d+)?)\s*ms", value or "")
+    return abs(float(m.group(1))) if m else None
 
 try:
     import websocket  # websocket-client
@@ -115,8 +125,16 @@ def main():
     time.sleep(15)
     print("  video:", text("av-mirror-fps"), "| controls:", text("av-mirror-controls"))
 
+    # Audio player buffer depth — the native AudioTrack's low-latency win (default on). Read from the
+    # live Stats; this is the slice of press→hear that the native sink shrinks (WebAudio ~109 ms →
+    # native ~52 ms). It sits AFTER wire arrival, so it is not in the press→hear (wire) number.
+    audio_buffer_ms = parse_ms(text("stream-stats-audio-buffer"))
+    audio_underruns = int((text("stream-stats-underruns") or "0").split()[0])
+    print(f"  audio player buffer: {audio_buffer_ms} ms | underruns: {audio_underruns}")
+
     # 2) Automatic soak — periodic aligned pops; assert matched pops and report offset P99.
     click("live-view-expand"); time.sleep(1)
+    click("av-sync-toggle"); time.sleep(0.5)  # the A/V Sync section is collapsed by default
     click("av-sync-run"); time.sleep(1)
     click("av-sync-reset")
     print(f"Auto A/V sync soak ({args.soak_seconds}s)...")
@@ -128,6 +146,7 @@ def main():
     assert matched >= 5, f"auto soak produced too few matched pops: {count}"
 
     # 3) Interactive space-triggered taps — report press->see / press->hear / offset P99.
+    click("av-sync-lat-toggle"); time.sleep(0.5)  # the Tap latency section is collapsed by default
     click("av-sync-key-load"); time.sleep(4)
     err = text("av-sync-error")
     assert err in (None, "", "none"), f"failed to load space program: {err}"
@@ -137,20 +156,49 @@ def main():
         click("av-sync-press")
         time.sleep(1.6)
     time.sleep(1)
-    see = text("av-sync-lat-see")
-    hear = text("av-sync-lat-hear")
-    offset = text("av-sync-lat-offset")
+    see_p99 = parse_ms(text("av-sync-lat-see-p99"))
+    hear_p99 = parse_ms(text("av-sync-lat-hear-p99"))
+    offset_p99 = parse_ms(text("av-sync-lat-offset-p99"))
+    soak_offset_p99 = parse_ms(stats.get("p99"))
     print("  taps:", text("av-sync-lat-count"),
-          "| press->see P99:", see, "| press->hear P99:", hear, "| A/V offset P99:", offset)
+          "| press->see p99:", see_p99, "ms | press->hear p99:", hear_p99,
+          "ms | A/V offset p99:", offset_p99, "ms | soak A/V offset p99:", soak_offset_p99, "ms")
     taps = int((text("av-sync-lat-count") or "0").split()[0])
-    # A single measured tap is not a meaningful P99. Require a majority of the sent taps to have
-    # produced a detected pop, and require the latency fields to actually be populated.
     required = max(2, args.taps // 2)
     assert taps >= required, f"only {taps}/{args.taps} SPACE taps produced a detected pop (need >= {required})"
-    for label, value in (("press->see", see), ("press->hear", hear), ("A/V offset", offset)):
-        assert value not in (None, "", "—"), f"{label} P99 not reported after the taps"
 
-    print("HIL PASS: pipeline works end to end on real hardware.")
+    # Assert the committed AMBITIOUS-BUT-ACHIEVABLE end-to-end budgets (§16.1, reframed). These are
+    # measured on real hardware and gated with headroom; a regression here fails the local build.
+    cfg = json.load(open(THRESHOLDS_PATH))
+    gates = cfg["endToEnd"]["thresholds"]
+    checks = {
+        "videoInputToDisplayP99Ms": (see_p99, gates["videoInputToDisplayP99Ms"]),
+        "audioInputToHearP99Ms": (hear_p99, gates["audioInputToHearP99Ms"]),
+        # `default=None` guards the empty case (neither the tap-latency section nor the auto-soak
+        # populated an offset p99): without it `max()` raises ValueError and escapes the gate loop as
+        # an opaque traceback instead of the clean `measured is None -> FAIL` the check below reports.
+        "avOffsetP99Ms": (max((v for v in (offset_p99, soak_offset_p99) if v is not None), default=None), gates["avOffsetP99Ms"]),
+        # Native low-latency audio: the player buffer must stay well under the WebAudio baseline.
+        "nativeAudioBufferMaxMs": (audio_buffer_ms, cfg["audioPlaybackLatency"]["thresholds"]["nativeAudioBufferMaxMs"]),
+    }
+    failed = []
+    for name, (measured, limit) in checks.items():
+        ok = measured is not None and measured <= limit
+        print(f"  gate {name}: {measured} ms <= {limit} ms -> {'PASS' if ok else 'FAIL'}")
+        if not ok:
+            failed.append(name)
+    # Native audio underruns — a REGRESSION-flood catch only (AudioTrack warmup + the HIL's own heavy
+    # polling emit a few; the strict zero-underrun ideal is the deterministic host audioContinuity gate).
+    underruns_max = cfg["audioPlaybackLatency"]["thresholds"]["audioUnderrunsMax"]
+    ok = audio_underruns <= underruns_max
+    print(f"  gate audioUnderrunsMax: {audio_underruns} <= {underruns_max} -> {'PASS' if ok else 'FAIL'}")
+    if not ok:
+        failed.append("audioUnderrunsMax")
+    if failed:
+        print(f"HIL FAIL: {len(failed)} latency gate(s) exceeded: {', '.join(failed)}", file=sys.stderr)
+        sys.exit(1)
+
+    print("HIL PASS: pipeline works end to end on real hardware AND meets the committed latency budgets.")
 
 
 if __name__ == "__main__":

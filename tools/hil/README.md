@@ -21,25 +21,62 @@ pip install websocket-client
 python3 tools/hil/av_sync_hil.py --serial <ADB_SERIAL> --soak-seconds 45 --taps 12
 ```
 
-## Thresholds — why hardware is not asserted to <30ms
+## Thresholds — ambitious-but-achievable, ASSERTED on hardware
 
-The `<30ms` press→pop latency and `<20ms` A/V offset targets are **perfect-network** figures. They
-are asserted deterministically by the every-build mocked-C64 E2E
-(`tests/unit/hooks/useAvSyncInteractive.test.tsx`). On real Wi-Fi the end-to-end path adds tens of
-ms that no client can remove: the machine:input HTTP round trip, the device's once-per-frame
-keyboard poll, the C64U's video-capture buffering (~1–2 frames), frame reassembly and render. So
-the HIL **proves the pipeline works end to end and prints the real numbers** rather than asserting
-the perfect-network thresholds.
+The original spec's `<30 ms` **source→display** target is a physical floor (the C64U's own ~1–2 frame
+capture buffer + multicast Wi-Fi + WebView render), so it was reframed to **end-to-end budgets
+measured on this hardware and now asserted** — see `ci/perf/stream-perf-thresholds.json` → `endToEnd`.
+`av_sync_hil.py` reads those thresholds and **fails (exit 1)** if the pipeline regresses past them:
 
-### Representative results (Pixel 4 → C64U fw 1.2.0, PAL, Wi-Fi)
+| Gate (p99)                      | Committed budget | Measured (2026-07-24) |
+| ------------------------------- | ---------------- | --------------------- |
+| press→see (video input→display) | < 250 ms         | ~96–176 ms            |
+| press→hear (audio input→hear)   | < 150 ms         | ~90–144 ms            |
+| A/V sync offset                 | < 20 ms          | ~2–5 ms               |
+| audio player buffer (native)    | < 100 ms         | ~13–56 ms (watching)  |
 
-| Metric | Value |
-| --- | --- |
-| Auto soak — matched pops | 10–23 over 45 s |
-| Auto soak — offset (signed P99) | within ±30 ms (video wire-lags audio ~36 ms; consistent) |
-| Interactive — press→see P99 | ~200 ms |
-| Interactive — press→hear P99 | ~110 ms |
-| Interactive — A/V offset P99 | ~54 ms |
+press→see/hear are input→display/hear, so they include the machine:input HTTP round trip and the
+device's once-per-frame keyboard poll — not a pure render latency. They are **noisy run-to-run**
+(±~80 ms; the see metric alone swings 96→176 ms across identical-video-path runs), so they gate gross
+regressions, not fine latency — the native-audio win is the separate buffer row. The A/V sync offset
+(~2–5 ms) is excellent; it improved from an earlier ~36 ms after the wire-timestamp + governor +
+throttle work.
+
+### Native low-latency audio (the audio-latency reduction)
+
+The largest **app-reducible** slice of the audio latency is the **player buffer**. The native
+`AudioTrack` (Settings → "Low-latency audio (native)", default on) is fed **directly from the plugin's
+`URGENT_AUDIO` receive thread**, never from JS — so there is no per-packet bridge traffic to stall the
+JS loop, and the JS-thread video paint can't starve the audio feed, which lets a small buffer hold
+glitch-free. The WebAudio player feeds from JS and has no cap: its buffer **balloons under concurrent
+video** because its scheduler queues chunks ahead through every JS jank. A/B measured on this rig
+**watching** (audio+video — the primary Live View mode), steady state, both stable 50 fps, 0 underruns:
+
+| Audio player buffer | Setting off (WebAudio) | Setting on (native)      |
+| ------------------- | ---------------------- | ------------------------ |
+| depth (live Stats)  | **179–192 ms**         | **13–56 ms** (~4× lower) |
+
+That buffer is the native audio latency; the HIL reads it from the live Stats
+(`stream-stats-audio-buffer`) and gates it (`ci/perf/stream-perf-thresholds.json` →
+`audioPlaybackLatency`). It is the **reproducible** native-audio win — press→hear (which measures the
+JS analyzer callback, a path the native playback does not use) is too run-to-run-noisy to show it. All
+the audio smarts (the A/V-sync analyzer, health stats) stay in TypeScript, fed from the same datagrams;
+only the final speaker sink is native. The **full** press→hear round trip keeps a firmware/Wi-Fi floor
+(machine:input round trip ~19–33 ms + capture + the once-per-frame keyboard poll) that no app change
+can beat, so the factor-2 goal (met ~4× here) is on this app-controlled buffer, not that physical floor.
+
+## Local gate, not shared CI
+
+This HIL needs the physical rig (Pixel 4 on USB + C64U on the LAN), so it runs on the **local build**,
+not in shared CI. Run the whole gate — streaming + latency — with:
+
+```bash
+npm run test:streams:hil        # or: ./build --install-apk --stream-hil
+```
+
+That runs `hil_stream_fixture.py` (fps / CPU / jank / slot accounting) and this `av_sync_hil.py`
+(the latency budgets above), with a machine-readable exit (0 pass, 1 product fail, 2 infra). Shared
+CI runs only the deterministic host gates (`scripts/ci/stream-gates.mjs`).
 
 ## machine:input drives the C64 keyboard matrix (verified)
 

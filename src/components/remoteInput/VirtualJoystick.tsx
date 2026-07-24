@@ -95,6 +95,15 @@ export const VirtualJoystick = ({
   const controlPx = Math.round(BASE_CONTROL_PX * safeScale);
   const thumbPx = Math.round(Math.max(40, controlPx * 0.36));
   const firePx = Math.round(BASE_FIRE_PX * safeScale);
+  // Game mode: the action controls are absolute (edge-anchored) so they don't size their container.
+  // Reserve exactly their height here — the zone is shrink-0 at this height — so the controls are
+  // fully contained and the Live View picture (a flex sibling above) fits ABOVE them, never hidden
+  // by them. Includes an allowance for the Autofire control when it is shown below FIRE.
+  const immersiveActionZonePx =
+    IMMERSIVE_ACTION_TOP_GAP_PX +
+    controlPx +
+    IMMERSIVE_ACTION_BOTTOM_OFFSET_PX +
+    (showAutofire ? IMMERSIVE_ACTION_CONTROL_STACK_GAP_PX + Math.round(firePx * 0.9) : 0);
 
   const applyDirections = useCallback(
     (next: JoystickInputName[]) => {
@@ -345,11 +354,17 @@ export const VirtualJoystick = ({
           controls stay edge-anchored for no-look thumb reach with extra vertical
           clearance from both the top controls and the footer. */}
       <div
+        data-testid="remote-input-joystick-action-zone"
+        data-immersive-min-height={immersive ? immersiveActionZonePx : undefined}
         className={cn("flex items-end justify-between gap-4", immersive && "relative min-h-0 flex-1")}
         style={
           immersive
             ? {
                 paddingTop: IMMERSIVE_ACTION_TOP_GAP_PX,
+                // Never let the action zone shrink below the controls' own height: the controls are
+                // absolute (edge-anchored) so a shorter zone would let them overflow UP over the Live
+                // View picture above. With this floor they stay contained and the picture is never hidden.
+                minHeight: immersiveActionZonePx,
               }
             : undefined
         }

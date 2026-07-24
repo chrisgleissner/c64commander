@@ -34,7 +34,7 @@ export interface StreamUdpDatagramEvent {
  */
 export interface StreamUdpVideoFrameEvent {
   name: string;
-  /** Base64 of the whole 52224-byte 4bpp VIC frame (PAL-sized storage; NTSC is a subset). */
+  /** Base64 of the whole 52224-byte 4bpp VIC frame; EMPTY when `present` is false (decimated). */
   data: string;
   /** Wire-arrival timestamp (ms) of the frame's EARLIEST packet — the frame-start instant for A/V sync. */
   t?: number;
@@ -44,6 +44,21 @@ export interface StreamUdpVideoFrameEvent {
   dropped: number;
   /** Cumulative frames LOST (gaps in the frame-number sequence — a frame that never completed). */
   lost: number;
+  /**
+   * Whether this frame is presented at the current native keep-rate (see {@link StreamUdpPlugin.setKeepFraction}).
+   * When false the frame was decimated natively: `data` is empty (its Base64 encode + bridge payload
+   * were elided to save CPU), but the event is still delivered so JS can count it. Absent (treated as
+   * true) on plugin builds without native decimation.
+   */
+  present?: boolean;
+}
+
+/** Live buffer/underrun stats returned by each {@link StreamUdpPlugin.writeAudioTrack} write. */
+export interface StreamUdpAudioStats {
+  /** PCM still queued ahead of the AudioTrack playback head (ms) — the native player buffer depth. */
+  bufferedMs: number;
+  /** Cumulative AudioTrack underruns (output ran dry) since {@link StreamUdpPlugin.openAudioTrack}. */
+  underruns: number;
 }
 
 /**
@@ -58,6 +73,32 @@ export interface StreamUdpPlugin {
    */
   bind(options: { name: string; port: number; group?: string; assemble?: boolean }): Promise<StreamUdpBindResult>;
   close(options: { name: string }): Promise<void>;
+  /**
+   * Set the native keep-rate for an assembled video stream, in permille (0–1000; 1000 = present
+   * every frame). The assembler decimates natively — skipping the Base64 encode + bridge of frames
+   * that will not be presented — so the governor's frame-rate reduction actually saves CPU.
+   */
+  setKeepFraction(options: { name: string; permille: number }): Promise<void>;
+  /**
+   * Open a native low-latency audio sink (Android `AudioTrack`, `PERFORMANCE_MODE_LOW_LATENCY`) for
+   * interleaved stereo S16LE PCM at `sampleRate` Hz. Replaces the WebAudio player's ~80 ms lead-in
+   * with the AudioTrack's small fast-mixer buffer. All jitter buffering / concealment / batching stay
+   * in JS; this sink only plays already-decided PCM. Idempotent: re-opening closes the previous track.
+   */
+  openAudioTrack(options: { sampleRate: number }): Promise<{ sampleRate: number; bufferMs: number }>;
+  /**
+   * Legacy JS-fed path: queue one chunk of base64 interleaved-stereo-S16LE PCM to the open AudioTrack.
+   * The shipping path feeds the track natively from the receive thread (no bridge traffic); this
+   * remains for completeness/testing. No-op (zeroed stats) if no track is open.
+   */
+  writeAudioTrack(options: { data: string }): Promise<StreamUdpAudioStats>;
+  /**
+   * Read the open AudioTrack's live buffer depth + underrun count — the governor's audio-headroom
+   * signal, polled periodically since native (not JS) now drives playback. Zeroed if no track is open.
+   */
+  readAudioStats(options?: Record<string, never>): Promise<StreamUdpAudioStats>;
+  /** Stop + release the native audio sink. Safe to call when none is open. */
+  closeAudioTrack(options?: Record<string, never>): Promise<void>;
   addListener(eventName: "datagram", listener: (event: StreamUdpDatagramEvent) => void): Promise<PluginListenerHandle>;
   addListener(
     eventName: "videoframe",

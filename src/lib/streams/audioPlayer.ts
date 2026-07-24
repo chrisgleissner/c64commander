@@ -47,6 +47,7 @@ export class AudioMirrorPlayer {
   private ctx: MinimalAudioContext | null = null;
   private nextTime = 0;
   private scheduled = 0;
+  private underruns = 0;
 
   constructor(
     private readonly factory: AudioContextFactory = defaultFactory,
@@ -68,6 +69,7 @@ export class AudioMirrorPlayer {
         return false;
       }
       this.nextTime = 0;
+      this.underruns = 0;
     }
     await this.ctx.resume?.();
     return true;
@@ -78,6 +80,12 @@ export class AudioMirrorPlayer {
     if (!this.ctx) return;
     const { left, right, frames } = deinterleaveStereo(interleaved);
     if (frames === 0) return;
+    // Underrun detection: if the previously-scheduled audio has already fully drained by the time
+    // this chunk is scheduled (nextTime has fallen at/behind the audio clock), the output ran dry —
+    // an audible gap. This is the closest the WebAudio player path can get to a hardware-callback
+    // underrun; it is the governor's fast-demote trigger and a §16.2 counter (labelled a *player*
+    // underrun, not a native RT-callback underrun).
+    if (this.nextTime > 0 && this.nextTime <= this.ctx.currentTime) this.underruns += 1;
     const buffer = this.ctx.createBuffer(2, frames, this.sampleRate);
     buffer.getChannelData(0).set(left);
     buffer.getChannelData(1).set(right);
@@ -94,11 +102,27 @@ export class AudioMirrorPlayer {
     return this.scheduled;
   }
 
+  /**
+   * Player buffer depth ahead of the audio output clock (ms) — how much scheduled audio is still to
+   * play. The governor's primary headroom signal; trends toward 0 as the pipeline nears an underrun.
+   * 0 when not started or already drained.
+   */
+  get bufferedMs(): number {
+    if (!this.ctx) return 0;
+    return Math.max(0, (this.nextTime - this.ctx.currentTime) * 1000);
+  }
+
+  /** Cumulative player underruns (output ran dry between chunks) since {@link start}. */
+  get underrunCount(): number {
+    return this.underruns;
+  }
+
   async stop(): Promise<void> {
     const ctx = this.ctx;
     this.ctx = null;
     this.nextTime = 0;
     this.scheduled = 0;
+    this.underruns = 0;
     await ctx?.close?.();
   }
 }
