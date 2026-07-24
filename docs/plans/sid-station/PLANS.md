@@ -76,7 +76,7 @@ Branch: **`feat/sid-radio`** (cut from `main`). Flags default **off** until each
 - [x] 4.3 HIL `--hvsc-update` soak: continuity while `md5PathIndex` rebuilds → **G12**
 - [x] 4.4 Full §9.2 budgets green on HW → **G9**
 - [x] 4.5 Manual chapter (new `###` under **In Depth**, beside Live View); patch coverage ≥ 91 % → **G10**
-- [ ] **M4 EXIT / GA** — all G1–G12 green → flags default **on**; PR green
+- [~] **M4 EXIT / GA** — SID Radio M0–M4 landed as green mergeable PR #320 (flags OFF); GA flag-flip awaits device HIL soaks + Track B L1–L4
 
 ## Track B — Local Playback Engine (parallel after M0; independent)  (→ L1–L4)
 

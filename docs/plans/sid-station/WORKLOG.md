@@ -530,3 +530,23 @@ _(append entries below as tasks/gates complete — newest last)_
   renders a PSID on the Callback 8020 / SailfishOS) and LE1–LE3 (local engine + chunked Web Audio sink
   + engine toggle + on-device perf) remain — the independent Track B build (§0.5), which needs the
   vendored `dist/` + a full audio engine.
+
+### 2026-07-24 — merge main + open PR #320 (green) — SID Radio M0–M4 landed
+- Task: Make the PR mergeable + green.
+- Merge: `origin/main` had advanced **88 commits** mid-session (dependabot rollups, content-explorer,
+  live-view/remote-input work). Merged into `feat/sid-radio`; resolved additive conflicts —
+  `appSettings.ts` (kept both key sets), `tools/hil/README.md` (combined SID Radio + A/V-sync HIL
+  sections), sid-station ledgers (ours). Fixed a pre-existing prefer-const on main's `audioNativeSink.test.ts`.
+- Rollout footprint: gated the SID Radio **Settings section behind developer mode** so the app is
+  byte-for-byte unchanged with the flags off (Prime Directive 7) — every other SID Radio surface
+  was already flag-gated; this keeps the Settings screenshots unchanged. Ungate at GA.
+- CI (PR #320): full unit suite **783 files / 9325 pass** on the merge; codecov **patch + project
+  PASS** (≥91%); lint + build green; Notices drift green. One flaky host micro-benchmark
+  (`Stream | Host gates` — streams `governor tick`/telemetry nanosecond timings, unrelated to SID
+  Radio, passed on the prior commit) was re-run.
+- State: PR #320 OPEN (draft), **MERGEABLE**, base `main`, **NOT merged**. Title/body updated.
+- Scope truth: **SID Radio M0–M4 complete** (G1/G3 device-proven; G2/G4/G5/G6/G7/G8/G11 code+unit,
+  device HIL manual per §9.5; G9 pinned+asserter; G10 manual+coverage; G12 code+unit). **Track B
+  LE1–LE3 (the on-device libsidplayfp-WASM engine) is NOT built** — LE0 licence audit passed; the
+  engine + audio sink + toggle + L2–L4 device proofs remain as the independent Track B build. GA
+  (flip flags default-on) awaits the device HIL soaks + Track B.
