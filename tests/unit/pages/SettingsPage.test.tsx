@@ -277,6 +277,7 @@ vi.mock("@/hooks/useListPreviewLimit", () => ({
 }));
 
 vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlagValue: () => false,
   useFeatureFlags: () => ({
     flags: featureFlagsRef.current,
     resolved: Object.fromEntries(
@@ -468,6 +469,25 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadDebugLoggingEnabled: vi.fn(() => true),
   loadDiskAutostartMode: vi.fn(() => "kernal"),
   loadVolumeSliderPreviewIntervalMs: vi.fn(() => 200),
+  loadSearchInsideDisks: vi.fn(() => false),
+  saveSearchInsideDisks: vi.fn(),
+  loadBootMenuAnswerEnabled: vi.fn(() => false),
+  saveBootMenuAnswerEnabled: vi.fn(),
+  loadBootMenuKey: vi.fn(() => "F7"),
+  saveBootMenuKey: vi.fn(),
+  loadBootSettleMs: vi.fn(() => 2800),
+  saveBootSettleMs: vi.fn(),
+  BOOT_MENU_KEYS: ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "RETURN", "SPACE"],
+  BOOT_SETTLE_MIN_MS: 1000,
+  BOOT_SETTLE_MAX_MS: 8000,
+  loadStreamVideoPort: vi.fn(() => 11000),
+  saveStreamVideoPort: vi.fn(),
+  loadStreamAudioPort: vi.fn(() => 11001),
+  saveStreamAudioPort: vi.fn(),
+  loadStreamNetworkBufferMs: vi.fn(() => 5),
+  saveStreamNetworkBufferMs: vi.fn(),
+  loadStreamNativeVideoAssembly: vi.fn(() => true),
+  saveStreamNativeVideoAssembly: vi.fn(),
   loadArchiveClientIdOverride: vi.fn(() => ""),
   loadArchiveHostOverride: vi.fn(() => ""),
   loadArchiveUserAgentOverride: vi.fn(() => ""),

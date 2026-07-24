@@ -69,6 +69,18 @@ vi.mock("@/lib/logging", () => ({
   addLog: mockAddLog,
 }));
 
+const { mockAvMirror } = vi.hoisted(() => ({
+  mockAvMirror: {
+    videoLive: false,
+    audioLive: false,
+    stopAll: vi.fn().mockResolvedValue(undefined),
+    startVideo: vi.fn().mockResolvedValue(undefined),
+    startAudio: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
+vi.mock("@/lib/streams/avMirrorSession", () => ({ avMirrorSession: mockAvMirror }));
+
 vi.mock("@/lib/uiErrors", async () => {
   const actual = await vi.importActual<typeof import("@/lib/uiErrors")>("@/lib/uiErrors");
   return {
@@ -146,6 +158,8 @@ describe("useSavedDeviceSwitching", () => {
     vi.resetModules();
     localStorage.clear();
     vi.clearAllMocks();
+    mockAvMirror.videoLive = false;
+    mockAvMirror.audioLive = false;
   });
 
   it("updates local selection immediately, then persists verified identity and route invalidation on success", async () => {
@@ -1238,5 +1252,96 @@ describe("useSavedDeviceSwitching", () => {
       verificationOk: false,
       errorMessage: "Verification exploded",
     });
+  });
+
+  it("stops the live A/V mirror on the old device and restarts it on the verified new device", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    store.addSavedDevice({
+      id: "device-backup",
+      name: "Backup Lab",
+      host: "backup-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      hasPassword: false,
+    });
+    mockVerifyCurrentConnectionTarget.mockResolvedValueOnce({
+      ok: true,
+      deviceInfo: { product: "U64E", hostname: "backup-lab", unique_id: "UID-BACKUP" },
+    });
+    // Live View is running when the user switches devices.
+    mockAvMirror.videoLive = true;
+    mockAvMirror.audioLive = true;
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), { wrapper: createWrapper("/play") });
+
+    await act(async () => {
+      await result.current("device-backup");
+    });
+
+    // Stopped on the OLD device (before the API retarget), restarted on the NEW verified device —
+    // so both devices never stream to the shared multicast group at once (clean transition).
+    expect(mockAvMirror.stopAll).toHaveBeenCalledTimes(1);
+    expect(mockAvMirror.startVideo).toHaveBeenCalledTimes(1);
+    expect(mockAvMirror.startAudio).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not restart the mirror when the new device fails to verify", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    store.addSavedDevice({
+      id: "device-offline",
+      name: "Offline Lab",
+      host: "offline-c64",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      hasPassword: false,
+    });
+    mockVerifyCurrentConnectionTarget.mockResolvedValueOnce({ ok: false, error: "Host unreachable" });
+    mockAvMirror.videoLive = true;
+    mockAvMirror.audioLive = false;
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), { wrapper: createWrapper("/play") });
+
+    await act(async () => {
+      await result.current("device-offline");
+    });
+
+    // Old device's stream is stopped, but we do NOT start streaming on an unreachable device.
+    expect(mockAvMirror.stopAll).toHaveBeenCalledTimes(1);
+    expect(mockAvMirror.startVideo).not.toHaveBeenCalled();
+    expect(mockAvMirror.startAudio).not.toHaveBeenCalled();
+  });
+
+  it("leaves the mirror untouched when Live View is not active", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    store.addSavedDevice({
+      id: "device-backup",
+      name: "Backup Lab",
+      host: "backup-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      hasPassword: false,
+    });
+    mockVerifyCurrentConnectionTarget.mockResolvedValueOnce({
+      ok: true,
+      deviceInfo: { product: "U64E", hostname: "backup-lab", unique_id: "UID-BACKUP" },
+    });
+    // Live View off — nothing to stop or restart.
+    mockAvMirror.videoLive = false;
+    mockAvMirror.audioLive = false;
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), { wrapper: createWrapper("/play") });
+
+    await act(async () => {
+      await result.current("device-backup");
+    });
+
+    expect(mockAvMirror.stopAll).not.toHaveBeenCalled();
+    expect(mockAvMirror.startVideo).not.toHaveBeenCalled();
   });
 });

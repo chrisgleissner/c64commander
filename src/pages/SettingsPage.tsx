@@ -46,6 +46,8 @@ import { Slider } from "@/components/ui/slider";
 import {
   loadAutofireRateHz,
   saveAutofireRateHz,
+  loadShowAutofireButton,
+  saveShowAutofireButton,
   MIN_AUTOFIRE_RATE_HZ,
   MAX_AUTOFIRE_RATE_HZ,
 } from "@/lib/remoteInput/autofire";
@@ -110,6 +112,26 @@ import {
   saveDebugLoggingEnabled,
   saveDiskAutostartMode,
   saveVolumeSliderPreviewIntervalMs,
+  loadSearchInsideDisks,
+  saveSearchInsideDisks,
+  loadBootMenuAnswerEnabled,
+  saveBootMenuAnswerEnabled,
+  loadBootMenuKey,
+  saveBootMenuKey,
+  loadBootSettleMs,
+  saveBootSettleMs,
+  BOOT_MENU_KEYS,
+  BOOT_SETTLE_MIN_MS,
+  BOOT_SETTLE_MAX_MS,
+  type BootMenuKey,
+  loadStreamVideoPort,
+  saveStreamVideoPort,
+  loadStreamAudioPort,
+  saveStreamAudioPort,
+  loadStreamNetworkBufferMs,
+  saveStreamNetworkBufferMs,
+  loadStreamNativeVideoAssembly,
+  saveStreamNativeVideoAssembly,
   loadNotificationVisibility,
   saveNotificationVisibility,
   loadNotificationDurationMs,
@@ -327,10 +349,21 @@ export default function SettingsPage() {
   const [configWriteIntervalMs, setConfigWriteIntervalMs] = useState(loadConfigWriteIntervalMs());
   const [demoModeEnabled, setDemoModeEnabled] = useState(loadDemoModeEnabled());
   const [diskAutostartMode, setDiskAutostartMode] = useState<DiskAutostartMode>(loadDiskAutostartMode());
+  // Content Explorer: In-Image Search (C) + Launch Safety boot-menu answer (B).
+  const [searchInsideDisks, setSearchInsideDisks] = useState(loadSearchInsideDisks);
+  const [bootMenuAnswerEnabled, setBootMenuAnswerEnabled] = useState(loadBootMenuAnswerEnabled);
+  const [bootMenuKey, setBootMenuKey] = useState<BootMenuKey>(loadBootMenuKey);
+  const [bootSettleMs, setBootSettleMs] = useState<number>(loadBootSettleMs);
+  // Live Mirror (D/E) transport ports — configurable (defaults 11000/11001).
+  const [streamVideoPort, setStreamVideoPort] = useState<number>(loadStreamVideoPort);
+  const [streamAudioPort, setStreamAudioPort] = useState<number>(loadStreamAudioPort);
+  const [streamNetworkBufferMs, setStreamNetworkBufferMs] = useState<number>(loadStreamNetworkBufferMs);
+  const [streamNativeVideoAssembly, setStreamNativeVideoAssembly] = useState<boolean>(loadStreamNativeVideoAssembly);
   const [volumeSliderPreviewIntervalMs, setVolumeSliderPreviewIntervalMs] = useState(
     loadVolumeSliderPreviewIntervalMs(),
   );
   const [autofireRateHz, setAutofireRateHz] = useState(loadAutofireRateHz());
+  const [showAutofireButton, setShowAutofireButton] = useState(loadShowAutofireButton());
   const [startupDiscoveryWindowInput, setStartupDiscoveryWindowInput] = useState(
     String(loadStartupDiscoveryWindowMs() / 1000),
   );
@@ -1898,6 +1931,209 @@ export default function SettingsPage() {
                   </p>
                 </div>
 
+                {flags.in_image_search_enabled && (
+                  <div className="flex items-start justify-between gap-3 min-w-0">
+                    <div className="min-w-0">
+                      <Label htmlFor="settings-search-inside-disks" className="font-medium">
+                        Search inside disk images
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        When searching media, also match the programs inside .d64/.d71/.d81 images, not just their
+                        filenames.
+                      </p>
+                    </div>
+                    <Checkbox
+                      id="settings-search-inside-disks"
+                      data-testid="settings-search-inside-disks"
+                      checked={searchInsideDisks}
+                      onCheckedChange={(checked) => {
+                        const next = checked === true;
+                        setSearchInsideDisks(next);
+                        saveSearchInsideDisks(next);
+                      }}
+                    />
+                  </div>
+                )}
+
+                {flags.launch_safety_enabled && (
+                  <div className="space-y-3 rounded-md border border-border p-3">
+                    <div className="flex items-start justify-between gap-3 min-w-0">
+                      <div className="min-w-0">
+                        <Label htmlFor="settings-boot-menu-answer" className="font-medium">
+                          Answer cartridge boot menu after reset
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Advanced. For machines running a cartridge that shows a boot menu on reset: press a key after
+                          a Mount &amp; Load reset so the typed LOAD is not swallowed by the menu. Leave off unless you
+                          run such a cartridge.
+                        </p>
+                      </div>
+                      <Checkbox
+                        id="settings-boot-menu-answer"
+                        data-testid="settings-boot-menu-answer"
+                        checked={bootMenuAnswerEnabled}
+                        onCheckedChange={(checked) => {
+                          const next = checked === true;
+                          setBootMenuAnswerEnabled(next);
+                          saveBootMenuAnswerEnabled(next);
+                        }}
+                      />
+                    </div>
+                    {bootMenuAnswerEnabled && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="settings-boot-menu-key" className="text-sm">
+                            Menu key
+                          </Label>
+                          <Select
+                            value={bootMenuKey}
+                            onValueChange={(value) => {
+                              const key = value as BootMenuKey;
+                              setBootMenuKey(key);
+                              saveBootMenuKey(key);
+                            }}
+                          >
+                            <SelectTrigger id="settings-boot-menu-key" data-testid="settings-boot-menu-key">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {BOOT_MENU_KEYS.map((key) => (
+                                <SelectItem key={key} value={key}>
+                                  {key}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="settings-boot-settle" className="text-sm">
+                            Boot settle (ms)
+                          </Label>
+                          <Input
+                            id="settings-boot-settle"
+                            data-testid="settings-boot-settle"
+                            inputMode="numeric"
+                            value={String(bootSettleMs)}
+                            min={BOOT_SETTLE_MIN_MS}
+                            max={BOOT_SETTLE_MAX_MS}
+                            onChange={(event) => setBootSettleMs(Number(event.target.value) || 0)}
+                            onBlur={() => {
+                              const clamped = Math.min(BOOT_SETTLE_MAX_MS, Math.max(BOOT_SETTLE_MIN_MS, bootSettleMs));
+                              setBootSettleMs(clamped);
+                              saveBootSettleMs(clamped);
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {flags.live_view_enabled && (flags.audio_mirror_enabled || flags.video_mirror_enabled) && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="settings-stream-video-port" className="text-sm">
+                        Video stream port
+                      </Label>
+                      <Input
+                        id="settings-stream-video-port"
+                        data-testid="settings-stream-video-port"
+                        inputMode="numeric"
+                        value={String(streamVideoPort)}
+                        onChange={(event) => setStreamVideoPort(Number(event.target.value) || 0)}
+                        onBlur={() => {
+                          saveStreamVideoPort(streamVideoPort);
+                          setStreamVideoPort(loadStreamVideoPort());
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="settings-stream-audio-port" className="text-sm">
+                        Audio stream port
+                      </Label>
+                      <Input
+                        id="settings-stream-audio-port"
+                        data-testid="settings-stream-audio-port"
+                        inputMode="numeric"
+                        value={String(streamAudioPort)}
+                        onChange={(event) => setStreamAudioPort(Number(event.target.value) || 0)}
+                        onBlur={() => {
+                          saveStreamAudioPort(streamAudioPort);
+                          setStreamAudioPort(loadStreamAudioPort());
+                        }}
+                      />
+                    </div>
+                    <p className="col-span-2 text-xs text-muted-foreground">
+                      UDP ports the device streams Audio/Video Mirror to. Defaults 11000 / 11001; change only if a port
+                      is already in use.
+                    </p>
+                    <div className="col-span-2 space-y-2">
+                      <Label htmlFor="settings-stream-network-buffer" className="text-sm">
+                        Audio network buffer (ms)
+                      </Label>
+                      <Input
+                        id="settings-stream-network-buffer"
+                        data-testid="settings-stream-network-buffer"
+                        inputMode="numeric"
+                        value={String(streamNetworkBufferMs)}
+                        onChange={(event) => setStreamNetworkBufferMs(Number(event.target.value) || 0)}
+                        onBlur={() => {
+                          saveStreamNetworkBufferMs(streamNetworkBufferMs);
+                          setStreamNetworkBufferMs(loadStreamNetworkBufferMs());
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Jitter buffer depth for Live View audio. Holds each packet briefly so a slightly-late or
+                        reordered packet still plays in order, and a lost packet is smoothly concealed instead of
+                        clicking. Default 5 ms; 0 = lowest latency, least resilient.
+                      </p>
+                    </div>
+                    <div className="col-span-2 flex items-start justify-between gap-3 min-w-0">
+                      <div className="min-w-0">
+                        <Label htmlFor="settings-stream-native-assembly" className="font-medium">
+                          Fast video (native assembly)
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Assemble Live View video frames natively so the full frame rate (50 fps PAL / 60 fps NTSC) is
+                          reached. Leave on; turn off only to compare or if video misbehaves. Android only.
+                        </p>
+                      </div>
+                      <Checkbox
+                        id="settings-stream-native-assembly"
+                        data-testid="settings-stream-native-assembly"
+                        checked={streamNativeVideoAssembly}
+                        onCheckedChange={(checked) => {
+                          const next = checked === true;
+                          setStreamNativeVideoAssembly(next);
+                          saveStreamNativeVideoAssembly(next);
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-start justify-between gap-3 min-w-0">
+                  <div className="min-w-0">
+                    <Label htmlFor="settings-show-autofire" className="font-medium">
+                      Show Autofire button
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Autofire is rarely needed for C64 games, so its control is hidden from the Remote Input joystick
+                      and game mode by default. Turn this on to show it.
+                    </p>
+                  </div>
+                  <Checkbox
+                    id="settings-show-autofire"
+                    data-testid="settings-show-autofire"
+                    checked={showAutofireButton}
+                    onCheckedChange={(checked) => {
+                      const next = checked === true;
+                      setShowAutofireButton(next);
+                      saveShowAutofireButton(next);
+                    }}
+                  />
+                </div>
+
                 <div className="space-y-2">
                   <Label className="text-sm">Autofire rate: {autofireRateHz}/s</Label>
                   <Slider
@@ -1905,6 +2141,7 @@ export default function SettingsPage() {
                     max={MAX_AUTOFIRE_RATE_HZ}
                     step={1}
                     value={[autofireRateHz]}
+                    disabled={!showAutofireButton}
                     onValueChange={([value]) => setAutofireRateHz(value)}
                     onValueCommit={([value]) => saveAutofireRateHz(value)}
                     aria-label="Autofire rate"

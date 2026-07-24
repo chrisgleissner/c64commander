@@ -13,6 +13,17 @@ export const MIN_AUTOFIRE_RATE_HZ = 1;
 export const MAX_AUTOFIRE_RATE_HZ = 10;
 
 const AUTOFIRE_RATE_KEY = "c64u_remote_input_autofire_rate_hz";
+const SHOW_AUTOFIRE_BUTTON_KEY = "c64u_remote_input_show_autofire";
+
+/**
+ * Autofire is rarely needed for C64 games and its control otherwise crowds the
+ * game-mode action zone (overlapping the Live View picture). So the button is
+ * hidden by default; a Settings toggle opts it back in.
+ */
+export const DEFAULT_SHOW_AUTOFIRE_BUTTON = false;
+
+/** Broadcast when the "show autofire button" preference changes (parallels the rate event). */
+export const AUTOFIRE_VISIBILITY_CHANGE_EVENT = "c64u-autofire-visibility-updated";
 
 /**
  * Broadcast when the persisted autofire rate changes so a LIVE remote-input
@@ -38,6 +49,22 @@ export const saveAutofireRateHz = (rateHz: number): void => {
   localStorage.setItem(AUTOFIRE_RATE_KEY, String(clampAutofireRateHz(rateHz)));
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event(AUTOFIRE_RATE_CHANGE_EVENT));
+  }
+};
+
+/** Whether the game-mode Autofire button is shown (Settings → Remote Input). Default off. */
+export const loadShowAutofireButton = (): boolean => {
+  if (typeof localStorage === "undefined") return DEFAULT_SHOW_AUTOFIRE_BUTTON;
+  const raw = localStorage.getItem(SHOW_AUTOFIRE_BUTTON_KEY);
+  if (raw === null) return DEFAULT_SHOW_AUTOFIRE_BUTTON;
+  return raw === "1";
+};
+
+export const saveShowAutofireButton = (show: boolean): void => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(SHOW_AUTOFIRE_BUTTON_KEY, show ? "1" : "0");
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTOFIRE_VISIBILITY_CHANGE_EVENT));
   }
 };
 

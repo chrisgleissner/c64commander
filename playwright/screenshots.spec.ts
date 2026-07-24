@@ -1647,6 +1647,15 @@ test.describe("App screenshots", () => {
   });
 
   test("capture home screenshots", { tag: "@screenshots" }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    // Enable the (flag-gated, additive) A/V mirror so the Live View card renders on the Home
+    // dashboard overview + as its own section thumbnail — it is a shipped Home feature and must be
+    // visible in the Home screenshots, not only in the dedicated Content Explorer captures.
+    await page.addInitScript(() => {
+      for (const flag of ["audio_mirror_enabled", "video_mirror_enabled"]) {
+        localStorage.setItem(`c64u_feature_flag:${flag}`, "1");
+        sessionStorage.setItem(`c64u_feature_flag:${flag}`, "1");
+      }
+    });
     // Override the zero timings from beforeEach so the launch sequence runs at normal speed.
     // addInitScript scripts run in registration order on each goto, so this second registration wins.
     await page.addInitScript(() => {
@@ -1751,6 +1760,13 @@ test.describe("App screenshots", () => {
     "capture home profile screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      // Enable the A/V mirror so the Live View card appears in the manual's Home overview too.
+      await page.addInitScript(() => {
+        for (const flag of ["audio_mirror_enabled", "video_mirror_enabled"]) {
+          localStorage.setItem(`c64u_feature_flag:${flag}`, "1");
+          sessionStorage.setItem(`c64u_feature_flag:${flag}`, "1");
+        }
+      });
       for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
         await page.goto("/");
         await waitForConnected(page);
@@ -2126,6 +2142,197 @@ test.describe("App screenshots", () => {
       await expect(page.getByRole("dialog")).toHaveCount(0);
     }
   });
+
+  test(
+    "capture content explorer screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      // The Content Explorer capabilities are additive and flag-gated. Enable the
+      // ones we want to document so the New disk button, the Disk Explorer menu
+      // action, and the launch-safety Settings section render for the captures
+      // below. Registered after the beforeEach seeds, so this override wins.
+      await page.addInitScript(() => {
+        for (const flag of [
+          "new_disk_enabled",
+          "disk_explorer_enabled",
+          "in_image_search_enabled",
+          "launch_safety_enabled",
+        ]) {
+          localStorage.setItem(`c64u_feature_flag:${flag}`, "1");
+          sessionStorage.setItem(`c64u_feature_flag:${flag}`, "1");
+        }
+      });
+      await installListPreviewLimit(page, 3);
+
+      // --- New disk dialog: create a formatted blank image on the device ---
+      await page.goto("/disks");
+      await expect(page.getByRole("heading", { name: "Disks", level: 1 })).toBeVisible();
+      await expect(getActiveMain(page).getByTestId("disk-list")).toContainText("Disk 1.d64");
+
+      await getActiveMain(page).getByTestId("new-disk-open").click();
+      const newDiskDialog = page.getByRole("dialog");
+      await expect(newDiskDialog.getByTestId("new-disk-name")).toBeVisible();
+      await newDiskDialog.getByTestId("new-disk-name").fill("bubble-bobble.d64");
+      await newDiskDialog.getByTestId("new-disk-label").fill("BUBBLE BOBBLE");
+      await newDiskDialog.getByTestId("new-disk-folder").fill("/USB0");
+      await expect(newDiskDialog.getByTestId("new-disk-create")).toBeEnabled();
+      await captureScreenshot(page, testInfo, "disks/content-explorer/01-new-disk.png", {
+        locator: newDiskDialog,
+      });
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+
+      // --- Disk Explorer: look inside an image and Run/Load/Mount a single
+      //     program. Best-effort — the mock disk may not carry a parseable
+      //     directory, so we only capture when the entry list renders. ---
+      const rowMenu = getActiveMain(page).getByRole("button", { name: "Item actions" }).first();
+      if (await rowMenu.isVisible().catch(() => false)) {
+        await rowMenu.click();
+        const explorerItem = page.getByRole("menuitem", { name: /Open \(Disk Explorer\)/ });
+        if (await explorerItem.isVisible().catch(() => false)) {
+          await explorerItem.click();
+          const explorerDialog = page.getByRole("dialog");
+          const listRendered = await explorerDialog
+            .getByTestId("disk-contents-list")
+            .waitFor({ state: "visible", timeout: 6000 })
+            .then(() => true)
+            .catch(() => false);
+          if (listRendered) {
+            await captureScreenshot(page, testInfo, "disks/content-explorer/02-disk-contents.png", {
+              locator: explorerDialog,
+            });
+          }
+        }
+        await page.keyboard.press("Escape");
+      }
+
+      // --- Settings: launch safety + in-image search (Play and Disk card) ---
+      await page.goto("/settings");
+      const bootMenuAnswer = getActiveMain(page).getByTestId("settings-boot-menu-answer");
+      await expect(bootMenuAnswer).toBeVisible();
+      const playAndDiskCard = getActiveMain(page)
+        .locator(".profile-card")
+        .filter({ has: page.getByTestId("settings-boot-menu-answer") });
+      await playAndDiskCard.scrollIntoViewIfNeeded();
+      await captureScreenshot(page, testInfo, "settings/content-explorer/01-launch-safety.png", {
+        locator: playAndDiskCard,
+      });
+    },
+  );
+
+  test(
+    "capture A/V mirror Live View screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      allowWarnings(testInfo, "A/V mirror stream start + stub WebSocket during screenshots.");
+
+      // Enable the mirror flags and install a browser-side stub so the app receives a
+      // real (synthetic) VIC video stream: colour-bar frames in the app's own packet
+      // format flow through the genuine WebSocketStreamReceiver → VideoMirrorController →
+      // decoder → canvas, so these shots show the actual rendered pipeline, not a mock UI.
+      await page.addInitScript(() => {
+        for (const flag of ["audio_mirror_enabled", "video_mirror_enabled"]) {
+          localStorage.setItem(`c64u_feature_flag:${flag}`, "1");
+          sessionStorage.setItem(`c64u_feature_flag:${flag}`, "1");
+        }
+        const RealWebSocket = window.WebSocket;
+        const HDR = 12;
+        const BYTES_PER_LINE = 192;
+        const LINES_PER_PKT = 4;
+        const WIDTH = 384;
+        const HEIGHT = 272;
+        const packets: ArrayBuffer[] = [];
+        const total = HEIGHT / LINES_PER_PKT;
+        for (let i = 0; i < total; i++) {
+          const line = i * LINES_PER_PKT;
+          const buf = new ArrayBuffer(HDR + LINES_PER_PKT * BYTES_PER_LINE);
+          const dv = new DataView(buf);
+          const u8 = new Uint8Array(buf);
+          dv.setUint16(0, i, true); // seq
+          dv.setUint16(4, (line & 0x7fff) | (i === total - 1 ? 0x8000 : 0), true); // line + last-line
+          dv.setUint16(6, WIDTH, true); // width
+          u8[8] = LINES_PER_PKT;
+          u8[9] = 4; // bpp
+          for (let k = 0; k < LINES_PER_PKT; k++) {
+            const color = Math.floor((line + k) / (HEIGHT / 16)) & 0x0f; // 16 colour bars
+            u8.fill(color | (color << 4), HDR + k * BYTES_PER_LINE, HDR + (k + 1) * BYTES_PER_LINE);
+          }
+          packets.push(buf);
+        }
+        class StubStreamWebSocket {
+          url: string;
+          binaryType = "blob";
+          readyState = 0;
+          onopen: ((e?: unknown) => void) | null = null;
+          onmessage: ((e: { data: unknown }) => void) | null = null;
+          onclose: ((e?: unknown) => void) | null = null;
+          onerror: ((e?: unknown) => void) | null = null;
+          private closed = false;
+          constructor(url: string) {
+            this.url = String(url);
+            if (!this.url.includes("/streams/")) return new RealWebSocket(url) as unknown as StubStreamWebSocket;
+            const isVideo = this.url.endsWith("/streams/video");
+            setTimeout(() => {
+              this.readyState = 1;
+              this.onopen?.({});
+              if (!isVideo) return;
+              let n = 0;
+              const tick = () => {
+                if (this.closed || n > 400) return; // ~13s of frames covers the whole capture
+                for (const p of packets) this.onmessage?.({ data: p.slice(0) });
+                n += 1;
+                setTimeout(tick, 33);
+              };
+              tick();
+            }, 15);
+          }
+          send() {}
+          close() {
+            this.closed = true;
+            this.readyState = 3;
+            this.onclose?.({});
+          }
+        }
+        window.WebSocket = StubStreamWebSocket as unknown as typeof WebSocket;
+      });
+
+      // The device stream start/stop REST must be accepted so the controller stays live.
+      await page.route("**/v1/streams/**", (route) =>
+        route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ errors: [] }) }),
+      );
+
+      await page.goto("/");
+      await waitForConnected(page);
+
+      const liveView = getActiveMain(page).getByTestId("live-view-card");
+      await expect(liveView).toBeVisible();
+      await liveView.scrollIntoViewIfNeeded();
+      await liveView.getByTestId("av-video-toggle").click();
+      // Wait until decoded frames are flowing (the fps badge only shows once they are).
+      await expect(liveView.getByTestId("av-mirror-fps")).toBeVisible({ timeout: 8000 });
+      await captureScreenshot(page, testInfo, "home/content-explorer/01-live-view.png", { locator: liveView });
+
+      // Expanded inline preview.
+      await liveView.getByTestId("live-view-expand").click();
+      await page.waitForTimeout(200);
+      await captureScreenshot(page, testInfo, "home/content-explorer/02-live-view-expanded.png", { locator: liveView });
+
+      // Remote Input immersive mirror: the zoomable screen with the view-lock controls.
+      await getActiveMain(page).getByTestId("home-machine-inline-openRemoteInput").click();
+      const sheet = page.getByTestId("remote-input-sheet");
+      await expect(sheet).toBeVisible();
+      const immersiveMirror = sheet.getByTestId("av-mirror-immersive");
+      if (await immersiveMirror.isVisible().catch(() => false)) {
+        await expect(immersiveMirror.getByTestId("av-mirror-immersive-controls")).toBeVisible({ timeout: 8000 });
+        // Zoom in so the picture is magnified and the corner minimap (with its draggable
+        // viewport rectangle) is on screen — the CTAs the manual/README describe.
+        await immersiveMirror.getByTestId("av-immersive-zoom-in").click();
+        await immersiveMirror.getByTestId("av-immersive-zoom-in").click();
+        await expect(immersiveMirror.getByTestId("av-mirror-minimap")).toBeVisible({ timeout: 4000 });
+        await captureScreenshot(page, testInfo, "home/remote-input/06-av-mirror-immersive.png", { locator: sheet });
+      }
+    },
+  );
 
   test(
     "capture disks profile screenshots",

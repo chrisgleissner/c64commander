@@ -179,7 +179,7 @@ If the device is hard to reach, start in **Connection**. If it is reachable but 
 
 Settings also holds saved devices. Use it to edit a name, host, HTTP port, FTP port, Telnet port, or password. When you save and connect, the app probes the device and reports whether the chosen services answer.
 
-Display settings are local to the app. They do not change the C64 Ultimate. Use them to choose the display profile, full-screen behavior, notification style, and how dense the interface should feel.
+Display settings are local to the app. They do not change your C64. Use them to choose the display profile, full-screen behavior, notification style, and how dense the interface should feel.
 
 Feature toggles appear only when a feature is safe for normal users to change in this variant. If a feature is not supported by this variant, it is absent from Settings and from this manual.
 
@@ -408,6 +408,62 @@ To steer a game you have just launched:
 
 On by default. You can change it in Settings > Stable Features.
 
+### Live View
+
+Your C64 can send its own sound and picture out across your network, and Live View brings them straight back into the app — so you can hear a tune or watch the screen without wiring up a speaker or a second television.
+
+It is one shared session. Start it in a single place and it keeps playing wherever you go; there is never a second copy fighting for the same stream. You will find it just below the Quick Actions on **Home**, with two switches:
+
+- **Listen** turns the sound on. It asks for almost no room — a lit button and a small live dot — so it is perfect for keeping half an ear on a game or a SID tune while you get on with something else. Wander to another page and a matching dot appears in the top bar to remind you it is still playing; a tap on it stops everything at once.
+- **Watch** turns the picture on. A small preview of the C64 screen appears just beneath the switches; tap the chevron beside it to grow that preview in place.
+
+![Live View on Home](../../img/app/home/content-explorer/01-live-view.png)
+
+#### The immersive screen
+
+Open **Remote Input** while **Watch** is on and the picture stretches to fill the width of the sheet, above the joystick and keyboard — a proper screen for playing a game or driving a program you are typing into.
+
+Move around it however suits you. On a touchscreen, **pinch** to zoom, **drag** to slide the picture about, and **double-tap** to jump straight in on a spot — a second double-tap fits the whole screen back on. A small map in the corner shows which part you are looking at; drag its rectangle to leap somewhere else in an instant. Switch on **Follow** and the view drifts along on its own to wherever the action is — a lovely way to keep the cursor in sight as you type.
+
+![The immersive screen in Remote Input](../../img/app/home/remote-input/06-av-mirror-immersive.png)
+
+#### Driving the C64, or adjusting the view
+
+When you steer your phone with a physical keypad, those same keys could either work the C64 or move the picture, so Live View makes the difference impossible to mistake. The mirror wears a coloured border that tells you at a glance which one you are doing: a **blue “Driving C64”** border means your keys go straight to the machine, as usual; an **amber “Adjusting view”** border means your keys zoom and pan the picture instead.
+
+Press the **menu key** — or the on-screen **Adjust** button — to switch between the two. You are never stranded looking at a frozen game: adjusting view slips quietly back to driving on its own after a short pause. While the border is amber, the keypad moves the view like this:
+
+| Key | What it does |
+| --- | --- |
+| **2**, or D-pad up | Pan up |
+| **8**, or D-pad down | Pan down |
+| **4**, or D-pad left | Pan left |
+| **6**, or D-pad right | Pan right |
+| **3** or **9** | Zoom in |
+| **1** or **7** | Zoom out |
+| **0**, **5**, or the centre/OK key | Fit the whole screen back on |
+| the **menu** key | Return to driving the C64 |
+
+The same four moves have on-screen buttons too — **＋** and **−** to zoom, **⤢** to fit, and **◎** to turn Follow on and off — so a touchscreen and a keypad reach every control.
+
+Live View is optional and starts switched off. The device streams to two network ports (11000 for the picture, 11001 for the sound); if your setup needs different ones, you can change them in **Settings**, under Play and disk behaviour. Live View borrows the same feeds as **Streams** (below), and while it is playing it takes charge of them — see there for how the two work together.
+
+Optional. Enable it in Settings > Experimental Features.
+
+### Streams
+
+Your C64 can send what it is doing out across the network. **Home > Streams** exposes three feeds — **VIC** (the live video picture), **Audio** (the SID output), and **Debug** (a low-level trace for developers). Point a feed at a destination address, press **Start**, and it streams there; **Stop** ends it. The card appears only when the connected device advertises streaming support.
+
+Live View (above) plays those same **VIC** and **Audio** feeds inside the app, so the two are careful never to fight over one stream. Turn Live View on and it takes charge of the feed it needs: that row shows a small **Live View** badge and turns read-only, so nothing you do here can pull the picture or sound out from under it. Your own target is remembered, and the moment you stop Live View the row hands control straight back to you.
+
+### The SID Audio Mixer
+
+Your C64 makes its sound with a SID chip, and can host more than one. **Home > SID / Audio mixer** is a live mixing desk: a **master volume** for everything, and, for each SID it reports, that chip's own **volume** and **stereo position**. Slide one SID toward the left speaker and another toward the right for true stereo, or pull one down to let the other lead. Changes are heard at once, and the same controls appear in **Config > Audio Mixer** if you prefer the full tree.
+
+### The Virtual Printer
+
+A C64 once talked to a Commodore printer over the serial bus; yours emulates one so you never need the vintage hardware. **Home > Printer** picks the **emulation** (such as Commodore MPS), sets the printer's **bus ID**, and manages its output: **Flush** commits what has been printed so far, **Eject** finishes the page, and **Reset** clears the emulated printer.
+
 ### RAM Snapshots
 
 A RAM snapshot is a copy of what is in your C64's memory right now, saved onto your phone so you can put it back later. It is the nearest thing the app has to a save-and-restore button for programs that have none of their own.
@@ -438,17 +494,43 @@ Mounting is the heart of the page. Choose a disk from your collection, choose th
 
 For a title that spans several disks, drop the related images into one **group**. Grouped disks add **rotate** controls to the drive card, so when a program asks for the next disk you can swap without hunting through the collection. A drive can also read loose files straight from a folder on the device through its **Soft IEC** path, which suits large collections that are not packed into disk images.
 
-### The SID Audio Mixer
+### Content Explorer
 
-The C64's sound comes from its SID chip, and the Ultimate can host more than one. **Home > SID / Audio mixer** is a live mixing desk: a **master volume** for everything, and, for each SID the device reports, that chip's own **volume** and **stereo position**. Slide one SID toward the left speaker and another toward the right for true stereo, or pull one down to let the other lead. Changes are heard at once, and the same controls appear in **Config > Audio Mixer** if you prefer the full tree.
+Content Explorer is a set of additive tools for working with the programs *inside* disk images and launching them safely. Each part is optional and independent — turn on only the ones you want in **Settings**, and the rest stay out of the way.
 
-### Video, Audio, and Debug Streams
+#### Looking Inside a Disk
 
-The Ultimate can send what your C64 is doing out across the network. **Home > Streams** exposes three feeds — **VIC** (the live video picture), **Audio** (the SID output), and **Debug** (a low-level trace for developers). Point a feed at a destination address, press **Start**, and the device streams it there; **Stop** ends it. The Streams card appears only when the connected device advertises streaming support.
+Mounting a disk image gives you the whole disk. Disk Explorer instead looks *inside* one so you can pick a single program to launch. On **Disks**, open a disk image's menu and choose **Open (Disk Explorer)…**; the app lists every file on the disk, each with its type, its size in blocks, and — for a program — its load address.
 
-### The Virtual Printer
+Each launchable file offers three actions:
 
-A C64 once talked to a Commodore printer over the serial bus; the Ultimate emulates one so you never need the vintage hardware. **Home > Printer** picks the **emulation** (such as Commodore MPS), sets the printer's **bus ID**, and manages its output: **Flush** commits what has been printed so far, **Eject** finishes the page, and **Reset** clears the emulated printer.
+- **Run** loads the program into the C64's memory and starts it.
+- **Load** loads it into memory without starting it — handy for monitors and development.
+- **Mount & Load** mounts the whole disk, resets the machine, waits for BASIC, then types the LOAD and RUN for you — the right choice for titles that load in several stages.
+
+Only a proper **PRG** program can be launched directly. Other file types show a short note explaining why they cannot, and an unclosed "splat" file — one that was never finished being written — cannot be launched either.
+
+On by default. You can change it in Settings > Stable Features.
+
+#### Launch Safety
+
+Some setups have a freezer cartridge (Action Replay / Retro Replay style) configured. On those, launching a program directly can occasionally reset into the cartridge's own menu instead — which looks exactly like the app misbehaving. Launch Safety prevents that: around every direct launch it briefly *parks* the configured cartridge, then restores it afterwards. It never writes to the device's saved (flash) settings, so a power cycle always brings the cartridge back, and when no cartridge is configured it does nothing at all. This happens automatically; there is no per-launch control.
+
+One advanced option sits in **Settings**, under Play and disk behaviour: **Answer cartridge boot menu after reset**. It is off by default and helps only one narrow case — a cartridge that shows a boot menu when the machine resets, which could otherwise swallow the LOAD that Mount & Load types. Turn it on to choose the **menu key** (F1–F8, RETURN, or SPACE) and a **boot settle** time; the app then presses that key after a Mount & Load reset to clear the menu first. Leave it off unless you run such a cartridge.
+
+On by default. You can change it in Settings > Stable Features.
+
+#### Searching Inside Disk Images
+
+By default, searching your media matches disk images by their file name. Turn on **Search inside disk images** — in **Settings**, under Play and disk behaviour — and search also reaches the programs *inside* your `.d64`, `.d71`, and `.d81` images. A match found inside a disk is shown as **DISK → PROGRAM**, so you can see exactly which disk holds the program you want, then Run or Load it just like any other.
+
+Optional. Enable it in Settings > Experimental Features.
+
+#### Creating a Blank Disk
+
+Need a fresh disk to save to? On **Disks**, choose **New disk** to format a blank image on the device. Pick the **type** — D64 (1541), D71 (1571), D81 (1581), or DNP (CMD native) — give it a **file name**, and set a **disk label** of up to 16 characters (it defaults to the file name). A D64 lets you choose the number of **tracks** (35 to 41, usually 35); a DNP requires a track count (1 to 255); D71 and D81 need none. Finally pick a real **storage folder** on the device, such as USB0 — the top-level `/` is only a virtual list of drives and cannot hold files. The app creates the image and mounts it ready to write to.
+
+On by default. You can change it in Settings > Stable Features.
 
 ### File Sources
 
@@ -539,7 +621,7 @@ The CPU speed setting can briefly drop the network while the device applies a cl
 
 ### Password required
 
-Enter the network password configured on the C64 Ultimate. If the saved password stops working, the app asks again.
+Enter the network password configured on the Commodore 64 Ultimate. If the saved password stops working, the app asks again.
 
 ### File browsing fails
 
@@ -600,6 +682,12 @@ Preferred locations are marked first.
 | Streams | **Home > Streams**, Config | Visible when the device exposes streaming support. |
 | Save/load device config | **Home > Config actions** | Use Save to flash when Auto save config is Ask or No, or when you want to force a flash save now. |
 | App-stored config snapshots | **Home > Config actions** | Local app snapshots, separate from device flash. |
+| Disk Explorer (launch a program inside a disk) | **Disks > disk menu > Open (Disk Explorer)** | On by default. You can change it in Settings > Stable Features. |
+| Create a blank disk | **Disks > New disk** | On by default. You can change it in Settings > Stable Features. |
+| Search inside disk images | **Settings > Play and disk behavior** | Optional. Enable it in Settings > Experimental Features. |
+| Launch Safety (cartridge parking) | Automatic; boot-menu answer in **Settings > Play and disk behavior** | On by default. You can change it in Settings > Stable Features. |
+| Live View — Audio Mirror | **Settings > Experimental Features** | Optional. Enable it in Settings > Experimental Features. |
+| Live View — Video Mirror | **Settings > Experimental Features** | Optional. Enable it in Settings > Experimental Features. |
 | Advanced config file actions | **Home > Config actions** | Optional. Enable it in Settings > Experimental Features. |
 | Advanced drive shortcuts | **Home > Drives** | Optional. Enable it in Settings > Experimental Features. |
 | Advanced printer shortcuts | **Home > Printer** | Optional. Enable it in Settings > Experimental Features. |

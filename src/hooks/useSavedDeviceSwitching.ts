@@ -41,6 +41,7 @@ import { hasActiveInputRelease, releaseActiveRemoteInput } from "@/lib/remoteInp
 import { drainKernalFallbackInjectionQueue } from "@/lib/remoteInput/kernalFallbackInjector";
 import { isBackgroundExecutionActive, stopBackgroundExecution } from "@/lib/native/backgroundExecutionManager";
 import { BackgroundExecution } from "@/lib/native/backgroundExecution";
+import { avMirrorSession } from "@/lib/streams/avMirrorSession";
 import { toast } from "@/hooks/use-toast";
 
 let activeSavedDeviceSwitch: { deviceId: string; promise: Promise<unknown> } | null = null;
@@ -82,6 +83,25 @@ export function useSavedDeviceSwitching() {
       // the previous device, so the UI and the control plane cannot diverge into
       // the "selected=new / API=old" state.
       const password = device.hasPassword ? await getPasswordForDevice(deviceId) : null;
+
+      // Live View clean-transition: both devices stream A/V to the SAME multicast group, so the
+      // OLD device must be told to stop BEFORE we retarget the API — otherwise it keeps streaming
+      // there and, once the mirror follows to the new device, the receiver sees interleaved frames
+      // from BOTH devices (corrupt video, no clean switch). Stop here while getC64API() still
+      // targets the old device; re-start on the new device after it verifies. Bounded so a dead
+      // old device cannot stall the switch.
+      const liveViewVideoWasActive = avMirrorSession.videoLive;
+      const liveViewAudioWasActive = avMirrorSession.audioLive;
+      if (liveViewVideoWasActive || liveViewAudioWasActive) {
+        await Promise.race([avMirrorSession.stopAll(), new Promise((resolve) => setTimeout(resolve, 1500))]).catch(
+          (error) => {
+            addLog("warn", "Live View: failed to stop the A/V mirror before device switch", {
+              fromDeviceId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          },
+        );
+      }
 
       // Stale error toasts attributed to the device being switched away from
       // must not survive the switch (ERROR_POLICY §6).
@@ -184,6 +204,23 @@ export function useSavedDeviceSwitching() {
         if (verification.ok && verification.deviceInfo) {
           completeSavedDeviceVerification(deviceId, verification.deviceInfo);
           invalidateForSavedDeviceSwitch(queryClient);
+          // Follow Live View to the now-verified new device (single clean source). Fire-and-forget
+          // so a slow streams:start cannot delay the switch resolving; startVideo/startAudio bind a
+          // fresh receiver and issue streams:start on the new device.
+          if (liveViewVideoWasActive)
+            void avMirrorSession.startVideo().catch((error) => {
+              addLog("warn", "Live View: failed to restart video on the new device after switch", {
+                deviceId,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            });
+          if (liveViewAudioWasActive)
+            void avMirrorSession.startAudio().catch((error) => {
+              addLog("warn", "Live View: failed to restart audio on the new device after switch", {
+                deviceId,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            });
           completeSavedDeviceSwitchAttempt(attemptId, {
             outcome: "success",
             verification,

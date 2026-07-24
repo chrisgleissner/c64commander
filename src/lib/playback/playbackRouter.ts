@@ -38,6 +38,7 @@ import {
 import { base64ToUint8, createSslPayload } from "@/lib/sid/sidUtils";
 import { loadDiskAutostartMode, type DiskAutostartMode } from "@/lib/config/appSettings";
 import { loadFirstDiskPrgViaDma, type DiskImageType } from "./diskFirstPrg";
+import { withCartridgeParked } from "./launchSafety";
 
 export type PlaySource = "local" | "ultimate" | "hvsc" | "commoserve";
 
@@ -437,123 +438,136 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
         if (beforeLaunch) {
           await beforeLaunch();
         }
-        if (plan.source === "ultimate" && selectedDeviceCanAccessOrigin) {
-          const hasSonglengthData = typeof plan.durationMs === "number" && plan.durationMs > 0;
-          if (!hasSonglengthData || options.skipSidSslPropagation) {
-            emitDurationPropagationEvent({
-              type: "playback-no-duration",
-              level: "info",
-              reason: hasSonglengthData ? "ssl-propagation-skipped" : "no-songlength-entry",
-              path: plan.path,
-            });
-            await withPlaybackFirstAudioScope(plan, "ultimate-direct", () => api.playSid(plan.path, plan.songNr));
-            recordPlaybackBenchmarkSnapshot(plan, "ultimate-direct", benchmarkMetadata);
-            return;
-          }
-
-          let propagationFailure: Error | null = null;
-          try {
-            const ftpBlob = await withSidPropagationPreflightDeadline(tryFetchUltimateSidBlob(plan.path), plan.path);
-            if (!ftpBlob) {
-              throw new Error("SID FTP fetch failed for SSL propagation");
+        // Launch Safety (capability B): sidplay is a direct-memory launch, so park
+        // a configured cartridge around it (no-op when the flag is off or none set).
+        await withCartridgeParked(api, async () => {
+          if (plan.source === "ultimate" && selectedDeviceCanAccessOrigin) {
+            const hasSonglengthData = typeof plan.durationMs === "number" && plan.durationMs > 0;
+            if (!hasSonglengthData || options.skipSidSslPropagation) {
+              emitDurationPropagationEvent({
+                type: "playback-no-duration",
+                level: "info",
+                reason: hasSonglengthData ? "ssl-propagation-skipped" : "no-songlength-entry",
+                path: plan.path,
+              });
+              await withPlaybackFirstAudioScope(plan, "ultimate-direct", () => api.playSid(plan.path, plan.songNr));
+              recordPlaybackBenchmarkSnapshot(plan, "ultimate-direct", benchmarkMetadata);
+              return;
             }
-            const sslPayload = createSslPayload(plan.durationMs as number, { songNr: plan.songNr });
-            const sslBlob = new Blob([sslPayload], {
-              type: "application/octet-stream",
-            });
-            await withPlaybackFirstAudioScope(plan, "ultimate-ssl-upload", () =>
-              api.playSidUpload(ftpBlob, plan.songNr, sslBlob, { filename: plan.path }),
-            );
-            recordPlaybackBenchmarkSnapshot(plan, "ultimate-ssl-upload", benchmarkMetadata);
-            return;
-          } catch (error) {
-            propagationFailure = error as Error;
-            const message = propagationFailure.message;
-            const reason = /ftp|preflight|timed out/i.test(message)
-              ? "ftp-fetch-failed"
-              : /invalid sid duration|duration/i.test(message)
-                ? "ssl-payload-invalid"
-                : "upload-failed-with-songlength-available";
-            emitDurationPropagationEvent({
-              type: "ssl-propagation-failure",
-              level: "warn",
-              reason,
-              path: plan.path,
-              songlengthEntryMs: plan.durationMs,
-              errorMessage: message,
-            });
-            addLog("warn", "Ultimate SID falling back to direct playback without SSL upload", {
-              path: plan.path,
-              reason,
-              error: message,
-            });
-          }
 
-          try {
-            await withPlaybackFirstAudioScope(plan, "ultimate-direct-fallback", () =>
-              api.playSid(plan.path, plan.songNr),
-            );
-            recordPlaybackBenchmarkSnapshot(plan, "ultimate-direct-fallback", benchmarkMetadata);
-            return;
-          } catch (fallbackError) {
-            const err = fallbackError as Error;
-            const fallbackContext = new Error(
-              `Ultimate SID fallback playback failed after SSL propagation failure: ${err.message}`,
-            );
-            addErrorLog("Ultimate SID fallback playback failed", {
-              path: plan.path,
-              propagationError: propagationFailure?.message ?? null,
-              fallbackError: err.message,
-            });
-            throw fallbackContext;
-          }
-        }
-        const blob = (await resolveOriginBlob()) ?? (await toBlob(plan.file));
-        if (!blob) throw new Error("Missing local SID data.");
-        const sslBlob =
-          plan.durationMs && plan.durationMs > 0
-            ? new Blob([createSslPayload(plan.durationMs, { songNr: plan.songNr })], {
+            let propagationFailure: Error | null = null;
+            try {
+              const ftpBlob = await withSidPropagationPreflightDeadline(tryFetchUltimateSidBlob(plan.path), plan.path);
+              if (!ftpBlob) {
+                throw new Error("SID FTP fetch failed for SSL propagation");
+              }
+              const sslPayload = createSslPayload(plan.durationMs as number, { songNr: plan.songNr });
+              const sslBlob = new Blob([sslPayload], {
                 type: "application/octet-stream",
-              })
-            : undefined;
-        await withPlaybackFirstAudioScope(plan, "local-upload", () =>
-          api.playSidUpload(blob, plan.songNr, sslBlob, { filename: plan.path }),
-        );
-        recordPlaybackBenchmarkSnapshot(plan, "local-upload", benchmarkMetadata);
+              });
+              await withPlaybackFirstAudioScope(plan, "ultimate-ssl-upload", () =>
+                api.playSidUpload(ftpBlob, plan.songNr, sslBlob, { filename: plan.path }),
+              );
+              recordPlaybackBenchmarkSnapshot(plan, "ultimate-ssl-upload", benchmarkMetadata);
+              return;
+            } catch (error) {
+              propagationFailure = error as Error;
+              const message = propagationFailure.message;
+              const reason = /ftp|preflight|timed out/i.test(message)
+                ? "ftp-fetch-failed"
+                : /invalid sid duration|duration/i.test(message)
+                  ? "ssl-payload-invalid"
+                  : "upload-failed-with-songlength-available";
+              emitDurationPropagationEvent({
+                type: "ssl-propagation-failure",
+                level: "warn",
+                reason,
+                path: plan.path,
+                songlengthEntryMs: plan.durationMs,
+                errorMessage: message,
+              });
+              addLog("warn", "Ultimate SID falling back to direct playback without SSL upload", {
+                path: plan.path,
+                reason,
+                error: message,
+              });
+            }
+
+            try {
+              await withPlaybackFirstAudioScope(plan, "ultimate-direct-fallback", () =>
+                api.playSid(plan.path, plan.songNr),
+              );
+              recordPlaybackBenchmarkSnapshot(plan, "ultimate-direct-fallback", benchmarkMetadata);
+              return;
+            } catch (fallbackError) {
+              const err = fallbackError as Error;
+              const fallbackContext = new Error(
+                `Ultimate SID fallback playback failed after SSL propagation failure: ${err.message}`,
+              );
+              addErrorLog("Ultimate SID fallback playback failed", {
+                path: plan.path,
+                propagationError: propagationFailure?.message ?? null,
+                fallbackError: err.message,
+              });
+              throw fallbackContext;
+            }
+          }
+          const blob = (await resolveOriginBlob()) ?? (await toBlob(plan.file));
+          if (!blob) throw new Error("Missing local SID data.");
+          const sslBlob =
+            plan.durationMs && plan.durationMs > 0
+              ? new Blob([createSslPayload(plan.durationMs, { songNr: plan.songNr })], {
+                  type: "application/octet-stream",
+                })
+              : undefined;
+          await withPlaybackFirstAudioScope(plan, "local-upload", () =>
+            api.playSidUpload(blob, plan.songNr, sslBlob, { filename: plan.path }),
+          );
+          recordPlaybackBenchmarkSnapshot(plan, "local-upload", benchmarkMetadata);
+        });
         return;
       }
       case "mod": {
         if (beforeLaunch) {
           await beforeLaunch();
         }
-        if (plan.source === "ultimate" && selectedDeviceCanAccessOrigin) {
-          await api.playMod(plan.path);
-          return;
-        }
-        const blob = (await resolveOriginBlob()) ?? (await toBlob(plan.file));
-        if (!blob) throw new Error("Missing local MOD data.");
-        await api.playModUpload(blob, { filename: plan.path });
+        // Launch Safety (capability B): mod playback is a direct-memory launch, so
+        // park a configured cartridge around it. No-op when the flag is off or no
+        // cartridge is configured.
+        await withCartridgeParked(api, async () => {
+          if (plan.source === "ultimate" && selectedDeviceCanAccessOrigin) {
+            await api.playMod(plan.path);
+            return;
+          }
+          const blob = (await resolveOriginBlob()) ?? (await toBlob(plan.file));
+          if (!blob) throw new Error("Missing local MOD data.");
+          await api.playModUpload(blob, { filename: plan.path });
+        });
         return;
       }
       case "prg": {
         if (beforeLaunch) {
           await beforeLaunch();
         }
-        if (plan.source === "ultimate" && selectedDeviceCanAccessOrigin) {
-          if (loadMode === "load") {
-            await api.loadPrg(plan.path);
-          } else {
-            await api.runPrg(plan.path);
+        // Launch Safety (capability B): a PRG run is the canonical direct-memory
+        // launch a freezer cartridge can hijack. Park it around the launch.
+        await withCartridgeParked(api, async () => {
+          if (plan.source === "ultimate" && selectedDeviceCanAccessOrigin) {
+            if (loadMode === "load") {
+              await api.loadPrg(plan.path);
+            } else {
+              await api.runPrg(plan.path);
+            }
+            return;
           }
-          return;
-        }
-        const blob = (await resolveOriginBlob()) ?? (await toBlob(plan.file));
-        if (!blob) throw new Error("Missing local PRG data.");
-        if (loadMode === "load") {
-          await api.loadPrgUpload(blob, { filename: plan.path });
-        } else {
-          await api.runPrgUpload(blob, { filename: plan.path });
-        }
+          const blob = (await resolveOriginBlob()) ?? (await toBlob(plan.file));
+          if (!blob) throw new Error("Missing local PRG data.");
+          if (loadMode === "load") {
+            await api.loadPrgUpload(blob, { filename: plan.path });
+          } else {
+            await api.runPrgUpload(blob, { filename: plan.path });
+          }
+        });
         return;
       }
       case "crt": {
@@ -624,7 +638,10 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
 
         if (dmaEligible && localBlob) {
           const image = new Uint8Array(await localBlob.arrayBuffer());
-          await loadFirstDiskPrgViaDma(api, image, diskType as DiskImageType);
+          // Launch Safety (capability B): first-PRG DMA autostart is a direct-memory
+          // launch — park a configured cartridge around it. Mount & Load (the kernal
+          // injection branches below) is drive-backed and is not parked here.
+          await withCartridgeParked(api, () => loadFirstDiskPrgViaDma(api, image, diskType as DiskImageType));
         } else if (
           diskAutostartMode === "dma" &&
           plan.source === "local" &&
@@ -638,7 +655,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
           try {
             const blob = await resolveLocalDiskBlob(diskEntry);
             const image = new Uint8Array(await blob.arrayBuffer());
-            await loadFirstDiskPrgViaDma(api, image, diskType as DiskImageType);
+            await withCartridgeParked(api, () => loadFirstDiskPrgViaDma(api, image, diskType as DiskImageType));
           } catch (error) {
             addLog("warn", "DMA disk autostart fallback to injection", {
               path: plan.path,

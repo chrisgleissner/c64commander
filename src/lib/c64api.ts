@@ -80,6 +80,9 @@ import { collectTraceHeaders } from "@/lib/tracing/payloadPreview";
 import { notifyReachable } from "@/lib/connection/reachabilityEvents";
 import { getLifecycleState } from "@/lib/appLifecycle";
 import { CapacitorHttp } from "@capacitor/core";
+import { buildCreateDiskPlan, type CreateDiskArgs, type CreateDiskPlan } from "@/lib/disks/createDisk";
+
+export type CreateDiskResult = CreateDiskPlan;
 
 // A request that fails with a generic network/timeout class while the app is
 // in the background is almost always the WebView/Capacitor pausing the request
@@ -122,6 +125,8 @@ const PLAYBACK_REQUEST_TIMEOUT_MS = 5000;
 // budget so a normal mount is never falsely timed out.
 const MOUNT_REQUEST_TIMEOUT_MS = 8000;
 const RAM_BLOCK_WRITE_TIMEOUT_MS = 15_000;
+// Formatting a blank image on slow USB media can exceed the normal control budget.
+const DISK_CREATE_REQUEST_TIMEOUT_MS = 30_000;
 const IDLE_RECOVERY_THRESHOLD_MS = 10_000;
 const NETWORK_RETRY_DELAY_MS = 180;
 const SID_UPLOAD_MAX_ATTEMPTS = 3;
@@ -3115,6 +3120,25 @@ export class C64API {
     });
     this.assertActionAccepted(response, "CRT run");
     return response;
+  }
+
+  /**
+   * Content Explorer capability F: create a formatted blank disk image on the
+   * device. Formatting on slow USB media can exceed the normal REST budget, so
+   * this call gets an elevated (~30s) timeout. See src/lib/disks/createDisk.ts for
+   * the validated URL/param building (rejects the virtual `/`, clamps the label,
+   * bounds the track count).
+   */
+  async createDisk(args: CreateDiskArgs): Promise<CreateDiskResult> {
+    const plan = buildCreateDiskPlan(args);
+    const response = await this.request<{ errors: string[] }>(plan.path, {
+      method: "PUT",
+      timeoutMs: DISK_CREATE_REQUEST_TIMEOUT_MS,
+      __c64uSkipSuccessBodyInspection: true,
+      __c64uInspectSkippedSuccessBody: true,
+    });
+    this.assertActionAccepted(response, `create ${plan.kind} disk`);
+    return { ...plan };
   }
 
   async runCartridgeUpload(

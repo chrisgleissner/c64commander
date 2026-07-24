@@ -23,6 +23,7 @@ const capturedConnectionCallbacks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/hooks/useFeatureFlags", () => ({
+  useFeatureFlagValue: () => false,
   useFeatureFlags: () => ({ flags: { keypad_input_enabled: false } }),
 }));
 

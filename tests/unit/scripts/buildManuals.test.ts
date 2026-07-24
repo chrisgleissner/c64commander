@@ -102,7 +102,7 @@ describe("manual generator", () => {
       // In Depth gained device-feature walkthroughs beyond Remote Input / RAM.
       expect(manual).toContain("### Drives and Disk Images");
       expect(manual).toContain("### The SID Audio Mixer");
-      expect(manual).toContain("### Video, Audio, and Debug Streams");
+      expect(manual).toContain("### Streams");
       expect(manual).toContain("### The Virtual Printer");
       expect(manual).toContain("### File Sources");
       expect(manual).toContain("### Configuration and Saving");

@@ -52,6 +52,16 @@ export const variantConfig = {
     displayNamePascalCase: "C64commander",
     exportedFileBasename: "c64commander",
     featureFlags: {
+      audio_mirror_enabled: {
+        developer_only: false,
+        enabled: true,
+        visible_to_user: true,
+      },
+      av_sync_tests_enabled: {
+        developer_only: false,
+        enabled: true,
+        visible_to_user: true,
+      },
       background_execution_enabled: {
         developer_only: true,
         enabled: true,
@@ -65,6 +75,11 @@ export const variantConfig = {
       demo_mode_enabled: {
         developer_only: false,
         enabled: false,
+        visible_to_user: true,
+      },
+      disk_explorer_enabled: {
+        developer_only: false,
+        enabled: true,
         visible_to_user: true,
       },
       home_telnet_clear_ram_reboot_enabled: {
@@ -102,7 +117,17 @@ export const variantConfig = {
         enabled: true,
         visible_to_user: true,
       },
+      in_image_search_enabled: {
+        developer_only: false,
+        enabled: false,
+        visible_to_user: true,
+      },
       keypad_input_enabled: {
+        developer_only: false,
+        enabled: true,
+        visible_to_user: true,
+      },
+      launch_safety_enabled: {
         developer_only: false,
         enabled: true,
         visible_to_user: true,
@@ -112,12 +137,27 @@ export const variantConfig = {
         enabled: false,
         visible_to_user: false,
       },
+      live_view_enabled: {
+        developer_only: false,
+        enabled: true,
+        visible_to_user: true,
+      },
+      new_disk_enabled: {
+        developer_only: false,
+        enabled: true,
+        visible_to_user: true,
+      },
       ram_snapshots_enabled: {
         developer_only: false,
         enabled: true,
         visible_to_user: true,
       },
       remote_input_enabled: {
+        developer_only: false,
+        enabled: true,
+        visible_to_user: true,
+      },
+      video_mirror_enabled: {
         developer_only: false,
         enabled: true,
         visible_to_user: true,

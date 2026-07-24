@@ -19,6 +19,12 @@ Control and manage a Commodore 64 Ultimate from Android, iOS, or a self-hosted w
 - **Configuration**: Browse and edit the full C64 Ultimate configuration tree.
 - **Diagnostics**: Inspect activity logs, traces, latency, and connection health across App, REST, FTP, and Telnet activity.
 - **Device Switcher**: Switch between devices and run parallel health checks.
+- **Content Explorer**: An additive, feature-flagged set of tools, each toggled independently in **Settings**:
+  - **Disk Explorer**: Open a disk image to see the programs inside it and Run, Load, or Mount & Load any single one (only closed PRG files can launch directly).
+  - **Launch Safety**: Automatically parks a configured cartridge around direct launches so a freezer cartridge can't hijack a Run into its menu; optional boot-menu answer after a Mount & Load reset.
+  - **In-image search**: Search finds programs inside `.d64`/`.d71`/`.d81` images, shown as disk → program.
+  - **New disk**: Create a formatted blank D64/D71/D81/DNP image on the device.
+  - **Live mirror** _(experimental)_: Receive and play the running machine's audio in-app, with a more demanding, off-by-default video mirror.
 
 ## Getting Started
 
@@ -148,6 +154,23 @@ The following shows the Keys tab using various display profiles, from small to l
   </tr>
 </table>
 
+### Live View
+
+Hear and see the running machine from inside the app, in one shared session that stays live wherever you go. **Listen** for audio-only (no screen space, just a live dot); **Watch** for a small preview you can expand.
+
+<table>
+  <tr>
+    <td><img src="docs/img/app/home/content-explorer/01-live-view.png" alt="Live View on Home: Listen and Watch toggles with a small live preview" width="300"/></td>
+    <td><img src="docs/img/app/home/content-explorer/02-live-view-expanded.png" alt="Live View expanded to a larger inline preview of the C64 screen" width="300"/></td>
+  </tr>
+</table>
+
+Inside **Remote Input**, the mirror becomes a full-width, zoomable screen for playing games or driving keypad-only devices. A colour-coded **view-lock** keeps physical keys unambiguous — **blue = driving the C64**, **amber = adjusting the view** — and you can pinch/drag/double-tap to zoom and pan, follow on-screen activity automatically, or jump around with the minimap.
+
+<img src="docs/img/app/home/remote-input/06-av-mirror-immersive.png" alt="Remote Input immersive mirror: the C64 screen with a Driving-C64 view-lock chip and zoom/pan controls" width="300"/>
+
+Enable **Audio Mirror** / **Video Mirror** under **Settings → Features** (stream ports are configurable under **Settings → Play and disk behaviour**, defaulting to 11000 / 11001).
+
 ### Play
 
 Build playlists for programs and songs sourced from the local device, C64U storage, HVSC, or CommoServe. Supports autoplay, shuffle, repeat, subsong selection, and automatic song length discovery.
@@ -186,6 +209,17 @@ View drive state, mount and eject images, and manage disk collections with multi
     <td><img src="docs/img/app/disks/01-overview.png" alt="Disks overview" width="360"/></td>
     <td><img src="docs/img/app/disks/sections/02-disks.png" alt="Disks section" width="360"/></td>
     <td><img src="docs/img/app/disks/collection/01-view-all.png" alt="Disks collection" width="360"/></td>
+  </tr>
+</table>
+
+### Content Explorer
+
+Go beyond mounting a whole image: create a formatted blank disk on the device, look inside an image to Run, Load, or Mount a single program, search the programs inside disk images, and let Launch Safety answer a cartridge boot menu after a reset.
+
+<table>
+  <tr>
+    <td><img src="docs/img/app/disks/content-explorer/01-new-disk.png" alt="New disk dialog: create a formatted blank D64/D71/D81/DNP image on the device" width="360"/></td>
+    <td><img src="docs/img/app/settings/content-explorer/01-launch-safety.png" alt="Settings: search inside disk images and answer a cartridge boot menu after reset" width="360"/></td>
   </tr>
 </table>
 
