@@ -27,6 +27,7 @@ const ARCHIVE_CLIENT_ID_OVERRIDE_KEY = "c64u_archive_client_id_override";
 const ARCHIVE_USER_AGENT_OVERRIDE_KEY = "c64u_archive_user_agent_override";
 const HIDE_STATUS_BAR_KEY = "c64u_full_screen_hide_status_bar";
 const HIDE_NAVIGATION_BAR_KEY = "c64u_full_screen_hide_navigation_bar";
+const SID_RADIO_ENABLED_KEY = "c64u_sid_radio_enabled";
 
 export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 200;
 export type NotificationVisibility = "errors-only" | "all";
@@ -295,6 +296,21 @@ export const saveEnableSwipeNavigation = (enabled: boolean) => {
   broadcast(ENABLE_SWIPE_NAVIGATION_KEY, enabled);
 };
 
+/**
+ * SID Radio master flag (spec §0.4, `sidRadioEnabled`). Defaults **off** during
+ * rollout: with it off the app is byte-for-byte unchanged (no similarity bundle
+ * fetch at play time, no `md5PathIndex` build on the songlengths finalize hook).
+ */
+export const DEFAULT_SID_RADIO_ENABLED = false;
+
+export const loadSidRadioEnabled = () => readBoolean(SID_RADIO_ENABLED_KEY, DEFAULT_SID_RADIO_ENABLED);
+
+export const saveSidRadioEnabled = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(SID_RADIO_ENABLED_KEY, enabled ? "1" : "0");
+  broadcast(SID_RADIO_ENABLED_KEY, enabled);
+};
+
 const loadString = (key: string) => {
   if (typeof localStorage === "undefined") return "";
   return localStorage.getItem(key) ?? "";
@@ -338,4 +354,5 @@ export const APP_SETTINGS_KEYS = {
   ARCHIVE_USER_AGENT_OVERRIDE_KEY,
   HIDE_STATUS_BAR_KEY,
   HIDE_NAVIGATION_BAR_KEY,
+  SID_RADIO_ENABLED_KEY,
 };

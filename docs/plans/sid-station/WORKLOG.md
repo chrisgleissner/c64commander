@@ -158,3 +158,31 @@ _(append entries below as tasks/gates complete — newest last)_
   - `eslint` + `tsc -p tsconfig.app.json --noEmit` → clean.
 - Gate: **G1 (host + web/Node parse) proven**; G1 Android/iOS device-load is the M0.5 worker
   spike; G3 partial (pure, worker-ready). G2 (`md5_48→virtualPath` on device) is M0.4.
+
+### 2026-07-24 — M0.4 `md5PathIndex.ts` + finalize-hook wiring + `sidRadioEnabled`
+- Task: `md5_48 → virtualPath[]` index from `Songlengths.md5`, D14 tie-break, rebuild on the
+  songlengths finalize hook, gated by the master flag — RED→GREEN.
+- Files: `src/lib/sidRadio/md5PathIndex.ts` (new), `tests/unit/sidRadio/md5PathIndex.test.ts`
+  (new, 9), `src/lib/config/appSettings.ts` (+`sidRadioEnabled`, key `c64u_sid_radio_enabled`,
+  default **false**), `tests/unit/config/appSettings.test.ts` (+default/save/event cases),
+  `src/lib/hvsc/hvscSongLengthService.ts` (`loadInternal.discover` also rebuilds the index
+  from the same `.md5` read, gated).
+- Decisions (spec §2.4/§2.5, D14, §0.4, Prime Directive 7): pure `parseMd548PathIndex` walks
+  Songlengths.md5 exactly like `parseSonglengths` (path comment → `<full_md5>=…`), keys on the
+  first 12 hex, and sorts multi-path prefixes (HVSC dupes) lexicographically. `resolveVirtualPath`
+  applies D14 (installed-path-preferred, then lowest sorted). The singleton rebuilds on the
+  **same** finalize hook via `rebuildMd548PathIndexFromFiles` inside the existing `discover`
+  closure (no extra I/O); skips an unchanged rebuild (FNV-1a hash) and **never clobbers a
+  populated index with an empty pre-commit discovery** (mirrors HARD19-016). Gated on
+  `sidRadioEnabled` (default off) so the hardened songlengths path is byte-for-byte unchanged
+  and adds no JS-thread work with the flag off ([[hvsc-hydration-starved-remote-input]]).
+  §0.4 models these as appSettings booleans (not the YAML registry) → followed `appSettings.ts`.
+- Commands + evidence:
+  - `npx vitest run` (md5PathIndex, both appSettings suites, hvscSongLengthService,
+    songlengths/*) → **144 passed** (incl. the 33 hvscSongLengthService tests — wiring safe).
+  - md5PathIndex 9: md5_48 derivation, Commando line, multi-path sorted array, D14 installed
+    tie-break, unchanged-skip/force, empty-no-clobber, moved-tune re-map (§2.5), multi-file.
+  - `eslint` + `tsc -p tsconfig.app.json --noEmit` clean.
+- Gate: **G2 code path complete** (index + finalize-hook rebuild + D14). On-device
+  `Commando.sid` resolution is the HIL/device proof at M0 EXIT (needs installed HVSC + the
+  worker spike M0.5). G12 re-map behaviour unit-proven (moved-tune test).

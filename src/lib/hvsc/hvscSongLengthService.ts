@@ -23,6 +23,8 @@ import {
   type SongLengthResolution,
   type SongLengthSourceFile,
 } from "@/lib/songlengths";
+import { loadSidRadioEnabled } from "@/lib/config/appSettings";
+import { rebuildMd548PathIndexFromFiles } from "@/lib/sidRadio/md5PathIndex";
 
 const HVSC_WORK_DIR = "hvsc";
 const HVSC_LIBRARY_DIR = `${HVSC_WORK_DIR}/library`;
@@ -253,7 +255,25 @@ const discoverSonglengthFiles = async (force = false): Promise<SongLengthSourceF
 };
 
 const loadInternal = async (trigger: "cold-start" | "config-change", force = false) => {
-  const discover = () => discoverSonglengthFiles(force);
+  const discover = async (): Promise<SongLengthSourceFile[]> => {
+    const files = await discoverSonglengthFiles(force);
+    // SID Radio: rebuild the md5_48 -> virtualPath index from the SAME
+    // Songlengths.md5 read the songlengths facade consumes (spec §2.4/§2.5), so
+    // it is never stale relative to installed HVSC and survives moves. Gated on
+    // sidRadioEnabled so the songlengths path is byte-for-byte unchanged with
+    // the flag off (Prime Directive 7); failures are non-fatal to songlengths.
+    if (loadSidRadioEnabled()) {
+      try {
+        rebuildMd548PathIndexFromFiles(files, { force });
+      } catch (error) {
+        addErrorLog("SID Radio md5 path index rebuild failed", {
+          service: "hvsc-songlengths",
+          error: getErrorMessage(error),
+        });
+      }
+    }
+    return files;
+  };
   if (trigger === "cold-start") {
     await facade.loadOnColdStart(HVSC_LIBRARY_DIR, discover, "hvsc-library");
   } else {

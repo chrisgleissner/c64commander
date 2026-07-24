@@ -16,7 +16,10 @@ import {
   DEFAULT_VOLUME_SLIDER_PREVIEW_INTERVAL_MS,
   DEFAULT_STARTUP_DISCOVERY_WINDOW_MS,
   DEFAULT_ENABLE_SWIPE_NAVIGATION,
+  DEFAULT_SID_RADIO_ENABLED,
   APP_SETTINGS_KEYS,
+  loadSidRadioEnabled,
+  saveSidRadioEnabled,
   loadAutomaticDemoModeEnabled,
   loadBackgroundRediscoveryIntervalMs,
   loadDiscoveryProbeTimeoutMs,
@@ -68,6 +71,8 @@ describe("appSettings", () => {
     expect(loadDiskAutostartMode()).toBe(DEFAULT_DISK_AUTOSTART_MODE);
     expect(loadVolumeSliderPreviewIntervalMs()).toBe(DEFAULT_VOLUME_SLIDER_PREVIEW_INTERVAL_MS);
     expect(loadEnableSwipeNavigation()).toBe(DEFAULT_ENABLE_SWIPE_NAVIGATION);
+    expect(loadSidRadioEnabled()).toBe(DEFAULT_SID_RADIO_ENABLED);
+    expect(DEFAULT_SID_RADIO_ENABLED).toBe(false); // spec §0.4: off during rollout
   });
 
   it("saves values and emits setting events", () => {
@@ -82,6 +87,7 @@ describe("appSettings", () => {
     saveDiskAutostartMode("dma");
     saveVolumeSliderPreviewIntervalMs(321);
     saveEnableSwipeNavigation(true);
+    saveSidRadioEnabled(true);
 
     dispose();
 
@@ -94,6 +100,7 @@ describe("appSettings", () => {
     expect(localStorage.getItem(APP_SETTINGS_KEYS.DISK_AUTOSTART_MODE_KEY)).toBe("dma");
     expect(localStorage.getItem(APP_SETTINGS_KEYS.VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY)).toBe("321");
     expect(localStorage.getItem(APP_SETTINGS_KEYS.ENABLE_SWIPE_NAVIGATION_KEY)).toBe("1");
+    expect(localStorage.getItem(APP_SETTINGS_KEYS.SID_RADIO_ENABLED_KEY)).toBe("1");
 
     expect(events).toEqual(
       expect.arrayContaining([
