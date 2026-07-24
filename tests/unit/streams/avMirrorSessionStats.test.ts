@@ -128,6 +128,44 @@ describe("AvMirrorSession — governor + telemetry wiring", () => {
     expect(seen).toHaveLength(2); // no delivery after unsubscribe
   });
 
+  it("input priority sheds video to a low cadence while the user is actively driving, then recovers", async () => {
+    const { session, videoReceiver } = makeSession();
+    await session.startVideo();
+    videoReceiver.open();
+    videoReceiver.emit(videoFrame(0, 0), 0);
+
+    // The applied keep-fraction the video path actually runs at is recorded in telemetry each tick.
+    const appliedAt = (t: number): number => {
+      session.tick(t);
+      const history = session.statsHistory(600);
+      return history[history.length - 1].effectiveFraction;
+    };
+
+    // No input → full cadence (auto ceiling, no governor pressure).
+    expect(appliedAt(0)).toBe(1);
+
+    // A single input event caps the video HARD for the input-priority tail (spec: joystick > video).
+    session.notifyInputActivity(1000);
+    expect(appliedAt(1000)).toBeCloseTo(0.2, 5);
+    // Still inside the ~350 ms tail → still shed.
+    expect(appliedAt(1200)).toBeCloseTo(0.2, 5);
+    // Tail elapsed (>350 ms since the last input) → video ramps straight back to full.
+    expect(appliedAt(2000)).toBe(1);
+  });
+
+  it("input priority can be disabled (Settings A/B) so input never sheds the video", async () => {
+    const { session, videoReceiver } = makeSession();
+    await session.startVideo();
+    videoReceiver.open();
+    videoReceiver.emit(videoFrame(0, 0), 0);
+    session.setInputPriority(false);
+
+    session.notifyInputActivity(1000);
+    session.tick(1000);
+    const history = session.statsHistory(600);
+    expect(history[history.length - 1].effectiveFraction).toBe(1); // full cadence despite input
+  });
+
   it("exportDiagnostics produces a JSON-serialisable payload with governor + summary", async () => {
     const { session, videoReceiver } = makeSession();
     await session.startVideo();

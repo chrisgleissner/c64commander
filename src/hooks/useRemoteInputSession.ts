@@ -33,6 +33,7 @@ import {
 } from "@/lib/remoteInput/keyboardHeldSet";
 import type { HeldKeyboardInputs } from "@/lib/remoteInput/keyboardHeldSet";
 import { recordInputLatencySample } from "@/lib/remoteInput/inputLatency";
+import { notifyInputActivity } from "@/lib/streams/inputActivitySignal";
 import {
   applyAutofirePhase,
   AUTOFIRE_RATE_CHANGE_EVENT,
@@ -348,6 +349,12 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
   // pending, splitting what should be one call into two.
   const scheduleFlush = useCallback(
     (options: { fastPath?: boolean } = {}) => {
+      // Input priority: the user just did something C64-bound (joystick/keyboard/type/cursor). Tell
+      // the Live View mirror IMMEDIATELY so it sheds video and hands the CPU to this input path
+      // (spec: joystick > keyboard > audio > video). This is the leading edge of every USER input —
+      // the autofire duty-cycle timer bypasses scheduleFlush (it calls scheduleFlushIn directly), so
+      // its automatic pulses correctly do NOT keep the video shed while fire is merely held.
+      notifyInputActivity();
       // Stamp the gesture time only on the leading edge of a burst — a rapid
       // second change riding the same pending flush must not push the
       // sample's start later than the user's actual first press.

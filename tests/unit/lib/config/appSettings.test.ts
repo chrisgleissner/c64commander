@@ -310,4 +310,29 @@ describe("appSettings", () => {
       expect(spy).toHaveBeenCalledWith(expect.objectContaining({ type: "c64u-app-settings-updated" }));
     });
   });
+
+  describe("streamInputPriority (Live View)", () => {
+    const KEY = "c64u_stream_input_priority";
+
+    it("defaults to true (input preempts video)", () => {
+      expect(appSettings.DEFAULT_STREAM_INPUT_PRIORITY).toBe(true);
+      expect(appSettings.loadStreamInputPriority()).toBe(true);
+    });
+
+    it("persists an opt-out and reads it back", () => {
+      appSettings.saveStreamInputPriority(false);
+      expect(localStorage.getItem(KEY)).toBe("0");
+      expect(appSettings.loadStreamInputPriority()).toBe(false);
+
+      appSettings.saveStreamInputPriority(true);
+      expect(localStorage.getItem(KEY)).toBe("1");
+      expect(appSettings.loadStreamInputPriority()).toBe(true);
+    });
+
+    it("broadcasts an app-settings change on save", () => {
+      const spy = vi.spyOn(window, "dispatchEvent");
+      appSettings.saveStreamInputPriority(false);
+      expect(spy).toHaveBeenCalledWith(expect.objectContaining({ type: "c64u-app-settings-updated" }));
+    });
+  });
 });

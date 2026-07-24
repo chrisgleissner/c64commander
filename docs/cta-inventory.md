@@ -327,7 +327,10 @@ Mount disk sheet: Available disks list — filter text — `list-filter-input` �
   `settings-stream-audio-port` — R✅ I✅ ; Audio network buffer (ms) — number —
   `settings-stream-network-buffer` — R✅ I✅ ; Fast video (native assembly) —
   switch — `settings-stream-native-assembly` — R✅ I✅ _(default on; native VIC
-  frame assembly, A/B / escape-hatch toggle — native builds only)_
+  frame assembly, A/B / escape-hatch toggle — native builds only)_ ; Input
+  priority (instant joystick) — switch — `settings-stream-input-priority` —
+  R✅ I✅ _(default on; sheds video briefly while the user is actively driving so
+  joystick/keyboard/mouse input reaches the C64 instantly)_
   `[visible when audio_mirror_enabled or video_mirror_enabled]`
 - **Notifications**: visibility — select — R✅ I✅ ; duration — slider — R✅ I✅
 - **Build/info**: REST API docs — link — `settings-about-rest-api-docs` — R✅ I✅

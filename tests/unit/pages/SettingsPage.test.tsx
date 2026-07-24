@@ -488,6 +488,8 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveStreamNetworkBufferMs: vi.fn(),
   loadStreamNativeVideoAssembly: vi.fn(() => true),
   saveStreamNativeVideoAssembly: vi.fn(),
+  loadStreamInputPriority: vi.fn(() => true),
+  saveStreamInputPriority: vi.fn(),
   loadStreamNativeAudio: vi.fn(() => true),
   saveStreamNativeAudio: vi.fn(),
   loadArchiveClientIdOverride: vi.fn(() => ""),

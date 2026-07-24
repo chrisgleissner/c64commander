@@ -38,6 +38,7 @@ const STREAM_NATIVE_VIDEO_ASSEMBLY_KEY = "c64u_stream_native_video_assembly";
 const STREAM_NATIVE_AUDIO_KEY = "c64u_stream_native_audio";
 const STREAM_NATIVE_AUDIO_BUFFER_MS_KEY = "c64u_stream_native_audio_buffer_ms";
 const STREAM_VIDEO_FRAME_RATE_MODE_KEY = "c64u_stream_video_frame_rate_mode";
+const STREAM_INPUT_PRIORITY_KEY = "c64u_stream_input_priority";
 
 export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 200;
 export type NotificationVisibility = "errors-only" | "all";
@@ -453,6 +454,24 @@ export const saveStreamVideoFrameRateMode = (mode: StreamVideoFrameRateMode) => 
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(STREAM_VIDEO_FRAME_RATE_MODE_KEY, mode);
   broadcast(STREAM_VIDEO_FRAME_RATE_MODE_KEY, mode);
+};
+
+/**
+ * Input priority (Live View). When on (default), active C64 input (joystick/keyboard/mouse) briefly
+ * sheds the video mirror to a low cadence so the JS thread and the native encoder are free for the
+ * input path — guaranteeing an instant C64 response to a sudden joystick movement even while a
+ * high-fps stream is running (spec priority: joystick > keyboard > audio > video). Video ramps back
+ * up the moment input goes idle. Off = video keeps full cadence regardless of input (useful only for
+ * A/B measurement of the effect). See {@link AvMirrorSession.notifyInputActivity}.
+ */
+export const DEFAULT_STREAM_INPUT_PRIORITY = true;
+
+export const loadStreamInputPriority = () => readBoolean(STREAM_INPUT_PRIORITY_KEY, DEFAULT_STREAM_INPUT_PRIORITY);
+
+export const saveStreamInputPriority = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(STREAM_INPUT_PRIORITY_KEY, enabled ? "1" : "0");
+  broadcast(STREAM_INPUT_PRIORITY_KEY, enabled);
 };
 
 export const loadNotificationVisibility = (): NotificationVisibility => {

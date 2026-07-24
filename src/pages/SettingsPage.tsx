@@ -130,6 +130,8 @@ import {
   saveStreamAudioPort,
   loadStreamNetworkBufferMs,
   saveStreamNetworkBufferMs,
+  loadStreamInputPriority,
+  saveStreamInputPriority,
   loadStreamNativeVideoAssembly,
   saveStreamNativeVideoAssembly,
   loadStreamNativeAudio,
@@ -361,6 +363,7 @@ export default function SettingsPage() {
   const [streamAudioPort, setStreamAudioPort] = useState<number>(loadStreamAudioPort);
   const [streamNetworkBufferMs, setStreamNetworkBufferMs] = useState<number>(loadStreamNetworkBufferMs);
   const [streamNativeVideoAssembly, setStreamNativeVideoAssembly] = useState<boolean>(loadStreamNativeVideoAssembly);
+  const [streamInputPriority, setStreamInputPriority] = useState<boolean>(loadStreamInputPriority);
   const [streamNativeAudio, setStreamNativeAudio] = useState<boolean>(loadStreamNativeAudio);
   const [volumeSliderPreviewIntervalMs, setVolumeSliderPreviewIntervalMs] = useState(
     loadVolumeSliderPreviewIntervalMs(),
@@ -2109,6 +2112,29 @@ export default function SettingsPage() {
                           const next = checked === true;
                           setStreamNativeVideoAssembly(next);
                           saveStreamNativeVideoAssembly(next);
+                        }}
+                      />
+                    </div>
+                    <div className="col-span-2 flex items-start justify-between gap-3 min-w-0">
+                      <div className="min-w-0">
+                        <Label htmlFor="settings-stream-input-priority" className="font-medium">
+                          Input priority (instant joystick)
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Give the joystick, keyboard and mouse absolute priority over the picture: while you are
+                          actively driving the C64, the video briefly drops its frame rate so your input reaches the
+                          machine instantly, then the picture ramps straight back up. Leave on; turn off only to
+                          compare.
+                        </p>
+                      </div>
+                      <Checkbox
+                        id="settings-stream-input-priority"
+                        data-testid="settings-stream-input-priority"
+                        checked={streamInputPriority}
+                        onCheckedChange={(checked) => {
+                          const next = checked === true;
+                          setStreamInputPriority(next);
+                          saveStreamInputPriority(next);
                         }}
                       />
                     </div>

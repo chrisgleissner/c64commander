@@ -24,6 +24,7 @@ import {
   loadStreamAudioPort,
   loadStreamNativeAudio,
   loadStreamNativeAudioBufferMs,
+  loadStreamInputPriority,
   loadStreamNativeVideoAssembly,
   loadStreamVideoFrameRateMode,
   loadStreamVideoPort,
@@ -35,6 +36,7 @@ import { AudioMirrorController, type AudioMirrorSignals, type AudioMirrorState }
 import { VideoMirrorController, type VideoMirrorState } from "./videoMirrorController";
 import { StreamGovernor, type FrameRateMode, type GovernorState, type GovernorTransition } from "./streamGovernor";
 import { StreamTelemetry, type TelemetryBucket, type TelemetrySessionSummary } from "./streamTelemetry";
+import { onInputActivity } from "./inputActivitySignal";
 import type { VideoStandard } from "./vicDecode";
 import type { AudioMirrorPlayer } from "./audioPlayer";
 
@@ -109,6 +111,22 @@ const FRAME_RATE_MODE: Record<StreamVideoFrameRateMode, FrameRateMode> = {
   "25": "25",
 };
 
+/**
+ * How long after the last input event the user is still considered "actively driving" — the video
+ * mirror stays shed for this tail so a burst of joystick movements doesn't flicker the cadence, then
+ * video ramps straight back up. ~350 ms covers the gap between a governor tick (~250 ms) and the next
+ * input while staying short enough that the picture recovers the instant the user pauses.
+ */
+export const INPUT_PRIORITY_TAIL_MS = 350;
+
+/**
+ * The video keep-fraction cap WHILE input is active. Low enough to free the JS thread + native
+ * encoder for the input path (instant joystick response), high enough to keep visible feedback of
+ * what the input is doing. ~0.2 ≈ every 5th PAL frame (~10 fps) — the user still sees their move
+ * land while the CPU is handed to input. Video returns to the governor's full target once input idles.
+ */
+export const DEFAULT_INPUT_PRIORITY_FRACTION = 0.2;
+
 export class AvMirrorSession {
   private snapshot: AvMirrorSnapshot = INITIAL;
   private readonly listeners = new Set<AvMirrorListener>();
@@ -123,6 +141,12 @@ export class AvMirrorSession {
   private readonly now: () => number;
   /** Last observed cumulative player-underrun count, for per-tick delta. */
   private lastAudioUnderruns = 0;
+  /** Wall time (ms) until which the user is treated as actively driving the C64 → video stays shed. */
+  private inputActiveUntilMs = 0;
+  /** Video keep-fraction cap applied while input is active. */
+  private inputPriorityFraction = DEFAULT_INPUT_PRIORITY_FRACTION;
+  /** Whether input-priority shedding is enabled (Settings; read at session start). Default on. */
+  private inputPriorityEnabled = true;
 
   constructor(deps: AvMirrorSessionDeps = {}) {
     const startStream = deps.startStream ?? ((name, destination) => getC64API().startStream(name, destination));
@@ -266,7 +290,10 @@ export class AvMirrorSession {
       nowMs,
     );
     this.lastAudioUnderruns = signals.audioUnderruns;
-    this.applyKeepFraction(governor.effectiveFraction);
+    // Input priority caps the governor's target while the user is actively driving the C64, so the
+    // telemetry records the fraction the video path ACTUALLY runs at (not just the governor's target).
+    const applied = this.effectiveVideoFraction(governor.effectiveFraction, nowMs);
+    this.applyKeepFraction(applied);
 
     this.telemetry.record({
       tMs: nowMs,
@@ -281,16 +308,49 @@ export class AvMirrorSession {
       videoDroppedPackets: video.droppedPackets,
       renderResidenceMs: video.renderResidenceMs,
       fps: video.fps,
-      effectiveFraction: governor.effectiveFraction,
+      effectiveFraction: applied,
       requestedMode: governor.requested,
     });
     this.emitStats();
   }
 
+  /**
+   * Signal that the user is actively driving the C64 (joystick/keyboard/mouse). Input ALWAYS takes
+   * precedence over streaming throughput (spec priority: joystick > keyboard > audio > video): while
+   * active, the video cadence is capped to {@link inputPriorityFraction} so the JS thread and the
+   * native encoder are free for the input path, giving an INSTANT C64 response to a sudden joystick
+   * movement even under a high-fps stream. Applied on the LEADING edge here — not only at the ~4 Hz
+   * governor tick — so the shed is immediate; video ramps back up automatically once input goes idle
+   * (after {@link INPUT_PRIORITY_TAIL_MS}). Cheap and idempotent: safe to call on every input event.
+   */
+  notifyInputActivity(nowMs: number = this.now()): void {
+    if (!this.inputPriorityEnabled) return;
+    const wasActive = nowMs < this.inputActiveUntilMs;
+    this.inputActiveUntilMs = nowMs + INPUT_PRIORITY_TAIL_MS;
+    // Only re-apply the cadence on the leading edge of an input burst (transition idle → active);
+    // subsequent events just extend the tail, and the video is already shed.
+    if (!wasActive && this.videoLive) {
+      this.applyKeepFraction(this.effectiveVideoFraction(this.governor.state.effectiveFraction, nowMs));
+    }
+  }
+
+  /** Enable/disable input priority and optionally override the active-cadence cap (tuning/tests). */
+  setInputPriority(enabled: boolean, fraction?: number): void {
+    this.inputPriorityEnabled = enabled;
+    if (fraction !== undefined) this.inputPriorityFraction = Math.min(1, Math.max(0.01, fraction));
+    if (!enabled) this.inputActiveUntilMs = 0;
+  }
+
+  /** The keep-fraction the video path should run at: the governor target, capped while input is active. */
+  private effectiveVideoFraction(governorFraction: number, nowMs: number): number {
+    const inputActive = this.inputPriorityEnabled && nowMs < this.inputActiveUntilMs;
+    return inputActive ? Math.min(governorFraction, this.inputPriorityFraction) : governorFraction;
+  }
+
   /** Set the requested Live View frame-rate mode (§11.1). Applies immediately + records the transition. */
   setFrameRateMode(mode: FrameRateMode, nowMs: number = this.now()): void {
     const state = this.governor.setRequested(mode, nowMs);
-    this.applyKeepFraction(state.effectiveFraction);
+    this.applyKeepFraction(this.effectiveVideoFraction(state.effectiveFraction, nowMs));
     this.emitStats();
   }
 
@@ -367,6 +427,9 @@ export class AvMirrorSession {
     this.telemetry.reset();
     this.governor.reset();
     this.lastAudioUnderruns = 0;
+    this.inputActiveUntilMs = 0;
+    // Read the input-priority preference now (deferred from construction, same as the frame-rate mode).
+    this.inputPriorityEnabled = loadStreamInputPriority();
     // Apply the persisted user frame-rate mode now (deferred from construction). setRequested is a
     // no-op if it already matches, so restarts don't spam transitions.
     const stored = FRAME_RATE_MODE[loadStreamVideoFrameRateMode()];
@@ -421,3 +484,8 @@ export class AvMirrorSession {
 
 /** The app-wide shared session. */
 export const avMirrorSession = new AvMirrorSession();
+
+// Wire the shared session to the app-wide input-activity signal so any Remote Input event sheds the
+// mirror instantly (see AvMirrorSession.notifyInputActivity). Kept OUT of the class so unit tests can
+// construct isolated sessions without the global subscription; the singleton lives for the app's life.
+onInputActivity((nowMs) => avMirrorSession.notifyInputActivity(nowMs));
