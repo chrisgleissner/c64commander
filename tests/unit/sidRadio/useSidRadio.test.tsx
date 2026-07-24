@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
 import { clearAllRankings, getRanking } from "@/lib/sidRadio/rankingStore";
+import { loadSidRadioSession, saveSidRadioSession } from "@/lib/sidRadio/sidRadioSession";
 import type { StationRequest } from "@/lib/sidRadio/sidRadioWorkerProtocol";
 import type { StationResult } from "@/lib/sidRadio/stationEngine";
 
@@ -119,5 +120,38 @@ describe("useSidRadio", () => {
     });
     expect(getRanking("0123456789abcdef0123456789abcdef")).toBe("like");
     expect(params.advanceToNext).not.toHaveBeenCalled();
+  });
+
+  it("persists the station descriptor on start and clears it on stop (D15)", async () => {
+    const client = makeClient();
+    const params = baseParams(client);
+    const { result } = renderHook(() => useSidRadio(params));
+    await act(async () => {
+      await result.current.startSongRadio("aabbccddeeff", "Commando");
+    });
+    const saved = loadSidRadioSession();
+    expect(saved).toMatchObject({ seedKind: "song", seedLabel: "Commando", shuffleSeed: 12345 });
+    expect(saved?.excludeOrdinals.length).toBeGreaterThan(0);
+    act(() => result.current.stop());
+    expect(loadSidRadioSession()).toBeNull();
+  });
+
+  it("resumes the chip from a saved session on mount (D15)", () => {
+    saveSidRadioSession({
+      seedKind: "style",
+      seedLabel: "Fast-Paced",
+      seed: { kind: "style", styleBit: 0 },
+      styleFilter: 0,
+      shuffleSeed: 777,
+      rankingSnapshotId: "snap",
+      excludeOrdinals: [1, 2, 3],
+    });
+    const client = makeClient();
+    const params = baseParams(client);
+    const { result } = renderHook(() => useSidRadio(params));
+    expect(result.current.active).toBe(true);
+    expect(result.current.station).toMatchObject({ seedKind: "style", seedLabel: "Fast-Paced", shuffleSeed: 777 });
+    // Resume rebuilds the chip only — it does not auto-replace the playlist.
+    expect(params.startPlaylist).not.toHaveBeenCalled();
   });
 });

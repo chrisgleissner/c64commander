@@ -28,6 +28,12 @@ import {
   resetSidRadioStats,
   updateSidRadioStats,
 } from "@/lib/sidRadio/sidRadioStats";
+import {
+  clearSidRadioSession,
+  loadSidRadioSession,
+  saveSidRadioSession,
+  type SidRadioSessionDescriptor,
+} from "@/lib/sidRadio/sidRadioSession";
 
 const basename = (path: string): string => path.split("/").filter(Boolean).pop() ?? path;
 
@@ -110,11 +116,12 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
   }, [params]);
 
   const buildProvider = useCallback(
-    (seed: StationSeed, styleFilter: number | null, shuffleSeed: number) => {
+    (seed: StationSeed, styleFilter: number | null, shuffleSeed: number, initialExclude: number[] = []) => {
       const client = ensureClient();
       seedRef.current = { seed, styleFilter, shuffleSeed };
       return new StationQueueProvider({
         lookahead: LOOKAHEAD,
+        initialExclude,
         computeCandidates: (exclude, count) =>
           client.compute({
             seed,
@@ -132,6 +139,18 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     },
     [ensureClient, resolvePath],
   );
+
+  const persistSession = useCallback((descriptor: ActiveStation, seed: StationSeed) => {
+    saveSidRadioSession({
+      seedKind: descriptor.seedKind,
+      seedLabel: descriptor.seedLabel,
+      seed,
+      styleFilter: descriptor.styleBit,
+      shuffleSeed: descriptor.shuffleSeed,
+      rankingSnapshotId: descriptor.rankingSnapshotId,
+      excludeOrdinals: providerRef.current?.excludedOrdinals ?? [],
+    });
+  }, []);
 
   const start = useCallback(
     async (seed: StationSeed, styleFilter: number | null, seedKind: ActiveStation["seedKind"], seedLabel: string) => {
@@ -164,10 +183,18 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
         providerRef.current = null;
         return;
       }
-      setStation({ seedKind, seedLabel, styleBit: styleFilter, shuffleSeed, rankingSnapshotId: snapshot.id });
+      const activeStation: ActiveStation = {
+        seedKind,
+        seedLabel,
+        styleBit: styleFilter,
+        shuffleSeed,
+        rankingSnapshotId: snapshot.id,
+      };
+      setStation(activeStation);
+      persistSession(activeStation, seed);
       await startPlaylist(items);
     },
-    [enabled, ensureClient, randomSeed, buildProvider, startPlaylist],
+    [enabled, ensureClient, randomSeed, buildProvider, startPlaylist, persistSession],
   );
 
   const startSongRadio = useCallback(
@@ -199,8 +226,35 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
   const stop = useCallback(() => {
     setStation(null);
     providerRef.current = null;
+    clearSidRadioSession();
     updateSidRadioStats({ stationActive: false, transportShuffleDisabled: false, transportRepeatDisabled: false });
   }, []);
+
+  // Resume the chip after an app restart (D15): rebuild the provider with the
+  // saved exclude set so the next refill continues the identical sequence.
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current || !enabled || station) return;
+    restoredRef.current = true;
+    const saved: SidRadioSessionDescriptor | null = loadSidRadioSession();
+    if (!saved) return;
+    providerRef.current = buildProvider(saved.seed, saved.styleFilter, saved.shuffleSeed, saved.excludeOrdinals);
+    setStation({
+      seedKind: saved.seedKind,
+      seedLabel: saved.seedLabel,
+      styleBit: saved.styleFilter,
+      shuffleSeed: saved.shuffleSeed,
+      rankingSnapshotId: saved.rankingSnapshotId,
+    });
+    updateSidRadioStats({
+      stationActive: true,
+      seedKind: saved.seedKind,
+      styleBit: saved.styleFilter,
+      shuffleSeed: saved.shuffleSeed,
+      transportShuffleDisabled: true,
+      transportRepeatDisabled: true,
+    });
+  }, [enabled, station, buildProvider]);
 
   const steer = useCallback(
     (md5: string, signal: RankingSignal) => {
@@ -230,6 +284,15 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
         recordRefill({ lastRefillMs: mainThreadMs, mainThreadMs, emitted: items.length, lookahead: LOOKAHEAD });
         if (items.length > 0) {
           appendItems(items);
+          saveSidRadioSession({
+            seedKind: station.seedKind,
+            seedLabel: station.seedLabel,
+            seed: seedRef.current.seed,
+            styleFilter: station.styleBit,
+            shuffleSeed: station.shuffleSeed,
+            rankingSnapshotId: station.rankingSnapshotId,
+            excludeOrdinals: provider.excludedOrdinals,
+          });
         } else if (reason) {
           updateSidRadioStats({ stationActive: true });
         }

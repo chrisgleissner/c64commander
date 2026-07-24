@@ -470,3 +470,18 @@ _(append entries below as tasks/gates complete — newest last)_
 - Evidence: launcher 6 tests; full sidRadio + playFiles suites (49 files / 364) pass; tsc + eslint clean.
 - Gate: **G7** style admission + Style×Likes composition + Taste unlock proven (code+unit). The
   on-device on-vibe mask spot-check is a manual HIL (§9.5).
+
+### 2026-07-24 — M4.1 station-descriptor persistence + resume (D15)
+- Task: Persist the active-station descriptor → exact recompute-on-restart; resume the chip (§6.3, D15).
+- Files: `sidRadioSession.ts` (new — save/load/clear the tiny tuple: seed/styleFilter/shuffleSeed/
+  rankingSnapshotId/excludeOrdinals; never the full queue), `useSidRadio.ts` (persist on start +
+  after each refill with the growing exclude set; clear on stop; restore-on-mount rebuilds the
+  provider with the saved `initialExclude` so the next refill continues the identical sequence,
+  and resumes the chip without auto-replacing the playlist). Tests: sidRadioSession (4),
+  useSidRadio resume (+2).
+- Decisions: store only the deterministic recompute tuple (D15) — the engine replays the exact
+  continuation. Resume rebuilds the chip + provider only; the app's own playlist persistence
+  restores the queue.
+- Evidence: 11 tests (round-trip, null, clear, malformed-reject; start persists + stop clears;
+  mount resumes the chip without startPlaylist). tsc + eslint clean.
+- Gate: **G8** exact-recompute persistence + chip resume proven (code+unit); device restart = manual HIL.
