@@ -512,3 +512,21 @@ _(append entries below as tasks/gates complete — newest last)_
 - Evidence: 13 useSidRadio/useCurrentTuneMd5 tests pass; manual chapters added; sidRadio unit
   coverage strong.
 - Gate: **G10** manual chapter added; patch % verified by CI. **G9/G12** ◑ (device soak = manual HIL).
+
+### 2026-07-24 — LE0 licence audit (Track B legal gate) — PASS
+- Task: LE0 due-diligence — confirm no GPL-2.0-only component before adopting libsidplayfp-wasm (§12.2).
+- Findings (source: /home/chris/dev/c64/sidflow/packages/libsidplayfp-wasm):
+  - The package is **not published to npm** (E404) → D5 fallback applies (vendor its `dist/`).
+  - libsidplayfp upstream README: "the Free Software Foundation; either version 2 of the License,
+    or (at your option) any later version" → **GPL-2.0-or-later** ✓ (compatible with this GPL-3.0
+    app; the combined work is GPL-3.0-or-later). NOT GPL-2.0-only.
+  - hashlib = **MIT** ✓. reSIDfp/residfp ships within the libsidplayfp tree under the same
+    GPL-2.0-or-later. No GPL-2.0-only piece found.
+  - dist ships the GPL v2 *license text* file, but the code is v2-or-later per the README clause.
+- Decision: licence gate **clears** — the WASM engine can be vendored under GPL-3.0-or-later with
+  attribution in THIRD_PARTY_NOTICES (add with the vendor step). iOS App-Store × GPL friction is a
+  separate pre-iOS-release legal check (§12.2), not an Android/SailfishOS blocker.
+- Gate: **L1 legal component satisfied** (no GPL-2.0-only). The L1 runtime proof (WASM instantiates +
+  renders a PSID on the Callback 8020 / SailfishOS) and LE1–LE3 (local engine + chunked Web Audio sink
+  + engine toggle + on-device perf) remain — the independent Track B build (§0.5), which needs the
+  vendored `dist/` + a full audio engine.

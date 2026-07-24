@@ -80,7 +80,7 @@ Branch: **`feat/sid-radio`** (cut from `main`). Flags default **off** until each
 
 ## Track B — Local Playback Engine (parallel after M0; independent)  (→ L1–L4)
 
-- [ ] LE0 Licence audit (`dist/LICENSE` + residfp + transitive = v2-or-later/permissive); render one PSID → PCM on Callback 8020 / SailfishOS → **L1**
+- [~] LE0 Licence audit **(licence PASS: no GPL-2.0-only; libsidplayfp v2-or-later ✓, hashlib MIT)**; runtime WASM-render proof + vendor dist remain → (`dist/LICENSE` + residfp + transitive = v2-or-later/permissive); render one PSID → PCM on Callback 8020 / SailfishOS → **L1**
 - [ ] LE1 `localSidEngine.ts` + `localSid.worker.ts` + chunked Web Audio sink; gapless scheduling; position events — **RED→GREEN** → **L2**
 - [ ] LE2 `c64u_playback_engine` setting + Play-page segmented control (`playback-engine-c64`/`playback-engine-local`); route in `playItem`; ROM-less fallback + one-time notice; clean instant switch; foreground wake lock → **L3**
 - [ ] LE3 On-device battery/CPU gate (§12.6); background-audio doc + native-sink escape hatch noted; **SID Radio e2e on Local engine, no C64** (`--engine local`); manual chapter → **L4**
