@@ -70,6 +70,9 @@ export interface AvStatsSnapshot {
     presented: number;
     decimated: number;
     backlogReplacements: number;
+    completeFrames: number;
+    partialConcealed: number;
+    repeatedFrames: number;
     framesLost: number;
     droppedPackets: number;
     standard: VideoStandard;
@@ -316,6 +319,9 @@ export class AvMirrorSession {
         presented: video.presented,
         decimated: video.decimated,
         backlogReplacements: video.backlogReplacements,
+        completeFrames: video.completeFrames,
+        partialConcealed: video.partialConcealed,
+        repeatedFrames: video.repeatedFrames,
         framesLost: video.framesLost,
         droppedPackets: video.droppedPackets,
         standard: video.standard,

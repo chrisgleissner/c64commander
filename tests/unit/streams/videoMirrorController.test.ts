@@ -579,6 +579,81 @@ describe("VideoMirrorController — coalescing present queue (drop-late / presen
   });
 });
 
+describe("VideoMirrorController — presentation-slot accounting / concealment (§9)", () => {
+  /** Build a two-packet frame (line 0 + last-line) whose seq numbers the caller controls. */
+  const frameOf = (receiver: FakeReceiver, seq0: number, frameNum: number) => {
+    receiver.emit(videoPacket({ seq: seq0, frame: frameNum, line: 0, lastLine: false }));
+    receiver.emit(videoPacket({ seq: seq0 + 1, frame: frameNum, line: 268, lastLine: true }));
+  };
+
+  it("classifies clean frames as complete, with no repeats or partials and no unexplained gaps", async () => {
+    const receiver = new FakeReceiver();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame: vi.fn(),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+    let seq = 0;
+    for (let f = 0; f < 10; f += 1) {
+      frameOf(receiver, seq, f);
+      seq += 2;
+    }
+    const s = controller.getSnapshot();
+    expect(s.completeFrames).toBe(10);
+    expect(s.partialConcealed).toBe(0);
+    expect(s.repeatedFrames).toBe(0);
+    // Every completed source frame was presented (no decimation, no backlog) — no unexplained gaps.
+    expect(s.presented + s.decimated + s.backlogReplacements).toBe(s.completeFrames + s.partialConcealed);
+  });
+
+  it("counts a whole-frame loss as a repeated slot (previous frame held on the canvas)", async () => {
+    const receiver = new FakeReceiver();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame: vi.fn(),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+    // Frames 0,1, then SKIP frame 2 (its last-line lost), then 3 → frame-number gap 1→3 = 1 lost slot.
+    frameOf(receiver, 0, 0);
+    frameOf(receiver, 2, 1);
+    frameOf(receiver, 6, 3); // seq jumps too (frame 2's packets never arrived)
+    const s = controller.getSnapshot();
+    expect(s.repeatedFrames).toBe(1); // the missing frame 2 slot = one repeat of the previous frame
+    expect(s.framesLost).toBe(1);
+    // Slot invariant still holds: completed frames are all classified + presented.
+    expect(s.presented + s.decimated + s.backlogReplacements).toBe(s.completeFrames + s.partialConcealed);
+  });
+
+  it("classifies a frame with missing line packets as partially concealed", async () => {
+    const receiver = new FakeReceiver();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame: vi.fn(),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+    frameOf(receiver, 0, 0); // complete
+    // Frame 1: a mid-line packet is missing (seq gap within the frame) → dropped++ → partial-concealed.
+    receiver.emit(videoPacket({ seq: 2, frame: 1, line: 0, lastLine: false }));
+    receiver.emit(videoPacket({ seq: 5, frame: 1, line: 268, lastLine: true })); // seq 3,4 dropped
+    const s = controller.getSnapshot();
+    expect(s.droppedPackets).toBeGreaterThan(0);
+    expect(s.partialConcealed).toBe(1);
+    expect(s.completeFrames).toBe(1); // only frame 0 was clean
+  });
+});
+
 describe("VideoMirrorController — continuous fractional cadence (§11 governor)", () => {
   /** Present `frames` source frames at `keepFraction` and return how many were rendered. */
   const presentedAt = async (keepFraction: number, frames: number): Promise<number> => {

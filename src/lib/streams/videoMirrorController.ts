@@ -72,6 +72,18 @@ export interface VideoMirrorSnapshot {
   backlogReplacements: number;
   /** Frames actually handed to the sink (presented). */
   presented: number;
+  /** Source frames received COMPLETE (no missing packets). §9.1 slot outcome. */
+  completeFrames: number;
+  /**
+   * Frames whose assembly had missing line packets → the gaps retain the PREVIOUS frame's pixels
+   * (temporal region concealment; the assembler never clears its buffer). §9 partial concealment.
+   */
+  partialConcealed: number;
+  /**
+   * Whole source frames LOST (never completed) → the previous frame is held on the canvas (a
+   * deliberate temporal repeat). Ensures every source slot has an outcome (§9.1 / no unexplained gaps).
+   */
+  repeatedFrames: number;
   /** Most recent present-queue residence (ms, presentation clock): ready → presented. */
   renderResidenceMs: number;
   /** Max present-queue residence since start (ms) — the video queue-age bound telemetry (§6). */
@@ -121,6 +133,9 @@ export class VideoMirrorController {
     decimated: 0,
     backlogReplacements: 0,
     presented: 0,
+    completeFrames: 0,
+    partialConcealed: 0,
+    repeatedFrames: 0,
     renderResidenceMs: 0,
     maxResidenceMs: 0,
     standard: "PAL",
@@ -134,6 +149,12 @@ export class VideoMirrorController {
   private decimated = 0;
   private backlogReplacements = 0;
   private presented = 0;
+  private completeFrames = 0;
+  private partialConcealed = 0;
+  private repeatedFrames = 0;
+  /** Cumulative dropped/lost at the previous completed frame, for per-frame slot classification. */
+  private prevDroppedPackets = 0;
+  private prevFramesLost = 0;
   private maxResidenceMs = 0;
   /** The governor's requested keep-fraction (0,1]. Realised natively when the transport supports it. */
   private requestedKeepFraction: number;
@@ -227,11 +248,22 @@ export class VideoMirrorController {
     present = true,
   ): void {
     const standard = videoStandardForHeight(height);
+    // Presentation-slot accounting (§9.1): classify this source frame, and account for any whole
+    // source frames LOST just before it as repeats (the previous frame is held on the canvas). These
+    // classify every source slot so there are no unexplained missing presentation slots (§16.3).
+    const deltaLost = Math.max(0, framesLost - this.prevFramesLost);
+    const deltaDropped = Math.max(0, droppedPackets - this.prevDroppedPackets);
+    this.prevFramesLost = framesLost;
+    this.prevDroppedPackets = droppedPackets;
+    this.repeatedFrames += deltaLost;
+    if (deltaDropped > 0) this.partialConcealed += 1;
+    else this.completeFrames += 1;
+
     // Native decimation: the transport already decided to skip this frame (payload elided). Count it
     // as intentional cadence decimation and render nothing — the JS cadence is a no-op (keepFraction 1).
     if (present === false) {
       this.decimated += 1;
-      this.update({ droppedPackets, framesLost, decimated: this.decimated, standard });
+      this.update({ droppedPackets, framesLost, decimated: this.decimated, standard, ...this.slotCounts() });
       return;
     }
     // JS-side fractional cadence (web path, or native transport that isn't decimating): accumulate
@@ -241,12 +273,21 @@ export class VideoMirrorController {
     if (this.presentPhase + 1e-9 < 1) {
       // Intentional cadence decimation — not a defect, counted separately (§2/§16.3).
       this.decimated += 1;
-      this.update({ droppedPackets, framesLost, decimated: this.decimated, standard });
+      this.update({ droppedPackets, framesLost, decimated: this.decimated, standard, ...this.slotCounts() });
       return;
     }
     this.presentPhase -= 1;
     this.enqueueForPresent({ frame, height, arrivalMs, readyMs: this.now() });
-    this.update({ droppedPackets, framesLost, standard });
+    this.update({ droppedPackets, framesLost, standard, ...this.slotCounts() });
+  }
+
+  /** The presentation-slot classification counters (§9.1), for the snapshot patch. */
+  private slotCounts(): Pick<VideoMirrorSnapshot, "completeFrames" | "partialConcealed" | "repeatedFrames"> {
+    return {
+      completeFrames: this.completeFrames,
+      partialConcealed: this.partialConcealed,
+      repeatedFrames: this.repeatedFrames,
+    };
   }
 
   /** Coalesce into the depth-one present queue; a superseded ready frame is a backlog replacement. */
@@ -301,6 +342,9 @@ export class VideoMirrorController {
       decimated: 0,
       backlogReplacements: 0,
       presented: 0,
+      completeFrames: 0,
+      partialConcealed: 0,
+      repeatedFrames: 0,
       renderResidenceMs: 0,
       maxResidenceMs: 0,
     });
@@ -376,6 +420,11 @@ export class VideoMirrorController {
     this.decimated = 0;
     this.backlogReplacements = 0;
     this.presented = 0;
+    this.completeFrames = 0;
+    this.partialConcealed = 0;
+    this.repeatedFrames = 0;
+    this.prevDroppedPackets = 0;
+    this.prevFramesLost = 0;
     this.maxResidenceMs = 0;
   }
 
@@ -398,6 +447,9 @@ export class VideoMirrorController {
       decimated: 0,
       backlogReplacements: 0,
       presented: 0,
+      completeFrames: 0,
+      partialConcealed: 0,
+      repeatedFrames: 0,
       renderResidenceMs: 0,
       maxResidenceMs: 0,
       error: null,

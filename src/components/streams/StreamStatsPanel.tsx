@@ -223,8 +223,10 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
           {/* Video presentation-slot accounting (§9.1) */}
           <section data-testid="stream-stats-video">
             <div className="mb-1 text-[11px] font-medium">Video ({live.standard})</div>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <Stat label="Presented" value={num(live.presented)} testid="presented" />
+              <Stat label="Partial" value={num(live.partialConcealed)} testid="partial" />
+              <Stat label="Repeated" value={num(live.repeatedFrames)} testid="repeated" />
               <Stat label="Decimated" value={num(live.decimated)} testid="decimated" />
               <Stat label="Backlog" value={num(live.backlogReplacements)} testid="backlog" />
               <Stat label="Lost" value={num(live.framesLost)} testid="frames-lost" />
