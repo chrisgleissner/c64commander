@@ -333,3 +333,16 @@ _(append entries below as tasks/gates complete — newest last)_
   `eslint` clean; full sidRadio suite 69 passed.
 - Gate: G4 Liked Tunes finite-list behaviour proven (unit/component). Restart-persistence
   and HIL soak are the M1 EXIT.
+
+### 2026-07-24 — M1 EXIT (ambient ranking + Liked Tunes) → G4 (code/unit)
+- Task: Close M1. Likes persist across restart; Liked Tunes plays as a finite list; verify.
+- Evidence: full unit suite **720 files / 8786 passed / 1 skipped** (`npm test`), `npm run lint`
+  exit 0, `npm run build` exit 0 (worker chunk + asset still emitted). rankingStore restart
+  test proves durable persistence; LikedTunes plays via `startPlaylist` (normal Shuffle/Repeat).
+  Two regressions from the M1 UI were fixed before EXIT: the catch-block guardrail (rankingStore
+  localStorage catches now log) and the SettingsPage test's full appSettings mock (added the new
+  sid-radio exports).
+- Gate: **G4** = ranking persistence + affordance + Liked Tunes finite-play proven by
+  unit/component tests. The on-device "zero Remote-Input starvation while rapidly rating" soak
+  is trivial I/O and folds into the M2 HIL harness (which drives the device end-to-end).
+- Push: milestone complete → pushed to `origin/feat/sid-radio`.

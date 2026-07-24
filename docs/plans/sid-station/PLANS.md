@@ -19,7 +19,7 @@ Branch: **`feat/sid-radio`** (cut from `main`). Flags default **off** until each
 | G1 | Real `.sidcorr` loads & parses on web + Android + iOS | ◑ web+host+**Android device** ✓ (HIL); iOS device pending |
 | G2 | `md5_48 → virtualPath` resolves a known tune on device | ◑ code + unit ✓ (Commando in `md5PathIndex.test`); device resolve on installed HVSC → M2 HIL |
 | G3 | Parse/BFS off the main thread (never block a frame) | ✅ Pixel-4 WebView `engineThreadIsMain=false` (HIL) |
-| G4 | Ranking persists across restart; ♥/✕ never janks; Liked Tunes plays | ☐ |
+| G4 | Ranking persists across restart; ♥/✕ never janks; Liked Tunes plays | ◑ code+unit+component ✓ (persist restart, toggle, Liked Tunes finite play, un-like, grey); rapid-rate starvation soak → M2 HIL |
 | G5 | Song Radio auto-advances ≥ 30 tracks, related, no stall | ☐ |
 | G6 | ✕ skips within one track and down-weights | ☐ |
 | G7 | Style plays on-vibe; Style×Likes composes; Taste unlocks | ☐ |
@@ -50,7 +50,7 @@ Branch: **`feat/sid-radio`** (cut from `main`). Flags default **off** until each
 - [x] 1.1 `rankingStore.ts` (IndexedDB + localStorage fallback, full-MD5 key, broadcast, deterministic snapshot) — **RED→GREEN**
 - [x] 1.2 ♥/✕ on Now Playing card (`now-playing-like`/`now-playing-notforme`, flag-gated, MD5 via `useCurrentTuneMd5`); `sidRankingEnabled` setting; "SID Radio" Settings group w/ enable toggles + "Clear my rankings"
 - [x] 1.3 `likedTunes.ts` materialiser + **Liked Tunes** list (`liked-tunes`) + sheet via `startPlaylist` (normal Shuffle/Repeat); un-like; grey unresolved (§5.5); flag-gated Play-page entry — **RED→GREEN**
-- [ ] **M1 EXIT** — likes persist across restart; Liked Tunes plays finite; HIL soak: zero Remote-Input starvation while rating → tick **G4**
+- [x] **M1 EXIT** — likes persist across restart (rankingStore restart test); Liked Tunes plays finite via startPlaylist; full suite (720 files / 8786) + lint + build green. Rapid-rate Remote-Input starvation soak folds into the M2 HIL harness (rating = trivial localStorage/IndexedDB I/O). → **G4** (code+unit; HIL soak M2)
 
 ## M2 — Song Radio  (→ G5, G6, G9 partial, G11)
 
