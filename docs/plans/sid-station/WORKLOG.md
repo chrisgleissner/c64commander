@@ -64,3 +64,50 @@ gate. Never rewrite prior entries; corrections are new entries. The live board i
 ## Progress log
 
 _(append entries below as tasks/gates complete — newest last)_
+
+### 2026-07-24 — pre-M0 side-task: sidflow tiny-spec accuracy (user request)
+- Task: Make the `sidflow`/`sidflow-data` tiny spec match what the code actually
+  produces, before building the parser against it.
+- Findings: The generator (`sidflow/packages/sidflow-common/src/similarity-export-tiny.ts`)
+  emits **binary_format_version 2**, but `sidflow/doc/similarity-export-tiny.md` described
+  v1. Verified against the real 1.8 MB release bundle and a local 796-track dev export
+  (both v2, graph_flags `0x0007`, 12-byte neighbor rows, packed rating table). Divergences:
+  (a) header version 1→2; (b) neighbor record is `u24` target **+ `u8` quantized similarity**
+  (12-byte rows, not 9); (c) a **RATING_TABLE** (`u16`/track packed nibbles) sits between
+  STYLE_MASK_TABLE and NEIGHBOR_TABLE; (d) FILE_IDENTITY_TABLE has **no** section mini-header
+  (bare 6-byte records); (e) size table was stale.
+- Files: `sidflow/doc/similarity-export-tiny.md` (only). Added §5.4 Binary Format Versions
+  with offset-only v1/v2 detection matching `openTinySimilarityDataset`; new §9.1 RATING_TABLE;
+  §10.2 v2 neighbor layout + quantization formulas; corrected §7.1; v2 size table (=1,818,171 B).
+- Decisions: Update the **doc** to match the **code** (user directive), not vice-versa. Doc-only.
+  `sidflow-data` needs no change — its README already defers all format specs to `sidflow`,
+  and there is no local `sidflow-data` checkout (confirmed with the user).
+- Commands + evidence: probed the real bundle (magic SIDTINY1, ver 2, tracks 87073, files 60571,
+  styles 9, neighborsBytes=1,044,876=87073·12, end offset == file size, sum(fileTrackCount)==trackCount).
+  `git -C /home/chris/dev/c64/sidflow commit` → `4f41ed2` (doc-only, not pushed).
+- Gate: n/a (external repo doc; unblocks M0 parser correctness).
+
+### 2026-07-24 — M0.1 fetch-sidcorr + pinned sha + build wiring + notices
+- Task: `scripts/fetch-sidcorr.mjs`, committed `SIDCORR_BUNDLE_SHA256`, build wiring,
+  git-ignore asset, `THIRD_PARTY_NOTICES.md` attribution. (TDD: RED test first.)
+- Files: `scripts/fetch-sidcorr.mjs` (new), `src/lib/sidRadio/sidcorrRelease.ts` (new, app
+  source of truth for the pin), `tests/unit/scripts/fetchSidcorr.test.ts` (new, RED→GREEN),
+  `scripts/generate-third-party-notices.mjs` (+DATA_NOTICES curated section),
+  `THIRD_PARTY_NOTICES.md` (regenerated), `package.json` (prebuild += `sidcorr:fetch`;
+  new `sidcorr:fetch` script), `.gitignore` (`public/data/sidcorr/`).
+- Decisions (spec §3, D4/D9): ship the raw `.sidcorr` as a fetched-at-build web asset,
+  git-ignored, verified against a committed sha256 pin. Single source of truth = TS constants;
+  the `.mjs` build-side copy is drift-guarded by a test. Fetch is idempotent (cached+sha-ok =
+  skip, no network) and offline-tolerant (soft-skip when the net is down, since SID Radio flags
+  default off during rollout); sha **mismatch** is a hard fail. Notices attribution added via
+  the generator (not a hand-edit) so `notices:check` stays green; credits sidflow-data
+  (GPL-3.0-or-later) and HVSC, and explicitly states no SID files / no ROMs are bundled.
+- Commands + evidence:
+  - Downloaded real bundle → `public/data/sidcorr/hvsc-tiny.sidcorr`, sha256
+    `37ceb567…5d7d1b` == manifest pin; 1,818,171 bytes; magic `SIDTINY1`.
+  - `npx vitest run tests/unit/scripts/fetchSidcorr.test.ts` → 4 passed (pin is 64-hex;
+    mjs↔ts no-drift; verify true/false; git-ignored public path).
+  - `node scripts/fetch-sidcorr.mjs` → `up to date (1818171 bytes, sha ok)`, exit 0 (idempotent).
+  - `npm run notices:generate && npm run notices:check` → check passed (811 entries).
+  - `npx eslint` on new files → clean; generator diff = +17 lines only (no reformat churn).
+- Gate: G1/G2 partial (asset acquisition + pin). Parser round-trip is M0.3; device resolve is M0.4.

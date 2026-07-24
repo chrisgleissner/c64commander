@@ -353,6 +353,22 @@ const renderNotices = (entries) => {
   return [header, separator, ...rows].join('\n');
 };
 
+// Bundled data assets that are not npm/native dependencies (so they never
+// appear in a lockfile) but must still be attributed. Curated here so
+// generation and `--check` stay consistent.
+const DATA_NOTICES = [
+  '## Data notices',
+  '',
+  'The following bundled data assets are not npm/Gradle/CocoaPods/SwiftPM dependencies and are attributed separately:',
+  '',
+  '| Asset | Source | License |',
+  '| --- | --- | --- |',
+  '| SID Radio similarity bundle (`sidcorr-tiny-1`) | [chrisgleissner/sidflow-data](https://github.com/chrisgleissner/sidflow-data) | [GPL-3.0-or-later](https://www.gnu.org/licenses/gpl-3.0.html) |',
+  '',
+  'The SID Radio similarity bundle is a compact, content-addressed index derived from analysis of the High Voltage SID Collection (HVSC, <https://www.hvsc.c64.org/>). SID tunes and their metadata remain the property of their respective composers and the HVSC team; this application bundles only the derived similarity index — not the SID files themselves and not any C64 ROM images.',
+  '',
+].join('\n');
+
 const parseArgs = () => {
   const args = process.argv.slice(2);
   return {
@@ -411,6 +427,7 @@ const main = async () => {
     '',
     renderNotices(allEntries),
     '',
+    DATA_NOTICES,
   ].join('\n');
 
   await writeOrCheck({

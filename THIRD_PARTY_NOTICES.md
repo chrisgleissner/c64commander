@@ -819,3 +819,13 @@ Summary: 811 dependencies across NPM (794), Gradle (13), CocoaPods (4), SwiftPM 
 | CocoaPods | CapacitorCordova | 6.2.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://github.com/ionic-team/capacitor](https://github.com/ionic-team/capacitor) |
 | CocoaPods | CapacitorFilesystem | 6.0.4 | [MIT](https://spdx.org/licenses/MIT.html) | [https://github.com/ionic-team/capacitor-plugins.git](https://github.com/ionic-team/capacitor-plugins.git) |
 | CocoaPods | CapacitorShare | 6.0.4 | [MIT](https://spdx.org/licenses/MIT.html) | [https://github.com/ionic-team/capacitor-plugins.git](https://github.com/ionic-team/capacitor-plugins.git) |
+
+## Data notices
+
+The following bundled data assets are not npm/Gradle/CocoaPods/SwiftPM dependencies and are attributed separately:
+
+| Asset | Source | License |
+| --- | --- | --- |
+| SID Radio similarity bundle (`sidcorr-tiny-1`) | [chrisgleissner/sidflow-data](https://github.com/chrisgleissner/sidflow-data) | [GPL-3.0-or-later](https://www.gnu.org/licenses/gpl-3.0.html) |
+
+The SID Radio similarity bundle is a compact, content-addressed index derived from analysis of the High Voltage SID Collection (HVSC, <https://www.hvsc.c64.org/>). SID tunes and their metadata remain the property of their respective composers and the HVSC team; this application bundles only the derived similarity index — not the SID files themselves and not any C64 ROM images.

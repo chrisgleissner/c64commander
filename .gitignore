@@ -68,6 +68,10 @@ agents/coverage-agents.xml
 docs/manual/**/*.pdf
 docs/manual/**/.last-build
 
+# SID Radio similarity bundle — fetched at build time by scripts/fetch-sidcorr.mjs
+# (verified against the committed pin in src/lib/sidRadio/sidcorrRelease.ts), never committed.
+public/data/sidcorr/
+
 # Test fixtures
 .cache/hvsc/
 android/app/src/test/fixtures/HVSC_Update_84.7z
