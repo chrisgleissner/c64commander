@@ -111,3 +111,24 @@ _(append entries below as tasks/gates complete — newest last)_
   - `npm run notices:generate && npm run notices:check` → check passed (811 entries).
   - `npx eslint` on new files → clean; generator diff = +17 lines only (no reformat churn).
 - Gate: G1/G2 partial (asset acquisition + pin). Parser round-trip is M0.3; device resolve is M0.4.
+
+### 2026-07-24 — M0.2 synthetic fixture builder (`buildTinyFixture.ts`)
+- Task: Byte-exact synthetic `.sidcorr` emitter so unit tests never load the real
+  1.8 MB bundle and assertions are exact (spec §8.5).
+- Files: `tests/fixtures/sidcorr/buildTinyFixture.ts` (new — declarative spec →
+  ArrayBuffer, v1 & v2, `DEFAULT_TINY_STYLES`, `buildDefaultTinyFixture`),
+  `tests/unit/sidRadio/buildTinyFixture.test.ts` (new — self-test via raw DataView,
+  independent of the production parser).
+- Decisions: Mirror the real generator's v2 layout exactly (header offsets, 12-byte
+  section header + 28-byte style records + UTF-8 payload, bare identity/mask/rating
+  arrays, u24+u8 neighbor records, graph_flags `0x0007`). Builder enforces the DAG
+  invariant (neighbor target < ordinal) so fixtures can't encode illegal graphs.
+  Also supports v1 (no rating table, 3-byte neighbor rows) so the parser can be
+  tested against both. The opt-in `SIDCORR_REAL=1` golden test parses the *real*
+  bundle and therefore ships with the parser (0.3), not here.
+- Commands + evidence: `npx vitest run tests/unit/sidRadio/buildTinyFixture.test.ts`
+  → 9 passed (header/counts, contiguous v2 offsets incl. rating table, 9 canonical
+  styles in order, fileTrackCount sum, raw md5_48, mask+rating round-trip, backward
+  neighbor edges + similarity byte + sentinel, DAG rejection, v1 3-byte rows).
+  prettier + eslint clean.
+- Gate: infra for G1/G3 (feeds the M0.3 parser + M2 engine tests).

@@ -38,7 +38,7 @@ Branch: **`feat/sid-radio`** (cut from `main`). Flags default **off** until each
 ## M0 — Data plumbing + worker/asset harness  (→ G1, G2, G3 partial)
 
 - [x] 0.1 `scripts/fetch-sidcorr.mjs` + committed `SIDCORR_BUNDLE_SHA256`; wire into build & `cap copy`; git-ignore asset; `THIRD_PARTY_NOTICES.md` attribution
-- [ ] 0.2 Fixtures: `tests/fixtures/sidcorr/buildTinyFixture.ts` + opt-in `SIDCORR_REAL=1` golden manifest test
+- [x] 0.2 Fixtures: `tests/fixtures/sidcorr/buildTinyFixture.ts` (+ self-test) — golden `SIDCORR_REAL=1` manifest test delivered with the parser in 0.3 (it exercises the parser)
 - [ ] 0.3 `sidcorrTiny.ts` parser + header validation + cold→hot transform (§2.6) — **RED→GREEN**
 - [ ] 0.4 `md5PathIndex.ts` from `Songlengths.md5`; rebuild on finalize hook; deterministic tie-break (D14) — **RED→GREEN**
 - [ ] 0.5 Worker/asset harness spike `sidRadio.worker.ts`: builds under vite + loads in Capacitor WebView on Android/web/iOS; off-main-thread guard (§8.6)
