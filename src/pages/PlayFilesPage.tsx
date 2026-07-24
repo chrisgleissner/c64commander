@@ -84,6 +84,9 @@ import { NowPlayingRanking } from "@/pages/playFiles/components/NowPlayingRankin
 import { useCurrentTuneMd5 } from "@/pages/playFiles/hooks/useCurrentTuneMd5";
 import { useSidRadioFlags } from "@/lib/sidRadio/useSidRadioFlags";
 import { LikedTunesSheet } from "@/pages/playFiles/components/LikedTunesSheet";
+import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
+import { SidRadioChip } from "@/pages/playFiles/components/SidRadioChip";
+import { Radio as RadioIcon } from "lucide-react";
 import { PlaybackSettingsPanel } from "@/pages/playFiles/components/PlaybackSettingsPanel";
 import { PlaylistPanel } from "@/pages/playFiles/components/PlaylistPanel";
 import { HvscManager } from "@/pages/playFiles/components/HvscManager";
@@ -1335,7 +1338,24 @@ export default function PlayFilesPage() {
 
   const currentItem = playlist[currentIndex];
   const sidRadioFlags = useSidRadioFlags();
-  const currentTuneMd5 = useCurrentTuneMd5(currentItem ?? null, sidRadioFlags.rankingActive);
+  const currentTuneMd5 = useCurrentTuneMd5(currentItem ?? null, sidRadioFlags.sidRadioEnabled);
+  const sidRadio = useSidRadio({
+    enabled: sidRadioFlags.sidRadioEnabled,
+    startPlaylist: (items) => {
+      void startPlaylist(items, 0);
+    },
+    appendItems: (items) => setPlaylist((prev) => [...prev, ...items]),
+    advanceToNext: handleNext,
+    currentIndex,
+    playlistLength: playlist.length,
+  });
+  const sidRadioWhyThisTune = sidRadio.station
+    ? sidRadio.station.seedKind === "song"
+      ? `Similar to ${sidRadio.station.seedLabel}`
+      : sidRadio.station.seedKind === "style"
+        ? `Matches ${sidRadio.station.seedLabel}`
+        : "From tunes you like"
+    : null;
   const { setPlaybackContext, resolved: lightingResolved, openStudio, openContextLens } = useLightingStudio();
   const currentDurationMs = currentItem ? playlistItemDuration(currentItem, currentIndex) : undefined;
   const sourceKind = useMemo<TraceSourceKind | null>(() => {
@@ -1814,9 +1834,14 @@ export default function PlayFilesPage() {
                   ) : undefined
                 }
                 currentItemLabel={currentItem?.label ?? null}
+                stationActive={sidRadio.active}
                 rankingControls={
                   sidRadioFlags.rankingActive ? (
-                    <NowPlayingRanking md5={currentTuneMd5} enabled={sidRadioFlags.rankingActive} />
+                    <NowPlayingRanking
+                      md5={currentTuneMd5}
+                      enabled={sidRadioFlags.rankingActive}
+                      onNotForMe={sidRadio.active ? handleNext : undefined}
+                    />
                   ) : undefined
                 }
                 currentDurationLabel={currentDurationLabel}
@@ -1894,15 +1919,33 @@ export default function PlayFilesPage() {
                 }
               />
               {sidRadioFlags.sidRadioEnabled ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="self-start"
-                  data-testid="sid-radio-liked-tunes-open"
-                  onClick={() => setLikedTunesSheetOpen(true)}
-                >
-                  <Heart className="mr-1.5 h-4 w-4" /> Liked Tunes
-                </Button>
+                <div className="flex w-full flex-col gap-2">
+                  {sidRadio.active && sidRadio.station ? (
+                    <SidRadioChip station={sidRadio.station} whyThisTune={sidRadioWhyThisTune} onStop={sidRadio.stop} />
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    {!sidRadio.active && currentTuneMd5 && currentItem?.category === "sid" ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        data-testid="sid-radio-start"
+                        onClick={() =>
+                          void sidRadio.startSongRadio(currentTuneMd5.slice(0, 12), currentItem?.label ?? "this tune")
+                        }
+                      >
+                        <RadioIcon className="mr-1.5 h-4 w-4" /> Start Radio
+                      </Button>
+                    ) : null}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      data-testid="sid-radio-liked-tunes-open"
+                      onClick={() => setLikedTunesSheetOpen(true)}
+                    >
+                      <Heart className="mr-1.5 h-4 w-4" /> Liked Tunes
+                    </Button>
+                  </div>
+                </div>
               ) : null}
               <PlaybackSettingsPanel
                 durationSliderMax={DURATION_SLIDER_STEPS}

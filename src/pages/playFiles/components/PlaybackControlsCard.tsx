@@ -11,6 +11,7 @@ import { Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square } from "luc
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
 
 export type PlaybackControlsCardProps = {
@@ -52,6 +53,8 @@ export type PlaybackControlsCardProps = {
   openControllerAction?: ReactNode;
   /** SID Radio ambient ♥/✕ ranking affordance (spec §5.1); null when disabled. */
   rankingControls?: ReactNode;
+  /** True while a SID Radio station drives the queue — disables Shuffle/Repeat (§5.3, principle 9). */
+  stationActive?: boolean;
 };
 
 const PLAY_TRANSPORT_FOCUS_ORDER = {
@@ -99,6 +102,7 @@ export const PlaybackControlsCard = ({
   shuffleSeed,
   openControllerAction,
   rankingControls,
+  stationActive = false,
 }: PlaybackControlsCardProps) => {
   const previousFocusRef = useFocusItem<HTMLButtonElement>({
     id: "play-transport-previous",
@@ -234,9 +238,13 @@ export const PlaybackControlsCard = ({
             />
             Recurse
           </label>
-          <label className="flex items-center gap-2 text-xs">
+          <label
+            className={cn("flex items-center gap-2 text-xs", stationActive && "opacity-50")}
+            title={stationActive ? "Radio picks the order" : undefined}
+          >
             <Checkbox
-              checked={shuffleEnabled}
+              checked={shuffleEnabled && !stationActive}
+              disabled={stationActive}
               onCheckedChange={(value) => onShuffleChange(Boolean(value))}
               aria-label="Shuffle"
               data-testid="playback-shuffle"
@@ -245,9 +253,13 @@ export const PlaybackControlsCard = ({
               <Shuffle className="h-3.5 w-3.5" /> Shuffle
             </span>
           </label>
-          <label className="flex items-center gap-2 text-xs">
+          <label
+            className={cn("flex items-center gap-2 text-xs", stationActive && "opacity-50")}
+            title={stationActive ? "Radio picks the order" : undefined}
+          >
             <Checkbox
-              checked={repeatEnabled}
+              checked={repeatEnabled && !stationActive}
+              disabled={stationActive}
               onCheckedChange={(value) => onRepeatChange(Boolean(value))}
               aria-label="Repeat"
               data-testid="playback-repeat"
@@ -261,7 +273,7 @@ export const PlaybackControlsCard = ({
             variant="outline"
             size="sm"
             onClick={onReshuffle}
-            disabled={reshuffleDisabled}
+            disabled={reshuffleDisabled || stationActive}
             id="playlist-reshuffle"
             data-testid="playlist-reshuffle"
             data-active={reshuffleActive ? "true" : "false"}

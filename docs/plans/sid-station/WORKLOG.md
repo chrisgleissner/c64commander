@@ -392,3 +392,21 @@ _(append entries below as tasks/gates complete — newest last)_
   Stats DOM blob is the HIL/CDP read surface (mirrors Live View) and doubles as Diagnostics.
 - Evidence: contract 5 + stats 4 pass; existing worker core/client 10 still pass; eslint + tsc clean.
 - Gate: worker contract (§8.3) green; feeds G5/G6/G9 HIL (the stats surface).
+
+### 2026-07-24 — M2.4 useSidRadio hook + sid-radio-chip + Start Radio + transport disable
+- Task: Orchestrate a station over the existing Play engine; the chip; Start Radio; disable
+  transport Shuffle/Repeat while a station drives (spec §6.1, §5.3, principle 9).
+- Files: `useSidRadio.ts` (new — owns worker client + StationQueueProvider; startSong/Style/Taste,
+  steer, stop; fresh random shuffleSeed/start; lookahead refill on cursor-near-tail via
+  appendItems; ✕ steer records + skips (D8); records sidRadioStats), `SidRadioChip.tsx` (new —
+  `sid-radio-chip`/`sid-radio-stop`, "why this tune" expansion), `PlaybackControlsCard.tsx`
+  (+`stationActive` → Shuffle/Repeat/Reshuffle disabled, "Radio picks the order"),
+  `PlayFilesPage.tsx` (wires useSidRadio to startPlaylist/setPlaylist/handleNext; renders the
+  chip; flag-gated Start Radio (`sid-radio-start`) from the current tune's md5_48; NowPlaying ✕
+  skips when a station is active). Tests: useSidRadio (5), SidRadioChip (3).
+- Decisions: a station is a **queue provider**, never a parallel transport (principle 1) — it
+  calls the existing `startPlaylist`/`setPlaylist`. Variety = fresh random shuffleSeed per start
+  (§2.3). The chip carries name/stop/why; ♥/✕ stay on the Now Playing card (no duplication).
+- Commands + evidence: useSidRadio 5 + SidRadioChip 3 pass; existing playFiles page/card suites
+  (31 files / 257) still pass; tsc + eslint clean.
+- Gate: feeds G5 (continuity), G6 (✕ skip), G11 (controls-disabled) — device proofs are M2.6/2.7 HIL.
