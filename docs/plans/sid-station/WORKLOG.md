@@ -251,3 +251,32 @@ _(append entries below as tasks/gates complete — newest last)_
   refused; correctly-hashed write matches the pin). `node scripts/fetch-sidcorr.mjs` still
   `up to date … exit 0`. eslint clean.
 - Gate: §8.4 packaging assertions green (feeds G1).
+
+### 2026-07-24 — M0 EXIT: on-device worker/asset proof (Pixel 4) → G1 (Android) + G3 GREEN
+- Task: Prove the vite-worker → Capacitor-WebView path on real hardware (the M0 exit gate).
+- Method: `./build --skip-tests --install-apk` built the debug APK (BUILD SUCCESSFUL, 1m3s) —
+  the vite build's worker chunk (`sidRadio.worker-*.js`) and the 1.8 MB `.sidcorr` asset are
+  synced into the APK. Install needed `adb install -r -d` (device had a newer versionCode 2220
+  vs this branch's 2154; downgrade allowed for the debug build). Launched
+  `uk.gleissner.c64commander`, forwarded the WebView CDP socket
+  (`@webview_devtools_remote_22082` → tcp:9222; Chrome 150 WebView, Android 16, Pixel 4),
+  set `localStorage c64u_sid_radio_enabled=1`, reloaded, and invoked `window.__sidRadioProbe()`.
+- Evidence (real device, `window.__sidRadioProbe()` return):
+  `{"bundleLoadMs":131.4,"reverseIndexMs":13.6,"memoryEstimateBytes":5247024,
+    "fileCount":60571,"trackCount":87073,"edgeCount":261213,"styleCount":9,
+    "engineThreadIsMain":false}`
+  → the real bundle **fetched + parsed + reverse-indexed inside the Capacitor WebView, OFF
+  the main thread** (`engineThreadIsMain:false` = **G3**), counts match the manifest
+  (**G1 Android**), device cold load+reverse ≈ **145 ms** (« <1500 ms §9.2 target) and
+  **5.0 MB** hot (< ~8 MB, §2.6). The repo's first Web Worker works on hardware — biggest M0
+  unknown de-risked.
+- Gate status: **G1 = web/host + Android device ✓** (iOS device untested — no iOS hardware
+  here; WKWebView supports module workers, flag for a pre-iOS-release check). **G3 = GREEN**
+  (off-main on device). **G2** = code + unit-proven (Commando resolves in `md5PathIndex.test`);
+  the device resolve against installed HVSC is exercised naturally by the M2 station HIL (needs
+  installed HVSC + Commando's md5_48). First **G9** device data point recorded (load budget).
+- Notes: the concurrent `./build`/npm-install pruned `@emnapi` optional deps from
+  `package-lock.json` ([[cap8-jdk21-and-lockfile]]) and regenerated `THIRD_PARTY_NOTICES.md`
+  from it — both reverted to HEAD (never committed). A pre-existing branch-tip prettier drift
+  in `usePlaybackController.autoAdvance.test.tsx` (unrelated to SID Radio) was formatted so
+  `npm run lint` is green. Device left with the SID Radio flag enabled for later M2 HIL.

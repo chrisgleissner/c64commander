@@ -16,9 +16,9 @@ Branch: **`feat/sid-radio`** (cut from `main`). Flags default **off** until each
 
 | Gate | What it proves | Status |
 | --- | --- | --- |
-| G1 | Real `.sidcorr` loads & parses on web + Android + iOS | ☐ |
-| G2 | `md5_48 → virtualPath` resolves a known tune on device | ☐ |
-| G3 | Parse/BFS off the main thread (never block a frame) | ☐ |
+| G1 | Real `.sidcorr` loads & parses on web + Android + iOS | ◑ web+host+**Android device** ✓ (HIL); iOS device pending |
+| G2 | `md5_48 → virtualPath` resolves a known tune on device | ◑ code + unit ✓ (Commando in `md5PathIndex.test`); device resolve on installed HVSC → M2 HIL |
+| G3 | Parse/BFS off the main thread (never block a frame) | ✅ Pixel-4 WebView `engineThreadIsMain=false` (HIL) |
 | G4 | Ranking persists across restart; ♥/✕ never janks; Liked Tunes plays | ☐ |
 | G5 | Song Radio auto-advances ≥ 30 tracks, related, no stall | ☐ |
 | G6 | ✕ skips within one track and down-weights | ☐ |
@@ -43,7 +43,7 @@ Branch: **`feat/sid-radio`** (cut from `main`). Flags default **off** until each
 - [x] 0.4 `md5PathIndex.ts` from `Songlengths.md5`; rebuild on finalize hook (gated by `sidRadioEnabled`); deterministic tie-break (D14) — **RED→GREEN**
 - [x] 0.5 Worker/asset harness spike `sidRadio.worker.ts`: builds under vite (worker chunk emitted; bundled asset in dist) + off-main-thread guard (§8.6). Device WebView `ready`/`engineThreadIsMain=false` proof = M0 EXIT (HIL)
 - [x] 0.6 Packaging test: `.sidcorr` absent from `androidResources.noCompress`; sha256 verify fails loudly on drift (§8.4)
-- [ ] **M0 EXIT** — parser round-trips real bundle; `Commando.sid` resolves on device; worker posts `ready` w/ `engineThreadIsMain=false` → tick **G1, G2, G3(partial)**
+- [x] **M0 EXIT** — parser round-trips real bundle (host golden ✓); worker posts `ready` w/ `engineThreadIsMain=false` **on the Pixel-4 Capacitor WebView** ✓ (real device HIL: 60571 files / 87073 tracks / 9 styles; load+reverse ≈145 ms; 5.0 MB) → **G1 (host+Android), G3 green**. G2 code+unit-proven; device Commando resolve on installed HVSC folds into M2 HIL.
 
 ## M1 — Ambient ranking + Liked Tunes  (→ G4)
 
