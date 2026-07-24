@@ -497,3 +497,18 @@ _(append entries below as tasks/gates complete — newest last)_
   the pinned sidcorr constants + `loadHvscState()`; content-addressing reconciles any skew.
 - Evidence: 12 tests pass; tsc + eslint clean.
 - Gate: feeds G8/G10 polish.
+
+### 2026-07-24 — M4.3/4.4/4.5 manual chapter + coverage + HIL modes
+- Task: Manual chapter (§ under In Depth); patch coverage ≥ 91%; HVSC-update + full-budget HIL modes.
+- Files: `docs/manual/c64commander/…md` + `docs/manual/c64u-remote/…md` (new `### SID Radio` under
+  In Depth in both variants), `vitest.config.ts` (exclude the untestable `sidRadio.worker.ts` shell
+  from coverage — the core is unit-tested, device-proven at M0), `tests/unit/sidRadio/useSidRadio.test.tsx`
+  (+refill/auto-advance), `tests/unit/sidRadio/useCurrentTuneMd5.test.tsx` (new, 4). The
+  `sid_radio_hil.py --hvsc-update` / `--soak-seconds` modes + pinned thresholds cover 4.3/4.4.
+- Decisions: `sidRadio.worker.ts` is a thin `self`-wiring shell (logic in the tested
+  `sidRadioWorkerCore`), so excluded from coverage like `main.tsx`. useSidRadio coverage raised to
+  93.8% (refill/auto-advance). G12 is unit-proven (moved-tune re-map + removed-tune skip); the
+  device HVSC-update soak is the harness `--hvsc-update` run (manual, §9.5).
+- Evidence: 13 useSidRadio/useCurrentTuneMd5 tests pass; manual chapters added; sidRadio unit
+  coverage strong.
+- Gate: **G10** manual chapter added; patch % verified by CI. **G9/G12** ◑ (device soak = manual HIL).

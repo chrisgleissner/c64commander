@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
@@ -24,7 +24,7 @@ const makeClient = () => {
   const client = {
     load: vi.fn().mockResolvedValue({ fileCount: 4, trackCount: 4, engineThreadIsMain: false }),
     compute: vi.fn(async (request: StationRequest): Promise<StationResult> => {
-      const pool = [1, 2, 3, 4, 5, 6].filter((o) => !request.exclude.includes(o));
+      const pool = Array.from({ length: 60 }, (_, i) => i + 1).filter((o) => !request.exclude.includes(o));
       return {
         candidates: pool.slice(0, request.count).map((trackOrdinal) => ({
           trackOrdinal,
@@ -134,6 +134,24 @@ describe("useSidRadio", () => {
     expect(saved?.excludeOrdinals.length).toBeGreaterThan(0);
     act(() => result.current.stop());
     expect(loadSidRadioSession()).toBeNull();
+  });
+
+  it("refills the queue as the cursor nears the tail and records auto-advances", async () => {
+    const client = makeClient();
+    const params = baseParams(client, { playlistLength: 10, currentIndex: 0 });
+    const { result, rerender } = renderHook((p: ReturnType<typeof baseParams>) => useSidRadio(p), {
+      initialProps: params,
+    });
+    await act(async () => {
+      await result.current.startSongRadio("aabbccddeeff", "Commando");
+    });
+    // Advance the cursor to within the refill threshold of the tail.
+    await act(async () => {
+      rerender({ ...params, currentIndex: 8, playlistLength: 10 });
+    });
+    await waitFor(() => expect(params.appendItems).toHaveBeenCalled());
+    const appended = (params.appendItems as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(appended.length).toBeGreaterThan(0);
   });
 
   it("surfaces a 'no radio for this tune' notice when the seed has no neighbours (Q5)", async () => {

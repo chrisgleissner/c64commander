@@ -467,6 +467,20 @@ Every change — on Home, on Disks, or in Config — is sent to the running devi
 
 You manage that from **Home > Config actions**. **Save to flash** writes the current live settings to flash now — reach for it when **Auto save config** is Ask or No. The app can also keep named **configuration snapshots** on the phone, separate from the device's flash: save the current setup, then load it back later to restore a whole configuration at once.
 
+### SID Radio
+
+SID Radio turns the tunes you like — and the mood you are in — into an endless, self-refilling queue of similar SIDs, launched in one tap. It rides the normal Play engine, so everything you already know about playback still applies.
+
+**Rate as you listen.** While a SID plays, a subtle heart / cross pair sits on the Now Playing card. Tap the heart to add a tune to your **Liked Tunes**; tap the cross to skip it now and steer future picks away from its neighbourhood. Ratings are optional and ambient, stored on the device, and they follow a tune across HVSC updates because they key on the tune's content (its MD5), not its path.
+
+**Start a station.** Open **SID Radio** from the Play page to pick a mood: nine style tiles (Fast-Paced, Chill / Ambient, Melodic and more), a **From tunes you like** taste station that unlocks once you have liked a few tunes, or **Surprise me**. Turn on **Based on my likes** to bias any style toward what you enjoy — for example "Fast-Paced from your Likes". You can also start a station from any single tune with **Start Radio**.
+
+**Lean back.** A station is an endless stream, so — like radio everywhere — it has no shuffle control of its own, and the transport Shuffle and Repeat are paused while a station plays. They return the moment you play a finite list such as Liked Tunes. Each start is fresh, so the same mood feels new every time. The now-playing chip names the active station, stops it in one tap, and expands a short "why this tune" line.
+
+**Liked Tunes.** Everything you have liked is a plain, playable list — browse it, play it (with normal Shuffle and Repeat), or un-like a tune. Tunes no longer in your installed HVSC are shown greyed rather than dropped.
+
+SID Radio works fully offline: it ships a small similarity index and needs no network while you listen. Enable it, and the heart / cross ranking, under **Settings → SID Radio**, which also shows the similarity-corpus and installed-HVSC versions.
+
 ### Reading Diagnostics
 
 Diagnostics is your window into the health of the connection and everything the app has recently done. It slides up from the bottom of the screen. Reach it by tapping the header badge, pressing `*`, choosing **Diagnostics** in Settings, or tapping any error notification.

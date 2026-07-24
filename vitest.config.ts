@@ -100,6 +100,9 @@ export default defineConfig({
         "src/**/*.spec.{ts,tsx}",
         "src/vite-env.d.ts",
         "src/main.tsx",
+        // Thin Web Worker entry shell — wires the (unit-tested) sidRadioWorkerCore
+        // to `self`; cannot run under jsdom, device-proven at M0 EXIT.
+        "src/lib/sidRadio/sidRadio.worker.ts",
         "**/*.d.ts",
         "**/*.config.{ts,js}",
         "**/node_modules/**",

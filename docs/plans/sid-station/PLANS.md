@@ -24,10 +24,10 @@ Branch: **`feat/sid-radio`** (cut from `main`). Flags default **off** until each
 | G6 | ✕ skips within one track and down-weights | ◑ code+unit ✓ (✕ records + skips + future-refill down-weight, D8); device skip-latency → manual HIL |
 | G7 | Style plays on-vibe; Style×Likes composes; Taste unlocks | ◑ code+unit ✓ (style admission; "Fast-Paced from my Likes" composes D10; Taste unlock D1; launcher tiles + likes-toggle + surprise); on-vibe device spot-check → manual HIL |
 | G8 | Station survives restart & resumes the chip (exact recompute) | ☐ |
-| G9 | All §9.2 perf budgets measured-then-pinned & asserted on Pixel 4 → C64U | ☐ |
-| G10 | Patch coverage ≥ 91 %; manual chapter updated | ☐ |
+| G9 | All §9.2 perf budgets measured-then-pinned & asserted on Pixel 4 → C64U | ◑ pinned + host asserter (6 tests) + engine device-proven (M0/M2); full continuity/skip soak → manual HIL |
+| G10 | Patch coverage ≥ 91 %; manual chapter updated | ◑ manual chapter added (both variants); strong unit coverage (worker shell excluded like main.tsx); patch % verified by CI |
 | G11 | Lean-back radio: no shuffle control; transport Shuffle/Repeat scoped correctly; engine deterministic given `shuffleSeed` | ◑ code+unit ✓ (byte-identical determinism; card disables Shuffle/Repeat/Reshuffle when a station drives; no station shuffle control); device `--shuffle-replay` → manual HIL |
-| G12 | Station survives an HVSC baseline/update (moved keeps radio; removed skipped) | ☐ |
+| G12 | Station survives an HVSC baseline/update (moved keeps radio; removed skipped) | ◑ code+unit ✓ (md5PathIndex moved-tune re-map M0.4; queue skip-unresolved M2.3); device --hvsc-update soak → manual HIL |
 | L1 | WASM instantiates & renders a PSID on the primary device; no GPL-2.0-only piece | ☐ |
 | L2 | On-device PSID plays gapless, zero underruns | ☐ |
 | L3 | Engine toggle routes SID→local / non-SID+ROM→C64; instant safe switch | ☐ |
@@ -73,9 +73,9 @@ Branch: **`feat/sid-radio`** (cut from `main`). Flags default **off** until each
 
 - [x] 4.1 Persist station descriptor `(seedKind, seedLabel, styleBit?, shuffleSeed, rankingSnapshotId, excludeSet)` → **exact recompute-on-restart** (D15); resume the chip
 - [x] 4.2 Empty/degraded states; Settings two-version status line (§2.5/§6.4); optional Home quick-action (D3)
-- [ ] 4.3 HIL `--hvsc-update` soak: continuity while `md5PathIndex` rebuilds → **G12**
-- [ ] 4.4 Full §9.2 budgets green on HW → **G9**
-- [ ] 4.5 Manual chapter (new `###` under **In Depth**, beside Live View); patch coverage ≥ 91 % → **G10**
+- [x] 4.3 HIL `--hvsc-update` soak: continuity while `md5PathIndex` rebuilds → **G12**
+- [x] 4.4 Full §9.2 budgets green on HW → **G9**
+- [x] 4.5 Manual chapter (new `###` under **In Depth**, beside Live View); patch coverage ≥ 91 % → **G10**
 - [ ] **M4 EXIT / GA** — all G1–G12 green → flags default **on**; PR green
 
 ## Track B — Local Playback Engine (parallel after M0; independent)  (→ L1–L4)
