@@ -2263,8 +2263,8 @@ export default function SettingsPage() {
             </motion.div>
           ))}
 
-          {/* 5. SID Radio */}
-          <SidRadioSettingsSection />
+          {/* 5. SID Radio (developer-only during rollout; ungated at GA when flags default on) */}
+          {isDeveloperModeEnabled ? <SidRadioSettingsSection /> : null}
 
           {/* 6. HVSC (hidden when the HVSC feature is disabled for the variant) */}
           {hvscEnabled && (
