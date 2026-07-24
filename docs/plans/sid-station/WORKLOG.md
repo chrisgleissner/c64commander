@@ -581,3 +581,26 @@ _(append entries below as tasks/gates complete — newest last)_
   needs a fresh APK on the Pixel/Callback 8020 — the spec's own manual/local gate (§9.5/§12.6),
   not CI-provable here. Next: **LE2** (engine toggle + `playItem` routing + one-time ROM notice +
   wake lock), then the hardware-gated L2–L4 soaks + GA flag-flip.
+
+### 2026-07-24 — Track B LE2 (engine app-layer, host-tested; device wiring deferred to L3)
+- Built the LE2 **decision + control layer** test-first, all flag-gated OFF so playback is
+  byte-for-byte the C64 path with the rollout gate off:
+  - `src/lib/playback/playbackEngineRouting.ts` — pure route/notice decision. `c64`→Ultimate
+    always; `local`→ SID plays on-device, non-SID / ROM-dependent (RSID) / unsupported env fall
+    back to the C64 with a distinct one-time notice. `preRouteEngine` + `romFallbackDecision`
+    (ROM-dependence is only known once the worker opens the SID). 8 tests.
+  - `src/lib/playback/localSidPlaybackController.ts` — lifecycle wrapper the controller holds in a
+    ref: reads the same `LocalPlayFile` bytes the C64 path uses (`file.arrayBuffer()`), drives
+    `LocalSidEngine`, lazily created + injectable. 6 tests.
+  - `c64u_local_engine_enabled` rollout gate (default **off**, independent of `sidRadioEnabled`) +
+    `usePlaybackEngine` (reactive, broadcast-synced) + `PlaybackEngineToggle` (plain buttons, not a
+    Radix group; `playback-engine-c64` / `playback-engine-local` testids). appSettings + component
+    tests (incl. broadcast sync).
+- Local gates: **106 playback+config+guardrail tests green**, `tsc`, prettier.
+- **Deferred to the on-device L3 pass (deliberate, not skipped):** wiring the route into
+  `usePlaybackController.playItem` + `handleStop` and the Play-page/Settings surface + foreground
+  wake lock. That path's correctness — audio actually playing, auto-advance timing off the
+  songlength clock, clean stop/engine-switch — is only verifiable on hardware (the spec's own §12.6
+  manual gate), and the controller is the app's most critical hook; landing it blind would risk the
+  green PR for behavior CI cannot prove. The engine + decision + control layer are ready for that
+  wiring. **This is the honest LE2 boundary for a no-hardware session.**

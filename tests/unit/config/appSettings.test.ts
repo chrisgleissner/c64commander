@@ -19,9 +19,12 @@ import {
   DEFAULT_SID_RADIO_ENABLED,
   DEFAULT_SID_RANKING_ENABLED,
   DEFAULT_PLAYBACK_ENGINE,
+  DEFAULT_LOCAL_ENGINE_ENABLED,
   APP_SETTINGS_KEYS,
   loadPlaybackEngine,
   savePlaybackEngine,
+  loadLocalEngineEnabled,
+  saveLocalEngineEnabled,
   loadSidRadioEnabled,
   saveSidRadioEnabled,
   loadSidRankingEnabled,
@@ -83,6 +86,17 @@ describe("appSettings", () => {
     expect(DEFAULT_SID_RANKING_ENABLED).toBe(false);
     expect(loadPlaybackEngine()).toBe(DEFAULT_PLAYBACK_ENGINE);
     expect(DEFAULT_PLAYBACK_ENGINE).toBe("c64"); // spec §12.5: C64 by default (always works)
+    expect(loadLocalEngineEnabled()).toBe(DEFAULT_LOCAL_ENGINE_ENABLED);
+    expect(DEFAULT_LOCAL_ENGINE_ENABLED).toBe(false); // Track B: off during rollout
+  });
+
+  it("persists the local-engine rollout gate and emits an event", () => {
+    const { events, dispose } = collectSettingEvents();
+    saveLocalEngineEnabled(true);
+    expect(localStorage.getItem(APP_SETTINGS_KEYS.LOCAL_ENGINE_ENABLED_KEY)).toBe("1");
+    expect(loadLocalEngineEnabled()).toBe(true);
+    expect(events).toContainEqual({ key: APP_SETTINGS_KEYS.LOCAL_ENGINE_ENABLED_KEY, value: true });
+    dispose();
   });
 
   it("persists the playback engine and rejects unknown values", () => {

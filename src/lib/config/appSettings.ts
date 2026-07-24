@@ -30,6 +30,7 @@ const HIDE_NAVIGATION_BAR_KEY = "c64u_full_screen_hide_navigation_bar";
 const SID_RADIO_ENABLED_KEY = "c64u_sid_radio_enabled";
 const SID_RANKING_ENABLED_KEY = "c64u_sid_ranking_enabled";
 const PLAYBACK_ENGINE_KEY = "c64u_playback_engine";
+const LOCAL_ENGINE_ENABLED_KEY = "c64u_local_engine_enabled";
 const BOOT_MENU_ANSWER_ENABLED_KEY = "c64u_boot_menu_answer_enabled";
 const BOOT_MENU_KEY_KEY = "c64u_boot_menu_key";
 const BOOT_SETTLE_MS_KEY = "c64u_boot_settle_ms";
@@ -593,6 +594,22 @@ export const savePlaybackEngine = (engine: PlaybackEngine) => {
   broadcast(PLAYBACK_ENGINE_KEY, engine);
 };
 
+/**
+ * Local-engine rollout gate (Track B). Defaults **off**: with it off the
+ * on-device engine is never offered (no Play-page engine toggle) and `playItem`
+ * never routes to it, so playback is byte-for-byte the C64 path. Independent of
+ * `sidRadioEnabled` — the two "SID walkman" features roll out separately.
+ */
+export const DEFAULT_LOCAL_ENGINE_ENABLED = false;
+
+export const loadLocalEngineEnabled = () => readBoolean(LOCAL_ENGINE_ENABLED_KEY, DEFAULT_LOCAL_ENGINE_ENABLED);
+
+export const saveLocalEngineEnabled = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(LOCAL_ENGINE_ENABLED_KEY, enabled ? "1" : "0");
+  broadcast(LOCAL_ENGINE_ENABLED_KEY, enabled);
+};
+
 const loadString = (key: string) => {
   if (typeof localStorage === "undefined") return "";
   return localStorage.getItem(key) ?? "";
@@ -639,4 +656,5 @@ export const APP_SETTINGS_KEYS = {
   SID_RADIO_ENABLED_KEY,
   SID_RANKING_ENABLED_KEY,
   PLAYBACK_ENGINE_KEY,
+  LOCAL_ENGINE_ENABLED_KEY,
 };
