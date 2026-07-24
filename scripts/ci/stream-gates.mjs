@@ -15,10 +15,10 @@
  *   Layer  F   no-drift soak (accelerated) + committed-threshold guard
  *   Layer  C   host micro-benchmark relative-regression gate
  *
- * The Pixel-4 → Ultimate-64 HIL gate (Layer E, §14.5) is NOT run here: it needs a self-hosted runner
- * with the physical hardware and a lock, which does not exist in shared CI. This orchestrator makes
- * that explicit — it PASSES the host gates but records the HIL gate as "manual / not-run", so a build
- * is never reported fully green on the strength of the host gates alone (§1.5, §22). See tools/hil.
+ * The Pixel-4 → Ultimate-64 HIL gate (Layer E, §14.5) is NOT run here: it needs the physical rig
+ * (phone on USB + C64U on the LAN), so it runs on the LOCAL build instead — `./build --stream-hil`
+ * (or `npm run test:streams:hil`). Shared CI runs only these host gates; this orchestrator records
+ * the HIL gate as "local-build gate" so it is never conflated with the host result (§1.5, §22).
  *
  * Exit: 0 all host gates passed, 1 a gate failed, 2 orchestration error.
  */
@@ -61,10 +61,10 @@ const lines = [
   "| Gate | Result | Time |",
   "| --- | --- | ---: |",
   ...results.map((r) => `| ${r.title} | ${r.ok ? "✅ pass" : "❌ FAIL"} | ${(r.ms / 1000).toFixed(1)}s |`),
-  `| Pixel-4 → Ultimate-64 HIL (§14.5) | ⚠️ manual / not-run in shared CI | — |`,
+  `| Pixel-4 → Ultimate-64 HIL (§14.5) | 🔌 local-build gate (\`./build --stream-hil\`) | — |`,
   "",
   failed === 0
-    ? "Host gates green. **The mandatory HIL gate is not asserted here** — run it on the self-hosted Pixel-4 rig (tools/hil)."
+    ? "Host gates green. The mandatory Pixel-4 → C64U HIL runs on the LOCAL build (`./build --stream-hil` / `npm run test:streams:hil`), not in shared CI."
     : `**${failed} host gate(s) failed.**`,
 ];
 const summary = lines.join("\n");

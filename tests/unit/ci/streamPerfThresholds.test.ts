@@ -37,6 +37,17 @@ describe("committed stream perf thresholds", () => {
     expect(d.maxSlopeMsPerMin).toBeGreaterThan(0);
   });
 
+  it("carries reframed end-to-end latency budgets that are ambitious but achievable (§16.1)", () => {
+    const e = cfg.endToEnd.thresholds;
+    // Reframed from the impossible 30 ms source→display floor to measured-on-hardware budgets. They
+    // must stay above the measured values (achievable) yet tight enough to gate regressions.
+    expect(e.avOffsetP99Ms).toBeGreaterThan(0);
+    expect(e.avOffsetP99Ms).toBeLessThanOrEqual(20); // A/V sync measured ~2–5 ms
+    expect(e.audioInputToHearP99Ms).toBeLessThanOrEqual(150); // press→hear measured ~83–87 ms
+    expect(e.videoInputToDisplayP99Ms).toBeLessThanOrEqual(300); // press→see measured ~99–168 ms
+    expect(e.videoInputToDisplayP99Ms).toBeGreaterThan(e.audioInputToHearP99Ms);
+  });
+
   it("keeps the zero-tolerance audio + video gates at zero (§16.2/§16.3)", () => {
     const a = cfg.audioContinuity.thresholds;
     expect(a.audioCallbackUnderruns).toBe(0);

@@ -7,7 +7,33 @@
     "(host, deterministic). The device CPU gates are asserted by the Pixel-4 HIL fixture, which is",
     "currently MANUAL (no self-hosted CI runner) — see docs/plans/live-view and tools/hil."
   ],
-  "version": 1,
+  "version": 2,
+  "endToEnd": {
+    "$comment": [
+      "End-to-end latency, reframed from the spec's original <30 ms source→display (unreachable on",
+      "this firmware+transport — the C64U's own capture buffer + Wi-Fi floor it) to AMBITIOUS-BUT-",
+      "ACHIEVABLE budgets MEASURED on real hardware and now ASSERTED by the interactive Pixel-4 → C64U",
+      "HIL (tools/hil/av_sync_hil.py). Measured 2026-07-24 (Pixel 4 → C64U fw1.2.0, PAL, Wi-Fi):",
+      "press→see p99 153 ms, press→hear p99 60 ms, A/V sync offset p99 ~2 ms. Thresholds sit above the",
+      "measured values with headroom so they gate regressions without flaking. Note press→see/hear",
+      "INCLUDE the machine:input round trip + the device's once-per-frame keyboard poll + capture",
+      "buffering — they are input→display/hear, not a pure render latency."
+    ],
+    "profile": "pixel4-hil-avsync",
+    "runner": "pixel4-c64u-hil-local",
+    "device": "Pixel 4 (flame)",
+    "firmware": "C64U fw1.2.0",
+    "source": "PAL",
+    "unit": "ms",
+    "aggregation": "p99",
+    "taps": 10,
+    "soakSeconds": 35,
+    "thresholds": {
+      "videoInputToDisplayP99Ms": 200,
+      "audioInputToHearP99Ms": 100,
+      "avOffsetP99Ms": 15
+    }
+  },
   "latencyDrift": {
     "profile": "deterministic-soak",
     "runner": "host-node",

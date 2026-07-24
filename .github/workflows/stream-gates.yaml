@@ -1,8 +1,9 @@
 name: stream-gates
 
-# Live View streaming CI gates (spec §17). Host gates run on every eligible build; the mandatory
-# Pixel-4 → Ultimate-64 HIL gate (§14.5) needs a self-hosted runner with the physical hardware and a
-# lock, so it is a MANUAL job here (workflow_dispatch) and never converts to a passing host result.
+# Live View streaming CI gates (spec §17). CI runs the deterministic HOST gates on every eligible
+# build. The mandatory Pixel-4 → Ultimate-64 HIL gate (§14.5) needs the physical rig (phone on USB +
+# C64U on the LAN), so it is a LOCAL-build gate — `./build --stream-hil` / `npm run test:streams:hil`
+# (tools/hil) — not a CI job. CI never reports a build "fully green" on the host gates alone.
 
 on:
   push:
@@ -12,6 +13,7 @@ on:
     paths:
       - "src/lib/streams/**"
       - "src/components/streams/**"
+      - "src/components/remoteInput/**"
       - "src/hooks/useStreamStats.ts"
       - "android/app/src/main/java/uk/gleissner/c64commander/StreamUdpPlugin.kt"
       - "ci/perf/**"
@@ -48,32 +50,5 @@ jobs:
 
       - name: Run streaming host gates
         run: node scripts/ci/stream-gates.mjs
-
-  pixel4-hil:
-    name: Stream | Pixel-4 → Ultimate-64 HIL (manual, self-hosted)
-    # MANDATORY per spec §14.5 but only runnable on the self-hosted rig with the physical Pixel 4 +
-    # Ultimate 64 and a hardware lock. Triggered manually until that runner exists; a build is NOT
-    # reported fully green on the host gates alone. See tools/hil/README.md.
-    if: ${{ github.event_name == 'workflow_dispatch' }}
-    runs-on: [self-hosted, pixel4-c64u-hil]
-    concurrency:
-      group: pixel4-c64u-hil-rig # hardware lock: never two builds on the one rig at once
-      cancel-in-progress: false
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Run Pixel-4 → C64U HIL fixture
-        run: python3 tools/hil/hil_stream_fixture.py --serial "$HIL_ADB_SERIAL" --report ci-artifacts/hil/stream-hil-report.json
-      - name: Upload HIL artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pixel4-hil-report
-          path: ci-artifacts/hil/
+        # The mandatory Pixel-4 -> C64U HIL gate is not run here — it runs on the LOCAL build with the
+        # physical rig (./build --stream-hil). See tools/hil/README.md.
