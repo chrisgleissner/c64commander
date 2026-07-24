@@ -12,9 +12,10 @@ import { Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { saveSidRadioEnabled, saveSidRankingEnabled } from "@/lib/config/appSettings";
+import { saveSidRadioEnabled, saveSidRankingEnabled, saveLocalEngineEnabled } from "@/lib/config/appSettings";
 import { clearAllRankings } from "@/lib/sidRadio/rankingStore";
 import { useSidRadioFlags } from "@/lib/sidRadio/useSidRadioFlags";
+import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
 import {
   SIDCORR_BUNDLE_SHA256,
   SIDCORR_EXPECTED,
@@ -51,6 +52,7 @@ const ToggleRow = ({ id, testId, label, description, checked, onChange }: Toggle
  */
 export const SidRadioSettingsSection = () => {
   const { sidRadioEnabled, sidRankingEnabled } = useSidRadioFlags();
+  const { localEngineEnabled } = usePlaybackEngine();
   const [cleared, setCleared] = useState(false);
 
   const handleClear = async () => {
@@ -90,6 +92,15 @@ export const SidRadioSettingsSection = () => {
             onChange={saveSidRankingEnabled}
           />
         ) : null}
+
+        <ToggleRow
+          id="local-engine-enabled"
+          testId="settings-local-engine-enabled"
+          label="On-device playback engine (experimental)"
+          description="Adds a “Play on: C64 / This device” choice on the Play screen. ROM-independent SIDs play on this device with libsidplayfp; ROM-dependent (RSID) tunes still play on the C64."
+          checked={localEngineEnabled}
+          onChange={saveLocalEngineEnabled}
+        />
 
         <div
           className="space-y-1 rounded-lg border border-border/70 p-3 text-xs"

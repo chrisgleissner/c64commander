@@ -10,7 +10,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { SidRadioSettingsSection } from "@/pages/settings/SidRadioSettingsSection";
-import { loadSidRadioEnabled, loadSidRankingEnabled } from "@/lib/config/appSettings";
+import { loadLocalEngineEnabled, loadSidRadioEnabled, loadSidRankingEnabled } from "@/lib/config/appSettings";
 import { clearAllRankings, getRanking, setRanking } from "@/lib/sidRadio/rankingStore";
 
 beforeEach(async () => {
@@ -34,6 +34,13 @@ describe("SidRadioSettingsSection", () => {
     expect(screen.getByTestId("settings-sid-ranking-enabled")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("settings-sid-ranking-enabled"));
     await waitFor(() => expect(loadSidRankingEnabled()).toBe(true));
+  });
+
+  it("toggling the on-device engine row persists the rollout gate (Track B)", async () => {
+    render(<SidRadioSettingsSection />);
+    expect(loadLocalEngineEnabled()).toBe(false);
+    fireEvent.click(screen.getByTestId("settings-local-engine-enabled"));
+    await waitFor(() => expect(loadLocalEngineEnabled()).toBe(true));
   });
 
   it("shows the two-version status line (§6.4)", () => {

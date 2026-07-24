@@ -47,6 +47,14 @@ import {
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 
 import { buildLocalPlayFileFromUri, buildLocalPlayFileFromTree } from "@/lib/playback/fileLibraryUtils";
+import { loadLocalEngineEnabled, loadPlaybackEngine } from "@/lib/config/appSettings";
+import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
+import { detectRomRequired } from "@/lib/playback/localSidWorkerCore";
+import {
+  ENGINE_FALLBACK_MESSAGES,
+  preRouteEngine,
+  type EngineFallbackNotice,
+} from "@/lib/playback/playbackEngineRouting";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { resolveSidMutedVolumeOption } from "@/lib/config/sidVolumeControl";
 import {
@@ -217,6 +225,13 @@ interface UsePlaybackControllerProps {
   setAutoAdvanceDueAtMs: (dueAtMs: number | null) => void;
 
   trace: any;
+
+  /**
+   * Local SID playback engine (Track B / LE2). Injected in tests; created
+   * lazily in production. Playback routes here for SID items only when
+   * `c64u_local_engine_enabled` is on and the engine is set to `local`.
+   */
+  localSidPlaybackController?: LocalSidPlaybackController;
 }
 
 export function usePlaybackController({
@@ -272,6 +287,7 @@ export function usePlaybackController({
   trace,
   setTrackInstanceId,
   setAutoAdvanceDueAtMs,
+  localSidPlaybackController,
 }: UsePlaybackControllerProps) {
   const durationFallbackMs = durationSeconds * 1000;
   const machineTransitionCoordinatorRef = useRef(createMachineTransitionCoordinator());
@@ -281,6 +297,22 @@ export function usePlaybackController({
   const currentIndexRef = useRef(currentIndex);
   const isPlayingRef = useRef(isPlaying);
   const isPausedRef = useRef(isPaused);
+  // Track B (LE2): the on-device engine, created lazily so the worker/WASM cost
+  // is only paid once the user actually plays a SID on the device.
+  const localSidPlaybackRef = useRef<LocalSidPlaybackController | null>(localSidPlaybackController ?? null);
+  // True while the current track is playing on the device (no C64 to stop).
+  const currentPlaybackIsLocalRef = useRef(false);
+  // One-time engine-fallback notices (rom/non-sid/unsupported), shown once each.
+  const engineNoticeShownRef = useRef(new Set<EngineFallbackNotice>());
+  const getLocalSidPlayback = useCallback(() => {
+    if (!localSidPlaybackRef.current) localSidPlaybackRef.current = new LocalSidPlaybackController();
+    return localSidPlaybackRef.current;
+  }, []);
+  const emitEngineNotice = useCallback((notice: EngineFallbackNotice) => {
+    if (engineNoticeShownRef.current.has(notice)) return;
+    engineNoticeShownRef.current.add(notice);
+    toast({ title: "Playback engine", description: ENGINE_FALLBACK_MESSAGES[notice] });
+  }, []);
   // HARD12-018: tracks that the last song in the playlist auto-ended so that
   // background execution can stop even though `isPlaying` stays true (the Stop
   // affordance must remain available). Reset whenever a new track starts.
@@ -819,32 +851,50 @@ export function usePlaybackController({
             });
           }
         }
-        try {
-          await ensurePlaybackConnection();
-        } catch (error) {
-          reportUserError({
-            operation: "PLAYBACK_CONNECT",
-            title: "Connection failed",
-            description: (error as Error).message,
-            error,
-            context: {
-              item: item.label,
-            },
+        // Track B (LE2): decide whether this SID plays on the device. The
+        // pre-route only knows category/engine/support; ROM-dependent (RSID)
+        // tunes need ship-forbidden C64 ROMs, so peek the (tiny) SID header and
+        // route those back to the C64 with a one-time notice. Gated on
+        // `c64u_local_engine_enabled` — off by default, so the whole block is a
+        // no-op and playback is byte-for-byte the C64 path.
+        let routeToLocal = false;
+        if (loadLocalEngineEnabled()) {
+          const selection = preRouteEngine({
+            category: item.category,
+            engine: loadPlaybackEngine(),
+            localSupported: LocalSidPlaybackController.isSupported(),
           });
-          throw error;
+          if (selection.route === "local" && effectiveRequest.file) {
+            try {
+              const sidBytes = new Uint8Array(await effectiveRequest.file.arrayBuffer());
+              if (detectRomRequired(sidBytes)) {
+                emitEngineNotice("rom-on-c64");
+              } else {
+                routeToLocal = true;
+              }
+            } catch (error) {
+              addErrorLog("Local engine could not read the SID; using the C64", {
+                error: (error as Error).message,
+                item: item.label,
+              });
+            }
+          } else if (selection.notice) {
+            emitEngineNotice(selection.notice);
+          }
         }
-        await ensureUnmuted({ refreshItems: true });
+        // Silence any prior on-device tune before the C64 takes over (a local→C64
+        // switch); consecutive local plays are handled inside the engine.
+        if (!routeToLocal && localSidPlaybackRef.current) {
+          localSidPlaybackRef.current.stop();
+        }
         const api = getC64API();
-        if (isPausedRef.current) {
-          // The machine is DMA-paused (frozen). Launching a new track without
-          // resuming first leaves it frozen while the UI flips to "playing" -
-          // no audio, wedged until Stop. See HARD9-029.
+        if (!routeToLocal) {
           try {
-            await resumeMachineWithRetry(api);
+            await ensurePlaybackConnection();
           } catch (error) {
             reportUserError({
-              operation: "PLAYBACK_RESUME",
-              title: "Resume failed",
+              operation: "PLAYBACK_CONNECT",
+              title: "Connection failed",
               description: (error as Error).message,
               error,
               context: {
@@ -852,6 +902,26 @@ export function usePlaybackController({
               },
             });
             throw error;
+          }
+          await ensureUnmuted({ refreshItems: true });
+          if (isPausedRef.current) {
+            // The machine is DMA-paused (frozen). Launching a new track without
+            // resuming first leaves it frozen while the UI flips to "playing" -
+            // no audio, wedged until Stop. See HARD9-029.
+            try {
+              await resumeMachineWithRetry(api);
+            } catch (error) {
+              reportUserError({
+                operation: "PLAYBACK_RESUME",
+                title: "Resume failed",
+                description: (error as Error).message,
+                error,
+                context: {
+                  item: item.label,
+                },
+              });
+              throw error;
+            }
           }
         }
         const resolvedDurationBase = durationOverride ?? item.durationMs;
@@ -968,7 +1038,21 @@ export function usePlaybackController({
           durationMs: request.durationMs ?? null,
           rebootBeforePlay: Boolean(executionOptions?.rebootBeforeMount),
         });
-        await executePlayPlan(api, plan, executionOptions);
+        if (routeToLocal) {
+          // On-device engine: render the SID here, no C64 (spec §12). The
+          // songlength clock + auto-advance below run identically to the C64
+          // path, so playlist/SID-Radio behaviour is engine-agnostic.
+          await getLocalSidPlayback().play(effectiveRequest.file!, effectiveRequest.songNr ?? 0, {
+            onError: (playbackError) =>
+              addErrorLog("Local SID playback failed", {
+                error: playbackError.message,
+                item: item.label,
+              }),
+          });
+        } else {
+          await executePlayPlan(api, plan, executionOptions);
+        }
+        currentPlaybackIsLocalRef.current = routeToLocal;
 
         if (playGenerationRef.current !== myPlayGeneration) {
           // HARD18-009 (M5): Stop (or a later Play) superseded this
@@ -982,14 +1066,19 @@ export function usePlaybackController({
             itemId: item.id,
             label: item.label,
           });
-          try {
-            await withTimeout(api.machineReset(), STOP_MACHINE_TIMEOUT_MS, "Reset");
-          } catch (error) {
-            addErrorLog("Follow-up reset after superseded playback launch failed", {
-              itemId: item.id,
-              label: item.label,
-              error: (error as Error).message,
-            });
+          if (routeToLocal) {
+            getLocalSidPlayback().stop();
+            currentPlaybackIsLocalRef.current = false;
+          } else {
+            try {
+              await withTimeout(api.machineReset(), STOP_MACHINE_TIMEOUT_MS, "Reset");
+            } catch (error) {
+              addErrorLog("Follow-up reset after superseded playback launch failed", {
+                itemId: item.id,
+                label: item.label,
+                error: (error as Error).message,
+              });
+            }
           }
           return;
         }
@@ -1264,29 +1353,37 @@ export function usePlaybackController({
       cancelPendingUserSkip();
       const currentItem = playlist[currentIndex];
       const shouldReboot = currentItem?.category === "disk";
-      try {
-        const api = getC64API();
-        if (isPaused) {
-          try {
-            await resumeMachineWithRetry(api);
-          } catch (error) {
-            addErrorLog("Resume before stop failed", {
-              error: (error as Error).message,
-            });
+      // Track B (LE2): silence any on-device tune first. When the current track
+      // is playing locally there is no C64 involved, so skip the device stop
+      // entirely (it would hang if no Ultimate is connected).
+      localSidPlaybackRef.current?.stop();
+      if (currentPlaybackIsLocalRef.current) {
+        currentPlaybackIsLocalRef.current = false;
+      } else {
+        try {
+          const api = getC64API();
+          if (isPaused) {
+            try {
+              await resumeMachineWithRetry(api);
+            } catch (error) {
+              addErrorLog("Resume before stop failed", {
+                error: (error as Error).message,
+              });
+            }
           }
+          await stopMachineWithGracePeriod(api, shouldReboot);
+        } catch (error) {
+          reportUserError({
+            operation: "PLAYBACK_STOP",
+            title: "Stop failed",
+            description: (error as Error).message,
+            error,
+            context: {
+              currentIndex,
+              category: currentItem?.category,
+            },
+          });
         }
-        await stopMachineWithGracePeriod(api, shouldReboot);
-      } catch (error) {
-        reportUserError({
-          operation: "PLAYBACK_STOP",
-          title: "Stop failed",
-          description: (error as Error).message,
-          error,
-          context: {
-            currentIndex,
-            category: currentItem?.category,
-          },
-        });
       }
       const now = Date.now();
       playedClockRef.current.stop(now, true);

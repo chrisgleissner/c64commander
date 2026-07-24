@@ -80,6 +80,8 @@ import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import { VolumeControls } from "@/pages/playFiles/components/VolumeControls";
 import { PlaybackControlsCard } from "@/pages/playFiles/components/PlaybackControlsCard";
+import { PlaybackEngineToggle } from "@/pages/playFiles/components/PlaybackEngineToggle";
+import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
 import { NowPlayingRanking } from "@/pages/playFiles/components/NowPlayingRanking";
 import { useCurrentTuneMd5 } from "@/pages/playFiles/hooks/useCurrentTuneMd5";
 import { useSidRadioFlags } from "@/lib/sidRadio/useSidRadioFlags";
@@ -1341,6 +1343,7 @@ export default function PlayFilesPage() {
 
   const currentItem = playlist[currentIndex];
   const sidRadioFlags = useSidRadioFlags();
+  const playbackEngine = usePlaybackEngine();
   const currentTuneMd5 = useCurrentTuneMd5(currentItem ?? null, sidRadioFlags.sidRadioEnabled);
   const sidRadio = useSidRadio({
     enabled: sidRadioFlags.sidRadioEnabled,
@@ -1818,6 +1821,7 @@ export default function PlayFilesPage() {
               data-section-label="Playback controls"
               data-testid="play-section-playback"
             >
+              {playbackEngine.localEngineEnabled && currentItem?.category === "sid" ? <PlaybackEngineToggle /> : null}
               <PlaybackControlsCard
                 hasCurrentItem={Boolean(currentItem)}
                 currentItemIcon={

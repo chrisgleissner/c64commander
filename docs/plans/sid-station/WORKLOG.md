@@ -604,3 +604,28 @@ _(append entries below as tasks/gates complete — newest last)_
   manual gate), and the controller is the app's most critical hook; landing it blind would risk the
   green PR for behavior CI cannot prove. The engine + decision + control layer are ready for that
   wiring. **This is the honest LE2 boundary for a no-hardware session.**
+
+### 2026-07-24 — Track B LE2 device wiring (playItem/handleStop routing + Play-page/Settings surface)
+- Wired the on-device engine into the real transport, all behind `c64u_local_engine_enabled`
+  (default OFF → shipped behaviour + every existing controller test byte-for-byte unchanged):
+  - `usePlaybackController`: holds a lazily-created (test-injectable) `LocalSidPlaybackController`
+    ref. In `playItem`, after duration resolution and **before any device step**, it decides the
+    route via `preRouteEngine` + a synchronous RSID magic-byte peek: ROM-independent PSID → play
+    on-device; RSID / non-SID / unsupported-env → C64 with a **one-time** notice. When routing
+    local it guards `ensurePlaybackConnection` / resume / `executePlayPlan` (so **no C64 is
+    needed**) and reuses the existing songlength clock + auto-advance untouched. `handleStop` and
+    the superseded-by-Stop path stop the local engine and **skip the device stop** for a local
+    track (which would hang with no Ultimate). A `currentPlaybackIsLocalRef` tracks which engine
+    owns the current track; prior local audio is silenced before a C64 launch.
+  - Play page: `PlaybackEngineToggle` rendered in the playback-controls section for a SID current
+    item when the gate is on. Settings: a dev-mode "On-device playback engine (experimental)" row
+    (`settings-local-engine-enabled`) with the ROM caveat.
+  - Tests: 6 controller routing tests (PSID→local, RSID→C64, non-SID→C64, unsupported→C64,
+    disabled→C64, Stop-halts-local-skips-device) + the Settings row + patched the `SettingsPage`
+    appSettings mock. `tsc`, full `npm run lint`, catch-guardrail all green; 88 controller tests
+    + 887 playFiles/settings/playback tests pass locally.
+- **Honest boundary:** the code path is complete but its audio correctness — gapless render, the
+  once-per-track songlength-clock timing, and a **clean instant mid-track engine switch** — is only
+  verifiable on hardware (spec §12.6). The Play-page toggle currently persists the choice
+  (next-track effect); instant mid-track restart is the remaining device-validated refinement,
+  landing with the L2/L3 soak. Flags stay OFF, so this is fully mergeable as-is.

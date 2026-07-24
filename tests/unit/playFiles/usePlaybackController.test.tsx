@@ -4,6 +4,7 @@ import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackContro
 import { seededShuffleIds } from "@/pages/playFiles/playFilesUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { executePlayPlan, tryFetchUltimateSidBlob } from "@/lib/playback/playbackRouter";
+import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { clearArchivePlaybackCacheForTests } from "@/lib/archive/archivePlaybackCache";
 import { getC64API } from "@/lib/c64api";
 import { reportUserError } from "@/lib/uiErrors";
@@ -152,6 +153,7 @@ const renderPlaybackController = (
     resolveUnavailableConfigDecision?: ReturnType<typeof vi.fn>;
     buildHvscLocalPlayFile?: ReturnType<typeof vi.fn>;
     deviceProduct?: string | null;
+    localSidPlaybackController?: unknown;
   },
 ) =>
   renderHook(() =>
@@ -221,6 +223,7 @@ const renderPlaybackController = (
       setTrackInstanceId: options?.setTrackInstanceId ?? vi.fn(),
       setAutoAdvanceDueAtMs: options?.setAutoAdvanceDueAtMs ?? vi.fn(),
       ensureUnmuted: options?.ensureUnmuted ?? vi.fn().mockResolvedValue(undefined),
+      localSidPlaybackController: options?.localSidPlaybackController as any,
     }),
   );
 
@@ -2508,5 +2511,130 @@ describe("usePlaybackController", () => {
     await result.current.handleNext("user");
 
     expect(playlist.map((item) => item.id)).toEqual(originalOrder);
+  });
+
+  describe("Track B — local playback engine routing", () => {
+    const psid = () => new Uint8Array([0x50, 0x53, 0x49, 0x44, 0, 2, 0, 0x7c]).buffer; // "PSID"
+    const rsid = () => new Uint8Array([0x52, 0x53, 0x49, 0x44, 0, 2, 0, 0x7c]).buffer; // "RSID"
+
+    const sidItem = (bytes: () => ArrayBuffer): PlaylistItem =>
+      createPlaylistItem({
+        id: "sid-1",
+        category: "sid",
+        label: "tune.sid",
+        path: "/HVSC/tune.sid",
+        durationMs: 120_000,
+        request: {
+          source: "local",
+          path: "/HVSC/tune.sid",
+          songNr: 0,
+          file: { name: "tune.sid", lastModified: 0, arrayBuffer: vi.fn(async () => bytes()) },
+        } as any,
+      });
+
+    const fakeController = () => ({
+      play: vi.fn(async () => ({ romRequired: false, started: true, sampleRate: 48000, channels: 2, tuneInfo: null })),
+      stop: vi.fn(),
+      getStats: vi.fn(() => null),
+      dispose: vi.fn(),
+    });
+
+    const enableLocal = () => {
+      localStorage.setItem("c64u_local_engine_enabled", "1");
+      localStorage.setItem("c64u_playback_engine", "local");
+      vi.spyOn(LocalSidPlaybackController, "isSupported").mockReturnValue(true);
+    };
+
+    beforeEach(() => localStorage.clear());
+    afterEach(() => {
+      localStorage.clear();
+      vi.restoreAllMocks();
+    });
+
+    it("routes a ROM-independent PSID to the local engine, not the C64", async () => {
+      enableLocal();
+      const controller = fakeController();
+      const playlist = [sidItem(psid)];
+      const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+      expect(controller.play).toHaveBeenCalledTimes(1);
+      expect(controller.play.mock.calls[0][1]).toBe(0); // song index
+      expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+    });
+
+    it("falls a ROM-dependent RSID back to the C64", async () => {
+      enableLocal();
+      const controller = fakeController();
+      const playlist = [sidItem(rsid)];
+      const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+      expect(controller.play).not.toHaveBeenCalled();
+      expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+    });
+
+    it("routes a non-SID item to the C64 with a notice when the local engine is selected", async () => {
+      enableLocal();
+      const controller = fakeController();
+      const playlist = [
+        createPlaylistItem({ category: "prg", request: { source: "ultimate", path: "/x.prg" } as any }),
+      ];
+      const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+      expect(controller.play).not.toHaveBeenCalled();
+      expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+    });
+
+    it("falls back to the C64 when the local engine is unsupported in this environment", async () => {
+      localStorage.setItem("c64u_local_engine_enabled", "1");
+      localStorage.setItem("c64u_playback_engine", "local");
+      vi.spyOn(LocalSidPlaybackController, "isSupported").mockReturnValue(false);
+      const controller = fakeController();
+      const playlist = [sidItem(psid)];
+      const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+      expect(controller.play).not.toHaveBeenCalled();
+      expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+    });
+
+    it("uses the C64 for SIDs when the local engine is disabled (default)", async () => {
+      // Flag off: byte-for-byte the C64 path.
+      const controller = fakeController();
+      const playlist = [sidItem(psid)];
+      const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+      expect(controller.play).not.toHaveBeenCalled();
+      expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+    });
+
+    it("Stop halts the local engine and skips the device stop for a local track", async () => {
+      enableLocal();
+      const controller = fakeController();
+      const machineOff = vi.fn().mockResolvedValue(undefined);
+      const machineReset = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(getC64API).mockReturnValue({ machineOff, machineReset } as any);
+      const playlist = [sidItem(psid)];
+      const { result } = renderPlaybackController(playlist, {
+        localSidPlaybackController: controller,
+        isPlaying: true,
+      });
+
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      await result.current.handleStop();
+
+      expect(controller.stop).toHaveBeenCalled();
+      // No device stop was issued for the local track.
+      expect(machineOff).not.toHaveBeenCalled();
+      expect(machineReset).not.toHaveBeenCalled();
+    });
   });
 });
