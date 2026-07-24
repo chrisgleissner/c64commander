@@ -20,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Gamepad2 } from "lucide-react";
+import { Gamepad2, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RemoteInputSheet } from "@/components/remoteInput/RemoteInputSheet";
 import { PlaybackConfigSheet } from "@/pages/playFiles/components/PlaybackConfigSheet";
@@ -83,6 +83,7 @@ import { PlaybackControlsCard } from "@/pages/playFiles/components/PlaybackContr
 import { NowPlayingRanking } from "@/pages/playFiles/components/NowPlayingRanking";
 import { useCurrentTuneMd5 } from "@/pages/playFiles/hooks/useCurrentTuneMd5";
 import { useSidRadioFlags } from "@/lib/sidRadio/useSidRadioFlags";
+import { LikedTunesSheet } from "@/pages/playFiles/components/LikedTunesSheet";
 import { PlaybackSettingsPanel } from "@/pages/playFiles/components/PlaybackSettingsPanel";
 import { PlaylistPanel } from "@/pages/playFiles/components/PlaylistPanel";
 import { HvscManager } from "@/pages/playFiles/components/HvscManager";
@@ -293,6 +294,7 @@ export default function PlayFilesPage() {
   const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
   const { value: remoteInputEnabled } = useFeatureFlag("remote_input_enabled");
   const [remoteInputSheetOpen, setRemoteInputSheetOpen] = useState(false);
+  const [likedTunesSheetOpen, setLikedTunesSheetOpen] = useState(false);
 
   const {
     volumeSliderPreviewIntervalMs,
@@ -1891,6 +1893,17 @@ export default function PlayFilesPage() {
                   ) : undefined
                 }
               />
+              {sidRadioFlags.sidRadioEnabled ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="self-start"
+                  data-testid="sid-radio-liked-tunes-open"
+                  onClick={() => setLikedTunesSheetOpen(true)}
+                >
+                  <Heart className="mr-1.5 h-4 w-4" /> Liked Tunes
+                </Button>
+              ) : null}
               <PlaybackSettingsPanel
                 durationSliderMax={DURATION_SLIDER_STEPS}
                 durationSliderValue={durationSecondsToSlider(durationSeconds)}
@@ -2113,6 +2126,12 @@ export default function PlayFilesPage() {
           {remoteInputEnabled ? (
             <RemoteInputSheet open={remoteInputSheetOpen} onOpenChange={setRemoteInputSheetOpen} />
           ) : null}
+
+          <LikedTunesSheet
+            open={likedTunesSheetOpen}
+            onOpenChange={setLikedTunesSheetOpen}
+            onPlay={(items, startIndex) => void startPlaylist(items, startIndex)}
+          />
 
           <AlertDialog
             open={Boolean(pendingConfigChange)}

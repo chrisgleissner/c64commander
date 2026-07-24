@@ -49,7 +49,7 @@ Branch: **`feat/sid-radio`** (cut from `main`). Flags default **off** until each
 
 - [x] 1.1 `rankingStore.ts` (IndexedDB + localStorage fallback, full-MD5 key, broadcast, deterministic snapshot) — **RED→GREEN**
 - [x] 1.2 ♥/✕ on Now Playing card (`now-playing-like`/`now-playing-notforme`, flag-gated, MD5 via `useCurrentTuneMd5`); `sidRankingEnabled` setting; "SID Radio" Settings group w/ enable toggles + "Clear my rankings"
-- [ ] 1.3 `likedTunes.ts` materialiser + **Liked Tunes** list (`liked-tunes`) via `startPlaylist` (normal Shuffle/Repeat); un-like; grey unresolved (§5.5) — **RED→GREEN**
+- [x] 1.3 `likedTunes.ts` materialiser + **Liked Tunes** list (`liked-tunes`) + sheet via `startPlaylist` (normal Shuffle/Repeat); un-like; grey unresolved (§5.5); flag-gated Play-page entry — **RED→GREEN**
 - [ ] **M1 EXIT** — likes persist across restart; Liked Tunes plays finite; HIL soak: zero Remote-Input starvation while rating → tick **G4**
 
 ## M2 — Song Radio  (→ G5, G6, G9 partial, G11)

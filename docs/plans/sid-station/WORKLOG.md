@@ -314,3 +314,22 @@ _(append entries below as tasks/gates complete — newest last)_
   ✕-records-without-station, ✕-skips-only-when-newly-marking, Like→✕ replace; Settings renders,
   master toggle reveals ranking toggle, Clear wipes rankings). `tsc` + `eslint` clean.
 - Gate: G4 affordance + persistence proven (unit/component); jank/starvation is the M1 HIL soak.
+
+### 2026-07-24 — M1.3 Liked Tunes (materialiser + list + sheet)
+- Task: Liked Tunes playable collection (spec §5.5) — materialise ranking likes → PlaylistItems
+  via md5PathIndex; play via startPlaylist; un-like; grey unresolved.
+- Files: `likedTunes.ts` (listLikedTunes/buildLikedTunePlaylistItems — full-md5 → md5_48 →
+  resolveVirtualPath, D14 installed-preference, sorted, greys unresolved §2.5),
+  `LikedTunesList.tsx` (`liked-tunes` list; per-row play/un-like; subscribes to ranking
+  changes), `LikedTunesSheet.tsx` (bottom sheet), `PlayFilesPage.tsx` (flag-gated
+  "Liked Tunes" entry + sheet; onPlay → existing `startPlaylist`, so normal Shuffle/Repeat
+  apply). Tests: likedTunes (5), LikedTunesList (4).
+- Decisions: Liked Tunes is a finite list, not a radio — it reuses `startPlaylist` wholesale
+  (no new transport). Un-like = `clearRanking` (drops from list AND stops steering). Play
+  starts the whole liked list at the tapped tune. Entry gated by `sidRadioEnabled`.
+- Commands + evidence: 9 tests (materialise resolved, exclude notForMe, grey removed-tune,
+  build HVSC items resolved-only, D14 installed preference; list plays from tapped index,
+  un-like removes row + clears ranking, greyed-disabled unresolved, empty state). `tsc` +
+  `eslint` clean; full sidRadio suite 69 passed.
+- Gate: G4 Liked Tunes finite-list behaviour proven (unit/component). Restart-persistence
+  and HIL soak are the M1 EXIT.
