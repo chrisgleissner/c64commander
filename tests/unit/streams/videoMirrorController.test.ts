@@ -10,7 +10,8 @@ import { describe, expect, it, vi } from "vitest";
 import { VideoMirrorController, type VideoMirrorSnapshot } from "@/lib/streams/videoMirrorController";
 import type { StreamReceiver, StreamConnectionState } from "@/lib/streams/streamReceiver";
 import { VIC_HEADER_BYTES, VIC_BYTES_PER_LINE, VIC_LAST_LINE_FLAG } from "@/lib/streams/vicStream";
-import { VIC_FRAME_WIDTH } from "@/lib/streams/vicDecode";
+import { VIC_FRAME_WIDTH, VIC_PAL_HEIGHT } from "@/lib/streams/vicDecode";
+import { buildTestPatternStream } from "@/lib/streams/vicTestPattern";
 
 class FakeReceiver implements StreamReceiver {
   datagram: ((data: Uint8Array, arrivalMs: number) => void) | null = null;
@@ -296,6 +297,91 @@ describe("VideoMirrorController", () => {
     await controller.start();
     await expect(controller.stop()).resolves.toBeUndefined();
     expect(controller.getSnapshot().state).toBe("off");
+  });
+
+  it("renders via the native onFrame fast path when the receiver assembles frames", async () => {
+    // A receiver that delivers whole frames (the native Android plugin's assemble mode): the
+    // controller must render them directly, passing through height, frame-start time and drops —
+    // without any JS-side assembly.
+    class FrameReceiver implements StreamReceiver {
+      frame: ((f: Uint8Array, h: number, t: number, dropped: number, lost: number) => void) | null = null;
+      datagram: ((d: Uint8Array, t: number) => void) | null = null;
+      stateCb: ((s: StreamConnectionState) => void) | null = null;
+      readonly destination = "10.0.0.9:11000";
+      closed = false;
+      onDatagram(handler: (d: Uint8Array, t: number) => void) {
+        this.datagram = handler;
+      }
+      onFrame(handler: (f: Uint8Array, h: number, t: number, dropped: number, lost: number) => void) {
+        this.frame = handler;
+      }
+      onStateChange(handler: (s: StreamConnectionState) => void) {
+        this.stateCb = handler;
+      }
+      close() {
+        this.closed = true;
+      }
+    }
+
+    const receiver = new FrameReceiver();
+    const renderFrame = vi.fn();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.stateCb?.("open");
+
+    const frame = new Uint8Array((VIC_FRAME_WIDTH * 272) / 2);
+    receiver.frame?.(frame, 240, 7777, 5, 2);
+
+    expect(renderFrame).toHaveBeenCalledTimes(1);
+    expect(renderFrame.mock.calls[0][1]).toBe(240); // height passed through
+    expect(renderFrame.mock.calls[0][2]).toBe(7777); // frame-start wire time passed through
+    expect(controller.getSnapshot().droppedPackets).toBe(5);
+    expect(controller.getSnapshot().framesLost).toBe(2); // native frame-loss count passed through
+    expect(controller.getSnapshot().standard).toBe("NTSC"); // height 240 classifies NTSC
+    // The per-packet path is not used in assemble mode.
+    expect(receiver.datagram).not.toBeNull(); // controller registered it, but it never fires here
+  });
+
+  it("surfaces zero frame loss for a clean synthetic stream and the exact count when frames are dropped", async () => {
+    // Clean stream: every frame arrives → framesLost stays 0, fps counts every frame.
+    const clean = buildTestPatternStream(120, { height: VIC_PAL_HEIGHT });
+    const cleanReceiver = new FakeReceiver();
+    const cleanController = new VideoMirrorController({
+      createReceiver: () => cleanReceiver,
+      renderFrame: vi.fn(),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await cleanController.start();
+    cleanReceiver.emitState("open");
+    for (const packet of clean.packets) cleanReceiver.emit(packet);
+    expect(cleanController.getSnapshot().framesLost).toBe(0);
+
+    // Damaged stream: drop two frames' last-line packets → controller reports exactly 2 lost.
+    const damaged = buildTestPatternStream(120, { height: VIC_PAL_HEIGHT });
+    const perFrame = damaged.packets.length / 120;
+    const drop = new Set([40 * perFrame + (perFrame - 1), 80 * perFrame + (perFrame - 1)]);
+    const receiver = new FakeReceiver();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame: vi.fn(),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+    damaged.packets.forEach((packet, idx) => {
+      if (!drop.has(idx)) receiver.emit(packet);
+    });
+    expect(controller.getSnapshot().framesLost).toBe(2);
   });
 
   it("ignores datagrams that do not complete a frame", async () => {

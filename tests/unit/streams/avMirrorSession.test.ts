@@ -87,7 +87,7 @@ describe("AvMirrorSession", () => {
     expect(seen).toHaveLength(1);
     expect(session.getSnapshot()).toEqual({
       audio: { state: "off", droppedPackets: 0, error: null },
-      video: { state: "off", fps: 0, standard: "PAL", error: null },
+      video: { state: "off", fps: 0, droppedPackets: 0, framesLost: 0, standard: "PAL", error: null },
     });
     expect(session.audioLive).toBe(false);
     expect(session.videoLive).toBe(false);

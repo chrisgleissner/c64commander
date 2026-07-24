@@ -46,6 +46,8 @@ import { Slider } from "@/components/ui/slider";
 import {
   loadAutofireRateHz,
   saveAutofireRateHz,
+  loadShowAutofireButton,
+  saveShowAutofireButton,
   MIN_AUTOFIRE_RATE_HZ,
   MAX_AUTOFIRE_RATE_HZ,
 } from "@/lib/remoteInput/autofire";
@@ -128,6 +130,8 @@ import {
   saveStreamAudioPort,
   loadStreamNetworkBufferMs,
   saveStreamNetworkBufferMs,
+  loadStreamNativeVideoAssembly,
+  saveStreamNativeVideoAssembly,
   loadNotificationVisibility,
   saveNotificationVisibility,
   loadNotificationDurationMs,
@@ -354,10 +358,12 @@ export default function SettingsPage() {
   const [streamVideoPort, setStreamVideoPort] = useState<number>(loadStreamVideoPort);
   const [streamAudioPort, setStreamAudioPort] = useState<number>(loadStreamAudioPort);
   const [streamNetworkBufferMs, setStreamNetworkBufferMs] = useState<number>(loadStreamNetworkBufferMs);
+  const [streamNativeVideoAssembly, setStreamNativeVideoAssembly] = useState<boolean>(loadStreamNativeVideoAssembly);
   const [volumeSliderPreviewIntervalMs, setVolumeSliderPreviewIntervalMs] = useState(
     loadVolumeSliderPreviewIntervalMs(),
   );
   const [autofireRateHz, setAutofireRateHz] = useState(loadAutofireRateHz());
+  const [showAutofireButton, setShowAutofireButton] = useState(loadShowAutofireButton());
   const [startupDiscoveryWindowInput, setStartupDiscoveryWindowInput] = useState(
     String(loadStartupDiscoveryWindowMs() / 1000),
   );
@@ -2023,7 +2029,7 @@ export default function SettingsPage() {
                   </div>
                 )}
 
-                {(flags.audio_mirror_enabled || flags.video_mirror_enabled) && (
+                {flags.live_view_enabled && (flags.audio_mirror_enabled || flags.video_mirror_enabled) && (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
                       <Label htmlFor="settings-stream-video-port" className="text-sm">
@@ -2082,8 +2088,51 @@ export default function SettingsPage() {
                         clicking. Default 5 ms; 0 = lowest latency, least resilient.
                       </p>
                     </div>
+                    <div className="col-span-2 flex items-start justify-between gap-3 min-w-0">
+                      <div className="min-w-0">
+                        <Label htmlFor="settings-stream-native-assembly" className="font-medium">
+                          Fast video (native assembly)
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Assemble Live View video frames natively so the full frame rate (50 fps PAL / 60 fps NTSC) is
+                          reached. Leave on; turn off only to compare or if video misbehaves. Android only.
+                        </p>
+                      </div>
+                      <Checkbox
+                        id="settings-stream-native-assembly"
+                        data-testid="settings-stream-native-assembly"
+                        checked={streamNativeVideoAssembly}
+                        onCheckedChange={(checked) => {
+                          const next = checked === true;
+                          setStreamNativeVideoAssembly(next);
+                          saveStreamNativeVideoAssembly(next);
+                        }}
+                      />
+                    </div>
                   </div>
                 )}
+
+                <div className="flex items-start justify-between gap-3 min-w-0">
+                  <div className="min-w-0">
+                    <Label htmlFor="settings-show-autofire" className="font-medium">
+                      Show Autofire button
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Autofire is rarely needed for C64 games, so its control is hidden from the Remote Input joystick
+                      and game mode by default. Turn this on to show it.
+                    </p>
+                  </div>
+                  <Checkbox
+                    id="settings-show-autofire"
+                    data-testid="settings-show-autofire"
+                    checked={showAutofireButton}
+                    onCheckedChange={(checked) => {
+                      const next = checked === true;
+                      setShowAutofireButton(next);
+                      saveShowAutofireButton(next);
+                    }}
+                  />
+                </div>
 
                 <div className="space-y-2">
                   <Label className="text-sm">Autofire rate: {autofireRateHz}/s</Label>
@@ -2092,6 +2141,7 @@ export default function SettingsPage() {
                     max={MAX_AUTOFIRE_RATE_HZ}
                     step={1}
                     value={[autofireRateHz]}
+                    disabled={!showAutofireButton}
                     onValueChange={([value]) => setAutofireRateHz(value)}
                     onValueCommit={([value]) => saveAutofireRateHz(value)}
                     aria-label="Autofire rate"

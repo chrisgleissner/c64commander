@@ -19,7 +19,7 @@
 
 import { getC64API } from "@/lib/c64api";
 import { addLog } from "@/lib/logging";
-import { loadStreamAudioPort, loadStreamVideoPort } from "@/lib/config/appSettings";
+import { loadStreamAudioPort, loadStreamNativeVideoAssembly, loadStreamVideoPort } from "@/lib/config/appSettings";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
 import { AudioMirrorController, type AudioMirrorState } from "./audioMirrorController";
 import { VideoMirrorController, type VideoMirrorState } from "./videoMirrorController";
@@ -28,7 +28,14 @@ import type { AudioMirrorPlayer } from "./audioPlayer";
 
 export interface AvMirrorSnapshot {
   audio: { state: AudioMirrorState; droppedPackets: number; error: string | null };
-  video: { state: VideoMirrorState; fps: number; standard: VideoStandard; error: string | null };
+  video: {
+    state: VideoMirrorState;
+    fps: number;
+    droppedPackets: number;
+    framesLost: number;
+    standard: VideoStandard;
+    error: string | null;
+  };
 }
 
 export type AvMirrorFrameHandler = (frame: Uint8Array, height: number, arrivalMs: number) => void;
@@ -37,7 +44,7 @@ export type AvMirrorListener = (snapshot: AvMirrorSnapshot) => void;
 
 const INITIAL: AvMirrorSnapshot = {
   audio: { state: "off", droppedPackets: 0, error: null },
-  video: { state: "off", fps: 0, standard: "PAL", error: null },
+  video: { state: "off", fps: 0, droppedPackets: 0, framesLost: 0, standard: "PAL", error: null },
 };
 
 const isLiveState = (state: AudioMirrorState | VideoMirrorState) => state === "connecting" || state === "live";
@@ -78,9 +85,25 @@ export class AvMirrorSession {
     this.video = new VideoMirrorController({
       startStream: (_name, destination) => startStream("video", destination),
       stopStream: () => stopStream("video"),
-      onChange: (s) => this.update({ video: { state: s.state, fps: s.fps, standard: s.standard, error: s.error } }),
+      onChange: (s) =>
+        this.update({
+          video: {
+            state: s.state,
+            fps: s.fps,
+            droppedPackets: s.droppedPackets,
+            framesLost: s.framesLost,
+            standard: s.standard,
+            error: s.error,
+          },
+        }),
       createReceiver:
-        deps.createVideoReceiver ?? ((opts) => createStreamReceiver({ ...opts, port: loadStreamVideoPort() })),
+        deps.createVideoReceiver ??
+        ((opts) =>
+          createStreamReceiver({
+            ...opts,
+            port: loadStreamVideoPort(),
+            nativeVideoAssembly: loadStreamNativeVideoAssembly(),
+          })),
       renderFrame: (frame, height, arrivalMs) => this.emitFrame(frame, height, arrivalMs),
       frameThrottle: deps.videoFrameThrottle,
       now: deps.now,

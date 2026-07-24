@@ -19,6 +19,12 @@
  * press→see/hear use the JS observe clock (same clock as the press) so they measure the real
  * end-to-end user latency; the A/V offset uses the wire clock so it is not polluted by the
  * asymmetric receive latency. Pure and side-effect-free: the caller supplies every timestamp.
+ *
+ * Each of the three metrics is recorded INDEPENDENTLY, the instant its pop arrives — a press is
+ * never held hostage waiting for the other two. So "press → see" appears the moment the flash is
+ * rendered even if audio isn't playing, and a value never gets stuck because the analyzer failed to
+ * pair the pops for the offset. A press counts as measured once it produces any pop; it counts as
+ * missed only if it is superseded by the next press having produced no pop at all.
  */
 
 export interface AvLatencyStats {
@@ -37,9 +43,9 @@ export interface AvLatencyStats {
 
 interface Pending {
   pressMs: number;
-  videoObserveMs: number | null;
-  audioObserveMs: number | null;
-  offsetMs: number | null;
+  sawVideo: boolean;
+  sawAudio: boolean;
+  sawOffset: boolean;
 }
 
 /**
@@ -73,28 +79,42 @@ export class AvLatencyTracker {
   private readonly see: number[] = [];
   private readonly hear: number[] = [];
   private readonly offset: number[] = [];
+  private measured = 0;
   private missed = 0;
 
   /** Begin a measurement: SPACE was sent at `pressMs` (JS observe clock, e.g. performance.now). */
   markPress(pressMs: number): void {
-    if (this.pending && !this.isComplete(this.pending)) this.missed += 1;
-    this.pending = { pressMs, videoObserveMs: null, audioObserveMs: null, offsetMs: null };
+    // Count the outgoing press as missed only if it produced NO pop at all before this one.
+    if (this.pending && !this.pending.sawVideo && !this.pending.sawAudio) this.missed += 1;
+    this.pending = { pressMs, sawVideo: false, sawAudio: false, sawOffset: false };
   }
 
-  /** A video pop was rendered at `observeMs` (JS observe clock). */
+  /** A video pop was rendered at `observeMs` (JS observe clock). Records press→see immediately. */
   onVideoPop(observeMs: number): void {
-    if (!this.pending || this.pending.videoObserveMs !== null) return;
-    if (!this.belongsToPending(observeMs)) return;
-    this.pending.videoObserveMs = observeMs;
-    this.tryComplete();
+    if (!this.pending || this.pending.sawVideo || !this.belongsToPending(observeMs)) return;
+    this.markMeasured();
+    this.pending.sawVideo = true;
+    this.see.push(observeMs - this.pending.pressMs);
   }
 
-  /** An audio pop was observed at `observeMs` (JS observe clock). */
+  /** An audio pop was observed at `observeMs` (JS observe clock). Records press→hear immediately. */
   onAudioPop(observeMs: number): void {
-    if (!this.pending || this.pending.audioObserveMs !== null) return;
-    if (!this.belongsToPending(observeMs)) return;
-    this.pending.audioObserveMs = observeMs;
-    this.tryComplete();
+    if (!this.pending || this.pending.sawAudio || !this.belongsToPending(observeMs)) return;
+    this.markMeasured();
+    this.pending.sawAudio = true;
+    this.hear.push(observeMs - this.pending.pressMs);
+  }
+
+  /** The analyzer matched the pop pair with this signed wire offset (audio − video, ms). */
+  onMatchOffset(wireOffsetMs: number): void {
+    if (!this.pending || this.pending.sawOffset) return;
+    this.pending.sawOffset = true;
+    this.offset.push(Math.abs(wireOffsetMs));
+  }
+
+  /** Count the current press as measured the first time it produces any pop. */
+  private markMeasured(): void {
+    if (this.pending && !this.pending.sawVideo && !this.pending.sawAudio) this.measured += 1;
   }
 
   /** True when a pop at `observeMs` plausibly belongs to the current press (after it, within window). */
@@ -104,30 +124,10 @@ export class AvLatencyTracker {
     return observeMs >= pending.pressMs && observeMs - pending.pressMs <= MAX_POP_WINDOW_MS;
   }
 
-  /** The analyzer matched the pop pair with this signed wire offset (audio − video, ms). */
-  onMatchOffset(wireOffsetMs: number): void {
-    if (!this.pending || this.pending.offsetMs !== null) return;
-    this.pending.offsetMs = Math.abs(wireOffsetMs);
-    this.tryComplete();
-  }
-
-  private isComplete(p: Pending): boolean {
-    return p.videoObserveMs !== null && p.audioObserveMs !== null && p.offsetMs !== null;
-  }
-
-  private tryComplete(): void {
-    const p = this.pending;
-    if (!p || !this.isComplete(p)) return;
-    this.see.push((p.videoObserveMs as number) - p.pressMs);
-    this.hear.push((p.audioObserveMs as number) - p.pressMs);
-    this.offset.push(p.offsetMs as number);
-    this.pending = null;
-  }
-
   getStats(): AvLatencyStats {
     const last = (a: number[]): number | null => (a.length ? a[a.length - 1] : null);
     return {
-      count: this.see.length,
+      count: this.measured,
       missed: this.missed,
       seeLastMs: last(this.see),
       seeP99Ms: p99(this.see),
@@ -143,6 +143,7 @@ export class AvLatencyTracker {
     this.see.length = 0;
     this.hear.length = 0;
     this.offset.length = 0;
+    this.measured = 0;
     this.missed = 0;
   }
 }

@@ -20,6 +20,9 @@ const now = () => (typeof performance !== "undefined" ? performance.now() : Date
 /** Hold the SPACE key this long (~3 PAL frames) so the device's once-per-frame matrix poll sees it. */
 const SPACE_HOLD_MS = 60;
 
+/** How often to re-read the analyzer/tracker stats into React state, so values surface promptly. */
+const STATS_REFRESH_MS = 250;
+
 /**
  * Binds the {@link AvSyncAnalyzer} to the shared A/V mirror session: every decoded video frame
  * and audio batch is stamped and fed to the analyzer, which matches the periodic white-flash /
@@ -29,7 +32,9 @@ const SPACE_HOLD_MS = 60;
  * Also drives the interactive space-triggered test ({@link AvLatencyTracker}): `runKeyTest()`
  * loads the av-sync-key program, then each `pressSpace()` sends SPACE over Remote Input and the
  * tracker measures press→see, press→hear (JS observe/render clock — the real end-to-end latency)
- * and the pop's A/V offset (wire clock).
+ * and the pop's A/V offset (wire clock). `stopTest()` resets the C64 to end whichever test program
+ * is running. Both the sync stats and the latency stats surface the most recent value as soon as
+ * it is available (not only once a percentile stabilises).
  */
 export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
   const latencyRef = useRef<AvLatencyTracker | null>(null);
@@ -51,17 +56,23 @@ export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
   const [latencyStats, setLatencyStats] = useState<AvLatencyStats>(() => latencyRef.current!.getStats());
   const [runningTest, setRunningTest] = useState(false);
   const [testError, setTestError] = useState<string | null>(null);
+  /** Whether a test program is currently loaded/running on the device (so Stop can reset it). */
+  const [testActive, setTestActive] = useState(false);
 
   useEffect(() => {
     const analyzer = analyzerRef.current!;
     const latency = latencyRef.current!;
+    const refresh = () => {
+      setStats(analyzer.getStats());
+      setLatencyStats(latency.getStats());
+    };
     const unsubscribeFrames = session.subscribeFrames((frame, _height, arrivalMs) => {
       videoObserveRef.current = now();
       const offset = analyzer.pushVideoFrame(frame, arrivalMs);
+      // A matched pop feeds the wire offset into the latency tracker and surfaces stats immediately.
       if (offset !== null) {
         latency.onMatchOffset(offset);
-        setStats(analyzer.getStats());
-        setLatencyStats(latency.getStats());
+        refresh();
       }
     });
     const unsubscribeAudio = session.subscribeAudio((samples, arrivalMs) => {
@@ -69,15 +80,11 @@ export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
       const offset = analyzer.pushAudioSamples(samples, arrivalMs);
       if (offset !== null) {
         latency.onMatchOffset(offset);
-        setStats(analyzer.getStats());
-        setLatencyStats(latency.getStats());
+        refresh();
       }
     });
-    // Reflect unmatched-pop / latency counts as they accrue, before the first match.
-    const poll = setInterval(() => {
-      setStats(analyzer.getStats());
-      setLatencyStats(latency.getStats());
-    }, 500);
+    // Backstop poll: surface see/hear pops (and unmatched-pop counts) promptly even between matches.
+    const poll = setInterval(refresh, STATS_REFRESH_MS);
     return () => {
       unsubscribeFrames();
       unsubscribeAudio();
@@ -97,6 +104,7 @@ export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
     setTestError(null);
     try {
       await runAvSyncTest();
+      setTestActive(true);
     } catch (error) {
       const message = (error as Error)?.message ?? String(error);
       setTestError(message);
@@ -111,6 +119,7 @@ export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
     setTestError(null);
     try {
       await runAvSyncKeyTest();
+      setTestActive(true);
     } catch (error) {
       const message = (error as Error)?.message ?? String(error);
       setTestError(message);
@@ -155,5 +164,21 @@ export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
     }
   }, []);
 
-  return { stats, latencyStats, reset, runTest, runKeyTest, pressSpace, runningTest, testError };
+  /** Stop whichever test program is running by resetting the C64 (both tests are RAM-resident). */
+  const stopTest = useCallback(async () => {
+    setRunningTest(true);
+    setTestError(null);
+    try {
+      await getC64API().machineReset();
+    } catch (error) {
+      const message = (error as Error)?.message ?? String(error);
+      setTestError(message);
+      addLog("warn", "A/V sync: failed to reset the machine to stop the test", { error: message });
+    } finally {
+      setTestActive(false);
+      setRunningTest(false);
+    }
+  }, []);
+
+  return { stats, latencyStats, reset, runTest, runKeyTest, pressSpace, stopTest, testActive, runningTest, testError };
 };

@@ -18,6 +18,8 @@ import { AvSyncPanel } from "./AvSyncPanel";
 export interface LiveViewCardProps {
   audioEnabled?: boolean;
   videoEnabled?: boolean;
+  /** Show the A/V Sync + Tap latency measurement tools (gated by the av_sync_tests feature flag). */
+  showAvSyncTests?: boolean;
   className?: string;
 }
 
@@ -27,7 +29,12 @@ export interface LiveViewCardProps {
  * audio-only shows just the lit toggle; video shows a thumbnail that can expand.
  * The full zoom/pan experience lives in Remote Input game mode (see 06-av-mirror-ux).
  */
-export function LiveViewCard({ audioEnabled = true, videoEnabled = true, className }: LiveViewCardProps) {
+export function LiveViewCard({
+  audioEnabled = true,
+  videoEnabled = true,
+  showAvSyncTests = true,
+  className,
+}: LiveViewCardProps) {
   const { video } = useAvMirror();
   const [expanded, setExpanded] = useState(false);
   const showPreview = videoEnabled && video.state !== "off";
@@ -63,7 +70,7 @@ export function LiveViewCard({ audioEnabled = true, videoEnabled = true, classNa
         </div>
       )}
 
-      {showPreview && expanded && <AvSyncPanel className="mt-3" />}
+      {showPreview && showAvSyncTests && <AvSyncPanel className="mt-3" />}
 
       <p className="mt-2 text-xs text-muted-foreground">
         Hear{videoEnabled ? " and see" : ""} the running machine. Open Remote Input for the full zoomable screen.

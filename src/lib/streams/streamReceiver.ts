@@ -37,6 +37,18 @@ export interface StreamReceiver {
    * audio↔video offset from this so asymmetric downstream latency cannot skew it.
    */
   onDatagram(handler: (data: Uint8Array, arrivalMs: number) => void): void;
+  /**
+   * Optional native fast path: pre-assembled whole VIC frames. When the transport reassembles
+   * frames itself (the native Android plugin with `assemble:true`), it delivers each complete
+   * frame here instead of per-packet `datagram`s — so the caller skips JS-side assembly. `frame`
+   * is the 52224-byte 4bpp buffer, `height` its line count (PAL 272 / NTSC 240), `arrivalMs` the
+   * frame-start wire time, `droppedPackets` the cumulative sequence-gap count, and `framesLost` the
+   * cumulative frame-number gaps (frames that never completed). Transports that do not assemble (web
+   * WebSocket bridge, audio) omit this method; the caller falls back to `onDatagram` + JS assembly.
+   */
+  onFrame?(
+    handler: (frame: Uint8Array, height: number, arrivalMs: number, droppedPackets: number, framesLost: number) => void,
+  ): void;
   onStateChange(handler: (state: StreamConnectionState) => void): void;
   /** The host:port the device should stream to (the receiver's own address). */
   readonly destination: string;
@@ -58,6 +70,11 @@ export interface StreamReceiverOptions {
   destination?: string;
   /** UDP port the device streams to / the bridge binds (defaults 11000 video / 11001 audio). */
   port?: number;
+  /**
+   * Native video fast path: assemble VIC frames in the plugin (one bridge hop per frame). Video-only
+   * and native-only; defaults on. Threaded from the app setting so it can be A/B toggled at runtime.
+   */
+  nativeVideoAssembly?: boolean;
   /** Injectable WebSocket constructor for tests. */
   socketFactory?: (url: string) => WebSocketLike;
 }
@@ -150,25 +167,49 @@ const base64ToBytes = (base64: string): Uint8Array => {
 /** Native receiver: binds a UDP port through the StreamUdp plugin and forwards datagrams. */
 export class NativeUdpStreamReceiver implements StreamReceiver {
   private datagramHandler: ((data: Uint8Array, arrivalMs: number) => void) | null = null;
+  private frameHandler:
+    | ((frame: Uint8Array, height: number, arrivalMs: number, droppedPackets: number, framesLost: number) => void)
+    | null = null;
   private stateHandler: ((state: StreamConnectionState) => void) | null = null;
   destination = "";
   private closed = false;
   private readonly name: StreamName;
-  private readonly listener: Promise<PluginListenerHandle>;
+  private readonly assemble: boolean;
+  private readonly listeners: Promise<PluginListenerHandle>[] = [];
   private readonly readyPromise: Promise<void>;
 
   constructor(options: StreamReceiverOptions) {
     this.name = options.name;
     const port = options.port ?? defaultPortFor(options.name);
     const group = MULTICAST_GROUP[options.name];
+    // Native frame assembly is a video-only fast path; audio stays per-packet (~250/s is cheap).
+    this.assemble = options.name === "video" && (options.nativeVideoAssembly ?? true);
     // Destination is the multicast group (known up front); the device streams there.
     this.destination = options.destination ?? multicastDestination(options.name, port);
-    this.listener = StreamUdp.addListener("datagram", (event) => {
-      if (event.name !== this.name || !this.datagramHandler) return;
-      // Prefer the native wire-arrival stamp; fall back for pre-timestamp plugin builds.
-      this.datagramHandler(base64ToBytes(event.data), typeof event.t === "number" ? event.t : nowMs());
-    });
-    this.readyPromise = StreamUdp.bind({ name: this.name, port, group })
+    // Always listen for per-packet datagrams (audio, and the video fallback when assembly is off).
+    this.listeners.push(
+      StreamUdp.addListener("datagram", (event) => {
+        if (event.name !== this.name || !this.datagramHandler) return;
+        // Prefer the native wire-arrival stamp; fall back for pre-timestamp plugin builds.
+        this.datagramHandler(base64ToBytes(event.data), typeof event.t === "number" ? event.t : nowMs());
+      }),
+    );
+    // In assembly mode the plugin emits whole frames instead — one bridge hop per frame, not per packet.
+    if (this.assemble) {
+      this.listeners.push(
+        StreamUdp.addListener("videoframe", (event) => {
+          if (event.name !== this.name || !this.frameHandler) return;
+          this.frameHandler(
+            base64ToBytes(event.data),
+            event.height,
+            typeof event.t === "number" ? event.t : nowMs(),
+            event.dropped ?? 0,
+            event.lost ?? 0,
+          );
+        }),
+      );
+    }
+    this.readyPromise = StreamUdp.bind({ name: this.name, port, group, assemble: this.assemble })
       .then(() => {
         if (!this.closed) this.stateHandler?.("open");
       })
@@ -186,6 +227,12 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
     this.datagramHandler = handler;
   }
 
+  onFrame(
+    handler: (frame: Uint8Array, height: number, arrivalMs: number, droppedPackets: number, framesLost: number) => void,
+  ): void {
+    this.frameHandler = handler;
+  }
+
   onStateChange(handler: (state: StreamConnectionState) => void): void {
     this.stateHandler = handler;
     handler("connecting");
@@ -194,7 +241,7 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
   close(): void {
     this.closed = true;
     void StreamUdp.close({ name: this.name }).catch(() => {});
-    void this.listener.then((handle) => handle.remove()).catch(() => {});
+    for (const listener of this.listeners) void listener.then((handle) => handle.remove()).catch(() => {});
     if (this.stateHandler) this.stateHandler("closed");
   }
 }

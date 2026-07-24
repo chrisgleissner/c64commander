@@ -185,28 +185,48 @@ features:
       Index and search the programs inside disk images, so a program that only
       exists inside a .d64/.d71/.d81 becomes findable. Depends on Disk Explorer.
 
+  - id: live_view_enabled
+    enabled: true
+    visible_to_user: true
+    developer_only: false
+    group: stable
+    title: Live View
+    description: >-
+      Master switch for Live View — see and hear the running machine — everywhere
+      it appears: the Home and Play dashboards and Remote Input game mode. On by
+      default. Turn off to hide all Live View UI on every page. The Audio Mirror and
+      Video Mirror flags below choose which of the two feeds is offered within it.
+
+  - id: av_sync_tests_enabled
+    enabled: true
+    visible_to_user: true
+    developer_only: false
+    group: experimental
+    title: A/V Sync tests
+    description: >-
+      Show the A/V Sync and Tap latency measurement tools inside Live View on Home
+      (audio↔video offset, and press→see/hear round-trip latency). On by default.
+      Requires Live View.
+
   - id: audio_mirror_enabled
-    enabled: false
+    enabled: true
     visible_to_user: true
     developer_only: false
     group: experimental
     title: Audio Mirror
     description: >-
-      Hear the running machine: receive the device audio stream in-app and play
-      it, with an optional audio recording. Off by default: the phone app still
-      needs its stream receiver (a UDP transport) before the audio arrives.
+      Within Live View, offer the audio feed: hear the running machine by receiving
+      the device audio stream in-app, with an optional audio recording.
 
   - id: video_mirror_enabled
-    enabled: false
+    enabled: true
     visible_to_user: true
     developer_only: false
     group: experimental
     title: Video Mirror
     description: >-
-      See the running machine: decode and render the device VIC stream to a
-      canvas, with zoom/pan immersive control in Remote Input. Off by default:
-      the phone app still needs its stream receiver (a UDP transport) before the
-      video arrives.
+      Within Live View, offer the video feed: decode and render the device VIC
+      stream to a canvas, with zoom/pan immersive control in Remote Input.
 
   - id: new_disk_enabled
     enabled: true

@@ -34,6 +34,8 @@ export interface VideoMirrorSnapshot {
   state: VideoMirrorState;
   fps: number;
   droppedPackets: number;
+  /** Frames LOST — gaps in the VIC frame-number sequence (a frame whose last-line packet never arrived). */
+  framesLost: number;
   /** Video standard detected from the actual received frame height (PAL 272 / NTSC 240). */
   standard: VideoStandard;
   error: string | null;
@@ -62,7 +64,14 @@ export interface VideoMirrorDeps {
 export class VideoMirrorController {
   private receiver: StreamReceiver | null = null;
   private assembler = new VicStreamAssembler();
-  private snapshot: VideoMirrorSnapshot = { state: "off", fps: 0, droppedPackets: 0, standard: "PAL", error: null };
+  private snapshot: VideoMirrorSnapshot = {
+    state: "off",
+    fps: 0,
+    droppedPackets: 0,
+    framesLost: 0,
+    standard: "PAL",
+    error: null,
+  };
   private frameTick = 0;
   /**
    * Earliest wire-arrival time seen for each VIC frame number in flight. Keyed by frame number
@@ -89,6 +98,27 @@ export class VideoMirrorController {
     this.deps.onChange(this.snapshot);
   }
 
+  /**
+   * A complete frame is ready (from the native fast path or JS assembly): apply the render throttle,
+   * update the rolling fps and the dropped/standard health. `arrivalMs` is the frame-start wire time
+   * (earliest packet), so the A/V sync analyzer stays correct regardless of which path produced it.
+   */
+  private handleCompletedFrame(
+    frame: Uint8Array,
+    height: number,
+    arrivalMs: number,
+    droppedPackets: number,
+    framesLost: number,
+  ): void {
+    this.frameTick += 1;
+    let fps = this.snapshot.fps;
+    if (this.frameTick % this.throttle === 0) {
+      this.deps.renderFrame?.(frame, height, arrivalMs);
+      fps = this.recordRenderedFrame();
+    }
+    this.update({ fps, droppedPackets, framesLost, standard: videoStandardForHeight(height) });
+  }
+
   /** Record a rendered frame and return the frame count in the last ~1s. */
   private recordRenderedFrame(): number {
     const now = this.now();
@@ -104,7 +134,7 @@ export class VideoMirrorController {
     this.frameTick = 0;
     this.frameStartByNum.clear();
     this.renderTimes = [];
-    this.update({ state: "connecting", error: null, fps: 0, droppedPackets: 0 });
+    this.update({ state: "connecting", error: null, fps: 0, droppedPackets: 0, framesLost: 0 });
 
     const receiver = (this.deps.createReceiver ?? createStreamReceiver)({ name: "video" });
     this.receiver = receiver;
@@ -117,6 +147,15 @@ export class VideoMirrorController {
       } else if (connection === "closed" && this.snapshot.state !== "off") {
         this.update({ state: "off" });
       }
+    });
+
+    // Native fast path: the Android plugin reassembles VIC datagrams into whole frames and crosses
+    // the Capacitor bridge once per FRAME (~50/s) instead of once per PACKET (~3400/s) — the per-event
+    // bridge overhead was what capped the mirror at ~20–30 fps. When the receiver assembles frames it
+    // fires `onFrame`; otherwise (web WebSocket bridge, or assembly off) it fires `onDatagram` and we
+    // assemble in JS. Only one path is active per receiver, so registering both is safe.
+    receiver.onFrame?.((frame, height, arrivalMs, droppedPackets, framesLost) => {
+      this.handleCompletedFrame(frame, height, arrivalMs, droppedPackets, framesLost);
     });
 
     receiver.onDatagram((bytes, arrivalMs) => {
@@ -141,17 +180,13 @@ export class VideoMirrorController {
         if (oldest === undefined) break;
         this.frameStartByNum.delete(oldest);
       }
-      this.frameTick += 1;
-      let fps = this.snapshot.fps;
-      if (this.frameTick % this.throttle === 0) {
-        this.deps.renderFrame?.(frame, this.assembler.frameHeight, frameArrivalMs);
-        fps = this.recordRenderedFrame();
-      }
-      this.update({
-        fps,
-        droppedPackets: this.assembler.stats.droppedPackets,
-        standard: videoStandardForHeight(this.assembler.frameHeight),
-      });
+      this.handleCompletedFrame(
+        frame,
+        this.assembler.frameHeight,
+        frameArrivalMs,
+        this.assembler.stats.droppedPackets,
+        this.assembler.stats.lostFrames,
+      );
     });
 
     try {
@@ -180,6 +215,6 @@ export class VideoMirrorController {
     this.frameTick = 0;
     this.frameStartByNum.clear();
     this.renderTimes = [];
-    this.update({ state: "off", fps: 0, error: null });
+    this.update({ state: "off", fps: 0, framesLost: 0, error: null });
   }
 }

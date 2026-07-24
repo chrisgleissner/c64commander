@@ -30,9 +30,16 @@ import java.util.concurrent.Executors
 /**
  * Native UDP receiver for the A/V mirror (Content Explorer). The C64 Ultimate streams raw
  * VIC video / audio as UDP datagrams; a WebView cannot open a UDP socket, so this plugin
- * binds the two ports natively and forwards each datagram to the JS layer as a base64
- * `datagram` event ({ name, data }). It is the native counterpart of the web server's
- * UDP -> WebSocket bridge.
+ * binds the two ports natively and forwards data to the JS layer. It is the native
+ * counterpart of the web server's UDP -> WebSocket bridge.
+ *
+ * There are two forwarding modes:
+ *   - Per-packet (`datagram` events): audio, and video when native assembly is off. Each datagram
+ *     is base64-encoded and crosses the Capacitor bridge on its own.
+ *   - Native frame assembly (`videoframe` events, `bind({assemble:true})`): the plugin reassembles
+ *     the ~68 VIC datagrams of a frame into ONE 52224-byte buffer and crosses the bridge once per
+ *     FRAME (~50/s PAL). The per-event bridge overhead of the per-packet path (~3400 events/s) was
+ *     the hard cap that held the mirror at ~20–30 fps; assembling natively lifts it to full rate.
  *
  * The firmware's default (and reliable) stream destination is **multicast** — unicast
  * `streams:start` returns "Network Host Resolve Error" because the device streams from its
@@ -66,6 +73,29 @@ class StreamUdpPlugin : Plugin() {
     notifyListeners("datagram", event)
   }
 
+  /**
+   * Test seam: how an assembled VIC frame is delivered to JS (default: a `videoframe` event).
+   * `data` is base64 of the whole 52224-byte frame, `arrivalMs` the frame-start wire time (earliest
+   * packet), `height` the line count (PAL 272 / NTSC 240), `dropped` the cumulative sequence-gap
+   * (packet-loss) count, `lost` the cumulative FRAME-loss count (gaps in the frame-number sequence).
+   */
+  internal var emitFrame: (String, String, Double, Int, Int, Int) -> Unit = {
+    name,
+    data,
+    arrivalMs,
+    height,
+    dropped,
+    lost ->
+    val event = JSObject()
+    event.put("name", name)
+    event.put("data", data)
+    event.put("t", arrivalMs)
+    event.put("height", height)
+    event.put("dropped", dropped)
+    event.put("lost", lost)
+    notifyListeners("videoframe", event)
+  }
+
   @PluginMethod
   fun bind(call: PluginCall) {
     val name = call.getString("name")
@@ -79,6 +109,7 @@ class StreamUdpPlugin : Plugin() {
       return
     }
     val group = call.getString("group") // multicast group, e.g. 239.0.1.64; null = plain unicast
+    val assemble = call.getBoolean("assemble", false) == true
     try {
       closeSocket(name)
       val socket: DatagramSocket =
@@ -97,7 +128,11 @@ class StreamUdpPlugin : Plugin() {
           }
         }
       sockets[name] = socket
-      executor.execute { receiveLoop(name, socket) }
+      if (assemble) {
+        executor.execute { assembleLoop(name, socket) }
+      } else {
+        executor.execute { receiveLoop(name, socket) }
+      }
       val result = JSObject()
       result.put("localIp", siteLocalIpv4() ?: "")
       result.put("port", socket.localPort)
@@ -106,7 +141,7 @@ class StreamUdpPlugin : Plugin() {
       // Release the multicast lock if we acquired it above but never got a running socket, so a
       // failed multicast bind cannot leak the Wi-Fi MulticastLock (it is not reference-counted).
       if (sockets.isEmpty()) releaseMulticastLock()
-      Log.w(logTag, "bind failed for $name:$port (group=$group)", error)
+      Log.w(logTag, "bind failed for $name:$port (group=$group, assemble=$assemble)", error)
       call.reject("bind failed: ${error.message}", error)
     }
   }
@@ -125,19 +160,169 @@ class StreamUdpPlugin : Plugin() {
   private fun receiveLoop(name: String, socket: DatagramSocket) {
     // VIC packets are ~780 bytes and audio ~770; 2048 leaves ample headroom.
     val buffer = ByteArray(2048)
+    val stats = RateLog(name, "raw")
+    var prevCompletedFrame = -1
+    var lost = 0
     while (!socket.isClosed) {
       try {
         val packet = DatagramPacket(buffer, buffer.size)
         socket.receive(packet)
         // Stamp wire-arrival time immediately, before any encoding/bridge latency (see emitDatagram).
-        val arrivalMs = clockNanos() / 1_000_000.0
+        val arrivalNanos = clockNanos()
         val encoded = Base64.encodeToString(packet.data, packet.offset, packet.length, Base64.NO_WRAP)
-        emitDatagram(name, encoded, arrivalMs)
+        emitDatagram(name, encoded, arrivalNanos / 1_000_000.0)
+        // Count a completed frame when this datagram carries the last-line flag (cheap header peek),
+        // and track frame-number gaps, so the per-second measurement log reports frames/s AND frame
+        // loss even on the per-packet path (JS still does the authoritative assembly + loss counting).
+        var completedFrame = false
+        if (packet.length >= VIC_HEADER_BYTES && isLastLine(packet.data, packet.offset)) {
+          completedFrame = true
+          val frameNum = u16(packet.data, packet.offset + 2)
+          if (prevCompletedFrame >= 0) {
+            val gap = (frameNum - prevCompletedFrame).toShort().toInt()
+            if (gap > 1) lost += gap - 1
+          }
+          prevCompletedFrame = frameNum
+        }
+        stats.record(arrivalNanos, if (completedFrame) 1 else 0, 0, lost)
       } catch (error: Exception) {
         if (socket.isClosed) break
         // Transient receive error on a still-open socket: log with the stack trace (mandatory
         // exception handling) and keep listening rather than tearing the stream down.
         Log.w(logTag, "Transient receive error on $name socket; continuing", error)
+      }
+    }
+  }
+
+  /**
+   * Native VIC frame assembler (the Live View fast path). Reassembles the per-line datagrams of a
+   * frame into one 52224-byte 4bpp buffer and emits it as a single `videoframe` event, collapsing
+   * ~68 bridge hops per frame into one. Format/guard rules mirror the JS `VicStreamAssembler` and
+   * c64stream exactly (width 384, 4 lines/packet, 4 bpp). Thread-confined: the buffer and all
+   * assembly state live on this receive thread, so no synchronisation is needed.
+   */
+  private fun assembleLoop(name: String, socket: DatagramSocket) {
+    val buffer = ByteArray(2048)
+    val frame = ByteArray(VIC_BYTES_PER_FRAME)
+    var lastSeq = -1
+    var dropped = 0
+    var lost = 0
+    var prevCompletedFrame = -1
+    var curFrameNum = -1
+    var frameStartNanos = Long.MAX_VALUE
+    var frameHeight = VIC_PAL_HEIGHT
+    val stats = RateLog(name, "assembled")
+    while (!socket.isClosed) {
+      try {
+        val packet = DatagramPacket(buffer, buffer.size)
+        socket.receive(packet)
+        val arrivalNanos = clockNanos()
+        val data = packet.data
+        val off = packet.offset
+        val len = packet.length
+        if (len < VIC_HEADER_BYTES) {
+          continue
+        }
+
+        val seq = u16(data, off + 0)
+        val frameNum = u16(data, off + 2)
+        val lineRaw = u16(data, off + 4)
+        val line = lineRaw and 0x7FFF
+        val lastLine = (lineRaw and LAST_LINE_FLAG) != 0
+        val width = u16(data, off + 6)
+        val linesPerPacket = data[off + 8].toInt() and 0xFF
+        val bpp = data[off + 9].toInt() and 0xFF
+
+        // Dropped-packet accounting via 16-bit sequence gaps (mirrors VicStreamAssembler).
+        if (lastSeq >= 0) {
+          val gap = (seq - lastSeq - 1) and 0xFFFF
+          if (gap in 1 until 0x8000) dropped += gap
+        }
+        lastSeq = seq
+
+        // Frame-start = the earliest wire arrival of any packet of this frame (top of frame == when
+        // the av-sync tone gate opens), so the analyzer can cancel the asymmetric assembly latency.
+        if (frameNum != curFrameNum) {
+          curFrameNum = frameNum
+          frameStartNanos = arrivalNanos
+        } else if (arrivalNanos < frameStartNanos) {
+          frameStartNanos = arrivalNanos
+        }
+
+        val valid = width == VIC_FRAME_WIDTH && linesPerPacket == VIC_LINES_PER_PACKET && bpp == VIC_BITS_PER_PIXEL
+        if (valid) {
+          val writeOffset = line * VIC_BYTES_PER_LINE
+          if (writeOffset < VIC_BYTES_PER_FRAME) {
+            val available = VIC_BYTES_PER_FRAME - writeOffset
+            val payloadLen = len - VIC_HEADER_BYTES
+            val count = minOf(payloadLen, linesPerPacket * VIC_BYTES_PER_LINE, available)
+            if (count > 0) System.arraycopy(data, off + VIC_HEADER_BYTES, frame, writeOffset, count)
+          }
+        }
+
+        if (lastLine) {
+          // Height derives from the last packet (line + linesPerPacket), clamped to [NTSC, PAL].
+          frameHeight = clampFrameHeight(line + (if (linesPerPacket > 0) linesPerPacket else VIC_LINES_PER_PACKET))
+          // Frame-loss: a jump of >1 in the frame number between consecutively completed frames means
+          // the intervening frame(s) never completed. Wrap-safe (65535→0) via Short truncation.
+          if (prevCompletedFrame >= 0) {
+            val gap = (frameNum - prevCompletedFrame).toShort().toInt()
+            if (gap > 1) lost += gap - 1
+          }
+          prevCompletedFrame = frameNum
+          val encoded = Base64.encodeToString(frame, 0, VIC_BYTES_PER_FRAME, Base64.NO_WRAP)
+          emitFrame(name, encoded, frameStartNanos / 1_000_000.0, frameHeight, dropped, lost)
+          curFrameNum = -1
+          frameStartNanos = Long.MAX_VALUE
+          stats.record(arrivalNanos, 1, dropped, lost)
+        } else {
+          stats.record(arrivalNanos, 0, dropped, lost)
+        }
+      } catch (error: Exception) {
+        if (socket.isClosed) break
+        Log.w(logTag, "Transient receive error on $name assembler; continuing", error)
+      }
+    }
+  }
+
+  /** Peek a datagram's VIC last-line flag without full parsing (little-endian u16 at offset 4). */
+  private fun isLastLine(data: ByteArray, offset: Int): Boolean = (u16(data, offset + 4) and LAST_LINE_FLAG) != 0
+
+  private fun u16(data: ByteArray, index: Int): Int =
+    (data[index].toInt() and 0xFF) or ((data[index + 1].toInt() and 0xFF) shl 8)
+
+  private fun clampFrameHeight(height: Int): Int =
+    if (height < VIC_NTSC_HEIGHT) VIC_NTSC_HEIGHT else if (height > VIC_PAL_HEIGHT) VIC_PAL_HEIGHT else height
+
+  /**
+   * Per-second frame-progression measurement (the c64stream network/obs-CSV analysis, delivered
+   * through logcat). One `Log.i` a second reports packets/s, frames/s and cumulative drops so a
+   * `adb logcat -s StreamUdpPlugin` capture shows the wire rate and whether the pipeline keeps up.
+   */
+  private inner class RateLog(private val name: String, private val mode: String) {
+    private var windowStartNanos = 0L
+    private var packets = 0
+    private var frames = 0
+
+    fun record(arrivalNanos: Long, framesCompleted: Int, dropped: Int, lost: Int) {
+      if (windowStartNanos == 0L) windowStartNanos = arrivalNanos
+      packets += 1
+      frames += framesCompleted
+      val elapsed = arrivalNanos - windowStartNanos
+      if (elapsed >= 1_000_000_000L) {
+        val secs = elapsed / 1_000_000_000.0
+        Log.i(
+          logTag,
+          "progression name=$name mode=$mode fps=%.1f pkts/s=%.0f dropped=%d lost=%d".format(
+            frames / secs,
+            packets / secs,
+            dropped,
+            lost,
+          ),
+        )
+        windowStartNanos = arrivalNanos
+        packets = 0
+        frames = 0
       }
     }
   }
@@ -219,5 +404,18 @@ class StreamUdpPlugin : Plugin() {
     sockets.clear()
     releaseMulticastLock()
     executor.shutdownNow()
+  }
+
+  companion object {
+    // VIC wire-format constants (source of truth: src/lib/streams/vicStream.ts + c64stream).
+    private const val VIC_HEADER_BYTES = 12
+    private const val VIC_FRAME_WIDTH = 384
+    private const val VIC_BYTES_PER_LINE = VIC_FRAME_WIDTH / 2 // 192 (4 bits per pixel)
+    private const val VIC_PAL_HEIGHT = 272
+    private const val VIC_NTSC_HEIGHT = 240
+    private const val VIC_BYTES_PER_FRAME = VIC_FRAME_WIDTH * VIC_PAL_HEIGHT / 2 // 52224
+    private const val VIC_LINES_PER_PACKET = 4
+    private const val VIC_BITS_PER_PIXEL = 4
+    private const val LAST_LINE_FLAG = 0x8000
   }
 }

@@ -54,7 +54,12 @@ export const webServerVariantConfig = {
     featureFlags: {
       audio_mirror_enabled: {
         developer_only: false,
-        enabled: false,
+        enabled: true,
+        visible_to_user: true,
+      },
+      av_sync_tests_enabled: {
+        developer_only: false,
+        enabled: true,
         visible_to_user: true,
       },
       background_execution_enabled: {
@@ -132,6 +137,11 @@ export const webServerVariantConfig = {
         enabled: false,
         visible_to_user: false,
       },
+      live_view_enabled: {
+        developer_only: false,
+        enabled: true,
+        visible_to_user: true,
+      },
       new_disk_enabled: {
         developer_only: false,
         enabled: true,
@@ -149,7 +159,7 @@ export const webServerVariantConfig = {
       },
       video_mirror_enabled: {
         developer_only: false,
-        enabled: false,
+        enabled: true,
         visible_to_user: true,
       },
     },

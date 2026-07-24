@@ -34,6 +34,7 @@ const SEARCH_INSIDE_DISKS_KEY = "c64u_search_inside_disks";
 const STREAM_VIDEO_PORT_KEY = "c64u_stream_video_port";
 const STREAM_AUDIO_PORT_KEY = "c64u_stream_audio_port";
 const STREAM_NETWORK_BUFFER_MS_KEY = "c64u_stream_network_buffer_ms";
+const STREAM_NATIVE_VIDEO_ASSEMBLY_KEY = "c64u_stream_native_video_assembly";
 
 export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 200;
 export type NotificationVisibility = "errors-only" | "all";
@@ -366,6 +367,25 @@ export const saveStreamNetworkBufferMs = (value: number) => {
   const clamped = clampNetworkBufferMs(value);
   localStorage.setItem(STREAM_NETWORK_BUFFER_MS_KEY, String(clamped));
   broadcast(STREAM_NETWORK_BUFFER_MS_KEY, clamped);
+};
+
+/**
+ * Native video assembly (Live View fast path). When on (default), the Android StreamUdp plugin
+ * assembles VIC datagrams into whole frames natively and crosses the Capacitor bridge once per
+ * FRAME (~50/s PAL) instead of once per PACKET (~3400/s) — the per-event bridge overhead was the
+ * hard cap that held the mirror to ~20–30 fps. Off falls back to the per-packet path (JS assembles
+ * frames), for A/B measurement or as an escape hatch. Native-only; the web/Docker WebSocket bridge
+ * is unaffected.
+ */
+export const DEFAULT_STREAM_NATIVE_VIDEO_ASSEMBLY = true;
+
+export const loadStreamNativeVideoAssembly = () =>
+  readBoolean(STREAM_NATIVE_VIDEO_ASSEMBLY_KEY, DEFAULT_STREAM_NATIVE_VIDEO_ASSEMBLY);
+
+export const saveStreamNativeVideoAssembly = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(STREAM_NATIVE_VIDEO_ASSEMBLY_KEY, enabled ? "1" : "0");
+  broadcast(STREAM_NATIVE_VIDEO_ASSEMBLY_KEY, enabled);
 };
 
 export const loadNotificationVisibility = (): NotificationVisibility => {

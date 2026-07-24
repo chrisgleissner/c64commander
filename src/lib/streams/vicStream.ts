@@ -61,7 +61,17 @@ export interface VicStreamStats {
   ignored: number;
   frames: number;
   droppedPackets: number;
+  /** Frames LOST — gaps in the VIC frame-number sequence between consecutively completed frames. */
+  lostFrames: number;
 }
+
+/**
+ * Wrap-safe signed difference of two 16-bit frame numbers (matches c64stream's
+ * `(int16_t)(a - b)`): the device's frame counter wraps 65535→0, so a raw subtraction
+ * would report a spurious ~65535-frame "gap" at the wrap. Sign-extending to 16 bits makes
+ * the wrap a clean +1.
+ */
+export const frameSeqDiff = (frame: number, prevFrame: number): number => (((frame - prevFrame) & 0xffff) << 16) >> 16;
 
 /**
  * Assembles VIC datagrams into full 52224-byte frames. Call `ingest` per packet;
@@ -71,9 +81,11 @@ export interface VicStreamStats {
 export class VicStreamAssembler {
   private readonly frame = new Uint8Array(VIC_BYTES_PER_FRAME);
   private lastSeq: number | null = null;
+  /** Frame number of the previous COMPLETED frame, for frame-loss (gap) detection. */
+  private prevCompletedFrame: number | null = null;
   /** Height reported by the most recent completed frame — PAL 272 / NTSC 240. */
   frameHeight: number = VIC_PAL_HEIGHT;
-  readonly stats: VicStreamStats = { packets: 0, ignored: 0, frames: 0, droppedPackets: 0 };
+  readonly stats: VicStreamStats = { packets: 0, ignored: 0, frames: 0, droppedPackets: 0, lostFrames: 0 };
 
   ingest(packet: Uint8Array): Uint8Array | null {
     const header = parseVicHeader(packet);
@@ -114,6 +126,13 @@ export class VicStreamAssembler {
   private completeFrame(header: VicPacketHeader): Uint8Array {
     // c64stream derives the frame height from the last packet: line + linesPerPacket.
     this.frameHeight = clampFrameHeight(header.line + (header.linesPerPacket || VIC_LINES_PER_PACKET));
+    // Frame-loss: a jump of >1 in the frame number between consecutively completed frames means the
+    // intervening frame(s) never completed (their last-line packet was lost). Wrap-safe (65535→0).
+    if (this.prevCompletedFrame !== null) {
+      const gap = frameSeqDiff(header.frame, this.prevCompletedFrame);
+      if (gap > 1) this.stats.lostFrames += gap - 1;
+    }
+    this.prevCompletedFrame = header.frame;
     this.stats.frames += 1;
     return this.frame.slice();
   }
@@ -121,10 +140,12 @@ export class VicStreamAssembler {
   reset(): void {
     this.frame.fill(0);
     this.lastSeq = null;
+    this.prevCompletedFrame = null;
     this.frameHeight = VIC_PAL_HEIGHT;
     this.stats.packets = 0;
     this.stats.ignored = 0;
     this.stats.frames = 0;
     this.stats.droppedPackets = 0;
+    this.stats.lostFrames = 0;
   }
 }

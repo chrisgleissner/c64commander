@@ -28,14 +28,41 @@ export interface StreamUdpDatagramEvent {
 }
 
 /**
+ * A fully-assembled VIC video frame, emitted by the native plugin when `bind({assemble:true})` is
+ * used (the Live View fast path). Assembling frames natively collapses ~68 per-packet bridge hops
+ * per frame into ONE — the per-event bridge overhead was what capped the mirror at ~20–30 fps.
+ */
+export interface StreamUdpVideoFrameEvent {
+  name: string;
+  /** Base64 of the whole 52224-byte 4bpp VIC frame (PAL-sized storage; NTSC is a subset). */
+  data: string;
+  /** Wire-arrival timestamp (ms) of the frame's EARLIEST packet — the frame-start instant for A/V sync. */
+  t?: number;
+  /** Frame height in lines derived from the last packet (PAL 272 / NTSC 240). */
+  height: number;
+  /** Cumulative dropped-packet count (sequence gaps) observed on the socket so far. */
+  dropped: number;
+  /** Cumulative frames LOST (gaps in the frame-number sequence — a frame that never completed). */
+  lost: number;
+}
+
+/**
  * Native UDP receiver bridge (Android `StreamUdpPlugin`). Only used on native platforms —
  * the web/Docker build receives streams through the server's UDP -> WebSocket bridge instead.
  */
 export interface StreamUdpPlugin {
-  /** `group` (optional) joins a multicast group on the bound port. */
-  bind(options: { name: string; port: number; group?: string }): Promise<StreamUdpBindResult>;
+  /**
+   * `group` (optional) joins a multicast group on the bound port. `assemble` (video only) makes
+   * the plugin reassemble VIC datagrams into whole frames natively and emit `videoframe` events
+   * instead of per-packet `datagram` events.
+   */
+  bind(options: { name: string; port: number; group?: string; assemble?: boolean }): Promise<StreamUdpBindResult>;
   close(options: { name: string }): Promise<void>;
   addListener(eventName: "datagram", listener: (event: StreamUdpDatagramEvent) => void): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: "videoframe",
+    listener: (event: StreamUdpVideoFrameEvent) => void,
+  ): Promise<PluginListenerHandle>;
 }
 
 export const StreamUdp = registerPlugin<StreamUdpPlugin>("StreamUdp");

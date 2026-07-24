@@ -47,17 +47,46 @@ describe("AvLatencyTracker", () => {
     expect(t.getStats().seeLastMs).toBe(30);
   });
 
-  it("counts a press whose pop never arrives as missed when superseded", () => {
+  it("records each metric independently, as soon as its pop arrives", () => {
     const t = new AvLatencyTracker();
     t.markPress(100);
-    t.onVideoPop(120); // incomplete — no audio / offset
-    t.markPress(500); // supersedes the incomplete measurement
+    t.onVideoPop(120); // see is available immediately, without audio or the offset match
+    let s = t.getStats();
+    expect(s.count).toBe(1);
+    expect(s.seeLastMs).toBe(20);
+    expect(s.hearLastMs).toBeNull();
+    expect(s.offsetLastMs).toBeNull();
+    // Audio then the offset arrive later — each surfaces on its own.
+    t.onAudioPop(126);
+    t.onMatchOffset(-4);
+    s = t.getStats();
+    expect(s.hearLastMs).toBe(26);
+    expect(s.offsetLastMs).toBe(4);
+    expect(s.missed).toBe(0);
+  });
+
+  it("counts a press as missed only when NO pop arrives before it is superseded", () => {
+    const t = new AvLatencyTracker();
+    t.markPress(100); // no pop at all
+    t.markPress(500); // supersedes an empty press → missed 1
     t.onVideoPop(520);
     t.onAudioPop(525);
     t.onMatchOffset(0);
     const s = t.getStats();
     expect(s.count).toBe(1);
     expect(s.missed).toBe(1);
+  });
+
+  it("does not mark a press missed when it produced a pop but no full triple", () => {
+    const t = new AvLatencyTracker();
+    t.markPress(100);
+    t.onVideoPop(120); // saw the flash — a real measurement even without audio/offset
+    t.markPress(500); // supersedes, but the first press DID produce a pop → not missed
+    t.onVideoPop(520);
+    const s = t.getStats();
+    expect(s.count).toBe(2);
+    expect(s.missed).toBe(0);
+    expect(s.seeLastMs).toBe(20);
   });
 
   it("aggregates P99 across many presses", () => {

@@ -31,6 +31,7 @@ import {
   stepRemoteInputControlSize,
   type RemoteInputControlSize,
 } from "@/lib/remoteInput/remoteInputControlSettings";
+import { AUTOFIRE_VISIBILITY_CHANGE_EVENT, loadShowAutofireButton } from "@/lib/remoteInput/autofire";
 import { VirtualJoystick } from "@/components/remoteInput/VirtualJoystick";
 import { TypeKeyboard } from "@/components/remoteInput/TypeKeyboard";
 import { QuickKeysBar } from "@/components/remoteInput/QuickKeysBar";
@@ -76,21 +77,36 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   const isCompactDisplay = profile === "compact";
   const [controlSize, setControlSize] = useState<RemoteInputControlSize>(DEFAULT_REMOTE_INPUT_CONTROL_SIZE);
   const [immersive, setImmersive] = useState(false);
+  const [showAutofire, setShowAutofire] = useState(loadShowAutofireButton);
   const scale = remoteInputControlScale(controlSize);
 
-  // Content Explorer A/V mirror: pair the live screen with driving the machine.
-  const audioMirrorEnabled = useFeatureFlagValue("audio_mirror_enabled");
-  const videoMirrorEnabled = useFeatureFlagValue("video_mirror_enabled");
+  // Content Explorer A/V mirror: pair the live screen with driving the machine. The Live View
+  // master flag hides the mirror everywhere when off; audio/video pick which feeds are offered.
+  const liveViewEnabled = useFeatureFlagValue("live_view_enabled");
+  const audioMirrorFlag = useFeatureFlagValue("audio_mirror_enabled");
+  const videoMirrorFlag = useFeatureFlagValue("video_mirror_enabled");
+  const audioMirrorEnabled = liveViewEnabled && audioMirrorFlag;
+  const videoMirrorEnabled = liveViewEnabled && videoMirrorFlag;
   const mirrorEnabled = audioMirrorEnabled || videoMirrorEnabled;
   const mirror = useAvMirror();
   const mirrorRef = useRef<AvMirrorImmersiveHandle>(null);
   const [mirrorAdjust, setMirrorAdjust] = useState(false);
   const showMirrorScreen = videoMirrorEnabled && mirror.video.state !== "off";
 
-  // Rehydrate the persisted control-size preference when the sheet opens.
+  // Rehydrate the persisted control-size / autofire-visibility preferences when the sheet opens.
   useEffect(() => {
-    if (open) setControlSize(loadRemoteInputControlSize());
+    if (open) {
+      setControlSize(loadRemoteInputControlSize());
+      setShowAutofire(loadShowAutofireButton());
+    }
   }, [open]);
+
+  // Hot-swap the autofire-button visibility if the Settings toggle changes while a session is live.
+  useEffect(() => {
+    const sync = () => setShowAutofire(loadShowAutofireButton());
+    window.addEventListener(AUTOFIRE_VISIBILITY_CHANGE_EVENT, sync);
+    return () => window.removeEventListener(AUTOFIRE_VISIBILITY_CHANGE_EVENT, sync);
+  }, []);
 
   const changeSize = useCallback((direction: 1 | -1) => {
     setControlSize((current) => {
@@ -462,6 +478,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
               onAutofireEnabledChange={session.setAutofireEnabled}
               autofireRateHz={session.autofireRateHz}
               onAutofireRateHzChange={session.setAutofireRateHz}
+              showAutofire={showAutofire}
               disabled={!joystickAvailable}
               disabledHint={joystickUnavailableHint}
               scale={scale}
