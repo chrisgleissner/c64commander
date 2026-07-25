@@ -54,3 +54,32 @@ Attributed in `THIRD_PARTY_NOTICES.md`. **ROMs are never bundled.**
 2. `new URL("../dist/", import.meta.url)` → `new URL("./", import.meta.url)` (so the
    `.wasm` resolves as a sibling of `index.js`).
 3. Dropped the trailing `//# sourceMappingURL=` comments (`.map` files not vendored).
+
+## Migration in progress: fetched at build time, not committed
+
+The binaries in this directory are currently **committed**, which is how the engine silently shipped
+as SIDLite for months: a committed blob carries no version, no provenance and no integrity check, and
+every engine change adds ~425 KB to this repo's history forever.
+
+sidflow now attaches `libsidplayfp-wasm-<tag>.tar.gz` plus `SHA256SUMS` to every release (reSIDfp in
+the root, SIDLite under `sidlite/`), and `scripts/fetch-libsidplayfp-wasm.mjs` is wired into
+`prebuild` to fetch and verify it — the same shape as `fetch-sidcorr.mjs` fetches the similarity
+corpus. It runs at **build time**, before `vite build` and therefore before Capacitor copies `dist/`
+into the native bundle, so the engine ships **inside** the APK / IPA / Docker image. The app never
+downloads anything at runtime.
+
+The pin (`LIBSIDPLAYFP_WASM_RELEASE.tag`) is deliberately `null` until sidflow publishes a release
+carrying the asset — the workflow landed in sidflow `8b2617d`, after the current `0.6.0` release.
+While it is null the fetch is a no-op and these committed files are used.
+
+**To complete the switch**, once such a release exists:
+
+1. set `tag` in `scripts/fetch-libsidplayfp-wasm.mjs`;
+2. run `npm run wasm:fetch` and copy the printed `SHA256SUMS` digest into `checksumsSha256`;
+3. `git rm` the binaries here (`index.js` excepted — see the local edits above) and add
+   `public/wasm/libsidplayfp/*.wasm` / `*.js` to `.gitignore`, mirroring `public/data/sidcorr/`;
+4. re-run `npm run build` and confirm the engine still lands in `dist/wasm/libsidplayfp/`.
+
+The unit test `tests/unit/scripts/fetchLibsidplayfpWasm.test.ts` already enforces that a pinned tag
+must come with a checksum, and that the shipped files come from the reSIDfp root rather than
+`sidlite/`.
