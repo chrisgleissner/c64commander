@@ -23,6 +23,13 @@
 /** main → worker: instantiate the WASM module (idempotent). */
 export interface LocalSidLoadMessage {
   type: "load";
+  /**
+   * Which SID emulation to instantiate: `residfp` (accurate, the default) or
+   * `sidlite` (a ~10x cheaper approximation). The two are separate WASM
+   * artifacts shipped side by side, so this is chosen before the module loads
+   * and a change requires a fresh worker.
+   */
+  engine?: "residfp" | "sidlite";
 }
 
 /** main → worker: open a SID tune and select a song, ready to render. */

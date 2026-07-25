@@ -12,7 +12,14 @@ import { Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { saveSidRadioEnabled, saveSidRankingEnabled, saveLocalEngineEnabled } from "@/lib/config/appSettings";
+import {
+  saveSidRadioEnabled,
+  saveSidRankingEnabled,
+  saveLocalEngineEnabled,
+  loadSidEmulationEngine,
+  saveSidEmulationEngine,
+  type SidEmulationEngine,
+} from "@/lib/config/appSettings";
 import { clearAllRankings } from "@/lib/sidRadio/rankingStore";
 import { useSidRadioFlags } from "@/lib/sidRadio/useSidRadioFlags";
 import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
@@ -56,6 +63,7 @@ export const SidRadioSettingsSection = () => {
   const { sidRadioEnabled, sidRankingEnabled } = useSidRadioFlags();
   const { localEngineEnabled } = usePlaybackEngine();
   const { deviceHost } = useC64Connection();
+  const [sidEngine, setSidEngine] = useState<SidEmulationEngine>(() => loadSidEmulationEngine());
   const [cleared, setCleared] = useState(false);
 
   const handleClear = async () => {
@@ -104,6 +112,39 @@ export const SidRadioSettingsSection = () => {
           checked={localEngineEnabled}
           onChange={saveLocalEngineEnabled}
         />
+        {localEngineEnabled ? (
+          <div className="space-y-2 rounded-lg border border-border/70 p-3 min-w-0" data-testid="settings-sid-engine">
+            <Label className="text-sm font-medium">SID emulation</Label>
+            <p className="text-xs text-muted-foreground">
+              <strong>Accurate</strong> models the real SID chip and is what makes a tune sound like a C64.{" "}
+              <strong>Light</strong> is a much cheaper approximation for slower devices — it costs roughly a tenth of
+              the CPU, but it does not sound like the real thing. Takes effect on the next track.
+            </p>
+            <div className="flex gap-2">
+              {(
+                [
+                  ["residfp", "Accurate (reSIDfp)"],
+                  ["sidlite", "Light (SIDLite)"],
+                ] as const
+              ).map(([value, label]) => (
+                <Button
+                  key={value}
+                  type="button"
+                  size="sm"
+                  variant={sidEngine === value ? "default" : "outline"}
+                  data-testid={`settings-sid-engine-${value}`}
+                  aria-pressed={sidEngine === value}
+                  onClick={() => {
+                    setSidEngine(value);
+                    saveSidEmulationEngine(value);
+                  }}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         {localEngineEnabled ? <LocalEngineRomsRow deviceHost={deviceHost ?? ""} /> : null}
 
         <div

@@ -107,11 +107,11 @@
       "unit": "ms/sec",
       "bound": "max",
       "aggregation": "p99",
-      "pinned": 500,
+      "pinned": 850,
       "measured": {
         "device": "Pixel 4 (flame)",
-        "value": 394,
-        "note": "RE-DERIVED 2026-07-25 for the reSIDfp engine. The previous 250 bound was measured at 69 ms/sec against the SIDLite build, which the fidelity work showed is not what a C64 sounds like (docs/plans/sid-station/AUDIO-FIDELITY-TEST.md); the vendored artifact is now real reSIDfp, a full analogue model with a sinc resampler, and costs ~5.7x more. This is a deliberate, understood consequence of a deliberate engine change, not a regression being papered over -- the old pin's own note says to re-measure once reSIDfp is vendored. Measured on device over a bounded 35 s run: p99 stable at 388-395 ms/sec (not a cold-start artifact) with ZERO underruns, i.e. ~2.5x realtime. Pinned at 500 to leave ~27% variance headroom while still failing on any regression that would threaten realtime. RISK: the Callback 8020 (SailfishOS) is the perf floor and has never run this engine -- gate L1. If it cannot hold realtime there, the native path costed in AUDIO-FIDELITY-TEST.md 6.4 becomes necessary."
+        "value": 715,
+        "note": "RE-DERIVED 2026-07-25 for the reSIDfp engine, then widened after a second, harder run. The previous 250 bound was measured at 69 ms/sec against the SIDLite build, which the fidelity work showed does not sound like a C64; the vendored artifact is now real reSIDfp, a full analogue model with a sinc resampler, and costs ~5.7x more. That is a deliberate, understood consequence of a deliberate engine change -- the old pin's own note said to re-measure once reSIDfp was vendored. A single-tune 35 s run measured a stable 388-395 ms/sec, which suggested 500. A SID Radio station run (gate L4, C64 unreachable) then peaked at 715 ms/sec p99 across track changes with ZERO underruns, so 500 would have failed CI on correct behaviour. Pinned at 850: above every observed value, and still failing before realtime (1000 ms/sec) is threatened. audioUnderruns stays pinned at 0 and is the real user-facing guarantee; this metric is the early warning. RISK: the Callback 8020 (SailfishOS) is the perf floor and has never run this engine -- gate L1. At 715 ms/sec p99 on a Pixel 4 the margin is ~1.4x realtime, so a slower device is a genuine concern; if it cannot hold realtime there, the native path costed in AUDIO-FIDELITY-TEST.md 6.4 becomes necessary."
       }
     },
     "audioUnderruns": {

@@ -9,6 +9,7 @@
 import { LocalSidChunkScheduler, type AudioScheduleSink, type AudioScheduleSource } from "./localSidChunkScheduler";
 import type { LocalSidMainToWorker, LocalSidWorkerToMain, LocalSidOpenedMessage } from "./localSidWorkerProtocol";
 import { loadStoredRoms } from "@/lib/roms/romStore";
+import { loadSidEmulationEngine } from "@/lib/config/appSettings";
 
 /**
  * Main-thread controller for the Local SID engine (spec §12.2, Track B / LE1).
@@ -282,7 +283,9 @@ export class LocalSidEngine {
         return;
       }
       this.loadPending = { resolve, reject };
-      worker.postMessage({ type: "load" });
+      // Read at load time, not construction: the worker is torn down between
+      // sessions, so a change in Settings takes effect on the next play.
+      worker.postMessage({ type: "load", engine: loadSidEmulationEngine() });
     });
   }
 

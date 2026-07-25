@@ -30,6 +30,7 @@ const HIDE_NAVIGATION_BAR_KEY = "c64u_full_screen_hide_navigation_bar";
 const SID_RADIO_ENABLED_KEY = "c64u_sid_radio_enabled";
 const SID_RANKING_ENABLED_KEY = "c64u_sid_ranking_enabled";
 const PLAYBACK_ENGINE_KEY = "c64u_playback_engine";
+const SID_EMULATION_ENGINE_KEY = "c64u_sid_emulation_engine";
 const LOCAL_ENGINE_ENABLED_KEY = "c64u_local_engine_enabled";
 const BOOT_MENU_ANSWER_ENABLED_KEY = "c64u_boot_menu_answer_enabled";
 const BOOT_MENU_KEY_KEY = "c64u_boot_menu_key";
@@ -625,6 +626,49 @@ export const savePlaybackEngine = (engine: PlaybackEngine) => {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(PLAYBACK_ENGINE_KEY, engine);
   broadcast(PLAYBACK_ENGINE_KEY, engine);
+};
+
+/**
+ * Which SID emulation the on-device engine uses (Track B).
+ *
+ * The vendored WASM ships both, side by side: `reSIDfp` is libsidplayfp's
+ * cycle-accurate analogue model, `SIDLite` a lightweight approximation derived
+ * from cRSID. They are not close substitutes — measured on a Pixel 4 against a
+ * real C64 Ultimate (docs/plans/sid-station/AUDIO-FIDELITY-TEST.md):
+ *
+ *   reSIDfp   envelope correlation 0.55 vs hardware, ~715 ms/sec p99 to render
+ *   SIDLite   audibly not a C64 (DC offset, wrong timbre), ~69 ms/sec
+ *
+ * So this is a fidelity-for-CPU dial worth ~5.5x. The default is per-variant —
+ * see DEFAULT_SID_EMULATION_ENGINE.
+ */
+export type SidEmulationEngine = "residfp" | "sidlite";
+
+/**
+ * Per-variant, because this is a device-capability decision rather than a taste
+ * one. Measured like-for-like on identical tunes:
+ *
+ *   reSIDfp   4.3x realtime   (~39% of one core on a Pixel 4, 0 underruns)
+ *   SIDLite  23.8x realtime   (~5.5x cheaper)
+ *
+ * The keypad variant targets the Callback 8020 (MediaTek Helio G81, Cortex-A75
+ * @2.0 GHz), roughly 2-3x slower single-threaded than the Pixel 4's Snapdragon
+ * 855 (Cortex-A76 @2.84 GHz). Scaling 39% by that puts reSIDfp at or past
+ * realtime there, so that variant defaults to SIDLite. Either way the user can
+ * switch in Settings.
+ */
+export const DEFAULT_SID_EMULATION_ENGINE: SidEmulationEngine =
+  variant.runtime.defaultSidEmulationEngine === "sidlite" ? "sidlite" : "residfp";
+
+export const loadSidEmulationEngine = (): SidEmulationEngine => {
+  if (typeof localStorage === "undefined") return DEFAULT_SID_EMULATION_ENGINE;
+  return localStorage.getItem(SID_EMULATION_ENGINE_KEY) === "sidlite" ? "sidlite" : DEFAULT_SID_EMULATION_ENGINE;
+};
+
+export const saveSidEmulationEngine = (engine: SidEmulationEngine) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(SID_EMULATION_ENGINE_KEY, engine);
+  broadcast(SID_EMULATION_ENGINE_KEY, engine);
 };
 
 /**

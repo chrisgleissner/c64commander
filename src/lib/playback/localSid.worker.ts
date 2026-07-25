@@ -36,11 +36,13 @@ interface SidAudioEngineLike {
   dispose(): void;
 }
 interface SidAudioEngineCtor {
-  new (options: { sampleRate?: number; stereo?: boolean }): SidAudioEngineLike;
+  new (options: { sampleRate?: number; stereo?: boolean; engine?: SidEmulation }): SidAudioEngineLike;
 }
 interface LibsidplayfpModule {
   SidAudioEngine: SidAudioEngineCtor;
 }
+
+type SidEmulation = "residfp" | "sidlite";
 
 interface WorkerScope {
   postMessage(message: LocalSidWorkerToMain, transfer?: Transferable[]): void;
@@ -54,6 +56,12 @@ ctx.__runsInWorker = true;
 
 let EngineCtor: SidAudioEngineCtor | null = null;
 let engine: SidAudioEngineLike | null = null;
+/**
+ * Which emulation to instantiate. reSIDfp and SIDLite are separate WASM
+ * artifacts shipped side by side; `SidAudioEngine` resolves the right one from
+ * this option, and caches per engine, so the module import itself is shared.
+ */
+let requestedEmulation: SidEmulation = "residfp";
 
 async function ensureModule(): Promise<SidAudioEngineCtor> {
   if (EngineCtor) return EngineCtor;
@@ -88,6 +96,7 @@ const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
     switch (message.type) {
       case "load": {
         const startedAt = performance.now();
+        if (message.engine) requestedEmulation = message.engine;
         await ensureModule();
         ctx.postMessage({ type: "ready", moduleLoadMs: performance.now() - startedAt });
         return;
@@ -116,7 +125,7 @@ const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
           return;
         }
         const Ctor = await ensureModule();
-        engine = new Ctor({ sampleRate: message.sampleRate, stereo: true });
+        engine = new Ctor({ sampleRate: message.sampleRate, stereo: true, engine: requestedEmulation });
         // Must precede loadSidBuffer: the engine reloads the current tune when
         // ROMs change, and we want the tune opened against the real ROMs once.
         await engine.setSystemROMs(new Uint8Array(message.roms.kernal), new Uint8Array(message.roms.basic), null);

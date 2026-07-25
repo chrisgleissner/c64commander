@@ -185,6 +185,7 @@ export const webServerVariantConfig = {
       defaultDisplayProfile: "auto",
       defaultHideNavigationBar: false,
       defaultHideStatusBar: false,
+      defaultSidEmulationEngine: "residfp",
       defaultT9InputEnabled: false,
       endpoints: {
         commoserve_base_url: "http://commoserve.files.commodore.net",

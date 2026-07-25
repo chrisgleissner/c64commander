@@ -435,6 +435,56 @@ int32_t out = std::inner_product(a, a+bLength, b, out);   // `out` initialises i
 not take (`checking for SIMD instructions... none`), so it does not explain this result — but it is
 worth reporting upstream.
 
+### 6.3a Engine cost, and which one each device should default to
+
+Both emulations now ship side by side (reSIDfp at `public/wasm/libsidplayfp/`, SIDLite under
+`sidlite/`), selectable in **Settings → SID Radio → SID emulation**.
+
+**Like-for-like cost**, same three tunes, same 30 s of audio, same harness:
+
+| engine  | render time for 30 s | realtime factor | relative cost    |
+| ------- | -------------------- | --------------- | ---------------- |
+| reSIDfp | 6.90 s               | 4.3×            | —                |
+| SIDLite | 1.26 s               | 23.8×           | **5.5× cheaper** |
+
+(An earlier "~10×" claim compared numbers taken from different builds and is withdrawn; 5.5× is the
+measured like-for-like figure.)
+
+**On the Pixel 4** (Snapdragon 855, Cortex-A76 @ 2.84 GHz), playing a real tune:
+
+| engine  | process CPU        | `renderMsPerSec` p99                         | underruns |
+| ------- | ------------------ | -------------------------------------------- | --------- |
+| reSIDfp | 42.5 % of one core | 390 (peaks 715 across station track changes) | 0         |
+| SIDLite | 43.4 % of one core | 244                                          | 0         |
+
+Process CPU is nearly identical because it is dominated by the WebView, audio scheduling and UI
+rather than by the SID emulation; the engine difference shows up in `renderMsPerSec`, and most
+clearly in the isolated render timings above.
+
+**The Callback 8020** is a **MediaTek Helio G81** — 2× Cortex-A75 @ 2.0 GHz + 6× A55 @ 1.8 GHz, 12 nm
+(`docs/plans/callback8020/sailfish-callback-8020-android-compatibility.md`). Against the Pixel 4's
+Cortex-A76 @ 2.84 GHz on 7 nm that is roughly **2–3× slower single-threaded** (older core, ~30 % lower
+IPC, 42 % lower clock).
+
+Scaling the Pixel 4 measurements by 2.5×:
+
+| engine           | projected on Helio G81 | verdict                 |
+| ---------------- | ---------------------- | ----------------------- |
+| reSIDfp, typical | ~975 ms/sec            | at realtime — no margin |
+| reSIDfp, p99     | ~1790 ms/sec           | **past realtime**       |
+| SIDLite, typical | ~177 ms/sec            | ~5.6× headroom          |
+| SIDLite, p99     | ~325 ms/sec            | comfortable             |
+
+**Decision: the `c64u-remote` variant (the keypad build that targets the Callback 8020) defaults to
+SIDLite; every other variant defaults to reSIDfp.** Sounding like a C64 is the point of playing a SID,
+so accuracy wins wherever the device can afford it — but on the Callback 8020 reSIDfp would very
+likely stutter, and a stuttering accurate engine is worse than a clean approximation. The user can
+switch either way in Settings.
+
+This is a projection, not a measurement: **gate L1 still has to run on the real device.** If the
+Helio G81 turns out to hold reSIDfp, flip `default_sid_emulation_engine` in `variants/variants.yaml`.
+If even SIDLite struggles, the native path in §6.4 becomes necessary.
+
 ### 6.4 Engine strategy — WASM vs a bundled native libsidplayfp
 
 Raised during this iteration: the app already ships **upstream 7-Zip both ways** — a native per-ABI

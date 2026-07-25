@@ -80,6 +80,10 @@ variants:
         commoserve_base_url: http://commoserve.files.commodore.net
       default_display_profile: compact
       default_t9_input_enabled: true
+      # Callback 8020 = MediaTek Helio G81, ~2-3x slower single-threaded
+      # than a Pixel 4. reSIDfp measures ~39% of one core there; scaled up it
+      # lands at or past realtime, so this variant defaults to the cheap engine.
+      default_sid_emulation_engine: sidlite
       # Keypad-first appliance UX: start full-screen (hide the Android status and
       # navigation bars). The user can still override both in Settings -> Display.
       default_hide_status_bar: true
