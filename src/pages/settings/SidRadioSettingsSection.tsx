@@ -117,8 +117,8 @@ export const SidRadioSettingsSection = () => {
             <Label className="text-sm font-medium">SID emulation</Label>
             <p className="text-xs text-muted-foreground">
               <strong>Accurate</strong> models the real SID chip and is what makes a tune sound like a C64.{" "}
-              <strong>Light</strong> is a much cheaper approximation for slower devices — it costs roughly a tenth of
-              the CPU, but it does not sound like the real thing. Takes effect on the next track.
+              <strong>Light</strong> is a cheaper approximation for slower devices — roughly a third of the work, but it
+              does not sound like the real thing. Takes effect on the next track.
             </p>
             <div className="flex gap-2">
               {(

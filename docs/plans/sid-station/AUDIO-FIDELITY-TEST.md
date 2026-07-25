@@ -450,30 +450,34 @@ Both emulations now ship side by side (reSIDfp at `public/wasm/libsidplayfp/`, S
 (An earlier "~10×" claim compared numbers taken from different builds and is withdrawn; 5.5× is the
 measured like-for-like figure.)
 
-**On the Pixel 4** (Snapdragon 855, Cortex-A76 @ 2.84 GHz), playing a real tune:
+**On the Pixel 4** (Snapdragon 855, Cortex-A76 @ 2.84 GHz), **same tune** (`Hymn.sid`) on both:
 
-| engine  | process CPU        | `renderMsPerSec` p99                         | underruns |
-| ------- | ------------------ | -------------------------------------------- | --------- |
-| reSIDfp | 42.5 % of one core | 390 (peaks 715 across station track changes) | 0         |
-| SIDLite | 43.4 % of one core | 244                                          | 0         |
+| engine  | `renderMsPerSec` | ≈ share of one core | underruns |
+| ------- | ---------------- | ------------------- | --------- |
+| reSIDfp | 494.6            | ~49 %               | 0         |
+| SIDLite | 158.4            | ~16 %               | 0         |
 
-Process CPU is nearly identical because it is dominated by the WebView, audio scheduling and UI
-rather than by the SID emulation; the engine difference shows up in `renderMsPerSec`, and most
-clearly in the isolated render timings above.
+**3.1× apart on device**, against 5.5× for the isolated render timings above — the device figure is
+lower because it includes fixed per-chunk overhead that does not scale with the emulation.
+
+> **Process CPU is not a usable discriminator here, and an earlier attempt to use it was wrong.**
+> Sampling `/proc/<pid>/stat` gave 42.5 % (reSIDfp) vs 43.4 % (SIDLite) — but those were _different
+> tunes_, and a follow-up same-tune run measured the app at **40–48 % of a core while merely idle**,
+> which swamps the engine entirely and even produced a negative "engine cost". That idle figure is
+> worth investigating in its own right. `renderMsPerSec` is the engine's own counter and is the
+> figure to trust.
 
 **The Callback 8020** is a **MediaTek Helio G81** — 2× Cortex-A75 @ 2.0 GHz + 6× A55 @ 1.8 GHz, 12 nm
 (`docs/plans/callback8020/sailfish-callback-8020-android-compatibility.md`). Against the Pixel 4's
 Cortex-A76 @ 2.84 GHz on 7 nm that is roughly **2–3× slower single-threaded** (older core, ~30 % lower
 IPC, 42 % lower clock).
 
-Scaling the Pixel 4 measurements by 2.5×:
+Scaling the corrected same-tune Pixel 4 figures by 2.5×:
 
-| engine           | projected on Helio G81 | verdict                 |
-| ---------------- | ---------------------- | ----------------------- |
-| reSIDfp, typical | ~975 ms/sec            | at realtime — no margin |
-| reSIDfp, p99     | ~1790 ms/sec           | **past realtime**       |
-| SIDLite, typical | ~177 ms/sec            | ~5.6× headroom          |
-| SIDLite, p99     | ~325 ms/sec            | comfortable             |
+| engine  | projected on Helio G81 | verdict                      |
+| ------- | ---------------------- | ---------------------------- |
+| reSIDfp | ~1240 ms/sec           | **past realtime** — stutters |
+| SIDLite | ~400 ms/sec            | ~2.5× headroom               |
 
 **Decision: the `c64u-remote` variant (the keypad build that targets the Callback 8020) defaults to
 SIDLite; every other variant defaults to reSIDfp.** Sounding like a C64 is the point of playing a SID,
