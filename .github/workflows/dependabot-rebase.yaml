@@ -1,0 +1,53 @@
+name: dependabot-rebase
+
+# Keep open Dependabot PRs rebased on main.
+#
+# PR #322 failed CI for a full day purely because it was behind main: the
+# AGP↔Gradle guardrail that failed it had already been fixed on main (600f3c25),
+# but the PR was still being judged against the old guard. A stale PR judged
+# against a since-fixed guard is indistinguishable from a real failure, which is
+# how a genuinely broken dependency bump gets waved through as "flaky".
+#
+# Asking Dependabot to rebase re-runs CI against current main, so a red check
+# means something is actually wrong.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  pull-requests: write
+
+jobs:
+  rebase-stale:
+    name: Dependabot | Rebase stale PRs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Comment @dependabot rebase on out-of-date Dependabot PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # `BEHIND` is only reported when GitHub has finished computing
+          # mergeability, and `UNKNOWN` means it is still working. Ask for the
+          # field and treat anything we cannot confirm as up to date, so we never
+          # spam a PR that does not need rebasing.
+          prs=$(gh pr list \
+            --state open \
+            --app dependabot \
+            --json number,mergeStateStatus,title \
+            --jq '.[] | select(.mergeStateStatus == "BEHIND") | .number')
+
+          if [[ -z "${prs}" ]]; then
+            echo "No Dependabot PRs are behind ${GITHUB_REF_NAME:-main}."
+            exit 0
+          fi
+
+          for pr in ${prs}; do
+            echo "PR #${pr} is behind the base branch; requesting a rebase."
+            gh pr comment "${pr}" --body '@dependabot rebase'
+          done
