@@ -155,6 +155,8 @@ export class AvMirrorSession {
   private inputPriorityEnabled = true;
   /** True when starting video moved a Wi‑Fi audio stream onto Ethernet (dynamic policy) — so it can move back on video stop. */
   private audioForcedToEthernet = false;
+  /** Serializes audio/video start/stop so a route conversion (stop+start) can't interleave with another toggle. */
+  private opChain: Promise<unknown> = Promise.resolve();
 
   constructor(deps: AvMirrorSessionDeps = {}) {
     const startStream =
@@ -446,56 +448,74 @@ export class AvMirrorSession {
     this.applyKeepFraction(state.effectiveFraction);
   }
 
+  /** Run `op` after any in-flight transport op completes, so route conversions never interleave. */
+  private serialize<T>(op: () => Promise<T>): Promise<T> {
+    const run = this.opChain.then(op, op);
+    this.opChain = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
   startAudio(): Promise<void> {
-    this.beginSessionIfIdle();
-    // Prefer Wi‑Fi for audio-only when the policy allows it (firmware wifi=true);
-    // the controller falls back to Ethernet if Wi‑Fi isn't available.
-    const wifi = shouldUseWifiForAudio({ policy: loadStreamAudioRoute(), videoActive: this.videoLive });
-    return this.audio.start({ wifi });
+    return this.serialize(async () => {
+      this.beginSessionIfIdle();
+      // Prefer Wi‑Fi for audio-only when the policy allows it (firmware wifi=true);
+      // the controller falls back to Ethernet if Wi‑Fi isn't available.
+      const wifi = shouldUseWifiForAudio({ policy: loadStreamAudioRoute(), videoActive: this.videoLive });
+      await this.audio.start({ wifi });
+    });
   }
 
   stopAudio(): Promise<void> {
-    this.audioForcedToEthernet = false;
-    return this.audio.stop();
+    return this.serialize(async () => {
+      this.audioForcedToEthernet = false;
+      await this.audio.stop();
+    });
   }
 
   toggleAudio(): Promise<void> {
     return this.audioLive ? this.stopAudio() : this.startAudio();
   }
 
-  async startVideo(): Promise<void> {
-    // Wi‑Fi audio can't share a route with video. Depending on the policy, move
-    // the audio to Ethernet first (dynamic) or refuse the video (wifi).
-    const action = resolveVideoStartAction({
-      policy: loadStreamAudioRoute(),
-      audioOnWifi: this.audio.isOnWifi(),
+  startVideo(): Promise<void> {
+    return this.serialize(async () => {
+      // Wi‑Fi audio can't share a route with video. Depending on the policy, move
+      // the audio to Ethernet first (dynamic) or refuse the video (wifi).
+      const action = resolveVideoStartAction({
+        policy: loadStreamAudioRoute(),
+        audioOnWifi: this.audio.isOnWifi(),
+      });
+      if (action === "blocked") {
+        this.update({ video: { ...this.snapshot.video, error: WIFI_AUDIO_BLOCKS_VIDEO } });
+        return;
+      }
+      if (action === "convert-audio-then-start") {
+        await this.audio.stop();
+        await this.audio.start({ wifi: false }); // Ethernet, so both share one route
+        this.audioForcedToEthernet = true;
+      }
+      this.beginSessionIfIdle();
+      await this.video.start();
     });
-    if (action === "blocked") {
-      this.update({ video: { ...this.snapshot.video, error: WIFI_AUDIO_BLOCKS_VIDEO } });
-      return;
-    }
-    if (action === "convert-audio-then-start") {
-      await this.audio.stop();
-      await this.audio.start({ wifi: false }); // Ethernet, so both share one route
-      this.audioForcedToEthernet = true;
-    }
-    this.beginSessionIfIdle();
-    await this.video.start();
   }
 
-  async stopVideo(): Promise<void> {
-    await this.video.stop();
-    this.latestFrame = null;
-    // Dynamic policy: return audio to Wi‑Fi now that it is alone again, but only
-    // if starting video is what moved it off Wi‑Fi in the first place.
-    if (
-      this.audioLive &&
-      shouldReturnAudioToWifi({ policy: loadStreamAudioRoute(), audioForcedToEthernet: this.audioForcedToEthernet })
-    ) {
-      this.audioForcedToEthernet = false;
-      await this.audio.stop();
-      await this.audio.start({ wifi: true });
-    }
+  stopVideo(): Promise<void> {
+    return this.serialize(async () => {
+      await this.video.stop();
+      this.latestFrame = null;
+      // Dynamic policy: return audio to Wi‑Fi now that it is alone again, but only
+      // if starting video is what moved it off Wi‑Fi in the first place.
+      if (
+        this.audioLive &&
+        shouldReturnAudioToWifi({ policy: loadStreamAudioRoute(), audioForcedToEthernet: this.audioForcedToEthernet })
+      ) {
+        this.audioForcedToEthernet = false;
+        await this.audio.stop();
+        await this.audio.start({ wifi: true });
+      }
+    });
   }
 
   toggleVideo(): Promise<void> {

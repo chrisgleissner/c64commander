@@ -241,6 +241,16 @@ export class AudioMirrorController {
           addLog("info", "Audio Mirror: Wi‑Fi stream unavailable; using Ethernet", {
             error: (wifiError as Error)?.message ?? String(wifiError),
           });
+          // Tear down the failed Wi‑Fi attempt before starting the Ethernet one,
+          // so the device never has two overlapping audio:start requests in
+          // flight (it streams a single audio stream at a time).
+          try {
+            await this.deps.stopStream("audio");
+          } catch (stopError) {
+            addLog("debug", "Audio Mirror: stop after failed Wi‑Fi start (ignored)", {
+              error: (stopError as Error)?.message ?? String(stopError),
+            });
+          }
           await this.deps.startStream("audio", receiver.destination);
           this.update({ route: "ethernet" });
         }

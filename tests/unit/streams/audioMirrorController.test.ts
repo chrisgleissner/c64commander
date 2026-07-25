@@ -271,16 +271,19 @@ describe("AudioMirrorController", () => {
       .fn()
       .mockRejectedValueOnce(new Error("Network Host Resolve Error")) // Wi‑Fi attempt fails
       .mockResolvedValueOnce({ errors: [] }); // Ethernet succeeds
+    const stopStream = vi.fn(async () => ({ errors: [] }));
     const controller = new AudioMirrorController({
       createReceiver: () => receiver,
       createPlayer: () => fakePlayer(true),
       startStream,
-      stopStream: vi.fn(async () => ({ errors: [] })),
+      stopStream,
       onChange: vi.fn(),
     });
 
     await controller.start({ wifi: true });
     expect(startStream).toHaveBeenNthCalledWith(1, "audio", "192.168.1.185:11001", { wifi: true });
+    // The failed Wi‑Fi attempt is torn down before the Ethernet start (no two overlapping starts).
+    expect(stopStream).toHaveBeenCalledWith("audio");
     expect(startStream).toHaveBeenNthCalledWith(2, "audio", "10.0.0.5:11001");
     expect(controller.isOnWifi()).toBe(false);
     expect(controller.getSnapshot().route).toBe("ethernet");

@@ -335,7 +335,10 @@ Mount disk sheet: Available disks list — filter text — `list-filter-input` �
   R✅ I✅ _(default on; sheds video briefly while the user is actively driving so
   joystick/keyboard/mouse input reaches the C64 instantly)_ ; Low-latency audio
   (native) — switch — `settings-stream-native-audio` — R✅ I✅ _(default on; plays
-  Live View audio through a native low-latency track — Android only)_
+  Live View audio through a native low-latency track — Android only)_ ; Audio
+  streaming route — select — `settings-stream-audio-route` — R✅ I✅ _(default
+  Dynamic; firmware wifi=true — Wi‑Fi for audio-only, Ethernet with video, or
+  Always Wi‑Fi / Always Ethernet)_
   `[visible when audio_mirror_enabled or video_mirror_enabled]`
 - **Notifications**: visibility — select — R✅ I✅ ; duration — slider — R✅ I✅
 - **Build/info**: REST API docs — link — `settings-about-rest-api-docs` — R✅ I✅
