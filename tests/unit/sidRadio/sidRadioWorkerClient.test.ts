@@ -86,4 +86,46 @@ describe("SidRadioWorkerClient", () => {
     const client = new SidRadioWorkerClient();
     await expect(client.load()).rejects.toBeInstanceOf(SidRadioWorkerUnavailableError);
   });
+
+  it("fails a pending load fast on a worker 'error' event (not just the timeout)", async () => {
+    const worker = new FakeWorker(() => null); // never answers normally
+    const client = new SidRadioWorkerClient(() => worker as unknown as Worker);
+    const loadP = client.load({ timeoutMs: 60_000 });
+    queueMicrotask(() => worker.dispatchEvent(new ErrorEvent("error", { message: "worker crashed" })));
+    await expect(loadP).rejects.toThrow(/worker crashed/);
+    client.terminate();
+  });
+
+  it("fails a pending load on a worker 'messageerror' (undeserializable message)", async () => {
+    const worker = new FakeWorker(() => null);
+    const client = new SidRadioWorkerClient(() => worker as unknown as Worker);
+    const loadP = client.load({ timeoutMs: 60_000 });
+    queueMicrotask(() => worker.dispatchEvent(new Event("messageerror")));
+    await expect(loadP).rejects.toThrow(/deserialized/);
+    client.terminate();
+  });
+
+  it("fails in-flight compute requests when the worker errors", async () => {
+    // Load succeeds; a compute is left pending, then the worker crashes.
+    const worker = new FakeWorker((message) => {
+      if (message.type !== "load") return null; // compute never answers
+      return { type: "ready", stats: buildReadyStats(buildDefaultTinyFixture(), false) };
+    });
+    const client = new SidRadioWorkerClient(() => worker as unknown as Worker);
+    await client.load();
+    const computeP = client.compute(
+      {
+        seed: { kind: "song", md5_48: "abcdef012345" },
+        shuffleSeed: 1,
+        likes: [],
+        notForMe: [],
+        exclude: [],
+        count: 4,
+      },
+      60_000,
+    );
+    queueMicrotask(() => worker.dispatchEvent(new ErrorEvent("error", { message: "died mid-compute" })));
+    await expect(computeP).rejects.toThrow(/died mid-compute/);
+    client.terminate();
+  });
 });

@@ -74,8 +74,32 @@ export class SidRadioWorkerClient {
       this.worker.addEventListener("message", (event: MessageEvent<SidRadioWorkerToMain>) =>
         this.onMessage(event.data),
       );
+      // A worker-side exception or a message that fails to deserialize never
+      // reaches `message`; without these handlers the pending load/compute would
+      // only resolve on the 15 s timeout. Fail fast instead.
+      this.worker.addEventListener("error", (event) =>
+        this.failAllPending(`SID Radio worker error: ${event.message || "unknown"}`),
+      );
+      this.worker.addEventListener("messageerror", () =>
+        this.failAllPending("SID Radio worker message could not be deserialized"),
+      );
     }
     return this.worker;
+  }
+
+  /** Reject every in-flight load/compute so callers fail fast on a worker crash. */
+  private failAllPending(reason: string): void {
+    const error = new Error(reason);
+    if (this.loadPending) {
+      clearTimeout(this.loadPending.timer);
+      this.loadPending.reject(error);
+      this.loadPending = null;
+    }
+    for (const pending of this.computePending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(error);
+    }
+    this.computePending.clear();
   }
 
   private onMessage(message: SidRadioWorkerToMain): void {

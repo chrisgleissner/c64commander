@@ -17,13 +17,20 @@ class FakeWorker implements LocalSidWorkerLike {
   readonly transfers: (Transferable[] | undefined)[] = [];
   terminated = false;
   private handler: ((event: MessageEvent<LocalSidWorkerToMain>) => void) | null = null;
+  private errorHandler: ((event: { message?: string }) => void) | null = null;
+  private messageErrorHandler: (() => void) | null = null;
 
   postMessage(message: LocalSidMainToWorker, transfer?: Transferable[]): void {
     this.sent.push(message);
     this.transfers.push(transfer);
   }
-  addEventListener(_type: "message", handler: (event: MessageEvent<LocalSidWorkerToMain>) => void): void {
-    this.handler = handler;
+  addEventListener(type: "message", handler: (event: MessageEvent<LocalSidWorkerToMain>) => void): void;
+  addEventListener(type: "error", handler: (event: { message?: string }) => void): void;
+  addEventListener(type: "messageerror", handler: () => void): void;
+  addEventListener(type: string, handler: (...args: never[]) => void): void {
+    if (type === "message") this.handler = handler as typeof this.handler;
+    else if (type === "error") this.errorHandler = handler as typeof this.errorHandler;
+    else if (type === "messageerror") this.messageErrorHandler = handler as typeof this.messageErrorHandler;
   }
   terminate(): void {
     this.terminated = true;
@@ -31,6 +38,14 @@ class FakeWorker implements LocalSidWorkerLike {
   /** Deliver a worker→main message to the engine. */
   emit(message: LocalSidWorkerToMain): void {
     this.handler?.({ data: message } as MessageEvent<LocalSidWorkerToMain>);
+  }
+  /** Fire a worker `error` event. */
+  emitError(message: string): void {
+    this.errorHandler?.({ message });
+  }
+  /** Fire a worker `messageerror` (deserialization failure) event. */
+  emitMessageError(): void {
+    this.messageErrorHandler?.();
   }
   sentOfType<T extends LocalSidMainToWorker["type"]>(type: T): Extract<LocalSidMainToWorker, { type: T }>[] {
     return this.sent.filter((m) => m.type === type) as Extract<LocalSidMainToWorker, { type: T }>[];
@@ -372,5 +387,33 @@ describe("LocalSidEngine — default environment factories", () => {
     expect(onError).toHaveBeenCalledWith(
       expect.objectContaining({ message: expect.stringContaining("render blew up") }),
     );
+  });
+
+  it("fails a pending load when the worker fires an 'error' event", async () => {
+    const worker = new FakeWorker();
+    const engine = new LocalSidEngine({ workerFactory: () => worker });
+    const loadP = engine.load();
+    worker.emitError("segfault");
+    await expect(loadP).rejects.toThrow(/segfault/);
+  });
+
+  it("fails a pending open when a worker message cannot be deserialized", async () => {
+    const worker = new FakeWorker();
+    const engine = new LocalSidEngine({ workerFactory: () => worker });
+    const play = engine.play(new ArrayBuffer(8), 0, {});
+    worker.emit({ type: "ready", moduleLoadMs: 1 });
+    await flush();
+    worker.emitMessageError();
+    await expect(play).rejects.toThrow(/deserial/i);
+  });
+
+  it("surfaces a worker crash during playback via onError", async () => {
+    const onError = vi.fn();
+    const { engine, worker } = makeEngine();
+    const play = engine.play(new ArrayBuffer(8), 0, { onError });
+    await completeOpen(worker);
+    await play;
+    worker.emitError("worker died");
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("worker died") }));
   });
 });

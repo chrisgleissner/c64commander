@@ -29,6 +29,8 @@ import type { LocalSidMainToWorker, LocalSidWorkerToMain, LocalSidOpenedMessage 
 export interface LocalSidWorkerLike {
   postMessage(message: LocalSidMainToWorker, transfer?: Transferable[]): void;
   addEventListener(type: "message", handler: (event: MessageEvent<LocalSidWorkerToMain>) => void): void;
+  addEventListener(type: "error", handler: (event: { message?: string }) => void): void;
+  addEventListener(type: "messageerror", handler: () => void): void;
   terminate(): void;
 }
 
@@ -199,8 +201,33 @@ export class LocalSidEngine {
       this.worker.addEventListener("message", (event: MessageEvent<LocalSidWorkerToMain>) =>
         this.onMessage(event.data),
       );
+      // A worker-side exception or an undeserializable message never reaches
+      // `message`; fail the pending load/open (and surface a playback error)
+      // instead of hanging until the caller's own timeout.
+      this.worker.addEventListener("error", (event) =>
+        this.failWorker(`Local SID worker error: ${event.message || "unknown"}`),
+      );
+      this.worker.addEventListener("messageerror", () =>
+        this.failWorker("Local SID worker message could not be deserialized"),
+      );
     }
     return this.worker;
+  }
+
+  /** Reject the pending load/open and report a playback error on a worker crash. */
+  private failWorker(reason: string): void {
+    const error = new Error(reason);
+    if (this.loadPending) {
+      const pending = this.loadPending;
+      this.loadPending = null;
+      pending.reject(error);
+    }
+    if (this.openPending) {
+      const pending = this.openPending;
+      this.openPending = null;
+      pending.reject(error);
+    }
+    this.callbacks.onError?.(error);
   }
 
   /** Instantiate the WASM module in the worker (idempotent). */
