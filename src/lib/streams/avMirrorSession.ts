@@ -520,7 +520,10 @@ export class AvMirrorSession {
       // if starting video is what moved it off Wi‑Fi in the first place.
       if (
         this.audioLive &&
-        shouldReturnAudioToWifi({ policy: this.effectiveAudioRoute(), audioForcedToEthernet: this.audioForcedToEthernet })
+        shouldReturnAudioToWifi({
+          policy: this.effectiveAudioRoute(),
+          audioForcedToEthernet: this.audioForcedToEthernet,
+        })
       ) {
         this.audioForcedToEthernet = false;
         await this.audio.stop();

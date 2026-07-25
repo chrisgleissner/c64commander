@@ -17,8 +17,13 @@
  * - Engine `local`:
  *   - only **SID** can play on-device (libsidplayfp is SID-only) → non-SID
  *     (prg/crt/disk/mod) falls back to the C64 with a one-time notice.
- *   - **ROM-dependent** SIDs (detected as RSID when the worker opens them) need
- *     ship-forbidden C64 ROMs → fall back to the C64 with a one-time notice.
+ *   - without **C64 ROMs** nothing can play on-device. libsidplayfp initialises a
+ *     tune and then never advances it, producing a flat drone (measured: envelope
+ *     correlation ~0.008 against real hardware, vs 0.625 with ROMs — see
+ *     docs/plans/sid-station/AUDIO-FIDELITY-TEST.md §6.2). ROMs cannot be
+ *     shipped, but the user can read them from their own connected C64 in
+ *     Settings; until they do, every SID falls back to the C64 with a one-time
+ *     notice.
  *   - if the environment lacks Web Workers / Web Audio → fall back to the C64.
  */
 
@@ -61,8 +66,9 @@ export function shouldAttemptLocalEngine(input: EngineRouteInput): boolean {
 }
 
 /**
- * After the worker opens a SID: if it is ROM-dependent, fall back to the C64
- * with the `rom-on-c64` notice; otherwise stay on the Local engine.
+ * After the worker opens a SID: if the C64 ROMs it needs are unavailable, fall
+ * back to the C64 with the `rom-on-c64` notice; otherwise stay on the Local
+ * engine.
  */
 export function romFallbackDecision(romRequired: boolean): PreRouteDecision {
   return romRequired ? { route: "c64", notice: "rom-on-c64" } : { route: "local", notice: null };
@@ -71,6 +77,8 @@ export function romFallbackDecision(romRequired: boolean): PreRouteDecision {
 /** Human-facing one-time notice copy (rendered by the controller). */
 export const ENGINE_FALLBACK_MESSAGES: Record<EngineFallbackNotice, string> = {
   "non-sid-on-c64": "This runs on the C64 — only SID tunes can play on this device.",
-  "rom-on-c64": "This tune needs C64 ROMs, so it plays on the C64.",
+  "rom-on-c64":
+    "On-device playback needs the C64 ROMs. Add them in Settings — they are read from the C64 " +
+    "you're connected to. Until then, this plays on the C64.",
   "local-unavailable": "On-device playback isn't available here, so this plays on the C64.",
 };

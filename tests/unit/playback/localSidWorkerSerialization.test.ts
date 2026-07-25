@@ -33,6 +33,9 @@ let renderOrder: number[] = [];
 
 class FakeSidAudioEngine {
   constructor(_options: { sampleRate?: number; stereo?: boolean }) {}
+  async setSystemROMs(_kernal: Uint8Array | null, _basic: Uint8Array | null, _chargen: Uint8Array | null) {
+    await Promise.resolve();
+  }
   async loadSidBuffer(_data: Uint8Array, _songIndex?: number): Promise<void> {
     await Promise.resolve();
   }
@@ -116,6 +119,16 @@ beforeEach(async () => {
   posted.length = 0;
 });
 
+/**
+ * The worker refuses to start without C64 ROMs — without KERNAL/BASIC
+ * libsidplayfp initialises a tune and never advances it, so routing to the C64
+ * is the only correct answer (see docs/plans/sid-station/AUDIO-FIDELITY-TEST.md
+ * §6.2). These tests are about message *ordering*, not ROM validity, and the
+ * engine is stubbed here, so any two buffers of the right shape will do. Fresh
+ * ones per call because posting transfers them.
+ */
+const FAKE_ROMS = () => ({ kernal: new Uint8Array(8192).buffer, basic: new Uint8Array(8192).buffer });
+
 describe("localSid.worker message serialization", () => {
   it("marks itself as running in a worker", () => {
     expect(scope.__runsInWorker).toBe(true);
@@ -123,7 +136,14 @@ describe("localSid.worker message serialization", () => {
 
   it("never runs two renderSeconds calls at once, however many are in flight", async () => {
     send({ type: "load" } as LocalSidMainToWorker);
-    send({ type: "open", id: 1, sidBytes: new Uint8Array([0x50, 0x53, 0x49, 0x44, 0, 2, 0, 0x7c]).buffer, songIndex: 0, sampleRate: 48000 } as LocalSidMainToWorker);
+    send({
+      type: "open",
+      id: 1,
+      sidBytes: new Uint8Array([0x50, 0x53, 0x49, 0x44, 0, 2, 0, 0x7c]).buffer,
+      songIndex: 0,
+      sampleRate: 48000,
+      roms: FAKE_ROMS(),
+    } as LocalSidMainToWorker);
     await drain();
 
     // The engine pumps up to MAX_IN_FLIGHT_RENDERS renders back-to-back.
@@ -137,7 +157,14 @@ describe("localSid.worker message serialization", () => {
 
   it("renders consecutive spans in order — no span is replayed", async () => {
     send({ type: "load" } as LocalSidMainToWorker);
-    send({ type: "open", id: 1, sidBytes: new Uint8Array([0x50, 0x53, 0x49, 0x44, 0, 2, 0, 0x7c]).buffer, songIndex: 0, sampleRate: 48000 } as LocalSidMainToWorker);
+    send({
+      type: "open",
+      id: 1,
+      sidBytes: new Uint8Array([0x50, 0x53, 0x49, 0x44, 0, 2, 0, 0x7c]).buffer,
+      songIndex: 0,
+      sampleRate: 48000,
+      roms: FAKE_ROMS(),
+    } as LocalSidMainToWorker);
     await drain();
     for (let i = 0; i < 4; i += 1) {
       send({ type: "render", id: 1, seconds: 0.5 } as LocalSidMainToWorker);
@@ -153,7 +180,14 @@ describe("localSid.worker message serialization", () => {
 
   it("keeps ordering a render behind the open that replaces the engine", async () => {
     send({ type: "load" } as LocalSidMainToWorker);
-    send({ type: "open", id: 1, sidBytes: new Uint8Array([0x50, 0x53, 0x49, 0x44, 0, 2, 0, 0x7c]).buffer, songIndex: 0, sampleRate: 48000 } as LocalSidMainToWorker);
+    send({
+      type: "open",
+      id: 1,
+      sidBytes: new Uint8Array([0x50, 0x53, 0x49, 0x44, 0, 2, 0, 0x7c]).buffer,
+      songIndex: 0,
+      sampleRate: 48000,
+      roms: FAKE_ROMS(),
+    } as LocalSidMainToWorker);
     send({ type: "render", id: 1, seconds: 0.5 } as LocalSidMainToWorker);
     await drain();
 
@@ -166,7 +200,14 @@ describe("localSid.worker message serialization", () => {
     send({ type: "load" } as LocalSidMainToWorker);
     // No engine open yet → render reports `end` rather than throwing.
     send({ type: "render", id: 9, seconds: 0.5 } as LocalSidMainToWorker);
-    send({ type: "open", id: 2, sidBytes: new Uint8Array([0x50, 0x53, 0x49, 0x44, 0, 2, 0, 0x7c]).buffer, songIndex: 0, sampleRate: 48000 } as LocalSidMainToWorker);
+    send({
+      type: "open",
+      id: 2,
+      sidBytes: new Uint8Array([0x50, 0x53, 0x49, 0x44, 0, 2, 0, 0x7c]).buffer,
+      songIndex: 0,
+      sampleRate: 48000,
+      roms: FAKE_ROMS(),
+    } as LocalSidMainToWorker);
     send({ type: "render", id: 2, seconds: 0.5 } as LocalSidMainToWorker);
     await drain();
 

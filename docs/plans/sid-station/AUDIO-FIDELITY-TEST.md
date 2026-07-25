@@ -3,8 +3,8 @@
 **Date:** 2026-07-25 · **Branch:** `feat/sid-radio` (PR #320) · **Rig:** Pixel 4 (`flame`) + C64 Ultimate (`c64u`, fw 1.1.0)
 
 > **Status update — iterations 2 and 3 (later on 2026-07-25).** Every defect below is fixed in
-> `sidflow` (`d2f734c`, `c08fde2`). The wasm engine is now **numerically identical to a native build
-> of the same library** (`waveCorr 1.0000`), and against the real C64 **all five median exit criteria
+> `sidflow` (`d2f734c`, `c08fde2`). The wasm engine is now **indistinguishable from a native build
+> of the same library** (correlation > 0.99999, error floor ~−80 dBFS), and against the real C64 **all five median exit criteria
 > pass**, with envelope correlation (0.625) **exceeding native `sidplayfp`'s own 0.483** on the same
 > machine. One prerequisite changed: correct playback **requires C64 ROMs** (§6.2). Full iteration
 > history in **§6**.
@@ -273,7 +273,7 @@ Per tune, iteration 3:
 
 **Still open per tune.** §1.5 asks for LTAS < 3 dB and centroid 0.85–1.18 on _every_ tune; four
 (`Alice_in_Videoland`, `Hardrestart`, `Mamba_issue_15`, `Drummachine`) still exceed that against
-hardware. Since the engine is now bit-identical to native `sidplayfp` (§6.3), these are
+hardware. Since the engine now matches native `sidplayfp` to ~−80 dBFS (§6.3), these are
 emulation-vs-hardware differences — the Ultimate's SID model, filter tolerance and mixer — not build
 defects, and the same tunes would fail for native `sidplayfp` too. The per-tune spectral bounds
 should be re-derived against a native-`sidplayfp`-vs-hardware baseline rather than assumed
@@ -288,8 +288,22 @@ This is the honest test of "is our build correct", and it is now exact:
 | wasm before this iteration | +0.00240     | 0.4229     | +0.84 dB     | 0.7770     | 0.7502     |
 | **wasm after**             | **−0.00015** | **0.4229** | **+0.00 dB** | **1.0000** | **1.0000** |
 
-Criterion §1.5 asked for ≥ 0.90 here. It is 1.0000 — the wasm build is numerically identical to a
-native build of the same library.
+Criterion §1.5 asked for ≥ 0.90 here. It is 1.0000 (4 d.p.).
+
+**Precisely how close.** Not bit-exact — the two builds differ by a handful of LSBs:
+
+| pair | max \|Δ\| | mean \|Δ\| | correlation | error RMS |
+| --- | --- | --- | --- | --- |
+| Drummachine + ROMs | 164 LSB | 3.08 | 0.99999798 | −75.1 dBFS |
+| 10_Orbyte + ROMs | 98 LSB | 1.38 | 0.99999978 | −81.1 dBFS |
+| Waterfall_3SID + ROMs | 7 LSB | 1.03 | 0.99999235 | −87.0 dBFS |
+| Ta-Boo, no ROMs | 13 LSB | 1.16 | 0.99999942 | −84.8 dBFS |
+
+An error floor around −80 dBFS is inaudible and far below the SID's own ~8-bit noise floor, but it
+is real. The most likely source is libm: emscripten's musl-derived `exp`/`log`/`sin` differ from
+glibc's in the last ulp, and those feed the reSIDfp filter and resampler table generation. For
+context, the same measurement on the *broken* build was correlation 0.75 and roughly −20 dBFS, so
+the gap between "correct" and "broken" is about 60 dB.
 
 ### 6.2 New finding — C64 ROMs are a **prerequisite**, not an accuracy improvement
 
@@ -333,10 +347,10 @@ Characterisation so far:
 - **Not a timing or clock error.** Per-second windows align at a _constant_ 156-sample offset with no
   drift, and per-window waveform correlation is a stable 0.79–0.86 across the whole render.
 - **Not floating-point chaos.** A systematic offset with no decay over time.
-- **Not the compiler.** A clang-built native stack and a gcc-built native stack are **bit-identical**
-  (`waveCorr 1.0000`).
+- **Not the compiler.** A clang-built native stack and a gcc-built native stack agree to `waveCorr
+  1.0000` (not bit-exact, but ~−80 dBFS apart — nowhere near the discrepancy under investigation).
 - **Not the emscripten thread guard.** Applying the same inline-`sidThread` patch to a _native_ build
-  also produces **bit-identical** output (`waveCorr 1.0000`), so `apply-thread-guards.py` is exonerated.
+  also agrees to `waveCorr 1.0000`, so `apply-thread-guards.py` is exonerated.
 - **Not a libsidplayfp version difference.** The distro's `/usr/bin/sidplayfp` is libsidplayfp
   **2.6.0**; the matched v3.0.2 control above removes that variable and the excess persists.
 
@@ -344,8 +358,14 @@ Characterisation so far:
   numbers (`envCorr 0.7770`, `waveCorr 0.7502`, `+0.84 dB`).
 - **Deterministic** — two runs byte-identical — but **chunk-size dependent**: wasm at 20 000 vs
   10 000 cycles per `render()` correlated only 0.78 **with itself**, and the gap to native widened
-  with more calls (0.750 → 0.672 → 0.546 at 20 000 / 15 000 / 10 000). Native was invariant
-  (`1.0000`) at every chunk size.
+  with more calls (0.750 → 0.672 → 0.546 at 20 000 / 15 000 / 10 000), while native agreed with
+  itself at `1.0000` across the same sweep on this tune.
+
+  > Chunk invariance is **not** a universal property of libsidplayfp, so do not turn this into a
+  > test. Checked afterwards: native output *does* vary with chunk size on other fixtures (including
+  > single-SID `10_Orbyte`, and `Drummachine` itself once ROMs are absent) — by a few LSBs, not by
+  > 10 dB. It was a useful *signal* here because the wasm build diverged by two orders of magnitude
+  > more than native did, not because exact invariance is guaranteed.
 
 Deterministic, platform-specific and allocation-sensitive is the signature of an out-of-bounds or
 freed read, so the build was instrumented with **AddressSanitizer** (`SIDFLOW_EXTRA_FLAGS=-fsanitize=address`),
@@ -375,7 +395,7 @@ undisturbed; wasm's allocator reused it.
 
 **Fix** (`c08fde2`): all four call sites now go through a `refreshMixer()` helper that documents the
 ordering requirement, with `selectSong()`'s call immediately after `load()`/`reset()`. The wasm build
-is now numerically identical to native (§6.1a).
+now matches native to ~−80 dBFS (§6.1a).
 
 Note also an upstream latent bug spotted while reading `SincResampler.cpp`:
 
@@ -397,7 +417,7 @@ NDK cross-compile per ABI, a build-config stamp, release-only ABI narrowing, and
 test (`tests/unit/scripts/androidUpstream7zipPackaging.test.ts`).
 
 It is also newly attractive because **the native build is provably correct and the wasm build is
-not** (§6.3, §6.5): native is bit-identical across gcc and clang and perfectly chunk-size invariant.
+not** (§6.3, §6.5): native agrees across gcc and clang to ~−80 dBFS.
 
 **Decision: fix the WASM; keep native as a costed escape hatch. Do not build both yet.**
 

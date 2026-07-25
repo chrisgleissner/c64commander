@@ -36,6 +36,16 @@ export interface LocalSidOpenMessage {
   songIndex: number;
   /** Requested output sample rate (the engine may return a different one). */
   sampleRate: number;
+  /**
+   * C64 KERNAL/BASIC images read from the user's own machine, when available.
+   *
+   * Not an optimisation: without them libsidplayfp initialises a tune and never
+   * advances it (a flat drone — see docs/plans/sid-station/AUDIO-FIDELITY-TEST.md
+   * §6.2), so absent ROMs means the tune must play on the C64 instead. Passing
+   * them per-open keeps the worker stateless about ROMs, so revoking them in
+   * Settings takes effect on the very next track.
+   */
+  roms?: { kernal: ArrayBuffer; basic: ArrayBuffer };
 }
 
 /** main → worker: render the next `seconds` of PCM for the open tune. */

@@ -1500,7 +1500,19 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     `If you would rather not power up a C64 at all, turn on the **on-device playback engine** — a single "Play on: **C64** / **This device**" choice that appears on the Play screen for SID tunes. Pick **This device** and the app renders the SID on your ${appDeviceName(
       variant,
-    )} itself, with a built-in libsidplayfp engine — no C64, and no network stream, required. A small number of tunes rely on the C64's own ROM routines (RSID files); those always play on the C64, and the app switches back to it automatically with a brief note.`,
+    )} itself, with a built-in libsidplayfp engine — no network stream required.`,
+    "",
+    `**On-device playback needs the C64 ROMs.** SID music is driven by the C64's own KERNAL and BASIC routines, so without them a tune starts but never plays. Those ROM images are copyrighted and cannot be shipped with an app, so ${appName} reads them from ${targetDeviceShortName(
+      variant,
+    )}: **Settings → SID Radio → C64 ROMs for on-device playback → Read from C64**. It takes a moment and only has to be done once.`,
+    "",
+    `**Only connect ${appName} to devices you own or have been given permission to use.** The ROM images stay on your ${appDeviceName(
+      variant,
+    )}, are never shared or uploaded, and are never included in diagnostics. You can remove them again at any time with **Remove** in the same place.`,
+    "",
+    `Until the ROMs are in place — or if you remove them — SID tunes simply play on the ${targetDeviceShortName(
+      variant,
+    )} instead, and the app tells you so once.`,
     "",
     "![SID Radio settings: enable stations, the ranking, and the experimental on-device playback engine, with the similarity-corpus status](../../img/app/settings/sid-radio.png)",
     "",

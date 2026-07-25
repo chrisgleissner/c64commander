@@ -2122,13 +2122,13 @@ export default function SettingsPage() {
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">
-                          <strong>Developer preview — not in released firmware yet.</strong> When you listen to C64 audio{" "}
-                          <strong>without video</strong>, the C64 can send it over <strong>Wi‑Fi</strong> — handy when the
-                          C64 and this device share only a wireless router. Wi‑Fi audio can&apos;t run at the same time as
-                          video. <strong>Dynamic</strong> (recommended) uses Wi‑Fi while audio is alone and moves to
-                          Ethernet when you add video, so both share one route. <strong>Always Wi‑Fi</strong> keeps audio
-                          on Wi‑Fi and blocks video until you change this. <strong>Always Ethernet</strong> never uses
-                          Wi‑Fi.
+                          <strong>Developer preview — not in released firmware yet.</strong> When you listen to C64
+                          audio <strong>without video</strong>, the C64 can send it over <strong>Wi‑Fi</strong> — handy
+                          when the C64 and this device share only a wireless router. Wi‑Fi audio can&apos;t run at the
+                          same time as video. <strong>Dynamic</strong> (recommended) uses Wi‑Fi while audio is alone and
+                          moves to Ethernet when you add video, so both share one route. <strong>Always Wi‑Fi</strong>{" "}
+                          keeps audio on Wi‑Fi and blocks video until you change this. <strong>Always Ethernet</strong>{" "}
+                          never uses Wi‑Fi.
                         </p>
                       </div>
                     ) : null}

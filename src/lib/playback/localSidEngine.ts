@@ -8,6 +8,7 @@
 
 import { LocalSidChunkScheduler, type AudioScheduleSink, type AudioScheduleSource } from "./localSidChunkScheduler";
 import type { LocalSidMainToWorker, LocalSidWorkerToMain, LocalSidOpenedMessage } from "./localSidWorkerProtocol";
+import { loadStoredRoms } from "@/lib/roms/romStore";
 
 /**
  * Main-thread controller for the Local SID engine (spec §12.2, Track B / LE1).
@@ -287,8 +288,8 @@ export class LocalSidEngine {
 
   /**
    * Open a SID and start playing it on the device. Resolves once the tune's
-   * format is known; ROM-dependent tunes resolve with `romRequired` and are NOT
-   * started (the caller routes them to the C64).
+   * format is known; a tune that cannot play here resolves with `romRequired`
+   * and is NOT started (the caller routes it to the C64).
    */
   async play(
     sidBytes: ArrayBuffer,
@@ -303,10 +304,27 @@ export class LocalSidEngine {
     this.nextId += 1;
     this.activeId = id;
 
+    // Read per-play rather than cached, so revoking the ROMs in Settings takes
+    // effect on the very next track instead of after a restart.
+    const roms = loadStoredRoms();
+    const transfer: Transferable[] = [sidBytes];
+    let romPayload: { kernal: ArrayBuffer; basic: ArrayBuffer } | undefined;
+    if (roms.kernal && roms.basic) {
+      // Copy: the stored Uint8Arrays are reused across plays, so their buffers
+      // must not be detached by the transfer.
+      const kernal = roms.kernal.slice().buffer;
+      const basic = roms.basic.slice().buffer;
+      romPayload = { kernal, basic };
+      transfer.push(kernal, basic);
+    }
+
     return new Promise<LocalSidPlayResult>((resolve, reject) => {
       this.openPending = { resolve, reject };
       // Transfer the SID bytes to the worker (single owner).
-      worker.postMessage({ type: "open", id, sidBytes, songIndex, sampleRate: this.requestedSampleRate }, [sidBytes]);
+      worker.postMessage(
+        { type: "open", id, sidBytes, songIndex, sampleRate: this.requestedSampleRate, roms: romPayload },
+        transfer,
+      );
     });
   }
 

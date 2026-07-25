@@ -25,7 +25,9 @@ The engine is **reSIDfp**, asserted at build time (`WasmReSIDfp` present, `WasmS
 functional smoke render. Earlier artifacts silently fell back to SIDLite — a lightweight
 cRSID-derived approximation — because `HAVE_RESIDFP` was never defined; see
 `docs/plans/sid-station/AUDIO-FIDELITY-TEST.md` §6 for what that cost and how it was measured. This
-artifact is numerically identical to a native build of the same library (`waveCorr 1.0000`).
+artifact is indistinguishable from a native build of the same library: correlation > 0.99999 with an
+error floor around −80 dBFS (not bit-exact — emscripten's libm differs from glibc's in the last ulp,
+which reaches the reSIDfp table generation).
 
 ## Licence (spec §12.2, LE0 — PASS)
 

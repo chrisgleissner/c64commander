@@ -23,6 +23,8 @@ import {
   SIDCORR_SCHEMA_VERSION,
 } from "@/lib/sidRadio/sidcorrRelease";
 import { loadHvscState } from "@/lib/hvsc/hvscStateStore";
+import { useC64Connection } from "@/hooks/useC64Connection";
+import { LocalEngineRomsRow } from "./LocalEngineRomsRow";
 
 type ToggleRowProps = {
   id: string;
@@ -53,6 +55,7 @@ const ToggleRow = ({ id, testId, label, description, checked, onChange }: Toggle
 export const SidRadioSettingsSection = () => {
   const { sidRadioEnabled, sidRankingEnabled } = useSidRadioFlags();
   const { localEngineEnabled } = usePlaybackEngine();
+  const { deviceHost } = useC64Connection();
   const [cleared, setCleared] = useState(false);
 
   const handleClear = async () => {
@@ -97,10 +100,11 @@ export const SidRadioSettingsSection = () => {
           id="local-engine-enabled"
           testId="settings-local-engine-enabled"
           label="On-device playback engine (experimental)"
-          description="Adds a “Play on: C64 / This device” choice on the Play screen. ROM-independent SIDs play on this device with libsidplayfp; ROM-dependent (RSID) tunes still play on the C64."
+          description="Adds a “Play on: C64 / This device” choice on the Play screen. Playing here needs the C64 ROMs from your own machine — add them below."
           checked={localEngineEnabled}
           onChange={saveLocalEngineEnabled}
         />
+        {localEngineEnabled ? <LocalEngineRomsRow deviceHost={deviceHost ?? ""} /> : null}
 
         <div
           className="space-y-1 rounded-lg border border-border/70 p-3 text-xs"

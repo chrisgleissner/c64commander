@@ -187,7 +187,7 @@ Build playlists for programs and songs sourced from the local device, C64U stora
 
 ### SID Radio
 
-An endless, self-refilling queue of _similar_ SIDs, mixed from the High Voltage SID Collection and the tunes you like. Pick a **song station** (more like the current tune), a **mood station** (fast-paced, chill, melodic, nostalgic, …), or a **taste station** built from your ♥ ratings — then lean back while it auto-advances. Rate the current tune with ♥ / ✕ to steer where the station goes next. An optional **on-device playback engine** can render ROM-independent SIDs on the phone itself (no C64 needed); ROM-dependent tunes keep playing on the Ultimate. Similarity comes from a compact, content-addressed index (`sidcorr-tiny-1`), so it works offline.
+An endless, self-refilling queue of _similar_ SIDs, mixed from the High Voltage SID Collection and the tunes you like. Pick a **song station** (more like the current tune), a **mood station** (fast-paced, chill, melodic, nostalgic, …), or a **taste station** built from your ♥ ratings — then lean back while it auto-advances. Rate the current tune with ♥ / ✕ to steer where the station goes next. An optional **on-device playback engine** can render SIDs on the phone itself with libsidplayfp, no C64 needed — it uses the C64 ROM images read from the Ultimate you are connected to (Settings → SID Radio), which stay on your phone and are never shared; without them, tunes play on the Ultimate instead. Similarity comes from a compact, content-addressed index (`sidcorr-tiny-1`), so it works offline.
 
 <table>
   <tr>

@@ -7,7 +7,15 @@
  */
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// The section shows the C64 ROM row for on-device playback, which needs to know
+// which device is connected. useC64Connection is react-query backed; this suite
+// is about the SID Radio group, not connection state, so stub it rather than
+// wrapping every case in a QueryClientProvider.
+vi.mock("@/hooks/useC64Connection", () => ({
+  useC64Connection: () => ({ deviceHost: "c64u.local" }),
+}));
 
 import { SidRadioSettingsSection } from "@/pages/settings/SidRadioSettingsSection";
 import { loadLocalEngineEnabled, loadSidRadioEnabled } from "@/lib/config/appSettings";
@@ -57,5 +65,30 @@ describe("SidRadioSettingsSection", () => {
     fireEvent.click(screen.getByTestId("settings-clear-rankings"));
     await waitFor(() => expect(getRanking("0123456789abcdef0123456789abcdef")).toBeNull());
     expect(screen.getByTestId("settings-clear-rankings")).toHaveTextContent("Cleared");
+  });
+});
+
+describe("SidRadioSettingsSection — C64 ROMs", () => {
+  it("offers to read the ROMs and says they are needed", () => {
+    render(<SidRadioSettingsSection />);
+    expect(screen.getByTestId("settings-local-engine-roms")).toBeInTheDocument();
+    expect(screen.getByTestId("settings-roms-fetch")).toHaveTextContent("Read from C64");
+    expect(screen.getByTestId("settings-roms-status")).toHaveTextContent("No ROMs stored");
+  });
+
+  it("states the authorisation obligation at the point of action", () => {
+    // This wording is a product requirement, not decoration: reading ROM images
+    // from a machine the user is not entitled to use is not sanctioned by this
+    // feature, and the user has to be told so where they act.
+    render(<SidRadioSettingsSection />);
+    const row = screen.getByTestId("settings-local-engine-roms");
+    expect(row).toHaveTextContent(/only connect .* to devices you own or have been given permission to use/i);
+    expect(row).toHaveTextContent(/never shared, uploaded or included in diagnostics/i);
+  });
+
+  it("hides the ROM row when the on-device engine is switched off", async () => {
+    render(<SidRadioSettingsSection />);
+    fireEvent.click(screen.getByTestId("settings-local-engine-enabled"));
+    await waitFor(() => expect(screen.queryByTestId("settings-local-engine-roms")).toBeNull());
   });
 });
