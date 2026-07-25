@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { C64_ROM_BYTES, romFingerprint } from "@/lib/roms/c64SystemRoms";
 import { clearStoredRoms, hasCompleteRomSet, loadRomSummaries, loadStoredRoms, saveRom } from "@/lib/roms/romStore";
 
-vi.mock("@/lib/logging", () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
+// Mock only what this suite needs, matching the real module's export shape.
+// A previous version mocked a `logger` object that logging.ts does not export;
+// vitest happily resolved it while the production build failed to link.
+vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 
 /** Synthesised, never a real ROM dump — those are not distributed with this app. */
 function noisyImage(seed: number): Uint8Array {

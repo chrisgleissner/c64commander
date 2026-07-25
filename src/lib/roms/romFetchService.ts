@@ -27,7 +27,7 @@
  */
 
 import type { C64API } from "@/lib/c64api";
-import { logger } from "@/lib/logging";
+import { addLog } from "@/lib/logging";
 import { ROM_SOURCE_ADDRESS, validateRomImage, type C64RomKind } from "./c64SystemRoms";
 import { saveRom } from "./romStore";
 
@@ -59,8 +59,10 @@ export async function fetchSystemRomsFromDevice(api: C64API, deviceLabel: string
 
   for (const kind of ["kernal", "basic"] as const) {
     try {
+      // "user": this only ever runs from an explicit tap in Settings, so it gets
+      // the same scheduling priority as any other direct user action.
       const bytes = await api.readMemory(ROM_SOURCE_ADDRESS[kind], ROM_LENGTH, {
-        __c64uIntent: `read ${kind} ROM`,
+        __c64uIntent: "user",
       });
       const validation = validateRomImage(kind, bytes);
       if (!validation.ok) {
@@ -79,7 +81,7 @@ export async function fetchSystemRomsFromDevice(api: C64API, deviceLabel: string
         fingerprint: validation.image.fingerprint,
       });
       // Fingerprint and description only — never the image itself.
-      logger.info("Read a C64 system ROM from the connected device", {
+      addLog("info", "Read a C64 system ROM from the connected device", {
         kind,
         description: validation.image.description,
         fingerprint: validation.image.fingerprint,

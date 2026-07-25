@@ -26,7 +26,7 @@
  * quota.
  */
 
-import { logger } from "@/lib/logging";
+import { addLog } from "@/lib/logging";
 import { C64_ROM_BYTES, romFingerprint, validateRomImage, type C64RomKind } from "./c64SystemRoms";
 
 const STORAGE_KEY = "c64commander.localEngine.systemRoms.v1";
@@ -78,7 +78,7 @@ function readRaw(): StoredRomSet {
     const parsed = JSON.parse(raw) as StoredRomSet;
     return parsed && typeof parsed === "object" ? parsed : {};
   } catch (error) {
-    logger.warn("Stored C64 ROMs could not be read; ignoring them", { error: String(error) });
+    addLog("warn", "Stored C64 ROMs could not be read; ignoring them", { error: String(error) });
     return {};
   }
 }
@@ -100,13 +100,13 @@ export function loadStoredRoms(): Partial<Record<C64RomKind, Uint8Array>> {
       const bytes = fromBase64(entry.data);
       if (bytes.length !== C64_ROM_BYTES) continue;
       if (romFingerprint(bytes) !== entry.fingerprint) {
-        logger.warn("Stored C64 ROM failed its fingerprint check; ignoring it", { kind });
+        addLog("warn", "Stored C64 ROM failed its fingerprint check; ignoring it", { kind });
         continue;
       }
       if (!validateRomImage(kind, bytes).ok) continue;
       result[kind] = bytes;
     } catch (error) {
-      logger.warn("Stored C64 ROM could not be decoded; ignoring it", { kind, error: String(error) });
+      addLog("warn", "Stored C64 ROM could not be decoded; ignoring it", { kind, error: String(error) });
     }
   }
   return result;

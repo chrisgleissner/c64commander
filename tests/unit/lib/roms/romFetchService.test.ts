@@ -5,7 +5,10 @@ import { C64_ROM_BYTES } from "@/lib/roms/c64SystemRoms";
 import { fetchSystemRomsFromDevice } from "@/lib/roms/romFetchService";
 import { loadStoredRoms } from "@/lib/roms/romStore";
 
-vi.mock("@/lib/logging", () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
+// Mock only what this suite needs, matching the real module's export shape.
+// A previous version mocked a `logger` object that logging.ts does not export;
+// vitest happily resolved it while the production build failed to link.
+vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 
 /** Synthesised, never a real ROM dump — those are not distributed with this app. */
 function noisyImage(seed: number): Uint8Array {
@@ -56,8 +59,12 @@ describe("fetchSystemRomsFromDevice", () => {
     const result = await fetchSystemRomsFromDevice(api, "c64u.local");
 
     expect(result.ok).toBe(true);
-    expect(api.readMemory).toHaveBeenCalledWith("e000", 8192, expect.anything());
-    expect(api.readMemory).toHaveBeenCalledWith("a000", 8192, expect.anything());
+    // Assert the exact options, not expect.anything(): an earlier version passed a
+    // free-text description as __c64uIntent, which is a typed enum
+    // ("user" | "system" | "background"). expect.anything() accepted it and the
+    // real device call then threw inside the interaction scheduler.
+    expect(api.readMemory).toHaveBeenCalledWith("e000", 8192, { __c64uIntent: "user" });
+    expect(api.readMemory).toHaveBeenCalledWith("a000", 8192, { __c64uIntent: "user" });
 
     const stored = loadStoredRoms();
     expect(stored.kernal).toEqual(kernal());

@@ -11,7 +11,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { getC64API } from "@/lib/c64api";
-import { logger } from "@/lib/logging";
+import { addLog } from "@/lib/logging";
 import { fetchSystemRomsFromDevice, type RomFetchOutcome } from "@/lib/roms/romFetchService";
 import { clearStoredRoms, loadRomSummaries, type RomSummary } from "@/lib/roms/romStore";
 
@@ -44,7 +44,7 @@ export const LocalEngineRomsRow = ({ deviceHost }: { deviceHost: string }) => {
       setOutcomes(result.outcomes);
       setSummaries(loadRomSummaries());
     } catch (error) {
-      logger.warn("Reading the C64 ROMs failed", { error: String(error) });
+      addLog("warn", "Reading the C64 ROMs failed", { error: String(error) });
       setOutcomes([{ kind: "kernal", ok: false, reason: error instanceof Error ? error.message : String(error) }]);
     } finally {
       setBusy(false);
