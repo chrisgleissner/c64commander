@@ -153,13 +153,24 @@ def read_engine_route(cdp: Cdp) -> str:
     return cdp.evaluate("localStorage.getItem('c64u_playback_engine') || 'c64'")
 
 
-def click_testid(cdp: Cdp, testid: str) -> bool:
-    return bool(
-        cdp.evaluate(
-            f"(() => {{ const el = document.querySelector('[data-testid=\"{testid}\"]');"
-            f" if (!el) return false; el.click(); return true; }})()"
+def click_testid(cdp: Cdp, testid: str, timeout_s: float = 10.0) -> bool:
+    """Click a test id, waiting for it to appear.
+
+    Polls rather than clicking once: the station launcher opens in a sheet that
+    animates in, so a single immediate attempt raced it and reported
+    "sid-radio-style-0 not found" on a perfectly healthy app.
+    """
+    deadline = time.time() + timeout_s
+    while True:
+        found = bool(
+            cdp.evaluate(
+                f"(() => {{ const el = document.querySelector('[data-testid=\"{testid}\"]');"
+                f" if (!el) return false; el.click(); return true; }})()"
+            )
         )
-    )
+        if found or time.time() >= deadline:
+            return found
+        time.sleep(0.25)
 
 
 def read_stats(cdp: Cdp) -> dict | None:
@@ -170,7 +181,34 @@ def read_stats(cdp: Cdp) -> dict | None:
     return json.loads(value) if value else None
 
 
+def stop_active_station(cdp: Cdp) -> bool:
+    """Leave any station that is already running.
+
+    A station survives an app restart via the persisted session, and while one is
+    active the Play page shows Stop instead of the launcher — so a soak that
+    assumed a clean slate failed with "sid-radio-style-0 not found" on an app
+    that was working perfectly.
+    """
+    if not click_testid(cdp, "sid-radio-stop", timeout_s=1.0):
+        return False
+    time.sleep(1.5)
+    return True
+
+
+def open_play_tab(cdp: Cdp) -> None:
+    """Every station control lives on the Play page.
+
+    The harness used to assume the app was already there, so a run against a
+    freshly launched app (which opens on Home) failed with
+    "sid-radio-style-0 not found" — a missing tab, not a missing feature.
+    """
+    click_testid(cdp, "tab-play", timeout_s=20.0)
+    time.sleep(2.5)
+
+
 def start_station(cdp: Cdp, station: str, style: str | None) -> None:
+    open_play_tab(cdp)
+    stop_active_station(cdp)
     if station == "song":
         if not click_testid(cdp, "sid-radio-start"):
             raise SystemExit("sid_radio_hil: sid-radio-start not found (play a SID first)")
@@ -187,13 +225,50 @@ def start_station(cdp: Cdp, station: str, style: str | None) -> None:
     time.sleep(2)
 
 
+def elapsed_label(cdp: Cdp) -> str | None:
+    return cdp.evaluate(
+        "(() => { const el = document.querySelector('[data-testid=\"playback-elapsed\"]');"
+        " return el ? el.textContent : null; })()"
+    )
+
+
+def ensure_playing(cdp: Cdp, timeout_s: float = 25.0) -> bool:
+    """Make sure audio is actually advancing, not merely that a station exists.
+
+    Starting a station queues tracks; it does not necessarily start playback. A
+    soak that skipped this reported tracksAutoAdvanced=0 and looked like a
+    continuity failure when nothing had ever played.
+    """
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        before = elapsed_label(cdp)
+        time.sleep(3)
+        after = elapsed_label(cdp)
+        if after not in (None, "0:00") and after != before:
+            return True
+        click_testid(cdp, "playlist-play", timeout_s=2.0)
+    return False
+
+
 def soak(cdp: Cdp, target_tracks: int, skips: int, seconds: int | None) -> dict:
+    if not ensure_playing(cdp):
+        raise SystemExit("sid_radio_hil: playback never advanced; soak would measure nothing")
     deadline = time.time() + (seconds if seconds else max(180, target_tracks * 8))
     skip_every = max(1, target_tracks // (skips + 1)) if skips else 0
     last_skip_at = 0
     stats: dict = {}
+    stalled_since = time.time()
+    last_elapsed = None
     while time.time() < deadline:
         stats = read_stats(cdp) or stats
+        # A stalled clock means playback died mid-soak; nudge it rather than
+        # silently accumulating a passing-looking run with no audio.
+        current = elapsed_label(cdp)
+        if current != last_elapsed:
+            last_elapsed, stalled_since = current, time.time()
+        elif time.time() - stalled_since > 20:
+            click_testid(cdp, "playlist-play", timeout_s=2.0)
+            stalled_since = time.time()
         advanced = int(stats.get("tracksAutoAdvanced", 0))
         if skip_every and advanced >= last_skip_at + skip_every and stats.get("skips", 0) < skips:
             click_testid(cdp, "now-playing-notforme")

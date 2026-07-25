@@ -5,6 +5,7 @@ gate. Never rewrite prior entries; corrections are new entries. The live board i
 `PLANS.md`; the spec is `spec.md`. Do not edit the repo-root `WORKLOG.md`.
 
 **Entry format:**
+
 ```
 ### <date> — <Mx.y / gate> <title>
 - Task: <what>
@@ -66,6 +67,7 @@ gate. Never rewrite prior entries; corrections are new entries. The live board i
 _(append entries below as tasks/gates complete — newest last)_
 
 ### 2026-07-24 — pre-M0 side-task: sidflow tiny-spec accuracy (user request)
+
 - Task: Make the `sidflow`/`sidflow-data` tiny spec match what the code actually
   produces, before building the parser against it.
 - Findings: The generator (`sidflow/packages/sidflow-common/src/similarity-export-tiny.ts`)
@@ -88,6 +90,7 @@ _(append entries below as tasks/gates complete — newest last)_
 - Gate: n/a (external repo doc; unblocks M0 parser correctness).
 
 ### 2026-07-24 — M0.1 fetch-sidcorr + pinned sha + build wiring + notices
+
 - Task: `scripts/fetch-sidcorr.mjs`, committed `SIDCORR_BUNDLE_SHA256`, build wiring,
   git-ignore asset, `THIRD_PARTY_NOTICES.md` attribution. (TDD: RED test first.)
 - Files: `scripts/fetch-sidcorr.mjs` (new), `src/lib/sidRadio/sidcorrRelease.ts` (new, app
@@ -113,6 +116,7 @@ _(append entries below as tasks/gates complete — newest last)_
 - Gate: G1/G2 partial (asset acquisition + pin). Parser round-trip is M0.3; device resolve is M0.4.
 
 ### 2026-07-24 — M0.2 synthetic fixture builder (`buildTinyFixture.ts`)
+
 - Task: Byte-exact synthetic `.sidcorr` emitter so unit tests never load the real
   1.8 MB bundle and assertions are exact (spec §8.5).
 - Files: `tests/fixtures/sidcorr/buildTinyFixture.ts` (new — declarative spec →
@@ -124,7 +128,7 @@ _(append entries below as tasks/gates complete — newest last)_
   arrays, u24+u8 neighbor records, graph_flags `0x0007`). Builder enforces the DAG
   invariant (neighbor target < ordinal) so fixtures can't encode illegal graphs.
   Also supports v1 (no rating table, 3-byte neighbor rows) so the parser can be
-  tested against both. The opt-in `SIDCORR_REAL=1` golden test parses the *real*
+  tested against both. The opt-in `SIDCORR_REAL=1` golden test parses the _real_
   bundle and therefore ships with the parser (0.3), not here.
 - Commands + evidence: `npx vitest run tests/unit/sidRadio/buildTinyFixture.test.ts`
   → 9 passed (header/counts, contiguous v2 offsets incl. rating table, 9 canonical
@@ -134,15 +138,16 @@ _(append entries below as tasks/gates complete — newest last)_
 - Gate: infra for G1/G3 (feeds the M0.3 parser + M2 engine tests).
 
 ### 2026-07-24 — M0.3 `sidcorrTiny.ts` parser + cold→hot transform (+ golden)
+
 - Task: Zero-copy parser + one-time cold→hot transform (spec §2.6, §6.1) — RED→GREEN.
 - Files: `src/lib/sidRadio/sidcorrTiny.ts` (new), `tests/unit/sidRadio/sidcorrTiny.test.ts`
   (new — 12 synthetic + 1 opt-in golden).
 - Decisions: Header validation (magic/version{1,2}/neighbors==3/bounds/`fileIdentityBytes
-  == fileCount*6`). v1↔v2 detected from offsets/lengths exactly like the reference decoder
+== fileCount*6`). v1↔v2 detected from offsets/lengths exactly like the reference decoder
   (`hasNeighborSimilarity`, `hasPackedRatings`). Cold→hot: expand u24 targets → aligned
   `Uint32Array` (hot sentinel `0xFFFFFFFF`; also treats `raw>=trackCount` as empty), aligned
   copies of style-mask/ratings (styleMaskOffset is odd on the real bundle so a Uint16Array
-  *view* is impossible — copy instead), build the reverse CSR once, and a `md5_48→fileOrdinal`
+  _view_ is impossible — copy instead), build the reverse CSR once, and a `md5_48→fileOrdinal`
   map for O(1) seed resolution. `resolveTrack` uses upper_bound over `fileTrackStart`.
 - Commands + evidence:
   - `npx vitest run tests/unit/sidRadio/sidcorrTiny.test.ts` → 12 passed, 1 skipped
@@ -160,6 +165,7 @@ _(append entries below as tasks/gates complete — newest last)_
   spike; G3 partial (pure, worker-ready). G2 (`md5_48→virtualPath` on device) is M0.4.
 
 ### 2026-07-24 — M0.4 `md5PathIndex.ts` + finalize-hook wiring + `sidRadioEnabled`
+
 - Task: `md5_48 → virtualPath[]` index from `Songlengths.md5`, D14 tie-break, rebuild on the
   songlengths finalize hook, gated by the master flag — RED→GREEN.
 - Files: `src/lib/sidRadio/md5PathIndex.ts` (new), `tests/unit/sidRadio/md5PathIndex.test.ts`
@@ -188,6 +194,7 @@ _(append entries below as tasks/gates complete — newest last)_
   worker spike M0.5). G12 re-map behaviour unit-proven (moved-tune test).
 
 ### 2026-07-24 — spec §2.2 v2-layout fix + decision D16 (format audit, doc-only)
+
 - Task: Independent format audit flagged that spec §2.2 still described the **v1** layout
   (u24-only 9-byte neighbor rows "~783 KB", no RATING_TABLE) while §2.1 pins the **v2**
   bundle — contradicting the shipped M0 parser and misleading M2. Doc + one decision only;
@@ -208,6 +215,7 @@ _(append entries below as tasks/gates complete — newest last)_
 - Gate: n/a (spec/parser now mutually consistent; unblocks M2 stationEngine design).
 
 ### 2026-07-24 — M0.5 Web Worker / asset harness spike (the biggest unknown)
+
 - Task: Prove the vite-worker → Capacitor-WebView path before any engine logic depends on
   it (principle 5, G3). The repo had **no Web Worker precedent**.
 - Files: `src/lib/sidRadio/sidRadioWorkerProtocol.ts` (typed `load`→`ready`/`error` contract,
@@ -236,6 +244,7 @@ _(append entries below as tasks/gates complete — newest last)_
   device proof is the M0 EXIT (HIL via `window.__sidRadioProbe`).
 
 ### 2026-07-24 — M0.6 packaging test (§8.4) + fetch-sidcorr testability refactor
+
 - Task: Assert `.sidcorr` is never in `androidResources`/`aaptOptions` `noCompress` (so AGP
   DEFLATE-compresses it in the APK) and that the sha256 pin fails loudly on drift.
 - Files: `tests/unit/scripts/sidcorrPackaging.test.ts` (new, node), `scripts/fetch-sidcorr.mjs`
@@ -253,6 +262,7 @@ _(append entries below as tasks/gates complete — newest last)_
 - Gate: §8.4 packaging assertions green (feeds G1).
 
 ### 2026-07-24 — M0 EXIT: on-device worker/asset proof (Pixel 4) → G1 (Android) + G3 GREEN
+
 - Task: Prove the vite-worker → Capacitor-WebView path on real hardware (the M0 exit gate).
 - Method: `./build --skip-tests --install-apk` built the debug APK (BUILD SUCCESSFUL, 1m3s) —
   the vite build's worker chunk (`sidRadio.worker-*.js`) and the 1.8 MB `.sidcorr` asset are
@@ -263,8 +273,8 @@ _(append entries below as tasks/gates complete — newest last)_
   set `localStorage c64u_sid_radio_enabled=1`, reloaded, and invoked `window.__sidRadioProbe()`.
 - Evidence (real device, `window.__sidRadioProbe()` return):
   `{"bundleLoadMs":131.4,"reverseIndexMs":13.6,"memoryEstimateBytes":5247024,
-    "fileCount":60571,"trackCount":87073,"edgeCount":261213,"styleCount":9,
-    "engineThreadIsMain":false}`
+  "fileCount":60571,"trackCount":87073,"edgeCount":261213,"styleCount":9,
+  "engineThreadIsMain":false}`
   → the real bundle **fetched + parsed + reverse-indexed inside the Capacitor WebView, OFF
   the main thread** (`engineThreadIsMain:false` = **G3**), counts match the manifest
   (**G1 Android**), device cold load+reverse ≈ **145 ms** (« <1500 ms §9.2 target) and
@@ -282,6 +292,7 @@ _(append entries below as tasks/gates complete — newest last)_
   `npm run lint` is green. Device left with the SID Radio flag enabled for later M2 HIL.
 
 ### 2026-07-24 — spec D17 bundle-size decision (doc-only)
+
 - Task: Record the measured v2-vs-v1 bundle-size decision (paste-in steering).
 - Measurement (real pinned bundle, 536.7 KiB gzip): stripping the unused v2 fields
   (RATING_TABLE + per-edge similarity byte) saves only **18.9 KiB gzip** (~3.5 % asset,
@@ -297,6 +308,7 @@ _(append entries below as tasks/gates complete — newest last)_
 - Gate: n/a.
 
 ### 2026-07-24 — M1.2 ♥/✕ Now Playing affordance + Settings group
+
 - Task: Ambient ♥/✕ ranking on the Now Playing card + "Clear my rankings" in Settings (spec §5.1, §6.4).
 - Files: `appSettings.ts` (+`sidRankingEnabled`, key `c64u_sid_ranking_enabled`, default off),
   `useNowPlayingRanking.ts` (reactive ranking state over rankingStore), `useSidRadioFlags.ts`
@@ -306,7 +318,7 @@ _(append entries below as tasks/gates complete — newest last)_
   `PlaybackControlsCard.tsx` (+`rankingControls` slot), `PlayFilesPage.tsx` (wires the affordance,
   flag-gated), `settings/SidRadioSettingsSection.tsx` (enable toggles + Clear), `SettingsPage.tsx`
   (renders the section). Tests: NowPlayingRanking (7), SidRadioSettingsSection (3), appSettings (+2).
-- Decisions: ✕ only *records* with no active station (D8); `onNotForMe` (station skip) is wired in
+- Decisions: ✕ only _records_ with no active station (D8); `onNotForMe` (station skip) is wired in
   M2. Flag-gated (both `sidRadioEnabled` && `sidRankingEnabled`) so the card is byte-for-byte
   unchanged with flags off. MD5 computed once per tune-change (not on the render hot path) from the
   item's local bytes (`request.file.arrayBuffer()`), reusing `computeSidMd5`.
@@ -316,6 +328,7 @@ _(append entries below as tasks/gates complete — newest last)_
 - Gate: G4 affordance + persistence proven (unit/component); jank/starvation is the M1 HIL soak.
 
 ### 2026-07-24 — M1.3 Liked Tunes (materialiser + list + sheet)
+
 - Task: Liked Tunes playable collection (spec §5.5) — materialise ranking likes → PlaylistItems
   via md5PathIndex; play via startPlaylist; un-like; grey unresolved.
 - Files: `likedTunes.ts` (listLikedTunes/buildLikedTunePlaylistItems — full-md5 → md5_48 →
@@ -335,6 +348,7 @@ _(append entries below as tasks/gates complete — newest last)_
   and HIL soak are the M1 EXIT.
 
 ### 2026-07-24 — M1 EXIT (ambient ranking + Liked Tunes) → G4 (code/unit)
+
 - Task: Close M1. Likes persist across restart; Liked Tunes plays as a finite list; verify.
 - Evidence: full unit suite **720 files / 8786 passed / 1 skipped** (`npm test`), `npm run lint`
   exit 0, `npm run build` exit 0 (worker chunk + asset still emitted). rankingStore restart
@@ -348,6 +362,7 @@ _(append entries below as tasks/gates complete — newest last)_
 - Push: milestone complete → pushed to `origin/feat/sid-radio`.
 
 ### 2026-07-24 — M2.1/2.2 stationEngine + determinism (G11 unit)
+
 - Task: The pure, deterministic station engine (spec §2.3) + the G11 determinism test.
 - Files: `src/lib/sidRadio/stationEngine.ts` (new), `tests/unit/sidRadio/stationEngine.test.ts` (10).
 - Design: seed → BFS over forward + reverse edges (reverse CSR from the bundle),
@@ -367,6 +382,7 @@ _(append entries below as tasks/gates complete — newest last)_
   proof is M2.7 HIL. Feeds G5 (continuity).
 
 ### 2026-07-24 — M2.3 stationQueueProvider (lookahead refill + skip-unresolved)
+
 - Task: Resolve the engine's candidate stream → playable PlaylistItems, keep ~10 lookahead,
   skip a candidate whose path no longer resolves (spec §6.1, §2.5).
 - Files: `stationQueueProvider.ts` (new — async `refill(count)`; injected computeCandidates
@@ -378,6 +394,7 @@ _(append entries below as tasks/gates complete — newest last)_
 - Gate: feeds G5 continuity + G12 removed-tune skip.
 
 ### 2026-07-24 — M2.5 worker compute + contract test + sidRadioStats
+
 - Task: Extend the worker to compute candidate batches; pin the message contract (§8.3);
   add the `sid-radio-stats` DOM blob (§9.4).
 - Files: `sidRadioWorkerProtocol.ts` (+compute/candidates/empty, id-correlated),
@@ -394,6 +411,7 @@ _(append entries below as tasks/gates complete — newest last)_
 - Gate: worker contract (§8.3) green; feeds G5/G6/G9 HIL (the stats surface).
 
 ### 2026-07-24 — M2.4 useSidRadio hook + sid-radio-chip + Start Radio + transport disable
+
 - Task: Orchestrate a station over the existing Play engine; the chip; Start Radio; disable
   transport Shuffle/Repeat while a station drives (spec §6.1, §5.3, principle 9).
 - Files: `useSidRadio.ts` (new — owns worker client + StationQueueProvider; startSong/Style/Taste,
@@ -412,15 +430,16 @@ _(append entries below as tasks/gates complete — newest last)_
 - Gate: feeds G5 (continuity), G6 (✕ skip), G11 (controls-disabled) — device proofs are M2.6/2.7 HIL.
 
 ### 2026-07-24 — M2.6/2.7 HIL harness + pinned §9.2 thresholds + asserter
+
 - Task: `tools/hil/sid_radio_hil.py` + `ci/perf/sid-radio-perf-thresholds.json` (MEASURE→PIN)
-  + `--shuffle-replay`; the host-deterministic budget check.
+  - `--shuffle-replay`; the host-deterministic budget check.
 - Files: `ci/perf/sid-radio-perf-thresholds.json` (new — §9.2 + §12.6 localEngine block, each
   threshold profile/metric/unit/bound/aggregation/pinned/measured), `scripts/assert-sid-radio-perf.mjs`
   (new — validates a captured `sid-radio-stats` blob against the pins, composite metrics, exit 1
   on regress; importable + unit-tested), `tests/unit/scripts/assertSidRadioPerf.test.ts` (new, 6),
   `tools/hil/sid_radio_hil.py` (new — CDP driver: enable flags, start a station via testids, soak
   N auto-advances firing ✕, read `sid-radio-stats`, assert budgets; `--station/--style/--soak-tracks/
-  --skips/--soak-seconds/--shuffle-replay/--hvsc-update/--engine`), `tools/hil/README.md`.
+--skips/--soak-seconds/--shuffle-replay/--hvsc-update/--engine`), `tools/hil/README.md`.
 - Decisions (§9.2/§9.5): pins are the spec's proposed targets, which already carry headroom over
   the on-device measurements (M0: coldLoad 145 ms « 1500; engineThreadIsMain false; 5.0 MB;
   M2: compute 0.09 ms host « refill budgets). Never auto-rewrite a baseline. The deterministic
@@ -431,6 +450,7 @@ _(append entries below as tasks/gates complete — newest last)_
   needs a fresh APK + live C64U → documented manual HIL. Engine-side budgets device-proven.
 
 ### 2026-07-24 — M2 EXIT (Song Radio) → G5/G6/G11 code+unit; G9 pinned
+
 - Task: Close M2. Verify Song Radio end-to-end at the code level; the device continuity/skip
   soak is a manual HIL (live C64U).
 - Evidence: full unit suite **727 files / 8825 passed / 1 skipped**; `npm run lint` exit 0;
@@ -445,6 +465,7 @@ _(append entries below as tasks/gates complete — newest last)_
 - Push: milestone complete → pushed to `origin/feat/sid-radio`.
 
 ### 2026-07-24 — M3.1 stationEngine: diversity-sampled Taste + Style×Likes composition
+
 - Task: D12 diversity-sampled Taste aggregation; D10 composed style × Likes admission; verify.
 - Files: `stationEngine.ts` (+`diversitySample` — deterministic shuffleSeed-spread cap so one
   composer/cluster can't dominate a Taste station; TASTE_SEED_SAMPLE=16),
@@ -458,6 +479,7 @@ _(append entries below as tasks/gates complete — newest last)_
 - Gate: feeds G7 (composition/on-vibe); Taste-unlock UI is 3.2.
 
 ### 2026-07-24 — M3.2 + M3 EXIT: launcher AppSheet → G7 (code+unit)
+
 - Task: The SID Radio launcher (spec §5.2) — 9 style tiles, "based on my likes" composition
   toggle, Taste unlock at threshold, Surprise; close M3.
 - Files: `SidRadioLauncherSheet.tsx` (new — `sid-radio-style-<bit>` tiles, `sid-radio-likes-toggle`,
@@ -472,6 +494,7 @@ _(append entries below as tasks/gates complete — newest last)_
   on-device on-vibe mask spot-check is a manual HIL (§9.5).
 
 ### 2026-07-24 — M4.1 station-descriptor persistence + resume (D15)
+
 - Task: Persist the active-station descriptor → exact recompute-on-restart; resume the chip (§6.3, D15).
 - Files: `sidRadioSession.ts` (new — save/load/clear the tiny tuple: seed/styleFilter/shuffleSeed/
   rankingSnapshotId/excludeOrdinals; never the full queue), `useSidRadio.ts` (persist on start +
@@ -487,6 +510,7 @@ _(append entries below as tasks/gates complete — newest last)_
 - Gate: **G8** exact-recompute persistence + chip resume proven (code+unit); device restart = manual HIL.
 
 ### 2026-07-24 — M4.2 empty/degraded states + Settings two-version status line
+
 - Task: "No radio for this tune yet" empty state (Q5) + the Settings two-version status line (§6.4).
 - Files: `useSidRadio.ts` (+`notice`/`dismissNotice` — set on an empty song start),
   `PlayFilesPage.tsx` (renders `sid-radio-notice`), `SidRadioSettingsSection.tsx`
@@ -499,6 +523,7 @@ _(append entries below as tasks/gates complete — newest last)_
 - Gate: feeds G8/G10 polish.
 
 ### 2026-07-24 — M4.3/4.4/4.5 manual chapter + coverage + HIL modes
+
 - Task: Manual chapter (§ under In Depth); patch coverage ≥ 91%; HVSC-update + full-budget HIL modes.
 - Files: `docs/manual/c64commander/…md` + `docs/manual/c64u-remote/…md` (new `### SID Radio` under
   In Depth in both variants), `vitest.config.ts` (exclude the untestable `sidRadio.worker.ts` shell
@@ -514,6 +539,7 @@ _(append entries below as tasks/gates complete — newest last)_
 - Gate: **G10** manual chapter added; patch % verified by CI. **G9/G12** ◑ (device soak = manual HIL).
 
 ### 2026-07-24 — LE0 licence audit (Track B legal gate) — PASS
+
 - Task: LE0 due-diligence — confirm no GPL-2.0-only component before adopting libsidplayfp-wasm (§12.2).
 - Findings (source: /home/chris/dev/c64/sidflow/packages/libsidplayfp-wasm):
   - The package is **not published to npm** (E404) → D5 fallback applies (vendor its `dist/`).
@@ -522,16 +548,17 @@ _(append entries below as tasks/gates complete — newest last)_
     app; the combined work is GPL-3.0-or-later). NOT GPL-2.0-only.
   - hashlib = **MIT** ✓. reSIDfp/residfp ships within the libsidplayfp tree under the same
     GPL-2.0-or-later. No GPL-2.0-only piece found.
-  - dist ships the GPL v2 *license text* file, but the code is v2-or-later per the README clause.
+  - dist ships the GPL v2 _license text_ file, but the code is v2-or-later per the README clause.
 - Decision: licence gate **clears** — the WASM engine can be vendored under GPL-3.0-or-later with
   attribution in THIRD_PARTY_NOTICES (add with the vendor step). iOS App-Store × GPL friction is a
   separate pre-iOS-release legal check (§12.2), not an Android/SailfishOS blocker.
 - Gate: **L1 legal component satisfied** (no GPL-2.0-only). The L1 runtime proof (WASM instantiates +
   renders a PSID on the Callback 8020 / SailfishOS) and LE1–LE3 (local engine + chunked Web Audio sink
-  + engine toggle + on-device perf) remain — the independent Track B build (§0.5), which needs the
-  vendored `dist/` + a full audio engine.
+  - engine toggle + on-device perf) remain — the independent Track B build (§0.5), which needs the
+    vendored `dist/` + a full audio engine.
 
 ### 2026-07-24 — merge main + open PR #320 (green) — SID Radio M0–M4 landed
+
 - Task: Make the PR mergeable + green.
 - Merge: `origin/main` had advanced **88 commits** mid-session (dependabot rollups, content-explorer,
   live-view/remote-input work). Merged into `feat/sid-radio`; resolved additive conflicts —
@@ -552,8 +579,9 @@ _(append entries below as tasks/gates complete — newest last)_
   (flip flags default-on) awaits the device HIL soaks + Track B.
 
 ### 2026-07-24 — PR #320 E2E fix + Track B LE1 (local WASM engine core, host-tested)
+
 - **PR #320 green.** The settings-order E2E (`settingsConnection.spec.ts › settings sections appear
-  in expected order`) failed: in **developer mode** it enumerates every `h2`, and the dev-only
+in expected order`) failed: in **developer mode** it enumerates every `h2`, and the dev-only
   **SID Radio** settings section (the flag toggle) is a legit new heading after "Experimental
   Features". Taught the expected list about it (commit `13a5cd7d`); default (non-dev) mode is
   unchanged so no pixel baseline moves. Re-run: all 12 E2E shards pass, **31/31 substantive checks
@@ -583,6 +611,7 @@ _(append entries below as tasks/gates complete — newest last)_
   wake lock), then the hardware-gated L2–L4 soaks + GA flag-flip.
 
 ### 2026-07-24 — Track B LE2 (engine app-layer, host-tested; device wiring deferred to L3)
+
 - Built the LE2 **decision + control layer** test-first, all flag-gated OFF so playback is
   byte-for-byte the C64 path with the rollout gate off:
   - `src/lib/playback/playbackEngineRouting.ts` — pure route/notice decision. `c64`→Ultimate
@@ -606,6 +635,7 @@ _(append entries below as tasks/gates complete — newest last)_
   wiring. **This is the honest LE2 boundary for a no-hardware session.**
 
 ### 2026-07-24 — Track B LE2 device wiring (playItem/handleStop routing + Play-page/Settings surface)
+
 - Wired the on-device engine into the real transport, all behind `c64u_local_engine_enabled`
   (default OFF → shipped behaviour + every existing controller test byte-for-byte unchanged):
   - `usePlaybackController`: holds a lazily-created (test-injectable) `LocalSidPlaybackController`
@@ -623,9 +653,73 @@ _(append entries below as tasks/gates complete — newest last)_
   - Tests: 6 controller routing tests (PSID→local, RSID→C64, non-SID→C64, unsupported→C64,
     disabled→C64, Stop-halts-local-skips-device) + the Settings row + patched the `SettingsPage`
     appSettings mock. `tsc`, full `npm run lint`, catch-guardrail all green; 88 controller tests
-    + 887 playFiles/settings/playback tests pass locally.
+    - 887 playFiles/settings/playback tests pass locally.
 - **Honest boundary:** the code path is complete but its audio correctness — gapless render, the
   once-per-track songlength-clock timing, and a **clean instant mid-track engine switch** — is only
   verifiable on hardware (spec §12.6). The Play-page toggle currently persists the choice
   (next-track effect); instant mid-track restart is the remaining device-validated refinement,
   landing with the L2/L3 soak. Flags stay OFF, so this is fully mergeable as-is.
+
+### 2026-07-26 — engine correctness, ROMs, engine choice, hold-to-seek (hardware-verified)
+
+**The engine did not sound like a C64, and the cause was not what it looked like.** Full method and
+per-tune data in `AUDIO-FIDELITY-TEST.md` §6. Five defects, fixed in `sidflow` (PR #95) and vendored:
+
+| #   | defect                                                                                                                                                                       | how it presented              |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| 1   | Built **SIDLite, not reSIDfp** — `HAVE_RESIDFP` was never defined, so `bindings.cpp` fell through to `SIDLiteBuilder` while passing `-I.../residfp-builder` as if it had not | plausible audio, wrong engine |
+| 2   | A `sidemu` wrapper corrupted the mixer's buffer contract (`bufferpos()` is non-virtual)                                                                                      | plausible audio, decorrelated |
+| 3   | **Heap-use-after-free**: `initMixer()` caches each chip's raw `short*`; `player.load()` reallocates it; `selectSong()` called `load()` without re-running `initMixer()`      | ~10 dB too bright             |
+| 4   | reSIDfp's filter-table threads aborted under emscripten, and the guard script silently matched nothing **and reported success**                                              | no audio at all               |
+| 5   | Upstream pinned to a **pre-release alpha** (v3.0.0a2)                                                                                                                        | non-reproducible              |
+
+Defect 3 was found with AddressSanitizer in a single run after compiler, fast-math and thread-guard
+were each ruled out by controls. Now on **libsidplayfp v3.0.2 + libresidfp v1.1.2**.
+
+**Result vs the real C64**, 31-tune sign-off corpus (≥30 required), all five median criteria pass:
+
+| metric (median)      | before   | after        | criterion    |
+| -------------------- | -------- | ------------ | ------------ |
+| DC offset            | +0.1736  | **+0.0018**  | < 0.005 ✅   |
+| level vs C64         | −7.98 dB | **+0.22 dB** | < 1.5 dB ✅  |
+| LTAS rms             | 4.83 dB  | **2.78 dB**  | < 3 dB ✅    |
+| centroid ratio       | 1.583    | **1.039**    | 0.85–1.18 ✅ |
+| envelope correlation | 0.060    | **0.551**    | ≥ 0.45 ✅    |
+
+Envelope correlation beats native `sidplayfp`'s own 0.483 on the same hardware.
+
+**C64 ROMs are a prerequisite, not an RSID-only unlock** (§1.7 reframed). Without KERNAL/BASIC the
+engine initialises a tune and never advances it — a flat drone, correlation ~0.008. Implemented as an
+explicit Settings action reading them from the connected Ultimate over DMA, structurally validated,
+app-private, never bundled or exported, with the authorisation obligation stated in Settings, both
+manual variants and the README. **Hardware-verified**: both images read, validated and identified as
+KERNAL rev 3 / BASIC V2 with fingerprints matching the canonical dumps.
+
+**SID emulation is now selectable** (Settings → SID Radio), defaulting per variant. Measured
+like-for-like: reSIDfp 4.3× realtime, SIDLite 23.8× (5.5× cheaper isolated; 3.1× on device, same
+tune). The Callback 8020 is a Helio G81, ~2–3× slower single-threaded than the Pixel 4, which
+projects reSIDfp past realtime there — so `c64u-remote` defaults to SIDLite, everything else to
+reSIDfp. **A projection, not a measurement: gate L1 still settles it.**
+
+**Hold Previous/Next to rewind/fast-forward local playback** (new). Verified on device: hold-next
+0:09 → 0:35 with the track unchanged, hold-prev 0:35 → 0:02, tap still changes track. Required
+scheduler seek-rebase, dropping in-flight renders, and rebasing **both** UI clocks; also fixed a
+keypad hazard where the click-suppression flag outlived its click.
+
+**Budgets re-derived and measured on device** (`ci/perf/sid-radio-perf-thresholds.json`):
+
+- `renderMsPerSec` re-pinned 250 → **850**. The old bound was measured against SIDLite; reSIDfp is a
+  full analogue model and costs ~5.7× more. Observed 388–715 p99 with zero underruns.
+- `refillMainThreadMaxMs` **113 ms → 0.0 ms** — the metric was timed _across_ the await, so it
+  measured refill latency, not main-thread occupancy, and was assigned the same value as
+  `lastRefillMs`. Fixed and re-measured.
+- `firstCandidateMs` 254 (< 300 ✅), `audioUnderruns` 0 ✅, `engineThreadIsMain` false ✅.
+- `skips`/`skipToLaunchMs` were **dead metrics**: `recordSkip` lived in `useSidRadio.steer()`, which
+  nothing consumes — the ✕ is wired straight to `handleNext`. Now recorded where the skip happens.
+
+**Gate L4 PASSED** — SID Radio played end to end on the Local engine for 60 s with the C64 pointed at
+an unroutable address, zero underruns.
+
+**Part 3 (Dependabot) landed on main** via PR #323: the AGP↔Gradle guardrail fix (which had been
+stranded on this branch, so rebasing #322 alone would never have worked), a meta-guard forbidding
+hardcoded version literals, and an auto-rebase workflow for stale Dependabot PRs. #322 is closed.
