@@ -543,11 +543,12 @@ export const saveEnableSwipeNavigation = (enabled: boolean) => {
 };
 
 /**
- * SID Radio master flag (spec §0.4, `sidRadioEnabled`). Defaults **off** during
- * rollout: with it off the app is byte-for-byte unchanged (no similarity bundle
- * fetch at play time, no `md5PathIndex` build on the songlengths finalize hook).
+ * SID Radio master flag (spec §0.4, `sidRadioEnabled`). **GA: on by default.**
+ * (During rollout this was off so the app was byte-for-byte unchanged; it is now
+ * a shipped feature — the similarity bundle loads and the `md5PathIndex` builds
+ * on the songlengths finalize hook.)
  */
-export const DEFAULT_SID_RADIO_ENABLED = false;
+export const DEFAULT_SID_RADIO_ENABLED = true;
 
 export const loadSidRadioEnabled = () => readBoolean(SID_RADIO_ENABLED_KEY, DEFAULT_SID_RADIO_ENABLED);
 
@@ -558,11 +559,11 @@ export const saveSidRadioEnabled = (enabled: boolean) => {
 };
 
 /**
- * The ambient ♥/✕ ranking affordance (spec §0.4, `sidRankingEnabled`). Defaults
- * off during rollout and, per §0.4, follows the master `sidRadioEnabled`: the
- * affordance is shown only when both are on.
+ * The ambient ♥/✕ ranking affordance (spec §0.4, `sidRankingEnabled`). **GA: on
+ * by default**, and per §0.4 it follows the master `sidRadioEnabled` — the
+ * affordance shows only when both are on.
  */
-export const DEFAULT_SID_RANKING_ENABLED = false;
+export const DEFAULT_SID_RANKING_ENABLED = true;
 
 export const loadSidRankingEnabled = () => readBoolean(SID_RANKING_ENABLED_KEY, DEFAULT_SID_RANKING_ENABLED);
 
@@ -595,12 +596,13 @@ export const savePlaybackEngine = (engine: PlaybackEngine) => {
 };
 
 /**
- * Local-engine rollout gate (Track B). Defaults **off**: with it off the
- * on-device engine is never offered (no Play-page engine toggle) and `playItem`
- * never routes to it, so playback is byte-for-byte the C64 path. Independent of
- * `sidRadioEnabled` — the two "SID walkman" features roll out separately.
+ * Local-engine gate (Track B). **GA: on by default** — the Play-page "Play on:
+ * C64 / This device" choice is offered for SID items. The default *engine* is
+ * still `c64` ([[DEFAULT_PLAYBACK_ENGINE]]), so playback stays on the Ultimate
+ * until the user explicitly picks "This device"; this flag only surfaces the
+ * choice. Independent of `sidRadioEnabled`.
  */
-export const DEFAULT_LOCAL_ENGINE_ENABLED = false;
+export const DEFAULT_LOCAL_ENGINE_ENABLED = true;
 
 export const loadLocalEngineEnabled = () => readBoolean(LOCAL_ENGINE_ENABLED_KEY, DEFAULT_LOCAL_ENGINE_ENABLED);
 

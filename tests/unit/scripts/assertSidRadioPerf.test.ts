@@ -24,6 +24,10 @@ const goodStats = {
   tracksAutoAdvanced: 32,
   engineThreadIsMain: false,
   memoryEstimateBytes: 5_247_024,
+  // Track B / LE3 local-engine budgets (§12.6).
+  renderMsPerSec: 60,
+  audioUnderruns: 0,
+  engineSwitchMs: 900,
 };
 
 describe("assert-sid-radio-perf", () => {
@@ -54,6 +58,43 @@ describe("assert-sid-radio-perf", () => {
     const result = assertSidRadioPerf({ ...goodStats, tracksAutoAdvanced: 12 }, thresholds());
     expect(result.passed).toBe(false);
     expect(result.failures.map((f) => f.name)).toContain("tracksAutoAdvanced");
+  });
+
+  it("asserts the Local engine budgets (§12.6, Track B / LE3)", () => {
+    // Renders slower than realtime → renderMsPerSec regression (max bound).
+    const slow = assertSidRadioPerf({ ...goodStats, renderMsPerSec: 300 }, thresholds());
+    expect(slow.passed).toBe(false);
+    expect(slow.failures.map((f) => f.name)).toContain("renderMsPerSec");
+
+    // Any audible gap over the soak → audioUnderruns regression.
+    const gaps = assertSidRadioPerf({ ...goodStats, audioUnderruns: 2 }, thresholds());
+    expect(gaps.passed).toBe(false);
+    expect(gaps.failures.map((f) => f.name)).toContain("audioUnderruns");
+
+    // A sluggish engine switch → engineSwitchMs regression.
+    const slowSwitch = assertSidRadioPerf({ ...goodStats, engineSwitchMs: 2000 }, thresholds());
+    expect(slowSwitch.passed).toBe(false);
+    expect(slowSwitch.failures.map((f) => f.name)).toContain("engineSwitchMs");
+  });
+
+  it("has internally-consistent pinned budgets (recorded measurements within bounds)", () => {
+    // A host gate independent of any device run: every recorded `measured.value`
+    // in the thresholds file must already satisfy its own pinned budget, across
+    // both the SID Radio and Local engine groups. Nobody can pin a budget that
+    // the recorded measurement already violates (spec §9.2).
+    const doc = thresholds();
+    for (const group of [doc.thresholds, doc.localEngine]) {
+      for (const [name, spec] of Object.entries<Record<string, unknown>>(group)) {
+        const measured = (spec as { measured?: { value?: number | boolean | null } }).measured?.value;
+        if (measured === undefined || measured === null) continue;
+        const stats = { [(spec as { metric: string }).metric]: measured };
+        const result = assertSidRadioPerf(stats, doc);
+        expect(
+          result.failures.map((f) => f.name),
+          `pinned budget ${name} violated by its own measurement`,
+        ).not.toContain(name);
+      }
+    }
   });
 
   it("skips (does not fail) metrics missing from the stats blob", () => {

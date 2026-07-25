@@ -81,13 +81,13 @@ describe("appSettings", () => {
     expect(loadVolumeSliderPreviewIntervalMs()).toBe(DEFAULT_VOLUME_SLIDER_PREVIEW_INTERVAL_MS);
     expect(loadEnableSwipeNavigation()).toBe(DEFAULT_ENABLE_SWIPE_NAVIGATION);
     expect(loadSidRadioEnabled()).toBe(DEFAULT_SID_RADIO_ENABLED);
-    expect(DEFAULT_SID_RADIO_ENABLED).toBe(false); // spec §0.4: off during rollout
+    expect(DEFAULT_SID_RADIO_ENABLED).toBe(true); // GA: on by default
     expect(loadSidRankingEnabled()).toBe(DEFAULT_SID_RANKING_ENABLED);
-    expect(DEFAULT_SID_RANKING_ENABLED).toBe(false);
+    expect(DEFAULT_SID_RANKING_ENABLED).toBe(true);
     expect(loadPlaybackEngine()).toBe(DEFAULT_PLAYBACK_ENGINE);
-    expect(DEFAULT_PLAYBACK_ENGINE).toBe("c64"); // spec §12.5: C64 by default (always works)
+    expect(DEFAULT_PLAYBACK_ENGINE).toBe("c64"); // spec §12.5: C64 by default (local is opt-in)
     expect(loadLocalEngineEnabled()).toBe(DEFAULT_LOCAL_ENGINE_ENABLED);
-    expect(DEFAULT_LOCAL_ENGINE_ENABLED).toBe(false); // Track B: off during rollout
+    expect(DEFAULT_LOCAL_ENGINE_ENABLED).toBe(true); // GA: the on-device engine choice is offered
   });
 
   it("persists the local-engine rollout gate and emits an event", () => {

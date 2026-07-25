@@ -44,7 +44,10 @@ export const assertSidRadioPerf = (stats, thresholdsDoc) => {
   const failures = [];
   const skipped = [];
   let checked = 0;
-  const groups = [thresholdsDoc.thresholds ?? {}];
+  // Both the SID Radio budgets (§9.2) and the Local engine budgets (§12.6,
+  // Track B / LE3) are asserted against the same stats blob; unmeasured metrics
+  // are skipped, not failed.
+  const groups = [thresholdsDoc.thresholds ?? {}, thresholdsDoc.localEngine ?? {}];
   for (const group of groups) {
     for (const [name, spec] of Object.entries(group)) {
       const actual = resolveMetric(stats, spec.metric);

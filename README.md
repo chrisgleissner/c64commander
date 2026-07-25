@@ -185,6 +185,18 @@ Build playlists for programs and songs sourced from the local device, C64U stora
   </tr>
 </table>
 
+### SID Radio
+
+An endless, self-refilling queue of _similar_ SIDs, mixed from the High Voltage SID Collection and the tunes you like. Pick a **song station** (more like the current tune), a **mood station** (fast-paced, chill, melodic, nostalgic, …), or a **taste station** built from your ♥ ratings — then lean back while it auto-advances. Rate the current tune with ♥ / ✕ to steer where the station goes next. An optional **on-device playback engine** can render ROM-independent SIDs on the phone itself (no C64 needed); ROM-dependent tunes keep playing on the Ultimate. Similarity comes from a compact, content-addressed index (`sidcorr-tiny-1`), so it works offline.
+
+<table>
+  <tr>
+    <td><img src="docs/img/app/play/sid-radio/01-controls.png" alt="SID Radio and Liked Tunes controls with the heart/cross ranking on the playback card" width="360"/></td>
+    <td><img src="docs/img/app/play/sid-radio/02-stations.png" alt="SID Radio station launcher: song, mood (nine style tiles) and taste seeds" width="360"/></td>
+    <td><img src="docs/img/app/settings/sid-radio.png" alt="SID Radio settings: enable stations, ranking, and the experimental on-device playback engine, with the similarity corpus status" width="360"/></td>
+  </tr>
+</table>
+
 ### Browse & Import
 
 Choose an import source, browse its contents, then add files to your playlist or disk collection.

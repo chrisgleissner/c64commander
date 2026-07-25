@@ -10,7 +10,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { SidRadioSettingsSection } from "@/pages/settings/SidRadioSettingsSection";
-import { loadLocalEngineEnabled, loadSidRadioEnabled, loadSidRankingEnabled } from "@/lib/config/appSettings";
+import { loadLocalEngineEnabled, loadSidRadioEnabled } from "@/lib/config/appSettings";
 import { clearAllRankings, getRanking, setRanking } from "@/lib/sidRadio/rankingStore";
 
 beforeEach(async () => {
@@ -26,21 +26,21 @@ describe("SidRadioSettingsSection", () => {
     expect(screen.getByTestId("settings-clear-rankings")).toBeInTheDocument();
   });
 
-  it("toggling the master flag persists it and reveals the ranking toggle", async () => {
+  it("master flag is on by default (GA); toggling it off hides the ranking toggle", async () => {
     render(<SidRadioSettingsSection />);
-    expect(screen.queryByTestId("settings-sid-ranking-enabled")).toBeNull();
-    fireEvent.click(screen.getByTestId("settings-sid-radio-enabled"));
-    await waitFor(() => expect(loadSidRadioEnabled()).toBe(true));
+    // GA default: master on, so the ranking sub-toggle is visible.
+    expect(loadSidRadioEnabled()).toBe(true);
     expect(screen.getByTestId("settings-sid-ranking-enabled")).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId("settings-sid-ranking-enabled"));
-    await waitFor(() => expect(loadSidRankingEnabled()).toBe(true));
+    fireEvent.click(screen.getByTestId("settings-sid-radio-enabled"));
+    await waitFor(() => expect(loadSidRadioEnabled()).toBe(false));
+    expect(screen.queryByTestId("settings-sid-ranking-enabled")).toBeNull();
   });
 
-  it("toggling the on-device engine row persists the rollout gate (Track B)", async () => {
+  it("toggling the on-device engine row persists the gate (Track B; on by default)", async () => {
     render(<SidRadioSettingsSection />);
-    expect(loadLocalEngineEnabled()).toBe(false);
+    expect(loadLocalEngineEnabled()).toBe(true); // GA default
     fireEvent.click(screen.getByTestId("settings-local-engine-enabled"));
-    await waitFor(() => expect(loadLocalEngineEnabled()).toBe(true));
+    await waitFor(() => expect(loadLocalEngineEnabled()).toBe(false));
   });
 
   it("shows the two-version status line (§6.4)", () => {

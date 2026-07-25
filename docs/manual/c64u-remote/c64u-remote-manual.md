@@ -12,6 +12,7 @@ Connect, control, play, mount, and diagnose a Commodore 64 Ultimate.
 - [Your First Tour](#your-first-tour)
 - [Everyday Flows](#everyday-flows)
 - [In Depth](#in-depth)
+- [SID Radio](#sid-radio)
 - [Safe Device Use](#safe-device-use)
 - [Troubleshooting](#troubleshooting)
 - [Appendices](#appendices)
@@ -562,20 +563,6 @@ Every change — on Home, on Disks, or in Config — is sent to the running devi
 
 You manage that from **Home > Config actions**. **Save to flash** writes the current live settings to flash now — reach for it when **Auto save config** is Ask or No. The app can also keep named **configuration snapshots** on the phone, separate from the device's flash: save the current setup, then load it back later to restore a whole configuration at once.
 
-### SID Radio
-
-SID Radio turns the tunes you like — and the mood you are in — into an endless, self-refilling queue of similar SIDs, launched in one tap. It rides the normal Play engine, so everything you already know about playback still applies.
-
-**Rate as you listen.** While a SID plays, a subtle heart / cross pair sits on the Now Playing card. Tap the heart to add a tune to your **Liked Tunes**; tap the cross to skip it now and steer future picks away from its neighbourhood. Ratings are optional and ambient, stored on the device, and they follow a tune across HVSC updates because they key on the tune's content (its MD5), not its path.
-
-**Start a station.** Open **SID Radio** from the Play page to pick a mood: nine style tiles (Fast-Paced, Chill / Ambient, Melodic and more), a **From tunes you like** taste station that unlocks once you have liked a few tunes, or **Surprise me**. Turn on **Based on my likes** to bias any style toward what you enjoy — for example "Fast-Paced from your Likes". You can also start a station from any single tune with **Start Radio**.
-
-**Lean back.** A station is an endless stream, so — like radio everywhere — it has no shuffle control of its own, and the transport Shuffle and Repeat are paused while a station plays. They return the moment you play a finite list such as Liked Tunes. Each start is fresh, so the same mood feels new every time. The now-playing chip names the active station, stops it in one tap, and expands a short "why this tune" line.
-
-**Liked Tunes.** Everything you have liked is a plain, playable list — browse it, play it (with normal Shuffle and Repeat), or un-like a tune. Tunes no longer in your installed HVSC are shown greyed rather than dropped.
-
-SID Radio works fully offline: it ships a small similarity index and needs no network while you listen. Enable it, and the heart / cross ranking, under **Settings → SID Radio**, which also shows the similarity-corpus and installed-HVSC versions.
-
 ### Reading Diagnostics
 
 Diagnostics is your window into the health of the connection and everything the app has recently done. It slides up from the bottom of the screen. Reach it by tapping the header badge, pressing `*`, choosing **Diagnostics** in Settings, or tapping any error notification.
@@ -622,6 +609,32 @@ The switcher checks each saved device for you and refreshes every ten seconds wh
 Tap a device to switch to it. Before anything else the app safely lets go of any input you were holding on the old device, stops tracking its playback and pause state, retargets to the new device's address and ports, and then checks that the new device answers. While that happens the target shows a **Verifying** pill; once it responds, it becomes the active device.
 
 Saved devices themselves are created and edited in **Settings > Connection**, under **Saved devices**. There you can add a device, edit its **Device name**, **Hostname / IP**, and **HTTP**, **FTP**, and **Telnet** ports, set an optional **Network Password**, or delete one you no longer use. A device is saved only once it answers, so the list never fills with machines that are not really there. With a single device saved there is nothing to switch to, so the switcher stays out of your way.
+
+## SID Radio
+
+SID Radio turns the tunes you like — and the mood you are in — into an endless, self-refilling queue of similar SIDs, launched in one tap. It rides the normal Play engine, so everything you already know about playback still applies, and it works fully offline: the app ships a small similarity index and needs no network while you listen.
+
+![SID Radio and Liked Tunes controls with the heart / cross ranking on the Now Playing card](../../img/app/play/sid-radio/01-controls.png)
+
+**Rate as you listen.** While a SID plays, a subtle heart / cross pair sits on the Now Playing card. Tap the heart to add a tune to your **Liked Tunes**; tap the cross to skip it now and steer future picks away from its neighbourhood. Ratings are optional and ambient, stored on the device, and they follow a tune across HVSC updates because they key on the tune's content (its MD5), not its path.
+
+**Start a station.** Open **SID Radio** from the Play page to pick a mood: nine style tiles (Fast-Paced, Chill / Ambient, Melodic and more), a **From tunes you like** taste station that unlocks once you have liked a few tunes, or **Surprise me**. Turn on **Based on my likes** to bias any style toward what you enjoy — for example "Fast-Paced from your Likes". You can also start a station from any single tune with **Start Radio**.
+
+![The SID Radio station launcher: song, mood (nine style tiles) and taste seeds](../../img/app/play/sid-radio/02-stations.png)
+
+**Lean back.** A station is an endless stream, so — like radio everywhere — it has no shuffle control of its own, and the transport Shuffle and Repeat are paused while a station plays. They return the moment you play a finite list such as Liked Tunes. Each start is fresh, so the same mood feels new every time. The now-playing chip names the active station, stops it in one tap, and expands a short "why this tune" line.
+
+**Liked Tunes.** Everything you have liked is a plain, playable list — browse it, play it (with normal Shuffle and Repeat), or un-like a tune. Tunes no longer in your installed HVSC are shown greyed rather than dropped.
+
+### Where the music plays
+
+By default, SID Radio plays each tune **on the C64** — exactly like the rest of the app — and you hear it back on your phone through the network **audio mirror**. For that to work the Commodore 64 Ultimate has to be reachable on your local network: connect it to your Wi‑Fi router with an **Ethernet** cable, and keep your phone on the same Wi‑Fi. The C64 then streams its sound across the network and the app plays it in step with the on-screen progress.
+
+If you would rather not power up a C64 at all, turn on the **on-device playback engine** — a single "Play on: **C64** / **This device**" choice that appears on the Play screen for SID tunes. Pick **This device** and the app renders the SID on your phone itself, with a built-in libsidplayfp engine — no C64, and no network stream, required. A small number of tunes rely on the C64's own ROM routines (RSID files); those always play on the C64, and the app switches back to it automatically with a brief note.
+
+![SID Radio settings: enable stations, the ranking, and the experimental on-device playback engine, with the similarity-corpus status](../../img/app/settings/sid-radio.png)
+
+Enable SID Radio, the heart / cross ranking, and the on-device engine under **Settings → SID Radio**, which also shows the similarity-corpus and installed-HVSC versions.
 
 ## Safe Device Use
 

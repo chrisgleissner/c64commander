@@ -22,7 +22,8 @@ describe("registerSidRadioProbe", () => {
     delete window.__sidRadioReady;
   });
 
-  it("does not install the probe when SID Radio is disabled (default)", () => {
+  it("does not install the probe when SID Radio is turned off", () => {
+    saveSidRadioEnabled(false); // GA default is on, so disable it explicitly
     registerSidRadioProbe();
     expect(window.__sidRadioProbe).toBeUndefined();
   });
