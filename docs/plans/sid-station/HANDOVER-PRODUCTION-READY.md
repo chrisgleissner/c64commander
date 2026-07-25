@@ -247,7 +247,57 @@ the iteration history so the path is auditable.
 - The Ultimate has **no second SID mapped**, so 2-SID tunes are silent on the C64 side. Either map it
   (`SID Addressing` / `SID Sockets Configuration`) or keep excluding them — state which.
 
-### 1.7 If it turns out to be a dead end
+### 1.7 Fetch the C64 ROMs from the user's own Ultimate over DMA (design + implement)
+
+libsidplayfp is materially more accurate **with** real KERNAL/BASIC ROMs — native `sidplayfp`, the
+0.483 reference, runs with them. Today the app ships none (they cannot legally be bundled), which is
+why RSID tunes are routed back to the C64 and why PSID accuracy is capped. **This is solvable: read
+the ROMs from the user's own connected hardware.** The app never distributes ROMs; it reads them off
+the machine the user owns.
+
+**Already proven on the rig this session** — `GET /v1/machine:readmem` is documented as *"performs a
+**DMA read** action on the cartridge bus"* (`u2plus-open-api-spec.yaml`), and the dumps verified
+byte-perfect against the canonical images:
+
+| ROM | request | size | MD5 | identification |
+| --- | --- | --- | --- | --- |
+| KERNAL | `machine:readmem?address=e000&length=8192` | 8 KiB | `39065497630802346bce17963f13c092` | ✅ genuine KERNAL rev 3 (`901227-03`) |
+| BASIC | `machine:readmem?address=a000&length=8192` | 8 KiB | `57af4ae21d4b705c2991d98ed5c1f7b8` | ✅ genuine BASIC V2 (`901226-01`) |
+| CHARGEN | `machine:readmem?address=d000&length=4096` | 4 KiB | `72c3ce07501ea0cac7d1f7e2834dad7c` | ❌ **not** chargen — `$D000` is I/O under default banking |
+
+**Chargen** needs the character ROM banked in (`$01` bit 2 `CHAREN = 0`): read `$01` via `readmem`,
+write it with CHAREN cleared via `machine:writemem`, DMA-read `$D000–$DFFF`, then **restore `$01`**.
+Do this only in a known-idle machine state, and prefer to skip it entirely — chargen has **no effect
+on audio**, and `setSystemROMs(kernal, basic, null)` is fine for playback. Only pursue it if a
+verified-complete ROM set is wanted.
+
+**Implementation requirements:**
+
+- **Trigger:** an explicit, understandable user action (Settings → "Fetch C64 ROMs from your
+  Ultimate"), not a silent background grab. Explain plainly that it improves on-device playback
+  accuracy and enables ROM-dependent (RSID) tunes.
+- **Validate before use, always.** Check length, then checksum against the known-good set above;
+  reject all-zeros, all-`$FF`, or anything failing a sanity check. A DMA read reflects **current
+  banking** — if a cartridge is active or a program has banked ROM out, the read returns RAM and will
+  silently look like a ROM-shaped blob. Capture after a reset, in a known state, and **never accept a
+  dump that fails checksum validation**.
+- **Handle ROM variants.** KERNAL revisions differ (rev 1/2/3), and a U64/C128 may present different
+  images. Accept any dump that passes structural validation, record which revision was captured, and
+  surface it in Settings/Diagnostics.
+- **Storage:** app-private storage only. **Never** bundle, export, sync, include in diagnostics
+  bundles, or ship in the APK. Document this explicitly.
+- **Wire it up:** pass the cached ROMs into `SidAudioEngine.setSystemROMs(kernal, basic, chargen)`
+  before `loadSidBuffer`. Then revisit `playbackEngineRouting.ts`: with valid ROMs present, the
+  `rom-on-c64` fallback for RSID tunes can be lifted, so RSID plays on-device too. Keep the fallback
+  for the no-ROMs case.
+- **Re-measure.** Adding ROMs changes the audio path — rerun the §1.4 loop with and without ROMs and
+  record both. Note that in the current (broken) WASM, supplying real ROMs made output *worse*
+  (AC RMS jumped from 0.07 to 0.51, correlation 0.046), so **only evaluate the ROM path after §1.1
+  and §1.2 are fixed** — otherwise you will be measuring the wrapper bug.
+- **Licence note:** update `THIRD_PARTY_NOTICES.md` / docs to state that ROMs are user-supplied from
+  their own hardware at runtime and are never distributed with the app.
+
+### 1.8 If it turns out to be a dead end
 
 It very probably is not — native `sidplayfp` already proves the library reproduces the hardware well,
 and §1.1 is a concrete confirmed defect in *our* wrapper. But if, after fixing §1.1 and §1.2, the
@@ -351,8 +401,10 @@ Also record on-device **CPU % (p95)** and **battery** over the soak (§12.6).
   `DEFAULT_PLAYBACK_ENGINE = "c64"`, so the engine is *offered* but the C64 is the default. **Until
   Part 1 passes, it must not be presented as equivalent to the C64** — either keep it clearly
   labelled as approximate, or gate it off.
-- If the on-device engine ships, state the ROM caveat plainly: RSID tunes need C64 ROMs that cannot
-  be bundled and fall back to the C64 with a one-time notice.
+- ROM story (§1.7): if ROM fetching ships, document that ROMs are read from the user's own Ultimate
+  over DMA, cached app-privately and never distributed — and that RSID tunes play on-device once ROMs
+  are present. Until then, keep the current caveat: RSID tunes need C64 ROMs that cannot be bundled
+  and fall back to the C64 with a one-time notice.
 
 ### 2.6 Licence hygiene
 
@@ -368,11 +420,13 @@ assets, and the pinned upstream ref must be recorded there).
 
 1. Part 1 exit criteria met on a ≥ 30-tune corpus, numbers recorded in `AUDIO-FIDELITY-TEST.md`, and
    the on-device engine confirmed by ear to be indistinguishable from the C64.
-2. Every budget in §2.2 measured on hardware and within its pinned bound.
-3. Every gate in §2.3 green with WORKLOG evidence.
-4. §2.4 CI/quality gates green; PR #320 mergeable and not merged.
-5. Docs, screenshots, manual and licence notices updated.
-6. The sidflow fix landed on `main` with a build-time assertion that the artifact really is reSIDfp
+2. ROM acquisition from the user's Ultimate (§1.7) implemented, checksum-validated, wired into the
+   engine, and its effect on fidelity measured and recorded.
+3. Every budget in §2.2 measured on hardware and within its pinned bound.
+4. Every gate in §2.3 green with WORKLOG evidence.
+5. §2.4 CI/quality gates green; PR #320 mergeable and not merged.
+6. Docs, screenshots, manual and licence notices updated.
+7. The sidflow fix landed on `main` with a build-time assertion that the artifact really is reSIDfp
    and the tracing path cannot affect audio.
 
 ## Relevant memories
