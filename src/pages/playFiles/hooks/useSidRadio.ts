@@ -167,9 +167,16 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       resetSidRadioStats();
       const started = performance.now();
       const { items } = await provider.refill(LOOKAHEAD);
+      // `lastRefillMs` is end-to-end latency (it spans the await, so it includes
+      // worker compute). `mainThreadMs` must NOT: its budget is one 60 fps frame
+      // because it is meant to capture only the synchronous work this callback
+      // does on the UI thread. Measuring it across the await made the two
+      // identical and the budget meaningless — it read 113 ms against a 16 ms
+      // bound while nothing was actually blocking the main thread.
+      const settledAt = performance.now();
       recordRefill({
-        lastRefillMs: performance.now() - started,
-        mainThreadMs: performance.now() - started,
+        lastRefillMs: settledAt - started,
+        mainThreadMs: performance.now() - settledAt,
         emitted: items.length,
         lookahead: LOOKAHEAD,
         firstCandidate: true,
@@ -286,8 +293,11 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     void provider
       .refill(LOOKAHEAD - remaining)
       .then(({ items, reason }) => {
-        const mainThreadMs = performance.now() - started;
-        recordRefill({ lastRefillMs: mainThreadMs, mainThreadMs, emitted: items.length, lookahead: LOOKAHEAD });
+        // See the note in the station-start refill: the awaited span is refill
+        // *latency*, not main-thread occupancy. Only the synchronous work below
+        // — appending items and saving the session — actually blocks the UI
+        // thread, so that is what `mainThreadMs` has to measure.
+        const settledAt = performance.now();
         if (items.length > 0) {
           appendItems(items);
           saveSidRadioSession({
@@ -302,6 +312,12 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
         } else if (reason) {
           updateSidRadioStats({ stationActive: true });
         }
+        recordRefill({
+          lastRefillMs: settledAt - started,
+          mainThreadMs: performance.now() - settledAt,
+          emitted: items.length,
+          lookahead: LOOKAHEAD,
+        });
       })
       .finally(() => {
         refillingRef.current = false;

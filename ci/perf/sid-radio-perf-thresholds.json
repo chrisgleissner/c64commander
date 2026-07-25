@@ -24,8 +24,8 @@
       "pinned": 300,
       "measured": {
         "device": "Pixel 4 (flame)",
-        "value": null,
-        "note": "measure on first station start; compute is ~0.09 ms host on the full bundle"
+        "value": 113.1,
+        "note": "Measured 2026-07-25 on device, style station on the Local engine: 113.1 ms from station start to the first candidate (budget 300)."
       }
     },
     "lastRefillMs": {
@@ -36,8 +36,8 @@
       "pinned": 150,
       "measured": {
         "device": "Pixel 4 (flame)",
-        "value": null,
-        "note": "worker compute + path resolve per refill"
+        "value": 113.1,
+        "note": "Measured 2026-07-25 on device: 113.1 ms end-to-end per refill, worker compute included (budget 150)."
       }
     },
     "refillMainThreadMaxMs": {
@@ -48,8 +48,8 @@
       "pinned": 16,
       "measured": {
         "device": "Pixel 4 (flame)",
-        "value": null,
-        "note": "one 60 fps frame; engine runs off-main so this is only path resolve + append"
+        "value": 0.0,
+        "note": "Measured 2026-07-25 on device: 0.0 ms. NOTE the metric itself was wrong before this run \u2014 mainThreadMs was timed ACROSS the await in useSidRadio, so it measured end-to-end refill latency and was assigned the same value as lastRefillMs. It read 113 ms against this 16 ms bound while nothing was actually blocking the UI thread. It now times only the synchronous continuation (appendItems + session save), which is what the budget was always about."
       }
     },
     "skipToLaunchMs": {
