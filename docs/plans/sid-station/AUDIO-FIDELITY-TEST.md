@@ -124,7 +124,42 @@ macro could never be set. Adding `-DHAVE_RESIDFP` compiles but fails to link
 `libsidplayfp/libresidfp` with emscripten, install it where pkg-config can see it, and link
 `-lresidfp`.
 
-**A second, independent defect in the same build:** upstream was **unpinned**. `docker/entrypoint.sh`
+### 2.3 A second defect — sidflow's `TracingSidEmu` corrupts the mixer's buffer contract
+
+SIDLite alone does **not** explain a 0.066 envelope correlation: a cruder SID emulation should still
+play the right notes at the right time. Code inspection of `bindings.cpp` found a concrete defect
+that does explain it.
+
+`TracingSidEmu` is a sidflow-specific `libsidplayfp::sidemu` subclass that wraps a real emulation
+(`inner`) to capture SID register writes, mirroring state with:
+
+```cpp
+void syncBufferState() {
+    m_buffer = inner->buffer();
+    bufferpos(inner->bufferpos());
+    m_error  = inner->error();
+}
+```
+
+Upstream `src/sidemu.h` declares `bufferpos()` **non-virtual**:
+
+```cpp
+int  bufferpos() const   { return m_bufferpos; }
+void bufferpos(int pos)  { m_bufferpos = pos; }
+```
+
+and `src/player.cpp` drives the consume cycle through it — `sampleCount = s->bufferpos();` then
+`s->bufferpos(0);` (lines 265/267, also 150/180). Because the setter is non-virtual those calls land
+on the **outer** wrapper, while samples are produced into `inner`'s buffer
+(`sidlite-emu.cpp:84` / `residfp-emu.cpp:102`: `m_bufferpos += m_sid.clock(cycles, m_buffer + m_bufferpos)`).
+
+`inner->m_bufferpos` is therefore **never reset**: it grows monotonically, `m_buffer + m_bufferpos`
+walks off the end of inner's buffer, and every `syncBufferState()` feeds the mixer an ever-growing
+stale sample count. This is the leading explanation for the decorrelated output, and plausibly for
+the DC offset. Not yet fixed — see the handover for the fix direction (get tracing out of the audio
+path entirely, or make the wrapper own the buffer contract).
+
+**A third, independent defect in the same build:** upstream was **unpinned**. `docker/entrypoint.sh`
 cloned `libsidplayfp` master and ran `git reset --hard origin/master` on every build, so the artifact
 changed silently with upstream. By now upstream master has dropped `SidConfig::playback`,
 `SidConfig::MONO/STEREO` and `SidInfo::channels`, and the bindings **no longer compile against it at
@@ -142,7 +177,8 @@ matches the `SIDLiteEmu V3.0.0a2` string found in the previously published artif
 | 2 | **Audio underruns.** The Web Audio schedule was kept only 1.5 s ahead, but every chunk still crosses the main thread — which stalls up to **1.9 s** on the HVSC-loaded Play page (28 % of wall time in GC, measured with a long-task observer + CPU profile). | Audible gaps; `audioUnderruns` climbing ~6/min against a pinned budget of 0 (§12.6). | **Fixed** — buffer raised to 4 s, in-flight renders 2→4. Measured on device: **0 underruns over 110 s** (was 6/min). No added start latency. |
 | 3 | **Pause did not stop on-device playback.** `handlePauseResume` only ever drove the C64 (`machinePause`/`machineResume`), so pausing a locally-playing tune sent a pointless call to the Ultimate while the audio kept playing. | Playback could not be stopped from the UI. | **Fixed** — local playback now suspends/resumes the engine's AudioContext, which freezes the schedule in place and resumes exactly where it stopped. |
 | 4 | **WASM built with SIDLite, not reSIDfp.** See §2.2. | Wrong timbre, large DC offset (~0.17 full-scale, eating headroom — peaks to 0.93 where the C64 peaks at 0.40), ~8 dB level deficit, and output that does not track the real machine. | **Open.** Needs `libresidfp` cross-compiled for wasm and linked (§2.2) — not a one-line change, and not completed here. |
-| 5 | **Upstream libsidplayfp was unpinned** in the WASM build (`reset --hard origin/master` per run), so artifacts drifted silently and the bindings no longer compile against current master (7 API errors). | Non-reproducible artifacts; the package could not be rebuilt at all. | **Fixed in `sidflow`** — pinned to `v3.0.0a2` (`LIBSIDPLAYFP_REF` to override), which restores a working build. |
+| 5 | **`TracingSidEmu` breaks the mixer's buffer contract** (§2.3) — `bufferpos()` is non-virtual, so `player.cpp`'s `bufferpos(0)` reset never reaches the inner emulation, whose position grows unbounded and walks past its buffer. | Leading explanation for the decorrelated output; likely also the DC offset. | **Open.** Fix by removing tracing from the audio path (or making the wrapper own the buffer contract). |
+| 6 | **Upstream libsidplayfp was unpinned** in the WASM build (`reset --hard origin/master` per run), so artifacts drifted silently and the bindings no longer compile against current master (7 API errors). | Non-reproducible artifacts; the package could not be rebuilt at all. | **Fixed in `sidflow`** — pinned to `v3.0.0a2` (`LIBSIDPLAYFP_REF` to override), which restores a working build. |
 
 Defect 4 means **on-device playback is not yet sonically faithful and should not be presented to
 users as equivalent to the C64** until the reSIDfp rebuild is vendored and this test re-run.
