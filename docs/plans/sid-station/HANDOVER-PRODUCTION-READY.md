@@ -251,9 +251,26 @@ the iteration history so the path is auditable.
 
 libsidplayfp is materially more accurate **with** real KERNAL/BASIC ROMs — native `sidplayfp`, the
 0.483 reference, runs with them. Today the app ships none (they cannot legally be bundled), which is
-why RSID tunes are routed back to the C64 and why PSID accuracy is capped. **This is solvable: read
-the ROMs from the user's own connected hardware.** The app never distributes ROMs; it reads them off
-the machine the user owns.
+why RSID tunes are routed back to the C64 and why PSID accuracy is capped.
+
+**The model to document and implement:** on-device SID playback **uses the ROM images from the C64
+device the app is connected to**. The app never bundles, ships or distributes ROMs — it reads them,
+at the user's request, from the machine that user has connected to, and keeps them only on that
+user's own phone.
+
+**This carries an explicit user obligation that must be stated in the product, not just in code
+comments:** *the user must only connect the app to devices they own or have been granted permission
+to use.* ROM images are copyrighted; reading them from a machine the user is not authorised to use is
+not sanctioned by this feature. Surface this plainly:
+
+- in the Settings entry that triggers the fetch (short, unambiguous wording — not buried in a tooltip);
+- in the manual's SID Radio / on-device playback section (both variants, via
+  `scripts/build-manuals.mjs`);
+- in the README section covering on-device playback.
+
+Wording along these lines: *"On-device playback uses the C64 ROM images from the Ultimate you are
+connected to. Only connect C64 Commander to devices you own or have been given permission to use.
+ROM images stay on this phone and are never shared or uploaded."*
 
 **Already proven on the rig this session** — `GET /v1/machine:readmem` is documented as *"performs a
 **DMA read** action on the cartridge bus"* (`u2plus-open-api-spec.yaml`), and the dumps verified
@@ -273,9 +290,10 @@ verified-complete ROM set is wanted.
 
 **Implementation requirements:**
 
-- **Trigger:** an explicit, understandable user action (Settings → "Fetch C64 ROMs from your
-  Ultimate"), not a silent background grab. Explain plainly that it improves on-device playback
-  accuracy and enables ROM-dependent (RSID) tunes.
+- **Trigger:** an explicit, understandable user action (Settings → "Use ROMs from the connected C64"),
+  never a silent background grab. State at the point of action that the ROMs come from the connected
+  device, that they stay on the phone, and that the user must only connect to devices they own or are
+  permitted to use. It improves on-device playback accuracy and enables ROM-dependent (RSID) tunes.
 - **Validate before use, always.** Check length, then checksum against the known-good set above;
   reject all-zeros, all-`$FF`, or anything failing a sanity check. A DMA read reflects **current
   banking** — if a cartridge is active or a program has banked ROM out, the read returns RAM and will
@@ -294,8 +312,10 @@ verified-complete ROM set is wanted.
   record both. Note that in the current (broken) WASM, supplying real ROMs made output *worse*
   (AC RMS jumped from 0.07 to 0.51, correlation 0.046), so **only evaluate the ROM path after §1.1
   and §1.2 are fixed** — otherwise you will be measuring the wrapper bug.
-- **Licence note:** update `THIRD_PARTY_NOTICES.md` / docs to state that ROMs are user-supplied from
-  their own hardware at runtime and are never distributed with the app.
+- **Licence note:** update `THIRD_PARTY_NOTICES.md` / docs to state that C64 ROM images are **not**
+  distributed with the app; they are read at runtime from the C64 device the user connects to, remain
+  on that user's device, and are never uploaded, exported or included in diagnostics bundles — and
+  that the user is responsible for only connecting to devices they own or are permitted to use.
 
 ### 1.8 If it turns out to be a dead end
 
@@ -401,10 +421,12 @@ Also record on-device **CPU % (p95)** and **battery** over the soak (§12.6).
   `DEFAULT_PLAYBACK_ENGINE = "c64"`, so the engine is *offered* but the C64 is the default. **Until
   Part 1 passes, it must not be presented as equivalent to the C64** — either keep it clearly
   labelled as approximate, or gate it off.
-- ROM story (§1.7): if ROM fetching ships, document that ROMs are read from the user's own Ultimate
-  over DMA, cached app-privately and never distributed — and that RSID tunes play on-device once ROMs
-  are present. Until then, keep the current caveat: RSID tunes need C64 ROMs that cannot be bundled
-  and fall back to the C64 with a one-time notice.
+- ROM story (§1.7): if ROM fetching ships, the manual, README and Settings must all say that
+  on-device playback uses the ROM images from the connected C64, that those images stay on the phone
+  and are never shared, that **the user must only connect to devices they own or have permission to
+  use**, and that RSID tunes play on-device once ROMs are present. Until then, keep the current
+  caveat: RSID tunes need C64 ROMs that cannot be bundled and fall back to the C64 with a one-time
+  notice.
 
 ### 2.6 Licence hygiene
 
@@ -416,7 +438,78 @@ assets, and the pinned upstream ref must be recorded there).
 
 ---
 
-## Definition of done
+---
+
+## PART 3 — Stop Dependabot PRs failing on self-inflicted guardrails
+
+Scoped separately from SID Radio, but it blocks the same CI and must be fixed for good.
+
+### 3.1 What actually happened to PR #322
+
+`#322` (weekly-rollup, 35 updates) had **exactly one** failing check — `Web | Unit tests (coverage)` —
+from `tests/unit/ci/dependabotContracts.test.ts`:
+
+```
+AGP 9.3.1 has no documented Gradle wrapper pair; add one to KNOWN_GOOD_AGP_WRAPPER_PAIRS
+```
+
+Dependabot bumped AGP `9.3.0 → 9.3.1` — a **patch** bump — and the guard was a hardcoded
+`KNOWN_GOOD_AGP_WRAPPER_PAIRS` table that did not list the new version. Nothing was actually
+incompatible: **`Android | Packaging` and `Android | Tests + Coverage` both passed on that very PR**
+with AGP 9.3.1 against Gradle 9.6.1. The build — the authoritative check — was green; only the
+hand-maintained proxy for it was red.
+
+It is also already fixed on `main`: commit `600f3c25` ("stop the AGP↔Gradle guardrail failing on every
+Dependabot bump", 2026-07-25 01:26) replaced the table with a **major-version invariant**, landing
+*after* #322's last CI run at 23:52 on 2026-07-24. **#322 needs nothing but a rebase** (`@dependabot
+rebase`) — AGP major 9 vs wrapper major 9 now passes.
+
+### 3.2 Why it keeps happening
+
+The guard has oscillated three times:
+
+| commit | what it did |
+| --- | --- |
+| `b444b375` | derived AGP/Gradle versions from the repo (no hardcoding) |
+| `2cd7b9bf` | **regressed** — "restore AGP↔wrapper lockstep guard via known-good pair matrix" reintroduced a hardcoded table |
+| `600f3c25` | fixed again — structural major-version invariant |
+
+The recurring failure mode is the pattern, not the specific table: **a CI guard that must be
+hand-edited whenever a dependency legitimately changes will fail every routine Dependabot bump.** It
+generates noise, trains people to assume "flaky", and the noise is what makes a real failure easy to
+miss.
+
+### 3.3 The conclusive fix
+
+1. **Never assert exact third-party version tuples in tests.** Assert only invariants that survive
+   routine upgrades:
+   - a *structural* relationship (AGP major == Gradle wrapper major) — cheap and still catches the
+     real hazard, a major AGP move without a coordinated wrapper bump; and
+   - a *configuration contract* (`.github/dependabot.yml` still ignores the Gradle wrapper so the
+     pairing stays deliberate).
+   Real AGP↔Gradle compatibility is proven by the Android build jobs, which already run on every PR.
+   Keep the current `600f3c25` shape; **do not "tighten" it back into a version list.**
+
+2. **Add a meta-guard so the regression cannot recur.** A test asserting that
+   `dependabotContracts.test.ts` contains no hardcoded dependency-version literal (e.g. no
+   `KNOWN_GOOD_*_PAIRS` map, no `\d+\.\d+\.\d+` string literal outside a regex). Reference
+   `2cd7b9bf` in its failure message so the next person understands *why* the constraint exists.
+
+3. **Auto-rebase stale Dependabot PRs.** #322 failed purely because it was behind `main`. Either
+   enable Dependabot's rebase behaviour, or add a scheduled workflow that comments `@dependabot
+   rebase` on open Dependabot PRs whose base has moved, so a PR is never judged against a guard that
+   has since been fixed.
+
+4. **Make guard failures self-servicing.** Any remaining guard must say, in its message, exactly which
+   file to edit and why the constraint exists — so a failure is a 30-second fix, not an
+   investigation.
+
+5. **Triage before assuming flaky.** Known recurring Dependabot failure modes in this repo (see
+   `[[dependabot-pr-failure-modes]]`): a `sharp` minor pulling a breaking libvips → PNG fixture
+   rejection; the reset-drives race; notices/asset drift gates. Classify against these first; only
+   then re-run.
+
+**Immediate action:** rebase #322 and confirm it goes green; then implement (2) and (3).
 
 1. Part 1 exit criteria met on a ≥ 30-tune corpus, numbers recorded in `AUDIO-FIDELITY-TEST.md`, and
    the on-device engine confirmed by ear to be indistinguishable from the C64.
