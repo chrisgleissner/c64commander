@@ -29,6 +29,7 @@ const LIBSIDPLAYFP_URL = "/wasm/libsidplayfp/index.js";
 interface SidAudioEngineLike {
   setSystemROMs(kernal: Uint8Array | null, basic: Uint8Array | null, chargen: Uint8Array | null): Promise<void>;
   loadSidBuffer(data: Uint8Array, songIndex?: number): Promise<void>;
+  seekSeconds(seconds: number): Promise<number>;
   getSampleRate(): number;
   getChannels(): number;
   getTuneInfo(): Record<string, unknown> | null;
@@ -153,6 +154,20 @@ const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
           return;
         }
         ctx.postMessage({ type: "chunk", id: message.id, pcm, samples: pcm.length, renderMs }, [pcm.buffer]);
+        return;
+      }
+      case "seek": {
+        if (!engine) {
+          // Nothing open: report the request back so the caller's clock stays
+          // consistent rather than hanging on a reply that never comes.
+          ctx.postMessage({ type: "seeked", id: message.id, positionSeconds: message.positionSeconds });
+          return;
+        }
+        // Serialised behind the same queue as render, so a seek can never
+        // interleave with an in-flight renderSeconds() on this one stateful
+        // engine — the defect that made playback loop and crackle.
+        await engine.seekSeconds(Math.max(0, message.positionSeconds));
+        ctx.postMessage({ type: "seeked", id: message.id, positionSeconds: Math.max(0, message.positionSeconds) });
         return;
       }
       case "close": {

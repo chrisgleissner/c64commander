@@ -457,6 +457,7 @@ export default function PlayFilesPage() {
     handlePauseResume,
     handleNext,
     handlePrevious,
+    handleSeekBy,
     playlistEnded,
     playlistItemDuration,
   } = usePlaybackController({
@@ -1868,6 +1869,14 @@ export default function PlayFilesPage() {
                 onStop={() => void handleStop()}
                 onPauseResume={() => void handlePauseResume()}
                 onNext={() => void handleNext()}
+                // Only offered when the tune is actually rendering here: the C64
+                // plays the SID itself and cannot be scrubbed, so on that route
+                // Previous/Next stay plain track controls.
+                onSeek={
+                  playbackEngine.engine === "local" && currentItem?.category === "sid" && isPlaying
+                    ? (deltaSeconds) => void handleSeekBy(deltaSeconds)
+                    : undefined
+                }
                 progressPercent={progressPercent}
                 elapsedLabel={formatTime(elapsedMs)}
                 remainingLabel={remainingLabel}

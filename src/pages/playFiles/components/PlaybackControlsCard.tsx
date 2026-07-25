@@ -6,12 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useRef, type ReactNode } from "react";
 import { Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { addLog } from "@/lib/logging";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
 
 export type PlaybackControlsCardProps = {
@@ -33,6 +34,12 @@ export type PlaybackControlsCardProps = {
   onStop: () => void;
   onPauseResume: () => void;
   onNext: () => void;
+  /**
+   * Scrub the current tune by `deltaSeconds` (negative rewinds). Only supplied
+   * when the active engine can seek — the C64 plays the SID itself, so there is
+   * nothing to scrub there.
+   */
+  onSeek?: (deltaSeconds: number) => void;
   progressPercent: number;
   elapsedLabel: string;
   remainingLabel: string;
@@ -65,6 +72,67 @@ const PLAY_TRANSPORT_FOCUS_ORDER = {
   reshuffle: 180,
 } as const;
 
+/** How long Previous/Next must be held before it scrubs instead of skipping. */
+const SEEK_HOLD_MS = 450;
+/** How often it scrubs while held, and by how much. */
+const SEEK_REPEAT_MS = 200;
+const SEEK_STEP_SECONDS = 5;
+
+/**
+ * Hold Previous/Next to scrub the current tune; tap to change track.
+ *
+ * The two gestures share one button, so a hold must *suppress* the click that
+ * follows it — otherwise letting go after scrubbing would also skip the track,
+ * which is the opposite of what the user just asked for. `seeked` stays set
+ * until the next press so the click handler (which fires after pointerup) can
+ * still see it.
+ */
+const useHoldToSeek = (deltaSeconds: number, onSeek?: (deltaSeconds: number) => void) => {
+  const holdTimer = useRef<number | null>(null);
+  const repeatTimer = useRef<number | null>(null);
+  const seeked = useRef(false);
+
+  const stop = useCallback(() => {
+    if (holdTimer.current !== null) {
+      window.clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+    if (repeatTimer.current !== null) {
+      window.clearInterval(repeatTimer.current);
+      repeatTimer.current = null;
+    }
+    // Clear the suppression flag on the next tick — after the click that
+    // follows this pointerup has been handled, but before anything else.
+    //
+    // Leaving it set until the next press would swallow a later activation that
+    // produces no pointerdown to reset it: keyboard or keypad Enter on a focused
+    // button raises `click` alone. That is not a corner case here — the C64U
+    // Remote variant is keypad-first — and the symptom would be a Next button
+    // that silently ignores every other press.
+    if (seeked.current) {
+      window.setTimeout(() => {
+        seeked.current = false;
+      }, 0);
+    }
+  }, []);
+
+  const start = useCallback(() => {
+    if (!onSeek) return;
+    seeked.current = false;
+    holdTimer.current = window.setTimeout(() => {
+      seeked.current = true;
+      addLog("debug", "Local SID hold-to-seek engaged", { deltaSeconds });
+      onSeek(deltaSeconds);
+      repeatTimer.current = window.setInterval(() => onSeek(deltaSeconds), SEEK_REPEAT_MS);
+    }, SEEK_HOLD_MS);
+  }, [deltaSeconds, onSeek, stop]);
+
+  // Never leave a timer running past unmount.
+  useEffect(() => stop, [stop]);
+
+  return { start, stop, consumedClick: () => seeked.current };
+};
+
 export const PlaybackControlsCard = ({
   hasCurrentItem,
   currentItemIcon,
@@ -84,6 +152,7 @@ export const PlaybackControlsCard = ({
   onStop,
   onPauseResume,
   onNext,
+  onSeek,
   progressPercent,
   elapsedLabel,
   remainingLabel,
@@ -104,6 +173,9 @@ export const PlaybackControlsCard = ({
   rankingControls,
   stationActive = false,
 }: PlaybackControlsCardProps) => {
+  const holdRewind = useHoldToSeek(-SEEK_STEP_SECONDS, onSeek);
+  const holdForward = useHoldToSeek(SEEK_STEP_SECONDS, onSeek);
+
   const previousFocusRef = useFocusItem<HTMLButtonElement>({
     id: "play-transport-previous",
     order: PLAY_TRANSPORT_FOCUS_ORDER.previous,
@@ -158,12 +230,20 @@ export const PlaybackControlsCard = ({
             ref={previousFocusRef}
             variant="outline"
             size="icon"
-            onClick={onPrevious}
-            disabled={!canTransport || !hasPrev}
+            onClick={() => {
+              // A hold already scrubbed; do not also change track.
+              if (holdRewind.consumedClick()) return;
+              onPrevious();
+            }}
+            onPointerDown={holdRewind.start}
+            onPointerUp={holdRewind.stop}
+            onPointerLeave={holdRewind.stop}
+            onPointerCancel={holdRewind.stop}
+            disabled={(!canTransport || !hasPrev) && !onSeek}
             id="playlist-prev"
             data-testid="playlist-prev"
             aria-label="Previous"
-            title="Previous"
+            title={onSeek ? "Previous (hold to rewind)" : "Previous"}
           >
             <SkipBack className="h-4 w-4" />
           </Button>
@@ -198,12 +278,20 @@ export const PlaybackControlsCard = ({
             ref={nextFocusRef}
             variant="outline"
             size="icon"
-            onClick={onNext}
-            disabled={!canTransport || !hasNext}
+            onClick={() => {
+              // A hold already scrubbed; do not also change track.
+              if (holdForward.consumedClick()) return;
+              onNext();
+            }}
+            onPointerDown={holdForward.start}
+            onPointerUp={holdForward.stop}
+            onPointerLeave={holdForward.stop}
+            onPointerCancel={holdForward.stop}
+            disabled={(!canTransport || !hasNext) && !onSeek}
             id="playlist-next"
             data-testid="playlist-next"
             aria-label="Next"
-            title="Next"
+            title={onSeek ? "Next (hold to fast forward)" : "Next"}
           >
             <SkipForward className="h-4 w-4" />
           </Button>

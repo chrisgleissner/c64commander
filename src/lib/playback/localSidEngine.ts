@@ -203,6 +203,9 @@ export class LocalSidEngine {
 
   private audio: LocalSidAudioSink | null = null;
   private scheduler: LocalSidChunkScheduler | null = null;
+  /** Bumped per seek so chunks rendered for a superseded position are dropped. */
+  private seekEpoch = 0;
+  private seekPending: { id: number; resolve: () => void } | null = null;
   private channels = 2;
   private nextId = 1;
   private activeId = 0;
@@ -345,6 +348,10 @@ export class LocalSidEngine {
         return;
       case "chunk": {
         if (message.id !== this.activeId) return; // stale tune
+        // The worker handles messages in order, so anything still arriving
+        // before the "seeked" reply was rendered for the position we just left.
+        // Scheduling it would play the wrong part of the tune.
+        if (this.seekPending) return;
         this.inFlightRenders = Math.max(0, this.inFlightRenders - 1);
         this.recordRender(message.renderMs, message.samples);
         this.scheduler?.schedule(message.pcm, this.channels);
@@ -354,9 +361,19 @@ export class LocalSidEngine {
       }
       case "end": {
         if (message.id !== this.activeId) return;
+        // Same reasoning as "chunk": an end raised before the seek completed
+        // describes the old position and must not finish the tune.
+        if (this.seekPending) return;
         this.inFlightRenders = Math.max(0, this.inFlightRenders - 1);
         this.endReceived = true;
         this.maybeFireEnded();
+        return;
+      }
+      case "seeked": {
+        if (this.seekPending?.id !== message.id) return;
+        const pending = this.seekPending;
+        this.seekPending = null;
+        pending.resolve();
         return;
       }
       case "error":
@@ -402,6 +419,40 @@ export class LocalSidEngine {
       channels: message.channels,
       tuneInfo: message.tuneInfo,
     });
+  }
+
+  /**
+   * Jump to an absolute position in the open tune.
+   *
+   * Order matters. The queued audio belongs to the old position, so it is
+   * dropped first; `seekEpoch` then invalidates any render already in flight in
+   * the worker, because those chunks would otherwise be scheduled after the seek
+   * and play the wrong part of the tune. Only once the worker confirms the seek
+   * does prefetching resume.
+   */
+  async seekTo(positionSeconds: number): Promise<void> {
+    if (!this.worker || !this.scheduler) return;
+    const target = Math.max(0, positionSeconds);
+    const id = this.nextId;
+    this.nextId += 1;
+
+    this.seekEpoch += 1;
+    const epoch = this.seekEpoch;
+    this.inFlightRenders = 0;
+    this.endReceived = false;
+    this.endedFired = false;
+    this.chunksEnded = 0;
+    this.scheduler.resetTo(target);
+    this.emitPosition();
+
+    await new Promise<void>((resolve) => {
+      this.seekPending = { id, resolve };
+      this.worker?.postMessage({ type: "seek", id, positionSeconds: target });
+    });
+
+    // A newer seek landed while this one was in flight; that one owns the state.
+    if (epoch !== this.seekEpoch) return;
+    this.pump();
   }
 
   /** Request renders until the buffer is full ahead of the clock. */

@@ -2015,6 +2015,40 @@ export function usePlaybackController({
     [currentIndex, durationFallbackMs, durationMs],
   );
 
+  /**
+   * Scrub the locally-played tune. Returns undefined when nothing is playing
+   * on-device, so the Play page can hide the gesture entirely rather than
+   * offering a control that silently does nothing — the C64 plays the SID
+   * itself and cannot be scrubbed.
+   */
+  const handleSeekBy = useCallback(
+    async (deltaSeconds: number) => {
+      const controller = localSidPlaybackRef.current;
+      if (!controller) {
+        addLog("debug", "Local SID seek ignored: no on-device controller", { deltaSeconds });
+        return;
+      }
+      const fromSeconds = controller.positionSeconds();
+      await controller.seekBy(deltaSeconds);
+      // The progress bar runs off a wall clock that knows nothing about the
+      // engine, so a seek has to move it explicitly — otherwise the audio jumps
+      // and the displayed time carries on from where it was, which reads as the
+      // seek having done nothing.
+      const positionMs = Math.max(0, controller.positionSeconds() * 1000);
+      const now = Date.now();
+      // Two independent clocks drive the UI and neither knows about the engine,
+      // so both have to be rebased or the audio jumps while the display carries
+      // on from the old spot — which reads as the seek having done nothing.
+      // `elapsedMs` (the big timer) is `now - trackStartedAt`, so shifting the
+      // start point is what moves it.
+      trackStartedAtRef.current = now - positionMs;
+      playedClockRef.current.hydrate(positionMs, isPausedRef.current ? null : now);
+      setPlayedMs(positionMs);
+      addLog("debug", "Local SID seek", { deltaSeconds, fromSeconds, toSeconds: positionMs / 1000 });
+    },
+    [playedClockRef, setPlayedMs, trackStartedAtRef],
+  );
+
   return {
     playItem,
     startPlaylist,
@@ -2023,6 +2057,7 @@ export function usePlaybackController({
     handlePauseResume,
     handleNext,
     handlePrevious,
+    handleSeekBy,
     playlistEnded,
     resolveSidMetadata,
     resolveUltimateSidDurationByMd5,

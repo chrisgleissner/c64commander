@@ -59,6 +59,11 @@ export class LocalSidPlaybackController {
     return engine.play(buffer, songIndex, callbacks);
   }
 
+  /** Current playback position in seconds, 0 when nothing is open. */
+  positionSeconds(): number {
+    return this.engine?.getStats().positionSeconds ?? 0;
+  }
+
   /** Stop the current tune (keeps the worker + WASM module warm). */
   stop(): void {
     this.engine?.stop();
@@ -67,6 +72,20 @@ export class LocalSidPlaybackController {
   /** Pause on-device playback in place (no C64 involved). */
   async pause(): Promise<void> {
     await this.engine?.pause();
+  }
+
+  /**
+   * Scrub within the current tune, relative to where it is now.
+   *
+   * Backwards is inherently slower than forwards: libsidplayfp cannot rewind, so
+   * the engine reloads the tune and re-renders up to the target. Clamped at 0 so
+   * rewinding past the start lands on the start rather than failing.
+   */
+  async seekBy(deltaSeconds: number): Promise<void> {
+    const engine = this.engine;
+    if (!engine) return;
+    const target = Math.max(0, engine.getStats().positionSeconds + deltaSeconds);
+    await engine.seekTo(target);
   }
 
   /** Resume after {@link pause}. */

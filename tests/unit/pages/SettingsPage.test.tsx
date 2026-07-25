@@ -512,6 +512,10 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveSidRankingEnabled: vi.fn(),
   loadPlaybackEngine: vi.fn(() => "c64"),
   savePlaybackEngine: vi.fn(),
+  // The SID Radio section offers a reSIDfp/SIDLite choice for the on-device
+  // engine; without these the whole Settings tree fails to render.
+  loadSidEmulationEngine: vi.fn(() => "residfp"),
+  saveSidEmulationEngine: vi.fn(),
   loadLocalEngineEnabled: vi.fn(() => false),
   saveLocalEngineEnabled: vi.fn(),
   saveDiskAutostartMode: vi.fn(),

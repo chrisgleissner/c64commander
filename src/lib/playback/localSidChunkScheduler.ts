@@ -84,6 +84,14 @@ export class LocalSidChunkScheduler {
   private chunksScheduled = 0;
   private underruns = 0;
   private scheduledSeconds = 0;
+  /**
+   * Playback position of the next sample the scheduler will emit.
+   *
+   * Zero for normal playback, where position is simply "how long we have been
+   * playing". After a seek it carries the position we jumped to, so the reported
+   * position continues from there instead of restarting at zero.
+   */
+  private positionOffsetSeconds = 0;
   private readonly live = new Set<AudioScheduleSource>();
 
   constructor(
@@ -148,10 +156,10 @@ export class LocalSidChunkScheduler {
 
   /** Elapsed playback position in seconds, clamped to what was scheduled. */
   positionSeconds(): number {
-    if (!this.started) return 0;
+    if (!this.started) return this.positionOffsetSeconds;
     const elapsed = this.sink.currentTime - this.firstStartTime;
-    if (elapsed <= 0) return 0;
-    return Math.min(elapsed, this.scheduledSeconds);
+    if (elapsed <= 0) return this.positionOffsetSeconds;
+    return this.positionOffsetSeconds + Math.min(elapsed, this.scheduledSeconds);
   }
 
   getStats(): SchedulerStats {
@@ -166,6 +174,28 @@ export class LocalSidChunkScheduler {
   /** True once at least one chunk has been scheduled. */
   hasStarted(): boolean {
     return this.started;
+  }
+
+  /**
+   * Drop everything still queued and rebase the clock to `positionSeconds`.
+   *
+   * A seek invalidates the audio already scheduled — it belongs to the old
+   * position and must not be heard — and the reported position has to continue
+   * from the new one rather than restart at zero.
+   *
+   * `chunksScheduled` and `underruns` are deliberately NOT reset: they are
+   * session counters, and the stats bridge banks underruns whenever it sees the
+   * count drop, so zeroing them here would double-count. Clearing `started`
+   * means the first chunk after the seek takes the fresh-start path in
+   * {@link schedule} rather than being mistaken for an underrun.
+   */
+  resetTo(positionSeconds: number): void {
+    this.stopAll();
+    this.nextStartTime = 0;
+    this.firstStartTime = 0;
+    this.started = false;
+    this.scheduledSeconds = 0;
+    this.positionOffsetSeconds = Math.max(0, positionSeconds);
   }
 
   /** Stop and drop every still-scheduled source (called on stop/close). */

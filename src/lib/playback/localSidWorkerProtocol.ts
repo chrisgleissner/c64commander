@@ -64,13 +64,37 @@ export interface LocalSidRenderMessage {
   seconds: number;
 }
 
+/**
+ * main → worker: jump to an absolute position in the open tune.
+ *
+ * Absolute rather than relative because the engine's own `seekSeconds` is
+ * absolute, and because the main thread owns the playback clock — making the
+ * worker track position too would give two sources of truth that can drift.
+ * Seeking backwards is inherently slower than forwards: the engine reloads the
+ * tune and re-renders up to the target.
+ */
+export interface LocalSidSeekMessage {
+  type: "seek";
+  /** Correlates the response to this request. */
+  id: number;
+  positionSeconds: number;
+}
+
 /** main → worker: dispose the open tune + engine, freeing WASM memory. */
 export interface LocalSidCloseMessage {
   type: "close";
 }
 
 export type LocalSidMainToWorker =
-  LocalSidLoadMessage | LocalSidOpenMessage | LocalSidRenderMessage | LocalSidCloseMessage;
+  LocalSidLoadMessage | LocalSidOpenMessage | LocalSidRenderMessage | LocalSidSeekMessage | LocalSidCloseMessage;
+
+/** worker → main: the seek completed; rendering resumes from `positionSeconds`. */
+export interface LocalSidSeekedMessage {
+  type: "seeked";
+  id: number;
+  /** Where the engine actually landed, which may differ from the request. */
+  positionSeconds: number;
+}
 
 /** worker → main: the WASM module instantiated and is ready to open tunes. */
 export interface LocalSidReadyMessage {
@@ -125,4 +149,9 @@ export interface LocalSidErrorMessage {
 }
 
 export type LocalSidWorkerToMain =
-  LocalSidReadyMessage | LocalSidOpenedMessage | LocalSidChunkMessage | LocalSidEndMessage | LocalSidErrorMessage;
+  | LocalSidReadyMessage
+  | LocalSidOpenedMessage
+  | LocalSidChunkMessage
+  | LocalSidSeekedMessage
+  | LocalSidEndMessage
+  | LocalSidErrorMessage;
