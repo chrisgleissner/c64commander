@@ -279,3 +279,98 @@ describe("LocalSidEngine", () => {
     expect(worker.terminated).toBe(true);
   });
 });
+
+describe("LocalSidEngine — default environment factories", () => {
+  it("reports isSupported from Worker + AudioContext availability (false under jsdom)", () => {
+    expect(LocalSidEngine.isSupported()).toBe(false);
+  });
+
+  it("rejects load() when the environment has no Web Worker", async () => {
+    const engine = new LocalSidEngine(); // no injected worker factory
+    await expect(engine.load()).rejects.toThrow(/Web Workers/);
+  });
+
+  it("builds a real AudioContext sink through the default factory when none is injected", async () => {
+    const created: MockAudioContext[] = [];
+    class MockSource {
+      buffer: unknown = null;
+      onended: (() => void) | null = null;
+      connect = vi.fn();
+      start = vi.fn();
+      stop = vi.fn();
+    }
+    class MockAudioContext {
+      currentTime = 0;
+      sampleRate: number;
+      destination = {};
+      closed = vi.fn();
+      resumed = vi.fn();
+      constructor(opts: { sampleRate: number }) {
+        this.sampleRate = opts.sampleRate;
+        created.push(this);
+      }
+      createBuffer(channels: number, frames: number) {
+        const data = Array.from({ length: channels }, () => new Float32Array(frames));
+        return { getChannelData: (c: number) => data[c] };
+      }
+      createBufferSource() {
+        return new MockSource();
+      }
+      resume() {
+        this.resumed();
+        return Promise.resolve();
+      }
+      close() {
+        this.closed();
+        return Promise.resolve();
+      }
+    }
+    (globalThis as unknown as { AudioContext: unknown }).AudioContext = MockAudioContext;
+    try {
+      const worker = new FakeWorker();
+      const engine = new LocalSidEngine({ workerFactory: () => worker }); // NO audioSinkFactory → default
+      const play = engine.play(new ArrayBuffer(64), 0, {});
+      worker.emit({ type: "ready", moduleLoadMs: 1 });
+      await flush();
+      worker.emit({ type: "opened", id: 1, sampleRate: 44100, channels: 2, tuneInfo: null, romRequired: false });
+      const result = await play;
+      expect(result.started).toBe(true);
+      expect(created).toHaveLength(1);
+      expect(created[0].sampleRate).toBe(44100);
+      // A chunk drives the adapter's createBuffer / createSource / start path.
+      worker.emit({ type: "chunk", id: 1, pcm: new Int16Array(4000), samples: 4000, renderMs: 5 });
+      expect(engine.getStats().chunksScheduled).toBe(1);
+      engine.stop();
+      expect(created[0].closed).toHaveBeenCalled();
+    } finally {
+      delete (globalThis as unknown as { AudioContext?: unknown }).AudioContext;
+    }
+  });
+
+  it("rejects play() when the audio sink factory throws", async () => {
+    const worker = new FakeWorker();
+    const engine = new LocalSidEngine({
+      workerFactory: () => worker,
+      audioSinkFactory: () => {
+        throw new Error("no audio device");
+      },
+    });
+    const play = engine.play(new ArrayBuffer(8), 0, {});
+    worker.emit({ type: "ready", moduleLoadMs: 1 });
+    await flush();
+    worker.emit({ type: "opened", id: 1, sampleRate: 48000, channels: 2, tuneInfo: null, romRequired: false });
+    await expect(play).rejects.toThrow(/no audio device/);
+  });
+
+  it("routes a worker error during playback (uncorrelated) to onError", async () => {
+    const onError = vi.fn();
+    const { engine, worker } = makeEngine();
+    const play = engine.play(new ArrayBuffer(8), 0, { onError });
+    await completeOpen(worker);
+    await play;
+    worker.emit({ type: "error", code: "render", message: "render blew up" });
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining("render blew up") }),
+    );
+  });
+});

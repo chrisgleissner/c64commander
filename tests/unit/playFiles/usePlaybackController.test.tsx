@@ -2636,5 +2636,51 @@ describe("usePlaybackController", () => {
       expect(machineOff).not.toHaveBeenCalled();
       expect(machineReset).not.toHaveBeenCalled();
     });
+
+    it("falls back to the C64 when the SID bytes cannot be read", async () => {
+      enableLocal();
+      const controller = fakeController();
+      const unreadable = createPlaylistItem({
+        id: "sid-bad",
+        category: "sid",
+        label: "broken.sid",
+        path: "/HVSC/broken.sid",
+        durationMs: 120_000,
+        subsongCount: 1, // both set → skip metadata resolution; only routing reads the bytes
+        request: {
+          source: "local",
+          path: "/HVSC/broken.sid",
+          songNr: 0,
+          file: {
+            name: "broken.sid",
+            lastModified: 0,
+            arrayBuffer: vi.fn(async () => {
+              throw new Error("read error");
+            }),
+          },
+        } as any,
+      });
+      const { result } = renderPlaybackController([unreadable], { localSidPlaybackController: controller });
+
+      await result.current.playItem(unreadable, { playlistIndex: 0 });
+
+      // The byte read failed, so the tune played on the C64, not the local engine.
+      expect(controller.play).not.toHaveBeenCalled();
+      expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+    });
+
+    it("resumes a paused device track before stopping it (non-local Stop path)", async () => {
+      // Local engine off → a normal device track; Stop while paused must resume
+      // first, then stop the machine.
+      const machineResume = vi.fn().mockResolvedValue(undefined);
+      const machineOff = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(getC64API).mockReturnValue({ machineResume, machineOff } as any);
+      const playlist = [sidItem(psid)];
+      const { result } = renderPlaybackController(playlist, { isPlaying: true, isPaused: true });
+
+      await result.current.handleStop();
+
+      expect(machineResume).toHaveBeenCalled();
+    });
   });
 });

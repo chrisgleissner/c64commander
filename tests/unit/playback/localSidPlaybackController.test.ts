@@ -46,6 +46,10 @@ const byteSource = (bytes = new Uint8Array([0x50, 0x53, 0x49, 0x44]).buffer): Si
 });
 
 describe("LocalSidPlaybackController", () => {
+  it("reports isSupported (false under jsdom — no Worker/Web Audio)", () => {
+    expect(LocalSidPlaybackController.isSupported()).toBe(false);
+  });
+
   it("lazily creates the engine only on first play", () => {
     const factory = vi.fn(() => fakeEngine());
     const controller = new LocalSidPlaybackController(factory);
