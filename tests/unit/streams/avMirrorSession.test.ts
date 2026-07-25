@@ -268,4 +268,44 @@ describe("AvMirrorSession", () => {
       expect(session.getSnapshot().video.error).toBe(WIFI_AUDIO_BLOCKS_VIDEO);
     });
   });
+
+  describe("operation serialization (serialize())", () => {
+    /** Drain all pending microtasks (a macrotask boundary flushes the microtask queue). */
+    const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    it("does not let a concurrent stop interleave with an in-flight start", async () => {
+      // Regression for the serialize() op-chain: a route conversion's stop+start (or any
+      // audio toggle) must run to completion before the next op begins, so late continuations
+      // can't issue transport commands out of order. Without serialize() the stop below would
+      // fire immediately, while the start is still awaiting — this test would then fail.
+      const { session, audio } = makeSession();
+      const order: string[] = [];
+      let releaseStart!: () => void;
+      const startGate = new Promise<void>((resolve) => {
+        releaseStart = resolve;
+      });
+      audio.start.mockImplementation(async () => {
+        order.push("start:begin");
+        await startGate; // hold the start open so a non-serialized stop could slip in
+        order.push("start:end");
+      });
+      audio.stop.mockImplementation(async () => {
+        order.push("stop:begin");
+        order.push("stop:end");
+      });
+
+      const p1 = session.startAudio();
+      const p2 = session.stopAudio();
+
+      await flush();
+      // The start is in flight (blocked on the gate); the stop MUST still be queued behind it.
+      expect(order).toEqual(["start:begin"]);
+      expect(audio.stop).not.toHaveBeenCalled();
+
+      releaseStart();
+      await Promise.all([p1, p2]);
+      // stop ran strictly after start fully completed — never interleaved.
+      expect(order).toEqual(["start:begin", "start:end", "stop:begin", "stop:end"]);
+    });
+  });
 });
