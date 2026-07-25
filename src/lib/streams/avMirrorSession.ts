@@ -28,8 +28,10 @@ import {
   loadStreamNativeVideoAssembly,
   loadStreamVideoFrameRateMode,
   loadStreamVideoPort,
+  loadStreamAudioRoute,
   type StreamVideoFrameRateMode,
 } from "@/lib/config/appSettings";
+import { resolveVideoStartAction, shouldReturnAudioToWifi, shouldUseWifiForAudio } from "./audioRoute";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
 import { NativeAudioSink } from "./audioNativeSink";
 import { AudioMirrorController, type AudioMirrorSignals, type AudioMirrorState } from "./audioMirrorController";
@@ -95,7 +97,7 @@ const INITIAL: AvMirrorSnapshot = {
 const isLiveState = (state: AudioMirrorState | VideoMirrorState) => state === "connecting" || state === "live";
 
 export interface AvMirrorSessionDeps {
-  startStream?: (name: "audio" | "video", destination: string) => Promise<unknown>;
+  startStream?: (name: "audio" | "video", destination: string, options?: { wifi?: boolean }) => Promise<unknown>;
   stopStream?: (name: "audio" | "video") => Promise<unknown>;
   createAudioReceiver?: (options: StreamReceiverOptions) => StreamReceiver;
   createVideoReceiver?: (options: StreamReceiverOptions) => StreamReceiver;
@@ -127,6 +129,10 @@ export const INPUT_PRIORITY_TAIL_MS = 350;
  */
 export const DEFAULT_INPUT_PRIORITY_FRACTION = 0.2;
 
+/** Shown on the video pane when the `wifi` audio policy keeps audio on Wi‑Fi, which video can't join. */
+export const WIFI_AUDIO_BLOCKS_VIDEO =
+  "Audio is streaming over Wi‑Fi, which can't run together with video. Switch the audio route to Ethernet or Dynamic in Settings, or stop the audio, to watch.";
+
 export class AvMirrorSession {
   private snapshot: AvMirrorSnapshot = INITIAL;
   private readonly listeners = new Set<AvMirrorListener>();
@@ -147,9 +153,12 @@ export class AvMirrorSession {
   private inputPriorityFraction = DEFAULT_INPUT_PRIORITY_FRACTION;
   /** Whether input-priority shedding is enabled (Settings; read at session start). Default on. */
   private inputPriorityEnabled = true;
+  /** True when starting video moved a Wi‑Fi audio stream onto Ethernet (dynamic policy) — so it can move back on video stop. */
+  private audioForcedToEthernet = false;
 
   constructor(deps: AvMirrorSessionDeps = {}) {
-    const startStream = deps.startStream ?? ((name, destination) => getC64API().startStream(name, destination));
+    const startStream =
+      deps.startStream ?? ((name, destination, options) => getC64API().startStream(name, destination, options));
     const stopStream = deps.stopStream ?? ((name) => getC64API().stopStream(name));
     this.now = deps.now ?? (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
     // The stored frame-rate mode is applied when a session starts (see beginSessionIfIdle), NOT at
@@ -158,7 +167,7 @@ export class AvMirrorSession {
     this.governor = new StreamGovernor("auto");
 
     this.audio = new AudioMirrorController({
-      startStream: (_name, destination) => startStream("audio", destination),
+      startStream: (_name, destination, options) => startStream("audio", destination, options),
       stopStream: () => stopStream("audio"),
       onChange: (s) => this.update({ audio: { state: s.state, droppedPackets: s.droppedPackets, error: s.error } }),
       createReceiver:
@@ -439,10 +448,14 @@ export class AvMirrorSession {
 
   startAudio(): Promise<void> {
     this.beginSessionIfIdle();
-    return this.audio.start();
+    // Prefer Wi‑Fi for audio-only when the policy allows it (firmware wifi=true);
+    // the controller falls back to Ethernet if Wi‑Fi isn't available.
+    const wifi = shouldUseWifiForAudio({ policy: loadStreamAudioRoute(), videoActive: this.videoLive });
+    return this.audio.start({ wifi });
   }
 
   stopAudio(): Promise<void> {
+    this.audioForcedToEthernet = false;
     return this.audio.stop();
   }
 
@@ -450,14 +463,39 @@ export class AvMirrorSession {
     return this.audioLive ? this.stopAudio() : this.startAudio();
   }
 
-  startVideo(): Promise<void> {
+  async startVideo(): Promise<void> {
+    // Wi‑Fi audio can't share a route with video. Depending on the policy, move
+    // the audio to Ethernet first (dynamic) or refuse the video (wifi).
+    const action = resolveVideoStartAction({
+      policy: loadStreamAudioRoute(),
+      audioOnWifi: this.audio.isOnWifi(),
+    });
+    if (action === "blocked") {
+      this.update({ video: { ...this.snapshot.video, error: WIFI_AUDIO_BLOCKS_VIDEO } });
+      return;
+    }
+    if (action === "convert-audio-then-start") {
+      await this.audio.stop();
+      await this.audio.start({ wifi: false }); // Ethernet, so both share one route
+      this.audioForcedToEthernet = true;
+    }
     this.beginSessionIfIdle();
-    return this.video.start();
+    await this.video.start();
   }
 
   async stopVideo(): Promise<void> {
     await this.video.stop();
     this.latestFrame = null;
+    // Dynamic policy: return audio to Wi‑Fi now that it is alone again, but only
+    // if starting video is what moved it off Wi‑Fi in the first place.
+    if (
+      this.audioLive &&
+      shouldReturnAudioToWifi({ policy: loadStreamAudioRoute(), audioForcedToEthernet: this.audioForcedToEthernet })
+    ) {
+      this.audioForcedToEthernet = false;
+      await this.audio.stop();
+      await this.audio.start({ wifi: true });
+    }
   }
 
   toggleVideo(): Promise<void> {

@@ -1314,6 +1314,21 @@ describe("c64api branches", () => {
     expect(urls[1]).toContain("/v1/streams/audio%20out:stop");
   });
 
+  // Wi‑Fi audio stream start (firmware PR #732): wifi=true appended for audio-only Wi‑Fi delivery.
+  it("appends wifi=true when a Wi‑Fi stream start is requested", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(okJsonResponse());
+
+    const api = new C64API("http://c64u");
+    await api.startStream("audio", "192.168.1.185:11001", { wifi: true });
+    await api.startStream("audio", "192.168.1.185:11001"); // default = Ethernet, no wifi param
+
+    const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(urls[0]).toContain("/v1/streams/audio:start?ip=192.168.1.185%3A11001&wifi=true");
+    expect(urls[1]).toContain("/v1/streams/audio:start?ip=192.168.1.185%3A11001");
+    expect(urls[1]).not.toContain("wifi=true");
+  });
+
   // #33: writeMemoryDMA failure branch
   it("throws and logs error on writeMemoryBlock failure", async () => {
     const fetchMock = getFetchMock();

@@ -67,6 +67,14 @@ export interface StreamReceiver {
   /** The host:port the device should stream to (the receiver's own address). */
   readonly destination: string;
   /**
+   * The **unicast** host:port for a Wi‑Fi audio stream (firmware `wifi=true`) —
+   * the phone's own site-local address + this receiver's port. Present only on
+   * the native transport (learned from the UDP bind), and only once {@link ready}
+   * resolves. Undefined ⇒ this transport can't receive a Wi‑Fi stream, so callers
+   * must use {@link destination} (Ethernet multicast) instead.
+   */
+  readonly wifiDestination?: string;
+  /**
    * Resolves once the receiver is ready and {@link destination} is final. Optional: the web
    * receiver knows its destination synchronously; the native receiver must first bind a UDP
    * socket to learn the phone's address, so a caller must await this before telling the
@@ -194,6 +202,8 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
   private static readonly EMPTY = new Uint8Array(0);
   private stateHandler: ((state: StreamConnectionState) => void) | null = null;
   destination = "";
+  /** Unicast phone-address:port for a Wi‑Fi audio stream — set once bind resolves. */
+  wifiDestination: string | undefined = undefined;
   private closed = false;
   private readonly name: StreamName;
   private readonly assemble: boolean;
@@ -235,7 +245,10 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
       );
     }
     this.readyPromise = StreamUdp.bind({ name: this.name, port, group, assemble: this.assemble })
-      .then(() => {
+      .then((result) => {
+        // The bind reports the phone's site-local IPv4 — the unicast address a
+        // Wi‑Fi audio stream (firmware wifi=true) must be relayed to.
+        if (result?.localIp) this.wifiDestination = `${result.localIp}:${port}`;
         if (!this.closed) this.stateHandler?.("open");
       })
       .catch((error) => {

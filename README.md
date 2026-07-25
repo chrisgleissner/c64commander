@@ -156,7 +156,7 @@ The following shows the Keys tab using various display profiles, from small to l
 
 ### Live View
 
-Hear and see the running machine from inside the app, in one shared session that stays live wherever you go. **Listen** for audio-only (no screen space, just a live dot); **Watch** for a small preview you can expand.
+Hear and see the running machine from inside the app, in one shared session that stays live wherever you go. **Listen** for audio-only (no screen space, just a live dot); **Watch** for a small preview you can expand. Listen-only audio can travel over **Wi‑Fi** (great when the C64 and your device share only a wireless router) and moves itself to Ethernet when you add video — configurable under **Settings → Audio streaming route** (Dynamic / Always Wi‑Fi / Always Ethernet).
 
 <table>
   <tr>

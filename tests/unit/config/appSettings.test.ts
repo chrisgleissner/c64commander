@@ -8,6 +8,9 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  DEFAULT_STREAM_AUDIO_ROUTE,
+  loadStreamAudioRoute,
+  saveStreamAudioRoute,
   DEFAULT_AUTO_DEMO_MODE_ENABLED,
   DEFAULT_BACKGROUND_REDISCOVERY_INTERVAL_MS,
   DEFAULT_CONFIG_WRITE_INTERVAL_MS,
@@ -173,5 +176,19 @@ describe("appSettings", () => {
   it("returns fallback when localStorage has a non-numeric value for a number setting (BRDA:60)", () => {
     localStorage.setItem(APP_SETTINGS_KEYS.CONFIG_WRITE_INTERVAL_KEY, "not-a-number");
     expect(loadConfigWriteIntervalMs()).toBe(DEFAULT_CONFIG_WRITE_INTERVAL_MS);
+  });
+
+  it("persists the Live View audio route and defaults to dynamic (firmware wifi=true)", () => {
+    expect(DEFAULT_STREAM_AUDIO_ROUTE).toBe("dynamic");
+    expect(loadStreamAudioRoute()).toBe("dynamic");
+
+    saveStreamAudioRoute("wifi");
+    expect(loadStreamAudioRoute()).toBe("wifi");
+    saveStreamAudioRoute("ethernet");
+    expect(loadStreamAudioRoute()).toBe("ethernet");
+
+    // An unknown persisted value falls back to the default.
+    localStorage.setItem("c64u_stream_audio_route", "bogus");
+    expect(loadStreamAudioRoute()).toBe("dynamic");
   });
 });

@@ -30,6 +30,7 @@ interface Captured {
   };
   start: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
+  isOnWifi?: ReturnType<typeof vi.fn>;
 }
 
 // Hoisted so the arrays exist before the module's `avMirrorSession` singleton
@@ -44,6 +45,7 @@ vi.mock("@/lib/streams/audioMirrorController", () => ({
     deps: Captured["deps"];
     start = vi.fn(async () => {});
     stop = vi.fn(async () => {});
+    isOnWifi = vi.fn(() => false);
     constructor(deps: Captured["deps"]) {
       this.deps = deps;
       audioInstances.push(this as unknown as Captured);
@@ -63,7 +65,7 @@ vi.mock("@/lib/streams/videoMirrorController", () => ({
   },
 }));
 
-import { AvMirrorSession, avMirrorSession } from "@/lib/streams/avMirrorSession";
+import { AvMirrorSession, WIFI_AUDIO_BLOCKS_VIDEO, avMirrorSession } from "@/lib/streams/avMirrorSession";
 
 const makeSession = () => {
   audioInstances.length = 0;
@@ -203,5 +205,54 @@ describe("AvMirrorSession", () => {
 
   it("exposes a shared app-wide singleton", () => {
     expect(avMirrorSession).toBeInstanceOf(AvMirrorSession);
+  });
+
+  describe("Wi‑Fi audio route (firmware wifi=true)", () => {
+    beforeEach(() => localStorage.clear()); // default policy = dynamic
+
+    it("requests Wi‑Fi for audio-only under the default (dynamic) policy", async () => {
+      const { session, audio } = makeSession();
+      await session.startAudio();
+      expect(audio.start).toHaveBeenCalledWith({ wifi: true });
+    });
+
+    it("does not request Wi‑Fi for audio while video is already live", async () => {
+      const { session, audio, video } = makeSession();
+      video.deps.onChange({ state: "live", fps: 10, error: null });
+      await session.startAudio();
+      expect(audio.start).toHaveBeenCalledWith({ wifi: false });
+    });
+
+    it("never requests Wi‑Fi under the ethernet policy", async () => {
+      localStorage.setItem("c64u_stream_audio_route", "ethernet");
+      const { session, audio } = makeSession();
+      await session.startAudio();
+      expect(audio.start).toHaveBeenCalledWith({ wifi: false });
+    });
+
+    it("moves Wi‑Fi audio to Ethernet before starting video (dynamic), then back on stop", async () => {
+      const { session, audio, video } = makeSession();
+      audio.isOnWifi!.mockReturnValue(true); // audio currently on Wi‑Fi
+      await session.startVideo();
+      // Audio was restarted on Ethernet, then video started.
+      expect(audio.stop).toHaveBeenCalled();
+      expect(audio.start).toHaveBeenCalledWith({ wifi: false });
+      expect(video.start).toHaveBeenCalled();
+
+      // Now video stops → audio returns to Wi‑Fi (dynamic).
+      audio.deps.onChange({ state: "live", droppedPackets: 0, error: null }); // audio still live
+      audio.start.mockClear();
+      await session.stopVideo();
+      expect(audio.start).toHaveBeenCalledWith({ wifi: true });
+    });
+
+    it("blocks video under the wifi policy while Wi‑Fi audio is live, with an explanatory message", async () => {
+      localStorage.setItem("c64u_stream_audio_route", "wifi");
+      const { session, audio, video } = makeSession();
+      audio.isOnWifi!.mockReturnValue(true);
+      await session.startVideo();
+      expect(video.start).not.toHaveBeenCalled();
+      expect(session.getSnapshot().video.error).toBe(WIFI_AUDIO_BLOCKS_VIDEO);
+    });
   });
 });

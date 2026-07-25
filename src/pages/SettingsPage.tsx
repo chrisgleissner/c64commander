@@ -137,6 +137,9 @@ import {
   saveStreamNativeVideoAssembly,
   loadStreamNativeAudio,
   saveStreamNativeAudio,
+  loadStreamAudioRoute,
+  saveStreamAudioRoute,
+  type StreamAudioRoute,
   loadNotificationVisibility,
   saveNotificationVisibility,
   loadNotificationDurationMs,
@@ -366,6 +369,7 @@ export default function SettingsPage() {
   const [streamNativeVideoAssembly, setStreamNativeVideoAssembly] = useState<boolean>(loadStreamNativeVideoAssembly);
   const [streamInputPriority, setStreamInputPriority] = useState<boolean>(loadStreamInputPriority);
   const [streamNativeAudio, setStreamNativeAudio] = useState<boolean>(loadStreamNativeAudio);
+  const [streamAudioRoute, setStreamAudioRoute] = useState<StreamAudioRoute>(loadStreamAudioRoute);
   const [volumeSliderPreviewIntervalMs, setVolumeSliderPreviewIntervalMs] = useState(
     loadVolumeSliderPreviewIntervalMs(),
   );
@@ -2093,6 +2097,36 @@ export default function SettingsPage() {
                         Jitter buffer depth for Live View audio. Holds each packet briefly so a slightly-late or
                         reordered packet still plays in order, and a lost packet is smoothly concealed instead of
                         clicking. Default 5 ms; 0 = lowest latency, least resilient.
+                      </p>
+                    </div>
+                    <div className="col-span-2 space-y-2">
+                      <Label htmlFor="settings-stream-audio-route" className="text-sm">
+                        Audio streaming route
+                      </Label>
+                      <Select
+                        value={streamAudioRoute}
+                        onValueChange={(value) => {
+                          const next = value as StreamAudioRoute;
+                          setStreamAudioRoute(next);
+                          saveStreamAudioRoute(next);
+                        }}
+                      >
+                        <SelectTrigger id="settings-stream-audio-route" data-testid="settings-stream-audio-route">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="dynamic">Dynamic — Wi‑Fi for audio, Ethernet with video</SelectItem>
+                          <SelectItem value="wifi">Always Wi‑Fi (if available)</SelectItem>
+                          <SelectItem value="ethernet">Always Ethernet</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        When you listen to C64 audio <strong>without video</strong>, the C64 can send it over{" "}
+                        <strong>Wi‑Fi</strong> — handy when the C64 and this device share only a wireless router. Wi‑Fi
+                        audio can&apos;t run at the same time as video. <strong>Dynamic</strong> (recommended) uses
+                        Wi‑Fi while audio is alone and moves to Ethernet when you add video, so both share one route.{" "}
+                        <strong>Always Wi‑Fi</strong> keeps audio on Wi‑Fi and blocks video until you change this.{" "}
+                        <strong>Always Ethernet</strong> never uses Wi‑Fi.
                       </p>
                     </div>
                     <div className="col-span-2 flex items-start justify-between gap-3 min-w-0">

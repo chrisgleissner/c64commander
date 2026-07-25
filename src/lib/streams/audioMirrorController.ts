@@ -32,6 +32,8 @@ export interface AudioMirrorSnapshot {
   droppedPackets: number;
   chunks: number;
   error: string | null;
+  /** The route the current stream actually uses (Wi‑Fi only when requested + available). */
+  route: "wifi" | "ethernet";
 }
 
 /** Live audio-pipeline signals for the governor + telemetry (read on the low-rate tick). */
@@ -62,7 +64,7 @@ export interface AudioMirrorDeps {
    * sink can't open (e.g. non-native platform). The session supplies this only when the setting is on.
    */
   createNativeSink?: (sampleRate: number) => NativeAudioSink | null;
-  startStream: (name: "audio", destination: string) => Promise<unknown>;
+  startStream: (name: "audio", destination: string, options?: { wifi?: boolean }) => Promise<unknown>;
   stopStream: (name: "audio") => Promise<unknown>;
   onChange: (snapshot: AudioMirrorSnapshot) => void;
   /** Broadcast each decoded audio batch (interleaved Int16) — the ~32 ms player cadence. */
@@ -88,7 +90,13 @@ export class AudioMirrorController {
   private nativeLastSeq: number | null = null;
   private batcher = new AudioBatcher();
   private playbackBuffer: AudioPlaybackBuffer | null = null;
-  private snapshot: AudioMirrorSnapshot = { state: "off", droppedPackets: 0, chunks: 0, error: null };
+  private snapshot: AudioMirrorSnapshot = {
+    state: "off",
+    droppedPackets: 0,
+    chunks: 0,
+    error: null,
+    route: "ethernet",
+  };
 
   constructor(private readonly deps: AudioMirrorDeps) {}
 
@@ -131,12 +139,22 @@ export class AudioMirrorController {
     }
   }
 
-  async start(): Promise<void> {
+  /** True while the current audio stream is delivered over Wi‑Fi (firmware wifi=true). */
+  isOnWifi(): boolean {
+    return this.snapshot.route === "wifi" && (this.snapshot.state === "connecting" || this.snapshot.state === "live");
+  }
+
+  /**
+   * @param options.wifi request Wi‑Fi delivery (audio-only). Falls back to
+   *   Ethernet automatically if the transport has no Wi‑Fi address or the device
+   *   rejects the Wi‑Fi start (no silent firmware fallback — PR #732).
+   */
+  async start(options?: { wifi?: boolean }): Promise<void> {
     if (this.snapshot.state === "connecting" || this.snapshot.state === "live") return;
     this.batcher.reset();
     this.nativeLostPackets = 0;
     this.nativeLastSeq = null;
-    this.update({ state: "connecting", error: null, droppedPackets: 0, chunks: 0 });
+    this.update({ state: "connecting", error: null, droppedPackets: 0, chunks: 0, route: "ethernet" });
 
     // Prefer the native low-latency sink when offered: the plugin's receive thread feeds the
     // AudioTrack directly, so JS drives NO playback (no bridge traffic, no jitter buffer). Fall back
@@ -210,7 +228,26 @@ export class AudioMirrorController {
 
     try {
       await receiver.ready?.(); // native binds a UDP socket first, learning its destination
-      await this.deps.startStream("audio", receiver.destination);
+      // Wi‑Fi audio (PR #732): relay a UNICAST stream to the phone's own address.
+      // The firmware fails (no silent Ethernet fallback) if it has no Wi‑Fi, so
+      // retry over Ethernet ourselves. Only the native transport exposes a
+      // wifiDestination; elsewhere Wi‑Fi is not possible → Ethernet.
+      const wifiDestination = options?.wifi ? receiver.wifiDestination : undefined;
+      if (wifiDestination) {
+        try {
+          await this.deps.startStream("audio", wifiDestination, { wifi: true });
+          this.update({ route: "wifi" });
+        } catch (wifiError) {
+          addLog("info", "Audio Mirror: Wi‑Fi stream unavailable; using Ethernet", {
+            error: (wifiError as Error)?.message ?? String(wifiError),
+          });
+          await this.deps.startStream("audio", receiver.destination);
+          this.update({ route: "ethernet" });
+        }
+      } else {
+        await this.deps.startStream("audio", receiver.destination);
+        this.update({ route: "ethernet" });
+      }
     } catch (error) {
       addLog("warn", "Audio Mirror: device stream start failed", {
         error: (error as Error)?.message ?? String(error),
