@@ -102,8 +102,8 @@
       "pinned": 250,
       "measured": {
         "device": "Pixel 4 (flame)",
-        "value": null,
-        "note": "≥4× realtime; Track B LE3. p99 across per-chunk render rates over the whole engine session"
+        "value": 69,
+        "note": "≥4× realtime; Track B LE3. p99 across per-chunk render rates over the whole engine session. Measured 2026-07-25 on device over a ~110 s HVSC PSID: 69.4 ms/sec ≈ 14× realtime. NOTE: measured with the SIDLite WASM build; re-measure once a reSIDfp artifact is vendored (see docs/plans/sid-station/AUDIO-FIDELITY-TEST.md)"
       }
     },
     "audioUnderruns": {
@@ -114,8 +114,8 @@
       "pinned": 0,
       "measured": {
         "device": "Pixel 4 (flame)",
-        "value": null,
-        "note": "zero underruns over a 3-min PSID; Track B LE3. Summed across every tune in the soak"
+        "value": 0,
+        "note": "zero underruns over a 3-min PSID; Track B LE3. Summed across every tune in the soak. Measured 2026-07-25: 0 over 110 s, after raising the schedule to 4 s — it was ~6/min at 1.5 s because the main thread stalls up to 1.9 s (GC)"
       }
     },
     "engineSwitchMs": {
