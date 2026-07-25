@@ -279,6 +279,34 @@ defects, and the same tunes would fail for native `sidplayfp` too. The per-tune 
 should be re-derived against a native-`sidplayfp`-vs-hardware baseline rather than assumed
 achievable; that is tracked as a follow-up.
 
+### 6.1b Sign-off run — 34-tune corpus (31 compared)
+
+The §1.5 exit criteria ask for a ≥ 30-tune corpus. Built by carrying over the original 14 (so the
+iteration history stays comparable), adding the 12 classics already pulled from the device, then
+header-selecting from the local HVSC to widen the spread — 34 tunes across 13 distinct
+model / clock / multi-speed / multi-song buckets. Only single-SID tunes were added: the Ultimate has
+no second SID mapped, so multi-SID tunes are silent on the C64 side. All 34 captured with `gaps == 0`;
+3 are silent on the C64 side and excluded, leaving **31 compared**.
+
+| metric (median, 31 tunes) | value        | exit criterion (§1.5) |     |
+| ------------------------- | ------------ | --------------------- | --- |
+| DC offset                 | **+0.0018**  | \|DC\| < 0.005        | ✅  |
+| level Δ vs C64            | **+0.22 dB** | median \|Δ\| < 1.5 dB | ✅  |
+| LTAS rms difference       | **2.78 dB**  | < 3 dB                | ✅  |
+| spectral centroid ratio   | **1.039**    | 0.85–1.18             | ✅  |
+| envelope correlation      | **0.551**    | ≥ 0.45                | ✅  |
+
+Envelope correlation again clears native `sidplayfp`'s 0.483 against the same hardware.
+
+**Per-tune spread.** Correlation runs 0.069–0.868 and LTAS 0.48–14.42 dB, so §1.5's _per-tune_
+spectral bounds are still exceeded on a minority (notably `Alice_in_Videoland` 14.4 dB,
+`Last_Ninja_2` 12.2 dB, `Hardrestart` 11.5 dB, and `Jumpman_Junior` at 0.069 correlation). Since the
+engine is now equal to a native build of the same library to ~−80 dBFS (§6.1a), these are
+emulation-vs-hardware differences — the Ultimate's SID model, filter tolerance and mixer — not build
+defects, and native `sidplayfp` would fail them on the same tunes. The per-tune bounds were assumed
+rather than derived; they should be re-derived from a native-`sidplayfp`-vs-hardware baseline over
+this same corpus before being treated as a gate. Tracked as a follow-up.
+
 ### 6.1a The strict control: device vs the same library, natively
 
 This is the honest test of "is our build correct", and it is now exact:
@@ -292,17 +320,17 @@ Criterion §1.5 asked for ≥ 0.90 here. It is 1.0000 (4 d.p.).
 
 **Precisely how close.** Not bit-exact — the two builds differ by a handful of LSBs:
 
-| pair | max \|Δ\| | mean \|Δ\| | correlation | error RMS |
-| --- | --- | --- | --- | --- |
-| Drummachine + ROMs | 164 LSB | 3.08 | 0.99999798 | −75.1 dBFS |
-| 10_Orbyte + ROMs | 98 LSB | 1.38 | 0.99999978 | −81.1 dBFS |
-| Waterfall_3SID + ROMs | 7 LSB | 1.03 | 0.99999235 | −87.0 dBFS |
-| Ta-Boo, no ROMs | 13 LSB | 1.16 | 0.99999942 | −84.8 dBFS |
+| pair                  | max \|Δ\| | mean \|Δ\| | correlation | error RMS  |
+| --------------------- | --------- | ---------- | ----------- | ---------- |
+| Drummachine + ROMs    | 164 LSB   | 3.08       | 0.99999798  | −75.1 dBFS |
+| 10_Orbyte + ROMs      | 98 LSB    | 1.38       | 0.99999978  | −81.1 dBFS |
+| Waterfall_3SID + ROMs | 7 LSB     | 1.03       | 0.99999235  | −87.0 dBFS |
+| Ta-Boo, no ROMs       | 13 LSB    | 1.16       | 0.99999942  | −84.8 dBFS |
 
 An error floor around −80 dBFS is inaudible and far below the SID's own ~8-bit noise floor, but it
 is real. The most likely source is libm: emscripten's musl-derived `exp`/`log`/`sin` differ from
 glibc's in the last ulp, and those feed the reSIDfp filter and resampler table generation. For
-context, the same measurement on the *broken* build was correlation 0.75 and roughly −20 dBFS, so
+context, the same measurement on the _broken_ build was correlation 0.75 and roughly −20 dBFS, so
 the gap between "correct" and "broken" is about 60 dB.
 
 ### 6.2 New finding — C64 ROMs are a **prerequisite**, not an accuracy improvement
@@ -348,7 +376,7 @@ Characterisation so far:
   drift, and per-window waveform correlation is a stable 0.79–0.86 across the whole render.
 - **Not floating-point chaos.** A systematic offset with no decay over time.
 - **Not the compiler.** A clang-built native stack and a gcc-built native stack agree to `waveCorr
-  1.0000` (not bit-exact, but ~−80 dBFS apart — nowhere near the discrepancy under investigation).
+1.0000` (not bit-exact, but ~−80 dBFS apart — nowhere near the discrepancy under investigation).
 - **Not the emscripten thread guard.** Applying the same inline-`sidThread` patch to a _native_ build
   also agrees to `waveCorr 1.0000`, so `apply-thread-guards.py` is exonerated.
 - **Not a libsidplayfp version difference.** The distro's `/usr/bin/sidplayfp` is libsidplayfp
@@ -362,9 +390,9 @@ Characterisation so far:
   itself at `1.0000` across the same sweep on this tune.
 
   > Chunk invariance is **not** a universal property of libsidplayfp, so do not turn this into a
-  > test. Checked afterwards: native output *does* vary with chunk size on other fixtures (including
+  > test. Checked afterwards: native output _does_ vary with chunk size on other fixtures (including
   > single-SID `10_Orbyte`, and `Drummachine` itself once ROMs are absent) — by a few LSBs, not by
-  > 10 dB. It was a useful *signal* here because the wasm build diverged by two orders of magnitude
+  > 10 dB. It was a useful _signal_ here because the wasm build diverged by two orders of magnitude
   > more than native did, not because exact invariance is guaranteed.
 
 Deterministic, platform-specific and allocation-sensitive is the signature of an out-of-bounds or
