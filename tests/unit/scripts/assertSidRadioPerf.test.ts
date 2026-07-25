@@ -61,8 +61,12 @@ describe("assert-sid-radio-perf", () => {
   });
 
   it("asserts the Local engine budgets (§12.6, Track B / LE3)", () => {
-    // Renders slower than realtime → renderMsPerSec regression (max bound).
-    const slow = assertSidRadioPerf({ ...goodStats, renderMsPerSec: 300 }, thresholds());
+    // A render-cost regression → renderMsPerSec (max bound). Derived from the
+    // pinned value rather than hardcoded: the bound legitimately moved when the
+    // engine was changed from SIDLite to reSIDfp, and a literal here silently
+    // stopped exercising the failure path.
+    const renderBound = thresholds().localEngine.renderMsPerSec.pinned;
+    const slow = assertSidRadioPerf({ ...goodStats, renderMsPerSec: renderBound + 1 }, thresholds());
     expect(slow.passed).toBe(false);
     expect(slow.failures.map((f) => f.name)).toContain("renderMsPerSec");
 
