@@ -64,6 +64,16 @@ export class LocalSidPlaybackController {
     this.engine?.stop();
   }
 
+  /** Pause on-device playback in place (no C64 involved). */
+  async pause(): Promise<void> {
+    await this.engine?.pause();
+  }
+
+  /** Resume after {@link pause}. */
+  async resume(): Promise<void> {
+    await this.engine?.resume();
+  }
+
   /** Live playback stats for the HIL / on-screen blob, or null before first play. */
   getStats(): LocalSidStats | null {
     return this.engine?.getStats() ?? null;

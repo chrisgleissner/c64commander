@@ -249,6 +249,44 @@ describe("LocalSidEngine", () => {
     expect(positions.length).toBeGreaterThan(0);
   });
 
+  it("reports the p99 of per-chunk render rates, not just the mean (§12.6)", async () => {
+    const { engine, worker } = makeEngine({ chunkSeconds: 0.5, targetBufferSeconds: 1.0 });
+    const play = engine.play(new ArrayBuffer(64), 0, {});
+    await completeOpen(worker);
+    await play;
+    // 98 cheap chunks (10 ms/sec) and two expensive ones (400 ms/sec). The mean
+    // stays low while the p99 (nearest-rank: the 99th of 100) must surface the
+    // spikes that risk an underrun.
+    for (let i = 0; i < 98; i += 1) {
+      worker.emit({ type: "chunk", id: 1, pcm: chunk(24000), samples: 48000, renderMs: 5 });
+    }
+    worker.emit({ type: "chunk", id: 1, pcm: chunk(24000), samples: 48000, renderMs: 200 });
+    worker.emit({ type: "chunk", id: 1, pcm: chunk(24000), samples: 48000, renderMs: 200 });
+
+    const stats = engine.getStats();
+    expect(stats.renderMsPerSec).toBeLessThan(20);
+    expect(stats.renderMsPerSecP99).toBeCloseTo(400, 3);
+    expect(stats.peakRenderMsPerSec).toBeCloseTo(400, 3);
+  });
+
+  it("keeps render throughput across tunes so a soak measures the whole session", async () => {
+    const { engine, worker } = makeEngine({ chunkSeconds: 0.5, targetBufferSeconds: 1.0 });
+    const play = engine.play(new ArrayBuffer(64), 0, {});
+    await completeOpen(worker);
+    await play;
+    worker.emit({ type: "chunk", id: 1, pcm: chunk(24000), samples: 48000, renderMs: 50 });
+    expect(engine.getStats().renderMsPerSecP99).toBeCloseTo(100, 3);
+
+    // An auto-advance stops the tune; the session's throughput must survive it.
+    engine.stop();
+    expect(engine.getStats().renderMsPerSecP99).toBeCloseTo(100, 3);
+
+    // Disposing the engine ends the session and clears it.
+    engine.dispose();
+    expect(engine.getStats().renderMsPerSecP99).toBe(0);
+    expect(engine.getStats().renderMsPerSec).toBe(0);
+  });
+
   it("rejects load on a worker load error and play on an open error", async () => {
     const { engine, worker } = makeEngine();
     const loadP = engine.load();

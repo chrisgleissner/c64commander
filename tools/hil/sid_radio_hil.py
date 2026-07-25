@@ -17,7 +17,10 @@ G5/G6/G9/G11; the host-deterministic parts run in CI via
     python3 tools/hil/sid_radio_hil.py --serial <ADB_SERIAL> --engine local --station song --soak-tracks 20
 
 The C64 engine needs a live C64U (the app plays SIDs on the Ultimate and you
-hear them via the audio mirror); ``--engine local`` needs no C64 (Track B).
+hear them via the audio mirror); ``--engine local`` needs no C64 (Track B) and
+is the only mode that asserts the ``localEngine`` (§12.6) budgets — it selects
+the on-device engine before the station starts and aborts if the app did not
+take the selection.
 """
 from __future__ import annotations
 
@@ -74,7 +77,11 @@ class Cdp:
         page = next((p for p in pages if p.get("type") == "page" and p.get("webSocketDebuggerUrl")), None)
         if not page:
             raise SystemExit("sid_radio_hil: no debuggable page")
-        self.ws = websocket.create_connection(page["webSocketDebuggerUrl"], timeout=45)
+        # `suppress_origin`: the WebView's devtools endpoint rejects a handshake
+        # that carries an Origin header (403) — websocket-client sends one by default.
+        self.ws = websocket.create_connection(
+            page["webSocketDebuggerUrl"], timeout=45, suppress_origin=True
+        )
         self._id = 0
 
     def send(self, method: str, params: dict | None = None) -> dict:
@@ -103,15 +110,47 @@ class Cdp:
             pass
 
 
-def enable_flags(cdp: Cdp) -> None:
+def enable_flags(cdp: Cdp, engine: str = "c64", force_hvsc_update: bool = False) -> None:
+    """Select the feature flags + playback engine, then reload so they take effect."""
+    script = [
+        "localStorage.setItem('c64u_sid_radio_enabled','1');",
+        "localStorage.setItem('c64u_sid_ranking_enabled','1');",
+    ]
+    if engine == "local":
+        # Track B: offer the on-device engine AND select it, so the station's
+        # tunes render here instead of on the Ultimate (spec §12.5).
+        script.append("localStorage.setItem('c64u_local_engine_enabled','1');")
+        script.append("localStorage.setItem('c64u_playback_engine','local');")
+    else:
+        script.append("localStorage.setItem('c64u_playback_engine','c64');")
+    if force_hvsc_update:
+        # G12: make the periodic HVSC update check due again, so it runs while
+        # the station below is playing and rebuilds `md5PathIndex` underneath it.
+        script.append(
+            "(() => { const k='c64u_hvsc_state:v1'; const raw=localStorage.getItem(k);"
+            " if (!raw) return; try { const s=JSON.parse(raw); s.lastUpdateCheckUtcMs=null;"
+            " localStorage.setItem(k, JSON.stringify(s)); } catch {} })();"
+        )
     cdp.send("Page.enable")
-    cdp.evaluate(
-        "localStorage.setItem('c64u_sid_radio_enabled','1');"
-        "localStorage.setItem('c64u_sid_ranking_enabled','1');"
-        "'ok'"
-    )
+    cdp.evaluate("".join(script) + "'ok'")
     cdp.send("Page.reload", {"ignoreCache": False})
     time.sleep(6)
+
+
+def read_hvsc_state(cdp: Cdp) -> dict:
+    """The persisted HVSC state — used to tell a real update from a no-op (G12)."""
+    raw = cdp.evaluate("localStorage.getItem('c64u_hvsc_state:v1')")
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+
+
+def read_engine_route(cdp: Cdp) -> str:
+    """Which engine the app will actually use for the next SID."""
+    return cdp.evaluate("localStorage.getItem('c64u_playback_engine') || 'c64'")
 
 
 def click_testid(cdp: Cdp, testid: str) -> bool:
@@ -165,24 +204,37 @@ def soak(cdp: Cdp, target_tracks: int, skips: int, seconds: int | None) -> dict:
     return stats
 
 
-def assert_budgets(stats: dict) -> int:
+def assert_budgets(stats: dict, sections: tuple[str, ...] = ("thresholds",)) -> int:
+    """Assert the pinned §9.2/§12.6 budgets for each requested section.
+
+    A metric the app never reported is called out rather than skipped: a silent
+    `None` would otherwise let an unmeasured budget pass as green.
+    """
     doc = json.loads(THRESHOLDS_PATH.read_text())
-    failures = []
-    for name, spec in doc.get("thresholds", {}).items():
-        metric = spec["metric"]
-        actual = sum(stats.get(k.strip(), 0) for k in metric.split("+")) if "+" in metric else stats.get(metric)
-        if actual is None:
-            continue
-        bound, pinned = spec["bound"], spec["pinned"]
-        ok = (
-            (bound == "max" and actual <= pinned)
-            or (bound == "min" and actual >= pinned)
-            or (bound == "equals" and actual == pinned)
-        )
-        status = "ok" if ok else "REGRESSION"
-        print(f"[sid-radio-hil] {name}: {metric}={actual} {bound} {pinned} -> {status}")
-        if not ok:
-            failures.append(name)
+    failures: list[str] = []
+    for section in sections:
+        specs = doc.get(section, {})
+        reported = 0
+        for name, spec in specs.items():
+            metric = spec["metric"]
+            actual = sum(stats.get(k.strip(), 0) for k in metric.split("+")) if "+" in metric else stats.get(metric)
+            if actual is None:
+                print(f"[sid-radio-hil] {section}.{name}: {metric}=NOT REPORTED (not measured this run)")
+                continue
+            reported += 1
+            bound, pinned = spec["bound"], spec["pinned"]
+            ok = (
+                (bound == "max" and actual <= pinned)
+                or (bound == "min" and actual >= pinned)
+                or (bound == "equals" and actual == pinned)
+            )
+            status = "ok" if ok else "REGRESSION"
+            print(f"[sid-radio-hil] {section}.{name}: {metric}={actual} {bound} {pinned} -> {status}")
+            if not ok:
+                failures.append(f"{section}.{name}")
+        if specs and reported == 0:
+            print(f"[sid-radio-hil] {section}: NO metric was reported — the run proved nothing")
+            failures.append(section)
     return 1 if failures else 0
 
 
@@ -195,6 +247,35 @@ def shuffle_replay(cdp: Cdp, station: str, style: str | None) -> int:
     seq = stats.get("emittedSequence", [])
     print(f"[sid-radio-hil] shuffle-replay: controls-disabled={disabled} seqLen={len(seq)}")
     return 0 if disabled else 1
+
+
+def hvsc_update(cdp: Cdp, args: argparse.Namespace, before: dict) -> int:
+    """G12: a station keeps advancing while an HVSC update rebuilds md5PathIndex.
+
+    `enable_flags` already made the update check due, so it runs on this launch
+    — overlapping the station started here. Continuity is the assertion; whether
+    upstream actually had an update is reported so a no-op run is never mistaken
+    for a proof.
+    """
+    start_station(cdp, args.station, args.style)
+    stats = soak(cdp, args.soak_tracks, 0, args.soak_seconds)
+    after = read_hvsc_state(cdp)
+    rebuilt = before.get("updateVersion") != after.get("updateVersion") or before.get(
+        "installedVersion"
+    ) != after.get("installedVersion")
+    advanced = int(stats.get("tracksAutoAdvanced", 0))
+    print(
+        f"[sid-radio-hil] hvsc-update: advanced={advanced} "
+        f"installed {before.get('installedVersion')!r}->{after.get('installedVersion')!r} "
+        f"update {before.get('updateVersion')!r}->{after.get('updateVersion')!r}"
+    )
+    if not rebuilt:
+        print(
+            "[sid-radio-hil] hvsc-update: NO HVSC update was available upstream — "
+            "continuity held but the index never rebuilt, so G12 is NOT proven by this run"
+        )
+    print("[sid-radio-hil] final stats:", json.dumps(stats))
+    return assert_budgets(stats)
 
 
 def main() -> int:
@@ -213,13 +294,23 @@ def main() -> int:
     forward_devtools(args.serial)
     cdp = Cdp()
     try:
-        enable_flags(cdp)
+        before = read_hvsc_state(cdp) if args.hvsc_update else {}
+        enable_flags(cdp, engine=args.engine, force_hvsc_update=args.hvsc_update)
+        route = read_engine_route(cdp)
+        print(f"[sid-radio-hil] playback engine: requested={args.engine} selected={route}")
+        if route != args.engine:
+            raise SystemExit(f"sid_radio_hil: engine {args.engine} was not selected (app reports {route})")
+        if args.hvsc_update:
+            return hvsc_update(cdp, args, before)
         if args.shuffle_replay:
             return shuffle_replay(cdp, args.station, args.style)
         start_station(cdp, args.station, args.style)
         stats = soak(cdp, args.soak_tracks, args.skips, args.soak_seconds)
         print("[sid-radio-hil] final stats:", json.dumps(stats))
-        return assert_budgets(stats)
+        # `--engine local` is the only run that exercises the on-device engine,
+        # so it is the only one whose §12.6 budgets mean anything.
+        sections = ("thresholds", "localEngine") if args.engine == "local" else ("thresholds",)
+        return assert_budgets(stats, sections)
     finally:
         cdp.close()
 

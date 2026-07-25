@@ -68,8 +68,21 @@ function disposeEngine(): void {
   engine = null;
 }
 
-ctx.onmessage = async (event: MessageEvent<LocalSidMainToWorker>) => {
-  const message = event.data;
+/**
+ * Serialises message handling.
+ *
+ * `SidAudioEngine` is a single stateful WASM instance and `renderSeconds()` is
+ * **not** reentrant: it advances the emulated machine from wherever it left
+ * off. Handling messages with a bare `async` listener let every `await` yield
+ * to the *next* queued message, so with N renders in flight N `renderSeconds()`
+ * calls ran concurrently against that one engine — they interleaved and
+ * replayed the same span, which is audible as a short passage looping over and
+ * over with crackle at the seams. Ordering `open`/`render`/`close` through one
+ * chain also stops a render from landing on an engine that is being replaced.
+ */
+let workQueue: Promise<void> = Promise.resolve();
+
+const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
   try {
     switch (message.type) {
       case "load": {
@@ -131,4 +144,10 @@ ctx.onmessage = async (event: MessageEvent<LocalSidMainToWorker>) => {
     const id = message && "id" in message ? (message as { id?: number }).id : undefined;
     ctx.postMessage(toLocalSidError(error, code, id));
   }
+};
+
+ctx.onmessage = (event: MessageEvent<LocalSidMainToWorker>) => {
+  const message = event.data;
+  // Never let a rejection break the chain for subsequent messages.
+  workQueue = workQueue.then(() => handleMessage(message)).catch(() => undefined);
 };

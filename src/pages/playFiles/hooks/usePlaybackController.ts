@@ -49,7 +49,9 @@ import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { buildLocalPlayFileFromUri, buildLocalPlayFileFromTree } from "@/lib/playback/fileLibraryUtils";
 import { loadLocalEngineEnabled, loadPlaybackEngine } from "@/lib/config/appSettings";
 import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
+import { LocalEngineStatsAccumulator } from "@/lib/playback/localEngineStatsBridge";
 import { detectRomRequired } from "@/lib/playback/localSidWorkerCore";
+import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
 import {
   ENGINE_FALLBACK_MESSAGES,
   preRouteEngine,
@@ -127,6 +129,13 @@ type RuntimePlaybackRequest = {
 };
 
 export const USER_TRANSPORT_COALESCE_MS = 120;
+
+/**
+ * How often the on-device engine's stats are mirrored to the SID Radio blob
+ * (§12.6). The HIL samples the blob every 2 s, so 1 s keeps it fresh without
+ * putting a needless timer on the main thread during local playback.
+ */
+const LOCAL_ENGINE_STATS_POLL_MS = 1000;
 
 interface UsePlaybackControllerProps {
   playlist: PlaylistItem[];
@@ -302,12 +311,37 @@ export function usePlaybackController({
   const localSidPlaybackRef = useRef<LocalSidPlaybackController | null>(localSidPlaybackController ?? null);
   // True while the current track is playing on the device (no C64 to stop).
   const currentPlaybackIsLocalRef = useRef(false);
+  // Mirrors the ref as state so the §12.6 stats poll below can start/stop with
+  // on-device playback (a ref alone would never re-run the effect).
+  const [localEngineActive, setLocalEngineActive] = useState(false);
+  const localEngineStatsRef = useRef(new LocalEngineStatsAccumulator());
+  /** Last engine seen, to tell an engine change from any other settings change. */
+  const selectedEngineRef = useRef(loadPlaybackEngine());
+  /** Keep the ref (read synchronously mid-transition) and the state in sync. */
+  const setCurrentPlaybackIsLocal = useCallback((isLocal: boolean) => {
+    currentPlaybackIsLocalRef.current = isLocal;
+    setLocalEngineActive(isLocal);
+  }, []);
   // One-time engine-fallback notices (rom/non-sid/unsupported), shown once each.
   const engineNoticeShownRef = useRef(new Set<EngineFallbackNotice>());
   const getLocalSidPlayback = useCallback(() => {
     if (!localSidPlaybackRef.current) localSidPlaybackRef.current = new LocalSidPlaybackController();
     return localSidPlaybackRef.current;
   }, []);
+  // Track B (LE3, §12.6): mirror the on-device engine's render throughput and
+  // underruns into the SID Radio stats blob so the HIL can assert the budgets.
+  // Polled (the engine exposes stats by pull) and folded across tunes, because
+  // the scheduler's underrun counter restarts on every auto-advance.
+  useEffect(() => {
+    if (!localEngineActive) return;
+    const timer = window.setInterval(() => {
+      const stats = localSidPlaybackRef.current?.getStats();
+      if (!stats) return;
+      updateSidRadioStats(localEngineStatsRef.current.sample(stats));
+    }, LOCAL_ENGINE_STATS_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [localEngineActive]);
+
   const emitEngineNotice = useCallback((notice: EngineFallbackNotice) => {
     if (engineNoticeShownRef.current.has(notice)) return;
     engineNoticeShownRef.current.add(notice);
@@ -1052,7 +1086,7 @@ export function usePlaybackController({
         } else {
           await executePlayPlan(api, plan, executionOptions);
         }
-        currentPlaybackIsLocalRef.current = routeToLocal;
+        setCurrentPlaybackIsLocal(routeToLocal);
 
         if (playGenerationRef.current !== myPlayGeneration) {
           // HARD18-009 (M5): Stop (or a later Play) superseded this
@@ -1068,7 +1102,7 @@ export function usePlaybackController({
           });
           if (routeToLocal) {
             getLocalSidPlayback().stop();
-            currentPlaybackIsLocalRef.current = false;
+            setCurrentPlaybackIsLocal(false);
           } else {
             try {
               await withTimeout(api.machineReset(), STOP_MACHINE_TIMEOUT_MS, "Reset");
@@ -1230,6 +1264,53 @@ export function usePlaybackController({
     [],
   );
 
+  // Track B (LE2, §12.5): switching "Play on: C64 / This device" acts on the
+  // tune that is playing *now* — stop whichever engine owns it and restart it
+  // on the chosen one — instead of waiting for the next track. `playItem`
+  // re-reads the engine setting, so the restart lands on the new engine.
+  useEffect(() => {
+    const onSettingsUpdated = () => {
+      const nextEngine = loadPlaybackEngine();
+      if (nextEngine === selectedEngineRef.current) return;
+      selectedEngineRef.current = nextEngine;
+      const index = currentIndexRef.current;
+      const item = playlistRef.current[index];
+      // Only a playing SID can move between engines; everything else is a
+      // no-op that takes effect on the next track, as before.
+      if (!isPlayingRef.current || !item || item.category !== "sid") return;
+      const startedAt = performance.now();
+      void (async () => {
+        if (currentPlaybackIsLocalRef.current) {
+          localSidPlaybackRef.current?.stop();
+          setCurrentPlaybackIsLocal(false);
+        } else {
+          try {
+            await withTimeout(getC64API().machineReset(), STOP_MACHINE_TIMEOUT_MS, "Reset");
+          } catch (error) {
+            addErrorLog("Stopping the C64 for a playback-engine switch failed", {
+              error: (error as Error).message,
+              item: item.label,
+            });
+          }
+        }
+        try {
+          await playItem(item, { playlistIndex: index, playlistSize: playlistRef.current.length });
+          // §12.6 `engineSwitchMs`: press → the tune is audible again.
+          updateSidRadioStats({ engineSwitchMs: performance.now() - startedAt });
+        } catch (error) {
+          if (!isHandledUiError(error)) {
+            addErrorLog("Restarting the tune on the new playback engine failed", {
+              error: (error as Error).message,
+              item: item.label,
+            });
+          }
+        }
+      })();
+    };
+    window.addEventListener("c64u-app-settings-updated", onSettingsUpdated);
+    return () => window.removeEventListener("c64u-app-settings-updated", onSettingsUpdated);
+  }, [playItem, setCurrentPlaybackIsLocal, addErrorLog, STOP_MACHINE_TIMEOUT_MS]);
+
   const startPlaylist = useCallback(
     async (items: PlaylistItem[], startIndex = 0) => {
       if (!items.length) return;
@@ -1358,7 +1439,7 @@ export function usePlaybackController({
       // entirely (it would hang if no Ultimate is connected).
       localSidPlaybackRef.current?.stop();
       if (currentPlaybackIsLocalRef.current) {
-        currentPlaybackIsLocalRef.current = false;
+        setCurrentPlaybackIsLocal(false);
       } else {
         try {
           const api = getC64API();
@@ -1521,6 +1602,37 @@ export function usePlaybackController({
   const handlePauseResume = useCallback(
     trace(async function handlePauseResume() {
       if (!isPlaying) return;
+      // Track B (LE2): a tune playing on the device has no C64 to pause — the
+      // machine calls below would be pointless (and hang with no Ultimate
+      // connected) while the on-device audio kept playing. Suspend the engine's
+      // audio clock instead; it resumes exactly where it stopped.
+      if (currentPlaybackIsLocalRef.current) {
+        const local = getLocalSidPlayback();
+        const now = Date.now();
+        if (isPaused) {
+          await local.resume();
+          setIsPaused(false);
+          writeMachineExecutionFromPlay("running");
+          trackStartedAtRef.current = now - elapsedMs;
+          playedClockRef.current.resume(now);
+          setPlayedMs(playedClockRef.current.current(now));
+          if (autoAdvanceGuardRef.current && typeof durationMs === "number") {
+            autoAdvanceGuardRef.current.dueAtMs = now + Math.max(0, durationMs - elapsedMs);
+            autoAdvanceGuardRef.current.autoFired = false;
+            autoAdvanceGuardRef.current.userCancelled = false;
+            setAutoAdvanceDueAtMs(autoAdvanceGuardRef.current.dueAtMs);
+          }
+        } else {
+          cancelPendingUserSkip();
+          await local.pause();
+          playedClockRef.current.pause(now);
+          setPlayedMs(playedClockRef.current.current(now));
+          setIsPaused(true);
+          setAutoAdvanceDueAtMs(null);
+          writeMachineExecutionFromPlay("paused");
+        }
+        return;
+      }
       const pollingPauseHandle = pollingPauseRegistry.acquirePause();
       try {
         const target = isPaused ? "running" : "paused";

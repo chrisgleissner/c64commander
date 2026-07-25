@@ -100,7 +100,11 @@
       "bound": "max",
       "aggregation": "p99",
       "pinned": 250,
-      "measured": { "device": "Callback 8020", "value": null, "note": "≥4× realtime; Track B LE3" }
+      "measured": {
+        "device": "Pixel 4 (flame)",
+        "value": null,
+        "note": "≥4× realtime; Track B LE3. p99 across per-chunk render rates over the whole engine session"
+      }
     },
     "audioUnderruns": {
       "metric": "audioUnderruns",
@@ -108,7 +112,11 @@
       "bound": "max",
       "aggregation": "count",
       "pinned": 0,
-      "measured": { "device": "Callback 8020", "value": null, "note": "zero underruns over a 3-min PSID; Track B LE3" }
+      "measured": {
+        "device": "Pixel 4 (flame)",
+        "value": null,
+        "note": "zero underruns over a 3-min PSID; Track B LE3. Summed across every tune in the soak"
+      }
     },
     "engineSwitchMs": {
       "metric": "engineSwitchMs",

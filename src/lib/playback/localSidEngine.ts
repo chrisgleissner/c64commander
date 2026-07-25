@@ -41,6 +41,8 @@ export interface LocalSidAudioSink {
   sink: AudioScheduleSink;
   /** Resume a suspended context (browsers start suspended until a gesture). */
   resume?: () => Promise<void> | void;
+  /** Suspend the audio clock, freezing the schedule where it stands. */
+  suspend?: () => Promise<void> | void;
   close: () => void;
 }
 
@@ -88,6 +90,7 @@ const defaultAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number) =
   return {
     sink,
     resume: () => context.resume(),
+    suspend: () => context.suspend(),
     close: () => void context.close(),
   };
 };
@@ -128,6 +131,12 @@ export interface LocalSidPlayResult {
 export interface LocalSidStats {
   /** Average ms to render one second of audio (≥ 4× realtime ⇒ < 250, §12.6). */
   renderMsPerSec: number;
+  /**
+   * p99 of the per-chunk render rate — the aggregation the §12.6 budget is
+   * pinned on. The running average converges and hides the spikes that
+   * actually cause underruns, so the HIL asserts this instead.
+   */
+  renderMsPerSecP99: number;
   /** Worst-case ms/sec seen this session. */
   peakRenderMsPerSec: number;
   /** Audible gaps in the gapless schedule (target 0 over a 3-min PSID). */
@@ -145,11 +154,39 @@ interface OpenPending {
   reject: (error: Error) => void;
 }
 
+/**
+ * How many per-chunk render rates to keep for the p99. At the 0.5 s default
+ * chunk this is ~34 min of audio — longer than any HIL soak, so the p99 covers
+ * the whole run while staying a fixed, tiny allocation.
+ */
+const RENDER_RATE_SAMPLES = 4096;
+
 const DEFAULT_CHUNK_SECONDS = 0.5;
-const DEFAULT_TARGET_BUFFER_SECONDS = 1.5;
+/**
+ * How far ahead of the audio clock to keep the schedule.
+ *
+ * Rendering happens in the worker, but every chunk still crosses the **main
+ * thread** to reach Web Audio — so the buffer has to survive whatever the main
+ * thread is doing. On a Pixel 4 playing from the HVSC-loaded Play page, that
+ * thread stalls for **up to ~1.9 s** (28% of wall time is GC; measured with a
+ * long-task observer + CPU profile). At the original 1.5 s this drained the
+ * schedule several times a minute — audible gaps, and `audioUnderruns` climbing
+ * ~6/min against a pinned budget of 0 (§12.6).
+ *
+ * 4 s clears the worst observed stall with margin. It costs no extra start
+ * latency (the first chunk still starts after `startPaddingSec`; the buffer just
+ * builds ahead of it) and ~1.5 MB of audio buffers. The real fix for the stalls
+ * is to stop allocating so hard on the Play page, but the audio path should not
+ * be hostage to that in the first place.
+ */
+const DEFAULT_TARGET_BUFFER_SECONDS = 4;
 const DEFAULT_SAMPLE_RATE = 48000;
-/** Cap concurrent render requests so a slow device cannot queue unboundedly. */
-const MAX_IN_FLIGHT_RENDERS = 2;
+/**
+ * Cap concurrent render requests so a slow device cannot queue unboundedly.
+ * Must be high enough to actually fill {@link DEFAULT_TARGET_BUFFER_SECONDS}
+ * promptly after a stall — at 0.5 s chunks, 4 in flight is 2 s of catch-up.
+ */
+const MAX_IN_FLIGHT_RENDERS = 4;
 
 export class LocalSidEngine {
   private readonly workerFactory: LocalSidWorkerFactory;
@@ -177,6 +214,8 @@ export class LocalSidEngine {
   private totalRenderMs = 0;
   private totalRenderedSeconds = 0;
   private peakRenderMsPerSec = 0;
+  /** Per-chunk render rates (ms per rendered second), newest wins once full. */
+  private renderRates: number[] = [];
 
   constructor(options: LocalSidEngineOptions = {}) {
     this.workerFactory = options.workerFactory ?? defaultWorkerFactory;
@@ -380,9 +419,20 @@ export class LocalSidEngine {
   private recordRender(renderMs: number, samples: number): void {
     const seconds = samples / Math.max(1, this.channels) / Math.max(1, this.audio?.sink.sampleRate ?? 1);
     if (seconds <= 0) return;
+    const rate = renderMs / seconds;
     this.totalRenderMs += renderMs;
     this.totalRenderedSeconds += seconds;
-    this.peakRenderMsPerSec = Math.max(this.peakRenderMsPerSec, renderMs / seconds);
+    this.peakRenderMsPerSec = Math.max(this.peakRenderMsPerSec, rate);
+    if (this.renderRates.length >= RENDER_RATE_SAMPLES) this.renderRates.shift();
+    this.renderRates.push(rate);
+  }
+
+  /** p99 of the recorded per-chunk render rates (0 before the first chunk). */
+  private renderRateP99(): number {
+    if (this.renderRates.length === 0) return 0;
+    const sorted = [...this.renderRates].sort((a, b) => a - b);
+    const index = Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.99) - 1);
+    return sorted[Math.max(0, index)];
   }
 
   private onWorkerError(code: string, message: string, id?: number): void {
@@ -406,12 +456,32 @@ export class LocalSidEngine {
     const stats = this.scheduler?.getStats();
     return {
       renderMsPerSec: this.totalRenderedSeconds > 0 ? this.totalRenderMs / this.totalRenderedSeconds : 0,
+      renderMsPerSecP99: this.renderRateP99(),
       peakRenderMsPerSec: this.peakRenderMsPerSec,
       audioUnderruns: stats?.underruns ?? 0,
       bufferedSeconds: stats?.bufferedSeconds ?? 0,
       positionSeconds: this.scheduler?.positionSeconds() ?? 0,
       chunksScheduled: stats?.chunksScheduled ?? 0,
     };
+  }
+
+  /**
+   * Pause on-device playback. Suspending the AudioContext freezes its clock, so
+   * everything already scheduled holds its place and `resume()` continues from
+   * exactly there — no re-render, no drift. Safe to call when not playing.
+   */
+  async pause(): Promise<void> {
+    await this.audio?.suspend?.();
+  }
+
+  /** Resume after {@link pause}. */
+  async resume(): Promise<void> {
+    await this.audio?.resume?.();
+  }
+
+  /** True while an on-device tune is loaded and scheduled. */
+  isActive(): boolean {
+    return this.scheduler !== null;
   }
 
   /** Stop the current tune (keeps the worker + WASM module warm for the next). */
@@ -432,9 +502,9 @@ export class LocalSidEngine {
     this.endReceived = false;
     this.endedFired = false;
     this.chunksEnded = 0;
-    this.totalRenderMs = 0;
-    this.totalRenderedSeconds = 0;
-    this.peakRenderMsPerSec = 0;
+    // Render throughput is deliberately NOT reset here: it measures what this
+    // device sustains across the whole engine session, so a multi-track soak
+    // (§12.6) reports one p99 over every tune rather than only the last one.
   }
 
   /** Tear down the worker + audio entirely (release WASM memory). */
@@ -444,5 +514,9 @@ export class LocalSidEngine {
     this.worker = null;
     this.moduleReady = false;
     this.loadPending = null;
+    this.totalRenderMs = 0;
+    this.totalRenderedSeconds = 0;
+    this.peakRenderMsPerSec = 0;
+    this.renderRates = [];
   }
 }

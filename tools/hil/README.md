@@ -27,11 +27,21 @@ python3 tools/hil/sid_radio_hil.py --serial <ADB_SERIAL> --hvsc-update      # G1
 python3 tools/hil/sid_radio_hil.py --serial <ADB_SERIAL> --engine local --station song --soak-tracks 20
 ```
 
-It sets `localStorage` `c64u_sid_radio_enabled` / `c64u_sid_ranking_enabled`, reloads, and reads the
+It sets `localStorage` `c64u_sid_radio_enabled` / `c64u_sid_ranking_enabled` (plus
+`c64u_local_engine_enabled` / `c64u_playback_engine` for `--engine local`), reloads, and reads the
 hidden `data-testid="sid-radio-stats"` JSON blob (§9.4) each tick. On-device measurements already
 recorded (M0/M2): cold bundle load + reverse index **≈145 ms** (« 1500 ms), `engineThreadIsMain=false`,
 hot memory **5.0 MB**. Continuity (≥30 auto-advances) and skip latency need a live C64U (or the Local
 engine). Never auto-rewrite a pinned baseline to hide a regression (spec §9.2).
+
+`--engine local` is the only mode that asserts the `localEngine` (§12.6) block — it aborts if the app
+did not take the engine selection, so a run can never pass by quietly falling back to the C64. A metric
+the app never reported is printed as `NOT REPORTED` and a section that reported nothing at all fails the
+run, so an unmeasured budget is never mistaken for a green one.
+
+`--hvsc-update` (G12) clears `lastUpdateCheckUtcMs` so the app's update check runs during the station,
+then asserts continuity. It prints the installed/update versions before and after and says so loudly
+when upstream had no update — continuity across a rebuild that never happened proves nothing.
 
 # A/V sync — Hardware-in-the-loop (HIL) test
 
