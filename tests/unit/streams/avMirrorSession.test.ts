@@ -208,12 +208,25 @@ describe("AvMirrorSession", () => {
   });
 
   describe("Wi‑Fi audio route (firmware wifi=true)", () => {
-    beforeEach(() => localStorage.clear()); // default policy = dynamic
+    beforeEach(() => {
+      localStorage.clear(); // default policy = dynamic
+      // The Wi‑Fi route is a developer-mode-only capability (firmware PR #732 is
+      // not in released firmware yet); enable dev mode so the route decisions apply.
+      localStorage.setItem("c64u_dev_mode_enabled", "1");
+    });
 
     it("requests Wi‑Fi for audio-only under the default (dynamic) policy", async () => {
       const { session, audio } = makeSession();
       await session.startAudio();
       expect(audio.start).toHaveBeenCalledWith({ wifi: true });
+    });
+
+    it("forces Ethernet regardless of the persisted policy when developer mode is off", async () => {
+      localStorage.setItem("c64u_dev_mode_enabled", "0"); // dev mode off
+      localStorage.setItem("c64u_stream_audio_route", "wifi"); // even an explicit Wi‑Fi policy
+      const { session, audio } = makeSession();
+      await session.startAudio();
+      expect(audio.start).toHaveBeenCalledWith({ wifi: false });
     });
 
     it("does not request Wi‑Fi for audio while video is already live", async () => {

@@ -462,18 +462,6 @@ The **picture** is the demanding part, so you get a say in how much of it to dra
 
 **Stats** also shows, at a glance and over the last minutes, how the stream is really doing: the picture's frame rate, how full the audio buffer is, any packets lost on the network and how they were smoothed over, and the app's own load. Open or close it as you like — it is built to be light enough that watching it costs the stream nothing. If you ever need to send in a report, **Export diagnostics** saves all of it as a small file.
 
-#### Listening over Wi‑Fi
-
-Sound is light enough to travel over **Wi‑Fi**. When you **Listen** without the picture, C64 Commander can ask the C64 to send its audio over Wi‑Fi instead of the wired network — handy when the C64 and your phone or tablet share only a wireless router, or when you just want a SID tune sent straight to your phone or tablet with no cabling between them. The picture is too heavy for Wi‑Fi, so this is for **sound on its own** — Wi‑Fi audio never runs at the same time as **Watch**.
-
-Choose how it behaves in **Settings**, under **Audio streaming route**:
-
-- **Dynamic** (recommended) — the sound goes over Wi‑Fi while it is playing alone, and moves itself to the wired network the moment you turn **Watch** on, so sound and picture always travel the same way; it hops back to Wi‑Fi when you stop watching.
-- **Always Wi‑Fi** — the sound stays on Wi‑Fi. Because that can't share the road with the picture, **Watch** is held back until you change this or stop the sound.
-- **Always Ethernet** — the sound always uses the wired network, exactly as before.
-
-If your phone or tablet has no Wi‑Fi to offer, C64 Commander simply uses the wired network — there is nothing to set up.
-
 Live View is ready to use out of the box; the picture and sound simply stay off until you press **Watch** or **Listen**, so nothing streams until you ask for it. The device streams to two network ports (11000 for the picture, 11001 for the sound); if your setup needs different ones, you can change them in **Settings**, under Play and disk behaviour. Live View borrows the same feeds as **Streams** (below), and while it is playing it takes charge of them — see there for how the two work together.
 
 On by default. You can change it in Settings > Experimental Features.

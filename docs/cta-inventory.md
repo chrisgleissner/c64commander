@@ -339,7 +339,7 @@ Mount disk sheet: Available disks list — filter text — `list-filter-input` �
   streaming route — select — `settings-stream-audio-route` — R✅ I✅ _(default
   Dynamic; firmware wifi=true — Wi‑Fi for audio-only, Ethernet with video, or
   Always Wi‑Fi / Always Ethernet)_
-  `[visible when audio_mirror_enabled or video_mirror_enabled]`
+  `[developer-mode only — firmware wifi=true not yet in released firmware; the session forces Ethernet unless dev mode is on]`
 - **Notifications**: visibility — select — R✅ I✅ ; duration — slider — R✅ I✅
 - **Build/info**: REST API docs — link — `settings-about-rest-api-docs` — R✅ I✅
   (`c64u-remote`: C64U User Guide — link — `settings-about-c64u-user-guide`
