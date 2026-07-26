@@ -115,6 +115,13 @@ def enable_flags(cdp: Cdp, engine: str = "c64", force_hvsc_update: bool = False)
     script = [
         "localStorage.setItem('c64u_sid_radio_enabled','1');",
         "localStorage.setItem('c64u_sid_ranking_enabled','1');",
+        # Debug logging OFF, always. It is off by default, but it persists once
+        # switched on, and a soak that inherits it is not measuring the shipped
+        # app: every engine open and byte read writes a log entry and
+        # re-serialises the whole log array to localStorage on the main thread.
+        # A soak that inherited it reported an audio underrun (budget 0) and a
+        # 5241 ms worst skip against 3585 ms measured with it off.
+        "localStorage.setItem('c64u_debug_logging_enabled','0');",
     ]
     if engine == "local":
         # Track B: offer the on-device engine AND select it, so the station's
