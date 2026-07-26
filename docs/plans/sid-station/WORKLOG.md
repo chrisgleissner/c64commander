@@ -837,3 +837,43 @@ different set of tests than CI's shard 2 (which is exactly `playback.spec.ts`).
 Reproducing a shard failure means asking that script which files the shard owns.
 The 4000 ms mixer bound is tight enough to flake under a coverage-instrumented
 run on a loaded runner, and is a reasonable thing to revisit.
+
+## 2026-07-26 (final) — the underrun was mine, and the flake was not
+
+**The G11 fix caused an audio underrun, and a clean soak caught it.** Moving the
+determinism sequence to emit time was right for the gate, but it moved the
+recording onto a far hotter path: `recordEmitted` fires once per emitted _item_,
+so every refill called it ten times in a tight synchronous loop, and each call
+did a `querySelector` plus a full `JSON.stringify` of the whole stats object —
+on the main thread, while audio was playing. A 25-minute soak came back with
+`audioUnderruns=1` against a pinned budget of 0 where earlier runs had none.
+
+`recordEmitted` now updates memory only; the `recordRefill` that immediately
+follows flushes the sequence with everything else, so nothing is lost and the
+engine's own reads stay current. `writeToDom` caches the mirror node rather than
+re-querying during playback. Re-verified on the rebuilt APK: **0 underruns**,
+`skipToLaunchMs` 3302 ms, `firstCandidateMs` 425 ms, `renderMsPerSec` 163 — all
+inside budget. Two tests pin the behaviour so it cannot quietly return.
+
+This is the second time in one session that the measurement, not the product,
+was the thing that needed fixing first — and both times the wrong number pointed
+somewhere plausible but false. Worth remembering that a budget breach is a claim
+about the harness as much as about the code.
+
+**The one red CI check was not caused by this branch, and the proof is
+mechanical rather than rhetorical.** `Web | E2E (sharded) (2, 12)` failed on
+`playback.spec.ts:1716 › mute button toggles and slider does not unmute`. The
+two commits either side of the failures differ only in `WORKLOG.md` and a Python
+HIL script: `git diff --name-only -- src/ public/ index.html vite.config.ts`
+returns nothing. Across that identical application code the shard produced fail,
+pass, fail, fail. Four local configurations pass it — full spec normally, the
+test ×6 normally, the test ×6 against the coverage build, and the full spec
+against the coverage build pinned to two cores.
+
+Failing three of four runs is not noise, though, and the cause was a real one:
+the Audio Mixer write had a hard 4 s bound. That bound exists so a write that
+never settles cannot wedge the mute/volume lane — it is an anti-hang guard, not
+a latency target — and exceeding it raises a user-facing "Mute toggle failed"
+toast. Set that close to how long a healthy-but-slow write takes and real users
+on congested Wi-Fi, or on a phone that just woke, are told a failure happened
+when none did. Widened to 10 s, named, and documented. CI green at 33 pass.
