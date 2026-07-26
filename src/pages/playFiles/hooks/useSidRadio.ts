@@ -114,14 +114,10 @@ const REFILL_THRESHOLD = 4;
 const PINNED_SHUFFLE_SEED_KEY = "c64u_sid_radio_pinned_shuffle_seed";
 
 const defaultRandomSeed = (): number => {
-  try {
-    const pinned = window.localStorage.getItem(PINNED_SHUFFLE_SEED_KEY);
-    if (pinned !== null) {
-      const parsed = Number.parseInt(pinned, 10);
-      if (Number.isFinite(parsed)) return parsed >>> 0;
-    }
-  } catch {
-    // Storage disabled (private mode): fall through to a random seed.
+  const pinned = typeof localStorage === "undefined" ? null : localStorage.getItem(PINNED_SHUFFLE_SEED_KEY);
+  if (pinned !== null) {
+    const parsed = Number.parseInt(pinned, 10);
+    if (Number.isFinite(parsed)) return parsed >>> 0;
   }
   return Math.floor(Math.random() * 0xffffffff);
 };

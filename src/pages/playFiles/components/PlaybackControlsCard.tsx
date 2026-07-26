@@ -122,12 +122,12 @@ const useHoldToSeek = (deltaSeconds: number, onSeek?: (deltaSeconds: number) => 
       seeked.current = false;
       // Keep receiving pointer events even if the finger drifts off a small icon
       // button, which would otherwise fire pointerleave and cancel the hold.
-      if (event?.pointerId !== undefined) {
-        try {
-          event.currentTarget.setPointerCapture(event.pointerId);
-        } catch {
-          // Capture is best-effort; the hold still works without it.
-        }
+      // `hasPointerCapture` is the documented guard: capture throws only for a
+      // pointer id that is no longer active, which this rules out without
+      // swallowing anything.
+      const target = event?.currentTarget;
+      if (event?.pointerId !== undefined && target?.isConnected && !target.hasPointerCapture(event.pointerId)) {
+        target.setPointerCapture(event.pointerId);
       }
       holdTimer.current = window.setTimeout(() => {
         seeked.current = true;
