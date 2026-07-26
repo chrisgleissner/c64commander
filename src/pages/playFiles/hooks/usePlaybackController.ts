@@ -48,7 +48,11 @@ import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 
 import { buildLocalPlayFileFromUri, buildLocalPlayFileFromTree } from "@/lib/playback/fileLibraryUtils";
 import { loadLocalEngineEnabled, loadPlaybackEngine } from "@/lib/config/appSettings";
-import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
+import {
+  LocalSidPlaybackController,
+  getSharedLocalSidPlaybackController,
+} from "@/lib/playback/localSidPlaybackController";
+import { markRemotePlaybackStarted, markRemotePlaybackStopped } from "@/lib/playback/activePlaybackSession";
 import { LocalEngineStatsAccumulator } from "@/lib/playback/localEngineStatsBridge";
 import { detectRomRequired } from "@/lib/playback/localSidWorkerCore";
 import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
@@ -327,7 +331,10 @@ export function usePlaybackController({
   // One-time engine-fallback notices (rom/non-sid/unsupported), shown once each.
   const engineNoticeShownRef = useRef(new Set<EngineFallbackNotice>());
   const getLocalSidPlayback = useCallback(() => {
-    if (!localSidPlaybackRef.current) localSidPlaybackRef.current = new LocalSidPlaybackController();
+    // Shared, never per-page: a page-scoped engine kept playing after its page
+    // unmounted, so tab-navigating away from Play and back stacked concurrent
+    // AudioContexts and layered tunes on top of each other.
+    if (!localSidPlaybackRef.current) localSidPlaybackRef.current = getSharedLocalSidPlaybackController();
     return localSidPlaybackRef.current;
   }, []);
   // Track B (LE3, §12.6): mirror the on-device engine's render throughput and
@@ -1087,6 +1094,10 @@ export function usePlaybackController({
           });
         } else {
           await executePlayPlan(api, plan, executionOptions);
+          // The tune is now running on the Ultimate. Recorded here, at the real
+          // launch, so a device switch can stop it no matter which page is
+          // mounted (see activePlaybackSession).
+          markRemotePlaybackStarted();
         }
         setCurrentPlaybackIsLocal(routeToLocal);
 
@@ -1455,6 +1466,7 @@ export function usePlaybackController({
             }
           }
           await stopMachineWithGracePeriod(api, shouldReboot);
+          markRemotePlaybackStopped();
         } catch (error) {
           reportUserError({
             operation: "PLAYBACK_STOP",

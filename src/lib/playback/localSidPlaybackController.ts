@@ -30,6 +30,36 @@ export interface SidByteSource {
 
 export type LocalSidEngineFactory = () => LocalSidEngine;
 
+/**
+ * The one on-device playback engine for the whole app.
+ *
+ * This MUST be process-wide, not per-component. The controller used to live in
+ * a `useRef` inside `usePlaybackController`, so every `PlayFilesPage` instance
+ * built its own engine — and each engine owns its own `AudioContext`, worker
+ * and scheduled buffers. Navigating away from Play and back mounts a fresh
+ * page (React can also mount a transient second one during a tab switch), and
+ * nothing tore the previous engine down, so its audio simply kept playing.
+ * Repeated tab navigation while a tune was playing left **eight** concurrent
+ * AAudio streams from one process, all rendering different tunes on top of one
+ * another.
+ *
+ * A shared instance makes the overlap structurally impossible: `play()` always
+ * stops whatever this engine was doing first, so "start a tune" can never mean
+ * "start a second, parallel tune" no matter how the UI is navigated.
+ */
+let sharedController: LocalSidPlaybackController | null = null;
+
+export const getSharedLocalSidPlaybackController = (): LocalSidPlaybackController => {
+  if (!sharedController) sharedController = new LocalSidPlaybackController();
+  return sharedController;
+};
+
+/** Drop the shared engine (tests, and a full teardown). */
+export const resetSharedLocalSidPlaybackController = (): void => {
+  sharedController?.dispose();
+  sharedController = null;
+};
+
 export class LocalSidPlaybackController {
   private engine: LocalSidEngine | null = null;
 

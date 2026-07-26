@@ -369,6 +369,19 @@ describe("LocalSidEngine — default environment factories", () => {
       createBufferSource() {
         return new MockSource();
       }
+      createGain() {
+        // Real AudioContexts have this; the sink routes every source through a
+        // master gain so an opt-in crossfade can ramp the whole output.
+        return {
+          gain: {
+            value: 1,
+            cancelScheduledValues: vi.fn(),
+            setValueAtTime: vi.fn(),
+            linearRampToValueAtTime: vi.fn(),
+          },
+          connect: vi.fn(),
+        };
+      }
       resume() {
         this.resumed();
         return Promise.resolve();

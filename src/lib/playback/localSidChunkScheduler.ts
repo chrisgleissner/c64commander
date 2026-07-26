@@ -198,8 +198,33 @@ export class LocalSidChunkScheduler {
     this.positionOffsetSeconds = Math.max(0, positionSeconds);
   }
 
-  /** Stop and drop every still-scheduled source (called on stop/close). */
-  stopAll(): void {
+  /**
+   * Stop and drop every still-scheduled source (called on stop/close).
+   *
+   * `keepSourcesFor` lets an opt-in crossfade ring the outgoing tune out: the
+   * sources are released from this scheduler but left running for that long
+   * while the sink's gain ramps down, then stopped. Without it — the default —
+   * everything is silenced immediately, which is what a switchover must do so
+   * two tunes can never be audible at once.
+   */
+  stopAll(options: { keepSourcesFor?: number } = {}): void {
+    const keepFor = options.keepSourcesFor ?? 0;
+    if (keepFor > 0) {
+      const fading = [...this.live];
+      this.live.clear();
+      for (const source of fading) source.onended = null;
+      setTimeout(() => {
+        for (const source of fading) {
+          try {
+            source.stop();
+          } catch {
+            // Already ended: nothing to stop.
+            void 0;
+          }
+        }
+      }, keepFor);
+      return;
+    }
     for (const source of this.live) {
       try {
         source.onended = null;

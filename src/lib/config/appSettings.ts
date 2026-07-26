@@ -31,6 +31,7 @@ const SID_RADIO_ENABLED_KEY = "c64u_sid_radio_enabled";
 const SID_RANKING_ENABLED_KEY = "c64u_sid_ranking_enabled";
 const PLAYBACK_ENGINE_KEY = "c64u_playback_engine";
 const SID_EMULATION_ENGINE_KEY = "c64u_sid_emulation_engine";
+const PLAYBACK_CROSSFADE_MS_KEY = "c64u_playback_crossfade_ms";
 const LOCAL_ENGINE_ENABLED_KEY = "c64u_local_engine_enabled";
 const BOOT_MENU_ANSWER_ENABLED_KEY = "c64u_boot_menu_answer_enabled";
 const BOOT_MENU_KEY_KEY = "c64u_boot_menu_key";
@@ -675,6 +676,36 @@ export const saveSidEmulationEngine = (engine: SidEmulationEngine) => {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(SID_EMULATION_ENGINE_KEY, engine);
   broadcast(SID_EMULATION_ENGINE_KEY, engine);
+};
+
+/**
+ * Crossfade length for on-device playback, in milliseconds. `0` (the default)
+ * means a hard cut: the outgoing tune is silenced before the next one starts.
+ *
+ * The default is deliberately off. A switchover must *always* begin from
+ * silence unless the listener has explicitly asked for the two to be blended,
+ * because anything else is indistinguishable from the bug where two tunes play
+ * at once. Turning this on is that explicit request, and it is bounded so the
+ * overlap stays a deliberate musical effect rather than an ambiguous smear.
+ */
+export const CROSSFADE_MS_MIN = 0;
+export const CROSSFADE_MS_MAX = 5000;
+export const DEFAULT_PLAYBACK_CROSSFADE_MS = 0;
+
+export const loadPlaybackCrossfadeMs = (): number => {
+  if (typeof localStorage === "undefined") return DEFAULT_PLAYBACK_CROSSFADE_MS;
+  const raw = localStorage.getItem(PLAYBACK_CROSSFADE_MS_KEY);
+  if (raw === null) return DEFAULT_PLAYBACK_CROSSFADE_MS;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed)) return DEFAULT_PLAYBACK_CROSSFADE_MS;
+  return Math.min(CROSSFADE_MS_MAX, Math.max(CROSSFADE_MS_MIN, parsed));
+};
+
+export const savePlaybackCrossfadeMs = (ms: number) => {
+  if (typeof localStorage === "undefined") return;
+  const clamped = Math.min(CROSSFADE_MS_MAX, Math.max(CROSSFADE_MS_MIN, Math.round(ms)));
+  localStorage.setItem(PLAYBACK_CROSSFADE_MS_KEY, String(clamped));
+  broadcast(PLAYBACK_CROSSFADE_MS_KEY, clamped);
 };
 
 /**

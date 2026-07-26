@@ -18,6 +18,8 @@ import {
   saveLocalEngineEnabled,
   loadSidEmulationEngine,
   saveSidEmulationEngine,
+  loadPlaybackCrossfadeMs,
+  savePlaybackCrossfadeMs,
   type SidEmulationEngine,
 } from "@/lib/config/appSettings";
 import { clearAllRankings } from "@/lib/sidRadio/rankingStore";
@@ -64,6 +66,7 @@ export const SidRadioSettingsSection = () => {
   const { localEngineEnabled } = usePlaybackEngine();
   const { deviceHost } = useC64Connection();
   const [sidEngine, setSidEngine] = useState<SidEmulationEngine>(() => loadSidEmulationEngine());
+  const [crossfadeMs, setCrossfadeMs] = useState<number>(() => loadPlaybackCrossfadeMs());
   const [cleared, setCleared] = useState(false);
 
   const handleClear = async () => {
@@ -137,6 +140,41 @@ export const SidRadioSettingsSection = () => {
                   onClick={() => {
                     setSidEngine(value);
                     saveSidEmulationEngine(value);
+                  }}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {localEngineEnabled ? (
+          <div className="space-y-2 rounded-lg border border-border/70 p-3 min-w-0" data-testid="settings-crossfade">
+            <Label className="text-sm font-medium">Blend between tunes</Label>
+            <p className="text-xs text-muted-foreground">
+              Normally one tune stops before the next begins, so you never hear two at once. Turn this up to blend them
+              instead — the outgoing tune fades down while the next fades in. Applies to tunes played on this device,
+              including when you switch between the C64 and this device.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  [0, "Off (clean cut)"],
+                  [600, "Short (0.6s)"],
+                  [1500, "Medium (1.5s)"],
+                  [3000, "Long (3s)"],
+                ] as const
+              ).map(([value, label]) => (
+                <Button
+                  key={value}
+                  type="button"
+                  size="sm"
+                  variant={crossfadeMs === value ? "default" : "outline"}
+                  data-testid={`settings-crossfade-${value}`}
+                  aria-pressed={crossfadeMs === value}
+                  onClick={() => {
+                    setCrossfadeMs(value);
+                    savePlaybackCrossfadeMs(value);
                   }}
                 >
                   {label}

@@ -43,6 +43,7 @@ import { isBackgroundExecutionActive, stopBackgroundExecution } from "@/lib/nati
 import { BackgroundExecution } from "@/lib/native/backgroundExecution";
 import { avMirrorSession } from "@/lib/streams/avMirrorSession";
 import { toast } from "@/hooks/use-toast";
+import { stopActivePlaybackBeforeDeviceSwitch } from "@/lib/playback/activePlaybackSession";
 
 let activeSavedDeviceSwitch: { deviceId: string; promise: Promise<unknown> } | null = null;
 
@@ -83,6 +84,14 @@ export function useSavedDeviceSwitching() {
       // the previous device, so the UI and the control plane cannot diverge into
       // the "selected=new / API=old" state.
       const password = device.hasPassword ? await getPasswordForDevice(deviceId) : null;
+
+      // Stop the tune itself while getC64API() still targets the OLD device, so
+      // the stop lands on the machine that is actually playing. Without this,
+      // switching Ultimates mid-tune left the old one playing with the app no
+      // longer pointing at it — and once the new device started its own tune the
+      // user heard both at once, with no way to silence the first from the app.
+      // Bounded internally so a dead old device cannot stall the switch.
+      await stopActivePlaybackBeforeDeviceSwitch();
 
       // Live View clean-transition: both devices stream A/V to the SAME multicast group, so the
       // OLD device must be told to stop BEFORE we retarget the API — otherwise it keeps streaming

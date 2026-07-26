@@ -9,8 +9,8 @@
 import { LocalSidChunkScheduler, type AudioScheduleSink, type AudioScheduleSource } from "./localSidChunkScheduler";
 import type { LocalSidMainToWorker, LocalSidWorkerToMain, LocalSidOpenedMessage } from "./localSidWorkerProtocol";
 import { loadStoredRoms } from "@/lib/roms/romStore";
-import { loadSidEmulationEngine } from "@/lib/config/appSettings";
-import { addLog } from "@/lib/logging";
+import { loadSidEmulationEngine, loadPlaybackCrossfadeMs } from "@/lib/config/appSettings";
+import { addLog, addErrorLog } from "@/lib/logging";
 
 /**
  * Main-thread controller for the Local SID engine (spec §12.2, Track B / LE1).
@@ -46,10 +46,55 @@ export interface LocalSidAudioSink {
   resume?: () => Promise<void> | void;
   /** Suspend the audio clock, freezing the schedule where it stands. */
   suspend?: () => Promise<void> | void;
+  /** Ramp output down over `ms`, for an opt-in crossfade. */
+  fadeOut?: (ms: number) => void;
+  /** Ramp output up over `ms`, for an opt-in crossfade. */
+  fadeIn?: (ms: number) => void;
   close: () => void;
 }
 
 export type LocalSidAudioSinkFactory = (sampleRate: number) => LocalSidAudioSink;
+
+/**
+ * The engine that currently owns on-device audio output, if any.
+ *
+ * Exactly one engine may produce audio at a time. This is enforced rather than
+ * assumed because the failure is severe and silent: the controller used to be
+ * created per `PlayFilesPage`, and since nothing tore an engine down when its
+ * page unmounted, navigating away from Play and back left the previous engine
+ * playing. Repeated tab navigation while a tune played produced **eight**
+ * concurrent AAudio streams from one process — different tunes layered over
+ * each other, with no way for the user to stop them short of killing the app.
+ *
+ * A shared controller prevents the usual route to that, but a shared instance
+ * is a convention a later refactor can quietly undo. This registry is the
+ * backstop: whoever opens an audio sink first silences anyone else holding one,
+ * so overlap cannot survive even a mistake upstream. The eviction is logged as
+ * an error because reaching it at all means an ownership bug exists.
+ */
+let audioOwner: { stopPlayback: () => void } | null = null;
+
+const claimAudioOwnership = (next: { stopPlayback: () => void }): void => {
+  if (audioOwner && audioOwner !== next) {
+    addErrorLog("Local SID engine: evicting a second audio owner", {
+      service: "local-sid",
+      detail:
+        "Another engine still held an audio sink when this one started. Playback would have " +
+        "overlapped. The previous engine was stopped; this indicates an engine-ownership bug.",
+    });
+    const previous = audioOwner;
+    audioOwner = null;
+    previous.stopPlayback();
+  }
+  audioOwner = next;
+};
+
+const releaseAudioOwnership = (engine: { stopPlayback: () => void }): void => {
+  if (audioOwner === engine) audioOwner = null;
+};
+
+/** Test seam: is on-device audio currently owned by anyone? */
+export const __hasLocalSidAudioOwner = (): boolean => audioOwner !== null;
 
 export class LocalSidUnavailableError extends Error {
   constructor(message = "Local SID engine requires Web Workers and Web Audio") {
@@ -72,6 +117,11 @@ const defaultAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number) =
       : (globalThis as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Ctor) throw new LocalSidUnavailableError("No AudioContext in this environment");
   const context = new Ctor({ sampleRate });
+  // Everything plays through one gain node so a switchover can fade the whole
+  // output, rather than each buffer source having to be faded individually.
+  const master = context.createGain();
+  master.gain.value = 1;
+  master.connect(context.destination);
   const sink: AudioScheduleSink = {
     get currentTime() {
       return context.currentTime;
@@ -83,7 +133,7 @@ const defaultAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number) =
     createSource: (buffer) => {
       const source = context.createBufferSource();
       source.buffer = buffer as AudioBuffer;
-      source.connect(context.destination);
+      source.connect(master);
       // AudioBufferSourceNode satisfies the narrow AudioScheduleSource slice we
       // use (start/stop/onended); the DOM onended signature differs only in its
       // (ignored) event arg.
@@ -94,6 +144,29 @@ const defaultAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number) =
     sink,
     resume: () => context.resume(),
     suspend: () => context.suspend(),
+    fadeOut: (ms: number) => {
+      // Ramp to (near) zero, then let the caller close once the ramp has run.
+      // linearRampToValueAtTime needs a starting event to ramp from, hence the
+      // explicit setValueAtTime at "now".
+      const now = context.currentTime;
+      try {
+        master.gain.cancelScheduledValues(now);
+        master.gain.setValueAtTime(master.gain.value, now);
+        master.gain.linearRampToValueAtTime(0.0001, now + ms / 1000);
+      } catch {
+        master.gain.value = 0;
+      }
+    },
+    fadeIn: (ms: number) => {
+      const now = context.currentTime;
+      try {
+        master.gain.cancelScheduledValues(now);
+        master.gain.setValueAtTime(0.0001, now);
+        master.gain.linearRampToValueAtTime(1, now + ms / 1000);
+      } catch {
+        master.gain.value = 1;
+      }
+    },
     close: () => void context.close(),
   };
 };
@@ -217,6 +290,8 @@ export class LocalSidEngine {
   private endReceived = false;
   private endedFired = false;
   private chunksEnded = 0;
+  /** Crossfade length to apply to the tune currently being opened (0 = cut). */
+  private pendingCrossfadeMs = 0;
   private totalRenderMs = 0;
   private totalRenderedSeconds = 0;
   private peakRenderMsPerSec = 0;
@@ -304,7 +379,11 @@ export class LocalSidEngine {
     callbacks: LocalSidPlayCallbacks = {},
   ): Promise<LocalSidPlayResult> {
     await this.load();
-    this.stopPlayback();
+    // A switchover ALWAYS starts from silence unless the listener has asked for
+    // a blend. Zero (the default) is a hard cut.
+    const crossfadeMs = loadPlaybackCrossfadeMs();
+    this.pendingCrossfadeMs = crossfadeMs;
+    this.stopPlayback({ crossfadeMs });
     this.callbacks = callbacks;
     const worker = this.ensureWorker();
     const id = this.nextId;
@@ -415,13 +494,24 @@ export class LocalSidEngine {
       return;
     }
 
+    // HARD INVARIANT: at most one engine may hold an open audio sink.
+    //
+    // Overlapping tunes is a showstopper in the field, so this is enforced here
+    // -- at the one place audio is actually created -- rather than relying on
+    // callers to be well behaved. Any engine that still holds a sink is silenced
+    // before this one opens its own, whatever created it and however the UI got
+    // there. See claimAudioOwnership.
+    claimAudioOwnership(this);
     try {
       this.audio = this.audioSinkFactory(message.sampleRate);
     } catch (error) {
+      releaseAudioOwnership(this);
       pending?.reject(error as Error);
       return;
     }
     void this.audio.resume?.();
+    if (this.pendingCrossfadeMs > 0) this.audio.fadeIn?.(this.pendingCrossfadeMs);
+    this.pendingCrossfadeMs = 0;
     this.scheduler = new LocalSidChunkScheduler(this.audio.sink, {
       onSourceEnded: () => this.onSourceEnded(),
     });
@@ -577,11 +667,26 @@ export class LocalSidEngine {
     this.worker?.postMessage({ type: "close" });
   }
 
-  private stopPlayback(): void {
-    this.scheduler?.stopAll();
+  /**
+   * Silence and tear down this engine's audio. Not private: the audio-ownership
+   * registry calls it to evict a stale owner (see claimAudioOwnership).
+   */
+  stopPlayback(options: { crossfadeMs?: number } = {}): void {
+    releaseAudioOwnership(this);
+    const fadeMs = options.crossfadeMs ?? 0;
+    const outgoing = this.audio;
+    this.scheduler?.stopAll(fadeMs > 0 ? { keepSourcesFor: fadeMs } : undefined);
     this.scheduler = null;
-    this.audio?.close();
     this.audio = null;
+    if (outgoing && fadeMs > 0 && outgoing.fadeOut) {
+      // Deliberate blend: let the tail ring out under the incoming tune, then
+      // close. The context is detached from this engine already, so nothing can
+      // schedule onto it and it cannot become a second live source.
+      outgoing.fadeOut(fadeMs);
+      setTimeout(() => outgoing.close(), fadeMs + 50);
+    } else {
+      outgoing?.close();
+    }
     this.activeId = 0;
     this.openPending = null;
     this.callbacks = {};
