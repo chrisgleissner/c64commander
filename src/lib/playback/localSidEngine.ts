@@ -51,6 +51,8 @@ export interface LocalSidAudioSink {
   fadeOut?: (ms: number) => void;
   /** Ramp output up over `ms`, for an opt-in crossfade. */
   fadeIn?: (ms: number) => void;
+  /** Set output level, 0..1. Used by the Play page's volume control. */
+  setGain?: (value: number) => void;
   close: () => void;
 }
 
@@ -156,6 +158,18 @@ const defaultAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number) =
         master.gain.linearRampToValueAtTime(0.0001, now + ms / 1000);
       } catch {
         master.gain.value = 0;
+      }
+    },
+    setGain: (value: number) => {
+      const clamped = Math.min(1, Math.max(0, value));
+      try {
+        master.gain.cancelScheduledValues(context.currentTime);
+        // A short ramp rather than a step: an abrupt gain change on a running
+        // buffer is an audible click.
+        master.gain.setValueAtTime(master.gain.value, context.currentTime);
+        master.gain.linearRampToValueAtTime(clamped, context.currentTime + 0.02);
+      } catch {
+        master.gain.value = clamped;
       }
     },
     fadeIn: (ms: number) => {
@@ -297,6 +311,8 @@ export class LocalSidEngine {
   private prerenderKey: string | null = null;
   /** Progress of the in-flight pre-render, 0..1; null when none is running. */
   private prerenderFraction: number | null = null;
+  private volume = 1;
+  private muted = false;
   /** Crossfade length to apply to the tune currently being opened (0 = cut). */
   private pendingCrossfadeMs = 0;
   private totalRenderMs = 0;
@@ -539,6 +555,8 @@ export class LocalSidEngine {
       return;
     }
     void this.audio.resume?.();
+    // Carry the listener's level onto the new tune's sink.
+    if (this.volume !== 1 || this.muted) this.audio.setGain?.(this.muted ? 0 : this.volume);
     if (this.pendingCrossfadeMs > 0) this.audio.fadeIn?.(this.pendingCrossfadeMs);
     this.pendingCrossfadeMs = 0;
     this.scheduler = new LocalSidChunkScheduler(this.audio.sink, {
@@ -691,6 +709,24 @@ export class LocalSidEngine {
   }
 
   /** Stop the current tune (keeps the worker + WASM module warm for the next). */
+  /**
+   * Output level for on-device playback, 0..1.
+   *
+   * The Play page's volume control used to reach only the C64's Audio Mixer, so
+   * it did nothing at all while the tune was rendering here — the slider moved
+   * and the sound did not. Remembered across tunes so a new track opens at the
+   * level the listener chose.
+   */
+  setVolume(value: number): void {
+    this.volume = Math.min(1, Math.max(0, value));
+    this.audio?.setGain?.(this.muted ? 0 : this.volume);
+  }
+
+  setMuted(muted: boolean): void {
+    this.muted = muted;
+    this.audio?.setGain?.(muted ? 0 : this.volume);
+  }
+
   /** A fully-rendered tune, when this one has been cached. */
   getRenderedTune(key: string): RenderedTune | null {
     return this.renderCache.get(key);

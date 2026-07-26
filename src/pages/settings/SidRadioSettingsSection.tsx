@@ -161,9 +161,8 @@ export const SidRadioSettingsSection = () => {
             <p className="text-xs text-muted-foreground">
               {crossfadeUnavailable ? (
                 <>
-                  Not available while <strong>Play on: C64</strong> is selected. Crossfading needs two tunes sounding at
-                  the same time, and the C64 plays one tune, live, on its single sound chip. Switch playback to{" "}
-                  <strong>This device</strong> on the Play screen to use it.
+                  Only available with <strong>Listen on</strong> set to <strong>This device</strong>. Crossfading needs
+                  two tunes sounding at the same moment, and the C64 plays one tune, live, on its single sound chip.
                 </>
               ) : (
                 <>

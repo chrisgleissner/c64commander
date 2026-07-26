@@ -631,7 +631,15 @@ SID Radio turns the tunes you like — and the mood you are in — into an endle
 
 By default, SID Radio plays each tune **on the C64** — exactly like the rest of the app — and you hear it back on your phone or tablet through the network **audio mirror**. For that to work the connected Ultimate-family device has to be reachable on your local network: connect it to your Wi‑Fi router with an **Ethernet** cable, and keep your phone or tablet on the same Wi‑Fi. The C64 then streams its sound across the network and the app plays it in step with the on-screen progress.
 
-If you would rather not power up a C64 at all, turn on the **on-device playback engine** — a single "Play on: **C64** / **This device**" choice that appears on the Play screen for SID tunes. Pick **This device** and the app renders the SID on your phone or tablet itself, with a built-in libsidplayfp engine — no network stream required.
+Where you hear a SID is up to you. When a SID is playing, the Play screen offers **Listen on**, with up to three choices:
+
+- **C64** — the tune plays on the connected Ultimate-family device and you listen there.
+- **Both** — the tune plays on the connected Ultimate-family device and its sound is streamed to your phone or tablet as well, so you hear it in both places. This choice only appears when the sound can actually reach you — if the connected Ultimate-family device has no network path for it, the option is simply not shown.
+- **This device** — your phone or tablet renders the SID itself with a built-in libsidplayfp engine. No C64 needed, and nothing is streamed.
+
+**Listen on** appears only for SID tunes, since it is the only thing your phone or tablet can play on its own; programs and disks always run on the connected Ultimate-family device.
+
+![The Listen on control: C64, Both, or This device](../../img/app/play/sid-radio/03-listen-on.png)
 
 **On-device playback needs the C64 ROMs.** SID music is driven by the C64's own KERNAL and BASIC routines, so without them a tune starts but never plays. Those ROM images are copyrighted and cannot be shipped with an app, so C64 Commander reads them from the connected Ultimate-family device: **Settings → SID Radio → C64 ROMs for on-device playback → Read from C64**. It takes a moment and only has to be done once.
 
@@ -643,7 +651,7 @@ Until the ROMs are in place — or if you remove them — SID tunes simply play 
 
 **Crossfading between tunes.** By default one tune stops before the next begins, so you never hear two at once — including when you move playback between the the connected Ultimate-family device and your phone or tablet, or switch to a different Ultimate. If you would rather they overlap, **Settings → SID Radio → Crossfade** offers a short, medium or long fade: the outgoing tune fades down while the next fades in.
 
-Crossfading only works for tunes playing on your phone or tablet. Two tunes have to sound at the same moment for one to fade into the other, and the connected Ultimate-family device plays a single tune live on its one sound chip — so while **Play on: C64** is selected the setting is greyed out and tunes change cleanly instead.
+Crossfading only works for tunes playing on your phone or tablet. Two tunes have to sound at the same moment for one to fade into the other, and the connected Ultimate-family device plays a single tune live on its one sound chip — so unless **Listen on** is set to **This device** the setting is greyed out and tunes change cleanly instead.
 
 **Two SID sound engines.** Under **Settings → SID Radio → SID emulation** you can choose how faithfully the on-device engine models the C64's SID chip. **Accurate (reSIDfp)** is the default and is what you want: it is a full model of the real chip and sounds like the hardware. **Light (SIDLite)** trades some of that fidelity for roughly a third of the work, which is worth having on an older or slower phone, or when you want to save battery on a long listen. Both play every tune; only the sound and the effort differ, and you can switch whenever you like.
 

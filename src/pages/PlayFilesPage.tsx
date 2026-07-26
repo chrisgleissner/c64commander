@@ -167,6 +167,7 @@ import {
   sliderToDurationSeconds,
   shuffleArray,
 } from "@/pages/playFiles/playFilesUtils";
+import { getSharedLocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 
 const ACTIVE_ADD_ITEMS_PROGRESS_STATES = new Set<AddItemsProgressState["status"]>([
   "scanning",
@@ -1442,6 +1443,24 @@ export default function PlayFilesPage() {
   const progressPercent = currentDurationMs ? Math.min(100, (displayElapsedMs / currentDurationMs) * 100) : 0;
   const remainingMs = currentDurationMs !== undefined ? Math.max(0, currentDurationMs - displayElapsedMs) : undefined;
   const remainingLabel = currentDurationMs !== undefined ? `-${formatTime(remainingMs)}` : "—";
+  // On-device playback has its own output gain (the same master node the
+  // crossfade uses), so the Play page's volume control can drive whichever
+  // route is sounding instead of only ever reaching the C64.
+  const [localMuted, setLocalMuted] = useState(false);
+  const setLocalVolumeFromIndex = useCallback(
+    (index: number) => {
+      const steps = Math.max(1, volumeSteps.length - 1);
+      getSharedLocalSidPlaybackController().setVolume(Math.min(1, Math.max(0, index / steps)));
+    },
+    [volumeSteps.length],
+  );
+  const toggleLocalMute = useCallback(() => {
+    setLocalMuted((muted) => {
+      getSharedLocalSidPlaybackController().setMuted(!muted);
+      return !muted;
+    });
+  }, []);
+
   const canControlVolume = enabledSidVolumeItems.length > 0 && volumeSteps.length > 0;
   const volumeLabel = volumeSteps[volumeIndex]?.label ?? "—";
   const knownSubsongCount =
@@ -1922,9 +1941,13 @@ export default function PlayFilesPage() {
                 remainingTotalLabel={formatTime(playlistTotals.remaining)}
                 volumeControls={
                   <VolumeControls
-                    volumeMuted={volumeMuted}
-                    canControlVolume={canControlVolume}
+                    volumeMuted={playbackEngine.engine === "local" ? localMuted : volumeMuted}
+                    canControlVolume={playbackEngine.engine === "local" ? true : canControlVolume}
                     onToggleMute={() => {
+                      if (playbackEngine.engine === "local") {
+                        toggleLocalMute();
+                        return;
+                      }
                       void handleToggleMute().catch((error) => {
                         addErrorLog("Mute toggle failed", {
                           error: (error as Error).message,
@@ -1940,8 +1963,25 @@ export default function PlayFilesPage() {
                     volumeStepsCount={volumeSteps.length}
                     volumeIndex={volumeIndex}
                     onVolumeDraftChange={handleVolumeDraftChange}
-                    onVolumePreview={handleVolumePreview}
-                    onVolumeCommit={(value) => void handleVolumeCommit(value)}
+                    onVolumePreview={(value) => {
+                      // Follow the route that is actually sounding. The slider
+                      // reached only the C64's Audio Mixer, so while the tune
+                      // rendered here it moved and nothing happened — which is
+                      // not what anyone expects of a volume control on the page
+                      // they are listening from.
+                      if (playbackEngine.engine === "local") {
+                        setLocalVolumeFromIndex(value);
+                        return;
+                      }
+                      handleVolumePreview(value);
+                    }}
+                    onVolumeCommit={(value) => {
+                      if (playbackEngine.engine === "local") {
+                        setLocalVolumeFromIndex(value);
+                        return;
+                      }
+                      void handleVolumeCommit(value);
+                    }}
                     previewIntervalMs={volumeSliderPreviewIntervalMs}
                     volumeLabel={volumeLabel}
                     volumeValueFormatter={(value) => volumeSteps[Math.round(value)]?.label ?? "—"}

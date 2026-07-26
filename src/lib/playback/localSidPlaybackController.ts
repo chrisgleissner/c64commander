@@ -124,6 +124,15 @@ export class LocalSidPlaybackController {
     return this.engine?.getPrerenderProgress() ?? null;
   }
 
+  /** Output level for on-device playback, 0..1 (see LocalSidEngine.setVolume). */
+  setVolume(value: number): void {
+    this.ensureEngine().setVolume(value);
+  }
+
+  setMuted(muted: boolean): void {
+    this.ensureEngine().setMuted(muted);
+  }
+
   /** True while this device is actually rendering a tune. */
   isActive(): boolean {
     return this.engine?.isActive() ?? false;
