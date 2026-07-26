@@ -11,6 +11,7 @@ import type { LocalSidMainToWorker, LocalSidWorkerToMain, LocalSidOpenedMessage 
 import { loadStoredRoms } from "@/lib/roms/romStore";
 import { loadSidEmulationEngine, loadPlaybackCrossfadeMs } from "@/lib/config/appSettings";
 import { addLog, addErrorLog } from "@/lib/logging";
+import { RenderedTuneCache, type RenderedTune } from "./renderedTuneCache";
 
 /**
  * Main-thread controller for the Local SID engine (spec §12.2, Track B / LE1).
@@ -290,6 +291,12 @@ export class LocalSidEngine {
   private endReceived = false;
   private endedFired = false;
   private chunksEnded = 0;
+  /** Fully-rendered tunes (previous/current/next), so a seek is a buffer offset. */
+  private readonly renderCache = new RenderedTuneCache();
+  private prerenderId = 0;
+  private prerenderKey: string | null = null;
+  /** Progress of the in-flight pre-render, 0..1; null when none is running. */
+  private prerenderFraction: number | null = null;
   /** Crossfade length to apply to the tune currently being opened (0 = cut). */
   private pendingCrossfadeMs = 0;
   private totalRenderMs = 0;
@@ -426,6 +433,28 @@ export class LocalSidEngine {
       case "opened":
         this.onOpened(message);
         return;
+      case "prerender-progress":
+        if (message.id === this.prerenderId) this.prerenderFraction = message.fraction;
+        return;
+      case "prerendered": {
+        if (message.id !== this.prerenderId || !this.prerenderKey) return;
+        this.prerenderFraction = null;
+        this.renderCache.set(this.prerenderKey, {
+          pcm: message.pcm,
+          sampleRate: message.sampleRate,
+          channels: message.channels,
+          durationSeconds: message.seconds,
+        });
+        addLog("debug", "Local SID tune pre-rendered", {
+          service: "local-sid",
+          key: this.prerenderKey,
+          seconds: Math.round(message.seconds),
+          megabytes: +(message.pcm.byteLength / 1024 / 1024).toFixed(1),
+          cachedTunes: this.renderCache.size,
+          cacheMegabytes: +(this.renderCache.bytes / 1024 / 1024).toFixed(1),
+        });
+        return;
+      }
       case "chunk": {
         if (message.id !== this.activeId) return; // stale tune
         // The worker handles messages in order, so anything still arriving
@@ -662,6 +691,46 @@ export class LocalSidEngine {
   }
 
   /** Stop the current tune (keeps the worker + WASM module warm for the next). */
+  /** A fully-rendered tune, when this one has been cached. */
+  getRenderedTune(key: string): RenderedTune | null {
+    return this.renderCache.get(key);
+  }
+
+  /** 0..1 while a pre-render is running, else null. */
+  getPrerenderProgress(): number | null {
+    return this.prerenderFraction;
+  }
+
+  /**
+   * Render the whole tune in the background so seeking inside it is instant.
+   *
+   * Rendering costs roughly 150 ms of CPU per second of audio on a Pixel 4, so
+   * a three-minute tune is ~27 s of work — worth paying once, off to the side,
+   * rather than paying part of it again on every backward seek.
+   */
+  prerender(key: string, sidBytes: ArrayBuffer, songIndex: number, seconds: number): void {
+    if (this.renderCache.has(key) || !this.worker || seconds <= 0) return;
+    const roms = loadStoredRoms();
+    if (!roms.kernal || !roms.basic) return;
+    this.prerenderId += 1;
+    this.prerenderKey = key;
+    this.prerenderFraction = 0;
+    const kernal = roms.kernal.slice().buffer;
+    const basic = roms.basic.slice().buffer;
+    this.worker.postMessage(
+      {
+        type: "prerender",
+        id: this.prerenderId,
+        sidBytes,
+        songIndex,
+        sampleRate: this.requestedSampleRate,
+        seconds,
+        roms: { kernal, basic },
+      },
+      [sidBytes, kernal, basic],
+    );
+  }
+
   stop(): void {
     this.stopPlayback();
     this.worker?.postMessage({ type: "close" });

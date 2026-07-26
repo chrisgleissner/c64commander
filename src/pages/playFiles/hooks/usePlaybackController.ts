@@ -361,7 +361,7 @@ export function usePlaybackController({
   useEffect(() => {
     if (!localEngineActive) return;
     const timer = window.setInterval(() => {
-      const stats = localSidPlaybackRef.current?.getStats();
+      const stats = getLocalSidPlayback().getStats();
       if (!stats) return;
       updateSidRadioStats(localEngineStatsRef.current.sample(stats));
     }, LOCAL_ENGINE_STATS_POLL_MS);
@@ -1102,13 +1102,24 @@ export function usePlaybackController({
           // On-device engine: render the SID here, no C64 (spec §12). The
           // songlength clock + auto-advance below run identically to the C64
           // path, so playlist/SID-Radio behaviour is engine-agnostic.
-          await getLocalSidPlayback().play(effectiveRequest.file!, effectiveRequest.songNr ?? 0, {
-            onError: (playbackError) =>
-              addErrorLog("Local SID playback failed", {
-                error: playbackError.message,
-                item: item.label,
-              }),
-          });
+          await getLocalSidPlayback().play(
+            effectiveRequest.file!,
+            effectiveRequest.songNr ?? 0,
+            {
+              onError: (playbackError) =>
+                addErrorLog("Local SID playback failed", {
+                  error: playbackError.message,
+                  item: item.label,
+                }),
+            },
+            // Render the whole tune in the background so scrubbing inside it is
+            // instant. Keyed by item + subsong so two subsongs of one file are
+            // cached separately — they are different music.
+            {
+              prerenderKey: `${item.id}#${effectiveRequest.songNr ?? 0}`,
+              durationSeconds: resolvedDuration ? resolvedDuration / 1000 : undefined,
+            },
+          );
         } else {
           await executePlayPlan(api, plan, executionOptions);
           // The tune is now running on the Ultimate. Recorded here, at the real
@@ -1325,7 +1336,12 @@ export function usePlaybackController({
       const startedAt = performance.now();
       void (async () => {
         if (currentPlaybackIsLocalRef.current) {
-          localSidPlaybackRef.current?.stop();
+          // getLocalSidPlayback(), never the raw ref: the ref is per-page and
+          // starts null, so a page that adopted an already-running session (a
+          // remount, or the transient second instance a tab switch creates)
+          // silently no-opped here and the tune kept playing after the user had
+          // switched engines.
+          getLocalSidPlayback().stop();
           setCurrentPlaybackIsLocal(false);
         } else {
           try {
@@ -1481,7 +1497,9 @@ export function usePlaybackController({
       // Track B (LE2): silence any on-device tune first. When the current track
       // is playing locally there is no C64 involved, so skip the device stop
       // entirely (it would hang if no Ultimate is connected).
-      localSidPlaybackRef.current?.stop();
+      // Shared controller, not the per-page ref — see the engine-switch stop
+      // above. A null ref here meant Stop did nothing at all.
+      getLocalSidPlayback().stop();
       if (currentPlaybackIsLocalRef.current) {
         setCurrentPlaybackIsLocal(false);
       } else {

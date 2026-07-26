@@ -184,6 +184,63 @@ const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
         ctx.postMessage({ type: "seeked", id: message.id, positionSeconds: Math.max(0, message.positionSeconds) });
         return;
       }
+      case "prerender": {
+        // A SECOND engine, deliberately. The playing engine is one stateful WASM
+        // instance whose position advances as it renders, so reusing it to
+        // render the future would fast-forward what the listener is hearing.
+        const Ctor = await ensureModule();
+        const bytes = new Uint8Array(message.sidBytes);
+        if (!message.roms) {
+          ctx.postMessage({ type: "error", id: message.id, code: "prerender", message: "ROMs required" });
+          return;
+        }
+        const offline = new Ctor({ sampleRate: message.sampleRate, stereo: true, engine: requestedEmulation });
+        try {
+          await offline.setSystemROMs(new Uint8Array(message.roms.kernal), new Uint8Array(message.roms.basic), null);
+          await offline.loadSidBuffer(bytes, message.songIndex);
+          const sampleRate = offline.getSampleRate();
+          const channels = offline.getChannels();
+          // Rendered in slices so progress can be reported and the worker stays
+          // responsive to a cancel; one giant renderSeconds() would block it.
+          const slice = 5;
+          const parts: Int16Array[] = [];
+          let done = 0;
+          while (done < message.seconds) {
+            const want = Math.min(slice, message.seconds - done);
+            const pcm = await offline.renderSeconds(want);
+            if (!pcm || pcm.length === 0) break;
+            parts.push(pcm);
+            done += want;
+            ctx.postMessage({ type: "prerender-progress", id: message.id, fraction: done / message.seconds });
+          }
+          const total = parts.reduce((sum, part) => sum + part.length, 0);
+          const merged = new Int16Array(total);
+          let at = 0;
+          for (const part of parts) {
+            merged.set(part, at);
+            at += part.length;
+          }
+          ctx.postMessage({ type: "prerendered", id: message.id, pcm: merged, sampleRate, channels, seconds: done }, [
+            merged.buffer,
+          ]);
+        } catch (error) {
+          ctx.postMessage({
+            type: "error",
+            id: message.id,
+            code: "prerender",
+            message: (error as Error)?.message ?? String(error),
+          });
+        } finally {
+          try {
+            offline.dispose?.();
+          } catch (error) {
+            // Teardown races are the vendored engine's own problem; the
+            // pre-render result is already sent either way.
+            void error;
+          }
+        }
+        return;
+      }
       case "close": {
         disposeEngine();
         return;

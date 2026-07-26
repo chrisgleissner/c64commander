@@ -86,7 +86,12 @@ export interface LocalSidCloseMessage {
 }
 
 export type LocalSidMainToWorker =
-  LocalSidLoadMessage | LocalSidOpenMessage | LocalSidRenderMessage | LocalSidSeekMessage | LocalSidCloseMessage;
+  | LocalSidLoadMessage
+  | LocalSidOpenMessage
+  | LocalSidRenderMessage
+  | LocalSidSeekMessage
+  | LocalSidPrerenderMessage
+  | LocalSidCloseMessage;
 
 /** worker → main: the seek completed; rendering resumes from `positionSeconds`. */
 export interface LocalSidSeekedMessage {
@@ -136,6 +141,43 @@ export interface LocalSidOpenedMessage {
   };
 }
 
+/**
+ * main → worker: render the WHOLE tune ahead of time.
+ *
+ * Rendered separately from playback: the playing engine is a single stateful
+ * WASM instance whose position advances as it renders, so it cannot also be
+ * asked to render the future without disturbing what is being heard. The worker
+ * therefore opens a SECOND engine for this, and streams progress back so a long
+ * tune does not look frozen.
+ */
+export interface LocalSidPrerenderMessage {
+  type: "prerender";
+  id: number;
+  sidBytes: ArrayBuffer;
+  songIndex: number;
+  sampleRate: number;
+  /** How much audio to produce; the tune's resolved songlength. */
+  seconds: number;
+  roms?: { kernal: ArrayBuffer; basic: ArrayBuffer };
+}
+
+/** worker → main: how far a pre-render has got (0..1). */
+export interface LocalSidPrerenderProgressMessage {
+  type: "prerender-progress";
+  id: number;
+  fraction: number;
+}
+
+/** worker → main: the finished pre-render. */
+export interface LocalSidPrerenderedMessage {
+  type: "prerendered";
+  id: number;
+  pcm: Int16Array;
+  sampleRate: number;
+  channels: number;
+  seconds: number;
+}
+
 /** worker → main: a rendered PCM chunk (interleaved Int16). */
 export interface LocalSidChunkMessage {
   type: "chunk";
@@ -154,7 +196,7 @@ export interface LocalSidEndMessage {
   id: number;
 }
 
-export type LocalSidErrorCode = "load" | "open" | "render" | "unsupported";
+export type LocalSidErrorCode = "load" | "open" | "render" | "prerender" | "unsupported";
 
 /** worker → main: a fatal error, optionally correlated to a request. */
 export interface LocalSidErrorMessage {
@@ -170,4 +212,6 @@ export type LocalSidWorkerToMain =
   | LocalSidChunkMessage
   | LocalSidSeekedMessage
   | LocalSidEndMessage
+  | LocalSidPrerenderProgressMessage
+  | LocalSidPrerenderedMessage
   | LocalSidErrorMessage;

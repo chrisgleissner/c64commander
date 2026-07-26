@@ -84,6 +84,7 @@ export class LocalSidPlaybackController {
     file: SidByteSource,
     songIndex: number,
     callbacks: LocalSidPlayCallbacks = {},
+    options?: { prerenderKey?: string; durationSeconds?: number },
   ): Promise<LocalSidPlayResult> {
     const engine = this.ensureEngine();
     // Timed separately from the engine open: opening measures 23-48 ms on a
@@ -91,12 +92,36 @@ export class LocalSidPlaybackController {
     // the engine and reading the bytes is the first suspect.
     const readStartedAt = performance.now();
     const buffer = await file.arrayBuffer();
+    // Taken before `play` transfers ownership of `buffer` to the worker.
+    const copy = options?.prerenderKey ? buffer.slice(0) : new ArrayBuffer(0);
     addLog("debug", "Local SID bytes read", {
       service: "local-sid",
       readMs: performance.now() - readStartedAt,
       bytes: buffer.byteLength,
     });
-    return engine.play(buffer, songIndex, callbacks);
+    const result = await engine.play(buffer, songIndex, callbacks);
+    // Kick off a full render of this tune in the background so seeking inside
+    // it becomes a buffer offset rather than a re-render from the start. Uses a
+    // COPY of the bytes: `play` transferred the original to the worker, and the
+    // pre-render runs on its own engine.
+    if (!result.romRequired && options?.prerenderKey && options.durationSeconds) {
+      engine.prerender(options.prerenderKey, copy, songIndex, options.durationSeconds);
+    }
+    return result;
+  }
+
+  /**
+   * Render the whole tune in the background so seeking inside it is instant.
+   *
+   * `key` identifies the tune+subsong; the cache keeps previous/current/next.
+   */
+  prerender(key: string, sidBytes: ArrayBuffer, songIndex: number, seconds: number): void {
+    this.ensureEngine().prerender(key, sidBytes, songIndex, seconds);
+  }
+
+  /** 0..1 while a pre-render is running, else null. */
+  prerenderProgress(): number | null {
+    return this.engine?.getPrerenderProgress() ?? null;
   }
 
   /** True while this device is actually rendering a tune. */

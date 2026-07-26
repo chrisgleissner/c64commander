@@ -194,3 +194,24 @@ describe("crossfade is opt-in", () => {
     }
   });
 });
+
+/**
+ * Stopping has to reach the engine that is actually playing.
+ *
+ * The controller lives in a per-page ref that starts null and is only populated
+ * when THAT page instance starts a tune. A page which adopted an already-running
+ * session — a remount, or the transient second instance a tab switch creates —
+ * therefore had a null ref, and `ref.current?.stop()` silently did nothing: the
+ * tune kept playing after Stop, and kept playing after switching from this
+ * device to the C64. Every stop path must resolve the SHARED controller.
+ */
+describe("stop reaches the shared engine", () => {
+  it("never stops through the nullable per-page ref", async () => {
+    const { readFileSync } = await import("node:fs");
+    const hook = readFileSync("src/pages/playFiles/hooks/usePlaybackController.ts", "utf8");
+    expect(hook).not.toMatch(/localSidPlaybackRef\.current\?\.stop\(\)/);
+    // At least the three real stop paths: engine switch, stop, and playlist end.
+    const shared = hook.match(/getLocalSidPlayback\(\)\.stop\(\)/g) ?? [];
+    expect(shared.length).toBeGreaterThanOrEqual(3);
+  });
+});
