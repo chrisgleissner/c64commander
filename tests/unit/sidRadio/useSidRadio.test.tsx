@@ -188,3 +188,69 @@ describe("useSidRadio", () => {
     expect(params.startPlaylist).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * `emittedSequence` is the evidence behind the G11 `--shuffle-replay` gate:
+ * the HIL starts a station twice with the same pinned `shuffleSeed` and
+ * asserts the sequences match, then with a different seed and asserts they
+ * diverge. Both assertions are vacuous unless the sequence identifies *tunes*
+ * and is produced by the station rather than by playback. It used to be
+ * appended on auto-advance with the playlist cursor, which is 0,1,2,… for
+ * every station and every seed, so the gate compared two counters.
+ */
+describe("useSidRadio emittedSequence identity", () => {
+  it("records the tune ordinals the station emitted, not the playlist cursor", async () => {
+    const { getSidRadioStats } = await import("@/lib/sidRadio/sidRadioStats");
+    const client = makeClient();
+    // Emit a pool whose ordinals cannot be confused with playlist indices.
+    const pool = [700, 701, 702, 703, 704, 705, 706, 707, 708, 709, 710, 711];
+    client.compute = vi.fn(async (request: StationRequest): Promise<StationResult> => ({
+      candidates: pool
+        .filter((o) => !request.exclude.includes(o))
+        .slice(0, request.count)
+        .map((trackOrdinal) => ({
+          trackOrdinal,
+          md5_48: `m${trackOrdinal}`,
+          songIndex: 1,
+          score: 1,
+          reason: "similar" as const,
+        })),
+    }));
+
+    const params = baseParams(client);
+    const { result } = renderHook(() => useSidRadio(params));
+    await act(async () => {
+      await result.current.startSongRadio("aabbccddeeff", "Commando");
+    });
+
+    const sequence = getSidRadioStats().emittedSequence;
+    expect(sequence.length).toBeGreaterThan(0);
+    // The tunes the engine chose, in the order it chose them -- never 0,1,2,…
+    expect(sequence).toEqual(pool.slice(0, sequence.length));
+    expect(sequence[0]).toBe(700);
+  });
+
+  it("counts auto-advances separately from the emitted sequence", async () => {
+    const { getSidRadioStats } = await import("@/lib/sidRadio/sidRadioStats");
+    const client = makeClient();
+    let currentIndex = 0;
+    const params = baseParams(client);
+    const { result, rerender } = renderHook(() => useSidRadio({ ...params, currentIndex }));
+    await act(async () => {
+      await result.current.startSongRadio("aabbccddeeff", "Commando");
+    });
+    const emittedBefore = getSidRadioStats().emittedSequence.length;
+
+    for (const next of [1, 2]) {
+      currentIndex = next;
+      await act(async () => {
+        rerender();
+      });
+    }
+
+    // Advancing the cursor counts advances; it must not append to the
+    // determinism sequence, which belongs to the station, not to playback.
+    expect(getSidRadioStats().tracksAutoAdvanced).toBe(2);
+    expect(getSidRadioStats().emittedSequence).toHaveLength(emittedBefore);
+  });
+});

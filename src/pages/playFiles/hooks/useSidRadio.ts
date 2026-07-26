@@ -23,6 +23,7 @@ import { StationQueueProvider } from "@/lib/sidRadio/stationQueueProvider";
 import type { StationSeed } from "@/lib/sidRadio/stationEngine";
 import {
   recordAutoAdvance,
+  recordEmitted,
   recordRefill,
   recordSkip,
   resetSidRadioStats,
@@ -96,10 +97,38 @@ const REFILL_THRESHOLD = 4;
  * playback engine, keeps the queue refilled ahead of the cursor, and steers on
  * ♥/✕. A station is a *queue provider*, never a parallel transport (principle 1).
  */
+
+/**
+ * A station's `shuffleSeed` is random by design — that randomness *is* the
+ * intrinsic variety two starts of the same station are meant to have (D12).
+ * Gate G11 nonetheless has to prove the sequence is reproducible **on
+ * hardware**, and that needs the seed pinned from outside the app, because
+ * nothing in the UI can set it. `--shuffle-replay` writes this key, starts a
+ * station, restarts with the same value and asserts the two emitted sequences
+ * are identical.
+ *
+ * Absent the key — which is to say always, in normal use — this is an ordinary
+ * random seed. It is read at station start rather than cached so a HIL run can
+ * change it between starts without reloading.
+ */
+const PINNED_SHUFFLE_SEED_KEY = "c64u_sid_radio_pinned_shuffle_seed";
+
+const defaultRandomSeed = (): number => {
+  try {
+    const pinned = window.localStorage.getItem(PINNED_SHUFFLE_SEED_KEY);
+    if (pinned !== null) {
+      const parsed = Number.parseInt(pinned, 10);
+      if (Number.isFinite(parsed)) return parsed >>> 0;
+    }
+  } catch {
+    // Storage disabled (private mode): fall through to a random seed.
+  }
+  return Math.floor(Math.random() * 0xffffffff);
+};
 export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
   const { enabled, startPlaylist, appendItems, currentIndex, playlistLength } = params;
   const resolvePath = params.resolvePath ?? ((md5) => resolveVirtualPath(md5));
-  const randomSeed = params.randomSeed ?? (() => Math.floor(Math.random() * 0xffffffff));
+  const randomSeed = params.randomSeed ?? defaultRandomSeed;
 
   const [station, setStation] = useState<ActiveStation | null>(null);
   const [notice, setNotice] = useState<"no-radio-for-tune" | "no-radio" | null>(null);
@@ -137,8 +166,13 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
             count,
           }),
         resolvePath,
-        buildItem: ({ virtualPath, songIndex, trackOrdinal }) =>
-          buildStationItem({ virtualPath, songIndex, trackOrdinal }),
+        buildItem: ({ virtualPath, songIndex, trackOrdinal }) => {
+          // The determinism proof behind G11: emission order is a pure function
+          // of the seed, so it is recorded here, where the station decides, and
+          // not where playback happens to arrive.
+          recordEmitted(trackOrdinal);
+          return buildStationItem({ virtualPath, songIndex, trackOrdinal });
+        },
       });
     },
     [ensureClient, resolvePath],
@@ -324,11 +358,12 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       });
   }, [station, currentIndex, playlistLength, appendItems]);
 
-  // Record auto-advances for the continuity/determinism stats (§9.2).
+  // Record auto-advances for the continuity stat (§9.2). The determinism
+  // sequence is recorded at emit time instead -- see `recordEmitted`.
   const lastIndexRef = useRef(currentIndex);
   useEffect(() => {
     if (station && currentIndex > lastIndexRef.current) {
-      recordAutoAdvance(currentIndex);
+      recordAutoAdvance();
     }
     lastIndexRef.current = currentIndex;
   }, [currentIndex, station]);

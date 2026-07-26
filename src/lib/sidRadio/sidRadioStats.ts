@@ -118,12 +118,23 @@ export const recordRefill = (input: {
 };
 
 /** Record an auto-advance to the next track (spec §9.2 `tracksAutoAdvanced`). */
-export const recordAutoAdvance = (trackOrdinal: number): void => {
-  stats = {
-    ...stats,
-    tracksAutoAdvanced: stats.tracksAutoAdvanced + 1,
-    emittedSequence: [...stats.emittedSequence, trackOrdinal],
-  };
+export const recordAutoAdvance = (): void => {
+  stats = { ...stats, tracksAutoAdvanced: stats.tracksAutoAdvanced + 1 };
+  writeToDom();
+};
+
+/**
+ * Record a tune the station emitted into the queue, in emit order (§9.3).
+ *
+ * This is deliberately *not* driven by playback advancing. Emission order is a
+ * pure function of `(seed, rankingSnapshot, shuffleSeed)`, which is precisely
+ * what the G11 `--shuffle-replay` gate re-runs and compares; playback order is
+ * not, because a listener skipping ahead outruns the refills and the two drift
+ * apart. Recording this on auto-advance also meant recording the playlist
+ * cursor -- 0,1,2,… for every seed -- so the comparison could never fail.
+ */
+export const recordEmitted = (trackOrdinal: number): void => {
+  stats = { ...stats, emittedSequence: [...stats.emittedSequence, trackOrdinal] };
   writeToDom();
 };
 

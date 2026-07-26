@@ -313,15 +313,154 @@ def assert_budgets(stats: dict, sections: tuple[str, ...] = ("thresholds",)) -> 
     return 1 if failures else 0
 
 
+PINNED_SEED_KEY = "c64u_sid_radio_pinned_shuffle_seed"
+# Two seeds under test, plus a fixed one used only to make a Song station's
+# seed tune reproducible (see capture_sequence).
+REPLAY_SEED = 0x5A17C0DE
+VARIETY_SEED = 0x0BADF00D
+BOOTSTRAP_SEED = 0x1D0C0FFE
+
+
+def pin_shuffle_seed(cdp: Cdp, seed: int | None) -> None:
+    """Force (or release) the station `shuffleSeed`, so a replay is reproducible."""
+    if seed is None:
+        cdp.evaluate(f"localStorage.removeItem('{PINNED_SEED_KEY}'); 'ok'")
+    else:
+        cdp.evaluate(f"localStorage.setItem('{PINNED_SEED_KEY}','{seed}'); 'ok'")
+
+
+def capture_sequence(
+    cdp: Cdp, station: str, style: str | None, tracks: int, seed: int
+) -> tuple[list[int], int | None]:
+    """Start a station and read back the first `tracks` tune ordinals it emits.
+
+    The station emits its whole lookahead at start, so this needs no playback
+    and no skipping -- which matters, because ✕ would write the tune into the
+    not-for-me set and change the engine's inputs between the two runs of a
+    pinned seed, failing determinism for a reason that is not a bug.
+
+    A Song station needs care: it is seeded from the *currently playing tune*,
+    which is a determinism input every bit as much as the shuffleSeed
+    ((seed, rankingSnapshot, shuffleSeed), §8.1). Left alone, each capture would
+    seed from whatever the previous capture happened to leave playing and the
+    two runs would diverge for a reason that is not a defect. So the seed tune
+    is made reproducible first, by starting a Style station -- whose own
+    determinism is proven by (b) on the style path -- and adopting its first
+    tune.
+    """
+    if station == "song":
+        # Bootstrap with a FIXED seed, never the seed under test: the tune this
+        # picks becomes the Song station's seed, and varying it alongside the
+        # shuffleSeed would change two inputs at once -- (c) would then compare
+        # two different stations rather than two shufflings of one.
+        pin_shuffle_seed(cdp, BOOTSTRAP_SEED)
+        start_station(cdp, "style", style or "fast_paced")
+        # Wait for that tune to be genuinely *current*, not merely queued. A
+        # fixed sleep here was too short for the local engine to finish loading,
+        # so the Song station below adopted whatever the previous capture had
+        # left playing and the "same" seed produced a different neighbourhood.
+        if not ensure_playing(cdp, timeout_s=40):
+            raise SystemExit("sid_radio_hil: bootstrap tune never started — cannot pin the Song seed")
+        stop_active_station(cdp)
+        time.sleep(1)
+        pin_shuffle_seed(cdp, seed)
+    start_station(cdp, station, style)
+    seq: list[int] = []
+    deadline = time.time() + 60
+    while time.time() < deadline:
+        stats = read_stats(cdp) or {}
+        seq = list(stats.get("emittedSequence") or [])
+        if len(seq) >= tracks:
+            return seq[:tracks], stats.get("shuffleSeed")
+        time.sleep(2)
+    stats = read_stats(cdp) or {}
+    return list(stats.get("emittedSequence") or [])[:tracks], stats.get("shuffleSeed")
+
+
 def shuffle_replay(cdp: Cdp, station: str, style: str | None) -> int:
-    """Assert transport Shuffle/Repeat are disabled during a station (G11, §9.3)."""
+    """G11 on hardware (§9.3): lean-back controls + replay determinism + variety.
+
+    Three assertions, all of which have to hold:
+
+    (a) transport Shuffle/Repeat are disabled while a station drives the queue,
+        and enabled again once the station stops and a finite list is in charge;
+    (b) the same pinned `shuffleSeed` twice emits an identical sequence;
+    (c) two different seeds emit a different order over an overlapping set.
+
+    (b) and (c) are the whole point of the gate, and both are vacuous on an
+    empty sequence -- the previous version of this function asserted only (a),
+    printed `seqLen=0` and still returned success. A run that emitted nothing
+    now fails.
+    """
+    want = 8
+
+    # (a) — during a station.
     start_station(cdp, station, style)
     time.sleep(2)
-    stats = read_stats(cdp) or {}
-    disabled = bool(stats.get("transportShuffleDisabled")) and bool(stats.get("transportRepeatDisabled"))
-    seq = stats.get("emittedSequence", [])
-    print(f"[sid-radio-hil] shuffle-replay: controls-disabled={disabled} seqLen={len(seq)}")
-    return 0 if disabled else 1
+    live = read_stats(cdp) or {}
+    disabled = bool(live.get("transportShuffleDisabled")) and bool(live.get("transportRepeatDisabled"))
+
+    # (b) — same seed twice.
+    pin_shuffle_seed(cdp, REPLAY_SEED)
+    first, seed_a = capture_sequence(cdp, station, style, want, REPLAY_SEED)
+    pin_shuffle_seed(cdp, REPLAY_SEED)
+    second, seed_b = capture_sequence(cdp, station, style, want, REPLAY_SEED)
+
+    # (c) — a different seed, everything else held constant.
+    pin_shuffle_seed(cdp, VARIETY_SEED)
+    third, seed_c = capture_sequence(cdp, station, style, want, VARIETY_SEED)
+    pin_shuffle_seed(cdp, None)
+
+    # (a) again — once the station is stopped the controls must come back.
+    stop_active_station(cdp)
+    time.sleep(2)
+    idle = read_stats(cdp) or {}
+    restored = not idle.get("transportShuffleDisabled") and not idle.get("transportRepeatDisabled")
+
+    n = min(len(first), len(second))
+    identical = n > 0 and first[:n] == second[:n]
+    overlap = len(set(first) & set(third))
+    differs = bool(third) and third[: min(len(first), len(third))] != first[: min(len(first), len(third))]
+
+    print(f"[sid-radio-hil] shuffle-replay (a) controls disabled during station: {disabled}")
+    print(f"[sid-radio-hil] shuffle-replay (a) controls restored after stop: {restored}")
+    print(f"[sid-radio-hil] shuffle-replay (b) seed {seed_a}=={seed_b}, len={n}, identical={identical}")
+    print(f"[sid-radio-hil] shuffle-replay (b)   first  = {first[:want]}")
+    print(f"[sid-radio-hil] shuffle-replay (b)   replay = {second[:want]}")
+    print(f"[sid-radio-hil] shuffle-replay (c) seed {seed_c}: differs={differs} overlap={overlap}")
+    print(f"[sid-radio-hil] shuffle-replay (c)   other  = {third[:want]}")
+
+    failures = []
+    if not disabled:
+        failures.append("(a) Shuffle/Repeat were not disabled during a station")
+    if not restored:
+        failures.append("(a) Shuffle/Repeat were not restored after the station stopped")
+    if n == 0:
+        failures.append("(b) no candidates were emitted — determinism was never exercised")
+    elif not identical:
+        failures.append("(b) the same shuffleSeed produced a different sequence")
+    if not third:
+        failures.append("(c) the second seed emitted nothing — variety was never exercised")
+    elif not differs:
+        failures.append("(c) a different shuffleSeed produced the same order")
+    elif overlap == 0:
+        # Overlap is REPORTED, never required. The spec sketched "the tune set
+        # overlaps" assuming a small candidate pool, but every station type
+        # draws from a pool orders of magnitude larger than an 8-tune sample --
+        # even a Song station, whose neighbourhood runs to thousands of tunes --
+        # so two samples are expected to be disjoint and observed overlap swung
+        # 2 → 0 between runs of identical code. Asserting it would fail healthy
+        # builds at random. The property that actually defines variety is that
+        # the order differs, which is asserted above; the property that defines
+        # determinism is (b), which is exact.
+        print(
+            "[sid-radio-hil] shuffle-replay (c) note: samples are disjoint — expected, the "
+            "candidate pool is far larger than the sample; only the order difference is asserted"
+        )
+
+    for failure in failures:
+        print(f"[sid-radio-hil] shuffle-replay FAIL: {failure}")
+    return 1 if failures else 0
 
 
 def hvsc_update(cdp: Cdp, args: argparse.Namespace, before: dict) -> int:

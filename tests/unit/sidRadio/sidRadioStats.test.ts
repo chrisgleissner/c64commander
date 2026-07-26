@@ -13,6 +13,7 @@ import {
   getSidRadioStats,
   readSidRadioStatsFromDom,
   recordAutoAdvance,
+  recordEmitted,
   recordRefill,
   recordSkip,
   resetSidRadioStats,
@@ -41,9 +42,14 @@ describe("sidRadioStats", () => {
     expect(s.lastRefillMs).toBe(25);
   });
 
-  it("records auto-advances into the emitted sequence and counts skips", () => {
-    recordAutoAdvance(11);
-    recordAutoAdvance(7);
+  it("counts auto-advances and skips, keeping them out of the emitted sequence", () => {
+    // The emitted sequence is the station's output (recordEmitted), not
+    // playback's progress through it: a listener who skips does not change
+    // what the engine chose, and the G11 replay compares the choice.
+    recordEmitted(11);
+    recordEmitted(7);
+    recordAutoAdvance();
+    recordAutoAdvance();
     recordSkip(340);
     const s = getSidRadioStats();
     expect(s.tracksAutoAdvanced).toBe(2);
