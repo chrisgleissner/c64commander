@@ -121,7 +121,9 @@ describe("hold-to-seek click suppression", () => {
     // The flag must be cleared asynchronously in stop(), not only in start():
     // clearing it only on the next press is what swallowed a later keypad click.
     // The clear must still be asynchronous (a scrub-end call may precede it).
-    expect(source).toMatch(/if \(seeked\.current\) \{[\s\S]{0,120}?window\.setTimeout\(\(\) => \{\s*seeked\.current = false;/);
+    expect(source).toMatch(
+      /if \(seeked\.current\) \{[\s\S]{0,120}?window\.setTimeout\(\(\) => \{\s*seeked\.current = false;/,
+    );
     expect(source).toContain("keypad-first");
   });
 });
