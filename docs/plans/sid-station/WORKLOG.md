@@ -877,3 +877,71 @@ a latency target — and exceeding it raises a user-facing "Mute toggle failed"
 toast. Set that close to how long a healthy-but-slow write takes and real users
 on congested Wi-Fi, or on a phone that just woke, are told a failure happened
 when none did. Widened to 10 s, named, and documented. CI green at 33 pass.
+
+## 2026-07-26 (evening) — two sources at once: three bugs, one class
+
+The user heard "two interleaving songs". `dumpsys audio` found **eight**
+concurrent AAudio streams from a single app process. Three distinct defects,
+all of the same shape: a switchover that starts a new source without reliably
+stopping the old one.
+
+**1. Eight engines.** `LocalSidPlaybackController` lived in a `useRef` inside
+`usePlaybackController`, so every `PlayFilesPage` instance built its own
+`LocalSidEngine` — each owning an AudioContext, a worker and its own scheduled
+buffers — and nothing tore an engine down when its page unmounted. Tab-navigating
+away from Play and back left the previous engine playing. Six tab cycles, eight
+streams, different tunes layered on each other, unstoppable short of killing the
+app. Fixed twice over: the controller is shared process-wide, _and_ the engine
+enforces single audio ownership at the one place audio is created, so a later
+refactor reintroducing a per-component engine still cannot overlap. Verified:
+six tab cycles, one stream throughout.
+
+**2. Switching Ultimates left the old one playing.** The device switch already
+stopped the A/V mirror and Remote Input before retargeting; the tune was simply
+never considered. This took three attempts and both failures looked right:
+
+- a handle registered by `PlayFilesPage` — null exactly when needed, because
+  device switching happens from **Settings**, where Play has unmounted;
+- the same handle kept past unmount — but a transient replacement page
+  re-registers with a freshly-initialised `isPlaying: false`, and
+  last-registration-wins picked that.
+
+The lesson is worth keeping: React state owned by an arbitrary component
+instance is the wrong source of truth for "is something playing". The flag is
+now set where playback actually starts and cleared where it actually stops.
+
+Proving it needed hardware, not logs — the app's REST goes through native
+OkHttp, which logs no URLs here. Reading the old Ultimate's screen over DMA
+settled it: before, its SID-player clock ran on past the switch (01.26 → 01.32);
+after, the machine sits at `READY.` with only the BASIC cursor blinking (byte 80
+alternating 32 ↔ 160). One earlier "STILL PLAYING" reading was _my_ misreading —
+a changing byte that turned out to be that cursor, not the clock. Check which
+byte moved before calling it.
+
+**3. Engine switches** were already clean, and now have evidence. Measured
+through a microphone at the phone's speaker, calibrated against a true silence
+floor (−38.8 dBFS) — the first attempt was worthless because the phone's volume
+put "playing" only 1.5 dB above silence:
+
+| step    | streams | mic            |
+| ------- | ------- | -------------- |
+| Local   | 1       | −24.9 dBFS     |
+| → C64   | **0**   | **−41.1 dBFS** |
+| → Local | 1       | −24.6 dBFS     |
+
+Same track throughout, and the same result for an HVSC station (station stays
+active across the switch).
+
+**Blend is opt-in.** A switchover always begins from silence unless the listener
+asks otherwise, because anything else is indistinguishable from bug 1.
+Settings → SID Radio → "Blend between tunes": off (default) / 0.6s / 1.5s / 3s.
+
+**CTA responsiveness under load** (in-app latency: real finger's pointerdown →
+the frame the UI reflects it, so adb/CDP round-trip is excluded), sampled while
+a station played on the local engine: like toggle 79–131 ms, skip next
+139–187 ms, tab→Play 185–219 ms, mute toggle 198–267 ms, tab→Home 478–525 ms.
+Only tab→Home approaches half a second and is worth a look.
+
+**Also:** a 4-hour unattended run left the phone at 10% battery _while on USB
+power_ — continuous local-engine playback outruns the charge rate. Worth a
+battery note before this is called finished.
