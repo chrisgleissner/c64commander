@@ -5,6 +5,7 @@ import {
   LIBSIDPLAYFP_WASM_RELEASE,
   parseChecksums,
   sha256Hex,
+  sourceFiles,
   tarballName,
   tarballUrl,
   verifyExtracted,
@@ -18,19 +19,29 @@ import {
  * fetched at build time) actually safer, rather than just different.
  */
 describe("fetch-libsidplayfp-wasm pin", () => {
-  it("ships the reSIDfp build, never the SIDLite one", () => {
+  it("never installs a SIDLite artifact where reSIDfp belongs", () => {
     // The release tarball carries reSIDfp in the root and SIDLite under
-    // `sidlite/`. Taking anything from `sidlite/` would reintroduce the exact
-    // defect this whole exercise was about.
-    for (const file of LIBSIDPLAYFP_WASM_RELEASE.files) {
-      expect(file.startsWith("sidlite/"), `${file} is the SIDLite build`).toBe(false);
+    // `sidlite/`, and `public/wasm/libsidplayfp/index.js` resolves the engine
+    // the user picked against exactly that layout. Both are shipped — SIDLite is
+    // the opt-in "Light" choice — so the invariant is not "no SIDLite" but "the
+    // two never swap places", which is the defect that actually happened.
+    for (const { from, to } of LIBSIDPLAYFP_WASM_RELEASE.install) {
+      expect(to.startsWith("sidlite/"), `${from} → ${to} crosses the engines`).toBe(from.startsWith("sidlite/"));
     }
-    expect(LIBSIDPLAYFP_WASM_RELEASE.files).toContain("libsidplayfp.wasm");
+    expect(sourceFiles()).toContain("libsidplayfp.wasm");
+  });
+
+  it("ships both engines, each from its own half of the tarball", () => {
+    // A missing SIDLite binary is a 404 at runtime for anyone who picked
+    // "Light" in Settings → SID Radio → SID emulation, which is silent: the
+    // engine simply fails to load.
+    expect(sourceFiles()).toContain("sidlite/libsidplayfp.wasm");
+    expect(sourceFiles()).toContain("sidlite/libsidplayfp.js");
   });
 
   it("carries the engine's licence with it", () => {
     // libsidplayfp is GPL-2.0-or-later; the licence must travel with the binary.
-    expect(LIBSIDPLAYFP_WASM_RELEASE.files).toContain("LICENSE");
+    expect(sourceFiles()).toContain("LICENSE");
   });
 
   it("resolves a GitHub release download URL from the pin", () => {

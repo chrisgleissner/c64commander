@@ -31,14 +31,14 @@ const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 
 export const SIDCORR_RELEASE = {
   repo: "chrisgleissner/sidflow-data",
-  tag: "sidcorr-hvsc-full-20260407T115218Z",
+  tag: "sidcorr-hvsc-full-20260726T203707Z",
   bundleAsset: "sidcorr-hvsc-full-sidcorr-tiny-1.sidcorr",
   manifestAsset: "sidcorr-hvsc-full-sidcorr-tiny-1.manifest.json",
-  bundleSha256: "37ceb567faa2acc062e36c31ae7ae074dbdc05e6fc98709a29a483d3705d7d1b",
+  bundleSha256: "081664d81b35f1d31ce2fe93e9b054601c56250dbf02d79781c3e5d1d3cba7c5",
   publicPath: "data/sidcorr/hvsc-tiny.sidcorr",
   expected: {
-    fileCount: 60571,
-    trackCount: 87073,
+    fileCount: 61157,
+    trackCount: 87868,
     neighborsPerTrack: 3,
     styleCount: 9,
   },
@@ -75,20 +75,29 @@ export const fetchSidcorr = async ({
   readFileImpl = (absPath) => fs.readFile(absPath),
   writeFileImpl = (absPath, data) => fs.writeFile(absPath, data),
   mkdirImpl = (dir, options) => fs.mkdir(dir, options),
+  // Injectable alongside the rest so a test can exercise the accept path with
+  // stand-in bytes; the real bundle is git-ignored and may not be on disk.
+  expectedSha = SIDCORR_RELEASE.bundleSha256,
 } = {}) => {
   const targetPath = path.join(REPO_ROOT, "public", SIDCORR_RELEASE.publicPath);
 
   const existing = await readIfExists(targetPath, readFileImpl);
   if (existing) {
-    if (verifyBundleSha256(existing)) {
+    if (verifyBundleSha256(existing, expectedSha)) {
       console.log(`[fetch-sidcorr] up to date (${existing.length} bytes, sha ok): ${SIDCORR_RELEASE.publicPath}`);
       return { status: "cached", path: targetPath };
     }
-    logError(
-      `existing bundle at ${SIDCORR_RELEASE.publicPath} does not match the pinned sha256 ` +
-        `(${SIDCORR_RELEASE.bundleSha256}). Delete it and re-run, or re-pin the release.`,
+    // A local file that does not match the pin is a STALE CACHE, not an attack:
+    // the asset is git-ignored, so the only way to hold a different one is to
+    // have fetched an earlier pin. Re-downloading loses nothing and keeps a
+    // re-pin from breaking every existing checkout — which it did, because the
+    // pin had never moved until sidcorr-hvsc-full-20260726T203707Z. Integrity is
+    // unchanged: the downloaded bytes are still verified against the pin below,
+    // and a mismatch there is still fatal.
+    console.warn(
+      `[fetch-sidcorr] cached bundle at ${SIDCORR_RELEASE.publicPath} predates the current pin ` +
+        `(${SIDCORR_RELEASE.bundleSha256}) — re-downloading.`,
     );
-    return { status: "sha-mismatch", path: targetPath };
   }
 
   const url = bundleDownloadUrl();
@@ -112,7 +121,7 @@ export const fetchSidcorr = async ({
     return { status: "skipped-offline", path: targetPath };
   }
 
-  if (!verifyBundleSha256(buffer)) {
+  if (!verifyBundleSha256(buffer, expectedSha)) {
     logError(
       `downloaded bundle sha256 ${sha256Hex(buffer)} != pinned ${SIDCORR_RELEASE.bundleSha256}. ` +
         `Refusing to write a drifted asset.`,

@@ -23,7 +23,7 @@
 export const SIDCORR_REPO = "chrisgleissner/sidflow-data";
 
 /** Release tag the bundle is pinned to. */
-export const SIDCORR_RELEASE_TAG = "sidcorr-hvsc-full-20260407T115218Z";
+export const SIDCORR_RELEASE_TAG = "sidcorr-hvsc-full-20260726T203707Z";
 
 /** Release asset name for the Tiny bundle. */
 export const SIDCORR_BUNDLE_ASSET = "sidcorr-hvsc-full-sidcorr-tiny-1.sidcorr";
@@ -35,7 +35,7 @@ export const SIDCORR_MANIFEST_ASSET = "sidcorr-hvsc-full-sidcorr-tiny-1.manifest
  * Committed sha256 of the pinned bundle. A build fails loudly if the fetched
  * asset drifts from this pin (spec §3).
  */
-export const SIDCORR_BUNDLE_SHA256 = "37ceb567faa2acc062e36c31ae7ae074dbdc05e6fc98709a29a483d3705d7d1b";
+export const SIDCORR_BUNDLE_SHA256 = "081664d81b35f1d31ce2fe93e9b054601c56250dbf02d79781c3e5d1d3cba7c5";
 
 /**
  * Path under `public/` where the fetched bundle lands. Vite copies `public/`
@@ -58,8 +58,8 @@ export const SIDCORR_BINARY_FORMAT_VERSION = 2;
  * golden test to assert the parser round-trips the real bundle (spec §7 M0).
  */
 export const SIDCORR_EXPECTED = {
-  fileCount: 60571,
-  trackCount: 87073,
+  fileCount: 61157,
+  trackCount: 87868,
   neighborsPerTrack: 3,
   styleCount: 9,
 } as const;

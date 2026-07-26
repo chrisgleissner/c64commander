@@ -57,11 +57,42 @@ describe("fetch-sidcorr sha256 pin (§8.4)", () => {
     expect(isFatalStatus(result.status)).toBe(true);
   });
 
-  it("rejects a cached asset whose sha drifted from the pin", async () => {
+  it("re-downloads a cached asset left behind by an older pin", async () => {
+    // The asset is git-ignored, so the only way to hold bytes that do not match
+    // is to have fetched an earlier pin — a stale cache, not an attack. Failing
+    // the build over it would mean every re-pin breaks every existing checkout
+    // with "delete it and re-run", which is what happened moving to
+    // sidcorr-hvsc-full-20260726T203707Z, the first time the pin ever moved.
+    const pinned = Buffer.from("pinned bundle bytes");
+    let wrote: Buffer | null = null;
     const result = await fetchSidcorr({
-      readFileImpl: async () => Buffer.from("stale on-disk bytes"),
+      readFileImpl: async () => Buffer.from("bytes from an older pin"),
+      fetchImpl: async () => makeResponse(pinned),
+      writeFileImpl: async (_path: string, data: Buffer) => {
+        wrote = data;
+      },
+      mkdirImpl: async () => {},
+      // The real pin belongs to the real bundle; this stands in for it.
+      expectedSha: sha256Hex(pinned),
+    });
+    expect(result.status).toBe("downloaded");
+    expect(wrote).toEqual(pinned);
+  });
+
+  it("still refuses a bad download when the cache was stale", async () => {
+    // The re-download above must not become a way in for wrong bytes: the
+    // integrity check moves to the downloaded payload, it does not disappear.
+    let wrote = false;
+    const result = await fetchSidcorr({
+      readFileImpl: async () => Buffer.from("bytes from an older pin"),
+      fetchImpl: async () => makeResponse(Buffer.from("not the real sidcorr bundle")),
+      writeFileImpl: async () => {
+        wrote = true;
+      },
+      mkdirImpl: async () => {},
     });
     expect(result.status).toBe("sha-mismatch");
+    expect(wrote).toBe(false);
     expect(isFatalStatus(result.status)).toBe(true);
   });
 

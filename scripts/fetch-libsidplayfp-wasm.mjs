@@ -44,29 +44,45 @@ const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 /**
  * The pin.
  *
- * `tag` is deliberately null until sidflow cuts the first release carrying the
- * asset (the workflow landed in sidflow 8b2617d; release 0.6.0 predates it).
- * While it is null this script is a no-op and the checked-in engine under
- * public/wasm/libsidplayfp/ is used as-is — see VENDORING.md. To switch over:
- * set `tag`, run this script once, copy the printed SHA256SUMS digest into
- * `checksumsSha256`, then delete the committed binaries and un-ignore nothing
- * (the .gitignore entry is already prepared).
+ * Set `tag` and `checksumsSha256` together — a tag without a checksum is a
+ * download with no integrity check, i.e. no better than the committed blob this
+ * replaces. To move the pin: set `tag`, run `npm run wasm:fetch`, copy the
+ * printed SHA256SUMS digest into `checksumsSha256`, and re-run.
  */
 export const LIBSIDPLAYFP_WASM_RELEASE = {
   repo: "chrisgleissner/sidflow",
-  tag: null,
+  tag: "0.7.0",
   /** sha256 of the release's SHA256SUMS file; every payload file is checked against that. */
-  checksumsSha256: null,
+  checksumsSha256: "2ed0169a51bf136a077a80f214fe37e57f85f83e78af4836a5adabac5cd3656e",
   /** Where the engine lands, relative to public/. */
   publicDir: "wasm/libsidplayfp",
   /**
-   * Files taken from the tarball root, which is the reSIDfp build. SIDLite
-   * lives under `sidlite/` in the same tarball and is deliberately NOT shipped:
-   * it is a fast approximation that measurably does not sound like a C64
-   * (docs/plans/sid-station/AUDIO-FIDELITY-TEST.md).
+   * What to install, and from where in the tarball. The mapping is explicit
+   * because getting it wrong is the whole defect this exists to prevent: the
+   * tarball carries reSIDfp in the root and SIDLite under `sidlite/`, and for
+   * months the app shipped the latter believing it was the former.
+   *
+   * Both are installed, mirroring the layout `public/wasm/libsidplayfp/index.js`
+   * resolves against: reSIDfp is the default and the reference, SIDLite is the
+   * opt-in "Light" choice in Settings → SID Radio → SID emulation, ~10x cheaper
+   * and kept for hardware that cannot hold realtime with the reference engine
+   * (docs/plans/sid-station/AUDIO-FIDELITY-TEST.md §L1). What must never happen
+   * is a `sidlite/` file landing in the root — see the test.
+   *
+   * `index.js` and `player.js` are NOT here: they are this app's own loader and
+   * `SidAudioEngine` wrapper, not release artifacts, and stay committed.
    */
-  files: ["libsidplayfp.js", "libsidplayfp.wasm", "LICENSE"],
+  install: [
+    { from: "LICENSE", to: "LICENSE" },
+    { from: "libsidplayfp.js", to: "libsidplayfp.js" },
+    { from: "libsidplayfp.wasm", to: "libsidplayfp.wasm" },
+    { from: "sidlite/libsidplayfp.js", to: "sidlite/libsidplayfp.js" },
+    { from: "sidlite/libsidplayfp.wasm", to: "sidlite/libsidplayfp.wasm" },
+  ],
 };
+
+/** Tarball-relative paths the pin needs, in install order. */
+export const sourceFiles = (release = LIBSIDPLAYFP_WASM_RELEASE) => release.install.map((entry) => entry.from);
 
 export const sha256Hex = (buffer) => createHash("sha256").update(buffer).digest("hex");
 
@@ -110,12 +126,10 @@ async function main() {
   const target = path.join(REPO_ROOT, "public", release.publicDir);
 
   if (!release.tag) {
-    info(
-      "no release pinned yet — using the engine committed under public/wasm/libsidplayfp/. " +
-        "Set LIBSIDPLAYFP_WASM_RELEASE.tag once sidflow publishes a release carrying " +
-        "libsidplayfp-wasm-<tag>.tar.gz (see the comment on the pin).",
-    );
-    return 0;
+    // Unpinning is not a supported state: the binaries are git-ignored, so
+    // without a tag there is no engine to load and on-device playback is gone.
+    console.error("[fetch-libsidplayfp-wasm] no release pinned — set LIBSIDPLAYFP_WASM_RELEASE.tag.");
+    return 1;
   }
 
   const scratch = await fs.mkdtemp(path.join(os.tmpdir(), "libsidplayfp-wasm-"));
@@ -150,14 +164,15 @@ async function main() {
       stdio: "inherit",
     });
 
-    const verification = await verifyExtracted(scratch, parseChecksums(sumsText), release.files);
+    const verification = await verifyExtracted(scratch, parseChecksums(sumsText), sourceFiles(release));
     if (!verification.ok) throw Object.assign(new Error(verification.reason), { hard: true });
 
-    await fs.mkdir(target, { recursive: true });
-    for (const file of release.files) {
-      await fs.copyFile(path.join(scratch, file), path.join(target, file));
+    for (const { from, to } of release.install) {
+      const destination = path.join(target, to);
+      await fs.mkdir(path.dirname(destination), { recursive: true });
+      await fs.copyFile(path.join(scratch, from), destination);
     }
-    info(`installed ${release.files.length} files → public/${release.publicDir} (${release.tag})`);
+    info(`installed ${release.install.length} files → public/${release.publicDir} (${release.tag})`);
     return 0;
   } catch (error) {
     if (error?.hard || required) {

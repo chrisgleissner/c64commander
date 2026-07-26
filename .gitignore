@@ -72,6 +72,15 @@ docs/manual/**/.last-build
 # (verified against the committed pin in src/lib/sidRadio/sidcorrRelease.ts), never committed.
 public/data/sidcorr/
 
+# libsidplayfp WASM engine — fetched at build time by scripts/fetch-libsidplayfp-wasm.mjs
+# and verified against the release's own SHA256SUMS. Committing it is what let the
+# app ship SIDLite as reSIDfp unnoticed for months. index.js / player.js / README.md /
+# VENDORING.md next to these are ours (or plain text) and stay committed.
+public/wasm/libsidplayfp/LICENSE
+public/wasm/libsidplayfp/libsidplayfp.js
+public/wasm/libsidplayfp/libsidplayfp.wasm
+public/wasm/libsidplayfp/sidlite/
+
 # Test fixtures
 .cache/hvsc/
 android/app/src/test/fixtures/HVSC_Update_84.7z
