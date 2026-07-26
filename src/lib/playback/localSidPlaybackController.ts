@@ -133,6 +133,18 @@ export class LocalSidPlaybackController {
     await engine.seekTo(target);
   }
 
+  /**
+   * Jump to an absolute position, for scrubbing.
+   *
+   * Seeking backwards costs time proportional to the target: libsidplayfp
+   * cannot rewind, so the engine reloads the tune and re-renders up to the
+   * point asked for. A scrub therefore has to coalesce — seek to where the
+   * finger is NOW, not once per repeat tick.
+   */
+  async seekTo(positionSeconds: number): Promise<void> {
+    await this.engine?.seekTo(Math.max(0, positionSeconds));
+  }
+
   /** Resume after {@link pause}. */
   async resume(): Promise<void> {
     await this.engine?.resume();

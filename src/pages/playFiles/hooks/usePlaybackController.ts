@@ -76,6 +76,8 @@ import {
 } from "@/pages/playFiles/playFilesUtils";
 import type { VolumeAction } from "@/pages/playFiles/volumeState";
 import type { SidEnablement } from "@/lib/config/sidVolumeControl";
+import { avMirrorSession } from "@/lib/streams/avMirrorSession";
+import { featureFlagManager } from "@/lib/config/featureFlags";
 
 type HandledUiError = Error & { c64uHandled?: boolean };
 
@@ -140,6 +142,18 @@ export const USER_TRANSPORT_COALESCE_MS = 120;
  * putting a needless timer on the main thread during local playback.
  */
 const LOCAL_ENGINE_STATS_POLL_MS = 1000;
+
+/**
+ * How often a scrub sends the engine to the finger's current position.
+ *
+ * Not once per visual step. Seeking backwards reloads the tune and re-renders
+ * up to the target, so a seek per 200 ms repeat queues work faster than it can
+ * finish and the audio ends up chasing a target from seconds ago. ~350 ms is
+ * slow enough for each catch-up to land — giving a short audible burst of the
+ * tune at the new position, the way a CD player previews a scrub — and quick
+ * enough to stay roughly with the moving progress bar.
+ */
+const SCRUB_SEEK_INTERVAL_MS = 350;
 
 interface UsePlaybackControllerProps {
   playlist: PlaylistItem[];
@@ -1098,6 +1112,20 @@ export function usePlaybackController({
           // launch, so a device switch can stop it no matter which page is
           // mounted (see activePlaybackSession).
           markRemotePlaybackStarted();
+          // The engine toggle promises "C64 — hear via Live View", so make that
+          // true. Without this the tune plays on the Ultimate in silence as far
+          // as the phone is concerned, and the listener has to know to go to
+          // Home and switch Listen on by hand. Best-effort: the mirror is a
+          // convenience, and a device that will not stream must not stop the
+          // tune from playing.
+          if (featureFlagManager.getSnapshot().flags.audio_mirror_enabled && !avMirrorSession.audioLive) {
+            void avMirrorSession.startAudio().catch((error) => {
+              addLog("warn", "Playback: could not start Live View audio for C64 playback", {
+                service: "playback",
+                error: error instanceof Error ? error.message : String(error),
+              });
+            });
+          }
         }
         setCurrentPlaybackIsLocal(routeToLocal);
 
@@ -2035,6 +2063,86 @@ export function usePlaybackController({
    * offering a control that silently does nothing — the C64 plays the SID
    * itself and cannot be scrubbed.
    */
+  /**
+   * Scrubbing (hold-to-seek) state.
+   *
+   * The engine is deliberately NOT driven once per repeat tick. Seeking
+   * backwards reloads the tune and re-renders up to the target, so issuing one
+   * seek every 200 ms queues work far faster than it completes and the UI ends
+   * up chasing a seek from seconds ago. Instead the *target* moves instantly —
+   * that is what the progress bar follows, so the feedback is immediate — and
+   * the engine is sent to wherever the finger is NOW, at most one seek in
+   * flight at a time.
+   *
+   * Letting the engine play between those seeks is what produces the
+   * CD-player-style preview: each catch-up lands at a new position and a short
+   * burst of the tune is heard there before the next one.
+   */
+  const scrubTargetMsRef = useRef<number | null>(null);
+  const [scrubTargetMs, setScrubTargetMs] = useState<number | null>(null);
+  const scrubSeekInFlightRef = useRef(false);
+  const scrubTimerRef = useRef<number | null>(null);
+  const scrubDurationMsRef = useRef<number | undefined>(undefined);
+
+  const runScrubSeek = useCallback(async () => {
+    const controller = localSidPlaybackRef.current;
+    const target = scrubTargetMsRef.current;
+    if (!controller || target === null || scrubSeekInFlightRef.current) return;
+    scrubSeekInFlightRef.current = true;
+    try {
+      await controller.seekTo(target / 1000);
+    } catch (error) {
+      addLog("debug", "Local SID scrub seek failed", { error: (error as Error).message });
+    } finally {
+      scrubSeekInFlightRef.current = false;
+    }
+  }, []);
+
+  const beginScrub = useCallback(
+    (durationMs?: number) => {
+      const controller = localSidPlaybackRef.current;
+      if (!controller) return;
+      scrubDurationMsRef.current = durationMs;
+      const startMs = Math.max(0, controller.positionSeconds() * 1000);
+      scrubTargetMsRef.current = startMs;
+      setScrubTargetMs(startMs);
+      if (scrubTimerRef.current === null) {
+        scrubTimerRef.current = window.setInterval(() => void runScrubSeek(), SCRUB_SEEK_INTERVAL_MS);
+      }
+    },
+    [runScrubSeek],
+  );
+
+  const scrubBy = useCallback((deltaSeconds: number) => {
+    if (scrubTargetMsRef.current === null) return;
+    const max = scrubDurationMsRef.current;
+    const next = Math.max(0, Math.min(max ?? Number.MAX_SAFE_INTEGER, scrubTargetMsRef.current + deltaSeconds * 1000));
+    scrubTargetMsRef.current = next;
+    setScrubTargetMs(next);
+  }, []);
+
+  const endScrub = useCallback(async () => {
+    if (scrubTimerRef.current !== null) {
+      window.clearInterval(scrubTimerRef.current);
+      scrubTimerRef.current = null;
+    }
+    const controller = localSidPlaybackRef.current;
+    const target = scrubTargetMsRef.current;
+    scrubTargetMsRef.current = null;
+    setScrubTargetMs(null);
+    if (!controller || target === null) return;
+    // Land exactly where the user let go, even if a catch-up seek was still in
+    // flight for an older target.
+    while (scrubSeekInFlightRef.current) await new Promise((r) => setTimeout(r, 20));
+    await controller.seekTo(target / 1000);
+    const positionMs = Math.max(0, controller.positionSeconds() * 1000);
+    const now = Date.now();
+    trackStartedAtRef.current = now - positionMs;
+    playedClockRef.current.hydrate(positionMs, isPausedRef.current ? null : now);
+    setPlayedMs(positionMs);
+    addLog("debug", "Local SID scrub ended", { toSeconds: positionMs / 1000 });
+  }, [playedClockRef, setPlayedMs, trackStartedAtRef]);
+
   const handleSeekBy = useCallback(
     async (deltaSeconds: number) => {
       const controller = localSidPlaybackRef.current;
@@ -2064,6 +2172,10 @@ export function usePlaybackController({
   );
 
   return {
+    beginScrub,
+    scrubBy,
+    endScrub,
+    scrubTargetMs,
     playItem,
     startPlaylist,
     handlePlay,
