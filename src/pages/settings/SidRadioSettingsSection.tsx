@@ -63,10 +63,15 @@ const ToggleRow = ({ id, testId, label, description, checked, onChange }: Toggle
  */
 export const SidRadioSettingsSection = () => {
   const { sidRadioEnabled, sidRankingEnabled } = useSidRadioFlags();
-  const { localEngineEnabled } = usePlaybackEngine();
+  const { localEngineEnabled, engine: playbackEngine } = usePlaybackEngine();
   const { deviceHost } = useC64Connection();
   const [sidEngine, setSidEngine] = useState<SidEmulationEngine>(() => loadSidEmulationEngine());
   const [crossfadeMs, setCrossfadeMs] = useState<number>(() => loadPlaybackCrossfadeMs());
+  // Crossfading needs two tunes sounding at once. The C64 has one SID and
+  // renders in real time, so on that engine it is not merely unimplemented --
+  // it cannot exist. Reflect that in the control rather than letting the user
+  // set a value that silently does nothing.
+  const crossfadeUnavailable = playbackEngine === "c64";
   const [cleared, setCleared] = useState(false);
 
   const handleClear = async () => {
@@ -150,11 +155,22 @@ export const SidRadioSettingsSection = () => {
         ) : null}
         {localEngineEnabled ? (
           <div className="space-y-2 rounded-lg border border-border/70 p-3 min-w-0" data-testid="settings-crossfade">
-            <Label className="text-sm font-medium">Blend between tunes</Label>
+            <Label className={`text-sm font-medium${crossfadeUnavailable ? " text-muted-foreground" : ""}`}>
+              Crossfade
+            </Label>
             <p className="text-xs text-muted-foreground">
-              Normally one tune stops before the next begins, so you never hear two at once. Turn this up to blend them
-              instead — the outgoing tune fades down while the next fades in. Applies to tunes played on this device,
-              including when you switch between the C64 and this device.
+              {crossfadeUnavailable ? (
+                <>
+                  Not available while <strong>Play on: C64</strong> is selected. Crossfading needs two tunes sounding at
+                  the same time, and the C64 plays one tune, live, on its single sound chip. Switch playback to{" "}
+                  <strong>This device</strong> on the Play screen to use it.
+                </>
+              ) : (
+                <>
+                  Normally one tune stops before the next begins, so you never hear two at once. Turn this up and they
+                  overlap instead — the outgoing tune fades down while the next fades in.
+                </>
+              )}
             </p>
             <div className="flex flex-wrap gap-2">
               {(
@@ -172,6 +188,7 @@ export const SidRadioSettingsSection = () => {
                   variant={crossfadeMs === value ? "default" : "outline"}
                   data-testid={`settings-crossfade-${value}`}
                   aria-pressed={crossfadeMs === value}
+                  disabled={crossfadeUnavailable}
                   onClick={() => {
                     setCrossfadeMs(value);
                     savePlaybackCrossfadeMs(value);

@@ -133,7 +133,7 @@ describe("local SID audio ownership", () => {
 
 /**
  * A switchover must begin from silence unless the listener explicitly asked for
- * a blend — anything else is indistinguishable from the overlap bug above.
+ * a crossfade — anything else is indistinguishable from the overlap bug above.
  */
 describe("crossfade is opt-in", () => {
   beforeEach(() => {
@@ -152,7 +152,7 @@ describe("crossfade is opt-in", () => {
     expect(first.closed.value).toBe(true);
   });
 
-  it("fades the outgoing tune out when a blend is configured", async () => {
+  it("fades the outgoing tune out when a crossfade is configured", async () => {
     vi.useFakeTimers();
     try {
       localStorage.setItem("c64u_playback_crossfade_ms", "1500");

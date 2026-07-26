@@ -1520,13 +1520,17 @@ export const renderManualMarkdown = ({ variant, features }) => {
       variant,
     )} the buttons only skip.`,
     "",
-    `**Blending between tunes.** By default one tune stops before the next begins, so you never hear two at once — including when you move playback between the ${targetDeviceShortName(
+    `**Crossfading between tunes.** By default one tune stops before the next begins, so you never hear two at once — including when you move playback between the ${targetDeviceShortName(
       variant,
     )} and your ${appDeviceName(
       variant,
-    )}, or switch to a different Ultimate. If you would rather they melt into each other, **Settings → SID Radio → Blend between tunes** offers a short, medium or long crossfade: the outgoing tune fades down while the next fades in. It applies to tunes playing on your ${appDeviceName(
+    )}, or switch to a different Ultimate. If you would rather they overlap, **Settings → SID Radio → Crossfade** offers a short, medium or long fade: the outgoing tune fades down while the next fades in.
+
+Crossfading only works for tunes playing on your ${appDeviceName(
       variant,
-    )}.`,
+    )}. Two tunes have to sound at the same moment for one to fade into the other, and ${targetDeviceShortName(
+      variant,
+    )} plays a single tune live on its one sound chip — so while **Play on: C64** is selected the setting is greyed out and tunes change cleanly instead.`,
     "",
     `**Two SID sound engines.** Under **Settings → SID Radio → SID emulation** you can choose how faithfully the on-device engine models the C64's SID chip. **Accurate (reSIDfp)** is the default and is what you want: it is a full model of the real chip and sounds like the hardware. **Light (SIDLite)** trades some of that fidelity for roughly a third of the work, which is worth having on an older or slower phone, or when you want to save battery on a long listen. Both play every tune; only the sound and the effort differ, and you can switch whenever you like.`,
     "",

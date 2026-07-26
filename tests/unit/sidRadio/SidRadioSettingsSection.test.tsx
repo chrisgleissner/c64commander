@@ -92,3 +92,34 @@ describe("SidRadioSettingsSection — C64 ROMs", () => {
     await waitFor(() => expect(screen.queryByTestId("settings-local-engine-roms")).toBeNull());
   });
 });
+
+/**
+ * Crossfading needs two tunes sounding at the same moment. The C64 has one SID
+ * and renders live, so on that engine a crossfade is not unimplemented — it
+ * cannot exist. The control says so instead of accepting a value that would
+ * silently do nothing.
+ */
+describe("SidRadioSettingsSection crossfade availability", () => {
+  const renderWith = async (engine: "c64" | "local") => {
+    localStorage.setItem("c64u_local_engine_enabled", "1");
+    localStorage.setItem("c64u_playback_engine", engine);
+    const { SidRadioSettingsSection } = await import("@/pages/settings/SidRadioSettingsSection");
+    const { render } = await import("@testing-library/react");
+    return render(<SidRadioSettingsSection />);
+  };
+
+  it("disables every crossfade option while playback is routed to the C64", async () => {
+    const { getByTestId, getByText } = await renderWith("c64");
+    for (const ms of [0, 600, 1500, 3000]) {
+      expect(getByTestId(`settings-crossfade-${ms}`)).toBeDisabled();
+    }
+    expect(getByText(/single sound chip/i)).toBeInTheDocument();
+  });
+
+  it("enables them when playback is on this device", async () => {
+    const { getByTestId } = await renderWith("local");
+    for (const ms of [0, 600, 1500, 3000]) {
+      expect(getByTestId(`settings-crossfade-${ms}`)).not.toBeDisabled();
+    }
+  });
+});

@@ -683,7 +683,7 @@ export const saveSidEmulationEngine = (engine: SidEmulationEngine) => {
  * means a hard cut: the outgoing tune is silenced before the next one starts.
  *
  * The default is deliberately off. A switchover must *always* begin from
- * silence unless the listener has explicitly asked for the two to be blended,
+ * silence unless the listener has explicitly asked for a crossfade,
  * because anything else is indistinguishable from the bug where two tunes play
  * at once. Turning this on is that explicit request, and it is bounded so the
  * overlap stays a deliberate musical effect rather than an ambiguous smear.

@@ -380,7 +380,7 @@ export class LocalSidEngine {
   ): Promise<LocalSidPlayResult> {
     await this.load();
     // A switchover ALWAYS starts from silence unless the listener has asked for
-    // a blend. Zero (the default) is a hard cut.
+    // a crossfade. Zero (the default) is a hard cut.
     const crossfadeMs = loadPlaybackCrossfadeMs();
     this.pendingCrossfadeMs = crossfadeMs;
     this.stopPlayback({ crossfadeMs });
@@ -679,7 +679,7 @@ export class LocalSidEngine {
     this.scheduler = null;
     this.audio = null;
     if (outgoing && fadeMs > 0 && outgoing.fadeOut) {
-      // Deliberate blend: let the tail ring out under the incoming tune, then
+      // Deliberate crossfade: let the tail ring out under the incoming tune, then
       // close. The context is detached from this engine already, so nothing can
       // schedule onto it and it cannot become a second live source.
       outgoing.fadeOut(fadeMs);
