@@ -10,6 +10,7 @@ import { LocalSidChunkScheduler, type AudioScheduleSink, type AudioScheduleSourc
 import type { LocalSidMainToWorker, LocalSidWorkerToMain, LocalSidOpenedMessage } from "./localSidWorkerProtocol";
 import { loadStoredRoms } from "@/lib/roms/romStore";
 import { loadSidEmulationEngine } from "@/lib/config/appSettings";
+import { addLog } from "@/lib/logging";
 
 /**
  * Main-thread controller for the Local SID engine (spec §12.2, Track B / LE1).
@@ -387,6 +388,20 @@ export class LocalSidEngine {
     const pending = this.openPending;
     this.openPending = null;
     this.channels = Math.max(1, message.channels);
+
+    if (message.openTiming) {
+      // Opening dominates `skipToLaunchMs`; log the split so a slow skip can be
+      // attributed instead of guessed at.
+      addLog("debug", "Local SID engine opened", {
+        service: "local-sid",
+        ...message.openTiming,
+        totalMs:
+          message.openTiming.moduleMs +
+          message.openTiming.constructMs +
+          message.openTiming.romsMs +
+          message.openTiming.loadMs,
+      });
+    }
 
     if (message.romRequired) {
       // Cannot play ROM-dependent tunes without ship-forbidden C64 ROMs.

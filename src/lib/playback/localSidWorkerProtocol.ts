@@ -118,6 +118,22 @@ export interface LocalSidOpenedMessage {
    * (spec §12.2). The controller routes these back to "Play on C64" (LE2).
    */
   romRequired: boolean;
+  /**
+   * Where the open actually spent its time. Opening dominates `skipToLaunchMs`
+   * (§9.2), and a single total cannot distinguish a slow WASM instantiation
+   * from a slow tune load — those have opposite fixes. Absent when the tune
+   * needed ROMs we do not have, since nothing was opened.
+   */
+  openTiming?: {
+    /** Fetching/compiling the WASM module (cached after the first open). */
+    moduleMs: number;
+    /** Constructing a fresh SidAudioEngine instance. */
+    constructMs: number;
+    /** Copying the KERNAL/BASIC images in. */
+    romsMs: number;
+    /** Parsing the SID and preparing the tune. */
+    loadMs: number;
+  };
 }
 
 /** worker → main: a rendered PCM chunk (interleaved Int16). */

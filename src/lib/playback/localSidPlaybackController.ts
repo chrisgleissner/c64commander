@@ -12,6 +12,7 @@ import {
   type LocalSidPlayResult,
   type LocalSidStats,
 } from "./localSidEngine";
+import { addLog } from "@/lib/logging";
 
 /**
  * Thin lifecycle wrapper the playback controller (LE2) holds in a ref to route
@@ -55,7 +56,16 @@ export class LocalSidPlaybackController {
     callbacks: LocalSidPlayCallbacks = {},
   ): Promise<LocalSidPlayResult> {
     const engine = this.ensureEngine();
+    // Timed separately from the engine open: opening measures 23-48 ms on a
+    // Pixel 4 while a skip can take seconds, so the difference is upstream of
+    // the engine and reading the bytes is the first suspect.
+    const readStartedAt = performance.now();
     const buffer = await file.arrayBuffer();
+    addLog("debug", "Local SID bytes read", {
+      service: "local-sid",
+      readMs: performance.now() - readStartedAt,
+      bytes: buffer.byteLength,
+    });
     return engine.play(buffer, songIndex, callbacks);
   }
 

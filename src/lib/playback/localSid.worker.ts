@@ -125,11 +125,19 @@ const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
           });
           return;
         }
+        // Opening is the dominant term in `skipToLaunchMs` (§9.2), so its four
+        // phases are timed separately — a single total cannot tell a slow WASM
+        // instantiation apart from a slow tune load, and those have opposite
+        // fixes.
+        const openStartedAt = performance.now();
         const Ctor = await ensureModule();
+        const moduleReadyAt = performance.now();
         engine = new Ctor({ sampleRate: message.sampleRate, stereo: true, engine: requestedEmulation });
+        const engineReadyAt = performance.now();
         // Must precede loadSidBuffer: the engine reloads the current tune when
         // ROMs change, and we want the tune opened against the real ROMs once.
         await engine.setSystemROMs(new Uint8Array(message.roms.kernal), new Uint8Array(message.roms.basic), null);
+        const romsReadyAt = performance.now();
         await engine.loadSidBuffer(bytes, message.songIndex);
         ctx.postMessage({
           type: "opened",
@@ -138,6 +146,12 @@ const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
           channels: engine.getChannels(),
           tuneInfo: engine.getTuneInfo(),
           romRequired: false,
+          openTiming: {
+            moduleMs: moduleReadyAt - openStartedAt,
+            constructMs: engineReadyAt - moduleReadyAt,
+            romsMs: romsReadyAt - engineReadyAt,
+            loadMs: performance.now() - romsReadyAt,
+          },
         });
         return;
       }
