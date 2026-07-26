@@ -48,6 +48,11 @@ export type PlaybackControlsCardProps = {
   onScrubEnd?: () => void;
   /** True while a hold is in progress (drives the scrubbing affordance). */
   isScrubbing?: boolean;
+  /**
+   * Jump straight to a fraction (0..1) of the tune. Only supplied for the
+   * on-device engine — the C64 renders the SID itself and cannot be positioned.
+   */
+  onSeekToFraction?: (fraction: number) => void;
   progressPercent: number;
   elapsedLabel: string;
   remainingLabel: string;
@@ -95,6 +100,13 @@ const SEEK_STEP_SECONDS = 5;
  * until the next press so the click handler (which fires after pointerup) can
  * still see it.
  */
+/** Where along the bar the pointer is, as a fraction of its width. */
+const fractionFromPointer = (event: ReactPointerEvent<HTMLElement>): number => {
+  const rect = event.currentTarget.getBoundingClientRect();
+  if (rect.width <= 0) return 0;
+  return Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+};
+
 /** A short tick so a scrub is felt as well as seen; silently ignored where unsupported. */
 const buzz = (ms: number) => {
   try {
@@ -209,6 +221,7 @@ export const PlaybackControlsCard = ({
   onScrubStep,
   onScrubEnd,
   isScrubbing = false,
+  onSeekToFraction,
   progressPercent,
   elapsedLabel,
   remainingLabel,
@@ -369,14 +382,49 @@ export const PlaybackControlsCard = ({
             >
               {isScrubbing ? `⏵ ${elapsedLabel}` : elapsedLabel}
             </span>
-            <Progress
-              value={progressPercent}
-              // Scrubbing gets its own look so the moving bar reads as "you are
-              // dragging this", not as playback that has suddenly sped up.
-              className={cn("flex-1 min-w-0 transition-none", isScrubbing && "ring-2 ring-primary/60")}
-              data-testid="playback-progress"
-              data-scrubbing={isScrubbing ? "true" : undefined}
-            />
+            {onSeekToFraction ? (
+              // A tap or drag anywhere on the bar jumps there. Wrapped in a
+              // button so it is reachable by keyboard and by the keypad-first
+              // C64U Remote variant, where there is no pointer at all.
+              <button
+                type="button"
+                data-testid="playback-progress-seek"
+                aria-label="Seek within the tune"
+                className="flex-1 min-w-0 cursor-pointer py-2 -my-2 touch-none"
+                onPointerDown={(event) => {
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  onSeekToFraction(fractionFromPointer(event));
+                }}
+                onPointerMove={(event) => {
+                  // Only while the finger is actually down on this control.
+                  if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                    onSeekToFraction(fractionFromPointer(event));
+                  }
+                }}
+                onKeyDown={(event) => {
+                  const step = event.key === "ArrowRight" ? 0.02 : event.key === "ArrowLeft" ? -0.02 : 0;
+                  if (step === 0) return;
+                  event.preventDefault();
+                  onSeekToFraction(Math.min(1, Math.max(0, progressPercent / 100 + step)));
+                }}
+              >
+                <Progress
+                  value={progressPercent}
+                  className={cn("w-full transition-none", isScrubbing && "ring-2 ring-primary/60")}
+                  data-testid="playback-progress"
+                  data-scrubbing={isScrubbing ? "true" : undefined}
+                />
+              </button>
+            ) : (
+              <Progress
+                value={progressPercent}
+                // Scrubbing gets its own look so the moving bar reads as "you are
+                // dragging this", not as playback that has suddenly sped up.
+                className={cn("flex-1 min-w-0 transition-none", isScrubbing && "ring-2 ring-primary/60")}
+                data-testid="playback-progress"
+                data-scrubbing={isScrubbing ? "true" : undefined}
+              />
+            )}
             <span className="shrink-0" data-testid="playback-remaining">
               {remainingLabel}
             </span>

@@ -462,6 +462,7 @@ export default function PlayFilesPage() {
     beginScrub,
     scrubBy,
     endScrub,
+    seekToFraction,
     scrubTargetMs,
     playlistEnded,
     playlistItemDuration,
@@ -1907,6 +1908,11 @@ export default function PlayFilesPage() {
                     : undefined
                 }
                 onScrubStep={scrubBy}
+                onSeekToFraction={
+                  playbackEngine.engine === "local" && currentItem?.category === "sid" && currentDurationMs
+                    ? (fraction) => seekToFraction(fraction, currentDurationMs)
+                    : undefined
+                }
                 onScrubEnd={() => void endScrub()}
                 isScrubbing={isScrubbing}
                 progressPercent={progressPercent}

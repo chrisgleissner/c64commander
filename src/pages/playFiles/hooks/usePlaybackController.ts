@@ -155,6 +155,9 @@ const LOCAL_ENGINE_STATS_POLL_MS = 1000;
  */
 const SCRUB_SEEK_INTERVAL_MS = 350;
 
+/** How long after the last drag movement the bar commits to that position. */
+const DRAG_SETTLE_MS = 220;
+
 interface UsePlaybackControllerProps {
   playlist: PlaylistItem[];
   setPlaylist: React.Dispatch<React.SetStateAction<PlaylistItem[]>>;
@@ -2064,6 +2067,28 @@ export function usePlaybackController({
    * itself and cannot be scrubbed.
    */
   /**
+   * Move the auto-advance deadline to match a new playback position.
+   *
+   * The deadline is set once, at launch, as "now + the tune's remaining
+   * duration". Seeking rebases the clocks but used to leave that deadline
+   * alone, so a tune scrubbed forward kept playing well past its end — jumping
+   * to 95% of a 4:28 tune left it still playing at 4:57, because the original
+   * schedule had not expired yet. Every seek has to reschedule it.
+   */
+  const rescheduleAutoAdvance = useCallback(
+    (positionMs: number) => {
+      const guard = autoAdvanceGuardRef.current;
+      const durationMs = durationMsRef.current;
+      if (!guard || !durationMs) return;
+      const dueAtMs = Date.now() + Math.max(0, durationMs - positionMs);
+      guard.dueAtMs = dueAtMs;
+      guard.autoFired = false;
+      setAutoAdvanceDueAtMs(dueAtMs);
+    },
+    [autoAdvanceGuardRef, durationMsRef, setAutoAdvanceDueAtMs],
+  );
+
+  /**
    * Scrubbing (hold-to-seek) state.
    *
    * The engine is deliberately NOT driven once per repeat tick. Seeking
@@ -2084,6 +2109,7 @@ export function usePlaybackController({
   const scrubTimerRef = useRef<number | null>(null);
   const scrubDurationMsRef = useRef<number | undefined>(undefined);
   const scrubEndingRef = useRef(false);
+  const dragSettleRef = useRef<number | null>(null);
 
   const runScrubSeek = useCallback(async () => {
     const controller = localSidPlaybackRef.current;
@@ -2160,6 +2186,7 @@ export function usePlaybackController({
     trackStartedAtRef.current = now - positionMs;
     playedClockRef.current.hydrate(positionMs, isPausedRef.current ? null : now);
     setPlayedMs(positionMs);
+    rescheduleAutoAdvance(positionMs);
     await controller.seekTo(target / 1000);
     // Only now stop showing the scrub target. Releasing it before the engine
     // had landed made the timer snap back to the pre-scrub position for a frame
@@ -2168,7 +2195,36 @@ export function usePlaybackController({
     setScrubTargetMs(null);
     scrubEndingRef.current = false;
     addLog("debug", "Local SID scrub ended", { toSeconds: positionMs / 1000 });
-  }, [playedClockRef, setPlayedMs, trackStartedAtRef]);
+  }, [playedClockRef, setPlayedMs, trackStartedAtRef, rescheduleAutoAdvance]);
+
+  /**
+   * Jump to a fraction of the tune (tapping/dragging the progress bar).
+   *
+   * Coalesced through the same one-in-flight path as a scrub, because dragging
+   * emits a position per pointermove and seeking backwards re-renders the tune
+   * from the start — issuing one seek per move would queue work far faster than
+   * it completes.
+   */
+  const seekToFraction = useCallback(
+    (fraction: number, durationMs?: number) => {
+      const controller = localSidPlaybackRef.current;
+      if (!controller || !durationMs) return;
+      const target = Math.max(0, Math.min(durationMs, fraction * durationMs));
+      scrubDurationMsRef.current = durationMs;
+      scrubTargetMsRef.current = target;
+      setScrubTargetMs(target);
+      if (scrubTimerRef.current === null) {
+        scrubTimerRef.current = window.setInterval(() => void runScrubSeek(), SCRUB_SEEK_INTERVAL_MS);
+      }
+      // Land shortly after the finger stops moving; another move restarts it.
+      if (dragSettleRef.current !== null) window.clearTimeout(dragSettleRef.current);
+      dragSettleRef.current = window.setTimeout(() => {
+        dragSettleRef.current = null;
+        void endScrub();
+      }, DRAG_SETTLE_MS);
+    },
+    [runScrubSeek, endScrub],
+  );
 
   const handleSeekBy = useCallback(
     async (deltaSeconds: number) => {
@@ -2193,15 +2249,17 @@ export function usePlaybackController({
       trackStartedAtRef.current = now - positionMs;
       playedClockRef.current.hydrate(positionMs, isPausedRef.current ? null : now);
       setPlayedMs(positionMs);
+      rescheduleAutoAdvance(positionMs);
       addLog("debug", "Local SID seek", { deltaSeconds, fromSeconds, toSeconds: positionMs / 1000 });
     },
-    [playedClockRef, setPlayedMs, trackStartedAtRef],
+    [playedClockRef, setPlayedMs, trackStartedAtRef, rescheduleAutoAdvance],
   );
 
   return {
     beginScrub,
     scrubBy,
     endScrub,
+    seekToFraction,
     scrubTargetMs,
     playItem,
     startPlaylist,

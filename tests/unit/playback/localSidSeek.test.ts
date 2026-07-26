@@ -164,3 +164,26 @@ describe("scrub feedback contract", () => {
     expect(hook).toContain("SCRUB_SEEK_INTERVAL_MS");
   });
 });
+
+/**
+ * The auto-advance deadline is computed once, at launch, as "now + the tune's
+ * remaining duration". Seeking rebases the playback clocks but used to leave
+ * that deadline untouched, so a tune scrubbed forward kept playing long past
+ * its end: jumping to 95% of a 4:28 tune left it still playing at 4:57 and
+ * counting, because the original schedule had not expired. Every seek path has
+ * to move the deadline with the position.
+ */
+describe("auto-advance follows a seek", () => {
+  it("reschedules from every seek path", async () => {
+    const { readFileSync } = await import("node:fs");
+    const hook = readFileSync("src/pages/playFiles/hooks/usePlaybackController.ts", "utf8");
+    expect(hook).toContain("const rescheduleAutoAdvance = useCallback(");
+    // Relative seek (hold), scrub release, and the two that drive them.
+    const calls = hook.match(/rescheduleAutoAdvance\(positionMs\)/g) ?? [];
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    // Deadline is derived from the tune's duration and the NEW position.
+    expect(hook).toContain("const dueAtMs = Date.now() + Math.max(0, durationMs - positionMs)");
+    // A rescheduled track must be allowed to fire again.
+    expect(hook).toContain("guard.autoFired = false");
+  });
+});
