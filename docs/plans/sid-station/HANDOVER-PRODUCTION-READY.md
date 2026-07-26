@@ -8,10 +8,10 @@ that means every gate below green with evidence, not just the audio loop.
 
 Two working trees matter, side by side:
 
-| repo | role |
-| --- | --- |
-| `/home/chris/dev/c64/c64commander-sid-radio` | the app. Branch `feat/sid-radio`, PR **#320**, tip `a96ccc7e` (pushed). |
-| `/home/chris/dev/c64/sidflow` | builds `@sidflow/libsidplayfp-wasm`, vendored into the app at `public/wasm/libsidplayfp/`. Branch `fix/libsidplayfp-wasm-pin-and-residfp-audit` (pushed). |
+| repo                                         | role                                                                                                                                                      |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/home/chris/dev/c64/c64commander-sid-radio` | the app. Branch `feat/sid-radio`, PR **#320**, tip `a96ccc7e` (pushed).                                                                                   |
+| `/home/chris/dev/c64/sidflow`                | builds `@sidflow/libsidplayfp-wasm`, vendored into the app at `public/wasm/libsidplayfp/`. Branch `fix/libsidplayfp-wasm-pin-and-residfp-audit` (pushed). |
 
 ---
 
@@ -25,11 +25,11 @@ quieter**, and **no envelope correlation** (0.03–0.09).
 
 A three-way comparison isolates the fault to **our WASM build**, not the app and not libsidplayfp:
 
-| engine (same tune, same file) | DC offset | peak | envelope corr. vs real C64 |
-| --- | --- | --- | --- |
-| native `sidplayfp` (reSIDfp, installed at `/usr/bin/sidplayfp`) | +0.0017 | 0.379 | **0.483** |
-| **vendored sidflow WASM** | **+0.1742** | **0.715** | **0.066** |
-| real C64 Ultimate | −0.0002 | 0.396 | reference |
+| engine (same tune, same file)                                   | DC offset   | peak      | envelope corr. vs real C64 |
+| --------------------------------------------------------------- | ----------- | --------- | -------------------------- |
+| native `sidplayfp` (reSIDfp, installed at `/usr/bin/sidplayfp`) | +0.0017     | 0.379     | **0.483**                  |
+| **vendored sidflow WASM**                                       | **+0.1742** | **0.715** | **0.066**                  |
+| real C64 Ultimate                                               | −0.0002     | 0.396     | reference                  |
 
 The WASM does not track native `sidplayfp` either (**0.065**). Ruled out already — do not redo:
 chunked vs single-call rendering (byte-identical), the app's scheduler, missing C64 ROMs (supplying
@@ -179,19 +179,19 @@ rejects a websocket handshake carrying an `Origin` header (403).
 
 **Third reference — native `sidplayfp`** (`/usr/bin/sidplayfp`, reSIDfp, with ROMs):
 `sidplayfp -f48000 -s -t12 -wout corpus/Tune.sid`. This is the "what libsidplayfp should sound like"
-control that separates *our* bugs from real hardware-vs-emulation differences.
+control that separates _our_ bugs from real hardware-vs-emulation differences.
 
 **Analysis.** AC-couple both sides (2nd-order high-pass at 30 Hz — the coupling every real speaker
 path applies; without it sub-audible drift dominates every metric), resample the C64 side onto
 48 kHz, then compute per tune:
 
-| metric | what it catches |
-| --- | --- |
-| DC offset | output-stage / centring bugs |
-| AC RMS, peak | level and headroom |
+| metric                                              | what it catches                                                                        |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| DC offset                                           | output-stage / centring bugs                                                           |
+| AC RMS, peak                                        | level and headroom                                                                     |
 | envelope cross-correlation after a ±20 s lag search | **whether it is the same music at the same time** — the metric that is currently 0.066 |
-| LTAS rms dB difference, spectral centroid ratio | timbre / filter character |
-| onset rate, dominant-pitch track | tempo and pitch errors |
+| LTAS rms dB difference, spectral centroid ratio     | timbre / filter character                                                              |
+| onset rate, dominant-pitch track                    | tempo and pitch errors                                                                 |
 
 **Sanity controls you must keep running** — a loop that lies to you is worse than none:
 
@@ -199,7 +199,7 @@ path applies; without it sub-audible drift dominates every metric), resample the
   harness before trusting any other number.
 - native `sidplayfp` vs C64 must stay around **0.48**. That is your realistic ceiling for
   emulation-vs-hardware; it is the target the device must approach.
-- a tune must correlate better with *itself* than with a different tune (build the full cross-matrix
+- a tune must correlate better with _itself_ than with a different tune (build the full cross-matrix
   occasionally; LTAS alone is **not** discriminative — all SID music has a similar broad spectrum).
 
 **Corpus.** Reuse the 14 header-selected tunes in `AUDIO-FIDELITY-TEST.md` §1 and keep them fixed so
@@ -259,8 +259,8 @@ at the user's request, from the machine that user has connected to, and keeps th
 user's own phone.
 
 **This carries an explicit user obligation that must be stated in the product, not just in code
-comments:** *the user must only connect the app to devices they own or have been granted permission
-to use.* ROM images are copyrighted; reading them from a machine the user is not authorised to use is
+comments:** _the user must only connect the app to devices they own or have been granted permission
+to use._ ROM images are copyrighted; reading them from a machine the user is not authorised to use is
 not sanctioned by this feature. Surface this plainly:
 
 - in the Settings entry that triggers the fetch (short, unambiguous wording — not buried in a tooltip);
@@ -268,18 +268,18 @@ not sanctioned by this feature. Surface this plainly:
   `scripts/build-manuals.mjs`);
 - in the README section covering on-device playback.
 
-Wording along these lines: *"On-device playback uses the C64 ROM images from the Ultimate you are
+Wording along these lines: _"On-device playback uses the C64 ROM images from the Ultimate you are
 connected to. Only connect C64 Commander to devices you own or have been given permission to use.
-ROM images stay on this phone and are never shared or uploaded."*
+ROM images stay on this phone and are never shared or uploaded."_
 
-**Already proven on the rig this session** — `GET /v1/machine:readmem` is documented as *"performs a
-**DMA read** action on the cartridge bus"* (`u2plus-open-api-spec.yaml`), and the dumps verified
+**Already proven on the rig this session** — `GET /v1/machine:readmem` is documented as _"performs a
+**DMA read** action on the cartridge bus"_ (`u2plus-open-api-spec.yaml`), and the dumps verified
 byte-perfect against the canonical images:
 
-| ROM | request | size | MD5 | identification |
-| --- | --- | --- | --- | --- |
-| KERNAL | `machine:readmem?address=e000&length=8192` | 8 KiB | `39065497630802346bce17963f13c092` | ✅ genuine KERNAL rev 3 (`901227-03`) |
-| BASIC | `machine:readmem?address=a000&length=8192` | 8 KiB | `57af4ae21d4b705c2991d98ed5c1f7b8` | ✅ genuine BASIC V2 (`901226-01`) |
+| ROM     | request                                    | size  | MD5                                | identification                                            |
+| ------- | ------------------------------------------ | ----- | ---------------------------------- | --------------------------------------------------------- |
+| KERNAL  | `machine:readmem?address=e000&length=8192` | 8 KiB | `39065497630802346bce17963f13c092` | ✅ genuine KERNAL rev 3 (`901227-03`)                     |
+| BASIC   | `machine:readmem?address=a000&length=8192` | 8 KiB | `57af4ae21d4b705c2991d98ed5c1f7b8` | ✅ genuine BASIC V2 (`901226-01`)                         |
 | CHARGEN | `machine:readmem?address=d000&length=4096` | 4 KiB | `72c3ce07501ea0cac7d1f7e2834dad7c` | ❌ **not** chargen — `$D000` is I/O under default banking |
 
 **Chargen** needs the character ROM banked in (`$01` bit 2 `CHAREN = 0`): read `$01` via `readmem`,
@@ -309,7 +309,7 @@ verified-complete ROM set is wanted.
   `rom-on-c64` fallback for RSID tunes can be lifted, so RSID plays on-device too. Keep the fallback
   for the no-ROMs case.
 - **Re-measure.** Adding ROMs changes the audio path — rerun the §1.4 loop with and without ROMs and
-  record both. Note that in the current (broken) WASM, supplying real ROMs made output *worse*
+  record both. Note that in the current (broken) WASM, supplying real ROMs made output _worse_
   (AC RMS jumped from 0.07 to 0.51, correlation 0.046), so **only evaluate the ROM path after §1.1
   and §1.2 are fixed** — otherwise you will be measuring the wrapper bug.
 - **Licence note:** update `THIRD_PARTY_NOTICES.md` / docs to state that C64 ROM images are **not**
@@ -320,7 +320,7 @@ verified-complete ROM set is wanted.
 ### 1.8 If it turns out to be a dead end
 
 It very probably is not — native `sidplayfp` already proves the library reproduces the hardware well,
-and §1.1 is a concrete confirmed defect in *our* wrapper. But if, after fixing §1.1 and §1.2, the
+and §1.1 is a concrete confirmed defect in _our_ wrapper. But if, after fixing §1.1 and §1.2, the
 device still cannot reach the exit criteria, escalate in this order and **write up the evidence
 before switching**:
 
@@ -365,19 +365,19 @@ a rebuild that never happened proves nothing.
 (spec §9.2); the host test `tests/unit/scripts/assertSidRadioPerf.test.ts` asserts every recorded
 measurement satisfies its own budget.
 
-| metric | budget | state |
-| --- | --- | --- |
-| `coldLoadMs` | < 1500 | ✅ 145 (M0) |
-| `engineThreadIsMain` | false | ✅ (M0) |
-| `memoryEstimateBytes` | < 8 MiB | ✅ 5.0 MB (M0) |
-| `renderMsPerSec` (p99) | < 250 | ◑ 69 measured — **re-measure after the engine fix** |
-| `audioUnderruns` | 0 | ✅ 0 over 110 s |
-| `engineSwitchMs` (p99) | < 1500 | ❌ not measured on device |
-| `firstCandidateMs` (p99) | < 300 | ❌ |
-| `lastRefillMs` (p99) | < 150 | ❌ |
-| `refillMainThreadMaxMs` | < 16 | ❌ |
-| `skipToLaunchMs` (p99) | < 400 | ❌ |
-| `tracksAutoAdvanced` | ≥ 30, zero gaps | ❌ |
+| metric                   | budget          | state                                               |
+| ------------------------ | --------------- | --------------------------------------------------- |
+| `coldLoadMs`             | < 1500          | ✅ 145 (M0)                                         |
+| `engineThreadIsMain`     | false           | ✅ (M0)                                             |
+| `memoryEstimateBytes`    | < 8 MiB         | ✅ 5.0 MB (M0)                                      |
+| `renderMsPerSec` (p99)   | < 250           | ◑ 69 measured — **re-measure after the engine fix** |
+| `audioUnderruns`         | 0               | ✅ 0 over 110 s                                     |
+| `engineSwitchMs` (p99)   | < 1500          | ❌ not measured on device                           |
+| `firstCandidateMs` (p99) | < 300           | ❌                                                  |
+| `lastRefillMs` (p99)     | < 150           | ❌                                                  |
+| `refillMainThreadMaxMs`  | < 16            | ❌                                                  |
+| `skipToLaunchMs` (p99)   | < 400           | ❌                                                  |
+| `tracksAutoAdvanced`     | ≥ 30, zero gaps | ❌                                                  |
 
 Also record on-device **CPU % (p95)** and **battery** over the soak (§12.6).
 
@@ -418,7 +418,7 @@ Also record on-device **CPU % (p95)** and **battery** over the soak (§12.6).
 - README SID Radio section current.
 - **Decide the rollout position for the on-device engine.** Flags currently default **on**
   (`DEFAULT_SID_RADIO_ENABLED` / `DEFAULT_SID_RANKING_ENABLED` / `DEFAULT_LOCAL_ENGINE_ENABLED`) with
-  `DEFAULT_PLAYBACK_ENGINE = "c64"`, so the engine is *offered* but the C64 is the default. **Until
+  `DEFAULT_PLAYBACK_ENGINE = "c64"`, so the engine is _offered_ but the C64 is the default. **Until
   Part 1 passes, it must not be presented as equivalent to the C64** — either keep it clearly
   labelled as approximate, or gate it off.
 - ROM story (§1.7): if ROM fetching ships, the manual, README and Settings must all say that
@@ -461,18 +461,18 @@ hand-maintained proxy for it was red.
 
 It is also already fixed on `main`: commit `600f3c25` ("stop the AGP↔Gradle guardrail failing on every
 Dependabot bump", 2026-07-25 01:26) replaced the table with a **major-version invariant**, landing
-*after* #322's last CI run at 23:52 on 2026-07-24. **#322 needs nothing but a rebase** (`@dependabot
+_after_ #322's last CI run at 23:52 on 2026-07-24. **#322 needs nothing but a rebase** (`@dependabot
 rebase`) — AGP major 9 vs wrapper major 9 now passes.
 
 ### 3.2 Why it keeps happening
 
 The guard has oscillated three times:
 
-| commit | what it did |
-| --- | --- |
-| `b444b375` | derived AGP/Gradle versions from the repo (no hardcoding) |
+| commit     | what it did                                                                                                    |
+| ---------- | -------------------------------------------------------------------------------------------------------------- |
+| `b444b375` | derived AGP/Gradle versions from the repo (no hardcoding)                                                      |
 | `2cd7b9bf` | **regressed** — "restore AGP↔wrapper lockstep guard via known-good pair matrix" reintroduced a hardcoded table |
-| `600f3c25` | fixed again — structural major-version invariant |
+| `600f3c25` | fixed again — structural major-version invariant                                                               |
 
 The recurring failure mode is the pattern, not the specific table: **a CI guard that must be
 hand-edited whenever a dependency legitimately changes will fail every routine Dependabot bump.** It
@@ -483,21 +483,21 @@ miss.
 
 1. **Never assert exact third-party version tuples in tests.** Assert only invariants that survive
    routine upgrades:
-   - a *structural* relationship (AGP major == Gradle wrapper major) — cheap and still catches the
+   - a _structural_ relationship (AGP major == Gradle wrapper major) — cheap and still catches the
      real hazard, a major AGP move without a coordinated wrapper bump; and
-   - a *configuration contract* (`.github/dependabot.yml` still ignores the Gradle wrapper so the
+   - a _configuration contract_ (`.github/dependabot.yml` still ignores the Gradle wrapper so the
      pairing stays deliberate).
-   Real AGP↔Gradle compatibility is proven by the Android build jobs, which already run on every PR.
-   Keep the current `600f3c25` shape; **do not "tighten" it back into a version list.**
+     Real AGP↔Gradle compatibility is proven by the Android build jobs, which already run on every PR.
+     Keep the current `600f3c25` shape; **do not "tighten" it back into a version list.**
 
 2. **Add a meta-guard so the regression cannot recur.** A test asserting that
    `dependabotContracts.test.ts` contains no hardcoded dependency-version literal (e.g. no
    `KNOWN_GOOD_*_PAIRS` map, no `\d+\.\d+\.\d+` string literal outside a regex). Reference
-   `2cd7b9bf` in its failure message so the next person understands *why* the constraint exists.
+   `2cd7b9bf` in its failure message so the next person understands _why_ the constraint exists.
 
 3. **Auto-rebase stale Dependabot PRs.** #322 failed purely because it was behind `main`. Either
    enable Dependabot's rebase behaviour, or add a scheduled workflow that comments `@dependabot
-   rebase` on open Dependabot PRs whose base has moved, so a PR is never judged against a guard that
+rebase` on open Dependabot PRs whose base has moved, so a PR is never judged against a guard that
    has since been fixed.
 
 4. **Make guard failures self-servicing.** Any remaining guard must say, in its message, exactly which

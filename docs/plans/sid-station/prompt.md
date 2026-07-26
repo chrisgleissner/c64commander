@@ -104,9 +104,10 @@ LOOP:
 ```
 
 **Convergence rules**
+
 - **One task at a time, in order.** The Implementation Order is a total order; respect it.
 - **Never skip a gate to reach a later one.** A red gate blocks everything downstream of it.
-- **If blocked**, do not stall: record the blocker in WORKLOG.md, then take the *smallest*
+- **If blocked**, do not stall: record the blocker in WORKLOG.md, then take the _smallest_
   step that removes it (a spike, a fixture, a narrower test). The M0 worker/asset harness
   exists precisely to remove the biggest unknown early.
 - **Measured-then-pinned perf.** On the first M2 HIL run, MEASURE the budgets, then PIN
@@ -138,80 +139,87 @@ Never delete or rewrite prior entries; corrections are new entries.
 Cut branch **`feat/sid-radio`** from `main`. Each milestone is test-first (spec §7) and is
 "done" only when its **exit gate** (spec §0.3) is green. SID Radio (M-series) is the
 primary line; the Local engine (Track B, LE-series) is independent and may proceed in
-parallel *after* M0 lands the shared worker/asset harness, but must not delay the M-series.
+parallel _after_ M0 lands the shared worker/asset harness, but must not delay the M-series.
 
-### Phase M0 — Data plumbing + worker/asset harness  → gates G1, G2, G3(partial)
+### Phase M0 — Data plumbing + worker/asset harness → gates G1, G2, G3(partial)
+
 0.1 `scripts/fetch-sidcorr.mjs` + committed `SIDCORR_BUNDLE_SHA256`; wire into build &
-    `cap copy`; git-ignore the asset; `THIRD_PARTY_NOTICES.md` attribution.
+`cap copy`; git-ignore the asset; `THIRD_PARTY_NOTICES.md` attribution.
 0.2 Fixtures: `tests/fixtures/sidcorr/buildTinyFixture.ts` (synthetic valid bundle) +
-    opt-in `SIDCORR_REAL=1` golden manifest check.
+opt-in `SIDCORR_REAL=1` golden manifest check.
 0.3 `sidcorrTiny.ts` (parser + header validation + cold→hot transform, spec §2.6) — TDD.
 0.4 `md5PathIndex.ts` from `Songlengths.md5`; rebuild on `reloadHvscSonglengthsOnConfigChange`
-    finalize hook; deterministic tie-break (D14) — TDD.
+finalize hook; deterministic tie-break (D14) — TDD.
 0.5 **Worker/asset harness spike**: minimal `sidRadio.worker.ts` that fetches + parses the
-    bundle and posts `{type:"ready", stats}` — prove it **builds under vite and loads in
-    the Capacitor WebView on Android** (and web/iOS). Off-main-thread guard (§8.6).
+bundle and posts `{type:"ready", stats}` — prove it **builds under vite and loads in
+the Capacitor WebView on Android** (and web/iOS). Off-main-thread guard (§8.6).
 **Exit:** parser round-trips the real bundle; `md5_48 → virtualPath` resolves `Commando.sid`
 on device; worker posts `ready` from a background thread (`engineThreadIsMain=false`).
 
-### Phase M1 — Ambient ranking + Liked Tunes  → gate G4
+### Phase M1 — Ambient ranking + Liked Tunes → gate G4
+
 1.1 `rankingStore.ts` (IndexedDB, full-MD5 key, broadcast) — TDD.
 1.2 ♥/✕ on the Now Playing card (`now-playing-like`/`now-playing-notforme`); "Clear my
-    rankings" in Settings.
+rankings" in Settings.
 1.3 **Liked Tunes** playable list (`liked-tunes`) via `likedTunes.ts` → `startPlaylist`
-    (normal Shuffle/Repeat apply); un-like; grey unresolved tunes (spec §5.5) — TDD.
+(normal Shuffle/Repeat apply); un-like; grey unresolved tunes (spec §5.5) — TDD.
 **Exit:** likes persist across restart; Liked Tunes plays as a finite list; HIL soak shows
 zero Remote-Input starvation while rapidly rating.
 
-### Phase M2 — Song Radio  → gates G5, G6, G9(partial), G11
+### Phase M2 — Song Radio → gates G5, G6, G9(partial), G11
+
 2.1 `stationEngine.ts` in the worker: reverse index, seed resolution, style-mask admission,
-    exclude/dedupe, scoring, `notForMe` down-weight (future-refill, D8), empty fallbacks,
-    and the `shuffleSeed` permutation — TDD incl. the **determinism test (G11)**.
+exclude/dedupe, scoring, `notForMe` down-weight (future-refill, D8), empty fallbacks,
+and the `shuffleSeed` permutation — TDD incl. the **determinism test (G11)**.
 2.2 `stationQueueProvider.ts` (lookahead ~10 refill; skip-a-candidate when path unresolved).
 2.3 `useSidRadio.ts`; "Start Radio" from a tune; `sid-radio-chip` + Stop + "why this tune";
-    **transport Shuffle/Repeat disabled while a station drives** (principle 9).
+**transport Shuffle/Repeat disabled while a station drives** (principle 9).
 2.4 `sidRadioStats.ts` DOM blob; worker contract test (§8.3).
 2.5 `tools/hil/sid_radio_hil.py` + `ci/perf/sid-radio-perf-thresholds.json` — **MEASURE
-    then PIN** the §9.2 budgets on Pixel 4 → C64U; `--shuffle-replay` proves determinism +
-    controls-disabled.
+then PIN** the §9.2 budgets on Pixel 4 → C64U; `--shuffle-replay` proves determinism +
+controls-disabled.
 **Exit:** ≥ 30-track continuity, ✕ skip < one track, refill main-thread < 16 ms, all on HW.
 
-### Phase M3 — Style & Taste Radio (incl. Style × Likes composition)  → gate G7
+### Phase M3 — Style & Taste Radio (incl. Style × Likes composition) → gate G7
+
 3.1 Extend `stationEngine`: diversity-sampled Taste aggregation (D12); **composed style ×
-    Likes admission (D10)**; Like-boosted `seedWeight` — TDD.
+Likes admission (D10)**; Like-boosted `seedWeight` — TDD.
 3.2 Launcher `AppSheet`: 9 style tiles, `sid-radio-likes-toggle` ("based on my likes"),
-    Taste unlock at threshold (D1), Surprise.
+Taste unlock at threshold (D1), Surprise.
 **Exit:** style stations play on-vibe; "Fast-Paced from my Likes" composes correctly; Taste
 unlocks and reflects likes.
 
-### Phase M4 — Persistence & polish → GA  → gates G8, G9(full), G10, G12
+### Phase M4 — Persistence & polish → GA → gates G8, G9(full), G10, G12
+
 4.1 Persist the station descriptor `(seedKind, seedLabel, styleBit?, shuffleSeed,
     rankingSnapshotId, excludeSet)` → **exact recompute-on-restart** (D15); resume the chip.
 4.2 Empty/degraded states; Settings two-version status line (§2.5, §6.4); optional Home
-    quick-action (D3).
+quick-action (D3).
 4.3 HVSC-update continuity: `--hvsc-update` HIL soak (G12); full §9.2 budgets green.
 4.4 Manual chapter (new `###` under **In Depth**, beside Live View); patch coverage ≥ 91 %.
 **Exit:** every DoD row G1–G12 green → flags default **on**; PR green.
 
-### Track B — Local Playback Engine (parallel, independent)  → gates L1–L4
+### Track B — Local Playback Engine (parallel, independent) → gates L1–L4
+
 LE0 Licence & feasibility spike (dist/LICENSE + residfp audit; render one PSID to PCM on
-    Callback 8020 / SailfishOS) → **L1**.
+Callback 8020 / SailfishOS) → **L1**.
 LE1 `localSidEngine.ts` + `localSid.worker.ts` + chunked Web Audio sink; gapless play →
-    **L2** (zero underruns, `renderMsPerSec` recorded).
+**L2** (zero underruns, `renderMsPerSec` recorded).
 LE2 `c64u_playback_engine` setting + Play-page segmented control
-    (`playback-engine-c64`/`playback-engine-local`) + route selection in `playItem` +
-    ROM-less fallback + clean engine-switch → **L3**.
+(`playback-engine-c64`/`playback-engine-local`) + route selection in `playItem` +
+ROM-less fallback + clean engine-switch → **L3**.
 LE3 On-device perf/battery gate; **SID Radio end-to-end on the Local engine with NO C64
-    powered on** (`sid_radio_hil.py --engine local`); manual chapter → **L4**.
+powered on** (`sid_radio_hil.py --engine local`); manual chapter → **L4**.
 
 ---
 
 ## WHAT ALREADY EXISTS — DO NOT RE-CREATE (verify in code; extend only)
 
 Per spec Appendix A (all verified 2026-07-24):
+
 - **Playback:** `usePlaybackController.ts` (`startPlaylist`/`playItem`/auto-advance guard),
   `usePlaylistManager.ts`, `PlayFilesPage.tsx`, `playbackRouter.ts` (`executePlayPlan` —
-  the Local engine routes *around* this single point).
+  the Local engine routes _around_ this single point).
 - **Model:** `types.ts` (`PlaylistItem`), `fileTypes.ts` (`PlayFileCategory` incl. `sid`).
 - **HVSC:** `hvscSongLengthService.ts` (`Songlengths.md5`,
   `reloadHvscSonglengthsOnConfigChange` — the `md5PathIndex` rebuild hook),
@@ -224,7 +232,7 @@ Per spec Appendix A (all verified 2026-07-24):
   `audioNativeSink.ts` (native audio sink — the §12 escape hatch).
 - **WASM:** `@sidflow/libsidplayfp-wasm` (`SidAudioEngine`) + `sidflow-web`
   `worklet-player.ts` / `sid-renderer.worklet.ts` reference integration.
-- **No Web Worker precedent** exists (only the PWA *service* worker) — M0 establishes it.
+- **No Web Worker precedent** exists (only the PWA _service_ worker) — M0 establishes it.
 
 ---
 
@@ -273,7 +281,7 @@ Until all six hold, return to the CONVERGENCE LOOP. Partial completion is not co
   `usePlaybackController` / `executePlayPlan` (Prime Directive 1).
 - Parse/BFS/WASM run on the main thread, or `engineThreadIsMain` is ever `true`, or Remote
   Input is starved during a station soak.
-- A station exposes a shuffle control, or transport Shuffle/Repeat are *not* disabled while
+- A station exposes a shuffle control, or transport Shuffle/Repeat are _not_ disabled while
   a station drives the queue, or they are disabled for a finite Liked-Tunes list.
 - The engine is non-deterministic for a fixed `(seed, rankingSnapshot, shuffleSeed)`
   (`--shuffle-replay` differs run-to-run).

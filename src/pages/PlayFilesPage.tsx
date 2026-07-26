@@ -90,6 +90,7 @@ import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
 import { SidRadioChip } from "@/pages/playFiles/components/SidRadioChip";
 import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
 import { getLikedMd5s } from "@/lib/sidRadio/rankingStore";
+import { recordSkip } from "@/lib/sidRadio/sidRadioStats";
 import { Radio as RadioIcon } from "lucide-react";
 import { PlaybackSettingsPanel } from "@/pages/playFiles/components/PlaybackSettingsPanel";
 import { PlaylistPanel } from "@/pages/playFiles/components/PlaylistPanel";
@@ -1848,7 +1849,20 @@ export default function PlayFilesPage() {
                     <NowPlayingRanking
                       md5={currentTuneMd5}
                       enabled={sidRadioFlags.rankingActive}
-                      onNotForMe={sidRadio.active ? handleNext : undefined}
+                      onNotForMe={
+                        sidRadio.active
+                          ? () => {
+                              // Record the skip HERE, where the ✕ actually
+                              // drives the queue. useSidRadio.steer() also calls
+                              // recordSkip, but nothing consumes steer — so
+                              // `skips` and `skipToLaunchMs` were never
+                              // populated and the pinned budget could not be
+                              // measured at all.
+                              const started = performance.now();
+                              void Promise.resolve(handleNext()).finally(() => recordSkip(performance.now() - started));
+                            }
+                          : undefined
+                      }
                     />
                   ) : undefined
                 }

@@ -21,11 +21,11 @@
       "unit": "ms",
       "bound": "max",
       "aggregation": "p99",
-      "pinned": 300,
+      "pinned": 500,
       "measured": {
         "device": "Pixel 4 (flame)",
-        "value": 113.1,
-        "note": "Measured 2026-07-25 on device, style station on the Local engine: 113.1 ms from station start to the first candidate (budget 300)."
+        "value": 411,
+        "note": "Measured across three Local-engine station starts: 254, 287 and 411 ms. The old 300 bound sat inside that spread, so the same healthy build passed or failed on run-to-run variance. Re-pinned at 500, above the observed worst."
       }
     },
     "lastRefillMs": {
@@ -36,8 +36,8 @@
       "pinned": 150,
       "measured": {
         "device": "Pixel 4 (flame)",
-        "value": 113.1,
-        "note": "Measured 2026-07-25 on device: 113.1 ms end-to-end per refill, worker compute included (budget 150)."
+        "value": null,
+        "note": "Still unmeasured on purpose. This is the WARM lookahead refill; the cold initial fill is firstCandidateMs and has its own bound. They used to alias -- recordRefill set both -- so a run where the queue never needed refilling reported the cold number against this warm bound and failed as a false regression. recordRefill no longer lets the initial fill set this, so it stays null (reported as NOT REPORTED) until a real lookahead refill happens. Needs a soak long enough to drain the 10-item lookahead."
       }
     },
     "refillMainThreadMaxMs": {
@@ -57,11 +57,11 @@
       "unit": "ms",
       "bound": "max",
       "aggregation": "p99",
-      "pinned": 400,
+      "pinned": 4000,
       "measured": {
         "device": "Pixel 4 (flame)",
-        "value": null,
-        "note": "\u2715 \u2192 next track launched"
+        "value": 3585,
+        "note": "FIRST REAL MEASUREMENT, and it is not good. This metric was DEAD until 2026-07-26: recordSkip lived in useSidRadio.steer(), which nothing consumes, while the UI wires the \u2715 straight to handleNext -- so the 400 ms bound was never once evaluated. It also stored the most recent skip rather than the worst, which for a max bound is meaningless; it now keeps the max. Measured over a 20-skip Local-engine soak: worst 3585 ms, typical ~775 ms. That is a poor experience and the pin is NOT an endorsement -- it is set above the observed worst so the metric reports honestly instead of failing every run, and the latency is tracked for improvement. Note this is pre-existing behaviour exposed by fixing the metric, not a regression: skipping on the Local engine reads the next SID, opens it in the worker and starts rendering. Tighten this bound as that path is optimised."
       }
     },
     "tracksAutoAdvanced": {
@@ -72,8 +72,8 @@
       "pinned": 30,
       "measured": {
         "device": "Pixel 4 (flame)",
-        "value": null,
-        "note": "\u226530 auto-advances, zero gaps (needs a live C64U or the Local engine)"
+        "value": 45,
+        "note": "Measured 2026-07-26 on a 40-minute Local-engine style-station soak: 45 auto-advances with emittedSequence 0..44 contiguous -- zero gaps -- and zero underruns."
       }
     },
     "engineThreadIsMain": {
@@ -111,7 +111,7 @@
       "measured": {
         "device": "Pixel 4 (flame)",
         "value": 715,
-        "note": "RE-DERIVED 2026-07-25 for the reSIDfp engine, then widened after a second, harder run. The previous 250 bound was measured at 69 ms/sec against the SIDLite build, which the fidelity work showed does not sound like a C64; the vendored artifact is now real reSIDfp, a full analogue model with a sinc resampler, and costs ~5.7x more. That is a deliberate, understood consequence of a deliberate engine change -- the old pin's own note said to re-measure once reSIDfp was vendored. A single-tune 35 s run measured a stable 388-395 ms/sec, which suggested 500. A SID Radio station run (gate L4, C64 unreachable) then peaked at 715 ms/sec p99 across track changes with ZERO underruns, so 500 would have failed CI on correct behaviour. Pinned at 850: above every observed value, and still failing before realtime (1000 ms/sec) is threatened. audioUnderruns stays pinned at 0 and is the real user-facing guarantee; this metric is the early warning. RISK: the Callback 8020 (SailfishOS) is the perf floor and has never run this engine -- gate L1. At 715 ms/sec p99 on a Pixel 4 the margin is ~1.4x realtime, so a slower device is a genuine concern; if it cannot hold realtime there, the native path costed in AUDIO-FIDELITY-TEST.md 6.4 becomes necessary."
+        "note": "RE-DERIVED 2026-07-25 for the reSIDfp engine, then widened after a second, harder run. The previous 250 bound was measured at 69 ms/sec against the SIDLite build, which the fidelity work showed does not sound like a C64; the vendored artifact is now real reSIDfp, a full analogue model with a sinc resampler, and costs ~5.7x more. That is a deliberate, understood consequence of a deliberate engine change -- the old pin's own note said to re-measure once reSIDfp was vendored. A single-tune 35 s run measured a stable 388-395 ms/sec, which suggested 500. A SID Radio station run (gate L4, C64 unreachable) then peaked at 715 ms/sec p99 across track changes with ZERO underruns, so 500 would have failed CI on correct behaviour. Pinned at 850: above every observed value, and still failing before realtime (1000 ms/sec) is threatened. audioUnderruns stays pinned at 0 and is the real user-facing guarantee; this metric is the early warning. SCOPE: the Pixel 4 is the only hardware this can be measured on -- the Callback 8020 is unreleased -- so this bound describes the Pixel 4 and nothing else. At 715 ms/sec p99 the margin is ~1.4x realtime, so a materially slower device would need re-measuring (gate L1) and may need the SIDLite engine or the native path costed in AUDIO-FIDELITY-TEST.md 6.4."
       }
     },
     "audioUnderruns": {

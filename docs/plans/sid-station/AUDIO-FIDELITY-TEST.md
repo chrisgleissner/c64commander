@@ -467,27 +467,22 @@ lower because it includes fixed per-chunk overhead that does not scale with the 
 > worth investigating in its own right. `renderMsPerSec` is the engine's own counter and is the
 > figure to trust.
 
-**The Callback 8020** is a **MediaTek Helio G81** — 2× Cortex-A75 @ 2.0 GHz + 6× A55 @ 1.8 GHz, 12 nm
-(`docs/plans/callback8020/sailfish-callback-8020-android-compatibility.md`). Against the Pixel 4's
-Cortex-A76 @ 2.84 GHz on 7 nm that is roughly **2–3× slower single-threaded** (older core, ~30 % lower
-IPC, 42 % lower clock).
+**The Callback 8020 has not been released**, so none of this can be measured on it. For reference it
+is specified as a **MediaTek Helio G81** — 2× Cortex-A75 @ 2.0 GHz + 6× A55 @ 1.8 GHz, 12 nm
+(`docs/plans/callback8020/sailfish-callback-8020-android-compatibility.md`) — roughly **2–3× slower
+single-threaded** than the Pixel 4's Cortex-A76 @ 2.84 GHz on 7 nm, which would put reSIDfp at
+~1240 ms/sec: past realtime.
 
-Scaling the corrected same-tune Pixel 4 figures by 2.5×:
+**Decision: every variant defaults to reSIDfp, including the keypad one.** The projection above is
+not a measurement, and acting on it would ship an audible quality regression on the hardware that
+exists in order to protect hardware that does not. Sounding like a C64 is the point of playing a SID,
+and the only device we can test runs reSIDfp with zero underruns. SIDLite is built, shipped and one
+tap away in Settings for anyone who needs it.
 
-| engine  | projected on Helio G81 | verdict                      |
-| ------- | ---------------------- | ---------------------------- |
-| reSIDfp | ~1240 ms/sec           | **past realtime** — stutters |
-| SIDLite | ~400 ms/sec            | ~2.5× headroom               |
-
-**Decision: the `c64u-remote` variant (the keypad build that targets the Callback 8020) defaults to
-SIDLite; every other variant defaults to reSIDfp.** Sounding like a C64 is the point of playing a SID,
-so accuracy wins wherever the device can afford it — but on the Callback 8020 reSIDfp would very
-likely stutter, and a stuttering accurate engine is worse than a clean approximation. The user can
-switch either way in Settings.
-
-This is a projection, not a measurement: **gate L1 still has to run on the real device.** If the
-Helio G81 turns out to hold reSIDfp, flip `default_sid_emulation_engine` in `variants/variants.yaml`.
-If even SIDLite struggles, the native path in §6.4 becomes necessary.
+The mechanism is in place: `variants.yaml` carries `default_sid_emulation_engine` per variant. When
+the 8020 ships, run gate L1 on it and set that key to `sidlite` if it cannot hold realtime. A unit
+test pins the current state so no variant can quietly start shipping the lesser engine without a
+measurement behind it.
 
 ### 6.4 Engine strategy — WASM vs a bundled native libsidplayfp
 

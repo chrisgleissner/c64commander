@@ -645,20 +645,26 @@ export const savePlaybackEngine = (engine: PlaybackEngine) => {
 export type SidEmulationEngine = "residfp" | "sidlite";
 
 /**
- * Per-variant, because this is a device-capability decision rather than a taste
- * one. Measured like-for-like on identical tunes:
+ * Variant-driven, so a device that genuinely cannot afford the accurate engine
+ * can default to the cheap one — but **every** variant currently defaults to
+ * reSIDfp, on purpose.
  *
- *   reSIDfp   4.3x realtime   (~39% of one core on a Pixel 4, 0 underruns)
- *   SIDLite  23.8x realtime   (~5.5x cheaper)
+ * Measured like-for-like on identical tunes: reSIDfp runs at 4.3x realtime
+ * (~39% of one core on a Pixel 4, zero underruns) and SIDLite at 23.8x. The
+ * cheap engine is tempting for the keypad variant, which targets the Commodore
+ * Callback 8020 — but that device is unreleased and cannot be measured.
+ * Defaulting it to SIDLite on a spec-sheet projection would ship an audible
+ * quality regression on the hardware that exists to protect hardware that does
+ * not. Sounding like a C64 is the point of playing a SID.
  *
- * The keypad variant targets the Callback 8020 (MediaTek Helio G81, Cortex-A75
- * @2.0 GHz), roughly 2-3x slower single-threaded than the Pixel 4's Snapdragon
- * 855 (Cortex-A76 @2.84 GHz). Scaling 39% by that puts reSIDfp at or past
- * realtime there, so that variant defaults to SIDLite. Either way the user can
- * switch in Settings.
+ * When the 8020 ships, measure it (gate L1) and flip
+ * `default_sid_emulation_engine` in variants.yaml if it cannot hold realtime.
  */
 export const DEFAULT_SID_EMULATION_ENGINE: SidEmulationEngine =
-  variant.runtime.defaultSidEmulationEngine === "sidlite" ? "sidlite" : "residfp";
+  // Compared as a plain string: the generated variant narrows this to whichever
+  // literal the ACTIVE variant declares, so a direct comparison against the other
+  // value is a type error whenever every variant happens to agree.
+  (variant.runtime.defaultSidEmulationEngine as string) === "sidlite" ? "sidlite" : "residfp";
 
 export const loadSidEmulationEngine = (): SidEmulationEngine => {
   if (typeof localStorage === "undefined") return DEFAULT_SID_EMULATION_ENGINE;

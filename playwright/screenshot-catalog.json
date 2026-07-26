@@ -1,8 +1,5 @@
 {
-  "disks": [
-    "drives",
-    "disks"
-  ],
+  "disks": ["drives", "disks"],
   "config": [
     "memory-roms",
     "turbo-boost",

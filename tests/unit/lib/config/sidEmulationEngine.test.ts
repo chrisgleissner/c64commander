@@ -4,16 +4,13 @@ import { DEFAULT_SID_EMULATION_ENGINE, loadSidEmulationEngine, saveSidEmulationE
 import { variant } from "@/generated/variant";
 
 /**
- * The engine default is a device-capability decision, backed by measurement, so
- * it is worth pinning rather than leaving to whoever edits variants.yaml next.
+ * Every variant defaults to the accurate engine, and that is worth pinning:
+ * the cheap one is a real, audible downgrade, so switching a variant's default
+ * to it must be a deliberate act backed by a measurement on that device.
  *
- * Measured like-for-like on identical tunes (docs/plans/sid-station/AUDIO-FIDELITY-TEST.md):
+ * Measured like-for-like (docs/plans/sid-station/AUDIO-FIDELITY-TEST.md §6.3a):
  *   reSIDfp   4.3x realtime  — ~39% of one core on a Pixel 4, 0 underruns
  *   SIDLite  23.8x realtime  — ~5.5x cheaper, but audibly not a C64
- *
- * The keypad variant targets the Callback 8020 (MediaTek Helio G81, Cortex-A75
- * @2.0 GHz), roughly 2-3x slower single-threaded than the Pixel 4's Snapdragon
- * 855, which puts reSIDfp at or past realtime there.
  */
 describe("SID emulation engine setting", () => {
   beforeEach(() => {
@@ -26,12 +23,13 @@ describe("SID emulation engine setting", () => {
     );
   });
 
-  it("defaults to the accurate engine unless the variant asks otherwise", () => {
-    // Sounding like a C64 is the point of playing a SID, so accuracy is the
-    // default everywhere the device can afford it.
-    if (variant.runtime.defaultSidEmulationEngine !== "sidlite") {
-      expect(DEFAULT_SID_EMULATION_ENGINE).toBe("residfp");
-    }
+  it("defaults to the accurate engine on every shipped variant", () => {
+    // No variant may quietly ship the lesser engine. The keypad variant targets
+    // the unreleased Callback 8020; defaulting it to SIDLite on a spec-sheet
+    // projection would degrade the hardware that exists to protect hardware that
+    // does not. Change this only alongside a measurement on the real device.
+    expect(variant.runtime.defaultSidEmulationEngine).toBe("residfp");
+    expect(DEFAULT_SID_EMULATION_ENGINE).toBe("residfp");
   });
 
   it("uses the default when nothing is stored", () => {

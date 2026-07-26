@@ -273,8 +273,8 @@ _(append entries below as tasks/gates complete — newest last)_
   set `localStorage c64u_sid_radio_enabled=1`, reloaded, and invoked `window.__sidRadioProbe()`.
 - Evidence (real device, `window.__sidRadioProbe()` return):
   `{"bundleLoadMs":131.4,"reverseIndexMs":13.6,"memoryEstimateBytes":5247024,
-  "fileCount":60571,"trackCount":87073,"edgeCount":261213,"styleCount":9,
-  "engineThreadIsMain":false}`
+"fileCount":60571,"trackCount":87073,"edgeCount":261213,"styleCount":9,
+"engineThreadIsMain":false}`
   → the real bundle **fetched + parsed + reverse-indexed inside the Capacitor WebView, OFF
   the main thread** (`engineThreadIsMain:false` = **G3**), counts match the manifest
   (**G1 Android**), device cold load+reverse ≈ **145 ms** (« <1500 ms §9.2 target) and
@@ -695,11 +695,13 @@ app-private, never bundled or exported, with the authorisation obligation stated
 manual variants and the README. **Hardware-verified**: both images read, validated and identified as
 KERNAL rev 3 / BASIC V2 with fingerprints matching the canonical dumps.
 
-**SID emulation is now selectable** (Settings → SID Radio), defaulting per variant. Measured
-like-for-like: reSIDfp 4.3× realtime, SIDLite 23.8× (5.5× cheaper isolated; 3.1× on device, same
-tune). The Callback 8020 is a Helio G81, ~2–3× slower single-threaded than the Pixel 4, which
-projects reSIDfp past realtime there — so `c64u-remote` defaults to SIDLite, everything else to
-reSIDfp. **A projection, not a measurement: gate L1 still settles it.**
+**SID emulation is now selectable** (Settings → SID Radio). Measured like-for-like: reSIDfp 4.3×
+realtime, SIDLite 23.8× (5.5× cheaper isolated; 3.1× on device, same tune). **Every variant defaults
+to reSIDfp**, including the keypad one: the Callback 8020 it targets is unreleased and cannot be
+measured, and defaulting it to the lesser engine on a spec-sheet projection would ship an audible
+regression on the hardware that exists to protect hardware that does not. `variants.yaml` carries a
+per-variant override so that flips with one line once gate L1 can actually be run; a unit test pins
+the current state so no variant starts shipping SIDLite without a measurement behind it.
 
 **Hold Previous/Next to rewind/fast-forward local playback** (new). Verified on device: hold-next
 0:09 → 0:35 with the track unchanged, hold-prev 0:35 → 0:02, tap still changes track. Required
@@ -719,6 +721,11 @@ keypad hazard where the click-suppression flag outlived its click.
 
 **Gate L4 PASSED** — SID Radio played end to end on the Local engine for 60 s with the C64 pointed at
 an unroutable address, zero underruns.
+
+**Gate L1 cannot be run and is deferred, not blocked.** It is defined against the Callback 8020,
+which has not been released. The available rig is a Pixel 4 and a C64 Ultimate; the engine is proven
+on the Pixel 4 (zero underruns, 715 ms/sec p99, ~1.4× realtime margin). L1 becomes runnable when the
+device ships.
 
 **Part 3 (Dependabot) landed on main** via PR #323: the AGP↔Gradle guardrail fix (which had been
 stranded on this branch, so rebasing #322 alone would never have worked), a meta-guard forbidding

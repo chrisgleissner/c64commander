@@ -220,6 +220,8 @@ interface UsePlaybackControllerProps {
     pause: (now: number) => void;
     resume: (now: number) => void;
     reset: () => void;
+    /** Move the clock to an absolute position; used by seek. */
+    hydrate: (baseMs: number, startedAt: number | null) => void;
     current: (now: number) => number;
   }>;
   trackStartedAtRef: MutableRefObject<number | null>;

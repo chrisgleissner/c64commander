@@ -101,7 +101,13 @@ export const recordRefill = (input: {
 }): void => {
   stats = {
     ...stats,
-    lastRefillMs: input.lastRefillMs,
+    // The initial station fill is the COLD path and is measured by
+    // `firstCandidateMs`, which has its own (looser) budget. Letting it also set
+    // `lastRefillMs` made the two alias: a run where no lookahead refill was
+    // needed reported the cold number against the warm 150 ms budget and failed
+    // as a false regression. `lastRefillMs` stays null until a real lookahead
+    // refill happens, which the HIL reports as NOT REPORTED rather than green.
+    lastRefillMs: input.firstCandidate ? stats.lastRefillMs : input.lastRefillMs,
     refillMainThreadMaxMs: Math.max(stats.refillMainThreadMaxMs, input.mainThreadMs),
     candidatesEmitted: stats.candidatesEmitted + input.emitted,
     queueLookahead: input.lookahead,
@@ -123,7 +129,14 @@ export const recordAutoAdvance = (trackOrdinal: number): void => {
 
 /** Record a ✕-skip and its launch latency (spec §9.2 `skipToLaunchMs`). */
 export const recordSkip = (skipToLaunchMs: number): void => {
-  stats = { ...stats, skips: stats.skips + 1, skipToLaunchMs };
+  // Keep the WORST skip, not the most recent one. The budget is a max bound, so
+  // reporting whichever skip happened last would let a 25-skip soak pass or fail
+  // on the luck of its final sample.
+  stats = {
+    ...stats,
+    skips: stats.skips + 1,
+    skipToLaunchMs: Math.max(stats.skipToLaunchMs ?? 0, skipToLaunchMs),
+  };
   writeToDom();
 };
 

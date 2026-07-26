@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -116,16 +116,28 @@ const useHoldToSeek = (deltaSeconds: number, onSeek?: (deltaSeconds: number) => 
     }
   }, []);
 
-  const start = useCallback(() => {
-    if (!onSeek) return;
-    seeked.current = false;
-    holdTimer.current = window.setTimeout(() => {
-      seeked.current = true;
-      addLog("debug", "Local SID hold-to-seek engaged", { deltaSeconds });
-      onSeek(deltaSeconds);
-      repeatTimer.current = window.setInterval(() => onSeek(deltaSeconds), SEEK_REPEAT_MS);
-    }, SEEK_HOLD_MS);
-  }, [deltaSeconds, onSeek, stop]);
+  const start = useCallback(
+    (event?: ReactPointerEvent<HTMLButtonElement>) => {
+      if (!onSeek) return;
+      seeked.current = false;
+      // Keep receiving pointer events even if the finger drifts off a small icon
+      // button, which would otherwise fire pointerleave and cancel the hold.
+      if (event?.pointerId !== undefined) {
+        try {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+          // Capture is best-effort; the hold still works without it.
+        }
+      }
+      holdTimer.current = window.setTimeout(() => {
+        seeked.current = true;
+        addLog("debug", "Local SID hold-to-seek engaged", { deltaSeconds });
+        onSeek(deltaSeconds);
+        repeatTimer.current = window.setInterval(() => onSeek(deltaSeconds), SEEK_REPEAT_MS);
+      }, SEEK_HOLD_MS);
+    },
+    [deltaSeconds, onSeek],
+  );
 
   // Never leave a timer running past unmount.
   useEffect(() => stop, [stop]);
@@ -242,6 +254,10 @@ export const PlaybackControlsCard = ({
             disabled={(!canTransport || !hasPrev) && !onSeek}
             id="playlist-prev"
             data-testid="playlist-prev"
+            // Without this, Android hands a long press to the scroller and fires
+            // pointercancel at roughly the hold threshold, so the gesture died on
+            // a real finger while working under synthetic events.
+            style={onSeek ? { touchAction: "none" } : undefined}
             aria-label="Previous"
             title={onSeek ? "Previous (hold to rewind)" : "Previous"}
           >
@@ -290,6 +306,10 @@ export const PlaybackControlsCard = ({
             disabled={(!canTransport || !hasNext) && !onSeek}
             id="playlist-next"
             data-testid="playlist-next"
+            // Without this, Android hands a long press to the scroller and fires
+            // pointercancel at roughly the hold threshold, so the gesture died on
+            // a real finger while working under synthetic events.
+            style={onSeek ? { touchAction: "none" } : undefined}
             aria-label="Next"
             title={onSeek ? "Next (hold to fast forward)" : "Next"}
           >

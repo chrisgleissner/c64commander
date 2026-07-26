@@ -82,19 +82,19 @@ same table is the HIL/CI dashboard (mirrors `docs/plans/live-view` §6 red/green
 | `c64u_sid_ranking_enabled`    | `sidRankingEnabled`    | The ♥/✕ affordance                                    | follows master         |
 | `c64u_local_playback_enabled` | `localPlaybackEnabled` | Gates _availability_ of the Local engine toggle (§12) | **off → on**           |
 
-> **Why the emulation default is per-variant.** Measured like-for-like, reSIDfp runs at 4.3× realtime
-> and SIDLite at 23.8× (`AUDIO-FIDELITY-TEST.md` §6.3a). The `c64u-remote` variant targets the
-> Callback 8020 (MediaTek Helio G81), ~2–3× slower single-threaded than a Pixel 4, which projects
-> reSIDfp past realtime there. Accuracy is the default wherever the device can afford it; a
-> stuttering accurate engine is worse than a clean approximation. **Projection, not measurement —
-> gate L1 settles it.**
+> **Why the emulation default is uniform (for now).** Measured like-for-like, reSIDfp runs at 4.3×
+> realtime and SIDLite at 23.8× (`AUDIO-FIDELITY-TEST.md` §6.3a). The keypad variant targets the
+> **unreleased** Callback 8020, which cannot be measured — so it defaults to reSIDfp like everything
+> else rather than shipping an audible downgrade on a spec-sheet projection. `variants.yaml` carries
+> `default_sid_emulation_engine` per variant, so that flips with one line once gate L1 can actually
+> be run.
 
 **User-choice setting** (not a flag — a persisted selection):
 
-| Storage key                 | Type                 | Values                   | Default                                                                                  |
-| --------------------------- | -------------------- | ------------------------ | ---------------------------------------------------------------------------------------- |
-| `c64u_playback_engine`      | `PlaybackEngine`     | `"c64" \| "local"`       | `"c64"`                                                                                  |
-| `c64u_sid_emulation_engine` | `SidEmulationEngine` | `"residfp" \| "sidlite"` | **per variant** — `residfp` everywhere except `c64u-remote`, which defaults to `sidlite` |
+| Storage key                 | Type                 | Values                   | Default                                                            |
+| --------------------------- | -------------------- | ------------------------ | ------------------------------------------------------------------ |
+| `c64u_playback_engine`      | `PlaybackEngine`     | `"c64" \| "local"`       | `"c64"`                                                            |
+| `c64u_sid_emulation_engine` | `SidEmulationEngine` | `"residfp" \| "sidlite"` | `"residfp"` on every variant (per-variant override exists, unused) |
 
 > The flag `localPlaybackEnabled` decides whether the engine _toggle is shown at all_;
 > `c64u_playback_engine` records the user's _choice_. Never conflate them.
