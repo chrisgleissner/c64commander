@@ -79,6 +79,23 @@ type EnsureUnmutedOptions = {
 const PLAYBACK_RECONCILE_MIN_DELAY_MS = 50;
 const PLAYBACK_RECONCILE_MAX_DELAY_MS = 250;
 const PENDING_VOLUME_WRITE_STALE_MS = 5000;
+/**
+ * How long an Audio Mixer write may take before we stop waiting on it.
+ *
+ * This is an **anti-hang** bound, not a latency target: without it a write that
+ * never settles would leave the mute/volume lane wedged forever. Exceeding it
+ * raises a user-facing "Mute toggle failed" error toast, so it has to sit well
+ * clear of how long a healthy-but-slow write actually takes -- a device on a
+ * congested Wi-Fi network, or a phone that just woke, is not a failure and the
+ * user should not be told it is.
+ *
+ * It was 4 s, which was close enough to normal that the E2E mute test failed on
+ * three of four CI runs with identical application code (the two commits either
+ * side of the failures differ only in a docs file and a Python script). A test
+ * that flips on unchanged code is measuring the runner, and here it was
+ * measuring a bound the product had set too tight.
+ */
+const AUDIO_MIXER_WRITE_TIMEOUT_MS = 10000;
 
 const isExposedMasterVolumeItem = (item: AudioMixerItem) =>
   item.name === AUDIO_MIXER_MASTER_VOLUME_ITEM && Array.isArray(item.options) && item.options.length > 0;
@@ -474,7 +491,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
               updates: write.updates,
               skipInvalidation: true,
             }),
-            4000,
+            AUDIO_MIXER_WRITE_TIMEOUT_MS,
             `${write.context} audio mixer update`,
           );
         } finally {
@@ -523,7 +540,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
             updates,
             skipInvalidation: true,
           }),
-          4000,
+          AUDIO_MIXER_WRITE_TIMEOUT_MS,
           `${context} audio mixer update`,
         );
       let pendingWrite = startAudioMixerWrite();
