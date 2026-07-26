@@ -65,3 +65,35 @@ describe("sidRadioStats", () => {
     expect(getSidRadioStats().skips).toBe(0);
   });
 });
+
+/**
+ * recordEmitted runs once per emitted item, so a refill calls it `lookahead`
+ * times in a tight loop while audio is playing. Mirroring to the DOM there
+ * meant ten querySelector + JSON.stringify pairs per refill on the main
+ * thread, and a soak came back with an audio underrun against a pinned budget
+ * of 0. The refill that emitted the items flushes them, so this stays cheap.
+ */
+describe("sidRadioStats DOM mirror cost", () => {
+  it("does not touch the DOM per emitted item, but the refill flushes them", () => {
+    resetSidRadioStats();
+    const element = document.querySelector(`[data-testid="${SID_RADIO_STATS_TESTID}"]`)!;
+    const before = element.textContent;
+
+    for (const ordinal of [11, 22, 33]) recordEmitted(ordinal);
+
+    // In memory immediately -- the engine's own reads must never be stale.
+    expect(getSidRadioStats().emittedSequence).toEqual([11, 22, 33]);
+    // ...but the mirror has not been rewritten yet.
+    expect(element.textContent).toBe(before);
+
+    recordRefill({ lastRefillMs: 20, mainThreadMs: 5, emitted: 3, lookahead: 10 });
+    expect(readSidRadioStatsFromDom()?.emittedSequence).toEqual([11, 22, 33]);
+  });
+
+  it("re-creates the mirror node if it is removed from the document", () => {
+    resetSidRadioStats();
+    document.querySelector(`[data-testid="${SID_RADIO_STATS_TESTID}"]`)?.remove();
+    updateSidRadioStats({ stationActive: true });
+    expect(readSidRadioStatsFromDom()).toMatchObject({ stationActive: true });
+  });
+});

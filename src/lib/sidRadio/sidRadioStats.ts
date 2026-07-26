@@ -70,17 +70,27 @@ const initialStats = (): SidRadioStats => ({
 
 let stats: SidRadioStats = initialStats();
 
+/**
+ * Cached mirror node. The lookup is skipped while the node stays in the
+ * document; re-querying on every write is pure overhead on a path that runs
+ * while audio is playing.
+ */
+let mirrorElement: Element | null = null;
+
 const writeToDom = (): void => {
   if (typeof document === "undefined" || !document.body) return;
-  let element = document.querySelector(`[data-testid="${SID_RADIO_STATS_TESTID}"]`);
-  if (!element) {
-    element = document.createElement("div");
-    element.setAttribute("data-testid", SID_RADIO_STATS_TESTID);
-    (element as HTMLElement).hidden = true;
-    (element as HTMLElement).style.display = "none";
-    document.body.appendChild(element);
+  if (!mirrorElement?.isConnected) {
+    mirrorElement = document.querySelector(`[data-testid="${SID_RADIO_STATS_TESTID}"]`);
   }
-  element.textContent = JSON.stringify(stats);
+  if (!mirrorElement) {
+    const created = document.createElement("div");
+    created.setAttribute("data-testid", SID_RADIO_STATS_TESTID);
+    created.hidden = true;
+    created.style.display = "none";
+    document.body.appendChild(created);
+    mirrorElement = created;
+  }
+  mirrorElement.textContent = JSON.stringify(stats);
 };
 
 export const getSidRadioStats = (): SidRadioStats => stats;
@@ -134,8 +144,15 @@ export const recordAutoAdvance = (): void => {
  * cursor -- 0,1,2,… for every seed -- so the comparison could never fail.
  */
 export const recordEmitted = (trackOrdinal: number): void => {
+  // Deliberately does NOT mirror to the DOM. This fires once per emitted item,
+  // so a single refill calls it `lookahead` times in a tight synchronous loop --
+  // and writeToDom does a querySelector plus a full JSON.stringify of the whole
+  // stats object every time. Mirroring here put ten of those on the main thread
+  // inside each refill, while audio was playing, and a 25-minute soak came back
+  // with an audio underrun against a pinned budget of 0 where earlier runs had
+  // none. The refill that emitted these items calls recordRefill immediately
+  // afterwards, which flushes the sequence along with the rest.
   stats = { ...stats, emittedSequence: [...stats.emittedSequence, trackOrdinal] };
-  writeToDom();
 };
 
 /** Record a ✕-skip and its launch latency (spec §9.2 `skipToLaunchMs`). */
