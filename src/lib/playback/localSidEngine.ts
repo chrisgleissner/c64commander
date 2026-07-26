@@ -311,6 +311,16 @@ export class LocalSidEngine {
   private prerenderKey: string | null = null;
   /** Progress of the in-flight pre-render, 0..1; null when none is running. */
   private prerenderFraction: number | null = null;
+  /**
+   * The fully-rendered tune currently being played FROM, and the read cursor
+   * into it. Set only by a seek that the cache could satisfy: adopting the
+   * cache mid-playback would splice a separately-rendered copy into audio that
+   * is already sounding, and the two renders need not be sample-identical.
+   */
+  private cached: RenderedTune | null = null;
+  private cachedCursor = 0;
+  /** Key of the tune currently open, so a finished pre-render can be matched to it. */
+  private currentKey: string | null = null;
   private volume = 1;
   private muted = false;
   /** Crossfade length to apply to the tune currently being opened (0 = cut). */
@@ -597,6 +607,23 @@ export class LocalSidEngine {
     this.scheduler.resetTo(target);
     this.emitPosition();
 
+    // If this tune has been rendered in full, the seek is a buffer offset and
+    // needs no engine round-trip at all. That is the whole point of the
+    // pre-render: libsidplayfp cannot rewind, so asking the engine to go
+    // backwards costs ~150 ms of CPU per second of audio it has to replay —
+    // seconds of silence for a seek the listener expects to be instant.
+    const rendered = this.currentKey ? this.renderCache.get(this.currentKey) : null;
+    if (rendered) {
+      this.cached = rendered;
+      this.cachedCursor = Math.min(rendered.pcm.length, Math.floor(target * rendered.sampleRate) * rendered.channels);
+      addLog("debug", "Local SID seek served from the pre-render cache", {
+        service: "local-sid",
+        seconds: target,
+      });
+      this.pump();
+      return;
+    }
+
     await new Promise<void>((resolve) => {
       this.seekPending = { id, resolve };
       this.worker?.postMessage({ type: "seek", id, positionSeconds: target });
@@ -609,7 +636,29 @@ export class LocalSidEngine {
 
   /** Request renders until the buffer is full ahead of the clock. */
   private pump(): void {
-    if (!this.scheduler || this.endReceived || !this.worker) return;
+    if (!this.scheduler || this.endReceived) return;
+    // Playing from a cached render: slice the next chunk straight out of the
+    // buffer. No worker, no rendering, no waiting.
+    if (this.cached) {
+      const { pcm, channels, sampleRate } = this.cached;
+      const chunkSamples = Math.floor(this.chunkSeconds * sampleRate) * channels;
+      while (this.scheduler.bufferedSeconds() < this.targetBufferSeconds) {
+        if (this.cachedCursor >= pcm.length) {
+          this.endReceived = true;
+          this.maybeFireEnded();
+          return;
+        }
+        const end = Math.min(pcm.length, this.cachedCursor + chunkSamples);
+        // A copy, because the scheduler hands the buffer to Web Audio.
+        const slice = pcm.slice(this.cachedCursor, end);
+        this.cachedCursor = end;
+        this.recordRender(0, slice.length);
+        this.scheduler.schedule(slice, channels);
+        this.emitPosition();
+      }
+      return;
+    }
+    if (!this.worker) return;
     while (
       this.inFlightRenders < MAX_IN_FLIGHT_RENDERS &&
       this.scheduler.bufferedSeconds() + this.inFlightRenders * this.chunkSeconds < this.targetBufferSeconds
@@ -745,6 +794,9 @@ export class LocalSidEngine {
    * rather than paying part of it again on every backward seek.
    */
   prerender(key: string, sidBytes: ArrayBuffer, songIndex: number, seconds: number): void {
+    // Remember which tune is open even when it is already cached, so a later
+    // seek can find it.
+    this.currentKey = key;
     if (this.renderCache.has(key) || !this.worker || seconds <= 0) return;
     const roms = loadStoredRoms();
     if (!roms.kernal || !roms.basic) return;
@@ -799,6 +851,9 @@ export class LocalSidEngine {
     this.endReceived = false;
     this.endedFired = false;
     this.chunksEnded = 0;
+    this.cached = null;
+    this.cachedCursor = 0;
+    this.currentKey = null;
     // Render throughput is deliberately NOT reset here: it measures what this
     // device sustains across the whole engine session, so a multi-track soak
     // (§12.6) reports one p99 over every tune rather than only the last one.

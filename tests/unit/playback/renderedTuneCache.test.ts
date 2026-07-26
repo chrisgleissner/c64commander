@@ -71,3 +71,32 @@ describe("RenderedTuneCache", () => {
     expect(cache.bytes).toBe(192_000);
   });
 });
+
+/**
+ * The point of pre-rendering is that a seek stops costing a re-render.
+ * libsidplayfp cannot rewind, so going backwards through the engine replays the
+ * tune from the start at ~150 ms of CPU per second of audio — seconds of
+ * silence for something the listener expects to be instant.
+ */
+describe("seeking from a cached render", () => {
+  it("slices audio out of the buffer at the requested offset", () => {
+    const cache = new RenderedTuneCache();
+    const seconds = 4;
+    const rendered = tune(seconds);
+    // Mark each frame so the slice can be located unambiguously.
+    for (let i = 0; i < rendered.pcm.length; i += 1) rendered.pcm[i] = i % 1000;
+    cache.set("k", rendered);
+
+    const hit = cache.get("k")!;
+    const targetSeconds = 2;
+    const cursor = Math.floor(targetSeconds * hit.sampleRate) * hit.channels;
+
+    expect(cursor).toBe(48000 * 2 * 2);
+    expect(hit.pcm.slice(cursor, cursor + 4)).toEqual(
+      new Int16Array([cursor % 1000, (cursor + 1) % 1000, (cursor + 2) % 1000, (cursor + 3) % 1000]),
+    );
+    // Seeking past the end clamps rather than reading out of bounds.
+    const past = Math.min(hit.pcm.length, Math.floor(99 * hit.sampleRate) * hit.channels);
+    expect(past).toBe(hit.pcm.length);
+  });
+});
