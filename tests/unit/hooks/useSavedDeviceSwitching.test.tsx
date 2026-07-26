@@ -79,6 +79,12 @@ const { mockAvMirror } = vi.hoisted(() => ({
   },
 }));
 
+vi.mock("@/lib/playback/activePlaybackSession", () => ({
+  // The switch stops whatever is playing before retargeting; these tests are
+  // about the switch ordering, not about playback.
+  hasActivePlaybackToStop: vi.fn().mockReturnValue(false),
+  stopActivePlaybackBeforeDeviceSwitch: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/lib/streams/avMirrorSession", () => ({ avMirrorSession: mockAvMirror }));
 
 vi.mock("@/lib/uiErrors", async () => {

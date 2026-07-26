@@ -61,6 +61,17 @@ export const markRemotePlaybackStopped = (): void => {
 export const __isRemotePlaybackActive = (): boolean => remotePlaybackActive;
 
 /**
+ * Is there anything to stop before a device switch?
+ *
+ * Synchronous on purpose. The switch path deliberately avoids suspending when
+ * there is no work to do — `hasActiveInputRelease` exists for exactly the same
+ * reason — so callers can skip the await entirely rather than yielding a
+ * microtask on every switch just to discover nothing was playing.
+ */
+export const hasActivePlaybackToStop = (): boolean =>
+  remotePlaybackActive || getSharedLocalSidPlaybackController().isActive();
+
+/**
  * Silence whatever is playing before a device retarget.
  *
  * Runs while `getC64API()` still points at the OLD device, so the reset lands

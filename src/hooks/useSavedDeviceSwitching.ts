@@ -43,7 +43,7 @@ import { isBackgroundExecutionActive, stopBackgroundExecution } from "@/lib/nati
 import { BackgroundExecution } from "@/lib/native/backgroundExecution";
 import { avMirrorSession } from "@/lib/streams/avMirrorSession";
 import { toast } from "@/hooks/use-toast";
-import { stopActivePlaybackBeforeDeviceSwitch } from "@/lib/playback/activePlaybackSession";
+import { hasActivePlaybackToStop, stopActivePlaybackBeforeDeviceSwitch } from "@/lib/playback/activePlaybackSession";
 
 let activeSavedDeviceSwitch: { deviceId: string; promise: Promise<unknown> } | null = null;
 
@@ -91,7 +91,12 @@ export function useSavedDeviceSwitching() {
       // longer pointing at it — and once the new device started its own tune the
       // user heard both at once, with no way to silence the first from the app.
       // Bounded internally so a dead old device cannot stall the switch.
-      await stopActivePlaybackBeforeDeviceSwitch();
+      // Skip the await entirely when nothing is playing — the switch path
+      // deliberately does not suspend on work it does not have to do (see
+      // hasActiveInputRelease above, same reasoning).
+      if (hasActivePlaybackToStop()) {
+        await stopActivePlaybackBeforeDeviceSwitch();
+      }
 
       // Live View clean-transition: both devices stream A/V to the SAME multicast group, so the
       // OLD device must be told to stop BEFORE we retarget the API — otherwise it keeps streaming

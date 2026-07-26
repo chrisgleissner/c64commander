@@ -516,6 +516,8 @@ vi.mock("@/lib/config/appSettings", () => ({
   // engine; without these the whole Settings tree fails to render.
   loadSidEmulationEngine: vi.fn(() => "residfp"),
   saveSidEmulationEngine: vi.fn(),
+  loadPlaybackCrossfadeMs: vi.fn(() => 0),
+  savePlaybackCrossfadeMs: vi.fn(),
   loadLocalEngineEnabled: vi.fn(() => false),
   saveLocalEngineEnabled: vi.fn(),
   saveDiskAutostartMode: vi.fn(),

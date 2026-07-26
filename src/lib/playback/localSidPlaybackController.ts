@@ -99,6 +99,11 @@ export class LocalSidPlaybackController {
     return engine.play(buffer, songIndex, callbacks);
   }
 
+  /** True while this device is actually rendering a tune. */
+  isActive(): boolean {
+    return this.engine?.isActive() ?? false;
+  }
+
   /** Current playback position in seconds, 0 when nothing is open. */
   positionSeconds(): number {
     return this.engine?.getStats().positionSeconds ?? 0;
