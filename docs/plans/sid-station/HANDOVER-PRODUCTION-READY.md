@@ -384,9 +384,9 @@ Also record on-device **CPU % (p95)** and **battery** over the soak (§12.6).
 ### 2.3 Gates still open
 
 - **G1** — real `.sidcorr` loads/parses on **iOS device** (web + host + Android already ✓).
-- **L1** — WASM instantiate + render is proven on **Pixel 4**; still to prove on the **Callback 8020
-  (SailfishOS)**, the primary rollout device and the perf floor. It was not attached during this
-  session.
+- **L1** — **done**: WASM instantiate + render is proven on the **Pixel 4**, which is the phone-side
+  venue. The Callback 8020 is unreleased, so there is no pending item here and none should be
+  re-created (AGENTS.md) — its perf floor is a design constraint to build for, not a measurement.
 - **L3** — on-device battery/CPU gate; background-audio behaviour documented; native-sink escape
   hatch noted.
 - **L4** — SID Radio end-to-end on the Local engine with **no C64 attached**.

@@ -518,10 +518,12 @@ Reasoning:
 
 **What would flip this decision**, in priority order:
 
-1. **Gate L1 on the Callback 8020 (SailfishOS).** That device is the primary rollout target and the
-   perf floor, and WASM has never been run on it. If the engine cannot hold real time there, native
-   becomes necessary — and since SailfishOS is Linux/ARM, the same cross-compile approach extends to
-   it, which is what makes the idea strong rather than Android-only.
+1. **A slower handset than the Pixel 4 turning up in the rollout.** WASM holds real time
+   comfortably on the Pixel 4, which is the only phone we have and the venue for every phone-side
+   gate. A device roughly 2–3× slower would put that in question — and since SailfishOS is
+   Linux/ARM, the same cross-compile approach extends there, which is what makes the idea strong
+   rather than Android-only. This is a *contingency*, not scheduled work: the Callback 8020 is
+   unreleased, so no task may be gated on measuring it (AGENTS.md).
 2. **§6.5 turning out to be unfixable** in the wasm target specifically.
 
 If it flips, the shape is: native on Android + SailfishOS via the 7-Zip pattern, WASM retained for

@@ -577,6 +577,29 @@ Set `JAVA_HOME` to a valid JDK install and avoid hardcoded system paths.
 - For hardware-backed validation, use the adb-attached Pixel 4 when it is present.
 - Record which hardware target was chosen and do not claim device validation when neither host is reachable.
 
+## The hardware that exists — and the Callback 8020, which does not
+
+**The available rig is exactly: the Pixel 4 (adb), the C64U, and the U64.** That is all
+of it. Plan every gate, task and acceptance criterion against that list.
+
+**The Callback 8020 does not exist yet.** It is an unreleased handset. Neither it nor
+SailfishOS can be tested on, now or by waiting — so:
+
+- **The Pixel 4 stands in for every phone**, the 8020 included. A result proven on the
+  Pixel 4 is the phone-side result; report it as measured on the Pixel 4 and move on.
+- **Never write a task, gate or "remaining work" item whose venue is the 8020.** Such an
+  item is not blocked, it is unrunnable, and it has repeatedly been re-created and
+  re-carried across sessions as though hardware were about to arrive.
+- Where a spec names the 8020 (e.g. keypad-first / low-power sizing), treat it as a
+  *design constraint to build for*, not a device to measure on: satisfy it by
+  construction, prove what is provable on the Pixel 4, and say plainly which part is
+  unverifiable until the handset ships.
+- The same applies to the `c64u-remote` variant's manual, which names the 8020 as the
+  target handset: writing for it is fine, testing on it is not.
+
+Physically power-cycling the C64 is a rare, ask-first exception; the U64 may be absent,
+so probe it rather than assuming.
+
 ## Modularization guardrails
 
 - If a file grows beyond about 600 lines or mixes concerns, split it.
