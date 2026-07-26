@@ -8,6 +8,63 @@ physical rig), while the host-deterministic budget checks run in CI.
 - **`sid_radio_hil.py`** — SID Radio (§9): starts a station, soaks auto-advances, asserts the
   pinned §9.2 budgets (`ci/perf/sid-radio-perf-thresholds.json`). See **SID Radio** below.
 - **`av_sync_hil.py`** — Live View A/V sync + input latency. See **A/V sync** below.
+- **`seek_latency_hil.py`** — what a backward seek costs the listener, measured at the speaker.
+  See **Seek latency** below.
+
+## Seek latency
+
+`seek_latency_hil.py` answers one question with the microphone: **tap the progress bar to seek
+backwards — how long until the music comes back?** libsidplayfp cannot rewind, so a backward seek
+used to re-render the tune from the start at ~150 ms of CPU per second of audio. The pre-render
+cache (`localSidEngine.seekTo`) turns that into a buffer offset.
+
+```bash
+pip install websocket-client numpy
+python3 tools/hil/seek_latency_hil.py --serial <ADB_SERIAL>
+python3 tools/hil/seek_latency_hil.py --serial <ADB_SERIAL> --min-position-seconds 25 --seek-back-seconds 20
+```
+
+### Measured on the Pixel 4, 2026-07-27 (mic at the speaker, media volume 16/25)
+
+Eight clean readings — every one a real backward seek, on an audible phone, with no track change:
+
+```
+0.33  0.43  0.52  0.67  1.20  2.38  2.62  3.65   (seconds, tap → sound returns)
+```
+
+| | tap → sound returns |
+| --- | --- |
+| **After the pre-render cache** | **0.33 – 3.65 s, median ≈ 0.9 s** |
+| _Before it existed_ | _9.96 s_ |
+
+So the worst reading beats the old figure by ~2.7× and the typical one by ~10×.
+
+**The spread is not explained by the cache being warm or cold.** That was the expectation, and the
+readings do not support it: two seeks taken 176 s and 85 s into the *same* 245 s tune — both long
+past the ~37 s its pre-render needs — returned 2.38 s and 1.20 s, while a seek 3 s into a fresh tune
+returned 0.43 s. Something other than the cache dominates what is left, and it has not been
+identified. Do not quote a cold/warm split from this data.
+
+The station advances tracks underneath the harness, so the two readings in a run are often different
+tunes — they are two samples along the same axis, not a controlled pair.
+
+### What it refuses to report
+
+Every one of these was a wrong number this harness produced before the guard existed:
+
+- **The mic must actually hear the phone.** A pre-flight capture (retried, so a track boundary does
+  not condemn a healthy rig) requires the speaker to be ≥ 4 dB over the room floor. A silent phone
+  otherwise yields a confident "15.96 s".
+- **The seek must run backwards.** The target is computed from the position and duration clocks, not
+  from a fixed fraction of the bar: 2% of a twenty-minute tune is 24 s in, which lands _ahead_ of a
+  playhead at 0:27 and quietly measures a forward seek.
+- **The track must not change mid-capture**, or the "gap" may be the gap between tunes.
+- **The first silence after the tap**, never the longest in the capture — the longest was once a
+  quiet passage 13 s after a tap at 4 s.
+
+Drive the bar with `adb shell input tap`, not CDP mouse events: synthesised events drove the control
+into a scrub it never left (the elapsed label kept its `⏵`) and playback stopped. And keep the screen
+awake — a sleeping screen stops playback mid-capture.
 
 ## SID Radio
 

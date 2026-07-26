@@ -309,6 +309,11 @@ export class LocalSidEngine {
   private readonly renderCache = new RenderedTuneCache();
   private prerenderId = 0;
   private prerenderKey: string | null = null;
+  /**
+   * The pre-render's own worker — a separate thread from playback, because
+   * sharing one starved playback into silence (see `ensurePrerenderWorker`).
+   */
+  private prerenderWorker: LocalSidWorkerLike | null = null;
   /** Progress of the in-flight pre-render, 0..1; null when none is running. */
   private prerenderFraction: number | null = null;
   /**
@@ -365,6 +370,45 @@ export class LocalSidEngine {
       );
     }
     return this.worker;
+  }
+
+  /**
+   * The pre-render gets its OWN worker, i.e. its own thread.
+   *
+   * It used to share the playback worker. Rendering is CPU-bound — roughly
+   * 150 ms per second of audio — so a pre-render occupied that single thread
+   * almost continuously and the playback renders behind it never ran: measured
+   * on a Pixel 4, every locally-played tune was SILENT for its first ~35 s
+   * (audio stream open, clock advancing, room floor at the microphone), and the
+   * same passage played normally once the pre-render finished. Slicing the
+   * render and awaiting between slices was not enough; a slice is ~750 ms of
+   * solid WASM and one thread cannot serve both.
+   *
+   * Separate workers are separate threads, and a phone has cores to spare.
+   */
+  private ensurePrerenderWorker(): LocalSidWorkerLike {
+    if (!this.prerenderWorker) {
+      this.prerenderWorker = this.workerFactory();
+      // Routed into the same handler: pre-render replies are matched on
+      // `prerenderId`, which is independent of the playback ids.
+      this.prerenderWorker.addEventListener("message", (event: MessageEvent<LocalSidWorkerToMain>) =>
+        this.onMessage(event.data),
+      );
+      // A pre-render that dies must not fail playback — the tune is still
+      // playing, seeks simply go back to the slow path. So this deliberately
+      // does NOT call failWorker.
+      this.prerenderWorker.addEventListener("error", () => this.abandonPrerender());
+      this.prerenderWorker.addEventListener("messageerror", () => this.abandonPrerender());
+    }
+    return this.prerenderWorker;
+  }
+
+  /** Give up on the current pre-render, leaving playback untouched. */
+  private abandonPrerender(): void {
+    this.prerenderFraction = null;
+    this.prerenderKey = null;
+    this.prerenderWorker?.terminate();
+    this.prerenderWorker = null;
   }
 
   /** Reject the pending load/open and report a playback error on a worker crash. */
@@ -800,12 +844,16 @@ export class LocalSidEngine {
     if (this.renderCache.has(key) || !this.worker || seconds <= 0) return;
     const roms = loadStoredRoms();
     if (!roms.kernal || !roms.basic) return;
+    // A pre-render still running for a previous tune is now dead weight, and
+    // its worker would render it to the end before touching this one. Killing
+    // the thread stops that work immediately rather than queueing behind it.
+    if (this.prerenderFraction !== null) this.abandonPrerender();
     this.prerenderId += 1;
     this.prerenderKey = key;
     this.prerenderFraction = 0;
     const kernal = roms.kernal.slice().buffer;
     const basic = roms.basic.slice().buffer;
-    this.worker.postMessage(
+    this.ensurePrerenderWorker().postMessage(
       {
         type: "prerender",
         id: this.prerenderId,
@@ -862,6 +910,9 @@ export class LocalSidEngine {
   /** Tear down the worker + audio entirely (release WASM memory). */
   dispose(): void {
     this.stopPlayback();
+    // The pre-render thread holds a second WASM instance and would otherwise
+    // keep rendering a tune nobody is listening to.
+    this.abandonPrerender();
     this.worker?.terminate();
     this.worker = null;
     this.moduleReady = false;
