@@ -2083,6 +2083,7 @@ export function usePlaybackController({
   const scrubSeekInFlightRef = useRef(false);
   const scrubTimerRef = useRef<number | null>(null);
   const scrubDurationMsRef = useRef<number | undefined>(undefined);
+  const scrubEndingRef = useRef(false);
 
   const runScrubSeek = useCallback(async () => {
     const controller = localSidPlaybackRef.current;
@@ -2122,6 +2123,13 @@ export function usePlaybackController({
   }, []);
 
   const endScrub = useCallback(async () => {
+    // The gesture ends on pointerup, pointerleave AND pointercancel, so this can
+    // be called more than once for one release. Without this guard the second
+    // call found the target already taken and cleared the display immediately,
+    // showing the pre-scrub position for as long as the real seek took to land
+    // (~1.4 s on a rewind) before jumping to where the user actually let go.
+    if (scrubEndingRef.current) return;
+    scrubEndingRef.current = true;
     if (scrubTimerRef.current !== null) {
       window.clearInterval(scrubTimerRef.current);
       scrubTimerRef.current = null;
@@ -2129,17 +2137,36 @@ export function usePlaybackController({
     const controller = localSidPlaybackRef.current;
     const target = scrubTargetMsRef.current;
     scrubTargetMsRef.current = null;
-    setScrubTargetMs(null);
-    if (!controller || target === null) return;
+    if (!controller || target === null) {
+      setScrubTargetMs(null);
+      scrubEndingRef.current = false;
+      return;
+    }
     // Land exactly where the user let go, even if a catch-up seek was still in
     // flight for an older target.
     while (scrubSeekInFlightRef.current) await new Promise((r) => setTimeout(r, 20));
-    await controller.seekTo(target / 1000);
-    const positionMs = Math.max(0, controller.positionSeconds() * 1000);
+    // Rebase the clocks to the TARGET *before* awaiting the seek.
+    //
+    // Two reasons, both learned the hard way. Reading the position back after
+    // seekTo gives a stale value — it resolves before the engine has caught up —
+    // so the clocks landed on the pre-scrub position. And ordering the clear
+    // after the await left a window where the scrub display was gone but the
+    // clocks had not moved yet, showing the position playback had drifted to
+    // during the gesture (1:25 after scrubbing back to 0:33) for as long as a
+    // rewind takes to re-render. Rebasing first means there is no stale value to
+    // reveal, whatever order the rest completes in.
+    const positionMs = Math.max(0, target);
     const now = Date.now();
     trackStartedAtRef.current = now - positionMs;
     playedClockRef.current.hydrate(positionMs, isPausedRef.current ? null : now);
     setPlayedMs(positionMs);
+    await controller.seekTo(target / 1000);
+    // Only now stop showing the scrub target. Releasing it before the engine
+    // had landed made the timer snap back to the pre-scrub position for a frame
+    // (0:15 after scrubbing to 1:09) before jumping forward — a flicker that
+    // reads as the seek having failed and then corrected itself.
+    setScrubTargetMs(null);
+    scrubEndingRef.current = false;
     addLog("debug", "Local SID scrub ended", { toSeconds: positionMs / 1000 });
   }, [playedClockRef, setPlayedMs, trackStartedAtRef]);
 

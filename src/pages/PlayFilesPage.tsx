@@ -459,6 +459,10 @@ export default function PlayFilesPage() {
     handleNext,
     handlePrevious,
     handleSeekBy,
+    beginScrub,
+    scrubBy,
+    endScrub,
+    scrubTargetMs,
     playlistEnded,
     playlistItemDuration,
   } = usePlaybackController({
@@ -1428,8 +1432,14 @@ export default function PlayFilesPage() {
     };
   }, [currentItem, isPlaying, setPlaybackContext]);
   const currentDurationLabel = formatTime(currentDurationMs);
-  const progressPercent = currentDurationMs ? Math.min(100, (elapsedMs / currentDurationMs) * 100) : 0;
-  const remainingMs = currentDurationMs !== undefined ? Math.max(0, currentDurationMs - elapsedMs) : undefined;
+  // While the user is scrubbing, the bar and the timer follow the FINGER rather
+  // than the audio clock. The engine is deliberately behind — it is catching up
+  // to the target in the background — and showing its position would make the
+  // control feel dead for as long as a rewind takes to re-render.
+  const isScrubbing = scrubTargetMs !== null;
+  const displayElapsedMs = isScrubbing ? scrubTargetMs : elapsedMs;
+  const progressPercent = currentDurationMs ? Math.min(100, (displayElapsedMs / currentDurationMs) * 100) : 0;
+  const remainingMs = currentDurationMs !== undefined ? Math.max(0, currentDurationMs - displayElapsedMs) : undefined;
   const remainingLabel = currentDurationMs !== undefined ? `-${formatTime(remainingMs)}` : "—";
   const canControlVolume = enabledSidVolumeItems.length > 0 && volumeSteps.length > 0;
   const volumeLabel = volumeSteps[volumeIndex]?.label ?? "—";
@@ -1891,8 +1901,16 @@ export default function PlayFilesPage() {
                     ? (deltaSeconds) => void handleSeekBy(deltaSeconds)
                     : undefined
                 }
+                onScrubStart={
+                  playbackEngine.engine === "local" && currentItem?.category === "sid" && isPlaying
+                    ? () => beginScrub(currentDurationMs)
+                    : undefined
+                }
+                onScrubStep={scrubBy}
+                onScrubEnd={() => void endScrub()}
+                isScrubbing={isScrubbing}
                 progressPercent={progressPercent}
-                elapsedLabel={formatTime(elapsedMs)}
+                elapsedLabel={formatTime(displayElapsedMs)}
                 remainingLabel={remainingLabel}
                 totalLabel={formatTime(playlistTotals.total)}
                 remainingTotalLabel={formatTime(playlistTotals.remaining)}

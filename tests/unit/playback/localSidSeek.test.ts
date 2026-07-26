@@ -120,7 +120,45 @@ describe("hold-to-seek click suppression", () => {
 
     // The flag must be cleared asynchronously in stop(), not only in start():
     // clearing it only on the next press is what swallowed a later keypad click.
-    expect(source).toMatch(/if \(seeked\.current\) \{\s*window\.setTimeout/);
+    // The clear must still be asynchronous (a scrub-end call may precede it).
+    expect(source).toMatch(/if \(seeked\.current\) \{[\s\S]{0,120}?window\.setTimeout\(\(\) => \{\s*seeked\.current = false;/);
     expect(source).toContain("keypad-first");
+  });
+});
+
+/**
+ * Hold-to-seek has to give feedback while the finger is down. The engine cannot
+ * provide it: rewinding reloads the tune and re-renders up to the target, so
+ * its reported position lags by however long that takes, and a progress bar
+ * following the engine sits still through the whole gesture — which reads as a
+ * broken control. The UI therefore follows a scrub TARGET that moves instantly,
+ * and the engine is sent after it.
+ */
+describe("scrub feedback contract", () => {
+  it("moves the target on every repeat tick, not once per engine seek", async () => {
+    const { readFileSync } = await import("node:fs");
+    const card = readFileSync("src/pages/playFiles/components/PlaybackControlsCard.tsx", "utf8");
+    // The repeat interval must drive scrub.step (the target), not onSeek.
+    expect(card).toMatch(/repeatTimer\.current = window\.setInterval\(\(\) => \{\s*scrub\.step\?\.\(deltaSeconds\)/);
+    // Releasing the button lands on the target.
+    expect(card).toContain("scrubRef.current?.end?.()");
+  });
+
+  it("shows the scrub position rather than the audio clock while scrubbing", async () => {
+    const { readFileSync } = await import("node:fs");
+    const page = readFileSync("src/pages/PlayFilesPage.tsx", "utf8");
+    expect(page).toContain("const isScrubbing = scrubTargetMs !== null");
+    expect(page).toContain("const displayElapsedMs = isScrubbing ? scrubTargetMs : elapsedMs");
+    // Both the bar and the timer must use it, or they disagree mid-gesture.
+    expect(page).toMatch(/progressPercent = currentDurationMs \? Math\.min\(100, \(displayElapsedMs/);
+    expect(page).toContain("elapsedLabel={formatTime(displayElapsedMs)}");
+  });
+
+  it("sends the engine to the latest target on a bounded cadence", async () => {
+    const { readFileSync } = await import("node:fs");
+    const hook = readFileSync("src/pages/playFiles/hooks/usePlaybackController.ts", "utf8");
+    // One seek in flight at a time, aimed at wherever the finger is now.
+    expect(hook).toContain("if (!controller || target === null || scrubSeekInFlightRef.current) return");
+    expect(hook).toContain("SCRUB_SEEK_INTERVAL_MS");
   });
 });

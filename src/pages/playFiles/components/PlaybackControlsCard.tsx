@@ -40,6 +40,14 @@ export type PlaybackControlsCardProps = {
    * nothing to scrub there.
    */
   onSeek?: (deltaSeconds: number) => void;
+  /** Hold started: capture the current position as the scrub origin. */
+  onScrubStart?: () => void;
+  /** One repeat tick of the hold — moves the scrub target, not the engine. */
+  onScrubStep?: (deltaSeconds: number) => void;
+  /** Finger lifted: land on the target. */
+  onScrubEnd?: () => void;
+  /** True while a hold is in progress (drives the scrubbing affordance). */
+  isScrubbing?: boolean;
   progressPercent: number;
   elapsedLabel: string;
   remainingLabel: string;
@@ -87,10 +95,27 @@ const SEEK_STEP_SECONDS = 5;
  * until the next press so the click handler (which fires after pointerup) can
  * still see it.
  */
-const useHoldToSeek = (deltaSeconds: number, onSeek?: (deltaSeconds: number) => void) => {
+/** A short tick so a scrub is felt as well as seen; silently ignored where unsupported. */
+const buzz = (ms: number) => {
+  try {
+    navigator.vibrate?.(ms);
+  } catch {
+    // Vibration is a nicety, never a requirement.
+    void 0;
+  }
+};
+
+const useHoldToSeek = (
+  deltaSeconds: number,
+  onSeek?: (deltaSeconds: number) => void,
+  scrub?: { start?: () => void; step?: (deltaSeconds: number) => void; end?: () => void },
+) => {
   const holdTimer = useRef<number | null>(null);
   const repeatTimer = useRef<number | null>(null);
   const seeked = useRef(false);
+  // `stop` is created once, so it reads the latest callbacks through a ref.
+  const scrubRef = useRef(scrub);
+  scrubRef.current = scrub;
 
   const stop = useCallback(() => {
     if (holdTimer.current !== null) {
@@ -110,6 +135,7 @@ const useHoldToSeek = (deltaSeconds: number, onSeek?: (deltaSeconds: number) => 
     // Remote variant is keypad-first — and the symptom would be a Next button
     // that silently ignores every other press.
     if (seeked.current) {
+      scrubRef.current?.end?.();
       window.setTimeout(() => {
         seeked.current = false;
       }, 0);
@@ -132,6 +158,20 @@ const useHoldToSeek = (deltaSeconds: number, onSeek?: (deltaSeconds: number) => 
       holdTimer.current = window.setTimeout(() => {
         seeked.current = true;
         addLog("debug", "Local SID hold-to-seek engaged", { deltaSeconds });
+        // Scrubbing moves a TARGET that the UI follows immediately; the engine
+        // is sent after it on its own cadence. Stepping the engine once per
+        // repeat instead made the bar sit still until a rewind had finished
+        // re-rendering, which reads as the control being broken.
+        if (scrub?.start) {
+          scrub.start();
+          scrub.step?.(deltaSeconds);
+          buzz(12);
+          repeatTimer.current = window.setInterval(() => {
+            scrub.step?.(deltaSeconds);
+            buzz(8);
+          }, SEEK_REPEAT_MS);
+          return;
+        }
         onSeek(deltaSeconds);
         repeatTimer.current = window.setInterval(() => onSeek(deltaSeconds), SEEK_REPEAT_MS);
       }, SEEK_HOLD_MS);
@@ -165,6 +205,10 @@ export const PlaybackControlsCard = ({
   onPauseResume,
   onNext,
   onSeek,
+  onScrubStart,
+  onScrubStep,
+  onScrubEnd,
+  isScrubbing = false,
   progressPercent,
   elapsedLabel,
   remainingLabel,
@@ -185,8 +229,9 @@ export const PlaybackControlsCard = ({
   rankingControls,
   stationActive = false,
 }: PlaybackControlsCardProps) => {
-  const holdRewind = useHoldToSeek(-SEEK_STEP_SECONDS, onSeek);
-  const holdForward = useHoldToSeek(SEEK_STEP_SECONDS, onSeek);
+  const scrubHandlers = { start: onScrubStart, step: onScrubStep, end: onScrubEnd };
+  const holdRewind = useHoldToSeek(-SEEK_STEP_SECONDS, onSeek, scrubHandlers);
+  const holdForward = useHoldToSeek(SEEK_STEP_SECONDS, onSeek, scrubHandlers);
 
   const previousFocusRef = useFocusItem<HTMLButtonElement>({
     id: "play-transport-previous",
@@ -318,10 +363,20 @@ export const PlaybackControlsCard = ({
         </div>
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="shrink-0" data-testid="playback-elapsed">
-              {elapsedLabel}
+            <span
+              className={cn("shrink-0 tabular-nums", isScrubbing && "font-semibold text-foreground")}
+              data-testid="playback-elapsed"
+            >
+              {isScrubbing ? `⏵ ${elapsedLabel}` : elapsedLabel}
             </span>
-            <Progress value={progressPercent} className="flex-1 min-w-0" />
+            <Progress
+              value={progressPercent}
+              // Scrubbing gets its own look so the moving bar reads as "you are
+              // dragging this", not as playback that has suddenly sped up.
+              className={cn("flex-1 min-w-0 transition-none", isScrubbing && "ring-2 ring-primary/60")}
+              data-testid="playback-progress"
+              data-scrubbing={isScrubbing ? "true" : undefined}
+            />
             <span className="shrink-0" data-testid="playback-remaining">
               {remainingLabel}
             </span>
