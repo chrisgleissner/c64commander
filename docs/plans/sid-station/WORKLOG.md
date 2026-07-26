@@ -798,3 +798,42 @@ than endorsed. `lastRefillMs` aliased the cold `firstCandidateMs`, failing as a
 false regression whenever the lookahead never needed refilling. `firstCandidateMs`
 was pinned at 300 ms but measures 254–411 ms, so the same healthy build passed or
 failed on variance.
+
+## 2026-07-26 (later) — a soak that lied, and a CI flake that was not mine
+
+**A soak reported an underrun that never happened.** A 30-minute local-engine
+run came back with `audioUnderruns=1` against a pinned budget of 0, and a
+5241 ms worst skip where the same build had measured 3585 ms. Neither was real.
+The run had inherited `c64u_debug_logging_enabled` from the earlier session where
+the skip was attributed. With debug logging on, every engine open and every byte
+read writes a log entry _and_ re-serialises the whole log array to localStorage
+on the main thread — so the soak was measuring a developer setting, not the
+shipped app. `enable_flags` now forces it off alongside the other flags. The
+lesson is worth keeping: a benchmark whose numbers depend on a leftover setting
+will eventually lie about a release, and it will lie in the flattering direction
+just as easily as this one lied in the alarming direction.
+
+That run did confirm two fixes in the wild: `firstCandidateMs` came in at 323 ms
+(passes the re-pinned 500, would have failed the old 300, which sat inside the
+metric's own variance), and `emittedSequence` reported genuine tune ordinals —
+`[38357, 4697, 58703, 22047, …]` — rather than the `0,1,2,…` cursor it used to.
+
+**The one red CI check was not a regression.** `Web | E2E (sharded) (2, 12)`
+failed three times on `playback.spec.ts:1716 › mute button toggles and slider
+does not unmute`, with `Unmute audio mixer update timed out`. That is a
+hard-coded 4000 ms bound on a mocked Audio Mixer config write
+(`useVolumeOverride.ts:471`), pre-existing and untouched by this branch. Shard 2
+is green across the last eight runs on `main` and was green on this branch two
+commits earlier; the delta in between is documentation, threshold notes,
+debug-gated logging and pointer capture on the two transport buttons — none of
+which reaches the mixer, and the test activates neither SID Radio nor the local
+engine. Running the exact file CI runs gives 37/37 locally. A re-run of that one
+job passed, leaving CI at **33 pass / 0 fail**.
+
+Worth recording for whoever meets this next: CI does **not** shard with
+Playwright's `--shard` flag. It selects shard _files_ via
+`scripts/get-playwright-shard-files.mjs`, so `--shard=2/12` locally runs a
+different set of tests than CI's shard 2 (which is exactly `playback.spec.ts`).
+Reproducing a shard failure means asking that script which files the shard owns.
+The 4000 ms mixer bound is tight enough to flake under a coverage-instrumented
+run on a loaded runner, and is a reasonable thing to revisit.
