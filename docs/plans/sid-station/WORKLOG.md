@@ -730,3 +730,71 @@ device ships.
 **Part 3 (Dependabot) landed on main** via PR #323: the AGP↔Gradle guardrail fix (which had been
 stranded on this branch, so rebasing #322 alone would never have worked), a meta-guard forbidding
 hardcoded version literals, and an auto-rebase workflow for stale Dependabot PRs. #322 is closed.
+
+## 2026-07-26 — G11 made real, G12 blocked on data, L1/L3/L4 closed
+
+**G11 was passing vacuously.** `--shuffle-replay` implemented a fragment of
+requirement (a) and neither (b) nor (c); it printed `seqLen=0` and returned
+success. The field it is built on could not have proven anything either:
+`emittedSequence` was appended on auto-advance with the _playlist cursor_, so it
+read `0,1,2,…` for every station and every seed — two different seeds compared
+equal. It now records the tune ordinal at emit time, because emission order is a
+pure function of `(seed, rankingSnapshot, shuffleSeed)` while playback order is
+not (a listener skipping ahead outruns the refills).
+
+Pinning the seed needed a hook, since nothing in the UI can set one. Two further
+inputs had to be held still before Song stations reproduced: the seed _tune_
+(each capture was seeding from whatever the previous left playing — now
+established from a fixed-seed Style station) and the timing of it becoming
+current (a fixed sleep was too short for the local engine, so the wait is now on
+actual playback).
+
+Result on a Pixel 4, local engine, both station types green:
+
+| station | pinned seed, run 1 & 2                                               | different seed                                             |
+| ------- | -------------------------------------------------------------------- | ---------------------------------------------------------- |
+| style   | `[83409, 82897, 22, 453, 74341, 326, 335, 2588]` identical           | `[25, 101, 40161, 50414, 4158, 1996, 4785, 41829]`         |
+| song    | `[40697, 41765, 41770, 41768, 41224, 41221, 40699, 41223]` identical | `[41767, 41221, 41224, 40042, 41225, 40046, 40439, 40696]` |
+
+Overlap between two seeds is reported but **not** asserted. The spec sketched
+"the tune set overlaps" assuming a small pool; every station draws from one far
+larger than an 8-tune sample, and observed overlap swung 2 → 0 between runs of
+identical code. Requiring it would fail healthy builds at random.
+
+**G12's HIL half is blocked on data, not deferred by choice.** It needs an HVSC
+incremental update to exist. Upstream publishes only full baselines and 85 is
+the newest, which the device already has, so there is nothing to trigger — the
+harness detects this and refuses to claim a pass. Continuity itself did hold
+across the update-check window (3 auto-advances, 0 underruns). It becomes
+runnable via an `hvsc-base-url` override serving a newer archive, or when HVSC
+86 ships.
+
+**L3 closed** — engine switch measured against a live C64U, both directions ×2:
+Local→C64 1020 / 886 ms, C64→Local 172 / 320 ms. The asymmetry is the entire
+cost of the C64 direction (reset the Ultimate, re-upload the tune) against the
+Local direction's stop-and-start. Worst 1020 ms is inside the 1500 ms pin. This
+had to be measured by waiting for the reported value to _change_, not to be
+non-null: the stat persists between switches, so a naive read reports the
+previous direction and both look identical.
+
+**L1's substance passed, its venue is deferred** — the WASM engine instantiates
+and renders on the Pixel 4 across the 31-tune corpus and the licence audit is
+clean. The gate names the Callback 8020 / SailfishOS as the primary device; that
+hardware does not exist yet, so that re-run is deferred, not failed.
+
+**Hold-to-seek verified with real touch**, after the user reported it did not
+work. Earlier verification drove React handlers directly and so never exercised
+a finger; Android hands a long press on a scrollable region to the scroller and
+fires `pointercancel` at about the 450 ms hold threshold. Fixed with pointer
+capture plus `touch-action: none`. On the device, 2.5 s holds: next 0:31 → 1:16,
+prev 1:16 → 0:22, same track throughout. (A rewind near 0:00 clamps, which made
+one earlier spot-check look broken.)
+
+**Three metrics were reporting numbers that could not mean what their budgets
+said.** `skipToLaunchMs` was never recorded — `recordSkip` sat in an unconsumed
+hook — so its 400 ms bound had never once been evaluated; first real measurement
+is 3585 ms worst / ~775 ms typical, which is poor and is recorded as such rather
+than endorsed. `lastRefillMs` aliased the cold `firstCandidateMs`, failing as a
+false regression whenever the lookahead never needed refilling. `firstCandidateMs`
+was pinned at 300 ms but measures 254–411 ms, so the same healthy build passed or
+failed on variance.

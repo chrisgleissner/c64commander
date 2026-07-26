@@ -134,8 +134,8 @@
       "pinned": 1500,
       "measured": {
         "device": "Pixel 4 (flame)",
-        "value": null,
-        "note": "C64 \u2194 Local switch \u2192 audio resumes; Track B LE3"
+        "value": 1020,
+        "note": "Measured 2026-07-26 against a live C64U, both directions, twice each, with a tune playing: Local\u2192C64 1020 and 886 ms, C64\u2192Local 172 and 320 ms. The asymmetry is expected and is the whole cost of the C64 direction -- it resets the Ultimate and re-uploads the tune, where the Local direction only stops the C64 and starts the WASM engine. Worst case 1020 ms sits inside the 1500 ms pin. Measured by waiting for the reported value to CHANGE rather than to be non-null: the stat persists between switches, so a naive read reports the previous direction's number and the second direction looks identical to the first."
       }
     }
   }
