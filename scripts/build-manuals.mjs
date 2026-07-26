@@ -1514,6 +1514,14 @@ export const renderManualMarkdown = ({ variant, features }) => {
       variant,
     )} instead, and the app tells you so once.`,
     "",
+    `**Wind through a tune.** While a SID is playing on your ${appDeviceName(
+      variant,
+    )}, press and hold **⏭** to fast-forward or **⏮** to rewind — the tune keeps moving for as long as you hold, roughly five seconds at a time. A short tap still skips to the next or previous tune, so the buttons do what they always did. This works with the on-device engine; on ${targetDeviceShortName(
+      variant,
+    )} the buttons only skip.`,
+    "",
+    `**Two SID sound engines.** Under **Settings → SID Radio → SID emulation** you can choose how faithfully the on-device engine models the C64's SID chip. **Accurate (reSIDfp)** is the default and is what you want: it is a full model of the real chip and sounds like the hardware. **Light (SIDLite)** trades some of that fidelity for roughly a third of the work, which is worth having on an older or slower phone, or when you want to save battery on a long listen. Both play every tune; only the sound and the effort differ, and you can switch whenever you like.`,
+    "",
     "![SID Radio settings: enable stations, the ranking, and the experimental on-device playback engine, with the similarity-corpus status](../../img/app/settings/sid-radio.png)",
     "",
     "Enable SID Radio, the heart / cross ranking, and the on-device engine under **Settings → SID Radio**, which also shows the similarity-corpus and installed-HVSC versions.",
