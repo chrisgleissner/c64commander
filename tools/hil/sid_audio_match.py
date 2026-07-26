@@ -35,15 +35,19 @@ import numpy as np
 MEL_FMIN, MEL_FMAX = 800.0, 3000.0
 MATCH_THRESHOLD = 0.40
 
-# Playback volume for HIL runs. Measured on this rig: at Android media volume
-# 14/25 a correct tune scores 0.560 -- comfortably clear of the 0.40 threshold --
-# so there is no reason to run louder, and these tests share a room with people.
-# Below that the margin was not established: a single 10-second sample cannot
-# rank volumes, because melSim varies more between TUNES than between volumes
-# (a sweep that let the station auto-advance scored 0.100 at volume 16 and 0.583
-# at volume 6, measuring the tune rather than the level). Ranking lower volumes
-# honestly needs several samples of the SAME tune per step.
-RECOMMENDED_ANDROID_MEDIA_VOLUME = 14
+# Playback volume for HIL runs. These tests share a room with people, so this is
+# the quietest level that still scores reliably, not the loudest available.
+# Measured on one tune (Turrican_3, subsong 23) against the room floor of
+# -42.4 dBFS:
+#
+#   volume 16 -> -35.7 dBFS (floor +6.7)   melSim 0.542
+#   volume 18 -> -33.2 dBFS (floor +9.2)   melSim 0.484
+#   volume 20 -> -30.9 dBFS (floor +11.5)  melSim 0.521
+#   volume 22 -> -27.6 dBFS (floor +14.8)  melSim 0.549
+#   volume 14 -> -38.5 dBFS (floor +3.9)   too quiet to match
+#
+# Above ~6 dB over the floor the score plateaus, so louder buys nothing.
+RECOMMENDED_ANDROID_MEDIA_VOLUME = 16
 SAMPLE_RATE = 44100
 
 def read_wav(path: str):
@@ -110,6 +114,38 @@ def match(capture_wav: str, sid_path: str, songnr: int | None = None, reference_
             "seconds": round(len(cap)/crate, 1), "tune": os.path.basename(sid_path),
             "match": bool(sims[best] >= MATCH_THRESHOLD)}
 
+def subsong_count(sid_path: str) -> int:
+    with open(sid_path, "rb") as fh:
+        head = fh.read(0x10)
+    return int.from_bytes(head[0x0E:0x10], "big") if len(head) >= 0x10 else 1
+
+def match_any_subsong(capture_wav: str, sid_path: str, reference_seconds: int = 100,
+                      max_subsongs: int = 32) -> dict:
+    """Match without being told which subsong is playing.
+
+    The app does not surface the subsong, and a SID's subsongs are different
+    pieces of music: `Turrican_3.sid` defaults to subsong 2 but the app was
+    playing 23, which scored 0.534 while every other subsong sat below 0.10.
+    Comparing against the default alone therefore reports a perfectly good
+    playback as a mismatch -- which it did, at every volume, until this was
+    found. When the subsong is unknown, scan.
+    """
+    n = min(subsong_count(sid_path), max_subsongs)
+    best = {"melSim": -1.0, "songnr": None}
+    for song in range(1, max(n, 1) + 1):
+        try:
+            r = match(capture_wav, sid_path, songnr=song, reference_seconds=reference_seconds)
+        except SystemExit:
+            continue
+        if r["melSim"] > best["melSim"]:
+            best = {**r, "songnr": song}
+    best["subsongsScanned"] = n
+    best["match"] = bool(best["melSim"] >= MATCH_THRESHOLD)
+    return best
+
 if __name__ == "__main__":
     import json
-    print(json.dumps(match(sys.argv[1], sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else None)))
+    if len(sys.argv) > 3:
+        print(json.dumps(match(sys.argv[1], sys.argv[2], int(sys.argv[3]))))
+    else:
+        print(json.dumps(match_any_subsong(sys.argv[1], sys.argv[2])))
