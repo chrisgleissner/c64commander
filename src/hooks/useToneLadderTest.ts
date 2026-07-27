@@ -278,9 +278,22 @@ export const useToneLadderTest = (session: AvMirrorSession = avMirrorSession): T
   const lastColour = useRef<number | null>(null);
   const unsubscribeAudio = useRef<(() => void) | null>(null);
   const unsubscribeFrames = useRef<(() => void) | null>(null);
+  /**
+   * The capture deadline, tracked so a finished run cannot end a later one.
+   *
+   * A run normally ends early, when enough audio has arrived, leaving its deadline still pending.
+   * Start a second run inside that window and the stale timer fires against the new capture, which
+   * is then graded on a sliver of audio — a plausible-looking result from a measurement that never
+   * happened. Cleared whenever a run starts, ends or is reset.
+   */
+  const deadline = useRef<number | null>(null);
 
   const stopListening = useCallback(() => {
     collecting.current = false;
+    if (deadline.current !== null) {
+      window.clearTimeout(deadline.current);
+      deadline.current = null;
+    }
     unsubscribeAudio.current?.();
     unsubscribeAudio.current = null;
     unsubscribeFrames.current?.();
@@ -310,6 +323,8 @@ export const useToneLadderTest = (session: AvMirrorSession = avMirrorSession): T
   }, [stopListening]);
 
   const run = useCallback(async () => {
+    // Tear down anything still live from a previous run before starting a new one.
+    stopListening();
     setRunning(true);
     setError(null);
     setResult(null);
@@ -359,8 +374,9 @@ export const useToneLadderTest = (session: AvMirrorSession = avMirrorSession): T
           pendingColour.current = { colour, atMs: arrivalMs };
         }) ?? null;
 
-      window.setTimeout(
+      deadline.current = window.setTimeout(
         () => {
+          deadline.current = null;
           if (collecting.current) finish();
         },
         (CAPTURE_SECONDS + 2) * 1000,
@@ -371,7 +387,7 @@ export const useToneLadderTest = (session: AvMirrorSession = avMirrorSession): T
       setRunning(false);
       addLog("warn", "Tone & colour ladder: could not start", { service: "streams", error: message });
     }
-  }, [finish, session]);
+  }, [finish, session, stopListening]);
 
   const reset = useCallback(() => {
     stopListening();

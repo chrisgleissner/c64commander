@@ -50,6 +50,40 @@ describe("useToneLadderTest", () => {
     expect(subscribeFrames).toHaveBeenCalledTimes(1);
   });
 
+  it("does not let a finished run's deadline cut short the next one", async () => {
+    // A run usually ends early, when enough audio has arrived, leaving its deadline still pending.
+    // Start another inside that window and the stale timer would fire against the new capture, which
+    // then gets graded on a sliver of audio — a plausible-looking result from a measurement that
+    // never happened.
+    vi.useFakeTimers();
+    try {
+      const { result } = renderHook(() => useToneLadderTest());
+
+      await act(async () => {
+        await result.current.run();
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+        await result.current.run();
+      });
+
+      // t=18.5s: past the FIRST run's deadline (18s) but before the second's (19s). If the stale
+      // timer were still armed it would end the second run right here.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(17_500);
+      });
+      expect(result.current.running).toBe(true);
+
+      // The second run's own deadline still ends it, at t=19s.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      expect(result.current.running).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("stops listening once the run is reset", async () => {
     const unsubscribeAudio = vi.fn();
     subscribeAudio.mockReturnValueOnce(unsubscribeAudio);
