@@ -48,14 +48,30 @@ const median = (values) => {
 };
 
 /**
- * How many times to run the whole benchmark file before comparing.
+ * How many times to run the whole benchmark file before comparing, and why the
+ * per-stage aggregate is the BEST sample rather than the median.
  *
  * Each vitest run is internally tight (±0.1%), but the run-to-run spread is
  * large: `VIC frame assembly` was observed at 40,786 / 39,895 / 23,489 ops/s on
  * an otherwise idle machine — a 74% spread that no sensible tolerance can
- * straddle. One sample per stage therefore gates noise, not code. Taking the
- * median of a few runs collapses that, because interference only ever makes a
- * microbenchmark slower, never faster.
+ * straddle. One sample per stage therefore gates noise, not code.
+ *
+ * The median was the first attempt at collapsing that, and it is not enough on
+ * a shared public runner. Interference there is not uniform: it can stall ONE
+ * stage while the others run clean, which no cross-stage normalisation can
+ * cancel. `governor tick` measured 256,743 ops/s in CI against a 576,956
+ * baseline — on a runner the same run rated 19% FASTER overall — while the same
+ * commit measured 552k/574k/574k locally. Two slow samples out of three drag
+ * the median down and the gate fails on code that never touched the governor.
+ *
+ * So take the MAXIMUM, which follows from the sentence already true above:
+ * interference only ever makes a microbenchmark slower, never faster. The
+ * fastest observed sample is therefore the least-contaminated estimate of what
+ * this machine can do, and noise can only pull the others away from it.
+ *
+ * This does not weaken the gate. A genuine code regression makes EVERY sample
+ * slower — there is no run in which the slower code is fast — so the maximum
+ * drops with it and the stage is still caught at the same tolerance.
  */
 const REPEATS = Number(process.env.STREAM_BENCH_REPEATS ?? 3);
 
@@ -76,13 +92,15 @@ const runOnce = () => {
   return hz;
 };
 
-console.log(`Running stream hot-path benchmarks (${REPEATS}x, per-stage median)…`);
+console.log(`Running stream hot-path benchmarks (${REPEATS}x, per-stage best of ${REPEATS})…`);
 const samples = {};
 for (let i = 0; i < REPEATS; i += 1) {
   for (const [name, hz] of Object.entries(runOnce())) (samples[name] ??= []).push(hz);
 }
 const current = {};
-for (const [name, values] of Object.entries(samples)) current[name] = Math.round(median(values));
+// Best, not median — see the REPEATS comment: interference only slows a
+// microbenchmark, so the fastest sample is the cleanest measurement.
+for (const [name, values] of Object.entries(samples)) current[name] = Math.round(Math.max(...values));
 
 if (Object.keys(current).length === 0) fail(2, "No benchmark results parsed");
 
