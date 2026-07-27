@@ -11,7 +11,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { addLog } from "@/lib/logging";
 import { getC64API } from "@/lib/c64api";
 import { AUDIO_SAMPLE_RATE } from "@/lib/streams/audioStream";
-import type { AvMirrorSession } from "@/lib/streams/avMirrorSession";
+import { avMirrorSession, type AvMirrorSession } from "@/lib/streams/avMirrorSession";
 import { VIC_FRAME_WIDTH } from "@/lib/streams/vicDecode";
 import {
   TONE_LADDER_LOOP_SECONDS,
@@ -258,7 +258,15 @@ export interface ToneLadderTest {
   reset: () => void;
 }
 
-export const useToneLadderTest = (session?: AvMirrorSession): ToneLadderTest => {
+/**
+ * Defaults to the shared mirror session, exactly as `useAvSync` does.
+ *
+ * It used to take an optional session and no default. `AvSyncPanel` renders without a session prop,
+ * so `session?.subscribeAudio(...)` quietly did nothing and the check graded an empty capture —
+ * reporting "not measured" rather than lying, but never measuring anything either. Only a run on the
+ * phone showed it.
+ */
+export const useToneLadderTest = (session: AvMirrorSession = avMirrorSession): ToneLadderTest => {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<ToneLadderResult | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAvSync } from "@/hooks/useAvSync";
 import { useToneLadderTest } from "@/hooks/useToneLadderTest";
-import { TONE_LADDER_SLOT_SECONDS } from "@/lib/streams/toneLadder";
 import { activeVicPalette, paletteEntryHex } from "@/lib/streams/vicPalette";
 import type { AvMirrorSession } from "@/lib/streams/avMirrorSession";
 import type { AvSyncStats } from "@/lib/streams/avSync";
@@ -391,12 +390,8 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
           </p>
         ) : (
           <p className="mt-2 text-[11px] text-muted-foreground">
-            Plays a known scale on your C64 — C3 up to C4 and back, {TONE_LADDER_SLOT_SECONDS.toFixed(2)}s per note,
-            with the screen changing colour on every note and two silent gaps — then grades the sound and picture that
-            reach this device. Wrong pitch, notes running long, or a gap that is not silent all mean the audio is being
-            corrupted on the way here rather than merely delayed; most often that is another machine streaming into the
-            same group. Because the C64 changes the note and the colour together, the A/V figure is the delay between
-            them. Needs <strong>Listen</strong> on, and <strong>Live View</strong> for the picture.
+            Plays a known scale that changes the screen colour on every note. Tap <strong>Run test</strong> with Listen
+            and Watch both on.
           </p>
         )}
       </CollapsibleSection>
