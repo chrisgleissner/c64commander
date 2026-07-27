@@ -251,16 +251,29 @@ def check_transport(cdp: Cdp, serial: str, checks: Checks) -> None:
         f"pause={pause}",
     )
 
-    play = testid_state(cdp, "playlist-play")
-    checks.record(
-        "Play/Stop reflects the running tune",
-        bool(play and play["present"] and "stop" in play["label"].lower()),
-        f"play={play}",
-    )
+    # Play/Prev/Next are gated on `canTransport = hasPlaylist && !isPlaylistLoading`.
+    # An empty playlist therefore disables them CORRECTLY — and the playlist is
+    # per-device, so selecting a machine that has never had one made these read
+    # as transport failures when nothing was wrong. Say which it is.
+    playlist_items = cdp.evaluate("document.querySelectorAll('[data-testid=\"playlist-item\"]').length") or 0
+    if not playlist_items:
+        checks.record(
+            "playlist present for the transport checks",
+            False,
+            "this device has an EMPTY playlist, so Play/Previous/Next are correctly disabled — "
+            "run against a device with a playlist to exercise them",
+        )
+    else:
+        play = testid_state(cdp, "playlist-play")
+        checks.record(
+            "Play/Stop reflects the running tune",
+            bool(play and play["present"] and "stop" in play["label"].lower()),
+            f"play={play}",
+        )
 
-    for testid in ("playlist-prev", "playlist-next"):
-        state = testid_state(cdp, testid)
-        checks.record(f"{testid} is usable", bool(state and state["present"] and not state["disabled"]), f"{state}")
+        for testid in ("playlist-prev", "playlist-next"):
+            state = testid_state(cdp, testid)
+            checks.record(f"{testid} is usable", bool(state and state["present"] and not state["disabled"]), f"{state}")
 
     # Pause must act on the tune that is playing, not on nothing.
     before = elapsed_seconds(cdp)

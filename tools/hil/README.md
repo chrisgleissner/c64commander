@@ -11,6 +11,46 @@ physical rig), while the host-deterministic budget checks run in CI.
 - **`seek_latency_hil.py`** — what a backward seek costs the listener, measured at the speaker.
   See **Seek latency** below.
 
+## Audio overlap + transport
+
+`audio_overlap_hil.py` proves the app never plays two sounds at once and that the transport acts on
+whatever is playing. Run it against either machine, or across a switch between them:
+
+```bash
+python3 tools/hil/audio_overlap_hil.py --serial <ADB_SERIAL> --device debug-c64u
+python3 tools/hil/audio_overlap_hil.py --serial <ADB_SERIAL> --switch-devices
+```
+
+### Verified on the Pixel 4, 2026-07-27 — 13/13 against the C64U
+
+| Check | Result |
+| --- | --- |
+| A local tune plays | 1 app audio stream, −30.2 dBFS (11.8 dB over the room floor) |
+| Live View audio started **on top of** a local tune | 1 stream — the tune is stopped, never layered |
+| A local tune started **on top of** the mirror | 1 stream — the mirror is stopped |
+| After a WebView reload | 0 streams (the native AudioTrack no longer outlives the page) |
+| Pause on a Play page mounted mid-tune | enabled, and it stops the audio |
+| Play/Stop, Previous, Next | usable, labelled for the running tune |
+| Progress bar seekable | yes on the local route, absent on the C64 route |
+
+Audio **quality** was checked separately, because "no overlap" is not "sounds right": a 14 s capture
+of `Use_My_Fire.sid` scored **melSim 0.716** against a `sidplayfp` render of the same file pulled off
+the phone — the rig's calibrated "correct tune" score is 0.725 (wrong tune −0.049). See
+`sid_audio_match.py`.
+
+### Counting audio streams honestly
+
+`dumpsys audio | grep -c 'state:started'` counts **every app on the phone**, which is how a stray
+"2 concurrent streams" was once blamed on this app when the second player belonged to something else.
+This harness filters started players to the app's own pid.
+
+### Reading a failure
+
+Play / Previous / Next are gated on `canTransport = hasPlaylist && !isPlaylistLoading`, and the
+playlist is **per device**. Running against a machine that has never had one disables them
+correctly — the harness reports that as "this device has an EMPTY playlist" rather than as a
+transport failure.
+
 ## Seek latency
 
 `seek_latency_hil.py` answers one question with the microphone: **tap the progress bar to seek
@@ -32,15 +72,15 @@ Eight clean readings — every one a real backward seek, on an audible phone, wi
 0.33  0.43  0.52  0.67  1.20  2.38  2.62  3.65   (seconds, tap → sound returns)
 ```
 
-| | tap → sound returns |
-| --- | --- |
+|                                | tap → sound returns               |
+| ------------------------------ | --------------------------------- |
 | **After the pre-render cache** | **0.33 – 3.65 s, median ≈ 0.9 s** |
-| _Before it existed_ | _9.96 s_ |
+| _Before it existed_            | _9.96 s_                          |
 
 So the worst reading beats the old figure by ~2.7× and the typical one by ~10×.
 
 **The spread is not explained by the cache being warm or cold.** That was the expectation, and the
-readings do not support it: two seeks taken 176 s and 85 s into the *same* 245 s tune — both long
+readings do not support it: two seeks taken 176 s and 85 s into the _same_ 245 s tune — both long
 past the ~37 s its pre-render needs — returned 2.38 s and 1.20 s, while a seek 3 s into a fresh tune
 returned 0.43 s. Something other than the cache dominates what is left, and it has not been
 identified. Do not quote a cold/warm split from this data.
