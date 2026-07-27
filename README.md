@@ -11,26 +11,21 @@ Control and manage a Commodore 64 Ultimate from Android, iOS, or a self-hosted w
 
 ## Features
 
-- **Cross-platform**: Native Android and iOS apps, plus a Docker-based web interface for macOS, Windows, or Linux.
-- **Cross-device**: Works with the C64 Ultimate, the Ultimate 64 (Elite I/II), and the Ultimate-II+(L) cartridge.
-- **Dashboard**: Machine controls, Quick actions, drive and printer shortcuts, SID mixer, and streams on a single page.
-- **Playlists**: Build playlists from local files, C64U storage, the High Voltage SID Collection (HVSC), or CommoServe search results. Autoplay, shuffle, and subsong selection.
-- **Disk management**: Mount, unmount, and rotate multi-disk groups across drives.
-- **Configuration**: Browse and edit the full C64 Ultimate configuration tree.
-- **Diagnostics**: Inspect activity logs, traces, latency, and connection health across App, REST, FTP, and Telnet activity.
-- **Device Switcher**: Switch between devices and run parallel health checks.
-- **Content Explorer**: An additive, feature-flagged set of tools, each toggled independently in **Settings**:
-  - **Disk Explorer**: Open a disk image to see the programs inside it and Run, Load, or Mount & Load any single one (only closed PRG files can launch directly).
-  - **Launch Safety**: Automatically parks a configured cartridge around direct launches so a freezer cartridge can't hijack a Run into its menu; optional boot-menu answer after a Mount & Load reset.
-  - **In-image search**: Search finds programs inside `.d64`/`.d71`/`.d81` images, shown as disk → program.
-  - **New disk**: Create a formatted blank D64/D71/D81/DNP image on the device.
-  - **Live mirror** _(experimental)_: Receive and play the running machine's audio in-app, with a more demanding, off-by-default video mirror.
+- **Cross-platform**: Android and iOS apps, plus a self-hosted Docker web app for Windows, macOS, and Linux.
+- **Device support**: Works with the C64 Ultimate, Ultimate 64 Elite I/II, and Ultimate-II+(L) cartridges.
+- **Dashboard**: Control the machine, drives, printer, SID mixer, lighting, and streams from one page.
+- **Playlists and SID Radio**: Play programs and SID music from local files, device storage, HVSC, or CommoServe.
+- **Remote Input and Live View**: Use an on-screen joystick or keyboard, and stream audio or video from the running machine.
+- **Disk tools**: Mount images, manage multi-disk collections, inspect image contents, and create blank disks.
+- **Configuration**: Browse and edit the complete C64 Ultimate configuration.
+- **Diagnostics**: Review connection health, activity, traces, and latency.
+- **Multiple devices**: Save several devices, check their health, and switch between them.
 
 ## Getting Started
 
 Setup takes three steps: install the app, enable the C64 Ultimate's network services, then connect the two over your local network.
 
-### Step 1 — Install C64 Commander
+### Step 1: Install C64 Commander
 
 Install the app on a phone, tablet, or host that is on the **same local network** as the C64 Ultimate.
 
@@ -50,7 +45,7 @@ SideStore refreshes the app signature automatically every 7 days.
 
 **Web (Docker)**
 
-The web version is self-hosted for LAN use. It needs Docker on Windows, macOS, or Linux; a Raspberry Pi Zero 2W or 4B with 512 MiB RAM or more is enough. Install Docker with [Docker Desktop](https://docs.docker.com/desktop/) (Windows/macOS) or [Docker Engine](https://docs.docker.com/engine/install/) (Linux). The image supports `linux/amd64` and `linux/arm64`.
+The web app runs on your local network using Docker. Install [Docker Desktop](https://docs.docker.com/desktop/) on Windows or macOS, or [Docker Engine](https://docs.docker.com/engine/install/) on Linux. The image supports `linux/amd64` and `linux/arm64`; a Raspberry Pi Zero 2W or 4B with at least 512 MiB RAM is sufficient.
 
 ```bash
 mkdir -p ./c64commander-config && chmod 0777 ./c64commander-config
@@ -60,25 +55,25 @@ docker run -d --name c64commander -p 8064:8064 \
   ghcr.io/chrisgleissner/c64commander:<version>
 ```
 
-Open `http://<host-ip>:8064` in a browser to load the app. If you later set a password in **Settings > Device > Network password**, the web interface requires that password to log in.
+Open `http://<host-ip>:8064` in a browser. If you configure a network password under **Settings > Device > Network password**, use it to sign in to the web app.
 
-### Step 2 — Enable Network Services on the C64 Ultimate
+### Step 2: Enable Network Services on the C64 Ultimate
 
-C64 Commander controls the device through its built-in network services, so turn these on first.
+Enable the network services used by C64 Commander.
 
 ![Network services & timezone menu](docs/img/setup/enable_services.png)
 
 1. On the C64 Ultimate, press **C=** and **RESTORE** together to open the menu, then select **Network Services & Timezone**.
-2. Enable the services the app relies on:
-   - **Web Remote Control Service** — the REST API used for most control and status operations. **Required.**
-   - **FTP File Service** — needed to browse and transfer files for playlists and disk collections.
-   - **Telnet Remote Menu Service** — used for a few advanced operations not available over REST, such as power cycle.
-3. Make sure the C64 Ultimate is on the same network as the device running C64 Commander. Note its IP address under **Wired Network Setup** or **WI-FI Network Setup** in case you need to enter it manually.
+2. Enable the required services:
+   - **Web Remote Control Service**: required for control and status.
+   - **FTP File Service**: required for browsing and transferring files.
+   - **Telnet Remote Menu Service**: required for actions such as power cycling.
+3. Connect both devices to the same local network. Note the Ultimate's IP address under **Wired Network Setup** or **Wi-Fi Network Setup** in case manual setup is needed.
 
-### Step 3 — Connect to Your Device
+### Step 3: Connect to Your Device
 
-1. Start C64 Commander. When no reachable device is configured yet, it automatically scans the local network for C64 Ultimate devices.
-2. From the discovered devices, tap **Use** to connect now, or **Save** to keep one for later. If a device is password-protected, the app prompts for its network password before connecting.
+1. Start C64 Commander. If no reachable device is configured, the app scans the local network automatically.
+2. Tap **Use** to connect to a discovered device, or **Save** to keep it for later. Enter the network password when prompted.
 
    <img src="docs/img/app/launch/discovery/startup-autodiscovery-interstitial.png" alt="C64 systems found during a network scan" width="320"/>
 
@@ -88,13 +83,13 @@ C64 Commander controls the device through its built-in network services, so turn
 
 ![Connected C64U badge](docs/img/app/home/02-connection-status-popover.png)
 
-On later launches, C64 Commander reconnects to your saved device automatically. If a device needs a network password — or a saved password stops working — the app prompts for it and reconnects as soon as the correct password is entered.
+C64 Commander reconnects to saved devices automatically on later launches.
 
 ## Pages
 
 ### Home
 
-Operational dashboard: machine controls, quick actions, light effects, drives, printer, SID mixer, streams, and configuration snapshots.
+Control the machine, quick actions, lighting, drives, printer, SID mixer, streams, and configuration snapshots.
 
 <table>
   <tr>
@@ -121,18 +116,18 @@ Operational dashboard: machine controls, quick actions, light effects, drives, p
 
 ### Remote Input
 
-Turn your phone into a wireless controller for the C64 — an on-screen joystick and keyboard relayed to the machine over your network. Open it from the **Remote Input** quick action on **Home**, or the **Remote Input** button on **Play** while something is running.
+Use your phone as a wireless joystick or C64 keyboard. Open **Remote Input** from **Home**, or from **Play** while a program is running.
 
 Remote Input includes:
 
-- **Joystick** - **Analog**, **D-Pad**, and **Swipe** controls, **FIRE**, autofire, port selection, and an immersive **Game mode** that simplifies the layout.
-- **Keys** - a touchscreen C64 keyboard with direct access to common control, edit, function, and system keys.
+- **Joystick**: Analog, D-pad, and swipe controls, with fire, autofire, port selection, and Game mode.
+- **Keys**: A touchscreen C64 keyboard with common control, edit, function, and system keys.
 
-Joystick support requires an Ultimate 64 with firmware 3.15 or above. Due to hardware limitations, it does not work on U2.
+Joystick input requires an Ultimate 64 with firmware 3.15 or later. It is not available on Ultimate-II+(L) cartridges.
 
 #### Joystick Control
 
-The following shows the Joystick tab in standard and Game mode.
+Joystick controls in standard and Game mode:
 
 <table>
   <tr>
@@ -144,7 +139,7 @@ The following shows the Joystick tab in standard and Game mode.
 
 #### Keyboard Control
 
-The following shows the Keys tab using various display profiles, from small to large.
+Keyboard layouts for small, standard, and large displays:
 
 <table>
   <tr>
@@ -156,7 +151,7 @@ The following shows the Keys tab using various display profiles, from small to l
 
 ### Live View
 
-Hear and see the running machine from inside the app, in one shared session that stays live wherever you go. **Listen** for audio-only (no screen space, just a live dot); **Watch** for a small preview you can expand.
+Stream audio and video from the running machine. Use **Listen** for audio only, or **Watch** for an expandable screen preview.
 
 <table>
   <tr>
@@ -165,17 +160,17 @@ Hear and see the running machine from inside the app, in one shared session that
   </tr>
 </table>
 
-Inside **Remote Input**, the mirror becomes a full-width, zoomable screen for playing games or driving keypad-only devices. A colour-coded **view-lock** keeps physical keys unambiguous — **blue = driving the C64**, **amber = adjusting the view** — and you can pinch/drag/double-tap to zoom and pan, follow on-screen activity automatically, or jump around with the minimap. In game mode the screen stays fully visible above the controls at any control size.
+In **Remote Input**, Live View provides a full-width screen with zoom, pan, a minimap, and automatic tracking. A view lock switches physical controls between the C64 and the screen view. Game mode keeps the screen visible above the controls.
 
 <img src="docs/img/app/home/remote-input/06-av-mirror-immersive.png" alt="Remote Input immersive mirror: the C64 screen with a Driving-C64 view-lock chip and zoom/pan controls" width="300"/>
 
-Audio never clicks or drifts: lost packets are concealed (hold-last-sample with a fade) and the picture is never allowed to lag the sound. A **Stats** panel (open while playing) shows live and historical frame rate, audio-buffer depth, packet loss/concealment and CPU, and exports a JSON diagnostic. An adaptive **Video frame rate** (Auto / 100% / 50% / 25%) sheds exactly as much picture as needed to protect audio and battery, recovering to full rate automatically. On the transport side, video frames are assembled natively (skipping the base64/bridge cost of frames that won't be shown), the receive threads run at raised priority, and a continuous no-drift latency invariant is enforced. Correctness, latency, concealment and CPU are guarded by deterministic tests plus a local Pixel-4 → C64U hardware-in-the-loop gate (`./build --stream-hil`).
+Live View prioritises continuous audio and can reduce the video frame rate when needed. The optional **Stats** panel shows frame rate, buffering, packet loss, and CPU use.
 
-Enable **Audio Mirror** / **Video Mirror** under **Settings → Features** (stream ports are configurable under **Settings → Play and disk behaviour**, defaulting to 11000 / 11001).
+Enable **Audio Mirror** and **Video Mirror** under **Settings > Features**. Video is more demanding and disabled by default. Stream ports can be changed under **Settings > Play and disk behaviour**.
 
 ### Play
 
-Build playlists for programs and songs sourced from the local device, C64U storage, HVSC, or CommoServe. Supports autoplay, shuffle, repeat, subsong selection, and automatic song length discovery.
+Build playlists from local files, C64 Ultimate storage, HVSC, or CommoServe. Use autoplay, shuffle, repeat, subsong selection, and automatic song lengths.
 
 <table>
   <tr>
@@ -187,7 +182,9 @@ Build playlists for programs and songs sourced from the local device, C64U stora
 
 ### SID Radio
 
-An endless, self-refilling queue of _similar_ SIDs, mixed from the High Voltage SID Collection and the tunes you like. Pick a **song station** (more like the current tune), a **mood station** (fast-paced, chill, melodic, nostalgic, …), or a **taste station** built from your ♥ ratings — then lean back while it auto-advances. Rate the current tune with ♥ / ✕ to steer where the station goes next. An optional **on-device playback engine** can render SIDs on the phone itself with libsidplayfp, no C64 needed — it uses the C64 ROM images read from the Ultimate you are connected to (Settings → SID Radio), which stay on your phone and are never shared; without them, tunes play on the Ultimate instead. Similarity comes from a compact, content-addressed index (`sidcorr-tiny-1`), so it works offline.
+Create an endless playlist of similar SID tunes from HVSC. Start from the current song, a mood, or your liked tunes, then use ♥ and ✕ to guide future selections.
+
+Tunes normally play on the connected C64 Ultimate. The optional on-device engine plays them on your phone using C64 ROM images copied from your Ultimate. The ROMs remain on your device, and SID Radio can then work offline.
 
 <table>
   <tr>
@@ -228,7 +225,7 @@ View drive state, mount and eject images, and manage disk collections with multi
 
 ### Content Explorer
 
-Go beyond mounting a whole image: create a formatted blank disk on the device, look inside an image to Run, Load, or Mount a single program, search the programs inside disk images, and let Launch Safety answer a cartridge boot menu after a reset.
+Create blank disks, inspect disk images, launch individual programs, search inside images, and handle cartridge boot menus with Launch Safety.
 
 <table>
   <tr>
@@ -239,7 +236,7 @@ Go beyond mounting a whole image: create a formatted blank disk on the device, l
 
 ### Configuration
 
-Browse and edit the full C64 Ultimate configuration: categories, items, sliders, toggles, and per-item refresh.
+Browse and edit the complete C64 Ultimate configuration.
 
 <table>
   <tr>
@@ -251,7 +248,7 @@ Browse and edit the full C64 Ultimate configuration: categories, items, sliders,
 
 ### Settings
 
-Connection, appearance, diagnostics, playback defaults, HVSC integration, and device-safety controls.
+Configure connections, appearance, diagnostics, playback, HVSC, and device safety.
 
 <table>
   <tr>
@@ -280,9 +277,7 @@ Built-in guides for setup, workflows, and day-to-day usage.
 
 ### Diagnostics
 
-Tap the top-right status badge to open diagnostics.
-
-Provides health checks, activity logs, trace inspection, filter editor, and latency analysis across App, REST, FTP, and Telnet contributors.
+Tap the top-right status badge to review connection health, activity logs, traces, filters, and latency.
 
 <table>
   <tr>
@@ -294,9 +289,7 @@ Provides health checks, activity logs, trace inspection, filter editor, and late
 
 ### Switch Device
 
-Long-press the top-right status badge to open the device switcher.
-
-The switcher shows all configured devices with real-time health status, allowing instant switching and quick identification of connectivity or device issues.
+Long-press the top-right status badge to view saved devices, compare their health, and switch between them.
 
 <table>
   <tr>
@@ -308,7 +301,7 @@ The switcher shows all configured devices with real-time health status, allowing
 
 ## Display Profiles
 
-The layout adapts automatically based on viewport width: Small (phones), Standard (large phones and small tablets), and Large (tablets and desktops). Override in **Settings > Display Profile**.
+The layout adapts to the screen size: Small for phones, Standard for large phones and small tablets, and Large for tablets and desktops. Override it under **Settings > Display Profile**.
 
 <table>
   <thead>
@@ -344,39 +337,27 @@ The layout adapts automatically based on viewport width: Small (phones), Standar
 
 ## Keyboard & Keypad Navigation
 
-C64 Commander can be operated with a hardware keyboard, D-pad/joystick, or
-numeric keypad.
+Use a hardware keyboard, D-pad, joystick, or numeric keypad to navigate the app. The highlighted control shows the current selection. Use Up/Down to move, OK/Enter to activate, and Back/Escape to close or return.
 
-The visible highlight shows the selected control; use
-Up/Down to move, OK/Enter to open a card or activate a control, and Back/Escape
-to leave a card, close a dialog, or go back. A soft-key guidance bar appears only
-while key navigation is active and clears immediately on touch/mouse input.
-
-Disable it in **Settings > Experimental > Keyboard and keypad navigation** if a
-device should remain touch-only. Numeric-keypad T9 text entry is reserved for
-keypad-first mode; hardware keyboard typing remains literal.
+Disable this under **Settings > Experimental > Keyboard and keypad navigation** for touch-only use. T9 text entry is used only in keypad-first mode; hardware keyboard input remains unchanged.
 
 ## Troubleshooting
 
-### Can't reach the device
+### Cannot reach the device
 
 - Confirm the C64 Ultimate and your device are on the same network.
 - Verify the IP address or hostname in **Settings > Device > Connection**.
 
 ### Device becomes unresponsive
 
-C64 Commander includes **Device Safety** controls under **Settings > Device Safety** to throttle REST and FTP traffic. REST mutations use a single in-flight lane; presets and advanced controls tune FTP concurrency and backoff behavior.
-
-- **Presets**: Relaxed, Balanced (default), Conservative.
-- **Advanced controls**: FTP concurrency, read coalescing, cooldowns, backoff strategy, circuit-breaker thresholds, discovery probe interval.
-- The Relaxed preset can overwhelm some setups. Start with Balanced or Conservative.
+Open **Settings > Device Safety** and select **Balanced** (default) or **Conservative** to reduce network load. Use **Relaxed** only on stable setups. Advanced controls are available for further tuning.
 
 ### iOS specifics
 
 - **App expired**: SideStore refreshes every 7 days automatically.
 - **Account/App ID limits**: Remove unused sideloaded apps and retry.
 - **Install/signing errors**: Re-download the IPA and verify its checksum.
-- **Telnet-backed controls**: Power Cycle, Clear Flash, and other Telnet-only actions use the native socket bridge on iOS and Android. Support is discovered from the connected device's live Telnet menu graph, so device-specific gaps stay visible as disabled controls with inline explanation instead of disappearing.
+- **Unavailable controls**: Actions not supported by the connected device remain visible but disabled, with an explanation.
 
 ## For Developers
 
