@@ -7,18 +7,21 @@
  */
 
 import { useState } from "react";
-import { Cpu, Smartphone, Volume2 } from "lucide-react";
+import { Volume2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { cn } from "@/lib/utils";
 import { addLog } from "@/lib/logging";
 import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
 import { useAvMirror } from "@/hooks/useAvMirror";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
+import { getSelectedSavedDevice } from "@/lib/savedDevices/store";
+import { LOCAL_DEVICE_LABEL, connectedDeviceLabel } from "@/lib/sourceNavigation/sourceTerms";
 
 /**
- * "Listen on: [C64] [Both] [This device]" (spec §12.5, Track B / LE2).
+ * "Listen on: [<device>] [Both] [Local]" (spec §12.5, Track B / LE2).
  *
  * The control asks ONE question — which speakers you hear the tune on — and
  * every option names speakers, so the middle one is simply the union of the
@@ -29,9 +32,14 @@ import { useFeatureFlag } from "@/hooks/useFeatureFlags";
  * is a location. Asking a single question turns the compound into a plain word.
  *
  * Mapping:
- *   C64          engine = c64,   audio mirror off
- *   Both         engine = c64,   audio mirror on
- *   This device  engine = local  (rendered here; there is no C64 audio to mirror)
+ *   <device>  engine = c64,   audio mirror off
+ *   Both      engine = c64,   audio mirror on
+ *   Local     engine = local  (rendered here; there is no C64 audio to mirror)
+ *
+ * Naming and icons come from `sourceTerms` and `FileOriginIcon`, the same pair
+ * the "Choose source" dialog, the playlist rows and the disks list use. This
+ * control used to invent both — a lucide chip glyph and the word "C64" — so one
+ * machine appeared under three names and two icons within a single app.
  */
 type ListenTarget = "c64" | "both" | "local";
 
@@ -76,7 +84,7 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
     });
   };
 
-  const option = (value: ListenTarget, Icon: typeof Cpu, title: string, testId: string) => {
+  const option = (value: ListenTarget, icon: React.ReactNode, title: string, testId: string) => {
     const active = selected === value;
     return (
       <Button
@@ -89,7 +97,7 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
         onClick={() => select(value)}
         className="gap-1.5"
       >
-        <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        {icon}
         {title}
       </Button>
     );
@@ -109,9 +117,26 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
     >
       <Label className="text-xs font-medium text-muted-foreground">Listen on</Label>
       <div className="flex flex-wrap gap-2">
-        {option("c64", Cpu, "C64", "playback-engine-c64")}
-        {canStreamBack ? option("both", Volume2, "Both", "playback-listen-both") : null}
-        {option("local", Smartphone, "This device", "playback-engine-local")}
+        {option(
+          "c64",
+          <FileOriginIcon origin="ultimate" className="h-3.5 w-3.5" label="" />,
+          connectedDeviceLabel(getSelectedSavedDevice()?.name),
+          "playback-engine-c64",
+        )}
+        {canStreamBack
+          ? option(
+              "both",
+              <Volume2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />,
+              "Both",
+              "playback-listen-both",
+            )
+          : null}
+        {option(
+          "local",
+          <FileOriginIcon origin="local" className="h-3.5 w-3.5" label="" />,
+          LOCAL_DEVICE_LABEL,
+          "playback-engine-local",
+        )}
       </div>
     </div>
   );

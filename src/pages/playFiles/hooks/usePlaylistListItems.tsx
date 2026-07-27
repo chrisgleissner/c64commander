@@ -12,6 +12,7 @@ import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { describeConfigOrigin, resolvePlaybackConfigUiState } from "@/lib/config/playbackConfig";
 import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
+import { LOCAL_DEVICE_LABEL, connectedDeviceLabel } from "@/lib/sourceNavigation/sourceTerms";
 import type { ActionListItem, ActionListMenuItem } from "@/components/lists/SelectableActionList";
 import type { PlayFileCategory } from "@/lib/playback/fileTypes";
 import type { PlaylistItem } from "@/pages/playFiles/types";
@@ -157,7 +158,7 @@ export const usePlaylistListItems = ({
               {
                 type: "info" as const,
                 label: "Location",
-                value: item.configRef.kind === "local" ? "This device" : "C64 Ultimate",
+                value: item.configRef.kind === "local" ? LOCAL_DEVICE_LABEL : connectedDeviceLabel(),
               },
             ]
           : []),

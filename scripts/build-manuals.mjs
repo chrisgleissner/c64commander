@@ -1500,7 +1500,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     `Where you hear a SID is up to you. When a SID is playing, the Play screen offers **Listen on**, with up to three choices:`,
     "",
-    `- **C64** — the tune plays on ${targetDeviceShortName(variant)} and you listen there.`,
+    `- **The device's own name** (or **C64U** if it has none) — the tune plays on ${targetDeviceShortName(
+      variant,
+    )} and you listen there. The button is labelled after the machine you are connected to, so with two saved machines you can see which one you are choosing.`,
     `- **Both** — the tune plays on ${targetDeviceShortName(
       variant,
     )} and its sound is streamed to your ${appDeviceName(
@@ -1508,7 +1510,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     )} as well, so you hear it in both places. This choice only appears when the sound can actually reach you — if ${targetDeviceShortName(
       variant,
     )} has no network path for it, the option is simply not shown.`,
-    `- **This device** — your ${appDeviceName(
+    `- **Local** — your ${appDeviceName(
       variant,
     )} renders the SID itself with a built-in libsidplayfp engine. No C64 needed, and nothing is streamed.`,
     "",
@@ -1516,7 +1518,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
       variant,
     )} can play on its own; programs and disks always run on ${targetDeviceShortName(variant)}.`,
     "",
-    "![The Listen on control: C64, Both, or This device](../../img/app/play/sid-radio/03-listen-on.png)",
+    "![The Listen on control: the connected machine, Both, or Local](../../img/app/play/sid-radio/03-listen-on.png)",
     "",
     `**On-device playback needs the C64 ROMs.** SID music is driven by the C64's own KERNAL and BASIC routines, so without them a tune starts but never plays. Those ROM images are copyrighted and cannot be shipped with an app, so ${appName} reads them from ${targetDeviceShortName(
       variant,
@@ -1546,7 +1548,7 @@ Crossfading only works for tunes playing on your ${appDeviceName(
       variant,
     )}. Two tunes have to sound at the same moment for one to fade into the other, and ${targetDeviceShortName(
       variant,
-    )} plays a single tune live on its one sound chip — so unless **Listen on** is set to **This device** the setting is greyed out and tunes change cleanly instead.`,
+    )} plays a single tune live on its one sound chip — so unless **Listen on** is set to **Local** the setting is greyed out and tunes change cleanly instead.`,
     "",
     `**Two SID sound engines.** Under **Settings → SID Radio → SID emulation** you can choose how faithfully the on-device engine models the C64's SID chip. **Accurate (reSIDfp)** is the default and models the real chip cycle by cycle — pick it if you want the last word in fidelity. **Light (SIDLite)** does roughly a third of the work and still sounds good; most listeners will not hear the difference, so it is a perfectly reasonable choice on an older or slower phone, or when you want to save battery on a long listen. Both play every tune, and you can switch whenever you like.`,
     "",

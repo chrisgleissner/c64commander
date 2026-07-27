@@ -116,7 +116,7 @@ export const SidRadioSettingsSection = () => {
           id="local-engine-enabled"
           testId="settings-local-engine-enabled"
           label="On-device playback engine (experimental)"
-          description="Adds a “Play on: C64 / This device” choice on the Play screen. Playing here needs the C64 ROMs from your own machine — add them below."
+          description="Adds a “Listen on” choice on the Play screen, so a tune can play on your C64 or here. Playing here needs the C64 ROMs from your own machine — add them below."
           checked={localEngineEnabled}
           onChange={saveLocalEngineEnabled}
         />
@@ -162,8 +162,8 @@ export const SidRadioSettingsSection = () => {
             <p className="text-xs text-muted-foreground">
               {crossfadeUnavailable ? (
                 <>
-                  Only available with <strong>Listen on</strong> set to <strong>This device</strong>. Crossfading needs
-                  two tunes sounding at the same moment, and the C64 plays one tune, live, on its single sound chip.
+                  Only available with <strong>Listen on</strong> set to <strong>Local</strong>. Crossfading needs two
+                  tunes sounding at the same moment, and the C64 plays one tune, live, on its single sound chip.
                 </>
               ) : (
                 <>
