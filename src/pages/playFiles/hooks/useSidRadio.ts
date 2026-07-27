@@ -127,9 +127,10 @@ export const isStylePopulated = (populations: SidRadioStylePopulations | null, k
 /**
  * The same test against a mask bit, for the moment the populations have actually
  * arrived. An unknown bit counts as populated — this refuses empty stations, it
- * does not police the tile table (§8.1 already asserts that mapping).
+ * does not police the tile table (§8.1 already asserts that mapping). Internal:
+ * it is reached through `start()`, and asserted through what `start()` does.
  */
-export const isStyleBitPopulated = (populations: SidRadioStylePopulations, bit: number): boolean =>
+const isStyleBitPopulated = (populations: SidRadioStylePopulations, bit: number): boolean =>
   !SID_RADIO_STYLE_TILES.some((tile) => tile.bit === bit && populations[tile.key] === 0);
 
 /**
