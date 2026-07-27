@@ -577,6 +577,47 @@ Set `JAVA_HOME` to a valid JDK install and avoid hardcoded system paths.
 - For hardware-backed validation, use the adb-attached Pixel 4 when it is present.
 - Record which hardware target was chosen and do not claim device validation when neither host is reachable.
 
+## Debugging a signal: measure the wire before you read the code
+
+When something *sounds*, *looks* or *feels* wrong on a device — audio, video, input latency — measure
+the signal at its source before forming a theory about the code. A whole afternoon went into a
+"streamed audio is rough" report that was diagnosed from the code four different ways (ordering on
+the real-time thread, buffer priming, sample-rate mismatch, channel mismatch) and was none of them.
+Five minutes of `socket.recvfrom` on the multicast group had the answer:
+
+    250 pkt/s expected · 500 observed · two interleaved 16-bit sequence counters
+
+**Two Ultimates were streaming into the same multicast group.** Every packet arrived, in order, with
+zero loss *from each sender's point of view*, so nothing in the receive path looked wrong.
+
+Rules that follow from it:
+
+- **Count what arrives first.** Packet rate, payload size, and the implied sample rate against the
+  expected one. `tools/hil/` has the harnesses; a ten-line `recvfrom` loop is often faster.
+- **A/B by removing senders, not by editing code.** Stop the stream on *every* machine, then start
+  one, and measure again.
+- **Sequence deltas name the fault.** All `+1` = a clean single sender. Two alternating large deltas
+  summing to ~65536 = two senders sharing a group, not packet loss.
+- **The multicast groups are shared by every Ultimate** (`239.0.1.64:11000` video,
+  `239.0.1.65:11001` audio). A device keeps streaming until something asks it to stop — surviving
+  app restarts, device switches and crashes. Suspect an orphaned stream early. See
+  [[live-view-device-switch-clean-transition]].
+- **Check the phone is awake and foregrounded before concluding anything about async behaviour.** A
+  dozing WebView freezes timers and promises, which reads exactly like a hung native plugin: in the
+  same session `StreamUdp.bind()` "never resolved" for 90 s purely because the screen was off.
+- **Zero underruns does not mean healthy audio.** An over-full buffer never underruns; it silently
+  discards what it cannot accept. If a counter can only show starvation, add the one that shows
+  overflow before trusting either.
+
+## Build an exact instrument when the complaint is subjective
+
+"It sounds rough" cannot be graded against real music, whose spectrum moves constantly — a
+correlation score says only that *something* differs. `tools/hil/make_tone_ladder_sid.py` emits a
+260-byte PSID playing a known C3→B3→C3 ladder, and `analyse_tone_ladder.py` reports per-note pitch
+error in cents and per-note duration. That turns "rough" into "notes are 0.965 s instead of 0.500 s",
+which points at a rate problem in one reading. Prefer building that instrument early over another
+round of reasoning about the code.
+
 ## The hardware that exists — and the Callback 8020, which does not
 
 **The available rig is exactly: the Pixel 4 (adb), the C64U, and the U64.** That is all

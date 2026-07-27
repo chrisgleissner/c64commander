@@ -17,7 +17,7 @@
  * Home "check" preview and the Remote Input preview) render the one stream.
  */
 
-import { getC64API } from "@/lib/c64api";
+import { C64API, getC64API } from "@/lib/c64api";
 import { addLog } from "@/lib/logging";
 import { isNativePlatform } from "@/lib/native/platform";
 import {
@@ -185,6 +185,11 @@ export class AvMirrorSession {
           ? new NativeAudioSink(sampleRate, undefined, loadStreamNativeAudioBufferMs())
           : null,
       renderAudioForAnalysis: (samples, arrivalMs) => this.emitAudio(samples, arrivalMs),
+      // Who we EXPECT to hear from, and how to silence anyone else. The mirror's groups are
+      // multicast and every Ultimate defaults to the same ones, so a machine left streaming by an
+      // earlier session sends straight into ours.
+      expectedSenderHost: () => getC64API().getDeviceHost(),
+      stopStreamAt: (host, name) => new C64API(undefined, undefined, host).stopStream(name),
     });
 
     this.video = new VideoMirrorController({

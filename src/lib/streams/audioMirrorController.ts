@@ -15,6 +15,7 @@
  */
 
 import { addLog } from "@/lib/logging";
+import { foreignSenders, stopForeignSenders } from "./foreignSenderGuard";
 import { AUDIO_SAMPLE_RATE, AudioBatcher, bytesToInt16LE, parseAudioPacket } from "./audioStream";
 import { loadStreamNetworkBufferMs } from "@/lib/config/appSettings";
 import { AudioPlaybackBuffer } from "./audioPlaybackBuffer";
@@ -66,6 +67,10 @@ export interface AudioMirrorDeps {
   createNativeSink?: (sampleRate: number) => NativeAudioSink | null;
   startStream: (name: "audio", destination: string, options?: { wifi?: boolean }) => Promise<unknown>;
   stopStream: (name: "audio") => Promise<unknown>;
+  /** The device the user selected — any other sender on the group is uninvited. */
+  expectedSenderHost?: () => string | null;
+  /** Ask ONE specific machine (by host/IP) to stop streaming. */
+  stopStreamAt?: (host: string, name: "audio" | "video") => Promise<unknown>;
   onChange: (snapshot: AudioMirrorSnapshot) => void;
   /** Broadcast each decoded audio batch (interleaved Int16) — the ~32 ms player cadence. */
   renderAudio?: (samples: Int16Array) => void;
@@ -85,6 +90,8 @@ export class AudioMirrorController {
   private player: AudioMirrorPlayer | null = null;
   /** Native low-latency sink; when set the plugin's receive thread feeds the AudioTrack directly. */
   private nativeSink: NativeAudioSink | null = null;
+  /** Uninvited senders already acted on, so the guard asks each machine once per session. */
+  private readonly foreignHandled = new Set<string>();
   /** Seq-gap loss counter for the native path (which has no JS playback buffer to count drops). */
   private nativeLostPackets = 0;
   private nativeLastSeq: number | null = null;
@@ -112,6 +119,10 @@ export class AudioMirrorController {
     // The buffer-depth/underrun headroom signal comes from whichever player is live — the native
     // AudioTrack when it is, else the WebAudio player. The governor needs a real signal from the
     // active sink or it would peg video to the floor (a video-only mirror already handles that).
+    // Another machine streaming into our multicast group is not a subtle fault — it doubles the
+    // arrival rate and interleaves two sequence spaces — but nothing in the receive path looks
+    // wrong, because every packet arrives in order from each sender. Catch it by origin IP.
+    void this.evictForeignSenders();
     const nativeStats = this.nativeSink?.getStats();
     return {
       audioBufferMs: nativeStats?.bufferedMs ?? this.player?.bufferedMs ?? 0,
@@ -265,6 +276,27 @@ export class AudioMirrorController {
       await this.stop();
       this.update({ state: "error", error: "Could not tell the device to start streaming audio." });
     }
+  }
+
+  /**
+   * Ask any machine that is streaming into our audio group uninvited to stop.
+   *
+   * Each offender is asked once per session: the stop is a request to a device that may be busy or
+   * unreachable, and retrying it every 250 ms tick would be a flood, not a fix.
+   */
+  private async evictForeignSenders(): Promise<void> {
+    const senders = this.nativeSink?.senders ?? [];
+    if (senders.length < 2) return;
+    const pending = foreignSenders(senders, this.deps.expectedSenderHost?.() ?? null).filter(
+      (host) => !this.foreignHandled.has(host),
+    );
+    if (pending.length === 0) return;
+    pending.forEach((host) => this.foreignHandled.add(host));
+    await stopForeignSenders({
+      senders: pending,
+      expectedHost: null, // already filtered
+      stopStreamAt: (host, name) => this.deps.stopStreamAt?.(host, name) ?? Promise.resolve(),
+    });
   }
 
   async stop(): Promise<void> {

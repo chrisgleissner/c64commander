@@ -59,6 +59,23 @@ export interface StreamUdpAudioStats {
   bufferedMs: number;
   /** Cumulative AudioTrack underruns (output ran dry) since {@link StreamUdpPlugin.openAudioTrack}. */
   underruns: number;
+  /**
+   * PCM bytes the AudioTrack refused because its buffer was full — audio the listener lost.
+   *
+   * Separate from {@link underruns}, which counts the opposite failure (the buffer running dry).
+   * A stream can break up audibly with zero underruns if it is losing tails here instead, which is
+   * exactly why this is reported rather than dropped silently.
+   */
+  droppedBytes?: number;
+  /** What the AudioTrack is actually doing (not what was requested). */
+  trackSampleRate?: number;
+  trackChannels?: number;
+  trackBufferFrames?: number;
+  /**
+   * Distinct source IPs seen on the audio group. More than one means another machine is streaming
+   * into it uninvited — see `streams/foreignSenderGuard`.
+   */
+  senders?: string[];
 }
 
 /**

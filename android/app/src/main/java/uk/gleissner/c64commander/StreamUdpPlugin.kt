@@ -18,6 +18,7 @@ import android.os.Build
 import android.os.Process
 import android.util.Base64
 import android.util.Log
+import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
@@ -56,6 +57,34 @@ import java.util.concurrent.Executors
 class StreamUdpPlugin : Plugin() {
   private val sockets = ConcurrentHashMap<String, DatagramSocket>()
   private val executor = Executors.newCachedThreadPool()
+
+  /**
+   * True while a native AudioTrack owns audio playback. Read on the receive hot path to decide
+   * whether the packet still has to cross the bridge, so it is a plain @Volatile rather than
+   * something that needs `audioSinkLock` — the lock is for mutating the sink, not for asking
+   * whether one exists.
+   */
+  @Volatile private var nativeAudioOwnsPlayback = false
+
+  /**
+   * Opt-in: also deliver audio packets to JS for the A/V-sync analyser. Off by default because it
+   * costs a base64 encode and a bridge hop per packet on the URGENT_AUDIO thread.
+   */
+  @Volatile private var audioAnalysisEnabled = false
+
+  /**
+   * Distinct source addresses seen on each stream.
+   *
+   * The mirror's groups are MULTICAST, so any machine on the LAN can send to them — and more than
+   * one Ultimate will, because they all default to the same group. Two senders is not a subtle
+   * fault: the app receives both at once, at double the expected rate and with two independent
+   * sequence spaces interleaved, which is heard as a rough, patchy, wrong-pitch stream while every
+   * packet arrives perfectly in order from each sender's point of view.
+   *
+   * Recording the origins makes that diagnosable in one glance, and lets the app go and stop the
+   * stream it did not ask for.
+   */
+  private val streamSenders = java.util.concurrent.ConcurrentHashMap<String, MutableSet<String>>()
   private val logTag = "StreamUdpPlugin"
   private var multicastLock: WifiManager.MulticastLock? = null
 
@@ -201,6 +230,7 @@ class StreamUdpPlugin : Plugin() {
       return
     }
     closeSocket(name)
+    streamSenders.remove(name)
     call.resolve(JSObject())
   }
 
@@ -215,6 +245,7 @@ class StreamUdpPlugin : Plugin() {
         audioSink?.close()
         val sink = AudioSink(sampleRate, bufferMs)
         audioSink = sink
+        nativeAudioOwnsPlayback = true
         val result = JSObject()
         result.put("sampleRate", sampleRate)
         result.put("bufferMs", sink.bufferCapacityMs)
@@ -240,6 +271,18 @@ class StreamUdpPlugin : Plugin() {
     val result = JSObject()
     result.put("bufferedMs", stats.bufferedMs)
     result.put("underruns", stats.underruns)
+    // Audio the track refused because its buffer was full. Reported so a stream that is breaking
+    // up cannot show a clean underrun count and look healthy.
+    result.put("droppedBytes", stats.droppedBytes)
+    // What the track is ACTUALLY doing, not what was requested. A track running at a different rate
+    // or channel count than the stream plays it at the wrong speed and pitch while quietly
+    // overflowing its buffer, and nothing else in the stats would show it.
+    result.put("trackSampleRate", stats.trackSampleRate)
+    result.put("trackChannels", stats.trackChannels)
+    result.put("trackBufferFrames", stats.trackBufferFrames)
+    val senders = JSArray()
+    streamSenders["audio"]?.forEach { senders.put(it) }
+    result.put("senders", senders)
     call.resolve(result)
   }
 
@@ -251,11 +294,31 @@ class StreamUdpPlugin : Plugin() {
     val result = JSObject()
     result.put("bufferedMs", stats.bufferedMs)
     result.put("underruns", stats.underruns)
+    // Audio the track refused because its buffer was full. Reported so a stream that is breaking
+    // up cannot show a clean underrun count and look healthy.
+    result.put("droppedBytes", stats.droppedBytes)
+    // What the track is ACTUALLY doing, not what was requested. A track running at a different rate
+    // or channel count than the stream plays it at the wrong speed and pitch while quietly
+    // overflowing its buffer, and nothing else in the stats would show it.
+    result.put("trackSampleRate", stats.trackSampleRate)
+    result.put("trackChannels", stats.trackChannels)
+    result.put("trackBufferFrames", stats.trackBufferFrames)
+    val senders = JSArray()
+    streamSenders["audio"]?.forEach { senders.put(it) }
+    result.put("senders", senders)
     call.resolve(result)
   }
 
   @PluginMethod
+  fun setAudioAnalysis(call: PluginCall) {
+    // Turning this on re-enables the per-packet bridge hop for audio (A/V-sync analyser only).
+    audioAnalysisEnabled = call.getBoolean("enabled", false) == true
+    call.resolve(JSObject())
+  }
+
+  @PluginMethod
   fun closeAudioTrack(call: PluginCall) {
+    nativeAudioOwnsPlayback = false
     synchronized(audioSinkLock) {
       audioSink?.close()
       audioSink = null
@@ -277,19 +340,33 @@ class StreamUdpPlugin : Plugin() {
     val countFrames = name == "video"
     var prevCompletedFrame = -1
     var lost = 0
+    // Cheap origin tracking: the address object is reused by the socket for the same peer, so a
+    // reference compare keeps the common single-sender case free of allocation and set lookups.
+    var lastSender: java.net.InetAddress? = null
+    val senders = streamSenders.getOrPut(name) { java.util.concurrent.ConcurrentHashMap.newKeySet() }
     while (!socket.isClosed) {
       try {
         packet.setLength(buffer.size)
         socket.receive(packet)
         // Stamp wire-arrival time immediately, before any encoding/bridge latency (see emitDatagram).
         val arrivalNanos = clockNanos()
-        val encoded = Base64.encodeToString(packet.data, packet.offset, packet.length, Base64.NO_WRAP)
-        emitDatagram(name, encoded, arrivalNanos / 1_000_000.0)
-        // Native low-latency audio: feed the AudioTrack DIRECTLY from this URGENT_AUDIO receive
-        // thread when a sink is open — playback never crosses the JS bridge, so there is no per-packet
-        // bridge traffic to stall the JS analyzer/render loop and no video-paint contention on the
-        // audio feed. JS still receives the datagram above (for the A/V-sync analyzer); it just no
-        // longer drives playback. Strip the 2-byte seq and keep whole stereo frames.
+        val source = packet.address
+        if (source !== lastSender) {
+          lastSender = source
+          val ip = source?.hostAddress
+          if (ip != null && senders.size < MAX_TRACKED_SENDERS && senders.add(ip)) {
+            Log.i(logTag, "stream $name: sender $ip (distinct senders now ${senders.size})")
+          }
+        }
+        // PLAYBACK FIRST, telemetry second — the order matters on this thread.
+        //
+        // This is the URGENT_AUDIO receive thread, and the AudioTrack it feeds is the real-time
+        // path. The base64 encode + Capacitor bridge hop below is analysis, and it used to run
+        // BEFORE this write: every audio packet paid a JSON serialisation and a WebView dispatch
+        // before a single sample reached the mixer. Whenever the JS thread was busy — and it often
+        // is, painting video or hydrating HVSC — that delay landed directly on playback, which is
+        // audible as roughness. Feeding the track first costs nothing and removes the bridge from
+        // the playback critical path entirely. Strip the 2-byte seq and keep whole stereo frames.
         if (name == "audio") {
           synchronized(audioSinkLock) {
             audioSink?.let { sink ->
@@ -299,6 +376,18 @@ class StreamUdpPlugin : Plugin() {
               if (pcmLen > 0) sink.writeRaw(packet.data, pcmOffset, pcmLen)
             }
           }
+        }
+        // The per-packet bridge hop is the most expensive thing on this thread, and for audio it is
+        // usually pure waste: ~250 packets/s each allocating a base64 String, boxing a JSObject and
+        // crossing into the WebView, for a stream the NATIVE sink is already playing. JS wants these
+        // only for the A/V-sync analyser, which is a developer tool and off by default.
+        //
+        // Video already avoids this via `assemble:true` (one event per frame instead of 68), and
+        // skipping it here is the same idea applied to audio: when the native sink owns playback and
+        // nobody asked for analysis, the packet never leaves Kotlin.
+        if (!(name == "audio" && nativeAudioOwnsPlayback && !audioAnalysisEnabled)) {
+          val encoded = Base64.encodeToString(packet.data, packet.offset, packet.length, Base64.NO_WRAP)
+          emitDatagram(name, encoded, arrivalNanos / 1_000_000.0)
         }
         // Count a completed frame when this datagram carries the last-line flag (cheap header peek),
         // and track frame-number gaps, so the per-second measurement log reports frames/s AND frame
@@ -585,9 +674,16 @@ class StreamUdpPlugin : Plugin() {
    * a transient burst that overflows is dropped (we are ahead, never starving) and the sink re-levels.
    */
   private class AudioSink(sampleRate: Int, requestedBufferMs: Int = 0) {
-    data class Stats(val bufferedMs: Double, val underruns: Int) {
+    data class Stats(
+      val bufferedMs: Double,
+      val underruns: Int,
+      val droppedBytes: Long,
+      val trackSampleRate: Int,
+      val trackChannels: Int,
+      val trackBufferFrames: Int,
+    ) {
       companion object {
-        val ZERO = Stats(0.0, 0)
+        val ZERO = Stats(0.0, 0, 0L, 0, 0, 0)
       }
     }
 
@@ -598,6 +694,8 @@ class StreamUdpPlugin : Plugin() {
     private val primeFrames: Int
     /** Total stereo frames handed to AudioTrack (for the buffer-depth estimate). */
     private var framesWritten: Long = 0
+    /** PCM bytes the track could not accept (buffer full) — audio the listener lost. */
+    private var droppedBytes: Long = 0
     /** False until enough is buffered to start playback with a cushion (deferred `play()`). */
     private var started = false
 
@@ -658,6 +756,10 @@ class StreamUdpPlugin : Plugin() {
       if (length <= 0) return
       val written = track.write(data, offset, length, AudioTrack.WRITE_NON_BLOCKING)
       if (written > 0) framesWritten += (written / BYTES_PER_FRAME).toLong()
+      // A short write means the track buffer was full and the tail is gone. That is audio the
+      // listener will not hear, so it is counted: dropping it silently is why the Stats panel could
+      // report zero underruns while the stream was audibly breaking up.
+      if (written in 0 until length) droppedBytes += (length - maxOf(written, 0)).toLong()
       // Start playback only once a cushion is buffered, so the first feed hiccup can't dry the track
       // immediately — the whole point of a low-latency buffer is to stay just barely ahead.
       if (!started && framesWritten >= primeFrames) {
@@ -667,7 +769,25 @@ class StreamUdpPlugin : Plugin() {
     }
 
     /** Current buffer depth + underruns (read by the governor via readAudioStats). */
-    fun stats(): Stats = Stats(bufferedMs(), underruns())
+    fun stats(): Stats =
+      Stats(bufferedMs(), underruns(), droppedBytes, track.sampleRate, track.channelCount, realBufferFrames())
+
+    /**
+     * The buffer the framework ACTUALLY gave us, which is not what was requested.
+     * `PERFORMANCE_MODE_LOW_LATENCY` in particular can hand back a far smaller buffer than
+     * `setBufferSizeInBytes` asked for, and priming against the requested size then overfills it on
+     * the first writes — every later write is refused and the audio arrives in fragments.
+     */
+    private fun realBufferFrames(): Int =
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        try {
+          track.bufferSizeInFrames
+        } catch (error: Exception) {
+          bufferFrames
+        }
+      } else {
+        bufferFrames
+      }
 
     /** PCM still queued ahead of the playback head (ms). 0 when drained. */
     private fun bufferedMs(): Double {
@@ -723,6 +843,9 @@ class StreamUdpPlugin : Plugin() {
     // C64U PAL audio sample rate (rounded to int for AudioTrack; source of truth: audioStream.ts).
     private const val DEFAULT_AUDIO_SAMPLE_RATE = 47983
     // Audio wire format: u16 LE seq prefix, then interleaved stereo S16 (4 bytes/frame).
+    /** Enough to notice a second (or third) sender without letting a spoofing flood grow the set. */
+    private const val MAX_TRACKED_SENDERS = 4
+
     private const val AUDIO_SEQ_BYTES = 2
     private const val AUDIO_BYTES_PER_FRAME = 4
 

@@ -401,24 +401,6 @@ with open(outfile, "w", encoding="utf-8") as handle:
 PY
 }
 
-# ── Is the app actually running? ────────────────────────────────
-# The in-app debug HTTP server (AppDelegate.IOSDebugHTTPServer, DEBUG builds)
-# lives and dies with the app process, so one connect answers the question both
-# the accessibility snapshot and the debug-payload collection need.
-#
-# Both used to just try anyway. A flow ends with the app stopped, so every
-# attempt was doomed: 5 endpoints x 3 attempts of curl-plus-sleep (~30s) and two
-# `maestro hierarchy` calls waiting out their own timeouts (~16s) — ~46s per
-# flow, ~2.3 minutes per run, spent proving something already known. Worse, the
-# log filled with "Failed to collect debug/..." lines that read like a broken
-# harness rather than "there was no app to ask".
-debug_server_reachable() {
-  xcrun simctl spawn "$UDID" /usr/bin/curl --silent --show-error --fail \
-    --connect-timeout "$DEBUG_PAYLOAD_CONNECT_TIMEOUT_SECONDS" \
-    --max-time "$DEBUG_PAYLOAD_CURL_MAX_TIME_SECONDS" \
-    "http://127.0.0.1:39877/debug/trace" >/dev/null 2>&1
-}
-
 capture_accessibility_snapshot() {
   local flow_dir="$1"
   local snapshot_name="$2"
@@ -448,6 +430,25 @@ capture_accessibility_snapshot() {
     log "Accessibility snapshot ${snapshot_name} failed (elapsed=$(log_elapsed "$started_ms"))"
   fi
 }
+
+# ── Is the app actually running? ────────────────────────────────
+# The in-app debug HTTP server (AppDelegate.IOSDebugHTTPServer, DEBUG builds)
+# lives and dies with the app process, so one connect answers the question both
+# the accessibility snapshot and the debug-payload collection need.
+#
+# Both used to just try anyway. A flow ends with the app stopped, so every
+# attempt was doomed: 5 endpoints x 3 attempts of curl-plus-sleep (~30s) and two
+# `maestro hierarchy` calls waiting out their own timeouts (~16s) — ~46s per
+# flow, ~2.3 minutes per run, spent proving something already known. Worse, the
+# log filled with "Failed to collect debug/..." lines that read like a broken
+# harness rather than "there was no app to ask".
+debug_server_reachable() {
+  xcrun simctl spawn "$UDID" /usr/bin/curl --silent --show-error --fail \
+    --connect-timeout "$DEBUG_PAYLOAD_CONNECT_TIMEOUT_SECONDS" \
+    --max-time "$DEBUG_PAYLOAD_CURL_MAX_TIME_SECONDS" \
+    "http://127.0.0.1:39877/debug/trace" >/dev/null 2>&1
+}
+
 
 run_maestro_and_capture() {
   local flow="$1"
