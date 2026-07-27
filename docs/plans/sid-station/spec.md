@@ -186,21 +186,27 @@ Source of truth: `sidflow` repo docs `doc/similarity-export-tiny.md` (schema
 
 ### 2.1 What the current release contains
 
-From `sidcorr-hvsc-full-sidcorr-tiny-1.manifest.json` (release
-`sidcorr-hvsc-full-20260407T115218Z`):
+From `sidcorr-hvsc-full-sidcorr-tiny-1.manifest.json` for the release the app is
+pinned to in `src/lib/sidRadio/sidcorrRelease.ts`, `sidcorr-hvsc-full-20260726T203707Z`:
 
 | Field                   | Value                                          |
 | ----------------------- | ---------------------------------------------- |
 | `schema_version`        | `sidcorr-tiny-1`                               |
 | `binary_format_version` | `2`                                            |
 | `corpus_version`        | `hvsc`                                         |
-| `file_count`            | 60,571                                         |
-| `track_count`           | 87,073 (files × subsongs)                      |
+| `file_count`            | 61,157                                         |
+| `track_count`           | 87,868 (files × subsongs)                      |
 | `neighbors_per_track`   | 3                                              |
 | `style_count`           | 9                                              |
 | `file_id_kind`          | `md5_48` (first 6 bytes of the SID file's MD5) |
-| `bundle_bytes`          | 1,818,171 (`content_encoding: identity`)       |
-| `bundle_sha256`         | `37ceb567…5d7d1b`                              |
+| `bundle_bytes`          | 1,834,993 (`content_encoding: identity`)       |
+| `bundle_sha256`         | `081664d8…cba7c5`                              |
+
+**Style populations in this release are not usable as they stand:** `theme_hunter`
+has 0 members, `composer_focus` 673 (0.8%), and five personas each cover roughly
+half the corpus, with `fast_paced` and `slow_ambient` sharing ~9,500 tracks. The
+launcher therefore reads the per-style counts before offering a tile (§5.4)
+instead of trusting every style to have a station behind it.
 
 ### 2.2 Binary layout (little-endian, byte-aligned)
 
@@ -226,8 +232,8 @@ remain readable. (Authoritative: sidflow `doc/similarity-export-tiny.md`; this a
   e/m/c/p nibbles. Sits **between** STYLE_MASK_TABLE and NEIGHBOR_TABLE; absent in v1.
   Parsed into `ratings` but **not used by GA** (see D16).
 - **NEIGHBOR_TABLE:** `neighborRecord[track_count][3]` — in v2 each record is **12 bytes**
-  per row: a u24 target ordinal **+ a u8 quantized cosine similarity** (~1.02 MiB total,
-  1,044,876 B). v1 stores u24-only 9-byte rows. Edges form a **DAG** (targets always have a
+  per row: a u24 target ordinal **+ a u8 quantized cosine similarity** (~1.01 MiB total,
+  1,054,416 B). v1 stores u24-only 9-byte rows. Edges form a **DAG** (targets always have a
   _smaller_ ordinal), rank-ordered, `0xFFFFFF` sentinel padding. The similarity byte is
   hydrated into `neighborSimilarity`/`reverseSimilarity` but **not used by GA scoring**
   (see D16).
