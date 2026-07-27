@@ -182,9 +182,11 @@ Build playlists from local files, C64 Ultimate storage, HVSC, or CommoServe. Use
 
 ### SID Radio
 
-Create an endless playlist of similar SID tunes from HVSC. Start from the current song, a mood, or your liked tunes, then use ♥ and ✕ to guide future selections.
+Create an endless playlist of similar SID tunes from HVSC. Start with the current song, choose a mood, or build from your liked tunes. Use ♥ and ✕ to shape future selections.
 
-Tunes normally play on the connected C64 Ultimate. The optional on-device engine plays them on your phone using C64 ROM images copied from your Ultimate. The ROMs remain on your device, and SID Radio can then work offline.
+Tunes normally play on the connected C64 Ultimate. You can also stream the audio back from your C64U and listen on your local device.
+
+For SID music on the go, the built-in player runs entirely on your phone and requires no network connection.
 
 <table>
   <tr>
