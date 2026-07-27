@@ -230,6 +230,7 @@ not-connected / empty / single-device).
   - **A/V measurement** (`av-sync-panel`) _(power-user diagnostic; two independently collapsible sections, both collapsed by default)_
     - A/V Sync section — expand/collapse — `av-sync-toggle` — R✅ I✅ ; inside: Run test — button — `av-sync-run` — R✅ I✅ ; Reset all A/V measurements — icon button — `av-sync-reset` — R✅ I✅ ; Stop — button — `av-sync-stop` — R✅ I✅ `[visible when a test program is running on the device]`
     - Tap latency section — expand/collapse — `av-sync-lat-toggle` — R✅ I✅ ; inside: Load — button — `av-sync-key-load` — R✅ I✅ ; Send SPACE — button — `av-sync-press` — R✅ I✅ ; Stop — button — `av-sync-stop` (shared with the A/V Sync section) `[visible when a test program is running]`
+    - Tone & colour ladder section — expand/collapse — `av-tone-ladder-toggle` — R✅ I✅ ; inside: Run test — button — `av-tone-ladder-run` — R✅ I✅ `[disabled while listening]` ; Reset — button — `av-tone-ladder-reset` — R✅ I✅ `[disabled: no result yet, or a run in progress]` — plays a known C3→C4→C3 scale on the C64, stepping the screen background through all 16 VIC colours in unison with the notes, and grades the sound and picture that reach this device (pitch Δ in cents, note-length Δ, silence floor in dBFS against the EBU R128 gate, A/V offset graded per ITU-R BT.1359-1, per-note table with colour swatches)
 - **Config actions** (`data-section-label="Config"`)
   - Save/Load (flash) — button — R✅ I✅
   - Reset to default — button (danger) — R✅ I✅

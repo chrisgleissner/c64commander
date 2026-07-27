@@ -8,11 +8,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  LocalSidEngine,
-  type LocalSidAudioSink,
-  type LocalSidWorkerLike,
-} from "@/lib/playback/localSidEngine";
+import { LocalSidEngine, type LocalSidAudioSink, type LocalSidWorkerLike } from "@/lib/playback/localSidEngine";
 import type { LocalSidMainToWorker, LocalSidWorkerToMain } from "@/lib/playback/localSidWorkerProtocol";
 import type { AudioScheduleSink, AudioScheduleSource } from "@/lib/playback/localSidChunkScheduler";
 import { __resetPhoneAudioOwnership } from "@/lib/audio/phoneAudioOwnership";
@@ -82,7 +78,7 @@ const makeSink = () => {
       } as unknown as AudioBuffer;
     },
     createSource: (buffer: AudioBuffer) => {
-      written.push(((buffer as unknown as { __data: Float32Array[] }).__data)[0]!);
+      written.push((buffer as unknown as { __data: Float32Array[] }).__data[0]!);
       return new TestSource();
     },
   };

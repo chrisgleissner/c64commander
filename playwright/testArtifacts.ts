@@ -658,9 +658,7 @@ const checkHorizontalOverflow = async (page: Page, testInfo: TestInfo) => {
  * only started firing when choosing C64 playback began starting Live View audio,
  * which is why several playback specs failed on a working app.
  */
-const ENVIRONMENTAL_CONSOLE_NOISE = [
-  /WebSocket connection to '[^']*\/streams\/(audio|video)' failed/i,
-] as const;
+const ENVIRONMENTAL_CONSOLE_NOISE = [/WebSocket connection to '[^']*\/streams\/(audio|video)' failed/i] as const;
 
 const isEnvironmentalConsoleNoise = (text: string): boolean =>
   ENVIRONMENTAL_CONSOLE_NOISE.some((pattern) => pattern.test(text));
