@@ -460,6 +460,15 @@ The **picture** is the demanding part, so you get a say in how much of it to dra
 
 **Stats** also shows, at a glance and over the last minutes, how the stream is really doing: the picture's frame rate, how full the audio buffer is, any packets lost on the network and how they were smoothed over, and the app's own load. Open or close it as you like — it is built to be light enough that watching it costs the stream nothing. If you ever need to send in a report, **Export diagnostics** saves all of it as a small file.
 
+#### Checking the sound and picture yourself
+
+Under Live View you will find three checks you can run whenever something seems off.
+
+- **A/V sync** and **Tap latency** answer *when*: how far apart the sound and picture are, and how long it takes a keypress to come back to you.
+- **Tone & colour ladder** answers *what*. It plays a short tune on your C64 — a scale from C3 up to C4 and back, half a second a note — and changes the screen colour on every single note, stepping through all sixteen C64 colours as it goes. Because the C64 changes the note and the colour at the very same instant, anything that arrives out of step arrived that way across your network.
+
+The ladder grades what comes back and shows you six numbers: how many notes were **in tune**, how far off the **pitch** was, whether notes ran **long or short**, whether the two deliberate **silent gaps** really were silent, how far apart the **sound and picture** were, and how many **colours** arrived intact. Wrong pitches, notes running long, or a gap that is not silent all point the same way — the sound is being corrupted on the way to you rather than merely delayed. The most common cause by far is a second machine on your network streaming into the same place, and this check makes that obvious in one run.
+
 Live View is ready to use out of the box; the picture and sound simply stay off until you press **Watch** or **Listen**, so nothing streams until you ask for it. The device streams to two network ports (11000 for the picture, 11001 for the sound); if your setup needs different ones, you can change them in **Settings**, under Play and disk behaviour. Live View borrows the same feeds as **Streams** (below), and while it is playing it takes charge of them — see there for how the two work together.
 
 On by default. You can change it in Settings > Experimental Features.
