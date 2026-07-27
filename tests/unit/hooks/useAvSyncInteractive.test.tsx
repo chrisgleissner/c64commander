@@ -84,6 +84,13 @@ describe("useAvSync — interactive space-triggered latency (mock C64, perfect n
     const HEAR_LATENCY = 10;
     const WIRE_OFFSET = 3;
 
+    // Load the program first, as the UI requires. It is also what opens the audio feed: mirrored
+    // audio is only subscribed while a test is on the device, because on Android an idle subscriber
+    // would keep ~250 packets/s crossing the bridge to analyse a stream with nothing in it.
+    await act(async () => {
+      await result.current.runKeyTest();
+    });
+
     let wire = 100_000; // monotonic wire clock (native-style), independent of the observe clock
     for (let i = 0; i < 40; i++) {
       const pressAt = 1000 + i * 1000;
