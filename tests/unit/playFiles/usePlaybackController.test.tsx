@@ -14,6 +14,7 @@ import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { getHvscDurationsByMd5Seconds } from "@/lib/hvsc";
 import { applyConfigFileReference, ensureConfigFileReferenceAccessible } from "@/lib/config/applyConfigFileReference";
+import { markRemotePlaybackStopped } from "@/lib/playback/activePlaybackSession";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import {
   buildEnabledSidMuteUpdates,
@@ -234,6 +235,11 @@ describe("usePlaybackController", () => {
     vi.clearAllMocks();
     clearArchivePlaybackCacheForTests();
     pollingPauseRegistry.__resetForTest();
+    // "Is anything playing" is app-wide module state that outlives any page —
+    // that is the point of it — so it also outlives a test. Without this, a
+    // test that started remote playback leaves the next one believing a tune is
+    // still running, and Stop/Pause behave as though it were.
+    markRemotePlaybackStopped();
     mockArchiveClient.downloadBinary.mockResolvedValue({
       fileName: "joyride.sid",
       bytes: new Uint8Array([0x50, 0x53, 0x49, 0x44]),
