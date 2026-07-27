@@ -127,8 +127,13 @@ def wait_for_playing(cdp: Cdp, serial: str, timeout_s: float = 60.0) -> bool:
     return False
 
 
-def select_device(cdp: Cdp, device_id: str) -> None:
-    """Point the app at a saved device and reload, as a device switch does."""
+def select_device(cdp: Cdp, device_id: str) -> Cdp:
+    """Point the app at a saved device and reload, as a device switch does.
+
+    Returns a FRESH CDP connection: the reload navigates the inspected target,
+    and every later call on the old one fails with "Inspected target navigated
+    or closed" — which read as a harness crash rather than a completed switch.
+    """
     cdp.evaluate(
         "(() => { const raw = localStorage.getItem('c64u_saved_devices:v1'); if (!raw) return 'none';"
         " const state = JSON.parse(raw);"
@@ -136,7 +141,25 @@ def select_device(cdp: Cdp, device_id: str) -> None:
         " localStorage.setItem('c64u_saved_devices:v1', JSON.stringify(state)); return 'ok'; })()"
     )
     cdp.send("Page.reload", {"ignoreCache": False})
-    time.sleep(8)
+    cdp.close()
+    time.sleep(10)
+    return Cdp()
+
+
+def app_connected(cdp: Cdp) -> bool:
+    """Is the app actually talking to the selected machine?
+
+    A station cannot start against a machine the app never reached, and the
+    failure looks identical to "SID Radio is broken".
+    """
+    return bool(
+        cdp.evaluate(
+            "(() => { const el = document.querySelector('[data-testid=\"unified-health-badge\"]');"
+            " if (!el) return false;"
+            " const state = el.getAttribute('data-connection-state') || '';"
+            " return /CONNECTED/i.test(state); })()"
+        )
+    )
 
 
 def selected_device(cdp: Cdp) -> str | None:
@@ -278,11 +301,19 @@ def check_seek_gating(cdp: Cdp, serial: str, engine: str, checks: Checks) -> Non
         )
 
 
-def run_for_device(cdp: Cdp, serial: str, device_id: str | None, checks: Checks) -> None:
+def run_for_device(cdp: Cdp, serial: str, device_id: str | None, checks: Checks) -> Cdp:
     if device_id:
         print(f"\n=== device: {device_id} ===")
-        select_device(cdp, device_id)
+        cdp = select_device(cdp, device_id)
     print(f"selected device: {selected_device(cdp)}")
+    connected = app_connected(cdp)
+    checks.record(
+        f"app reaches {selected_device(cdp)}",
+        connected,
+        "connected" if connected else "NOT connected — the checks below cannot mean anything",
+    )
+    if not connected:
+        return cdp
 
     enable_flags(cdp, engine="local")
     check_no_overlap(cdp, serial, checks)
@@ -300,6 +331,7 @@ def run_for_device(cdp: Cdp, serial: str, device_id: str | None, checks: Checks)
     check_seek_gating(cdp, serial, "c64", checks)
     click_testid(cdp, "sid-radio-stop", timeout_s=5)
     time.sleep(2)
+    return cdp
 
 
 def main() -> int:
@@ -321,14 +353,14 @@ def main() -> int:
     checks = Checks()
     try:
         if args.switch_devices:
-            run_for_device(cdp, args.serial, "debug-c64u", checks)
+            cdp = run_for_device(cdp, args.serial, "debug-c64u", checks)
             # The switch itself, with a tune running: the old machine must be
             # left silent and the app must stay in control of the transport.
             enable_flags(cdp, engine="local")
             start_station(cdp, "style", "fast_paced")
             wait_for_playing(cdp, args.serial, timeout_s=45)
             print("\n=== switching devices while playing ===")
-            select_device(cdp, "debug-u64")
+            cdp = select_device(cdp, "debug-u64")
             time.sleep(6)
             streams = app_audio_streams(args.serial)
             checks.record(
@@ -336,9 +368,9 @@ def main() -> int:
                 streams <= 1,
                 f"{streams} stream(s) from this app after the switch",
             )
-            run_for_device(cdp, args.serial, None, checks)
+            cdp = run_for_device(cdp, args.serial, None, checks)
         else:
-            run_for_device(cdp, args.serial, args.device, checks)
+            cdp = run_for_device(cdp, args.serial, args.device, checks)
 
         outdir = Path(args.outdir)
         outdir.mkdir(parents=True, exist_ok=True)

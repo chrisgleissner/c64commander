@@ -52,7 +52,12 @@ import {
   LocalSidPlaybackController,
   getSharedLocalSidPlaybackController,
 } from "@/lib/playback/localSidPlaybackController";
-import { markRemotePlaybackStarted, markRemotePlaybackStopped } from "@/lib/playback/activePlaybackSession";
+import {
+  isAnyPlaybackActive,
+  isLocalPlaybackActive,
+  markRemotePlaybackStarted,
+  markRemotePlaybackStopped,
+} from "@/lib/playback/activePlaybackSession";
 import { LocalEngineStatsAccumulator } from "@/lib/playback/localEngineStatsBridge";
 import { detectRomRequired } from "@/lib/playback/localSidWorkerCore";
 import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
@@ -1485,7 +1490,9 @@ export function usePlaybackController({
 
   const handleStop = useCallback(
     trace(async function handleStop() {
-      if (!isPlaying && !isPaused) return;
+      // Same reason as handlePauseResume: a page that did not start the tune
+      // must still be able to stop it.
+      if (!isPlaying && !isPaused && !isAnyPlaybackActive()) return;
       // HARD18-009 (M5): Stop always runs immediately (never queued behind
       // enqueuePlayTransition) and claims the play-generation counter so any
       // in-flight playItem transition (auto-advance, Next/Previous, a
@@ -1664,12 +1671,19 @@ export function usePlaybackController({
 
   const handlePauseResume = useCallback(
     trace(async function handlePauseResume() {
-      if (!isPlaying) return;
+      // App-wide, not this page's own state. `isPlaying` starts false on a Play
+      // page mounted mid-tune, so this returned immediately and Pause did
+      // nothing at all — on a button the UI had (correctly) enabled, which is
+      // worse than a disabled one.
+      if (!isPlaying && !isAnyPlaybackActive()) return;
       // Track B (LE2): a tune playing on the device has no C64 to pause — the
       // machine calls below would be pointless (and hang with no Ultimate
       // connected) while the on-device audio kept playing. Suspend the engine's
       // audio clock instead; it resumes exactly where it stopped.
-      if (currentPlaybackIsLocalRef.current) {
+      // The ref belongs to this page instance and starts false, so a remounted
+      // page would take the C64 branch for a tune playing here — pausing a
+      // machine that is not playing while the local audio ran on.
+      if (currentPlaybackIsLocalRef.current || isLocalPlaybackActive()) {
         const local = getLocalSidPlayback();
         const now = Date.now();
         if (isPaused) {

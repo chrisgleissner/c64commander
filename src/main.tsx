@@ -17,6 +17,7 @@ import { registerRemoteInputLatencyBridge } from "./lib/remoteInput/inputLatency
 import { markStartupBootstrapComplete } from "./lib/startup/startupMilestones";
 import { initializeRuntimeMotionMode } from "./lib/startup/runtimeMotionBudget";
 import { registerServiceWorker } from "./lib/startup/serviceWorkerRegistration";
+import { silenceLeftoverNativeAudio } from "./lib/streams/silenceLeftoverNativeAudio";
 import { addErrorLog } from "./lib/logging";
 import { installNativeSafeAreaSync } from "./lib/native/safeArea";
 import { applyFullScreenFromSettings } from "./lib/native/fullScreen";
@@ -88,6 +89,10 @@ const startDeferredStartupBootstrap = () => {
 };
 
 initializeRuntimeMotionMode();
+// The mirror's audio is a NATIVE AudioTrack, so it outlives this WebView. A
+// reload leaves it playing while the fresh JavaScript believes nothing is —
+// and the next local tune then starts underneath it.
+void silenceLeftoverNativeAudio();
 registerServiceWorker();
 installNativeSafeAreaSync();
 applyFullScreenFromSettings();
