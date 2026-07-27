@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 
 import { EMPTY_NEIGHBOR_HOT, SidcorrParseError, parseSidcorrTiny } from "@/lib/sidRadio/sidcorrTiny";
 import { SIDCORR_BUNDLE_PUBLIC_PATH, SIDCORR_EXPECTED } from "@/lib/sidRadio/sidcorrRelease";
+import { SID_RADIO_STYLE_TILES } from "@/pages/playFiles/hooks/useSidRadio";
 import {
   DEFAULT_TINY_STYLES,
   buildDefaultTinyFixture,
@@ -30,6 +31,15 @@ describe("parseSidcorrTiny — header & styles", () => {
     expect(bundle.styles.map((s) => s.maskBit)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
     expect(bundle.styles[0].kind).toBe("audio");
     expect(bundle.styles[5].kind).toBe("hybrid");
+  });
+
+  // Spec §5.4: the launcher's labels are UI-side but its keys and mask bits are
+  // the export's, and they are what a tile's population is looked up by — a
+  // drifted key would silently drop the count and the empty-station guard.
+  it("maps the 9 launcher tiles 1:1 onto the parsed STYLE_TABLE", () => {
+    const bundle = parseSidcorrTiny(buildDefaultTinyFixture());
+    expect(SID_RADIO_STYLE_TILES.map((tile) => tile.key)).toEqual(bundle.styles.map((style) => style.key));
+    expect(SID_RADIO_STYLE_TILES.map((tile) => tile.bit)).toEqual(bundle.styles.map((style) => style.maskBit));
   });
 
   it("rejects a wrong magic", () => {

@@ -9,9 +9,14 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import type { SidRadioStylePopulations } from "@/lib/sidRadio/sidRadioWorkerProtocol";
 import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
+import { SID_RADIO_STYLE_TILES } from "@/pages/playFiles/hooks/useSidRadio";
 
-const setup = (likeCount: number) => {
+const populationsWith = (overrides: Record<string, number>): SidRadioStylePopulations =>
+  Object.fromEntries(SID_RADIO_STYLE_TILES.map((tile) => [tile.key, overrides[tile.key] ?? 1000]));
+
+const setup = (likeCount: number, stylePopulations: SidRadioStylePopulations | null = null) => {
   const onStartStyle = vi.fn();
   const onStartTaste = vi.fn();
   const onSurprise = vi.fn();
@@ -21,6 +26,7 @@ const setup = (likeCount: number) => {
       open
       onOpenChange={onOpenChange}
       likeCount={likeCount}
+      stylePopulations={stylePopulations}
       onStartStyle={onStartStyle}
       onStartTaste={onStartTaste}
       onSurprise={onSurprise}
@@ -71,5 +77,37 @@ describe("SidRadioLauncherSheet", () => {
     const { onSurprise } = setup(0);
     fireEvent.click(screen.getByTestId("sid-radio-surprise"));
     expect(onSurprise).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * The export shipped `theme_hunter` with 0 members and `composer_focus` with 673
+ * of 87,868, so the launcher offered a station that could never play anything
+ * and gave no way to tell it from one covering half the corpus.
+ */
+describe("SidRadioLauncherSheet station populations", () => {
+  const populations = populationsWith({ fast_paced: 41648, composer_focus: 673, theme_hunter: 0 });
+
+  it("shows each station's size once the populations are known", () => {
+    setup(0, populations);
+    expect(screen.getByTestId("sid-radio-style-0-size")).toHaveTextContent("41,648 tracks");
+    expect(screen.getByTestId("sid-radio-style-5-size")).toHaveTextContent("673 tracks");
+  });
+
+  it("disables a style the export left empty instead of offering a dead station", () => {
+    const { onStartStyle } = setup(0, populations);
+    const emptyTile = screen.getByTestId("sid-radio-style-8");
+    expect(emptyTile).toBeDisabled();
+    expect(screen.getByTestId("sid-radio-style-8-size")).toHaveTextContent("None in this release");
+    fireEvent.click(emptyTile);
+    expect(onStartStyle).not.toHaveBeenCalled();
+  });
+
+  it("keeps every tile enabled and unlabelled while the populations are unread", () => {
+    setup(0);
+    for (let bit = 0; bit < 9; bit += 1) {
+      expect(screen.getByTestId(`sid-radio-style-${bit}`)).not.toBeDisabled();
+      expect(screen.queryByTestId(`sid-radio-style-${bit}-size`)).toBeNull();
+    }
   });
 });

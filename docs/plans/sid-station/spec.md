@@ -464,7 +464,9 @@ station can be a mood, a taste, or both.
    yet", with Style/Taste one tap away.
 2. **The SID Radio launcher** (`sid-radio-launcher`). A compact entry in the **Play page
    header** (and, optionally, a Home quick action) opens a lightweight `AppSheet`:
-   - **Style stations** — a grid of the 9 mapped styles (`sid-radio-style-<bit>`, §5.4).
+   - **Style stations** — a grid of the 9 mapped styles (`sid-radio-style-<bit>`, §5.4),
+     each showing how many tracks that station draws from
+     (`sid-radio-style-<bit>-size`), and each disabled if that number is zero.
    - **From tunes you like** (`sid-radio-taste`) — Taste seed; enabled once there are ≥ N
      (default 5, D1) likes, with a gentle "Like a few tunes to unlock" hint otherwise.
    - **A "based on my likes" toggle on the sheet (Q4).** With it on, tapping any style
@@ -518,8 +520,22 @@ Tunes**, §5.5).
 | `deep_discovery` | **Deep Cuts**          | Rarely-heard corners of HVSC          |
 | `theme_hunter`   | **Game Themes**        | Themes & loader tunes                 |
 
-(Labels are UI-side; the mask bit indices come from the export's `STYLE_TABLE`. A test
-asserts the 9 labels map 1:1 onto the parsed `STYLE_TABLE` order — §8.1.)
+(Labels are UI-side; the keys and mask bit indices come from the export's `STYLE_TABLE`.
+A test asserts the 9 tiles map 1:1 onto the parsed `STYLE_TABLE` order — §8.1.)
+
+**Station size, and styles with no station behind them.** The worker counts every
+style's members in one pass over `STYLE_MASK_TABLE` at load and returns them on the
+`ready` message (`stylePopulations`, keyed by export key). The launcher shows the count
+on each tile and **disables a tile whose style has no members**, because that tile is a
+station that can never play anything — the pinned release ships `theme_hunter` at 0
+(§2.1). **Surprise me** draws only from styles that have members for the same reason.
+The `empty` reason from a `compute` remains the backstop for everything the counts
+cannot predict (a style filter composed over Likes that admits nothing, an exhausted
+station), so a station that goes empty at run time still degrades to the §5.2 Q5 notice.
+
+The counts come from the bundle rather than the manifest's `style_populations`: the
+bundle is the only artefact the app ships, it is authoritative for releases predating
+that field, and the export gate holds the manifest to a recount from the same table.
 
 ### 5.5 Liked Tunes — a playable collection (Q9)
 

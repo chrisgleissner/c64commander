@@ -13,12 +13,19 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { SID_RADIO_STYLE_TILES, SID_RADIO_TASTE_UNLOCK_LIKES } from "@/pages/playFiles/hooks/useSidRadio";
+import type { SidRadioStylePopulations } from "@/lib/sidRadio/sidRadioWorkerProtocol";
+import {
+  SID_RADIO_STYLE_TILES,
+  SID_RADIO_TASTE_UNLOCK_LIKES,
+  isStylePopulated,
+} from "@/pages/playFiles/hooks/useSidRadio";
 
 export type SidRadioLauncherSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   likeCount: number;
+  /** Per-style track counts from the similarity bundle; null while unread. */
+  stylePopulations?: SidRadioStylePopulations | null;
   onStartStyle: (styleBit: number, label: string, fromLikes: boolean) => void;
   onStartTaste: () => void;
   onSurprise: () => void;
@@ -28,11 +35,16 @@ export type SidRadioLauncherSheetProps = {
  * The SID Radio launcher (spec §5.2). Composes seed × optional style: a grid of
  * the 9 style tiles, a "based on my likes" composition toggle (Q4/D10), a Taste
  * entry that unlocks at the like threshold (D1), and Surprise.
+ *
+ * Each tile carries the size of the station behind it, and a style the export
+ * left empty is offered as a disabled tile rather than a station that starts and
+ * immediately reports it has nothing to play (§5.4).
  */
 export const SidRadioLauncherSheet = ({
   open,
   onOpenChange,
   likeCount,
+  stylePopulations = null,
   onStartStyle,
   onStartTaste,
   onSurprise,
@@ -60,22 +72,32 @@ export const SidRadioLauncherSheet = ({
           </label>
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {SID_RADIO_STYLE_TILES.map((tile) => (
-              <Button
-                key={tile.bit}
-                type="button"
-                variant="outline"
-                className="h-auto flex-col items-start gap-0.5 whitespace-normal py-2 text-left"
-                data-testid={`sid-radio-style-${tile.bit}`}
-                onClick={() => {
-                  close();
-                  onStartStyle(tile.bit, tile.label, fromLikes);
-                }}
-              >
-                <span className="text-sm font-medium">{tile.label}</span>
-                <span className="text-xs text-muted-foreground">{tile.blurb}</span>
-              </Button>
-            ))}
+            {SID_RADIO_STYLE_TILES.map((tile) => {
+              const population = stylePopulations?.[tile.key];
+              const populated = isStylePopulated(stylePopulations, tile.key);
+              return (
+                <Button
+                  key={tile.bit}
+                  type="button"
+                  variant="outline"
+                  className="h-auto flex-col items-start gap-0.5 whitespace-normal py-2 text-left"
+                  data-testid={`sid-radio-style-${tile.bit}`}
+                  disabled={!populated}
+                  onClick={() => {
+                    close();
+                    onStartStyle(tile.bit, tile.label, fromLikes);
+                  }}
+                >
+                  <span className="text-sm font-medium">{tile.label}</span>
+                  <span className="text-xs text-muted-foreground">{tile.blurb}</span>
+                  {population === undefined ? null : (
+                    <span className="text-xs text-muted-foreground" data-testid={`sid-radio-style-${tile.bit}-size`}>
+                      {populated ? `${population.toLocaleString()} tracks` : "None in this release"}
+                    </span>
+                  )}
+                </Button>
+              );
+            })}
           </div>
 
           <div className="flex flex-col gap-2">

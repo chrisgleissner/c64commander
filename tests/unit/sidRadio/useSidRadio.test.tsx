@@ -9,10 +9,10 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
+import { SID_RADIO_STYLE_TILES, useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
 import { clearAllRankings, getRanking } from "@/lib/sidRadio/rankingStore";
 import { loadSidRadioSession, saveSidRadioSession } from "@/lib/sidRadio/sidRadioSession";
-import type { StationRequest } from "@/lib/sidRadio/sidRadioWorkerProtocol";
+import type { SidRadioStylePopulations, StationRequest } from "@/lib/sidRadio/sidRadioWorkerProtocol";
 import type { StationResult } from "@/lib/sidRadio/stationEngine";
 
 beforeEach(async () => {
@@ -20,9 +20,12 @@ beforeEach(async () => {
   await clearAllRankings();
 });
 
-const makeClient = () => {
+const populationsWith = (overrides: Record<string, number>): SidRadioStylePopulations =>
+  Object.fromEntries(SID_RADIO_STYLE_TILES.map((tile) => [tile.key, overrides[tile.key] ?? 1000]));
+
+const makeClient = (stylePopulations: SidRadioStylePopulations = populationsWith({})) => {
   const client = {
-    load: vi.fn().mockResolvedValue({ fileCount: 4, trackCount: 4, engineThreadIsMain: false }),
+    load: vi.fn().mockResolvedValue({ fileCount: 4, trackCount: 4, stylePopulations, engineThreadIsMain: false }),
     compute: vi.fn(async (request: StationRequest): Promise<StationResult> => {
       const pool = Array.from({ length: 60 }, (_, i) => i + 1).filter((o) => !request.exclude.includes(o));
       return {
@@ -167,6 +170,58 @@ describe("useSidRadio", () => {
     expect(params.startPlaylist).not.toHaveBeenCalled();
     act(() => result.current.dismissNotice());
     expect(result.current.notice).toBeNull();
+  });
+
+  it("reads the style populations once and reuses them", async () => {
+    const client = makeClient(populationsWith({ theme_hunter: 0 }));
+    const params = baseParams(client);
+    const { result } = renderHook(() => useSidRadio(params));
+    expect(result.current.stylePopulations).toBeNull();
+    await act(async () => {
+      await result.current.ensureStylePopulations();
+      await result.current.ensureStylePopulations();
+    });
+    expect(client.load).toHaveBeenCalledTimes(1);
+    expect(result.current.stylePopulations).toMatchObject({ theme_hunter: 0, fast_paced: 1000 });
+  });
+
+  it("leaves the populations unknown rather than failing when the bundle cannot be read", async () => {
+    const client = makeClient();
+    client.load = vi.fn().mockRejectedValue(new Error("bundle missing"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const params = baseParams(client);
+    const { result } = renderHook(() => useSidRadio(params));
+    await act(async () => {
+      await expect(result.current.ensureStylePopulations()).resolves.toBeNull();
+    });
+    expect(result.current.stylePopulations).toBeNull();
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("Surprise never rolls a style the export left empty", async () => {
+    // theme_hunter (bit 8) matched 0 tracks in the pinned release, and the old
+    // picker chose uniformly over all nine bits.
+    const client = makeClient(populationsWith({ theme_hunter: 0 }));
+    const params = baseParams(client, { randomSeed: () => 8 });
+    const { result } = renderHook(() => useSidRadio(params));
+    await act(async () => {
+      await result.current.startSurpriseRadio();
+    });
+    expect(result.current.station?.styleBit).not.toBe(8);
+    expect(result.current.station?.seedLabel).not.toBe("Game Themes");
+  });
+
+  it("Surprise says so rather than starting nothing when no style has members", async () => {
+    const client = makeClient(Object.fromEntries(SID_RADIO_STYLE_TILES.map((tile) => [tile.key, 0])));
+    const params = baseParams(client);
+    const { result } = renderHook(() => useSidRadio(params));
+    await act(async () => {
+      await result.current.startSurpriseRadio();
+    });
+    expect(result.current.active).toBe(false);
+    expect(result.current.notice).toBe("no-radio");
+    expect(params.startPlaylist).not.toHaveBeenCalled();
   });
 
   it("resumes the chip from a saved session on mount (D15)", () => {

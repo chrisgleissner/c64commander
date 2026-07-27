@@ -19,6 +19,7 @@ import {
   type RankingSignal,
 } from "@/lib/sidRadio/rankingStore";
 import { SidRadioWorkerClient } from "@/lib/sidRadio/sidRadioWorkerClient";
+import type { SidRadioStylePopulations } from "@/lib/sidRadio/sidRadioWorkerProtocol";
 import { StationQueueProvider } from "@/lib/sidRadio/stationQueueProvider";
 import type { StationSeed } from "@/lib/sidRadio/stationEngine";
 import {
@@ -73,6 +74,10 @@ export interface UseSidRadioResult {
   startTasteRadio: () => Promise<void>;
   /** Surprise: a random style / broad Deep-Discovery station (§5.2). */
   startSurpriseRadio: () => Promise<void>;
+  /** Per-style track counts, or null until the bundle has been read. */
+  stylePopulations: SidRadioStylePopulations | null;
+  /** Read the populations so the launcher can size (and retire) its tiles. */
+  ensureStylePopulations: () => Promise<SidRadioStylePopulations | null>;
   steer: (md5: string, signal: RankingSignal) => void;
   stop: () => void;
   /** A transient empty/degraded notice (spec §5.2 Q5), or null. */
@@ -90,6 +95,26 @@ const buildStationItem = (input: { virtualPath: string; songIndex: number; track
 
 const LOOKAHEAD = 10;
 const REFILL_THRESHOLD = 4;
+
+/** The 9 style tiles (spec §5.4) — mask bit → export key + friendly label + blurb. */
+export const SID_RADIO_STYLE_TILES: ReadonlyArray<{ bit: number; key: string; label: string; blurb: string }> = [
+  { bit: 0, key: "fast_paced", label: "Fast-Paced", blurb: "High-energy, driving tunes" },
+  { bit: 1, key: "slow_ambient", label: "Chill / Ambient", blurb: "Slow, atmospheric" },
+  { bit: 2, key: "melodic", label: "Melodic", blurb: "Strong, hummable melodies" },
+  { bit: 3, key: "experimental", label: "Experimental", blurb: "Off the beaten track" },
+  { bit: 4, key: "nostalgic", label: "Nostalgic", blurb: "Classic, wistful vibes" },
+  { bit: 5, key: "composer_focus", label: "Composer Deep-Dive", blurb: "Stays close to a composer's signature" },
+  { bit: 6, key: "era_explorer", label: "Era Explorer", blurb: "Roams a musical era" },
+  { bit: 7, key: "deep_discovery", label: "Deep Cuts", blurb: "Rarely-heard corners of HVSC" },
+  { bit: 8, key: "theme_hunter", label: "Game Themes", blurb: "Themes & loader tunes" },
+];
+
+/** Taste-Radio unlock threshold (D1). */
+export const SID_RADIO_TASTE_UNLOCK_LIKES = 5;
+
+/** A style the export left empty has no station behind it (spec §5.4). */
+export const isStylePopulated = (populations: SidRadioStylePopulations | null, key: string): boolean =>
+  populations === null || populations[key] !== 0;
 
 /**
  * Orchestrates a SID Radio station (spec §6.1 `useSidRadio`): owns the worker
@@ -128,6 +153,9 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
 
   const [station, setStation] = useState<ActiveStation | null>(null);
   const [notice, setNotice] = useState<"no-radio-for-tune" | "no-radio" | null>(null);
+  const [stylePopulations, setStylePopulations] = useState<SidRadioStylePopulations | null>(null);
+  const stylePopulationsRef = useRef<SidRadioStylePopulations | null>(null);
+  const stylePopulationsLoadRef = useRef<Promise<SidRadioStylePopulations | null> | null>(null);
   const clientRef = useRef<SidRadioWorkerClient | null>(null);
   const providerRef = useRef<StationQueueProvider | null>(null);
   const seedRef = useRef<{ seed: StationSeed; styleFilter: number | null; shuffleSeed: number }>({
@@ -143,6 +171,31 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     }
     return clientRef.current;
   }, [params]);
+
+  // Set once per session: the populations are a pure function of the pinned
+  // bundle, so the stored reference stays stable and cannot re-trigger effects.
+  const rememberStylePopulations = useCallback((populations: SidRadioStylePopulations) => {
+    if (stylePopulationsRef.current) return;
+    stylePopulationsRef.current = populations;
+    setStylePopulations(populations);
+  }, []);
+
+  const ensureStylePopulations = useCallback(async (): Promise<SidRadioStylePopulations | null> => {
+    if (!enabled) return null;
+    if (stylePopulationsRef.current) return stylePopulationsRef.current;
+    stylePopulationsLoadRef.current ??= ensureClient()
+      .load()
+      .then((stats) => {
+        rememberStylePopulations(stats.stylePopulations);
+        return stats.stylePopulations;
+      })
+      .catch((error: unknown) => {
+        stylePopulationsLoadRef.current = null;
+        console.warn("SID Radio: could not read style populations from the similarity bundle", error);
+        return null;
+      });
+    return stylePopulationsLoadRef.current;
+  }, [enabled, ensureClient, rememberStylePopulations]);
 
   const buildProvider = useCallback(
     (seed: StationSeed, styleFilter: number | null, shuffleSeed: number, initialExclude: number[] = []) => {
@@ -190,7 +243,8 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     async (seed: StationSeed, styleFilter: number | null, seedKind: ActiveStation["seedKind"], seedLabel: string) => {
       if (!enabled) return;
       const client = ensureClient();
-      await client.load();
+      const readyStats = await client.load();
+      rememberStylePopulations(readyStats.stylePopulations);
       const shuffleSeed = randomSeed();
       const provider = buildProvider(seed, styleFilter, shuffleSeed);
       providerRef.current = provider;
@@ -237,7 +291,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       persistSession(activeStation, seed);
       await startPlaylist(items);
     },
-    [enabled, ensureClient, randomSeed, buildProvider, startPlaylist, persistSession],
+    [enabled, ensureClient, rememberStylePopulations, randomSeed, buildProvider, startPlaylist, persistSession],
   );
 
   const startSongRadio = useCallback(
@@ -250,21 +304,16 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     [start],
   );
   const startTasteRadio = useCallback(() => start({ kind: "taste" }, null, "taste", "Tunes you like"), [start]);
-  const startSurpriseRadio = useCallback(() => {
-    const bit = Math.floor(randomSeed() % 9);
-    const labels = [
-      "Fast-Paced",
-      "Chill / Ambient",
-      "Melodic",
-      "Experimental",
-      "Nostalgic",
-      "Composer Deep-Dive",
-      "Era Explorer",
-      "Deep Cuts",
-      "Game Themes",
-    ];
-    return start({ kind: "style", styleBit: bit }, bit, "style", labels[bit] ?? "Surprise");
-  }, [start, randomSeed]);
+  const startSurpriseRadio = useCallback(async () => {
+    const populations = await ensureStylePopulations();
+    const candidates = SID_RADIO_STYLE_TILES.filter((tile) => isStylePopulated(populations, tile.key));
+    if (candidates.length === 0) {
+      setNotice("no-radio");
+      return;
+    }
+    const tile = candidates[randomSeed() % candidates.length];
+    await start({ kind: "style", styleBit: tile.bit }, tile.bit, "style", tile.label);
+  }, [start, randomSeed, ensureStylePopulations]);
 
   const stop = useCallback(() => {
     setStation(null);
@@ -378,25 +427,11 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     startStyleRadio,
     startTasteRadio,
     startSurpriseRadio,
+    stylePopulations,
+    ensureStylePopulations,
     steer,
     stop,
     notice,
     dismissNotice: () => setNotice(null),
   };
 };
-
-/** The 9 style tiles (spec §5.4) — mask bit → friendly label + blurb. */
-export const SID_RADIO_STYLE_TILES: ReadonlyArray<{ bit: number; key: string; label: string; blurb: string }> = [
-  { bit: 0, key: "fast_paced", label: "Fast-Paced", blurb: "High-energy, driving tunes" },
-  { bit: 1, key: "slow_ambient", label: "Chill / Ambient", blurb: "Slow, atmospheric" },
-  { bit: 2, key: "melodic", label: "Melodic", blurb: "Strong, hummable melodies" },
-  { bit: 3, key: "experimental", label: "Experimental", blurb: "Off the beaten track" },
-  { bit: 4, key: "nostalgic", label: "Nostalgic", blurb: "Classic, wistful vibes" },
-  { bit: 5, key: "composer_focus", label: "Composer Deep-Dive", blurb: "Stays close to a composer's signature" },
-  { bit: 6, key: "era_explorer", label: "Era Explorer", blurb: "Roams a musical era" },
-  { bit: 7, key: "deep_discovery", label: "Deep Cuts", blurb: "Rarely-heard corners of HVSC" },
-  { bit: 8, key: "theme_hunter", label: "Game Themes", blurb: "Themes & loader tunes" },
-];
-
-/** Taste-Radio unlock threshold (D1). */
-export const SID_RADIO_TASTE_UNLOCK_LIKES = 5;

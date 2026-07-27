@@ -268,7 +268,7 @@ not-connected / empty / single-device).
 
 - Start a station from the current tune — button — `sid-radio-start` — R✅ I✅ _(shown for a playing SID)_
 - Open the station launcher — button — `sid-radio-launcher` — R✅ I✅ ; sheet `sid-radio-launcher-sheet`
-  - Style stations — button — `sid-radio-style-<bit>` (0–8) — R✅ I✅
+  - Style stations — button — `sid-radio-style-<bit>` (0–8) — R✅ I✅ `[disabled: the export left this style with no tracks — see size `sid-radio-style-<bit>-size`]`
   - Based on my likes — checkbox — `sid-radio-likes-toggle` — R✅ I✅
   - My taste — button — `sid-radio-taste` — R✅ I✅ `[disabled: not enough rankings yet — see hint `sid-radio-taste-hint`]`
   - Surprise me — button — `sid-radio-surprise` — R✅ I✅

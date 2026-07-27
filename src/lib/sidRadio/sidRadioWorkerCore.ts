@@ -13,6 +13,7 @@ import type {
   SidRadioEmptyMessage,
   SidRadioErrorMessage,
   SidRadioReadyStats,
+  SidRadioStylePopulations,
   StationRequest,
 } from "./sidRadioWorkerProtocol";
 
@@ -32,6 +33,28 @@ export const isWorkerGlobalScope = (): boolean => {
   );
 };
 
+/**
+ * Count the members of every style in one pass over `STYLE_MASK_TABLE` — the
+ * same table {@link computeStation} admits candidates from, so a tile's count
+ * and the station behind it can never disagree.
+ *
+ * The published manifest carries the same numbers from 0.8.0 onward, but the
+ * bundle is the only artefact the app ships, it is authoritative for every
+ * release including the ones that predate that field, and the export gate holds
+ * the manifest to a recount from exactly this table.
+ */
+export const stylePopulationsFromBundle = (bundle: SidcorrTinyBundle): SidRadioStylePopulations => {
+  const populations: Record<string, number> = {};
+  for (const style of bundle.styles) populations[style.key] = 0;
+  for (let ordinal = 0; ordinal < bundle.trackCount; ordinal += 1) {
+    const mask = bundle.styleMask[ordinal];
+    for (const style of bundle.styles) {
+      if ((mask & (1 << style.maskBit)) !== 0) populations[style.key] += 1;
+    }
+  }
+  return populations;
+};
+
 /** Derive the ready-stats surfaced to the main thread from a parsed bundle. */
 export const readyStatsFromBundle = (bundle: SidcorrTinyBundle, engineThreadIsMain: boolean): SidRadioReadyStats => ({
   bundleLoadMs: bundle.stats.bundleLoadMs,
@@ -41,6 +64,7 @@ export const readyStatsFromBundle = (bundle: SidcorrTinyBundle, engineThreadIsMa
   trackCount: bundle.trackCount,
   edgeCount: bundle.stats.edgeCount,
   styleCount: bundle.styles.length,
+  stylePopulations: stylePopulationsFromBundle(bundle),
   engineThreadIsMain,
 });
 
