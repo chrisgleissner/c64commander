@@ -156,7 +156,20 @@ jobs:
     name: iOS | Maestro
     runs-on: macos-latest
     needs: ios-prepare
-    timeout-minutes: 25
+    # 40, not 25. The cap was set below the job's own observed spread, so it was
+    # failing runs for being unlucky rather than for being wrong.
+    #
+    # Measured across consecutive runs of the SAME code path: 14m46s, 17m24s,
+    # 18m41s, 19m14s, 23m56s, 24m26s, 25m42s, 26m6s. Two of those pairs differ
+    # only by a Playwright spec file, which is not in the app bundle and cannot
+    # change how long a simulator takes — the spread is macOS runner variance.
+    # `main` sits in the same 18-24m band against the same cap, so this is not a
+    # regression being papered over; it is a gate calibrated under its own p100.
+    #
+    # This is a TIMEOUT, not a budget: nothing is asserted about duration, so
+    # raising it cannot hide a slowdown. If the flows genuinely need to be
+    # faster, that belongs in a measured perf gate, not in a job kill switch.
+    timeout-minutes: 40
 
     env:
       IOS_MAESTRO_FLOWS: ios-ci-smoke,ios-secure-storage-persist,ios-config-persistence
