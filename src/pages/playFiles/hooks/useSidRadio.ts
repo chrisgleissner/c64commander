@@ -112,9 +112,25 @@ export const SID_RADIO_STYLE_TILES: ReadonlyArray<{ bit: number; key: string; la
 /** Taste-Radio unlock threshold (D1). */
 export const SID_RADIO_TASTE_UNLOCK_LIKES = 5;
 
-/** A style the export left empty has no station behind it (spec §5.4). */
+/**
+ * A style the export left empty has no station behind it (spec §5.4).
+ *
+ * `null` is "not read yet", and it is deliberately permissive: the launcher opens
+ * as soon as it is tapped rather than waiting on the bundle, so a tile with no
+ * counts yet is offered rather than greyed out and then un-greyed a moment later.
+ * That makes this a presentation guard, not the enforcement point — {@link
+ * isStyleBitPopulated} refuses the station itself, once the counts are known.
+ */
 export const isStylePopulated = (populations: SidRadioStylePopulations | null, key: string): boolean =>
   populations === null || populations[key] !== 0;
+
+/**
+ * The same test against a mask bit, for the moment the populations have actually
+ * arrived. An unknown bit counts as populated — this refuses empty stations, it
+ * does not police the tile table (§8.1 already asserts that mapping).
+ */
+export const isStyleBitPopulated = (populations: SidRadioStylePopulations, bit: number): boolean =>
+  !SID_RADIO_STYLE_TILES.some((tile) => tile.bit === bit && populations[tile.key] === 0);
 
 /**
  * Orchestrates a SID Radio station (spec §6.1 `useSidRadio`): owns the worker
@@ -245,6 +261,15 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       const client = ensureClient();
       const readyStats = await client.load();
       rememberStylePopulations(readyStats.stylePopulations);
+      // The launcher opens before the populations are read, so a fast tap reaches
+      // a tile the disabled state had no counts to refuse yet. They are known
+      // here, ahead of any compute, and a style with no members admits nothing
+      // whether it is seeded by the style or filtered over Likes: refuse the
+      // station rather than starting one that can only report itself empty.
+      if (styleFilter !== null && !isStyleBitPopulated(readyStats.stylePopulations, styleFilter)) {
+        setNotice("no-radio");
+        return;
+      }
       const shuffleSeed = randomSeed();
       const provider = buildProvider(seed, styleFilter, shuffleSeed);
       providerRef.current = provider;
