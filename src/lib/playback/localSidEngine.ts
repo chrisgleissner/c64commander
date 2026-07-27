@@ -51,8 +51,14 @@ export interface LocalSidAudioSink {
   suspend?: () => Promise<void> | void;
   /** Ramp output down over `ms`, for an opt-in crossfade. */
   fadeOut?: (ms: number) => void;
-  /** Ramp output up over `ms`, for an opt-in crossfade. */
-  fadeIn?: (ms: number) => void;
+  /**
+   * Ramp output up over `ms`, for an opt-in crossfade.
+   *
+   * `toGain` is where the ramp ENDS. It is not optional in practice: ramping to
+   * a hardcoded 1 wiped whatever level the listener had chosen, so the volume
+   * control worked until the next crossfade and then jumped back to full.
+   */
+  fadeIn?: (ms: number, toGain?: number) => void;
   /** Set output level, 0..1. Used by the Play page's volume control. */
   setGain?: (value: number) => void;
   close: () => void;
@@ -156,14 +162,15 @@ const defaultAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number) =
         master.gain.value = clamped;
       }
     },
-    fadeIn: (ms: number) => {
+    fadeIn: (ms: number, toGain = 1) => {
       const now = context.currentTime;
+      const target = Math.min(1, Math.max(0.0001, toGain));
       try {
         master.gain.cancelScheduledValues(now);
         master.gain.setValueAtTime(0.0001, now);
-        master.gain.linearRampToValueAtTime(1, now + ms / 1000);
+        master.gain.linearRampToValueAtTime(target, now + ms / 1000);
       } catch {
-        master.gain.value = 1;
+        master.gain.value = target;
       }
     },
     close: () => void context.close(),
@@ -380,11 +387,26 @@ export class LocalSidEngine {
       );
       // A pre-render that dies must not fail playback — the tune is still
       // playing, seeks simply go back to the slow path. So this deliberately
-      // does NOT call failWorker.
-      this.prerenderWorker.addEventListener("error", () => this.abandonPrerender());
-      this.prerenderWorker.addEventListener("messageerror", () => this.abandonPrerender());
+      // does NOT call failWorker. It is still logged: a thread that keeps dying
+      // leaves every seek on the slow path, which is exactly the kind of quiet
+      // regression that hides for months.
+      this.prerenderWorker.addEventListener("error", (event) =>
+        this.onPrerenderWorkerFailure(event.message || "unknown worker error"),
+      );
+      this.prerenderWorker.addEventListener("messageerror", () =>
+        this.onPrerenderWorkerFailure("a pre-render message could not be deserialized"),
+      );
     }
     return this.prerenderWorker;
+  }
+
+  /** Report a dead pre-render thread, then give up on it. Playback is untouched. */
+  private onPrerenderWorkerFailure(reason: string): void {
+    addErrorLog("Local SID pre-render thread failed; seeking falls back to re-rendering", {
+      service: "local-sid",
+      error: reason,
+    });
+    this.abandonPrerender();
   }
 
   /** Give up on the current pre-render, leaving playback untouched. */
@@ -594,8 +616,12 @@ export class LocalSidEngine {
     }
     void this.audio.resume?.();
     // Carry the listener's level onto the new tune's sink.
-    if (this.volume !== 1 || this.muted) this.audio.setGain?.(this.muted ? 0 : this.volume);
-    if (this.pendingCrossfadeMs > 0) this.audio.fadeIn?.(this.pendingCrossfadeMs);
+    const level = this.muted ? 0 : this.volume;
+    if (this.volume !== 1 || this.muted) this.audio.setGain?.(level);
+    // Fade UP TO the listener's level. `fadeIn` cancels whatever `setGain` just
+    // scheduled, so a fade to a hardcoded 1 would undo the line above and the
+    // volume control would silently reset on every crossfade.
+    if (this.pendingCrossfadeMs > 0) this.audio.fadeIn?.(this.pendingCrossfadeMs, level);
     this.pendingCrossfadeMs = 0;
     this.scheduler = new LocalSidChunkScheduler(this.audio.sink, {
       onSourceEnded: () => this.onSourceEnded(),
@@ -706,9 +732,16 @@ export class LocalSidEngine {
   private maybeFireEnded(): void {
     if (this.endedFired || !this.endReceived || !this.scheduler) return;
     const scheduled = this.scheduler.getStats().chunksScheduled;
-    if (scheduled > 0 && this.chunksEnded >= scheduled) {
+    // `scheduled === 0` is not "not finished yet", it is "there was never any
+    // audio": seeking to or past the end of a fully-rendered tune exhausts the
+    // cache on the first pump, before anything is queued. Waiting for chunks
+    // that will never exist left the engine silent and never-ending.
+    if (scheduled === 0 || this.chunksEnded >= scheduled) {
       this.endedFired = true;
       this.callbacks.onEnded?.();
+      // The tune is over. Listeners deriving "is anything playing" from the
+      // engine must re-read, or a finished tune keeps offering Pause.
+      notifyPlaybackActivityChanged();
     }
   }
 
@@ -738,6 +771,18 @@ export class LocalSidEngine {
 
   private onWorkerError(code: string, message: string, id?: number): void {
     const error = new Error(`Local SID engine error [${code}]: ${message}`);
+    // A pre-render runs on its own worker, in the background, for a tune that is
+    // very likely playing perfectly. Its failure means seeks fall back to the
+    // slow path — it is NOT a playback failure, and reporting it as one told the
+    // user (and the logs) that a working tune had failed.
+    if (code === "prerender") {
+      addErrorLog("Local SID pre-render failed; seeking falls back to re-rendering", {
+        service: "local-sid",
+        error: message,
+      });
+      this.abandonPrerender();
+      return;
+    }
     if (this.loadPending) {
       const pending = this.loadPending;
       this.loadPending = null;
@@ -862,9 +907,15 @@ export class LocalSidEngine {
    */
   stopPlayback(options: { crossfadeMs?: number } = {}): void {
     releaseAudioOwnership(this);
-    // `isActive()` flips here and only here, so this is where the app is told.
-    // A tune that simply ends reaches this path too — without it the transport
-    // would keep offering Pause for a tune that had already finished.
+    // `isActive()` flips here, so this is where the app is told.
+    //
+    // NOT the only place the app needs telling: a tune that simply runs out does
+    // NOT come through here. It fires `onEnded` (see maybeFireEnded, which
+    // notifies separately) and leaves the scheduler in place, so `isActive()`
+    // stays true until something explicitly stops or replaces the tune. Wiring
+    // end-of-tune teardown is a wider change than this one — auto-advance is
+    // driven by the songlength clock in PlayFilesPage, not by `onEnded`, which
+    // no caller currently installs.
     const wasActive = this.scheduler !== null;
     const fadeMs = options.crossfadeMs ?? 0;
     const outgoing = this.audio;

@@ -43,7 +43,7 @@ export const silenceLeftoverNativeAudio = async (): Promise<void> => {
   } catch (error) {
     // Best effort by design: a phone with nothing left over throws here on some
     // paths, and that must never stop the app from starting.
-    addLog("debug", "Streams: no leftover native audio to clear", {
+    addLog("warn", "Streams: could not clear leftover native audio", {
       service: "streams",
       error: error instanceof Error ? error.message : String(error),
     });

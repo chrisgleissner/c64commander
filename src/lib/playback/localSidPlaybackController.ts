@@ -150,14 +150,21 @@ export class LocalSidPlaybackController {
 
   /** Stop the current tune (keeps the worker + WASM module warm). */
   stop(): void {
+    // No notify here: `engine.stop()` reaches `stopPlayback()`, which is where
+    // `isActive()` actually flips and where the notify lives — and that path
+    // also covers an ownership eviction, which never comes through here.
     this.engine?.stop();
-    notifyPlaybackActivityChanged();
   }
 
-  /** Pause on-device playback in place (no C64 involved). */
+  /**
+   * Pause on-device playback in place (no C64 involved).
+   *
+   * Deliberately does not notify: pausing suspends the audio clock but leaves
+   * the tune loaded, so `isActive()` is unchanged and listeners would re-read an
+   * identical snapshot. "Is a tune loaded" is the question they ask.
+   */
   async pause(): Promise<void> {
     await this.engine?.pause();
-    notifyPlaybackActivityChanged();
   }
 
   /**

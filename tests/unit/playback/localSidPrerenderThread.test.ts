@@ -36,12 +36,20 @@ class FakeWorker implements LocalSidWorkerLike {
   readonly sent: LocalSidMainToWorker[] = [];
   terminated = false;
   private handler: ((event: MessageEvent<LocalSidWorkerToMain>) => void) | null = null;
+  private errorHandler: ((event: { message?: string }) => void) | null = null;
 
   postMessage(message: LocalSidMainToWorker): void {
     this.sent.push(message);
   }
   addEventListener(type: "message" | "error" | "messageerror", handler: unknown): void {
+    // All three, not just "message". Storing only "message" made the
+    // thread-death test tautological: the production error handlers were never
+    // wired, so no event could reach them.
     if (type === "message") this.handler = handler as (event: MessageEvent<LocalSidWorkerToMain>) => void;
+    if (type === "error") this.errorHandler = handler as (event: { message?: string }) => void;
+  }
+  emitError(message: string): void {
+    this.errorHandler?.({ message });
   }
   terminate(): void {
     this.terminated = true;
@@ -105,11 +113,30 @@ describe("pre-render runs off the playback thread", () => {
     const onError = vi.fn();
     void engine.play(new ArrayBuffer(8), 0, { onError });
     engine.prerender("tune-a", new ArrayBuffer(8), 0, 120);
+    const prerenderWorker = workers[1]!;
 
-    // The tune is still playing; a failed pre-render only means seeks go back
-    // to the slow path, so it must not surface as a playback error.
-    engine.dispose();
+    // Actually kill the thread, rather than disposing the engine and asserting
+    // that a torn-down callback was not called.
+    prerenderWorker.emitError("worker segfault");
+
+    // The tune is still playing; a dead pre-render only means seeks go back to
+    // the slow path, so it must not surface as a playback error.
     expect(onError).not.toHaveBeenCalled();
+    expect(prerenderWorker.terminated).toBe(true);
+  });
+
+  it("keeps pre-rendering possible after a thread death", () => {
+    // Abandoning must clear the worker, not leave a dead one installed —
+    // otherwise every later seek stays on the slow path forever.
+    const engine = makeEngine();
+    void engine.play(new ArrayBuffer(8), 0, {});
+    engine.prerender("tune-a", new ArrayBuffer(8), 0, 120);
+    workers[1]!.emitError("worker segfault");
+
+    engine.prerender("tune-b", new ArrayBuffer(8), 0, 120);
+
+    expect(workers).toHaveLength(3);
+    expect(workers[2]!.has("prerender")).toBe(true);
   });
 
   it("terminates the pre-render thread on dispose", () => {
