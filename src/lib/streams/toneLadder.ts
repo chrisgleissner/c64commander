@@ -176,13 +176,6 @@ export interface SilenceGrade {
   passed: boolean;
 }
 
-export interface ColourGrade {
-  changes: number;
-  /** Colour changes whose slot agreed with the pitch sounding at that moment. */
-  agreed: number;
-  disagreed: number;
-}
-
 export interface ToneLadderResult {
   notes: ToneLadderNote[];
   notesInTune: number;
@@ -196,7 +189,6 @@ export interface ToneLadderResult {
   /** Notes materially longer — a boundary was lost, or playback is running slow. */
   longNotes: number;
   silence: SilenceGrade;
-  colour: ColourGrade;
   av: AvSyncGrade;
 }
 
@@ -314,23 +306,39 @@ const anchorSlot = (notes: ToneLadderNoteInput[]): number => {
   return best;
 };
 
-const gradeAvSync = (notes: ToneLadderNote[], inputs: ToneLadderNoteInput[], extras: ToneLadderExtras): AvSyncGrade => {
-  const changes = extras.colourChanges ?? [];
-  const offsets: { offsetMs: number; atMs: number }[] = [];
-  for (const change of changes) {
-    // Pair each colour change with the note onset closest to it. A colour identifies its slot
-    // uniquely, so a pairing that lands on the wrong pitch is a content fault, not a timing one.
-    let nearest: { offsetMs: number; atMs: number } | null = null;
-    for (let i = 0; i < inputs.length; i += 1) {
-      const atMs = inputs[i]!.atMs;
-      if (atMs === undefined) continue;
-      const offsetMs = atMs - change.atMs;
+interface ColourPairing {
+  colour: number;
+  offsetMs: number;
+  atMs: number;
+  heardHz: number;
+}
+
+/**
+ * Pair each colour change with the note onset nearest to it.
+ *
+ * The pairing carries the pitch as well as the time, because a colour identifies its slot uniquely:
+ * the picture says which note ought to be sounding. A pair that lines up in time but lands on the
+ * wrong pitch is a content fault, not a timing one, and the two must not be reported as one number.
+ */
+const pairColoursWithNotes = (inputs: ToneLadderNoteInput[], extras: ToneLadderExtras): ColourPairing[] => {
+  const pairs: ColourPairing[] = [];
+  for (const change of extras.colourChanges ?? []) {
+    let nearest: ColourPairing | null = null;
+    for (const note of inputs) {
+      if (note.atMs === undefined) continue;
+      const offsetMs = note.atMs - change.atMs;
       if (Math.abs(offsetMs) > TONE_LADDER_SLOT_SECONDS * 500) continue;
-      if (!nearest || Math.abs(offsetMs) < Math.abs(nearest.offsetMs)) nearest = { offsetMs, atMs };
+      if (!nearest || Math.abs(offsetMs) < Math.abs(nearest.offsetMs)) {
+        nearest = { colour: change.colour, offsetMs, atMs: note.atMs, heardHz: note.hz };
+      }
     }
-    if (nearest) offsets.push(nearest);
+    if (nearest) pairs.push(nearest);
   }
-  void notes;
+  return pairs;
+};
+
+const gradeAvSync = (pairs: ColourPairing[]): AvSyncGrade => {
+  const offsets = pairs;
 
   if (offsets.length === 0) {
     return { samples: 0, medianOffsetMs: 0, spreadMs: 0, driftPpm: null, verdict: "not measured" };
@@ -370,20 +378,6 @@ const gradeAvSync = (notes: ToneLadderNote[], inputs: ToneLadderNoteInput[], ext
   };
 };
 
-const gradeColour = (notes: ToneLadderNote[], extras: ToneLadderExtras): ColourGrade => {
-  const changes = extras.colourChanges ?? [];
-  if (changes.length === 0) return { changes: 0, agreed: 0, disagreed: 0 };
-  // The wire carries 4-bit palette INDICES, not colour values, so this is an exact identity check:
-  // either the index the machine wrote is the index that arrived, or it is not. There is no colour
-  // conversion anywhere in the path for a perceptual difference metric to measure.
-  let agreed = 0;
-  for (const change of changes) {
-    if (slotForColour(change.colour) !== null) agreed += 1;
-  }
-  void notes;
-  return { changes: changes.length, agreed, disagreed: changes.length - agreed };
-};
-
 /**
  * Grade a captured ladder.
  *
@@ -414,7 +408,6 @@ export const gradeToneLadder = (notes: ToneLadderNoteInput[], extras: ToneLadder
       shortNotes: 0,
       longNotes: 0,
       silence,
-      colour: gradeColour([], extras),
       av: { samples: 0, medianOffsetMs: 0, spreadMs: 0, driftPpm: null, verdict: "not measured" },
     };
   }
@@ -456,8 +449,7 @@ export const gradeToneLadder = (notes: ToneLadderNoteInput[], extras: ToneLadder
     shortNotes: graded.filter((note) => note.seconds < note.expectedSeconds * 0.7).length,
     longNotes: graded.filter((note) => note.seconds > note.expectedSeconds * 1.4).length,
     silence,
-    colour: gradeColour(graded, extras),
-    av: gradeAvSync(graded, notes, extras),
+    av: gradeAvSync(pairColoursWithNotes(notes, extras)),
   };
 };
 

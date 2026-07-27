@@ -316,15 +316,6 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
                           : "signal present",
                     testid: "silence",
                   },
-                  {
-                    label: "Colour",
-                    value:
-                      ladder.result.colour.changes === 0
-                        ? "\u2014"
-                        : `${ladder.result.colour.agreed}/${ladder.result.colour.changes}`,
-                    sub: ladder.result.colour.changes === 0 ? "no video" : "recognised",
-                    testid: "colour",
-                  },
                 ] as const
               ).map((field) => (
                 <div key={field.testid} className="rounded-md bg-muted/50 px-2 py-1.5 text-center">

@@ -38,7 +38,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from analyse_tone_ladder import C64_COLOUR_NAMES, SLOT_SECONDS, analyse  # noqa: E402
+from analyse_tone_ladder import SLOT_SECONDS, analyse  # noqa: E402
 
 MULTICAST = {"video": ("239.0.1.64", 11000), "audio": ("239.0.1.65", 11001)}
 AUDIO_RATE = 47983  # PAL stereo, 16-bit
@@ -237,10 +237,9 @@ def main() -> int:
     if not colours:
         print("\nno background colour changes seen — is Live View video reaching this host?")
     else:
-        seen = sorted({c for _, c in colours})
         print(f"\nCOLOUR")
-        print(f"  changes        : {len(colours)}")
-        print(f"  palette seen   : {len(seen)}/16 ({', '.join(C64_COLOUR_NAMES[c] for c in seen)})")
+        print(f"  changes        : {len(colours)}  (the A/V timing marker; the palette itself never")
+        print(f"                    crosses the wire, so there is no colour fidelity to measure)")
 
     result = analyse(str(out))
     if not result["usable"]:

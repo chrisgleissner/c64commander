@@ -213,7 +213,6 @@ describe("A/V sync", () => {
 
     expect(result.av.verdict).toBe("not measured");
     expect(result.av.samples).toBe(0);
-    expect(result.colour.changes).toBe(0);
   });
 });
 

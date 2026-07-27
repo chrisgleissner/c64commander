@@ -297,7 +297,7 @@ export const useToneLadderTest = (session?: AvMirrorSession): ToneLadderTest => 
       silenceFloorDbfs: graded.silence.floorDbfs,
       avOffsetMs: graded.av.medianOffsetMs,
       avVerdict: graded.av.verdict,
-      colourChanges: graded.colour.changes,
+      colourChanges: colourChanges.current.length,
     });
   }, [stopListening]);
 
