@@ -2047,7 +2047,10 @@ export default function PlayFilesPage() {
                         variant="outline"
                         size="sm"
                         data-testid="sid-radio-launcher"
-                        onClick={() => setSidRadioLauncherOpen(true)}
+                        onClick={() => {
+                          void sidRadio.ensureStylePopulations();
+                          setSidRadioLauncherOpen(true);
+                        }}
                       >
                         <RadioIcon className="mr-1.5 h-4 w-4" /> SID Radio
                       </Button>
@@ -2302,6 +2305,7 @@ export default function PlayFilesPage() {
             open={sidRadioLauncherOpen}
             onOpenChange={setSidRadioLauncherOpen}
             likeCount={getLikedMd5s().length}
+            stylePopulations={sidRadio.stylePopulations}
             onStartStyle={(bit, label, fromLikes) => void sidRadio.startStyleRadio(bit, label, fromLikes)}
             onStartTaste={() => void sidRadio.startTasteRadio()}
             onSurprise={() => void sidRadio.startSurpriseRadio()}

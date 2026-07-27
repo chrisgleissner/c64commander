@@ -2441,6 +2441,9 @@ test.describe("App screenshots", () => {
       await launcher.click();
       const sheet = page.getByTestId("sid-radio-launcher-sheet");
       await expect(sheet).toBeVisible();
+      // Each tile's size arrives from the worker once it has parsed the bundle;
+      // capturing before then would photograph a half-populated grid.
+      await expect(sheet.getByTestId("sid-radio-style-0-size")).toBeVisible();
       await captureScreenshot(page, testInfo, "play/sid-radio/02-stations.png", { locator: sheet });
       await page.keyboard.press("Escape");
       await expect(page.getByTestId("sid-radio-launcher-sheet")).toHaveCount(0);

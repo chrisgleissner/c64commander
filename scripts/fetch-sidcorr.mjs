@@ -31,10 +31,10 @@ const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 
 export const SIDCORR_RELEASE = {
   repo: "chrisgleissner/sidflow-data",
-  tag: "sidcorr-hvsc-full-20260726T203707Z",
+  tag: "0.8.0",
   bundleAsset: "sidcorr-hvsc-full-sidcorr-tiny-1.sidcorr",
   manifestAsset: "sidcorr-hvsc-full-sidcorr-tiny-1.manifest.json",
-  bundleSha256: "081664d81b35f1d31ce2fe93e9b054601c56250dbf02d79781c3e5d1d3cba7c5",
+  bundleSha256: "64bee4464c89f605ea15e468168ff39b9f00bb8bf659da2af59ad0004f7c9c6d",
   publicPath: "data/sidcorr/hvsc-tiny.sidcorr",
   expected: {
     fileCount: 61157,

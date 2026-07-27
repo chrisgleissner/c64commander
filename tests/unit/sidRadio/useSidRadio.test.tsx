@@ -9,10 +9,16 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
+import { SID_RADIO_STYLE_TILES, useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
 import { clearAllRankings, getRanking } from "@/lib/sidRadio/rankingStore";
 import { loadSidRadioSession, saveSidRadioSession } from "@/lib/sidRadio/sidRadioSession";
-import type { StationRequest } from "@/lib/sidRadio/sidRadioWorkerProtocol";
+import { SidRadioWorkerClient } from "@/lib/sidRadio/sidRadioWorkerClient";
+import type {
+  SidRadioMainToWorker,
+  SidRadioReadyStats,
+  SidRadioStylePopulations,
+  StationRequest,
+} from "@/lib/sidRadio/sidRadioWorkerProtocol";
 import type { StationResult } from "@/lib/sidRadio/stationEngine";
 
 beforeEach(async () => {
@@ -20,9 +26,12 @@ beforeEach(async () => {
   await clearAllRankings();
 });
 
-const makeClient = () => {
+const populationsWith = (overrides: Record<string, number>): SidRadioStylePopulations =>
+  Object.fromEntries(SID_RADIO_STYLE_TILES.map((tile) => [tile.key, overrides[tile.key] ?? 1000]));
+
+const makeClient = (stylePopulations: SidRadioStylePopulations = populationsWith({})) => {
   const client = {
-    load: vi.fn().mockResolvedValue({ fileCount: 4, trackCount: 4, engineThreadIsMain: false }),
+    load: vi.fn().mockResolvedValue({ fileCount: 4, trackCount: 4, stylePopulations, engineThreadIsMain: false }),
     compute: vi.fn(async (request: StationRequest): Promise<StationResult> => {
       const pool = Array.from({ length: 60 }, (_, i) => i + 1).filter((o) => !request.exclude.includes(o));
       return {
@@ -169,6 +178,58 @@ describe("useSidRadio", () => {
     expect(result.current.notice).toBeNull();
   });
 
+  it("reads the style populations once and reuses them", async () => {
+    const client = makeClient(populationsWith({ theme_hunter: 0 }));
+    const params = baseParams(client);
+    const { result } = renderHook(() => useSidRadio(params));
+    expect(result.current.stylePopulations).toBeNull();
+    await act(async () => {
+      await result.current.ensureStylePopulations();
+      await result.current.ensureStylePopulations();
+    });
+    expect(client.load).toHaveBeenCalledTimes(1);
+    expect(result.current.stylePopulations).toMatchObject({ theme_hunter: 0, fast_paced: 1000 });
+  });
+
+  it("leaves the populations unknown rather than failing when the bundle cannot be read", async () => {
+    const client = makeClient();
+    client.load = vi.fn().mockRejectedValue(new Error("bundle missing"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const params = baseParams(client);
+    const { result } = renderHook(() => useSidRadio(params));
+    await act(async () => {
+      await expect(result.current.ensureStylePopulations()).resolves.toBeNull();
+    });
+    expect(result.current.stylePopulations).toBeNull();
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("Surprise never rolls a style the export left empty", async () => {
+    // theme_hunter (bit 8) matched 0 tracks in the release preceding the pinned
+    // 0.8.0, and the old picker chose uniformly over all nine bits.
+    const client = makeClient(populationsWith({ theme_hunter: 0 }));
+    const params = baseParams(client, { randomSeed: () => 8 });
+    const { result } = renderHook(() => useSidRadio(params));
+    await act(async () => {
+      await result.current.startSurpriseRadio();
+    });
+    expect(result.current.station?.styleBit).not.toBe(8);
+    expect(result.current.station?.seedLabel).not.toBe("Game Themes");
+  });
+
+  it("Surprise says so rather than starting nothing when no style has members", async () => {
+    const client = makeClient(Object.fromEntries(SID_RADIO_STYLE_TILES.map((tile) => [tile.key, 0])));
+    const params = baseParams(client);
+    const { result } = renderHook(() => useSidRadio(params));
+    await act(async () => {
+      await result.current.startSurpriseRadio();
+    });
+    expect(result.current.active).toBe(false);
+    expect(result.current.notice).toBe("no-radio");
+    expect(params.startPlaylist).not.toHaveBeenCalled();
+  });
+
   it("resumes the chip from a saved session on mount (D15)", () => {
     saveSidRadioSession({
       seedKind: "style",
@@ -186,6 +247,116 @@ describe("useSidRadio", () => {
     expect(result.current.station).toMatchObject({ seedKind: "style", seedLabel: "Fast-Paced", shuffleSeed: 777 });
     // Resume rebuilds the chip only — it does not auto-replace the playlist.
     expect(params.startPlaylist).not.toHaveBeenCalled();
+  });
+
+  it("refuses a station for a style with no members even when the tap beats the counts", async () => {
+    // The sheet opens before the populations are read, so the disabled tile
+    // cannot be the enforcement point — a tap that lands first must still be
+    // refused, at the one place the counts are already known.
+    const client = makeClient(populationsWith({ theme_hunter: 0 }));
+    const params = baseParams(client);
+    const { result } = renderHook(() => useSidRadio(params));
+    expect(result.current.stylePopulations).toBeNull();
+    await act(async () => {
+      await result.current.startStyleRadio(8, "Game Themes");
+    });
+    expect(result.current.active).toBe(false);
+    expect(result.current.notice).toBe("no-radio");
+    expect(client.compute).not.toHaveBeenCalled();
+    expect(params.startPlaylist).not.toHaveBeenCalled();
+  });
+
+  it("refuses that style composed over Likes too, which admits nothing either", async () => {
+    const client = makeClient(populationsWith({ theme_hunter: 0 }));
+    const params = baseParams(client);
+    const { result } = renderHook(() => useSidRadio(params));
+    await act(async () => {
+      await result.current.startStyleRadio(8, "Game Themes", true);
+    });
+    expect(result.current.active).toBe(false);
+    expect(result.current.notice).toBe("no-radio");
+    expect(client.compute).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The launcher preloads the populations as its sheet opens (`PlayFilesPage`), and a
+ * tile tap starts a station straight after: two `client.load()` calls that overlap
+ * by design. Driven through the *real* `SidRadioWorkerClient` rather than a mock,
+ * because the defect lived in the protocol layer — a second `load` message replaced
+ * the client's single pending resolver, so the preload was never answered and
+ * rejected on its 15 s timeout, whose stale timer then cleared the newer load.
+ */
+describe("useSidRadio launcher preload overlapping a station start", () => {
+  class GatedWorker extends EventTarget {
+    loads = 0;
+
+    postMessage(message: SidRadioMainToWorker) {
+      if (message.type === "load") {
+        this.loads += 1; // answered only when the test releases it, so both loads overlap
+        return;
+      }
+      const { id, request } = message;
+      queueMicrotask(() =>
+        this.dispatchEvent(
+          new MessageEvent("message", {
+            data: {
+              type: "candidates",
+              id,
+              candidates: Array.from({ length: request.count }, (_, index) => ({
+                trackOrdinal: index + 1,
+                md5_48: `m${index + 1}`,
+                songIndex: 1,
+                score: 1,
+                reason: "similar" as const,
+              })),
+            },
+          }),
+        ),
+      );
+    }
+
+    releaseReady(stats: SidRadioReadyStats) {
+      this.dispatchEvent(new MessageEvent("message", { data: { type: "ready", stats } }));
+    }
+
+    terminate() {}
+  }
+
+  const readyStats = (): SidRadioReadyStats => ({
+    bundleLoadMs: 1,
+    reverseIndexMs: 1,
+    memoryEstimateBytes: 1024,
+    fileCount: 4,
+    trackCount: 4,
+    edgeCount: 4,
+    styleCount: 9,
+    stylePopulations: populationsWith({}),
+    engineThreadIsMain: false,
+  });
+
+  it("reads the bundle once and answers both callers", async () => {
+    const worker = new GatedWorker();
+    const client = new SidRadioWorkerClient(() => worker as unknown as Worker);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const params = baseParams(client as unknown as ReturnType<typeof makeClient>);
+    const { result } = renderHook(() => useSidRadio(params));
+
+    await act(async () => {
+      const preload = result.current.ensureStylePopulations();
+      const started = result.current.startStyleRadio(0, "Fast-Paced");
+      expect(worker.loads).toBe(1);
+      worker.releaseReady(readyStats());
+      const [populations] = await Promise.all([preload, started]);
+      expect(populations).toMatchObject({ fast_paced: 1000 });
+    });
+
+    expect(result.current.station).toMatchObject({ seedKind: "style", seedLabel: "Fast-Paced" });
+    expect(params.startPlaylist).toHaveBeenCalledTimes(1);
+    // The preload resolved on its own load rather than timing out into a warning.
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+    client.terminate();
   });
 });
 

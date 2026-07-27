@@ -1491,7 +1491,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "**Rate as you listen.** While a SID plays, a subtle heart / cross pair sits on the Now Playing card. Tap the heart to add a tune to your **Liked Tunes**; tap the cross to skip it now and steer future picks away from its neighbourhood. Ratings are optional and ambient, stored on the device, and they follow a tune across HVSC updates because they key on the tune's content (its MD5), not its path.",
     "",
-    '**Start a station.** Open **SID Radio** from the Play page to pick a mood: nine style tiles (Fast-Paced, Chill / Ambient, Melodic and more), a **From tunes you like** taste station that unlocks once you have liked a few tunes, or **Surprise me**. Turn on **Based on my likes** to bias any style toward what you enjoy — for example "Fast-Paced from your Likes". You can also start a station from any single tune with **Start Radio**.',
+    '**Start a station.** Open **SID Radio** from the Play page to pick a mood: nine style tiles (Fast-Paced, Chill / Ambient, Melodic and more), a **From tunes you like** taste station that unlocks once you have liked a few tunes, or **Surprise me**. Each tile shows how many tunes that station draws from, and a mood the similarity index has nothing for is greyed out rather than starting a station with nothing to play. Turn on **Based on my likes** to bias any style toward what you enjoy — for example "Fast-Paced from your Likes". You can also start a station from any single tune with **Start Radio**.',
     "",
     "![The SID Radio station launcher: song, mood (nine style tiles) and taste seeds](../../img/app/play/sid-radio/02-stations.png)",
     "",

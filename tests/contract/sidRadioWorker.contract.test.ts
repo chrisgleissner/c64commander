@@ -70,6 +70,8 @@ describe("sidRadio worker contract (§8.3)", () => {
     });
     expect(typeof stats.bundleLoadMs).toBe("number");
     expect(typeof stats.memoryEstimateBytes).toBe("number");
+    // The launcher sizes its tiles from these, so they cross the boundary too.
+    expect(stats.stylePopulations).toMatchObject({ fast_paced: 3, slow_ambient: 1, theme_hunter: 0 });
   });
 
   it("compute → candidates for a resolvable seed", async () => {
