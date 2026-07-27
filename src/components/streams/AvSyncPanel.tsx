@@ -12,7 +12,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAvSync } from "@/hooks/useAvSync";
 import { useToneLadderTest } from "@/hooks/useToneLadderTest";
-import { TONE_LADDER_SLOT_SECONDS, colourSwatch } from "@/lib/streams/toneLadder";
+import { TONE_LADDER_SLOT_SECONDS } from "@/lib/streams/toneLadder";
+import { activeVicPalette, paletteEntryHex } from "@/lib/streams/vicPalette";
 import type { AvMirrorSession } from "@/lib/streams/avMirrorSession";
 import type { AvSyncStats } from "@/lib/streams/avSync";
 
@@ -363,7 +364,11 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
                         <span className="inline-flex items-center gap-1">
                           <span
                             className="inline-block h-2.5 w-2.5 shrink-0 rounded-[2px] border border-border/60"
-                            style={{ background: colourSwatch(note.colour) ?? undefined }}
+                            // Shown in the palette the user actually has on screen, not a fixed reference.
+                            style={{
+                              background:
+                                note.colour === null ? undefined : paletteEntryHex(activeVicPalette(), note.colour),
+                            }}
                             aria-hidden
                           />
                           <span className="text-muted-foreground">{note.colourName ?? "\u2014"}</span>

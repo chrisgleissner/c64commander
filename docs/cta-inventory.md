@@ -350,7 +350,12 @@ Mount disk sheet: Available disks list — filter text — `list-filter-input` �
   Boot settle (ms) — number — `settings-boot-settle` — R✅ I✅ ; Video stream port
   / Audio stream port — number ×2 — `settings-stream-video-port` /
   `settings-stream-audio-port` — R✅ I✅ ; Audio network buffer (ms) — number —
-  `settings-stream-network-buffer` — R✅ I✅ ; Fast video (native assembly) —
+  `settings-stream-network-buffer` — R✅ I✅ ; Screen colours — select —
+  `settings-vic-palette` — R✅ I✅ _(the nine bundled c64stream VICE palettes; a
+  16-swatch preview `settings-vic-palette-preview` shows every colour before you
+  commit. Render-only: the stream carries 4-bit palette indices, so this cannot
+  change what the device sent, and frame decode is already a 16-entry LUT so the
+  hot path is unaffected)_ ; Fast video (native assembly) —
   switch — `settings-stream-native-assembly` — R✅ I✅ _(default on; native VIC
   frame assembly, A/B / escape-hatch toggle — native builds only)_ ; Input
   priority (instant joystick) — switch — `settings-stream-input-priority` —

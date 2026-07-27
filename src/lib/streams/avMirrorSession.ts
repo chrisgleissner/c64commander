@@ -19,7 +19,10 @@
 
 import { C64API, getC64API } from "@/lib/c64api";
 import { addLog } from "@/lib/logging";
+import { Capacitor } from "@capacitor/core";
+
 import { isNativePlatform } from "@/lib/native/platform";
+import { StreamUdp } from "@/lib/native/streamUdp";
 import {
   loadStreamAudioPort,
   loadStreamNativeAudio,
@@ -141,6 +144,8 @@ export class AvMirrorSession {
   private readonly listeners = new Set<AvMirrorListener>();
   private readonly frameListeners = new Set<AvMirrorFrameHandler>();
   private readonly audioListeners = new Set<AvMirrorAudioHandler>();
+  /** Whether the native receiver is currently forwarding audio packets to JS for analysis. */
+  private nativeAudioAnalysis = false;
   private readonly statsListeners = new Set<AvStatsListener>();
   private latestFrame: { frame: Uint8Array; height: number; arrivalMs: number } | null = null;
   private readonly audio: AudioMirrorController;
@@ -264,9 +269,34 @@ export class AvMirrorSession {
    */
   subscribeAudio(handler: AvMirrorAudioHandler): () => void {
     this.audioListeners.add(handler);
+    this.syncNativeAudioAnalysis();
     return () => {
       this.audioListeners.delete(handler);
+      this.syncNativeAudioAnalysis();
     };
+  }
+
+  /**
+   * Keep the native receiver's audio bridge open exactly while someone is listening in JS.
+   *
+   * With the native sink playing, the receive thread stops emitting audio datagrams — that is the
+   * point of the native path. But `subscribeAudio` exists for the analysers, and they measure the
+   * received stream in JS, so without this an in-app measurement on Android would quietly grade
+   * silence and report a fault that is really a missing feed.
+   */
+  private syncNativeAudioAnalysis(): void {
+    const wanted = this.audioListeners.size > 0;
+    if (wanted === this.nativeAudioAnalysis) return;
+    this.nativeAudioAnalysis = wanted;
+    // Android-only plugin: on web and iOS there is no native sink, so nothing is being bypassed.
+    if (!isNativePlatform() || !Capacitor.isPluginAvailable("StreamUdp")) return;
+    void StreamUdp.setAudioAnalysis({ enabled: wanted }).catch((error) => {
+      addLog("warn", "Live View: could not toggle native audio analysis", {
+        service: "streams",
+        enabled: wanted,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
 
   /** Subscribe to the low-rate Stats snapshot (governor + telemetry). Replays the current snapshot. */

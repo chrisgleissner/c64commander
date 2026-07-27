@@ -53,6 +53,7 @@ import {
   MAX_AUTOFIRE_RATE_HZ,
 } from "@/lib/remoteInput/autofire";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { VicPaletteRow } from "@/pages/settings/VicPaletteRow";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
 import {
@@ -2132,6 +2133,7 @@ export default function SettingsPage() {
                         </p>
                       </div>
                     ) : null}
+                    <VicPaletteRow />
                     <div className="col-span-2 flex items-start justify-between gap-3 min-w-0">
                       <div className="min-w-0">
                         <Label htmlFor="settings-stream-native-assembly" className="font-medium">

@@ -34,8 +34,6 @@
  *            headline, and the spread is what says whether the path is steady.
  */
 
-import { VIC_PALETTE_RGB } from "@/lib/streams/vicDecode";
-
 /** The scale the ladder walks: a C-major octave, C3 up to C4. */
 export const TONE_LADDER_SCALE_NAMES = ["C3", "D3", "E3", "F3", "G3", "A3", "B3", "C4"] as const;
 const SCALE_SEMITONES = [0, 2, 4, 5, 7, 9, 11, 12];
@@ -451,11 +449,4 @@ export const gradeToneLadder = (notes: ToneLadderNoteInput[], extras: ToneLadder
     silence,
     av: gradeAvSync(pairColoursWithNotes(notes, extras)),
   };
-};
-
-/** Palette RGB for a slot's colour, for rendering the expected swatch in the UI. */
-export const colourSwatch = (colour: number | null): string | null => {
-  if (colour === null) return null;
-  const [r, g, b] = VIC_PALETTE_RGB[colour & 0x0f]!;
-  return `rgb(${r} ${g} ${b})`;
 };

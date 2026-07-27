@@ -21,6 +21,7 @@ import java.net.InetAddress
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -469,32 +470,21 @@ class StreamUdpPluginTest {
 
   @Test
   fun audioReceiveLoopFeedsTheOpenAudioTrackNatively() {
-    // Option C: with an AudioTrack open, the AUDIO receive thread feeds it directly (no JS write). We
-    // verify the feed PATH runs end to end without error: the audio packet is received (emitDatagram
-    // fires — writeRaw is called right after it in the same loop iteration) and readAudioStats resolves.
-    // (The buffered DEPTH can't be asserted under Robolectric: its ShadowAudioTrack.write does not model
-    // buffering and returns 0 — that is exercised on real hardware by the HIL.)
+    // With the native sink playing, the AUDIO receive thread feeds the AudioTrack directly and the
+    // per-packet bridge hop is SKIPPED — ~250 base64 encodes + JSObject boxes + WebView crossings a
+    // second that nobody was reading. So the packet must NOT surface as a datagram, while the feed
+    // path still runs and stats stay readable.
+    // (The buffered DEPTH can't be asserted under Robolectric: its ShadowAudioTrack.write does not
+    // model buffering and returns 0 — that is exercised on real hardware by the HIL.)
     plugin.openAudioTrack(resolvingCall { `when`(it.getInt("sampleRate")).thenReturn(47983) }.first)
 
-    val (bindCall, bindResolved) =
-        resolvingCall {
-          `when`(it.getString("name")).thenReturn("audio")
-          `when`(it.getInt("port")).thenReturn(0)
-        }
-    plugin.bind(bindCall)
-    val port = bindResolved()!!.getInteger("port")!!
-    assertTrue("expected an OS-assigned audio port", port > 0)
+    val port = bindAudio()
+    sendAudioPacket(port)
 
-    // Send one audio packet: u16 LE seq + a whole stereo S16 frame (4 bytes of PCM).
-    val packet = byteArrayOf(0, 0, 0x11, 0x22, 0x33, 0x44)
-    DatagramSocket().use { sender ->
-      sender.send(DatagramPacket(packet, packet.size, InetAddress.getByName("127.0.0.1"), port))
-    }
-
-    // The receive loop processed the packet (and thus ran the native feed) without tearing down.
-    assertTrue("audio packet was not received by the receive loop", latch.await(3, TimeUnit.SECONDS))
-    assertEquals(1, received.size)
-    assertEquals("audio", received[0].first)
+    assertFalse(
+        "audio packet crossed the bridge even though the native sink owns playback",
+        latch.await(1, TimeUnit.SECONDS))
+    assertTrue("expected no datagram events", received.isEmpty())
 
     // Stats read is safe (>= 0, no crash) while the sink is fed natively.
     val (statsCall, statsResolved) = resolvingCall {}
@@ -505,6 +495,48 @@ class StreamUdpPluginTest {
     `when`(closeCall.getString("name")).thenReturn("audio")
     plugin.close(closeCall)
     plugin.closeAudioTrack(resolvingCall {}.first)
+  }
+
+  @Test
+  fun audioPacketsReachJsAgainWhileAnalysisIsEnabled() {
+    // The in-app diagnostics (A/V sync, the tone & colour ladder) measure the received stream in JS,
+    // so they need the packets back. Without this the app would grade silence on Android and report
+    // a fault that is really a missing feed. AvMirrorSession enables it while an audio subscriber
+    // exists and disables it when the last one leaves, so the cost is paid only during a measurement.
+    plugin.openAudioTrack(resolvingCall { `when`(it.getInt("sampleRate")).thenReturn(47983) }.first)
+    plugin.setAudioAnalysis(resolvingCall { `when`(it.getBoolean("enabled", false)).thenReturn(true) }.first)
+
+    val port = bindAudio()
+    sendAudioPacket(port)
+
+    assertTrue("audio packet was not forwarded while analysis was on", latch.await(3, TimeUnit.SECONDS))
+    assertEquals(1, received.size)
+    assertEquals("audio", received[0].first)
+
+    val closeCall = mock(PluginCall::class.java)
+    `when`(closeCall.getString("name")).thenReturn("audio")
+    plugin.close(closeCall)
+    plugin.closeAudioTrack(resolvingCall {}.first)
+  }
+
+  private fun bindAudio(): Int {
+    val (bindCall, bindResolved) =
+        resolvingCall {
+          `when`(it.getString("name")).thenReturn("audio")
+          `when`(it.getInt("port")).thenReturn(0)
+        }
+    plugin.bind(bindCall)
+    val port = bindResolved()!!.getInteger("port")!!
+    assertTrue("expected an OS-assigned audio port", port > 0)
+    return port
+  }
+
+  /** One audio packet: u16 LE seq + a whole stereo S16 frame (4 bytes of PCM). */
+  private fun sendAudioPacket(port: Int) {
+    val packet = byteArrayOf(0, 0, 0x11, 0x22, 0x33, 0x44)
+    DatagramSocket().use { sender ->
+      sender.send(DatagramPacket(packet, packet.size, InetAddress.getByName("127.0.0.1"), port))
+    }
   }
 
   private fun injectBridge(target: Plugin, ctx: Context) {

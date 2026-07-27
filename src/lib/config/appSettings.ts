@@ -46,6 +46,7 @@ const STREAM_NATIVE_AUDIO_BUFFER_MS_KEY = "c64u_stream_native_audio_buffer_ms";
 const STREAM_VIDEO_FRAME_RATE_MODE_KEY = "c64u_stream_video_frame_rate_mode";
 const STREAM_INPUT_PRIORITY_KEY = "c64u_stream_input_priority";
 const STREAM_AUDIO_ROUTE_KEY = "c64u_stream_audio_route";
+const VIC_PALETTE_KEY = "c64u_vic_palette";
 
 export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 200;
 export type NotificationVisibility = "errors-only" | "all";
@@ -772,4 +773,22 @@ export const APP_SETTINGS_KEYS = {
   SID_RANKING_ENABLED_KEY,
   PLAYBACK_ENGINE_KEY,
   LOCAL_ENGINE_ENABLED_KEY,
+};
+
+/**
+ * Which VIC palette the app paints Live View frames with.
+ *
+ * Stored as a `.vpl` id from `src/assets/palettes`. Validation lives with the palette table rather
+ * than here, so an id from an older build (or a palette that has since been removed) falls back to
+ * the default instead of painting from an empty table.
+ */
+export const loadVicPaletteId = (): string => {
+  if (typeof localStorage === "undefined") return "default";
+  return localStorage.getItem(VIC_PALETTE_KEY) ?? "default";
+};
+
+export const saveVicPaletteId = (id: string) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(VIC_PALETTE_KEY, id);
+  broadcast(VIC_PALETTE_KEY, id);
 };

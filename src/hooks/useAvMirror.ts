@@ -8,7 +8,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { avMirrorSession, type AvMirrorSession, type AvMirrorSnapshot } from "@/lib/streams/avMirrorSession";
-import { buildPaletteLUT, decodeVicFrameInto, VIC_FRAME_WIDTH, VIC_PAL_HEIGHT } from "@/lib/streams/vicDecode";
+import { decodeVicFrameInto, VIC_FRAME_WIDTH, VIC_PAL_HEIGHT } from "@/lib/streams/vicDecode";
+import { activeVicPaletteLut, subscribeVicPalette } from "@/lib/streams/vicPalette";
 
 const isLive = (state: string) => state === "connecting" || state === "live";
 
@@ -60,7 +61,9 @@ export const useAvMirrorCanvas = (
       if (!canvas) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return; // jsdom / no-canvas: no-op
-      if (!lutRef.current) lutRef.current = buildPaletteLUT();
+      // Cached table, never built here: a palette change swaps it in via the subscription below,
+      // so the per-pixel decode is byte-for-byte what it was before palettes were selectable.
+      if (!lutRef.current) lutRef.current = activeVicPaletteLut();
       if (!imageDataRef.current || !pixelsRef.current || heightRef.current !== height) {
         canvas.height = height;
         imageDataRef.current = ctx.createImageData(VIC_FRAME_WIDTH, height);
@@ -71,4 +74,15 @@ export const useAvMirrorCanvas = (
       ctx.putImageData(imageDataRef.current, 0, 0);
     });
   }, [canvasRef, session]);
+
+  // Picking a different palette swaps the cached table in. Separate from the frame subscription on
+  // purpose: the frame handler must not check for a palette change, or the check would run 50 times
+  // a second forever to catch something that happens when a user opens Settings.
+  useEffect(
+    () =>
+      subscribeVicPalette(() => {
+        lutRef.current = activeVicPaletteLut();
+      }),
+    [],
+  );
 };

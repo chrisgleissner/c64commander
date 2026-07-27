@@ -491,6 +491,8 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadStreamInputPriority: vi.fn(() => true),
   saveStreamInputPriority: vi.fn(),
   loadStreamNativeAudio: vi.fn(() => true),
+  loadVicPaletteId: vi.fn(() => "default"),
+  saveVicPaletteId: vi.fn(),
   saveStreamNativeAudio: vi.fn(),
   loadStreamAudioRoute: vi.fn(() => "dynamic"),
   saveStreamAudioRoute: vi.fn(),

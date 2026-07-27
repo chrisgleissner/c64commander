@@ -116,6 +116,17 @@ export interface StreamUdpPlugin {
   readAudioStats(options?: Record<string, never>): Promise<StreamUdpAudioStats>;
   /** Stop + release the native audio sink. Safe to call when none is open. */
   closeAudioTrack(options?: Record<string, never>): Promise<void>;
+  /**
+   * Let audio packets keep crossing the bridge while something in JS is analysing them.
+   *
+   * Once the native sink owns playback, the receive thread feeds the AudioTrack directly and stops
+   * emitting `datagram` for audio — that per-packet bridge crossing was pure waste, and removing it
+   * is most of the native path's win. The in-app diagnostics (A/V sync, the tone & colour ladder)
+   * are the exception: they measure the received stream in JS, so they need the packets back for as
+   * long as they are listening. `AvMirrorSession` turns this on while an audio subscriber exists and
+   * off again when the last one leaves, so the cost is paid only while a measurement is running.
+   */
+  setAudioAnalysis(options: { enabled: boolean }): Promise<void>;
   addListener(eventName: "datagram", listener: (event: StreamUdpDatagramEvent) => void): Promise<PluginListenerHandle>;
   addListener(
     eventName: "videoframe",
