@@ -1,72 +1,72 @@
 config:
   general:
-    schema_version: '0.3'
+    schema_version: "0.3"
     device_type: C64 Ultimate
     menu_title: Commodore 64 Ultimate
     extraction_status: complete_for_supplied_menu_pages
-    yaml_shape: Aligned with the REST YAML convention of config.general plus 
+    yaml_shape: Aligned with the REST YAML convention of config.general plus
       config.categories; config.menu_tree captures menu hierarchy.
     notes:
-    - This file mirrors the user-visible menu labels and visible selected 
-      values.
-    - It is a menu extraction, not yet a completed REST-to-menu mapping.
-    - Selected values are preserved as visible values rather than converted to 
-      natural English case.
-    - System information is present in the root menu, but no detail page is 
-      included here.
+      - This file mirrors the user-visible menu labels and visible selected
+        values.
+      - It is a menu extraction, not yet a completed REST-to-menu mapping.
+      - Selected values are preserved as visible values rather than converted to
+        natural English case.
+      - System information is present in the root menu, but no detail page is
+        included here.
   menu_tree:
     label: Commodore 64 Ultimate
     items:
-    - label: Disk file browser
-      category: Disk file browser
-    - label: CommoServe file search
-      category: CommoServe file search
-    - label: Memory & ROMs
-      category: Memory & ROMs
-    - label: Turbo boost
-      category: Turbo boost
-    - label: Video setup
-      category: Video setup
-    - label: Audio setup
-      children:
-      - label: Audio mixer
-        category: Audio mixer
-      - label: Speaker mixer
-        category: Speaker mixer
-      - label: SID sockets configuration
-        category: SID sockets configuration
-      - label: UltiSID configuration
-        category: UltiSID configuration
-      - label: SID addressing
-        category: SID addressing
-      - label: SID player behavior
-        category: SID player behavior
-    - label: Joystick & controllers
-      category: Joystick & controllers
-    - label: LED lighting
-      category: LED lighting
-    - label: Network services & timezone
-      category: Network services & timezone
-    - label: Wired network setup
-      category: Wired network setup
-    - label: Wi-Fi network setup
-      category: Wi-Fi network setup
-    - label: Modems
-      category: Modems
-    - label: Printers
-      category: Printers
-    - label: User interface
-      category: User interface
-    - label: Built-in drive A
-      category: Built-in drive A
-    - label: Built-in drive B
-      category: Built-in drive B
-    - label: System information
-      category: System information
+      - label: Disk file browser
+        category: Disk file browser
+      - label: CommoServe file search
+        category: CommoServe file search
+      - label: Memory & ROMs
+        category: Memory & ROMs
+      - label: Turbo boost
+        category: Turbo boost
+      - label: Video setup
+        category: Video setup
+      - label: Audio setup
+        children:
+          - label: Audio mixer
+            category: Audio mixer
+          - label: Speaker mixer
+            category: Speaker mixer
+          - label: SID sockets configuration
+            category: SID sockets configuration
+          - label: UltiSID configuration
+            category: UltiSID configuration
+          - label: SID addressing
+            category: SID addressing
+          - label: SID player behavior
+            category: SID player behavior
+      - label: Joystick & controllers
+        category: Joystick & controllers
+      - label: LED lighting
+        category: LED lighting
+      - label: Network services & timezone
+        category: Network services & timezone
+      - label: Wired network setup
+        category: Wired network setup
+      - label: Wi-Fi network setup
+        category: Wi-Fi network setup
+      - label: Modems
+        category: Modems
+      - label: Printers
+        category: Printers
+      - label: User interface
+        category: User interface
+      - label: Built-in drive A
+        category: Built-in drive A
+      - label: Built-in drive B
+        category: Built-in drive B
+      - label: System information
+        category: System information
   categories:
     Disk file browser:
       menu_path:
-      - Disk file browser
+        - Disk file browser
       kind: browser
       items:
         SD:
@@ -83,48 +83,48 @@ config:
           selected: Ready
     CommoServe file search:
       menu_path:
-      - CommoServe file search
+        - CommoServe file search
       kind: form
       title: CommoServe file search
       items:
         Name:
-          selected: ''
+          selected: ""
         Group:
-          selected: ''
+          selected: ""
         Handle:
-          selected: ''
+          selected: ""
         Event:
-          selected: ''
+          selected: ""
         Category:
-          selected: ''
+          selected: ""
         Date:
-          selected: ''
+          selected: ""
         Type:
-          selected: ''
+          selected: ""
         Sort:
-          selected: ''
+          selected: ""
         Order:
-          selected: ''
+          selected: ""
       actions:
-      - << Submit >>
-      notice: You agree you have a necessary license or rights to download any 
+        - << Submit >>
+      notice: You agree you have a necessary license or rights to download any
         software.
     Memory & ROMs:
       menu_path:
-      - Memory & ROMs
+        - Memory & ROMs
       kind: settings
       items:
         Kernal ROM:
-          selected: ''
+          selected: ""
           kind: file_picker
         BASIC ROM:
-          selected: ''
+          selected: ""
           kind: file_picker
         Character ROM:
-          selected: ''
+          selected: ""
           kind: file_picker
         Cartridge:
-          selected: ''
+          selected: ""
           kind: file_picker
         RAM expansion unit:
           selected: Enabled
@@ -154,7 +154,7 @@ config:
               selected: 1581.rom
     Turbo boost:
       menu_path:
-      - Turbo boost
+        - Turbo boost
       kind: settings
       items:
         Turbo control:
@@ -167,7 +167,7 @@ config:
           selected: Disabled
     Video setup:
       menu_path:
-      - Video setup
+        - Video setup
       kind: settings
       items:
         System mode:
@@ -177,7 +177,7 @@ config:
         HDMI scan lines:
           selected: Enabled
         Palette definition:
-          selected: ''
+          selected: ""
           kind: action
         Analog video mode:
           selected: CVBS + SVideo
@@ -185,8 +185,8 @@ config:
           selected: Auto
     Audio mixer:
       menu_path:
-      - Audio setup
-      - Audio mixer
+        - Audio setup
+        - Audio mixer
       kind: settings
       items:
         Vol UltiSID 1:
@@ -231,8 +231,8 @@ config:
           selected: Center
     Speaker mixer:
       menu_path:
-      - Audio setup
-      - Speaker mixer
+        - Audio setup
+        - Speaker mixer
       kind: settings
       items:
         Speaker enable:
@@ -259,8 +259,8 @@ config:
           selected: -36 dB
     SID sockets configuration:
       menu_path:
-      - Audio setup
-      - SID sockets configuration
+        - Audio setup
+        - SID sockets configuration
       kind: settings
       items:
         SID socket 1:
@@ -281,8 +281,8 @@ config:
           selected: 470 pF
     UltiSID configuration:
       menu_path:
-      - Audio setup
-      - UltiSID configuration
+        - Audio setup
+        - UltiSID configuration
       kind: settings
       items:
         UltiSID 1 filter curve:
@@ -294,17 +294,17 @@ config:
         UltiSID 2 filter resonance:
           selected: Low
         UltiSID 1 combined waveforms:
-          selected: '6581'
+          selected: "6581"
         UltiSID 2 combined waveforms:
-          selected: '6581'
+          selected: "6581"
         UltiSID 1 digis level:
           selected: Medium
         UltiSID 2 digis level:
           selected: Medium
     SID addressing:
       menu_path:
-      - Audio setup
-      - SID addressing
+        - Audio setup
+        - SID addressing
       kind: settings
       items:
         SID socket 1 address:
@@ -328,8 +328,8 @@ config:
           kind: action
     SID player behavior:
       menu_path:
-      - Audio setup
-      - SID player behavior
+        - Audio setup
+        - SID player behavior
       kind: settings
       items:
         SID player autoconfig:
@@ -338,18 +338,18 @@ config:
           selected: Yes
     Joystick & controllers:
       menu_path:
-      - Joystick & controllers
+        - Joystick & controllers
       kind: settings
       items:
         Joystick input:
           selected: Normal
         Paddle override:
           selected: Enabled
-      note: When WASD joystick emulation is enabled, hold [CTRL] to type the W, 
+      note: When WASD joystick emulation is enabled, hold [CTRL] to type the W,
         A, S, D and RETURN characters.
     LED lighting:
       menu_path:
-      - LED lighting
+        - LED lighting
       kind: settings
       items:
         Power LED (if installed):
@@ -369,7 +369,7 @@ config:
             Pattern:
               selected: SingleColor
             Brightness:
-              selected: '21'
+              selected: "21"
             Color:
               selected: Red
             Tint:
@@ -384,14 +384,14 @@ config:
             Pattern:
               selected: Single Color
             Brightness:
-              selected: '0'
+              selected: "0"
             Color:
               selected: Azure
             Tint:
               selected: Pure
     Network services & timezone:
       menu_path:
-      - Network services & timezone
+        - Network services & timezone
       kind: settings
       items:
         Host name:
@@ -399,7 +399,7 @@ config:
         Unique ID:
           selected: Default
         Network password:
-          selected: '********'
+          selected: "********"
           kind: password
         Services:
           kind: section
@@ -431,7 +431,7 @@ config:
               selected: pool.ntp.org
     Wired network setup:
       menu_path:
-      - Wired network setup
+        - Wired network setup
       kind: settings
       items:
         Use DHCP:
@@ -455,29 +455,29 @@ config:
               selected: 02:15:41:3B:0F:35
     Wi-Fi network setup:
       menu_path:
-      - Wi-Fi network setup
+        - Wi-Fi network setup
       kind: settings
       items:
         Enable:
-          selected: ''
+          selected: ""
           kind: action
         Disable:
-          selected: ''
+          selected: ""
           kind: action
         Disconnect:
-          selected: ''
+          selected: ""
           kind: action
         Connect to last AP:
-          selected: ''
+          selected: ""
           kind: action
         Select AP from list:
-          selected: ''
+          selected: ""
           kind: action
         Enter AP manually:
-          selected: ''
+          selected: ""
           kind: action
         Forget APs:
-          selected: ''
+          selected: ""
           kind: action
         Use DHCP:
           selected: Enabled
@@ -495,14 +495,14 @@ config:
             Status:
               selected: Link Down
             Connected to:
-              selected: '-'
+              selected: "-"
             Active IP address:
               selected: 0.0.0.0
             Interface MAC:
               selected: 3C:DC:75:EF:DC:20
     Modems:
       menu_path:
-      - Modems
+        - Modems
       kind: settings
       items:
         Modem interface:
@@ -512,7 +512,7 @@ config:
         Hardware mode:
           selected: Swiftlink
         Listening port:
-          selected: '3000'
+          selected: "3000"
         Handshaking:
           kind: section
           items:
@@ -548,13 +548,13 @@ config:
               selected: 20 ms
     Printers:
       menu_path:
-      - Printers
+        - Printers
       kind: settings
       items:
         IEC printer:
           selected: Disabled
         Bus ID:
-          selected: '4'
+          selected: "4"
         Output file:
           selected: /Usb0/Printer
         Output type:
@@ -562,9 +562,9 @@ config:
         Ink density:
           selected: Medium
         Page top margin (default is 5):
-          selected: '5'
+          selected: "5"
         Page height (default is 60):
-          selected: '60'
+          selected: "60"
         Emulation:
           selected: Commodore MPS
         Commodore charset:
@@ -575,7 +575,7 @@ config:
           selected: International 1
     User interface:
       menu_path:
-      - User interface
+        - User interface
       kind: settings
       items:
         Interface type:
@@ -592,15 +592,15 @@ config:
           selected: None
     Built-in drive A:
       menu_path:
-      - Built-in drive A
+        - Built-in drive A
       kind: settings
       items:
         Drive:
           selected: Enabled
         Drive type:
-          selected: '1541'
+          selected: "1541"
         Drive bus ID:
-          selected: '8'
+          selected: "8"
         ROMs:
           kind: section
           items:
@@ -629,15 +629,15 @@ config:
               selected: none
     Built-in drive B:
       menu_path:
-      - Built-in drive B
+        - Built-in drive B
       kind: settings
       items:
         Drive:
           selected: Disabled
         Drive type:
-          selected: '1541'
+          selected: "1541"
         Drive bus ID:
-          selected: '9'
+          selected: "9"
         ROMs:
           kind: section
           items:
@@ -666,7 +666,7 @@ config:
               selected: none
     System information:
       menu_path:
-      - System information
+        - System information
       kind: info
       extraction_status: root_item_only_no_detail_page_supplied
       items: {}

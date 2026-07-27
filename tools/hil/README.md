@@ -1,3 +1,145 @@
+# Hardware-in-the-loop (HIL) harnesses
+
+`tools/hil/` holds the device-driving HIL harnesses. Each drives the **shipped app** on a
+physically-connected Pixel over the WebView CDP socket, clicking real `data-testid` elements and
+reading on-screen stat blobs — no raw ADB product input. They are **manual/local** (they need the
+physical rig), while the host-deterministic budget checks run in CI.
+
+- **`sid_radio_hil.py`** — SID Radio (§9): starts a station, soaks auto-advances, asserts the
+  pinned §9.2 budgets (`ci/perf/sid-radio-perf-thresholds.json`). See **SID Radio** below.
+- **`av_sync_hil.py`** — Live View A/V sync + input latency. See **A/V sync** below.
+- **`seek_latency_hil.py`** — what a backward seek costs the listener, measured at the speaker.
+  See **Seek latency** below.
+
+## Audio overlap + transport
+
+`audio_overlap_hil.py` proves the app never plays two sounds at once and that the transport acts on
+whatever is playing. Run it against either machine, or across a switch between them:
+
+```bash
+python3 tools/hil/audio_overlap_hil.py --serial <ADB_SERIAL> --device debug-c64u
+python3 tools/hil/audio_overlap_hil.py --serial <ADB_SERIAL> --switch-devices
+```
+
+### Verified on the Pixel 4, 2026-07-27 — 13/13 against the C64U
+
+| Check | Result |
+| --- | --- |
+| A local tune plays | 1 app audio stream, −30.2 dBFS (11.8 dB over the room floor) |
+| Live View audio started **on top of** a local tune | 1 stream — the tune is stopped, never layered |
+| A local tune started **on top of** the mirror | 1 stream — the mirror is stopped |
+| After a WebView reload | 0 streams (the native AudioTrack no longer outlives the page) |
+| Pause on a Play page mounted mid-tune | enabled, and it stops the audio |
+| Play/Stop, Previous, Next | usable, labelled for the running tune |
+| Progress bar seekable | yes on the local route, absent on the C64 route |
+
+Audio **quality** was checked separately, because "no overlap" is not "sounds right": a 14 s capture
+of `Use_My_Fire.sid` scored **melSim 0.716** against a `sidplayfp` render of the same file pulled off
+the phone — the rig's calibrated "correct tune" score is 0.725 (wrong tune −0.049). See
+`sid_audio_match.py`.
+
+### Counting audio streams honestly
+
+`dumpsys audio | grep -c 'state:started'` counts **every app on the phone**, which is how a stray
+"2 concurrent streams" was once blamed on this app when the second player belonged to something else.
+This harness filters started players to the app's own pid.
+
+### Reading a failure
+
+Play / Previous / Next are gated on `canTransport = hasPlaylist && !isPlaylistLoading`, and the
+playlist is **per device**. Running against a machine that has never had one disables them
+correctly — the harness reports that as "this device has an EMPTY playlist" rather than as a
+transport failure.
+
+## Seek latency
+
+`seek_latency_hil.py` answers one question with the microphone: **tap the progress bar to seek
+backwards — how long until the music comes back?** libsidplayfp cannot rewind, so a backward seek
+used to re-render the tune from the start at ~150 ms of CPU per second of audio. The pre-render
+cache (`localSidEngine.seekTo`) turns that into a buffer offset.
+
+```bash
+pip install websocket-client numpy
+python3 tools/hil/seek_latency_hil.py --serial <ADB_SERIAL>
+python3 tools/hil/seek_latency_hil.py --serial <ADB_SERIAL> --min-position-seconds 25 --seek-back-seconds 20
+```
+
+### Measured on the Pixel 4, 2026-07-27 (mic at the speaker, media volume 16/25)
+
+Eight clean readings — every one a real backward seek, on an audible phone, with no track change:
+
+```
+0.33  0.43  0.52  0.67  1.20  2.38  2.62  3.65   (seconds, tap → sound returns)
+```
+
+|                                | tap → sound returns               |
+| ------------------------------ | --------------------------------- |
+| **After the pre-render cache** | **0.33 – 3.65 s, median ≈ 0.9 s** |
+| _Before it existed_            | _9.96 s_                          |
+
+So the worst reading beats the old figure by ~2.7× and the typical one by ~10×.
+
+**The spread is not explained by the cache being warm or cold.** That was the expectation, and the
+readings do not support it: two seeks taken 176 s and 85 s into the _same_ 245 s tune — both long
+past the ~37 s its pre-render needs — returned 2.38 s and 1.20 s, while a seek 3 s into a fresh tune
+returned 0.43 s. Something other than the cache dominates what is left, and it has not been
+identified. Do not quote a cold/warm split from this data.
+
+The station advances tracks underneath the harness, so the two readings in a run are often different
+tunes — they are two samples along the same axis, not a controlled pair.
+
+### What it refuses to report
+
+Every one of these was a wrong number this harness produced before the guard existed:
+
+- **The mic must actually hear the phone.** A pre-flight capture (retried, so a track boundary does
+  not condemn a healthy rig) requires the speaker to be ≥ 4 dB over the room floor. A silent phone
+  otherwise yields a confident "15.96 s".
+- **The seek must run backwards.** The target is computed from the position and duration clocks, not
+  from a fixed fraction of the bar: 2% of a twenty-minute tune is 24 s in, which lands _ahead_ of a
+  playhead at 0:27 and quietly measures a forward seek.
+- **The track must not change mid-capture**, or the "gap" may be the gap between tunes.
+- **The first silence after the tap**, never the longest in the capture — the longest was once a
+  quiet passage 13 s after a tap at 4 s.
+
+Drive the bar with `adb shell input tap`, not CDP mouse events: synthesised events drove the control
+into a scrub it never left (the elapsed label kept its `⏵`) and playback stopped. And keep the screen
+awake — a sleeping screen stops playback mid-capture.
+
+## SID Radio
+
+`sid_radio_hil.py` is the authoritative Pixel-4 → C64U product proof for SID Radio (spec §9). It
+starts a station via real `data-testid` elements, soaks through auto-advances, and asserts the
+MEASURED-then-PINNED §9.2 budgets in
+[`ci/perf/sid-radio-perf-thresholds.json`](../../ci/perf/sid-radio-perf-thresholds.json), exiting
+`1` on any regression. Manual/local (spec §9.5); the host-deterministic budget check runs in CI via
+[`scripts/assert-sid-radio-perf.mjs`](../../scripts/assert-sid-radio-perf.mjs).
+
+```bash
+pip install websocket-client
+python3 tools/hil/sid_radio_hil.py --serial <ADB_SERIAL> --station song  --soak-tracks 30 --skips 5
+python3 tools/hil/sid_radio_hil.py --serial <ADB_SERIAL> --station style --style fast_paced --soak-tracks 30
+python3 tools/hil/sid_radio_hil.py --serial <ADB_SERIAL> --shuffle-replay   # G11: controls disabled during a station
+python3 tools/hil/sid_radio_hil.py --serial <ADB_SERIAL> --hvsc-update      # G12: continuity while md5PathIndex rebuilds
+python3 tools/hil/sid_radio_hil.py --serial <ADB_SERIAL> --engine local --station song --soak-tracks 20
+```
+
+It sets `localStorage` `c64u_sid_radio_enabled` / `c64u_sid_ranking_enabled` (plus
+`c64u_local_engine_enabled` / `c64u_playback_engine` for `--engine local`), reloads, and reads the
+hidden `data-testid="sid-radio-stats"` JSON blob (§9.4) each tick. On-device measurements already
+recorded (M0/M2): cold bundle load + reverse index **≈145 ms** (« 1500 ms), `engineThreadIsMain=false`,
+hot memory **5.0 MB**. Continuity (≥30 auto-advances) and skip latency need a live C64U (or the Local
+engine). Never auto-rewrite a pinned baseline to hide a regression (spec §9.2).
+
+`--engine local` is the only mode that asserts the `localEngine` (§12.6) block — it aborts if the app
+did not take the engine selection, so a run can never pass by quietly falling back to the C64. A metric
+the app never reported is printed as `NOT REPORTED` and a section that reported nothing at all fails the
+run, so an unmeasured budget is never mistaken for a green one.
+
+`--hvsc-update` (G12) clears `lastUpdateCheckUtcMs` so the app's update check runs during the station,
+then asserts continuity. It prints the installed/update versions before and after and says so loudly
+when upstream had no update — continuity across a rebuild that never happened proves nothing.
+
 # A/V sync — Hardware-in-the-loop (HIL) test
 
 `av_sync_hil.py` drives the **shipped app on a physically-connected Pixel** and measures the real

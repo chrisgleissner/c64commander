@@ -30,6 +30,7 @@ interface Captured {
   };
   start: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
+  isOnWifi?: ReturnType<typeof vi.fn>;
 }
 
 // Hoisted so the arrays exist before the module's `avMirrorSession` singleton
@@ -44,6 +45,7 @@ vi.mock("@/lib/streams/audioMirrorController", () => ({
     deps: Captured["deps"];
     start = vi.fn(async () => {});
     stop = vi.fn(async () => {});
+    isOnWifi = vi.fn(() => false);
     constructor(deps: Captured["deps"]) {
       this.deps = deps;
       audioInstances.push(this as unknown as Captured);
@@ -63,7 +65,7 @@ vi.mock("@/lib/streams/videoMirrorController", () => ({
   },
 }));
 
-import { AvMirrorSession, avMirrorSession } from "@/lib/streams/avMirrorSession";
+import { AvMirrorSession, WIFI_AUDIO_BLOCKS_VIDEO, avMirrorSession } from "@/lib/streams/avMirrorSession";
 
 const makeSession = () => {
   audioInstances.length = 0;
@@ -203,5 +205,107 @@ describe("AvMirrorSession", () => {
 
   it("exposes a shared app-wide singleton", () => {
     expect(avMirrorSession).toBeInstanceOf(AvMirrorSession);
+  });
+
+  describe("Wi‑Fi audio route (firmware wifi=true)", () => {
+    beforeEach(() => {
+      localStorage.clear(); // default policy = dynamic
+      // The Wi‑Fi route is a developer-mode-only capability (firmware PR #732 is
+      // not in released firmware yet); enable dev mode so the route decisions apply.
+      localStorage.setItem("c64u_dev_mode_enabled", "1");
+    });
+
+    it("requests Wi‑Fi for audio-only under the default (dynamic) policy", async () => {
+      const { session, audio } = makeSession();
+      await session.startAudio();
+      expect(audio.start).toHaveBeenCalledWith({ wifi: true });
+    });
+
+    it("forces Ethernet regardless of the persisted policy when developer mode is off", async () => {
+      localStorage.setItem("c64u_dev_mode_enabled", "0"); // dev mode off
+      localStorage.setItem("c64u_stream_audio_route", "wifi"); // even an explicit Wi‑Fi policy
+      const { session, audio } = makeSession();
+      await session.startAudio();
+      expect(audio.start).toHaveBeenCalledWith({ wifi: false });
+    });
+
+    it("does not request Wi‑Fi for audio while video is already live", async () => {
+      const { session, audio, video } = makeSession();
+      video.deps.onChange({ state: "live", fps: 10, error: null });
+      await session.startAudio();
+      expect(audio.start).toHaveBeenCalledWith({ wifi: false });
+    });
+
+    it("never requests Wi‑Fi under the ethernet policy", async () => {
+      localStorage.setItem("c64u_stream_audio_route", "ethernet");
+      const { session, audio } = makeSession();
+      await session.startAudio();
+      expect(audio.start).toHaveBeenCalledWith({ wifi: false });
+    });
+
+    it("moves Wi‑Fi audio to Ethernet before starting video (dynamic), then back on stop", async () => {
+      const { session, audio, video } = makeSession();
+      audio.isOnWifi!.mockReturnValue(true); // audio currently on Wi‑Fi
+      await session.startVideo();
+      // Audio was restarted on Ethernet, then video started.
+      expect(audio.stop).toHaveBeenCalled();
+      expect(audio.start).toHaveBeenCalledWith({ wifi: false });
+      expect(video.start).toHaveBeenCalled();
+
+      // Now video stops → audio returns to Wi‑Fi (dynamic).
+      audio.deps.onChange({ state: "live", droppedPackets: 0, error: null }); // audio still live
+      audio.start.mockClear();
+      await session.stopVideo();
+      expect(audio.start).toHaveBeenCalledWith({ wifi: true });
+    });
+
+    it("blocks video under the wifi policy while Wi‑Fi audio is live, with an explanatory message", async () => {
+      localStorage.setItem("c64u_stream_audio_route", "wifi");
+      const { session, audio, video } = makeSession();
+      audio.isOnWifi!.mockReturnValue(true);
+      await session.startVideo();
+      expect(video.start).not.toHaveBeenCalled();
+      expect(session.getSnapshot().video.error).toBe(WIFI_AUDIO_BLOCKS_VIDEO);
+    });
+  });
+
+  describe("operation serialization (serialize())", () => {
+    /** Drain all pending microtasks (a macrotask boundary flushes the microtask queue). */
+    const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    it("does not let a concurrent stop interleave with an in-flight start", async () => {
+      // Regression for the serialize() op-chain: a route conversion's stop+start (or any
+      // audio toggle) must run to completion before the next op begins, so late continuations
+      // can't issue transport commands out of order. Without serialize() the stop below would
+      // fire immediately, while the start is still awaiting — this test would then fail.
+      const { session, audio } = makeSession();
+      const order: string[] = [];
+      let releaseStart!: () => void;
+      const startGate = new Promise<void>((resolve) => {
+        releaseStart = resolve;
+      });
+      audio.start.mockImplementation(async () => {
+        order.push("start:begin");
+        await startGate; // hold the start open so a non-serialized stop could slip in
+        order.push("start:end");
+      });
+      audio.stop.mockImplementation(async () => {
+        order.push("stop:begin");
+        order.push("stop:end");
+      });
+
+      const p1 = session.startAudio();
+      const p2 = session.stopAudio();
+
+      await flush();
+      // The start is in flight (blocked on the gate); the stop MUST still be queued behind it.
+      expect(order).toEqual(["start:begin"]);
+      expect(audio.stop).not.toHaveBeenCalled();
+
+      releaseStart();
+      await Promise.all([p1, p2]);
+      // stop ran strictly after start fully completed — never interleaved.
+      expect(order).toEqual(["start:begin", "start:end", "stop:begin", "stop:end"]);
+    });
   });
 });

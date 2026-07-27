@@ -63,7 +63,8 @@
     "external-resources",
     "online-archive",
     "stable-features",
-    "experimental-features"
+    "experimental-features",
+    "sid-radio"
   ],
   "docs": [
     "getting-started",

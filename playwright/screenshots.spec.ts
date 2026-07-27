@@ -2413,6 +2413,73 @@ test.describe("App screenshots", () => {
   });
 
   test(
+    "capture sid radio screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      test.slow();
+      // GA defaults these on; set them explicitly + enable dev mode for the Settings capture.
+      await page.addInitScript(() => {
+        localStorage.setItem("c64u_sid_radio_enabled", "1");
+        localStorage.setItem("c64u_sid_ranking_enabled", "1");
+        localStorage.setItem("c64u_local_engine_enabled", "1");
+        localStorage.setItem("c64u_dev_mode_enabled", "1");
+      });
+      await installListPreviewLimit(page, 3);
+      await page.goto("/play");
+      await waitForConnected(page);
+      await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+
+      // The SID Radio controls (Browse stations, Liked Tunes) and the ♥/✕ ranking
+      // render on the playback card. The "Listen on" control is SID-only, so it
+      // gets its own capture below with a SID as the current item.
+      const launcher = getActiveMain(page).getByTestId("sid-radio-launcher");
+      await expect(launcher).toBeVisible();
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await captureScreenshot(page, testInfo, "play/sid-radio/01-controls.png");
+
+      // Open the stations launcher (song / style / taste seeds).
+      await launcher.click();
+      const sheet = page.getByTestId("sid-radio-launcher-sheet");
+      await expect(sheet).toBeVisible();
+      await captureScreenshot(page, testInfo, "play/sid-radio/02-stations.png", { locator: sheet });
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("sid-radio-launcher-sheet")).toHaveCount(0);
+
+      // "Listen on: C64 / Both / This device" — only rendered while a SID is the
+      // current item, so the playlist is seeded with one. Without this the
+      // control had no screenshot at all, even though the manual describes it.
+      await page.addInitScript(() => {
+        const payload = {
+          items: [
+            {
+              source: "hvsc",
+              path: "/MUSICIANS/H/Hubbard_Rob/Commando.sid",
+              name: "Commando.sid",
+              durationMs: 215000,
+            },
+          ],
+          currentIndex: 0,
+        };
+        localStorage.setItem("c64u_playlist:v1:TEST-123", JSON.stringify(payload));
+        localStorage.setItem("c64u_playlist:v1:default", JSON.stringify(payload));
+        localStorage.setItem("c64u_last_device_id", "TEST-123");
+      });
+      await page.goto("/play");
+      await waitForConnected(page);
+      const listenOn = getActiveMain(page).getByTestId("playback-engine-toggle");
+      await expect(listenOn).toBeVisible();
+      await captureScreenshot(page, testInfo, "play/sid-radio/03-listen-on.png", { locator: listenOn });
+
+      // The dev-mode Settings group (master + ranking + on-device engine + corpus status).
+      await page.goto("/settings");
+      const section = page.getByTestId("settings-sid-radio");
+      await expect(section).toBeVisible();
+      await section.scrollIntoViewIfNeeded();
+      await captureScreenshot(page, testInfo, "settings/sid-radio.png", { locator: section });
+    },
+  );
+
+  test(
     "capture play profile screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {

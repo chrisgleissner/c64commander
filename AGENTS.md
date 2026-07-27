@@ -577,6 +577,97 @@ Set `JAVA_HOME` to a valid JDK install and avoid hardcoded system paths.
 - For hardware-backed validation, use the adb-attached Pixel 4 when it is present.
 - Record which hardware target was chosen and do not claim device validation when neither host is reachable.
 
+## Debugging a signal: measure the wire before you read the code
+
+When something *sounds*, *looks* or *feels* wrong on a device — audio, video, input latency — measure
+the signal at its source before forming a theory about the code. A whole afternoon went into a
+"streamed audio is rough" report that was diagnosed from the code four different ways (ordering on
+the real-time thread, buffer priming, sample-rate mismatch, channel mismatch) and was none of them.
+Five minutes of `socket.recvfrom` on the multicast group had the answer:
+
+    250 pkt/s expected · 500 observed · two interleaved 16-bit sequence counters
+
+**Two Ultimates were streaming into the same multicast group.** Every packet arrived, in order, with
+zero loss *from each sender's point of view*, so nothing in the receive path looked wrong.
+
+Rules that follow from it:
+
+- **Count what arrives first.** Packet rate, payload size, and the implied sample rate against the
+  expected one. `tools/hil/` has the harnesses; a ten-line `recvfrom` loop is often faster.
+- **A/B by removing senders, not by editing code.** Stop the stream on *every* machine, then start
+  one, and measure again.
+- **Sequence deltas name the fault.** All `+1` = a clean single sender. Two alternating large deltas
+  summing to ~65536 = two senders sharing a group, not packet loss.
+- **The multicast groups are shared by every Ultimate** (`239.0.1.64:11000` video,
+  `239.0.1.65:11001` audio). A device keeps streaming until something asks it to stop — surviving
+  app restarts, device switches and crashes. Suspect an orphaned stream early. See
+  [[live-view-device-switch-clean-transition]].
+- **Check the phone is awake and foregrounded before concluding anything about async behaviour.** A
+  dozing WebView freezes timers and promises, which reads exactly like a hung native plugin: in the
+  same session `StreamUdp.bind()` "never resolved" for 90 s purely because the screen was off.
+- **Zero underruns does not mean healthy audio.** An over-full buffer never underruns; it silently
+  discards what it cannot accept. If a counter can only show starvation, add the one that shows
+  overflow before trusting either.
+
+## Build an exact instrument when the complaint is subjective
+
+"It sounds rough" cannot be graded against real music, whose spectrum moves constantly — a
+correlation score says only that *something* differs. `tools/hil/make_tone_ladder_sid.py` emits a
+307-byte PSID playing a known C3→C4→C3 ladder that also steps the screen colour in unison with the
+notes, and `analyse_tone_ladder.py` reports per-note pitch error in cents and per-note duration.
+That turns "rough" into "notes are 0.965 s instead of 0.500 s", which points at a rate problem in
+one reading. Prefer building that instrument early over another round of reasoning about the code.
+
+### Calibrate the instrument before you trust it
+
+An instrument that has not been checked against a known-good signal will report faults that are its
+own. Every one of these was a *measurement* bug that looked exactly like a device bug:
+
+- **AC-couple before measuring level.** Gating the SID leaves a DC step, and through the chip's DC
+  blocker it rings for ~0.6 s at about 1 Hz. Unweighted that ring measured -13 dBFS — louder than
+  half the ladder — so a plain RMS envelope scored it as a note and its click as the onset, and the
+  whole ladder mis-aligned. A 2nd-order high-pass at 60 Hz costs the lowest note 0.2 dB. This is why
+  ITU-R BS.1770's K-weighting starts with a high-pass; treat it as mandatory, not as polish.
+- **Check the reference, not just the reading.** Notes measured a rock-solid 499.0 ms against an
+  "expected" 500. The signal was right and the expectation was wrong: PAL is 985248/19656 =
+  50.1245 Hz, so 25 frames is 498.76 ms. A constant 1 ms bias, invented by the measurement.
+- **Reference a threshold to the thing you are measuring.** Half-rise between the note and the
+  preceding floor made onset placement depend on how quiet the *previous* slot was, so notes after a
+  silence were called tens of ms early. Half power below the note's own plateau is the same place on
+  every attack.
+- **A filter that happens to hide a problem is not a fix.** A `>= 0.12 s` length filter was silently
+  discarding spurious onsets. Replacing it with an explicit "a note sustains, a click does not" gate
+  fixed the real defect; the accidental filter would have hidden the next one.
+
+Validate against `sidplayfp` renders and a 6502 trace of the player (a ~90-line simulator over the
+handful of opcodes involved proves colour and note writes land on the same frame) *before* pointing
+the instrument at hardware. Grade against published standards — ITU-R BT.1359-1 for A/V sync,
+BS.1770/EBU R128 for level — so the verdict means something outside this repo, and report median
+with IQR rather than a bare mean so one dropout cannot move the headline.
+
+## The hardware that exists — and the Callback 8020, which does not
+
+**The available rig is exactly: the Pixel 4 (adb), the C64U, and the U64.** That is all
+of it. Plan every gate, task and acceptance criterion against that list.
+
+**The Callback 8020 does not exist yet.** It is an unreleased handset. Neither it nor
+SailfishOS can be tested on, now or by waiting — so:
+
+- **The Pixel 4 stands in for every phone**, the 8020 included. A result proven on the
+  Pixel 4 is the phone-side result; report it as measured on the Pixel 4 and move on.
+- **Never write a task, gate or "remaining work" item whose venue is the 8020.** Such an
+  item is not blocked, it is unrunnable, and it has repeatedly been re-created and
+  re-carried across sessions as though hardware were about to arrive.
+- Where a spec names the 8020 (e.g. keypad-first / low-power sizing), treat it as a
+  *design constraint to build for*, not a device to measure on: satisfy it by
+  construction, prove what is provable on the Pixel 4, and say plainly which part is
+  unverifiable until the handset ships.
+- The same applies to the `c64u-remote` variant's manual, which names the 8020 as the
+  target handset: writing for it is fine, testing on it is not.
+
+Physically power-cycling the C64 is a rare, ask-first exception; the U64 may be absent,
+so probe it rather than assuming.
+
 ## Modularization guardrails
 
 - If a file grows beyond about 600 lines or mixes concerns, split it.

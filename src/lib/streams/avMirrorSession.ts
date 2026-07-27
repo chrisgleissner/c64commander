@@ -17,9 +17,12 @@
  * Home "check" preview and the Remote Input preview) render the one stream.
  */
 
-import { getC64API } from "@/lib/c64api";
+import { C64API, getC64API } from "@/lib/c64api";
 import { addLog } from "@/lib/logging";
+import { Capacitor } from "@capacitor/core";
+
 import { isNativePlatform } from "@/lib/native/platform";
+import { StreamUdp } from "@/lib/native/streamUdp";
 import {
   loadStreamAudioPort,
   loadStreamNativeAudio,
@@ -28,8 +31,12 @@ import {
   loadStreamNativeVideoAssembly,
   loadStreamVideoFrameRateMode,
   loadStreamVideoPort,
+  loadStreamAudioRoute,
+  type StreamAudioRoute,
   type StreamVideoFrameRateMode,
 } from "@/lib/config/appSettings";
+import { getDeveloperModeEnabled } from "@/lib/config/developerModeStore";
+import { resolveVideoStartAction, shouldReturnAudioToWifi, shouldUseWifiForAudio } from "./audioRoute";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
 import { NativeAudioSink } from "./audioNativeSink";
 import { AudioMirrorController, type AudioMirrorSignals, type AudioMirrorState } from "./audioMirrorController";
@@ -37,6 +44,7 @@ import { VideoMirrorController, type VideoMirrorState } from "./videoMirrorContr
 import { StreamGovernor, type FrameRateMode, type GovernorState, type GovernorTransition } from "./streamGovernor";
 import { StreamTelemetry, type TelemetryBucket, type TelemetrySessionSummary } from "./streamTelemetry";
 import { onInputActivity } from "./inputActivitySignal";
+import { claimPhoneAudio, releasePhoneAudio } from "@/lib/audio/phoneAudioOwnership";
 import type { VideoStandard } from "./vicDecode";
 import type { AudioMirrorPlayer } from "./audioPlayer";
 
@@ -95,7 +103,7 @@ const INITIAL: AvMirrorSnapshot = {
 const isLiveState = (state: AudioMirrorState | VideoMirrorState) => state === "connecting" || state === "live";
 
 export interface AvMirrorSessionDeps {
-  startStream?: (name: "audio" | "video", destination: string) => Promise<unknown>;
+  startStream?: (name: "audio" | "video", destination: string, options?: { wifi?: boolean }) => Promise<unknown>;
   stopStream?: (name: "audio" | "video") => Promise<unknown>;
   createAudioReceiver?: (options: StreamReceiverOptions) => StreamReceiver;
   createVideoReceiver?: (options: StreamReceiverOptions) => StreamReceiver;
@@ -127,11 +135,17 @@ export const INPUT_PRIORITY_TAIL_MS = 350;
  */
 export const DEFAULT_INPUT_PRIORITY_FRACTION = 0.2;
 
+/** Shown on the video pane when the `wifi` audio policy keeps audio on Wi‑Fi, which video can't join. */
+export const WIFI_AUDIO_BLOCKS_VIDEO =
+  "Audio is streaming over Wi‑Fi, which can't run together with video. Switch the audio route to Ethernet or Dynamic in Settings, or stop the audio, to watch.";
+
 export class AvMirrorSession {
   private snapshot: AvMirrorSnapshot = INITIAL;
   private readonly listeners = new Set<AvMirrorListener>();
   private readonly frameListeners = new Set<AvMirrorFrameHandler>();
   private readonly audioListeners = new Set<AvMirrorAudioHandler>();
+  /** Whether the native receiver is currently forwarding audio packets to JS for analysis. */
+  private nativeAudioAnalysis = false;
   private readonly statsListeners = new Set<AvStatsListener>();
   private latestFrame: { frame: Uint8Array; height: number; arrivalMs: number } | null = null;
   private readonly audio: AudioMirrorController;
@@ -147,9 +161,14 @@ export class AvMirrorSession {
   private inputPriorityFraction = DEFAULT_INPUT_PRIORITY_FRACTION;
   /** Whether input-priority shedding is enabled (Settings; read at session start). Default on. */
   private inputPriorityEnabled = true;
+  /** True when starting video moved a Wi‑Fi audio stream onto Ethernet (dynamic policy) — so it can move back on video stop. */
+  private audioForcedToEthernet = false;
+  /** Serializes audio/video start/stop so a route conversion (stop+start) can't interleave with another toggle. */
+  private opChain: Promise<unknown> = Promise.resolve();
 
   constructor(deps: AvMirrorSessionDeps = {}) {
-    const startStream = deps.startStream ?? ((name, destination) => getC64API().startStream(name, destination));
+    const startStream =
+      deps.startStream ?? ((name, destination, options) => getC64API().startStream(name, destination, options));
     const stopStream = deps.stopStream ?? ((name) => getC64API().stopStream(name));
     this.now = deps.now ?? (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
     // The stored frame-rate mode is applied when a session starts (see beginSessionIfIdle), NOT at
@@ -158,7 +177,7 @@ export class AvMirrorSession {
     this.governor = new StreamGovernor("auto");
 
     this.audio = new AudioMirrorController({
-      startStream: (_name, destination) => startStream("audio", destination),
+      startStream: (_name, destination, options) => startStream("audio", destination, options),
       stopStream: () => stopStream("audio"),
       onChange: (s) => this.update({ audio: { state: s.state, droppedPackets: s.droppedPackets, error: s.error } }),
       createReceiver:
@@ -171,6 +190,11 @@ export class AvMirrorSession {
           ? new NativeAudioSink(sampleRate, undefined, loadStreamNativeAudioBufferMs())
           : null,
       renderAudioForAnalysis: (samples, arrivalMs) => this.emitAudio(samples, arrivalMs),
+      // Who we EXPECT to hear from, and how to silence anyone else. The mirror's groups are
+      // multicast and every Ultimate defaults to the same ones, so a machine left streaming by an
+      // earlier session sends straight into ours.
+      expectedSenderHost: () => getC64API().getDeviceHost(),
+      stopStreamAt: (host, name) => new C64API(undefined, undefined, host).stopStream(name),
     });
 
     this.video = new VideoMirrorController({
@@ -245,9 +269,34 @@ export class AvMirrorSession {
    */
   subscribeAudio(handler: AvMirrorAudioHandler): () => void {
     this.audioListeners.add(handler);
+    this.syncNativeAudioAnalysis();
     return () => {
       this.audioListeners.delete(handler);
+      this.syncNativeAudioAnalysis();
     };
+  }
+
+  /**
+   * Keep the native receiver's audio bridge open exactly while someone is listening in JS.
+   *
+   * With the native sink playing, the receive thread stops emitting audio datagrams — that is the
+   * point of the native path. But `subscribeAudio` exists for the analysers, and they measure the
+   * received stream in JS, so without this an in-app measurement on Android would quietly grade
+   * silence and report a fault that is really a missing feed.
+   */
+  private syncNativeAudioAnalysis(): void {
+    const wanted = this.audioListeners.size > 0;
+    if (wanted === this.nativeAudioAnalysis) return;
+    this.nativeAudioAnalysis = wanted;
+    // Android-only plugin: on web and iOS there is no native sink, so nothing is being bypassed.
+    if (!isNativePlatform() || !Capacitor.isPluginAvailable("StreamUdp")) return;
+    void StreamUdp.setAudioAnalysis({ enabled: wanted }).catch((error) => {
+      addLog("warn", "Live View: could not toggle native audio analysis", {
+        service: "streams",
+        enabled: wanted,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
 
   /** Subscribe to the low-rate Stats snapshot (governor + telemetry). Replays the current snapshot. */
@@ -437,13 +486,64 @@ export class AvMirrorSession {
     this.applyKeepFraction(state.effectiveFraction);
   }
 
+  /**
+   * The audio route in effect. The Wi‑Fi route (firmware PR #732) does not exist
+   * in released firmware yet, so it is a **developer-mode-only** capability:
+   * outside developer mode the route is always Ethernet, whatever is persisted.
+   */
+  private effectiveAudioRoute(): StreamAudioRoute {
+    return getDeveloperModeEnabled() ? loadStreamAudioRoute() : "ethernet";
+  }
+
+  /** Run `op` after any in-flight transport op completes, so route conversions never interleave. */
+  private serialize<T>(op: () => Promise<T>): Promise<T> {
+    const run = this.opChain.then(op, op);
+    this.opChain = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
   startAudio(): Promise<void> {
-    this.beginSessionIfIdle();
-    return this.audio.start();
+    return this.serialize(async () => {
+      this.beginSessionIfIdle();
+      // Take the speaker before opening the stream. The local SID engine can be
+      // playing a tune here, and the C64's audio laid over the top of it is two
+      // pieces of music at once with no way for the listener to tell which
+      // control stops which. Claiming first means the tune is already silenced
+      // by the time the first packet arrives.
+      claimPhoneAudio("av-mirror", this, () => {
+        void this.stopAudio().catch((error) => {
+          // Not cosmetic: if the stop fails, the C64's audio keeps playing and
+          // the local tune starts underneath it — the two-sounds-at-once
+          // failure this registry exists to prevent.
+          addLog("warn", "A/V mirror: stopping audio during eviction failed", {
+            service: "streams",
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+      });
+      // Prefer Wi‑Fi for audio-only when the policy allows it (firmware wifi=true);
+      // the controller falls back to Ethernet if Wi‑Fi isn't available.
+      const wifi = shouldUseWifiForAudio({ policy: this.effectiveAudioRoute(), videoActive: this.videoLive });
+      try {
+        await this.audio.start({ wifi });
+      } catch (error) {
+        // Nothing is playing, so do not keep holding the speaker against a
+        // local tune that could otherwise start.
+        releasePhoneAudio(this);
+        throw error;
+      }
+    });
   }
 
   stopAudio(): Promise<void> {
-    return this.audio.stop();
+    return this.serialize(async () => {
+      this.audioForcedToEthernet = false;
+      releasePhoneAudio(this);
+      await this.audio.stop();
+    });
   }
 
   toggleAudio(): Promise<void> {
@@ -451,13 +551,45 @@ export class AvMirrorSession {
   }
 
   startVideo(): Promise<void> {
-    this.beginSessionIfIdle();
-    return this.video.start();
+    return this.serialize(async () => {
+      // Wi‑Fi audio can't share a route with video. Depending on the policy, move
+      // the audio to Ethernet first (dynamic) or refuse the video (wifi).
+      const action = resolveVideoStartAction({
+        policy: this.effectiveAudioRoute(),
+        audioOnWifi: this.audio.isOnWifi(),
+      });
+      if (action === "blocked") {
+        this.update({ video: { ...this.snapshot.video, error: WIFI_AUDIO_BLOCKS_VIDEO } });
+        return;
+      }
+      if (action === "convert-audio-then-start") {
+        await this.audio.stop();
+        await this.audio.start({ wifi: false }); // Ethernet, so both share one route
+        this.audioForcedToEthernet = true;
+      }
+      this.beginSessionIfIdle();
+      await this.video.start();
+    });
   }
 
-  async stopVideo(): Promise<void> {
-    await this.video.stop();
-    this.latestFrame = null;
+  stopVideo(): Promise<void> {
+    return this.serialize(async () => {
+      await this.video.stop();
+      this.latestFrame = null;
+      // Dynamic policy: return audio to Wi‑Fi now that it is alone again, but only
+      // if starting video is what moved it off Wi‑Fi in the first place.
+      if (
+        this.audioLive &&
+        shouldReturnAudioToWifi({
+          policy: this.effectiveAudioRoute(),
+          audioForcedToEthernet: this.audioForcedToEthernet,
+        })
+      ) {
+        this.audioForcedToEthernet = false;
+        await this.audio.stop();
+        await this.audio.start({ wifi: true });
+      }
+    });
   }
 
   toggleVideo(): Promise<void> {

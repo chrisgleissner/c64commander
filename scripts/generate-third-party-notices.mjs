@@ -353,6 +353,26 @@ const renderNotices = (entries) => {
   return [header, separator, ...rows].join('\n');
 };
 
+// Bundled data assets that are not npm/native dependencies (so they never
+// appear in a lockfile) but must still be attributed. Curated here so
+// generation and `--check` stay consistent.
+const DATA_NOTICES = [
+  '## Data notices',
+  '',
+  'The following bundled data assets are not npm/Gradle/CocoaPods/SwiftPM dependencies and are attributed separately:',
+  '',
+  '| Asset | Source | License |',
+  '| --- | --- | --- |',
+  '| SID Radio similarity bundle (`sidcorr-tiny-1`) | [chrisgleissner/sidflow-data](https://github.com/chrisgleissner/sidflow-data) | [GPL-3.0-or-later](https://www.gnu.org/licenses/gpl-3.0.html) |',
+  '| libsidplayfp WASM engine (`public/wasm/libsidplayfp/`, from `@sidflow/libsidplayfp-wasm`) | [chrisgleissner/sidflow](https://github.com/chrisgleissner/sidflow) / [libsidplayfp](https://github.com/libsidplayfp/libsidplayfp) | [GPL-2.0-or-later](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html) |',
+  '',
+  'The SID Radio similarity bundle is a compact, content-addressed index derived from analysis of the High Voltage SID Collection (HVSC, <https://www.hvsc.c64.org/>). SID tunes and their metadata remain the property of their respective composers and the HVSC team; this application bundles only the derived similarity index — not the SID files themselves and not any C64 ROM images.',
+  '',
+  'The libsidplayfp WASM engine powers on-device SID playback (the optional "This device" playback engine). libsidplayfp and libresidfp (the reSIDfp engine, an external library since libsidplayfp v3.x, linked into the same binary) are GPL-2.0-or-later, compatible with this application\'s GPL-3.0-or-later licence. Two builds of it ship: reSIDfp, the cycle-accurate default, and SIDLite, a cheaper approximation offered as the "Light" option. The binaries are not held in this repository — they are fetched from a pinned `chrisgleissner/sidflow` release at build time, verified against that release\'s `SHA256SUMS`, and bundled into the application (`scripts/fetch-libsidplayfp-wasm.mjs`); the engine\'s own `LICENSE` is fetched and bundled alongside them under `public/wasm/libsidplayfp/`, and the pin is recorded in `public/wasm/libsidplayfp/VENDORING.md`.',
+  'C64 KERNAL/BASIC/CHARGEN ROM images are **not** distributed with this application. On-device playback needs the C64\'s own KERNAL and BASIC, so the app reads those images at the user\'s explicit request from the C64 device the user has connected to (`GET /v1/machine:readmem`, a DMA read). They are kept in that user\'s app-private storage on their own device, and are never uploaded, exported, shared or included in diagnostics bundles. The user is responsible for only connecting the app to devices they own or have been given permission to use. Without ROM images present, SID tunes are played on the C64 instead.',
+  '',
+].join('\n');
+
 const parseArgs = () => {
   const args = process.argv.slice(2);
   return {
@@ -411,6 +431,7 @@ const main = async () => {
     '',
     renderNotices(allEntries),
     '',
+    DATA_NOTICES,
   ].join('\n');
 
   await writeOrCheck({

@@ -47,6 +47,25 @@ import {
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 
 import { buildLocalPlayFileFromUri, buildLocalPlayFileFromTree } from "@/lib/playback/fileLibraryUtils";
+import { loadLocalEngineEnabled, loadPlaybackEngine } from "@/lib/config/appSettings";
+import {
+  LocalSidPlaybackController,
+  getSharedLocalSidPlaybackController,
+} from "@/lib/playback/localSidPlaybackController";
+import {
+  isAnyPlaybackActive,
+  isLocalPlaybackActive,
+  markRemotePlaybackStarted,
+  markRemotePlaybackStopped,
+} from "@/lib/playback/activePlaybackSession";
+import { LocalEngineStatsAccumulator } from "@/lib/playback/localEngineStatsBridge";
+import { detectRomRequired } from "@/lib/playback/localSidWorkerCore";
+import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
+import {
+  ENGINE_FALLBACK_MESSAGES,
+  preRouteEngine,
+  type EngineFallbackNotice,
+} from "@/lib/playback/playbackEngineRouting";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { resolveSidMutedVolumeOption } from "@/lib/config/sidVolumeControl";
 import {
@@ -62,6 +81,8 @@ import {
 } from "@/pages/playFiles/playFilesUtils";
 import type { VolumeAction } from "@/pages/playFiles/volumeState";
 import type { SidEnablement } from "@/lib/config/sidVolumeControl";
+import { avMirrorSession } from "@/lib/streams/avMirrorSession";
+import { featureFlagManager } from "@/lib/config/featureFlags";
 
 type HandledUiError = Error & { c64uHandled?: boolean };
 
@@ -119,6 +140,28 @@ type RuntimePlaybackRequest = {
 };
 
 export const USER_TRANSPORT_COALESCE_MS = 120;
+
+/**
+ * How often the on-device engine's stats are mirrored to the SID Radio blob
+ * (§12.6). The HIL samples the blob every 2 s, so 1 s keeps it fresh without
+ * putting a needless timer on the main thread during local playback.
+ */
+const LOCAL_ENGINE_STATS_POLL_MS = 1000;
+
+/**
+ * How often a scrub sends the engine to the finger's current position.
+ *
+ * Not once per visual step. Seeking backwards reloads the tune and re-renders
+ * up to the target, so a seek per 200 ms repeat queues work faster than it can
+ * finish and the audio ends up chasing a target from seconds ago. ~350 ms is
+ * slow enough for each catch-up to land — giving a short audible burst of the
+ * tune at the new position, the way a CD player previews a scrub — and quick
+ * enough to stay roughly with the moving progress bar.
+ */
+const SCRUB_SEEK_INTERVAL_MS = 350;
+
+/** How long after the last drag movement the bar commits to that position. */
+const DRAG_SETTLE_MS = 220;
 
 interface UsePlaybackControllerProps {
   playlist: PlaylistItem[];
@@ -203,6 +246,8 @@ interface UsePlaybackControllerProps {
     pause: (now: number) => void;
     resume: (now: number) => void;
     reset: () => void;
+    /** Move the clock to an absolute position; used by seek. */
+    hydrate: (baseMs: number, startedAt: number | null) => void;
     current: (now: number) => number;
   }>;
   trackStartedAtRef: MutableRefObject<number | null>;
@@ -217,6 +262,13 @@ interface UsePlaybackControllerProps {
   setAutoAdvanceDueAtMs: (dueAtMs: number | null) => void;
 
   trace: any;
+
+  /**
+   * Local SID playback engine (Track B / LE2). Injected in tests; created
+   * lazily in production. Playback routes here for SID items only when
+   * `c64u_local_engine_enabled` is on and the engine is set to `local`.
+   */
+  localSidPlaybackController?: LocalSidPlaybackController;
 }
 
 export function usePlaybackController({
@@ -272,6 +324,7 @@ export function usePlaybackController({
   trace,
   setTrackInstanceId,
   setAutoAdvanceDueAtMs,
+  localSidPlaybackController,
 }: UsePlaybackControllerProps) {
   const durationFallbackMs = durationSeconds * 1000;
   const machineTransitionCoordinatorRef = useRef(createMachineTransitionCoordinator());
@@ -281,6 +334,50 @@ export function usePlaybackController({
   const currentIndexRef = useRef(currentIndex);
   const isPlayingRef = useRef(isPlaying);
   const isPausedRef = useRef(isPaused);
+  // Track B (LE2): the on-device engine, created lazily so the worker/WASM cost
+  // is only paid once the user actually plays a SID on the device.
+  const localSidPlaybackRef = useRef<LocalSidPlaybackController | null>(localSidPlaybackController ?? null);
+  // True while the current track is playing on the device (no C64 to stop).
+  const currentPlaybackIsLocalRef = useRef(false);
+  // Mirrors the ref as state so the §12.6 stats poll below can start/stop with
+  // on-device playback (a ref alone would never re-run the effect).
+  const [localEngineActive, setLocalEngineActive] = useState(false);
+  const localEngineStatsRef = useRef(new LocalEngineStatsAccumulator());
+  /** Last engine seen, to tell an engine change from any other settings change. */
+  const selectedEngineRef = useRef(loadPlaybackEngine());
+  /** Keep the ref (read synchronously mid-transition) and the state in sync. */
+  const setCurrentPlaybackIsLocal = useCallback((isLocal: boolean) => {
+    currentPlaybackIsLocalRef.current = isLocal;
+    setLocalEngineActive(isLocal);
+  }, []);
+  // One-time engine-fallback notices (rom/non-sid/unsupported), shown once each.
+  const engineNoticeShownRef = useRef(new Set<EngineFallbackNotice>());
+  const getLocalSidPlayback = useCallback(() => {
+    // Shared, never per-page: a page-scoped engine kept playing after its page
+    // unmounted, so tab-navigating away from Play and back stacked concurrent
+    // AudioContexts and layered tunes on top of each other.
+    if (!localSidPlaybackRef.current) localSidPlaybackRef.current = getSharedLocalSidPlaybackController();
+    return localSidPlaybackRef.current;
+  }, []);
+  // Track B (LE3, §12.6): mirror the on-device engine's render throughput and
+  // underruns into the SID Radio stats blob so the HIL can assert the budgets.
+  // Polled (the engine exposes stats by pull) and folded across tunes, because
+  // the scheduler's underrun counter restarts on every auto-advance.
+  useEffect(() => {
+    if (!localEngineActive) return;
+    const timer = window.setInterval(() => {
+      const stats = getLocalSidPlayback().getStats();
+      if (!stats) return;
+      updateSidRadioStats(localEngineStatsRef.current.sample(stats));
+    }, LOCAL_ENGINE_STATS_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [localEngineActive]);
+
+  const emitEngineNotice = useCallback((notice: EngineFallbackNotice) => {
+    if (engineNoticeShownRef.current.has(notice)) return;
+    engineNoticeShownRef.current.add(notice);
+    toast({ title: "Playback engine", description: ENGINE_FALLBACK_MESSAGES[notice] });
+  }, []);
   // HARD12-018: tracks that the last song in the playlist auto-ended so that
   // background execution can stop even though `isPlaying` stays true (the Stop
   // affordance must remain available). Reset whenever a new track starts.
@@ -819,32 +916,50 @@ export function usePlaybackController({
             });
           }
         }
-        try {
-          await ensurePlaybackConnection();
-        } catch (error) {
-          reportUserError({
-            operation: "PLAYBACK_CONNECT",
-            title: "Connection failed",
-            description: (error as Error).message,
-            error,
-            context: {
-              item: item.label,
-            },
+        // Track B (LE2): decide whether this SID plays on the device. The
+        // pre-route only knows category/engine/support; ROM-dependent (RSID)
+        // tunes need ship-forbidden C64 ROMs, so peek the (tiny) SID header and
+        // route those back to the C64 with a one-time notice. Gated on
+        // `c64u_local_engine_enabled` — off by default, so the whole block is a
+        // no-op and playback is byte-for-byte the C64 path.
+        let routeToLocal = false;
+        if (loadLocalEngineEnabled()) {
+          const selection = preRouteEngine({
+            category: item.category,
+            engine: loadPlaybackEngine(),
+            localSupported: LocalSidPlaybackController.isSupported(),
           });
-          throw error;
+          if (selection.route === "local" && effectiveRequest.file) {
+            try {
+              const sidBytes = new Uint8Array(await effectiveRequest.file.arrayBuffer());
+              if (detectRomRequired(sidBytes)) {
+                emitEngineNotice("rom-on-c64");
+              } else {
+                routeToLocal = true;
+              }
+            } catch (error) {
+              addErrorLog("Local engine could not read the SID; using the C64", {
+                error: (error as Error).message,
+                item: item.label,
+              });
+            }
+          } else if (selection.notice) {
+            emitEngineNotice(selection.notice);
+          }
         }
-        await ensureUnmuted({ refreshItems: true });
+        // Silence any prior on-device tune before the C64 takes over (a local→C64
+        // switch); consecutive local plays are handled inside the engine.
+        if (!routeToLocal && localSidPlaybackRef.current) {
+          localSidPlaybackRef.current.stop();
+        }
         const api = getC64API();
-        if (isPausedRef.current) {
-          // The machine is DMA-paused (frozen). Launching a new track without
-          // resuming first leaves it frozen while the UI flips to "playing" -
-          // no audio, wedged until Stop. See HARD9-029.
+        if (!routeToLocal) {
           try {
-            await resumeMachineWithRetry(api);
+            await ensurePlaybackConnection();
           } catch (error) {
             reportUserError({
-              operation: "PLAYBACK_RESUME",
-              title: "Resume failed",
+              operation: "PLAYBACK_CONNECT",
+              title: "Connection failed",
               description: (error as Error).message,
               error,
               context: {
@@ -852,6 +967,26 @@ export function usePlaybackController({
               },
             });
             throw error;
+          }
+          await ensureUnmuted({ refreshItems: true });
+          if (isPausedRef.current) {
+            // The machine is DMA-paused (frozen). Launching a new track without
+            // resuming first leaves it frozen while the UI flips to "playing" -
+            // no audio, wedged until Stop. See HARD9-029.
+            try {
+              await resumeMachineWithRetry(api);
+            } catch (error) {
+              reportUserError({
+                operation: "PLAYBACK_RESUME",
+                title: "Resume failed",
+                description: (error as Error).message,
+                error,
+                context: {
+                  item: item.label,
+                },
+              });
+              throw error;
+            }
           }
         }
         const resolvedDurationBase = durationOverride ?? item.durationMs;
@@ -968,7 +1103,50 @@ export function usePlaybackController({
           durationMs: request.durationMs ?? null,
           rebootBeforePlay: Boolean(executionOptions?.rebootBeforeMount),
         });
-        await executePlayPlan(api, plan, executionOptions);
+        if (routeToLocal) {
+          // On-device engine: render the SID here, no C64 (spec §12). The
+          // songlength clock + auto-advance below run identically to the C64
+          // path, so playlist/SID-Radio behaviour is engine-agnostic.
+          await getLocalSidPlayback().play(
+            effectiveRequest.file!,
+            effectiveRequest.songNr ?? 0,
+            {
+              onError: (playbackError) =>
+                addErrorLog("Local SID playback failed", {
+                  error: playbackError.message,
+                  item: item.label,
+                }),
+            },
+            // Render the whole tune in the background so scrubbing inside it is
+            // instant. Keyed by item + subsong so two subsongs of one file are
+            // cached separately — they are different music.
+            {
+              prerenderKey: `${item.id}#${effectiveRequest.songNr ?? 0}`,
+              durationSeconds: resolvedDuration ? resolvedDuration / 1000 : undefined,
+            },
+          );
+        } else {
+          await executePlayPlan(api, plan, executionOptions);
+          // The tune is now running on the Ultimate. Recorded here, at the real
+          // launch, so a device switch can stop it no matter which page is
+          // mounted (see activePlaybackSession).
+          markRemotePlaybackStarted();
+          // The engine toggle promises "C64 — hear via Live View", so make that
+          // true. Without this the tune plays on the Ultimate in silence as far
+          // as the phone is concerned, and the listener has to know to go to
+          // Home and switch Listen on by hand. Best-effort: the mirror is a
+          // convenience, and a device that will not stream must not stop the
+          // tune from playing.
+          if (featureFlagManager.getSnapshot().flags.audio_mirror_enabled && !avMirrorSession.audioLive) {
+            void avMirrorSession.startAudio().catch((error) => {
+              addLog("warn", "Playback: could not start Live View audio for C64 playback", {
+                service: "playback",
+                error: error instanceof Error ? error.message : String(error),
+              });
+            });
+          }
+        }
+        setCurrentPlaybackIsLocal(routeToLocal);
 
         if (playGenerationRef.current !== myPlayGeneration) {
           // HARD18-009 (M5): Stop (or a later Play) superseded this
@@ -982,14 +1160,19 @@ export function usePlaybackController({
             itemId: item.id,
             label: item.label,
           });
-          try {
-            await withTimeout(api.machineReset(), STOP_MACHINE_TIMEOUT_MS, "Reset");
-          } catch (error) {
-            addErrorLog("Follow-up reset after superseded playback launch failed", {
-              itemId: item.id,
-              label: item.label,
-              error: (error as Error).message,
-            });
+          if (routeToLocal) {
+            getLocalSidPlayback().stop();
+            setCurrentPlaybackIsLocal(false);
+          } else {
+            try {
+              await withTimeout(api.machineReset(), STOP_MACHINE_TIMEOUT_MS, "Reset");
+            } catch (error) {
+              addErrorLog("Follow-up reset after superseded playback launch failed", {
+                itemId: item.id,
+                label: item.label,
+                error: (error as Error).message,
+              });
+            }
           }
           return;
         }
@@ -1141,6 +1324,58 @@ export function usePlaybackController({
     [],
   );
 
+  // Track B (LE2, §12.5): switching "Play on: C64 / This device" acts on the
+  // tune that is playing *now* — stop whichever engine owns it and restart it
+  // on the chosen one — instead of waiting for the next track. `playItem`
+  // re-reads the engine setting, so the restart lands on the new engine.
+  useEffect(() => {
+    const onSettingsUpdated = () => {
+      const nextEngine = loadPlaybackEngine();
+      if (nextEngine === selectedEngineRef.current) return;
+      selectedEngineRef.current = nextEngine;
+      const index = currentIndexRef.current;
+      const item = playlistRef.current[index];
+      // Only a playing SID can move between engines; everything else is a
+      // no-op that takes effect on the next track, as before.
+      if (!isPlayingRef.current || !item || item.category !== "sid") return;
+      const startedAt = performance.now();
+      void (async () => {
+        if (currentPlaybackIsLocalRef.current) {
+          // getLocalSidPlayback(), never the raw ref: the ref is per-page and
+          // starts null, so a page that adopted an already-running session (a
+          // remount, or the transient second instance a tab switch creates)
+          // silently no-opped here and the tune kept playing after the user had
+          // switched engines.
+          getLocalSidPlayback().stop();
+          setCurrentPlaybackIsLocal(false);
+        } else {
+          try {
+            await withTimeout(getC64API().machineReset(), STOP_MACHINE_TIMEOUT_MS, "Reset");
+          } catch (error) {
+            addErrorLog("Stopping the C64 for a playback-engine switch failed", {
+              error: (error as Error).message,
+              item: item.label,
+            });
+          }
+        }
+        try {
+          await playItem(item, { playlistIndex: index, playlistSize: playlistRef.current.length });
+          // §12.6 `engineSwitchMs`: press → the tune is audible again.
+          updateSidRadioStats({ engineSwitchMs: performance.now() - startedAt });
+        } catch (error) {
+          if (!isHandledUiError(error)) {
+            addErrorLog("Restarting the tune on the new playback engine failed", {
+              error: (error as Error).message,
+              item: item.label,
+            });
+          }
+        }
+      })();
+    };
+    window.addEventListener("c64u-app-settings-updated", onSettingsUpdated);
+    return () => window.removeEventListener("c64u-app-settings-updated", onSettingsUpdated);
+  }, [playItem, setCurrentPlaybackIsLocal, addErrorLog, STOP_MACHINE_TIMEOUT_MS]);
+
   const startPlaylist = useCallback(
     async (items: PlaylistItem[], startIndex = 0) => {
       if (!items.length) return;
@@ -1255,7 +1490,9 @@ export function usePlaybackController({
 
   const handleStop = useCallback(
     trace(async function handleStop() {
-      if (!isPlaying && !isPaused) return;
+      // Same reason as handlePauseResume: a page that did not start the tune
+      // must still be able to stop it.
+      if (!isPlaying && !isPaused && !isAnyPlaybackActive()) return;
       // HARD18-009 (M5): Stop always runs immediately (never queued behind
       // enqueuePlayTransition) and claims the play-generation counter so any
       // in-flight playItem transition (auto-advance, Next/Previous, a
@@ -1264,29 +1501,40 @@ export function usePlaybackController({
       cancelPendingUserSkip();
       const currentItem = playlist[currentIndex];
       const shouldReboot = currentItem?.category === "disk";
-      try {
-        const api = getC64API();
-        if (isPaused) {
-          try {
-            await resumeMachineWithRetry(api);
-          } catch (error) {
-            addErrorLog("Resume before stop failed", {
-              error: (error as Error).message,
-            });
+      // Track B (LE2): silence any on-device tune first. When the current track
+      // is playing locally there is no C64 involved, so skip the device stop
+      // entirely (it would hang if no Ultimate is connected).
+      // Shared controller, not the per-page ref — see the engine-switch stop
+      // above. A null ref here meant Stop did nothing at all.
+      getLocalSidPlayback().stop();
+      if (currentPlaybackIsLocalRef.current) {
+        setCurrentPlaybackIsLocal(false);
+      } else {
+        try {
+          const api = getC64API();
+          if (isPaused) {
+            try {
+              await resumeMachineWithRetry(api);
+            } catch (error) {
+              addErrorLog("Resume before stop failed", {
+                error: (error as Error).message,
+              });
+            }
           }
+          await stopMachineWithGracePeriod(api, shouldReboot);
+          markRemotePlaybackStopped();
+        } catch (error) {
+          reportUserError({
+            operation: "PLAYBACK_STOP",
+            title: "Stop failed",
+            description: (error as Error).message,
+            error,
+            context: {
+              currentIndex,
+              category: currentItem?.category,
+            },
+          });
         }
-        await stopMachineWithGracePeriod(api, shouldReboot);
-      } catch (error) {
-        reportUserError({
-          operation: "PLAYBACK_STOP",
-          title: "Stop failed",
-          description: (error as Error).message,
-          error,
-          context: {
-            currentIndex,
-            category: currentItem?.category,
-          },
-        });
       }
       const now = Date.now();
       playedClockRef.current.stop(now, true);
@@ -1423,7 +1671,45 @@ export function usePlaybackController({
 
   const handlePauseResume = useCallback(
     trace(async function handlePauseResume() {
-      if (!isPlaying) return;
+      // App-wide, not this page's own state. `isPlaying` starts false on a Play
+      // page mounted mid-tune, so this returned immediately and Pause did
+      // nothing at all — on a button the UI had (correctly) enabled, which is
+      // worse than a disabled one.
+      if (!isPlaying && !isAnyPlaybackActive()) return;
+      // Track B (LE2): a tune playing on the device has no C64 to pause — the
+      // machine calls below would be pointless (and hang with no Ultimate
+      // connected) while the on-device audio kept playing. Suspend the engine's
+      // audio clock instead; it resumes exactly where it stopped.
+      // The ref belongs to this page instance and starts false, so a remounted
+      // page would take the C64 branch for a tune playing here — pausing a
+      // machine that is not playing while the local audio ran on.
+      if (currentPlaybackIsLocalRef.current || isLocalPlaybackActive()) {
+        const local = getLocalSidPlayback();
+        const now = Date.now();
+        if (isPaused) {
+          await local.resume();
+          setIsPaused(false);
+          writeMachineExecutionFromPlay("running");
+          trackStartedAtRef.current = now - elapsedMs;
+          playedClockRef.current.resume(now);
+          setPlayedMs(playedClockRef.current.current(now));
+          if (autoAdvanceGuardRef.current && typeof durationMs === "number") {
+            autoAdvanceGuardRef.current.dueAtMs = now + Math.max(0, durationMs - elapsedMs);
+            autoAdvanceGuardRef.current.autoFired = false;
+            autoAdvanceGuardRef.current.userCancelled = false;
+            setAutoAdvanceDueAtMs(autoAdvanceGuardRef.current.dueAtMs);
+          }
+        } else {
+          cancelPendingUserSkip();
+          await local.pause();
+          playedClockRef.current.pause(now);
+          setPlayedMs(playedClockRef.current.current(now));
+          setIsPaused(true);
+          setAutoAdvanceDueAtMs(null);
+          writeMachineExecutionFromPlay("paused");
+        }
+        return;
+      }
       const pollingPauseHandle = pollingPauseRegistry.acquirePause();
       try {
         const target = isPaused ? "running" : "paused";
@@ -1806,7 +2092,207 @@ export function usePlaybackController({
     [currentIndex, durationFallbackMs, durationMs],
   );
 
+  /**
+   * Scrub the locally-played tune. Returns undefined when nothing is playing
+   * on-device, so the Play page can hide the gesture entirely rather than
+   * offering a control that silently does nothing — the C64 plays the SID
+   * itself and cannot be scrubbed.
+   */
+  /**
+   * Move the auto-advance deadline to match a new playback position.
+   *
+   * The deadline is set once, at launch, as "now + the tune's remaining
+   * duration". Seeking rebases the clocks but used to leave that deadline
+   * alone, so a tune scrubbed forward kept playing well past its end — jumping
+   * to 95% of a 4:28 tune left it still playing at 4:57, because the original
+   * schedule had not expired yet. Every seek has to reschedule it.
+   */
+  const rescheduleAutoAdvance = useCallback(
+    (positionMs: number) => {
+      const guard = autoAdvanceGuardRef.current;
+      const durationMs = durationMsRef.current;
+      if (!guard || !durationMs) return;
+      const dueAtMs = Date.now() + Math.max(0, durationMs - positionMs);
+      guard.dueAtMs = dueAtMs;
+      guard.autoFired = false;
+      setAutoAdvanceDueAtMs(dueAtMs);
+    },
+    [autoAdvanceGuardRef, durationMsRef, setAutoAdvanceDueAtMs],
+  );
+
+  /**
+   * Scrubbing (hold-to-seek) state.
+   *
+   * The engine is deliberately NOT driven once per repeat tick. Seeking
+   * backwards reloads the tune and re-renders up to the target, so issuing one
+   * seek every 200 ms queues work far faster than it completes and the UI ends
+   * up chasing a seek from seconds ago. Instead the *target* moves instantly —
+   * that is what the progress bar follows, so the feedback is immediate — and
+   * the engine is sent to wherever the finger is NOW, at most one seek in
+   * flight at a time.
+   *
+   * Letting the engine play between those seeks is what produces the
+   * CD-player-style preview: each catch-up lands at a new position and a short
+   * burst of the tune is heard there before the next one.
+   */
+  const scrubTargetMsRef = useRef<number | null>(null);
+  const [scrubTargetMs, setScrubTargetMs] = useState<number | null>(null);
+  const scrubSeekInFlightRef = useRef(false);
+  const scrubTimerRef = useRef<number | null>(null);
+  const scrubDurationMsRef = useRef<number | undefined>(undefined);
+  const scrubEndingRef = useRef(false);
+  const dragSettleRef = useRef<number | null>(null);
+
+  const runScrubSeek = useCallback(async () => {
+    const controller = localSidPlaybackRef.current;
+    const target = scrubTargetMsRef.current;
+    if (!controller || target === null || scrubSeekInFlightRef.current) return;
+    scrubSeekInFlightRef.current = true;
+    try {
+      await controller.seekTo(target / 1000);
+    } catch (error) {
+      addLog("debug", "Local SID scrub seek failed", { error: (error as Error).message });
+    } finally {
+      scrubSeekInFlightRef.current = false;
+    }
+  }, []);
+
+  const beginScrub = useCallback(
+    (durationMs?: number) => {
+      const controller = localSidPlaybackRef.current;
+      if (!controller) return;
+      scrubDurationMsRef.current = durationMs;
+      const startMs = Math.max(0, controller.positionSeconds() * 1000);
+      scrubTargetMsRef.current = startMs;
+      setScrubTargetMs(startMs);
+      if (scrubTimerRef.current === null) {
+        scrubTimerRef.current = window.setInterval(() => void runScrubSeek(), SCRUB_SEEK_INTERVAL_MS);
+      }
+    },
+    [runScrubSeek],
+  );
+
+  const scrubBy = useCallback((deltaSeconds: number) => {
+    if (scrubTargetMsRef.current === null) return;
+    const max = scrubDurationMsRef.current;
+    const next = Math.max(0, Math.min(max ?? Number.MAX_SAFE_INTEGER, scrubTargetMsRef.current + deltaSeconds * 1000));
+    scrubTargetMsRef.current = next;
+    setScrubTargetMs(next);
+  }, []);
+
+  const endScrub = useCallback(async () => {
+    // The gesture ends on pointerup, pointerleave AND pointercancel, so this can
+    // be called more than once for one release. Without this guard the second
+    // call found the target already taken and cleared the display immediately,
+    // showing the pre-scrub position for as long as the real seek took to land
+    // (~1.4 s on a rewind) before jumping to where the user actually let go.
+    if (scrubEndingRef.current) return;
+    scrubEndingRef.current = true;
+    if (scrubTimerRef.current !== null) {
+      window.clearInterval(scrubTimerRef.current);
+      scrubTimerRef.current = null;
+    }
+    const controller = localSidPlaybackRef.current;
+    const target = scrubTargetMsRef.current;
+    scrubTargetMsRef.current = null;
+    if (!controller || target === null) {
+      setScrubTargetMs(null);
+      scrubEndingRef.current = false;
+      return;
+    }
+    // Land exactly where the user let go, even if a catch-up seek was still in
+    // flight for an older target.
+    while (scrubSeekInFlightRef.current) await new Promise((r) => setTimeout(r, 20));
+    // Rebase the clocks to the TARGET *before* awaiting the seek.
+    //
+    // Two reasons, both learned the hard way. Reading the position back after
+    // seekTo gives a stale value — it resolves before the engine has caught up —
+    // so the clocks landed on the pre-scrub position. And ordering the clear
+    // after the await left a window where the scrub display was gone but the
+    // clocks had not moved yet, showing the position playback had drifted to
+    // during the gesture (1:25 after scrubbing back to 0:33) for as long as a
+    // rewind takes to re-render. Rebasing first means there is no stale value to
+    // reveal, whatever order the rest completes in.
+    const positionMs = Math.max(0, target);
+    const now = Date.now();
+    trackStartedAtRef.current = now - positionMs;
+    playedClockRef.current.hydrate(positionMs, isPausedRef.current ? null : now);
+    setPlayedMs(positionMs);
+    rescheduleAutoAdvance(positionMs);
+    await controller.seekTo(target / 1000);
+    // Only now stop showing the scrub target. Releasing it before the engine
+    // had landed made the timer snap back to the pre-scrub position for a frame
+    // (0:15 after scrubbing to 1:09) before jumping forward — a flicker that
+    // reads as the seek having failed and then corrected itself.
+    setScrubTargetMs(null);
+    scrubEndingRef.current = false;
+    addLog("debug", "Local SID scrub ended", { toSeconds: positionMs / 1000 });
+  }, [playedClockRef, setPlayedMs, trackStartedAtRef, rescheduleAutoAdvance]);
+
+  /**
+   * Jump to a fraction of the tune (tapping/dragging the progress bar).
+   *
+   * Coalesced through the same one-in-flight path as a scrub, because dragging
+   * emits a position per pointermove and seeking backwards re-renders the tune
+   * from the start — issuing one seek per move would queue work far faster than
+   * it completes.
+   */
+  const seekToFraction = useCallback(
+    (fraction: number, durationMs?: number) => {
+      const controller = localSidPlaybackRef.current;
+      if (!controller || !durationMs) return;
+      const target = Math.max(0, Math.min(durationMs, fraction * durationMs));
+      scrubDurationMsRef.current = durationMs;
+      scrubTargetMsRef.current = target;
+      setScrubTargetMs(target);
+      if (scrubTimerRef.current === null) {
+        scrubTimerRef.current = window.setInterval(() => void runScrubSeek(), SCRUB_SEEK_INTERVAL_MS);
+      }
+      // Land shortly after the finger stops moving; another move restarts it.
+      if (dragSettleRef.current !== null) window.clearTimeout(dragSettleRef.current);
+      dragSettleRef.current = window.setTimeout(() => {
+        dragSettleRef.current = null;
+        void endScrub();
+      }, DRAG_SETTLE_MS);
+    },
+    [runScrubSeek, endScrub],
+  );
+
+  const handleSeekBy = useCallback(
+    async (deltaSeconds: number) => {
+      const controller = localSidPlaybackRef.current;
+      if (!controller) {
+        addLog("debug", "Local SID seek ignored: no on-device controller", { deltaSeconds });
+        return;
+      }
+      const fromSeconds = controller.positionSeconds();
+      await controller.seekBy(deltaSeconds);
+      // The progress bar runs off a wall clock that knows nothing about the
+      // engine, so a seek has to move it explicitly — otherwise the audio jumps
+      // and the displayed time carries on from where it was, which reads as the
+      // seek having done nothing.
+      const positionMs = Math.max(0, controller.positionSeconds() * 1000);
+      const now = Date.now();
+      // Two independent clocks drive the UI and neither knows about the engine,
+      // so both have to be rebased or the audio jumps while the display carries
+      // on from the old spot — which reads as the seek having done nothing.
+      // `elapsedMs` (the big timer) is `now - trackStartedAt`, so shifting the
+      // start point is what moves it.
+      trackStartedAtRef.current = now - positionMs;
+      playedClockRef.current.hydrate(positionMs, isPausedRef.current ? null : now);
+      setPlayedMs(positionMs);
+      rescheduleAutoAdvance(positionMs);
+      addLog("debug", "Local SID seek", { deltaSeconds, fromSeconds, toSeconds: positionMs / 1000 });
+    },
+    [playedClockRef, setPlayedMs, trackStartedAtRef, rescheduleAutoAdvance],
+  );
+
   return {
+    beginScrub,
+    scrubBy,
+    endScrub,
+    seekToFraction,
+    scrubTargetMs,
     playItem,
     startPlaylist,
     handlePlay,
@@ -1814,6 +2300,7 @@ export function usePlaybackController({
     handlePauseResume,
     handleNext,
     handlePrevious,
+    handleSeekBy,
     playlistEnded,
     resolveSidMetadata,
     resolveUltimateSidDurationByMd5,

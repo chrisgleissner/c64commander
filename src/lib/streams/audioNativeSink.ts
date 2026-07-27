@@ -35,6 +35,17 @@ export interface NativeAudioStats {
   bufferedMs: number;
   /** Cumulative AudioTrack underruns since {@link NativeAudioSink.open}. */
   underruns: number;
+  /**
+   * PCM bytes the track refused because its buffer was full — audio the listener lost.
+   * The opposite failure to {@link underruns}, and invisible without it: a stream arriving at twice
+   * the expected rate keeps the buffer over-full, so it breaks up audibly with zero underruns.
+   */
+  droppedBytes?: number;
+  /**
+   * Distinct source IPs seen on the audio group. More than one means another machine is streaming
+   * into it uninvited (see `foreignSenderGuard`).
+   */
+  senders?: string[];
 }
 
 /** Minimal plugin surface the sink needs — injectable so the sink is unit-testable without Capacitor. */
@@ -84,6 +95,16 @@ export class NativeAudioSink {
       });
       return false;
     }
+  }
+
+  /**
+   * Distinct source IPs the native receiver has seen on the audio group.
+   *
+   * More than one means another machine is streaming into it uninvited, which arrives interleaved at
+   * double the expected rate and is heard as a rough, patchy stream — see `foreignSenderGuard`.
+   */
+  get senders(): readonly string[] {
+    return this.stats.senders ?? [];
   }
 
   /** Worst-case buffer the native track can hold (ms), reported at open. */

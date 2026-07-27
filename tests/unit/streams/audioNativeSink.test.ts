@@ -16,7 +16,7 @@ const afterPoll = () => new Promise((resolve) => setTimeout(resolve, 25));
 
 const fakeBackend = (overrides: Partial<NativeAudioBackend> = {}) => {
   let bufferedMs = 40;
-  let underruns = 0;
+  const underruns = 0;
   const backend: NativeAudioBackend = {
     openAudioTrack: vi.fn(async ({ sampleRate, bufferMs }) => ({ sampleRate, bufferMs: bufferMs ?? 52 })),
     readAudioStats: vi.fn(async () => {

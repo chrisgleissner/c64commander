@@ -22,6 +22,8 @@ class FakeReceiver implements StreamReceiver {
   datagram: ((data: Uint8Array, arrivalMs: number) => void) | null = null;
   stateCb: ((s: StreamConnectionState) => void) | null = null;
   readonly destination = "10.0.0.5:11001";
+  /** Set by tests exercising the Wi‑Fi audio path; undefined = no Wi‑Fi transport. */
+  wifiDestination: string | undefined = undefined;
   closed = false;
   private clock = 0;
   onDatagram(handler: (data: Uint8Array, arrivalMs: number) => void) {
@@ -242,6 +244,65 @@ describe("AudioMirrorController", () => {
     receiver.emitState("open");
     receiver.emitState("error");
     expect(controller.getSnapshot().state).toBe("error");
+  });
+
+  it("streams over Wi‑Fi to the phone's unicast address when requested and available", async () => {
+    const receiver = new FakeReceiver();
+    receiver.wifiDestination = "192.168.1.185:11001";
+    const startStream = vi.fn(async () => ({ errors: [] }));
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createPlayer: () => fakePlayer(true),
+      startStream,
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+
+    await controller.start({ wifi: true });
+    expect(startStream).toHaveBeenCalledWith("audio", "192.168.1.185:11001", { wifi: true });
+    expect(controller.isOnWifi()).toBe(true);
+    expect(controller.getSnapshot().route).toBe("wifi");
+  });
+
+  it("falls back to the Ethernet multicast destination when the Wi‑Fi start fails", async () => {
+    const receiver = new FakeReceiver();
+    receiver.wifiDestination = "192.168.1.185:11001";
+    const startStream = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Network Host Resolve Error")) // Wi‑Fi attempt fails
+      .mockResolvedValueOnce({ errors: [] }); // Ethernet succeeds
+    const stopStream = vi.fn(async () => ({ errors: [] }));
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createPlayer: () => fakePlayer(true),
+      startStream,
+      stopStream,
+      onChange: vi.fn(),
+    });
+
+    await controller.start({ wifi: true });
+    expect(startStream).toHaveBeenNthCalledWith(1, "audio", "192.168.1.185:11001", { wifi: true });
+    // The failed Wi‑Fi attempt is torn down before the Ethernet start (no two overlapping starts).
+    expect(stopStream).toHaveBeenCalledWith("audio");
+    expect(startStream).toHaveBeenNthCalledWith(2, "audio", "10.0.0.5:11001");
+    expect(controller.isOnWifi()).toBe(false);
+    expect(controller.getSnapshot().route).toBe("ethernet");
+  });
+
+  it("uses Ethernet when Wi‑Fi is requested but the transport has no Wi‑Fi address", async () => {
+    const receiver = new FakeReceiver(); // wifiDestination undefined (e.g. web/docker)
+    const startStream = vi.fn(async () => ({ errors: [] }));
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createPlayer: () => fakePlayer(true),
+      startStream,
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+
+    await controller.start({ wifi: true });
+    expect(startStream).toHaveBeenCalledWith("audio", "10.0.0.5:11001");
+    expect(controller.isOnWifi()).toBe(false);
   });
 });
 

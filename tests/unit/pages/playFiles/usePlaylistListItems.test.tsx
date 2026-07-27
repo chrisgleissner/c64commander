@@ -12,6 +12,7 @@ import { usePlaylistListItems } from "@/pages/playFiles/hooks/usePlaylistListIte
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { FileOriginIcon } from "@/components/FileOriginIcon";
 import type { ConfigFileReference } from "@/lib/config/configFileReference";
+import { LOCAL_DEVICE_LABEL } from "@/lib/sourceNavigation/sourceTerms";
 
 const { beginHvscPerfScope, endHvscPerfScope } = vi.hoisted(() => ({
   beginHvscPerfScope: vi.fn((scope: string, metadata?: Record<string, unknown>) => ({
@@ -186,10 +187,12 @@ describe("usePlaylistListItems", () => {
       label: "Attached",
       value: "track.cfg",
     });
+    // "Local", the same word the source picker and the disks list use for this
+    // device. It used to say "This device" here and "Local" there, for one place.
     expect(locationEntry).toEqual({
       type: "info",
       label: "Location",
-      value: "This device",
+      value: LOCAL_DEVICE_LABEL,
     });
 
     if (localAction?.type === "action") {

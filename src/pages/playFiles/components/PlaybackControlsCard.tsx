@@ -6,11 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
+import { addLog } from "@/lib/logging";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
 
 export type PlaybackControlsCardProps = {
@@ -32,6 +34,25 @@ export type PlaybackControlsCardProps = {
   onStop: () => void;
   onPauseResume: () => void;
   onNext: () => void;
+  /**
+   * Scrub the current tune by `deltaSeconds` (negative rewinds). Only supplied
+   * when the active engine can seek — the C64 plays the SID itself, so there is
+   * nothing to scrub there.
+   */
+  onSeek?: (deltaSeconds: number) => void;
+  /** Hold started: capture the current position as the scrub origin. */
+  onScrubStart?: () => void;
+  /** One repeat tick of the hold — moves the scrub target, not the engine. */
+  onScrubStep?: (deltaSeconds: number) => void;
+  /** Finger lifted: land on the target. */
+  onScrubEnd?: () => void;
+  /** True while a hold is in progress (drives the scrubbing affordance). */
+  isScrubbing?: boolean;
+  /**
+   * Jump straight to a fraction (0..1) of the tune. Only supplied for the
+   * on-device engine — the C64 renders the SID itself and cannot be positioned.
+   */
+  onSeekToFraction?: (fraction: number) => void;
   progressPercent: number;
   elapsedLabel: string;
   remainingLabel: string;
@@ -50,6 +71,10 @@ export type PlaybackControlsCardProps = {
   shuffleSeed: number | null;
   /** HARD12-017: one-tap entry to the remote input sheet, shown while playing. */
   openControllerAction?: ReactNode;
+  /** SID Radio ambient ♥/✕ ranking affordance (spec §5.1); null when disabled. */
+  rankingControls?: ReactNode;
+  /** True while a SID Radio station drives the queue — disables Shuffle/Repeat (§5.3, principle 9). */
+  stationActive?: boolean;
 };
 
 const PLAY_TRANSPORT_FOCUS_ORDER = {
@@ -59,6 +84,118 @@ const PLAY_TRANSPORT_FOCUS_ORDER = {
   next: 130,
   reshuffle: 180,
 } as const;
+
+/** How long Previous/Next must be held before it scrubs instead of skipping. */
+const SEEK_HOLD_MS = 450;
+/** How often it scrubs while held, and by how much. */
+const SEEK_REPEAT_MS = 200;
+const SEEK_STEP_SECONDS = 5;
+
+/**
+ * Hold Previous/Next to scrub the current tune; tap to change track.
+ *
+ * The two gestures share one button, so a hold must *suppress* the click that
+ * follows it — otherwise letting go after scrubbing would also skip the track,
+ * which is the opposite of what the user just asked for. `seeked` stays set
+ * until the next press so the click handler (which fires after pointerup) can
+ * still see it.
+ */
+/** Where along the bar the pointer is, as a fraction of its width. */
+const fractionFromPointer = (event: ReactPointerEvent<HTMLElement>): number => {
+  const rect = event.currentTarget.getBoundingClientRect();
+  if (rect.width <= 0) return 0;
+  return Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+};
+
+/** A short tick so a scrub is felt as well as seen; silently ignored where unsupported. */
+const buzz = (ms: number) => {
+  try {
+    navigator.vibrate?.(ms);
+  } catch {
+    // Vibration is a nicety, never a requirement.
+    void 0;
+  }
+};
+
+const useHoldToSeek = (
+  deltaSeconds: number,
+  onSeek?: (deltaSeconds: number) => void,
+  scrub?: { start?: () => void; step?: (deltaSeconds: number) => void; end?: () => void },
+) => {
+  const holdTimer = useRef<number | null>(null);
+  const repeatTimer = useRef<number | null>(null);
+  const seeked = useRef(false);
+  // `stop` is created once, so it reads the latest callbacks through a ref.
+  const scrubRef = useRef(scrub);
+  scrubRef.current = scrub;
+
+  const stop = useCallback(() => {
+    if (holdTimer.current !== null) {
+      window.clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+    if (repeatTimer.current !== null) {
+      window.clearInterval(repeatTimer.current);
+      repeatTimer.current = null;
+    }
+    // Clear the suppression flag on the next tick — after the click that
+    // follows this pointerup has been handled, but before anything else.
+    //
+    // Leaving it set until the next press would swallow a later activation that
+    // produces no pointerdown to reset it: keyboard or keypad Enter on a focused
+    // button raises `click` alone. That is not a corner case here — the C64U
+    // Remote variant is keypad-first — and the symptom would be a Next button
+    // that silently ignores every other press.
+    if (seeked.current) {
+      scrubRef.current?.end?.();
+      window.setTimeout(() => {
+        seeked.current = false;
+      }, 0);
+    }
+  }, []);
+
+  const start = useCallback(
+    (event?: ReactPointerEvent<HTMLButtonElement>) => {
+      if (!onSeek) return;
+      seeked.current = false;
+      // Keep receiving pointer events even if the finger drifts off a small icon
+      // button, which would otherwise fire pointerleave and cancel the hold.
+      // `hasPointerCapture` is the documented guard: capture throws only for a
+      // pointer id that is no longer active, which this rules out without
+      // swallowing anything.
+      const target = event?.currentTarget;
+      if (event?.pointerId !== undefined && target?.isConnected && !target.hasPointerCapture(event.pointerId)) {
+        target.setPointerCapture(event.pointerId);
+      }
+      holdTimer.current = window.setTimeout(() => {
+        seeked.current = true;
+        addLog("debug", "Local SID hold-to-seek engaged", { deltaSeconds });
+        // Scrubbing moves a TARGET that the UI follows immediately; the engine
+        // is sent after it on its own cadence. Stepping the engine once per
+        // repeat instead made the bar sit still until a rewind had finished
+        // re-rendering, which reads as the control being broken.
+        if (scrub?.start) {
+          scrub.start();
+          scrub.step?.(deltaSeconds);
+          buzz(12);
+          repeatTimer.current = window.setInterval(() => {
+            scrub.step?.(deltaSeconds);
+            buzz(8);
+          }, SEEK_REPEAT_MS);
+          return;
+        }
+        onSeek(deltaSeconds);
+        repeatTimer.current = window.setInterval(() => onSeek(deltaSeconds), SEEK_REPEAT_MS);
+      }, SEEK_HOLD_MS);
+    },
+    [deltaSeconds, onSeek],
+  );
+
+  // Never leave a timer running past unmount.
+  useEffect(() => stop, [stop]);
+
+  return { start, stop, consumedClick: () => seeked.current };
+};
 
 export const PlaybackControlsCard = ({
   hasCurrentItem,
@@ -79,6 +216,12 @@ export const PlaybackControlsCard = ({
   onStop,
   onPauseResume,
   onNext,
+  onSeek,
+  onScrubStart,
+  onScrubStep,
+  onScrubEnd,
+  isScrubbing = false,
+  onSeekToFraction,
   progressPercent,
   elapsedLabel,
   remainingLabel,
@@ -96,7 +239,13 @@ export const PlaybackControlsCard = ({
   reshuffleDisabled,
   shuffleSeed,
   openControllerAction,
+  rankingControls,
+  stationActive = false,
 }: PlaybackControlsCardProps) => {
+  const scrubHandlers = { start: onScrubStart, step: onScrubStep, end: onScrubEnd };
+  const holdRewind = useHoldToSeek(-SEEK_STEP_SECONDS, onSeek, scrubHandlers);
+  const holdForward = useHoldToSeek(SEEK_STEP_SECONDS, onSeek, scrubHandlers);
+
   const previousFocusRef = useFocusItem<HTMLButtonElement>({
     id: "play-transport-previous",
     order: PLAY_TRANSPORT_FOCUS_ORDER.previous,
@@ -139,6 +288,7 @@ export const PlaybackControlsCard = ({
               <span className="text-xs text-muted-foreground">({currentDurationLabel})</span>
             ) : null}
             {subsongLabel ? <span className="text-xs text-muted-foreground">{subsongLabel}</span> : null}
+            {rankingControls ? <span className="ml-auto shrink-0">{rankingControls}</span> : null}
           </div>
         ) : (
           "Select a playlist item to start"
@@ -150,12 +300,24 @@ export const PlaybackControlsCard = ({
             ref={previousFocusRef}
             variant="outline"
             size="icon"
-            onClick={onPrevious}
-            disabled={!canTransport || !hasPrev}
+            onClick={() => {
+              // A hold already scrubbed; do not also change track.
+              if (holdRewind.consumedClick()) return;
+              onPrevious();
+            }}
+            onPointerDown={holdRewind.start}
+            onPointerUp={holdRewind.stop}
+            onPointerLeave={holdRewind.stop}
+            onPointerCancel={holdRewind.stop}
+            disabled={(!canTransport || !hasPrev) && !onSeek}
             id="playlist-prev"
             data-testid="playlist-prev"
+            // Without this, Android hands a long press to the scroller and fires
+            // pointercancel at roughly the hold threshold, so the gesture died on
+            // a real finger while working under synthetic events.
+            style={onSeek ? { touchAction: "none" } : undefined}
             aria-label="Previous"
-            title="Previous"
+            title={onSeek ? "Previous (hold to rewind)" : "Previous"}
           >
             <SkipBack className="h-4 w-4" />
           </Button>
@@ -190,22 +352,79 @@ export const PlaybackControlsCard = ({
             ref={nextFocusRef}
             variant="outline"
             size="icon"
-            onClick={onNext}
-            disabled={!canTransport || !hasNext}
+            onClick={() => {
+              // A hold already scrubbed; do not also change track.
+              if (holdForward.consumedClick()) return;
+              onNext();
+            }}
+            onPointerDown={holdForward.start}
+            onPointerUp={holdForward.stop}
+            onPointerLeave={holdForward.stop}
+            onPointerCancel={holdForward.stop}
+            disabled={(!canTransport || !hasNext) && !onSeek}
             id="playlist-next"
             data-testid="playlist-next"
+            // Without this, Android hands a long press to the scroller and fires
+            // pointercancel at roughly the hold threshold, so the gesture died on
+            // a real finger while working under synthetic events.
+            style={onSeek ? { touchAction: "none" } : undefined}
             aria-label="Next"
-            title="Next"
+            title={onSeek ? "Next (hold to fast forward)" : "Next"}
           >
             <SkipForward className="h-4 w-4" />
           </Button>
         </div>
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="shrink-0" data-testid="playback-elapsed">
-              {elapsedLabel}
+            <span
+              className={cn("shrink-0 tabular-nums", isScrubbing && "font-semibold text-foreground")}
+              data-testid="playback-elapsed"
+            >
+              {isScrubbing ? `⏵ ${elapsedLabel}` : elapsedLabel}
             </span>
-            <Progress value={progressPercent} className="flex-1 min-w-0" />
+            {onSeekToFraction ? (
+              // A tap or drag anywhere on the bar jumps there. Wrapped in a
+              // button so it is reachable by keyboard and by the keypad-first
+              // C64U Remote variant, where there is no pointer at all.
+              <button
+                type="button"
+                data-testid="playback-progress-seek"
+                aria-label="Seek within the tune"
+                className="flex-1 min-w-0 cursor-pointer py-2 -my-2 touch-none"
+                onPointerDown={(event) => {
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  onSeekToFraction(fractionFromPointer(event));
+                }}
+                onPointerMove={(event) => {
+                  // Only while the finger is actually down on this control.
+                  if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                    onSeekToFraction(fractionFromPointer(event));
+                  }
+                }}
+                onKeyDown={(event) => {
+                  const step = event.key === "ArrowRight" ? 0.02 : event.key === "ArrowLeft" ? -0.02 : 0;
+                  if (step === 0) return;
+                  event.preventDefault();
+                  onSeekToFraction(Math.min(1, Math.max(0, progressPercent / 100 + step)));
+                }}
+              >
+                <Progress
+                  value={progressPercent}
+                  className={cn("w-full transition-none", isScrubbing && "ring-2 ring-primary/60")}
+                  data-testid="playback-progress"
+                  data-scrubbing={isScrubbing ? "true" : undefined}
+                />
+              </button>
+            ) : (
+              <Progress
+                value={progressPercent}
+                // Scrubbing gets its own look so the moving bar reads as "you are
+                // dragging this", not as playback that has suddenly sped up.
+                className={cn("flex-1 min-w-0 transition-none", isScrubbing && "ring-2 ring-primary/60")}
+                data-testid="playback-progress"
+                data-scrubbing={isScrubbing ? "true" : undefined}
+              />
+            )}
             <span className="shrink-0" data-testid="playback-remaining">
               {remainingLabel}
             </span>
@@ -230,9 +449,13 @@ export const PlaybackControlsCard = ({
             />
             Recurse
           </label>
-          <label className="flex items-center gap-2 text-xs">
+          <label
+            className={cn("flex items-center gap-2 text-xs", stationActive && "opacity-50")}
+            title={stationActive ? "Radio picks the order" : undefined}
+          >
             <Checkbox
-              checked={shuffleEnabled}
+              checked={shuffleEnabled && !stationActive}
+              disabled={stationActive}
               onCheckedChange={(value) => onShuffleChange(Boolean(value))}
               aria-label="Shuffle"
               data-testid="playback-shuffle"
@@ -241,9 +464,13 @@ export const PlaybackControlsCard = ({
               <Shuffle className="h-3.5 w-3.5" /> Shuffle
             </span>
           </label>
-          <label className="flex items-center gap-2 text-xs">
+          <label
+            className={cn("flex items-center gap-2 text-xs", stationActive && "opacity-50")}
+            title={stationActive ? "Radio picks the order" : undefined}
+          >
             <Checkbox
-              checked={repeatEnabled}
+              checked={repeatEnabled && !stationActive}
+              disabled={stationActive}
               onCheckedChange={(value) => onRepeatChange(Boolean(value))}
               aria-label="Repeat"
               data-testid="playback-repeat"
@@ -257,7 +484,7 @@ export const PlaybackControlsCard = ({
             variant="outline"
             size="sm"
             onClick={onReshuffle}
-            disabled={reshuffleDisabled}
+            disabled={reshuffleDisabled || stationActive}
             id="playlist-reshuffle"
             data-testid="playlist-reshuffle"
             data-active={reshuffleActive ? "true" : "false"}

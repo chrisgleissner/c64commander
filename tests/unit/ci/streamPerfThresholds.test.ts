@@ -71,4 +71,34 @@ describe("committed stream perf thresholds", () => {
     expect(a.staleSessionAudioSamples).toBe(0);
     expect(cfg.videoSlots.thresholds.unexplainedMissingPresentationSlots).toBe(0);
   });
+
+  /**
+   * The host benchmark runs on a shared public runner, where interference is not
+   * uniform: it can stall ONE stage while the others run clean, which no
+   * cross-stage normalisation can cancel. `governor tick` measured 256,743 ops/s
+   * in CI against a 576,956 baseline — on a runner the same run rated 19% FASTER
+   * overall — while the same commit measured 552k/574k/574k locally, on code
+   * that never touched the governor.
+   *
+   * Aggregating the repeats by their MAXIMUM is what makes that survivable, and
+   * it follows from a fact the script already states: interference only ever
+   * makes a microbenchmark slower, never faster. A median lets two unlucky
+   * samples out of three fail the build; the best sample is the cleanest
+   * measurement the machine produced. A genuine regression still fails, because
+   * slower code has no fast run for the maximum to find.
+   */
+  it("aggregates benchmark repeats by their best sample, not their median", () => {
+    const script = readFileSync(resolve(process.cwd(), "scripts/assert-stream-perf.mjs"), "utf8");
+    expect(script).toMatch(/current\[name\] = Math\.round\(Math\.max\(\.\.\.values\)\)/);
+    expect(script).not.toMatch(/current\[name\] = Math\.round\(median\(values\)\)/);
+  });
+
+  it("still normalises away a uniformly slower runner", () => {
+    // Shape, not absolute throughput: a runner half as fast shifts every stage
+    // equally, and dividing by the median per-stage ratio cancels it. Without
+    // this the gate is an absolute CPU gate in disguise, which §14.3 says a
+    // shared runner cannot support.
+    const script = readFileSync(resolve(process.cwd(), "scripts/assert-stream-perf.mjs"), "utf8");
+    expect(script).toMatch(/const scale = median\(shared\.map\(/);
+  });
 });

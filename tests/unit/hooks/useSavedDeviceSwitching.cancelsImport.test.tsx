@@ -20,6 +20,12 @@ const {
   mockResetInteractionState: vi.fn(),
 }));
 
+vi.mock("@/lib/playback/activePlaybackSession", () => ({
+  // The switch stops whatever is playing before retargeting; these tests are
+  // about the switch ordering, not about playback.
+  hasActivePlaybackToStop: vi.fn().mockReturnValue(false),
+  stopActivePlaybackBeforeDeviceSwitch: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/lib/connection/connectionManager", () => ({
   verifyCurrentConnectionTarget: mockVerifyCurrentConnectionTarget,
   setSavedDeviceSwitchProbeWindow: vi.fn(),

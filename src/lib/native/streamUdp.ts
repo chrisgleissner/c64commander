@@ -59,6 +59,23 @@ export interface StreamUdpAudioStats {
   bufferedMs: number;
   /** Cumulative AudioTrack underruns (output ran dry) since {@link StreamUdpPlugin.openAudioTrack}. */
   underruns: number;
+  /**
+   * PCM bytes the AudioTrack refused because its buffer was full — audio the listener lost.
+   *
+   * Separate from {@link underruns}, which counts the opposite failure (the buffer running dry).
+   * A stream can break up audibly with zero underruns if it is losing tails here instead, which is
+   * exactly why this is reported rather than dropped silently.
+   */
+  droppedBytes?: number;
+  /** What the AudioTrack is actually doing (not what was requested). */
+  trackSampleRate?: number;
+  trackChannels?: number;
+  trackBufferFrames?: number;
+  /**
+   * Distinct source IPs seen on the audio group. More than one means another machine is streaming
+   * into it uninvited — see `streams/foreignSenderGuard`.
+   */
+  senders?: string[];
 }
 
 /**
@@ -99,6 +116,17 @@ export interface StreamUdpPlugin {
   readAudioStats(options?: Record<string, never>): Promise<StreamUdpAudioStats>;
   /** Stop + release the native audio sink. Safe to call when none is open. */
   closeAudioTrack(options?: Record<string, never>): Promise<void>;
+  /**
+   * Let audio packets keep crossing the bridge while something in JS is analysing them.
+   *
+   * Once the native sink owns playback, the receive thread feeds the AudioTrack directly and stops
+   * emitting `datagram` for audio — that per-packet bridge crossing was pure waste, and removing it
+   * is most of the native path's win. The in-app diagnostics (A/V sync, the tone & colour ladder)
+   * are the exception: they measure the received stream in JS, so they need the packets back for as
+   * long as they are listening. `AvMirrorSession` turns this on while an audio subscriber exists and
+   * off again when the last one leaves, so the cost is paid only while a measurement is running.
+   */
+  setAudioAnalysis(options: { enabled: boolean }): Promise<void>;
   addListener(eventName: "datagram", listener: (event: StreamUdpDatagramEvent) => void): Promise<PluginListenerHandle>;
   addListener(
     eventName: "videoframe",

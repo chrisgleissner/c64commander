@@ -45,6 +45,10 @@ class FakeSession {
     this.audioHandlers.add(handler);
     return () => this.audioHandlers.delete(handler);
   }
+  /** How many listeners the audio feed has — the thing that costs bridge traffic on Android. */
+  audioListenerCount() {
+    return this.audioHandlers.size;
+  }
   emitFrame(frame: Uint8Array, t: number = (this.clock += 10)) {
     this.frameHandlers.forEach((h) => h(frame, 272, t));
   }
@@ -70,10 +74,17 @@ describe("useAvSync", () => {
     machineReset.mockReset().mockResolvedValue(undefined);
   });
 
-  it("feeds session frames/audio into the analyzer and records a matched pop", () => {
+  it("feeds session frames/audio into the analyzer and records a matched pop", async () => {
     const fake = new FakeSession();
     const { result } = renderHook(() => useAvSync(asSession(fake)));
     expect(result.current.stats.count).toBe(0);
+
+    // Matching needs both streams, and mirrored audio is only subscribed while a test program is on
+    // the device — an idle subscriber would keep ~250 packets/s crossing the Android bridge to
+    // analyse a stream that, with nothing running, contains no pop to find.
+    await act(async () => {
+      await result.current.runTest();
+    });
 
     act(() => {
       fake.emitFrame(black()); // prime video baseline + arm
@@ -85,6 +96,20 @@ describe("useAvSync", () => {
 
     expect(result.current.stats.count).toBe(1);
     expect(result.current.stats.lastMs).not.toBeNull();
+  });
+
+  it("does not listen to mirrored audio while no test is running", async () => {
+    // The cost this avoids is real: with the native sink playing, an audio subscriber turns the
+    // per-packet bridge back on for a stream nothing is measuring.
+    const fake = new FakeSession();
+    const { result } = renderHook(() => useAvSync(asSession(fake)));
+    // "A test is running" is a module-level latch by design, so that a remount keeps the only Stop
+    // button. Clear it explicitly rather than relying on whatever ran before.
+    await act(async () => {
+      await result.current.stopTest();
+    });
+
+    expect(fake.audioListenerCount()).toBe(0);
   });
 
   it("runTest uploads the program and resets clears the stats", async () => {

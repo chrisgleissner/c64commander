@@ -27,6 +27,12 @@ const ARCHIVE_CLIENT_ID_OVERRIDE_KEY = "c64u_archive_client_id_override";
 const ARCHIVE_USER_AGENT_OVERRIDE_KEY = "c64u_archive_user_agent_override";
 const HIDE_STATUS_BAR_KEY = "c64u_full_screen_hide_status_bar";
 const HIDE_NAVIGATION_BAR_KEY = "c64u_full_screen_hide_navigation_bar";
+const SID_RADIO_ENABLED_KEY = "c64u_sid_radio_enabled";
+const SID_RANKING_ENABLED_KEY = "c64u_sid_ranking_enabled";
+const PLAYBACK_ENGINE_KEY = "c64u_playback_engine";
+const SID_EMULATION_ENGINE_KEY = "c64u_sid_emulation_engine";
+const PLAYBACK_CROSSFADE_MS_KEY = "c64u_playback_crossfade_ms";
+const LOCAL_ENGINE_ENABLED_KEY = "c64u_local_engine_enabled";
 const BOOT_MENU_ANSWER_ENABLED_KEY = "c64u_boot_menu_answer_enabled";
 const BOOT_MENU_KEY_KEY = "c64u_boot_menu_key";
 const BOOT_SETTLE_MS_KEY = "c64u_boot_settle_ms";
@@ -39,6 +45,8 @@ const STREAM_NATIVE_AUDIO_KEY = "c64u_stream_native_audio";
 const STREAM_NATIVE_AUDIO_BUFFER_MS_KEY = "c64u_stream_native_audio_buffer_ms";
 const STREAM_VIDEO_FRAME_RATE_MODE_KEY = "c64u_stream_video_frame_rate_mode";
 const STREAM_INPUT_PRIORITY_KEY = "c64u_stream_input_priority";
+const STREAM_AUDIO_ROUTE_KEY = "c64u_stream_audio_route";
+const VIC_PALETTE_KEY = "c64u_vic_palette";
 
 export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 200;
 export type NotificationVisibility = "errors-only" | "all";
@@ -474,6 +482,37 @@ export const saveStreamInputPriority = (enabled: boolean) => {
   broadcast(STREAM_INPUT_PRIORITY_KEY, enabled);
 };
 
+/**
+ * Live View **audio route** — how Listen-only audio reaches the app (firmware
+ * PR #732 `wifi=true`). The firmware can send **audio-only** over Wi‑Fi, which
+ * never coexists with video, so this only governs audio-without-video:
+ *
+ * - `dynamic` (default) — Wi‑Fi while audio is the only stream; automatically
+ *   moves to Ethernet when you add video so both share one route (and back to
+ *   Wi‑Fi when video stops). "Just works."
+ * - `wifi` — always prefer Wi‑Fi for audio. Because Wi‑Fi audio can't run with
+ *   video, starting video is blocked while Wi‑Fi audio is live.
+ * - `ethernet` — always use Ethernet for audio (the classic behaviour).
+ *
+ * Wi‑Fi is attempted, not pre-detected: if the device has no Wi‑Fi the start
+ * fails and the app retries over Ethernet.
+ */
+export type StreamAudioRoute = "dynamic" | "wifi" | "ethernet";
+export const DEFAULT_STREAM_AUDIO_ROUTE: StreamAudioRoute = "dynamic";
+const STREAM_AUDIO_ROUTES: readonly StreamAudioRoute[] = ["dynamic", "wifi", "ethernet"] as const;
+
+export const loadStreamAudioRoute = (): StreamAudioRoute => {
+  if (typeof localStorage === "undefined") return DEFAULT_STREAM_AUDIO_ROUTE;
+  const raw = localStorage.getItem(STREAM_AUDIO_ROUTE_KEY);
+  return STREAM_AUDIO_ROUTES.includes(raw as StreamAudioRoute) ? (raw as StreamAudioRoute) : DEFAULT_STREAM_AUDIO_ROUTE;
+};
+
+export const saveStreamAudioRoute = (route: StreamAudioRoute) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(STREAM_AUDIO_ROUTE_KEY, route);
+  broadcast(STREAM_AUDIO_ROUTE_KEY, route);
+};
+
 export const loadNotificationVisibility = (): NotificationVisibility => {
   if (typeof localStorage === "undefined") return DEFAULT_NOTIFICATION_VISIBILITY;
   const raw = localStorage.getItem(NOTIFICATION_VISIBILITY_KEY);
@@ -538,6 +577,155 @@ export const saveEnableSwipeNavigation = (enabled: boolean) => {
   broadcast(ENABLE_SWIPE_NAVIGATION_KEY, enabled);
 };
 
+/**
+ * SID Radio master flag (spec §0.4, `sidRadioEnabled`). **GA: on by default.**
+ * (During rollout this was off so the app was byte-for-byte unchanged; it is now
+ * a shipped feature — the similarity bundle loads and the `md5PathIndex` builds
+ * on the songlengths finalize hook.)
+ */
+export const DEFAULT_SID_RADIO_ENABLED = true;
+
+export const loadSidRadioEnabled = () => readBoolean(SID_RADIO_ENABLED_KEY, DEFAULT_SID_RADIO_ENABLED);
+
+export const saveSidRadioEnabled = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(SID_RADIO_ENABLED_KEY, enabled ? "1" : "0");
+  broadcast(SID_RADIO_ENABLED_KEY, enabled);
+};
+
+/**
+ * The ambient ♥/✕ ranking affordance (spec §0.4, `sidRankingEnabled`). **GA: on
+ * by default**, and per §0.4 it follows the master `sidRadioEnabled` — the
+ * affordance shows only when both are on.
+ */
+export const DEFAULT_SID_RANKING_ENABLED = true;
+
+export const loadSidRankingEnabled = () => readBoolean(SID_RANKING_ENABLED_KEY, DEFAULT_SID_RANKING_ENABLED);
+
+export const saveSidRankingEnabled = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(SID_RANKING_ENABLED_KEY, enabled ? "1" : "0");
+  broadcast(SID_RANKING_ENABLED_KEY, enabled);
+};
+
+/**
+ * Playback engine (spec §12.5, Track B). `"c64"` plays on the Ultimate and
+ * mirrors the audio back over Live View (the app's identity — always works);
+ * `"local"` renders the SID on-device with the libsidplayfp WASM engine, no C64
+ * required. Defaults **`c64`**; the Local engine is opt-in during rollout, so
+ * with the default the playback path is byte-for-byte unchanged.
+ */
+export type PlaybackEngine = "c64" | "local";
+
+export const DEFAULT_PLAYBACK_ENGINE: PlaybackEngine = "c64";
+
+export const loadPlaybackEngine = (): PlaybackEngine => {
+  if (typeof localStorage === "undefined") return DEFAULT_PLAYBACK_ENGINE;
+  return localStorage.getItem(PLAYBACK_ENGINE_KEY) === "local" ? "local" : DEFAULT_PLAYBACK_ENGINE;
+};
+
+export const savePlaybackEngine = (engine: PlaybackEngine) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(PLAYBACK_ENGINE_KEY, engine);
+  broadcast(PLAYBACK_ENGINE_KEY, engine);
+};
+
+/**
+ * Which SID emulation the on-device engine uses (Track B).
+ *
+ * The vendored WASM ships both, side by side: `reSIDfp` is libsidplayfp's
+ * cycle-accurate analogue model, `SIDLite` a lightweight approximation derived
+ * from cRSID. They are not close substitutes — measured on a Pixel 4 against a
+ * real C64 Ultimate (docs/plans/sid-station/AUDIO-FIDELITY-TEST.md):
+ *
+ *   reSIDfp   envelope correlation 0.55 vs hardware, ~715 ms/sec p99 to render
+ *   SIDLite   audibly not a C64 (DC offset, wrong timbre), ~69 ms/sec
+ *
+ * So this is a fidelity-for-CPU dial worth ~5.5x. The default is per-variant —
+ * see DEFAULT_SID_EMULATION_ENGINE.
+ */
+export type SidEmulationEngine = "residfp" | "sidlite";
+
+/**
+ * Variant-driven, so a device that genuinely cannot afford the accurate engine
+ * can default to the cheap one — but **every** variant currently defaults to
+ * reSIDfp, on purpose.
+ *
+ * Measured like-for-like on identical tunes: reSIDfp runs at 4.3x realtime
+ * (~39% of one core on a Pixel 4, zero underruns) and SIDLite at 23.8x. The
+ * cheap engine is tempting for the keypad variant, which targets the Commodore
+ * Callback 8020 — but that device is unreleased and cannot be measured.
+ * Defaulting it to SIDLite on a spec-sheet projection would ship an audible
+ * quality regression on the hardware that exists to protect hardware that does
+ * not. Sounding like a C64 is the point of playing a SID.
+ *
+ * When the 8020 ships, measure it (gate L1) and flip
+ * `default_sid_emulation_engine` in variants.yaml if it cannot hold realtime.
+ */
+export const DEFAULT_SID_EMULATION_ENGINE: SidEmulationEngine =
+  // Compared as a plain string: the generated variant narrows this to whichever
+  // literal the ACTIVE variant declares, so a direct comparison against the other
+  // value is a type error whenever every variant happens to agree.
+  (variant.runtime.defaultSidEmulationEngine as string) === "sidlite" ? "sidlite" : "residfp";
+
+export const loadSidEmulationEngine = (): SidEmulationEngine => {
+  if (typeof localStorage === "undefined") return DEFAULT_SID_EMULATION_ENGINE;
+  return localStorage.getItem(SID_EMULATION_ENGINE_KEY) === "sidlite" ? "sidlite" : DEFAULT_SID_EMULATION_ENGINE;
+};
+
+export const saveSidEmulationEngine = (engine: SidEmulationEngine) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(SID_EMULATION_ENGINE_KEY, engine);
+  broadcast(SID_EMULATION_ENGINE_KEY, engine);
+};
+
+/**
+ * Crossfade length for on-device playback, in milliseconds. `0` (the default)
+ * means a hard cut: the outgoing tune is silenced before the next one starts.
+ *
+ * The default is deliberately off. A switchover must *always* begin from
+ * silence unless the listener has explicitly asked for a crossfade,
+ * because anything else is indistinguishable from the bug where two tunes play
+ * at once. Turning this on is that explicit request, and it is bounded so the
+ * overlap stays a deliberate musical effect rather than an ambiguous smear.
+ */
+export const CROSSFADE_MS_MIN = 0;
+export const CROSSFADE_MS_MAX = 5000;
+export const DEFAULT_PLAYBACK_CROSSFADE_MS = 0;
+
+export const loadPlaybackCrossfadeMs = (): number => {
+  if (typeof localStorage === "undefined") return DEFAULT_PLAYBACK_CROSSFADE_MS;
+  const raw = localStorage.getItem(PLAYBACK_CROSSFADE_MS_KEY);
+  if (raw === null) return DEFAULT_PLAYBACK_CROSSFADE_MS;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed)) return DEFAULT_PLAYBACK_CROSSFADE_MS;
+  return Math.min(CROSSFADE_MS_MAX, Math.max(CROSSFADE_MS_MIN, parsed));
+};
+
+export const savePlaybackCrossfadeMs = (ms: number) => {
+  if (typeof localStorage === "undefined") return;
+  const clamped = Math.min(CROSSFADE_MS_MAX, Math.max(CROSSFADE_MS_MIN, Math.round(ms)));
+  localStorage.setItem(PLAYBACK_CROSSFADE_MS_KEY, String(clamped));
+  broadcast(PLAYBACK_CROSSFADE_MS_KEY, clamped);
+};
+
+/**
+ * Local-engine gate (Track B). **GA: on by default** — the Play-page "Play on:
+ * C64 / This device" choice is offered for SID items. The default *engine* is
+ * still `c64` ([[DEFAULT_PLAYBACK_ENGINE]]), so playback stays on the Ultimate
+ * until the user explicitly picks "This device"; this flag only surfaces the
+ * choice. Independent of `sidRadioEnabled`.
+ */
+export const DEFAULT_LOCAL_ENGINE_ENABLED = true;
+
+export const loadLocalEngineEnabled = () => readBoolean(LOCAL_ENGINE_ENABLED_KEY, DEFAULT_LOCAL_ENGINE_ENABLED);
+
+export const saveLocalEngineEnabled = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(LOCAL_ENGINE_ENABLED_KEY, enabled ? "1" : "0");
+  broadcast(LOCAL_ENGINE_ENABLED_KEY, enabled);
+};
+
 const loadString = (key: string) => {
   if (typeof localStorage === "undefined") return "";
   return localStorage.getItem(key) ?? "";
@@ -581,4 +769,26 @@ export const APP_SETTINGS_KEYS = {
   ARCHIVE_USER_AGENT_OVERRIDE_KEY,
   HIDE_STATUS_BAR_KEY,
   HIDE_NAVIGATION_BAR_KEY,
+  SID_RADIO_ENABLED_KEY,
+  SID_RANKING_ENABLED_KEY,
+  PLAYBACK_ENGINE_KEY,
+  LOCAL_ENGINE_ENABLED_KEY,
+};
+
+/**
+ * Which VIC palette the app paints Live View frames with.
+ *
+ * Stored as a `.vpl` id from `src/assets/palettes`. Validation lives with the palette table rather
+ * than here, so an id from an older build (or a palette that has since been removed) falls back to
+ * the default instead of painting from an empty table.
+ */
+export const loadVicPaletteId = (): string => {
+  if (typeof localStorage === "undefined") return "default";
+  return localStorage.getItem(VIC_PALETTE_KEY) ?? "default";
+};
+
+export const saveVicPaletteId = (id: string) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(VIC_PALETTE_KEY, id);
+  broadcast(VIC_PALETTE_KEY, id);
 };

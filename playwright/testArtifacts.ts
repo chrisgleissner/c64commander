@@ -564,10 +564,10 @@ export const startStrictUiMonitoring = async (page: Page, testInfo: TestInfo) =>
   const onConsole = (msg: { type: () => string; text: () => string }) => {
     const type = msg.type();
     if (type === "warning" || type === "warn") {
-      tracker.consoleWarnings.push(msg.text());
+      if (!isEnvironmentalConsoleNoise(msg.text())) tracker.consoleWarnings.push(msg.text());
     }
     if (type === "error") {
-      tracker.consoleErrors.push(msg.text());
+      if (!isEnvironmentalConsoleNoise(msg.text())) tracker.consoleErrors.push(msg.text());
     }
   };
 
@@ -642,6 +642,26 @@ const checkHorizontalOverflow = async (page: Page, testInfo: TestInfo) => {
 
   overflows.forEach((overflow) => tracker.horizontalOverflows.push(overflow));
 };
+
+/**
+ * Console output that says something about the harness, not the app.
+ *
+ * Kept deliberately tiny and specific — everything else stays fatal, because a
+ * console error is usually a real defect.
+ *
+ * The A/V mirror consumes UDP through a WebSocket bridge that the *web server*
+ * serves at `/streams/{audio,video}`. E2E runs against the Vite preview server,
+ * which has no bridge and answers the upgrade with the SPA's own 200, so the
+ * BROWSER logs "WebSocket handshake: Unexpected response code: 200". The app
+ * cannot suppress that — the failure happens below it — and its own handling is
+ * already correct: the mirror is best-effort and the tune keeps playing. This
+ * only started firing when choosing C64 playback began starting Live View audio,
+ * which is why several playback specs failed on a working app.
+ */
+const ENVIRONMENTAL_CONSOLE_NOISE = [/WebSocket connection to '[^']*\/streams\/(audio|video)' failed/i] as const;
+
+const isEnvironmentalConsoleNoise = (text: string): boolean =>
+  ENVIRONMENTAL_CONSOLE_NOISE.some((pattern) => pattern.test(text));
 
 export const assertNoUiIssues = async (page: Page, testInfo: TestInfo) => {
   const tracker = getTracker(testInfo);

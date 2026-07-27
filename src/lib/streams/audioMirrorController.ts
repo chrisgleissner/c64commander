@@ -15,6 +15,7 @@
  */
 
 import { addLog } from "@/lib/logging";
+import { foreignSenders, stopForeignSenders } from "./foreignSenderGuard";
 import { AUDIO_SAMPLE_RATE, AudioBatcher, bytesToInt16LE, parseAudioPacket } from "./audioStream";
 import { loadStreamNetworkBufferMs } from "@/lib/config/appSettings";
 import { AudioPlaybackBuffer } from "./audioPlaybackBuffer";
@@ -32,6 +33,8 @@ export interface AudioMirrorSnapshot {
   droppedPackets: number;
   chunks: number;
   error: string | null;
+  /** The route the current stream actually uses (Wi‑Fi only when requested + available). */
+  route: "wifi" | "ethernet";
 }
 
 /** Live audio-pipeline signals for the governor + telemetry (read on the low-rate tick). */
@@ -62,8 +65,12 @@ export interface AudioMirrorDeps {
    * sink can't open (e.g. non-native platform). The session supplies this only when the setting is on.
    */
   createNativeSink?: (sampleRate: number) => NativeAudioSink | null;
-  startStream: (name: "audio", destination: string) => Promise<unknown>;
+  startStream: (name: "audio", destination: string, options?: { wifi?: boolean }) => Promise<unknown>;
   stopStream: (name: "audio") => Promise<unknown>;
+  /** The device the user selected — any other sender on the group is uninvited. */
+  expectedSenderHost?: () => string | null;
+  /** Ask ONE specific machine (by host/IP) to stop streaming. */
+  stopStreamAt?: (host: string, name: "audio" | "video") => Promise<unknown>;
   onChange: (snapshot: AudioMirrorSnapshot) => void;
   /** Broadcast each decoded audio batch (interleaved Int16) — the ~32 ms player cadence. */
   renderAudio?: (samples: Int16Array) => void;
@@ -83,12 +90,20 @@ export class AudioMirrorController {
   private player: AudioMirrorPlayer | null = null;
   /** Native low-latency sink; when set the plugin's receive thread feeds the AudioTrack directly. */
   private nativeSink: NativeAudioSink | null = null;
+  /** Uninvited senders already acted on, so the guard asks each machine once per session. */
+  private readonly foreignHandled = new Set<string>();
   /** Seq-gap loss counter for the native path (which has no JS playback buffer to count drops). */
   private nativeLostPackets = 0;
   private nativeLastSeq: number | null = null;
   private batcher = new AudioBatcher();
   private playbackBuffer: AudioPlaybackBuffer | null = null;
-  private snapshot: AudioMirrorSnapshot = { state: "off", droppedPackets: 0, chunks: 0, error: null };
+  private snapshot: AudioMirrorSnapshot = {
+    state: "off",
+    droppedPackets: 0,
+    chunks: 0,
+    error: null,
+    route: "ethernet",
+  };
 
   constructor(private readonly deps: AudioMirrorDeps) {}
 
@@ -104,6 +119,10 @@ export class AudioMirrorController {
     // The buffer-depth/underrun headroom signal comes from whichever player is live — the native
     // AudioTrack when it is, else the WebAudio player. The governor needs a real signal from the
     // active sink or it would peg video to the floor (a video-only mirror already handles that).
+    // Another machine streaming into our multicast group is not a subtle fault — it doubles the
+    // arrival rate and interleaves two sequence spaces — but nothing in the receive path looks
+    // wrong, because every packet arrives in order from each sender. Catch it by origin IP.
+    void this.evictForeignSenders();
     const nativeStats = this.nativeSink?.getStats();
     return {
       audioBufferMs: nativeStats?.bufferedMs ?? this.player?.bufferedMs ?? 0,
@@ -131,12 +150,22 @@ export class AudioMirrorController {
     }
   }
 
-  async start(): Promise<void> {
+  /** True while the current audio stream is delivered over Wi‑Fi (firmware wifi=true). */
+  isOnWifi(): boolean {
+    return this.snapshot.route === "wifi" && (this.snapshot.state === "connecting" || this.snapshot.state === "live");
+  }
+
+  /**
+   * @param options.wifi request Wi‑Fi delivery (audio-only). Falls back to
+   *   Ethernet automatically if the transport has no Wi‑Fi address or the device
+   *   rejects the Wi‑Fi start (no silent firmware fallback — PR #732).
+   */
+  async start(options?: { wifi?: boolean }): Promise<void> {
     if (this.snapshot.state === "connecting" || this.snapshot.state === "live") return;
     this.batcher.reset();
     this.nativeLostPackets = 0;
     this.nativeLastSeq = null;
-    this.update({ state: "connecting", error: null, droppedPackets: 0, chunks: 0 });
+    this.update({ state: "connecting", error: null, droppedPackets: 0, chunks: 0, route: "ethernet" });
 
     // Prefer the native low-latency sink when offered: the plugin's receive thread feeds the
     // AudioTrack directly, so JS drives NO playback (no bridge traffic, no jitter buffer). Fall back
@@ -210,7 +239,36 @@ export class AudioMirrorController {
 
     try {
       await receiver.ready?.(); // native binds a UDP socket first, learning its destination
-      await this.deps.startStream("audio", receiver.destination);
+      // Wi‑Fi audio (PR #732): relay a UNICAST stream to the phone's own address.
+      // The firmware fails (no silent Ethernet fallback) if it has no Wi‑Fi, so
+      // retry over Ethernet ourselves. Only the native transport exposes a
+      // wifiDestination; elsewhere Wi‑Fi is not possible → Ethernet.
+      const wifiDestination = options?.wifi ? receiver.wifiDestination : undefined;
+      if (wifiDestination) {
+        try {
+          await this.deps.startStream("audio", wifiDestination, { wifi: true });
+          this.update({ route: "wifi" });
+        } catch (wifiError) {
+          addLog("info", "Audio Mirror: Wi‑Fi stream unavailable; using Ethernet", {
+            error: (wifiError as Error)?.message ?? String(wifiError),
+          });
+          // Tear down the failed Wi‑Fi attempt before starting the Ethernet one,
+          // so the device never has two overlapping audio:start requests in
+          // flight (it streams a single audio stream at a time).
+          try {
+            await this.deps.stopStream("audio");
+          } catch (stopError) {
+            addLog("debug", "Audio Mirror: stop after failed Wi‑Fi start (ignored)", {
+              error: (stopError as Error)?.message ?? String(stopError),
+            });
+          }
+          await this.deps.startStream("audio", receiver.destination);
+          this.update({ route: "ethernet" });
+        }
+      } else {
+        await this.deps.startStream("audio", receiver.destination);
+        this.update({ route: "ethernet" });
+      }
     } catch (error) {
       addLog("warn", "Audio Mirror: device stream start failed", {
         error: (error as Error)?.message ?? String(error),
@@ -218,6 +276,27 @@ export class AudioMirrorController {
       await this.stop();
       this.update({ state: "error", error: "Could not tell the device to start streaming audio." });
     }
+  }
+
+  /**
+   * Ask any machine that is streaming into our audio group uninvited to stop.
+   *
+   * Each offender is asked once per session: the stop is a request to a device that may be busy or
+   * unreachable, and retrying it every 250 ms tick would be a flood, not a fix.
+   */
+  private async evictForeignSenders(): Promise<void> {
+    const senders = this.nativeSink?.senders ?? [];
+    if (senders.length < 2) return;
+    const pending = foreignSenders(senders, this.deps.expectedSenderHost?.() ?? null).filter(
+      (host) => !this.foreignHandled.has(host),
+    );
+    if (pending.length === 0) return;
+    pending.forEach((host) => this.foreignHandled.add(host));
+    await stopForeignSenders({
+      senders: pending,
+      expectedHost: null, // already filtered
+      stopStreamAt: (host, name) => this.deps.stopStreamAt?.(host, name) ?? Promise.resolve(),
+    });
   }
 
   async stop(): Promise<void> {

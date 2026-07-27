@@ -237,6 +237,7 @@ const markdownToc = [
   "Your First Tour",
   "Everyday Flows",
   "In Depth",
+  "SID Radio",
   "Safe Device Use",
   "Troubleshooting",
   {
@@ -1266,12 +1267,23 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 "The sound also plays through a **fast, low-latency path** so what you hear follows your keypresses closely — the app holds far less sound waiting to play than the ordinary in-app audio does, so the delay is much shorter. This is on by default; if you ever need to compare, or the sound misbehaves on your device, you can switch **Low-latency audio (native)** off in **Settings**.",
                 "",
+                "Your C64 sends colour *numbers* rather than colours, so the app decides what shade to paint each one. **Settings → Screen colours** offers nine palettes, with all sixteen colours shown before you choose: **Default** matches the machine\'s own palette, and the rest are alternatives — warmer, cooler, monochrome, and so on. It changes only how Live View looks on your device; the C64 carries on exactly as before, and it costs the picture nothing.",
+                "",
                 "The **picture** is the demanding part, so you get a say in how much of it to draw. Open **Stats** — it appears under Live View while it is playing — and choose a **Video frame rate**:",
                 "",
                 "- **Auto** (recommended) plays every frame it can and quietly eases off only when your device is working too hard, then climbs back to full speed once there is room to spare.",
                 "- **100%**, **50%**, and **25%** cap the picture at the full rate, half, or a quarter of what the C64 is sending. A lower setting is gentler on the battery and on older phones and leaves more headroom for the game you are driving. Even at a manual cap the app will still drop below it for a moment if that is what it takes to keep the sound perfect — the sound always comes first.",
                 "",
                 "**Stats** also shows, at a glance and over the last minutes, how the stream is really doing: the picture's frame rate, how full the audio buffer is, any packets lost on the network and how they were smoothed over, and the app's own load. Open or close it as you like — it is built to be light enough that watching it costs the stream nothing. If you ever need to send in a report, **Export diagnostics** saves all of it as a small file.",
+                "",
+                "#### Checking the sound and picture yourself",
+                "",
+                "Under Live View you will find three checks you can run whenever something seems off.",
+                "",
+                "- **A/V sync** and **Tap latency** answer *when*: how far apart the sound and picture are, and how long it takes a keypress to come back to you.",
+                "- **Tone & colour ladder** answers *what*. It plays a short tune on your C64 — a scale from C3 up to C4 and back, half a second a note — and changes the screen colour on every single note, stepping through all sixteen C64 colours as it goes. Because the C64 changes the note and the colour at the very same instant, anything that arrives out of step arrived that way across your network.",
+                "",
+                "The ladder grades what comes back and shows you five numbers: how many notes were **in tune**, how far off the **pitch** was, whether notes ran **long or short**, whether the two deliberate **silent gaps** really were silent, and how far apart the **sound and picture** were. Wrong pitches, notes running long, or a gap that is not silent all point the same way — the sound is being corrupted on the way to you rather than merely delayed. The most common cause by far is a second machine on your network streaming into the same place, and this check makes that obvious in one run.",
                 "",
               ]
             : []),
@@ -1470,6 +1482,98 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "Tap a device to switch to it. Before anything else the app safely lets go of any input you were holding on the old device, stops tracking its playback and pause state, retargets to the new device's address and ports, and then checks that the new device answers. While that happens the target shows a **Verifying** pill; once it responds, it becomes the active device.",
     "",
     "Saved devices themselves are created and edited in **Settings > Connection**, under **Saved devices**. There you can add a device, edit its **Device name**, **Hostname / IP**, and **HTTP**, **FTP**, and **Telnet** ports, set an optional **Network Password**, or delete one you no longer use. A device is saved only once it answers, so the list never fills with machines that are not really there. With a single device saved there is nothing to switch to, so the switcher stays out of your way.",
+    "",
+    "## SID Radio",
+    "",
+    "SID Radio turns the tunes you like — and the mood you are in — into an endless, self-refilling queue of similar SIDs, launched in one tap. It rides the normal Play engine, so everything you already know about playback still applies, and it works fully offline: the app ships a small similarity index and needs no network while you listen.",
+    "",
+    "![SID Radio and Liked Tunes controls with the heart / cross ranking on the Now Playing card](../../img/app/play/sid-radio/01-controls.png)",
+    "",
+    "**Rate as you listen.** While a SID plays, a subtle heart / cross pair sits on the Now Playing card. Tap the heart to add a tune to your **Liked Tunes**; tap the cross to skip it now and steer future picks away from its neighbourhood. Ratings are optional and ambient, stored on the device, and they follow a tune across HVSC updates because they key on the tune's content (its MD5), not its path.",
+    "",
+    '**Start a station.** Open **SID Radio** from the Play page to pick a mood: nine style tiles (Fast-Paced, Chill / Ambient, Melodic and more), a **From tunes you like** taste station that unlocks once you have liked a few tunes, or **Surprise me**. Turn on **Based on my likes** to bias any style toward what you enjoy — for example "Fast-Paced from your Likes". You can also start a station from any single tune with **Start Radio**.',
+    "",
+    "![The SID Radio station launcher: song, mood (nine style tiles) and taste seeds](../../img/app/play/sid-radio/02-stations.png)",
+    "",
+    '**Lean back.** A station is an endless stream, so — like radio everywhere — it has no shuffle control of its own, and the transport Shuffle and Repeat are paused while a station plays. They return the moment you play a finite list such as Liked Tunes. Each start is fresh, so the same mood feels new every time. The now-playing chip names the active station, stops it in one tap, and expands a short "why this tune" line.',
+    "",
+    "**Liked Tunes.** Everything you have liked is a plain, playable list — browse it, play it (with normal Shuffle and Repeat), or un-like a tune. Tunes no longer in your installed HVSC are shown greyed rather than dropped.",
+    "",
+    "### Where the music plays",
+    "",
+    `By default, SID Radio plays each tune **on the C64** — exactly like the rest of the app — and you hear it back on your ${appDeviceName(
+      variant,
+    )} through the network **audio mirror**. For that to work ${targetDeviceShortName(
+      variant,
+    )} has to be reachable on your local network: connect it to your Wi‑Fi router with an **Ethernet** cable, and keep your ${appDeviceName(
+      variant,
+    )} on the same Wi‑Fi. The C64 then streams its sound across the network and the app plays it in step with the on-screen progress.`,
+    "",
+    `Where you hear a SID is up to you. When a SID is playing, the Play screen offers **Listen on**, with up to three choices:`,
+    "",
+    `- **The device's own name** (or **C64U** if it has none) — the tune plays on ${targetDeviceShortName(
+      variant,
+    )} and you listen there. The button is labelled after the machine you are connected to, so with two saved machines you can see which one you are choosing.`,
+    `- **Both** — the tune plays on ${targetDeviceShortName(
+      variant,
+    )} and its sound is streamed to your ${appDeviceName(
+      variant,
+    )} as well, so you hear it in both places. This choice only appears when the sound can actually reach you — if ${targetDeviceShortName(
+      variant,
+    )} has no network path for it, the option is simply not shown.`,
+    `- **Local** — your ${appDeviceName(
+      variant,
+    )} renders the SID itself with a built-in libsidplayfp engine. No C64 needed, and nothing is streamed.`,
+    "",
+    `**Listen on** appears only for SID tunes, since it is the only thing your ${appDeviceName(
+      variant,
+    )} can play on its own; programs and disks always run on ${targetDeviceShortName(variant)}.`,
+    "",
+    "![The Listen on control: the connected machine, Both, or Local](../../img/app/play/sid-radio/03-listen-on.png)",
+    "",
+    `**On-device playback needs the C64 ROMs.** SID music is driven by the C64's own KERNAL and BASIC routines, so without them a tune starts but never plays. Those ROM images are copyrighted and cannot be shipped with an app, so ${appName} reads them from ${targetDeviceShortName(
+      variant,
+    )}: **Settings → SID Radio → C64 ROMs for on-device playback → Read from C64**. It takes a moment and only has to be done once.`,
+    "",
+    `**Only connect ${appName} to devices you own or have been given permission to use.** The ROM images stay on your ${appDeviceName(
+      variant,
+    )}, are never shared or uploaded, and are never included in diagnostics. You can remove them again at any time with **Remove** in the same place.`,
+    "",
+    `Until the ROMs are in place — or if you remove them — SID tunes simply play on ${targetDeviceShortName(
+      variant,
+    )} instead, and the app tells you so once.`,
+    "",
+    `**Wind through a tune.** While a SID is playing on your ${appDeviceName(
+      variant,
+    )}, press and hold **⏭** to fast-forward or **⏮** to rewind — the tune keeps moving for as long as you hold, roughly five seconds at a time. A short tap still skips to the next or previous tune, so the buttons do what they always did. This works with the on-device engine; on ${targetDeviceShortName(
+      variant,
+    )} the buttons only skip.`,
+    "",
+    `**One sound at a time.** Your ${appDeviceName(
+      variant,
+    )} can make sound two ways — playing a tune itself, or playing the sound streamed from ${targetDeviceShortName(
+      variant,
+    )} — and it will never do both at once. Whichever you start last takes over, and the other stops. So turning **Listen** on while a tune is playing here hands the speaker to ${targetDeviceShortName(
+      variant,
+    )}, and starting a tune here takes it back. You never have to work out which of two sounds to chase.`,
+    "",
+    `**Crossfading between tunes.** By default one tune stops before the next begins, so you never hear two at once — including when you move playback between ${targetDeviceShortName(
+      variant,
+    )} and your ${appDeviceName(
+      variant,
+    )}, or switch to a different Ultimate. If you would rather they overlap, **Settings → SID Radio → Crossfade** offers a short, medium or long fade: the outgoing tune fades down while the next fades in. That fade is the one moment two tunes are meant to sound together.
+
+Crossfading only works for tunes playing on your ${appDeviceName(
+      variant,
+    )}. Two tunes have to sound at the same moment for one to fade into the other, and ${targetDeviceShortName(
+      variant,
+    )} plays a single tune live on its one sound chip — so unless **Listen on** is set to **Local** the setting is greyed out and tunes change cleanly instead.`,
+    "",
+    `**Two SID sound engines.** Under **Settings → SID Radio → SID emulation** you can choose how faithfully the on-device engine models the C64's SID chip. **Accurate (reSIDfp)** is the default and models the real chip cycle by cycle — pick it if you want the last word in fidelity. **Light (SIDLite)** does roughly a third of the work and still sounds good; most listeners will not hear the difference, so it is a perfectly reasonable choice on an older or slower phone, or when you want to save battery on a long listen. Both play every tune, and you can switch whenever you like.`,
+    "",
+    "![SID Radio settings: enable stations, the ranking, and the experimental on-device playback engine, with the similarity-corpus status](../../img/app/settings/sid-radio.png)",
+    "",
+    "Enable SID Radio, the heart / cross ranking, and the on-device engine under **Settings → SID Radio**, which also shows the similarity-corpus and installed-HVSC versions.",
     "",
     "## Safe Device Use",
     "",

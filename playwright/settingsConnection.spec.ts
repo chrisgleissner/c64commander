@@ -280,6 +280,7 @@ test.describe("Settings connection management", () => {
       "Play and Disk",
       "Stable Features",
       "Experimental Features",
+      "SID Radio",
       "HVSC",
       "Online Archive",
       "Device Safety",

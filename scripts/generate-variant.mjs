@@ -1,34 +1,34 @@
 #!/usr/bin/env node
 
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import yaml from 'js-yaml';
-import prettier from 'prettier';
-import sharp from 'sharp';
-import { parseRegistrySource } from './compile-feature-flags.mjs';
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import yaml from "js-yaml";
+import prettier from "prettier";
+import sharp from "sharp";
+import { parseRegistrySource } from "./compile-feature-flags.mjs";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(SCRIPT_DIR, '..');
+const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 
 export const SUPPORTED_SCHEMA_VERSION = 1;
-export const DEFAULT_VARIANTS_PATH = path.join(REPO_ROOT, 'variants/variants.yaml');
-export const DEFAULT_FEATURE_FLAGS_PATH = path.join(REPO_ROOT, 'src/lib/config/feature-flags.yaml');
-export const DEFAULT_OVERLAYS_DIR = path.join(REPO_ROOT, 'variants/feature-flags');
-export const DEFAULT_RUNTIME_TS_PATH = path.join(REPO_ROOT, 'src/generated/variant.ts');
-export const DEFAULT_RUNTIME_JSON_PATH = path.join(REPO_ROOT, 'src/generated/variant.json');
-export const DEFAULT_WEB_INDEX_PATH = path.join(REPO_ROOT, 'index.html');
-export const DEFAULT_WEB_MANIFEST_PATH = path.join(REPO_ROOT, 'public/manifest.webmanifest');
-export const DEFAULT_WEB_SW_PATH = path.join(REPO_ROOT, 'public/sw.js');
-export const DEFAULT_WEB_SERVER_VARIANT_TS_PATH = path.join(REPO_ROOT, 'web/server/src/variant.generated.ts');
-export const DEFAULT_ANDROID_STRINGS_XML_PATH = path.join(REPO_ROOT, 'android/app/src/main/res/values/strings.xml');
+export const DEFAULT_VARIANTS_PATH = path.join(REPO_ROOT, "variants/variants.yaml");
+export const DEFAULT_FEATURE_FLAGS_PATH = path.join(REPO_ROOT, "src/lib/config/feature-flags.yaml");
+export const DEFAULT_OVERLAYS_DIR = path.join(REPO_ROOT, "variants/feature-flags");
+export const DEFAULT_RUNTIME_TS_PATH = path.join(REPO_ROOT, "src/generated/variant.ts");
+export const DEFAULT_RUNTIME_JSON_PATH = path.join(REPO_ROOT, "src/generated/variant.json");
+export const DEFAULT_WEB_INDEX_PATH = path.join(REPO_ROOT, "index.html");
+export const DEFAULT_WEB_MANIFEST_PATH = path.join(REPO_ROOT, "public/manifest.webmanifest");
+export const DEFAULT_WEB_SW_PATH = path.join(REPO_ROOT, "public/sw.js");
+export const DEFAULT_WEB_SERVER_VARIANT_TS_PATH = path.join(REPO_ROOT, "web/server/src/variant.generated.ts");
+export const DEFAULT_ANDROID_STRINGS_XML_PATH = path.join(REPO_ROOT, "android/app/src/main/res/values/strings.xml");
 export const DEFAULT_ANDROID_LAUNCHER_BACKGROUND_XML_PATH = path.join(
-    REPO_ROOT,
-    'android/app/src/main/res/values/ic_launcher_background.xml',
+  REPO_ROOT,
+  "android/app/src/main/res/values/ic_launcher_background.xml",
 );
-export const DEFAULT_IOS_VARIANT_XCCONFIG_PATH = path.join(REPO_ROOT, 'ios/App/App/Config/Variant.generated.xcconfig');
-export const ALLOWED_ENDPOINT_KEYS = ['device_host', 'hvsc_base_url', 'commoserve_base_url'];
-const ALLOWED_DEFAULT_DISPLAY_PROFILES = ['auto', 'compact', 'medium', 'expanded'];
+export const DEFAULT_IOS_VARIANT_XCCONFIG_PATH = path.join(REPO_ROOT, "ios/App/App/Config/Variant.generated.xcconfig");
+export const ALLOWED_ENDPOINT_KEYS = ["device_host", "hvsc_base_url", "commoserve_base_url"];
+const ALLOWED_DEFAULT_DISPLAY_PROFILES = ["auto", "compact", "medium", "expanded"];
 
 const VARIANT_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 
@@ -59,554 +59,569 @@ const IOS_XCCONFIG_BANNER = `// AUTO-GENERATED FILE. Do not edit by hand.
 `;
 
 const ANDROID_ICON_SIZES = [
-    ['mdpi', 48],
-    ['hdpi', 72],
-    ['xhdpi', 96],
-    ['xxhdpi', 144],
-    ['xxxhdpi', 192],
+  ["mdpi", 48],
+  ["hdpi", 72],
+  ["xhdpi", 96],
+  ["xxhdpi", 144],
+  ["xxxhdpi", 192],
 ];
 
-const IOS_SPLASH_FILENAMES = ['splash-2732x2732.png', 'splash-2732x2732-1.png', 'splash-2732x2732-2.png'];
+const IOS_SPLASH_FILENAMES = ["splash-2732x2732.png", "splash-2732x2732-1.png", "splash-2732x2732-2.png"];
 
 const TRANSPARENT_BACKGROUND = { r: 0, g: 0, b: 0, alpha: 0 };
-const SUPPORTED_ASSET_SOURCE_FORMATS = ['png', 'svg', 'jpg', 'jpeg', 'webp'];
+const SUPPORTED_ASSET_SOURCE_FORMATS = ["png", "svg", "jpg", "jpeg", "webp"];
 const PNG_WRITE_OPTIONS = {
-    compressionLevel: 9,
-    effort: 10,
-    palette: true,
-    quality: 100,
+  compressionLevel: 9,
+  effort: 10,
+  palette: true,
+  quality: 100,
 };
 
 class VariantCompileError extends Error {
-    constructor(message) {
-        super(message);
-        this.name = 'VariantCompileError';
-    }
+  constructor(message) {
+    super(message);
+    this.name = "VariantCompileError";
+  }
 }
 
 const fail = (message) => {
-    throw new VariantCompileError(message);
+  throw new VariantCompileError(message);
 };
 
 const requireMapping = (value, label) => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
-        fail(`${label} must be a YAML mapping`);
-    }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    fail(`${label} must be a YAML mapping`);
+  }
 };
 
 const requireNonEmptyString = (value, label) => {
-    if (typeof value !== 'string' || value.trim() === '') {
-        fail(`${label} must be a non-empty string`);
-    }
-    return value.trim();
+  if (typeof value !== "string" || value.trim() === "") {
+    fail(`${label} must be a non-empty string`);
+  }
+  return value.trim();
 };
 
 const requireStringArray = (value, label) => {
-    if (!Array.isArray(value)) {
-        fail(`${label} must be a YAML sequence`);
-    }
-    return value.map((entry, index) => requireNonEmptyString(entry, `${label}[${index}]`));
+  if (!Array.isArray(value)) {
+    fail(`${label} must be a YAML sequence`);
+  }
+  return value.map((entry, index) => requireNonEmptyString(entry, `${label}[${index}]`));
+};
+
+const requireOneOf = (value, allowed, label) => {
+  const raw = requireNonEmptyString(value, label);
+  if (!allowed.includes(raw)) {
+    throw new Error(`${label} must be one of ${allowed.join(", ")}, got: ${raw}`);
+  }
+  return raw;
 };
 
 const requireBoolean = (value, label) => {
-    if (typeof value !== 'boolean') {
-        fail(`${label} must be a boolean`);
-    }
-    return value;
+  if (typeof value !== "boolean") {
+    fail(`${label} must be a boolean`);
+  }
+  return value;
 };
 
 const requireHexColor = (value, label) => {
-    const normalized = requireNonEmptyString(value, label);
-    const match = /^#?([0-9a-fA-F]{6})$/.exec(normalized);
-    if (!match) {
-        fail(`${label} must be a 6-digit hex color`);
-    }
-    // Always return the canonical `#RRGGBB` form. The value flows into CSS colors
-    // (renderWebIndexHtml) and Android color resources (renderAndroidLauncherBackgroundXml),
-    // both of which require the leading `#`; a `#`-less input would silently break them.
-    return `#${match[1]}`;
+  const normalized = requireNonEmptyString(value, label);
+  const match = /^#?([0-9a-fA-F]{6})$/.exec(normalized);
+  if (!match) {
+    fail(`${label} must be a 6-digit hex color`);
+  }
+  // Always return the canonical `#RRGGBB` form. The value flows into CSS colors
+  // (renderWebIndexHtml) and Android color resources (renderAndroidLauncherBackgroundXml),
+  // both of which require the leading `#`; a `#`-less input would silently break them.
+  return `#${match[1]}`;
 };
 
 const parseYamlFile = (filePath, failureLabel) => {
-    let source;
-    try {
-        source = fs.readFileSync(filePath, 'utf8');
-    } catch (error) {
-        fail(`failed to read ${failureLabel}: ${error.message}`);
-    }
+  let source;
+  try {
+    source = fs.readFileSync(filePath, "utf8");
+  } catch (error) {
+    fail(`failed to read ${failureLabel}: ${error.message}`);
+  }
 
-    try {
-        return yaml.load(source);
-    } catch (error) {
-        fail(`failed to parse ${failureLabel}: ${error.message}`);
-    }
+  try {
+    return yaml.load(source);
+  } catch (error) {
+    fail(`failed to parse ${failureLabel}: ${error.message}`);
+  }
 };
 
 const xmlEscape = (value) =>
-    value
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&apos;');
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
 
 const hexColorToStoryboardRgb = (value, label) => {
-    const normalized = requireNonEmptyString(value, label);
-    const match = /^#?([0-9a-fA-F]{6})$/.exec(normalized);
-    if (!match) {
-        fail(`${label} must be a 6-digit hex color`);
-    }
+  const normalized = requireNonEmptyString(value, label);
+  const match = /^#?([0-9a-fA-F]{6})$/.exec(normalized);
+  if (!match) {
+    fail(`${label} must be a 6-digit hex color`);
+  }
 
-    const hex = match[1];
-    const readChannel = (start) => Number.parseInt(hex.slice(start, start + 2), 16) / 255;
+  const hex = match[1];
+  const readChannel = (start) => Number.parseInt(hex.slice(start, start + 2), 16) / 255;
 
-    return {
-        red: readChannel(0).toFixed(16),
-        green: readChannel(2).toFixed(16),
-        blue: readChannel(4).toFixed(16),
-    };
+  return {
+    red: readChannel(0).toFixed(16),
+    green: readChannel(2).toFixed(16),
+    blue: readChannel(4).toFixed(16),
+  };
 };
 
 const ensureFileExists = (repoRoot, relativePath, label) => {
-    requireNonEmptyString(relativePath, label);
-    const absolutePath = path.resolve(repoRoot, relativePath);
-    const relativeToRepoRoot = path.relative(repoRoot, absolutePath);
-    if (
-        relativeToRepoRoot === '..' ||
-        relativeToRepoRoot.startsWith(`..${path.sep}`) ||
-        path.isAbsolute(relativeToRepoRoot)
-    ) {
-        fail(`${label} must stay within the repository: ${relativePath}`);
-    }
-    if (!fs.existsSync(absolutePath)) {
-        fail(`${label} is missing: ${relativePath}`);
-    }
-    return relativePath;
+  requireNonEmptyString(relativePath, label);
+  const absolutePath = path.resolve(repoRoot, relativePath);
+  const relativeToRepoRoot = path.relative(repoRoot, absolutePath);
+  if (
+    relativeToRepoRoot === ".." ||
+    relativeToRepoRoot.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relativeToRepoRoot)
+  ) {
+    fail(`${label} must stay within the repository: ${relativePath}`);
+  }
+  if (!fs.existsSync(absolutePath)) {
+    fail(`${label} is missing: ${relativePath}`);
+  }
+  return relativePath;
 };
 
 const normalizeAssetSource = (repoRoot, raw, label) => {
-    requireMapping(raw, label);
-    const assetPath = ensureFileExists(repoRoot, raw.path, `${label}.path`);
-    const explicitFormat = raw.format === undefined ? '' : requireNonEmptyString(raw.format, `${label}.format`).toLowerCase();
-    const inferredFormat = path.extname(assetPath).slice(1).toLowerCase();
-    const format = explicitFormat || inferredFormat;
+  requireMapping(raw, label);
+  const assetPath = ensureFileExists(repoRoot, raw.path, `${label}.path`);
+  const explicitFormat =
+    raw.format === undefined ? "" : requireNonEmptyString(raw.format, `${label}.format`).toLowerCase();
+  const inferredFormat = path.extname(assetPath).slice(1).toLowerCase();
+  const format = explicitFormat || inferredFormat;
 
-    if (!format) {
-        fail(`${label}.format must be provided or inferable from the file extension`);
-    }
-    if (explicitFormat && inferredFormat && explicitFormat !== inferredFormat) {
-        fail(`${label}.format "${explicitFormat}" does not match file extension ".${inferredFormat}"`);
-    }
-    if (!SUPPORTED_ASSET_SOURCE_FORMATS.includes(format)) {
-        fail(`${label}.format must be one of: ${SUPPORTED_ASSET_SOURCE_FORMATS.join(', ')}`);
-    }
+  if (!format) {
+    fail(`${label}.format must be provided or inferable from the file extension`);
+  }
+  if (explicitFormat && inferredFormat && explicitFormat !== inferredFormat) {
+    fail(`${label}.format "${explicitFormat}" does not match file extension ".${inferredFormat}"`);
+  }
+  if (!SUPPORTED_ASSET_SOURCE_FORMATS.includes(format)) {
+    fail(`${label}.format must be one of: ${SUPPORTED_ASSET_SOURCE_FORMATS.join(", ")}`);
+  }
 
-    return {
-        path: assetPath,
-        format,
-    };
+  return {
+    path: assetPath,
+    format,
+  };
 };
 
 const readSchemaVersion = (raw) => {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-        fail('variant root must be a YAML mapping');
-    }
-    if (!Object.prototype.hasOwnProperty.call(raw, 'schema_version')) {
-        fail('variants/variants.yaml must declare schema_version');
-    }
-    const schemaVersion = raw.schema_version;
-    if (!Number.isInteger(schemaVersion)) {
-        fail(`schema_version must be an integer, got ${JSON.stringify(schemaVersion)}`);
-    }
-    if (schemaVersion > SUPPORTED_SCHEMA_VERSION) {
-        fail(`unsupported schema_version ${schemaVersion}; max supported version is ${SUPPORTED_SCHEMA_VERSION}`);
-    }
-    if (schemaVersion < 1) {
-        fail(`unsupported schema_version ${schemaVersion}`);
-    }
-    return schemaVersion;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    fail("variant root must be a YAML mapping");
+  }
+  if (!Object.prototype.hasOwnProperty.call(raw, "schema_version")) {
+    fail("variants/variants.yaml must declare schema_version");
+  }
+  const schemaVersion = raw.schema_version;
+  if (!Number.isInteger(schemaVersion)) {
+    fail(`schema_version must be an integer, got ${JSON.stringify(schemaVersion)}`);
+  }
+  if (schemaVersion > SUPPORTED_SCHEMA_VERSION) {
+    fail(`unsupported schema_version ${schemaVersion}; max supported version is ${SUPPORTED_SCHEMA_VERSION}`);
+  }
+  if (schemaVersion < 1) {
+    fail(`unsupported schema_version ${schemaVersion}`);
+  }
+  return schemaVersion;
 };
 
 const normalizeVariant = (repoRoot, variantId, raw) => {
-    if (!VARIANT_ID_PATTERN.test(variantId)) {
-        fail(`variant id "${variantId}" must match ${VARIANT_ID_PATTERN}`);
-    }
-    requireMapping(raw, `variants.${variantId}`);
-    requireMapping(raw.platform, `variants.${variantId}.platform`);
-    // Android is the only mandatory platform: a variant may target Android only
-    // (no iOS, no web). iOS and web platform blocks are optional.
-    requireMapping(raw.platform.android, `variants.${variantId}.platform.android`);
-    const hasIos = raw.platform.ios !== undefined && raw.platform.ios !== null;
-    const hasWeb = raw.platform.web !== undefined && raw.platform.web !== null;
-    if (hasIos) {
-        requireMapping(raw.platform.ios, `variants.${variantId}.platform.ios`);
-    }
-    if (hasWeb) {
-        requireMapping(raw.platform.web, `variants.${variantId}.platform.web`);
-    }
-    requireMapping(raw.assets, `variants.${variantId}.assets`);
-    requireMapping(raw.assets.sources, `variants.${variantId}.assets.sources`);
+  if (!VARIANT_ID_PATTERN.test(variantId)) {
+    fail(`variant id "${variantId}" must match ${VARIANT_ID_PATTERN}`);
+  }
+  requireMapping(raw, `variants.${variantId}`);
+  requireMapping(raw.platform, `variants.${variantId}.platform`);
+  // Android is the only mandatory platform: a variant may target Android only
+  // (no iOS, no web). iOS and web platform blocks are optional.
+  requireMapping(raw.platform.android, `variants.${variantId}.platform.android`);
+  const hasIos = raw.platform.ios !== undefined && raw.platform.ios !== null;
+  const hasWeb = raw.platform.web !== undefined && raw.platform.web !== null;
+  if (hasIos) {
+    requireMapping(raw.platform.ios, `variants.${variantId}.platform.ios`);
+  }
+  if (hasWeb) {
+    requireMapping(raw.platform.web, `variants.${variantId}.platform.web`);
+  }
+  requireMapping(raw.assets, `variants.${variantId}.assets`);
+  requireMapping(raw.assets.sources, `variants.${variantId}.assets.sources`);
 
-    // Theme colors are platform-independent. An explicit top-level `theme:` block
-    // is the canonical source (required for Android-only variants); for variants
-    // that still declare a `platform.web` block the web colors are used as the
-    // fallback so existing web-capable configs stay byte-for-byte identical.
-    const themeRaw = raw.theme;
-    let themeColor;
-    let backgroundColor;
-    if (themeRaw !== undefined && themeRaw !== null) {
-        requireMapping(themeRaw, `variants.${variantId}.theme`);
-        themeColor = requireHexColor(themeRaw.theme_color, `variants.${variantId}.theme.theme_color`);
-        backgroundColor = requireHexColor(themeRaw.background_color, `variants.${variantId}.theme.background_color`);
-    } else if (hasWeb) {
-        // These colors are reused for Android color resources and image backgrounds, so the
-        // web fallback must enforce the same hex constraint/normalization as the theme block.
-        themeColor = requireHexColor(
-            raw.platform.web.theme_color,
-            `variants.${variantId}.platform.web.theme_color`,
-        );
-        backgroundColor = requireHexColor(
-            raw.platform.web.background_color,
-            `variants.${variantId}.platform.web.background_color`,
-        );
-    } else {
-        fail(
-            `variants.${variantId} must declare a theme block (theme.theme_color and theme.background_color) when no platform.web block is present`,
-        );
-    }
-
-    const runtime = raw.runtime ?? {};
-    requireMapping(runtime, `variants.${variantId}.runtime`);
-    const runtimeEndpointsRaw = runtime.endpoints ?? {};
-    requireMapping(runtimeEndpointsRaw, `variants.${variantId}.runtime.endpoints`);
-    const endpointKeys = Object.keys(runtimeEndpointsRaw).sort();
-    endpointKeys.forEach((key) => {
-        if (!ALLOWED_ENDPOINT_KEYS.includes(key)) {
-            fail(`variants.${variantId}.runtime.endpoints contains unsupported key "${key}"`);
-        }
-        requireNonEmptyString(runtimeEndpointsRaw[key], `variants.${variantId}.runtime.endpoints.${key}`);
-    });
-    const defaultDisplayProfile = requireNonEmptyString(
-        runtime.default_display_profile ?? 'auto',
-        `variants.${variantId}.runtime.default_display_profile`,
+  // Theme colors are platform-independent. An explicit top-level `theme:` block
+  // is the canonical source (required for Android-only variants); for variants
+  // that still declare a `platform.web` block the web colors are used as the
+  // fallback so existing web-capable configs stay byte-for-byte identical.
+  const themeRaw = raw.theme;
+  let themeColor;
+  let backgroundColor;
+  if (themeRaw !== undefined && themeRaw !== null) {
+    requireMapping(themeRaw, `variants.${variantId}.theme`);
+    themeColor = requireHexColor(themeRaw.theme_color, `variants.${variantId}.theme.theme_color`);
+    backgroundColor = requireHexColor(themeRaw.background_color, `variants.${variantId}.theme.background_color`);
+  } else if (hasWeb) {
+    // These colors are reused for Android color resources and image backgrounds, so the
+    // web fallback must enforce the same hex constraint/normalization as the theme block.
+    themeColor = requireHexColor(raw.platform.web.theme_color, `variants.${variantId}.platform.web.theme_color`);
+    backgroundColor = requireHexColor(
+      raw.platform.web.background_color,
+      `variants.${variantId}.platform.web.background_color`,
     );
-    if (!ALLOWED_DEFAULT_DISPLAY_PROFILES.includes(defaultDisplayProfile)) {
-        fail(
-            `variants.${variantId}.runtime.default_display_profile must be one of ${ALLOWED_DEFAULT_DISPLAY_PROFILES.join(', ')}`,
-        );
-    }
-    const defaultT9InputEnabled =
-        runtime.default_t9_input_enabled !== undefined
-            ? requireBoolean(runtime.default_t9_input_enabled, `variants.${variantId}.runtime.default_t9_input_enabled`)
-            : false;
-    const defaultHideStatusBar =
-        runtime.default_hide_status_bar !== undefined
-            ? requireBoolean(runtime.default_hide_status_bar, `variants.${variantId}.runtime.default_hide_status_bar`)
-            : false;
-    const defaultHideNavigationBar =
-        runtime.default_hide_navigation_bar !== undefined
-            ? requireBoolean(
-                  runtime.default_hide_navigation_bar,
-                  `variants.${variantId}.runtime.default_hide_navigation_bar`,
-              )
-            : false;
+  } else {
+    fail(
+      `variants.${variantId} must declare a theme block (theme.theme_color and theme.background_color) when no platform.web block is present`,
+    );
+  }
 
-    const platform = {
-        android: {
-            applicationId: requireNonEmptyString(
-                raw.platform.android.application_id,
-                `variants.${variantId}.platform.android.application_id`,
-            ),
-            customUrlScheme: requireNonEmptyString(
-                raw.platform.android.custom_url_scheme,
-                `variants.${variantId}.platform.android.custom_url_scheme`,
-            ),
-        },
+  const runtime = raw.runtime ?? {};
+  requireMapping(runtime, `variants.${variantId}.runtime`);
+  const runtimeEndpointsRaw = runtime.endpoints ?? {};
+  requireMapping(runtimeEndpointsRaw, `variants.${variantId}.runtime.endpoints`);
+  const endpointKeys = Object.keys(runtimeEndpointsRaw).sort();
+  endpointKeys.forEach((key) => {
+    if (!ALLOWED_ENDPOINT_KEYS.includes(key)) {
+      fail(`variants.${variantId}.runtime.endpoints contains unsupported key "${key}"`);
+    }
+    requireNonEmptyString(runtimeEndpointsRaw[key], `variants.${variantId}.runtime.endpoints.${key}`);
+  });
+  const defaultDisplayProfile = requireNonEmptyString(
+    runtime.default_display_profile ?? "auto",
+    `variants.${variantId}.runtime.default_display_profile`,
+  );
+  if (!ALLOWED_DEFAULT_DISPLAY_PROFILES.includes(defaultDisplayProfile)) {
+    fail(
+      `variants.${variantId}.runtime.default_display_profile must be one of ${ALLOWED_DEFAULT_DISPLAY_PROFILES.join(", ")}`,
+    );
+  }
+  const defaultT9InputEnabled =
+    runtime.default_t9_input_enabled !== undefined
+      ? requireBoolean(runtime.default_t9_input_enabled, `variants.${variantId}.runtime.default_t9_input_enabled`)
+      : false;
+  // Which SID emulation the on-device engine defaults to. This is a per-device
+  // decision, not a taste one: measured like-for-like, reSIDfp costs ~5.5x
+  // SIDLite (4.3x realtime vs 23.8x on the same tunes), and a Pixel 4 spends
+  // ~39% of a core on it. The keypad variant targets the Callback 8020
+  // (MediaTek Helio G81, Cortex-A75 @2.0GHz) which is roughly 2-3x slower
+  // single-threaded than the Pixel's Snapdragon 855 — reSIDfp would land at or
+  // past realtime there, so that variant defaults to the cheap engine.
+  const defaultSidEmulationEngine =
+    runtime.default_sid_emulation_engine !== undefined
+      ? requireOneOf(
+          runtime.default_sid_emulation_engine,
+          ["residfp", "sidlite"],
+          `variants.${variantId}.runtime.default_sid_emulation_engine`,
+        )
+      : "residfp";
+  const defaultHideStatusBar =
+    runtime.default_hide_status_bar !== undefined
+      ? requireBoolean(runtime.default_hide_status_bar, `variants.${variantId}.runtime.default_hide_status_bar`)
+      : false;
+  const defaultHideNavigationBar =
+    runtime.default_hide_navigation_bar !== undefined
+      ? requireBoolean(runtime.default_hide_navigation_bar, `variants.${variantId}.runtime.default_hide_navigation_bar`)
+      : false;
+
+  const platform = {
+    android: {
+      applicationId: requireNonEmptyString(
+        raw.platform.android.application_id,
+        `variants.${variantId}.platform.android.application_id`,
+      ),
+      customUrlScheme: requireNonEmptyString(
+        raw.platform.android.custom_url_scheme,
+        `variants.${variantId}.platform.android.custom_url_scheme`,
+      ),
+    },
+  };
+  if (hasIos) {
+    platform.ios = {
+      bundleId: requireNonEmptyString(raw.platform.ios.bundle_id, `variants.${variantId}.platform.ios.bundle_id`),
     };
-    if (hasIos) {
-        platform.ios = {
-            bundleId: requireNonEmptyString(raw.platform.ios.bundle_id, `variants.${variantId}.platform.ios.bundle_id`),
-        };
-    }
-    if (hasWeb) {
-        platform.web = {
-            shortName: requireNonEmptyString(raw.platform.web.short_name, `variants.${variantId}.platform.web.short_name`),
-            themeColor: requireNonEmptyString(
-                raw.platform.web.theme_color,
-                `variants.${variantId}.platform.web.theme_color`,
-            ),
-            backgroundColor: requireNonEmptyString(
-                raw.platform.web.background_color,
-                `variants.${variantId}.platform.web.background_color`,
-            ),
-            loginTitle: requireNonEmptyString(
-                raw.platform.web.login_title,
-                `variants.${variantId}.platform.web.login_title`,
-            ),
-            loginHeading: requireNonEmptyString(
-                raw.platform.web.login_heading,
-                `variants.${variantId}.platform.web.login_heading`,
-            ),
-        };
-    }
+  }
+  if (hasWeb) {
+    platform.web = {
+      shortName: requireNonEmptyString(raw.platform.web.short_name, `variants.${variantId}.platform.web.short_name`),
+      themeColor: requireNonEmptyString(raw.platform.web.theme_color, `variants.${variantId}.platform.web.theme_color`),
+      backgroundColor: requireNonEmptyString(
+        raw.platform.web.background_color,
+        `variants.${variantId}.platform.web.background_color`,
+      ),
+      loginTitle: requireNonEmptyString(raw.platform.web.login_title, `variants.${variantId}.platform.web.login_title`),
+      loginHeading: requireNonEmptyString(
+        raw.platform.web.login_heading,
+        `variants.${variantId}.platform.web.login_heading`,
+      ),
+    };
+  }
 
-    const publishToGooglePlay =
-        raw.publish_to_google_play !== undefined
-            ? requireBoolean(raw.publish_to_google_play, `variants.${variantId}.publish_to_google_play`)
-            : true;
+  const publishToGooglePlay =
+    raw.publish_to_google_play !== undefined
+      ? requireBoolean(raw.publish_to_google_play, `variants.${variantId}.publish_to_google_play`)
+      : true;
 
-    return {
-        id: variantId,
-        displayName: requireNonEmptyString(raw.display_name, `variants.${variantId}.display_name`),
-        appId: requireNonEmptyString(raw.app_id, `variants.${variantId}.app_id`),
-        description: requireNonEmptyString(raw.description, `variants.${variantId}.description`),
-        exportedFileBasename: requireNonEmptyString(
-            raw.exported_file_basename,
-            `variants.${variantId}.exported_file_basename`,
+  return {
+    id: variantId,
+    displayName: requireNonEmptyString(raw.display_name, `variants.${variantId}.display_name`),
+    appId: requireNonEmptyString(raw.app_id, `variants.${variantId}.app_id`),
+    description: requireNonEmptyString(raw.description, `variants.${variantId}.description`),
+    exportedFileBasename: requireNonEmptyString(
+      raw.exported_file_basename,
+      `variants.${variantId}.exported_file_basename`,
+    ),
+    publishToGooglePlay,
+    platform,
+    theme: {
+      themeColor,
+      backgroundColor,
+    },
+    assets: {
+      sources: {
+        icon: normalizeAssetSource(repoRoot, raw.assets.sources.icon, `variants.${variantId}.assets.sources.icon`),
+        logo: normalizeAssetSource(repoRoot, raw.assets.sources.logo, `variants.${variantId}.assets.sources.logo`),
+        splash: normalizeAssetSource(
+          repoRoot,
+          raw.assets.sources.splash,
+          `variants.${variantId}.assets.sources.splash`,
         ),
-        publishToGooglePlay,
-        platform,
-        theme: {
-            themeColor,
-            backgroundColor,
-        },
-        assets: {
-            sources: {
-                icon: normalizeAssetSource(repoRoot, raw.assets.sources.icon, `variants.${variantId}.assets.sources.icon`),
-                logo: normalizeAssetSource(repoRoot, raw.assets.sources.logo, `variants.${variantId}.assets.sources.logo`),
-                splash: normalizeAssetSource(
-                    repoRoot,
-                    raw.assets.sources.splash,
-                    `variants.${variantId}.assets.sources.splash`,
-                ),
-            },
-            public: {
-                faviconPng: '/favicon.png',
-                homeLogoPng: `/${requireNonEmptyString(raw.app_id, `variants.${variantId}.app_id`)}.png`,
-                icon192Png: `/${requireNonEmptyString(raw.app_id, `variants.${variantId}.app_id`)}-192.png`,
-                icon512Png: `/${requireNonEmptyString(raw.app_id, `variants.${variantId}.app_id`)}-512.png`,
-                iconMaskable512Png: `/${requireNonEmptyString(raw.app_id, `variants.${variantId}.app_id`)}-maskable-512.png`,
-            },
-        },
-        runtime: {
-            defaultDisplayProfile,
-            defaultT9InputEnabled,
-            defaultHideStatusBar,
-            defaultHideNavigationBar,
-            endpoints: Object.fromEntries(endpointKeys.map((key) => [key, runtimeEndpointsRaw[key].trim()])),
-        },
-    };
+      },
+      public: {
+        faviconPng: "/favicon.png",
+        homeLogoPng: `/${requireNonEmptyString(raw.app_id, `variants.${variantId}.app_id`)}.png`,
+        icon192Png: `/${requireNonEmptyString(raw.app_id, `variants.${variantId}.app_id`)}-192.png`,
+        icon512Png: `/${requireNonEmptyString(raw.app_id, `variants.${variantId}.app_id`)}-512.png`,
+        iconMaskable512Png: `/${requireNonEmptyString(raw.app_id, `variants.${variantId}.app_id`)}-maskable-512.png`,
+      },
+    },
+    runtime: {
+      defaultDisplayProfile,
+      defaultT9InputEnabled,
+      defaultSidEmulationEngine,
+      defaultHideStatusBar,
+      defaultHideNavigationBar,
+      endpoints: Object.fromEntries(endpointKeys.map((key) => [key, runtimeEndpointsRaw[key].trim()])),
+    },
+  };
 };
 
 export const validateVariantConfig = (raw, { repoRoot = REPO_ROOT } = {}) => {
-    const schemaVersion = readSchemaVersion(raw);
-    requireMapping(raw.repo, 'repo');
-    requireMapping(raw.repo.publish_defaults, 'repo.publish_defaults');
-    requireMapping(raw.variants, 'variants');
+  const schemaVersion = readSchemaVersion(raw);
+  requireMapping(raw.repo, "repo");
+  requireMapping(raw.repo.publish_defaults, "repo.publish_defaults");
+  requireMapping(raw.variants, "variants");
 
-    const variants = {};
-    const appIds = new Map();
-    const applicationIds = new Map();
-    const bundleIds = new Map();
-    const customUrlSchemes = new Map();
+  const variants = {};
+  const appIds = new Map();
+  const applicationIds = new Map();
+  const bundleIds = new Map();
+  const customUrlSchemes = new Map();
 
-    for (const [variantId, entry] of Object.entries(raw.variants)) {
-        const normalized = normalizeVariant(repoRoot, variantId, entry);
-        variants[variantId] = normalized;
+  for (const [variantId, entry] of Object.entries(raw.variants)) {
+    const normalized = normalizeVariant(repoRoot, variantId, entry);
+    variants[variantId] = normalized;
 
-        const uniquenessChecks = [
-            ['app_id', normalized.appId, appIds],
-            ['application_id', normalized.platform.android.applicationId, applicationIds],
-            ['custom_url_scheme', normalized.platform.android.customUrlScheme, customUrlSchemes],
-        ];
-        if (normalized.platform.ios) {
-            uniquenessChecks.push(['bundle_id', normalized.platform.ios.bundleId, bundleIds]);
-        }
-
-        uniquenessChecks.forEach(([label, value, seen]) => {
-            if (seen.has(value)) {
-                fail(`${label} collision: "${value}" is declared by both "${seen.get(value)}" and "${variantId}"`);
-            }
-            seen.set(value, variantId);
-        });
+    const uniquenessChecks = [
+      ["app_id", normalized.appId, appIds],
+      ["application_id", normalized.platform.android.applicationId, applicationIds],
+      ["custom_url_scheme", normalized.platform.android.customUrlScheme, customUrlSchemes],
+    ];
+    if (normalized.platform.ios) {
+      uniquenessChecks.push(["bundle_id", normalized.platform.ios.bundleId, bundleIds]);
     }
 
-    const variantIds = Object.keys(variants).sort();
-    if (variantIds.length === 0) {
-        fail('variants must declare at least one variant');
-    }
+    uniquenessChecks.forEach(([label, value, seen]) => {
+      if (seen.has(value)) {
+        fail(`${label} collision: "${value}" is declared by both "${seen.get(value)}" and "${variantId}"`);
+      }
+      seen.set(value, variantId);
+    });
+  }
 
-    const defaultVariant = requireNonEmptyString(raw.repo.default_variant, 'repo.default_variant');
-    if (!variants[defaultVariant]) {
-        fail(`repo.default_variant references unknown variant "${defaultVariant}"`);
-    }
+  const variantIds = Object.keys(variants).sort();
+  if (variantIds.length === 0) {
+    fail("variants must declare at least one variant");
+  }
 
-    const publishDefaults = {};
-    for (const [publishKey, entries] of Object.entries(raw.repo.publish_defaults)) {
-        const values = requireStringArray(entries, `repo.publish_defaults.${publishKey}`);
-        values.forEach((variantId) => {
-            if (!variants[variantId]) {
-                fail(`repo.publish_defaults.${publishKey} references unknown variant "${variantId}"`);
-            }
-        });
-        publishDefaults[publishKey] = [...new Set(values)].sort();
-    }
+  const defaultVariant = requireNonEmptyString(raw.repo.default_variant, "repo.default_variant");
+  if (!variants[defaultVariant]) {
+    fail(`repo.default_variant references unknown variant "${defaultVariant}"`);
+  }
 
-    return {
-        schemaVersion,
-        repo: {
-            defaultVariant,
-            publishDefaults,
-        },
-        variants,
-    };
+  const publishDefaults = {};
+  for (const [publishKey, entries] of Object.entries(raw.repo.publish_defaults)) {
+    const values = requireStringArray(entries, `repo.publish_defaults.${publishKey}`);
+    values.forEach((variantId) => {
+      if (!variants[variantId]) {
+        fail(`repo.publish_defaults.${publishKey} references unknown variant "${variantId}"`);
+      }
+    });
+    publishDefaults[publishKey] = [...new Set(values)].sort();
+  }
+
+  return {
+    schemaVersion,
+    repo: {
+      defaultVariant,
+      publishDefaults,
+    },
+    variants,
+  };
 };
 
 export const parseVariantSource = (source, { repoRoot = REPO_ROOT } = {}) => {
-    let raw;
-    try {
-        raw = yaml.load(source);
-    } catch (error) {
-        fail(`failed to parse variants/variants.yaml: ${error.message}`);
-    }
-    return validateVariantConfig(raw, { repoRoot });
+  let raw;
+  try {
+    raw = yaml.load(source);
+  } catch (error) {
+    fail(`failed to parse variants/variants.yaml: ${error.message}`);
+  }
+  return validateVariantConfig(raw, { repoRoot });
 };
 
 export const validateFeatureFlagOverlay = (raw, { featureIds, variantId }) => {
-    if (raw === undefined || raw === null) {
-        return { overrides: {} };
+  if (raw === undefined || raw === null) {
+    return { overrides: {} };
+  }
+  requireMapping(raw, `variants/feature-flags/${variantId}.yaml`);
+  const overridesRaw = raw.overrides ?? {};
+  requireMapping(overridesRaw, `variants/feature-flags/${variantId}.yaml overrides`);
+
+  const overrides = {};
+  const allowedFields = ["enabled", "visible_to_user", "developer_only"];
+
+  for (const [featureId, overrideValue] of Object.entries(overridesRaw)) {
+    if (!featureIds.has(featureId)) {
+      fail(`variants/feature-flags/${variantId}.yaml references unknown feature id "${featureId}"`);
     }
-    requireMapping(raw, `variants/feature-flags/${variantId}.yaml`);
-    const overridesRaw = raw.overrides ?? {};
-    requireMapping(overridesRaw, `variants/feature-flags/${variantId}.yaml overrides`);
-
-    const overrides = {};
-    const allowedFields = ['enabled', 'visible_to_user', 'developer_only'];
-
-    for (const [featureId, overrideValue] of Object.entries(overridesRaw)) {
-        if (!featureIds.has(featureId)) {
-            fail(`variants/feature-flags/${variantId}.yaml references unknown feature id "${featureId}"`);
-        }
-        requireMapping(overrideValue, `feature override ${featureId}`);
-        const unknownKeys = Object.keys(overrideValue).filter((key) => !allowedFields.includes(key));
-        if (unknownKeys.length > 0) {
-            fail(`feature override ${featureId} contains disallowed fields: ${unknownKeys.join(', ')}`);
-        }
-
-        const normalizedOverride = {};
-        for (const key of allowedFields) {
-            if (Object.prototype.hasOwnProperty.call(overrideValue, key)) {
-                normalizedOverride[key] = requireBoolean(overrideValue[key], `feature override ${featureId}.${key}`);
-            }
-        }
-        overrides[featureId] = normalizedOverride;
+    requireMapping(overrideValue, `feature override ${featureId}`);
+    const unknownKeys = Object.keys(overrideValue).filter((key) => !allowedFields.includes(key));
+    if (unknownKeys.length > 0) {
+      fail(`feature override ${featureId} contains disallowed fields: ${unknownKeys.join(", ")}`);
     }
 
-    return { overrides };
+    const normalizedOverride = {};
+    for (const key of allowedFields) {
+      if (Object.prototype.hasOwnProperty.call(overrideValue, key)) {
+        normalizedOverride[key] = requireBoolean(overrideValue[key], `feature override ${featureId}.${key}`);
+      }
+    }
+    overrides[featureId] = normalizedOverride;
+  }
+
+  return { overrides };
 };
 
 export const parseFeatureFlagOverlaySource = (source, options) => {
-    let raw;
-    try {
-        raw = yaml.load(source);
-    } catch (error) {
-        fail(`failed to parse feature flag overlay: ${error.message}`);
-    }
-    return validateFeatureFlagOverlay(raw, options);
+  let raw;
+  try {
+    raw = yaml.load(source);
+  } catch (error) {
+    fail(`failed to parse feature flag overlay: ${error.message}`);
+  }
+  return validateFeatureFlagOverlay(raw, options);
 };
 
 export const resolveVariantFeatureRegistry = (baseRegistry, overlay) => {
-    const resolved = baseRegistry.features.map((feature) => {
-        const featureOverride = overlay.overrides[feature.id] ?? {};
-        const normalized = {
-            ...feature,
-            ...featureOverride,
-        };
-        if (normalized.developer_only && normalized.visible_to_user) {
-            fail(
-                `feature override ${feature.id} violates invariant: developer_only: true requires visible_to_user: false`,
-            );
-        }
-        return normalized;
-    });
-
-    return {
-        version: baseRegistry.version,
-        groups: baseRegistry.groups,
-        features: resolved,
+  const resolved = baseRegistry.features.map((feature) => {
+    const featureOverride = overlay.overrides[feature.id] ?? {};
+    const normalized = {
+      ...feature,
+      ...featureOverride,
     };
+    if (normalized.developer_only && normalized.visible_to_user) {
+      fail(`feature override ${feature.id} violates invariant: developer_only: true requires visible_to_user: false`);
+    }
+    return normalized;
+  });
+
+  return {
+    version: baseRegistry.version,
+    groups: baseRegistry.groups,
+    features: resolved,
+  };
 };
 
-export const resolvePublishVariants = (config, { publishTarget = 'release', explicitVariants = null } = {}) => {
-    const selected = explicitVariants && explicitVariants.length > 0 ? explicitVariants : config.repo.publishDefaults[publishTarget];
-    if (!selected) {
-        fail(`unknown publish target "${publishTarget}"`);
+export const resolvePublishVariants = (config, { publishTarget = "release", explicitVariants = null } = {}) => {
+  const selected =
+    explicitVariants && explicitVariants.length > 0 ? explicitVariants : config.repo.publishDefaults[publishTarget];
+  if (!selected) {
+    fail(`unknown publish target "${publishTarget}"`);
+  }
+  const unique = [...new Set(selected.map((value) => requireNonEmptyString(value, "publish variant id")))].sort();
+  unique.forEach((variantId) => {
+    if (!config.variants[variantId]) {
+      fail(`publish selection references unknown variant "${variantId}"`);
     }
-    const unique = [...new Set(selected.map((value) => requireNonEmptyString(value, 'publish variant id')))].sort();
-    unique.forEach((variantId) => {
-        if (!config.variants[variantId]) {
-            fail(`publish selection references unknown variant "${variantId}"`);
-        }
-    });
-    return unique;
+  });
+  return unique;
 };
 
 const toPascalCase = (value) =>
-    value
-        .split(/[-_]/g)
-        .filter(Boolean)
-        .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-        .join('');
+  value
+    .split(/[-_]/g)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join("");
 
 const sortObject = (value) => {
-    if (Array.isArray(value)) {
-        return value.map((entry) => sortObject(entry));
-    }
-    if (!value || typeof value !== 'object') {
-        return value;
-    }
-    return Object.fromEntries(
-        Object.keys(value)
-            .sort()
-            .map((key) => [key, sortObject(value[key])]),
-    );
+  if (Array.isArray(value)) {
+    return value.map((entry) => sortObject(entry));
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, sortObject(value[key])]),
+  );
 };
 
 export const buildVariantSelection = ({ config, variantId, baseRegistry, overlay, publishVariants }) => {
-    const selectedVariantId = variantId ?? config.repo.defaultVariant;
-    const selectedVariant = config.variants[selectedVariantId];
-    if (!selectedVariant) {
-        fail(`unknown variant "${selectedVariantId}"`);
-    }
+  const selectedVariantId = variantId ?? config.repo.defaultVariant;
+  const selectedVariant = config.variants[selectedVariantId];
+  if (!selectedVariant) {
+    fail(`unknown variant "${selectedVariantId}"`);
+  }
 
-    const resolvedFeatureRegistry = resolveVariantFeatureRegistry(baseRegistry, overlay);
-    const featureFlags = Object.fromEntries(
-        resolvedFeatureRegistry.features.map((feature) => [feature.id, {
-            enabled: feature.enabled,
-            visible_to_user: feature.visible_to_user,
-            developer_only: feature.developer_only,
-        }]),
-    );
+  const resolvedFeatureRegistry = resolveVariantFeatureRegistry(baseRegistry, overlay);
+  const featureFlags = Object.fromEntries(
+    resolvedFeatureRegistry.features.map((feature) => [
+      feature.id,
+      {
+        enabled: feature.enabled,
+        visible_to_user: feature.visible_to_user,
+        developer_only: feature.developer_only,
+      },
+    ]),
+  );
 
-    return sortObject({
-        schemaVersion: config.schemaVersion,
-        repo: {
-            defaultVariant: config.repo.defaultVariant,
-            publishDefaults: config.repo.publishDefaults,
-            selectedPublishVariants: publishVariants,
-        },
-        selectedVariantId,
-        variant: {
-            ...selectedVariant,
-            featureFlags,
-            displayNamePascalCase: toPascalCase(selectedVariant.id),
-        },
-    });
+  return sortObject({
+    schemaVersion: config.schemaVersion,
+    repo: {
+      defaultVariant: config.repo.defaultVariant,
+      publishDefaults: config.repo.publishDefaults,
+      selectedPublishVariants: publishVariants,
+    },
+    selectedVariantId,
+    variant: {
+      ...selectedVariant,
+      featureFlags,
+      displayNamePascalCase: toPascalCase(selectedVariant.id),
+    },
+  });
 };
 
 export const renderVariantRuntimeModule = (selection) => {
-    const serialized = JSON.stringify(selection, null, 2);
-    return `${LICENSE_HEADER}
+  const serialized = JSON.stringify(selection, null, 2);
+  return `${LICENSE_HEADER}
 ${GENERATED_BANNER}
 export const variantConfig = ${serialized} as const;
 
@@ -618,14 +633,14 @@ export const repoVariantConfig = variantConfig.repo;
 export const renderVariantJson = (selection) => `${JSON.stringify(selection, null, 2)}\n`;
 
 export const renderWebIndexHtml = (selection) => {
-    const { variant } = selection;
-    // The web manifest is only emitted for variants that declare a `platform.web` block
-    // (see compileVariant). Android-only variants never generate manifest.webmanifest, so
-    // omit the <link rel="manifest"> for them to avoid a guaranteed 404 in the Capacitor WebView.
-    const manifestLink = variant.platform.web
-        ? '\n    <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />'
-        : '';
-    return `<!doctype html>
+  const { variant } = selection;
+  // The web manifest is only emitted for variants that declare a `platform.web` block
+  // (see compileVariant). Android-only variants never generate manifest.webmanifest, so
+  // omit the <link rel="manifest"> for them to avoid a guaranteed 404 in the Capacitor WebView.
+  const manifestLink = variant.platform.web
+    ? '\n    <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />'
+    : "";
+  return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -677,40 +692,40 @@ export const renderWebIndexHtml = (selection) => {
 };
 
 export const renderWebManifest = (selection) => {
-    const { variant } = selection;
-    return `${JSON.stringify(
+  const { variant } = selection;
+  return `${JSON.stringify(
+    {
+      name: variant.displayName,
+      short_name: variant.platform.web.shortName,
+      description: variant.description,
+      start_url: ".",
+      scope: "/",
+      display: "standalone",
+      orientation: "any",
+      background_color: variant.platform.web.backgroundColor,
+      theme_color: variant.platform.web.themeColor,
+      icons: [
         {
-            name: variant.displayName,
-            short_name: variant.platform.web.shortName,
-            description: variant.description,
-            start_url: '.',
-            scope: '/',
-            display: 'standalone',
-            orientation: 'any',
-            background_color: variant.platform.web.backgroundColor,
-            theme_color: variant.platform.web.themeColor,
-            icons: [
-                {
-                    src: variant.assets.public.icon192Png.slice(1),
-                    sizes: '192x192',
-                    type: 'image/png',
-                },
-                {
-                    src: variant.assets.public.icon512Png.slice(1),
-                    sizes: '512x512',
-                    type: 'image/png',
-                },
-                {
-                    src: variant.assets.public.iconMaskable512Png.slice(1),
-                    sizes: '512x512',
-                    type: 'image/png',
-                    purpose: 'maskable',
-                },
-            ],
+          src: variant.assets.public.icon192Png.slice(1),
+          sizes: "192x192",
+          type: "image/png",
         },
-        null,
-        2,
-    )}\n`;
+        {
+          src: variant.assets.public.icon512Png.slice(1),
+          sizes: "512x512",
+          type: "image/png",
+        },
+        {
+          src: variant.assets.public.iconMaskable512Png.slice(1),
+          sizes: "512x512",
+          type: "image/png",
+          purpose: "maskable",
+        },
+      ],
+    },
+    null,
+    2,
+  )}\n`;
 };
 
 export const renderWebServiceWorker = () => `const CACHE_PREFIX = 'c64commander-static';
@@ -725,7 +740,7 @@ const buildId = (() => {
   }
 })();
 
-const CACHE_NAME = \`${'${CACHE_PREFIX}-${buildId}'}\`;
+const CACHE_NAME = \`${"${CACHE_PREFIX}-${buildId}"}\`;
 
 const isShellRequest = (request, url) => request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html';
 
@@ -800,17 +815,19 @@ export const renderAndroidLauncherBackgroundXml = (selection) => `${GENERATED_XM
 </resources>
 `;
 
-export const renderIosVariantXcconfig = (selection) => `${IOS_XCCONFIG_BANNER}VARIANT_DISPLAY_NAME = ${selection.variant.displayName}
+export const renderIosVariantXcconfig = (
+  selection,
+) => `${IOS_XCCONFIG_BANNER}VARIANT_DISPLAY_NAME = ${selection.variant.displayName}
 VARIANT_BUNDLE_IDENTIFIER = ${selection.variant.platform.ios.bundleId}
 `;
 
 export const renderIosLaunchScreenStoryboard = (selection) => {
-    const { red, green, blue } = hexColorToStoryboardRgb(
-        selection.variant.theme.backgroundColor,
-        'variant.theme.backgroundColor',
-    );
+  const { red, green, blue } = hexColorToStoryboardRgb(
+    selection.variant.theme.backgroundColor,
+    "variant.theme.backgroundColor",
+  );
 
-    return `<?xml version="1.0" encoding="UTF-8"?>
+  return `<?xml version="1.0" encoding="UTF-8"?>
 <document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="17132" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="01J-lp-oVM">
     <device id="retina4_7" orientation="portrait" appearance="light"/>
     <dependencies>
@@ -849,86 +866,90 @@ export const variant = webServerVariantConfig.variant;
 `;
 
 const formatGeneratedText = async ({ outputPath, rendered }) => {
-    const extension = path.extname(outputPath);
-    if (!['.json', '.ts', '.tsx'].includes(extension)) {
-        return rendered;
-    }
+  const extension = path.extname(outputPath);
+  if (![".json", ".ts", ".tsx"].includes(extension)) {
+    return rendered;
+  }
 
-    const config = (await prettier.resolveConfig(outputPath)) ?? {};
-    return prettier.format(rendered, {
-        ...config,
-        filepath: outputPath,
-    });
+  const config = (await prettier.resolveConfig(outputPath)) ?? {};
+  return prettier.format(rendered, {
+    ...config,
+    filepath: outputPath,
+  });
 };
 
 const writeOutputFile = ({ outputPath, rendered, check }) => {
-    let existing = '';
-    try {
-        existing = fs.readFileSync(outputPath, 'utf8');
-    } catch (error) {
-        if (error.code !== 'ENOENT') {
-            throw error;
-        }
+  let existing = "";
+  try {
+    existing = fs.readFileSync(outputPath, "utf8");
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      throw error;
     }
+  }
 
-    if (check) {
-        if (existing !== rendered) {
-            fail(`generated file is out of date: ${path.relative(REPO_ROOT, outputPath)}\n  run: node scripts/generate-variant.mjs`);
-        }
-        return false;
+  if (check) {
+    if (existing !== rendered) {
+      fail(
+        `generated file is out of date: ${path.relative(REPO_ROOT, outputPath)}\n  run: node scripts/generate-variant.mjs`,
+      );
     }
+    return false;
+  }
 
-    if (existing === rendered) {
-        return false;
-    }
+  if (existing === rendered) {
+    return false;
+  }
 
-    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-    fs.writeFileSync(outputPath, rendered, 'utf8');
-    return true;
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.writeFileSync(outputPath, rendered, "utf8");
+  return true;
 };
 
 const writeBinaryOutputFile = async ({ outputPath, content, check }) => {
-    let existing = null;
-    try {
-        existing = fs.readFileSync(outputPath);
-    } catch (error) {
-        if (error.code !== 'ENOENT') {
-            throw error;
-        }
+  let existing = null;
+  try {
+    existing = fs.readFileSync(outputPath);
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      throw error;
     }
+  }
 
-    if (check) {
-        if (!existing || !existing.equals(content)) {
-            fail(`generated file is out of date: ${path.relative(REPO_ROOT, outputPath)}\n  run: node scripts/generate-variant.mjs`);
-        }
-        return false;
+  if (check) {
+    if (!existing || !existing.equals(content)) {
+      fail(
+        `generated file is out of date: ${path.relative(REPO_ROOT, outputPath)}\n  run: node scripts/generate-variant.mjs`,
+      );
     }
+    return false;
+  }
 
-    if (existing && existing.equals(content)) {
-        return false;
-    }
+  if (existing && existing.equals(content)) {
+    return false;
+  }
 
-    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-    fs.writeFileSync(outputPath, content);
-    return true;
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.writeFileSync(outputPath, content);
+  return true;
 };
 
-const renderImageAsPng = async (inputPath, { size, fit = 'contain', background = TRANSPARENT_BACKGROUND } = {}) => {
-    let pipeline = sharp(inputPath);
-    if (size !== undefined) {
-        pipeline = pipeline.resize(size, size, {
-            fit,
-            background,
-        });
-    }
-    return pipeline.png(PNG_WRITE_OPTIONS).toBuffer();
+const renderImageAsPng = async (inputPath, { size, fit = "contain", background = TRANSPARENT_BACKGROUND } = {}) => {
+  let pipeline = sharp(inputPath);
+  if (size !== undefined) {
+    pipeline = pipeline.resize(size, size, {
+      fit,
+      background,
+    });
+  }
+  return pipeline.png(PNG_WRITE_OPTIONS).toBuffer();
 };
 
 const loadSourcePng = async (inputPath, format) => {
-    if (format === 'png') {
-        return sharp(inputPath).png(PNG_WRITE_OPTIONS).toBuffer();
-    }
-    return renderImageAsPng(inputPath);
+  if (format === "png") {
+    return sharp(inputPath).png(PNG_WRITE_OPTIONS).toBuffer();
+  }
+  return renderImageAsPng(inputPath);
 };
 
 /**
@@ -940,332 +961,334 @@ const loadSourcePng = async (inputPath, format) => {
  * means the home logo 404s.
  */
 const renderHomeLogoAsset = async ({ repoRoot, selection, check }) => {
-    const logoPath = path.join(repoRoot, selection.variant.assets.sources.logo.path);
-    return writeBinaryOutputFile({
-        outputPath: path.join(repoRoot, 'public', selection.variant.assets.public.homeLogoPng.slice(1)),
-        content: await loadSourcePng(logoPath, selection.variant.assets.sources.logo.format),
-        check,
-    });
+  const logoPath = path.join(repoRoot, selection.variant.assets.sources.logo.path);
+  return writeBinaryOutputFile({
+    outputPath: path.join(repoRoot, "public", selection.variant.assets.public.homeLogoPng.slice(1)),
+    content: await loadSourcePng(logoPath, selection.variant.assets.sources.logo.format),
+    check,
+  });
 };
 
 const renderPublicAssets = async ({ repoRoot, selection, check }) => {
-    const iconPath = path.join(repoRoot, selection.variant.assets.sources.icon.path);
+  const iconPath = path.join(repoRoot, selection.variant.assets.sources.icon.path);
 
-    const changes = [
-        await writeBinaryOutputFile({
-            outputPath: path.join(repoRoot, 'public', selection.variant.assets.public.faviconPng.slice(1)),
-            content: await renderImageAsPng(iconPath, { size: 64 }),
-            check,
-        }),
-        await writeBinaryOutputFile({
-            outputPath: path.join(repoRoot, 'public', selection.variant.assets.public.icon192Png.slice(1)),
-            content: await renderImageAsPng(iconPath, { size: 192 }),
-            check,
-        }),
-        await writeBinaryOutputFile({
-            outputPath: path.join(repoRoot, 'public', selection.variant.assets.public.icon512Png.slice(1)),
-            content: await renderImageAsPng(iconPath, { size: 512 }),
-            check,
-        }),
-        await writeBinaryOutputFile({
-            outputPath: path.join(repoRoot, 'public', selection.variant.assets.public.iconMaskable512Png.slice(1)),
-            content: await renderImageAsPng(iconPath, {
-                size: 512,
-                fit: 'contain',
-                background: selection.variant.theme.backgroundColor,
-            }),
-            check,
-        }),
-    ];
+  const changes = [
+    await writeBinaryOutputFile({
+      outputPath: path.join(repoRoot, "public", selection.variant.assets.public.faviconPng.slice(1)),
+      content: await renderImageAsPng(iconPath, { size: 64 }),
+      check,
+    }),
+    await writeBinaryOutputFile({
+      outputPath: path.join(repoRoot, "public", selection.variant.assets.public.icon192Png.slice(1)),
+      content: await renderImageAsPng(iconPath, { size: 192 }),
+      check,
+    }),
+    await writeBinaryOutputFile({
+      outputPath: path.join(repoRoot, "public", selection.variant.assets.public.icon512Png.slice(1)),
+      content: await renderImageAsPng(iconPath, { size: 512 }),
+      check,
+    }),
+    await writeBinaryOutputFile({
+      outputPath: path.join(repoRoot, "public", selection.variant.assets.public.iconMaskable512Png.slice(1)),
+      content: await renderImageAsPng(iconPath, {
+        size: 512,
+        fit: "contain",
+        background: selection.variant.theme.backgroundColor,
+      }),
+      check,
+    }),
+  ];
 
-    return changes.some(Boolean);
+  return changes.some(Boolean);
 };
 
 const renderAndroidAssets = async ({ repoRoot, selection, check }) => {
-    const iconPath = path.join(repoRoot, selection.variant.assets.sources.icon.path);
-    const splashPath = path.join(repoRoot, selection.variant.assets.sources.splash.path);
+  const iconPath = path.join(repoRoot, selection.variant.assets.sources.icon.path);
+  const splashPath = path.join(repoRoot, selection.variant.assets.sources.splash.path);
 
-    const changes = [
-        writeOutputFile({
-            outputPath: path.join(repoRoot, 'android/app/src/main/res/values/strings.xml'),
-            rendered: renderAndroidStringsXml(selection),
-            check,
-        }),
-        writeOutputFile({
-            outputPath: path.join(repoRoot, 'android/app/src/main/res/values/ic_launcher_background.xml'),
-            rendered: renderAndroidLauncherBackgroundXml(selection),
-            check,
-        }),
-        await writeBinaryOutputFile({
-            outputPath: path.join(repoRoot, 'android/app/src/main/res/drawable/splash.png'),
-            content: await renderImageAsPng(splashPath, {
-                size: 1366,
-                fit: 'contain',
-                background: selection.variant.theme.backgroundColor,
-            }),
-            check,
-        }),
-    ];
+  const changes = [
+    writeOutputFile({
+      outputPath: path.join(repoRoot, "android/app/src/main/res/values/strings.xml"),
+      rendered: renderAndroidStringsXml(selection),
+      check,
+    }),
+    writeOutputFile({
+      outputPath: path.join(repoRoot, "android/app/src/main/res/values/ic_launcher_background.xml"),
+      rendered: renderAndroidLauncherBackgroundXml(selection),
+      check,
+    }),
+    await writeBinaryOutputFile({
+      outputPath: path.join(repoRoot, "android/app/src/main/res/drawable/splash.png"),
+      content: await renderImageAsPng(splashPath, {
+        size: 1366,
+        fit: "contain",
+        background: selection.variant.theme.backgroundColor,
+      }),
+      check,
+    }),
+  ];
 
-    for (const [density, size] of ANDROID_ICON_SIZES) {
-        const directory = path.join(repoRoot, `android/app/src/main/res/mipmap-${density}`);
-        const iconPng = await renderImageAsPng(iconPath, { size });
-        const foregroundPng = await renderImageAsPng(iconPath, { size, fit: 'contain' });
-        changes.push(
-            await writeBinaryOutputFile({
-                outputPath: path.join(directory, 'ic_launcher.png'),
-                content: iconPng,
-                check,
-            }),
-        );
-        changes.push(
-            await writeBinaryOutputFile({
-                outputPath: path.join(directory, 'ic_launcher_round.png'),
-                content: iconPng,
-                check,
-            }),
-        );
-        changes.push(
-            await writeBinaryOutputFile({
-                outputPath: path.join(directory, 'ic_launcher_foreground.png'),
-                content: foregroundPng,
-                check,
-            }),
-        );
-    }
+  for (const [density, size] of ANDROID_ICON_SIZES) {
+    const directory = path.join(repoRoot, `android/app/src/main/res/mipmap-${density}`);
+    const iconPng = await renderImageAsPng(iconPath, { size });
+    const foregroundPng = await renderImageAsPng(iconPath, { size, fit: "contain" });
+    changes.push(
+      await writeBinaryOutputFile({
+        outputPath: path.join(directory, "ic_launcher.png"),
+        content: iconPng,
+        check,
+      }),
+    );
+    changes.push(
+      await writeBinaryOutputFile({
+        outputPath: path.join(directory, "ic_launcher_round.png"),
+        content: iconPng,
+        check,
+      }),
+    );
+    changes.push(
+      await writeBinaryOutputFile({
+        outputPath: path.join(directory, "ic_launcher_foreground.png"),
+        content: foregroundPng,
+        check,
+      }),
+    );
+  }
 
-    return changes.some(Boolean);
+  return changes.some(Boolean);
 };
 
 const renderIosAssets = async ({ repoRoot, selection, check }) => {
-    const iconPath = path.join(repoRoot, selection.variant.assets.sources.icon.path);
-    const splashPath = path.join(repoRoot, selection.variant.assets.sources.splash.path);
-    const splashPng = await renderImageAsPng(splashPath, {
-        size: 2732,
-        fit: 'contain',
-        background: selection.variant.theme.backgroundColor,
-    });
+  const iconPath = path.join(repoRoot, selection.variant.assets.sources.icon.path);
+  const splashPath = path.join(repoRoot, selection.variant.assets.sources.splash.path);
+  const splashPng = await renderImageAsPng(splashPath, {
+    size: 2732,
+    fit: "contain",
+    background: selection.variant.theme.backgroundColor,
+  });
 
-    const changes = [
-        writeOutputFile({
-            outputPath: path.join(repoRoot, 'ios/App/App/Config/Variant.generated.xcconfig'),
-            rendered: renderIosVariantXcconfig(selection),
-            check,
-        }),
-        writeOutputFile({
-            outputPath: path.join(repoRoot, 'ios/App/App/Base.lproj/LaunchScreen.storyboard'),
-            rendered: renderIosLaunchScreenStoryboard(selection),
-            check,
-        }),
-        await writeBinaryOutputFile({
-            outputPath: path.join(repoRoot, 'ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png'),
-            content: await renderImageAsPng(iconPath, { size: 1024 }),
-            check,
-        }),
-    ];
+  const changes = [
+    writeOutputFile({
+      outputPath: path.join(repoRoot, "ios/App/App/Config/Variant.generated.xcconfig"),
+      rendered: renderIosVariantXcconfig(selection),
+      check,
+    }),
+    writeOutputFile({
+      outputPath: path.join(repoRoot, "ios/App/App/Base.lproj/LaunchScreen.storyboard"),
+      rendered: renderIosLaunchScreenStoryboard(selection),
+      check,
+    }),
+    await writeBinaryOutputFile({
+      outputPath: path.join(repoRoot, "ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png"),
+      content: await renderImageAsPng(iconPath, { size: 1024 }),
+      check,
+    }),
+  ];
 
-    for (const filename of IOS_SPLASH_FILENAMES) {
-        changes.push(
-            await writeBinaryOutputFile({
-                outputPath: path.join(repoRoot, 'ios/App/App/Assets.xcassets/Splash.imageset', filename),
-                content: splashPng,
-                check,
-            }),
-        );
-    }
+  for (const filename of IOS_SPLASH_FILENAMES) {
+    changes.push(
+      await writeBinaryOutputFile({
+        outputPath: path.join(repoRoot, "ios/App/App/Assets.xcassets/Splash.imageset", filename),
+        content: splashPng,
+        check,
+      }),
+    );
+  }
 
-    return changes.some(Boolean);
+  return changes.some(Boolean);
 };
 
 export const compileVariant = async ({
-    variantsPath = DEFAULT_VARIANTS_PATH,
-    featureFlagsPath = DEFAULT_FEATURE_FLAGS_PATH,
-    overlaysDir = DEFAULT_OVERLAYS_DIR,
-    runtimeTsPath,
-    runtimeJsonPath,
-    webIndexPath,
-    webManifestPath,
-    webServiceWorkerPath,
-    webServerVariantTsPath,
-    variantId,
-    publishTarget = 'release',
-    explicitPublishVariants = null,
-    check = false,
+  variantsPath = DEFAULT_VARIANTS_PATH,
+  featureFlagsPath = DEFAULT_FEATURE_FLAGS_PATH,
+  overlaysDir = DEFAULT_OVERLAYS_DIR,
+  runtimeTsPath,
+  runtimeJsonPath,
+  webIndexPath,
+  webManifestPath,
+  webServiceWorkerPath,
+  webServerVariantTsPath,
+  variantId,
+  publishTarget = "release",
+  explicitPublishVariants = null,
+  check = false,
 } = {}) => {
-    const normalizedVariantId = normalizeOptionalVariantId(variantId);
-    const repoRoot = path.resolve(path.dirname(variantsPath), '..');
-    const resolvedRuntimeTsPath = runtimeTsPath ?? path.join(repoRoot, 'src/generated/variant.ts');
-    const resolvedRuntimeJsonPath = runtimeJsonPath ?? path.join(repoRoot, 'src/generated/variant.json');
-    const resolvedWebIndexPath = webIndexPath ?? path.join(repoRoot, 'index.html');
-    const resolvedWebManifestPath = webManifestPath ?? path.join(repoRoot, 'public/manifest.webmanifest');
-    const resolvedWebServiceWorkerPath = webServiceWorkerPath ?? path.join(repoRoot, 'public/sw.js');
-    const resolvedWebServerVariantTsPath = webServerVariantTsPath ?? path.join(repoRoot, 'web/server/src/variant.generated.ts');
-    const variantSource = fs.readFileSync(variantsPath, 'utf8');
-    const config = parseVariantSource(variantSource, { repoRoot });
-    const baseRegistry = parseRegistrySource(fs.readFileSync(featureFlagsPath, 'utf8'));
-    const overlayPath = path.join(overlaysDir, `${normalizedVariantId ?? config.repo.defaultVariant}.yaml`);
-    if (!fs.existsSync(overlayPath)) {
-        fail(
-            `missing feature flag overlay for variant "${normalizedVariantId ?? config.repo.defaultVariant}": ${path.relative(repoRoot, overlayPath)}`,
-        );
-    }
-    const overlay = parseFeatureFlagOverlaySource(fs.readFileSync(overlayPath, 'utf8'), {
-        featureIds: new Set(baseRegistry.features.map((feature) => feature.id)),
-        variantId: normalizedVariantId ?? config.repo.defaultVariant,
-    });
-    const publishVariants = resolvePublishVariants(config, {
-        publishTarget,
-        explicitVariants: explicitPublishVariants,
-    });
-    const selection = buildVariantSelection({
-        config,
-        variantId: normalizedVariantId,
-        baseRegistry,
-        overlay,
-        publishVariants,
-    });
+  const normalizedVariantId = normalizeOptionalVariantId(variantId);
+  const repoRoot = path.resolve(path.dirname(variantsPath), "..");
+  const resolvedRuntimeTsPath = runtimeTsPath ?? path.join(repoRoot, "src/generated/variant.ts");
+  const resolvedRuntimeJsonPath = runtimeJsonPath ?? path.join(repoRoot, "src/generated/variant.json");
+  const resolvedWebIndexPath = webIndexPath ?? path.join(repoRoot, "index.html");
+  const resolvedWebManifestPath = webManifestPath ?? path.join(repoRoot, "public/manifest.webmanifest");
+  const resolvedWebServiceWorkerPath = webServiceWorkerPath ?? path.join(repoRoot, "public/sw.js");
+  const resolvedWebServerVariantTsPath =
+    webServerVariantTsPath ?? path.join(repoRoot, "web/server/src/variant.generated.ts");
+  const variantSource = fs.readFileSync(variantsPath, "utf8");
+  const config = parseVariantSource(variantSource, { repoRoot });
+  const baseRegistry = parseRegistrySource(fs.readFileSync(featureFlagsPath, "utf8"));
+  const overlayPath = path.join(overlaysDir, `${normalizedVariantId ?? config.repo.defaultVariant}.yaml`);
+  if (!fs.existsSync(overlayPath)) {
+    fail(
+      `missing feature flag overlay for variant "${normalizedVariantId ?? config.repo.defaultVariant}": ${path.relative(repoRoot, overlayPath)}`,
+    );
+  }
+  const overlay = parseFeatureFlagOverlaySource(fs.readFileSync(overlayPath, "utf8"), {
+    featureIds: new Set(baseRegistry.features.map((feature) => feature.id)),
+    variantId: normalizedVariantId ?? config.repo.defaultVariant,
+  });
+  const publishVariants = resolvePublishVariants(config, {
+    publishTarget,
+    explicitVariants: explicitPublishVariants,
+  });
+  const selection = buildVariantSelection({
+    config,
+    variantId: normalizedVariantId,
+    baseRegistry,
+    overlay,
+    publishVariants,
+  });
 
-    // Always-generated outputs: the runtime config, the Vite entry (index.html),
-    // and the Android resources. These are required for every build, including
-    // an Android-only variant.
-    const outputs = [
-        writeOutputFile({
-            outputPath: resolvedRuntimeTsPath,
-            rendered: await formatGeneratedText({
-                outputPath: resolvedRuntimeTsPath,
-                rendered: renderVariantRuntimeModule(selection),
-            }),
-            check,
+  // Always-generated outputs: the runtime config, the Vite entry (index.html),
+  // and the Android resources. These are required for every build, including
+  // an Android-only variant.
+  const outputs = [
+    writeOutputFile({
+      outputPath: resolvedRuntimeTsPath,
+      rendered: await formatGeneratedText({
+        outputPath: resolvedRuntimeTsPath,
+        rendered: renderVariantRuntimeModule(selection),
+      }),
+      check,
+    }),
+    writeOutputFile({
+      outputPath: resolvedRuntimeJsonPath,
+      rendered: await formatGeneratedText({
+        outputPath: resolvedRuntimeJsonPath,
+        rendered: renderVariantJson(selection),
+      }),
+      check,
+    }),
+    writeOutputFile({ outputPath: resolvedWebIndexPath, rendered: renderWebIndexHtml(selection), check }),
+    await renderAndroidAssets({ repoRoot, selection, check }),
+    // The in-app home logo is rendered by the running app on every platform,
+    // so it must be emitted even for Android-only variants (no web block).
+    await renderHomeLogoAsset({ repoRoot, selection, check }),
+  ];
+
+  // Web-only artifacts (PWA favicons/icons, manifest, service worker, web-server
+  // variant module) are emitted only for variants that declare a `platform.web`
+  // block. An Android-only variant uses Android mipmap launcher icons instead;
+  // the favicon links in its index.html are inert inside the WebView.
+  if (selection.variant.platform.web) {
+    outputs.push(
+      await renderPublicAssets({ repoRoot, selection, check }),
+      writeOutputFile({ outputPath: resolvedWebManifestPath, rendered: renderWebManifest(selection), check }),
+      writeOutputFile({
+        outputPath: resolvedWebServiceWorkerPath,
+        rendered: renderWebServiceWorker(selection),
+        check,
+      }),
+      writeOutputFile({
+        outputPath: resolvedWebServerVariantTsPath,
+        rendered: await formatGeneratedText({
+          outputPath: resolvedWebServerVariantTsPath,
+          rendered: renderWebServerVariantModule(selection),
         }),
-        writeOutputFile({
-            outputPath: resolvedRuntimeJsonPath,
-            rendered: await formatGeneratedText({
-                outputPath: resolvedRuntimeJsonPath,
-                rendered: renderVariantJson(selection),
-            }),
-            check,
-        }),
-        writeOutputFile({ outputPath: resolvedWebIndexPath, rendered: renderWebIndexHtml(selection), check }),
-        await renderAndroidAssets({ repoRoot, selection, check }),
-        // The in-app home logo is rendered by the running app on every platform,
-        // so it must be emitted even for Android-only variants (no web block).
-        await renderHomeLogoAsset({ repoRoot, selection, check }),
-    ];
+        check,
+      }),
+    );
+  }
 
-    // Web-only artifacts (PWA favicons/icons, manifest, service worker, web-server
-    // variant module) are emitted only for variants that declare a `platform.web`
-    // block. An Android-only variant uses Android mipmap launcher icons instead;
-    // the favicon links in its index.html are inert inside the WebView.
-    if (selection.variant.platform.web) {
-        outputs.push(
-            await renderPublicAssets({ repoRoot, selection, check }),
-            writeOutputFile({ outputPath: resolvedWebManifestPath, rendered: renderWebManifest(selection), check }),
-            writeOutputFile({
-                outputPath: resolvedWebServiceWorkerPath,
-                rendered: renderWebServiceWorker(selection),
-                check,
-            }),
-            writeOutputFile({
-                outputPath: resolvedWebServerVariantTsPath,
-                rendered: await formatGeneratedText({
-                    outputPath: resolvedWebServerVariantTsPath,
-                    rendered: renderWebServerVariantModule(selection),
-                }),
-                check,
-            }),
-        );
-    }
+  // iOS artifacts (xcconfig, launch storyboard, app icon/splash) are emitted only
+  // for variants that declare a `platform.ios` block.
+  if (selection.variant.platform.ios) {
+    outputs.push(await renderIosAssets({ repoRoot, selection, check }));
+  }
 
-    // iOS artifacts (xcconfig, launch storyboard, app icon/splash) are emitted only
-    // for variants that declare a `platform.ios` block.
-    if (selection.variant.platform.ios) {
-        outputs.push(await renderIosAssets({ repoRoot, selection, check }));
-    }
+  const changed = outputs.some(Boolean);
 
-    const changed = outputs.some(Boolean);
-
-    return {
-        changed,
-        selection,
-        overlayPath,
-    };
+  return {
+    changed,
+    selection,
+    overlayPath,
+  };
 };
 
 const isDirectInvocation = () => {
-    const entry = process.argv[1];
-    if (!entry) return false;
-    return path.resolve(entry) === fileURLToPath(import.meta.url);
+  const entry = process.argv[1];
+  if (!entry) return false;
+  return path.resolve(entry) === fileURLToPath(import.meta.url);
 };
 
 const parseCliArgs = (args) => {
-    let variantId;
-    let publishTarget = 'release';
-    let explicitPublishVariants = null;
-    let check = false;
+  let variantId;
+  let publishTarget = "release";
+  let explicitPublishVariants = null;
+  let check = false;
 
-    for (let index = 0; index < args.length; index += 1) {
-        const arg = args[index];
-        if (arg === '--check') {
-            check = true;
-            continue;
-        }
-        if (arg === '--variant') {
-            variantId = args[index + 1];
-            index += 1;
-            continue;
-        }
-        if (arg === '--publish-target') {
-            publishTarget = args[index + 1] ?? publishTarget;
-            index += 1;
-            continue;
-        }
-        if (arg === '--publish-variants') {
-            explicitPublishVariants = (args[index + 1] ?? '')
-                .split(',')
-                .map((entry) => entry.trim())
-                .filter(Boolean);
-            index += 1;
-            continue;
-        }
-        fail(`unknown argument: ${arg}`);
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--check") {
+      check = true;
+      continue;
     }
+    if (arg === "--variant") {
+      variantId = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === "--publish-target") {
+      publishTarget = args[index + 1] ?? publishTarget;
+      index += 1;
+      continue;
+    }
+    if (arg === "--publish-variants") {
+      explicitPublishVariants = (args[index + 1] ?? "")
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+      index += 1;
+      continue;
+    }
+    fail(`unknown argument: ${arg}`);
+  }
 
-    return { variantId, publishTarget, explicitPublishVariants, check };
+  return { variantId, publishTarget, explicitPublishVariants, check };
 };
 
 const normalizeOptionalVariantId = (value) => {
-    if (typeof value !== 'string') return value;
-    const trimmed = value.trim();
-    return trimmed === '' ? undefined : trimmed;
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  return trimmed === "" ? undefined : trimmed;
 };
 
 if (isDirectInvocation()) {
-    try {
-        const args = parseCliArgs(process.argv.slice(2));
-        const envPublishVariants = (process.env.APP_PUBLISH_VARIANTS ?? '')
-            .split(',')
-            .map((entry) => entry.trim())
-            .filter(Boolean);
-        const resolvedArgs = {
-            ...args,
-            variantId: normalizeOptionalVariantId(args.variantId) ?? normalizeOptionalVariantId(process.env.APP_VARIANT),
-            explicitPublishVariants: args.explicitPublishVariants ?? (envPublishVariants.length > 0 ? envPublishVariants : null),
-        };
-        const result = await compileVariant(resolvedArgs);
-        if (resolvedArgs.check) {
-            console.log(`variant outputs are up to date for ${result.selection.selectedVariantId}`);
-        } else if (result.changed) {
-            console.log(`wrote variant outputs for ${result.selection.selectedVariantId}`);
-        } else {
-            console.log(`variant outputs already up to date for ${result.selection.selectedVariantId}`);
-        }
-    } catch (error) {
-        if (error instanceof VariantCompileError) {
-            console.error(`variant generation failed: ${error.message}`);
-            process.exit(1);
-        }
-        throw error;
+  try {
+    const args = parseCliArgs(process.argv.slice(2));
+    const envPublishVariants = (process.env.APP_PUBLISH_VARIANTS ?? "")
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    const resolvedArgs = {
+      ...args,
+      variantId: normalizeOptionalVariantId(args.variantId) ?? normalizeOptionalVariantId(process.env.APP_VARIANT),
+      explicitPublishVariants:
+        args.explicitPublishVariants ?? (envPublishVariants.length > 0 ? envPublishVariants : null),
+    };
+    const result = await compileVariant(resolvedArgs);
+    if (resolvedArgs.check) {
+      console.log(`variant outputs are up to date for ${result.selection.selectedVariantId}`);
+    } else if (result.changed) {
+      console.log(`wrote variant outputs for ${result.selection.selectedVariantId}`);
+    } else {
+      console.log(`variant outputs already up to date for ${result.selection.selectedVariantId}`);
     }
+  } catch (error) {
+    if (error instanceof VariantCompileError) {
+      console.error(`variant generation failed: ${error.message}`);
+      process.exit(1);
+    }
+    throw error;
+  }
 }
 
 export { VariantCompileError };

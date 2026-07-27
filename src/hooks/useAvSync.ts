@@ -81,13 +81,14 @@ export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
   /** In-flight SPACE press (press → hold → release); stopTest awaits it so a reset can't preempt it. */
   const pendingKeyRef = useRef<Promise<void> | null>(null);
 
+  const refresh = useCallback(() => {
+    setStats(analyzerRef.current!.getStats());
+    setLatencyStats(latencyRef.current!.getStats());
+  }, []);
+
   useEffect(() => {
     const analyzer = analyzerRef.current!;
     const latency = latencyRef.current!;
-    const refresh = () => {
-      setStats(analyzer.getStats());
-      setLatencyStats(latency.getStats());
-    };
     const unsubscribeFrames = session.subscribeFrames((frame, _height, arrivalMs) => {
       videoObserveRef.current = now();
       const offset = analyzer.pushVideoFrame(frame, arrivalMs);
@@ -99,7 +100,32 @@ export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
         refresh();
       }
     });
-    const unsubscribeAudio = session.subscribeAudio((samples, arrivalMs) => {
+    // Backstop poll: surface see/hear pops (and unmatched-pop counts) promptly even between matches.
+    const poll = setInterval(refresh, STATS_REFRESH_MS);
+    return () => {
+      unsubscribeFrames();
+      clearInterval(poll);
+    };
+  }, [refresh, session]);
+
+  /**
+   * Listen to audio only while a test program is on the device.
+   *
+   * Subscribing to mirrored audio is not free on Android: with the native sink playing, the receive
+   * thread stops emitting audio datagrams, and an active subscriber turns those ~250 packets/s of
+   * base64 + WebView crossings back on. This panel lives on Home, so subscribing for its whole
+   * lifetime would leave that cost running permanently — to analyse a stream that, with no test
+   * program loaded, carries nothing to detect. The C64 only flashes and beeps while av-sync-auto or
+   * av-sync-key is running, so outside a test there is by construction no pop to find.
+   */
+  useEffect(() => {
+    // `runningTest` as well as `testActive`: the latter is only set once the program has loaded, and
+    // subscribing after that point would race the first pop. `runningTest` flips synchronously when a
+    // run starts, so the subscription is always up before the device can make a sound.
+    if (!testActive && !runningTest) return;
+    const analyzer = analyzerRef.current!;
+    const latency = latencyRef.current!;
+    return session.subscribeAudio((samples, arrivalMs) => {
       audioObserveRef.current = now();
       const offset = analyzer.pushAudioSamples(samples, arrivalMs);
       if (offset !== null) {
@@ -107,14 +133,7 @@ export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
         refresh();
       }
     });
-    // Backstop poll: surface see/hear pops (and unmatched-pop counts) promptly even between matches.
-    const poll = setInterval(refresh, STATS_REFRESH_MS);
-    return () => {
-      unsubscribeFrames();
-      unsubscribeAudio();
-      clearInterval(poll);
-    };
-  }, [session]);
+  }, [refresh, runningTest, session, testActive]);
 
   const reset = useCallback(() => {
     analyzerRef.current!.reset();

@@ -80,6 +80,18 @@ variants:
         commoserve_base_url: http://commoserve.files.commodore.net
       default_display_profile: compact
       default_t9_input_enabled: true
+      # Deliberately NOT overridden to `sidlite`.
+      #
+      # This variant targets the Commodore Callback 8020, which has not been
+      # released and cannot be measured. Defaulting it to the lesser engine on
+      # the strength of a spec-sheet projection would ship a real, audible
+      # quality regression on every device that DOES exist, to protect one that
+      # does not. reSIDfp is what makes a SID sound like a C64, and the only
+      # hardware we can actually test (Pixel 4) runs it with zero underruns.
+      #
+      # When the 8020 exists: measure it (gate L1) and set
+      # `default_sid_emulation_engine: sidlite` here if it cannot hold realtime.
+      # The mechanism is in place and the user can already switch in Settings.
       # Keypad-first appliance UX: start full-screen (hide the Android status and
       # navigation bars). The user can still override both in Settings -> Display.
       default_hide_status_bar: true

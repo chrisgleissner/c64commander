@@ -20,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Gamepad2 } from "lucide-react";
+import { Gamepad2, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RemoteInputSheet } from "@/components/remoteInput/RemoteInputSheet";
 import { PlaybackConfigSheet } from "@/pages/playFiles/components/PlaybackConfigSheet";
@@ -80,6 +80,18 @@ import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import { VolumeControls } from "@/pages/playFiles/components/VolumeControls";
 import { PlaybackControlsCard } from "@/pages/playFiles/components/PlaybackControlsCard";
+import { PlaybackEngineToggle } from "@/pages/playFiles/components/PlaybackEngineToggle";
+import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
+import { NowPlayingRanking } from "@/pages/playFiles/components/NowPlayingRanking";
+import { useCurrentTuneMd5 } from "@/pages/playFiles/hooks/useCurrentTuneMd5";
+import { useSidRadioFlags } from "@/lib/sidRadio/useSidRadioFlags";
+import { LikedTunesSheet } from "@/pages/playFiles/components/LikedTunesSheet";
+import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
+import { SidRadioChip } from "@/pages/playFiles/components/SidRadioChip";
+import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
+import { getLikedMd5s } from "@/lib/sidRadio/rankingStore";
+import { recordSkip } from "@/lib/sidRadio/sidRadioStats";
+import { Radio as RadioIcon } from "lucide-react";
 import { PlaybackSettingsPanel } from "@/pages/playFiles/components/PlaybackSettingsPanel";
 import { PlaylistPanel } from "@/pages/playFiles/components/PlaylistPanel";
 import { HvscManager } from "@/pages/playFiles/components/HvscManager";
@@ -155,6 +167,8 @@ import {
   sliderToDurationSeconds,
   shuffleArray,
 } from "@/pages/playFiles/playFilesUtils";
+import { getSharedLocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
+import { useActivePlayback } from "@/hooks/useActivePlayback";
 
 const ACTIVE_ADD_ITEMS_PROGRESS_STATES = new Set<AddItemsProgressState["status"]>([
   "scanning",
@@ -290,6 +304,8 @@ export default function PlayFilesPage() {
   const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
   const { value: remoteInputEnabled } = useFeatureFlag("remote_input_enabled");
   const [remoteInputSheetOpen, setRemoteInputSheetOpen] = useState(false);
+  const [likedTunesSheetOpen, setLikedTunesSheetOpen] = useState(false);
+  const [sidRadioLauncherOpen, setSidRadioLauncherOpen] = useState(false);
 
   const {
     volumeSliderPreviewIntervalMs,
@@ -444,6 +460,12 @@ export default function PlayFilesPage() {
     handlePauseResume,
     handleNext,
     handlePrevious,
+    handleSeekBy,
+    beginScrub,
+    scrubBy,
+    endScrub,
+    seekToFraction,
+    scrubTargetMs,
     playlistEnded,
     playlistItemDuration,
   } = usePlaybackController({
@@ -1329,6 +1351,26 @@ export default function PlayFilesPage() {
   }, [autoAdvanceGuardRef, handleNextRef, playbackStateRef, queueBackgroundDueAtUpdateRef, syncPlaybackTimelineRef]);
 
   const currentItem = playlist[currentIndex];
+  const sidRadioFlags = useSidRadioFlags();
+  const playbackEngine = usePlaybackEngine();
+  const currentTuneMd5 = useCurrentTuneMd5(currentItem ?? null, sidRadioFlags.sidRadioEnabled);
+  const sidRadio = useSidRadio({
+    enabled: sidRadioFlags.sidRadioEnabled,
+    startPlaylist: (items) => {
+      void startPlaylist(items, 0);
+    },
+    appendItems: (items) => setPlaylist((prev) => [...prev, ...items]),
+    advanceToNext: handleNext,
+    currentIndex,
+    playlistLength: playlist.length,
+  });
+  const sidRadioWhyThisTune = sidRadio.station
+    ? sidRadio.station.seedKind === "song"
+      ? `Similar to ${sidRadio.station.seedLabel}`
+      : sidRadio.station.seedKind === "style"
+        ? `Matches ${sidRadio.station.seedLabel}`
+        : "From tunes you like"
+    : null;
   const { setPlaybackContext, resolved: lightingResolved, openStudio, openContextLens } = useLightingStudio();
   const currentDurationMs = currentItem ? playlistItemDuration(currentItem, currentIndex) : undefined;
   const sourceKind = useMemo<TraceSourceKind | null>(() => {
@@ -1393,9 +1435,33 @@ export default function PlayFilesPage() {
     };
   }, [currentItem, isPlaying, setPlaybackContext]);
   const currentDurationLabel = formatTime(currentDurationMs);
-  const progressPercent = currentDurationMs ? Math.min(100, (elapsedMs / currentDurationMs) * 100) : 0;
-  const remainingMs = currentDurationMs !== undefined ? Math.max(0, currentDurationMs - elapsedMs) : undefined;
+  // While the user is scrubbing, the bar and the timer follow the FINGER rather
+  // than the audio clock. The engine is deliberately behind — it is catching up
+  // to the target in the background — and showing its position would make the
+  // control feel dead for as long as a rewind takes to re-render.
+  const isScrubbing = scrubTargetMs !== null;
+  const displayElapsedMs = isScrubbing ? scrubTargetMs : elapsedMs;
+  const progressPercent = currentDurationMs ? Math.min(100, (displayElapsedMs / currentDurationMs) * 100) : 0;
+  const remainingMs = currentDurationMs !== undefined ? Math.max(0, currentDurationMs - displayElapsedMs) : undefined;
   const remainingLabel = currentDurationMs !== undefined ? `-${formatTime(remainingMs)}` : "—";
+  // On-device playback has its own output gain (the same master node the
+  // crossfade uses), so the Play page's volume control can drive whichever
+  // route is sounding instead of only ever reaching the C64.
+  const [localMuted, setLocalMuted] = useState(false);
+  const setLocalVolumeFromIndex = useCallback(
+    (index: number) => {
+      const steps = Math.max(1, volumeSteps.length - 1);
+      getSharedLocalSidPlaybackController().setVolume(Math.min(1, Math.max(0, index / steps)));
+    },
+    [volumeSteps.length],
+  );
+  const toggleLocalMute = useCallback(() => {
+    setLocalMuted((muted) => {
+      getSharedLocalSidPlaybackController().setMuted(!muted);
+      return !muted;
+    });
+  }, []);
+
   const canControlVolume = enabledSidVolumeItems.length > 0 && volumeSteps.length > 0;
   const volumeLabel = volumeSteps[volumeIndex]?.label ?? "—";
   const knownSubsongCount =
@@ -1450,7 +1516,18 @@ export default function PlayFilesPage() {
   const allPlaylistSelected = selectedPlaylistCount > 0 && selectedPlaylistCount === playlistIds.length;
   const hasPlaylist = playlist.length > 0;
   const canTransport = hasPlaylist && !isPlaylistLoading;
-  const canPause = isPlaying;
+  // Playing according to the APP, not according to this page instance.
+  //
+  // `isPlaying` is this component's own state and starts false, so a Play page
+  // mounted while a tune is already playing — navigate Home, come back —
+  // rendered Pause disabled and dropped Rewind/Fast Forward entirely, on audio
+  // the user could hear. It corrects itself when the async session restore
+  // lands, which is too late to be a transport. The union is deliberate:
+  // whichever source knows first wins, and neither can turn the other off.
+  const activePlayback = useActivePlayback();
+  const playbackRunning = isPlaying || activePlayback.any;
+  const localPlaybackRunning = isPlaying || activePlayback.local;
+  const canPause = playbackRunning;
   // HARD12-005: Next/Prev enablement must reflect the shuffle-aware traversal
   // (what tapping them will do), not the linear playlist position.
   const hasPrev = canAdvancePrevious(playlist, currentIndex, repeatEnabled, shuffleEnabled, shuffleSeed);
@@ -1788,6 +1865,7 @@ export default function PlayFilesPage() {
               data-section-label="Playback controls"
               data-testid="play-section-playback"
             >
+              {playbackEngine.localEngineEnabled && currentItem?.category === "sid" ? <PlaybackEngineToggle /> : null}
               <PlaybackControlsCard
                 hasCurrentItem={Boolean(currentItem)}
                 currentItemIcon={
@@ -1807,6 +1885,29 @@ export default function PlayFilesPage() {
                   ) : undefined
                 }
                 currentItemLabel={currentItem?.label ?? null}
+                stationActive={sidRadio.active}
+                rankingControls={
+                  sidRadioFlags.rankingActive ? (
+                    <NowPlayingRanking
+                      md5={currentTuneMd5}
+                      enabled={sidRadioFlags.rankingActive}
+                      onNotForMe={
+                        sidRadio.active
+                          ? () => {
+                              // Record the skip HERE, where the ✕ actually
+                              // drives the queue. useSidRadio.steer() also calls
+                              // recordSkip, but nothing consumes steer — so
+                              // `skips` and `skipToLaunchMs` were never
+                              // populated and the pinned budget could not be
+                              // measured at all.
+                              const started = performance.now();
+                              void Promise.resolve(handleNext()).finally(() => recordSkip(performance.now() - started));
+                            }
+                          : undefined
+                      }
+                    />
+                  ) : undefined
+                }
                 currentDurationLabel={currentDurationLabel}
                 subsongLabel={
                   knownSubsongCount && knownSubsongCount > 1 ? `Subsong ${clampedSongNr}/${subsongCount}` : null
@@ -1824,16 +1925,41 @@ export default function PlayFilesPage() {
                 onStop={() => void handleStop()}
                 onPauseResume={() => void handlePauseResume()}
                 onNext={() => void handleNext()}
+                // Only offered when the tune is actually rendering here: the C64
+                // plays the SID itself and cannot be scrubbed, so on that route
+                // Previous/Next stay plain track controls.
+                onSeek={
+                  playbackEngine.engine === "local" && currentItem?.category === "sid" && localPlaybackRunning
+                    ? (deltaSeconds) => void handleSeekBy(deltaSeconds)
+                    : undefined
+                }
+                onScrubStart={
+                  playbackEngine.engine === "local" && currentItem?.category === "sid" && localPlaybackRunning
+                    ? () => beginScrub(currentDurationMs)
+                    : undefined
+                }
+                onScrubStep={scrubBy}
+                onSeekToFraction={
+                  playbackEngine.engine === "local" && currentItem?.category === "sid" && currentDurationMs
+                    ? (fraction) => seekToFraction(fraction, currentDurationMs)
+                    : undefined
+                }
+                onScrubEnd={() => void endScrub()}
+                isScrubbing={isScrubbing}
                 progressPercent={progressPercent}
-                elapsedLabel={formatTime(elapsedMs)}
+                elapsedLabel={formatTime(displayElapsedMs)}
                 remainingLabel={remainingLabel}
                 totalLabel={formatTime(playlistTotals.total)}
                 remainingTotalLabel={formatTime(playlistTotals.remaining)}
                 volumeControls={
                   <VolumeControls
-                    volumeMuted={volumeMuted}
-                    canControlVolume={canControlVolume}
+                    volumeMuted={playbackEngine.engine === "local" ? localMuted : volumeMuted}
+                    canControlVolume={playbackEngine.engine === "local" ? true : canControlVolume}
                     onToggleMute={() => {
+                      if (playbackEngine.engine === "local") {
+                        toggleLocalMute();
+                        return;
+                      }
                       void handleToggleMute().catch((error) => {
                         addErrorLog("Mute toggle failed", {
                           error: (error as Error).message,
@@ -1849,8 +1975,25 @@ export default function PlayFilesPage() {
                     volumeStepsCount={volumeSteps.length}
                     volumeIndex={volumeIndex}
                     onVolumeDraftChange={handleVolumeDraftChange}
-                    onVolumePreview={handleVolumePreview}
-                    onVolumeCommit={(value) => void handleVolumeCommit(value)}
+                    onVolumePreview={(value) => {
+                      // Follow the route that is actually sounding. The slider
+                      // reached only the C64's Audio Mixer, so while the tune
+                      // rendered here it moved and nothing happened — which is
+                      // not what anyone expects of a volume control on the page
+                      // they are listening from.
+                      if (playbackEngine.engine === "local") {
+                        setLocalVolumeFromIndex(value);
+                        return;
+                      }
+                      handleVolumePreview(value);
+                    }}
+                    onVolumeCommit={(value) => {
+                      if (playbackEngine.engine === "local") {
+                        setLocalVolumeFromIndex(value);
+                        return;
+                      }
+                      void handleVolumeCommit(value);
+                    }}
                     previewIntervalMs={volumeSliderPreviewIntervalMs}
                     volumeLabel={volumeLabel}
                     volumeValueFormatter={(value) => volumeSteps[Math.round(value)]?.label ?? "—"}
@@ -1881,6 +2024,52 @@ export default function PlayFilesPage() {
                   ) : undefined
                 }
               />
+              {sidRadioFlags.sidRadioEnabled ? (
+                <div className="flex w-full flex-col gap-2">
+                  {sidRadio.active && sidRadio.station ? (
+                    <SidRadioChip station={sidRadio.station} whyThisTune={sidRadioWhyThisTune} onStop={sidRadio.stop} />
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    {!sidRadio.active && currentTuneMd5 && currentItem?.category === "sid" ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        data-testid="sid-radio-start"
+                        onClick={() =>
+                          void sidRadio.startSongRadio(currentTuneMd5.slice(0, 12), currentItem?.label ?? "this tune")
+                        }
+                      >
+                        <RadioIcon className="mr-1.5 h-4 w-4" /> Start Radio
+                      </Button>
+                    ) : null}
+                    {!sidRadio.active ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        data-testid="sid-radio-launcher"
+                        onClick={() => setSidRadioLauncherOpen(true)}
+                      >
+                        <RadioIcon className="mr-1.5 h-4 w-4" /> SID Radio
+                      </Button>
+                    ) : null}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      data-testid="sid-radio-liked-tunes-open"
+                      onClick={() => setLikedTunesSheetOpen(true)}
+                    >
+                      <Heart className="mr-1.5 h-4 w-4" /> Liked Tunes
+                    </Button>
+                  </div>
+                  {sidRadio.notice ? (
+                    <p className="text-xs text-muted-foreground" data-testid="sid-radio-notice">
+                      {sidRadio.notice === "no-radio-for-tune"
+                        ? "No radio for this tune yet — try a style or your likes."
+                        : "No radio available yet — like a few tunes to seed one."}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
               <PlaybackSettingsPanel
                 durationSliderMax={DURATION_SLIDER_STEPS}
                 durationSliderValue={durationSecondsToSlider(durationSeconds)}
@@ -2103,6 +2292,20 @@ export default function PlayFilesPage() {
           {remoteInputEnabled ? (
             <RemoteInputSheet open={remoteInputSheetOpen} onOpenChange={setRemoteInputSheetOpen} />
           ) : null}
+
+          <LikedTunesSheet
+            open={likedTunesSheetOpen}
+            onOpenChange={setLikedTunesSheetOpen}
+            onPlay={(items, startIndex) => void startPlaylist(items, startIndex)}
+          />
+          <SidRadioLauncherSheet
+            open={sidRadioLauncherOpen}
+            onOpenChange={setSidRadioLauncherOpen}
+            likeCount={getLikedMd5s().length}
+            onStartStyle={(bit, label, fromLikes) => void sidRadio.startStyleRadio(bit, label, fromLikes)}
+            onStartTaste={() => void sidRadio.startTasteRadio()}
+            onSurprise={() => void sidRadio.startSurpriseRadio()}
+          />
 
           <AlertDialog
             open={Boolean(pendingConfigChange)}

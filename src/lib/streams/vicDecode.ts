@@ -15,6 +15,10 @@
  * CPU cost is fixed regardless of display size (the GPU integer-scales the canvas).
  */
 
+import { DEFAULT_VIC_PALETTE_ID, VIC_PALETTES } from "@/generated/vicPalettes";
+
+const REFERENCE_PALETTE = VIC_PALETTES.find((palette) => palette.id === DEFAULT_VIC_PALETTE_ID)!;
+
 export const VIC_FRAME_WIDTH = 384;
 export const VIC_PAL_HEIGHT = 272;
 export const VIC_NTSC_HEIGHT = 240;
@@ -41,28 +45,15 @@ export const videoStandardForHeight = (height: number): VideoStandard =>
   height >= (VIC_NTSC_HEIGHT + VIC_PAL_HEIGHT) / 2 ? "PAL" : "NTSC";
 
 /**
- * 16-entry VIC palette (RGB) — the "C64 Ultimate Default Palette" the device
- * streams (source of truth: c64stream `data/palettes/default.vpl`), so in-app
- * video matches what the machine and OBS/c64stream render.
+ * The reference 16-entry VIC palette (RGB) — the "C64 Ultimate Default Palette", so in-app video
+ * matches what the machine itself renders. Defined in `src/assets/palettes/default.vpl`.
+ *
+ * This is the REFERENCE palette, not necessarily the one on screen: the user may pick another in
+ * Settings. Anything ANALYSING a frame must stay on this one — `inverted.vpl`, for instance, maps
+ * index 0 to white and index 1 to black, which would turn the A/V-sync flash detector inside out.
+ * Only the code that PAINTS a frame should follow the user's choice.
  */
-export const VIC_PALETTE_RGB: ReadonlyArray<readonly [number, number, number]> = [
-  [0x00, 0x00, 0x00], // Black
-  [0xf7, 0xf7, 0xf7], // White
-  [0x8d, 0x2f, 0x34], // Red
-  [0x6a, 0xd4, 0xcd], // Cyan
-  [0x98, 0x35, 0xa4], // Purple
-  [0x4c, 0xb4, 0x42], // Green
-  [0x2c, 0x29, 0xb1], // Blue
-  [0xef, 0xef, 0x5d], // Yellow
-  [0x98, 0x4e, 0x20], // Orange
-  [0x5b, 0x38, 0x00], // Brown
-  [0xd1, 0x67, 0x6d], // Pink
-  [0x4a, 0x4a, 0x4a], // Dark grey
-  [0x7b, 0x7b, 0x7b], // Medium grey
-  [0x9f, 0xef, 0x93], // Light green
-  [0x6d, 0x6a, 0xef], // Light blue
-  [0xb2, 0xb2, 0xb2], // Light grey
-];
+export const VIC_PALETTE_RGB: ReadonlyArray<readonly [number, number, number]> = REFERENCE_PALETTE.rgb;
 
 const toHex2 = (value: number) => value.toString(16).padStart(2, "0");
 
@@ -83,10 +74,13 @@ export const isLittleEndian = (): boolean => {
  * Build the 16-entry Uint32 LUT once. On little-endian the ImageData word reads as
  * 0xAABBGGRR; on big-endian as 0xRRGGBBAA. Alpha is always fully opaque.
  */
-export const buildPaletteLUT = (littleEndian: boolean = isLittleEndian()): Uint32Array => {
+export const buildPaletteLUT = (
+  littleEndian: boolean = isLittleEndian(),
+  rgb: ReadonlyArray<readonly [number, number, number]> = VIC_PALETTE_RGB,
+): Uint32Array => {
   const lut = new Uint32Array(16);
   for (let i = 0; i < 16; i += 1) {
-    const [r, g, b] = VIC_PALETTE_RGB[i];
+    const [r, g, b] = rgb[i]!;
     lut[i] = littleEndian
       ? ((0xff << 24) | (b << 16) | (g << 8) | r) >>> 0
       : ((r << 24) | (g << 16) | (b << 8) | 0xff) >>> 0;
