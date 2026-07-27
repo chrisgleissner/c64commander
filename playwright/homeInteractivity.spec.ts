@@ -411,13 +411,20 @@ test.describe("Home interactions", () => {
         (window as Window & { __c64uTracing?: { clearTraces?: () => void } }).__c64uTracing?.clearTraces?.(),
       );
 
+      // Wait for what the button ACTUALLY depends on, before asserting the button.
+      //
+      // `powerCycleVisible` is `flag && deviceCapabilities.supportsPowerCycle &&
+      // telnet.isAvailable`, and `supportsPowerCycle` is derived from the
+      // `core_version` in `/v1/info` — which demo mode populates asynchronously,
+      // after the DEMO_ACTIVE transition. Waiting only on the button turned that
+      // race into "element(s) not found", which names neither the dependency nor
+      // the cause; under CI contention it read as though the control had been
+      // removed. Waiting on the identity first fails with the true reason.
+      await expect(page.getByTestId("home-system-device")).not.toHaveText(/Not available|Not connected/, {
+        timeout: 30000,
+      });
+
       const powerCycle = page.getByTestId("home-power-cycle");
-      // Demo mode populates the device identity (product + core_version) asynchronously
-      // via the mock /v1/info query that runs after the DEMO_ACTIVE transition, so the
-      // Telnet-gated power-cycle control only renders once that identity settles. Wait
-      // for it to appear explicitly (mirroring the real-device sibling test's visibility
-      // wait) with a generous timeout instead of racing the default 10s enabled-timeout,
-      // which flakes under heavy CI contention (e.g. concurrent branch + tag workflows).
       await expect(powerCycle).toBeVisible({ timeout: 30000 });
       await expect(powerCycle).toBeEnabled({ timeout: 15000 });
       await powerCycle.click();
