@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { Capacitor } from "@capacitor/core";
+
 import { addLog } from "@/lib/logging";
 import { isNativePlatform } from "@/lib/native/platform";
 import { StreamUdp } from "@/lib/native/streamUdp";
@@ -30,10 +32,13 @@ import { StreamUdp } from "@/lib/native/streamUdp";
  * which matters because that is the common case.
  *
  * Not needed on the web build: there the bridge is a WebSocket owned by the page
- * itself, so a reload takes it with it.
+ * itself, so a reload takes it with it. Nor on a native platform without the
+ * plugin — `StreamUdp` is Android-only, and asking iOS to close an AudioTrack it
+ * has no concept of rejects with "not implemented" on EVERY launch. That is not
+ * a warning about anything; it is this function asking the wrong question.
  */
 export const silenceLeftoverNativeAudio = async (): Promise<void> => {
-  if (!isNativePlatform()) return;
+  if (!isNativePlatform() || !Capacitor.isPluginAvailable("StreamUdp")) return;
   try {
     await StreamUdp.closeAudioTrack();
     // The receive loops would otherwise keep pulling multicast packets and

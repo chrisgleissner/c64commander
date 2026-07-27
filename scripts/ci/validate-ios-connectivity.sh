@@ -176,6 +176,19 @@ fi
 VALID="true"
 [[ $had_error -ne 0 ]] && VALID="false"
 
+# A flow that produced no artifacts directory at all is a real failure, but it
+# used to surface as `connectivity-validation.json: No such file or directory`
+# from the redirect below — a shell error that names neither the flow nor the
+# cause, and reads as a broken script rather than a flow that never ran. Create
+# the directory so the result can be written, and say plainly what is missing.
+if [[ ! -d "$FLOW_DIR" ]]; then
+  echo "[validate-connectivity] ${FLOW_NAME}: no artifacts directory — the flow produced no evidence at all (did it run?)"
+  mkdir -p "$FLOW_DIR"
+  VALID="false"
+  had_error=1
+  ERRORS_JSON='["no artifacts directory: the flow produced no evidence"]'
+fi
+
 cat > "$VALIDATION_FILE" <<VJSON
 {
   "flow": "${FLOW_NAME}",

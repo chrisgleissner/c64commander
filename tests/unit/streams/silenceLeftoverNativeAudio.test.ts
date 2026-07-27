@@ -8,7 +8,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const native = vi.hoisted(() => ({ isNative: true }));
+const native = vi.hoisted(() => ({ isNative: true, pluginAvailable: true }));
 const plugin = vi.hoisted(() => ({
   closeAudioTrack: vi.fn(async () => {}),
   close: vi.fn(async () => {}),
@@ -21,6 +21,9 @@ vi.mock("@/lib/native/platform", async (importOriginal) => ({
   isNativePlatform: () => native.isNative,
 }));
 vi.mock("@/lib/native/streamUdp", () => ({ StreamUdp: plugin }));
+vi.mock("@capacitor/core", () => ({
+  Capacitor: { isPluginAvailable: () => native.pluginAvailable },
+}));
 
 import { silenceLeftoverNativeAudio } from "@/lib/streams/silenceLeftoverNativeAudio";
 
@@ -35,6 +38,7 @@ import { silenceLeftoverNativeAudio } from "@/lib/streams/silenceLeftoverNativeA
 describe("silencing native audio left over from a previous page", () => {
   beforeEach(() => {
     native.isNative = true;
+    native.pluginAvailable = true;
     plugin.closeAudioTrack.mockClear();
     plugin.close.mockClear();
     plugin.closeAudioTrack.mockResolvedValue(undefined);
@@ -60,6 +64,18 @@ describe("silencing native audio left over from a previous page", () => {
     await silenceLeftoverNativeAudio();
 
     expect(plugin.closeAudioTrack).not.toHaveBeenCalled();
+  });
+
+  it("does not ask a platform without the plugin to close an AudioTrack", async () => {
+    // StreamUdp is Android-only. On iOS the call rejects with "not implemented"
+    // on EVERY launch, and logging a warning about it says nothing about the
+    // app — it is this function asking the wrong question.
+    native.pluginAvailable = false;
+
+    await silenceLeftoverNativeAudio();
+
+    expect(plugin.closeAudioTrack).not.toHaveBeenCalled();
+    expect(plugin.close).not.toHaveBeenCalled();
   });
 
   it("never stops the app from starting", async () => {
