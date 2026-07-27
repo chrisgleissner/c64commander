@@ -613,10 +613,37 @@ Rules that follow from it:
 
 "It sounds rough" cannot be graded against real music, whose spectrum moves constantly — a
 correlation score says only that *something* differs. `tools/hil/make_tone_ladder_sid.py` emits a
-260-byte PSID playing a known C3→B3→C3 ladder, and `analyse_tone_ladder.py` reports per-note pitch
-error in cents and per-note duration. That turns "rough" into "notes are 0.965 s instead of 0.500 s",
-which points at a rate problem in one reading. Prefer building that instrument early over another
-round of reasoning about the code.
+307-byte PSID playing a known C3→C4→C3 ladder that also steps the screen colour in unison with the
+notes, and `analyse_tone_ladder.py` reports per-note pitch error in cents and per-note duration.
+That turns "rough" into "notes are 0.965 s instead of 0.500 s", which points at a rate problem in
+one reading. Prefer building that instrument early over another round of reasoning about the code.
+
+### Calibrate the instrument before you trust it
+
+An instrument that has not been checked against a known-good signal will report faults that are its
+own. Every one of these was a *measurement* bug that looked exactly like a device bug:
+
+- **AC-couple before measuring level.** Gating the SID leaves a DC step, and through the chip's DC
+  blocker it rings for ~0.6 s at about 1 Hz. Unweighted that ring measured -13 dBFS — louder than
+  half the ladder — so a plain RMS envelope scored it as a note and its click as the onset, and the
+  whole ladder mis-aligned. A 2nd-order high-pass at 60 Hz costs the lowest note 0.2 dB. This is why
+  ITU-R BS.1770's K-weighting starts with a high-pass; treat it as mandatory, not as polish.
+- **Check the reference, not just the reading.** Notes measured a rock-solid 499.0 ms against an
+  "expected" 500. The signal was right and the expectation was wrong: PAL is 985248/19656 =
+  50.1245 Hz, so 25 frames is 498.76 ms. A constant 1 ms bias, invented by the measurement.
+- **Reference a threshold to the thing you are measuring.** Half-rise between the note and the
+  preceding floor made onset placement depend on how quiet the *previous* slot was, so notes after a
+  silence were called tens of ms early. Half power below the note's own plateau is the same place on
+  every attack.
+- **A filter that happens to hide a problem is not a fix.** A `>= 0.12 s` length filter was silently
+  discarding spurious onsets. Replacing it with an explicit "a note sustains, a click does not" gate
+  fixed the real defect; the accidental filter would have hidden the next one.
+
+Validate against `sidplayfp` renders and a 6502 trace of the player (a ~90-line simulator over the
+handful of opcodes involved proves colour and note writes land on the same frame) *before* pointing
+the instrument at hardware. Grade against published standards — ITU-R BT.1359-1 for A/V sync,
+BS.1770/EBU R128 for level — so the verdict means something outside this repo, and report median
+with IQR rather than a bare mean so one dropout cannot move the headline.
 
 ## The hardware that exists — and the Callback 8020, which does not
 
