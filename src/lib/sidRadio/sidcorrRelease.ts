@@ -23,7 +23,7 @@
 export const SIDCORR_REPO = "chrisgleissner/sidflow-data";
 
 /** Release tag the bundle is pinned to. */
-export const SIDCORR_RELEASE_TAG = "sidcorr-hvsc-full-20260726T203707Z";
+export const SIDCORR_RELEASE_TAG = "0.8.0";
 
 /** Release asset name for the Tiny bundle. */
 export const SIDCORR_BUNDLE_ASSET = "sidcorr-hvsc-full-sidcorr-tiny-1.sidcorr";
@@ -35,7 +35,7 @@ export const SIDCORR_MANIFEST_ASSET = "sidcorr-hvsc-full-sidcorr-tiny-1.manifest
  * Committed sha256 of the pinned bundle. A build fails loudly if the fetched
  * asset drifts from this pin (spec §3).
  */
-export const SIDCORR_BUNDLE_SHA256 = "081664d81b35f1d31ce2fe93e9b054601c56250dbf02d79781c3e5d1d3cba7c5";
+export const SIDCORR_BUNDLE_SHA256 = "64bee4464c89f605ea15e468168ff39b9f00bb8bf659da2af59ad0004f7c9c6d";
 
 /**
  * Path under `public/` where the fetched bundle lands. Vite copies `public/`
