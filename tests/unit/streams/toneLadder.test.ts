@@ -6,6 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -63,6 +66,15 @@ describe("the ladder itself", () => {
 
     expect(String.fromCharCode(...bytes.subarray(0, 4))).toBe("PSID");
     expect(bytes.length).toBeGreaterThan(256);
+  });
+
+  it("embeds exactly the committed fixture", () => {
+    // The tune exists twice — as tests/fixtures/tone-ladder.sid for the HIL tools, and inlined here
+    // so the in-app check needs no network. Regenerating one and not the other would have the phone
+    // and the HIL harness measuring different tunes while both reported success.
+    const fixture = readFileSync(resolve(__dirname, "../../fixtures/tone-ladder.sid"));
+
+    expect(Buffer.from(toneLadderSidBytes()).equals(fixture)).toBe(true);
   });
 });
 
