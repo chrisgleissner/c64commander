@@ -45,10 +45,8 @@ export const videoStandardForHeight = (height: number): VideoStandard =>
   height >= (VIC_NTSC_HEIGHT + VIC_PAL_HEIGHT) / 2 ? "PAL" : "NTSC";
 
 /**
- * The reference 16-entry VIC palette (RGB) — the "C64 Ultimate Default Palette" the device streams
- * (source of truth: c64stream `data/palettes/default.vpl`, bundled at
- * `src/assets/palettes/default.vpl`), so in-app video matches what the machine and OBS/c64stream
- * render.
+ * The reference 16-entry VIC palette (RGB) — the "C64 Ultimate Default Palette", so in-app video
+ * matches what the machine itself renders. Defined in `src/assets/palettes/default.vpl`.
  *
  * This is the REFERENCE palette, not necessarily the one on screen: the user may pick another in
  * Settings. Anything ANALYSING a frame must stay on this one — `inverted.vpl`, for instance, maps
