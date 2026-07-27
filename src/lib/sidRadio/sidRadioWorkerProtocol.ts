@@ -47,10 +47,12 @@ export type SidRadioMainToWorker = SidRadioLoadMessage | SidRadioComputeMessage;
 /**
  * Export style key (`fast_paced`, `theme_hunter`, …) → how many tracks carry it.
  *
- * A style with no members is a station that can never play anything: the export
- * shipped `theme_hunter` at 0 tracks and `composer_focus` at 673 of 87,868, and
- * the launcher offered both as ordinary tiles. The launcher therefore needs the
- * populations before the user picks, not the `empty` reason afterwards.
+ * A style with no members is a station that can never play anything: the release
+ * preceding the pinned 0.8.0 shipped `theme_hunter` at 0 tracks and
+ * `composer_focus` at 673 of 87,868, and the launcher offered both as ordinary
+ * tiles. The launcher therefore needs the populations before the user picks, not
+ * the `empty` reason afterwards. 0.8.0 itself ships all nine at 17,574, so these
+ * counts now size the tiles and the guard behind them waits on the next re-pin.
  */
 export type SidRadioStylePopulations = Readonly<Record<string, number>>;
 

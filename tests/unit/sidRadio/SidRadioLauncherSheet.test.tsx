@@ -81,9 +81,11 @@ describe("SidRadioLauncherSheet", () => {
 });
 
 /**
- * The export shipped `theme_hunter` with 0 members and `composer_focus` with 673
- * of 87,868, so the launcher offered a station that could never play anything
- * and gave no way to tell it from one covering half the corpus.
+ * The release preceding the pinned 0.8.0 shipped `theme_hunter` with 0 members and
+ * `composer_focus` with 673 of 87,868, so the launcher offered a station that could
+ * never play anything and gave no way to tell it from one covering half the corpus.
+ * These fixtures keep those populations deliberately: the guard has to hold for any
+ * export, not only for the one that happens to be pinned.
  */
 describe("SidRadioLauncherSheet station populations", () => {
   const populations = populationsWith({ fast_paced: 41648, composer_focus: 673, theme_hunter: 0 });

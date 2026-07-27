@@ -187,7 +187,7 @@ Source of truth: `sidflow` repo docs `doc/similarity-export-tiny.md` (schema
 ### 2.1 What the current release contains
 
 From `sidcorr-hvsc-full-sidcorr-tiny-1.manifest.json` for the release the app is
-pinned to in `src/lib/sidRadio/sidcorrRelease.ts`, `sidcorr-hvsc-full-20260726T203707Z`:
+pinned to in `src/lib/sidRadio/sidcorrRelease.ts`, `sidflow-data` **0.8.0**:
 
 | Field                   | Value                                          |
 | ----------------------- | ---------------------------------------------- |
@@ -200,13 +200,20 @@ pinned to in `src/lib/sidRadio/sidcorrRelease.ts`, `sidcorr-hvsc-full-20260726T2
 | `style_count`           | 9                                              |
 | `file_id_kind`          | `md5_48` (first 6 bytes of the SID file's MD5) |
 | `bundle_bytes`          | 1,834,993 (`content_encoding: identity`)       |
-| `bundle_sha256`         | `081664d8…cba7c5`                              |
+| `bundle_sha256`         | `64bee446…7c9c6d`                              |
 
-**Style populations in this release are not usable as they stand:** `theme_hunter`
-has 0 members, `composer_focus` 673 (0.8%), and five personas each cover roughly
-half the corpus, with `fast_paced` and `slow_ambient` sharing ~9,500 tracks. The
-launcher therefore reads the per-style counts before offering a tile (§5.4)
-instead of trusting every style to have a station behind it.
+**Style populations are uniform in this release:** 0.8.0 rebuilt the masks so each
+style is the top 20% of the corpus by its own score — 17,574 tracks for all nine —
+and the export now refuses to publish a starved or indistinguishable one. 15.3% of
+tracks consequently carry no style at all, which the previous forced-top-3 rule
+could not express.
+
+The release this supersedes could not be used as it stood: `theme_hunter` had 0
+members, `composer_focus` 673 (0.8%), and five personas each covered roughly half
+the corpus, with `fast_paced` and `slow_ambient` sharing ~9,500 tracks. The
+launcher therefore reads the per-style counts before offering a tile (§5.4) instead
+of trusting every style to have a station behind it. On 0.8.0 that guard never
+fires; it is what keeps the next re-pin from putting a dead tile in front of a user.
 
 ### 2.2 Binary layout (little-endian, byte-aligned)
 
@@ -533,11 +540,19 @@ A test asserts the 9 tiles map 1:1 onto the parsed `STYLE_TABLE` order — §8.1
 style's members in one pass over `STYLE_MASK_TABLE` at load and returns them on the
 `ready` message (`stylePopulations`, keyed by export key). The launcher shows the count
 on each tile and **disables a tile whose style has no members**, because that tile is a
-station that can never play anything — the pinned release ships `theme_hunter` at 0
-(§2.1). **Surprise me** draws only from styles that have members for the same reason.
-The `empty` reason from a `compute` remains the backstop for everything the counts
-cannot predict (a style filter composed over Likes that admits nothing, an exhausted
-station), so a station that goes empty at run time still degrades to the §5.2 Q5 notice.
+station that can never play anything — the release preceding the pin shipped
+`theme_hunter` at 0 (§2.1). **Surprise me** draws only from styles that have members for
+the same reason. The `empty` reason from a `compute` remains the backstop for everything
+the counts cannot predict (a style filter composed over Likes that admits nothing, an
+exhausted station), so a station that goes empty at run time still degrades to the §5.2
+Q5 notice.
+
+The disabled tile is a **presentation** guard, and the counts arrive after the sheet
+opens: the launcher is offered immediately rather than greying all nine tiles and
+un-greying them a moment later. The refusal that matters therefore sits at station
+start, where the populations have already been awaited — a style with no members is
+refused there before anything is computed, whichever way the tap arrived and however
+early it was.
 
 The counts come from the bundle rather than the manifest's `style_populations`: the
 bundle is the only artefact the app ships, it is authoritative for releases predating
