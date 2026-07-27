@@ -401,6 +401,24 @@ with open(outfile, "w", encoding="utf-8") as handle:
 PY
 }
 
+# ── Is the app actually running? ────────────────────────────────
+# The in-app debug HTTP server (AppDelegate.IOSDebugHTTPServer, DEBUG builds)
+# lives and dies with the app process, so one connect answers the question both
+# the accessibility snapshot and the debug-payload collection need.
+#
+# Both used to just try anyway. A flow ends with the app stopped, so every
+# attempt was doomed: 5 endpoints x 3 attempts of curl-plus-sleep (~30s) and two
+# `maestro hierarchy` calls waiting out their own timeouts (~16s) — ~46s per
+# flow, ~2.3 minutes per run, spent proving something already known. Worse, the
+# log filled with "Failed to collect debug/..." lines that read like a broken
+# harness rather than "there was no app to ask".
+debug_server_reachable() {
+  xcrun simctl spawn "$UDID" /usr/bin/curl --silent --show-error --fail \
+    --connect-timeout "$DEBUG_PAYLOAD_CONNECT_TIMEOUT_SECONDS" \
+    --max-time "$DEBUG_PAYLOAD_CURL_MAX_TIME_SECONDS" \
+    "http://127.0.0.1:39877/debug/trace" >/dev/null 2>&1
+}
+
 capture_accessibility_snapshot() {
   local flow_dir="$1"
   local snapshot_name="$2"
@@ -409,6 +427,12 @@ capture_accessibility_snapshot() {
   local started_ms
   started_ms=$(ms_timestamp)
   mkdir -p "$out_dir"
+
+  if ! debug_server_reachable; then
+    log "Accessibility snapshot ${snapshot_name} skipped — the app is not running (nothing to dump)"
+    trace_event "$flow_dir" "app.accessibility.snapshot" "maestro" "{\"name\":\"${snapshot_name}\",\"status\":\"skipped-app-not-running\"}"
+    return
+  fi
 
   log "Capturing accessibility snapshot ${snapshot_name} -> ${out_file}"
 
@@ -852,6 +876,19 @@ collect_debug_payloads() {
   local flow_dir="$2"
   local endpoints=("trace" "actions" "log" "errorLog")
   local filenames=("trace.json" "action.json" "log.json" "errorLog.json")
+
+  if ! debug_server_reachable; then
+    # Say it once, plainly, instead of fifteen failed attempts that look like a
+    # broken harness. The evidence is genuinely absent and the validator will
+    # report it as fallback — this only stops us paying 30s to rediscover it.
+    log "Debug payloads unavailable for ${flow}: the app is not running at collection time (the flow stops it), so :39877 has no listener — writing fallbacks"
+    for i in "${!endpoints[@]}"; do
+      write_fallback_debug_payload "${endpoints[$i]}" "${flow_dir}/${filenames[$i]}" "$flow_dir"
+    done
+    write_fallback_debug_payload "network" "${flow_dir}/network.json" "$flow_dir"
+    write_fallback_debug_payload "event" "${flow_dir}/event.json" "$flow_dir"
+    return
+  fi
 
   for i in "${!endpoints[@]}"; do
     local endpoint="${endpoints[$i]}"
