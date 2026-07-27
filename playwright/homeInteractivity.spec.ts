@@ -414,15 +414,25 @@ test.describe("Home interactions", () => {
       // Wait for what the button ACTUALLY depends on, before asserting the button.
       //
       // `powerCycleVisible` is `flag && deviceCapabilities.supportsPowerCycle &&
-      // telnet.isAvailable`, and `supportsPowerCycle` is derived from the
+      // telnet.isAvailable`, and `supportsPowerCycle` is derived from
       // `core_version` in `/v1/info` — which demo mode populates asynchronously,
       // after the DEMO_ACTIVE transition. Waiting only on the button turned that
       // race into "element(s) not found", which names neither the dependency nor
       // the cause; under CI contention it read as though the control had been
-      // removed. Waiting on the identity first fails with the true reason.
-      await expect(page.getByTestId("home-system-device")).not.toHaveText(/Not available|Not connected/, {
+      // removed.
+      //
+      // `core_version`, specifically — NOT `home-system-device`, which shows
+      // `hostname || product` and can populate before `core_version` does. That
+      // would let this pass and hand the race straight back to the button wait.
+      // The value only renders inside the System Info disclosure, so open it,
+      // read it, and put it back the way it was.
+      const systemInfo = page.getByTestId("home-system-info");
+      await systemInfo.click();
+      await expect(page.getByTestId("home-system-core")).not.toHaveText(/Not available|Not connected/, {
         timeout: 30000,
       });
+      await systemInfo.click();
+      await expect(page.getByTestId("home-system-core")).toHaveCount(0);
 
       const powerCycle = page.getByTestId("home-power-cycle");
       await expect(powerCycle).toBeVisible({ timeout: 30000 });
