@@ -11,6 +11,8 @@ import type { LocalSidMainToWorker, LocalSidWorkerToMain, LocalSidOpenedMessage 
 import { loadStoredRoms } from "@/lib/roms/romStore";
 import { loadSidEmulationEngine, loadPlaybackCrossfadeMs } from "@/lib/config/appSettings";
 import { addLog, addErrorLog } from "@/lib/logging";
+import { claimPhoneAudio, phoneAudioOwner, releasePhoneAudio } from "@/lib/audio/phoneAudioOwnership";
+import { notifyPlaybackActivityChanged } from "./playbackActivitySignal";
 import { RenderedTuneCache, type RenderedTune } from "./renderedTuneCache";
 
 /**
@@ -59,45 +61,27 @@ export interface LocalSidAudioSink {
 export type LocalSidAudioSinkFactory = (sampleRate: number) => LocalSidAudioSink;
 
 /**
- * The engine that currently owns on-device audio output, if any.
+ * Ownership of this device's speaker now lives in `@/lib/audio/phoneAudioOwnership`,
+ * shared with the A/V mirror.
  *
- * Exactly one engine may produce audio at a time. This is enforced rather than
- * assumed because the failure is severe and silent: the controller used to be
- * created per `PlayFilesPage`, and since nothing tore an engine down when its
- * page unmounted, navigating away from Play and back left the previous engine
- * playing. Repeated tab navigation while a tune played produced **eight**
- * concurrent AAudio streams from one process — different tunes layered over
- * each other, with no way for the user to stop them short of killing the app.
- *
- * A shared controller prevents the usual route to that, but a shared instance
- * is a convention a later refactor can quietly undo. This registry is the
- * backstop: whoever opens an audio sink first silences anyone else holding one,
- * so overlap cannot survive even a mistake upstream. The eviction is logged as
- * an error because reaching it at all means an ownership bug exists.
+ * It used to be a registry private to this file, guarding engines against each
+ * other. That was the right idea aimed one level too low: the failure it was
+ * built for was severe and silent (a per-page controller left engines playing
+ * after their page unmounted — repeated tab navigation produced **eight**
+ * concurrent AAudio streams of different tunes), but the mirror could still
+ * play the C64's audio straight over the top of a local tune, because the two
+ * subsystems had no common notion of who holds the speaker. Now they do.
  */
-let audioOwner: { stopPlayback: () => void } | null = null;
-
-const claimAudioOwnership = (next: { stopPlayback: () => void }): void => {
-  if (audioOwner && audioOwner !== next) {
-    addErrorLog("Local SID engine: evicting a second audio owner", {
-      service: "local-sid",
-      detail:
-        "Another engine still held an audio sink when this one started. Playback would have " +
-        "overlapped. The previous engine was stopped; this indicates an engine-ownership bug.",
-    });
-    const previous = audioOwner;
-    audioOwner = null;
-    previous.stopPlayback();
-  }
-  audioOwner = next;
+const claimAudioOwnership = (engine: { stopPlayback: () => void }): void => {
+  claimPhoneAudio("local-sid", engine, () => engine.stopPlayback());
 };
 
-const releaseAudioOwnership = (engine: { stopPlayback: () => void }): void => {
-  if (audioOwner === engine) audioOwner = null;
+const releaseAudioOwnership = (engine: object): void => {
+  releasePhoneAudio(engine);
 };
 
 /** Test seam: is on-device audio currently owned by anyone? */
-export const __hasLocalSidAudioOwner = (): boolean => audioOwner !== null;
+export const __hasLocalSidAudioOwner = (): boolean => phoneAudioOwner() !== null;
 
 export class LocalSidUnavailableError extends Error {
   constructor(message = "Local SID engine requires Web Workers and Web Audio") {
@@ -878,6 +862,10 @@ export class LocalSidEngine {
    */
   stopPlayback(options: { crossfadeMs?: number } = {}): void {
     releaseAudioOwnership(this);
+    // `isActive()` flips here and only here, so this is where the app is told.
+    // A tune that simply ends reaches this path too — without it the transport
+    // would keep offering Pause for a tune that had already finished.
+    const wasActive = this.scheduler !== null;
     const fadeMs = options.crossfadeMs ?? 0;
     const outgoing = this.audio;
     this.scheduler?.stopAll(fadeMs > 0 ? { keepSourcesFor: fadeMs } : undefined);
@@ -905,6 +893,7 @@ export class LocalSidEngine {
     // Render throughput is deliberately NOT reset here: it measures what this
     // device sustains across the whole engine session, so a multi-track soak
     // (§12.6) reports one p99 over every tune rather than only the last one.
+    if (wasActive) notifyPlaybackActivityChanged();
   }
 
   /** Tear down the worker + audio entirely (release WASM memory). */

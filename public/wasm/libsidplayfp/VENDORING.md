@@ -53,8 +53,11 @@ the calls `localSid.worker.ts` makes, which a checksum cannot tell you.
 the tarball's layout. Which one loads is the user's choice in **Settings → SID Radio →
 SID emulation**; the app defaults to **reSIDfp** (`index.js`'s own `DEFAULT_SID_ENGINE`
 is `sidlite`, but the app always passes an engine explicitly). SIDLite renders roughly
-an order of magnitude faster and is kept for hardware that cannot hold realtime with the
-reference engine (`AUDIO-FIDELITY-TEST.md` §L1).
+an order of magnitude faster and sounds good in its own right — most listeners will not
+hear the difference — so it is a reasonable user choice on a slower device or to save
+battery, not merely a fallback. Note that the historical "SIDLite sounds wrong" finding
+was confounded: the artifact that produced it also carried a heap-use-after-free in
+`initMixer`, so the timbre it was judged on was not SIDLite's.
 
 reSIDfp is asserted at build time in sidflow (`WasmReSIDfp` present, `WasmSIDLite`
 absent) plus a functional smoke render, and is indistinguishable from a native build of

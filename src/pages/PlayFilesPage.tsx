@@ -168,6 +168,7 @@ import {
   shuffleArray,
 } from "@/pages/playFiles/playFilesUtils";
 import { getSharedLocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
+import { useActivePlayback } from "@/hooks/useActivePlayback";
 
 const ACTIVE_ADD_ITEMS_PROGRESS_STATES = new Set<AddItemsProgressState["status"]>([
   "scanning",
@@ -1515,7 +1516,18 @@ export default function PlayFilesPage() {
   const allPlaylistSelected = selectedPlaylistCount > 0 && selectedPlaylistCount === playlistIds.length;
   const hasPlaylist = playlist.length > 0;
   const canTransport = hasPlaylist && !isPlaylistLoading;
-  const canPause = isPlaying;
+  // Playing according to the APP, not according to this page instance.
+  //
+  // `isPlaying` is this component's own state and starts false, so a Play page
+  // mounted while a tune is already playing — navigate Home, come back —
+  // rendered Pause disabled and dropped Rewind/Fast Forward entirely, on audio
+  // the user could hear. It corrects itself when the async session restore
+  // lands, which is too late to be a transport. The union is deliberate:
+  // whichever source knows first wins, and neither can turn the other off.
+  const activePlayback = useActivePlayback();
+  const playbackRunning = isPlaying || activePlayback.any;
+  const localPlaybackRunning = isPlaying || activePlayback.local;
+  const canPause = playbackRunning;
   // HARD12-005: Next/Prev enablement must reflect the shuffle-aware traversal
   // (what tapping them will do), not the linear playlist position.
   const hasPrev = canAdvancePrevious(playlist, currentIndex, repeatEnabled, shuffleEnabled, shuffleSeed);
@@ -1917,12 +1929,12 @@ export default function PlayFilesPage() {
                 // plays the SID itself and cannot be scrubbed, so on that route
                 // Previous/Next stay plain track controls.
                 onSeek={
-                  playbackEngine.engine === "local" && currentItem?.category === "sid" && isPlaying
+                  playbackEngine.engine === "local" && currentItem?.category === "sid" && localPlaybackRunning
                     ? (deltaSeconds) => void handleSeekBy(deltaSeconds)
                     : undefined
                 }
                 onScrubStart={
-                  playbackEngine.engine === "local" && currentItem?.category === "sid" && isPlaying
+                  playbackEngine.engine === "local" && currentItem?.category === "sid" && localPlaybackRunning
                     ? () => beginScrub(currentDurationMs)
                     : undefined
                 }

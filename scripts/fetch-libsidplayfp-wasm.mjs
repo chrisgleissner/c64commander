@@ -63,11 +63,11 @@ export const LIBSIDPLAYFP_WASM_RELEASE = {
    * months the app shipped the latter believing it was the former.
    *
    * Both are installed, mirroring the layout `public/wasm/libsidplayfp/index.js`
-   * resolves against: reSIDfp is the default and the reference, SIDLite is the
-   * opt-in "Light" choice in Settings → SID Radio → SID emulation, ~10x cheaper
-   * and kept for hardware that cannot hold realtime with the reference engine
-   * (docs/plans/sid-station/AUDIO-FIDELITY-TEST.md §L1). What must never happen
-   * is a `sidlite/` file landing in the root — see the test.
+   * resolves against: reSIDfp is the default and the accuracy reference, SIDLite
+   * is the opt-in "Light" choice in Settings → SID Radio → SID emulation — ~10x
+   * cheaper, and good enough that most listeners will not hear the difference,
+   * so it is a genuine user choice rather than only a fallback. What must never
+   * happen is a `sidlite/` file landing in the root — see the test.
    *
    * `index.js` and `player.js` are NOT here: they are this app's own loader and
    * `SidAudioEngine` wrapper, not release artifacts, and stay committed.

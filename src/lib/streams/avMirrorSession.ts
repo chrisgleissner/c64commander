@@ -41,6 +41,7 @@ import { VideoMirrorController, type VideoMirrorState } from "./videoMirrorContr
 import { StreamGovernor, type FrameRateMode, type GovernorState, type GovernorTransition } from "./streamGovernor";
 import { StreamTelemetry, type TelemetryBucket, type TelemetrySessionSummary } from "./streamTelemetry";
 import { onInputActivity } from "./inputActivitySignal";
+import { claimPhoneAudio, releasePhoneAudio } from "@/lib/audio/phoneAudioOwnership";
 import type { VideoStandard } from "./vicDecode";
 import type { AudioMirrorPlayer } from "./audioPlayer";
 
@@ -472,16 +473,32 @@ export class AvMirrorSession {
   startAudio(): Promise<void> {
     return this.serialize(async () => {
       this.beginSessionIfIdle();
+      // Take the speaker before opening the stream. The local SID engine can be
+      // playing a tune here, and the C64's audio laid over the top of it is two
+      // pieces of music at once with no way for the listener to tell which
+      // control stops which. Claiming first means the tune is already silenced
+      // by the time the first packet arrives.
+      claimPhoneAudio("av-mirror", this, () => {
+        void this.stopAudio().catch(() => undefined);
+      });
       // Prefer Wi‑Fi for audio-only when the policy allows it (firmware wifi=true);
       // the controller falls back to Ethernet if Wi‑Fi isn't available.
       const wifi = shouldUseWifiForAudio({ policy: this.effectiveAudioRoute(), videoActive: this.videoLive });
-      await this.audio.start({ wifi });
+      try {
+        await this.audio.start({ wifi });
+      } catch (error) {
+        // Nothing is playing, so do not keep holding the speaker against a
+        // local tune that could otherwise start.
+        releasePhoneAudio(this);
+        throw error;
+      }
     });
   }
 
   stopAudio(): Promise<void> {
     return this.serialize(async () => {
       this.audioForcedToEthernet = false;
+      releasePhoneAudio(this);
       await this.audio.stop();
     });
   }

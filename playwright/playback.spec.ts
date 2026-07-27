@@ -1767,4 +1767,70 @@ test.describe("Playback file browser", () => {
     await expect(list).toContainText("demo.sid");
     await expect(list).not.toContainText("demo.prg");
   });
+
+  /**
+   * The transport must work on whatever is playing, not on what this page
+   * instance happens to remember.
+   *
+   * `isPlaying` was a `useState(false)` belonging to the Play page, so a page
+   * mounted while a tune was already running rendered Pause disabled and
+   * dropped the seek affordance entirely — on audio the user could hear. It
+   * corrected itself once an async session restore landed, which is not a
+   * transport.
+   */
+  test("transport stays live on a Play page mounted mid-tune", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await seedPlaylistStorage(page, [
+      {
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/Track_0001.sid",
+        name: "Track_0001.sid",
+        durationMs: 60000,
+      },
+    ]);
+
+    await page.goto("/play");
+    await page.getByTestId("playlist-play").click();
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/runners:sidplay")));
+    await expect(page.getByTestId("playlist-pause")).toBeEnabled();
+
+    // Leave and come back: this destroys the page instance that started it.
+    await page.getByRole("button", { name: "Disks", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Disks", level: 1 })).toBeVisible();
+    await page.getByRole("button", { name: "Play", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+
+    // On its FIRST paint, not after a restore settles.
+    await expect(page.getByTestId("playlist-pause")).toBeEnabled();
+    await expect(page.getByTestId("playlist-play")).toHaveAttribute("aria-label", "Stop");
+    await snap(page, testInfo, "transport-live-after-remount");
+
+    // And it acts on the tune that is actually playing.
+    await page.getByTestId("playlist-pause").click();
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/machine:pause")));
+  });
+
+  /**
+   * Rewind and Fast Forward belong to audio this device renders. The C64 plays
+   * the SID itself and cannot be scrubbed, so on that route Previous/Next stay
+   * plain track controls and the progress bar is not seekable.
+   */
+  test("no seek affordance while the C64 is playing the tune", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await seedPlaylistStorage(page, [
+      {
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/Track_0001.sid",
+        name: "Track_0001.sid",
+        durationMs: 60000,
+      },
+    ]);
+
+    await page.goto("/play");
+    await page.getByTestId("playlist-play").click();
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/runners:sidplay")));
+
+    // The bar renders, but not as a control: there is nothing here to seek.
+    await expect(page.getByTestId("playback-progress")).toBeVisible();
+    await expect(page.getByTestId("playback-progress-seek")).toHaveCount(0);
+    await snap(page, testInfo, "no-seek-on-c64-route");
+  });
 });

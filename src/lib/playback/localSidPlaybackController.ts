@@ -13,6 +13,7 @@ import {
   type LocalSidStats,
 } from "./localSidEngine";
 import { addLog } from "@/lib/logging";
+import { notifyPlaybackActivityChanged } from "./playbackActivitySignal";
 
 /**
  * Thin lifecycle wrapper the playback controller (LE2) holds in a ref to route
@@ -107,6 +108,10 @@ export class LocalSidPlaybackController {
     if (!result.romRequired && options?.prerenderKey && options.durationSeconds) {
       engine.prerender(options.prerenderKey, copy, songIndex, options.durationSeconds);
     }
+    // Tell the app something is playing here now. The transport controls read
+    // this rather than a page's own state, so they work on a freshly mounted
+    // Play page instead of waiting for its session restore.
+    notifyPlaybackActivityChanged();
     return result;
   }
 
@@ -146,11 +151,13 @@ export class LocalSidPlaybackController {
   /** Stop the current tune (keeps the worker + WASM module warm). */
   stop(): void {
     this.engine?.stop();
+    notifyPlaybackActivityChanged();
   }
 
   /** Pause on-device playback in place (no C64 involved). */
   async pause(): Promise<void> {
     await this.engine?.pause();
+    notifyPlaybackActivityChanged();
   }
 
   /**

@@ -1548,7 +1548,7 @@ Crossfading only works for tunes playing on your ${appDeviceName(
       variant,
     )} plays a single tune live on its one sound chip — so unless **Listen on** is set to **This device** the setting is greyed out and tunes change cleanly instead.`,
     "",
-    `**Two SID sound engines.** Under **Settings → SID Radio → SID emulation** you can choose how faithfully the on-device engine models the C64's SID chip. **Accurate (reSIDfp)** is the default and is what you want: it is a full model of the real chip and sounds like the hardware. **Light (SIDLite)** trades some of that fidelity for roughly a third of the work, which is worth having on an older or slower phone, or when you want to save battery on a long listen. Both play every tune; only the sound and the effort differ, and you can switch whenever you like.`,
+    `**Two SID sound engines.** Under **Settings → SID Radio → SID emulation** you can choose how faithfully the on-device engine models the C64's SID chip. **Accurate (reSIDfp)** is the default and models the real chip cycle by cycle — pick it if you want the last word in fidelity. **Light (SIDLite)** does roughly a third of the work and still sounds good; most listeners will not hear the difference, so it is a perfectly reasonable choice on an older or slower phone, or when you want to save battery on a long listen. Both play every tune, and you can switch whenever you like.`,
     "",
     "![SID Radio settings: enable stations, the ranking, and the experimental on-device playback engine, with the similarity-corpus status](../../img/app/settings/sid-radio.png)",
     "",

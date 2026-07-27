@@ -124,9 +124,10 @@ export const SidRadioSettingsSection = () => {
           <div className="space-y-2 rounded-lg border border-border/70 p-3 min-w-0" data-testid="settings-sid-engine">
             <Label className="text-sm font-medium">SID emulation</Label>
             <p className="text-xs text-muted-foreground">
-              <strong>Accurate</strong> models the real SID chip and is what makes a tune sound like a C64.{" "}
-              <strong>Light</strong> is a cheaper approximation for slower devices — roughly a third of the work, but it
-              does not sound like the real thing. Takes effect on the next track.
+              <strong>Accurate</strong> models the real SID chip cycle by cycle — the closest to a real C64, and the one
+              to pick if you want the last word in fidelity. <strong>Light</strong> does roughly a third of the work and
+              still sounds good; most listeners will not hear the difference, so it is a fine choice on a slower device
+              or to save battery. Takes effect on the next track.
             </p>
             <div className="flex gap-2">
               {(

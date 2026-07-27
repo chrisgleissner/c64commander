@@ -9,6 +9,20 @@
 import { addLog } from "@/lib/logging";
 import { getC64API } from "@/lib/c64api";
 import { getSharedLocalSidPlaybackController } from "./localSidPlaybackController";
+import { notifyPlaybackActivityChanged, subscribePlaybackActivity } from "./playbackActivitySignal";
+
+/**
+ * Subscribe to playback start/stop. Returns an unsubscribe.
+ *
+ * The transport buttons need this for the same reason the device switch needed
+ * the flag below. They were driven by a `PlayFilesPage` `useState(false)`, so a
+ * fresh page instance — one produced by navigating Home → Play while a tune
+ * played — rendered its controls as though nothing were playing: **Pause
+ * disabled, Rewind and Fast Forward gone**, on a tune the user could hear. The
+ * page recovers when its async session restore lands, but "the buttons work a
+ * moment later" is not a working transport.
+ */
+export const subscribeActivePlayback = subscribePlaybackActivity;
 
 /**
  * App-wide handle on whatever is currently making sound, so a *switchover* can
@@ -51,14 +65,30 @@ let remotePlaybackActive = false;
 export const markRemotePlaybackStarted = (): void => {
   remotePlaybackActive = true;
   addLog("info", "Playback: tune launched on the C64", { service: "playback" });
+  notifyPlaybackActivityChanged();
 };
 
 export const markRemotePlaybackStopped = (): void => {
   remotePlaybackActive = false;
+  notifyPlaybackActivityChanged();
 };
 
 /** Test seam. */
 export const __isRemotePlaybackActive = (): boolean => remotePlaybackActive;
+
+/** Is a tune playing on the C64 right now? Survives any mount/unmount. */
+export const isRemotePlaybackActive = (): boolean => remotePlaybackActive;
+
+/** Is a tune rendering on THIS device right now? */
+export const isLocalPlaybackActive = (): boolean => getSharedLocalSidPlaybackController().isActive();
+
+/**
+ * Is anything playing at all, wherever it is?
+ *
+ * This is what a transport control should ask. "Is *my* React state playing" is
+ * a different and much weaker question — see the listeners comment above.
+ */
+export const isAnyPlaybackActive = (): boolean => isRemotePlaybackActive() || isLocalPlaybackActive();
 
 /**
  * Is there anything to stop before a device switch?
