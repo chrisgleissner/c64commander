@@ -1528,7 +1528,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
       variant,
     )}, are never shared or uploaded, and are never included in diagnostics. You can remove them again at any time with **Remove** in the same place.`,
     "",
-    `Until the ROMs are in place — or if you remove them — SID tunes simply play on the ${targetDeviceShortName(
+    `Until the ROMs are in place — or if you remove them — SID tunes simply play on ${targetDeviceShortName(
       variant,
     )} instead, and the app tells you so once.`,
     "",
@@ -1538,11 +1538,19 @@ export const renderManualMarkdown = ({ variant, features }) => {
       variant,
     )} the buttons only skip.`,
     "",
-    `**Crossfading between tunes.** By default one tune stops before the next begins, so you never hear two at once — including when you move playback between the ${targetDeviceShortName(
+    `**One sound at a time.** Your ${appDeviceName(
+      variant,
+    )} can make sound two ways — playing a tune itself, or playing the sound streamed from ${targetDeviceShortName(
+      variant,
+    )} — and it will never do both at once. Whichever you start last takes over, and the other stops. So turning **Listen** on while a tune is playing here hands the speaker to ${targetDeviceShortName(
+      variant,
+    )}, and starting a tune here takes it back. You never have to work out which of two sounds to chase.`,
+    "",
+    `**Crossfading between tunes.** By default one tune stops before the next begins, so you never hear two at once — including when you move playback between ${targetDeviceShortName(
       variant,
     )} and your ${appDeviceName(
       variant,
-    )}, or switch to a different Ultimate. If you would rather they overlap, **Settings → SID Radio → Crossfade** offers a short, medium or long fade: the outgoing tune fades down while the next fades in.
+    )}, or switch to a different Ultimate. If you would rather they overlap, **Settings → SID Radio → Crossfade** offers a short, medium or long fade: the outgoing tune fades down while the next fades in. That fade is the one moment two tunes are meant to sound together.
 
 Crossfading only works for tunes playing on your ${appDeviceName(
       variant,

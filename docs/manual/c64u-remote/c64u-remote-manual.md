@@ -643,11 +643,13 @@ Where you hear a SID is up to you. When a SID is playing, the Play screen offers
 
 **Only connect C64U Remote to devices you own or have been given permission to use.** The ROM images stay on your phone, are never shared or uploaded, and are never included in diagnostics. You can remove them again at any time with **Remove** in the same place.
 
-Until the ROMs are in place — or if you remove them — SID tunes simply play on the the Commodore 64 Ultimate instead, and the app tells you so once.
+Until the ROMs are in place — or if you remove them — SID tunes simply play on the Commodore 64 Ultimate instead, and the app tells you so once.
 
 **Wind through a tune.** While a SID is playing on your phone, press and hold **⏭** to fast-forward or **⏮** to rewind — the tune keeps moving for as long as you hold, roughly five seconds at a time. A short tap still skips to the next or previous tune, so the buttons do what they always did. This works with the on-device engine; on the Commodore 64 Ultimate the buttons only skip.
 
-**Crossfading between tunes.** By default one tune stops before the next begins, so you never hear two at once — including when you move playback between the the Commodore 64 Ultimate and your phone, or switch to a different Ultimate. If you would rather they overlap, **Settings → SID Radio → Crossfade** offers a short, medium or long fade: the outgoing tune fades down while the next fades in.
+**One sound at a time.** Your phone can make sound two ways — playing a tune itself, or playing the sound streamed from the Commodore 64 Ultimate — and it will never do both at once. Whichever you start last takes over, and the other stops. So turning **Listen** on while a tune is playing here hands the speaker to the Commodore 64 Ultimate, and starting a tune here takes it back. You never have to work out which of two sounds to chase.
+
+**Crossfading between tunes.** By default one tune stops before the next begins, so you never hear two at once — including when you move playback between the Commodore 64 Ultimate and your phone, or switch to a different Ultimate. If you would rather they overlap, **Settings → SID Radio → Crossfade** offers a short, medium or long fade: the outgoing tune fades down while the next fades in. That fade is the one moment two tunes are meant to sound together.
 
 Crossfading only works for tunes playing on your phone. Two tunes have to sound at the same moment for one to fade into the other, and the Commodore 64 Ultimate plays a single tune live on its one sound chip — so unless **Listen on** is set to **Local** the setting is greyed out and tunes change cleanly instead.
 
