@@ -42,6 +42,23 @@ const readyFactory = () =>
     return { type: "ready", stats: buildReadyStats(bundle, false) };
   }) as unknown as Worker;
 
+/** A factory that counts the `load` messages the worker actually receives. */
+const countingLoadFactory = (
+  respond: (loads: number) => SidRadioWorkerToMain = () => ({
+    type: "ready",
+    stats: buildReadyStats(buildDefaultTinyFixture(), false),
+  }),
+) => {
+  const counter = { loads: 0 };
+  const factory = () =>
+    new FakeWorker((message) => {
+      if (message.type !== "load") return null;
+      counter.loads += 1;
+      return respond(counter.loads);
+    }) as unknown as Worker;
+  return { counter, factory };
+};
+
 describe("SidRadioWorkerClient", () => {
   it("resolves load() with ready stats posted off the main thread", async () => {
     const client = new SidRadioWorkerClient(readyFactory);
@@ -65,6 +82,50 @@ describe("SidRadioWorkerClient", () => {
     const bundle = buildDefaultTinyFixture();
     await client.load({ bundle });
     expect(seen!.lastTransfer).toEqual([bundle]);
+  });
+
+  /**
+   * The launcher preloads the style populations while a tile tap starts a station,
+   * so two `load()`s legitimately overlap. The client holds one pending resolver:
+   * a second `load` message used to replace it, leaving the preload unanswered
+   * until its 15 s timeout — which then warned and nulled out whichever load was
+   * pending by then, so a later station start could be dropped too.
+   */
+  it("shares one worker load across overlapping load() calls", async () => {
+    const { counter, factory } = countingLoadFactory();
+    const client = new SidRadioWorkerClient(factory);
+    const [first, second] = await Promise.all([client.load({ timeoutMs: 60_000 }), client.load({ timeoutMs: 60_000 })]);
+    expect(counter.loads).toBe(1);
+    expect(first).toBe(second);
+    // Once loaded, a later caller reuses it instead of re-parsing the bundle the
+    // worker still holds for `compute`.
+    expect(await client.load()).toBe(first);
+    expect(counter.loads).toBe(1);
+    client.terminate();
+  });
+
+  it("retries a failed load instead of caching the rejection forever", async () => {
+    const { counter, factory } = countingLoadFactory((loads) =>
+      loads === 1
+        ? { type: "error", code: "magic", message: "bad magic" }
+        : { type: "ready", stats: buildReadyStats(buildDefaultTinyFixture(), false) },
+    );
+    const client = new SidRadioWorkerClient(factory);
+    await expect(client.load()).rejects.toThrow(/magic/);
+    await expect(client.load()).resolves.toMatchObject({ fileCount: 3 });
+    expect(counter.loads).toBe(2);
+    client.terminate();
+  });
+
+  it("re-loads after terminate() rather than vouching for a discarded worker", async () => {
+    const { counter, factory } = countingLoadFactory();
+    const client = new SidRadioWorkerClient(factory);
+    await client.load();
+    client.terminate();
+    // The worker holding the parsed bundle is gone, so the memo must go with it.
+    await client.load();
+    expect(counter.loads).toBe(2);
+    client.terminate();
   });
 
   it("rejects load() when the worker reports a typed error", async () => {

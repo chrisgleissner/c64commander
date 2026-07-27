@@ -58,6 +58,7 @@ export class SidRadioWorkerClient {
     reject: (e: Error) => void;
     timer: ReturnType<typeof setTimeout>;
   } | null = null;
+  private loadInFlight: Promise<SidRadioReadyStats> | null = null;
   private readonly computePending = new Map<number, PendingCompute>();
   private nextId = 1;
 
@@ -138,7 +139,32 @@ export class SidRadioWorkerClient {
     }
   }
 
+  /**
+   * Load the bundle in the worker and resolve with its ready stats.
+   *
+   * **Idempotent by contract.** Two loads legitimately overlap: the launcher
+   * preloads to size its tiles, and a tile tap starts a station. Posting a
+   * second `load` would replace this class's single pending resolver, so the
+   * first caller would never be answered — it would reject on its 15 s timeout
+   * with a spurious warning, and that stale timer would clear whichever load was
+   * pending by then. Repeated calls therefore share one worker load, and with it
+   * one parse of the 1.8 MB bundle that the worker keeps for `compute` anyway.
+   *
+   * A rejected load is not retained, so a caller can retry; `terminate()`
+   * discards the worker and this memo together, since a resolved memo would
+   * otherwise claim a bundle is loaded in a worker that no longer exists.
+   * `options` from a later overlapping call are ignored, being a request to load
+   * what is already loading.
+   */
   load(options: SidRadioLoadOptions = {}): Promise<SidRadioReadyStats> {
+    this.loadInFlight ??= this.postLoad(options).catch((error: unknown) => {
+      this.loadInFlight = null;
+      throw error;
+    });
+    return this.loadInFlight;
+  }
+
+  private postLoad(options: SidRadioLoadOptions): Promise<SidRadioReadyStats> {
     const { bundle, timeoutMs = 15000 } = options;
     return new Promise<SidRadioReadyStats>((resolve, reject) => {
       let worker: Worker;
@@ -181,6 +207,7 @@ export class SidRadioWorkerClient {
   terminate(): void {
     this.worker?.terminate();
     this.worker = null;
+    this.loadInFlight = null;
     if (this.loadPending) {
       clearTimeout(this.loadPending.timer);
       this.loadPending = null;
