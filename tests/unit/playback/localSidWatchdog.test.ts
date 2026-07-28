@@ -152,6 +152,23 @@ describe("LocalSidEngine — the seek gate", () => {
     expect(engine.getStats().chunksScheduled).toBeGreaterThan(0);
   });
 
+  it("starts a new tune on a fresh worker rather than behind an unfinished seek", async () => {
+    const { engine, workers } = makeEngine();
+    await startTune(engine, workers);
+
+    // A seek near the end of a long tune: the worker reloads and fast-forwards to get there, in a
+    // single call it cannot interrupt. The listener does not wait for it — they skip to the next
+    // tune, whose `open` would otherwise sit behind the whole of it.
+    void engine.seekTo(200);
+    await vi.advanceTimersByTimeAsync(0);
+
+    void engine.play(new ArrayBuffer(64), 0, {});
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(workers[0].terminated).toBe(true);
+    expect(workers.length).toBe(2);
+  });
+
   it("does not carry a stuck gate into the next tune", async () => {
     const { engine, workers } = makeEngine();
     await startTune(engine, workers);

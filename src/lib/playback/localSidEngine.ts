@@ -601,6 +601,17 @@ export class LocalSidEngine {
     songIndex: number,
     callbacks: LocalSidPlayCallbacks = {},
   ): Promise<LocalSidPlayResult> {
+    // A seek still running belongs to a tune nobody is listening to any more, and it cannot be
+    // called off: seeking reloads the tune and fast-forwards to the target, so a seek near the end
+    // of a long one re-emulates minutes of C64 in a single call the worker cannot interrupt. The
+    // queue is strictly ordered, so this tune's `open` would wait all of it out — on a Pixel 4,
+    // scrub-then-skip spent longer there than the open's own 15 s timeout allows, and the track
+    // change was lost with the worker written off as unresponsive.
+    //
+    // A new tune inherits nothing from the old one, so start clean rather than queue behind it.
+    // Renders do not get this treatment: there are at most a handful, each a fraction of a second
+    // of audio, and a device that could not clear them faster than that could not play at all.
+    if (this.seekPending) this.discardWorker("a new tune superseded an unfinished seek");
     await this.load();
     // A switchover ALWAYS starts from silence unless the listener has asked for
     // a crossfade. Zero (the default) is a hard cut.
