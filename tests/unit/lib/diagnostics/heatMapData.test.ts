@@ -278,7 +278,7 @@ describe("buildFtpHeatMap", () => {
       makeEvent("ftp-operation", { operation: "NLST", path: "/Usb0/Demos", result: "success", durationMs: 10 }),
       makeEvent("ftp-operation", {
         operation: "RETR",
-        path: "/Usb0/Cartridges/ActionReplay.crt",
+        path: "/Usb0/Cartridges/SampleFreezer.crt",
         result: "success",
         durationMs: 16,
       }),

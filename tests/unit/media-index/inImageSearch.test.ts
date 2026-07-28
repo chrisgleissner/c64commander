@@ -22,7 +22,7 @@ import type { DiskDirectoryEntry } from "@/lib/disks/diskImage";
 
 const dirEntry = (overrides: Partial<DiskDirectoryEntry> = {}): DiskDirectoryEntry => ({
   index: 2,
-  name: "TURRICAN",
+  name: "SAMPLEGAME",
   rawName: new Uint8Array(16),
   type: "PRG",
   closed: true,
@@ -61,7 +61,7 @@ describe("inImageSearch — toChildEntry", () => {
   it("maps a directory entry to a child with a compound path and container", () => {
     const entry = toChildEntry("/GAMES/COMPILATION.D64", "d64", 174848, "2026-06-01", dirEntry());
     expect(entry.path).toBe("/GAMES/COMPILATION.D64#2");
-    expect(entry.name).toBe("TURRICAN");
+    expect(entry.name).toBe("SAMPLEGAME");
     expect(entry.type).toBe("prg");
     expect(entry.sizeBytes).toBe(40 * 254);
     expect(entry.container).toMatchObject({
@@ -119,24 +119,24 @@ describe("inImageSearch — cache freshness + supersede", () => {
 describe("inImageSearch — search", () => {
   const entries: MediaEntryV2[] = [
     { path: "/GAMES/COMPILATION.D64", name: "Compilation Disk", type: "disk" },
-    child("/GAMES/COMPILATION.D64", "TURRICAN", 0),
-    child("/GAMES/COMPILATION.D64", "TURRICAN LEVEL 2", 1),
+    child("/GAMES/COMPILATION.D64", "SAMPLEGAME", 0),
+    child("/GAMES/COMPILATION.D64", "SAMPLEGAME LEVEL 2", 1),
     child("/GAMES/OTHER.D64", "SOMETHING ELSE", 0),
   ];
 
   it("ignores children when the toggle is off", () => {
-    const hits = searchMediaEntries(entries, "turrican", { searchInsideDisks: false });
+    const hits = searchMediaEntries(entries, "samplegame", { searchInsideDisks: false });
     expect(hits).toHaveLength(0);
   });
 
   it("matches child names when the toggle is on (case-insensitive)", () => {
-    const hits = searchMediaEntries(entries, "turrican", { searchInsideDisks: true });
-    expect(hits.map((e) => e.name)).toEqual(["TURRICAN", "TURRICAN LEVEL 2"]);
+    const hits = searchMediaEntries(entries, "samplegame", { searchInsideDisks: true });
+    expect(hits.map((e) => e.name)).toEqual(["SAMPLEGAME", "SAMPLEGAME LEVEL 2"]);
   });
 
   it("ANDs multiple terms", () => {
-    const hits = searchMediaEntries(entries, "turrican level", { searchInsideDisks: true });
-    expect(hits.map((e) => e.name)).toEqual(["TURRICAN LEVEL 2"]);
+    const hits = searchMediaEntries(entries, "samplegame level", { searchInsideDisks: true });
+    expect(hits.map((e) => e.name)).toEqual(["SAMPLEGAME LEVEL 2"]);
   });
 
   it("still matches top-level entries regardless of the toggle", () => {

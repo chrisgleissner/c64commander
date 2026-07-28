@@ -551,7 +551,7 @@ describe("hvscBrowseIndexStore", () => {
 
     const snapshot = build([
       { path: "/MUSICIANS/H/Hubbard_Rob/Commando.sid", name: "Commando.sid", type: "sid", durationSeconds: 123 },
-      { path: "/GAMES/Last_Ninja.sid", name: "Last_Ninja.sid", type: "sid", durationSeconds: 95 },
+      { path: "/GAMES/Sample_Quest.sid", name: "Sample_Quest.sid", type: "sid", durationSeconds: 95 },
     ]);
 
     if (typeof localStorage !== "undefined") {
