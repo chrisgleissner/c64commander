@@ -368,6 +368,24 @@ export class LocalSidEngine {
     );
   }
 
+  /**
+   * Throw away a worker that missed its reply window, so the next play starts from a fresh one.
+   *
+   * Timing out the wait is what stops the UI wedging, but on its own it leaves the same
+   * unresponsive worker in place — the transport comes back and then every retry spends another
+   * 15 s failing against it. `ensureWorker` builds a new worker whenever this is null, so dropping
+   * it here is the whole recovery: the next play reloads the module and opens the tune normally.
+   * A worker that has stopped answering is not worth keeping.
+   */
+  private discardWorker(reason: string): void {
+    addLog("warn", "Local SID engine: discarding an unresponsive worker", { service: "local-sid", reason });
+    this.worker?.terminate();
+    this.worker = null;
+    this.moduleReady = false;
+    this.loadPending = null;
+    this.loadInFlight = null;
+  }
+
   private ensureWorker(): LocalSidWorkerLike {
     if (!this.worker) {
       this.worker = this.workerFactory();
@@ -484,8 +502,7 @@ export class LocalSidEngine {
         return;
       }
       const timer = setTimeout(() => {
-        this.loadPending = null;
-        this.loadInFlight = null;
+        this.discardWorker("module load timed out");
         reject(new Error(`Local SID engine did not load within ${WORKER_REPLY_TIMEOUT_MS}ms`));
       }, WORKER_REPLY_TIMEOUT_MS);
       this.loadPending = {
@@ -545,6 +562,7 @@ export class LocalSidEngine {
     return new Promise<LocalSidPlayResult>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.openPending = null;
+        this.discardWorker("tune open timed out");
         reject(new Error(`Local SID engine did not open the tune within ${WORKER_REPLY_TIMEOUT_MS}ms`));
       }, WORKER_REPLY_TIMEOUT_MS);
       const settle = <A extends unknown[], R>(fn: (...args: A) => R) => {

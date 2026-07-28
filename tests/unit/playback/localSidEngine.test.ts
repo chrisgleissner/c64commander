@@ -400,6 +400,33 @@ describe("LocalSidEngine — an unanswered worker", () => {
     }
   });
 
+  it("throws the unresponsive worker away, so the next play starts clean", async () => {
+    vi.useFakeTimers();
+    try {
+      // A factory that hands out a fresh worker each time, so "did the engine build a new one?"
+      // is observable — the shared harness returns one fixed instance.
+      const built: FakeWorker[] = [new FakeWorker()];
+      let handed = 0;
+      const engine = new LocalSidEngine({ workerFactory: () => built[Math.min(handed++, built.length - 1)] });
+      const worker = built[0];
+      const load = engine.load();
+      const assertion = expect(load).rejects.toThrow(/did not load/);
+      await vi.advanceTimersByTimeAsync(15_001);
+      await assertion;
+      expect(worker.terminated).toBe(true);
+
+      // The next attempt must reach a NEW worker, not spend another 15 s against the dead one.
+      const fresh = new FakeWorker();
+      built.push(fresh);
+      const retry = engine.load();
+      fresh.emit({ type: "ready", moduleLoadMs: 1 });
+      await expect(retry).resolves.toBeUndefined();
+      expect(built.length).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("rejects the open instead of waiting forever", async () => {
     vi.useFakeTimers();
     try {
