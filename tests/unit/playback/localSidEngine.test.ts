@@ -366,6 +366,40 @@ describe("LocalSidEngine — overlapping seeks", () => {
   });
 });
 
+/**
+ * Skipping quickly through a playlist overlaps opens: `play()` awaits `load()` before it registers
+ * `openPending`, so a second press gets there while the first is still waiting. The slot is single
+ * and `onOpened` only settles a reply whose id is still `activeId`, so the first play's resolver
+ * used to be dropped and its await — sitting in the middle of starting a track — never returned.
+ */
+describe("LocalSidEngine — overlapping opens", () => {
+  it("settles a superseded play instead of leaving its caller awaiting forever", async () => {
+    const { engine, worker } = makeEngine();
+    const first = engine.play(new ArrayBuffer(120), 0, {});
+    await completeOpen(worker, { id: 1 });
+    await first;
+
+    // A second track starts while a third press lands right behind it.
+    const second = engine.play(new ArrayBuffer(120), 0, {});
+    await flush();
+    const third = engine.play(new ArrayBuffer(120), 0, {});
+    await flush();
+
+    await expect(second).resolves.toMatchObject({ started: false });
+
+    const opens = worker.sentOfType("open");
+    worker.emit({
+      type: "opened",
+      id: opens[opens.length - 1].id,
+      sampleRate: 48000,
+      channels: 2,
+      tuneInfo: null,
+      romRequired: false,
+    });
+    await expect(third).resolves.toMatchObject({ started: true });
+  });
+});
+
 describe("LocalSidEngine — default environment factories", () => {
   it("reports isSupported from Worker + AudioContext availability (false under jsdom)", () => {
     expect(LocalSidEngine.isSupported()).toBe(false);

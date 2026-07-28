@@ -945,6 +945,21 @@ export class LocalSidEngine {
       outgoing?.close();
     }
     this.activeId = 0;
+    // Settle an open that this stop just cancelled, rather than dropping its resolver.
+    //
+    // `onOpened` only answers a reply whose id is still `activeId`, and the line above has just
+    // cleared that, so nothing else can ever settle this promise — its caller is an `await` in the
+    // middle of starting a track and would wait forever. `play()` calls `stopPlayback` before
+    // registering its own open, so skipping quickly through a playlist walks straight into it: an
+    // ordinary second press on Next, not a corner case. Resolving is honest — this open was
+    // cancelled before anything started, which is what the result says.
+    this.openPending?.resolve({
+      romRequired: false,
+      started: false,
+      sampleRate: this.requestedSampleRate,
+      channels: this.channels,
+      tuneInfo: null,
+    });
     this.openPending = null;
     this.callbacks = {};
     this.inFlightRenders = 0;
