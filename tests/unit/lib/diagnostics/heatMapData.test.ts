@@ -314,13 +314,13 @@ describe("buildFtpHeatMap", () => {
       makeEvent("ftp-operation", { operation: "DELE", path: "/Usb0/Logs/old.log", result: "success", durationMs: 9 }),
       makeEvent("ftp-operation", {
         operation: "SIZE",
-        path: "/Usb0/Games/Turrican II/Disk 1.d64",
+        path: "/Usb0/Games/Sample Arcade/Disk 1.d64",
         result: "success",
         durationMs: 13,
       }),
       makeEvent("ftp-operation", {
         operation: "RETR",
-        path: "/Usb0/Games/Turrican_II/loader.prg",
+        path: "/Usb0/Games/SampleArcade_II/loader.prg",
         result: "success",
         durationMs: 14,
       }),

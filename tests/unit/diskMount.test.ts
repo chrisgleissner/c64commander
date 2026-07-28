@@ -66,7 +66,7 @@ describe("mountDiskToDrive", () => {
 
     const disk = createDiskEntry({
       location: "ultimate",
-      path: "/Usb0/Games/Turrican II/Disk 1.d64",
+      path: "/Usb0/Games/Sample Arcade/Disk 1.d64",
     });
 
     await mountDiskToDrive(api, "a", disk);

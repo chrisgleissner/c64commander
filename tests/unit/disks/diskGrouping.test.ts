@@ -23,11 +23,11 @@ describe("assignDiskGroupsByPrefix", () => {
 
   it("groups hyphenated disk numbers", () => {
     const result = assignDiskGroupsByPrefix([
-      { path: "/Games/Last Ninja 3-1.d64", name: "Last Ninja 3-1.d64" },
-      { path: "/Games/Last Ninja 3-2.d64", name: "Last Ninja 3-2.d64" },
+      { path: "/Games/Sample Quest 3-1.d64", name: "Sample Quest 3-1.d64" },
+      { path: "/Games/Sample Quest 3-2.d64", name: "Sample Quest 3-2.d64" },
     ]);
-    expect(result.get("/Games/Last Ninja 3-1.d64")).toBe("Last Ninja 3");
-    expect(result.get("/Games/Last Ninja 3-2.d64")).toBe("Last Ninja 3");
+    expect(result.get("/Games/Sample Quest 3-1.d64")).toBe("Sample Quest 3");
+    expect(result.get("/Games/Sample Quest 3-2.d64")).toBe("Sample Quest 3");
   });
 
   it("groups single-letter suffixes", () => {

@@ -292,7 +292,7 @@ test.describe("Playback file browser (part 2)", () => {
     await clickSourceSelectionButton(dialog, "C64 Ultimate");
     await openRemoteFolder(dialog, "Usb0");
     await openRemoteFolder(dialog, "Demos");
-    await openRemoteFolder(dialog, "Krestage 3");
+    await openRemoteFolder(dialog, "Demo Collection");
     await selectEntryCheckbox(dialog, "Part 1.d64");
     await page.getByRole("button", { name: "Add to playlist" }).click();
     await expect(page.getByRole("dialog")).toBeHidden();
@@ -1045,7 +1045,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "c64u-root");
     await openRemoteFolder(dialog, "Usb0");
     await openRemoteFolder(dialog, "Games");
-    await openRemoteFolder(dialog, "Turrican II");
+    await openRemoteFolder(dialog, "Sample Arcade");
     await expect(dialog.getByText("Disk 1.d64", { exact: true })).toBeVisible();
     await snap(page, testInfo, "c64u-folder");
     await selectEntryCheckbox(dialog, "Disk 1.d64");
@@ -1071,7 +1071,7 @@ test.describe("Playback file browser (part 2)", () => {
     await openRemoteFolder(dialog, "Usb0");
     await openRemoteFolder(dialog, "Games");
     await expect(dialog.getByTestId("source-path-label")).toContainText("/Usb0/Games");
-    await expect(dialog.getByText("/Usb0/Games/Turrican II")).toHaveCount(0);
+    await expect(dialog.getByText("/Usb0/Games/Sample Arcade")).toHaveCount(0);
     await snap(page, testInfo, "c64u-path-remembered");
     await page.getByRole("button", { name: "Cancel" }).click();
     await snap(page, testInfo, "dialog-closed");
@@ -1551,7 +1551,7 @@ test.describe("Playback file browser (part 2)", () => {
     await expect(dialog.getByText("Usb0", { exact: true })).toBeVisible();
     await openRemoteFolder(dialog, "Usb0");
     await openRemoteFolder(dialog, "Games");
-    await openRemoteFolder(dialog, "Turrican II");
+    await openRemoteFolder(dialog, "Sample Arcade");
     await snap(page, testInfo, "remote-browser");
     await snap(page, testInfo, "remote-browser");
 
