@@ -67,7 +67,7 @@ class FakeSidAudioEngine {
   dispose(): void {}
 }
 
-vi.mock("/wasm/libsidplayfp/index.js", () => ({ SidAudioEngine: FakeSidAudioEngine }), { virtual: true });
+vi.mock("/wasm/libsidplayfp/dist/index.js", () => ({ SidAudioEngine: FakeSidAudioEngine }), { virtual: true });
 
 interface FakeScope {
   postMessage: (message: LocalSidWorkerToMain, transfer?: Transferable[]) => void;

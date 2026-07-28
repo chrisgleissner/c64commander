@@ -4,26 +4,22 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { LIBSIDPLAYFP_WASM_RELEASE } from "../../../scripts/fetch-libsidplayfp-wasm.mjs";
-
 /**
- * The pin tests next door prove the *right bytes* were fetched. These prove the
+ * The sync test next door proves the *right bytes* were deployed. These prove the
  * bytes are the right *engines* and still speak the API the player expects.
  *
  * That gap is not theoretical. The engine spent months shipping as SIDLite while
- * everything believed it was reSIDfp, because a checksum cannot tell you what a
- * binary is — only that it did not change. And the pin now moves across a large
- * version jump (the committed artifact was 0.3.10), so `SidAudioEngine`'s call
- * surface is exactly what a re-pin can silently break.
+ * everything believed it was reSIDfp, because a lockfile can tell you a package
+ * did not change but not what is inside it. A version bump is exactly what can
+ * silently break `SidAudioEngine`'s call surface.
  *
- * Skipped when the artifact is absent: it is git-ignored and fetched by
- * `prebuild`, so a plain `npm test` on a fresh clone has not fetched it yet.
+ * Skipped when the artifact is absent: it is git-ignored and populated by
+ * `prebuild`, so a plain `npm test` on a fresh clone has not synced it yet.
  */
 const ENGINE_DIR = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../../..",
-  "public",
-  LIBSIDPLAYFP_WASM_RELEASE.publicDir,
+  "public/wasm/libsidplayfp/dist",
 );
 
 const FIXTURE_SID = path.resolve(
