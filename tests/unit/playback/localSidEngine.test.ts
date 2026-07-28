@@ -372,6 +372,24 @@ describe("LocalSidEngine — overlapping seeks", () => {
  * and `onOpened` only settles a reply whose id is still `activeId`, so the first play's resolver
  * used to be dropped and its await — sitting in the middle of starting a track — never returned.
  */
+/**
+ * Two tracks starting close together both `await load()` before they open anything, and the `ready`
+ * handler resolves `loadPending` without matching an id — so the second call used to displace the
+ * first's resolver and strand that `play()` at its very first await, as well as posting a second
+ * WASM init.
+ */
+describe("LocalSidEngine — overlapping loads", () => {
+  it("shares one module load between overlapping callers", async () => {
+    const { engine, worker } = makeEngine();
+    const first = engine.load();
+    const second = engine.load();
+    expect(worker.sentOfType("load").length).toBe(1);
+    worker.emit({ type: "ready", moduleLoadMs: 1 });
+    await expect(first).resolves.toBeUndefined();
+    await expect(second).resolves.toBeUndefined();
+  });
+});
+
 describe("LocalSidEngine — overlapping opens", () => {
   it("settles a superseded play instead of leaving its caller awaiting forever", async () => {
     const { engine, worker } = makeEngine();

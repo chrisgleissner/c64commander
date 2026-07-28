@@ -279,6 +279,8 @@ export class LocalSidEngine {
 
   private worker: LocalSidWorkerLike | null = null;
   private loadPending: { resolve: () => void; reject: (e: Error) => void } | null = null;
+  /** Shared in-flight module load, so overlapping callers cannot displace each other's resolver. */
+  private loadInFlight: Promise<void> | null = null;
   private moduleReady = false;
 
   private audio: LocalSidAudioSink | null = null;
@@ -433,22 +435,44 @@ export class LocalSidEngine {
     this.callbacks.onError?.(error);
   }
 
-  /** Instantiate the WASM module in the worker (idempotent). */
+  /**
+   * Instantiate the WASM module in the worker.
+   *
+   * Idempotent for overlapping callers too, not just repeat ones. Two tracks
+   * starting close together both `await load()` before they open anything, and
+   * `loadPending` is a single slot the `ready` handler resolves without matching
+   * an id — so a second call used to drop the first's resolver and leave that
+   * `play()` waiting forever, as well as posting a redundant WASM init. Sharing
+   * one in-flight load fixes both.
+   */
   load(): Promise<void> {
     if (this.moduleReady) return Promise.resolve();
-    return new Promise<void>((resolve, reject) => {
+    if (this.loadInFlight) return this.loadInFlight;
+    // One promise, not a chained `.catch` — the memo must settle on exactly the
+    // tick the worker's `ready` does. `play()` awaits this before it registers
+    // its open, so an extra link here delays every open by a microtask.
+    this.loadInFlight = new Promise<void>((resolve, reject) => {
       let worker: LocalSidWorkerLike;
       try {
         worker = this.ensureWorker();
       } catch (error) {
+        // A failed load is not retained, so a caller can retry.
+        this.loadInFlight = null;
         reject(error as Error);
         return;
       }
-      this.loadPending = { resolve, reject };
+      this.loadPending = {
+        resolve,
+        reject: (error: Error) => {
+          this.loadInFlight = null;
+          reject(error);
+        },
+      };
       // Read at load time, not construction: the worker is torn down between
       // sessions, so a change in Settings takes effect on the next play.
       worker.postMessage({ type: "load", engine: loadSidEmulationEngine() });
     });
+    return this.loadInFlight;
   }
 
   /**
@@ -985,6 +1009,8 @@ export class LocalSidEngine {
     this.worker = null;
     this.moduleReady = false;
     this.loadPending = null;
+    // The memo would otherwise promise a module that lives in a worker we just terminated.
+    this.loadInFlight = null;
     this.totalRenderMs = 0;
     this.totalRenderedSeconds = 0;
     this.peakRenderMsPerSec = 0;
