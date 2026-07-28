@@ -2232,15 +2232,21 @@ export function usePlaybackController({
     setPlayedMs(positionMs);
     rescheduleAutoAdvance(positionMs);
     try {
-      await controller.seekTo(target / 1000);
+      // Raced, not just guarded. A `try/finally` only covers a seek that *rejects*; one that never
+      // settles never returns from the await, so the `finally` would not run either and the scrub
+      // would latch exactly as before. The release has to be able to happen without the engine.
+      await Promise.race([
+        controller.seekTo(target / 1000),
+        new Promise<void>((resolve) => setTimeout(resolve, SCRUB_RELEASE_WAIT_MS)),
+      ]);
     } catch (error) {
       addLog("debug", "Local SID scrub seek failed on release", { error: (error as Error).message });
     } finally {
       // Always leave the scrub, whatever the seek did.
       //
-      // These two lines used to sit after an unguarded await, so a seek that
-      // rejected — or never settled — left `scrubEndingRef` latched true and the
-      // scrub target on screen. That is not one lost gesture: the latch makes
+      // These two lines used to sit after a bare await, so a seek that rejected —
+      // or never settled — left `scrubEndingRef` latched true and the scrub
+      // target on screen. That is not one lost gesture: the latch makes
       // every later `endScrub` return at its re-entry guard, so hold-to-seek is
       // dead for the rest of the session and the timer keeps showing a position
       // playback has left. Releasing the gesture must not depend on the engine.
