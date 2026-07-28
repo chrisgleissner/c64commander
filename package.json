@@ -187,7 +187,7 @@
     "framer-motion": "^12.42.2",
     "input-otp": "^1.4.2",
     "js-yaml": "^4.3.0",
-    "libsidplayfp-wasm": "^0.1.1",
+    "libsidplayfp-wasm": "^1.0.1",
     "lucide-react": "^0.577.0",
     "next-themes": "^0.4.6",
     "react": "^18.3.1",
