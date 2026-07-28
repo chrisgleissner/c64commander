@@ -2070,7 +2070,9 @@ export default function PlayFilesPage() {
                         ? "No radio for this tune yet — try a style or your likes."
                         : sidRadio.notice === "no-hvsc"
                           ? "No HVSC music is installed yet — install it below, then any station will play."
-                          : "No radio available yet — like a few tunes to seed one."}
+                          : sidRadio.notice === "station-ended"
+                            ? "This station has played everything it could find — pick another to keep going."
+                            : "No radio available yet — like a few tunes to seed one."}
                     </p>
                   ) : null}
                 </div>

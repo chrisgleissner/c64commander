@@ -81,7 +81,7 @@ export interface UseSidRadioResult {
   steer: (md5: string, signal: RankingSignal) => void;
   stop: () => void;
   /** A transient empty/degraded notice (spec §5.2 Q5), or null. */
-  notice: "no-radio-for-tune" | "no-radio" | "no-hvsc" | null;
+  notice: "no-radio-for-tune" | "no-radio" | "no-hvsc" | "station-ended" | null;
   dismissNotice: () => void;
 }
 
@@ -169,7 +169,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
   const randomSeed = params.randomSeed ?? defaultRandomSeed;
 
   const [station, setStation] = useState<ActiveStation | null>(null);
-  const [notice, setNotice] = useState<"no-radio-for-tune" | "no-radio" | "no-hvsc" | null>(null);
+  const [notice, setNotice] = useState<"no-radio-for-tune" | "no-radio" | "no-hvsc" | "station-ended" | null>(null);
   const [stylePopulations, setStylePopulations] = useState<SidRadioStylePopulations | null>(null);
   const stylePopulationsRef = useRef<SidRadioStylePopulations | null>(null);
   const stylePopulationsLoadRef = useRef<Promise<SidRadioStylePopulations | null> | null>(null);
@@ -422,6 +422,14 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
           });
         } else if (reason) {
           updateSidRadioStats({ stationActive: true });
+          // Say so. A station that runs out does it at the tail of the queue, which is exactly
+          // where the user cannot tell an ended station from a broken one: playback stops on the
+          // last track and Next does nothing, because there is no next. (Next stays *enabled*
+          // whenever hold-to-seek is available, so it does not even grey out.) Observed on a Pixel
+          // 4 — a Chill / Ambient station advertised as holding 17,574 tracks stopped dead after 25
+          // and left no way to tell why. The provider latches this, so it will not resolve itself:
+          // the station is over and picking another is the only way on.
+          setNotice("station-ended");
         }
         recordRefill({
           lastRefillMs: settledAt - started,

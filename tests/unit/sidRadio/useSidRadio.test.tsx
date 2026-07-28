@@ -265,6 +265,38 @@ describe("useSidRadio", () => {
     expect(params.startPlaylist).not.toHaveBeenCalled();
   });
 
+  /**
+   * A station that runs out does it at the tail of the queue — the one place the user cannot tell
+   * "ended" from "broken": playback stops on the last track and Next does nothing because there is
+   * no next, while staying enabled (hold-to-seek keeps it live). Seen on a Pixel 4: a station the
+   * launcher sized at 17,574 tracks stopped after 25 with no explanation at all.
+   */
+  it("says the station has ended when a refill comes back empty", async () => {
+    installMusic();
+    const client = makeClient();
+    const params = baseParams(client, { playlistLength: 10, currentIndex: 0 });
+    const { result, rerender } = renderHook((p: ReturnType<typeof baseParams>) => useSidRadio(p), {
+      initialProps: params,
+    });
+    await act(async () => {
+      await result.current.startStyleRadio(1, "Chill / Ambient");
+    });
+    expect(result.current.notice).toBeNull();
+
+    // The station dries up. Drain whatever the provider still holds buffered, then keep the cursor
+    // at the tail until the empty compute is what a refill actually sees.
+    client.compute = vi.fn(async () => ({ candidates: [], empty: "exhausted" as const }));
+    for (let cursor = 6; cursor <= 9 && result.current.notice === null; cursor += 1) {
+      await act(async () => {
+        rerender({ ...params, currentIndex: cursor, playlistLength: 10 });
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+    await waitFor(() => expect(result.current.notice).toBe("station-ended"));
+  });
+
   it("resumes the chip from a saved session on mount (D15)", () => {
     saveSidRadioSession({
       seedKind: "style",
