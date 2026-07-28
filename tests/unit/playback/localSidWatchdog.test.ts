@@ -123,6 +123,69 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/**
+ * The gate that actually caused the stalls.
+ *
+ * `seekPending` suppresses every "chunk" and "end" so audio rendered for the position just left is
+ * never scheduled. It is cleared only by a `seeked` reply whose id still matches — so a reply that
+ * is lost, or superseded by a newer seek, used to leave it shut. `stopPlayback` did not reopen it,
+ * which is why the silence outlived the tune: the next tune's chunks were discarded too, and
+ * re-opening in a fresh worker could not help, because the gate is engine state and not the
+ * worker's. Scrubbing posts a seek every 350 ms, so this was easy to meet and reported constantly.
+ */
+describe("LocalSidEngine — the seek gate", () => {
+  it("reopens the gate when a seek is never acknowledged", async () => {
+    const { engine, workers, clock } = makeEngine();
+    await startTune(engine, workers);
+    const worker = workers[0];
+
+    // Seek, and let the worker never answer.
+    const seek = engine.seekTo(10);
+    await vi.advanceTimersByTimeAsync(8_001);
+    await seek;
+
+    // Audio delivered after the gate reopened must reach the timeline again.
+    clock.currentTime = 1;
+    deliverChunk(worker);
+    expect(engine.getStats().chunksScheduled).toBeGreaterThan(0);
+  });
+
+  it("does not carry a stuck gate into the next tune", async () => {
+    const { engine, workers } = makeEngine();
+    await startTune(engine, workers);
+
+    // A seek whose reply never comes, then the listener moves on to another tune.
+    void engine.seekTo(10);
+    await vi.advanceTimersByTimeAsync(0);
+    engine.stopPlayback();
+
+    const play = engine.play(new ArrayBuffer(64), 0, {});
+    await vi.advanceTimersByTimeAsync(0);
+    const worker = workers[workers.length - 1];
+    const opens = worker.sentOfType("open");
+    worker.emit({
+      type: "opened",
+      id: opens[opens.length - 1].id,
+      sampleRate: SAMPLE_RATE,
+      channels: CHANNELS,
+      tuneInfo: null,
+      romRequired: false,
+    });
+    await play;
+
+    const before = engine.getStats().chunksScheduled;
+    worker.emit({
+      type: "chunk",
+      id: opens[opens.length - 1].id,
+      pcm: chunk(SAMPLE_RATE),
+      samples: SAMPLE_RATE * CHANNELS,
+      renderMs: 10,
+    });
+    // The new tune must be audible; the old tune's abandoned seek is none of its business.
+    expect(engine.getStats().chunksScheduled).toBeGreaterThan(before);
+  });
+});
+
 describe("LocalSidEngine — liveness watchdog", () => {
   it("re-opens a stalled tune and resumes where it fell silent", async () => {
     const { engine, workers, clock } = makeEngine();

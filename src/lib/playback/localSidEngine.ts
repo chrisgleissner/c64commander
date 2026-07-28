@@ -122,6 +122,17 @@ const AUDIO_STALL_TIMEOUT_MS = 5000;
 const STARVED_BUFFER_SECONDS = 0.05;
 
 /**
+ * How long to wait for the worker to acknowledge a seek before reopening the audio gate.
+ *
+ * `seekPending` suppresses every rendered chunk so the audio from the position just left is never
+ * scheduled. That is correct while a seek is genuinely in flight and ruinous the moment it is not:
+ * an unacknowledged seek would discard chunks for as long as the tune lasts. Generous next to a
+ * seek that lands (a pre-rendered tune seeks from its buffer; a rewind re-renders and is the slow
+ * case at a few seconds), so this only fires when the reply is genuinely never coming.
+ */
+const SEEK_ACK_TIMEOUT_MS = 8000;
+
+/**
  * Ownership of this device's speaker now lives in `@/lib/audio/phoneAudioOwnership`,
  * shared with the A/V mirror.
  *
@@ -834,7 +845,27 @@ export class LocalSidEngine {
       // clock frozen mid-tune with no audio track left and the transport still
       // claiming to play. The superseded seek is simply over; resolve it.
       this.seekPending?.resolve();
-      this.seekPending = { id, resolve };
+      // Bounded, because leaving this set is not a lost seek but lost audio: while it is set every
+      // chunk is discarded, so a reply that never comes would silence the tune indefinitely. Give
+      // up on the reply and reopen the gate rather than wait for it forever — the worst case is a
+      // seek that does not land, which is a great deal better than a track that plays nothing.
+      const timer = setTimeout(() => {
+        if (this.seekPending?.id !== id) return;
+        this.seekPending = null;
+        addLog("warn", "Local SID seek was not acknowledged; reopening the audio gate", {
+          service: "local-sid",
+          seconds: target,
+        });
+        resolve();
+        this.pump();
+      }, SEEK_ACK_TIMEOUT_MS);
+      this.seekPending = {
+        id,
+        resolve: () => {
+          clearTimeout(timer);
+          resolve();
+        },
+      };
       this.worker?.postMessage({ type: "seek", id, positionSeconds: target });
     });
 
@@ -1155,6 +1186,15 @@ export class LocalSidEngine {
    */
   stopPlayback(options: { crossfadeMs?: number } = {}): void {
     releaseAudioOwnership(this);
+    // Reopen the seek gate. `seekPending` suppresses every "chunk" and "end" so audio rendered for
+    // the position we just left is never scheduled, and it is cleared only by a `seeked` reply whose
+    // id still matches. A reply that is lost — or superseded by a newer seek — therefore left it
+    // shut, and because a stop never reopened it the silence outlived the tune: the NEXT tune's
+    // chunks were discarded too, and re-opening in a fresh worker could not help either, because the
+    // gate is engine state and not the worker's. Scrubbing posts a seek every 350 ms, so this was
+    // easy to meet, and it is the whole of the "local SID playback stalled" report.
+    this.seekPending?.resolve();
+    this.seekPending = null;
     // `isActive()` flips here, so this is where the app is told.
     //
     // NOT the only place the app needs telling: a tune that simply runs out does
