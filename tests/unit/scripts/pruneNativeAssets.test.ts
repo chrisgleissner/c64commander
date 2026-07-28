@@ -17,6 +17,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
 import { pruneNativeAssets } from "../../../scripts/prune-native-assets.mjs";
 
 const dirs: string[] = [];
@@ -101,6 +102,50 @@ describe("prune-native-assets", () => {
     const result = run(root, "c64commander");
     expect(result.removed).toEqual([]);
     expect(fs.existsSync(path.join(root, "web/data/sidcorr/hvsc-tiny.sidcorr"))).toBe(true);
+  });
+
+  /**
+   * The prune is only worth anything if it runs on every path that syncs. It was originally wired
+   * into `cap:sync` alone, which the release build walked straight past — `build-android-apks.mjs`
+   * calls `cap:build`, and iOS CI has its own retry wrapper, both of which invoked `cap sync`
+   * directly. So assert the rule rather than the wiring: nothing invokes a sync without pruning
+   * after it.
+   */
+  it("has no sync path that skips the prune", () => {
+    const offenders: string[] = [];
+
+    // package.json is checked per script, not per file: it *defines* the prune script, so a
+    // whole-file search for it would excuse every other script in there — which is exactly how the
+    // release path came to bypass the prune in the first place.
+    const scripts: Record<string, string> = JSON.parse(fs.readFileSync("package.json", "utf8")).scripts ?? {};
+    for (const [name, body] of Object.entries(scripts)) {
+      if (name === "native:prune-assets") continue;
+      const invokesSync = /(^|[^:\w])cap sync/.test(body);
+      const prunes = /cap:sync|native:prune-assets/.test(body);
+      if (invokesSync && !prunes) offenders.push(`package.json script "${name}"`);
+    }
+
+    const tracked = execFileSync("git", ["ls-files"], { encoding: "utf8" }).split("\n").filter(Boolean);
+    for (const file of tracked) {
+      if (!/\.(mjs|sh|ya?ml)$/.test(file) && file !== "build") continue;
+      if (file === "scripts/prune-native-assets.mjs" || file.startsWith("tests/")) continue;
+      let contents: string;
+      try {
+        contents = fs.readFileSync(file, "utf8");
+      } catch {
+        continue;
+      }
+      // Comments and log lines describe the step rather than performing it.
+      const invokesSync = contents
+        .split("\n")
+        .filter((line) => !/^\s*(#|\/\/|\*)/.test(line) && !/echo /.test(line))
+        .some((line) => /(^|[^:\w])cap sync/.test(line) && !/cap:sync/.test(line));
+      // The prune need not be on the same line — the iOS wrapper retries the sync in a loop and
+      // prunes once it succeeds — but it must be somewhere in the same file.
+      if (invokesSync && !contents.includes("native:prune-assets")) offenders.push(file);
+    }
+
+    expect(offenders).toEqual([]);
   });
 
   it("is safe to run when a platform has not been set up", () => {

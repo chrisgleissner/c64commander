@@ -95,7 +95,7 @@
     "cap:sync:ios": "cap sync ios && npm run native:prune-assets",
     "cap:open:android": "cap open android",
     "cap:open:ios": "cap open ios",
-    "cap:build": "npm run build && cap sync",
+    "cap:build": "npm run build && npm run cap:sync",
     "ios:build:sim": "bash scripts/ios-build.sh sim",
     "ios:build:device": "bash scripts/ios-build.sh device",
     "android:apk": "cd android && ./gradlew assembleDebug",
