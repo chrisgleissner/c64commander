@@ -117,17 +117,42 @@ describe("sidRadio worker contract (§8.3)", () => {
     expect(message).toEqual({ type: "error", code: "magic", message: "bad magic" });
   });
 
-  it("rejects a compute before the bundle is loaded", async () => {
+  // The worker's own guarantee: a compute it cannot answer comes back as a typed error, never a
+  // hang and never a throw that kills the worker. Asserted against the worker directly, because
+  // the client no longer lets a compute reach it in that state (see the next test).
+  it("answers a compute with no bundle with a typed not-loaded error", async () => {
+    const worker = new ContractWorker(fixtureBytes());
+    const reply = await new Promise<SidRadioWorkerToMain>((resolve) => {
+      worker.addEventListener("message", (event) => resolve((event as MessageEvent).data), { once: true });
+      worker.postMessage({
+        type: "compute",
+        id: 1,
+        request: {
+          seed: { kind: "song", md5_48: "aaaaaaaaaaaa" },
+          shuffleSeed: 1,
+          likes: [],
+          notForMe: [],
+          exclude: [],
+          count: 5,
+        },
+      });
+    });
+    expect(reply).toEqual({ type: "error", id: 1, code: "not-loaded", message: "bundle not loaded" });
+  });
+
+  // A station restored at launch rebuilds its provider and refills immediately, with nothing on
+  // that path having loaded the bundle. The client closes that race for every caller by awaiting
+  // its own memoised load, so a compute is served rather than rejected.
+  it("loads the bundle on demand, so a compute needs no preceding load()", async () => {
     const client = clientFor(fixtureBytes());
-    await expect(
-      client.compute({
-        seed: { kind: "song", md5_48: "aaaaaaaaaaaa" },
-        shuffleSeed: 1,
-        likes: [],
-        notForMe: [],
-        exclude: [],
-        count: 5,
-      }),
-    ).rejects.toThrow(/not-loaded|bundle not loaded/);
+    const result = await client.compute({
+      seed: { kind: "song", md5_48: "aaaaaaaaaaaa" },
+      shuffleSeed: 1,
+      likes: [],
+      notForMe: [],
+      exclude: [],
+      count: 5,
+    });
+    expect(result.candidates.length).toBeGreaterThan(0);
   });
 });
