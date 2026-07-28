@@ -413,6 +413,17 @@ const buildPersistedMediaIndexSnapshot = (snapshot: HvscBrowseIndexSnapshot): Pe
 const shouldPersistFullSnapshot = (snapshot: HvscBrowseIndexSnapshot) =>
   Object.keys(snapshot.songs).length <= MAX_PERSISTED_FULL_SNAPSHOT_SONGS;
 
+/**
+ * Whether the last save already reported the downgrade, per persistence route.
+ *
+ * Which snapshot a library gets is a *state*, not an event: it follows from the song count and
+ * changes almost never. Metadata hydration saves every five seconds for as long as it runs, so
+ * logging it on each save said the same sentence over and over — on a real 61k-song HVSC it took
+ * 313 of the diagnostics log's 500 entries and pushed out everything worth reading. Announce the
+ * transition instead, and again if a library ever comes back under the limit.
+ */
+const downgradeReported = { filesystem: false, localStorage: false };
+
 const readFilesystemSnapshot = async () => {
   try {
     const result = await Filesystem.readFile({
@@ -596,13 +607,17 @@ export const saveHvscBrowseIndexSnapshot = async (
       await writeFilesystemMediaIndexSnapshot(normalized);
       if (persistFullSnapshot) {
         await writeFilesystemSnapshot(normalized);
+        downgradeReported.filesystem = false;
       } else {
         await deleteFilesystemFullSnapshot();
-        addLog("info", "HVSC browse snapshot persistence downgraded to compact media index", {
-          path: STORAGE_PATH,
-          songCount: Object.keys(normalized.songs).length,
-          maxFullSnapshotSongs: MAX_PERSISTED_FULL_SNAPSHOT_SONGS,
-        });
+        if (!downgradeReported.filesystem) {
+          downgradeReported.filesystem = true;
+          addLog("info", "HVSC browse snapshot persistence downgraded to compact media index", {
+            path: STORAGE_PATH,
+            songCount: Object.keys(normalized.songs).length,
+            maxFullSnapshotSongs: MAX_PERSISTED_FULL_SNAPSHOT_SONGS,
+          });
+        }
       }
       return;
     } catch (error) {
@@ -618,13 +633,17 @@ export const saveHvscBrowseIndexSnapshot = async (
       writeLocalStorageMediaIndexSnapshot(normalized);
       if (persistFullSnapshot) {
         writeLocalStorageSnapshot(normalized);
+        downgradeReported.localStorage = false;
       } else if (typeof localStorage !== "undefined") {
         deleteLocalStorageFullSnapshot();
-        addLog("info", "HVSC browse snapshot localStorage persistence downgraded to compact media index", {
-          storageKey: STORAGE_KEY,
-          songCount: Object.keys(normalized.songs).length,
-          maxFullSnapshotSongs: MAX_PERSISTED_FULL_SNAPSHOT_SONGS,
-        });
+        if (!downgradeReported.localStorage) {
+          downgradeReported.localStorage = true;
+          addLog("info", "HVSC browse snapshot localStorage persistence downgraded to compact media index", {
+            storageKey: STORAGE_KEY,
+            songCount: Object.keys(normalized.songs).length,
+            maxFullSnapshotSongs: MAX_PERSISTED_FULL_SNAPSHOT_SONGS,
+          });
+        }
       }
       return;
     }
