@@ -634,6 +634,8 @@ SID Radio turns the tunes you like — and the mood you are in — into an endle
 
 **Lean back.** A station is an endless stream, so — like radio everywhere — it has no shuffle control of its own, and the transport Shuffle and Repeat are paused while a station plays. They return the moment you play a finite list such as Liked Tunes. Each start is fresh, so the same mood feels new every time. The now-playing chip names the active station, stops it in one tap, and expands a short "why this tune" line.
 
+A station follows similarity, and once in a while it reaches the end of what it can find — most often after you have skipped through a great many tunes in one sitting. When that happens the app says so, rather than leaving you on a last track that will not advance, and you can pick another mood.
+
 **Liked Tunes.** Everything you have liked is a plain, playable list — browse it, play it (with normal Shuffle and Repeat), or un-like a tune. Tunes no longer in your installed HVSC are shown greyed rather than dropped.
 
 ### Where the music plays
@@ -657,6 +659,10 @@ Where you hear a SID is up to you. When a SID is playing, the Play screen offers
 Until the ROMs are in place — or if you remove them — SID tunes simply play on the Commodore 64 Ultimate instead, and the app tells you so once.
 
 **Wind through a tune.** While a SID is playing on your phone, press and hold **⏭** to fast-forward or **⏮** to rewind — the tune keeps moving for as long as you hold, roughly five seconds at a time. A short tap still skips to the next or previous tune, so the buttons do what they always did. This works with the on-device engine; on the Commodore 64 Ultimate the buttons only skip.
+
+**Jump straight to a moment.** The progress bar is not only a read-out. Tap anywhere along it to land there, or hold and sweep to travel through the tune — the bar and the time follow your finger, and the music picks up wherever you let go. Winding backwards asks more of the engine than winding forwards, so a long rewind can take a moment to settle. Like winding, this is for tunes playing on your phone.
+
+**If a tune ever falls quiet.** Very occasionally the on-device engine can stop making sound while everything on screen still says the tune is playing — the clock counts on, and there is simply nothing to hear. The app watches for that and starts the tune again from the moment it went quiet, without being asked. You may notice a short gap. You should not have to touch anything.
 
 **One sound at a time.** Your phone can make sound two ways — playing a tune itself, or playing the sound streamed from the Commodore 64 Ultimate — and it will never do both at once. Whichever you start last takes over, and the other stops. So turning **Listen** on while a tune is playing here hands the speaker to the Commodore 64 Ultimate, and starting a tune here takes it back. You never have to work out which of two sounds to chase.
 
