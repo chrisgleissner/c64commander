@@ -58,4 +58,34 @@ describe("NewDiskDialog", () => {
     await waitFor(() => expect(screen.getByTestId("new-disk-error")).toHaveTextContent("PATH DOESN'T EXIST"));
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
+
+  /**
+   * Everything the dialog can check itself is refused before the request goes out, so a failure
+   * that survives all of it is almost always the storage folder — and the firmware answers a write
+   * into a path it does not have with a bare 500. On a Pixel 4 against a c64u (removable media at
+   * /USB2, so the default /USB0 does not exist) creating a disk failed with nothing but "HTTP 500",
+   * which says nothing about the one field the user can fix.
+   */
+  it("turns a bare HTTP status into something the user can act on", async () => {
+    const failing = vi.fn(async () => {
+      throw new Error("HTTP 500");
+    });
+    setup(failing);
+    fireEvent.change(screen.getByTestId("new-disk-name"), { target: { value: "games" } });
+    fireEvent.change(screen.getByTestId("new-disk-folder"), { target: { value: "/USB0" } });
+    fireEvent.click(screen.getByTestId("new-disk-create"));
+    await waitFor(() => expect(screen.getByTestId("new-disk-error")).toHaveTextContent("/USB0"));
+    expect(screen.getByTestId("new-disk-error")).toHaveTextContent("HTTP 500");
+  });
+
+  it("leaves a message the device actually wrote alone", async () => {
+    const failing = vi.fn(async () => {
+      throw new Error("Disk full");
+    });
+    setup(failing);
+    fireEvent.change(screen.getByTestId("new-disk-name"), { target: { value: "games" } });
+    fireEvent.click(screen.getByTestId("new-disk-create"));
+    await waitFor(() => expect(screen.getByTestId("new-disk-error")).toHaveTextContent("Disk full"));
+    expect(screen.getByTestId("new-disk-error").textContent).not.toMatch(/folder exists/);
+  });
 });

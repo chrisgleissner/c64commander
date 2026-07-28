@@ -50,6 +50,25 @@ const KIND_LABEL: Record<CreateDiskKind, string> = {
 
 const needsTracks = (kind: CreateDiskKind) => kind === "d64" || kind === "dnp";
 
+/**
+ * Explain a device-side create failure in terms of the thing the user chose.
+ *
+ * Everything the dialog can check itself — the virtual `/`, the label length, the track count — is
+ * already refused before the request goes out, so a failure that gets past all that is almost
+ * always the storage folder: the firmware answers a write into a path it does not have with a bare
+ * 500, and the transport surfaces exactly that. "HTTP 500" tells the user nothing about the one
+ * field they can fix. Seen on a Pixel 4 against a c64u whose removable media is `/USB2`: the
+ * default `/USB0` does not exist there, and creating a disk failed with nothing but the status.
+ *
+ * The device's own words are kept when it bothers to say something; only a bare status gets the
+ * hint, so a genuinely different failure is never mislabelled as a missing folder.
+ */
+const describeCreateFailure = (message: string, folder: string): string => {
+  const bareStatus = /^\s*HTTP\s+\d{3}\s*\.?\s*$/i.test(message);
+  if (!bareStatus) return message;
+  return `${message} — the device would not write to ${folder}. Check that the folder exists and can hold files; the top-level / is virtual.`;
+};
+
 export function NewDiskDialog({
   open,
   onOpenChange,
@@ -112,7 +131,7 @@ export function NewDiskDialog({
         kind: args.kind,
         error: message,
       });
-      setError(message);
+      setError(describeCreateFailure(message, args.folder));
     } finally {
       setBusy(false);
     }
