@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { getPlayCategory } from "@/lib/playback/fileTypes";
-import { resolveVirtualPath } from "@/lib/sidRadio/md5PathIndex";
+import { getMd548PathIndexStats, resolveVirtualPath } from "@/lib/sidRadio/md5PathIndex";
 import {
   getNotForMeMd5s,
   getRankingSnapshot,
@@ -81,7 +81,7 @@ export interface UseSidRadioResult {
   steer: (md5: string, signal: RankingSignal) => void;
   stop: () => void;
   /** A transient empty/degraded notice (spec §5.2 Q5), or null. */
-  notice: "no-radio-for-tune" | "no-radio" | null;
+  notice: "no-radio-for-tune" | "no-radio" | "no-hvsc" | null;
   dismissNotice: () => void;
 }
 
@@ -169,7 +169,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
   const randomSeed = params.randomSeed ?? defaultRandomSeed;
 
   const [station, setStation] = useState<ActiveStation | null>(null);
-  const [notice, setNotice] = useState<"no-radio-for-tune" | "no-radio" | null>(null);
+  const [notice, setNotice] = useState<"no-radio-for-tune" | "no-radio" | "no-hvsc" | null>(null);
   const [stylePopulations, setStylePopulations] = useState<SidRadioStylePopulations | null>(null);
   const stylePopulationsRef = useRef<SidRadioStylePopulations | null>(null);
   const stylePopulationsLoadRef = useRef<Promise<SidRadioStylePopulations | null> | null>(null);
@@ -302,7 +302,13 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       });
       if (items.length === 0) {
         providerRef.current = null;
-        setNotice(seedKind === "song" ? "no-radio-for-tune" : "no-radio");
+        // Candidates resolve to a path through the md5→path index, which HVSC fills. An empty index
+        // means nothing is installed, so NO station can produce a track whatever its seed — and the
+        // usual wording then sends the user somewhere that cannot help: there is nothing installed
+        // to like, and liking would not make a station playable. Name the real blocker. Once music
+        // is installed, an empty station is a genuine one and keeps its taste/tune wording.
+        if (getMd548PathIndexStats().size === 0) setNotice("no-hvsc");
+        else setNotice(seedKind === "song" ? "no-radio-for-tune" : "no-radio");
         return;
       }
       setNotice(null);

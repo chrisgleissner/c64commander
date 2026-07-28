@@ -2068,7 +2068,9 @@ export default function PlayFilesPage() {
                     <p className="text-xs text-muted-foreground" data-testid="sid-radio-notice">
                       {sidRadio.notice === "no-radio-for-tune"
                         ? "No radio for this tune yet — try a style or your likes."
-                        : "No radio available yet — like a few tunes to seed one."}
+                        : sidRadio.notice === "no-hvsc"
+                          ? "No HVSC music is installed yet — install it below, then any station will play."
+                          : "No radio available yet — like a few tunes to seed one."}
                     </p>
                   ) : null}
                 </div>
