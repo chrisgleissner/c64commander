@@ -28,7 +28,7 @@
     "agentic:mcp:check": "node scripts/setup-agentic-mcp.mjs --check",
     "variant:generate": "npm run assets:brand && node scripts/generate-variant.mjs",
     "variant:check": "npm run assets:brand:check && node scripts/generate-variant.mjs --check",
-    "prebuild": "{ [ -n \"${VITE_APP_VERSION:-}\" ] || bash scripts/resolve-version.sh; } && npm run variant:generate && npm run feature-flags:compile && npm run menu-mapping:compile && npm run notices:generate && npm run sidcorr:fetch && npm run wasm:fetch",
+    "prebuild": "{ [ -n \"${VITE_APP_VERSION:-}\" ] || bash scripts/resolve-version.sh; } && npm run variant:generate && npm run feature-flags:compile && npm run menu-mapping:compile && npm run notices:generate && npm run sidcorr:fetch && npm run wasm:sync",
     "predev": "npm run variant:generate && npm run feature-flags:compile && npm run menu-mapping:compile",
     "prestart": "npm run variant:generate && npm run feature-flags:compile && npm run menu-mapping:compile",
     "feature-flags:compile": "node scripts/compile-feature-flags.mjs",
@@ -137,9 +137,10 @@
     "scope:mcp": "cd c64scope && npm run mcp",
     "scope:preflight": "node c64scope/dist/preflight.js",
     "scope:hil:evidence": "cd c64scope && npm run hil:evidence --",
-    "wasm:fetch": "node scripts/fetch-libsidplayfp-wasm.mjs"
+    "wasm:sync": "node scripts/sync-libsidplayfp-wasm.mjs"
   },
   "dependencies": {
+    "7z-wasm": "^1.2.0",
     "@capacitor/app": "^8.1.1",
     "@capacitor/filesystem": "^8.1.2",
     "@capacitor/screen-orientation": "^8.0.1",
@@ -174,7 +175,6 @@
     "@radix-ui/react-tooltip": "^1.2.12",
     "@tanstack/react-query": "^5.101.2",
     "@types/suncalc": "^1.9.2",
-    "7z-wasm": "^1.2.0",
     "baseline-browser-mapping": "^2.10.43",
     "basic-ftp": "^6.0.1",
     "caniuse-lite": "^1.0.30001806",
@@ -187,6 +187,7 @@
     "framer-motion": "^12.42.2",
     "input-otp": "^1.4.2",
     "js-yaml": "^4.3.0",
+    "libsidplayfp-wasm": "^0.1.1",
     "lucide-react": "^0.577.0",
     "next-themes": "^0.4.6",
     "react": "^18.3.1",

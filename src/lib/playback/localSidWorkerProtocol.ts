@@ -8,7 +8,7 @@
 
 /**
  * Typed message contract for the Local SID engine Web Worker (spec §12.2, Track
- * B / LE1). The WASM synth (`@sidflow/libsidplayfp-wasm` `SidAudioEngine`) runs
+ * B / LE1). The WASM synth (`libsidplayfp-wasm`'s `SidAudioEngine`) runs
  * **only** in the worker — off the main thread by construction, the same
  * discipline as SID Radio (§4.5) — so the UI thread and Remote Input are never
  * starved by rendering ([[hvsc-hydration-starved-remote-input]]).

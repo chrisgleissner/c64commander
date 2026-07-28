@@ -9,21 +9,25 @@
 /**
  * Local SID engine Web Worker entry (spec §12.2, Track B / LE1).
  *
- * Renders SID tunes to PCM **off the main thread** with the vendored
- * `@sidflow/libsidplayfp-wasm` `SidAudioEngine` (GPL-2.0-or-later; see
- * `public/wasm/libsidplayfp/VENDORING.md`). The WASM glue is loaded lazily by a
- * runtime `import()` of the verbatim-copied `public/` asset — so the bundler
- * never parses emscripten output and the 391 KiB `.wasm` only loads when the
- * user actually selects the "This device" engine. All pure logic lives in the
- * importable, host-tested `localSidWorkerCore.ts`; this file only wires it to
- * the worker globals and the (on-device-validated) engine.
+ * Renders SID tunes to PCM **off the main thread** with the `libsidplayfp-wasm`
+ * package's `SidAudioEngine` (GPL-2.0-or-later). The WASM glue is loaded lazily
+ * by a runtime `import()` of the `public/` copy — so the bundler never parses
+ * emscripten output and the 391 KiB `.wasm` only loads when the user actually
+ * selects the "This device" engine. All pure logic lives in the importable,
+ * host-tested `localSidWorkerCore.ts`; this file only wires it to the worker
+ * globals and the (on-device-validated) engine.
  */
 
 import { toLocalSidError } from "./localSidWorkerCore";
 import type { LocalSidMainToWorker, LocalSidWorkerToMain } from "./localSidWorkerProtocol";
 
-/** Absolute path to the vendored loader (served from the app root, like the SID Radio bundle). */
-const LIBSIDPLAYFP_URL = "/wasm/libsidplayfp/index.js";
+/**
+ * Absolute path to the loader, served from the app root like the SID Radio bundle.
+ * `scripts/sync-libsidplayfp-wasm.mjs` mirrors the package's own layout under
+ * `public/`, so `index.js` resolves its `"../dist/libsidplayfp.js"` unchanged and
+ * what is served is byte-for-byte what npm delivered.
+ */
+const LIBSIDPLAYFP_URL = "/wasm/libsidplayfp/dist/index.js";
 
 /** The slice of the vendored `SidAudioEngine` this worker drives. */
 interface SidAudioEngineLike {
